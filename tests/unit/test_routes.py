@@ -51,14 +51,22 @@ class TestHomeRoute:
 
     @patch("web_routes.get_db_connection")
     def test_home_database_error(self, mock_get_conn, client, authenticated_user):
-        """Home handles a database failure gracefully instead of 500ing."""
+        """A database failure is a 500 with a generic page, not a 200.
+
+        This used to assert the opposite — 200 with the exception text in the
+        body. That made every failure invisible: uptime checks, Render's status
+        metrics and the request log all saw a success, so a query that timed out
+        was indistinguishable from a page that rendered. It also echoed raw
+        exception text to the browser.
+        """
         mock_get_conn.side_effect = Exception("Database connection failed")
 
         with authenticated_user:
             response = client.get("/")
 
-        assert response.status_code == 200
-        assert b"Database connection failed" in response.data
+        assert response.status_code == 500
+        # The failure is logged server-side, never leaked to the visitor.
+        assert b"Database connection failed" not in response.data
 
 
 class TestMagicRoute:

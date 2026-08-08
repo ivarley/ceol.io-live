@@ -189,6 +189,95 @@ def capture_referrer():
         # Store in session for later use during registration
         session['referred_by_person_id'] = referrer
 
+
+# --- Request timing -------------------------------------------------------
+#
+# One line per request, so "the site felt slow" is answerable from the logs
+# instead of reconstructed after the fact. The DB counters come from
+# database.get_db_connection(), which records each pool checkout on `g`.
+#
+# Slow requests log at WARNING so they can be isolated in Render's log search;
+# everything else is DEBUG to keep steady-state noise down.
+SLOW_REQUEST_MS = int(os.environ.get("SLOW_REQUEST_MS", 500))
+
+_timing_log = logging.getLogger("ceol.timing")
+
+
+@app.before_request
+def _start_request_timer():
+    from flask import g
+    import time
+
+    g._request_started = time.monotonic()
+
+
+@app.teardown_request
+def _release_db_connections(exc):
+    """Hand back any connection this request borrowed and didn't close.
+
+    Most handlers are plain sequential code rather than try/finally, so an
+    exception between borrowing and closing skips the close entirely.
+    """
+    from database import release_request_connections
+
+    release_request_connections()
+
+
+@app.after_request
+def _log_request_timing(resp):
+    from flask import g
+    import time
+
+    started = getattr(g, "_request_started", None)
+    if started is None:
+        return resp
+    # Static files are served straight off disk and would drown out the signal.
+    if request.path.startswith("/static/"):
+        return resp
+
+    elapsed_ms = (time.monotonic() - started) * 1000
+    conns = getattr(g, "db_connections", 0)
+    db_ms = getattr(g, "db_connect_seconds", 0.0) * 1000
+    _timing_log.log(
+        logging.WARNING if elapsed_ms >= SLOW_REQUEST_MS else logging.INFO,
+        "request method=%s path=%s status=%s elapsed_ms=%.1f db_conns=%d db_connect_ms=%.1f",
+        request.method,
+        request.path,
+        resp.status_code,
+        elapsed_ms,
+        conns,
+        db_ms,
+    )
+    return resp
+
+
+def health():
+    """Liveness + database reachability, so an uptime check can tell the
+    difference between 'app is down' and 'database is slow'."""
+    from database import get_db_connection
+    import time
+
+    started = time.monotonic()
+    try:
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT 1")
+            cur.fetchone()
+        finally:
+            conn.close()
+    except Exception as e:
+        app.logger.exception("health check failed")
+        return {"status": "error", "database": str(e)}, 503
+    return {
+        "status": "ok",
+        "database_ms": round((time.monotonic() - started) * 1000, 1),
+    }
+
+
+app.add_url_rule("/health", "health", health)
+
+
 # Template filters for timezone handling
 @app.template_filter("format_datetime_tz")
 def format_datetime_tz(dt, session_timezone=None, format_str="%Y-%m-%d %H:%M"):

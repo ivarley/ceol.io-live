@@ -1,11 +1,20 @@
+# NOTE: every service here is dashboard-managed — Render does not apply this
+# blueprint. Editing it changes nothing in production; it is documentation, and
+# it is only useful if it stays true. (It previously claimed `flask run` on the
+# free plan while production had been running gunicorn on starter for a long
+# time, which sent a latency investigation chasing cold starts that weren't
+# happening.) When you change a service in the dashboard, mirror it here.
 services:
   - type: web
     name: ceol-io
     env: python
     # Also builds the spec-024 live-logging Svelte bundle into static/live.
     buildCommand: "pip install -r requirements.txt && npm install && npm run build && cd frontend && npm install && npm run build"
-    startCommand: "flask --app app run --host=0.0.0.0"
-    plan: free
+    # Gunicorn with gthread workers — see gunicorn.conf.py for why the bare
+    # `gunicorn app:app` default (one sync worker, one request at a time) was
+    # the dominant source of page-load latency.
+    startCommand: "gunicorn -c gunicorn.conf.py app:app"
+    plan: starter
     envVars:
       # Pin Python explicitly — without this Render falls back to its legacy 3.7
       # default, where the spec-024 streaming deps (asyncpg/starlette/uvicorn) won't
@@ -37,7 +46,7 @@ services:
     # Bounded graceful drain: SIGTERM (deploy/restart) must not hang on the
     # infinite in-flight SSE streams. After 5s, drop them; clients auto-reconnect.
     startCommand: "uvicorn streaming.service:app --host 0.0.0.0 --port $PORT --timeout-graceful-shutdown 5"
-    plan: free
+    plan: starter
     envVars:
       - key: PYTHON_VERSION
         value: "3.11.0"
@@ -60,7 +69,7 @@ services:
     schedule: "14,29,44,59 * * * *"
     buildCommand: "pip install -r requirements.txt"
     startCommand: "python3 jobs/check_active_sessions.py"
-    plan: free
+    plan: starter
     envVars:
       - key: PYTHON_VERSION
         value: "3.11.0"
@@ -105,7 +114,7 @@ services:
     rootDir: abc-renderer
     buildCommand: "npm install"
     startCommand: "npm start"
-    plan: free
+    plan: starter
     envVars:
       - key: NODE_VERSION
         value: "18"

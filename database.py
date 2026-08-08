@@ -1,6 +1,9 @@
 import os
 import re
+import threading
+import time
 import psycopg2
+import psycopg2.pool
 
 
 def get_current_user_id():
@@ -250,8 +253,8 @@ def extract_abc_incipit(abc_notation, tune_type=None):
     return abc_notation[:incipit_end]
 
 
-def get_db_connection():
-    conn = psycopg2.connect(
+def _connect_kwargs():
+    return dict(
         host=os.environ.get("PGHOST"),
         database=os.environ.get("PGDATABASE"),
         user=os.environ.get("PGUSER"),
@@ -264,7 +267,196 @@ def get_db_connection():
         # non-UTC server timezone.
         options="-c timezone=utc",
     )
-    return conn
+
+
+# Connection pooling. Every caller in the app follows the same shape:
+#
+#     conn = get_db_connection()
+#     try: ...
+#     finally: conn.close()
+#
+# ...across ~350 call sites. Rather than touch all of them, get_db_connection()
+# keeps its signature and hands back a PooledConnection whose .close() *returns*
+# the connection to the pool instead of tearing down the socket. Everything else
+# proxies straight through to the real psycopg2 connection.
+#
+# Why this matters: without it, each of those calls paid a full TCP + TLS + auth
+# handshake against a remote Postgres. An authenticated page load opens two of
+# them (Flask-Login's user_loader, then the page's own), and a session-instance
+# view up to seven across its redirect — enough per-request latency to dominate
+# time-to-first-byte on a site whose CPU sits near idle.
+_pool = None
+_pool_lock = threading.Lock()
+
+# Sized against the DB plan's connection cap, shared with the streaming sidecar
+# (which takes up to 10 of its own via asyncpg). Overridable for local work.
+_POOL_MIN = int(os.environ.get("PGPOOL_MIN", 1))
+_POOL_MAX = int(os.environ.get("PGPOOL_MAX", 10))
+
+
+def _get_pool():
+    """Build the pool on first use.
+
+    Lazily, not at import time: the cron jobs in jobs/ and the test suite import
+    this module in environments where PG* may be unset or point somewhere else,
+    and an import-time connection would turn that into an import error.
+    """
+    global _pool
+    if _pool is None:
+        with _pool_lock:
+            if _pool is None:
+                _pool = psycopg2.pool.ThreadedConnectionPool(
+                    _POOL_MIN, _POOL_MAX, **_connect_kwargs()
+                )
+    return _pool
+
+
+class PooledConnection:
+    """A psycopg2 connection borrowed from the pool.
+
+    Proxies every attribute to the real connection; the only overridden
+    behaviour is close(), which releases back to the pool. Closing twice is a
+    no-op, so the common `finally: conn.close()` after an inner close is safe.
+    """
+
+    def __init__(self, pool, conn):
+        self._pool = pool
+        self._conn = conn
+        self._released = False
+
+    def __getattr__(self, name):
+        # Only reached for attributes not set on the wrapper itself.
+        return getattr(self._conn, name)
+
+    @property
+    def closed(self):
+        """Non-zero once this handle is done, matching psycopg2's semantics.
+
+        Callers check `conn.closed` to mean "may I still use this?". Proxying
+        straight through would answer 0 after close(), because the socket is
+        alive again in the pool — true of the connection, wrong for the caller.
+        """
+        if self._released:
+            return 1
+        return self._conn.closed
+
+    def __del__(self):
+        # Safety net for the paths that never reach their conn.close(): a
+        # handler that raises between borrowing and closing (very common —
+        # most call sites are plain sequential code, not try/finally).
+        #
+        # This restores what actually kept the un-pooled version working:
+        # refcounting dropped the last reference and psycopg2 closed the
+        # socket. Here the equivalent is returning it to the pool; without it
+        # every raised exception permanently consumed a pool slot.
+        try:
+            self.close()
+        except Exception:
+            pass
+
+    def close(self):
+        if self._released:
+            return
+        self._released = True
+        try:
+            # Never hand a connection to the next request mid-transaction. Most
+            # callers only read and never commit, which would otherwise leave an
+            # idle-in-transaction session holding locks.
+            if self._conn.closed == 0:
+                self._conn.rollback()
+        except Exception:
+            # A broken connection can't be reused; let the pool discard it.
+            try:
+                self._pool.putconn(self._conn, close=True)
+            except Exception:
+                pass
+            return
+        try:
+            self._pool.putconn(self._conn)
+        except Exception:
+            pass
+
+    # psycopg2 connections are context managers that manage a *transaction*,
+    # not the connection itself — `with conn:` commits or rolls back and leaves
+    # the connection open. Preserve exactly that, so `with get_db_connection()`
+    # keeps its existing meaning rather than silently releasing to the pool.
+    def __enter__(self):
+        self._conn.__enter__()
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return self._conn.__exit__(exc_type, exc, tb)
+
+
+def get_db_connection():
+    """Borrow a connection from the pool. Call .close() to return it."""
+    pool = _get_pool()
+    started = time.monotonic()
+    conn = pool.getconn()
+    # Recycle anything the server hung up on (idle timeout, restart, failover)
+    # rather than handing a dead socket to the caller.
+    if conn.closed != 0:
+        pool.putconn(conn, close=True)
+        conn = pool.getconn()
+    wrapped = PooledConnection(pool, conn)
+    _record_connection(wrapped, time.monotonic() - started)
+    return wrapped
+
+
+def _record_connection(conn, elapsed):
+    """Track this checkout on the current request.
+
+    Two jobs: the counters feed the timing log in app.py, and the list lets
+    release_request_connections() reclaim anything a failed handler left
+    borrowed. Silent no-op outside a request context (cron jobs, scripts).
+    """
+    try:
+        from flask import g, has_request_context
+
+        if not has_request_context():
+            return
+        g.db_connections = getattr(g, "db_connections", 0) + 1
+        g.db_connect_seconds = getattr(g, "db_connect_seconds", 0.0) + elapsed
+        borrowed = getattr(g, "_db_borrowed", None)
+        if borrowed is None:
+            borrowed = g._db_borrowed = []
+        borrowed.append(conn)
+    except Exception:
+        pass
+
+
+def release_request_connections():
+    """Return every connection borrowed during this request.
+
+    PooledConnection.__del__ already covers most leaks, but while an exception
+    is being handled its traceback holds the frames — and therefore the
+    connection — alive. On a busy worker that is long enough to starve the
+    pool. Wired to teardown_request in app.py, this bounds a connection's
+    lifetime to the request that borrowed it, regardless of how it ended.
+    """
+    try:
+        from flask import g
+
+        for conn in getattr(g, "_db_borrowed", []) or []:
+            try:
+                conn.close()  # no-op if the handler already closed it
+            except Exception:
+                pass
+        g._db_borrowed = []
+    except Exception:
+        pass
+
+
+def close_db_pool():
+    """Tear down the pool (used by tests and at worker shutdown)."""
+    global _pool
+    with _pool_lock:
+        if _pool is not None:
+            try:
+                _pool.closeall()
+            except Exception:
+                pass
+            _pool = None
 
 
 def save_to_history(cur, table_name, operation, record_id, user_id=None):

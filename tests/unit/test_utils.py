@@ -292,13 +292,9 @@ class TestApplicationUtilities:
 class TestDatabaseConnectionHandling:
     """Test database connection and error handling."""
 
-    @patch("database.psycopg2.connect")
-    def test_database_connection_success(self, mock_connect):
-        """Test successful database connection."""
-        mock_conn = MagicMock()
-        mock_connect.return_value = mock_conn
-
-        from database import get_db_connection
+    def test_connect_kwargs_from_environment(self):
+        """Connection parameters are assembled from the PG* environment."""
+        from database import _connect_kwargs
 
         with patch.dict(
             os.environ,
@@ -310,51 +306,90 @@ class TestDatabaseConnectionHandling:
                 "PGPORT": "5432",
             },
         ):
-            conn = get_db_connection()
+            assert _connect_kwargs() == {
+                "host": "localhost",
+                "database": "test_db",
+                "user": "test_user",
+                "password": "test_pass",
+                "port": 5432,
+                # Pins the session timezone to UTC (see _connect_kwargs).
+                "options": "-c timezone=utc",
+            }
 
-        assert conn == mock_conn
-        mock_connect.assert_called_once_with(
-            host="localhost",
-            database="test_db",
-            user="test_user",
-            password="test_pass",
-            port=5432,
-            # Connection pins the session timezone to UTC (see get_db_connection).
-            options="-c timezone=utc",
-        )
+    def test_connect_kwargs_with_default_port(self):
+        """Port falls back to 5432 when PGPORT is unset."""
+        from database import _connect_kwargs
 
-    @patch("database.psycopg2.connect")
-    def test_database_connection_with_default_port(self, mock_connect):
-        """Test database connection uses default port when not specified."""
-        mock_conn = MagicMock()
-        mock_connect.return_value = mock_conn
+        env = {
+            "PGHOST": "localhost",
+            "PGDATABASE": "test_db",
+            "PGUSER": "test_user",
+            "PGPASSWORD": "test_pass",
+        }
+        with patch.dict(os.environ, env, clear=True):
+            assert _connect_kwargs()["port"] == 5432
 
+    @patch("database._get_pool")
+    def test_database_connection_exception(self, mock_get_pool):
+        """A pool that cannot hand out a connection propagates the error."""
         from database import get_db_connection
 
-        with patch.dict(
-            os.environ,
-            {
-                "PGHOST": "localhost",
-                "PGDATABASE": "test_db",
-                "PGUSER": "test_user",
-                "PGPASSWORD": "test_pass"
-                # No PGPORT specified
-            },
-        ):
-            get_db_connection()
-
-        # Should use default port 5432
-        call_args = mock_connect.call_args[1]
-        assert call_args["port"] == 5432
-
-    @patch("database.psycopg2.connect")
-    def test_database_connection_exception(self, mock_connect):
-        """Test database connection exception handling."""
-        mock_connect.side_effect = Exception("Connection failed")
-
-        from database import get_db_connection
+        mock_get_pool.return_value.getconn.side_effect = Exception("Connection failed")
 
         with pytest.raises(Exception) as exc_info:
             get_db_connection()
 
         assert "Connection failed" in str(exc_info.value)
+
+    @patch("database._get_pool")
+    def test_close_returns_connection_to_pool(self, mock_get_pool):
+        """close() releases to the pool instead of tearing down the socket."""
+        from database import get_db_connection
+
+        pool = mock_get_pool.return_value
+        raw = MagicMock()
+        raw.closed = 0
+        pool.getconn.return_value = raw
+
+        conn = get_db_connection()
+        conn.close()
+
+        raw.close.assert_not_called()
+        raw.rollback.assert_called_once()  # never released mid-transaction
+        pool.putconn.assert_called_once_with(raw)
+
+        # Releasing twice is a no-op, so the common nested-close/finally-close
+        # pattern can't hand the same connection out to two requests.
+        conn.close()
+        pool.putconn.assert_called_once_with(raw)
+
+    @patch("database._get_pool")
+    def test_dead_connection_is_discarded_and_replaced(self, mock_get_pool):
+        """A connection the server hung up on is recycled, not handed to the caller."""
+        from database import get_db_connection
+
+        pool = mock_get_pool.return_value
+        dead, live = MagicMock(), MagicMock()
+        dead.closed, live.closed = 1, 0
+        pool.getconn.side_effect = [dead, live]
+
+        conn = get_db_connection()
+
+        pool.putconn.assert_called_once_with(dead, close=True)
+        assert conn._conn is live
+
+    @patch("database._get_pool")
+    def test_attributes_proxy_to_real_connection(self, mock_get_pool):
+        """Everything but close() passes through to the wrapped connection."""
+        from database import get_db_connection
+
+        raw = MagicMock()
+        raw.closed = 0
+        mock_get_pool.return_value.getconn.return_value = raw
+
+        conn = get_db_connection()
+        conn.cursor()
+        conn.commit()
+
+        raw.cursor.assert_called_once()
+        raw.commit.assert_called_once()

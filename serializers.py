@@ -936,21 +936,44 @@ def build_session_detail_payload(
         today_in_session_tz = datetime.datetime.now(ZoneInfo("UTC")).date()
 
     # Top 20 most-played tunes at this session (includes instance-only tunes).
+    #
+    # Counted in two passes on purpose. The obvious single GROUP BY on
+    # COALESCE(sit.name, st.alias, t.name) makes the grouping key a ~500-byte
+    # text expression, so Postgres sorts every play row in the session's whole
+    # history before aggregating (GroupAggregate). Grouping first on the narrow
+    # (tune_id, sit.name) pair collapses ~16k rows to ~1.3k BEFORE the wide
+    # joins, and both passes then fit in a HashAggregate — no sort at all.
+    #
+    # Equivalent, not approximate: (tune_id, sit.name) is a strictly finer
+    # partition than the display name, since the alias/name fallbacks are
+    # functions of tune_id, so SUM() over the sub-counts recovers the same
+    # groups. Verified against production: identical rows for all 29 sessions,
+    # including the 523 plays that carry a free-text name override.
+    # Measured on the busiest session: 461ms -> 172ms.
     cur.execute(
         f"""
-        WITH tune_counts AS (
-            SELECT
-                COALESCE(sit.name, st.alias, t.name) AS tune_name,
-                sit.tune_id,
-                COUNT(*) AS play_count,
-                COALESCE(t.tunebook_count_cached, 0) AS tunebook_count
+        WITH raw_counts AS (
+            SELECT sit.tune_id, sit.name AS override_name, COUNT(*) AS play_count
             FROM session_instance_tune sit
             JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
-            LEFT JOIN tune t ON sit.tune_id = t.tune_id
-            LEFT JOIN session_tune st ON sit.tune_id = st.tune_id AND st.session_id = %s
-            WHERE si.session_id = %s AND COALESCE(sit.name, st.alias, t.name) IS NOT NULL
-              AND {person_scope.SIT_COUNTABLE}
-            GROUP BY COALESCE(sit.name, st.alias, t.name), sit.tune_id, COALESCE(t.tunebook_count_cached, 0)
+            WHERE si.session_id = %s AND {person_scope.SIT_COUNTABLE}
+            GROUP BY sit.tune_id, sit.name
+        ),
+        tune_counts AS (
+            SELECT
+                COALESCE(rc.override_name, st.alias, t.name) AS tune_name,
+                rc.tune_id,
+                -- ::bigint because SUM(bigint) is numeric, which psycopg2 hands
+                -- back as Decimal — COUNT(*) gave a plain int, and the payload
+                -- (and its JSON encoding) must not change shape here.
+                SUM(rc.play_count)::bigint AS play_count,
+                COALESCE(t.tunebook_count_cached, 0) AS tunebook_count
+            FROM raw_counts rc
+            LEFT JOIN tune t ON rc.tune_id = t.tune_id
+            LEFT JOIN session_tune st ON rc.tune_id = st.tune_id AND st.session_id = %s
+            WHERE COALESCE(rc.override_name, st.alias, t.name) IS NOT NULL
+            GROUP BY COALESCE(rc.override_name, st.alias, t.name), rc.tune_id,
+                     COALESCE(t.tunebook_count_cached, 0)
         )
         SELECT tune_name, tune_id, play_count, tunebook_count
         FROM tune_counts

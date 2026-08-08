@@ -7,6 +7,7 @@ from flask import (
     session,
     jsonify,
     make_response,
+    current_app,
 )
 import random
 import bcrypt
@@ -40,6 +41,24 @@ from email_utils import (
     verify_unsubscribe_token,
 )
 from recurrence_utils import to_human_readable
+
+
+def _page_error():
+    """Log an unexpected page-render failure and return a 500 error page.
+
+    These handlers used to `return f"Database connection failed: {e}"`, which
+    sent the raw exception text to the browser with a 200 status. That made
+    every failure look like a success to the request log, to uptime checks and
+    to Render's metrics — a query that timed out was indistinguishable from a
+    page that rendered. Log it and return a real 500.
+
+    render_error_page is imported here rather than at module scope because app
+    imports this module.
+    """
+    from app import render_error_page
+
+    current_app.logger.exception("page render failed")
+    return render_error_page("Something went wrong loading this page.", 500)
 
 
 def home():
@@ -179,8 +198,8 @@ def home():
         else:
             return render_template("home.html")
 
-    except Exception as e:
-        return f"Database connection failed: {str(e)}"
+    except Exception:
+        return _page_error()
 
 
 def magic():
@@ -240,8 +259,8 @@ def magic():
             current_type=tune_type,
         )
 
-    except Exception as e:
-        return f"Database connection failed: {str(e)}"
+    except Exception:
+        return _page_error()
 
 
 def db_test():
@@ -253,8 +272,8 @@ def db_test():
         cur.close()
         conn.close()
         return render_template("db_test.html", records=records)
-    except Exception as e:
-        return f"Database connection failed: {str(e)}"
+    except Exception:
+        return _page_error()
 
 
 def sessions():
@@ -277,8 +296,8 @@ def sessions():
             conn.close()
 
         return render_template("sessions.html", payload=payload, is_logged_in=current_user.is_authenticated)
-    except Exception as e:
-        return f"Database connection failed: {str(e)}"
+    except Exception:
+        return _page_error()
 
 
 def session_tunes(session_path):
@@ -354,8 +373,8 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
                 # The full path IS a session (e.g., "oflahertys/2025")
                 # Treat as session overview, not instance
                 is_session_overview = True
-        except Exception as e:
-            return f"Database connection failed: {str(e)}"
+        except Exception:
+            return _page_error()
 
     # Check if this is a session instance request (by date or ID)
     if looks_like_instance and not is_session_overview:
@@ -564,8 +583,8 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
                 else:
                     error_msg = f"Session instance not found: ID {last_part} for session {session_path}"
                 return render_error_page(error_msg, 404)
-        except Exception as e:
-            return f"Database connection failed: {str(e)}"
+        except Exception:
+            return _page_error()
 
     else:
         # This is a session detail request (spec 035 Step 4b): a thin shell around
@@ -611,8 +630,8 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
                 tune_id=tune_id,
                 person_id=person_id,
             )
-        except Exception as e:
-            return f"Database connection failed: {str(e)}"
+        except Exception:
+            return _page_error()
 
 
 def session_instance_players(full_path):
@@ -741,8 +760,8 @@ def session_instance_players(full_path):
             else:
                 error_msg = f"Session instance not found: ID {last_part} for session {session_path}"
             return render_error_page(error_msg, 404)
-    except Exception as e:
-        return f"Database connection failed: {str(e)}"
+    except Exception:
+        return _page_error()
 
 
 def add_session():
@@ -3459,17 +3478,17 @@ def live_logging_screen(session_instance_id):
         (session_path, session_id, instance_date, track_attendance,
          track_set_starters, instance_active, instance_name,
          instance_start, instance_end, session_type) = row
-    finally:
-        conn.close()
 
-    # Who may upload/timestamp this session's audio (schema/053). Resolved here so
-    # the header can decide whether the Recordings row exists at first paint; every
-    # endpoint behind it re-checks, so this only controls what is offered.
-    from recording_routes import can_manage_recordings
+        # Who may upload/timestamp this session's audio (schema/053). Resolved here so
+        # the header can decide whether the Recordings row exists at first paint; every
+        # endpoint behind it re-checks, so this only controls what is offered.
+        #
+        # Shares the connection above rather than opening a second one: for anonymous
+        # visitors and system admins this short-circuits without touching the cursor
+        # at all, so the extra connection was a round trip to compute a constant.
+        from recording_routes import can_manage_recordings
 
-    conn = get_db_connection()
-    try:
-        manages_recordings = can_manage_recordings(conn.cursor(), session_id)
+        manages_recordings = can_manage_recordings(cur, session_id)
     finally:
         conn.close()
 
