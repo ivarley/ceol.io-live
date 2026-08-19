@@ -496,3 +496,210 @@ describe('the round trip to the log', () => {
     expect(container.querySelector('audio').currentTime).toBe(600)
   })
 })
+
+describe('dragging a boundary', () => {
+  // Marking happens at speed against a moving playhead, so some marks land a
+  // little off. Re-marking only fixes a START; dragging the edge itself is the
+  // direct correction, and it is the only way to move an explicit end by hand.
+  //
+  // Placed here, all inside the tape's opening window (playhead 0, ±10s):
+  //   Alpha  2s -> 4s implicit -- its end IS Bravo's start
+  //   Bravo  4s -> 6s explicit -- closes set 1, then a gap
+  //   Charlie 8s -> end of file
+  const marked = () => {
+    const p = payload()
+    p.tunes[0].segment = { recording_tune_segment_id: 5, session_instance_tune_id: 1, start_ms: 2000, end_ms: null }
+    p.tunes[1].segment = { recording_tune_segment_id: 6, session_instance_tune_id: 2, start_ms: 4000, end_ms: 6000 }
+    p.tunes[2].segment = { recording_tune_segment_id: 7, session_instance_tune_id: 3, start_ms: 8000, end_ms: null }
+    return p
+  }
+
+  const WIDTH = 600 // px of tape
+  const ZOOM = 20000 // ms visible, the default zoom
+
+  /** Where a time sits on screen: the tape is centred on the playhead, at 0 here. */
+  const xFor = (ms) => WIDTH / 2 + (ms / ZOOM) * WIDTH
+
+  /**
+   * Render with the tape given a real size. jsdom lays nothing out, so without
+   * this every coordinate collapses to zero and no edge is ever within reach.
+   */
+  function renderTape(pageData = marked()) {
+    const view = render(App, { props: { pageData } })
+    const canvas = view.container.querySelector('.wf-detail canvas')
+    canvas.getBoundingClientRect = () => ({ left: 0, top: 0, width: WIDTH, height: 168, right: WIDTH, bottom: 168 })
+    canvas.setPointerCapture = vi.fn()
+    canvas.releasePointerCapture = vi.fn()
+    return { ...view, canvas }
+  }
+
+  /**
+   * jsdom has no PointerEvent, and fireEvent.pointerDown's fallback drops
+   * clientX entirely -- which is the only thing these handlers read. A
+   * MouseEvent carries it, so the pointer events are built by hand.
+   */
+  async function pointer(canvas, type, clientX, pointerType) {
+    const event = new MouseEvent(type, { clientX, bubbles: true })
+    if (pointerType) Object.defineProperty(event, 'pointerType', { value: pointerType })
+    await fireEvent(canvas, event)
+  }
+
+  async function dragEdge(canvas, fromMs, toMs, pointerType) {
+    await pointer(canvas, 'pointerdown', xFor(fromMs), pointerType)
+    await pointer(canvas, 'pointermove', xFor(toMs), pointerType)
+    await pointer(canvas, 'pointerup', xFor(toMs), pointerType)
+  }
+
+  const duration = (container, id) => container.querySelector(`[data-tune-id="${id}"] .tl-dur`).textContent.trim()
+
+  beforeEach(() => {
+    // Echo the upsert back the way the API does. The shared mock answers every
+    // call with the SAME canned segment, which lands every dragged tune on top
+    // of tune 1 at 0ms and makes the resolved ends nonsense.
+    global.fetch = vi.fn(async (url, init) => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        success: true,
+        segment: {
+          recording_tune_segment_id: 9,
+          session_instance_tune_id: Number(url.split('/').pop()),
+          ...JSON.parse(init.body),
+        },
+      }),
+    }))
+  })
+
+  it('moves an explicit end and saves it once', async () => {
+    const { canvas } = renderTape()
+    await dragEdge(canvas, 6000, 5500)
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1))
+    const [url, init] = global.fetch.mock.calls[0]
+    expect(url).toBe('/api/recordings/7/segments/2')
+    expect(init.method).toBe('PUT')
+    const body = JSON.parse(init.body)
+    expect(body.start_ms).toBe(4000)
+    expect(body.end_ms).toBe(5500)
+  })
+
+  it('moves a start, and with it the implicit end of the tune before it', async () => {
+    const { container, canvas } = renderTape()
+    // Bravo's start IS Alpha's end: one handle for the edge they share.
+    await dragEdge(canvas, 4000, 5000)
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1))
+    // Only Bravo is written. Alpha's end was never a stored value -- it is
+    // resolved from whatever starts next -- so there is nothing to save on it.
+    expect(global.fetch.mock.calls[0][0]).toBe('/api/recordings/7/segments/2')
+    const body = JSON.parse(global.fetch.mock.calls[0][1].body)
+    expect(body.start_ms).toBe(5000)
+    expect(body.end_ms).toBe(6000)
+    expect(duration(container, 1)).toBe('3s~')
+  })
+
+  it('will not let an edge swallow its neighbour', async () => {
+    const { canvas } = renderTape()
+    // Yank Bravo's end back past its own start; it stops half a second short.
+    await dragEdge(canvas, 6000, 1000)
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1))
+    expect(JSON.parse(global.fetch.mock.calls[0][1].body).end_ms).toBe(4500)
+  })
+
+  it('writes nothing when the edge is put back where it was', async () => {
+    const { canvas } = renderTape()
+    await dragEdge(canvas, 6000, 6000)
+    expect(global.fetch).not.toHaveBeenCalled()
+  })
+
+  it('leaves the playhead alone — the tape must not slide under the drag', async () => {
+    const { container, canvas } = renderTape()
+    const before = container.querySelector('.sg-time').textContent
+    await dragEdge(canvas, 6000, 5000)
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled())
+    expect(container.querySelector('.sg-time').textContent).toBe(before)
+  })
+
+  it('rolls back to where the edge actually was when the save fails', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false, status: 500, json: async () => ({ success: false, error: 'boom' }),
+    })
+    const { container, canvas, getByText } = renderTape()
+
+    await dragEdge(canvas, 6000, 5000)
+
+    await waitFor(() => expect(getByText(/Could not save "Bravo Jig"/)).toBeTruthy())
+    // 4s -> 6s again, not the 5s the drag previewed.
+    expect(duration(container, 2)).toBe('2s')
+  })
+
+  it('undoes back to the original position', async () => {
+    const { container, canvas } = renderTape()
+    await dragEdge(canvas, 6000, 5000)
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1))
+
+    await fireEvent.keyDown(window, { key: 'u' })
+
+    await waitFor(() => expect(duration(container, 2)).toBe('2s'))
+    expect(JSON.parse(global.fetch.mock.calls.at(-1)[1].body).end_ms).toBe(6000)
+  })
+
+  it('gives a fingertip more room to grab than a cursor', async () => {
+    // ~12px off the edge: a mouse at that distance meant to scrub, a finger
+    // almost certainly meant the boundary it was aiming at.
+    const nearMissMs = 6000 - 12 * (ZOOM / WIDTH)
+
+    const mouse = renderTape()
+    await dragEdge(mouse.canvas, nearMissMs, 5000)
+    expect(global.fetch).not.toHaveBeenCalled()
+    mouse.unmount()
+
+    const touch = renderTape()
+    await dragEdge(touch.canvas, nearMissMs, 5000, 'touch')
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1))
+    expect(JSON.parse(global.fetch.mock.calls[0][1].body).end_ms).toBe(5000)
+  })
+
+  it('still scrubs when the drag starts away from any edge', async () => {
+    const { container, canvas } = renderTape()
+    const before = container.querySelector('.sg-time').textContent
+    // 3s is mid-Alpha, a second from either boundary.
+    await dragEdge(canvas, 3000, 2000)
+    expect(global.fetch).not.toHaveBeenCalled()
+    expect(container.querySelector('.sg-time').textContent).not.toBe(before)
+  })
+})
+
+describe('the end badge', () => {
+  const marked = () => {
+    const p = payload()
+    p.tunes[0].segment = { recording_tune_segment_id: 5, session_instance_tune_id: 1, start_ms: 10000, end_ms: null }
+    p.tunes[1].segment = { recording_tune_segment_id: 6, session_instance_tune_id: 2, start_ms: 20000, end_ms: 30000 }
+    return p
+  }
+
+  it('jumps to the end of the set — the one time the list could not reach', async () => {
+    const { container } = render(App, { props: { pageData: marked() } })
+    const badge = container.querySelector('[data-tune-id="2"] .tl-endmark')
+    await fireEvent.click(badge)
+    await waitFor(() => expect(container.querySelector('.sg-time').textContent).toBe('0:30.0'))
+  })
+
+  it('jumps to an implied end too, which is where you go to type a real one', async () => {
+    const p = marked()
+    p.tunes[1].segment.end_ms = null // Bravo now runs until Charlie starts...
+    p.tunes[2].segment = { recording_tune_segment_id: 7, session_instance_tune_id: 3, start_ms: 45000, end_ms: null }
+    const { container } = render(App, { props: { pageData: p } })
+
+    await fireEvent.click(container.querySelector('[data-tune-id="2"] .tl-endmark'))
+
+    await waitFor(() => expect(container.querySelector('.sg-time').textContent).toBe('0:45.0'))
+  })
+
+  it('is inert while the tune has no mark to end', async () => {
+    const { container } = render(App, { props: { pageData: payload() } })
+    const badge = container.querySelector('[data-tune-id="2"] .tl-endmark')
+    expect(badge.tagName).toBe('SPAN')
+  })
+})

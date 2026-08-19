@@ -289,6 +289,44 @@ Two canvases over the same envelope:
   always in the same place on screen. Dragging scrubs, which keeps the finger
   off the mark point on a phone.
 
+**Boundaries can be dragged.** Marking runs against a moving playhead, so some
+marks land a little off — and pressing <kbd>M</kbd> again only ever fixes a
+*start*. Every boundary on the detail tape is therefore a handle: grab the line,
+move it, let go. The handles are each placed tune's start plus each explicit
+end; an implicit end is deliberately not one, because it IS the next tune's
+start and that start is already a handle — one handle per edge on screen, so a
+drag can't be ambiguous about which of two coincident things it moves. Dragging
+a start that another tune ends into therefore moves their shared edge, which is
+what it looks like it does.
+
+Three decisions worth keeping:
+
+- **The drag is local until it is dropped.** A PUT per animation frame would be
+  dozens of writes for one adjustment, and the intermediate positions are not
+  decisions. The save happens once, on release, through the same optimistic
+  path as a mark — so a failed write rolls back to where the edge actually was,
+  and <kbd>U</kbd> undoes the move as one step.
+- **Onset snap does not apply.** Snap exists to correct an eyeball error; a drag
+  IS the correction, and snapping it afterwards would move the edge away from
+  the spot just chosen by hand.
+- **The tape does not follow.** It is centred on the playhead, so moving the
+  playhead during a drag would slide the view out from under the edge being
+  placed. The playhead stays put and the clamped position is named in the status
+  line as it moves.
+
+Limits come from the neighbours (`edgeLimits`), which don't move during a
+gesture: an edge stops half a second short of swallowing its neighbour rather
+than being rejected by the API after the operator has already let go. The
+grab tolerance is 6px for a cursor and 15px for touch, because a fingertip is
+not a cursor and a 2px line is not a touch target.
+
+**The end badge is a jump.** The list's time column jumps to starts, which left
+a set's end as the one time in the log you couldn't reach from the list — and
+it is exactly where you go to check it or re-place it. Clicking the `END` badge
+on a placed tune seeks there, implied ends included, since the implied end is
+where you stand when typing a real one. Unplaced, the badge stays the label it
+always was.
+
 **Fixing the log from inside the tool.** Timestamping is where you find out the
 log is wrong: a tune nobody wrote down is a stretch of audio with no cursor to
 put on it, and there is nothing to mark until the log says it happened. So the

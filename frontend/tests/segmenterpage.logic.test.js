@@ -4,10 +4,12 @@
 // tests/integration/test_recording_segmenter_050.py.
 import { describe, it, expect } from 'vitest'
 import {
+  edgeLimits,
   envelopeForRange,
   formatDuration,
   formatTime,
   groupIntoSets,
+  MIN_SEGMENT_MS,
   nextUnplacedIndex,
   resolveSegments,
   snapToOnset,
@@ -177,5 +179,59 @@ describe('envelopeForRange', () => {
 
   it('returns an empty array for a zero width', () => {
     expect(envelopeForRange(new Uint8Array([1, 2]), 20, 0, 100, 0).length).toBe(0)
+  })
+})
+
+describe('edgeLimits', () => {
+  // A dragged boundary must not be able to swallow its neighbour, cross its own
+  // opposite edge, or leave the file -- all of which the API would reject at the
+  // END of the gesture, when the operator has already let go.
+  const seg = (startMs, endMs, explicitEnd) => ({ startMs, endMs, explicitEnd, gapAfterMs: 0 })
+
+  //  A: 10s -> 20s implicit (so its end IS B's start)
+  //  B: 20s -> 30s explicit, then a gap
+  //  C: 40s -> 60s implicit to the end of the file
+  const resolved = () =>
+    new Map([
+      [1, seg(10000, 20000, false)],
+      [2, seg(20000, 30000, true)],
+      [3, seg(40000, 60000, false)],
+    ])
+
+  it('stops a start short of its own end', () => {
+    const { hi } = edgeLimits(resolved(), 2, 'start', 60000)
+    expect(hi).toBe(30000 - MIN_SEGMENT_MS)
+  })
+
+  it('lets a start run back into the gap left by an explicit end', () => {
+    // C follows B's explicit end at 30s, so C's start may move back to 30s --
+    // the dead air is nobody's, and reclaiming it is the point of dragging.
+    expect(edgeLimits(resolved(), 3, 'start', 60000).lo).toBe(30000)
+  })
+
+  it('lets a start eat into the previous tune when that end is implicit', () => {
+    // B's start IS A's end, so moving it moves their shared edge -- bounded only
+    // by leaving A something to be.
+    expect(edgeLimits(resolved(), 2, 'start', 60000).lo).toBe(10000 + MIN_SEGMENT_MS)
+  })
+
+  it('bounds a start by the NEXT start when its own end is implicit', () => {
+    expect(edgeLimits(resolved(), 1, 'start', 60000).hi).toBe(20000 - MIN_SEGMENT_MS)
+  })
+
+  it('bounds an explicit end by its own start and the next tune', () => {
+    expect(edgeLimits(resolved(), 2, 'end', 60000)).toEqual({
+      lo: 20000 + MIN_SEGMENT_MS,
+      hi: 40000,
+    })
+  })
+
+  it('uses the file for the outer edges', () => {
+    expect(edgeLimits(resolved(), 1, 'start', 60000).lo).toBe(0)
+    expect(edgeLimits(resolved(), 3, 'start', 60000).hi).toBe(60000 - MIN_SEGMENT_MS)
+  })
+
+  it('has nothing to say about a tune that is not placed', () => {
+    expect(edgeLimits(resolved(), 99, 'start', 60000)).toBeNull()
   })
 })

@@ -93,6 +93,55 @@ export function snapToOnset(peaks, peaksHz, ms, windowMs = SNAP_WINDOW_MS) {
 }
 
 /**
+ * How much of a tune a boundary drag must leave standing.
+ *
+ * The API refuses end <= start outright; this is the friendlier floor, so a
+ * dragged edge stops short of its neighbour instead of being rejected by the
+ * server at the end of the gesture.
+ */
+export const MIN_SEGMENT_MS = 500
+
+/**
+ * How far a boundary may be dragged before it would collide with something.
+ *
+ * `resolved` is the Map from resolveSegments -- resolved ends included, which is
+ * what makes an implicit end usable as a limit without special-casing it here.
+ * Returns {lo, hi} in ms, or null when the tune isn't placed.
+ *
+ * The neighbours in play never move during a drag, so these limits are stable
+ * for the whole gesture: recomputing them per frame can't walk the edge along
+ * in front of the finger.
+ */
+export function edgeLimits(resolved, id, edge, durationMs) {
+  const order = [...resolved.entries()]
+    .map(([tuneId, seg]) => ({ id: tuneId, seg }))
+    .sort((a, b) => a.seg.startMs - b.seg.startMs)
+  const i = order.findIndex((e) => e.id === id)
+  if (i < 0) return null
+  const me = order[i].seg
+  const prev = order[i - 1]
+  const next = order[i + 1]
+
+  if (edge === 'end') {
+    // Only an EXPLICIT end is its own boundary; an implicit one is the next
+    // tune's start, and that start is the handle you get instead.
+    return {
+      lo: me.startMs + MIN_SEGMENT_MS,
+      hi: next ? next.seg.startMs : durationMs,
+    }
+  }
+
+  return {
+    // Backwards: into the gap after the previous tune's explicit end, or into
+    // the previous tune itself when its end is implicit -- because then this
+    // start IS that end, and dragging it is how you move their shared edge.
+    lo: prev ? (prev.seg.explicitEnd ? prev.seg.endMs : prev.seg.startMs + MIN_SEGMENT_MS) : 0,
+    // Forwards: never past this tune's own end, wherever that end comes from.
+    hi: Math.max(0, (me.explicitEnd ? me.endMs : next ? next.seg.startMs : durationMs) - MIN_SEGMENT_MS),
+  }
+}
+
+/**
  * Reduce the envelope to one bar per pixel column.
  * Returns a Float32Array of 0..1 heights, length `width`.
  */

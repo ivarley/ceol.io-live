@@ -11,6 +11,7 @@
   import Waveform from './Waveform.svelte'
   import TuneList from './TuneList.svelte'
   import {
+    edgeLimits,
     formatTime,
     nextUnplacedIndex,
     resolveSegments,
@@ -383,6 +384,65 @@
     flash(`Ended "${tune.name}" at ${formatTime(currentMs)}`)
   }
 
+  // ---- dragging a boundary ---------------------------------------------------
+  //
+  // Marking is done at speed against a moving playhead, so some marks land a
+  // little off -- and re-marking a tune only fixes its start. Dragging the edge
+  // itself is the direct correction: grab the line, move it, let go.
+  //
+  // The drag is local until it is dropped. A PUT per animation frame would be
+  // dozens of writes for one adjustment, and the intermediate positions are not
+  // decisions -- only where the finger stops is.
+
+  // The segment as it stood before this drag began. Kept so the save records the
+  // right "previous" for undo, and so a failed write rolls back to where the
+  // edge actually was rather than to the last previewed position.
+  let edgeDrag = null
+
+  function previewEdge(id, edge, ms) {
+    const index = tunes.findIndex((t) => t.session_instance_tune_id === id)
+    const tune = tunes[index]
+    if (!tune?.segment) return
+    if (!edgeDrag || edgeDrag.index !== index || edgeDrag.edge !== edge) {
+      edgeDrag = { index, edge, original: tune.segment }
+    }
+    const limits = edgeLimits(segments, id, edge, durationMs)
+    if (!limits) return
+    const at = Math.round(Math.min(limits.hi, Math.max(limits.lo, ms)))
+    tunes[index] = {
+      ...tune,
+      segment: edge === 'start' ? { ...tune.segment, start_ms: at } : { ...tune.segment, end_ms: at },
+    }
+    // Straight to `status`, not through flash(): this runs every frame of the
+    // drag, and flash() would be scheduling and cancelling a timer each time.
+    status = `${tune.name} ${edge === 'start' ? 'starts' : 'ends'} ${formatTime(at, { millis: true })}`
+    statusKind = 'info'
+  }
+
+  async function commitEdge(id, edge, ms) {
+    if (!edgeDrag) return
+    // The drop position is a position like any other: run it through the same
+    // clamping as every frame of the drag, so releasing outside the legal range
+    // can't save what dragging there wouldn't have shown.
+    previewEdge(id, edge, ms)
+    const held = edgeDrag
+    edgeDrag = null
+    const index = held.index
+    const moved = tunes[index]?.segment
+    const original = held.original
+    if (!moved) return
+    if (moved.start_ms === original.start_ms && moved.end_ms === original.end_ms) {
+      status = ''
+      return
+    }
+    const tune = tunes[index]
+    // Put the original back before saving: place() reads the current segment as
+    // the undo point, and by now that is the previewed position.
+    tunes[index] = { ...tune, segment: original }
+    await place(index, moved.start_ms, moved.end_ms)
+    flash(`Moved "${tune.name}" ${edge === 'start' ? 'start' : 'end'} to ${formatTime(edge === 'start' ? moved.start_ms : moved.end_ms, { millis: true })} — U to undo`)
+  }
+
   /**
    * Unplace a tune.
    *
@@ -581,6 +641,8 @@
           onseek={seek}
           onscrubstart={onScrubStart}
           onscrubend={onScrubEnd}
+          onedgepreview={previewEdge}
+          onedgecommit={commitEdge}
         />
 
         <div class="sg-clock">
@@ -690,6 +752,7 @@
             <div><dt>− =</dt><dd>zoom out / in</dd></div>
             <div><dt>[ ]</dt><dd>slower / faster</dd></div>
             <div><dt>S</dt><dd>toggle onset snap</dd></div>
+            <div><dt>drag an edge</dt><dd>move a boundary in the tape (no snap — the drag is the correction)</dd></div>
           </dl>
         </details>
       </section>

@@ -21,15 +21,41 @@
     onseek = () => {},
     onscrubstart = () => {},
     onscrubend = () => {},
+    onedgepreview = () => {},
+    onedgecommit = () => {},
   } = $props()
 
   let overviewCanvas = $state(null)
   let detailCanvas = $state(null)
   let overviewWidth = $state(0)
   let detailWidth = $state(0)
+  // The boundary under the pointer, or the one being dragged: `{id, edge}`.
+  // Drawn thicker so it is obvious WHICH edge a drag has hold of before the
+  // drag starts -- two marks a second apart are two pixels apart at 3-hour zoom.
+  let hotEdge = $state(null)
 
   const OVERVIEW_H = 56
   const DETAIL_H = 168
+  // Grab tolerance. Touch gets far more of it: a fingertip is nowhere near as
+  // precise as a cursor, and a 2px line is not a touch target.
+  const EDGE_GRAB_PX = 6
+  const EDGE_GRAB_TOUCH_PX = 15
+
+  /**
+   * The draggable boundaries: every placed tune's start, plus explicit ends.
+   *
+   * An implicit end is deliberately absent -- it IS the next tune's start, and
+   * that start is already here. One handle per edge on screen, so a drag can
+   * never be ambiguous about which of two coincident things it moves.
+   */
+  const edgeHandles = $derived.by(() => {
+    const out = []
+    for (const [id, seg] of segments) {
+      out.push({ id, edge: 'start', ms: seg.startMs })
+      if (seg.explicitEnd) out.push({ id, edge: 'end', ms: seg.endMs })
+    }
+    return out
+  })
 
   const tuneById = $derived(new Map(tunes.map((t) => [t.session_instance_tune_id, t])))
 
@@ -39,7 +65,7 @@
     drawOverview(overviewCanvas, overviewWidth, peaks, durationMs, currentMs, segments, zoomMs)
   })
   $effect(() => {
-    drawDetail(detailCanvas, detailWidth, peaks, durationMs, currentMs, zoomMs, segments, cursorTuneId)
+    drawDetail(detailCanvas, detailWidth, peaks, durationMs, currentMs, zoomMs, segments, cursorTuneId, hotEdge)
   })
 
   function prepare(canvas, cssWidth, cssHeight) {
@@ -100,7 +126,21 @@
     ctx.fillRect(Math.round(px), 0, 1, OVERVIEW_H)
   }
 
-  function drawDetail(canvas, width, peaks, durationMs, currentMs, zoomMs, segments, cursorTuneId) {
+  /**
+   * One boundary line, with a grip tab at the top.
+   *
+   * The tab is the affordance: a 2px coloured line reads as decoration, and
+   * nothing else on the tape says "this can be moved". When the pointer is on
+   * it (or dragging it) the whole edge thickens and goes white, so you can see
+   * which of two nearby edges you have hold of before you commit to the drag.
+   */
+  function drawEdge(ctx, x, color, hot) {
+    ctx.fillStyle = hot ? '#fff' : color
+    ctx.fillRect(x - (hot ? 1 : 0), 0, hot ? 4 : 2, DETAIL_H)
+    ctx.fillRect(x - (hot ? 3 : 2), 0, hot ? 8 : 6, hot ? 9 : 6)
+  }
+
+  function drawDetail(canvas, width, peaks, durationMs, currentMs, zoomMs, segments, cursorTuneId, hotEdge) {
     const ctx = prepare(canvas, width, DETAIL_H)
     if (!ctx || !durationMs) return
 
@@ -130,12 +170,13 @@
       ctx.fillStyle = setColor(tune ? tune.set_number : 0, isCursor ? 0.4 : 0.22)
       ctx.fillRect(x0, 0, Math.max(1, x1 - x0), DETAIL_H)
 
-      ctx.fillStyle = setColor(tune ? tune.set_number : 0, 1)
-      ctx.fillRect(x0, 0, 2, DETAIL_H)
+      const color = setColor(tune ? tune.set_number : 0, 1)
+      drawEdge(ctx, x0, color, hotEdge && hotEdge.id === id && hotEdge.edge === 'start')
       // An explicit end gets its own hard edge; an implicit one deliberately
-      // does not, because it is just wherever the next tune happens to start.
+      // does not, because it is just wherever the next tune happens to start --
+      // and that start is the handle you drag to move the pair of them.
       if (seg.explicitEnd) {
-        ctx.fillRect(x1 - 2, 0, 2, DETAIL_H)
+        drawEdge(ctx, x1 - 2, color, hotEdge && hotEdge.id === id && hotEdge.edge === 'end')
       }
 
       if (tune && x1 - x0 > 46) {
@@ -194,19 +235,65 @@
     overviewPointer(event)
   }
 
+  /** Absolute time under a client X coordinate on the detail tape. */
+  function detailMsAt(clientX, rect) {
+    const offset = (clientX - rect.left - rect.width / 2) * (zoomMs / rect.width)
+    return clamp(currentMs + offset)
+  }
+
+  /** The boundary within grabbing distance of a client X, or null. */
+  function edgeNear(clientX, rect, tolerancePx) {
+    if (!durationMs || !rect.width) return null
+    const msPerPx = zoomMs / rect.width
+    let best = null
+    for (const handle of edgeHandles) {
+      const hx = rect.left + rect.width / 2 + (handle.ms - currentMs) / msPerPx
+      const distance = Math.abs(hx - clientX)
+      if (distance <= tolerancePx && (!best || distance < best.distance)) best = { ...handle, distance }
+    }
+    return best
+  }
+
   function detailDown(event) {
-    event.currentTarget.setPointerCapture(event.pointerId)
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+    const rect = event.currentTarget.getBoundingClientRect()
+    // Grabbing an edge beats scrubbing the tape: a drag that starts ON a
+    // boundary can only have meant that boundary. Everywhere else is still the
+    // scrub it has always been, so the common gesture is unchanged.
+    const grabbed = edgeNear(event.clientX, rect, event.pointerType === 'touch' ? EDGE_GRAB_TOUCH_PX : EDGE_GRAB_PX)
+    if (grabbed) {
+      drag = { kind: 'edge', id: grabbed.id, edge: grabbed.edge }
+      hotEdge = { id: grabbed.id, edge: grabbed.edge }
+      onscrubstart()
+      onedgepreview(grabbed.id, grabbed.edge, detailMsAt(event.clientX, rect))
+      return
+    }
     drag = { kind: 'detail', startX: event.clientX, startMs: currentMs, moved: false }
     onscrubstart()
   }
 
   function pointerMove(event) {
-    if (!drag) return
+    if (!drag) {
+      // Idle hover: light up whatever edge a press would grab, so the tape says
+      // where its handles are before anything is committed to.
+      if (event.currentTarget === detailCanvas) {
+        const near = edgeNear(event.clientX, event.currentTarget.getBoundingClientRect(), EDGE_GRAB_PX)
+        hotEdge = near ? { id: near.id, edge: near.edge } : null
+      }
+      return
+    }
     if (drag.kind === 'overview') {
       overviewPointer(event)
       return
     }
     const rect = event.currentTarget.getBoundingClientRect()
+    if (drag.kind === 'edge') {
+      // The tape deliberately does NOT follow: it is centred on the playhead,
+      // so moving the playhead here would slide the view out from under the
+      // edge being placed.
+      onedgepreview(drag.id, drag.edge, detailMsAt(event.clientX, rect))
+      return
+    }
     const dx = event.clientX - drag.startX
     if (Math.abs(dx) > 3) drag.moved = true
     // Drag right = go back in time, like pulling tape past a playhead.
@@ -216,12 +303,18 @@
 
   function pointerUp(event) {
     if (!drag) return
+    const rect = event.currentTarget.getBoundingClientRect()
+    if (drag.kind === 'edge') {
+      onedgecommit(drag.id, drag.edge, detailMsAt(event.clientX, rect))
+      hotEdge = null
+      drag = null
+      onscrubend()
+      return
+    }
     // A tap that never became a drag is a seek to that spot, which is what a
     // click means everywhere else.
     if (drag.kind === 'detail' && !drag.moved) {
-      const rect = event.currentTarget.getBoundingClientRect()
-      const offset = (event.clientX - rect.left - rect.width / 2) * (zoomMs / rect.width)
-      onseek(clamp(drag.startMs + offset))
+      onseek(detailMsAt(event.clientX, rect))
     }
     drag = null
     onscrubend()
@@ -245,11 +338,13 @@
   <div class="wf-detail" bind:clientWidth={detailWidth}>
     <canvas
       bind:this={detailCanvas}
+      class:on-edge={hotEdge != null}
       style="height:{DETAIL_H}px"
       onpointerdown={detailDown}
       onpointermove={pointerMove}
       onpointerup={pointerUp}
       onpointercancel={pointerUp}
+      onpointerleave={() => { if (!drag) hotEdge = null }}
       onwheel={detailWheel}
     ></canvas>
     {#if !peaks}
@@ -290,6 +385,11 @@
        gesture for page scroll on touch and scrubbing simply never fires. */
     touch-action: pan-y;
     cursor: ew-resize;
+  }
+  /* Over a boundary the gesture means something different — moving that edge,
+     not scrubbing the tape — so the cursor says so before the press. */
+  canvas.on-edge {
+    cursor: col-resize;
   }
   .wf-empty {
     position: absolute;

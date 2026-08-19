@@ -48,8 +48,26 @@
           <button class="tl-main" type="button" onclick={() => onpick(idx)}>
             <span class="tl-name">{tune.name}</span>
             {#if tune.tune_type}<span class="tl-type">{tune.tune_type}</span>{/if}
-            {#if tune.is_set_end}<span class="tl-endmark" title="Last tune of the set — needs an explicit end">end</span>{/if}
           </button>
+
+          <!-- The set-end badge is a jump once the tune is placed: the end is
+               the one time in a set you cannot reach from the list otherwise
+               (the time column jumps to starts), and it is exactly where you
+               go to check or re-place it. Unplaced, there is nothing to jump
+               to, so it stays the label it always was. A sibling of .tl-main
+               rather than inside it, because a button cannot hold a button. -->
+          {#if tune.is_set_end}
+            {#if seg}
+              <button
+                class="tl-endmark is-jump"
+                type="button"
+                title="Ends at {formatTime(seg.endMs, { millis: true })}{seg.explicitEnd ? '' : ' (implied by the next tune)'} — jump there"
+                onclick={() => onseek(seg.endMs)}
+              >end</button>
+            {:else}
+              <span class="tl-endmark" title="Last tune of the set — needs an explicit end">end</span>
+            {/if}
+          {/if}
 
           {#if seg}
             <button
@@ -124,7 +142,10 @@
     background: rgba(245, 200, 66, 0.1);
   }
   .tl-main {
-    flex: 1 1 auto;
+    /* Was flex:1 — the end badge now sits outside it and carries the auto
+       margin instead, so the badge still reads as attached to the name while
+       the time column stays hard right. */
+    flex: 0 1 auto;
     display: flex;
     align-items: baseline;
     gap: 7px;
@@ -152,13 +173,24 @@
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--warning, #f5c842);
+    background: none;
     border: 1px solid currentColor;
     border-radius: 3px;
     padding: 0 3px;
     flex: none;
+    font-family: inherit;
+  }
+  .tl-endmark.is-jump {
+    cursor: pointer;
+  }
+  .tl-endmark.is-jump:hover {
+    background: rgba(245, 200, 66, 0.18);
   }
   .tl-time {
     flex: none;
+    /* Pushes the time column hard right whatever sits to its left — with or
+       without an end badge, placed or not. */
+    margin-left: auto;
     font-family: var(--font-family-monospace, monospace);
     font-size: 0.75rem;
     background: none;
@@ -191,6 +223,7 @@
   }
   .tl-unplaced {
     flex: none;
+    margin-left: auto;
     color: #555;
     padding: 2px 10px;
     font-size: 0.8rem;
