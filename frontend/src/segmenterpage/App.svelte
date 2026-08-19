@@ -74,6 +74,22 @@
     typeof window !== 'undefined' && window.matchMedia ? window.matchMedia(COMPACT_QUERY).matches : false,
   )
 
+  // How much chrome sits above the tool -- the site's fixed header plus the
+  // page padding. The phone layout gives the tape and the controls the top of
+  // the screen and lets ONLY the log scroll under them, which means knowing
+  // exactly how tall "the rest of the screen" is. Measured rather than
+  // hardcoded so a change to the surrounding template can't quietly leave the
+  // mark button hanging off the bottom; the 60px fallback in the stylesheet is
+  // what it measures to today.
+  let rootEl = $state(null)
+  let topOffset = $state(60)
+
+  function measureTop() {
+    if (!rootEl) return
+    const top = Math.round(rootEl.getBoundingClientRect().top + (window.scrollY || 0))
+    if (top > 0) topOffset = top
+  }
+
   const durationMs = $derived(recording?.duration_ms ?? 0)
   const segments = $derived(resolveSegments(tunes, durationMs))
   const placedCount = $derived(tunes.filter((t) => t.segment).length)
@@ -158,6 +174,8 @@
     const media = window.matchMedia ? window.matchMedia(COMPACT_QUERY) : null
     const onMedia = (event) => (compact = event.matches)
     media?.addEventListener('change', onMedia)
+    measureTop()
+    window.addEventListener('resize', measureTop)
     // Coming back with the browser's Back button restores this page from the
     // bfcache instead of mounting it again -- the playhead is already where it
     // was, and the mark left for the trip would otherwise sit there waiting to
@@ -168,6 +186,7 @@
       window.removeEventListener('keydown', onKeydown)
       window.removeEventListener('pageshow', dropResumeMarkOnRestore)
       media?.removeEventListener('change', onMedia)
+      window.removeEventListener('resize', measureTop)
     }
   })
 
@@ -628,7 +647,7 @@
 {#if !recording}
   <p class="sg-error">No recording payload. Reload the page.</p>
 {:else}
-  <div class="sg">
+  <div class="sg" bind:this={rootEl} style="--sg-top: {topOffset}px">
     <header class="sg-head">
       <div>
         <h1>{recording.label || 'Recording'}</h1>
@@ -848,6 +867,14 @@
     max-width: 1500px;
     margin: 0 auto;
     padding: 0 4px 24px;
+    /* No double-tap zoom anywhere in the tool. The transport buttons are tapped
+       in quick succession -- three −5s in a row is an ordinary thing to do --
+       and every other pair of them was being read as a double-tap and zooming
+       the page instead. `manipulation` drops that gesture only: panning and
+       PINCH zoom still work, which matters on a page whose whole content is a
+       waveform you sometimes want a closer look at. (The canvases set their own
+       `pan-y`, which already excludes double-tap zoom.) */
+    touch-action: manipulation;
   }
   .sg-head {
     display: flex;
@@ -1177,6 +1204,54 @@
       flex: 0 0 auto !important;
       min-width: 48px;
       font-size: 1.15rem !important;
+    }
+  }
+
+  /*
+   * Phone: the tape and its controls hold the top of the screen, and only the
+   * log scrolls under them.
+   *
+   * Sticky was not enough. A sticky block only stays put while the page has
+   * somewhere to put it, and this one is most of a phone screen -- so scrolling
+   * the log inevitably pushed the header and the top of the tape (where the
+   * drag handles are) out of view, and getting them back meant scrolling the
+   * log all the way home. Making the page itself unscrollable and giving the
+   * log its own overflow is the only arrangement where "scroll the list" and
+   * "keep the controls" are not the same gesture.
+   *
+   * Guarded on height: a phone in landscape cannot fit the tape, the transport
+   * and the mark row in ~375px, and pinning a block taller than the viewport
+   * would clip the mark button with no way to scroll to it. There the page goes
+   * back to scrolling as a whole, which is worse but never unusable.
+   */
+  @media (max-width: 900px) and (min-height: 500px) {
+    :global(html),
+    :global(body) {
+      overflow: hidden;
+    }
+    .sg {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      padding-bottom: 0;
+      height: calc(100vh - var(--sg-top, 60px));
+      /* dvh, so the phone's collapsing URL bar doesn't leave the mark button
+         under the fold or a dead strip below the log. */
+      height: calc(100dvh - var(--sg-top, 60px));
+    }
+    .sg-body {
+      flex: 1 1 auto;
+      min-height: 0;
+      grid-template-rows: auto minmax(0, 1fr);
+      align-items: stretch;
+    }
+    .sg-left {
+      /* Nothing to stick to any more: it is simply the top of a fixed column. */
+      position: static;
+      padding-bottom: 4px;
+    }
+    .sg-right {
+      min-height: 0;
     }
   }
 </style>

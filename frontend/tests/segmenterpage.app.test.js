@@ -807,6 +807,23 @@ describe('phone layout', () => {
     expect(container.querySelector('.sg-next-inline')).toBeNull()
   })
 
+  it('measures the chrome above it, so the pinned column ends at the screen edge', async () => {
+    // The phone layout is `height: calc(100dvh - var(--sg-top))`: the tape and
+    // the controls hold the top of the screen and only the log scrolls. Get the
+    // offset wrong and either the mark button hangs below the fold or there is
+    // a dead strip under the log.
+    const realRect = Element.prototype.getBoundingClientRect
+    Element.prototype.getBoundingClientRect = function () {
+      return { ...realRect.call(this), top: this.classList?.contains('sg') ? 50 : 0 }
+    }
+    try {
+      const { container } = phone()
+      await waitFor(() => expect(container.querySelector('.sg').style.cssText).toContain('--sg-top: 50px'))
+    } finally {
+      Element.prototype.getBoundingClientRect = realRect
+    }
+  })
+
   it('leaves the desktop header and options row alone', () => {
     const { container } = desktop()
     expect(container.querySelector('.sg-opts .sg-opt-audio')).toBeTruthy()

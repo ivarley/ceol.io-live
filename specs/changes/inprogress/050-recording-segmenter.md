@@ -350,6 +350,33 @@ The breakpoint is read synchronously at init and then followed with a
 `matchMedia` listener, so the tape is never drawn tall and re-drawn short on
 first paint, and a rotation doesn't need a reload.
 
+**The top of the screen is pinned; only the log scrolls.** The saved height
+alone did not fix the actual complaint. The left column was `position: sticky`,
+and a sticky block only stays put while the page has somewhere to put it — this
+one is most of a phone screen, so scrolling the log pushed the header and the
+top of the tape (where the drag handles are) out of view, and getting them back
+meant scrolling the log all the way home. So on a phone the page itself is made
+unscrollable and the log gets its own overflow: `.sg` is a flex column sized to
+`calc(100dvh - var(--sg-top))`, and the tune list is the only scroller on the
+screen. `--sg-top` is the tool's distance from the top of the page — the site's
+fixed header plus the page padding — measured at mount and on resize rather
+than hardcoded, so a change to the surrounding template cannot quietly leave
+the mark button hanging below the fold. `dvh` rather than `vh` because a
+phone's collapsing URL bar otherwise does exactly that.
+
+The tool also sets `touch-action: manipulation`, which drops double-tap zoom
+while leaving panning and pinch zoom alone. The transport buttons are tapped in
+quick succession — three −5s in a row is an ordinary thing to do — and every
+other pair was being read as a double-tap and zooming the page instead. Pinch
+is deliberately kept: the content is a waveform you sometimes want a closer
+look at, which is why this is `manipulation` rather than the live logger's
+`maximum-scale=1` viewport.
+
+This is guarded on `min-height: 500px`. A phone in landscape cannot fit the
+tape, the transport and the mark row in ~375px, and pinning a block taller than
+the viewport would clip the mark button with no way to scroll to it; there the
+page goes back to scrolling as a whole, which is worse but never unusable.
+
 **Fixing the log from inside the tool.** Timestamping is where you find out the
 log is wrong: a tune nobody wrote down is a stretch of audio with no cursor to
 put on it, and there is nothing to mark until the log says it happened. So the
