@@ -750,6 +750,9 @@
   // (spec 021 §A2–3). View is the common case — most people read a logged session
   // rather than log one — so a logger taps "✎ Edit log" to start.
   let mode = $state('view')
+  // Edit mode was asked for in the URL (?edit=1). Remembered only so a completed
+  // log can put it back -- completion locks editing for everyone (spec 024).
+  let requestedEdit = false
   const viewing = $derived(mode === 'view')
   // Editing affordances (seams, row actions, composer) are allowed only when in edit mode
   // AND not filtering — search mode hides them regardless of the underlying view/edit mode.
@@ -3297,6 +3300,13 @@
     displayTz = snap.user_timezone || snap.session_timezone || undefined
     notesText = snap.notes || ''
     logComplete = !!snap.log_complete
+    // ?edit=1 is asserted before the snapshot arrives, so it can land on a log
+    // that turns out to be finished. Completion locks editing for everyone, and
+    // the completed-log path renders without a stream at all.
+    if (logComplete && requestedEdit) {
+      requestedEdit = false
+      mode = 'view'
+    }
     highWater = snap.last_event_id || 0
     // Truth (or cache) is applied — the screen can render NOW. Flipping `loaded` here
     // (rather than when connect() fully resolves) matters only for an EMPTY log:
@@ -3603,9 +3613,21 @@
     const autoTuneId = params.get('tune')
     const highlightId = Number(params.get('highlight')) || null
     pendingHighlight = highlightId
-    if (autoTuneId || highlightId) {
+    // ?edit=1 opens straight in edit mode. The segmenter's "Fix the log" uses it
+    // (spec 050): landing in view mode would cost a tap before the one-line
+    // correction that was the whole reason for the trip. Set before connect() so
+    // the stream opens with the right mode= flag rather than being torn down and
+    // reopened a moment later; a signed-out viewer never leaves view mode, and a
+    // log that turns out to be complete is demoted when the snapshot says so.
+    const wantEdit = params.get('edit') === '1' && !readOnly
+    if (wantEdit) {
+      mode = 'edit'
+      requestedEdit = true
+    }
+    if (autoTuneId || highlightId || wantEdit) {
       params.delete('tune')
       params.delete('highlight')
+      params.delete('edit')
       const qs = params.toString()
       window.history.replaceState({}, '', window.location.pathname + (qs ? '?' + qs : ''))
     }

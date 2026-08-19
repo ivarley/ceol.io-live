@@ -367,6 +367,28 @@
         {% endfor %}
     </div>
     {% endif %}
+
+    {% if in_progress_recordings %}
+    <!-- In-Progress Timestamping Card (spec 050) -->
+    <div class="home-card">
+        <div class="home-card-header">
+            <span class="card-icon">&#9203;</span>
+            Continue Tagging
+        </div>
+        {% for r in in_progress_recordings %}
+        <div class="session-item">
+            <div class="session-date">
+                <div class="session-date-day">{{ r.date.strftime('%a') }}</div>
+                <div class="session-date-num">{{ r.date.day }}</div>
+            </div>
+            <div class="session-info">
+                <div class="session-name"><a href="/admin/recordings/{{ r.recording_id }}/segment">{{ r.label or r.name }}</a></div>
+                <div class="session-meta">{{ r.placed }} of {{ r.tune_count }} tunes placed &middot; edited {{ r.last_edit.strftime('%b %-d, %Y' if r.last_edit.year != current_year else '%b %-d') }}</div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
 </div>
 
 {% else %}

@@ -183,6 +183,66 @@ def home():
                 for row in cur.fetchall()
             ]
 
+            # In-progress timestamping (spec 050): recordings this user has placed
+            # tunes on in the last 30 days that still have tunes left to place.
+            # The same shape as the logging list above, and for the same reason --
+            # a three-hour recording is not finished in one sitting, and the way
+            # back to a half-tagged one was to remember it existed.
+            #
+            # "Finished" is placed == the instance's tune count; there is no
+            # completion flag on a recording, and inventing one would mean a
+            # second thing to remember to set.
+            cur.execute(
+                """
+                WITH mine AS (
+                    SELECT rts.recording_id, MAX(rts.last_modified_date) AS last_edit
+                    FROM recording_tune_segment rts
+                    WHERE rts.last_modified_user_id = %s
+                      AND rts.last_modified_date >= (NOW() AT TIME ZONE 'UTC') - INTERVAL '30 days'
+                    GROUP BY rts.recording_id
+                )
+                SELECT r.recording_id, r.label, s.name, si.date, mine.last_edit,
+                       (SELECT COUNT(*) FROM recording_tune_segment x
+                         WHERE x.recording_id = r.recording_id) AS placed,
+                       (SELECT COUNT(*) FROM session_instance_tune sit
+                         WHERE sit.session_instance_id = r.session_instance_id
+                           AND sit.deleted = FALSE AND sit.record_type <> 'break') AS tune_count
+                FROM mine
+                JOIN recording r ON r.recording_id = mine.recording_id
+                JOIN session_instance si ON si.session_instance_id = r.session_instance_id
+                JOIN session s ON s.session_id = si.session_id
+                WHERE r.status = 'ready'
+                  -- Who may still open the tool (schema/053). Having placed marks
+                  -- once is not the same as being allowed to now, and a card that
+                  -- links into a refusal is worse than no card.
+                  AND (%s OR EXISTS (
+                        SELECT 1 FROM session_person sp
+                        WHERE sp.session_id = s.session_id AND sp.person_id = %s
+                          AND sp.is_admin = TRUE AND sp.can_manage_recordings = TRUE
+                      ))
+                  AND (SELECT COUNT(*) FROM recording_tune_segment x
+                        WHERE x.recording_id = r.recording_id)
+                      < (SELECT COUNT(*) FROM session_instance_tune sit
+                          WHERE sit.session_instance_id = r.session_instance_id
+                            AND sit.deleted = FALSE AND sit.record_type <> 'break')
+                ORDER BY mine.last_edit DESC
+                LIMIT 3
+                """,
+                (current_user.user_id, bool(current_user.is_system_admin), person_id),
+            )
+            in_progress_recordings = [
+                {
+                    "recording_id": row[0],
+                    "label": row[1],
+                    "name": row[2],
+                    "date": row[3],
+                    "last_edit": row[4],
+                    "placed": row[5],
+                    "tune_count": row[6],
+                }
+                for row in cur.fetchall()
+            ]
+
             cur.close()
             conn.close()
 
@@ -193,6 +253,7 @@ def home():
                 suggested_tune=suggested_tune,
                 upcoming_sessions=upcoming_sessions,
                 in_progress_logs=in_progress_logs,
+                in_progress_recordings=in_progress_recordings,
                 current_year=today.year,
             )
         else:

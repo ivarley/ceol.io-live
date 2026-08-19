@@ -85,21 +85,74 @@
   let resumeAfterScrub = false
   const undoStack = []
 
+  // Where the playhead was when "Fix the log" left this page (below). The way
+  // back is the log header's own Recordings row, which carries no timestamp, so
+  // the spot is left here instead of in the URL. sessionStorage and read-once:
+  // it means "resume this round trip", not "always reopen where I left off".
+  //
+  // The element has no metadata at mount, and setting currentTime before it does
+  // wedges the load outright (see switchSource), so it is applied on
+  // loadedmetadata rather than immediately.
+  const RESUME_KEY = (id) => `ceol.segmenter.resume.${id}`
+  let pendingSeekMs = null
+
+  function applyPendingSeek() {
+    if (pendingSeekMs == null || !audio) return
+    audio.currentTime = pendingSeekMs / 1000
+    pendingSeekMs = null
+  }
+
+  function dropResumeMarkOnRestore(event) {
+    if (event.persisted) takeResumeMark()
+  }
+
+  function takeResumeMark() {
+    if (!recording) return null
+    try {
+      const key = RESUME_KEY(recording.recording_id)
+      const raw = window.sessionStorage.getItem(key)
+      window.sessionStorage.removeItem(key)
+      if (raw == null) return null
+      return Math.min(durationMs, Math.max(0, Number(raw) || 0))
+    } catch {
+      return null // private browsing and friends: just open at the top
+    }
+  }
+
   onMount(() => {
+    const resumeAt = takeResumeMark()
+    if (resumeAt != null) {
+      // Paint the waveform at the remembered spot immediately -- the peaks are
+      // already here, so the tape is back in place long before the audio is.
+      pendingSeekMs = resumeAt
+      currentMs = resumeAt
+      flash('Back where you left off')
+    }
     cursorIndex = Math.max(0, nextUnplacedIndex(tunes, 0))
     // On a warm cache the element can already be playable before the handlers
-    // above are bound, and then no event ever fires to clear the spinner.
+    // above are bound, and then no event ever fires to clear the spinner --
+    // and no loadedmetadata either, so a pending restore has to be applied here.
+    if (audio && audio.readyState >= 1) applyPendingSeek()
     if (audio && audio.readyState >= 3) mediaState = 'ready'
     loadPeaks()
     const tick = () => {
-      if (audio && !scrubbing) currentMs = audio.currentTime * 1000
+      // A pending restore means the element's clock is not authoritative yet:
+      // it still reads 0 (and reads 0 forever if the audio never loads), which
+      // would wipe the remembered spot the waveform is already painted at.
+      if (audio && !scrubbing && pendingSeekMs == null) currentMs = audio.currentTime * 1000
       raf = requestAnimationFrame(tick)
     }
     let raf = requestAnimationFrame(tick)
     window.addEventListener('keydown', onKeydown)
+    // Coming back with the browser's Back button restores this page from the
+    // bfcache instead of mounting it again -- the playhead is already where it
+    // was, and the mark left for the trip would otherwise sit there waiting to
+    // yank a later, unrelated visit back to an old spot.
+    window.addEventListener('pageshow', dropResumeMarkOnRestore)
     return () => {
       cancelAnimationFrame(raf)
       window.removeEventListener('keydown', onKeydown)
+      window.removeEventListener('pageshow', dropResumeMarkOnRestore)
     }
   })
 
@@ -129,6 +182,10 @@
 
   function seek(ms) {
     const clamped = Math.min(durationMs, Math.max(0, ms))
+    // Going somewhere deliberately outranks the remembered spot -- otherwise a
+    // restore still waiting on metadata would yank the playhead back out from
+    // under a scrub that had already moved on.
+    pendingSeekMs = null
     currentMs = clamped
     if (audio) audio.currentTime = clamped / 1000
   }
@@ -384,6 +441,27 @@
     if (seg) seek(seg.startMs)
   }
 
+  /**
+   * Go fix the log, then come straight back here.
+   *
+   * Timestamping is where you find out the log is wrong -- a tune nobody wrote
+   * down is a stretch of audio with no cursor to put on it -- and the fix is one
+   * line in the logger. `edit=1` lands in edit mode rather than costing a tap to
+   * get there, and the playhead is stashed first so the way back (the log
+   * header's Recordings row) reopens on the same moment instead of the top of a
+   * three-hour file.
+   */
+  function editLog() {
+    if (!instance) return
+    if (audio && !audio.paused) audio.pause()
+    try {
+      window.sessionStorage.setItem(RESUME_KEY(recording.recording_id), String(Math.round(currentMs)))
+    } catch {
+      // Not being able to remember the spot is not worth blocking the trip.
+    }
+    window.location.href = `/live/instances/${instance.session_instance_id}?edit=1`
+  }
+
   // ---- keyboard --------------------------------------------------------------
 
   function onKeydown(event) {
@@ -472,6 +550,12 @@
       <div class="sg-progress">
         <strong>{placedCount}</strong> / {tunes.length} placed
         {#if saving > 0}<span class="sg-saving">saving…</span>{/if}
+        <button
+          type="button"
+          class="sg-editlog"
+          onclick={editLog}
+          title="Open this night's log in edit mode — you'll come back here, at this moment in the audio"
+        >✎ Fix the log</button>
         <a class="sg-export" href="/api/recordings/{recording.recording_id}/export" target="_blank" rel="noopener">export</a>
       </div>
     </header>
@@ -630,6 +714,7 @@
       onpause={() => (playing = false)}
       onratechange={() => audio && (speed = audio.playbackRate)}
       onloadstart={() => (mediaState = 'loading')}
+      onloadedmetadata={applyPendingSeek}
       oncanplay={() => (mediaState = 'ready')}
       onplaying={() => (mediaState = 'ready')}
       onseeked={() => (mediaState = audio && audio.readyState >= 3 ? 'ready' : mediaState)}
@@ -679,6 +764,21 @@
   }
   .sg-saving {
     color: var(--warning, #f5c842);
+  }
+  /* Sits between the count and the export link, so it reads as part of the same
+     header cluster rather than as a control on the tool itself. */
+  .sg-editlog {
+    background: var(--header-bg, #2d2d2d);
+    color: var(--text-color, #e0e0e0);
+    border: 1px solid var(--border-color, #444);
+    border-radius: 6px;
+    padding: 5px 10px;
+    min-height: 32px;
+    font-size: 0.82rem;
+    cursor: pointer;
+  }
+  .sg-editlog:hover {
+    background: var(--hover-bg, #3d3d3d);
   }
   .sg-error {
     background: rgba(232, 90, 90, 0.15);

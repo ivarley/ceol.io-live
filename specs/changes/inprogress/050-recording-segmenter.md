@@ -230,6 +230,21 @@ hook. That wheel ships ffmpeg *only*, so `probe_audio` falls back to parsing
 ffmpeg's own stream report when there is no ffprobe; `_ffmpeg_exe()` prefers
 PATH, so local development is unaffected by any of this.
 
+### From the home page
+
+A three-hour recording is not timestamped in one sitting, and before this the
+only way back to a half-tagged one was to remember it existed. So the dashboard
+carries **Continue Tagging** next to Continue Logging, and the two are built the
+same way: recordings *you* placed marks on in the last 30 days that still have
+tunes left to place, most recently worked first, three at a time.
+
+Done is "every tune placed" rather than a flag — a recording has no completion
+column and inventing one would mean a second thing to remember to set — so the
+card empties itself as the work finishes. The permission is re-checked when the
+card is built (schema/053): having placed marks once is not the same as still
+being allowed to open the tool, and a card that links into a refusal is worse
+than no card.
+
 ### From inside the log
 
 `/admin/recordings` does this across every session in the system. The same job
@@ -273,6 +288,18 @@ Two canvases over the same envelope:
 - a **detail tape** that runs under a fixed centre line, so the mark point is
   always in the same place on screen. Dragging scrubs, which keeps the finger
   off the mark point on a phone.
+
+**Fixing the log from inside the tool.** Timestamping is where you find out the
+log is wrong: a tune nobody wrote down is a stretch of audio with no cursor to
+put on it, and there is nothing to mark until the log says it happened. So the
+header has **Fix the log**, which opens that night's logger at
+`?edit=1` — in edit mode, because landing in view mode costs a tap before the
+one-line correction that was the whole point. The way back is the log header's
+own Recordings row, which already links into the tool; what it cannot carry is
+where you were in three hours of audio, so the playhead is stashed in
+`sessionStorage` on the way out and consumed on the way in. Read-once and
+session-scoped on purpose: it means "resume this round trip", not "always reopen
+two hours in".
 
 **Onset snap** (on by default, <kbd>S</kbd> toggles) nudges a mark to the
 nearest sharp rise, and leaves it alone when the window holds no real onset.

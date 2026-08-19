@@ -408,3 +408,91 @@ describe('audio quality switch', () => {
     expect(container.querySelector('audio').getAttribute('src')).toBe('blob:master')
   })
 })
+
+describe('the round trip to the log', () => {
+  // Timestamping is where a missing tune shows up -- a stretch of audio with no
+  // cursor to put on it -- and the fix is one line in the logger. The trip out
+  // lands in edit mode; the way back is the log's own Recordings row, which
+  // carries no timestamp, so the playhead is stashed here instead.
+  const RESUME_KEY = 'ceol.segmenter.resume.7'
+
+  let realLocation
+  beforeEach(() => {
+    window.sessionStorage.removeItem(RESUME_KEY)
+    realLocation = window.location
+    // jsdom refuses a real navigation; capture the href instead of following it.
+    Object.defineProperty(window, 'location', {
+      configurable: true, writable: true, value: { href: '', pathname: '/admin/recordings/7/segment', search: '' },
+    })
+  })
+  afterEach(() => {
+    Object.defineProperty(window, 'location', { configurable: true, writable: true, value: realLocation })
+  })
+
+  it('goes to the log in edit mode', async () => {
+    const { container } = render(App, { props: { pageData: payload() } })
+    await fireEvent.click(container.querySelector('.sg-editlog'))
+    expect(window.location.href).toBe('/live/instances/42?edit=1')
+  })
+
+  it('stashes the playhead on the way out', async () => {
+    const { container } = render(App, { props: { pageData: payload() } })
+    const el = container.querySelector('audio')
+    await fireEvent(el, new Event('canplay'))
+    el.currentTime = 342
+    // The rAF tick is what copies the element's clock into the app's playhead.
+    await waitFor(() => expect(container.querySelector('.sg-time').textContent).toContain('5:42'))
+
+    await fireEvent.click(container.querySelector('.sg-editlog'))
+    expect(window.sessionStorage.getItem(RESUME_KEY)).toBe('342000')
+  })
+
+  it('reopens where it left off, once', async () => {
+    window.sessionStorage.setItem(RESUME_KEY, '342000')
+
+    const first = render(App, { props: { pageData: payload() } })
+    const el = first.container.querySelector('audio')
+    await fireEvent(el, new Event('loadedmetadata'))
+    expect(el.currentTime).toBe(342)
+    // Read once: the mark means "resume this round trip", not "always reopen
+    // three hours in" -- so the next visit starts at the top.
+    expect(window.sessionStorage.getItem(RESUME_KEY)).toBeNull()
+    first.unmount()
+
+    const again = render(App, { props: { pageData: payload() } })
+    const el2 = again.container.querySelector('audio')
+    el2.currentTime = 0
+    await fireEvent(el2, new Event('loadedmetadata'))
+    expect(el2.currentTime).toBe(0)
+  })
+
+  it('holds the remembered spot until the audio catches up', async () => {
+    // The rAF tick copies the element's clock into the playhead, and that clock
+    // reads 0 until metadata lands -- forever, if the audio never loads at all.
+    // Without holding it, the tape snaps back to the top a frame after painting.
+    window.sessionStorage.setItem(RESUME_KEY, '342000')
+    const { container } = render(App, { props: { pageData: payload() } })
+    await waitFor(() => expect(container.querySelector('.sg-time').textContent).toContain('5:42'))
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
+    expect(container.querySelector('.sg-time').textContent).toContain('5:42')
+  })
+
+  it('lets a deliberate seek win over a restore still in flight', async () => {
+    window.sessionStorage.setItem(RESUME_KEY, '342000')
+    const { container } = render(App, { props: { pageData: payload() } })
+    const el = container.querySelector('audio')
+    await fireEvent.click(container.querySelector('.sg-controls button')) // −15s
+    await fireEvent(el, new Event('loadedmetadata'))
+    // The mark is spent, not queued: the scrub already moved on from it.
+    expect(el.currentTime).not.toBe(342)
+  })
+
+  it('clamps a stale mark to the length of the recording', async () => {
+    // The log can be edited between leaving and coming back, but the audio
+    // cannot -- still, a mark past the end would seek nowhere useful.
+    window.sessionStorage.setItem(RESUME_KEY, '99999999')
+    const { container } = render(App, { props: { pageData: payload() } })
+    await fireEvent(container.querySelector('audio'), new Event('loadedmetadata'))
+    expect(container.querySelector('audio').currentTime).toBe(600)
+  })
+})
