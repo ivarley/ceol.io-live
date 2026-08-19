@@ -103,8 +103,8 @@
     })
   }
 
-  // Watching is now optional. Ingest runs on the server and a ten-minute cron
-  // finishes anything a sleeping dyno or a deploy interrupted, so this poll only
+  // Watching is now optional. Ingest runs on the server and a background sweeper
+  // finishes anything a deploy or a restart interrupted, so this poll only
   // keeps the list fresh for someone who happens to still be looking — nothing
   // depends on it, and closing the modal costs nothing.
   async function pollIngest(recordingId) {

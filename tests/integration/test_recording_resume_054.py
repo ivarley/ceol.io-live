@@ -1,19 +1,21 @@
 """Ingest that survives nobody watching (schema/054).
 
 Uploading starts a thread on the web dyno, which is fast and usually enough. It
-is not a guarantee: the free tier idles a web service out after ~15 minutes
-without traffic, so closing the tab on a long recording can put the dyno to sleep
-mid-transcode. The row then says 'processing' while nothing is processing it.
+is not a guarantee: the thread is a daemon thread in a gunicorn worker, and a
+deploy, an OOM, or a `max_requests` recycle takes it mid-transcode. The row then
+says 'processing' while nothing is processing it.
 
-Three mechanisms make that recoverable, and this is what pins them down:
+Four mechanisms make that recoverable, and this is what pins them down:
 
-1. **The claim.** One conditional UPDATE, so the web thread and the sweeper cron
+1. **The claim.** One conditional UPDATE, so the web thread and the sweeper
    cannot both start the same transcode however their timing lines up.
 2. **The heartbeat.** Liveness is stated every 30s rather than inferred from when
    a stage last changed, which is what lets "presumed dead" be 90 seconds instead
    of two hours.
 3. **The budget.** A file ffmpeg genuinely cannot read fails visibly instead of
-   being retried every ten minutes forever.
+   being retried for ever.
+4. **The sweep.** What actually re-runs an abandoned ingest, and what keeps two
+   gunicorn workers from each starting a different transcode at the same moment.
 
 The happy path through real ffmpeg lives in test_recording_ingest_050.
 """
@@ -265,3 +267,125 @@ def test_finishing_clears_the_budget(committed_recording, db_cursor, monkeypatch
     assert attempts == 0
     # Nothing is running, so nothing should be claiming to be alive.
     assert heartbeat is None
+
+
+# --------------------------------------------------------------------------- #
+# 5. the sweep
+# --------------------------------------------------------------------------- #
+# It used to be a cron job that was declared and never created. It now runs in
+# the web service from gunicorn's post_fork, which is the same code path either
+# way -- sweep_once() is what the manual jobs/ script calls too.
+
+
+def _no_real_ingest(monkeypatch):
+    """Record which recordings the sweep hands to ingest, without transcoding.
+
+    Also pretends object storage is configured. It is not in the test
+    environment, and sweep_once refuses to do anything without it -- correctly,
+    which is what test_the_sweep_does_nothing_without_object_storage covers.
+    """
+    import recording as rec
+    import services.recording_ingest as ri
+
+    monkeypatch.setattr(rec, "check_configured", lambda: None)
+    handed = []
+    monkeypatch.setattr(ri, "ingest_recording", lambda rid, user_id=None: handed.append(rid))
+    return handed
+
+
+def test_the_sweep_finishes_an_abandoned_run(committed_recording, monkeypatch):
+    import services.recording_ingest as ri
+
+    handed = _no_real_ingest(monkeypatch)
+    _set(status="processing")
+    _beat_ago(ri.HEARTBEAT_STALE_SECONDS + 30)
+
+    assert ri.sweep_once() == 1
+    assert handed == [RES_RECORDING]
+
+
+def test_the_sweep_takes_a_queued_recording(committed_recording, monkeypatch):
+    import services.recording_ingest as ri
+
+    handed = _no_real_ingest(monkeypatch)
+    assert ri.sweep_once() == 1
+    assert handed == [RES_RECORDING]
+
+
+def test_the_sweep_leaves_a_live_run_alone(committed_recording, monkeypatch):
+    """The point of _ingest_in_flight_anywhere.
+
+    Not about claiming the same row -- find_pending_recordings already excludes
+    anything beating. This is what stops the second gunicorn worker starting a
+    transcode of a DIFFERENT recording while one is already running, which is how
+    two ffmpegs end up sharing a 512MB dyno.
+    """
+    import services.recording_ingest as ri
+
+    handed = _no_real_ingest(monkeypatch)
+    _set(status="processing")
+    _beat_ago(5)
+
+    assert ri.sweep_once() == 0
+    assert handed == []
+
+
+def test_the_sweep_does_nothing_without_object_storage(committed_recording, monkeypatch, db_cursor):
+    """An unset AWS_* must not burn the retry budget of a good recording.
+
+    Every claim would spend an attempt on a download that cannot work, and three
+    sweeps would exhaust a perfectly readable file for a reason that has nothing
+    to do with it.
+    """
+    import recording as rec
+    import services.recording_ingest as ri
+
+    handed = _no_real_ingest(monkeypatch)
+    monkeypatch.setattr(rec, "check_configured", lambda: "object storage is not configured (test)")  # noqa: E501
+
+    assert ri.sweep_once() == 0
+    assert handed == []
+    assert _row(db_cursor, "status", "ingest_attempts") == ("queued", 0)
+
+
+def test_the_sweep_abandons_an_exhausted_recording_before_looking_for_work(
+    committed_recording, monkeypatch, db_cursor
+):
+    import services.recording_ingest as ri
+
+    handed = _no_real_ingest(monkeypatch)
+    _set(status="processing", ingest_attempts=ri.MAX_INGEST_ATTEMPTS)
+    _beat_ago(ri.HEARTBEAT_STALE_SECONDS + 30)
+
+    assert ri.sweep_once() == 0
+    assert handed == []
+    assert _row(db_cursor, "status")[0] == "failed"
+
+
+def test_one_bad_recording_does_not_stop_the_batch(committed_recording, monkeypatch):
+    """ingest_recording records its own failure; the sweep only has to continue."""
+    import services.recording_ingest as ri
+
+    _no_real_ingest(monkeypatch)
+
+    def _explode(rid, user_id=None):
+        raise RuntimeError("ffmpeg fell over")
+
+    monkeypatch.setattr(ri, "ingest_recording", _explode)
+    assert ri.sweep_once() == 0  # raised, so not counted -- and did not propagate
+
+
+def test_starting_the_sweeper_twice_starts_one_thread(monkeypatch):
+    """post_fork runs per worker, but nothing should start two in one process."""
+    import services.recording_ingest as ri
+
+    monkeypatch.setattr(ri, "_sweeper_running", False)
+    started = []
+    monkeypatch.setattr(ri, "_sweep_loop", lambda: started.append(1))
+
+    first = ri.start_sweeper()
+    second = ri.start_sweeper()
+
+    assert first is not None
+    assert second is None, "the second call should be a no-op, not a second sweeper"
+    first.join(timeout=5)

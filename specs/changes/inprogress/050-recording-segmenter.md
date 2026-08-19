@@ -193,14 +193,21 @@ the failing circle red and is most of the diagnosis on its own: a Download
 failure and a Proxy failure point at completely different problems.
 
 **You can close the tab.** Ingest runs on the server, so walking away never
-stopped the work — what stopped it was the dyno. Render's free tier idles a web
-service out after ~15 minutes without traffic, and the upload page's own poll was
-the only thing keeping it awake, so leaving a long file could put the dyno to
-sleep mid-transcode and leave the row saying `processing` while nothing was.
+stopped the work — what stopped it was the process going away underneath it. The
+thread doing the transcode is a daemon thread in a gunicorn worker, and a deploy,
+an OOM, or a `max_requests` recycle takes it with no warning, leaving the row
+saying `processing` while nothing is.
+
+(This was first written as "the free tier idles the dyno out after ~15 minutes."
+That was wrong — `ceol.io-live` is on starter and does not idle — and it sent the
+recovery mechanism to the wrong place: a cron job, which was then declared in
+`render.yaml` and never actually created, so for its whole life the safety net
+was a comment. The failure modes above are all *restarts*, which is why the sweep
+now lives in the web service.)
 
 Three things fix that (schema/054), and they are lifted from the spec-031 merge
 scan rather than invented — one mechanism in the codebase for "long job, thread
-plus cron, might get killed":
+plus sweeper, might get killed":
 
 - **A heartbeat, not an inference.** The running ingest refreshes
   `ingest_heartbeat_at` every 30s. Liveness used to be read off
@@ -208,11 +215,36 @@ plus cron, might get killed":
   each run for minutes — so "presumed dead" had to be two hours or a live run
   would be reaped. With a real heartbeat it is 90 seconds.
 - **A claim, not a check-then-act.** `claim_recording_for_ingest` is one
-  conditional UPDATE, so the web thread and the cron cannot both start the same
-  transcode however their timing lines up.
-- **A sweeper.** `jobs/process_pending_recordings.py` runs every ten minutes,
-  claims anything `queued` or abandoned, and finishes it. It needs the `AWS_*`
-  variables, unlike the other cron jobs.
+  conditional UPDATE, so the web thread and the sweeper cannot both start the
+  same transcode however their timing lines up.
+- **A sweeper, in the web service.** `services/recording_ingest.py`'s
+  `start_sweeper()` runs from `gunicorn.conf.py`'s `post_fork`: it sweeps shortly
+  after every worker boot, then every ten minutes. Booting is the point — each
+  event that can kill an ingest (deploy, OOM, worker recycle) is immediately
+  followed by a fork, so recovery happens in seconds rather than at the mercy of
+  a cron window, and it needs no service of its own. The periodic tick covers the
+  only case a restart doesn't: a run that stops heartbeating without dying.
+
+  Both workers run a sweeper. The atomic claim keeps them off the same recording,
+  and a "is anything heartbeating right now" check keeps them from starting two
+  *different* transcodes side by side on a 512MB dyno — `_SLOT` gives that
+  guarantee inside one process, the check extends it across them. The initial
+  delay is jittered per worker for the same reason.
+
+  It needs the `AWS_*` variables (the web service already has them for the upload
+  path); without object storage it logs and skips rather than burning a
+  recording's retry budget on a download that cannot work.
+
+  `jobs/process_pending_recordings.py` survives as the way to run the same sweep
+  by hand.
+
+**Deployment note.** `schema/054_recording_ingest_resume.sql` must be applied
+before in-app upload works at all — it is not only the recovery mechanism. The
+create endpoint INSERTs `status='queued'`, which the pre-054 `ck_recording_status`
+rejects, so without it an upload fails on its first statement. It was not applied
+to production when this shipped (2026-08-08), alongside the cron job that was
+declared and never created; both were found on 2026-08-19 with production still
+at 053.
 
 The thread is now the fast path rather than the guarantee, and rows are created
 `queued` so a dyno that dies before the thread starts loses nothing. Ingest is

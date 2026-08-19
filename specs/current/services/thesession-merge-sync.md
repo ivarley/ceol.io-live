@@ -1,4 +1,4 @@
-# thesession.org Merge Sync Cron Job
+# thesession.org Merge Sync
 
 Weekly job that mirrors upstream tune merges automatically (spec 031).
 
@@ -8,7 +8,8 @@ Weekly job that mirrors upstream tune merges automatically (spec 031).
 **Schedule**: Weekly, Mondays 06:00 UTC (thesession.org's data dumps refresh on Sundays)
 **Purpose**: Because `tune.tune_id` *is* the thesession.org tune id, tunes merged
 upstream go stale silently. This job finds them and applies the merges.
-**Technology**: Python cron job on Render (`ceol-io-thesession-merge-sync`)
+**Technology**: Python, piggybacked on the `ceol-io-active-sessions` cron —
+**not** a service of its own. See [Scheduling](#scheduling).
 
 ## How It Works
 
@@ -64,27 +65,50 @@ for local-only merges and imports a missing target on confirm.
 | `GET /api/admin/tunes/merge-scan` | Recent runs (≤26) with their result rows. |
 | `DELETE /api/admin/tunes/merge-scan` | Cancel the running sync. |
 
-## Deployment
+## Scheduling
 
-Configured in `render.yaml`:
+There is no `ceol-io-thesession-merge-sync` cron service. One was declared in
+`render.yaml` when this feature shipped and never created — `render.yaml` is
+dashboard-mirroring documentation, not an applied blueprint — so the sync did not
+run once between 2026-07-08 and 2026-08-19.
 
-```yaml
-- type: cron
-  name: ceol-io-thesession-merge-sync
-  env: python
-  schedule: "0 6 * * 1"
-  buildCommand: "pip install -r requirements.txt"
-  startCommand: "python3 jobs/sync_thesession_merges.py"
-```
+Rather than pay for a second cron service to fire 52 times a year, it rides on
+the one Ceol already has. `jobs/check_active_sessions.py` calls
+`run_weekly_if_due()` at the end of every run; that cron fires at
+`14,29,44,59 * * * *`, so it passes through the Monday 06:00 UTC window every
+week.
 
-Exit code 1 when the run didn't complete or recorded errors (Render alerts);
-errors retry naturally the following week.
+`is_due()` requires **both**:
+
+- **The window** — Monday, hour 06 UTC. This is what makes it weekly, and puts it
+  after thesession.org's Sunday dump refresh.
+- **≥ `SYNC_INTERVAL_DAYS` (6) since the last run started** (`MAX(started_at)` on
+  `tune_merge_scan`). This stops all four of that hour's invocations from each
+  starting a run, and recovers a week whose window was missed. Six days rather
+  than seven so clock drift can't skip a week.
+
+It runs **last** in that script, deliberately: it takes minutes when it fires,
+and Render won't start the next run of a cron while the current one is going.
+Session activation is the time-sensitive half and has already finished. The
+window is ~1am Central, when no sessions are activating anyway.
+
+The gate costs one `MAX()` per invocation and does nothing on 671 of every 672.
+
+`create_run()` still refuses to start when a run is already active (fresh
+heartbeat), so an admin's "Run Now" and this can't collide.
+
+Failures are logged; a run that didn't complete or recorded errors makes the
+active-sessions cron exit non-zero (Render alerts). Errors retry naturally the
+following week.
 
 ## Local Development
 
 ```bash
 python3 jobs/sync_thesession_merges.py   # runs against the .env database
 ```
+
+Run standalone it syncs immediately, ignoring the schedule gate — the gate only
+applies to `run_weekly_if_due()`.
 
 Tests: `tests/integration/test_merge_scan_031.py` (HTTP fully mocked, including
 the dump CSVs).

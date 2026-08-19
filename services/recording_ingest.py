@@ -12,8 +12,8 @@ So it runs in the background and the row carries its state:
 
 Still not a broker-backed job queue -- there is no worker dyno, and this fires a
 few times a week -- but it no longer depends on anyone watching. The thread is
-the fast path; a ten-minute cron (jobs/process_pending_recordings.py) is the
-safety net, and the two coordinate through the row itself:
+the fast path; the sweeper below is the safety net, and the two coordinate
+through the row itself:
 
   * **A heartbeat, not an inference.** Whoever is running an ingest refreshes
     `ingest_heartbeat_at` every 30 seconds. Liveness used to be read off
@@ -24,8 +24,7 @@ safety net, and the two coordinate through the row itself:
     conditional UPDATE, so the web thread and the cron cannot both take the same
     recording however their timing lines up.
   * **A budget.** ingest_attempts caps automatic retries, so a file ffmpeg simply
-    cannot read fails visibly instead of being re-attempted every ten minutes
-    forever.
+    cannot read fails visibly instead of being re-attempted for ever.
 
 This is the same shape as the spec-031 merge scan (tune_merge_scan.heartbeat_at,
 HEARTBEAT_STALE_SECONDS, claim-or-skip), deliberately: one mechanism in the
@@ -58,9 +57,9 @@ HEARTBEAT_STALE_SECONDS = 90
 HEARTBEAT_INTERVAL_SECONDS = 30
 
 # Automatic attempts before a recording is left alone. The sweeper re-runs
-# anything stale, so without this a file ffmpeg cannot read would be retried
-# every ten minutes for ever. Three is enough to ride out a deploy or a dyno
-# sleeping mid-run, and few enough that a genuinely broken file fails visibly.
+# anything stale, so without this a file ffmpeg cannot read would be retried for
+# ever. Three is enough to ride out a couple of deploys landing on the same
+# recording, and few enough that a genuinely broken file fails visibly.
 # An explicit Retry from the UI resets the count -- a person choosing to try
 # again is a different event from a machine looping.
 MAX_INGEST_ATTEMPTS = 3
@@ -133,7 +132,7 @@ def claim_recording_for_ingest(recording_id):
     """Take ownership of a recording's ingest. True if we got it.
 
     One conditional UPDATE rather than a read followed by a write: the web
-    thread and the sweeper cron both come through here, and check-then-act would
+    thread and the sweeper both come through here, and check-then-act would
     let two of them start the same three-hour transcode whenever their timing
     lined up. A row is claimable when it is waiting ('queued') or when whoever
     had it has stopped saying they are alive.
@@ -232,7 +231,7 @@ def ingest_recording(recording_id, user_id=None):
     re-run: every step overwrites, and the proxy lands on a key derived from the
     master's, so a retry replaces rather than accumulates.
 
-    Runs on a background thread (see start_ingest) or in the sweeper cron, and
+    Runs on a background thread (see start_ingest) or in the sweeper, and
     therefore opens its own connection and touches no request state.
 
     Claims the row first and returns immediately if it cannot: whoever holds a
@@ -425,7 +424,7 @@ def start_ingest(recording_id, user_id=None):
     """Kick off ingest_recording on a daemon thread and return immediately.
 
     The FAST PATH, not the guarantee. A daemon thread means a shutdown is never
-    held up by an in-flight transcode, and the sweeper cron picks up whatever a
+    held up by an in-flight transcode, and the sweeper picks up whatever a
     shutdown interrupted -- so this is free to be best-effort.
     """
     try:
@@ -453,3 +452,151 @@ def start_ingest(recording_id, user_id=None):
         except Exception:
             logger.exception("ingest: could not even mark recording %s as waiting", recording_id)
         return None
+
+
+# -----------------------------------------------------------------------------
+# The sweeper
+# -----------------------------------------------------------------------------
+# This used to be a cron job. It was declared in render.yaml and never created,
+# so for its whole life the safety net was a comment -- but the reasoning behind
+# it was wrong anyway. It was written for a free-tier web service that idles out
+# after ~15 minutes without traffic; ceol.io-live is on starter and does not
+# idle. What actually kills an in-flight ingest is the process restarting: a
+# deploy, an OOM, or gunicorn recycling a worker at max_requests.
+#
+# So the sweep belongs in the web service, where every one of those events is
+# followed by a fresh worker booting. post_fork starts this thread, which means
+# a deploy-interrupted ingest resumes seconds later rather than waiting out a
+# ten-minute cron window. The periodic tick after that is only for the case a
+# restart does not cover: a run that stops heartbeating without its process
+# dying.
+
+# How often to look after the first sweep. The heartbeat goes stale at 90s, so
+# anything faster is just re-asking a question already answered.
+SWEEP_INTERVAL_SECONDS = 600
+
+# Wait before the first sweep so a booting worker starts serving requests before
+# it starts a transcode, and so two workers forking together do not sweep in
+# lockstep. Jittered per process for the same reason.
+SWEEP_INITIAL_DELAY_SECONDS = (20, 90)
+
+_sweeper_started = threading.Lock()
+_sweeper_running = False
+
+
+def _ingest_in_flight_anywhere():
+    """True if some process is currently ingesting (a fresh heartbeat exists).
+
+    The claim is atomic, so this is not what keeps two sweepers off the same
+    recording -- find_pending_recordings already excludes anything beating. What
+    it prevents is both gunicorn workers picking up two DIFFERENT recordings at
+    the same moment and running two transcodes side by side on a 512MB dyno.
+    _SLOT gives that guarantee within a process; this extends it across them.
+    """
+    from database import get_db_connection
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT 1 FROM recording
+             WHERE status = 'processing'
+               AND ingest_heartbeat_at
+                   >= (NOW() AT TIME ZONE 'UTC') - make_interval(secs => %s)
+             LIMIT 1
+            """,
+            (HEARTBEAT_STALE_SECONDS,),
+        )
+        return cur.fetchone() is not None
+    finally:
+        conn.close()
+
+
+def sweep_once(limit=1):
+    """Finish recordings nobody is working on. Returns how many were attempted.
+
+    Runs the ingest SYNCHRONOUSLY on the calling thread -- the caller is either
+    the sweeper thread or a cron process, and in both the work is the point.
+
+    One at a time by default. Ingest is minutes per recording and uploads arrive
+    a few times a week, so there is nothing to be gained by batching and a real
+    cost to two of them sharing the dyno's memory.
+    """
+    import recording as rec
+
+    # Check this first: without object storage every claim below would burn an
+    # attempt on a download that cannot work, and three sweeps would exhaust the
+    # budget of a perfectly good recording for a reason that has nothing to do
+    # with it.
+    problem = rec.check_configured()
+    if problem:
+        logger.warning("sweep: skipped, %s", problem)
+        return 0
+
+    for recording_id in abandon_exhausted_recordings():
+        logger.warning(
+            "sweep: recording %s has used all %s attempts; marked failed for a human to look at",
+            recording_id, MAX_INGEST_ATTEMPTS,
+        )
+
+    if _ingest_in_flight_anywhere():
+        logger.debug("sweep: an ingest is already running; leaving it alone")
+        return 0
+
+    pending = find_pending_recordings(limit=limit)
+    if not pending:
+        return 0
+
+    attempted = 0
+    for item in pending:
+        logger.info(
+            "sweep: ingesting recording %s (%s) -- attempt %s of %s",
+            item["recording_id"], item["label"] or "unlabelled",
+            item["attempts"] + 1, MAX_INGEST_ATTEMPTS,
+        )
+        try:
+            # Claims internally and returns immediately if someone else picked it
+            # back up between our query and now -- a race worth losing.
+            ingest_recording(item["recording_id"])
+            attempted += 1
+        except Exception:
+            # ingest_recording records its own failure on the row; this is only
+            # so one bad recording cannot stop the rest of the batch.
+            logger.exception("sweep: recording %s raised out of ingest", item["recording_id"])
+
+    return attempted
+
+
+def _sweep_loop():
+    import random
+    import time
+
+    time.sleep(random.uniform(*SWEEP_INITIAL_DELAY_SECONDS))
+    while True:
+        try:
+            sweep_once()
+        except Exception:
+            # A sweeper that dies on a bad night is a safety net that silently
+            # stops existing. Log and go round again.
+            logger.exception("sweep: unhandled error; will try again next tick")
+        time.sleep(SWEEP_INTERVAL_SECONDS + random.uniform(0, 60))
+
+
+def start_sweeper():
+    """Start the background sweeper. Idempotent; safe to call once per worker.
+
+    Called from gunicorn.conf.py's post_fork, which is deliberate: it means the
+    sweeper exists in the web service and nowhere else -- not in the dev server,
+    not in tests, and not in the cron process, all of which import this module.
+    """
+    global _sweeper_running
+    with _sweeper_started:
+        if _sweeper_running:
+            return None
+        _sweeper_running = True
+
+    thread = threading.Thread(target=_sweep_loop, name="recording-ingest-sweeper", daemon=True)
+    thread.start()
+    logger.info("recording ingest sweeper started (every %ss)", SWEEP_INTERVAL_SECONDS)
+    return thread

@@ -369,7 +369,7 @@ def get_recording_status(recording_id):
 
     `stalled` means nothing is working on this recording: the run that had it
     stopped heartbeating. It is now a note rather than a call to action -- the
-    sweeper cron picks these up within ten minutes -- but the page still says so,
+    sweeper picks these up on the next worker boot or tick -- but the page says so,
     because "processing" with nobody processing is exactly the state that used to
     leave people watching a spinner for two hours.
     """
@@ -432,7 +432,7 @@ def reprocess_recording(recording_id):
     """POST /api/recordings/<id>/reprocess — run ingest again.
 
     Mostly needed now for a recording ingest genuinely could not read — a deploy
-    or a sleeping dyno is picked up by the sweeper cron without anyone asking.
+    or a restarted dyno is picked up by the sweeper without anyone asking.
     Idempotent: every step of ingest overwrites.
 
     Resets `ingest_attempts`, because a person choosing to try again is a

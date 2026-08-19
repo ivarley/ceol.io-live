@@ -45,15 +45,26 @@ loglevel = os.environ.get("GUNICORN_LOG_LEVEL", "info")
 
 
 def post_fork(server, worker):
-    """Each forked worker builds its own connection pool.
+    """Each forked worker builds its own connection pool, then starts sweeping.
 
     database.py creates the pool lazily on first use, so a pool inherited across
     a fork would share sockets between processes. Clearing it here makes that
     impossible rather than merely unlikely.
+
+    The recording-ingest sweeper (spec 050) starts here too. A worker forking is
+    precisely the event it exists to recover from -- deploy, OOM, max_requests
+    recycle -- so booting one is the right moment to go looking for an ingest
+    that was killed mid-transcode. This hook is also the reason the sweeper does
+    not run in the dev server, in tests, or in the cron process: they import the
+    module but never fork a gunicorn worker.
     """
     from database import close_db_pool
 
     close_db_pool()
+
+    from services.recording_ingest import start_sweeper
+
+    start_sweeper()
 
 
 def worker_exit(server, worker):

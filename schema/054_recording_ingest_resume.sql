@@ -2,10 +2,15 @@
 -- 054 Let a stranded ingest pick itself back up
 -- =============================================================================
 -- Ingest already runs on a background thread, so closing the tab does not stop
--- it. What stops it is the dyno: Render's free tier idles a web service out
--- after ~15 minutes without inbound traffic, and the upload page's own poll was
--- the only thing keeping it awake. Walk away from a long file and the thread can
--- die mid-transcode, leaving the row 'processing' forever.
+-- it. What stops it is the process going away underneath it: the thread is a
+-- daemon thread in a gunicorn worker, and a deploy, an OOM, or a max_requests
+-- recycle takes it mid-transcode, leaving the row 'processing' forever.
+--
+-- (This first said "Render's free tier idles the dyno out after ~15 minutes".
+-- That was wrong -- ceol.io-live is on starter and does not idle -- and it sent
+-- the recovery mechanism to a cron job that was declared in render.yaml and
+-- never created. The sweeper now runs in the web service, off gunicorn's
+-- post_fork, because a worker booting is precisely the event to recover from.)
 --
 -- Two columns make that recoverable without a human noticing:
 --
@@ -18,14 +23,18 @@
 --     the same reasoning as tune_merge_scan.heartbeat_at (spec 031).
 --
 --   * `ingest_attempts` -- a retry budget. A sweeper that re-runs anything stale
---     would otherwise retry a genuinely unreadable file every ten minutes
---     forever. After a few goes the row is marked failed and stays that way. An
+--     would otherwise retry a genuinely unreadable file for ever. After a few
+--     goes the row is marked failed and stays that way. An
 --     explicit human Retry resets the count, because a person choosing to try
 --     again is a different event from a machine looping.
 --
 -- The status vocabulary also gains 'queued': the create endpoint can then hand a
 -- recording off without depending on its thread ever starting, and the sweeper
 -- picks it up either way.
+--
+-- THIS MIGRATION IS LOAD-BEARING FOR UPLOAD, not just for recovery. The create
+-- endpoint INSERTs status='queued', which the old CHECK constraint rejects, so
+-- until this runs an in-app upload fails on its first statement.
 -- =============================================================================
 
 BEGIN;

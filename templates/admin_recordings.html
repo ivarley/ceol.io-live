@@ -606,7 +606,7 @@
                     throw new Error('Processing failed: ' + (data.status_detail || 'no detail recorded'));
                 }
                 if (data.stalled) {
-                    // No longer an error: the sweeper cron picks these up within
+                    // No longer an error: the sweeper picks these up within
                     // ten minutes. Say what is happening and keep watching.
                     setStatus('Waiting to be picked up — the server will finish this shortly.');
                     setTimeout(function () { pollStatus(recordingId); }, 5000);
@@ -677,8 +677,8 @@
                 if (!result.ok || !result.data.success) {
                     throw new Error(result.data.error || 'Could not register the recording');
                 }
-                // Handed off. Ingest runs on the server and a ten-minute cron
-                // finishes whatever a sleeping dyno or a deploy interrupts, so the
+                // Handed off. Ingest runs on the server and a background sweeper
+                // finishes whatever a deploy or a restart interrupts, so the
                 // form comes back now rather than after the transcode. The poll
                 // below is only for whoever stays to watch.
                 uploadBtn.disabled = false;

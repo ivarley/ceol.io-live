@@ -1,25 +1,36 @@
 #!/usr/bin/env python3
 """
-Finish recording ingests nobody is working on - Cron Job Script (spec 050)
+Finish recording ingests nobody is working on - manual tool (spec 050)
 
-Uploading audio starts a background thread on the web dyno, which is fast and
-usually enough. It is not a guarantee: Render's free tier idles a web service out
-after ~15 minutes without traffic, so closing the tab on a long recording can put
-the dyno to sleep mid-transcode, and a deploy does the same thing. The row is
-left saying 'processing' while nothing is processing it.
+NOT a cron job. This was declared as one in render.yaml and never created, so
+the safety net it describes was a comment for its whole life -- and the reason
+given for it was wrong anyway. It said Render's free tier idles a web service
+out after ~15 minutes; ceol.io-live is on starter and does not idle. What
+actually kills an in-flight ingest is the process restarting: a deploy, an OOM,
+or gunicorn recycling a worker at max_requests.
 
-This is the safety net. Every ten minutes it looks for recordings that are either
-waiting to start or were abandoned by a run that has stopped heartbeating, claims
-them, and finishes the job here instead. That is what makes it safe to upload
-something and walk away.
+So the sweep lives in the web service now (services/recording_ingest.py's
+start_sweeper, started from gunicorn.conf.py's post_fork). Every event that can
+interrupt an ingest is followed by a worker booting, which is exactly when a
+sweep is worth running -- a deploy-killed transcode resumes seconds later
+instead of waiting out a ten-minute cron window, and it costs nothing.
 
-Runs the ingest SYNCHRONOUSLY -- in a cron process the work is the point, and
-there is nothing to return to.
+This file remains as the way to run a sweep by hand: from a Render shell when
+something is stuck, or locally against a real database. The logic is the same
+function the web service calls, so running it here tells you what happens there.
+
+    python3 jobs/process_pending_recordings.py          # sweep one recording
+    python3 jobs/process_pending_recordings.py --limit 5
+
+Runs the ingest SYNCHRONOUSLY -- here the work is the point, and there is
+nothing to return to.
 
 Needs the AWS_* variables as well as the PG* ones: without object storage it can
-download nothing, and every sweep would quietly do nothing at all.
+download nothing, and the sweep would quietly do nothing at all. It says so and
+exits non-zero rather than pretending to work.
 """
 
+import argparse
 import logging
 import os
 import sys
@@ -35,12 +46,7 @@ load_dotenv()
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import recording as rec  # noqa: E402
-from services.recording_ingest import (  # noqa: E402
-    MAX_INGEST_ATTEMPTS,
-    abandon_exhausted_recordings,
-    find_pending_recordings,
-    ingest_recording,
-)
+from services.recording_ingest import sweep_once  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,
@@ -49,60 +55,33 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-# How many to take in one run. Ingest is minutes per recording and the cron comes
-# round every ten, so a small number keeps one long file from eating a window
-# that a second upload is waiting in.
-BATCH_SIZE = 2
-
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--limit", type=int, default=1,
+        help="How many recordings to finish in this run (default 1). Ingest is "
+             "minutes per recording and two at once share the box's memory, so "
+             "raise this only when you are clearing a backlog by hand.",
+    )
+    args = parser.parse_args()
+
     logger.info("=" * 80)
     logger.info("Sweeping for unfinished recording ingests")
     logger.info(f"Current UTC time: {datetime.now(timezone.utc).isoformat()}")
     logger.info("=" * 80)
 
-    # Check this first: without object storage every claim below would burn an
-    # attempt on a download that cannot work, and three sweeps would exhaust the
-    # budget of a perfectly good recording for a reason that has nothing to do
-    # with it.
+    # sweep_once checks this too and skips quietly, which is right for a
+    # background thread and wrong for someone who just ran a command: say it
+    # plainly and fail.
     problem = rec.check_configured()
     if problem:
         logger.error("Cannot sweep: %s", problem)
-        logger.error("Set the AWS_* variables on this cron service; nothing was attempted.")
+        logger.error("Set the AWS_* variables for this environment; nothing was attempted.")
         return 1
 
-    abandoned = abandon_exhausted_recordings()
-    for recording_id in abandoned:
-        logger.warning(
-            "Recording %s has used all %s attempts; marked failed for a human to look at",
-            recording_id, MAX_INGEST_ATTEMPTS,
-        )
-
-    pending = find_pending_recordings(limit=BATCH_SIZE)
-    if not pending:
-        logger.info("Nothing to do.")
-        return 0
-
-    logger.info("Found %d recording(s) to finish", len(pending))
-
-    processed = 0
-    for item in pending:
-        logger.info(
-            "Ingesting recording %s (%s) — attempt %s of %s",
-            item["recording_id"], item["label"] or "unlabelled",
-            item["attempts"] + 1, MAX_INGEST_ATTEMPTS,
-        )
-        try:
-            # Claims internally and returns immediately if the web dyno picked it
-            # back up between our query and now -- a race worth losing.
-            ingest_recording(item["recording_id"])
-            processed += 1
-        except Exception:
-            # ingest_recording records its own failure on the row; this is only
-            # so one bad recording cannot stop the rest of the batch.
-            logger.exception("Recording %s raised out of ingest", item["recording_id"])
-
-    logger.info("Swept %d recording(s)", processed)
+    swept = sweep_once(limit=args.limit)
+    logger.info("Swept %d recording(s)", swept)
     return 0
 
 

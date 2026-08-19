@@ -107,7 +107,7 @@ Decisions:
 |-------|-------|
 | Tables | `schema/031_merge_scan.sql`, mirrored in `schema/full_schema.sql` |
 | Sync pipeline (dump fetch/parse, settings-trace, live check, verify, apply, record) | `services/tune_merge_scan_service.py` |
-| Weekly job | `jobs/sync_thesession_merges.py` + `render.yaml` cron `ceol-io-thesession-merge-sync` |
+| Weekly job | `jobs/sync_thesession_merges.py` — `run_weekly_if_due()`, called from `jobs/check_active_sessions.py`. No cron service of its own; see [Scheduling](../../current/services/thesession-merge-sync.md#scheduling) |
 | Run Now / record / cancel endpoints | `api_routes.py` (`start_merge_scan`, `get_merge_scan`, `cancel_merge_scan`) |
 | Shared verify + apply (manual endpoint uses the same) | `tune_merge_scan_service.verify_thesession_redirect` / `.apply_merge`; `merge_tune` auto-import via `_import_tune_for_live` |
 | Record UI: Run Now, running progress, runs newest-first | `templates/admin_tune_merge.html` |

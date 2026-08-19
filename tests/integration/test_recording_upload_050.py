@@ -183,7 +183,7 @@ def test_create_queues_the_row_and_starts_ingest(
 
     The thread is the fast path, not the guarantee: if it never starts -- or the
     dyno dies between the INSERT and the first stage -- 'queued' is what tells
-    the sweeper cron this still needs doing. Claiming is what moves it on.
+    the sweeper this still needs doing. Claiming is what moves it on.
     """
     with admin_user:
         resp = _create(client, fake_s3)
