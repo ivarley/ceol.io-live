@@ -327,6 +327,29 @@ on a placed tune seeks there, implied ends included, since the implied end is
 where you stand when typing a real one. Unplaced, the badge stays the label it
 always was.
 
+### On a phone
+
+The left column is sticky above the tune list, so its height *is* the list's
+height — and at full size it filled a phone screen on its own. The header and
+the top of the tape, where the drag handles live, could only be seen by
+scrolling the list back to the very top, which then left room for about two
+tunes. The phone layout (under 900px) is that column giving back ~110px, a
+quarter of it:
+
+- both canvases are a quarter shorter — the tape is read across, not up;
+- the "next up" banner folds into the mark button's own row and drops the set
+  number, since the list two inches below already says which set this is;
+- the separate <kbd>E</kbd> button goes. The mark button already covers the
+  ordinary case by switching to "End of set" the moment a set's last tune is
+  placed, and a whole row for the rarer of the two is a row the list wants
+  more. Ending a set you have already scrolled past is a keyboard job now;
+- Undo becomes an icon, and the encode switch moves up beside Fix and export,
+  where "placed" and "the log" give up their words to make room.
+
+The breakpoint is read synchronously at init and then followed with a
+`matchMedia` listener, so the tape is never drawn tall and re-drawn short on
+first paint, and a rotation doesn't need a reload.
+
 **Fixing the log from inside the tool.** Timestamping is where you find out the
 log is wrong: a tune nobody wrote down is a stretch of audio with no cursor to
 put on it, and there is nothing to mark until the log says it happened. So the

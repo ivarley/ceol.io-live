@@ -64,6 +64,16 @@
     })(),
   )
 
+  // Phone layout. The left column is sticky, so anything it does not need is
+  // height the tune list does not get -- and on a phone that was the difference
+  // between two visible tunes and a usable list. Read synchronously at init
+  // rather than in onMount, so the tape is never drawn tall and then re-drawn
+  // short on the first frame.
+  const COMPACT_QUERY = '(max-width: 900px)'
+  let compact = $state(
+    typeof window !== 'undefined' && window.matchMedia ? window.matchMedia(COMPACT_QUERY).matches : false,
+  )
+
   const durationMs = $derived(recording?.duration_ms ?? 0)
   const segments = $derived(resolveSegments(tunes, durationMs))
   const placedCount = $derived(tunes.filter((t) => t.segment).length)
@@ -145,6 +155,9 @@
     }
     let raf = requestAnimationFrame(tick)
     window.addEventListener('keydown', onKeydown)
+    const media = window.matchMedia ? window.matchMedia(COMPACT_QUERY) : null
+    const onMedia = (event) => (compact = event.matches)
+    media?.addEventListener('change', onMedia)
     // Coming back with the browser's Back button restores this page from the
     // bfcache instead of mounting it again -- the playhead is already where it
     // was, and the mark left for the trip would otherwise sit there waiting to
@@ -154,6 +167,7 @@
       cancelAnimationFrame(raf)
       window.removeEventListener('keydown', onKeydown)
       window.removeEventListener('pageshow', dropResumeMarkOnRestore)
+      media?.removeEventListener('change', onMedia)
     }
   })
 
@@ -593,6 +607,24 @@
   }
 </script>
 
+<!-- Which encode is streamed. One definition, rendered in the header on a phone
+     and in the options row on a desktop -- the control is the same either way,
+     only the room for it differs. -->
+{#snippet audioPicker()}
+  {#if audioSources.length > 1}
+    <label class="sg-opt sg-opt-audio">
+      audio
+      <select value={sourceId} onchange={(e) => switchSource(e.currentTarget.value)}>
+        {#each audioSources as src (src.id)}
+          <option value={src.id}>
+            {src.label}{src.size_bytes ? ` · ${Math.round(src.size_bytes / 1e6)} MB` : ''}
+          </option>
+        {/each}
+      </select>
+    </label>
+  {/if}
+{/snippet}
+
 {#if !recording}
   <p class="sg-error">No recording payload. Reload the page.</p>
 {:else}
@@ -608,14 +640,19 @@
         </p>
       </div>
       <div class="sg-progress">
-        <strong>{placedCount}</strong> / {tunes.length} placed
+        <strong>{placedCount}</strong> / {tunes.length}{#if !compact} placed{/if}
         {#if saving > 0}<span class="sg-saving">saving…</span>{/if}
+        <!-- On a phone the encode switch rides up here with the other header
+             controls: down in the options row it was one more line of the
+             sticky column, and it is the one option you reach for when the
+             connection changes rather than while marking. -->
+        {#if compact}{@render audioPicker()}{/if}
         <button
           type="button"
           class="sg-editlog"
           onclick={editLog}
           title="Open this night's log in edit mode — you'll come back here, at this moment in the audio"
-        >✎ Fix the log</button>
+        >✎ {compact ? 'Fix' : 'Fix the log'}</button>
         <a class="sg-export" href="/api/recordings/{recording.recording_id}/export" target="_blank" rel="noopener">export</a>
       </div>
     </header>
@@ -631,6 +668,7 @@
       <section class="sg-left">
         <Waveform
           {peaks}
+          {compact}
           peaksHz={recording.peaks_hz ?? 20}
           {durationMs}
           {currentMs}
@@ -655,23 +693,29 @@
           {/if}
         </div>
 
-        {#if pendingSetEndIndex != null}
-          {@const ending = tunes[pendingSetEndIndex]}
-          <div class="sg-next is-ending">
-            <span class="sg-next-label">end of set {ending.set_number}</span>
-            <span class="sg-next-name">{ending.name}</span>
-            <span class="sg-next-meta">M marks where it stopped</span>
-          </div>
-        {:else}
-          <div class="sg-next">
-            {#if cursorTune}
-              <span class="sg-next-label">next up</span>
-              <span class="sg-next-name">{cursorTune.name}</span>
-              <span class="sg-next-meta">set {cursorTune.set_number}{cursorTune.is_set_end ? ' · last of set' : ''}</span>
-            {:else}
-              <span class="sg-next-label">log complete</span>
-            {/if}
-          </div>
+        <!-- Which tune the mark key will place, and in which of its two modes.
+             Its own band on a desktop; on a phone it is folded into the mark
+             button's own row (below), because a full-width banner is 46px of a
+             sticky column that has none to spare. -->
+        {#if !compact}
+          {#if pendingSetEndIndex != null}
+            {@const ending = tunes[pendingSetEndIndex]}
+            <div class="sg-next is-ending">
+              <span class="sg-next-label">end of set {ending.set_number}</span>
+              <span class="sg-next-name">{ending.name}</span>
+              <span class="sg-next-meta">M marks where it stopped</span>
+            </div>
+          {:else}
+            <div class="sg-next">
+              {#if cursorTune}
+                <span class="sg-next-label">next up</span>
+                <span class="sg-next-name">{cursorTune.name}</span>
+                <span class="sg-next-meta">set {cursorTune.set_number}{cursorTune.is_set_end ? ' · last of set' : ''}</span>
+              {:else}
+                <span class="sg-next-label">log complete</span>
+              {/if}
+            </div>
+          {/if}
         {/if}
 
         <div class="sg-controls">
@@ -695,6 +739,17 @@
         </div>
 
         <div class="sg-controls sg-controls-main">
+          <!-- Phone: the banner's job rides on the button's own row. Whose turn
+               it is matters as much as the button does, and side by side they
+               cost one row instead of two. No set number -- the list two
+               inches below is already showing which set this is. -->
+          {#if compact}
+            {@const ending = pendingSetEndIndex != null ? tunes[pendingSetEndIndex] : null}
+            <div class="sg-next-inline" class:is-ending={ending != null}>
+              <span class="sg-next-label">{ending ? 'end of set' : cursorTune ? 'next up' : 'done'}</span>
+              <span class="sg-next-name">{(ending ?? cursorTune)?.name ?? 'every tune placed'}</span>
+            </div>
+          {/if}
           <button
             type="button"
             class="sg-mark"
@@ -702,10 +757,18 @@
             onclick={markStart}
             disabled={!cursorTune && pendingSetEndIndex == null}
           >
-            {pendingSetEndIndex != null ? 'End of set' : 'Mark start'} <kbd>M</kbd>
+            {pendingSetEndIndex != null ? 'End of set' : 'Mark start'}{#if !compact} <kbd>M</kbd>{/if}
           </button>
-          <button type="button" class="sg-end" onclick={markEnd}>End of set <kbd>E</kbd></button>
-          <button type="button" onclick={undo}>Undo <kbd>U</kbd></button>
+          <!-- The separate end key is for ending a set you have already scrolled
+               past; the mark button covers the ordinary case on its own, by
+               switching mode. On a phone that second button is a whole row for
+               the rarer of the two, so the one that changes with you wins. -->
+          {#if !compact}
+            <button type="button" class="sg-end" onclick={markEnd}>End of set <kbd>E</kbd></button>
+          {/if}
+          <button type="button" class="sg-undo" onclick={undo} title="Undo the last mark" aria-label="Undo">
+            {#if compact}↺{:else}Undo <kbd>U</kbd>{/if}
+          </button>
         </div>
 
         <div class="sg-opts">
@@ -725,18 +788,7 @@
             <input type="checkbox" bind:checked={snapEnabled} />
             snap to onset
           </label>
-          {#if audioSources.length > 1}
-            <label class="sg-opt">
-              audio
-              <select value={sourceId} onchange={(e) => switchSource(e.currentTarget.value)}>
-                {#each audioSources as src (src.id)}
-                  <option value={src.id}>
-                    {src.label}{src.size_bytes ? ` · ${Math.round(src.size_bytes / 1e6)} MB` : ''}
-                  </option>
-                {/each}
-              </select>
-            </label>
-          {/if}
+          {#if !compact}{@render audioPicker()}{/if}
         </div>
 
         <details class="sg-keys">
@@ -1052,6 +1104,38 @@
     margin: 0;
   }
 
+  /* Whose turn it is, folded into the mark button's row on a phone. Shrinks
+     before the button does: the name can ellipsize, but a mark button that has
+     to be aimed at is the wrong thing to make smaller. */
+  .sg-next-inline {
+    flex: 1 1 40%;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 1px;
+    padding: 4px 8px;
+    border: 1px solid var(--border-color, #444);
+    border-left: 3px solid var(--warning, #f5c842);
+    border-radius: 6px;
+    text-align: left;
+  }
+  .sg-next-inline.is-ending {
+    border-left-color: var(--info, #5b99ea);
+  }
+  .sg-next-inline .sg-next-label {
+    font-size: 0.6rem;
+  }
+  .sg-next-inline .sg-next-name {
+    font-size: 0.85rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .sg-next-inline.is-ending .sg-next-label {
+    color: var(--info, #5b99ea);
+  }
+
   @media (max-width: 900px) {
     .sg-body {
       grid-template-columns: minmax(0, 1fr);
@@ -1068,6 +1152,31 @@
     }
     .sg-keys {
       display: none;
+    }
+    /* The header is one line on a phone: count, encode, Fix, export. */
+    .sg-head {
+      gap: 4px;
+    }
+    .sg-progress {
+      gap: 8px;
+      font-size: 0.8rem;
+    }
+    .sg-progress .sg-opt-audio select {
+      margin-left: 3px;
+      padding: 2px 3px;
+      font-size: 0.75rem;
+      max-width: 96px;
+    }
+    .sg-editlog {
+      padding: 4px 8px;
+      min-height: 28px;
+    }
+    /* Undo is an icon here: it is one of three things competing for a row that
+       also has to hold the mark button and whose turn it is. */
+    .sg-undo {
+      flex: 0 0 auto !important;
+      min-width: 48px;
+      font-size: 1.15rem !important;
     }
   }
 </style>

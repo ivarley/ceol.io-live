@@ -23,6 +23,7 @@
     onscrubend = () => {},
     onedgepreview = () => {},
     onedgecommit = () => {},
+    compact = false,
   } = $props()
 
   let overviewCanvas = $state(null)
@@ -34,8 +35,11 @@
   // drag starts -- two marks a second apart are two pixels apart at 3-hour zoom.
   let hotEdge = $state(null)
 
-  const OVERVIEW_H = 56
-  const DETAIL_H = 168
+  // A quarter shorter on a phone. Both canvases sit in a sticky column above
+  // the tune list, so every pixel here is a pixel the list does not get -- and
+  // neither view loses anything at this size: the tape is read across, not up.
+  const OVERVIEW_H = $derived(compact ? 42 : 56)
+  const DETAIL_H = $derived(compact ? 126 : 168)
   // Grab tolerance. Touch gets far more of it: a fingertip is nowhere near as
   // precise as a cursor, and a 2px line is not a touch target.
   const EDGE_GRAB_PX = 6
@@ -62,9 +66,11 @@
   // Redraw whenever anything visible changes. Reading the props here is what
   // registers the dependency -- Svelte 5 effects track what they touch.
   $effect(() => {
+    OVERVIEW_H // a height change is a redraw, same as any other visible change
     drawOverview(overviewCanvas, overviewWidth, peaks, durationMs, currentMs, segments, zoomMs)
   })
   $effect(() => {
+    DETAIL_H
     drawDetail(detailCanvas, detailWidth, peaks, durationMs, currentMs, zoomMs, segments, cursorTuneId, hotEdge)
   })
 

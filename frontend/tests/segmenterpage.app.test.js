@@ -703,3 +703,116 @@ describe('the end badge', () => {
     expect(badge.tagName).toBe('SPAN')
   })
 })
+
+describe('phone layout', () => {
+  // The left column is sticky above the tune list, so its height is the list's
+  // height. At full size it filled a phone screen on its own: the header and the
+  // top of the tape — where the drag handles are — could only be seen by
+  // scrolling the list back to the very top, which then left room for two tunes.
+  // Everything here is that column getting shorter.
+  let mediaListeners = []
+  function viewport(matches) {
+    mediaListeners = []
+    window.matchMedia = vi.fn().mockImplementation((media) => ({
+      matches,
+      media,
+      addEventListener: (_type, fn) => mediaListeners.push(fn),
+      removeEventListener: vi.fn(),
+    }))
+  }
+
+  afterEach(() => {
+    delete window.matchMedia
+  })
+
+  const phone = (pageData = payload()) => {
+    viewport(true)
+    return render(App, { props: { pageData } })
+  }
+  const desktop = (pageData = payload()) => {
+    viewport(false)
+    return render(App, { props: { pageData } })
+  }
+
+  it('shrinks both canvases by a quarter', () => {
+    const { container } = phone()
+    expect(container.querySelector('.wf-detail canvas').style.height).toBe('126px')
+    expect(container.querySelector('.wf-overview canvas').style.height).toBe('42px')
+  })
+
+  it('keeps them full size on a desktop', () => {
+    const { container } = desktop()
+    expect(container.querySelector('.wf-detail canvas').style.height).toBe('168px')
+    expect(container.querySelector('.wf-overview canvas').style.height).toBe('56px')
+  })
+
+  it('drops the separate end button — the mark button already switches modes', () => {
+    const { container } = phone()
+    expect(container.querySelector('.sg-end')).toBeNull()
+    expect(container.querySelector('.sg-mark')).toBeTruthy()
+  })
+
+  it('still switches that one button to "End of set" when a set needs one', async () => {
+    // The mode is the whole reason one button can do the work of two, so losing
+    // the second must not cost the first its two states.
+    const p = payload()
+    p.tunes[1].is_set_end = true
+    const { container } = phone(p)
+
+    await fireEvent.keyDown(window, { key: 'm' }) // place Alpha
+    await fireEvent.keyDown(window, { key: 'm' }) // place Bravo, which closes the set
+
+    await waitFor(() => expect(container.querySelector('.sg-mark').textContent.trim()).toBe('End of set'))
+    expect(container.querySelector('.sg-next-inline').textContent).toContain('end of set')
+  })
+
+  it('makes undo an icon', () => {
+    const { container } = phone()
+    const undo = container.querySelector('.sg-undo')
+    expect(undo.textContent.trim()).toBe('↺')
+    // Still announced properly — the label went, not the meaning.
+    expect(undo.getAttribute('aria-label')).toBe('Undo')
+  })
+
+  it('folds "next up" into the mark button row, without the set number', () => {
+    const { container } = phone()
+    expect(container.querySelector('.sg-next')).toBeNull() // the full-width banner
+    const inline = container.querySelector('.sg-controls-main .sg-next-inline')
+    expect(inline.textContent).toContain('next up')
+    expect(inline.textContent).toContain('Alpha Reel')
+    expect(inline.textContent).not.toContain('set 1')
+  })
+
+  it('moves the encode switch into the header and shortens what shares the line', () => {
+    const { container } = phone()
+    expect(container.querySelector('.sg-progress .sg-opt-audio')).toBeTruthy()
+    expect(container.querySelector('.sg-opts .sg-opt-audio')).toBeNull()
+    expect(container.querySelector('.sg-progress').textContent).not.toContain('placed')
+    expect(container.querySelector('.sg-editlog').textContent.trim()).toBe('✎ Fix')
+  })
+
+  it('follows a rotation or a resize without a reload', async () => {
+    // Phone landscape crosses the breakpoint, and so does an iPad picked up
+    // mid-session. The initial read is synchronous so the tape is never drawn
+    // tall and re-drawn short; this is the other half of that — the listener.
+    const { container } = phone()
+    expect(container.querySelector('.sg-end')).toBeNull()
+
+    expect(mediaListeners.length).toBe(1)
+    mediaListeners.forEach((fn) => fn({ matches: false }))
+
+    await waitFor(() => expect(container.querySelector('.sg-end')).toBeTruthy())
+    expect(container.querySelector('.wf-detail canvas').style.height).toBe('168px')
+    expect(container.querySelector('.sg-next')).toBeTruthy()
+    expect(container.querySelector('.sg-next-inline')).toBeNull()
+  })
+
+  it('leaves the desktop header and options row alone', () => {
+    const { container } = desktop()
+    expect(container.querySelector('.sg-opts .sg-opt-audio')).toBeTruthy()
+    expect(container.querySelector('.sg-progress .sg-opt-audio')).toBeNull()
+    expect(container.querySelector('.sg-progress').textContent).toContain('placed')
+    expect(container.querySelector('.sg-editlog').textContent.trim()).toBe('✎ Fix the log')
+    expect(container.querySelector('.sg-end')).toBeTruthy()
+  })
+})
