@@ -253,6 +253,79 @@ def extract_abc_incipit(abc_notation, tune_type=None):
     return abc_notation[:incipit_end]
 
 
+# -----------------------------------------------------------------------------
+# ABC (notation) search
+#
+# Searching by notes -- type "fdd cAA | B", find "My Darling Asleep". Every tune-search
+# box in the app blends this in, so the rules live in exactly one place here and are
+# mirrored twice: in SQL by abc_search_key() (schema/055_abc_search_index.sql), which
+# backs the trigram index, and in the browser by frontend/src/shared/abcquery.js. All
+# three normalizations must agree or the index silently stops matching.
+# -----------------------------------------------------------------------------
+
+# Blended (mode='mixed') notation search needs at least this many normalized characters.
+# Two reasons, and they happen to be the same number: shorter queries match almost every
+# tune in the catalog, and pg_trgm needs 3 characters to use the trigram index at all.
+# The live logger's client-side vocabulary match has always used 3 as well.
+ABC_MIN_QUERY_LEN = 3
+
+# Characters a typed melody can legitimately contain: note letters, rests, durations,
+# accidentals (^ _ =), octave marks (' ,), bar/repeat marks, tuplets, ties, ornaments.
+_ABC_FRIENDLY_RE = re.compile(r"[A-Ga-gxz0-9|^_=,'/()\[\]:<>~-]+")
+
+# Ornaments a player types the notes of but not the notation of: grace notes {...} and
+# chord symbols / annotations "...". Dropped from both sides so `{g}A{d}A{e}A {g}ABc`
+# is findable by typing `AAABc`.
+_ABC_ORNAMENT_RE = re.compile(r"\{[^}]*\}|\"[^\"]*\"")
+# Whitespace is meaningless in ABC; '!' is thesession's legacy line break (converted to
+# \n on ingest since spec 024, but old rows still carry it).
+_ABC_NOISE_RE = re.compile(r"[\s!]")
+
+# The SQL side of a notation match, for queries that have a `tune` aliased as `t`.
+# Takes one parameter: the LIKE pattern from abc_search_terms().
+ABC_MATCH_SQL = (
+    "EXISTS(SELECT 1 FROM tune_setting ts WHERE ts.tune_id = t.tune_id "
+    "AND abc_search_key(ts.abc) LIKE %s)"
+)
+
+
+def abc_query_key(q):
+    """Normalize a typed query exactly as SQL abc_search_key() normalizes stored ABC.
+
+    Returns '' when nothing is left to match on."""
+    if not q:
+        return ""
+    return _ABC_NOISE_RE.sub("", _ABC_ORNAMENT_RE.sub("", q)).lower()
+
+
+def is_abc_friendly(q):
+    """True when the query is plausibly notation rather than a name.
+
+    Deliberately permissive -- plenty of real tune names ("Cabbage", "Bee") are made
+    only of note letters. That is fine: in mixed mode notation matches are BLENDED with
+    name matches and ranked below them, so a false positive costs a few extra rows, not
+    a wrong answer."""
+    key = abc_query_key(q)
+    return bool(key) and _ABC_FRIENDLY_RE.fullmatch(key) is not None
+
+
+def abc_search_terms(q, mode="mixed"):
+    """The single decision point for "should this query search notation, and with what
+    pattern?". Returns (use_abc, like_pattern); like_pattern is None when use_abc is False.
+
+    mode='abc'   -- the explicit notation filter: honor whatever was typed.
+    mode='mixed' -- the app-wide default: blend notation in only when the query looks
+                    like notes AND is long enough to be discriminating.
+    mode='name'  -- never.
+    """
+    key = abc_query_key(q)
+    if not key or mode == "name":
+        return False, None
+    if mode != "abc" and not (is_abc_friendly(q) and len(key) >= ABC_MIN_QUERY_LEN):
+        return False, None
+    return True, f"%{key}%"
+
+
 def _connect_kwargs():
     return dict(
         host=os.environ.get("PGHOST"),

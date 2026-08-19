@@ -28,13 +28,17 @@ export const sortFunctions = {
 export const MYSTATUS_OPTIONS = ['', 'all', 'not on list', 'want to learn', 'learning', 'learned']
 
 // Filter + sort the repertoire. `filters.search` is lowercased/trimmed; the name
-// match is accent-insensitive via the app-wide AccentUtils when present. The
+// match is accent-insensitive via the app-wide AccentUtils when present. `abcIds` is
+// the set of tune ids whose notation matches a note-shaped query, resolved by the server
+// (shared/abcfilter.svelte.js) since the payload carries no ABC; rows that matched ONLY
+// that way come back tagged `_abcOnly`. Omitting it filters by name exactly as before. The
 // my-tunebook filter reads window.TunebookStatus ('all' colors without filtering).
 // filters.attended keeps only tunes played on nights the viewer checked in to
 // (spec 033 R4 — attended_play_count comes from the serializer, logged-in only).
-export function filterAndSortTunes(allTunes, filters, sort, myStatusInstrument) {
+export function filterAndSortTunes(allTunes, filters, sort, myStatusInstrument, abcIds = null) {
   const tb = typeof window !== 'undefined' ? window.TunebookStatus : null
   const accent = typeof window !== 'undefined' ? window.AccentUtils : null
+  const abcOnly = new Set()
   const filtered = allTunes.filter((tune) => {
     if (filters.search) {
       const searchTuneId = extractTuneId(filters.search)
@@ -43,7 +47,9 @@ export function filterAndSortTunes(allTunes, filters, sort, myStatusInstrument) 
         ? accent.includes(tuneName, filters.search)
         : tuneName.toLowerCase().includes(filters.search)
       const tuneIdMatch = searchTuneId && tune.tune_id === searchTuneId
-      if (!nameMatch && !tuneIdMatch) return false
+      const abcMatch = !!abcIds?.has(tune.tune_id)
+      if (!nameMatch && !tuneIdMatch && !abcMatch) return false
+      if (abcMatch && !nameMatch && !tuneIdMatch) abcOnly.add(tune.tune_id)
     }
     if (filters.type && tune.tune_type !== filters.type) return false
     if (filters.attended && !(tune.attended_play_count > 0)) return false
@@ -60,7 +66,11 @@ export function filterAndSortTunes(allTunes, filters, sort, myStatusInstrument) 
   })
   const sortFn = sortFunctions[sort.type]?.[sort.dir]
   if (sortFn) filtered.sort(sortFn)
-  return filtered
+  // Tag the rows that survived on NOTATION alone, so the card can say why it is here.
+  // Spread only those (the common case returns the original objects untouched).
+  return abcOnly.size
+    ? filtered.map((t) => (abcOnly.has(t.tune_id) ? { ...t, _abcOnly: true } : t))
+    : filtered
 }
 
 export function resultsCountLabel(filteredCount, totalCount) {

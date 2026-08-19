@@ -354,6 +354,27 @@ CREATE TABLE tune_setting (
 CREATE INDEX idx_tune_setting_tune_id ON tune_setting (tune_id);
 CREATE INDEX idx_tune_setting_cache_date ON tune_setting (cache_updated_date);
 
+-- Index-backed ABC (notation) search (see migration 055). Same shape as tune_search_key
+-- above: ONE IMMUTABLE normalization -- drop grace notes {...}, chord symbols "...",
+-- whitespace and legacy '!' line breaks, then lowercase -- shared by the index expression
+-- and every notation query (database.abc_query_key / ABC_MATCH_SQL), so the planner uses
+-- the index. frontend/src/shared/abcquery.js normAbc() is the browser-side twin.
+CREATE OR REPLACE FUNCTION abc_search_key(text)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE STRICT PARALLEL SAFE
+AS $$
+    SELECT lower(
+        regexp_replace(
+            regexp_replace($1, '\{[^}]*\}|"[^"]*"', '', 'g'),
+            '[[:space:]!]', '', 'g'
+        )
+    )
+$$;
+
+CREATE INDEX idx_tune_setting_abc_trgm
+    ON tune_setting USING gin (abc_search_key(abc) gin_trgm_ops);
+
 -- -----------------------------------------------------------------------------
 -- Session Tune table (depends on session, tune)
 -- -----------------------------------------------------------------------------

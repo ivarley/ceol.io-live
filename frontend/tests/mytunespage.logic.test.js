@@ -126,6 +126,41 @@ describe('filterAndSort', () => {
     const out = filterAndSort(tunes, { search: '', type: '', status: 'learned', instrument: 'Flute' }, sort, insts)
     expect(out).toHaveLength(1)
   })
+
+  // Notation search: `abcIds` is the set of tune ids the server says match a note-shaped
+  // query (the payload carries no ABC, so the browser can't decide this itself).
+  describe('notation (abcIds)', () => {
+    const filters = { search: 'gedbed', type: '', status: '', instrument: '' }
+    const tunes = [
+      tune({ tune_id: 1, tune_name: 'Zorble Reel' }),
+      tune({ tune_id: 2, tune_name: 'Other' }),
+    ]
+
+    it('unions notation matches into a search that would otherwise drop them', () => {
+      const out = filterAndSort(tunes, filters, sort, [], new Set([1]))
+      expect(out.map((t) => t.tune_id)).toEqual([1])
+    })
+
+    it('tags a notation-only match so the card can say why it is here', () => {
+      expect(filterAndSort(tunes, filters, sort, [], new Set([1]))[0]._abcOnly).toBe(true)
+    })
+
+    it('does not tag a row that also matched by name', () => {
+      const out = filterAndSort(tunes, { ...filters, search: 'zorble' }, sort, [], new Set([1]))
+      expect(out[0]._abcOnly).toBeFalsy()
+    })
+
+    it('omitting abcIds filters by name exactly as before', () => {
+      expect(filterAndSort(tunes, filters, sort, [])).toHaveLength(0)
+      expect(filterAndSort(tunes, filters, sort, [], null)).toHaveLength(0)
+    })
+
+    it('is ignored when there is no search term', () => {
+      const out = filterAndSort(tunes, { ...filters, search: '' }, sort, [], new Set([1]))
+      expect(out).toHaveLength(2)
+      expect(out.every((t) => !t._abcOnly)).toBe(true)
+    })
+  })
 })
 
 describe('messages and badges', () => {

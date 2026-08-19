@@ -173,6 +173,16 @@
     white-space: nowrap;
 }
 
+/* This row is in the results because its NOTATION matched the search, not its name.
+   Without the mark, a search by notes reads as a list of unrelated tunes. */
+.abc-only-badge {
+    font-size: 15px;
+    line-height: 1;
+    color: #e8d28a;
+    flex: 0 0 auto;
+    margin-left: 4px;
+}
+
 .tune-type {
     font-size: 11px;
     padding: 3px 6px;

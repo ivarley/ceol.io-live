@@ -196,10 +196,12 @@ export async function deepSearch(config, q, type, preferType, mode) {
 }
 
 // Offline fallback for the deep search, opted into per-surface (the Add-to-My-Tunes
-// pane — the same parity the folded-away legacy add page had): name-search the
-// CeolOffline bundle mirror (your tunebook first, then popular) and reshape the hits
-// into deep-search result cards. Name-only — the type filter and ABC mode need the
-// server. The live logger never opts in (it has its own offline model).
+// pane — the same parity the folded-away legacy add page had): search the CeolOffline
+// bundle mirror (your tunebook first, then popular) and reshape the hits into
+// deep-search result cards. Name AND notation, matching what the server blends online —
+// but the bundle carries only incipits, so offline notation matching reaches the opening
+// bars only (`abc_scope: 'incipit'`). The type filter still needs the server. The live
+// logger never opts in (it has its own offline model).
 async function offlineDeepSearch(config, q) {
   if (!config.offlineSearchFallback || !window.CeolOffline) return []
   try {
@@ -212,6 +214,8 @@ async function offlineDeepSearch(config, q) {
       can_render: false, // rendering needs the server; show the cached incipit only
       tunebook_count: t.tunebook_count ?? null,
       on_list: t.person_tune_id != null || t.learn_status != null,
+      abc_only: !!t.abc_only,
+      abc_scope: t.abc_scope || null,
     }))
   } catch {
     return []

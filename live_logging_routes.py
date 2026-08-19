@@ -48,6 +48,8 @@ from database import (
     remove_person_attendance as db_remove_person_attendance,
     create_person_with_instruments as db_create_person_with_instruments,
     extract_abc_incipit,
+    ABC_MATCH_SQL,
+    abc_search_terms,
 )
 from auth import create_session
 from api_routes import (
@@ -1796,19 +1798,19 @@ def _deep_search_core(cur, q, tune_type, prefer_type, mode, limit, person_id,
     same for tunes already in the session's repertoire (the session-tunes add pane).
     Either must be part of the SQL ORDER BY so fresh tunes fill the LIMIT window first.
     """
-    # Which sub-searches apply. Whitespace is meaningless in ABC, so strip it from the
-    # query before matching/detecting. ABC joins the blend only for ABC-friendly queries
-    # (note letters, accidentals, bar/octave marks, etc.) — except the explicit `abc`
-    # filter tab, which forces notation search on whatever was typed.
-    q_abc = re.sub(r"\s", "", q)
-    abc_friendly = bool(q_abc) and re.fullmatch(r"[A-Ga-gxz0-9|^_=,'/()\[\]:<>~-]+", q_abc) is not None
+    # Which sub-searches apply. `abc_search_terms` owns the whole "is this notation, and
+    # what does it match?" decision (database.py) -- the same rules the plain tune search,
+    # the abc-filter endpoint and the browser all use, so a query behaves identically
+    # wherever it is typed. The explicit `abc` filter tab forces notation search on
+    # whatever was typed; `mixed` blends it in only for note-shaped queries.
     use_name = bool(q) and mode in ("name", "mixed")
-    use_abc = bool(q_abc) and (mode == "abc" or (mode == "mixed" and abc_friendly))
+    use_abc, abc_pattern = abc_search_terms(q, mode)
 
     _nm = f"LOWER(unaccent({normalize_quotes_sql('t.name')}))"
-    # match the notation text with all whitespace ignored, so "fdd cAA | B" finds a
-    # tune whose body contains "fdd cAA|BAG..." ("My Darling Asleep").
-    _abc_exists = "EXISTS(SELECT 1 FROM tune_setting ts WHERE ts.tune_id = t.tune_id AND REGEXP_REPLACE(ts.abc, '\\s', '', 'g') ILIKE %s)"
+    # Notation matches through the indexed abc_search_key (grace notes, chord symbols and
+    # whitespace dropped on both sides), so "fdd cAA | B" finds a tune whose body contains
+    # "fdd cAA|BAG..." ("My Darling Asleep").
+    _abc_exists = ABC_MATCH_SQL
 
     # SELECT-clause params first (subqueries + type_pref), then abc_only, then rank,
     # then WHERE, then LIMIT — matching the textual order of %s placeholders below.
@@ -1828,7 +1830,7 @@ def _deep_search_core(cur, q, tune_type, prefer_type, mode, limit, person_id,
     # abc_only flag: row matched notation but NOT name (so the card can badge it).
     if use_abc and use_name:
         abc_only_sql = f"({_abc_exists} AND NOT ({_nm} LIKE LOWER(unaccent(%s))))"
-        params += [f"%{q_abc}%", f"%{q}%"]
+        params += [abc_pattern, f"%{q}%"]
     elif use_abc:  # abc-only mode: every match is a notation match
         abc_only_sql = "TRUE"
     else:
@@ -1858,7 +1860,7 @@ def _deep_search_core(cur, q, tune_type, prefer_type, mode, limit, person_id,
         params.append(f"%{q}%")
     if use_abc:
         clauses.append(_abc_exists)
-        params.append(f"%{q_abc}%")
+        params.append(abc_pattern)
     if clauses:
         where.append("(" + " OR ".join(clauses) + ")")
     if tune_type:

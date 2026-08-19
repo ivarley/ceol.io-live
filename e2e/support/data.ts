@@ -47,6 +47,23 @@ export const TUNES = {
 } as const;
 
 /**
+ * Fixture for notation (ABC) search — searching by notes rather than by name (feature 051).
+ *
+ * `phrase` is what a player types; it normalizes to `ebbab2eb` and matches exactly ONE
+ * seeded tune, Cooley's. Cooley's is deliberate on three counts: it is on sarah's seed list
+ * (so the My Tunes filter can find it), it is in the Mueller session's repertoire (so the
+ * public Tunes tab can), and the phrase falls inside its *incipit* — which is all the
+ * offline bundle carries, so the offline path finds it too.
+ *
+ * The phrase must NOT appear in any tune NAME, or these tests would pass on a name match
+ * and prove nothing.
+ */
+export const NOTATION = {
+  phrase: "EBBA B2 EB",
+  tune: { id: 1, name: "Cooley's" },
+} as const;
+
+/**
  * Scratch tunes for tests that ADD/REMOVE rows on the regular user's (sarah's)
  * tune list. Every mutating test owns its OWN tune, so parallel workers can
  * never race on the same person_tune row — the old shared pick ("first

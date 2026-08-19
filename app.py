@@ -43,6 +43,7 @@ from api_person_tune_routes import (
     get_my_sessions,
     sync_my_tunes,
     search_tunes,
+    abc_filter_tunes,
     update_my_profile,
     get_common_tunes
 )
@@ -1409,6 +1410,14 @@ app.add_url_rule(
     "search_tunes",
     search_tunes,
     methods=["GET"],
+)
+# Notation match over a list the client already has on screen (My Tunes, a session's
+# Tunes tab, the admin tunes tab): POST because the caller sends its visible tune ids.
+app.add_url_rule(
+    "/api/tunes/abc-filter",
+    "abc_filter_tunes",
+    abc_filter_tunes,
+    methods=["POST"],
 )
 app.add_url_rule(
     "/api/tunes/popular",

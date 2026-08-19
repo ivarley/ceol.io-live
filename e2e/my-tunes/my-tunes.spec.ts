@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { SCRATCH_TUNES, STORAGE } from "../support/data";
+import { NOTATION, SCRATCH_TUNES, STORAGE } from "../support/data";
 import { expectNoServerError } from "../support/nav";
 
 /** Personal tune collection: list/filter, the add pane, and the sync page. */
@@ -31,6 +31,21 @@ test.describe("My Tunes list", () => {
     await page.goto("/my-tunes");
     await page.locator("#filter-panel-toggle").click();
     await expect(page.locator("#filter-panel")).toBeVisible();
+  });
+
+  test("the filter box narrows the list by NOTATION, marking notation-only hits", async ({ page }) => {
+    // The page payload carries no ABC, so this exercises the whole round trip:
+    // POST /api/tunes/abc-filter and the union back into the client-side filter.
+    await page.goto("/my-tunes");
+    await expect(page.locator(".tune-name").first()).toBeVisible();
+
+    await page.locator("#search-input").fill(NOTATION.phrase);
+    const rows = page.locator(".tune-card-header");
+    await expect(rows).toHaveCount(1, { timeout: 8000 });
+    await expect(rows.first()).toContainText(NOTATION.tune.name);
+    // Badged, so it's clear WHY a tune whose name doesn't match is in the results.
+    await expect(rows.first().locator(".abc-only-badge")).toBeVisible();
+    await expectNoServerError(page);
   });
 });
 

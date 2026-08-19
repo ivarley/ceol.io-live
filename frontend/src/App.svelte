@@ -10,6 +10,9 @@
   import RecordingsModal from './RecordingsModal.svelte'
   import { queuePut, queueAll, queueDelete, snapshotPut, snapshotGet, matchCachePut, matchCacheGet } from './offline.js'
   import { generateAppend, generateBetween } from './fracindex.js'
+  // The "is this notation?" rules are shared with every other search box in the app
+  // (and with the server) — see shared/abcquery.js.
+  import { looksLikeAbc, abcNeedle } from './shared/abcquery.js'
   import {
     computeOrdered, segmentByBreaks, setsOf, tunesOf, pluralType, setLabel,
     maxPos, cursorPos, remapAnchors, normName, normAbc, stripThe,
@@ -2878,15 +2881,6 @@
     return ids
   }
 
-  // ABC-ish input: legal ABC melody characters — note letters, accidentals (^ _ =),
-  // octave/bar/repeat marks (' , | : [ ]), durations, etc. — with whitespace ignored
-  // (it's meaningless in ABC). Such a query gets its notation matches blended in alongside
-  // name matches, so e.g. "fdd cAA | B" finds "My Darling Asleep".
-  const looksLikeAbc = (q) => {
-    const s = (q || '').replace(/\s+/g, '')
-    return s.length > 0 && /^[A-Ga-gxz0-9|^_=,'\/()\[\]:<>~-]+$/.test(s)
-  }
-
   // Deep search entry: on DESKTOP the deep search IS the side pane (spec 032 — never a
   // centered modal there): seed it from the composer and focus it. Mobile opens the
   // full-screen modal, which seeds itself from the composer text.
@@ -3049,11 +3043,12 @@
       }
       nameHits.sort(cmp)
     }
-    // Notation hits: only for note-only input with a selective needle (3+ chars, so a
-    // one- or two-note fragment doesn't match half the catalog). Deduped against name hits.
+    // Notation hits: only for note-only input with a selective needle (abcNeedle applies
+    // the same minimum the server does, so a one- or two-note fragment doesn't match half
+    // the catalog). Deduped against name hits.
     const abcHits = []
-    const an = looksLikeAbc(q) ? normAbc(q) : ''
-    if (an.length >= 3) {
+    const an = abcNeedle(q)
+    if (an) {
       const seen = new Set(nameHits.map((e) => e.tune_id))
       for (const e of localIndex.list) {
         if (e.abc && !seen.has(e.tune_id) && e.abc.includes(an)) abcHits.push(e)

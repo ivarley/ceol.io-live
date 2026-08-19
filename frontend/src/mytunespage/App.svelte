@@ -8,6 +8,7 @@
   import AddTuneApp from '../mytunes/AddTuneApp.svelte'
   import TuneCard from './TuneCard.svelte'
   import { extractTuneId } from '../shared/parse.js'
+  import { createAbcMatcher } from '../shared/abcfilter.svelte.js'
   import {
     resolveTuneInstrumentStatus,
     filterAndSort,
@@ -58,8 +59,23 @@
   let isMobile = $state(mq.matches)
   mq.addEventListener('change', (e) => (isMobile = e.matches))
 
+  // Notation search: the filter box takes notes as well as names, but the page payload
+  // deliberately carries no ABC, so the matching tune ids come from the server. A query
+  // that isn't note-shaped never leaves the browser. See shared/abcfilter.svelte.js.
+  const abcMatch = createAbcMatcher()
+  $effect(() => {
+    // Tracked: the query, and the SIZE of the list (which arrives after mount, so a
+    // deep-linked ?search= must be retried once there is something to match against).
+    // The ids themselves are read untracked, so ordinary row churn costs nothing.
+    abcMatch.update(
+      filters.search,
+      () => untrack(() => allTunes.map((t) => t.tune_id)),
+      allTunes.length
+    )
+  })
+
   // ---- derived ----------------------------------------------------------------
-  const visible = $derived(filterAndSort(allTunes, filters, sort, instruments))
+  const visible = $derived(filterAndSort(allTunes, filters, sort, instruments, abcMatch.ids))
   const tuneTypes = $derived([...new Set(allTunes.map((t) => t.tune_type).filter(Boolean))].sort())
   const hasActiveFilters = $derived(!!(filters.type || filters.status || filters.instrument || filters.rel))
 

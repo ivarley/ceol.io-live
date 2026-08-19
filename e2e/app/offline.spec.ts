@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { SCRATCH_TUNES, STORAGE } from "../support/data";
+import { NOTATION, SCRATCH_TUNES, STORAGE } from "../support/data";
 
 /**
  * Reset one scratch tune to its seed state (not on the regular user's list).
@@ -469,6 +469,25 @@ test.describe("offline bundle model", () => {
       await expect(title).not.toHaveText(/Unknown|Loading/i);
       await expect(page.locator("#tune-detail-content")).not.toContainText(/Failed to load/i);
       await expect(page.locator("#tune-detail-content .abc-notation-section")).toBeVisible({ timeout: 8000 });
+    } finally {
+      await context.setOffline(false);
+    }
+  });
+
+  test("global Find-a-tune matches NOTATION offline, from the bundled incipits", async ({ page, context }) => {
+    // The bundle carries `incipit_abc` only, never the full setting ABC, so offline
+    // notation search reaches the OPENING BARS. The ♪ mark's tooltip says so, rather
+    // than under-answering quietly. NOTATION.phrase is inside Cooley's incipit.
+    await warmAndSync(page);
+
+    await context.setOffline(true);
+    try {
+      await page.evaluate(() => (window as any).findTune());
+      await page.locator(".ft-input").fill(NOTATION.phrase);
+      const hit = page.locator(".ft-results .ft-item").first();
+      await expect(hit).toBeVisible({ timeout: 8000 });
+      await expect(hit).toContainText(NOTATION.tune.name);
+      await expect(hit.locator(".ft-abc")).toHaveAttribute("title", /opening bars/i);
     } finally {
       await context.setOffline(false);
     }

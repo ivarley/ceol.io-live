@@ -95,7 +95,13 @@ button.textContent = 'Saving...';
 
 **Check-In**: `POST /api/session_instance/<id>/attendees/checkin` - Button disabled, spinner | `partials/attendance_tab.html`
 
-**Tune Search**: `GET /api/tunes/search?q=<query>` - 300ms debounce, dropdown | `frontend/src/TuneSearch.svelte` (Svelte pages), `TuneSearchComponent.js` (pill page only)
+**Tune Search**: `GET /api/tunes/search?q=<query>&mode=name|abc|mixed` - 300ms debounce, dropdown; blends
+notation matches for note-shaped queries and flags them `abc_only` | `frontend/src/TuneSearch.svelte`
+(Svelte pages), `frontend/src/tunesheet/FindTune.svelte` (hamburger overlay), `TuneSearchComponent.js` (pill page only)
+
+**Notation filter**: `POST /api/tunes/abc-filter {q, tune_ids}` -> `{tune_ids}` - which of THESE tunes match this
+notation query. Backs the three client-side list filters (My Tunes, session Tunes tab, admin tunes tab), whose
+payloads carry no ABC | `frontend/src/shared/abcfilter.svelte.js`. `@public_api` (session pages are public).
 
 **Save Tunes** (deprecated pill page): `POST /api/sessions/<path>/<date_or_id>/save_tunes` - Bulk save | `session_instance_detail.html`
 

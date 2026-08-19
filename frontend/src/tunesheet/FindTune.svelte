@@ -54,6 +54,11 @@
   // The kit SearchField owns the debounce (200ms) + Enter flush + Escape-clears;
   // this handler owns the min-2-chars rule, the stale-response guard, and the
   // server-with-offline-fallback search.
+  //
+  // Notation search needs no branch here: /api/tunes/search blends notation matches in
+  // itself for note-shaped queries, and flags the ones that matched the notation rather
+  // than the name as `abc_only` so the row can carry a musical note. Offline the bundle
+  // answers the same shape, but only over incipits (`abc_scope: 'incipit'`).
   async function runSearch(raw) {
     const q = (raw || '').trim()
     const refId = parseThesessionId(q)
@@ -113,7 +118,7 @@
     inputClass="ft-input"
     wrapperClass="ft-search-wrap"
     styled={false}
-    placeholder="Search tunes, or paste a thesession.org link…"
+    placeholder="Search by name or notes, or paste a link…"
     autocomplete="off"
     autocorrect="off"
     autocapitalize="off"
@@ -134,7 +139,7 @@
             onkeydown={(e) => e.key === 'Enter' && pick(tune)}
             role="option"
             aria-selected="false"
-            tabindex="0">{tune.name}<span class="ft-type">{tune.tune_type || ''}</span></li>
+            tabindex="0">{tune.name}{#if tune.abc_only}<span class="ft-abc" title={tune.abc_scope === 'incipit' ? 'Matched the opening bars (offline)' : 'Matched the notation, not the name'}>♪</span>{/if}<span class="ft-type">{tune.tune_type || ''}</span></li>
         {/each}
       {:else if linkRef}
         <!-- The link resolved, the catalog just doesn't have that tune yet. Importing is
