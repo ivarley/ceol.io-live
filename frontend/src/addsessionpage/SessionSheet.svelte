@@ -107,7 +107,11 @@
   let saving = $state(false)
 
   function applySeed(s) {
-    thesessionId = s.thesession_id ?? ''
+    // String(), not ?? '': thesession.org returns the session id as a NUMBER, and
+    // an import seeds this field straight from it. The field is a text input and
+    // save() calls .trim() on it, so an uncoerced number threw there and the Save
+    // button did nothing at all — every import was unsaveable.
+    thesessionId = s.thesession_id == null ? '' : String(s.thesession_id)
     name = s.name ?? ''
     locationName = s.location_name ?? ''
     locationPhone = s.location_phone ?? ''
@@ -167,7 +171,20 @@
     invalidFields = invalidFields.filter((f) => f !== fieldId)
   }
 
+  // A throw anywhere in the commit path used to leave the button silently dead —
+  // the "I click Save and nothing happens" report that a bad seed type caused.
+  // Whatever goes wrong, say so in the sheet and free the button for a retry.
   async function save() {
+    try {
+      await commit()
+    } catch (err) {
+      console.error('Error saving session:', err)
+      saving = false
+      formError = 'Something went wrong saving this session. Please try again.'
+    }
+  }
+
+  async function commit() {
     const formData = {
       thesession_id: thesessionId,
       name: name.trim(),
