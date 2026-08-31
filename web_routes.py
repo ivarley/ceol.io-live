@@ -3605,61 +3605,29 @@ def live_logging_screen(session_instance_id):
 @login_required
 def admin_recordings():
     """Index of session-audio recordings (spec 050): what's uploaded and how far
-    each one has been segmented. A plain Jinja table — non-interactive, so it
-    stays out of Svelte per spec 035 decision 2."""
+    each one has been segmented. A plain Jinja page — non-interactive, so it
+    stays out of Svelte per spec 035 decision 2.
+
+    Ordered as a work queue rather than by date; see
+    serializers.build_admin_recordings_payload for why.
+    """
     if not current_user.is_system_admin:
         flash("You must be authorized to view this page.", "error")
         return redirect(url_for("home"))
 
     from recording import check_configured
-    from services.recording_ingest import INGEST_STEPS, step_index_for
+    from serializers import build_admin_recordings_payload
+    from services.recording_ingest import INGEST_STEPS
 
     conn = get_db_connection()
     try:
-        cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT r.recording_id, r.label, r.duration_ms, r.is_clock_anchor, r.clock_offset_ms,
-                   si.session_instance_id, si.date, s.name, s.path,
-                   (SELECT count(*) FROM recording_tune_segment rts
-                     WHERE rts.recording_id = r.recording_id) AS segments,
-                   (SELECT count(*) FROM session_instance_tune sit
-                     WHERE sit.session_instance_id = si.session_instance_id
-                       AND sit.deleted = FALSE AND sit.record_type <> 'break') AS tunes,
-                   r.status, r.status_detail
-            FROM recording r
-            JOIN session_instance si ON si.session_instance_id = r.session_instance_id
-            JOIN session s ON s.session_id = si.session_id
-            ORDER BY si.date DESC, r.clock_offset_ms, r.recording_id
-            """
-        )
-        recordings = [
-            {
-                "recording_id": row[0],
-                "label": row[1],
-                "duration_ms": int(row[2]),
-                "is_clock_anchor": row[3],
-                "clock_offset_ms": int(row[4]),
-                "session_instance_id": row[5],
-                "date": row[6],
-                "session_name": row[7],
-                "session_path": row[8],
-                "segments": row[9],
-                "tunes": row[10],
-                "status": row[11],
-                "status_detail": row[12],
-                # Which stage circle to light on first paint. Computed here rather
-                # than left to the first poll, so a reload mid-ingest doesn't show
-                # an empty track for five seconds.
-                "ingest_step": (len(INGEST_STEPS) - 1) if row[11] == "ready" else step_index_for(row[12]),
-            }
-            for row in cur.fetchall()
-        ]
+        payload = build_admin_recordings_payload(conn)
 
         # The upload form's session picker. Small enough to embed rather than
         # fetch — the instance dates behind it are the part that needs an API.
         # Terminated sessions are included: an old recording of a session that
         # has since stopped running is exactly the sort of thing being backfilled.
+        cur = conn.cursor()
         cur.execute("SELECT session_id, name, path FROM session ORDER BY name")
         sessions = [{"session_id": r[0], "name": r[1], "path": r[2]} for r in cur.fetchall()]
     finally:
@@ -3669,7 +3637,9 @@ def admin_recordings():
     # pick a file and discover it at the signing step.
     return render_template(
         "admin_recordings.html",
-        recordings=recordings,
+        groups=payload["groups"],
+        recordings=payload["recordings"],
+        outstanding=payload["outstanding"],
         sessions=sessions,
         ingest_steps=INGEST_STEPS,
         storage_problem=check_configured(),

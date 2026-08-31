@@ -253,6 +253,10 @@
             {humanDuration(r.duration_ms)}
             {#if r.file_size_bytes}· {humanSize(r.file_size_bytes)}{/if}
             · <b>{r.segment_count}</b> of {tuneCount} tunes placed
+            <!-- A partial recording can never reach the night's tune count
+                 (schema/055). Without this the count reads as unfinished work
+                 here even after it has been settled on /admin/recordings. -->
+            {#if r.segmenting_complete}&mdash; rest isn't in this audio{/if}
           {:else if r.status === 'failed'}
             <span class="rec-failed">Processing failed — {r.status_detail || 'no detail recorded'}</span>
           {:else}

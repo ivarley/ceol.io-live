@@ -821,6 +821,15 @@ CREATE TABLE recording (
     -- tune_merge_scan.heartbeat_at (spec 031).
     ingest_heartbeat_at TIMESTAMPTZ,
     ingest_attempts SMALLINT NOT NULL DEFAULT 0,
+    -- "There is nothing else in this audio to place" (schema/055). Progress is
+    -- otherwise read as placements against the night's logged tunes, which can
+    -- never reach its denominator when the recording covers only part of the
+    -- night -- a phone started late, a battery that died. Only the person who
+    -- listened knows which it is, so it is recorded rather than inferred, and it
+    -- is kept apart from `status`: that is the ingest pipeline's state, written
+    -- by machines, and a re-ingest does not make this judgement untrue.
+    segmenting_complete BOOLEAN NOT NULL DEFAULT FALSE,
+    segmenting_complete_at TIMESTAMPTZ,
     notes TEXT,
     created_date TIMESTAMPTZ NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
     last_modified_date TIMESTAMPTZ NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
@@ -1285,6 +1294,8 @@ CREATE TABLE recording_history (
     stream_key VARCHAR(500),
     stream_mime_type VARCHAR(100),
     stream_size_bytes BIGINT,
+    segmenting_complete BOOLEAN,
+    segmenting_complete_at TIMESTAMPTZ,
     notes TEXT,
     created_date TIMESTAMPTZ,
     last_modified_date TIMESTAMPTZ,

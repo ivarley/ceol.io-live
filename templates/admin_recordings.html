@@ -22,152 +22,285 @@
                 {% endif %}
             {% endwith %}
 
-            <section class="docs-section">
-                <h2>Upload a recording</h2>
-                <p class="text-muted">
-                    Pick the night this audio is from, choose the file, and it uploads straight to
-                    object storage. Building the waveform and the playback proxy then takes a few
-                    minutes on a long recording &mdash; the row appears immediately and fills itself in.
-                </p>
+            {# Uploading is the rarer job -- a handful of files a month against a
+               queue worked through week by week -- so it is folded away. It used
+               to open the page, which on a phone meant six form controls before
+               the first recording. Open it and it stays open for the session, so
+               a run of uploads isn't a run of clicks on this. #}
+            <details class="upload-panel" id="upload-panel">
+                <summary class="upload-summary">
+                    <span class="upload-summary-label">Upload a recording</span>
+                    {% if storage_problem %}
+                    <span class="upload-summary-note">unavailable</span>
+                    {% endif %}
+                </summary>
 
-                {% if storage_problem %}
-                <div class="alert alert-warning">
-                    Uploading is unavailable: {{ storage_problem }}.
-                </div>
-                {% else %}
-                <div class="upload-grid">
-                    <label for="rec-session">Session</label>
-                    <select id="rec-session" class="form-select">
-                        <option value="">Choose a session&hellip;</option>
-                        {% for s in sessions %}
-                        <option value="{{ s.session_id }}">{{ s.name }}</option>
-                        {% endfor %}
-                    </select>
+                <div class="upload-panel-body">
+                    <p class="text-muted">
+                        Pick the night this audio is from, choose the file, and it uploads straight to
+                        object storage. Building the waveform and the playback proxy then takes a few
+                        minutes on a long recording &mdash; the row appears immediately and fills itself in.
+                        A large backlog is still faster from the command line:
+                        <code>venv/bin/python scripts/import_recording.py FILE --session-instance ID</code>.
+                    </p>
 
-                    <label for="rec-instance">Date</label>
-                    <select id="rec-instance" class="form-select" disabled>
-                        <option value="">Choose a session first</option>
-                    </select>
-
-                    <label for="rec-file">Audio file</label>
-                    <div>
-                        <input type="file" id="rec-file" accept=".mp3,.m4a,.mp4,.aac,.wav,.ogg,.opus,.flac,.webm,audio/*">
-                        <div id="rec-file-info" class="field-note"></div>
+                    {% if storage_problem %}
+                    <div class="alert alert-warning">
+                        Uploading is unavailable: {{ storage_problem }}.
                     </div>
+                    {% else %}
+                    <div class="upload-grid">
+                        <label for="rec-session">Session</label>
+                        <select id="rec-session" class="form-select">
+                            <option value="">Choose a session&hellip;</option>
+                            {% for s in sessions %}
+                            <option value="{{ s.session_id }}">{{ s.name }}</option>
+                            {% endfor %}
+                        </select>
 
-                    <label for="rec-label">Label</label>
-                    <input type="text" id="rec-label" class="form-control" placeholder="Optional &mdash; defaults to the session name and date">
+                        <label for="rec-instance">Date</label>
+                        <select id="rec-instance" class="form-select" disabled>
+                            <option value="">Choose a session first</option>
+                        </select>
 
-                    <label for="rec-started-at">Started at</label>
-                    <div>
-                        <input type="datetime-local" id="rec-started-at" class="form-control">
-                        <div class="field-note">
-                            Optional. Wall-clock time of the very start of the file, in this browser's
-                            timezone. Only needed to line the audio up against absolute timestamps.
+                        <label for="rec-file">Audio file</label>
+                        <div>
+                            <input type="file" id="rec-file" accept=".mp3,.m4a,.mp4,.aac,.wav,.ogg,.opus,.flac,.webm,audio/*">
+                            <div id="rec-file-info" class="field-note"></div>
+                        </div>
+
+                        <label for="rec-label">Label</label>
+                        <input type="text" id="rec-label" class="form-control" placeholder="Optional &mdash; defaults to the session name and date">
+
+                        <label for="rec-started-at">Started at</label>
+                        <div>
+                            <input type="datetime-local" id="rec-started-at" class="form-control">
+                            <div class="field-note">
+                                Optional. Wall-clock time of the very start of the file, in this browser's
+                                timezone. Only needed to line the audio up against absolute timestamps.
+                            </div>
+                        </div>
+
+                        <div class="upload-grid-spacer"></div>
+                        <div>
+                            <button type="button" id="rec-upload-btn" class="btn btn-primary" disabled>Upload</button>
                         </div>
                     </div>
 
-                    <div></div>
-                    <div>
-                        <button type="button" id="rec-upload-btn" class="btn btn-primary" disabled>Upload</button>
+                    <div id="rec-progress" class="upload-progress" hidden>
+                        <div class="progress">
+                            <div id="rec-bar" class="progress-bar" role="progressbar" style="width: 0%"></div>
+                        </div>
+                        {# The transfer has a bar because its length is known; ingest has
+                           circles because its length isn't, but its SHAPE is. #}
+                        <ol id="rec-steps" class="ingest-steps" hidden></ol>
+                        <div id="rec-status" class="upload-status"></div>
                     </div>
+                    {% endif %}
                 </div>
+            </details>
 
-                <div id="rec-progress" class="upload-progress" hidden>
-                    <div class="progress">
-                        <div id="rec-bar" class="progress-bar" role="progressbar" style="width: 0%"></div>
-                    </div>
-                    {# The transfer has a bar because its length is known; ingest has
-                       circles because its length isn't, but its SHAPE is. #}
-                    <ol id="rec-steps" class="ingest-steps" hidden></ol>
-                    <div id="rec-status" class="upload-status"></div>
-                </div>
-
-                {% endif %}
-
-                {# Outside the storage-configured branch on purpose: the row
-                   actions below (Retry, Delete) report through here too, and
-                   they still work when uploading doesn't. #}
-                <div id="rec-error" class="alert alert-danger" hidden></div>
-            </section>
+            {# Outside the upload panel on purpose, and outside the
+               storage-configured branch: the card actions below (Retry, Mark
+               done, Delete) report through here too, and they still work when
+               uploading doesn't. Inside a collapsed <details> an error would be
+               reported into a box nobody can see. #}
+            <div id="rec-error" class="alert alert-danger" hidden></div>
 
             <section class="docs-section">
                 <h2>Session recordings</h2>
                 <p class="text-muted">
                     Audio files with tune timestamps, the training corpus for tune recognition
-                    (spec 050). A large backlog is still faster from the command line:
-                    <code>venv/bin/python scripts/import_recording.py FILE --session-instance ID</code>.
+                    (spec 050).
+                    {% if outstanding %}
+                    <strong>{{ outstanding }}</strong> {{ 'recording is' if outstanding == 1 else 'recordings are' }} waiting on you.
+                    {% elif recordings %}
+                    Nothing is waiting on you.
+                    {% endif %}
                 </p>
 
-                {% if recordings %}
-                <div class="table-responsive">
-                    <table class="table table-sm">
-                        <thead>
-                            <tr>
-                                <th>Session</th>
-                                <th>Date</th>
-                                <th>Recording</th>
-                                <th class="text-right">Length</th>
-                                <th class="text-right">Placed</th>
-                                <th></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for r in recordings %}
-                            <tr {% if r.status != 'ready' %}data-recording-id="{{ r.recording_id }}"{% endif %}>
-                                <td><a href="/sessions/{{ r.session_path }}">{{ r.session_name }}</a></td>
-                                <td>{{ r.date }}</td>
-                                <td>
-                                    {{ r.label or 'recording %s'|format(r.recording_id) }}
-                                    {% if r.is_clock_anchor %}<span class="badge badge-secondary">anchor</span>
-                                    {% else %}<span class="text-muted">+{{ (r.clock_offset_ms // 1000) }}s</span>{% endif %}
-                                    {% if r.status != 'ready' %}
-                                    {# Painted by renderSteps() from these attributes on load,
-                                       then repainted from each poll. One generator, so the
-                                       first frame and every later one agree. #}
-                                    <ol class="ingest-steps compact rec-row-steps"
-                                        data-steps='{{ ingest_steps | tojson }}'
-                                        data-step="{{ r.ingest_step if r.ingest_step is not none else '' }}"
-                                        data-status="{{ r.status }}" hidden></ol>
-                                    {% endif %}
-                                    {% if r.status == 'processing' %}
-                                    <div class="row-status processing">Processing&hellip; <span class="detail">{{ r.status_detail or '' }}</span></div>
-                                    {% elif r.status == 'failed' %}
-                                    <div class="row-status failed">Ingest failed: {{ r.status_detail or 'no detail recorded' }}</div>
-                                    {% endif %}
-                                </td>
-                                <td class="text-right">
-                                    {% if r.status == 'ready' %}{{ '%d:%02d'|format(r.duration_ms // 3600000, (r.duration_ms // 60000) % 60) }}{% else %}&mdash;{% endif %}
-                                </td>
-                                <td class="text-right">
-                                    {{ r.segments }} / {{ r.tunes }}
-                                </td>
-                                <td class="text-right">
-                                    {% if r.status == 'ready' %}
-                                    <a class="btn btn-sm btn-primary" href="{{ url_for('segment_recording', recording_id=r.recording_id) }}">Segment</a>
-                                    <a class="btn btn-sm btn-outline-secondary" href="/api/recordings/{{ r.recording_id }}/export" target="_blank" rel="noopener">Export</a>
-                                    {% else %}
-                                    <button type="button" class="btn btn-sm btn-outline-secondary rec-retry" data-recording-id="{{ r.recording_id }}">Retry</button>
-                                    {% endif %}
-                                    <button type="button" class="btn btn-sm btn-outline-danger rec-delete"
-                                            data-recording-id="{{ r.recording_id }}"
-                                            data-label="{{ r.label or 'recording %s'|format(r.recording_id) }}"
-                                            data-segments="{{ r.segments }}">Delete</button>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                {% else %}
+                {% if not recordings %}
                 <p>No recordings imported yet.</p>
                 {% endif %}
+
+                {# Grouped by what each recording needs, most urgent first, rather
+                   than by date: newest-first buries one failed ingest from March
+                   under thirty finished nights, and finding the next thing to
+                   work on is the only reason to open this page. Done is folded
+                   away because it is the group that grows without bound. #}
+                {% for group in groups %}
+                <details class="rec-group" data-group="{{ group.slug }}" {% if group.slug != 'done' %}open{% endif %}>
+                    <summary class="rec-group-summary">
+                        <span class="rec-group-heading">{{ group.heading }}</span>
+                        <span class="rec-count">{{ group.recordings | length }}</span>
+                    </summary>
+                    <p class="rec-group-note">{{ group.note }}</p>
+
+                    <ul class="rec-list">
+                        {% for r in group.recordings %}
+                        {% set title = r.label or 'recording %s'|format(r.recording_id) %}
+                        {% set can_segment = r.status == 'ready' %}
+                        <li class="rec-card" data-recording-id="{{ r.recording_id }}"
+                            data-state="{{ r.group }}"
+                            {% if r.status != 'ready' %}data-pending="1"{% endif %}>
+
+                            <div class="rec-body">
+                                <div class="rec-head">
+                                    {# The night, not the file, is what an operator
+                                       recognises, so it leads -- and on a phone it is
+                                       the whole tap target for the one action that
+                                       matters, which is opening the tool. #}
+                                    {% if can_segment %}
+                                    <a class="rec-title" href="{{ url_for('segment_recording', recording_id=r.recording_id) }}">
+                                        {{ r.session_name }} &middot; {{ r.date_label }}
+                                    </a>
+                                    {% else %}
+                                    <span class="rec-title rec-title-plain">{{ r.session_name }} &middot; {{ r.date_label }}</span>
+                                    {% endif %}
+                                    <span class="rec-badge rec-badge-{{ r.group }}">{{ r.state_label }}</span>
+                                </div>
+
+                                <div class="rec-meta">
+                                    <span class="rec-meta-item">{{ title }}</span>
+                                    {% if r.status == 'ready' %}
+                                    <span class="rec-meta-item">{{ '%d:%02d'|format(r.duration_ms // 3600000, (r.duration_ms // 60000) % 60) }}</span>
+                                    {% endif %}
+                                    {% if r.is_clock_anchor %}
+                                    <span class="rec-meta-item">anchor</span>
+                                    {% elif r.clock_offset_ms %}
+                                    <span class="rec-meta-item">+{{ (r.clock_offset_ms // 1000) }}s</span>
+                                    {% endif %}
+                                    <a class="rec-meta-item rec-meta-link" href="/sessions/{{ r.session_path }}">session</a>
+                                </div>
+
+                                {% if r.tunes and r.status == 'ready' %}
+                                <div class="rec-placed">
+                                    <div class="rec-bar" role="img"
+                                         aria-label="{{ r.segments }} of {{ r.tunes }} tunes placed">
+                                        <div class="rec-bar-fill{% if r.complete %} is-complete{% endif %}"
+                                             style="width: {{ [100, (r.segments * 100 // r.tunes)] | min }}%"></div>
+                                    </div>
+                                    <span class="rec-placed-text">
+                                        {{ r.segments }} of {{ r.tunes }} tunes placed{% if r.segmenting_complete %} &mdash; rest isn't in this audio{% endif %}
+                                    </span>
+                                </div>
+                                {% endif %}
+
+                                {% if r.status != 'ready' %}
+                                {# Painted by renderSteps() from these attributes on load,
+                                   then repainted from each poll. One generator, so the
+                                   first frame and every later one agree. #}
+                                <ol class="ingest-steps compact rec-row-steps"
+                                    data-steps='{{ ingest_steps | tojson }}'
+                                    data-step="{{ r.ingest_step if r.ingest_step is not none else '' }}"
+                                    data-status="{{ r.status }}" hidden></ol>
+                                {% endif %}
+                                {% if r.status in ('queued', 'processing') %}
+                                <div class="row-status processing">Processing&hellip; <span class="detail">{{ r.status_detail or '' }}</span></div>
+                                {% elif r.status == 'failed' %}
+                                <div class="row-status failed">Ingest failed: {{ r.status_detail or 'no detail recorded' }}</div>
+                                {% endif %}
+                            </div>
+
+                            <div class="rec-actions">
+                                {% if can_segment and r.tunes %}
+                                <a class="btn btn-sm btn-primary" href="{{ url_for('segment_recording', recording_id=r.recording_id) }}">Segment</a>
+                                {% elif can_segment %}
+                                {# Nothing logged for that night, so there is nothing
+                                   to place against. The log is the actual next step. #}
+                                <a class="btn btn-sm btn-primary" href="{{ url_for('live_logging_screen', session_instance_id=r.session_instance_id) }}">Open the log</a>
+                                {% else %}
+                                <button type="button" class="btn btn-sm btn-outline-secondary rec-retry" data-recording-id="{{ r.recording_id }}">Retry</button>
+                                {% endif %}
+
+                                {% if can_segment and r.segments %}
+                                <a class="btn btn-sm btn-outline-secondary" href="/api/recordings/{{ r.recording_id }}/export" target="_blank" rel="noopener">Export</a>
+                                {% endif %}
+
+                                {# The partial-recording escape hatch (schema/055).
+                                   Offered only where it changes anything: a
+                                   recording whose tunes are all placed is already
+                                   done, and one that isn't ready has nothing to
+                                   judge yet. #}
+                                {% if r.segmenting_complete %}
+                                <button type="button" class="btn btn-sm btn-outline-secondary rec-complete"
+                                        data-recording-id="{{ r.recording_id }}" data-complete="false">Reopen</button>
+                                {% elif can_segment and r.tunes and not r.complete %}
+                                <button type="button" class="btn btn-sm btn-outline-success rec-complete"
+                                        data-recording-id="{{ r.recording_id }}" data-complete="true"
+                                        title="Everything this audio contains is already placed — stop counting the rest against it">Mark done</button>
+                                {% endif %}
+
+                                <button type="button" class="btn btn-sm btn-outline-danger rec-delete"
+                                        data-recording-id="{{ r.recording_id }}"
+                                        data-label="{{ title }}"
+                                        data-segments="{{ r.segments }}">Delete</button>
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </details>
+                {% endfor %}
             </section>
         </article>
     </div>
 </div>
 
 <style>
+/* ---------------------------------------------------------------------------
+   Upload panel
+   --------------------------------------------------------------------------- */
+.upload-panel {
+    margin: 1rem 0 1.5rem;
+    border: 1px solid var(--border-color, #444);
+    border-radius: 0.5rem;
+    background: var(--header-bg, #2d2d2d);
+}
+
+.upload-summary {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.7rem 1rem;
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--text-color);
+    /* The default marker is a tiny triangle that reads as decoration; this is a
+       control, and on a phone it is the only way back to the upload form. */
+    list-style: none;
+}
+
+.upload-summary::-webkit-details-marker { display: none; }
+
+.upload-summary::before {
+    content: "+";
+    display: inline-block;
+    width: 1.15rem;
+    height: 1.15rem;
+    flex: none;
+    border: 1px solid var(--border-color, #444);
+    border-radius: 0.25rem;
+    line-height: 1.05rem;
+    text-align: center;
+    color: var(--secondary-text, #999);
+}
+
+.upload-panel[open] > .upload-summary::before { content: "\2212"; }
+
+.upload-summary:hover { background: var(--hover-bg, #3d3d3d); }
+
+.upload-panel[open] > .upload-summary {
+    border-bottom: 1px solid var(--border-color, #444);
+}
+
+.upload-summary-note {
+    font-weight: 400;
+    font-size: 0.85rem;
+    color: var(--warning, #f5c842);
+}
+
+.upload-panel-body { padding: 0.25rem 1rem 1rem; }
+
 .upload-grid {
     display: grid;
     grid-template-columns: 8rem minmax(0, 32rem);
@@ -220,10 +353,221 @@
     color: var(--success, #28a745);
 }
 
-/* Ingest stages: one circle per stage, joined by the line they sit on.
+/* ---------------------------------------------------------------------------
+   The queue: one group per thing a recording can be waiting for
+   --------------------------------------------------------------------------- */
+.rec-group { margin: 1.25rem 0; }
+
+.rec-group-summary {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0;
+    cursor: pointer;
+    list-style: none;
+}
+
+.rec-group-summary::-webkit-details-marker { display: none; }
+
+.rec-group-summary::before {
+    content: "\25B8";
+    color: var(--secondary-text, #999);
+    transition: transform 0.15s ease;
+}
+
+.rec-group[open] > .rec-group-summary::before { transform: rotate(90deg); }
+
+.rec-group-heading {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+.rec-count {
+    padding: 0.05rem 0.45rem;
+    border-radius: 999px;
+    background: var(--border-color, #444);
+    color: var(--text-color);
+    font-size: 0.78rem;
+}
+
+.rec-group[data-group="failed"] .rec-count { background: var(--danger, #dc3545); color: #fff; }
+.rec-group[data-group="todo"] .rec-count { background: var(--primary, #007bff); color: #fff; }
+
+.rec-group-note {
+    margin: 0 0 0.6rem 1.1rem;
+    font-size: 0.85rem;
+    color: var(--secondary-text, #999);
+}
+
+.rec-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+/* One card per recording at every width. On a wide screen it lays out as a row
+   -- which is all the old table ever was -- and under 768px it stacks, because
+   six columns of a table do not survive a phone: they either scroll sideways or
+   crush the one thing being looked for. */
+.rec-card {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+    padding: 0.7rem 0.9rem;
+    margin: 0;
+    border: 1px solid var(--border-color, #444);
+    border-left: 3px solid var(--border-color, #444);
+    border-radius: 0.5rem;
+    background: var(--header-bg, #2d2d2d);
+}
+
+.rec-card[data-state="failed"] { border-left-color: var(--danger, #dc3545); }
+.rec-card[data-state="todo"] { border-left-color: var(--primary, #007bff); }
+.rec-card[data-state="processing"] { border-left-color: var(--warning, #f5c842); }
+.rec-card[data-state="done"] { border-left-color: var(--success, #28a745); }
+
+.rec-body {
+    flex: 1 1 20rem;
+    min-width: 0;
+}
+
+.rec-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.4rem 0.6rem;
+}
+
+.rec-title {
+    font-weight: 600;
+    font-size: 1rem;
+    color: var(--link-color, #4da6ff);
+}
+
+.rec-title-plain { color: var(--text-color); }
+
+.rec-badge {
+    padding: 0.05rem 0.45rem;
+    border-radius: 999px;
+    border: 1px solid var(--border-color, #444);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--secondary-text, #999);
+    white-space: nowrap;
+}
+
+.rec-badge-failed { border-color: var(--danger, #dc3545); color: var(--danger, #dc3545); }
+.rec-badge-todo { border-color: var(--primary, #007bff); color: var(--primary, #007bff); }
+.rec-badge-processing { border-color: var(--warning, #f5c842); color: var(--warning, #f5c842); }
+.rec-badge-done { border-color: var(--success, #28a745); color: var(--success, #28a745); }
+
+.rec-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.2rem 0.5rem;
+    margin-top: 0.15rem;
+    font-size: 0.82rem;
+    color: var(--secondary-text, #999);
+}
+
+/* The separating dot belongs to the item that FOLLOWS it, glued on with a
+   no-break space, and each item is unbreakable. A dot drawn as its own flex
+   child, or trailing the item before it, ends up alone at the end of a wrapped
+   line -- which on a phone is most lines. */
+.rec-meta-item {
+    white-space: nowrap;
+}
+
+.rec-meta-item + .rec-meta-item::before {
+    content: "\00B7\00A0";
+}
+
+/* The one item with no leading dot: it is a link rather than another fact about
+   the file, and on a phone it is the item most likely to wrap, where a leading
+   dot reads as a bullet. */
+.rec-meta-item.rec-meta-link::before { content: none; }
+
+.rec-meta-link { color: var(--secondary-text, #999); text-decoration: underline; }
+
+.rec-placed {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.4rem;
+}
+
+.rec-bar {
+    flex: 0 0 7rem;
+    height: 0.4rem;
+    border-radius: 999px;
+    background: var(--border-color, #444);
+    overflow: hidden;
+}
+
+.rec-bar-fill {
+    height: 100%;
+    background: var(--primary, #007bff);
+}
+
+.rec-bar-fill.is-complete { background: var(--success, #28a745); }
+
+.rec-placed-text {
+    font-size: 0.82rem;
+    color: var(--secondary-text, #999);
+}
+
+.rec-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    margin-left: auto;
+}
+
+/* Stated locally on purpose. The site's .btn rules resolve to a zero-width
+   border here, and an <a class="btn btn-primary"> picks up the link colour --
+   which is the primary colour, so the label vanishes into its own background.
+   These are the page's working controls; they have to be legible and, on a
+   phone, hittable. */
+.rec-actions > .btn {
+    border-width: 1px;
+    border-style: solid;
+    padding: 0.3rem 0.7rem;
+    font-size: 0.85rem;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+
+.rec-actions > .btn-primary {
+    color: #fff;
+    background: var(--primary, #007bff);
+    border-color: var(--primary, #007bff);
+}
+
+.rec-actions > .btn-primary:hover { color: #fff; filter: brightness(1.1); }
+
+.rec-actions > .btn-outline-secondary { color: var(--text-color); border-color: var(--border-color, #444); }
+.rec-actions > .btn-outline-success { color: var(--success, #28a745); border-color: var(--success, #28a745); }
+.rec-actions > .btn-outline-danger { color: var(--danger, #dc3545); border-color: var(--danger, #dc3545); }
+
+.rec-actions > .btn-outline-secondary:hover { background: var(--hover-bg, #3d3d3d); color: var(--text-color); }
+.rec-actions > .btn-outline-success:hover { background: var(--success, #28a745); color: #fff; }
+.rec-actions > .btn-outline-danger:hover { background: var(--danger, #dc3545); color: #fff; }
+
+.rec-actions > .btn:disabled { opacity: 0.55; }
+
+/* ---------------------------------------------------------------------------
+   Ingest stages: one circle per stage, joined by the line they sit on.
    Stages behind the current one are filled and ticked, the current one is ringed
    and pulsing, the rest are hollow. The connector to the LEFT of each circle is
-   what fills in, so progress reads as the line advancing between stations. */
+   what fills in, so progress reads as the line advancing between stations.
+   --------------------------------------------------------------------------- */
 .ingest-steps {
     /* The dot size and the track's offset are the SAME measurement -- the track
        runs through the middle of the circles -- so it is stated once and the
@@ -351,13 +695,13 @@
     font-weight: 600;
 }
 
-/* The in-table copy is the same component with the labels dropped: a row has no
+/* The in-card copy is the same component with the labels dropped: a card has no
    room for six words, and the sentence underneath already names the stage. */
 .ingest-steps.compact {
     /* One measurement changes; the track re-centres itself. */
     --dot-size: 0.85rem;
     --track: 2px;
-    margin: 0.35rem 0 0;
+    margin: 0.5rem 0 0;
     max-width: 12rem;
 }
 
@@ -396,6 +740,41 @@
     .upload-grid > label {
         padding-top: 0.6rem;
     }
+
+    /* The empty cell that lines the Upload button up under the fields on a wide
+       screen is just a gap on a narrow one. */
+    .upload-grid-spacer { display: none; }
+
+    .rec-card {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    /* `flex: 1 1 20rem` is a WIDTH on the row layout and a HEIGHT once the card
+       stacks -- 20rem of blank card under every recording. */
+    .rec-body {
+        flex: 0 1 auto;
+    }
+
+    .rec-title { font-size: 1.05rem; }
+
+    /* Every action a thumb's width tall and sharing the row evenly, with the
+       primary one -- into the tool -- taking a full line of its own. */
+    .rec-actions {
+        margin-left: 0;
+        margin-top: 0.15rem;
+    }
+
+    .rec-actions > .btn {
+        flex: 1 1 6rem;
+        padding: 0.4rem 0.5rem;
+    }
+
+    .rec-actions > .btn:first-child {
+        flex-basis: 100%;
+    }
+
+    .rec-bar { flex-basis: 4.5rem; }
 }
 </style>
 
@@ -408,6 +787,7 @@
     var labelInput = document.getElementById('rec-label');
     var startedAtInput = document.getElementById('rec-started-at');
     var uploadBtn = document.getElementById('rec-upload-btn');
+    var uploadPanel = document.getElementById('upload-panel');
     var progressBox = document.getElementById('rec-progress');
     var progressBar = document.getElementById('rec-bar');
     var statusLine = document.getElementById('rec-status');
@@ -422,6 +802,9 @@
     function showError(message) {
         errorBox.textContent = message;
         errorBox.hidden = false;
+        // The box sits above the list, and on a phone a card can easily be a
+        // screen or two below it.
+        errorBox.scrollIntoView({ block: 'nearest' });
     }
 
     function clearError() {
@@ -438,9 +821,23 @@
         uploadBtn.disabled = !(instanceSelect.value && fileInput.files.length);
     }
 
-    // The upload form is absent when object storage isn't configured; the row
+    // The upload form is absent when object storage isn't configured; the card
     // actions further down are not, and are wired either way.
     var canUpload = !!uploadBtn;
+
+    // Uploading several files in one sitting is the normal way this page gets
+    // used, and re-opening the panel after every reload would be a tax on
+    // exactly that. Per-browser, and only ever remembers "open".
+    var PANEL_KEY = 'ceol.admin-recordings.upload-open';
+    try {
+        if (window.localStorage.getItem(PANEL_KEY) === '1') { uploadPanel.open = true; }
+    } catch (e) { /* private mode: the panel just starts closed */ }
+    uploadPanel.addEventListener('toggle', function () {
+        try {
+            if (uploadPanel.open) { window.localStorage.setItem(PANEL_KEY, '1'); }
+            else { window.localStorage.removeItem(PANEL_KEY); }
+        } catch (e) { /* ditto */ }
+    });
 
     // Paint the stage circles into `el` from a /status response. The stage list
     // comes from the server (services/recording_ingest) rather than being
@@ -694,7 +1091,7 @@
     });
     }  // end if (canUpload)
 
-    // Paint the row steppers from what the server already rendered, so a reload
+    // Paint the card steppers from what the server already rendered, so a reload
     // mid-ingest shows the right circle immediately instead of after a poll.
     document.querySelectorAll('.rec-row-steps').forEach(function (el) {
         renderSteps(el, {
@@ -704,19 +1101,22 @@
         });
     });
 
-    // Rows that were mid-ingest when the page loaded: keep them honest without
+    // Cards that were mid-ingest when the page loaded: keep them honest without
     // making the operator refresh by hand.
-    var pendingRows = document.querySelectorAll('tr[data-recording-id]');
-    if (pendingRows.length) {
+    var pendingCards = document.querySelectorAll('.rec-card[data-pending]');
+    if (pendingCards.length) {
         setInterval(function () {
-            pendingRows.forEach(function (row) {
-                fetch('/api/recordings/' + row.dataset.recordingId + '/status')
+            pendingCards.forEach(function (card) {
+                fetch('/api/recordings/' + card.dataset.recordingId + '/status')
                     .then(function (r) { return r.json(); })
                     .then(function (data) {
                         if (!data.success) { return; }
+                        // A finished ingest changes which group the card belongs
+                        // in, which is a server decision, so reload rather than
+                        // trying to move it here.
                         if (data.status === 'ready') { window.location.reload(); return; }
-                        renderSteps(row.querySelector('.rec-row-steps'), data);
-                        var el = row.querySelector('.row-status');
+                        renderSteps(card.querySelector('.rec-row-steps'), data);
+                        var el = card.querySelector('.row-status');
                         if (!el) { return; }
                         if (data.status === 'failed') {
                             el.className = 'row-status failed';
@@ -753,6 +1153,35 @@
         });
     });
 
+    // "Everything that is in this audio has been placed" — the escape hatch for a
+    // recording that covers only part of a night and so can never reach its tune
+    // count. Reloading afterwards is the point: the card has to move out of the
+    // queue, and which group it lands in is the server's call.
+    document.querySelectorAll('.rec-complete').forEach(function (button) {
+        button.addEventListener('click', function () {
+            var complete = button.dataset.complete === 'true';
+            var was = button.textContent;
+            clearError();
+            button.disabled = true;
+            button.textContent = complete ? 'Marking…' : 'Reopening…';
+            fetch('/api/recordings/' + button.dataset.recordingId + '/segmenting-complete', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ complete: complete })
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (!data.success) { throw new Error(data.error || 'Could not update that recording'); }
+                    window.location.reload();
+                })
+                .catch(function (err) {
+                    button.disabled = false;
+                    button.textContent = was;
+                    showError(err.message);
+                });
+        });
+    });
+
     document.querySelectorAll('.rec-delete').forEach(function (button) {
         button.addEventListener('click', function () {
             var placed = parseInt(button.dataset.segments, 10) || 0;
@@ -774,10 +1203,10 @@
                 .then(function (data) {
                     if (!data.success) { throw new Error(data.error || 'Could not delete that recording'); }
                     if (data.storage_warning) {
-                        // The row is gone either way; this is a housekeeping note,
+                        // The card is gone either way; this is a housekeeping note,
                         // so say it and still refresh rather than looking failed.
                         showError(data.storage_warning);
-                        button.closest('tr').remove();
+                        button.closest('.rec-card').remove();
                         return;
                     }
                     window.location.reload();
