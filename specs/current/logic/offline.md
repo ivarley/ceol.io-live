@@ -81,6 +81,17 @@ the bundle.
   (`ceol-offline`, stores `tunes` / `popular` / `meta`) on each load (throttled ~5 min) and
   on reconnect. It exposes `getTune(id)`, `getTunes()`, and `searchTunes(q)` (your tunes
   first, then popular).
+  `searchTunes` matches names, then — for a note-shaped query — **notation**, appended
+  after the name hits and flagged `abc_only` / `abc_scope: 'incipit'`. Offline notation
+  matching reaches the **opening bars only**, because only incipits are bundled: a query
+  matching bar 20 of a tune finds it online and not offline. The `abc_scope` flag is how
+  the UI says so ("opening bars") instead of quietly under-answering. The rules are
+  hand-copied from `frontend/src/shared/abcquery.js` — `offline_data.js` loads outside
+  every Vite bundle and cannot import — and must stay in step with it and with SQL
+  `abc_search_key()`; see [Tune Search](tune-logic.md#notation-abc-search).
+  The three client-side list filters (My Tunes, session Tunes tab, admin tunes tab) do NOT
+  match notation offline: their notation matching is a server lookup, which no-ops offline
+  and leaves them filtering by name exactly as before.
 - **The UI falls back to it when a fetch fails** (the online path is unchanged):
   - Tune-detail drawer → `CeolOffline.getTune()` (renders incipit notation).
   - Global "Find a tune" (`frontend/src/tunesheet/FindTune.svelte`, opened via

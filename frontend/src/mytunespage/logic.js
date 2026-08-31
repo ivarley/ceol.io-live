@@ -72,16 +72,24 @@ function accentIncludes(haystack, needle) {
 
 // Filter + sort the list. Returns a NEW array of the visible tunes; each carries
 // `_instDimmed` when an instrument filter is active and the tune isn't on that
-// instrument (kept but dimmed and sorted below the matches, never dropped).
-export function filterAndSort(allTunes, filters, sort, instruments) {
+// instrument (kept but dimmed and sorted below the matches, never dropped), and
+// `_abcOnly` when it survived on NOTATION alone (see below).
+//
+// `abcIds` is the set of tune ids whose ABC matches a note-shaped query, resolved by the
+// server (shared/abcfilter.svelte.js) because the page payload deliberately carries no
+// notation. Omitting it — or passing null — reproduces name-only filtering exactly.
+export function filterAndSort(allTunes, filters, sort, instruments, abcIds = null) {
   const out = []
   for (const tune of allTunes) {
+    let abcOnly = false
     if (filters.search) {
       const tuneId = extractTuneId(filters.search)
       const nameMatch = accentIncludes(tune.tune_name || '', filters.search)
       const notesMatch = accentIncludes(tune.notes || '', filters.search)
       const tuneIdMatch = tuneId && tune.tune_id === tuneId
-      if (!tuneIdMatch && !nameMatch && !notesMatch) continue
+      const abcMatch = !!abcIds?.has(tune.tune_id)
+      if (!tuneIdMatch && !nameMatch && !notesMatch && !abcMatch) continue
+      abcOnly = abcMatch && !tuneIdMatch && !nameMatch && !notesMatch
     }
     if (filters.type && tune.tune_type !== filters.type) continue
 
@@ -95,10 +103,10 @@ export function filterAndSort(allTunes, filters, sort, instruments) {
       const dimmed = instStatus === null
       const effectiveStatus = dimmed ? tune.learn_status : instStatus
       if (filters.status && effectiveStatus !== filters.status) continue
-      out.push({ ...tune, _instDimmed: dimmed })
+      out.push({ ...tune, _instDimmed: dimmed, _abcOnly: abcOnly })
     } else {
       if (filters.status && tune.learn_status !== filters.status) continue
-      out.push(tune)
+      out.push(abcOnly ? { ...tune, _abcOnly: true } : tune)
     }
   }
 

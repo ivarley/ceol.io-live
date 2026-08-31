@@ -74,6 +74,40 @@ describe('filterAndSortTunes', () => {
     ).toEqual([101])
   })
 
+  // Notation search: `abcIds` is the set of tune ids the server says match a note-shaped
+  // query (the payload carries no ABC, so the browser can't decide this itself).
+  describe('notation (abcIds)', () => {
+    const noteSearch = { ...noFilters, search: 'gedbed' }
+
+    it('unions notation matches into a search that would otherwise drop them', () => {
+      expect(
+        filterAndSortTunes(tunes, noteSearch, sessionDesc, 'all', new Set([102])).map((t) => t.tune_id)
+      ).toEqual([102])
+    })
+
+    it('tags a notation-only match so the card can say why it is here', () => {
+      const out = filterAndSortTunes(tunes, noteSearch, sessionDesc, 'all', new Set([102]))
+      expect(out[0]._abcOnly).toBe(true)
+    })
+
+    it('does not tag a row that also matched by name', () => {
+      const out = filterAndSortTunes(
+        tunes, { ...noFilters, search: 'banish' }, sessionDesc, 'all', new Set([102])
+      )
+      expect(out[0]._abcOnly).toBeFalsy()
+    })
+
+    it('omitting abcIds filters by name exactly as before', () => {
+      expect(filterAndSortTunes(tunes, noteSearch, sessionDesc, 'all')).toHaveLength(0)
+    })
+
+    it('returns the original objects untouched when nothing matched by notation', () => {
+      const out = filterAndSortTunes(tunes, noFilters, sessionDesc, 'all', new Set([102]))
+      expect(out).toHaveLength(3)
+      expect(out.every((t) => !t._abcOnly)).toBe(true)
+    })
+  })
+
   it('type filter narrows to one tune type', () => {
     expect(
       filterAndSortTunes(tunes, { ...noFilters, type: 'reel' }, sessionDesc, 'all').map((t) => t.tune_id)

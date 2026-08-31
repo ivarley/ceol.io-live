@@ -13,6 +13,7 @@
         {% elif active_tab == 'test_links' %}Test Links
         {% elif active_tab == 'cache_settings' %}Cache Settings
         {% elif active_tab == 'email_updates' %}Email Updates
+        {% elif active_tab == 'recordings' %}Recordings
         {% endif %}
     </span>
     {% endif %}
@@ -67,6 +68,11 @@
            role="tab">
             Email Updates
         </a>
+        <a class="nav-link {{ 'active' if active_tab == 'recordings' else '' }}"
+           href="{{ url_for('admin_recordings') }}"
+           role="tab">
+            Recordings
+        </a>
     </div>
 
     <!-- Mobile Dropdown Navigation -->
@@ -95,6 +101,9 @@
             </option>
             <option value="{{ url_for('admin_email_updates') }}" {{ 'selected' if active_tab == 'email_updates' else '' }}>
                 Email Updates
+            </option>
+            <option value="{{ url_for('admin_recordings') }}" {{ 'selected' if active_tab == 'recordings' else '' }}>
+                Recordings
             </option>
         </select>
     </div>

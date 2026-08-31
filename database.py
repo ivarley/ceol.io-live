@@ -1,6 +1,9 @@
 import os
 import re
+import threading
+import time
 import psycopg2
+import psycopg2.pool
 
 
 def get_current_user_id():
@@ -250,8 +253,81 @@ def extract_abc_incipit(abc_notation, tune_type=None):
     return abc_notation[:incipit_end]
 
 
-def get_db_connection():
-    conn = psycopg2.connect(
+# -----------------------------------------------------------------------------
+# ABC (notation) search
+#
+# Searching by notes -- type "fdd cAA | B", find "My Darling Asleep". Every tune-search
+# box in the app blends this in, so the rules live in exactly one place here and are
+# mirrored twice: in SQL by abc_search_key() (schema/055_abc_search_index.sql), which
+# backs the trigram index, and in the browser by frontend/src/shared/abcquery.js. All
+# three normalizations must agree or the index silently stops matching.
+# -----------------------------------------------------------------------------
+
+# Blended (mode='mixed') notation search needs at least this many normalized characters.
+# Two reasons, and they happen to be the same number: shorter queries match almost every
+# tune in the catalog, and pg_trgm needs 3 characters to use the trigram index at all.
+# The live logger's client-side vocabulary match has always used 3 as well.
+ABC_MIN_QUERY_LEN = 3
+
+# Characters a typed melody can legitimately contain: note letters, rests, durations,
+# accidentals (^ _ =), octave marks (' ,), bar/repeat marks, tuplets, ties, ornaments.
+_ABC_FRIENDLY_RE = re.compile(r"[A-Ga-gxz0-9|^_=,'/()\[\]:<>~-]+")
+
+# Ornaments a player types the notes of but not the notation of: grace notes {...} and
+# chord symbols / annotations "...". Dropped from both sides so `{g}A{d}A{e}A {g}ABc`
+# is findable by typing `AAABc`.
+_ABC_ORNAMENT_RE = re.compile(r"\{[^}]*\}|\"[^\"]*\"")
+# Whitespace is meaningless in ABC; '!' is thesession's legacy line break (converted to
+# \n on ingest since spec 024, but old rows still carry it).
+_ABC_NOISE_RE = re.compile(r"[\s!]")
+
+# The SQL side of a notation match, for queries that have a `tune` aliased as `t`.
+# Takes one parameter: the LIKE pattern from abc_search_terms().
+ABC_MATCH_SQL = (
+    "EXISTS(SELECT 1 FROM tune_setting ts WHERE ts.tune_id = t.tune_id "
+    "AND abc_search_key(ts.abc) LIKE %s)"
+)
+
+
+def abc_query_key(q):
+    """Normalize a typed query exactly as SQL abc_search_key() normalizes stored ABC.
+
+    Returns '' when nothing is left to match on."""
+    if not q:
+        return ""
+    return _ABC_NOISE_RE.sub("", _ABC_ORNAMENT_RE.sub("", q)).lower()
+
+
+def is_abc_friendly(q):
+    """True when the query is plausibly notation rather than a name.
+
+    Deliberately permissive -- plenty of real tune names ("Cabbage", "Bee") are made
+    only of note letters. That is fine: in mixed mode notation matches are BLENDED with
+    name matches and ranked below them, so a false positive costs a few extra rows, not
+    a wrong answer."""
+    key = abc_query_key(q)
+    return bool(key) and _ABC_FRIENDLY_RE.fullmatch(key) is not None
+
+
+def abc_search_terms(q, mode="mixed"):
+    """The single decision point for "should this query search notation, and with what
+    pattern?". Returns (use_abc, like_pattern); like_pattern is None when use_abc is False.
+
+    mode='abc'   -- the explicit notation filter: honor whatever was typed.
+    mode='mixed' -- the app-wide default: blend notation in only when the query looks
+                    like notes AND is long enough to be discriminating.
+    mode='name'  -- never.
+    """
+    key = abc_query_key(q)
+    if not key or mode == "name":
+        return False, None
+    if mode != "abc" and not (is_abc_friendly(q) and len(key) >= ABC_MIN_QUERY_LEN):
+        return False, None
+    return True, f"%{key}%"
+
+
+def _connect_kwargs():
+    return dict(
         host=os.environ.get("PGHOST"),
         database=os.environ.get("PGDATABASE"),
         user=os.environ.get("PGUSER"),
@@ -264,7 +340,196 @@ def get_db_connection():
         # non-UTC server timezone.
         options="-c timezone=utc",
     )
-    return conn
+
+
+# Connection pooling. Every caller in the app follows the same shape:
+#
+#     conn = get_db_connection()
+#     try: ...
+#     finally: conn.close()
+#
+# ...across ~350 call sites. Rather than touch all of them, get_db_connection()
+# keeps its signature and hands back a PooledConnection whose .close() *returns*
+# the connection to the pool instead of tearing down the socket. Everything else
+# proxies straight through to the real psycopg2 connection.
+#
+# Why this matters: without it, each of those calls paid a full TCP + TLS + auth
+# handshake against a remote Postgres. An authenticated page load opens two of
+# them (Flask-Login's user_loader, then the page's own), and a session-instance
+# view up to seven across its redirect — enough per-request latency to dominate
+# time-to-first-byte on a site whose CPU sits near idle.
+_pool = None
+_pool_lock = threading.Lock()
+
+# Sized against the DB plan's connection cap, shared with the streaming sidecar
+# (which takes up to 10 of its own via asyncpg). Overridable for local work.
+_POOL_MIN = int(os.environ.get("PGPOOL_MIN", 1))
+_POOL_MAX = int(os.environ.get("PGPOOL_MAX", 10))
+
+
+def _get_pool():
+    """Build the pool on first use.
+
+    Lazily, not at import time: the cron jobs in jobs/ and the test suite import
+    this module in environments where PG* may be unset or point somewhere else,
+    and an import-time connection would turn that into an import error.
+    """
+    global _pool
+    if _pool is None:
+        with _pool_lock:
+            if _pool is None:
+                _pool = psycopg2.pool.ThreadedConnectionPool(
+                    _POOL_MIN, _POOL_MAX, **_connect_kwargs()
+                )
+    return _pool
+
+
+class PooledConnection:
+    """A psycopg2 connection borrowed from the pool.
+
+    Proxies every attribute to the real connection; the only overridden
+    behaviour is close(), which releases back to the pool. Closing twice is a
+    no-op, so the common `finally: conn.close()` after an inner close is safe.
+    """
+
+    def __init__(self, pool, conn):
+        self._pool = pool
+        self._conn = conn
+        self._released = False
+
+    def __getattr__(self, name):
+        # Only reached for attributes not set on the wrapper itself.
+        return getattr(self._conn, name)
+
+    @property
+    def closed(self):
+        """Non-zero once this handle is done, matching psycopg2's semantics.
+
+        Callers check `conn.closed` to mean "may I still use this?". Proxying
+        straight through would answer 0 after close(), because the socket is
+        alive again in the pool — true of the connection, wrong for the caller.
+        """
+        if self._released:
+            return 1
+        return self._conn.closed
+
+    def __del__(self):
+        # Safety net for the paths that never reach their conn.close(): a
+        # handler that raises between borrowing and closing (very common —
+        # most call sites are plain sequential code, not try/finally).
+        #
+        # This restores what actually kept the un-pooled version working:
+        # refcounting dropped the last reference and psycopg2 closed the
+        # socket. Here the equivalent is returning it to the pool; without it
+        # every raised exception permanently consumed a pool slot.
+        try:
+            self.close()
+        except Exception:
+            pass
+
+    def close(self):
+        if self._released:
+            return
+        self._released = True
+        try:
+            # Never hand a connection to the next request mid-transaction. Most
+            # callers only read and never commit, which would otherwise leave an
+            # idle-in-transaction session holding locks.
+            if self._conn.closed == 0:
+                self._conn.rollback()
+        except Exception:
+            # A broken connection can't be reused; let the pool discard it.
+            try:
+                self._pool.putconn(self._conn, close=True)
+            except Exception:
+                pass
+            return
+        try:
+            self._pool.putconn(self._conn)
+        except Exception:
+            pass
+
+    # psycopg2 connections are context managers that manage a *transaction*,
+    # not the connection itself — `with conn:` commits or rolls back and leaves
+    # the connection open. Preserve exactly that, so `with get_db_connection()`
+    # keeps its existing meaning rather than silently releasing to the pool.
+    def __enter__(self):
+        self._conn.__enter__()
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return self._conn.__exit__(exc_type, exc, tb)
+
+
+def get_db_connection():
+    """Borrow a connection from the pool. Call .close() to return it."""
+    pool = _get_pool()
+    started = time.monotonic()
+    conn = pool.getconn()
+    # Recycle anything the server hung up on (idle timeout, restart, failover)
+    # rather than handing a dead socket to the caller.
+    if conn.closed != 0:
+        pool.putconn(conn, close=True)
+        conn = pool.getconn()
+    wrapped = PooledConnection(pool, conn)
+    _record_connection(wrapped, time.monotonic() - started)
+    return wrapped
+
+
+def _record_connection(conn, elapsed):
+    """Track this checkout on the current request.
+
+    Two jobs: the counters feed the timing log in app.py, and the list lets
+    release_request_connections() reclaim anything a failed handler left
+    borrowed. Silent no-op outside a request context (cron jobs, scripts).
+    """
+    try:
+        from flask import g, has_request_context
+
+        if not has_request_context():
+            return
+        g.db_connections = getattr(g, "db_connections", 0) + 1
+        g.db_connect_seconds = getattr(g, "db_connect_seconds", 0.0) + elapsed
+        borrowed = getattr(g, "_db_borrowed", None)
+        if borrowed is None:
+            borrowed = g._db_borrowed = []
+        borrowed.append(conn)
+    except Exception:
+        pass
+
+
+def release_request_connections():
+    """Return every connection borrowed during this request.
+
+    PooledConnection.__del__ already covers most leaks, but while an exception
+    is being handled its traceback holds the frames — and therefore the
+    connection — alive. On a busy worker that is long enough to starve the
+    pool. Wired to teardown_request in app.py, this bounds a connection's
+    lifetime to the request that borrowed it, regardless of how it ended.
+    """
+    try:
+        from flask import g
+
+        for conn in getattr(g, "_db_borrowed", []) or []:
+            try:
+                conn.close()  # no-op if the handler already closed it
+            except Exception:
+                pass
+        g._db_borrowed = []
+    except Exception:
+        pass
+
+
+def close_db_pool():
+    """Tear down the pool (used by tests and at worker shutdown)."""
+    global _pool
+    with _pool_lock:
+        if _pool is not None:
+            try:
+                _pool.closeall()
+            except Exception:
+                pass
+            _pool = None
 
 
 def save_to_history(cur, table_name, operation, record_id, user_id=None):
@@ -482,10 +747,12 @@ def save_to_history(cur, table_name, operation, record_id, user_id=None):
             """
             INSERT INTO session_person_history
             (session_person_id, session_id, person_id, relationship, confirmed, archived, is_admin,
-             gets_email_reminder, gets_email_followup, operation, changed_by_user_id, changed_at,
+             can_manage_recordings, gets_email_reminder, gets_email_followup,
+             operation, changed_by_user_id, changed_at,
              created_date, last_modified_date, created_by_user_id, last_modified_user_id)
             SELECT session_person_id, session_id, person_id, relationship, confirmed, archived, is_admin,
-                   gets_email_reminder, gets_email_followup, %s, %s, (NOW() AT TIME ZONE 'UTC'),
+                   can_manage_recordings, gets_email_reminder, gets_email_followup,
+                   %s, %s, (NOW() AT TIME ZONE 'UTC'),
                    created_date, last_modified_date, created_by_user_id, last_modified_user_id
             FROM session_person WHERE session_id = %s AND person_id = %s
         """,
@@ -493,46 +760,39 @@ def save_to_history(cur, table_name, operation, record_id, user_id=None):
         )
 
     elif table_name == "recording":
+        # `peaks` is intentionally absent: a large derived blob, recomputable
+        # from the audio, that would bloat every history row (schema/049).
         cur.execute(
             """
             INSERT INTO recording_history
-            (recording_id, operation, changed_by_user_id, session_instance_id, person_id, source, status,
-             device_info, format, sample_rate, channels, bitrate, s3_prefix, total_chunks,
-             total_duration_ms, total_size_bytes, client_started_at,
+            (recording_id, operation, changed_by_user_id, session_instance_id, person_id, label, storage_key,
+             mime_type, duration_ms, file_size_bytes, sample_rate, channels, is_clock_anchor,
+             clock_offset_ms, started_at, peaks_hz, notes,
+             stream_key, stream_mime_type, stream_size_bytes,
+             segmenting_complete, segmenting_complete_at,
              created_date, last_modified_date, created_by_user_id, last_modified_user_id)
-            SELECT recording_id, %s, %s, session_instance_id, person_id, source, status,
-                   device_info, format, sample_rate, channels, bitrate, s3_prefix, total_chunks,
-                   total_duration_ms, total_size_bytes, client_started_at,
+            SELECT recording_id, %s, %s, session_instance_id, person_id, label, storage_key,
+                   mime_type, duration_ms, file_size_bytes, sample_rate, channels, is_clock_anchor,
+                   clock_offset_ms, started_at, peaks_hz, notes,
+                   stream_key, stream_mime_type, stream_size_bytes,
+                   segmenting_complete, segmenting_complete_at,
                    created_date, last_modified_date, created_by_user_id, last_modified_user_id
             FROM recording WHERE recording_id = %s
         """,
             (operation, user_id, record_id),
         )
 
-    elif table_name == "recording_chunk":
+    elif table_name == "recording_tune_segment":
         cur.execute(
             """
-            INSERT INTO recording_chunk_history
-            (recording_chunk_id, operation, changed_by_user_id, recording_id, sequence_number,
-             start_timestamp_ms, end_timestamp_ms, s3_key, file_size_bytes, upload_status, checksum,
-             created_date)
-            SELECT recording_chunk_id, %s, %s, recording_id, sequence_number,
-                   start_timestamp_ms, end_timestamp_ms, s3_key, file_size_bytes, upload_status, checksum,
-                   created_date
-            FROM recording_chunk WHERE recording_chunk_id = %s
-        """,
-            (operation, user_id, record_id),
-        )
-
-    elif table_name == "recording_event":
-        cur.execute(
-            """
-            INSERT INTO recording_event_history
-            (recording_event_id, operation, changed_by_user_id, recording_id, event_type,
-             event_data, client_timestamp, created_date)
-            SELECT recording_event_id, %s, %s, recording_id, event_type,
-                   event_data, client_timestamp, created_date
-            FROM recording_event WHERE recording_event_id = %s
+            INSERT INTO recording_tune_segment_history
+            (recording_tune_segment_id, operation, changed_by_user_id, recording_id,
+             session_instance_tune_id, start_ms, end_ms,
+             created_date, last_modified_date, created_by_user_id, last_modified_user_id)
+            SELECT recording_tune_segment_id, %s, %s, recording_id,
+                   session_instance_tune_id, start_ms, end_ms,
+                   created_date, last_modified_date, created_by_user_id, last_modified_user_id
+            FROM recording_tune_segment WHERE recording_tune_segment_id = %s
         """,
             (operation, user_id, record_id),
         )

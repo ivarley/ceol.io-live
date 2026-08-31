@@ -25,7 +25,10 @@
       instanceActive: {{ instance_active | tojson }},
       canonicalInstruments: {{ canonical_instruments | tojson }},
       trackAttendance: {{ track_attendance | tojson }},
-      trackSetStarters: {{ track_set_starters | tojson }}
+      trackSetStarters: {{ track_set_starters | tojson }},
+      // Whether to offer the header's Recordings row (schema/053). Purely about
+      // what is shown -- every recording endpoint re-checks the grant itself.
+      canManageRecordings: {{ can_manage_recordings | tojson }}
     };
     // Same app-wide flag base.html sets (this shell doesn't extend it): the tune drawer
     // and "Find a tune" overlay render for logged-out viewers too and have no page

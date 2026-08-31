@@ -286,6 +286,13 @@
     color: var(--primary);
     text-decoration: underline;
 }
+
+/* This row is in the results because its NOTATION matched the search, not its name.
+   Without the mark, a search by notes reads as a list of unrelated tunes. */
+.abc-only-badge {
+    color: #e8d28a;
+    margin-left: 4px;
+}
 @media (max-width: 768px) {
     #tunes-table {
         font-size: 0.85em;

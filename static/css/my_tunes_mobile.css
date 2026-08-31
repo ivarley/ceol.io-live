@@ -422,6 +422,16 @@
     flex: 0 0 auto;
 }
 
+/* This card is in the results because its NOTATION matched the search, not its name.
+   Without the mark, a search by notes reads as a list of unrelated tunes. */
+.abc-only-badge {
+    font-size: 15px;
+    line-height: 1;
+    color: #e8d28a;
+    flex: 0 0 auto;
+    margin-left: -6px; /* sits with the name, not spaced like the chips beside it */
+}
+
 .tune-type {
     font-size: 13px;
     padding: 3px 6px;

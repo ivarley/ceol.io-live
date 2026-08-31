@@ -137,8 +137,10 @@ export function normName(s) {
     .trim().toLowerCase()
 }
 
-// Notation normalizer for the ABC index: strip whitespace (meaningless in ABC) + lower.
-export const normAbc = (s) => (s || '').replace(/\s+/g, '').toLowerCase()
+// The notation normalizer now lives in shared/abcquery.js (every search box in the app
+// needs it, and it has to stay in lockstep with the SQL abc_search_key that backs the
+// notation index); re-exported here so the logger's own imports keep working unchanged.
+export { normAbc } from './shared/abcquery.js'
 
 // The existing tune a PURE APPEND would collapse into, mirroring the server merge rule
 // (_find_corroboration_target §H30): same tune already live in the OPEN set (after the

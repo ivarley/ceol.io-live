@@ -29,15 +29,17 @@ class TestHomeRoute:
         mock_conn.cursor.return_value = mock_cursor
         mock_get_conn.return_value = mock_conn
 
-        # Authed home issues four queries in order: learning counts (fetchall),
-        # suggested tune (fetchone), upcoming sessions (fetchall), then
-        # in-progress logs (fetchall).
+        # Authed home issues five queries in order: learning counts (fetchall),
+        # suggested tune (fetchone), upcoming sessions (fetchall), in-progress
+        # logs (fetchall), then in-progress timestamping (fetchall, spec 050).
         mock_cursor.fetchall.side_effect = [
             [("learning", 3), ("want to learn", 2)],  # learning counts
             [("Austin Session", "austin/session", 101,
               datetime(2023, 8, 15).date(), None, None)],  # upcoming sessions
             [("Mueller Session", "austin/mueller", 102,
               datetime(2023, 8, 10).date(), datetime(2023, 8, 12))],  # in-progress logs
+            [(77, "Mueller Night", "Mueller Session", datetime(2023, 8, 10).date(),
+              datetime(2023, 8, 12), 4, 11)],  # in-progress timestamping
         ]
         mock_cursor.fetchone.return_value = (1, "Cooley's", "reel", 9)  # suggested tune
 
@@ -48,17 +50,27 @@ class TestHomeRoute:
         assert b"Austin Session" in response.data
         assert b"Continue Logging" in response.data
         assert b"Mueller Session" in response.data
+        assert b"Continue Tagging" in response.data
+        assert b"4 of 11 tunes placed" in response.data
 
     @patch("web_routes.get_db_connection")
     def test_home_database_error(self, mock_get_conn, client, authenticated_user):
-        """Home handles a database failure gracefully instead of 500ing."""
+        """A database failure is a 500 with a generic page, not a 200.
+
+        This used to assert the opposite — 200 with the exception text in the
+        body. That made every failure invisible: uptime checks, Render's status
+        metrics and the request log all saw a success, so a query that timed out
+        was indistinguishable from a page that rendered. It also echoed raw
+        exception text to the browser.
+        """
         mock_get_conn.side_effect = Exception("Database connection failed")
 
         with authenticated_user:
             response = client.get("/")
 
-        assert response.status_code == 200
-        assert b"Database connection failed" in response.data
+        assert response.status_code == 500
+        # The failure is logged server-side, never leaked to the visitor.
+        assert b"Database connection failed" not in response.data
 
 
 class TestMagicRoute:

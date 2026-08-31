@@ -31,6 +31,7 @@ First paint needs no fetch — no loading flash.
 | `/admin/sessions/<path>` (+ tab wrappers) | `session_admin.html` | `build_session_admin_payload` | `GET /api/admin/sessions/<path>/admin-detail` | `frontend/src/sessionadminpage/` | `static/sessionadminpage/` |
 | `/add-session` | `add_session.html` | `build_add_session_payload` | `GET /api/add-session` (PUBLIC — only the create POST is gated) | `frontend/src/addsessionpage/` | `static/addsessionpage/` |
 | `/admin/people` | `admin_people.html` | `build_admin_people_payload` | `GET /api/admin/people` (system-admin) | `frontend/src/peopleadminpage/` | `static/peopleadminpage/` |
+| `/admin/recordings/<id>/segment` | `recording_segmenter.html` | `build_recording_segmenter_payload` | `GET /api/recordings/<id>/segmenter` (system-admin) | `frontend/src/segmenterpage/` | `static/segmenterpage/` |
 
 Plus three non-page bundles:
 

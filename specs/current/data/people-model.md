@@ -64,6 +64,14 @@ A person's relationship to a session (spec 034). Four orthogonal fields, each wi
   inferred; check-in does not un-archive. One-sided: the person still sees the session as
   theirs.
 - `is_admin` - Session admin (can edit session, manage attendance, confirm/archive people)
+- `can_manage_recordings` - May upload, delete and timestamp **this session's** audio
+  (spec 050, schema/053). Default false, and **only takes effect together with `is_admin`** —
+  the check is `is_admin AND can_manage_recordings` everywhere, so "who can do this here" stays
+  answerable from the session's admin list rather than from every row. Granted by a **system
+  admin only**, one person and one session at a time: it hands out a tool that writes to object
+  storage and can delete audio along with the hand-placed tune timestamps on it, so it is not
+  something a session admin can pass onward. Grants nothing on any other session's recordings,
+  and nothing on the site-wide `/admin/recordings` index.
 
 There is no stored "regular" flag. **Regular-ness is computed** from actual attendance
 (distinct `attendance='yes'` instances in a trailing 6-month window, then lifetime, then

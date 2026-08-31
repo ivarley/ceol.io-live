@@ -125,7 +125,8 @@ def _build(cur):
         (SIT, I_BOTH, T_BOTH, L),
     )
     cur.execute(
-        "INSERT INTO recording (recording_id, session_instance_id, person_id, status) VALUES (%s, %s, %s, 'stopped')",
+        "INSERT INTO recording (recording_id, session_instance_id, person_id, storage_key, duration_ms) "
+        "VALUES (%s, %s, %s, 'recordings/test/merge040.m4a', 600000)",
         (REC, I_BOTH, L),
     )
 

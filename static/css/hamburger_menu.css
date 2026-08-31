@@ -89,6 +89,9 @@
 }
 .ft-item:hover { background: var(--hover-bg, rgba(255,255,255,0.06)); }
 .ft-type { color: var(--disabled-text, #9a9aa3); font-size: 13px; flex: none; }
+/* This row matched the NOTATION, not the name — otherwise a search for notes returns
+   a list of names with no visible reason for being there. */
+.ft-abc { color: #e8d28a; font-size: 13px; flex: none; margin-left: 6px; margin-right: auto; }
 .ft-empty { padding: 10px 12px; color: var(--disabled-text, #9a9aa3); font-style: italic; }
 /* Pasted-link states: the "looking up #NNN" note and the import/offsite handoff the
    empty state offers when the catalog doesn't have that tune yet. */

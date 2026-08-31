@@ -28,6 +28,7 @@
   const isLoggedIn = permissions.is_logged_in
 
   import { toast, SearchField, Chip, Seg, Sheet } from '../lib/index.js'
+  import { createAbcMatcher } from '../shared/abcfilter.svelte.js'
 
   // ---- state ---------------------------------------------------------------
   let allTunes = $state([...initialTunes])
@@ -58,10 +59,24 @@
   let panelVisible = $state(false)
   let panelAnim = $state('') // '', 'opening', 'closing'
 
+  // Notation search: the filter takes notes as well as names, but the payload carries no
+  // ABC, so the matching ids come from the server. A query that isn't note-shaped never
+  // leaves the browser. Public endpoint, so this works for logged-out visitors too.
+  const abcMatch = createAbcMatcher()
+  $effect(() => {
+    // Tracked: the query, and the SIZE of the list (which can arrive after mount). The
+    // ids themselves are read untracked, so ordinary row churn costs nothing.
+    abcMatch.update(
+      filters.search,
+      () => untrack(() => allTunes.map((t) => t.tune_id)),
+      allTunes.length
+    )
+  })
+
   // ---- derived ---------------------------------------------------------------
   const filteredTunes = $derived.by(() => {
     void tunebookVersion // re-filter/re-color once the tunebook loads
-    return filterAndSortTunes(allTunes, filters, sort, myStatusInstrument)
+    return filterAndSortTunes(allTunes, filters, sort, myStatusInstrument, abcMatch.ids)
   })
   const tuneTypes = $derived([...new Set(allTunes.map((t) => t.tune_type).filter(Boolean))].sort())
   const hasActiveFilters = $derived(!!(filters.type || filters.mystatus || filters.attended))
@@ -661,6 +676,8 @@
                   toggleTuneSelection(tune.tune_id)
                 }} />
               <h3 class="tune-name">{tune.tune_name || 'Unknown'}</h3>
+              <!-- Here because its NOTATION matched, not its name. -->
+              {#if tune._abcOnly}<span class="abc-only-badge" title="Matched the notation, not the name">♪</span>{/if}
             </div>
             <div class="tune-meta">
               {#if st}<Chip label={st.status} styled={false} chipClass="ls-chip {st.cls}" />{/if}

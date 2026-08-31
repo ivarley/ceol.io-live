@@ -57,13 +57,59 @@ WHERE LOWER(unaccent(name)) = LOWER(unaccent(%s))
 
 ## Tune Search
 
-**API**: `GET /api/tunes/search?q=<query>` | `api_person_tune_routes.py:902`
+**API**: `GET /api/tunes/search?q=<query>&mode=name|abc|mixed` | `api_person_tune_routes.py` `search_tunes`
 
 **Strategy**:
-1. Search local `tune` table
+1. Search local `tune` table by name, blending in notation matches (below)
 2. If insufficient results, query thesession.org API
 3. Merge, deduplicate, sort by relevance + popularity
 4. Cache new results locally
+
+A query that is a thesession.org URL or a bare tune id is a POINTER, not a query: it
+resolves to that one tune (following merge redirects) and never gets notation blended in.
+
+## Notation (ABC) Search
+
+Searching by notes — type `fdd cAA | B`, find "My Darling Asleep". Available in **every**
+box that searches tunes (feature 051), not just the deep search.
+
+**The rules live in one place per runtime, and all three must agree:**
+
+| Runtime | Definition |
+|---|---|
+| SQL | `abc_search_key(text)` — `schema/055_abc_search_index.sql`; backs the index |
+| Python | `abc_query_key` / `is_abc_friendly` / `abc_search_terms` / `ABC_MATCH_SQL` — `database.py` |
+| Browser | `frontend/src/shared/abcquery.js` (hand-copied into `static/js/offline_data.js`, which loads outside every Vite bundle) |
+
+**Normalization**: drop grace notes `{…}`, chord symbols `"…"`, whitespace, and legacy `!`
+line breaks; lowercase. Ornament stripping is what lets a typed `AAABc` find a setting
+stored as `{g}A{d}A{e}A {g}ABc`. Lowercasing deliberately ignores ABC's octave-case
+convention, so `GED` and `ged` find the same tune.
+
+**Modes**: `mixed` (default) blends notation with name matches, ranked below them, and
+flags notation-only rows `abc_only` so the UI can mark them. `name` and `abc` narrow to one
+kind (the deep search's filter tabs). `mixed` requires the query to look like notes AND be
+at least `ABC_MIN_QUERY_LEN` (3) characters — shorter matches nearly the whole catalog, and
+pg_trgm cannot use the trigram index below 3. `mode=abc` honors whatever was typed.
+
+The "looks like notes" test is deliberately permissive — real names like `Cabbage` and
+`Bee` are all note letters. A false positive costs extra rows ranked below the name
+matches, never a wrong answer.
+
+**Filtering an already-loaded list**: `POST /api/tunes/abc-filter {q, tune_ids}` returns the
+subset whose notation matches. My Tunes, the session Tunes tab and the admin tunes tab all
+filter client-side over a payload that carries no ABC (far too large to ship), so they post
+their visible ids and union the result into the same filter pass.
+`frontend/src/shared/abcfilter.svelte.js` is the one client mechanism. `@public_api` —
+session pages are publicly viewable, so their Tunes tab must filter logged out.
+
+**Index**: `idx_tune_setting_abc_trgm`, a pg_trgm GIN index on `abc_search_key(abc)`. A
+leading-wildcard LIKE cannot use a B-tree, and the query must use the identical expression
+or the planner won't touch the index — same pattern as `tune_search_key` (migration 026).
+Apply migration 055 **before** deploying code that calls it.
+
+**Offline**: incipit-only — the bundle carries `incipit_abc`, never full ABC. Hits are
+flagged `abc_scope: 'incipit'`. See [Offline Support](offline.md).
 
 **Session-Specific Search** (prioritizes session aliases):
 1. `session_tune` & `session_tune_alias` - Highest priority

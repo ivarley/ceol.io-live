@@ -56,12 +56,16 @@ export function tuneSortValue(tune, column) {
 }
 
 // Legacy tune search: free text over name/alias/type/keys, OR an exact tune-id
-// match when the query looks like an id or thesession URL.
-export function filterTuneList(tunes, rawQuery) {
+// match when the query looks like an id or thesession URL, OR a NOTATION match --
+// `abcIds` is the set of tune ids whose ABC matches a note-shaped query, resolved by
+// the server (shared/abcfilter.svelte.js) since the payload carries no ABC. Omitting it
+// filters exactly as before.
+export function filterTuneList(tunes, rawQuery, abcIds = null) {
   const search = normalizeQuotes(rawQuery.toLowerCase())
   if (!search) return tunes
   const searchTuneId = extractTuneId(rawQuery)
   return tunes.filter((tune) => {
+    if (abcIds?.has(tune.tune_id)) return true
     const tuneIdMatch = searchTuneId && tune.tune_id === searchTuneId
     const textMatch =
       tune.tune_name.toLowerCase().includes(search) ||

@@ -12,6 +12,23 @@ from auth import User, SESSION_LIFETIME_WEEKS
 from api_auth import public_api
 from api_routes import *
 from web_routes import *
+from recording_routes import (
+    get_recording_segmenter,
+    get_recording_peaks,
+    put_recording_segment,
+    delete_recording_segment,
+    get_instance_recordings,
+    get_instance_audio,
+    download_recording_segment,
+    export_recording_segments,
+    create_recording_upload_url,
+    create_recording,
+    get_recording_status,
+    reprocess_recording,
+    set_recording_segmenting_complete,
+    delete_recording,
+    get_session_instances_for_admin,
+)
 from api_person_tune_routes import (
     get_my_tunes,
     get_person_tune_detail,
@@ -27,6 +44,7 @@ from api_person_tune_routes import (
     get_my_sessions,
     sync_my_tunes,
     search_tunes,
+    abc_filter_tunes,
     update_my_profile,
     get_common_tunes
 )
@@ -102,7 +120,23 @@ login_manager.login_message = "Please log in to access this page."
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.get_by_id(int(user_id))
+    """Resolve the signed session cookie's user id.
+
+    Returning None means "not logged in", which is the right answer for a cookie
+    this app did not mint -- and it WILL see some. Cookies are scoped by host and
+    ignore the port, so every other Flask app on localhost shares this jar and
+    the last one to log in wins the `session` cookie. A neighbour that keys users
+    by UUID used to take the whole site down with
+
+        ValueError: invalid literal for int() with base 10: '00000000-...-0001'
+
+    on every request, since this runs before any route. A foreign cookie should
+    log you out, not 500 you, so anything unparseable is simply nobody.
+    """
+    try:
+        return User.get_by_id(int(user_id))
+    except (TypeError, ValueError):
+        return None
 
 @login_manager.request_loader
 def load_user_from_request(req):
@@ -156,6 +190,95 @@ def capture_referrer():
     if referrer:
         # Store in session for later use during registration
         session['referred_by_person_id'] = referrer
+
+
+# --- Request timing -------------------------------------------------------
+#
+# One line per request, so "the site felt slow" is answerable from the logs
+# instead of reconstructed after the fact. The DB counters come from
+# database.get_db_connection(), which records each pool checkout on `g`.
+#
+# Slow requests log at WARNING so they can be isolated in Render's log search;
+# everything else is DEBUG to keep steady-state noise down.
+SLOW_REQUEST_MS = int(os.environ.get("SLOW_REQUEST_MS", 500))
+
+_timing_log = logging.getLogger("ceol.timing")
+
+
+@app.before_request
+def _start_request_timer():
+    from flask import g
+    import time
+
+    g._request_started = time.monotonic()
+
+
+@app.teardown_request
+def _release_db_connections(exc):
+    """Hand back any connection this request borrowed and didn't close.
+
+    Most handlers are plain sequential code rather than try/finally, so an
+    exception between borrowing and closing skips the close entirely.
+    """
+    from database import release_request_connections
+
+    release_request_connections()
+
+
+@app.after_request
+def _log_request_timing(resp):
+    from flask import g
+    import time
+
+    started = getattr(g, "_request_started", None)
+    if started is None:
+        return resp
+    # Static files are served straight off disk and would drown out the signal.
+    if request.path.startswith("/static/"):
+        return resp
+
+    elapsed_ms = (time.monotonic() - started) * 1000
+    conns = getattr(g, "db_connections", 0)
+    db_ms = getattr(g, "db_connect_seconds", 0.0) * 1000
+    _timing_log.log(
+        logging.WARNING if elapsed_ms >= SLOW_REQUEST_MS else logging.INFO,
+        "request method=%s path=%s status=%s elapsed_ms=%.1f db_conns=%d db_connect_ms=%.1f",
+        request.method,
+        request.path,
+        resp.status_code,
+        elapsed_ms,
+        conns,
+        db_ms,
+    )
+    return resp
+
+
+def health():
+    """Liveness + database reachability, so an uptime check can tell the
+    difference between 'app is down' and 'database is slow'."""
+    from database import get_db_connection
+    import time
+
+    started = time.monotonic()
+    try:
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT 1")
+            cur.fetchone()
+        finally:
+            conn.close()
+    except Exception as e:
+        app.logger.exception("health check failed")
+        return {"status": "error", "database": str(e)}, 503
+    return {
+        "status": "ok",
+        "database_ms": round((time.monotonic() - started) * 1000, 1),
+    }
+
+
+app.add_url_rule("/health", "health", health)
+
 
 # Template filters for timezone handling
 @app.template_filter("format_datetime_tz")
@@ -1289,6 +1412,14 @@ app.add_url_rule(
     search_tunes,
     methods=["GET"],
 )
+# Notation match over a list the client already has on screen (My Tunes, a session's
+# Tunes tab, the admin tunes tab): POST because the caller sends its visible tune ids.
+app.add_url_rule(
+    "/api/tunes/abc-filter",
+    "abc_filter_tunes",
+    abc_filter_tunes,
+    methods=["POST"],
+)
 app.add_url_rule(
     "/api/tunes/popular",
     "get_popular_tunes",
@@ -1423,42 +1554,111 @@ app.add_url_rule(
     methods=["POST"],
 )
 
-# Recording routes
+# Recording segmenter (spec 050): audio -> per-tune timestamps, the data-prep
+# step for the eventual tune-recognition model. All system-admin only.
 app.add_url_rule(
-    "/api/session_instance/<int:session_instance_id>/recordings",
-    "start_recording",
-    start_recording,
+    "/admin/recordings",
+    "admin_recordings",
+    admin_recordings,
+)
+app.add_url_rule(
+    "/admin/recordings/<int:recording_id>/segment",
+    "segment_recording",
+    segment_recording,
+)
+app.add_url_rule(
+    "/api/recordings/<int:recording_id>/segmenter",
+    "get_recording_segmenter",
+    get_recording_segmenter,
+    methods=["GET"],
+)
+# In-app upload: sign, confirm, then poll while the waveform and proxy are built.
+# The audio itself goes browser -> S3 and never touches Flask.
+app.add_url_rule(
+    "/api/recordings/upload-url",
+    "create_recording_upload_url",
+    create_recording_upload_url,
     methods=["POST"],
 )
 app.add_url_rule(
-    "/api/session_instance/<int:session_instance_id>/recordings",
-    "list_recordings",
-    list_recordings,
-    methods=["GET"],
-)
-app.add_url_rule(
-    "/api/recordings/<int:recording_id>/chunks",
-    "upload_chunk",
-    upload_chunk,
+    "/api/recordings",
+    "create_recording",
+    create_recording,
     methods=["POST"],
 )
 app.add_url_rule(
     "/api/recordings/<int:recording_id>/status",
-    "update_recording_status",
-    update_recording_status,
-    methods=["PUT"],
-)
-app.add_url_rule(
-    "/api/recordings/<int:recording_id>/playback",
-    "get_recording_playback",
-    get_recording_playback,
+    "get_recording_status",
+    get_recording_status,
     methods=["GET"],
 )
 app.add_url_rule(
-    "/api/session_instance/<int:session_instance_id>/recordings/upload",
-    "upload_recording_file",
-    upload_recording_file,
+    "/api/recordings/<int:recording_id>/reprocess",
+    "reprocess_recording",
+    reprocess_recording,
     methods=["POST"],
+)
+app.add_url_rule(
+    "/api/recordings/<int:recording_id>/segmenting-complete",
+    "set_recording_segmenting_complete",
+    set_recording_segmenting_complete,
+    methods=["PUT"],
+)
+app.add_url_rule(
+    "/api/recordings/<int:recording_id>",
+    "delete_recording",
+    delete_recording,
+    methods=["DELETE"],
+)
+app.add_url_rule(
+    "/api/admin/sessions/<int:session_id>/instances",
+    "get_session_instances_for_admin",
+    get_session_instances_for_admin,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/recordings/<int:recording_id>/peaks",
+    "get_recording_peaks",
+    get_recording_peaks,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/recordings/<int:recording_id>/segments/<int:session_instance_tune_id>",
+    "put_recording_segment",
+    put_recording_segment,
+    methods=["PUT"],
+)
+app.add_url_rule(
+    "/api/recordings/<int:recording_id>/segments/<int:session_instance_tune_id>",
+    "delete_recording_segment",
+    delete_recording_segment,
+    methods=["DELETE"],
+)
+app.add_url_rule(
+    "/api/recordings/<int:recording_id>/export",
+    "export_recording_segments",
+    export_recording_segments,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/session-instances/<int:session_instance_id>/recordings",
+    "get_instance_recordings",
+    get_instance_recordings,
+    methods=["GET"],
+)
+# Playback: the read side of the segmenter's work, for the session-instance page.
+app.add_url_rule(
+    "/api/session-instances/<int:session_instance_id>/audio",
+    "get_instance_audio",
+    get_instance_audio,
+    methods=["GET"],
+)
+# One tune, cut out of the master as a file. The only audio that goes through Flask.
+app.add_url_rule(
+    "/api/recordings/<int:recording_id>/segments/<int:session_instance_tune_id>/download",
+    "download_recording_segment",
+    download_recording_segment,
+    methods=["GET"],
 )
 
 # Error handlers

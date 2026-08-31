@@ -91,7 +91,9 @@ Logged tune plays (the actual session log).
 
 ## Key Operations
 
-**Search**: GET /api/tunes/search?q=<query> - searches local + thesession.org
+**Search**: GET /api/tunes/search?q=<query> - searches local (by name AND notation) + thesession.org.
+Notation search normalizes through `abc_search_key` and is index-backed; see
+[Tune Search](../logic/tune-logic.md#notation-abc-search).
 **Link**: POST /api/sessions/<path>/<date_or_id>/match_tune - link to thesession.org
 **Save Log**: POST /api/sessions/<path>/<date_or_id>/save_tunes - bulk save
 

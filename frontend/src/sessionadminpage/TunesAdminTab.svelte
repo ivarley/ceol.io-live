@@ -1,7 +1,9 @@
 <script>
   // Tunes tab: grid of all tunes played at this session — search (free text or
   // tune id/URL) + sortable columns, fetched once when the tab is active.
+  import { untrack } from 'svelte'
   import { SearchField } from '../lib/index.js'
+  import { createAbcMatcher } from '../shared/abcfilter.svelte.js'
   import { compareValues, filterTuneList, tuneSortValue } from './logic.js'
 
   let { sessionPath, load } = $props()
@@ -42,9 +44,23 @@
     }
   }
 
+  // Notation search: the box takes notes as well as names/aliases/keys, but the payload
+  // carries no ABC, so the matching ids come from the server. A query that isn't
+  // note-shaped never leaves the browser.
+  const abcMatch = createAbcMatcher()
+  $effect(() => {
+    // Tracked: the query, and the SIZE of the list — allTunes is null until the tab's
+    // fetch lands, so the first query has nothing to match against and must be retried.
+    abcMatch.update(
+      search,
+      () => untrack(() => (allTunes || []).map((t) => t.tune_id)),
+      (allTunes || []).length
+    )
+  })
+
   const filteredTunes = $derived.by(() => {
     if (!allTunes) return []
-    const filtered = filterTuneList(allTunes, search)
+    const filtered = filterTuneList(allTunes, search, abcMatch.ids)
     return [...filtered].sort((a, b) => compareValues(tuneSortValue(a, sortColumn), tuneSortValue(b, sortColumn), sortDirection))
   })
 
@@ -102,6 +118,8 @@
                   <a href="/sessions/{sessionPath}/tunes/{tune.tune_id}" class="tune-link">
                     {tune.tune_name}
                   </a>
+                  <!-- Here because its NOTATION matched, not its name/alias/type/key. -->
+                  {#if abcMatch.ids.has(tune.tune_id)}<span class="abc-only-badge" title="Matched the notation">♪</span>{/if}
                 </td>
                 <td class="tune-alias">
                   {#if tune.session_alias && tune.session_alias !== tune.tune_name}{tune.session_alias}{:else}<span class="text-muted">-</span>{/if}
