@@ -106,20 +106,24 @@
   let formError = $state('')
   let saving = $state(false)
 
+  // asText, not `?? ''`: an import seeds these straight from thesession.org, whose
+  // JSON types the session id as a NUMBER and will hand back a numeric-looking
+  // phone as one too. Each field below binds to a text input and is .trim()ed on
+  // save, so an uncoerced number threw there and the Save button did nothing at
+  // all — every import was unsaveable. The server coerces this payload as well;
+  // this is the same guarantee held at the field itself, for any other seed source.
+  const asText = (v) => (v == null ? '' : String(v))
+
   function applySeed(s) {
-    // String(), not ?? '': thesession.org returns the session id as a NUMBER, and
-    // an import seeds this field straight from it. The field is a text input and
-    // save() calls .trim() on it, so an uncoerced number threw there and the Save
-    // button did nothing at all — every import was unsaveable.
-    thesessionId = s.thesession_id == null ? '' : String(s.thesession_id)
-    name = s.name ?? ''
-    locationName = s.location_name ?? ''
-    locationPhone = s.location_phone ?? ''
-    locationWebsite = s.location_website ?? ''
-    city = s.city ?? ''
-    stateArea = s.state ?? ''
-    country = s.country ?? ''
-    inceptionDate = s.inception_date ?? ''
+    thesessionId = asText(s.thesession_id)
+    name = asText(s.name)
+    locationName = asText(s.location_name)
+    locationPhone = asText(s.location_phone)
+    locationWebsite = asText(s.location_website)
+    city = asText(s.city)
+    stateArea = asText(s.state)
+    country = asText(s.country)
+    inceptionDate = asText(s.inception_date)
     timezone = s.timezone ?? 'America/Chicago'
     sessionType = s.session_type ?? 'regular'
     bufferBefore = String(s.active_buffer_minutes_before ?? 60)
@@ -132,9 +136,8 @@
     unparsedText = s.unparsedText ?? ''
     // The import flow seeds exactly what generatePath would produce, so it stays
     // in generated mode; a seed that differs is a genuine override.
-    const seededPath = (s.path ?? '').trim()
-    pathIsManual =
-      Boolean(seededPath) && seededPath !== generatePath(s.city ?? '', s.name ?? '')
+    const seededPath = asText(s.path).trim()
+    pathIsManual = Boolean(seededPath) && seededPath !== generatePath(s.city, s.name)
     manualPath = seededPath
     invalidFields = []
     formError = ''
