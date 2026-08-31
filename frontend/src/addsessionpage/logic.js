@@ -18,8 +18,10 @@ export function parseSessionInput(input) {
  * Generate the URL slug ("city/session-name") from the city and session name.
  */
 export function generatePath(city, sessionName) {
+  // String(), not `|| ''`: App.svelte calls this with raw thesession.org fields,
+  // whose JSON is not type-guaranteed — a number would reach .toLowerCase().
   const clean = (s) =>
-    (s || '')
+    String(s ?? '')
       .toLowerCase()
       .replace(/[^a-z0-9\s-]/g, '') // Remove special characters
       .replace(/\s+/g, '-') // Replace spaces with hyphens
@@ -133,15 +135,18 @@ const DAY_PATTERNS = [
   ['sun', 'sunday'],
 ]
 
+// The three scanners and parseTime below read comment text straight off the
+// thesession.org payload, so they coerce rather than assume a string.
 function findWeekday(str) {
-  const lower = (str || '').toLowerCase()
+  const lower = String(str ?? '').toLowerCase()
   for (const [pattern, day] of DAY_PATTERNS) {
     if (lower.indexOf(pattern) !== -1) return day
   }
   return null
 }
 
-function parseTime(str) {
+function parseTime(input) {
+  const str = String(input ?? '')
   // Match patterns like "8pm", "7:30pm", "2:00-4:00 pm", "7pm to 9pm", "from 8pm", "@ 8pm".
   // Range with am/pm after each time ("7pm to 9pm", "7:00pm - 9:00pm"):
   const timeRangeWithBothAmPm =
@@ -213,7 +218,7 @@ function parseTime(str) {
 }
 
 function parseNthPatterns(str) {
-  const lower = (str || '').toLowerCase()
+  const lower = String(str ?? '').toLowerCase()
   const nthMap = {
     first: 1, '1st': 1,
     second: 2, '2nd': 2,
@@ -233,7 +238,7 @@ function parseNthPatterns(str) {
 }
 
 function isBiWeekly(str) {
-  const lower = (str || '').toLowerCase()
+  const lower = String(str ?? '').toLowerCase()
   return lower.includes('every other') || lower.includes('bi-weekly') || lower.includes('biweekly')
 }
 

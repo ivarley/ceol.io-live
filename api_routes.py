@@ -3263,6 +3263,45 @@ def search_sessions_ajax():
         )
 
 
+def _thesession_text(value):
+    """Coerce one thesession.org JSON value to a string.
+
+    Their API is not type-guaranteed: a venue phone that looks numeric comes back
+    as a number, and any field can be null. Everything this touches ends up in the
+    add-session wizard's text inputs, which .trim() what they are given — so a
+    non-string arrives in the browser as a crash rather than as a bad value (that
+    is exactly how the imported-session Save button went dead). Coerce once, here
+    at the boundary, instead of leaving every reader downstream to guess.
+    """
+    if value is None or isinstance(value, (bool, dict, list)):
+        return ""
+    return value if isinstance(value, str) else str(value)
+
+
+def _thesession_field(data, obj_key, field):
+    """Read data[<obj_key>][<field>] as a string.
+
+    Tolerates the nested object being absent, null, or not an object at all.
+    """
+    obj = data.get(obj_key)
+    return _thesession_text(obj.get(field)) if isinstance(obj, dict) else ""
+
+
+def _thesession_ref_id(value):
+    """The session's own thesession.org id as an int, or None.
+
+    Their JSON types it as a number; a numeric string is accepted too. Anything
+    else yields None rather than travelling on, so the wizard only ever seeds a
+    value that parse_thesession_session_id will take back.
+    """
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    text = str(value).strip()
+    return int(text) if text.isdigit() else None
+
+
 @public_api  # backs the /add-session page, which has no @login_required (only the final POST /api/add-session is gated) — TODO tighten?
 def fetch_session_data_ajax():
     if not request.json:
@@ -3290,41 +3329,49 @@ def fetch_session_data_ajax():
 
         data = response.json()
 
-        # Map TheSession.org data to our format
-        venue_name = data.get("venue", {}).get("name", "") if data.get("venue") else ""
+        # Map TheSession.org data to our format. Every value below goes through
+        # the coercion helpers: this payload seeds a form, and the wizard trusts
+        # the types it declares here.
+        venue_name = _thesession_field(data, "venue", "name")
 
         # Extract just the date part from the datetime string (format: "2017-04-21 16:33:23")
-        date_str = data.get("date", "")
+        date_str = _thesession_text(data.get("date"))
         inception_date = date_str.split(" ")[0] if date_str else ""
 
-        # Extract comments (sorted by date, most recent first)
-        comments = data.get("comments", [])
-        comments_list = []
-        for comment in comments:
-            comments_list.append({
-                "date": comment.get("date", ""),
-                "content": comment.get("content", "")
-            })
+        # Extract comments (sorted by date, most recent first). The wizard scans
+        # these for a schedule it can parse, so they have to be text.
+        comments = data.get("comments")
+        comments_list = [
+            {
+                "date": _thesession_text(comment.get("date")),
+                "content": _thesession_text(comment.get("content")),
+            }
+            for comment in (comments if isinstance(comments, list) else [])
+            if isinstance(comment, dict)
+        ]
         # Sort by date descending (most recent first)
-        comments_list.sort(key=lambda x: x.get("date", ""), reverse=True)
+        comments_list.sort(key=lambda x: x["date"], reverse=True)
+
+        # A list of schedule lines, or a single line — the wizard reads both; it is
+        # the element types that need pinning down.
+        schedule = data.get("schedule", "")
+        recurrence = (
+            [_thesession_text(line) for line in schedule]
+            if isinstance(schedule, list)
+            else _thesession_text(schedule)
+        )
 
         session_data = {
-            "id": data.get("id"),
+            "id": _thesession_ref_id(data.get("id")),
             "name": venue_name,  # Default session name to location name
             "inception_date": inception_date,
             "location_name": venue_name,
-            "location_phone": data.get("venue", {}).get("phone", "")
-            if data.get("venue")
-            else "",
-            "location_website": data.get("venue", {}).get("web", "")
-            if data.get("venue")
-            else "",
-            "city": data.get("town", {}).get("name", "") if data.get("town") else "",
-            "state": data.get("area", {}).get("name", "") if data.get("area") else "",
-            "country": data.get("country", {}).get("name", "")
-            if data.get("country")
-            else "",
-            "recurrence": data.get("schedule", ""),
+            "location_phone": _thesession_field(data, "venue", "phone"),
+            "location_website": _thesession_field(data, "venue", "web"),
+            "city": _thesession_field(data, "town", "name"),
+            "state": _thesession_field(data, "area", "name"),
+            "country": _thesession_field(data, "country", "name"),
+            "recurrence": recurrence,
             "comments": comments_list,
         }
 

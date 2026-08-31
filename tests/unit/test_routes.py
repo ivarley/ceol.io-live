@@ -379,6 +379,69 @@ class TestAPIRoutes:
         assert response.status_code == 200
         assert b"session" in response.data.lower()
 
+    @patch("api_routes.requests.get")
+    def test_fetch_session_data_normalizes_thesession_types(self, mock_get, client):
+        """/api/fetch-session-data pins the types the add-session wizard binds to.
+
+        thesession.org's JSON is not type-guaranteed — the id is a number, and a
+        numeric-looking phone comes back as one. The wizard puts these straight
+        into text inputs and .trim()s them on save, so anything but a string
+        reaches the browser as a crash. Coerce at the boundary.
+        """
+        mock_get.return_value = MagicMock(
+            status_code=200,
+            json=lambda: {
+                "id": 1247,
+                "venue": {"name": "B.D. Riley's", "phone": 5125551234, "web": None},
+                "town": {"name": "Austin"},
+                "area": {"name": "Texas"},
+                "country": {"name": "United States"},
+                "date": "2017-04-21 16:33:23",
+                "schedule": ["Every Tuesday @ 8pm"],
+                "comments": [{"date": "2020-01-01", "content": 42}],
+            },
+        )
+
+        response = client.post("/api/fetch-session-data", json={"session_id": "1247"})
+
+        assert response.status_code == 200
+        payload = json.loads(response.data)
+        assert payload["success"] is True
+        data = payload["session_data"]
+        assert data["id"] == 1247  # int, the shape parse_thesession_session_id takes
+        assert data["location_phone"] == "5125551234"
+        assert data["location_website"] == ""  # null venue field, not None
+        assert data["inception_date"] == "2017-04-21"
+        assert data["comments"] == [{"date": "2020-01-01", "content": "42"}]
+        for field in ("name", "location_name", "city", "state", "country"):
+            assert isinstance(data[field], str)
+
+    @patch("api_routes.requests.get")
+    def test_fetch_session_data_survives_a_malformed_payload(self, mock_get, client):
+        """Missing, null and wrongly-typed containers yield empty strings, not a 500."""
+        mock_get.return_value = MagicMock(
+            status_code=200,
+            json=lambda: {
+                "id": "not-an-id",
+                "venue": None,
+                "town": "Austin",  # a string where an object belongs
+                "date": None,
+                "schedule": None,
+                "comments": "no comments here",
+            },
+        )
+
+        response = client.post("/api/fetch-session-data", json={"session_id": "1"})
+
+        assert response.status_code == 200
+        data = json.loads(response.data)["session_data"]
+        assert data["id"] is None
+        assert data["inception_date"] == ""
+        assert data["recurrence"] == ""
+        assert data["comments"] == []
+        for field in ("name", "location_name", "location_phone", "city", "state"):
+            assert data[field] == ""
+
     def test_help_page(self, client):
         """Test help page."""
         response = client.get("/help")

@@ -433,6 +433,69 @@ describe('add-session wizard', () => {
     })
   })
 
+  it('saves an IMPORTED session, whose thesession id arrives as a number', async () => {
+    // thesession.org's JSON types the id as a number, so the seeded field is not a
+    // string. Every other save test types into the field (making it one), which is
+    // how a throw on `thesessionId.trim()` left the import flow's Save button dead.
+    const navigate = vi.fn()
+    const { container } = render(App, { pageData: payload(), navigate })
+    const input = container.querySelector('#sessionUrl')
+    input.value = '1247'
+    await fireEvent.input(input)
+    await fireEvent.submit(container.querySelector('#sessionUrlForm'))
+    await waitFor(() => expect(document.querySelector('#sessionDetailsForm')).toBeTruthy())
+    expect(document.querySelector('#thesessionId').value).toBe('1247')
+
+    await fireEvent.click(document.querySelector('#saveSessionBtn'))
+
+    await waitFor(() =>
+      expect(fetch.mock.calls.some(([u]) => String(u).includes('/api/add-session'))).toBe(true)
+    )
+    const [, init] = fetch.mock.calls.find(([u]) => String(u).includes('/api/add-session'))
+    expect(JSON.parse(init.body)).toMatchObject({
+      thesession_id: '1247',
+      name: "B.D. Riley's",
+      path: 'austin/bd-rileys',
+    })
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/sessions/austin/bd-rileys'))
+    expect(document.querySelector('.session-sheet-actions .field-error')).toBeNull()
+  })
+
+  it('seeds text fields as text even when the payload types them as numbers', async () => {
+    // The server coerces this payload, but the sheet holds the same guarantee at
+    // the field: any non-string here would throw on the .trim()s in save().
+    fetchRoutes['/api/fetch-session-data'] = {
+      success: true,
+      session_data: sessionData({
+        location_phone: 5125551234,
+        location_website: null,
+        comments: [{ date: '2020-01-01', content: 42 }],
+      }),
+    }
+    const navigate = vi.fn()
+    const { container } = render(App, { pageData: payload(), navigate })
+    const input = container.querySelector('#sessionUrl')
+    input.value = '1247'
+    await fireEvent.input(input)
+    await fireEvent.submit(container.querySelector('#sessionUrlForm'))
+    await waitFor(() => expect(document.querySelector('#sessionDetailsForm')).toBeTruthy())
+
+    expect(document.querySelector('#locationPhone').value).toBe('5125551234')
+    expect(document.querySelector('#locationWebsite').value).toBe('')
+
+    await fireEvent.click(document.querySelector('#saveSessionBtn'))
+
+    await waitFor(() =>
+      expect(fetch.mock.calls.some(([u]) => String(u).includes('/api/add-session'))).toBe(true)
+    )
+    const [, init] = fetch.mock.calls.find(([u]) => String(u).includes('/api/add-session'))
+    expect(JSON.parse(init.body)).toMatchObject({
+      location_phone: '5125551234',
+      location_website: null, // empty after coercion -> omitted, as any blank field is
+    })
+    expect(document.querySelector('.session-sheet-actions .field-error')).toBeNull()
+  })
+
   it('a failed save keeps the sheet open with the server message', async () => {
     fetchRoutes['/api/add-session'] = { success: false, message: 'Path "x" is already taken' }
     const navigate = vi.fn()
