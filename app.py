@@ -25,6 +25,7 @@ from recording_routes import (
     create_recording,
     get_recording_status,
     reprocess_recording,
+    set_recording_segmenting_complete,
     delete_recording,
     get_session_instances_for_admin,
 )
@@ -1596,6 +1597,12 @@ app.add_url_rule(
     "reprocess_recording",
     reprocess_recording,
     methods=["POST"],
+)
+app.add_url_rule(
+    "/api/recordings/<int:recording_id>/segmenting-complete",
+    "set_recording_segmenting_complete",
+    set_recording_segmenting_complete,
+    methods=["PUT"],
 )
 app.add_url_rule(
     "/api/recordings/<int:recording_id>",

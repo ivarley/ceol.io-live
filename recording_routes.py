@@ -476,6 +476,54 @@ def reprocess_recording(recording_id):
 
 
 @api_login_required
+def set_recording_segmenting_complete(recording_id):
+    """PUT /api/recordings/<id>/segmenting-complete — "nothing else in here to place".
+
+    Progress on /admin/recordings is placements against the night's logged tunes,
+    which silently assumes the audio covers the whole night. Plenty of it does
+    not: a phone started an hour in, a battery that died before the last set, a
+    file that is deliberately just the good bit. Those recordings can never reach
+    their denominator, so without this they sit in the queue advertising work
+    that does not exist.
+
+    Nothing here can be derived — only whoever listened knows whether the
+    unplaced tunes are missing from the corpus or missing from the audio — so it
+    is written down. Same permission as timestamping (schema/053): saying a
+    recording is finished IS part of timestamping it.
+
+    Takes a boolean so it can be turned off again; a night that turns out to have
+    more in it than it seemed should not need a database session to reopen.
+    """
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        denied = _recording_gate(cur, recording_id)
+        if denied:
+            return denied
+
+        payload = request.get_json(silent=True) or {}
+        complete = payload.get("complete", True)
+        if not isinstance(complete, bool):
+            return jsonify({"success": False, "error": "complete must be true or false"}), 400
+
+        save_to_history(cur, "recording", "UPDATE", recording_id, user_id=get_current_user_id())
+        # The timestamp is cleared on the way back down rather than left as a
+        # record of a decision that has been withdrawn: "when was this declared
+        # finished" has no answer for something that is not.
+        cur.execute(
+            "UPDATE recording SET segmenting_complete = %s, "
+            "segmenting_complete_at = CASE WHEN %s THEN (NOW() AT TIME ZONE 'UTC') ELSE NULL END, "
+            "last_modified_user_id = %s WHERE recording_id = %s",
+            (complete, complete, get_current_user_id(), recording_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return jsonify({"success": True, "recording_id": recording_id, "segmenting_complete": complete})
+
+
+@api_login_required
 def delete_recording(recording_id):
     """DELETE /api/recordings/<id> — remove a recording and its audio.
 

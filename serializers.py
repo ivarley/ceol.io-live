@@ -1951,6 +1951,161 @@ def build_recording_segmenter_payload(
     }
 
 
+# The buckets /admin/recordings groups by, in the order they are shown. That
+# page is a WORK QUEUE, not a catalogue: a recording's place in it is decided by
+# whether it is waiting on a person and for what, not by when it was uploaded.
+# Ordered by hand rather than by any property of the rows, because the ordering
+# IS the editorial judgement — a failed ingest is the most urgent thing on the
+# page even though it is usually the rarest.
+RECORDING_WORK_GROUPS: List[Dict[str, str]] = [
+    {
+        "slug": "failed",
+        "heading": "Failed",
+        "note": "Ingest didn't finish. Retry, or delete and upload again.",
+    },
+    {
+        "slug": "todo",
+        "heading": "Needs timestamps",
+        "note": "Audio is ready and the night is logged — this is the work.",
+    },
+    {
+        "slug": "processing",
+        "heading": "Processing",
+        "note": "Being ingested. Nothing to do; the rows update themselves.",
+    },
+    {
+        "slug": "blocked",
+        "heading": "Nothing to place yet",
+        "note": "There is audio but no logged tunes for that night to place against.",
+    },
+    {
+        "slug": "done",
+        "heading": "Done",
+        "note": "Every tune in the audio is placed.",
+    },
+]
+
+_WORK_GROUP_RANK = {g["slug"]: i for i, g in enumerate(RECORDING_WORK_GROUPS)}
+
+
+def recording_work_state(
+    status: str, segments: int, tunes: int, segmenting_complete: bool
+) -> Dict[str, Any]:
+    """Which bucket of the /admin/recordings queue one recording belongs in.
+
+    Two ways to be finished, and the distinction is the whole point of
+    schema/055. Placing every logged tune is the obvious one. The other is a
+    recording that covers only PART of the night — the phone was started an hour
+    in, or the battery died — where `segments` can never reach `tunes` however
+    much work is done, and the operator says so by hand. Without that, a partial
+    recording advertises work that does not exist, forever.
+
+    `state_label` names the row's state; `group` decides where it sorts and under
+    which heading it appears. They differ inside "Needs timestamps", where "Not
+    started" and "Part placed" are usefully different rows in the same pile.
+    (`state_label`, not `label`, because a recording already has a `label` of its
+    own and these two travel in the same dict.)
+    """
+    if status == "failed":
+        return {"group": "failed", "state_label": "Failed", "complete": False}
+    if status != "ready":
+        return {"group": "processing", "state_label": "Processing", "complete": False}
+    if segmenting_complete:
+        # Said by hand, so it holds even if more tunes are logged later: the
+        # claim is about the audio's contents, not about the night's.
+        return {"group": "done", "state_label": "Marked done", "complete": True}
+    if tunes and segments >= tunes:
+        return {"group": "done", "state_label": "All placed", "complete": True}
+    if not tunes:
+        return {"group": "blocked", "state_label": "No tunes logged", "complete": False}
+    if segments:
+        return {"group": "todo", "state_label": "Part placed", "complete": False}
+    return {"group": "todo", "state_label": "Not started", "complete": False}
+
+
+def build_admin_recordings_payload(conn) -> Dict[str, Any]:
+    """Every recording in the system, ordered as a work queue (/admin/recordings).
+
+    The rows themselves are much the same as the in-log modal's, but the ordering
+    is the feature: newest-first is the wrong sort for a page whose whole purpose
+    is finding the next thing to timestamp, since it buries one failed ingest
+    from March under thirty finished nights.
+    """
+    from services.recording_ingest import INGEST_STEPS, step_index_for
+
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(
+        """
+        SELECT r.recording_id, r.label, r.duration_ms, r.is_clock_anchor, r.clock_offset_ms,
+               r.status, r.status_detail, r.segmenting_complete,
+               si.session_instance_id, si.date, s.name AS session_name, s.path AS session_path,
+               (SELECT count(*) FROM recording_tune_segment rts
+                 WHERE rts.recording_id = r.recording_id) AS segments,
+               (SELECT count(*) FROM session_instance_tune sit
+                 WHERE sit.session_instance_id = si.session_instance_id
+                   AND sit.deleted = FALSE AND sit.record_type <> 'break') AS tunes
+        FROM recording r
+        JOIN session_instance si ON si.session_instance_id = r.session_instance_id
+        JOIN session s ON s.session_id = si.session_id
+        ORDER BY si.date DESC, r.clock_offset_ms, r.recording_id
+        """
+    )
+
+    recordings = []
+    for row in cur.fetchall():
+        state = recording_work_state(
+            row["status"], row["segments"], row["tunes"], row["segmenting_complete"]
+        )
+        recordings.append(
+            {
+                "recording_id": row["recording_id"],
+                "label": row["label"],
+                "duration_ms": int(row["duration_ms"]),
+                "is_clock_anchor": row["is_clock_anchor"],
+                "clock_offset_ms": int(row["clock_offset_ms"]),
+                "session_instance_id": row["session_instance_id"],
+                "date": row["date"].isoformat(),
+                # Formatted here rather than in the template because the whole
+                # payload stays JSON-safe that way, and the day of the week is
+                # how an operator recognises a night they were at.
+                "date_label": row["date"].strftime("%a %-d %b %Y"),
+                "session_name": row["session_name"],
+                "session_path": row["session_path"],
+                "segments": row["segments"],
+                "tunes": row["tunes"],
+                "status": row["status"],
+                "status_detail": row["status_detail"],
+                "segmenting_complete": row["segmenting_complete"],
+                # Which stage circle to light on first paint. Computed here rather
+                # than left to the first poll, so a reload mid-ingest doesn't show
+                # an empty track for five seconds.
+                "ingest_step": (
+                    (len(INGEST_STEPS) - 1)
+                    if row["status"] == "ready"
+                    else step_index_for(row["status_detail"])
+                ),
+                **state,
+            }
+        )
+
+    # Grouped rather than flat-sorted: the page prints a heading per bucket, and
+    # a heading needs its rows anyway. Python's sort is stable, so the date
+    # ordering the query established survives inside each group.
+    recordings.sort(key=lambda r: _WORK_GROUP_RANK[r["group"]])
+    groups = [
+        dict(g, recordings=[r for r in recordings if r["group"] == g["slug"]])
+        for g in RECORDING_WORK_GROUPS
+    ]
+
+    return {
+        "success": True,
+        "recordings": recordings,
+        "groups": [g for g in groups if g["recordings"]],
+        # What the operator is actually being asked to do, for the summary line.
+        "outstanding": sum(1 for r in recordings if r["group"] in ("failed", "todo")),
+    }
+
+
 def build_instance_recordings_payload(conn, session_instance_id: int) -> Dict[str, Any]:
     """Recordings attached to one session instance, with segmenting progress.
 
@@ -1962,6 +2117,7 @@ def build_instance_recordings_payload(conn, session_instance_id: int) -> Dict[st
         """
         SELECT r.recording_id, r.label, r.duration_ms, r.is_clock_anchor, r.clock_offset_ms,
                r.started_at, r.mime_type, r.file_size_bytes, r.status, r.status_detail,
+               r.segmenting_complete,
                (SELECT count(*) FROM recording_tune_segment rts WHERE rts.recording_id = r.recording_id)
                    AS segment_count
         FROM recording r
@@ -1986,6 +2142,10 @@ def build_instance_recordings_payload(conn, session_instance_id: int) -> Dict[st
             # to say so rather than presenting a guessed duration as fact.
             "status": r["status"],
             "status_detail": r["status_detail"],
+            # "Nothing left in this audio to place" (schema/055) -- said by hand
+            # for a recording that covers only part of the night, where the
+            # segment count can never reach the night's tune count.
+            "segmenting_complete": r["segmenting_complete"],
         }
         for r in cur.fetchall()
     ]

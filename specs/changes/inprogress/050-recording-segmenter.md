@@ -292,9 +292,58 @@ It is the same three-call upload and the same background ingest as the admin
 page; only the two pickers are missing, and the permission check is scoped
 rather than global.
 
+## The index
+
+`/admin/recordings` lists what's imported and how far each is segmented — and it
+is a **work queue**, not a catalogue. It began as one date-sorted table with the
+upload form above it, which is the wrong shape for the only question it is ever
+opened to answer: what should I timestamp next? Newest-first buries a failed
+ingest from March under thirty finished nights, and on a phone six columns of
+table either scroll sideways or crush the one thing being looked for.
+
+So it groups. Each recording is filed by **what it is waiting for**, and the
+groups print most urgent first: Failed, Needs timestamps, Processing, Nothing to
+place yet (audio exists, but that night has no logged tunes to place against),
+Done. Done is folded shut, because it is the group that grows without bound.
+`serializers.recording_work_state` decides the bucket and
+`build_admin_recordings_payload` assembles the queue, so the ordering is one
+testable function rather than an ORDER BY nobody can assert on.
+
+One recording is one **card** at every width — a row on a wide screen, stacked on
+a narrow one — rather than a table that becomes cards. The card's title is a link
+into the segmenter, which on a phone makes the whole heading the tap target for
+the only action that matters. Uploading is folded into a collapsed panel above
+the queue: it is the rarer job, a handful of files a month against a queue worked
+through week by week, and it used to be the entire first screen. The panel
+remembers being opened, so a run of uploads is not a run of clicks on it.
+
+### Saying a recording is finished
+
+Progress reads as placements against the night's logged tunes, and that quietly
+assumes the audio covers the whole night. Plenty of it does not — a phone started
+an hour in, a battery that died before the last set, a file that is deliberately
+just the good bit. Those recordings can never reach their denominator, so without
+somewhere to say so they advertise work that does not exist, forever.
+
+`recording.segmenting_complete` (schema/055) is that somewhere: **every tune
+actually present in this audio has been placed**, set from the card and cleared
+again from it (`PUT /api/recordings/<id>/segmenting-complete`, gated exactly like
+timestamping — saying a recording is finished IS part of timestamping it).
+
+Two things it deliberately is not:
+
+- **Not derived.** Only the person who listened knows whether an unplaced tune is
+  missing from the corpus or missing from the recording. Nothing in the database
+  can tell those apart.
+- **Not a `status` value.** `status` is the ingest pipeline's state, written by
+  machines; this is a human's judgement about the audio's contents, and a
+  re-ingest does not make that judgement untrue. Two facts, two columns.
+
+Placing every logged tune still counts as done on its own, so the flag is only
+ever needed for the partial case.
+
 ## The tool
 
-`/admin/recordings` lists what's imported and how far each is segmented.
 `/admin/recordings/<id>/segment` is the tool: a Svelte page under the spec-035
 thin-shell pattern (`serializers.build_recording_segmenter_payload` feeds both
 the embed and `GET /api/recordings/<id>/segmenter`).
