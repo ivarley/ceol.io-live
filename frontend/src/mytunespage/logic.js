@@ -7,6 +7,7 @@ export const STATUS_ORDER = ['want to learn', 'learning', 'learned']
 // extractTuneId (thesession URL / plain number -> id) now comes from the
 // shared helpers module (src/shared/) — one tested copy for every page bundle.
 import { extractTuneId } from '../shared/parse.js'
+import { DEFAULT_HEARD_COUNT } from '../shared/persontune.js'
 
 // Resolve a tune's status on one instrument (by name): an explicit override wins;
 // else an auto instrument follows learn_status, and a manual instrument is
@@ -241,7 +242,9 @@ export function applyPendingOps(serverTunes, ops) {
             tune_name: op.name || 'Tune #' + op.tune_id,
             tune_type: op.tune_type || null,
             learn_status: op.learn_status || 'want to learn',
-            heard_count: 0,
+            // What the server will write when the queued add syncs — predict it, or the
+            // row shows 0 heard until it lands and then silently becomes 1.
+            heard_count: DEFAULT_HEARD_COUNT,
             notes: null,
             person_tune_id: 'pending-' + op.tune_id,
             tunebook_count: op.tunebook_count || 0,

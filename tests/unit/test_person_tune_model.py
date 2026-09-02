@@ -35,7 +35,9 @@ class TestPersonTuneValidation:
         person_tune = PersonTune()
         
         assert person_tune.learn_status == 'want to learn'
-        assert person_tune.heard_count == 0
+        # A new row starts at one hearing, not zero: you don't add a tune you've
+        # never heard (PersonTune.DEFAULT_HEARD_COUNT).
+        assert person_tune.heard_count == 1
         assert person_tune.person_tune_id is None
         assert person_tune.person_id is None
         assert person_tune.tune_id is None
@@ -246,7 +248,7 @@ class TestPersonTuneDatabaseOperations:
         assert "INSERT INTO person_tune" in insert_call[0][0]
         # params: person_id, tune_id, learn_status, heard_count, learned_date,
         # notes, setting_id, name_alias, key, tags, created_by_user_id
-        assert insert_call[0][1] == (1, 100, 'learning', 0, None, None, None, None, None, [], 1)
+        assert insert_call[0][1] == (1, 100, 'learning', 1, None, None, None, None, None, [], 1)
         
         # Verify result
         assert result is person_tune

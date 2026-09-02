@@ -105,6 +105,12 @@ Personal tune learning tracking (the instrument-agnostic / "auto instruments" st
 - person_tune_id, person_id, tune_id
 - `learn_status` VARCHAR(20) - "want to learn" / "learning" / "learned" (spaces, CHECK-constrained)
 - `heard_count`, `learned_date` (auto-set by trigger when status crosses to/from 'learned')
+  - `heard_count` starts at **1** on a new row (`PersonTune.DEFAULT_HEARD_COUNT`, mirrored
+    by the ops endpoint's `add` and by the client's optimistic offline rows in
+    `frontend/src/shared/persontune.js`): adding a tune is itself a hearing, so 0 keeps
+    its real meaning — on the list, never heard since. The thesession.org tunebook sync
+    is the deliberate exception: it MIRRORS an external tunebook rather than recording a
+    hearing, so its bulk insert leaves the column at the schema default of 0.
 - notes - Personal notes
 - UNIQUE(person_id, tune_id)
 

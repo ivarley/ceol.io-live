@@ -508,6 +508,42 @@ class TestPersonTuneAPI:
         db_cursor.execute("SELECT setting_id FROM person_tune WHERE person_tune_id = %s", (ptid,))
         assert db_cursor.fetchone()[0] == setting_id
 
+    def test_new_rows_start_at_one_hearing_on_both_add_paths(self, client, authenticated_user, db_conn,
+                                                             db_cursor):
+        """Adding a tune IS a hearing — you don't put a tune on your list having never
+        heard it — so a new row starts at heard_count 1. Zero is left meaning what it
+        says: on the list, not heard since. Both add paths (the POST and the offline
+        op-queue's `add`) must agree, or a queued add syncs to a different row than the
+        client drew."""
+        unique_id = str(uuid.uuid4())[:8]
+        tune_a = 900000000 + int(unique_id[:6], 16) % 100000 + 90000
+        tune_b = tune_a + 1
+        person_id = 2
+
+        db_cursor.execute("""
+            INSERT INTO person (person_id, first_name, last_name, email)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (person_id) DO NOTHING
+        """, (person_id, "Test", "User", f"test{unique_id}@example.com"))
+        db_cursor.execute("""
+            INSERT INTO tune (tune_id, name, tune_type) VALUES (%s, %s, 'Reel'), (%s, %s, 'Jig')
+            ON CONFLICT (tune_id) DO NOTHING
+        """, (tune_a, f"Heard Once A {unique_id}", tune_b, f"Heard Once B {unique_id}"))
+        db_cursor.execute("DELETE FROM person_tune WHERE person_id = %s AND tune_id = ANY(%s)",
+                          (person_id, [tune_a, tune_b]))
+        db_conn.commit()
+
+        with authenticated_user:
+            assert client.post("/api/my-tunes", json={"tune_id": tune_a}).status_code == 201
+            op = client.post("/api/my-tunes/ops", json={"type": "add", "tune_id": tune_b})
+            assert op.status_code == 200
+
+        db_cursor.execute(
+            "SELECT tune_id, heard_count FROM person_tune WHERE person_id = %s AND tune_id = ANY(%s) ORDER BY tune_id",
+            (person_id, [tune_a, tune_b]),
+        )
+        assert db_cursor.fetchall() == [(tune_a, 1), (tune_b, 1)]
+
     def test_update_tune_status_requires_authentication(self, client):
         """Test that PUT /api/my-tunes/<id>/status requires authentication."""
         response = client.put("/api/my-tunes/1", json={"learn_status": "learning"})

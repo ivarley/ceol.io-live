@@ -9,6 +9,7 @@ from flask import request, jsonify
 from flask_login import current_user
 from typing import Optional, Dict, Any
 from functools import wraps
+from models.person_tune import PersonTune
 from services.person_tune_service import PersonTuneService, UNSET, normalize_tags
 from services.thesession_sync_service import ThesessionSyncService
 from database import (get_db_connection, get_current_user_id, normalize_quotes,
@@ -865,11 +866,13 @@ def my_tunes_op():
                 learn_status = data.get("learn_status") or "want to learn"
                 if learn_status not in ("want to learn", "learning", "learned"):
                     return jsonify({"success": False, "error": "invalid learn_status"}), 400
+                # Same starting heard_count the POST path gives a new row — an add is
+                # itself a hearing (PersonTune.DEFAULT_HEARD_COUNT).
                 cur.execute(
                     """INSERT INTO person_tune (person_id, tune_id, learn_status, heard_count, created_by_user_id)
-                       VALUES (%s, %s, %s, 0, %s)
+                       VALUES (%s, %s, %s, %s, %s)
                        ON CONFLICT (person_id, tune_id) DO NOTHING""",
-                    (person_id, tune_id, learn_status, user_id),
+                    (person_id, tune_id, learn_status, PersonTune.DEFAULT_HEARD_COUNT, user_id),
                 )
             elif op_type == "set_status":
                 learn_status = data.get("learn_status")

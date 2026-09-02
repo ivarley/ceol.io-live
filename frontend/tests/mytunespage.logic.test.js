@@ -263,6 +263,9 @@ describe('applyPendingOps (offline overlay)', () => {
     const added = out.find((t) => t.tune_id === 50)
     expect(added.person_tune_id).toBe('pending-50')
     expect(added.pending_sync).toBe(true)
+    // The synthesized row has to match what the server will write when the queue
+    // drains — a new person_tune starts at one hearing, not zero.
+    expect(added.heard_count).toBe(1)
     const edited = out.find((t) => t.tune_id === 1)
     expect(edited.heard_count).toBe(4)
     expect(edited.instrument_status.Fiddle).toBe('learned')

@@ -403,6 +403,21 @@ describe('offline op overlay', () => {
     expect(t.learn_status).toBe('learning')
     expect(t.heard_count).toBe(5)
   })
+
+  it('a queued add starts the row at one hearing, like the server will', () => {
+    const t = overlayOfflineOps({ name: 'The Butterfly', tune_id: 9 }, [{ tune_id: 9, ts: 1, type: 'add' }], 9)
+    expect(t.learn_status).toBe('want to learn')
+    expect(t.heard_count).toBe(1)
+  })
+
+  it('never overwrites a heard count the row already carries', () => {
+    const t = overlayOfflineOps(
+      { name: 'The Butterfly', tune_id: 9, heard_count: 0 },
+      [{ tune_id: 9, ts: 1, type: 'add' }],
+      9
+    )
+    expect(t.heard_count).toBe(0)
+  })
 })
 
 describe('TuneSheet component', () => {
