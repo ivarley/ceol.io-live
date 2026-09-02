@@ -167,6 +167,27 @@ def create_recording_upload_url():
 
     import recording as rec
 
+    payload = request.get_json(silent=True) or {}
+
+    try:
+        session_instance_id = int(payload.get("session_instance_id"))
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "error": "session_instance_id is required"}), 400
+
+    # Permission first, exactly as POST /api/recordings does it. Whether this
+    # deployment has object storage configured is not something to tell someone
+    # with no business on this session, and answering 503 ahead of the gate also
+    # hides the 403 wherever the bucket is unset -- which is every environment
+    # without S3 credentials, and is how this ordering went unnoticed.
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        denied = _instance_gate(cur, session_instance_id)
+        if denied:
+            return denied
+    finally:
+        conn.close()
+
     problem = rec.check_configured()
     if problem:
         # Verbatim: the message names the missing environment variables, and
@@ -174,15 +195,9 @@ def create_recording_upload_url():
         # aws_s3_bucket and throws away the only actionable part.
         return jsonify({"success": False, "error": f"Uploads are unavailable — {problem}"}), 503
 
-    payload = request.get_json(silent=True) or {}
     filename = (payload.get("filename") or "").strip()
     if not filename:
         return jsonify({"success": False, "error": "filename is required"}), 400
-
-    try:
-        session_instance_id = int(payload.get("session_instance_id"))
-    except (TypeError, ValueError):
-        return jsonify({"success": False, "error": "session_instance_id is required"}), 400
 
     extension = os.path.splitext(filename)[1].lower()
     if extension not in _UPLOAD_MIME_BY_EXTENSION:
@@ -200,15 +215,6 @@ def create_recording_upload_url():
     # the URL, so it has to match byte for byte what the client then sends, and
     # the client is told which value to use rather than asked.
     content_type = _UPLOAD_MIME_BY_EXTENSION[extension]
-
-    conn = get_db_connection()
-    try:
-        cur = conn.cursor()
-        denied = _instance_gate(cur, session_instance_id)
-        if denied:
-            return denied
-    finally:
-        conn.close()
 
     storage_key = rec.build_storage_key(filename)
     try:
