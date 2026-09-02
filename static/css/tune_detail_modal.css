@@ -1416,6 +1416,24 @@
     border-top: 1px solid var(--border-color, #444);
 }
 
+/* ---- The Details tab ---- */
+
+/* The session's own name / setting / key, above the stats. 037 put this under the History
+   droplist, where nobody found it — so here it is open, not behind a link, with a heading
+   that names whose statement it is ("At Mueller Session"). That heading is what keeps it
+   from reading as another personal Configure form; the two look alike on purpose. */
+.details-sess-block {
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border-color, #444);
+}
+.details-sess-heading {
+    margin-bottom: 8px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-muted, #888);
+}
+
 /* Offline: the three override fields are read-only, and must LOOK it. Notes stays live
    (set_notes is an offline op — a phone in a pub basement is exactly where someone types
    a note about a tune).

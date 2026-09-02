@@ -85,7 +85,7 @@
   // when the drawer moves to another tune (or reopens).
   let piExpanded = $state(false)
   let isConfigVisible = $state(false)
-  let activeTab = $state('stats')
+  let activeTab = $state('details')
   let activeSess = $state(null) // window.activeSession snapshot at render time
 
   // ---- the two forms (spec 037) ---------------------------------------------------
@@ -134,6 +134,17 @@
   let sessSaveState = $state('idle')
   let sessFetchState = $state('idle')
   let sessFormOpen = $state(false)
+
+  // Details: the same session_tune row the History form writes at 'general' scope, but
+  // pinned to that layer regardless of where the droplist points. It needs its own state
+  // rather than sharing sessFields, or selecting a date in History would silently repoint
+  // the fields sitting on Details. Not collapsed behind a link either — the tab exists
+  // BECAUSE that link was undiscoverable.
+  let dcFields = $state({ alias: '', setting: '', key: '' })
+  let dcOriginals = $state({})
+  let dcSettingError = $state('')
+  let dcSaveState = $state('idle')
+  let dcFetchState = $state('idle')
 
   // "At a different session ..." — re-scope the drawer to another session I'm a member
   // of, to see what THEY do with this tune.
@@ -239,6 +250,9 @@
         ? !!sessionScope?.can_edit_instance
         : !!sessionScope?.can_edit_session
   )
+  // Details edits the session's own row and only ever that, so its gate is the session
+  // gate alone — no scope in it.
+  const canEditSessionGeneral = $derived(inSession && !!sessionScope?.can_edit_session)
   // Un-enrolling only ever means "a tune that was never actually played here". With
   // plays present the link is simply absent — no explanation, it just isn't an option.
   const canRemoveFromSession = $derived(!!sessionScope?.can_remove_from_session)
@@ -274,6 +288,12 @@
     }
     return tune.setting_key ? `(the setting's key — ${tune.setting_key})` : '(not specified)'
   })
+
+  // Details is always the session's own layer, so its inherit option always names the
+  // setting's key — never "as usual", which is an instance's fallback.
+  const dcInheritKeyLabel = $derived(
+    tune?.setting_key ? `(the setting's key — ${tune.setting_key})` : '(not specified)'
+  )
 
   const rollup = $derived(tune ? rollupStatus(tune) : 'want to learn')
   const instruments = $derived(tune ? getInstrumentData(tune).instruments : [])
@@ -348,6 +368,7 @@
   }
   const pcFetchLabel = $derived(settingLabelFor(pcFields.setting, pcOriginals.setting_id || null))
   const sessFetchLabel = $derived(settingLabelFor(sessFields.setting, sessOriginals.setting_id || null))
+  const dcFetchLabel = $derived(settingLabelFor(dcFields.setting, dcOriginals.setting_id || null))
 
   // The Configure Save button covers ONLY the fields that still batch-save behind it
   // (name alias / setting / key). Notes and tags moved to the always-visible panel and
@@ -375,6 +396,16 @@
   })
   const sessSaveDisabled = $derived(!sessDirty || sessSaveState !== 'idle' || !!sessSettingError)
 
+  const dcDirty = $derived.by(() => {
+    if (!tune || !inSession) return false
+    return (
+      dcFields.alias !== dcOriginals.alias ||
+      extractSettingId(dcFields.setting) !== (dcOriginals.setting_id || null) ||
+      dcFields.key !== dcOriginals.key
+    )
+  })
+  const dcSaveDisabled = $derived(!dcDirty || dcSaveState !== 'idle' || !!dcSettingError)
+
   const adminDirty = $derived(!!tune && adminFields.name !== adminOriginals.name)
   const adminSaveDisabled = $derived(!adminDirty || adminSaveState !== 'idle')
 
@@ -395,11 +426,17 @@
   // tab and the default whenever it applies (a logged-in, non-admin viewer, on any
   // surface). History absorbed the old Session tab (spec 037). Panes all stay mounted
   // (CSS shows the active one), so History still loads eagerly on open regardless.
+  //
+  // "Details" is the old Stats tab, renamed and moved up to sit beside My List: what this
+  // tune IS at this session (its name, setting and key here) on top of the facts about the
+  // tune itself. 037 accepted that History didn't advertise being where you edit those;
+  // in practice nobody found it, so the session layer gets a tab that says so. No fifth
+  // tab — four is already the mobile ceiling.
   const showMyList = $derived(mode !== 'admin' && loggedIn)
   const tabList = $derived([
     ...(showMyList ? [{ id: 'my-list', label: 'My List' }] : []),
+    { id: 'details', label: 'Details' },
     { id: 'history', label: 'History' },
-    { id: 'stats', label: 'Stats' },
     { id: 'played-with', label: 'Played With' },
   ])
   const defaultTab = $derived(showMyList ? 'my-list' : 'history')
@@ -459,6 +496,25 @@
     sessFetchState = 'idle'
   }
 
+  // Details config: always the session's own row (session_tune), never an instance —
+  // which is exactly what makes it safe to sit on a tab with no scope control.
+  function seedDetailsForm() {
+    if (!inSession) return
+    dcOriginals = {
+      alias: tune.alias || '',
+      setting_id: tune.setting_id || '',
+      key: tune.key || '',
+    }
+    dcFields = {
+      alias: dcOriginals.alias,
+      setting: String(dcOriginals.setting_id || ''),
+      key: dcOriginals.key,
+    }
+    dcSettingError = ''
+    dcSaveState = 'idle'
+    dcFetchState = 'idle'
+  }
+
   function seedAdminForm() {
     adminOriginals = { name: tune.tune_name || '' }
     adminFields = { name: adminOriginals.name }
@@ -493,6 +549,7 @@
     sessFormOpen = false
     seedPersonalForm()
     seedSessionForm()
+    seedDetailsForm()
     seedAdminForm()
 
     refreshState = 'idle'
@@ -901,11 +958,12 @@
 
   // ---- configure section / save --------------------------------------------------------
 
-  // Both forms have a setting input; each validates its own.
+  // Every form has a setting input; each validates its own.
   function validateSettingField(which) {
-    const form = which === 'session' ? sessFields : pcFields
+    const form = which === 'session' ? sessFields : which === 'details' ? dcFields : pcFields
     const setError = (msg) => {
       if (which === 'session') sessSettingError = msg
+      else if (which === 'details') dcSettingError = msg
       else pcSettingError = msg
     }
     const value = (form.setting || '').trim()
@@ -1120,6 +1178,9 @@
           if (tune.session_scope) tune.session_scope.in_repertoire = true
         }
         seedSessionForm()
+        // At 'general' scope this and the Details form wrote the same row, so the other
+        // one has to be told; at instance scope it's a no-op re-seed.
+        seedDetailsForm()
         sessSaveState = 'saved'
         // The instance response carries the saved records, so a live logger can patch
         // its rows now rather than wait for the change to come back round the feed.
@@ -1130,6 +1191,47 @@
         console.error('Error saving session config:', error)
         toast(String(error.message || 'Could not save'), 'error')
         flashSaveState((s) => (sessSaveState = s), 'error')
+      })
+  }
+
+  // ---- details config (session_tune, always) -----------------------------------------
+
+  // The Details form's target never moves: the session's own row. That's the whole
+  // difference from saveSession, whose endpoint follows the History droplist.
+  export function saveDetails() {
+    if (!tune || !config || dcSaveDisabled || !canEditSessionGeneral) return
+
+    const updates = {}
+    const newSettingId = extractSettingId(dcFields.setting)
+    if (dcFields.alias !== dcOriginals.alias) updates.alias = dcFields.alias.trim() || null
+    if (newSettingId !== (dcOriginals.setting_id || null)) updates.setting_id = newSettingId
+    if (dcFields.key !== dcOriginals.key) updates.key = dcFields.key || null
+    if (!Object.keys(updates).length) return
+
+    dcSaveState = 'saving'
+    fetch(`/api/sessions/${sessionScope.path}/tunes/${tune.tune_id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (!data.success) throw new Error(data.message || data.error)
+        // Mirror onto the payload so both session forms rebuild from what we wrote, and
+        // the title/aka recompute against the new session alias. Saving the session layer
+        // for a tune with no session_tune row silently creates it (spec 037).
+        Object.assign(tune, updates)
+        if (tune.session_scope) tune.session_scope.in_repertoire = true
+        seedDetailsForm()
+        seedSessionForm()
+        dcSaveState = 'saved'
+        if (config.onSave && typeof config.onSave === 'function') config.onSave(data)
+        setTimeout(() => (dcSaveState = 'idle'), 1200)
+      })
+      .catch((error) => {
+        console.error('Error saving session details:', error)
+        toast(String(error.message || 'Could not save'), 'error')
+        flashSaveState((s) => (dcSaveState = s), 'error')
       })
   }
 
@@ -1266,17 +1368,19 @@
   // was fetched (even if the setting-id save then warned), so generateNotation can
   // surface failures its own way.
   //
-  // `which` is 'personal' | 'session' | 'none' — 'none' just caches the notation
-  // (Generate Notation for a viewer with no form to save into).
+  // `which` is 'personal' | 'session' | 'details' | 'none' — 'none' just caches the
+  // notation (Generate Notation for a viewer with no form to save into).
   export function fetchSetting(which = 'personal') {
     if (!tune) return Promise.resolve(false)
     const usingSession = which === 'session'
-    const state = () => (usingSession ? sessFetchState : pcFetchState)
-    const setState = (v) => (usingSession ? (sessFetchState = v) : (pcFetchState = v))
+    const usingDetails = which === 'details'
+    const state = () => (usingSession ? sessFetchState : usingDetails ? dcFetchState : pcFetchState)
+    const setState = (v) =>
+      usingSession ? (sessFetchState = v) : usingDetails ? (dcFetchState = v) : (pcFetchState = v)
     if (state() === 'loading') return Promise.resolve(false)
 
     const tuneId = tune.tune_id
-    const form = usingSession ? sessFields : pcFields
+    const form = usingSession ? sessFields : usingDetails ? dcFields : pcFields
     const settingIdValue = which === 'none' ? '' : (form.setting || '').trim()
     setState('loading')
 
@@ -1301,6 +1405,13 @@
         const endpoint = sessionEndpoint()
         if (!endpoint || !canEditSessionLayer) return null
         return { endpoint, body: (id) => (editingInstance ? { setting_override: id } : { setting_id: id }) }
+      }
+      if (usingDetails) {
+        if (!canEditSessionGeneral) return null
+        return {
+          endpoint: `/api/sessions/${sessionScope.path}/tunes/${tuneId}`,
+          body: (id) => ({ setting_id: id }),
+        }
       }
       const ptid = (pts && pts.person_tune_id) || config?.ptid
       if (!ptid) return null
@@ -1341,9 +1452,10 @@
           .then((response) => response.json())
           .then((saveData) => {
             if (saveData.success) {
-              if (usingSession) {
+              if (usingSession || usingDetails) {
                 Object.assign(tune, body)
                 seedSessionForm()
+                seedDetailsForm()
               } else {
                 if (tune.person_tune_status) Object.assign(tune.person_tune_status, body)
                 seedPersonalForm()
@@ -2162,9 +2274,10 @@
           </div>
         {/if}
 
-        <!-- Tabs: Session (when a session is in scope, and leftmost) / Stats / History /
-             Played With. The drawer opens on its leftmost tab, which is the single rule
-             that replaced "which tab do we land on, given which page opened us". -->
+        <!-- Tabs: My List / Details / History / Played With. Which one the drawer lands
+             on is a function of the viewer, never of the page that opened it: My List
+             where it applies, History otherwise. (037 phrased that as "the leftmost tab";
+             moving Details up made the phrasing wrong without changing the behaviour.) -->
         <div class="modal-tabs-section">
           <Tabs
             tabs={tabList}
@@ -2182,6 +2295,194 @@
                 {@render myListPane()}
               </div>
             {/if}
+            <!-- DETAILS — what this tune is AT THIS SESSION (its name, setting and key
+                 here), on top of the facts about the tune itself. The session block is
+                 always the session's own row: an instance's overrides are a fact of one
+                 night, so they stay in History with the droplist that selects one. -->
+            <div id="details-tab" class="modal-tab-pane{activeTab === 'details' ? ' active' : ''}">
+              {#if inSession}
+                <div class="details-sess-block">
+                  <div class="details-sess-heading">At {sessionLabel}</div>
+                  {#if canEditSessionGeneral}
+                    <div class="configure-section sess-form">
+                      <div class="configure-field-group-inline">
+                        <label class="configure-label" for="dc-alias-input">We call this:</label>
+                        <input
+                          type="text"
+                          id="dc-alias-input"
+                          class="configure-input"
+                          autocomplete="off"
+                          autocorrect="off"
+                          autocapitalize="off"
+                          spellcheck="false"
+                          placeholder={tune.tune_name || ''}
+                          bind:value={dcFields.alias}
+                        />
+                      </div>
+                      <div class="configure-field-group-inline">
+                        <label class="configure-label" for="dc-setting-input">Our setting:</label>
+                        <div class="input-with-button">
+                          <input
+                            type="text"
+                            id="dc-setting-input"
+                            class="configure-input"
+                            autocomplete="off"
+                            autocorrect="off"
+                            autocapitalize="off"
+                            spellcheck="false"
+                            placeholder="e.g., 123 or paste URL"
+                            style:border-color={dcSettingError ? '#dc3545' : ''}
+                            bind:value={dcFields.setting}
+                            oninput={() => validateSettingField('details')}
+                          />
+                          <button
+                            type="button"
+                            class="fetch-setting-btn{dcFetchState === 'loading' ? ' fetch-setting-btn-loading' : ''}"
+                            onclick={() => fetchSetting('details')}
+                            disabled={dcFetchState !== 'idle'}
+                            style:background-color={dcFetchState === 'ok' ? '#28a745' : dcFetchState === 'warn' ? '#f0ad4e' : dcFetchState === 'err' ? '#dc3545' : ''}
+                            style:color={dcFetchState === 'ok' || dcFetchState === 'warn' || dcFetchState === 'err' ? 'white' : ''}
+                            title="Fetch setting from TheSession.org"
+                          >
+                            {#if dcFetchState === 'loading'}<span class="fetch-setting-spinner"></span>
+                            {:else if dcFetchState === 'ok'}✓
+                            {:else if dcFetchState === 'warn'}⚠
+                            {:else if dcFetchState === 'err'}✗
+                            {:else}{dcFetchLabel}{/if}
+                          </button>
+                        </div>
+                      </div>
+                      <div class="field-error" style="display: {dcSettingError ? 'block' : 'none'};">
+                        {dcSettingError}
+                      </div>
+                      <div class="configure-field-group-inline">
+                        <label class="configure-label" for="dc-key-select">We play this in:</label>
+                        <select id="dc-key-select" class="configure-select" bind:value={dcFields.key}>
+                          {#each MUSICAL_KEYS as key}
+                            <option value={key}>{key || dcInheritKeyLabel}</option>
+                          {/each}
+                        </select>
+                      </div>
+                      <div class="modal-action-buttons">
+                        <button class="btn-secondary" onclick={seedDetailsForm} disabled={!dcDirty}>Cancel</button>
+                        <button
+                          class="btn-primary"
+                          onclick={saveDetails}
+                          disabled={dcSaveDisabled}
+                          style:background-color={saveBgFor(dcSaveState)}
+                        >
+                          {saveLabelFor(dcSaveState)}
+                        </button>
+                      </div>
+                    </div>
+                  {:else}
+                    <!-- Anyone can see what a session calls a tune, including logged-out
+                         visitors; only a session admin can change it. -->
+                    <div class="configure-section sess-form sess-form-readonly">
+                      <div class="configure-field-group-inline">
+                        <div class="configure-label">We call this:</div>
+                        <div class="configure-value">{dcOriginals.alias || '—'}</div>
+                      </div>
+                      <div class="configure-field-group-inline">
+                        <div class="configure-label">Our setting:</div>
+                        <div class="configure-value">{dcOriginals.setting_id || '—'}</div>
+                      </div>
+                      <div class="configure-field-group-inline">
+                        <div class="configure-label">We play this in:</div>
+                        <div class="configure-value">{dcOriginals.key || '—'}</div>
+                      </div>
+                    </div>
+                  {/if}
+                </div>
+              {/if}
+              {#if tune.person_list_count != null}
+                <div class="stat-card">
+                  <div class="stat-line">
+                    Saved in <span class="stat-number">{tune.person_list_count}</span> tune {plural(
+                      tune.person_list_count,
+                      'list'
+                    )} on Ceol.io
+                  </div>
+                </div>
+              {/if}
+              <div class="stat-card">
+                <div class="stat-line">
+                  Saved in <span class="stat-number" id="tunebook-count">{tunebookCountView}</span>
+                  {plural(tunebookCountView, 'tunebook')} on TheSession.org
+                  <button
+                    class="refresh-btn"
+                    onclick={refreshTunebookCount}
+                    disabled={refreshState === 'loading'}
+                    style:background-color={refreshState === 'ok' ? '#28a745' : refreshState === 'err' ? '#dc3545' : ''}
+                    style:color={refreshState === 'ok' || refreshState === 'err' ? 'white' : ''}
+                    title="Refresh"
+                  >
+                    {refreshState === 'loading' ? '⟳' : refreshState === 'ok' ? '✓' : refreshState === 'err' ? '✗' : '↻'}
+                  </button>
+                  {#if tune.tunebook_count_cached_date}<span class="stat-note"
+                      >Last Updated {tune.tunebook_count_cached_date}</span
+                    >{/if}
+                </div>
+              </div>
+              <!-- Logged-count cards, in scope order: this session -> my sessions
+                   (spec 033 R3) -> while I was there (R4) -> all sessions. The
+                   personal pair shows for any logged-in viewer whose payload
+                   carries the lens fields (stale offline snapshots may not). -->
+              {#if mode === 'session' || mode === 'session_instance'}
+                <div class="stat-card">
+                  <div class="stat-line">
+                    Logged <span class="stat-number">{tune.times_played || 0}</span>
+                    {plural(tune.times_played || 0, 'time')} at this session
+                  </div>
+                </div>
+              {/if}
+              {#if mode !== 'admin' && hasMyCounts}
+                <div class="stat-card">
+                  <div class="stat-line">
+                    Logged <span class="stat-number">{myPlayCount}</span>
+                    {plural(myPlayCount, 'time')} at my sessions
+                  </div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-line">
+                    Logged <span class="stat-number">{myAttendedCount}</span>
+                    {plural(myAttendedCount, 'time')} while I was there
+                  </div>
+                </div>
+              {/if}
+              <div class="stat-card">
+                <div class="stat-line">
+                  Logged <span class="stat-number">{tune.global_play_count || 0}</span>
+                  {plural(tune.global_play_count || 0, 'time')} at all sessions
+                </div>
+              </div>
+              {#if mode === 'admin'}
+                <div class="stat-card">
+                  <div class="stat-line">
+                    In the repertoire of <span class="stat-number">{tune.session_count || 0}</span> sessions
+                  </div>
+                </div>
+              {/if}
+              <!-- The canonical name and id. They used to sit at the top of the Configure
+                   section, above everything you actually came to look at; they're facts
+                   about the tune, so they belong with the other facts. -->
+              <div class="stat-canonical">
+                Canonical name: {tune.tune_name || 'Unknown'} (#{tune.tune_id})
+              </div>
+
+              <!-- Un-enrolling a tune from the repertoire. Only ever available for a tune
+                   with NO plays here: every tune played at an instance belongs to the
+                   session, and this endpoint used to break that by deleting the
+                   session_tune row and orphaning the plays. With plays present the link is
+                   simply absent — no explanation, it just isn't an option. -->
+              {#if inSession && canRemoveFromSession}
+                <div class="sess-danger-foot">
+                  <button type="button" class="tsc-action-link tsc-action-danger" onclick={removeFromSession}>
+                    Remove From Session
+                  </button>
+                </div>
+              {/if}
+            </div>
             <!-- HISTORY — which plays of this tune am I looking at, and (when the answer
                  is a session or one of its instances) what am I editing. The old Session
                  tab and the old History tab were asking the same question, so they became
@@ -2427,95 +2728,6 @@
                   {/if}
                 </div>
               {/if}
-
-              <!-- Un-enrolling a tune from the repertoire. Only ever available for a tune
-                   with NO plays here: every tune played at an instance belongs to the
-                   session, and this endpoint used to break that by deleting the
-                   session_tune row and orphaning the plays. With plays present the link is
-                   simply absent — no explanation, it just isn't an option. -->
-              {#if canRemoveFromSession && editableScope}
-                <div class="sess-danger-foot">
-                  <button type="button" class="tsc-action-link tsc-action-danger" onclick={removeFromSession}>
-                    Remove From Session
-                  </button>
-                </div>
-              {/if}
-            </div>
-            <div id="stats-tab" class="modal-tab-pane{activeTab === 'stats' ? ' active' : ''}">
-              {#if tune.person_list_count != null}
-                <div class="stat-card">
-                  <div class="stat-line">
-                    Saved in <span class="stat-number">{tune.person_list_count}</span> tune {plural(
-                      tune.person_list_count,
-                      'list'
-                    )} on Ceol.io
-                  </div>
-                </div>
-              {/if}
-              <div class="stat-card">
-                <div class="stat-line">
-                  Saved in <span class="stat-number" id="tunebook-count">{tunebookCountView}</span>
-                  {plural(tunebookCountView, 'tunebook')} on TheSession.org
-                  <button
-                    class="refresh-btn"
-                    onclick={refreshTunebookCount}
-                    disabled={refreshState === 'loading'}
-                    style:background-color={refreshState === 'ok' ? '#28a745' : refreshState === 'err' ? '#dc3545' : ''}
-                    style:color={refreshState === 'ok' || refreshState === 'err' ? 'white' : ''}
-                    title="Refresh"
-                  >
-                    {refreshState === 'loading' ? '⟳' : refreshState === 'ok' ? '✓' : refreshState === 'err' ? '✗' : '↻'}
-                  </button>
-                  {#if tune.tunebook_count_cached_date}<span class="stat-note"
-                      >Last Updated {tune.tunebook_count_cached_date}</span
-                    >{/if}
-                </div>
-              </div>
-              <!-- Logged-count cards, in scope order: this session -> my sessions
-                   (spec 033 R3) -> while I was there (R4) -> all sessions. The
-                   personal pair shows for any logged-in viewer whose payload
-                   carries the lens fields (stale offline snapshots may not). -->
-              {#if mode === 'session' || mode === 'session_instance'}
-                <div class="stat-card">
-                  <div class="stat-line">
-                    Logged <span class="stat-number">{tune.times_played || 0}</span>
-                    {plural(tune.times_played || 0, 'time')} at this session
-                  </div>
-                </div>
-              {/if}
-              {#if mode !== 'admin' && hasMyCounts}
-                <div class="stat-card">
-                  <div class="stat-line">
-                    Logged <span class="stat-number">{myPlayCount}</span>
-                    {plural(myPlayCount, 'time')} at my sessions
-                  </div>
-                </div>
-                <div class="stat-card">
-                  <div class="stat-line">
-                    Logged <span class="stat-number">{myAttendedCount}</span>
-                    {plural(myAttendedCount, 'time')} while I was there
-                  </div>
-                </div>
-              {/if}
-              <div class="stat-card">
-                <div class="stat-line">
-                  Logged <span class="stat-number">{tune.global_play_count || 0}</span>
-                  {plural(tune.global_play_count || 0, 'time')} at all sessions
-                </div>
-              </div>
-              {#if mode === 'admin'}
-                <div class="stat-card">
-                  <div class="stat-line">
-                    In the repertoire of <span class="stat-number">{tune.session_count || 0}</span> sessions
-                  </div>
-                </div>
-              {/if}
-              <!-- The canonical name and id. They used to sit at the top of the Configure
-                   section, above everything you actually came to look at; they're facts
-                   about the tune, so they belong with the other facts. -->
-              <div class="stat-canonical">
-                Canonical name: {tune.tune_name || 'Unknown'} (#{tune.tune_id})
-              </div>
             </div>
             <div id="played-with-tab" class="modal-tab-pane{activeTab === 'played-with' ? ' active' : ''}">
               {#if playedWithOptions.length > 1}
