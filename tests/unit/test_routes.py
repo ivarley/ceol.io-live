@@ -50,7 +50,7 @@ class TestHomeRoute:
         assert b"Austin Session" in response.data
         assert b"Continue Logging" in response.data
         assert b"Mueller Session" in response.data
-        assert b"Continue Tagging" in response.data
+        assert b"Continue Segmenting" in response.data
         assert b"4 of 11 tunes placed" in response.data
 
     @patch("web_routes.get_db_connection")

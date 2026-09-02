@@ -189,9 +189,13 @@ def home():
             # a three-hour recording is not finished in one sitting, and the way
             # back to a half-tagged one was to remember it existed.
             #
-            # "Finished" is placed == the instance's tune count; there is no
-            # completion flag on a recording, and inventing one would mean a
-            # second thing to remember to set.
+            # Two ways to be finished. Placing every logged tune is one.
+            # The other is recording.segmenting_complete (schema/055), set by
+            # hand for audio that covers only part of the night -- a phone
+            # started an hour in, a battery that died -- where the count can
+            # never reach the instance's tune count however much work is done.
+            # Without that second test those recordings sit here forever, which
+            # is the same complaint /admin/recordings answers.
             cur.execute(
                 """
                 WITH mine AS (
@@ -212,6 +216,7 @@ def home():
                 JOIN session_instance si ON si.session_instance_id = r.session_instance_id
                 JOIN session s ON s.session_id = si.session_id
                 WHERE r.status = 'ready'
+                  AND r.segmenting_complete = FALSE
                   -- Who may still open the tool (schema/053). Having placed marks
                   -- once is not the same as being allowed to now, and a card that
                   -- links into a refusal is worse than no card.

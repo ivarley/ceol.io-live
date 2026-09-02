@@ -266,13 +266,16 @@ PATH, so local development is unaffected by any of this.
 
 A three-hour recording is not timestamped in one sitting, and before this the
 only way back to a half-tagged one was to remember it existed. So the dashboard
-carries **Continue Tagging** next to Continue Logging, and the two are built the
-same way: recordings *you* placed marks on in the last 30 days that still have
-tunes left to place, most recently worked first, three at a time.
+carries **Continue Segmenting** next to Continue Logging, and the two are built
+the same way: recordings *you* placed marks on in the last 30 days that still
+have tunes left to place, most recently worked first, three at a time.
 
-Done is "every tune placed" rather than a flag — a recording has no completion
-column and inventing one would mean a second thing to remember to set — so the
-card empties itself as the work finishes. The permission is re-checked when the
+Done is read the same two ways as on /admin/recordings. Placing every logged
+tune is one, and the card empties itself as the work finishes rather than
+needing to be dismissed. The other is `segmenting_complete` (schema/055): audio
+that covers only part of a night can never reach the tune count, so without
+reading the flag the card would offer that work forever — the same complaint
+the work queue was reshaped to answer. The permission is re-checked when the
 card is built (schema/053): having placed marks once is not the same as still
 being allowed to open the tool, and a card that links into a refusal is worse
 than no card.

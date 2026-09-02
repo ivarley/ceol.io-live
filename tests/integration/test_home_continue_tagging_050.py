@@ -1,4 +1,4 @@
-"""The home page's "Continue Tagging" card (spec 050).
+"""The home page's "Continue Segmenting" card (spec 050).
 
 The companion to "Continue Logging": a three-hour recording is not timestamped
 in one sitting, and before this the only way back to a half-tagged one was to
@@ -9,9 +9,12 @@ quietly become wrong:
 
 1. **Half-done shows, with its counts.** Placed and total both come off the
    instance's own log, so the number in the card is the number in the tool.
-2. **Finished drops off.** There is no completion flag on a recording — done is
-   "every tune placed" — so the card empties itself rather than needing to be
-   dismissed.
+2. **Finished drops off, both ways.** Placing every tune is one way, and the
+   card empties itself rather than needing to be dismissed. The other is
+   `recording.segmenting_complete` (schema/055), for audio covering only part
+   of a night, where the count can never reach the total however much work is
+   done — those would otherwise sit here forever, which is exactly the
+   complaint /admin/recordings was reshaped to answer.
 3. **Somebody else's work is not mine.** The list is keyed on who placed the
    marks, exactly as the logging list is keyed on who edited the log.
 4. **The permission is re-checked now.** Having placed marks once is not the
@@ -150,7 +153,7 @@ def test_half_tagged_recording_appears_with_its_counts(client, tagging_world):
 
     html = _home(client)
 
-    assert "Continue Tagging" in html
+    assert "Continue Segmenting" in html
     assert SEGMENT_LINK in html
     assert f"2 of {TUNE_COUNT} tunes placed" in html
 
@@ -162,7 +165,49 @@ def test_fully_tagged_recording_drops_off(client, tagging_world):
     html = _home(client)
 
     assert SEGMENT_LINK not in html
-    assert "Continue Tagging" not in html
+    assert "Continue Segmenting" not in html
+
+
+def test_a_recording_marked_segmenting_complete_drops_off(client, tagging_world):
+    """The partial-recording case (schema/055). Half the tunes are placed and
+    the rest never will be, because they are not in the audio; the operator has
+    said so on /admin/recordings. Counting alone can't reach the total here, so
+    without the flag being read this card would offer the work forever."""
+    conn, cur = tagging_world
+    _place(cur, conn, 2)
+    cur.execute(
+        "UPDATE recording SET segmenting_complete = TRUE, "
+        "segmenting_complete_at = (NOW() AT TIME ZONE 'UTC') WHERE recording_id = %s",
+        (CT_RECORDING,),
+    )
+    conn.commit()
+
+    html = _home(client)
+
+    assert SEGMENT_LINK not in html
+    assert "Continue Segmenting" not in html
+
+
+def test_reopening_it_brings_the_card_back(client, tagging_world):
+    """Taking the decision back is what makes it safe to make -- the card is
+    the only way most of this work gets found again."""
+    conn, cur = tagging_world
+    _place(cur, conn, 2)
+    cur.execute(
+        "UPDATE recording SET segmenting_complete = TRUE WHERE recording_id = %s",
+        (CT_RECORDING,),
+    )
+    conn.commit()
+    assert SEGMENT_LINK not in _home(client)
+
+    cur.execute(
+        "UPDATE recording SET segmenting_complete = FALSE, segmenting_complete_at = NULL "
+        "WHERE recording_id = %s",
+        (CT_RECORDING,),
+    )
+    conn.commit()
+
+    assert SEGMENT_LINK in _home(client)
 
 
 def test_untouched_recording_never_appears(client, tagging_world):
