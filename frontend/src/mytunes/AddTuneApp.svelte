@@ -86,10 +86,14 @@
     }
   }
 
-  // target: {tune_id, thesession_id, name, tune_type}. Returns {finalId, already};
+  // target: {tune_id, thesession_id, name, tune_type}. Returns {finalId, already, applied};
   // throws Error(message) on failure — the aftermath (close/land) is the caller's.
   // NOTE: a thesession target carries the thesession id in BOTH tune_id and
   // thesession_id (the server folds them) — keep that shape.
+  // `already` is not a failure: the tune was on the list before this add. The server
+  // still applies the setting (and notes, when the row had none) that the form
+  // collected and reports them as `applied`, so the landing toast can say so — a
+  // pasted link can't tell you up front that the tune is already yours.
   async function performAdd(target, { status, notes, settingId, overrides }) {
     const tuneId = target.tune_id ?? target.thesession_id
     if (target.thesession_id != null || settingId != null) {
@@ -114,7 +118,7 @@
       })
       const j = await res.json().catch(() => ({}))
       const finalId = j.person_tune?.tune_id ?? j.redirect_to_tune_id ?? tuneId
-      if (res.status === 409) return { finalId, already: true }
+      if (res.status === 409) return { finalId, already: true, applied: j.applied || {} }
       if (!res.ok || !j.success) throw new Error(j.error || 'Could not add the tune.')
       await applyOverrides(finalId, overrides)
       return { finalId, already: false }
@@ -130,14 +134,14 @@
   // default action button is replaced by the footer form (which submits itself).
   async function doQuickAdd(target, name) {
     try {
-      const { finalId, already } = await performAdd(target, {
+      const { finalId, already, applied } = await performAdd(target, {
         status: 'want to learn',
         notes: '',
         settingId: null,
         overrides: [],
       })
       close()
-      ;(already ? onAlready : onAdded)(finalId, name)
+      already ? onAlready(finalId, name, applied) : onAdded(finalId, name)
     } catch (e) {
       searchError = e?.message || 'Could not add the tune. Please try again.'
     } finally {
@@ -171,9 +175,9 @@
     const target = isImport
       ? { tune_id: item.r.tune_id, thesession_id: item.r.tune_id, name, tune_type }
       : { tune_id: data?.tune_id ?? item.r.tune_id, thesession_id: null, name, tune_type }
-    const { finalId, already } = await performAdd(target, { ...vals, settingId: chosenSettingId })
+    const { finalId, already, applied } = await performAdd(target, { ...vals, settingId: chosenSettingId })
     close()
-    ;(already ? onAlready : onAdded)(finalId, name)
+    already ? onAlready(finalId, name, applied) : onAdded(finalId, name)
   }
 </script>
 

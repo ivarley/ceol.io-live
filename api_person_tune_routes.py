@@ -107,6 +107,61 @@ def _person_tune_detail_response(person_tune_id: int) -> Optional[Dict[str, Any]
         conn.close()
 
 
+def _cache_setting_if_needed(tune_id: int, setting_id, user_id) -> None:
+    """Make sure an explicitly chosen setting is in the local tune_setting cache.
+    The deep-search preview pages settings straight off thesession.org (the backfill),
+    so the one the person picked is often one we've never imported."""
+    if not setting_id:
+        return
+    from api_routes import cache_default_tune_setting
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT setting_id FROM tune_setting WHERE setting_id = %s", (setting_id,))
+        if not cur.fetchone():
+            cache_default_tune_setting(tune_id, None, user_id, sync=True, target_setting_id=setting_id)
+    finally:
+        conn.close()
+
+
+def _apply_to_existing_person_tune(person_id: int, tune_id: int, setting_id, notes, user_id) -> Dict[str, Any]:
+    """Apply the EXPLICIT parts of an add request to a person_tune that already exists,
+    and report what changed as {"setting_id": <id>} / {"notes": true}.
+
+    Only what the caller actually asked for is touched, and the two fields have
+    deliberately different rules:
+      - setting_id: applied even over an existing one. Picking a setting is an explicit,
+        cheap-to-redo choice, and the caller just pointed at this one.
+      - notes: applied only when the existing row has none. Free text is lossy to
+        overwrite, so an existing note wins and the caller keeps theirs on screen.
+    """
+    applied: Dict[str, Any] = {}
+    existing = person_tune_service.get_person_tune_by_person_and_tune(person_id, tune_id)
+    if not existing:
+        return applied
+
+    if setting_id and setting_id != existing.setting_id:
+        _cache_setting_if_needed(tune_id, setting_id, user_id)
+        ok, _msg, _pt = person_tune_service.update_person_tune(
+            person_tune_id=existing.person_tune_id,
+            setting_id=setting_id,
+            user_id=user_id,
+        )
+        if ok:
+            applied["setting_id"] = setting_id
+
+    if notes and not (existing.notes or "").strip():
+        ok, _msg, _pt = person_tune_service.update_person_tune(
+            person_tune_id=existing.person_tune_id,
+            notes=notes,
+            user_id=user_id,
+        )
+        if ok:
+            applied["notes"] = True
+
+    return applied
+
+
 @person_tune_login_required
 def get_my_tunes():
     """
@@ -443,31 +498,29 @@ def add_my_tune():
 
         if not success:
             if "already exists" in message:
-                return jsonify({
+                # The tune is already on the list, so there is nothing to CREATE — but the
+                # caller still asked for a specific setting (and maybe notes), and the add
+                # surfaces can't always tell you the tune is already there (a pasted
+                # thesession.org link resolves to a synthetic result with no on-list flag).
+                # Dropping the request on the floor loses exactly what the user configured,
+                # so apply it to the existing row and say what was applied.
+                applied = _apply_to_existing_person_tune(person_id, tune_id, setting_id, notes, user_id)
+                existing = person_tune_service.get_person_tune_by_person_and_tune(person_id, tune_id)
+                body = {
                     "success": False,
-                    "error": message
-                }), 409  # Conflict
+                    "error": message,
+                    "applied": applied,
+                }
+                if existing:
+                    body["person_tune"] = _person_tune_detail_response(existing.person_tune_id)
+                return jsonify(body), 409  # Conflict
             else:
                 return jsonify({
                     "success": False,
                     "error": message
                 }), 400
 
-        # If a specific setting_id was provided, ensure it's cached
-        if setting_id:
-            from api_routes import cache_default_tune_setting
-            conn_check = get_db_connection()
-            try:
-                cur_check = conn_check.cursor()
-                cur_check.execute(
-                    "SELECT setting_id FROM tune_setting WHERE setting_id = %s",
-                    (setting_id,)
-                )
-                if not cur_check.fetchone():
-                    # Setting not cached yet - cache it now
-                    cache_default_tune_setting(tune_id, None, user_id, sync=True, target_setting_id=setting_id)
-            finally:
-                conn_check.close()
+        _cache_setting_if_needed(tune_id, setting_id, user_id)
 
         # Build response with tune details via the shared serializer
         response_data = _person_tune_detail_response(person_tune.person_tune_id)

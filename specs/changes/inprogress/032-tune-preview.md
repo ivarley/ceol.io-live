@@ -228,6 +228,16 @@ on thesession.org") did it — the legacy vanilla `TuneSearchComponent`'s
   just enrolled, `session_instance_tune.setting_override` once the session
   already prefers a different non-default setting (spec 032's precedence,
   unchanged — the paste path just feeds it a chosen setting).
+- **A tune you already have** is the paste path's blind spot: a link resolves to a
+  synthetic result carrying no `on_list` flag, so the My Tunes pane offers the full add
+  form for a tune that's been on the list for years. `POST /api/my-tunes` answers 409
+  there, and used to drop the whole configured add on the floor — the chosen setting
+  and the typed notes with it. It now applies the EXPLICIT parts to the existing row and
+  reports them as `applied` in the 409 body (`{"setting_id": <id>}` / `{"notes": true}`):
+  the setting lands even over an existing one (an explicit, cheap-to-redo choice), notes
+  only fill an empty field (free text is lossy to overwrite). The pane forwards `applied`
+  to `onAlready`, and the landing toast says "Already on your list — set your setting to
+  #NNN" instead of the bare "already on your list".
 - Frontend: `parseThesessionId`/`parseThesessionSettingId` moved from
   `logstate.js` (live-only) to `shared/parse.js`, re-exported for the logger.
   `window.CEOL_AUTHED` (base.html + live_logging.html) tells app-wide bundles

@@ -373,7 +373,7 @@
       instruments,
       thesessionUserId,
       onAdded: (tuneId, name) => afterPaneAdd(tuneId, name, false),
-      onAlready: (tuneId, name) => afterPaneAdd(tuneId, name, true),
+      onAlready: (tuneId, name, applied) => afterPaneAdd(tuneId, name, true, applied),
       // Tunebook sync (the pane's sync view): refresh the list — and the saved
       // thesession ID a first sync may have just stored — while results show.
       onSynced: () => loadTunes(),
@@ -394,14 +394,20 @@
 
   // After the pane adds (or finds we already have) a tune: reuse the existing
   // ?show/?added/?already landing flow — same toast, scroll + highlight, cleanup.
-  function afterPaneAdd(tuneId, name, already) {
+  // `applied` (already-on-the-list adds only) is what the server DID carry over from
+  // the form onto the existing row — say so, or the setting you just picked looks
+  // like it vanished.
+  function afterPaneAdd(tuneId, name, already, applied) {
     const params = new URLSearchParams(window.location.search)
     params.delete('show')
     params.delete('added')
     params.delete('already')
+    params.delete('applied')
     params.set('show', tuneId)
-    if (already) params.set('already', '1')
-    else params.set('added', name || '')
+    if (already) {
+      params.set('already', '1')
+      if (applied && applied.setting_id) params.set('applied', String(applied.setting_id))
+    } else params.set('added', name || '')
     window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`)
     loadTunes()
     checkForSuccessMessage()
@@ -412,7 +418,15 @@
   function checkForSuccessMessage() {
     const params = new URLSearchParams(window.location.search)
     if (params.has('added')) toast(`Successfully added "${params.get('added')}" to your collection!`, 'success')
-    else if (params.has('already')) toast('This tune is already on your list', 'info')
+    else if (params.has('already')) {
+      const applied = params.get('applied')
+      toast(
+        applied
+          ? `Already on your list — set your setting to #${applied}`
+          : 'This tune is already on your list',
+        'info'
+      )
+    }
   }
 
   function stripLandingParams() {
@@ -420,6 +434,7 @@
     params.delete('show')
     params.delete('added')
     params.delete('already')
+    params.delete('applied')
     const q = params.toString()
     window.history.replaceState({}, '', q ? `${window.location.pathname}?${q}` : window.location.pathname)
   }
