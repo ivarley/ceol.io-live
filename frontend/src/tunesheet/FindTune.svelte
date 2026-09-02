@@ -97,6 +97,16 @@
   }
 
   function pick(tune) {
+    // A link that named a SETTING is a statement about which version you play, and the
+    // drawer can't take one — it would be dropped on the floor here (the setting only
+    // survived the "not in the library yet" branch below). Hand the raw link to the My
+    // Tunes add pane, which lands the pager on that setting and, for a tune already on
+    // your list, offers to update your setting.
+    if (linkRef && linkRef.settingId != null && loggedIn) {
+      close()
+      window.location.href = importHref
+      return
+    }
     close()
     // The drawer derives everything from its payload (viewer flags, on-list
     // state) and defaults its scope from the URL — so a pick on a session page
@@ -127,6 +137,9 @@
     onSearch={runSearch} />
   {#if linkRef && results === null}
     <p class="ft-note">Looking up tune #{linkRef.id} from thesession.org…</p>
+  {:else if linkRef && linkRef.settingId != null && loggedIn && results && results.length}
+    <!-- Say where the tap goes: this sheet can't hold on to a setting, My Tunes can. -->
+    <p class="ft-note">That link names setting #{linkRef.settingId} — opening it in My Tunes, where it can be saved.</p>
   {/if}
   <ul class="ft-results">
     {#if results !== null}

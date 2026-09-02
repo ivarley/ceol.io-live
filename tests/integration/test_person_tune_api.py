@@ -459,6 +459,55 @@ class TestPersonTuneAPI:
         )
         assert db_cursor.fetchone()[0] == "b part is tricky"
 
+    def test_update_setting_caches_the_settings_notation(self, client, authenticated_user, db_conn, db_cursor,
+                                                          monkeypatch):
+        """Adopting a setting from the preview's pager (Update Setting) must bring its
+        ABC with it — the pager pages thesession.org's full list, so the setting you
+        picked is usually one the catalog has never imported."""
+        import api_routes
+
+        unique_id = str(uuid.uuid4())[:8]
+        tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 80000
+        setting_id = tune_id + 3
+        person_id = 2
+
+        fetched = {}
+
+        def fake_cache(tid, tune_data, user_id, sync=True, target_setting_id=None):
+            fetched['tune_id'] = tid
+            fetched['setting_id'] = target_setting_id
+            return True, "cached", target_setting_id
+
+        monkeypatch.setattr(api_routes, "cache_default_tune_setting", fake_cache)
+
+        db_cursor.execute("""
+            INSERT INTO person (person_id, first_name, last_name, email)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (person_id) DO NOTHING
+        """, (person_id, "Test", "User", f"test{unique_id}@example.com"))
+        db_cursor.execute("""
+            INSERT INTO tune (tune_id, name, tune_type)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (tune_id) DO NOTHING
+        """, (tune_id, f"Pager Pick {unique_id}", "Reel"))
+        db_cursor.execute("DELETE FROM person_tune WHERE person_id = %s AND tune_id = %s", (person_id, tune_id))
+        db_cursor.execute("""
+            INSERT INTO person_tune (person_id, tune_id, learn_status)
+            VALUES (%s, %s, 'learning') RETURNING person_tune_id
+        """, (person_id, tune_id))
+        ptid = db_cursor.fetchone()[0]
+        db_conn.commit()
+
+        with authenticated_user:
+            response = client.put(f"/api/my-tunes/{ptid}", json={"setting_id": setting_id})
+
+        assert response.status_code == 200
+        # The uncached setting was fetched for THIS tune...
+        assert fetched == {'tune_id': tune_id, 'setting_id': setting_id}
+        # ...and recorded as the person's setting.
+        db_cursor.execute("SELECT setting_id FROM person_tune WHERE person_tune_id = %s", (ptid,))
+        assert db_cursor.fetchone()[0] == setting_id
+
     def test_update_tune_status_requires_authentication(self, client):
         """Test that PUT /api/my-tunes/<id>/status requires authentication."""
         response = client.put("/api/my-tunes/1", json={"learn_status": "learning"})

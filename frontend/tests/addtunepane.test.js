@@ -13,6 +13,8 @@ const SETTINGS = [
 
 // The tune is in the local catalog with ONE imported setting; the rest arrive from the
 // thesession.org backfill, exactly as they do for a real paste.
+// `personTune` = the viewer's own row, as the preview payload now carries it.
+let personTune = null
 const tunePreview = vi.fn(async () => ({
   tune_id: 8006,
   name: 'Scatter The Dew',
@@ -20,6 +22,7 @@ const tunePreview = vi.fn(async () => ({
   settings: [SETTINGS[0]],
   aliases: [],
   session_setting_id: null,
+  person_tune: personTune,
 }))
 const thesessionPreview = vi.fn(async (cfg, id, full) =>
   full
@@ -43,14 +46,22 @@ let AddTuneApp
 beforeEach(async () => {
   vi.clearAllMocks()
   delete window.MyTunesOffline
+  personTune = null
   AddTuneApp = (await import('../src/mytunes/AddTuneApp.svelte')).default
 })
+
+const btn = (label) =>
+  [...document.querySelectorAll('.mt-onlist-actions .pv-action')].find((b) =>
+    b.textContent.trim().startsWith(label)
+  )
 
 // Open the pane on the pasted link and wait for the pager to land on that setting.
 async function openOnPastedSetting(onAdded, onAlready) {
   const { component } = render(AddTuneApp, {})
   component.open({ instruments: [], query: PASTED, onAdded, onAlready })
-  await waitFor(() => expect(document.querySelector('.mt-submit')).toBeTruthy())
+  await waitFor(() =>
+    expect(document.querySelector('.mt-submit') || document.querySelector('.mt-onlist-panel')).toBeTruthy()
+  )
   await waitFor(() =>
     expect(document.querySelector('.pv-setlabel').textContent).toContain('#29513')
   )
@@ -114,5 +125,105 @@ describe('AddTuneApp: a pasted link with a setting', () => {
     await fireEvent.click(document.querySelector('.mt-submit'))
     await waitFor(() => expect(onAlready).toHaveBeenCalled())
     expect(onAlready.mock.calls[0][2]).toEqual({})
+  })
+})
+
+describe('AddTuneApp: a pasted link for a tune already on the list', () => {
+  it('says so with the status, and offers to update a setting that differs', async () => {
+    personTune = { person_tune_id: 2113, on_list: true, learn_status: 'learning', setting_id: 8006, heard_count: 3 }
+    globalThis.fetch = vi.fn()
+    await openOnPastedSetting(vi.fn(), vi.fn())
+
+    // The add form is gone — this is not an add.
+    expect(document.querySelector('.mt-submit')).toBeNull()
+    const panel = document.querySelector('.mt-onlist-panel')
+    expect(panel.textContent).toContain('Already on your list')
+    expect(document.querySelector('.mt-onlist-status').textContent).toBe('Learning')
+    // The ask names both settings, so the choice is legible.
+    const ask = document.querySelector('.mt-onlist-ask').textContent
+    expect(ask).toContain('#8006')
+    expect(ask).toContain('#29513')
+    expect(btn('Update Setting')).toBeTruthy()
+    expect(btn('I Heard It Again')).toBeTruthy()
+    expect(btn('Cancel')).toBeTruthy()
+  })
+
+  it('offers no Update Setting when the link names the setting already recorded', async () => {
+    personTune = { person_tune_id: 2113, on_list: true, learn_status: 'learned', setting_id: 29513, heard_count: 0 }
+    globalThis.fetch = vi.fn()
+    await openOnPastedSetting(vi.fn(), vi.fn())
+
+    expect(document.querySelector('.mt-onlist-ask')).toBeNull()
+    expect(btn('Update Setting')).toBeFalsy()
+    expect(btn('I Heard It Again')).toBeTruthy()
+  })
+
+  it('Update Setting PUTs the chosen setting onto the existing row and reports it', async () => {
+    personTune = { person_tune_id: 2113, on_list: true, learn_status: 'learning', setting_id: 8006, heard_count: 0 }
+    const fetchMock = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ success: true }) }))
+    globalThis.fetch = fetchMock
+    const onAlready = vi.fn()
+    await openOnPastedSetting(vi.fn(), onAlready)
+
+    await fireEvent.click(btn('Update Setting'))
+    await waitFor(() => expect(onAlready).toHaveBeenCalled())
+    const [url, opts] = fetchMock.mock.calls[0]
+    expect(url).toBe('/api/my-tunes/2113')
+    expect(opts.method).toBe('PUT')
+    expect(JSON.parse(opts.body)).toEqual({ setting_id: 29513 })
+    expect(onAlready).toHaveBeenCalledWith(8006, 'Scatter The Dew', { setting_id: 29513 })
+  })
+
+  it('I Heard It Again bumps the count and leaves the setting alone', async () => {
+    personTune = { person_tune_id: 2113, on_list: true, learn_status: 'want to learn', setting_id: 8006, heard_count: 3 }
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, heard_count: 4 }),
+    }))
+    globalThis.fetch = fetchMock
+    const onAlready = vi.fn()
+    await openOnPastedSetting(vi.fn(), onAlready)
+
+    // The current count rides along on the button, so you know what you're adding to.
+    expect(btn('I Heard It Again').textContent).toContain('(3)')
+    await fireEvent.click(btn('I Heard It Again'))
+    await waitFor(() => expect(onAlready).toHaveBeenCalled())
+    const [url, opts] = fetchMock.mock.calls[0]
+    expect(url).toBe('/api/my-tunes/2113/heard')
+    expect(opts.method).toBe('POST')
+    expect(onAlready).toHaveBeenCalledWith(8006, 'Scatter The Dew', { heard_count: 4 })
+  })
+
+  it('Cancel closes the pane without touching anything', async () => {
+    personTune = { person_tune_id: 2113, on_list: true, learn_status: 'learning', setting_id: 8006, heard_count: 0 }
+    const fetchMock = vi.fn()
+    globalThis.fetch = fetchMock
+    const onAlready = vi.fn()
+    const onAdded = vi.fn()
+    await openOnPastedSetting(onAdded, onAlready)
+
+    await fireEvent.click(btn('Cancel'))
+    await waitFor(() => expect(document.querySelector('.mt-onlist-panel')).toBeNull())
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(onAlready).not.toHaveBeenCalled()
+    expect(onAdded).not.toHaveBeenCalled()
+  })
+
+  it('a failed on-list action keeps the panel up with the error', async () => {
+    personTune = { person_tune_id: 2113, on_list: true, learn_status: 'learning', setting_id: 8006, heard_count: 0 }
+    globalThis.fetch = vi.fn(async () => ({
+      ok: false,
+      status: 500,
+      json: async () => ({ success: false, error: 'thesession.org is down' }),
+    }))
+    const onAlready = vi.fn()
+    await openOnPastedSetting(vi.fn(), onAlready)
+
+    await fireEvent.click(btn('Update Setting'))
+    await waitFor(() => expect(document.querySelector('.mt-onlist-panel .mt-error')).toBeTruthy())
+    expect(document.querySelector('.mt-onlist-panel .mt-error').textContent).toContain('thesession.org is down')
+    expect(onAlready).not.toHaveBeenCalled()
+    expect(btn('Update Setting').disabled).toBe(false) // retryable
   })
 })

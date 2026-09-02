@@ -228,16 +228,38 @@ on thesession.org") did it — the legacy vanilla `TuneSearchComponent`'s
   just enrolled, `session_instance_tune.setting_override` once the session
   already prefers a different non-default setting (spec 032's precedence,
   unchanged — the paste path just feeds it a chosen setting).
-- **A tune you already have** is the paste path's blind spot: a link resolves to a
-  synthetic result carrying no `on_list` flag, so the My Tunes pane offers the full add
-  form for a tune that's been on the list for years. `POST /api/my-tunes` answers 409
-  there, and used to drop the whole configured add on the floor — the chosen setting
-  and the typed notes with it. It now applies the EXPLICIT parts to the existing row and
-  reports them as `applied` in the 409 body (`{"setting_id": <id>}` / `{"notes": true}`):
-  the setting lands even over an existing one (an explicit, cheap-to-redo choice), notes
-  only fill an empty field (free text is lossy to overwrite). The pane forwards `applied`
-  to `onAlready`, and the landing toast says "Already on your list — set your setting to
-  #NNN" instead of the bare "already on your list".
+- **A tune you already have** was the paste path's blind spot: a link resolves to a
+  synthetic result carrying no `on_list` flag, so the My Tunes pane offered the full add
+  form for a tune that had been on the list for years, and `POST /api/my-tunes`'s 409
+  dropped the whole configured add on the floor — chosen setting and typed notes with it.
+  Two halves to the fix:
+  - **The preview payload now carries the viewer's own row.** `_tune_preview_core` returns
+    `person_tune: {person_tune_id, on_list, learn_status, setting_id, heard_count}` (null
+    when logged out or not on the list; the CANONICAL tune's row, since the preview
+    follows merge redirects). Every add surface reads it, so a pasted link knows what the
+    deep search already knew.
+  - **The pane answers with an on-list panel instead of the add form** (AddTuneForm's
+    `onList` branch): "★ Already on your list" + the learn status, and — only when the
+    link named a setting that ISN'T the one recorded — "You play setting #A, this link
+    points at #B. Update it?" over three actions: **Update Setting** (`PUT
+    /api/my-tunes/<ptid>` with `setting_id`), **I Heard It Again** (`POST
+    …/<ptid>/heard`, or the absolute `set_heard` op offline — never touches the setting),
+    and **Cancel** (closes, changes nothing). The landing toast names what changed.
+  `PUT /api/my-tunes/<ptid>` now caches an explicitly-set setting's ABC the way the add
+  path does — the pager pages thesession.org's full list, so the setting you adopt is
+  usually one the catalog never imported.
+  The 409 itself still can't be reached from the pane, but it stays honest for any other
+  caller: it applies the EXPLICIT parts of the request to the existing row and reports
+  them as `applied` (`{"setting_id": <id>}` / `{"notes": true}`) — the setting lands even
+  over an existing one (explicit, cheap to redo), notes only fill an empty field (free
+  text is lossy to overwrite).
+- **"Find a tune" (`FindTune.svelte`) hands a setting link to My Tunes.** The sheet opens
+  the tune-detail drawer, which has nowhere to put a setting, so a link naming one used to
+  lose it as soon as the tune was in the catalog (only the "not in the library yet" branch
+  forwarded it). A link with a setting, for a signed-in viewer, now navigates to
+  `/my-tunes?add=1&q=<raw link>` — the pane resolves it, lands the pager on that setting,
+  and offers Update Setting when the tune is already yours. A note under the field says so
+  before the tap. Plain links (no setting) still open the drawer.
 - Frontend: `parseThesessionId`/`parseThesessionSettingId` moved from
   `logstate.js` (live-only) to `shared/parse.js`, re-exported for the logger.
   `window.CEOL_AUTHED` (base.html + live_logging.html) tells app-wide bundles

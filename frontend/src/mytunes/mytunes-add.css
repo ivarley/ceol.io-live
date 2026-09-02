@@ -333,10 +333,35 @@
 .mt-add-pane .mt-note-toggle:hover { color: var(--text); }
 .mt-add-pane .mt-form .mt-notes { min-height: 52px; }
 .mt-add-pane .mt-form .mt-error { margin: 0; }
-/* already-on-list hand-off: same footprint as the action button, gold "your list" voice */
-.mt-add-pane .pv-action.mt-onlist {
+/* ---------- already-on-your-list panel (replaces the add form) ---------- */
+/* Gold "your list" voice, same footprint as the add form it stands in for. */
+.mt-add-pane .mt-onlist-panel { display: flex; flex-direction: column; gap: 9px; }
+.mt-add-pane .mt-onlist-head {
+  display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; cursor: pointer;
+  font: inherit; font-size: 14px; font-weight: 700; color: #e8d28a;
+  padding: 0; background: transparent; border: none;
+}
+.mt-add-pane .mt-onlist-star { font-size: 15px; line-height: 1; }
+.mt-add-pane .mt-onlist-status {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+  padding: 2px 8px; border-radius: 999px;
+  background: rgba(238, 191, 65, 0.16); border: 1px solid rgba(238, 191, 65, 0.45); color: #e8d28a;
+}
+.mt-add-pane .mt-onlist-ask { margin: 0; font-size: 13px; line-height: 1.45; color: var(--muted); }
+.mt-add-pane .mt-onlist-ask strong { color: var(--text); font-weight: 700; }
+.mt-add-pane .mt-onlist-panel .mt-error { margin: 0; }
+/* One row on desktop; the buttons wrap to full width when the pane is phone-narrow. */
+.mt-add-pane .mt-onlist-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.mt-add-pane .mt-onlist-actions .pv-action { flex: 1 1 auto; min-width: 120px; margin: 0; }
+.mt-add-pane .pv-action.mt-onlist-secondary {
   background: rgba(238, 191, 65, 0.16); border: 1px solid rgba(238, 191, 65, 0.5); color: #e8d28a;
 }
+.mt-add-pane .pv-action.mt-onlist-cancel {
+  flex: 0 1 auto; min-width: 84px;
+  background: transparent; border: 1px solid var(--border); color: var(--muted);
+}
+.mt-add-pane .pv-action.mt-onlist-cancel:hover { color: var(--text); }
+.mt-add-pane .mt-onlist-actions .pv-action:disabled { opacity: 0.6; cursor: default; }
 /* quick-add failure banner in the search phase (lives in the notice slot) */
 .mt-add-pane .mt-search-error { margin: 0 14px 8px; }
 

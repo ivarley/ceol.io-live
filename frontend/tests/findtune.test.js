@@ -145,6 +145,37 @@ describe('FindTune overlay', () => {
     )
   })
 
+  it('sends a link that names a SETTING to the add pane, not the drawer', async () => {
+    // Regression: the drawer has nowhere to put a setting, so picking a resolved link
+    // here used to drop it silently. My Tunes is where a setting can be kept.
+    window.CEOL_AUTHED = true
+    const href = 'https://thesession.org/tunes/55?setting=123#setting123'
+    const nav = { href: '' }
+    const { component } = render(FindTune)
+    // jsdom won't navigate; capture the assignment instead.
+    const origLocation = window.location
+    delete window.location
+    window.location = nav
+    try {
+      await openAndSearch(component, href)
+      expect(document.querySelector('.ft-note').textContent).toContain('#123')
+      await fireEvent.click(document.querySelector('.ft-results .ft-item'))
+      expect(nav.href).toBe('/my-tunes?add=1&q=' + encodeURIComponent(href))
+      expect(window.TuneDetailModal.show).not.toHaveBeenCalled()
+    } finally {
+      window.location = origLocation
+    }
+  })
+
+  it('still opens the drawer for a plain link (no setting) and for name results', async () => {
+    window.CEOL_AUTHED = true
+    const { component } = render(FindTune)
+    await openAndSearch(component, 'https://thesession.org/tunes/55')
+    expect(document.querySelector('.ft-note')).toBeFalsy()
+    await fireEvent.click(document.querySelector('.ft-results .ft-item'))
+    expect(window.TuneDetailModal.show).toHaveBeenCalledWith({ tuneId: 55, tuneName: 'Kesh, The' })
+  })
+
   it('shows the no-match row and requires 2+ characters', async () => {
     fetch.mockResolvedValue({ json: async () => ({ success: true, tunes: [] }) })
     const { component } = render(FindTune)

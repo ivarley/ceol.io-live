@@ -674,6 +674,12 @@ def update_person_tune(person_tune_id):
                     "error": message
                 }), 400
 
+        # A setting picked from the preview's pager is often one we've never imported
+        # (the pager pages thesession.org's full list), so cache its ABC — otherwise the
+        # id saves but the notation that made you pick it can't be drawn.
+        if setting_id is not UNSET and setting_id:
+            _cache_setting_if_needed(person_tune.tune_id, setting_id, user_id)
+
         # Build response with tune details via the shared serializer
         response_data = _person_tune_detail_response(person_tune.person_tune_id)
 

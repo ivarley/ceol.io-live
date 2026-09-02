@@ -179,6 +179,58 @@
     close()
     already ? onAlready(finalId, name, applied) : onAdded(finalId, name)
   }
+
+  // ---- already-on-the-list actions (the panel that replaces the add form) --------
+  // Both act on the viewer's EXISTING row, keyed by the person_tune_id the preview
+  // payload carries, and both land on the page the way an add does.
+  async function putPersonTune(ptid, body) {
+    const res = await fetch(`/api/my-tunes/${ptid}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify(body),
+    })
+    const j = await res.json().catch(() => ({}))
+    if (!res.ok || !j.success) throw new Error(j.error || 'That change could not be saved.')
+    return j
+  }
+
+  // Adopt the setting the pager is on. Online-only: the server imports the setting's
+  // notation when it isn't in our catalog yet (the pager pages thesession.org's list).
+  async function updateSetting(item, data, chosenSettingId) {
+    const pt = data?.person_tune
+    if (!pt?.person_tune_id || chosenSettingId == null) return
+    if (!navigator.onLine) throw new Error('You are offline. A specific setting can only be saved online.')
+    await putPersonTune(pt.person_tune_id, { setting_id: chosenSettingId })
+    const finalId = data?.tune_id ?? item.r.tune_id
+    close()
+    onAlready(finalId, data?.name ?? item.r.name, { setting_id: chosenSettingId })
+  }
+
+  // "I heard it again": bump the count, leave the setting (and everything else) alone.
+  async function heardAgain(item, data) {
+    const pt = data?.person_tune
+    if (!pt?.person_tune_id) return
+    const finalId = data?.tune_id ?? item.r.tune_id
+    const name = data?.name ?? item.r.name
+    if (!navigator.onLine) {
+      // Offline the op-queue owns it — heard_count is an ABSOLUTE set, so a replay
+      // can't double-count (spec 024's op vocabulary).
+      await submitOp({ type: 'set_heard', tune_id: finalId, heard_count: (pt.heard_count ?? 0) + 1 })
+      close()
+      onAlready(finalId, name, { heard_count: (pt.heard_count ?? 0) + 1 })
+      return
+    }
+    const res = await fetch(`/api/my-tunes/${pt.person_tune_id}/heard`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+    })
+    const j = await res.json().catch(() => ({}))
+    if (!res.ok || !j.success) throw new Error(j.error || 'Could not update the heard count.')
+    close()
+    onAlready(finalId, name, { heard_count: j.heard_count ?? j.new_count })
+  }
 </script>
 
 {#if pane.visible}
@@ -218,11 +270,16 @@
           {#key `${item.remote ? 'ts' : 'l'}:${item.r.tune_id}`}
             <AddTuneForm
               {instruments}
-              onList={!!item.r.on_list}
+              {chosenSettingId}
+              onList={!!(data?.person_tune?.on_list ?? item.r.on_list)}
+              existing={data?.person_tune ?? null}
               onShowExisting={() => {
                 close()
                 onAlready(data?.tune_id ?? item.r.tune_id, data?.name ?? item.r.name)
               }}
+              onCancel={close}
+              onUpdateSetting={() => updateSetting(item, data, chosenSettingId)}
+              onHeardAgain={() => heardAgain(item, data)}
               onSubmit={(vals) => previewSubmit(item, data, chosenSettingId, vals)}
             />
           {/key}

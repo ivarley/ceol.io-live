@@ -2244,6 +2244,29 @@ def _tune_preview_core(tune_id, session_id=None):
             for r in cur.fetchall()
         ]
 
+        # What the VIEWER already has for this tune. Every add surface needs it: the
+        # deep search flags on-list results, but a pasted thesession.org link resolves to
+        # a synthetic result with no such flag — without this the pane offers to "add" a
+        # tune that has been on your list for years (and the add is a no-op 409).
+        person_tune = None
+        if current_user.is_authenticated and getattr(current_user, "person_id", None):
+            cur.execute(
+                """
+                SELECT person_tune_id, learn_status, setting_id, heard_count
+                FROM person_tune WHERE person_id = %s AND tune_id = %s
+                """,
+                (current_user.person_id, tune_id),
+            )
+            ptrow = cur.fetchone()
+            if ptrow:
+                person_tune = {
+                    "person_tune_id": ptrow[0],
+                    "on_list": True,
+                    "learn_status": ptrow[1],
+                    "setting_id": ptrow[2],
+                    "heard_count": ptrow[3] or 0,
+                }
+
         aliases, played_here, dates = [], 0, []
         session_setting_id = None
         if session_id is not None:
@@ -2291,6 +2314,7 @@ def _tune_preview_core(tune_id, session_id=None):
             "played_here": played_here,
             "dates": dates,
             "session_setting_id": session_setting_id,
+            "person_tune": person_tune,
             "settings": settings,
         })
     finally:

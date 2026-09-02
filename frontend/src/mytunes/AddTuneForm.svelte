@@ -7,13 +7,42 @@
 
   let {
     instruments = [], // the person's instruments [{instrument, is_auto}]
-    onList = false, // tune already on the list: show the hand-off button, no form
+    onList = false, // tune already on the list: the on-list panel replaces the form
+    // The viewer's own row when onList — {learn_status, setting_id, heard_count}, from
+    // the preview payload. A pasted link can land here without ever having said "add".
+    existing = null,
+    chosenSettingId = null, // the setting the pager is on, when the user pointed at one
     onSubmit, // async ({status, notes, overrides}) — throws Error(message) on failure
     onShowExisting = () => {}, // on-list hand-off (close pane + highlight on the page)
+    onUpdateSetting, // async () — adopt chosenSettingId as the setting I play
+    onHeardAgain, // async () — bump heard_count, leaving the setting alone
+    onCancel = () => {}, // walk away unchanged (just closes the pane)
   } = $props()
 
   const STATUSES = ['want to learn', 'learning', 'learned']
   const LABELS = { 'want to learn': 'Want To Learn', learning: 'Learning', learned: 'Learned' }
+
+  // ---- already-on-the-list panel ------------------------------------------------
+  // Offering "Update Setting" only makes sense when the user actually pointed at a
+  // setting AND it isn't the one already recorded — otherwise there is nothing to update.
+  const settingDiffers = $derived(chosenSettingId != null && chosenSettingId !== (existing?.setting_id ?? null))
+  const statusLabel = $derived(LABELS[existing?.learn_status] || null)
+  const heardCount = $derived(existing?.heard_count ?? 0)
+  let onListBusy = $state('') // '' | 'setting' | 'heard' — which on-list action is in flight
+  let onListError = $state('')
+
+  async function runOnListAction(kind, fn) {
+    if (onListBusy) return
+    onListError = ''
+    onListBusy = kind
+    try {
+      await fn()
+      // success closes the pane; this component unmounts with it
+    } catch (e) {
+      onListError = e?.message || 'That didn\u2019t work. Please try again.'
+      onListBusy = ''
+    }
+  }
 
   let baseStatus = $state('want to learn')
   let instOpen = $state(false)
@@ -72,7 +101,42 @@
 </script>
 
 {#if onList}
-  <button class="pv-action mt-onlist" onclick={onShowExisting}>★ Already on your list — show it</button>
+  <!-- Already yours: not an add. Say so (with the status, so the panel answers "what do
+       I have on this tune?"), and offer only what's actually left to do here. -->
+  <div class="mt-onlist-panel">
+    <button class="mt-onlist-head" onclick={onShowExisting} title="Show this tune on your list">
+      <span class="mt-onlist-star">★</span> Already on your list
+      {#if statusLabel}<span class="mt-onlist-status">{statusLabel}</span>{/if}
+    </button>
+    {#if settingDiffers}
+      <p class="mt-onlist-ask">
+        {#if existing?.setting_id != null}
+          You play setting <strong>#{existing.setting_id}</strong> — this link points at
+          <strong>#{chosenSettingId}</strong>. Update it?
+        {:else}
+          You haven't picked a setting yet. Use <strong>#{chosenSettingId}</strong>?
+        {/if}
+      </p>
+    {/if}
+    {#if onListError}<p class="mt-error">{onListError}</p>{/if}
+    <div class="mt-onlist-actions">
+      {#if settingDiffers}
+        <button
+          class="pv-action mt-onlist-primary"
+          disabled={!!onListBusy}
+          onclick={() => runOnListAction('setting', () => onUpdateSetting())}>
+          {onListBusy === 'setting' ? 'Updating…' : 'Update Setting'}
+        </button>
+      {/if}
+      <button
+        class="pv-action mt-onlist-secondary"
+        disabled={!!onListBusy}
+        onclick={() => runOnListAction('heard', () => onHeardAgain())}>
+        {onListBusy === 'heard' ? 'Saving…' : `I Heard It Again${heardCount ? ` (${heardCount})` : ''}`}
+      </button>
+      <button class="pv-action mt-onlist-cancel" disabled={!!onListBusy} onclick={onCancel}>Cancel</button>
+    </div>
+  </div>
 {:else}
   <div class="mt-form">
     <div class="mt-form-row">

@@ -394,19 +394,21 @@
 
   // After the pane adds (or finds we already have) a tune: reuse the existing
   // ?show/?added/?already landing flow — same toast, scroll + highlight, cleanup.
-  // `applied` (already-on-the-list adds only) is what the server DID carry over from
-  // the form onto the existing row — say so, or the setting you just picked looks
-  // like it vanished.
+  // `applied` says what the pane changed on a tune that was ALREADY on the list —
+  // {setting_id} / {heard_count} — so the toast can name it. Without that, a setting
+  // you just adopted looks like it vanished.
   function afterPaneAdd(tuneId, name, already, applied) {
     const params = new URLSearchParams(window.location.search)
     params.delete('show')
     params.delete('added')
     params.delete('already')
     params.delete('applied')
+    params.delete('heard')
     params.set('show', tuneId)
     if (already) {
       params.set('already', '1')
       if (applied && applied.setting_id) params.set('applied', String(applied.setting_id))
+      if (applied && applied.heard_count != null) params.set('heard', String(applied.heard_count))
     } else params.set('added', name || '')
     window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`)
     loadTunes()
@@ -420,12 +422,11 @@
     if (params.has('added')) toast(`Successfully added "${params.get('added')}" to your collection!`, 'success')
     else if (params.has('already')) {
       const applied = params.get('applied')
-      toast(
-        applied
-          ? `Already on your list — set your setting to #${applied}`
-          : 'This tune is already on your list',
-        'info'
-      )
+      const heard = params.get('heard')
+      let msg = 'This tune is already on your list'
+      if (applied) msg = `Already on your list — set your setting to #${applied}`
+      else if (heard) msg = `Heard it again — ${heard} time${heard === '1' ? '' : 's'} now`
+      toast(msg, 'info')
     }
   }
 
@@ -435,6 +436,7 @@
     params.delete('added')
     params.delete('already')
     params.delete('applied')
+    params.delete('heard')
     const q = params.toString()
     window.history.replaceState({}, '', q ? `${window.location.pathname}?${q}` : window.location.pathname)
   }
