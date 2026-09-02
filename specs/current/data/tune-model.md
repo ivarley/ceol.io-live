@@ -89,6 +89,26 @@ Logged tune plays (the actual session log).
 - Rendered by ABC renderer service → stored as PNG bytea
 - See [ABC Renderer](../services/abc-renderer.md)
 
+**PNGs are rendered lazily, ABC is not.** A tune imported from thesession.org (the live
+logger's add op and the My Tunes add pane both go through
+`live_logging_routes._import_tune_for_live`) gets its `tune` row and default
+`tune_setting` — ABC and incipit ABC — inside the add's transaction, but no images: a
+render is an HTTP call to the abc-renderer service with a 15s timeout, twice, and no add
+should block on that. The PNGs are drawn and cached on the first VIEW instead, by
+whichever surface shows the notation:
+
+- deep-search preview → `…/setting-image/<setting_id>?kind=incipit|full` (`_ensure_setting_image`)
+- live logger → `…/incipit/<tune_id>` (`_ensure_incipit`, the tune's default setting)
+- tune-detail drawer → the setting-image endpoint for the setting its payload resolved
+  (`session_tune.setting_id`), fired automatically when the payload has ABC but no image
+
+Each renders once and writes the PNG back to `tune_setting`, so it happens once per
+setting for all viewers, ever. Anything still imageless (offline, renderer down, a
+logged-out viewer) falls back to the ABC text, with **Generate Notation** as the manual
+path. `api_routes.cache_default_tune_setting` is the eager sibling — it renders both
+sizes synchronously and is still used where a tune row is created outside an add's
+transaction.
+
 ## Key Operations
 
 **Search**: GET /api/tunes/search?q=<query> - searches local (by name AND notation) + thesession.org.

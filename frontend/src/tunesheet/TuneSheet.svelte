@@ -31,7 +31,7 @@
   // static/css/tune_detail_modal.css, the live shell's dark scoping and the
   // e2e suite all select on it. For the same reason this component has NO
   // <style> block: Svelte scoping would detach it from the shared stylesheet.
-  import { onMount } from 'svelte'
+  import { onMount, untrack } from 'svelte'
   import { Chip, Dialog, Seg, SessionPicker, TagInput, Tabs, toast } from '../lib/index.js'
   import {
     MUSICAL_KEYS,
@@ -1362,6 +1362,54 @@
         return false
       })
   }
+
+  // ---- lazy notation render ------------------------------------------------------
+  // A tune imported from thesession.org arrives with ABC only — the PNGs are rendered
+  // on demand (they go through the abc-renderer service, too slow to block an add on).
+  // The live logger already redeems that promise via its incipit endpoint; the drawer
+  // used to just show the abc text and wait for someone to press Generate Notation, so
+  // every tune added through the My Tunes pane stayed dot-less. Render it on first view
+  // instead: the setting-image endpoint draws from the ABC we already hold (no
+  // thesession.org round trip) and caches the PNG, so this happens once per setting ever.
+  const renderTried = new Set() // setting_ids this drawer has already asked about
+  async function settingImagePng(settingId, kind) {
+    const res = await fetch(`/api/my-tunes/setting-image/${settingId}?kind=${kind}`, {
+      credentials: 'same-origin',
+    })
+    if (!res.ok) return null
+    const data = await res.json().catch(() => ({}))
+    return data.image || null
+  }
+  // Write a freshly rendered PNG back into whichever block the view is reading from.
+  function patchNotationImage(settingId, field, value) {
+    if (tune && tune.setting_id === settingId) tune[field] = value
+    if (myNotation && myNotation.setting_id === settingId) myNotation = { ...myNotation, [field]: value }
+  }
+  async function renderMissingNotation(settingId) {
+    try {
+      // The incipit first — it's what the drawer opens on, so it's the visible win.
+      const incipit = await settingImagePng(settingId, 'incipit')
+      if (!incipit) return
+      patchNotationImage(settingId, 'incipit_image', incipit)
+      notationMode = 'dots' // the abc view was only ever the no-dots fallback
+      // Then the full staff, so the incipit/full toggle isn't a dead control.
+      const full = await settingImagePng(settingId, 'full')
+      if (full) patchNotationImage(settingId, 'image', full)
+    } catch {
+      /* leave the abc text (and Generate Notation) exactly as they were */
+    }
+  }
+  $effect(() => {
+    if (!visible || !loggedIn || isOffline) return
+    const src = notationSource
+    const settingId = src?.setting_id
+    if (settingId == null) return
+    // Only when there's something to render and nothing rendered yet.
+    if (src.incipit_image || !(src.incipit_abc || src.abc)) return
+    if (renderTried.has(settingId)) return
+    renderTried.add(settingId)
+    untrack(() => renderMissingNotation(settingId))
+  })
 
   // "Generate Notation" (shown in the notation area when nothing is cached): the SAME
   // action as a form's Fetch/Refresh button. It saves the setting to my list when I

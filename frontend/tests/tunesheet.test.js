@@ -320,6 +320,73 @@ describe('notation display resolution', () => {
   })
 })
 
+// A tune imported from thesession.org lands with ABC only — its PNGs are rendered on
+// demand, and until the drawer did that itself, every tune added through the My Tunes
+// pane showed abc text and waited for someone to press Generate Notation.
+describe('lazy notation render (imported tunes arrive as ABC only)', () => {
+  const noImages = {
+    tune: { setting_id: 5150, abc: 'EBBA!B2 EB!full body', incipit_abc: 'EBBA!B2 EB', image: null, incipit_image: null },
+  }
+  const settingImageCalls = () =>
+    fetchMock.mock.calls.map(([url]) => String(url)).filter((u) => u.includes('/setting-image/'))
+
+  it('renders and shows the missing dots, incipit first then the full staff', async () => {
+    stubFetch([
+      ['/api/tunes/101/detail', detailPayload(noImages)],
+      ['/setting-image/5150?kind=incipit', { success: true, image: 'INCIPIT-PNG' }],
+      ['/setting-image/5150?kind=full', { success: true, image: 'FULL-PNG' }],
+    ])
+    const { container, component } = render(TuneSheet)
+    component.show({ tuneId: 101, ptid: 11, scope: null })
+
+    // The abc text is what's on screen until the render lands...
+    await waitFor(() => expect(container.querySelector('.abc-notation-text')).toBeTruthy())
+    // ...then the dots replace it, without anyone pressing Generate Notation.
+    await waitFor(() => {
+      const img = container.querySelector('.abc-notation-image')
+      expect(img).toBeTruthy()
+      expect(img.getAttribute('src')).toBe('data:image/png;base64,INCIPIT-PNG')
+    })
+    // Both sizes get rendered, so the incipit/full toggle isn't a dead control.
+    await waitFor(() => expect(settingImageCalls()).toHaveLength(2))
+    expect(settingImageCalls()[0]).toContain('kind=incipit')
+    expect(settingImageCalls()[1]).toContain('kind=full')
+  })
+
+  it('asks once per setting, however often the drawer re-renders', async () => {
+    stubFetch([
+      ['/api/tunes/101/detail', detailPayload(noImages)],
+      ['/setting-image/', { success: true, image: 'PNG' }],
+    ])
+    const { component } = render(TuneSheet)
+    component.show({ tuneId: 101, ptid: 11, scope: null })
+    await waitFor(() => expect(settingImageCalls().length).toBe(2))
+    component.close()
+    component.show({ tuneId: 101, ptid: 11, scope: null })
+    await new Promise((r) => setTimeout(r, 50))
+    expect(settingImageCalls()).toHaveLength(2) // the cached PNGs are already in the payload's future
+  })
+
+  it('never renders for a tune that already has its notation, or for a logged-out viewer', async () => {
+    stubFetch([['/api/tunes/101/detail', detailPayload({ tune: { setting_id: 5150, incipit_image: 'ALREADY' } })]])
+    const { component } = render(TuneSheet)
+    component.show({ tuneId: 101, ptid: 11, scope: null })
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+    await new Promise((r) => setTimeout(r, 50))
+    expect(settingImageCalls()).toHaveLength(0)
+
+    cleanup()
+    stubFetch([['/api/tunes/101/detail', detailPayload({ ...noImages, viewer: { logged_in: false } })]])
+    const second = render(TuneSheet)
+    second.component.show({ tuneId: 101, scope: null })
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+    await new Promise((r) => setTimeout(r, 50))
+    // Rendering writes to the catalog — it needs a signed-in viewer (same gate as
+    // the Generate Notation affordance).
+    expect(settingImageCalls()).toHaveLength(0)
+  })
+})
+
 describe('offline op overlay', () => {
   it('applies queued ops in ts order and aliases name -> tune_name', () => {
     const t = overlayOfflineOps(
