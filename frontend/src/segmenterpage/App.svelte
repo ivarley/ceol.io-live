@@ -679,9 +679,6 @@
     {#if recording.audio_error}
       <p class="sg-error">Audio unavailable: {recording.audio_error}</p>
     {/if}
-    {#if status}
-      <p class="sg-status" class:is-error={statusKind === 'error'}>{status}</p>
-    {/if}
 
     <div class="sg-body">
       <section class="sg-left">
@@ -859,6 +856,17 @@
         flash('The audio file could not be loaded. The signed URL may have expired — reload the page.', 'error')
       }}
     ></audio>
+
+    <!-- Floating, so a mark's confirmation never reflows the page under a
+         finger already on its way to the next transport button. -->
+    {#if status}
+      <div class="sg-toast" class:is-error={statusKind === 'error'} role="status" aria-live="polite">
+        <span>{status}</span>
+        {#if statusKind === 'error'}
+          <button type="button" class="sg-toast-x" onclick={() => (status = '')} aria-label="Dismiss">×</button>
+        {/if}
+      </div>
+    {/if}
   </div>
 {/if}
 
@@ -929,13 +937,54 @@
     padding: 8px 10px;
     margin: 0 0 10px;
   }
-  .sg-status {
-    margin: 0 0 8px;
-    font-size: 0.85rem;
+  /* The running commentary -- which tune just landed where -- as a toast rather
+     than a band in the flow. Inline, it added a line to the top of the page on
+     every mark, which slid the transport buttons down exactly as a thumb was
+     arriving at one: you would mark a tune, reach for +15s, and press Undo.
+     Fixed and top-centre, matching the site's own flash messages. */
+  .sg-toast {
+    position: fixed;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: var(--z-toast, 9999);
+    max-width: min(420px, calc(100vw - 24px));
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border: 1px solid var(--border-color, #444);
+    border-radius: 8px;
+    background: var(--header-bg, #2d2d2d);
     color: var(--info, #5b99ea);
+    font-size: 0.85rem;
+    text-align: center;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+    /* Never eats a tap meant for what it is floating over. */
+    pointer-events: none;
+    animation: sg-toast-in 0.15s ease-out;
   }
-  .sg-status.is-error {
+  .sg-toast.is-error {
     color: var(--danger, #e85a5a);
+    border-color: var(--danger, #e85a5a);
+  }
+  /* Errors stay put until they are replaced or dismissed, so they get the one
+     piece of the toast you can actually hit. */
+  .sg-toast-x {
+    pointer-events: auto;
+    background: none;
+    border: 0;
+    color: inherit;
+    font-size: 1.1rem;
+    line-height: 1;
+    padding: 0 2px;
+    cursor: pointer;
+  }
+  @keyframes sg-toast-in {
+    from {
+      opacity: 0;
+      transform: translate(-50%, -8px);
+    }
   }
 
   .sg-body {
