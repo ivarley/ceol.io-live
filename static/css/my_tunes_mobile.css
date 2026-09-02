@@ -235,6 +235,24 @@
 .inst-select-option:hover { background-color: var(--hover-bg); }
 .inst-select-option.active { background-color: var(--primary); color: #fff; }
 
+/* The status filter lives OUTSIDE the drawer (it's the one you reach for every visit),
+   so it needs the row spacing the drawer used to give it. */
+.filter-status-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+/* It's on screen at all times, so it runs tighter than the drawer's controls — enough
+   less height to buy back a row of tunes, still a comfortable thumb target. Specific
+   enough to beat the shared .filter-status-btn/.filter-sort-btn padding in the mobile
+   block below, so it holds at every width. */
+.filter-status-row .filter-status-btn {
+    padding-top: 4px;
+    padding-bottom: 4px;
+}
+
 .filter-panel-row {
     display: flex;
     align-items: center;
@@ -1095,6 +1113,10 @@
     .filter-panel {
         margin-top: 8px;
         padding: 10px;
+    }
+
+    .filter-status-row {
+        margin-top: 6px;
     }
 
     .filter-panel-row {

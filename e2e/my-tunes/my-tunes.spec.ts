@@ -15,13 +15,12 @@ test.describe("My Tunes list", () => {
     await expectNoServerError(page);
   });
 
-  test("learn-status filters are clickable", async ({ page }) => {
+  test("learn-status filters are clickable without opening the filter panel", async ({ page }) => {
     await page.goto("/my-tunes");
-    // Filter controls live inside the (initially collapsed) filter panel.
-    await page.locator("#filter-panel-toggle").click();
-    await expect(page.locator("#filter-panel")).toBeVisible();
+    // The status filter is the one control that lives OUTSIDE the collapsed panel.
+    await expect(page.locator("#filter-panel")).toHaveCount(0);
 
-    const learning = page.locator('button[data-status="learning"]');
+    const learning = page.locator('.filter-status-row button[data-status="learning"]');
     await learning.click();
     await expect(learning).toHaveClass(/active/);
     await expectNoServerError(page);
@@ -128,17 +127,23 @@ test.describe("Add a tune", () => {
     expect(added.notes).toBe("from the e2e suite");
   });
 
-  test("previewing an on-list tune offers show-it instead of the form", async ({ page }) => {
+  test("previewing an on-list tune shows what you have, not an add form", async ({ page }) => {
     // Cooley's (tune 1) is on sarah's SEED list — read-only, safe in parallel.
     await page.goto("/my-tunes?add=1");
     const pane = page.locator(".mt-add-pane");
     await expect(pane).toBeVisible();
     await pane.locator(".deep-field").fill("Cooley");
     await pane.locator(".deep-card-body", { hasText: /Cooley/i }).first().click();
-    const onlist = pane.locator(".mt-onlist");
+    const onlist = pane.locator(".mt-onlist-panel");
     await expect(onlist).toContainText(/Already on your list/i);
+    // The status answers "what do I already have on this tune?"
+    await expect(onlist.locator(".mt-onlist-status")).toBeVisible();
     await expect(pane.locator(".mt-submit")).toHaveCount(0);
-    await onlist.click();
+    // Nothing was pointed at a setting, so there's nothing to update — just the
+    // heard bump and a way out.
+    await expect(onlist.locator(".mt-onlist-primary")).toHaveCount(0);
+    await expect(onlist.locator(".mt-onlist-secondary")).toContainText(/Heard It Again/i);
+    await onlist.locator(".mt-onlist-head").click();
     await expect(pane).toBeHidden();
     await expect(page.locator("#message-container .message")).toContainText(/already on your list/i);
   });

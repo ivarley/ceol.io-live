@@ -137,6 +137,58 @@ describe('My Tunes page view', () => {
   })
 })
 
+// "What am I learning right now?" is the question the page exists to answer, so the
+// status filter sits in the open. Everything else stays behind the filter drawer.
+describe('the status filter lives outside the filter drawer', () => {
+  const statusBtn = (container, id) => container.querySelector(`.filter-status-row [data-status="${id}"]`)
+
+  it('filters from first paint, with the drawer never opened', async () => {
+    const { container } = render(App, { pageData: payload() })
+    await waitFor(() => expect(container.querySelectorAll('.tune-card')).toHaveLength(2))
+    expect(container.querySelector('#filter-panel')).toBeNull() // drawer still shut
+
+    await fireEvent.click(statusBtn(container, 'learned'))
+    await waitFor(() => expect(container.querySelectorAll('.tune-card')).toHaveLength(1))
+    expect(container.querySelector('.tune-card').dataset.tuneId).toBe('102')
+    expect(statusBtn(container, 'learned').classList.contains('active')).toBe(true)
+    expect(new URL(window.location).searchParams.get('status')).toBe('learned')
+
+    await fireEvent.click(statusBtn(container, ''))
+    await waitFor(() => expect(container.querySelectorAll('.tune-card')).toHaveLength(2))
+  })
+
+  it('is not duplicated inside the drawer, or by a pill', async () => {
+    const { container } = render(App, { pageData: payload() })
+    await waitFor(() => expect(container.querySelectorAll('.tune-card')).toHaveLength(2))
+    await fireEvent.click(statusBtn(container, 'learned'))
+
+    // A pill stands in for a control you can't see; this one is right there.
+    await waitFor(() => expect(container.querySelectorAll('.tune-card')).toHaveLength(1))
+    expect(container.querySelector('#active-filter-pills')).toBeNull()
+    // ...and the drawer button doesn't claim to be hiding something either.
+    expect(container.querySelector('#filter-panel-toggle').classList.contains('active')).toBe(false)
+
+    await fireEvent.click(container.querySelector('#filter-panel-toggle'))
+    await waitFor(() => expect(container.querySelector('#filter-panel')).toBeTruthy())
+    // One status control on the page, and it's the one outside the drawer.
+    expect(container.querySelector('#filter-panel [data-status]')).toBeNull()
+    expect(statusBtn(container, 'learned')).toBeTruthy()
+  })
+
+  it('Clear Filters still resets it, wherever it lives', async () => {
+    const { container } = render(App, { pageData: payload() })
+    await waitFor(() => expect(container.querySelectorAll('.tune-card')).toHaveLength(2))
+    await fireEvent.click(statusBtn(container, 'learned'))
+    await waitFor(() => expect(container.querySelectorAll('.tune-card')).toHaveLength(1))
+
+    await fireEvent.click(container.querySelector('#filter-panel-toggle'))
+    await waitFor(() => expect(container.querySelector('#clear-filters-btn')).toBeTruthy())
+    await fireEvent.click(container.querySelector('#clear-filters-btn'))
+    await waitFor(() => expect(container.querySelectorAll('.tune-card')).toHaveLength(2))
+    expect(statusBtn(container, '').classList.contains('active')).toBe(true)
+  })
+})
+
 describe('drawer status-change notifications (chained tunes)', () => {
   it('updates the matching card for a tune already on the page', async () => {
     const { container } = render(App, { pageData: payload() })

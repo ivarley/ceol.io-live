@@ -78,6 +78,9 @@
   const visible = $derived(filterAndSort(allTunes, filters, sort, instruments, abcMatch.ids))
   const tuneTypes = $derived([...new Set(allTunes.map((t) => t.tune_type).filter(Boolean))].sort())
   const hasActiveFilters = $derived(!!(filters.type || filters.status || filters.instrument || filters.rel))
+  // What's set INSIDE the collapsed drawer. Status is excluded: it has its own always-
+  // visible control, so lighting the drawer button for it would point at nothing.
+  const hasDrawerFilters = $derived(!!(filters.type || filters.instrument || filters.rel))
 
   // Relationship chips (spec 033) — single-select, click the active one to clear.
   // (R2 "in my sessions' repertoire" was deliberately dropped: plays auto-enroll
@@ -206,19 +209,18 @@
     return 'All My Instruments'
   })
 
-  // Active-filter pills, shown only while the panel is collapsed.
+  // Active-filter pills, shown only while the panel is collapsed. They stand in for
+  // controls you can't see, so status — visible at all times now — has no pill.
   const pills = $derived.by(() => {
     if (panelVisible) return []
     const out = []
-    if (filters.status) out.push({ key: 'status', label: cap(filters.status) })
     if (filters.type) out.push({ key: 'type', label: cap(filters.type) })
     if (filters.instrument) out.push({ key: 'instrument', label: filters.instrument })
     if (filters.rel) out.push({ key: 'rel', label: relLabel(filters.rel) })
     return out
   })
   function removeFilterPill(key) {
-    if (key === 'status') filters.status = ''
-    else if (key === 'type') filters.type = ''
+    if (key === 'type') filters.type = ''
     else if (key === 'instrument') filters.instrument = ''
     else if (key === 'rel') filters.rel = ''
   }
@@ -618,7 +620,7 @@
         <button
           id="filter-panel-toggle"
           class="filter-panel-toggle"
-          class:active={panelVisible || hasActiveFilters}
+          class:active={panelVisible || hasDrawerFilters}
           title="Show filters"
           onclick={toggleFilterPanel}>
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -635,23 +637,27 @@
         </button>
       </div>
 
+      <!-- Status is the filter people actually live in — "what am I learning right now?"
+           is the question the page exists to answer — so it sits in the open, one tap
+           away, while the drawer keeps the filters you set once and forget. -->
+      <div class="filter-status-row">
+        <Seg
+          options={[
+            { id: 'want to learn', label: 'Want To Learn' },
+            { id: 'learning', label: 'Learning' },
+            { id: 'learned', label: 'Learned' },
+            { id: '', label: 'All' },
+          ]}
+          value={filters.status}
+          idAttr="data-status"
+          styled={false}
+          segClass="filter-button-group"
+          optClass="filter-status-btn"
+          onSelect={(v) => (filters.status = v)} />
+      </div>
+
       {#if panelVisible}
         <div id="filter-panel" class="filter-panel {panelAnim}">
-          <div class="filter-panel-row">
-            <Seg
-              options={[
-                { id: '', label: 'All' },
-                { id: 'learned', label: 'Learned' },
-                { id: 'learning', label: 'Learning' },
-                { id: 'want to learn', label: 'Want To Learn' },
-              ]}
-              value={filters.status}
-              idAttr="data-status"
-              styled={false}
-              segClass="filter-button-group"
-              optClass="filter-status-btn"
-              onSelect={(v) => (filters.status = v)} />
-          </div>
           <div class="filter-panel-row">
             <button
               id="sort-direction-toggle"
