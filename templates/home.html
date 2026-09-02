@@ -303,7 +303,7 @@
         <div class="tune-stats">
             <a href="/my-tunes?status=learning&sortType=heard&sortDir=desc&sortType2=popularity&sortDir2=desc" class="tune-stat">
                 <span class="tune-stat-number" id="stat-learning">{{ learning_count }}</span>
-                <span class="tune-stat-label">In Progress</span>
+                <span class="tune-stat-label">Learning</span>
             </a>
             <a href="/my-tunes?status=want+to+learn&sortType=heard&sortDir=desc&sortType2=popularity&sortDir2=desc" class="tune-stat">
                 <span class="tune-stat-number" id="stat-want-to-learn">{{ want_to_learn_count }}</span>
@@ -406,7 +406,7 @@
 
 <script>
 // Offline agreement: adjust the dashboard counts by any not-yet-synced My-Tunes ops so
-// "In Progress" / "To Learn" match the My Tunes page while offline. Computed against the
+// "Learning" / "To Learn" match the My Tunes page while offline. Computed against the
 // cached list (same model as the My Tunes overlay). No-op when nothing is queued.
 document.addEventListener('DOMContentLoaded', function () {
     if (!window.MyTunesOffline || !document.getElementById('stat-learning')) return;

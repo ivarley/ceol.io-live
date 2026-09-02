@@ -3,6 +3,7 @@
   // fetch the person's thesession.org tunebook and add everything not already on
   // the list. Three sub-phases: form -> progress (indeterminate) -> results.
   import { Seg } from '../lib/index.js'
+  import { STATUS_LABELS } from '../mylist.js'
 
   let {
     thesessionUserId = null, // saved person.thesession_user_id (null = never set)
@@ -12,7 +13,7 @@
   } = $props()
 
   const STATUSES = ['want to learn', 'learning', 'learned']
-  const LABELS = { 'want to learn': 'Want To Learn', learning: 'Learning', learned: 'Learned' }
+  const LABELS = STATUS_LABELS
 
   let savedId = $state(thesessionUserId) // cleared via the x to enter a different ID
   let inputId = $state('')

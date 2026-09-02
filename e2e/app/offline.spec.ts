@@ -286,7 +286,7 @@ test.describe("offline status change (Tier 2)", () => {
     try {
       await page.goto("/my-tunes"); // reload so the new tune is in the list
       const badge = page.locator(`[data-tune-id="${tid}"] .status-badge`).first();
-      await expect(badge).toHaveText(/want to learn/i, { timeout: 8000 });
+      await expect(badge).toHaveText(/to learn/i, { timeout: 8000 });
 
       await context.setOffline(true);
       await badge.click(); // want to learn -> learning (optimistic, queued)

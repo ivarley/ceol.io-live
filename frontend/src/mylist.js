@@ -13,6 +13,17 @@ export const STATUSES = ['want to learn', 'learning', 'learned']
 export const NOT_ON_LIST = 'not on list'
 export const STATUS_RANK = { 'want to learn': 1, learning: 2, learned: 3 }
 
+// How a status is WORDED to a person, everywhere in the app. 'want to learn' reads as
+// "To Learn": it names a shelf, not a wish, and it makes the three statuses one scale
+// (To Learn -> Learning -> Learned) on the home page, the My Tunes filter and cards,
+// the add pane, the tune-detail sheet and the session pages alike. Display only — the
+// stored value, the ops vocabulary and the ?status= URLs all stay 'want to learn'.
+export const STATUS_LABELS = {
+  'want to learn': 'To Learn',
+  learning: 'Learning',
+  learned: 'Learned',
+}
+
 const hasOwn = (o, k) => Object.prototype.hasOwnProperty.call(o || {}, k)
 
 // One instrument's status for an on-list entry: sparse override wins; else an auto

@@ -4,6 +4,7 @@
   // form state — the parent keys this component on the previewed tune's identity,
   // so stepping ‹ › to another tune remounts it fresh (no notes leaking across).
   import { Chip, Seg } from '../lib/index.js'
+  import { STATUS_LABELS } from '../mylist.js'
 
   let {
     instruments = [], // the person's instruments [{instrument, is_auto}]
@@ -20,7 +21,7 @@
   } = $props()
 
   const STATUSES = ['want to learn', 'learning', 'learned']
-  const LABELS = { 'want to learn': 'Want To Learn', learning: 'Learning', learned: 'Learned' }
+  const LABELS = STATUS_LABELS
 
   // ---- already-on-the-list panel ------------------------------------------------
   // Offering "Update Setting" only makes sense when the user actually pointed at a

@@ -24,6 +24,7 @@
     cycleInstrumentOverride,
     fetchAllTunes,
   } from './logic.js'
+  import { STATUS_LABELS } from '../mylist.js'
 
   let { pageData = null } = $props()
 
@@ -643,9 +644,9 @@
       <div class="filter-status-row">
         <Seg
           options={[
-            { id: 'want to learn', label: 'Want To Learn' },
-            { id: 'learning', label: 'Learning' },
-            { id: 'learned', label: 'Learned' },
+            { id: 'want to learn', label: STATUS_LABELS['want to learn'] },
+            { id: 'learning', label: STATUS_LABELS.learning },
+            { id: 'learned', label: STATUS_LABELS.learned },
             { id: '', label: 'All' },
           ]}
           value={filters.status}

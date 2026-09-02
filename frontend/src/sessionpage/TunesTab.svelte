@@ -29,6 +29,7 @@
 
   import { toast, SearchField, Chip, Seg, Sheet } from '../lib/index.js'
   import { createAbcMatcher } from '../shared/abcfilter.svelte.js'
+  import { STATUSES, STATUS_LABELS } from '../mylist.js'
 
   // ---- state ---------------------------------------------------------------
   let allTunes = $state([...initialTunes])
@@ -592,9 +593,9 @@
                 <option value="">My Tunebook: off</option>
                 <option value="all">Show My Status</option>
                 <option value="not on list">Not On My List</option>
-                <option value="want to learn">Want To Learn</option>
-                <option value="learning">Learning</option>
-                <option value="learned">Learned</option>
+                {#each STATUSES as st (st)}
+                  <option value={st}>{STATUS_LABELS[st]}</option>
+                {/each}
               </select>
               <select
                 id="mystatus-inst"

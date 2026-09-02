@@ -4,9 +4,11 @@
 
 export const STATUS_ORDER = ['want to learn', 'learning', 'learned']
 
+
 // extractTuneId (thesession URL / plain number -> id) now comes from the
 // shared helpers module (src/shared/) — one tested copy for every page bundle.
 import { extractTuneId } from '../shared/parse.js'
+import { STATUS_LABELS } from '../mylist.js'
 import { DEFAULT_HEARD_COUNT } from '../shared/persontune.js'
 
 // Resolve a tune's status on one instrument (by name): an explicit override wins;
@@ -135,8 +137,7 @@ export function noResultsMessage(filters) {
   }
   if (filters.search) parts.push(`containing '${filters.search}'`)
   if (filters.status) {
-    const statusLabels = { learned: 'Learned', learning: 'Learning', 'want to learn': 'Want To Learn' }
-    parts.push(`in '${statusLabels[filters.status] || filters.status}' status`)
+    parts.push(`in '${STATUS_LABELS[filters.status] || filters.status}' status`)
   }
   let message = 'No ' + parts[0]
   if (parts.length > 1) message += ' ' + parts.slice(1).join(' ')

@@ -77,7 +77,8 @@ describe('My Tunes page view', () => {
     await waitFor(() => expect(container.querySelector('.tune-card[data-tune-id="101"]')).toBeTruthy())
     const card = container.querySelector('.tune-card[data-tune-id="101"]')
     expect(card.getAttribute('data-person-tune-id')).toBe('11')
-    expect(card.querySelector('.status-badge').textContent).toBe('want to learn')
+    // The badge shows the page's wording; the stored value stays 'want to learn'.
+    expect(card.querySelector('.status-badge').textContent).toBe('To Learn')
     expect(container.querySelectorAll('#tunes-grid .tune-card')).toHaveLength(2)
   })
 
@@ -86,7 +87,7 @@ describe('My Tunes page view', () => {
     await waitFor(() => expect(container.querySelector('.tune-card[data-tune-id="101"] .status-badge')).toBeTruthy())
     await fireEvent.click(container.querySelector('.tune-card[data-tune-id="101"] .status-badge'))
     await waitFor(() => {
-      expect(container.querySelector('.tune-card[data-tune-id="101"] .status-badge').textContent).toBe('learning')
+      expect(container.querySelector('.tune-card[data-tune-id="101"] .status-badge').textContent).toBe('Learning')
     })
     const opCall = fetch.mock.calls.find(([url]) => String(url).includes('/api/my-tunes/ops'))
     expect(opCall).toBeTruthy()
@@ -204,7 +205,7 @@ describe('drawer status-change notifications (chained tunes)', () => {
       person_tune_id: 11,
     })
     await waitFor(() =>
-      expect(container.querySelector('.tune-card[data-tune-id="101"] .status-badge').textContent).toBe('learned')
+      expect(container.querySelector('.tune-card[data-tune-id="101"] .status-badge').textContent).toBe('Learned')
     )
   })
 
@@ -252,7 +253,7 @@ describe('drawer status-change notifications (chained tunes)', () => {
     })
     await waitFor(() => expect(container.querySelector('.tune-card[data-tune-id="999"]')).toBeTruthy())
     expect(container.querySelectorAll('#tunes-grid .tune-card')).toHaveLength(3)
-    expect(container.querySelector('.tune-card[data-tune-id="999"] .status-badge').textContent).toBe('want to learn')
+    expect(container.querySelector('.tune-card[data-tune-id="999"] .status-badge').textContent).toBe('To Learn')
   })
 
   it('the add button opens the bundled-in add pane seeded with the current search', async () => {

@@ -67,6 +67,7 @@
     normalizeTags,
     tagsEqual,
   } from './logic.js'
+  import { STATUSES, STATUS_LABELS } from '../mylist.js'
 
   // ---- modal state -----------------------------------------------------------
   let visible = $state(false)
@@ -327,6 +328,10 @@
   // affordance only shows for logged-in viewers (payload-derived, so a call
   // site can never forget the flag again).
   const canGenerateNotation = $derived(!!tune && loggedIn)
+
+  // The status segs (overall and per-instrument) speak the app's one status
+  // vocabulary — see STATUS_LABELS in mylist.js.
+  const STATUS_OPTIONS = STATUSES.map((id) => ({ id, label: STATUS_LABELS[id] }))
 
   // Offline, the three override fields go read-only and Notes stays live — a phone in
   // a pub basement is exactly where someone types a note about a tune, and set_notes
@@ -1904,11 +1909,7 @@
                   <span class="tsc-name tunebook-status-label">This tune is on your list as</span>
                 </div>
                 <Seg
-                  options={[
-                    { id: 'want to learn', label: 'Want To Learn' },
-                    { id: 'learning', label: 'Learning' },
-                    { id: 'learned', label: 'Learned' },
-                  ]}
+                  options={STATUS_OPTIONS}
                   value={rollup}
                   idAttr="data-status"
                   styled={false}
@@ -1952,11 +1953,7 @@
                         </div>
                       {:else}
                         <Seg
-                          options={[
-                            { id: 'want to learn', label: 'Want To Learn' },
-                            { id: 'learning', label: 'Learning' },
-                            { id: 'learned', label: 'Learned' },
-                          ]}
+                          options={STATUS_OPTIONS}
                           value={st}
                           idAttr="data-status"
                           styled={false}
