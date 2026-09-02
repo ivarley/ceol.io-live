@@ -660,7 +660,11 @@
       </div>
       <div class="sg-progress">
         <strong>{placedCount}</strong> / {tunes.length}{#if !compact} placed{/if}
-        {#if saving > 0}<span class="sg-saving">saving…</span>{/if}
+        <!-- Always in the DOM, merely invisible when idle. Appearing and
+             disappearing on every mark rewrapped the header, which moved the
+             whole page under a thumb already on its way to +15s. A dot on a
+             phone, where the word would cost the header a line of its own. -->
+        <span class="sg-saving" class:is-on={saving > 0} title="saving">{compact ? '•' : 'saving…'}</span>
         <!-- On a phone the encode switch rides up here with the other header
              controls: down in the options row it was one more line of the
              sticky column, and it is the one option you reach for when the
@@ -914,6 +918,10 @@
   }
   .sg-saving {
     color: var(--warning, #f5c842);
+    visibility: hidden;
+  }
+  .sg-saving.is-on {
+    visibility: visible;
   }
   /* Sits between the count and the export link, so it reads as part of the same
      header cluster rather than as a control on the tool itself. */
