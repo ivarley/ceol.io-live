@@ -871,7 +871,7 @@
       <select value={sourceId} onchange={(e) => switchSource(e.currentTarget.value)}>
         {#each audioSources as src (src.id)}
           <option value={src.id}>
-            {src.label}{src.size_bytes ? ` · ${mb(src.size_bytes)} MB` : ''}{local[src.id] ? ' ✓' : ''}
+            {src.label}{src.size_bytes && !compact ? ` · ${mb(src.size_bytes)} MB` : ''}{local[src.id] ? ' ✓' : ''}
           </option>
         {/each}
       </select>
@@ -891,7 +891,7 @@
       </span>
     {:else if local[sourceId]}
       <span class="sg-opt sg-offline is-saved" title="Saved on this device ({mb(local[sourceId].size_bytes)} MB) — plays with no connection">
-        offline ✓
+        {compact ? 'saved' : 'offline ✓'}
         <button type="button" class="sg-offline-x" onclick={() => forgetOffline()} aria-label="Remove the offline copy" title="Remove the offline copy">×</button>
       </span>
     {:else}
@@ -900,7 +900,7 @@
         class="sg-opt sg-offline"
         onclick={saveOffline}
         title="Download this encode to the device so the tool works with no connection"
-      >⤓ {compact ? 'offline' : 'save offline'}{#if currentSource.size_bytes} · {mb(currentSource.size_bytes)} MB{/if}</button>
+      >⤓ {compact ? 'offline' : 'save offline'}{#if currentSource.size_bytes && !compact} · {mb(currentSource.size_bytes)} MB{/if}</button>
     {/if}
   {/if}
 {/snippet}
@@ -1595,6 +1595,10 @@
     .sg-progress .sg-offline {
       padding: 2px 5px;
       font-size: 0.75rem;
+      gap: 3px;
+    }
+    .sg-progress .sg-actions {
+      gap: 8px;
     }
     .sg-editlog {
       padding: 4px 8px;
