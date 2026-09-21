@@ -345,6 +345,32 @@ describe('audio loading state', () => {
     await waitFor(() => expect(getByText(/could not be loaded/)).toBeTruthy())
     expect(spinner(container)).toBeNull()
   })
+  it('does not call a quiet download "buffering" while there is data to play', async () => {
+    // A saved copy is a blob: URL that loads in full at once, so Chrome's
+    // `stalled` ("no new bytes lately") fires immediately -- with playback
+    // carrying on. Only a real shortage of data is buffering.
+    const { container } = render(App, { props: { pageData: payload() } })
+    const el = container.querySelector('audio')
+    Object.defineProperty(el, 'readyState', { configurable: true, value: 4 })
+    await fireEvent(el, new Event('canplay'))
+    await fireEvent(el, new Event('stalled'))
+    expect(container.querySelector('.sg-loading')).toBeNull()
+
+    Object.defineProperty(el, 'readyState', { configurable: true, value: 2 })
+    await fireEvent(el, new Event('stalled'))
+    expect(container.querySelector('.sg-loading').textContent.trim()).toBe('buffering…')
+  })
+
+  it('clears a stale "buffering" as soon as time is advancing', async () => {
+    const { container } = render(App, { props: { pageData: payload() } })
+    const el = container.querySelector('audio')
+    await fireEvent(el, new Event('canplay'))
+    await fireEvent(el, new Event('waiting'))
+    expect(container.querySelector('.sg-loading').textContent.trim()).toBe('buffering…')
+    Object.defineProperty(el, 'paused', { configurable: true, value: false })
+    await fireEvent(el, new Event('timeupdate'))
+    expect(container.querySelector('.sg-loading')).toBeNull()
+  })
 })
 
 describe('audio quality switch', () => {

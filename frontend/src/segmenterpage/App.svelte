@@ -1290,7 +1290,18 @@
       onplaying={() => (mediaState = 'ready')}
       onseeked={() => (mediaState = audio && audio.readyState >= 3 ? 'ready' : mediaState)}
       onwaiting={() => (mediaState = 'buffering')}
-      onstalled={() => (mediaState = 'buffering')}
+      onstalled={() => {
+        // `stalled` means "no new bytes for a few seconds", not "playback
+        // stopped" -- Chrome fires it once a download goes quiet, which for a
+        // saved copy (a blob: URL that loads in full at once) is straight away,
+        // while playback carries on. Only a real shortage of data is buffering.
+        if (audio && audio.readyState < 3) mediaState = 'buffering'
+      }}
+      ontimeupdate={() => {
+        // Advancing time is proof the audio isn't buffering, whatever event
+        // said so; nothing else re-fires while playback never actually paused.
+        if (mediaState === 'buffering' && audio && !audio.paused) mediaState = 'ready'
+      }}
       onerror={() => {
         mediaState = 'error'
         flash(
