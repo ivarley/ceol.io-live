@@ -120,6 +120,7 @@
   const appendMode = $derived(cursorTune == null && pendingSetEndIndex == null)
   const GAN_AINM = 'Gan Ainm'
   let picker = $state(null) // the TunePicker instance
+  let revealId = $state(null) // the row the log should scroll to (a tune just logged)
   let pickerOpen = $state(false)
   const searchConfig = $derived({ sessionInstanceId: instance?.session_instance_id })
   const mediaBusy = $derived(mediaState === 'loading' || mediaState === 'buffering')
@@ -820,6 +821,7 @@
       if (!res.ok || !body.success) throw new Error(body.error || `HTTP ${res.status}`)
       adoptTunes(body.tunes)
       cursorIndex = -1 // the next mark logs the next tune
+      revealId = body.tune?.session_instance_tune_id ?? null
       undoStack.push({ kind: 'log', sitId: body.tune?.session_instance_tune_id, cursor: -1 })
       flash(`${GAN_AINM} at ${formatTime(startMs)} — tap it in the log to name it`)
     } catch (err) {
@@ -1261,6 +1263,7 @@
           onclear={(i) => clearAt(i, true)}
           onname={openPicker}
           onunlog={(i) => unlogAt(i)}
+          {revealId}
         />
       </section>
     </div>

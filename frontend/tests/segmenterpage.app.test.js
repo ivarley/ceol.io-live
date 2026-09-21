@@ -1102,6 +1102,24 @@ describe('logging while segmenting', () => {
     expect(container.querySelector('.sg-progress strong').textContent).toBe('4')
   })
 
+  it('scrolls the tune it just logged to the bottom of the log', async () => {
+    // Logging mode has no cursor to follow, and the new row lands at the end of
+    // a long list -- out of sight, one scroll away from the tap that names it.
+    const p = allPlaced()
+    const logged = { ...p, tunes: [...p.tunes, ganAinm(4, 45000)] }
+    global.fetch = vi.fn().mockResolvedValue(jsonResponse({ success: true, tunes: logged.tunes, tune: logged.tunes[3] }, 201))
+    const { container } = render(App, { props: { pageData: p } })
+    Element.prototype.scrollIntoView.mockClear()
+    await fireEvent.keyDown(window, { key: 'm' })
+    await waitFor(() => expect(container.querySelector('.tl-row[data-tune-id="4"]')).toBeTruthy())
+    await waitFor(() => {
+      const calls = Element.prototype.scrollIntoView.mock.calls
+      expect(calls.length).toBeGreaterThan(0)
+      expect(calls.at(-1)[0]).toEqual({ block: 'end' })
+    })
+    expect(Element.prototype.scrollIntoView.mock.instances.at(-1).getAttribute('data-tune-id')).toBe('4')
+  })
+
   it('after a written log\'s last tune, M still ends its set, and the mark after that logs', async () => {
     const p = payload()
     // Set 1 (Alpha, Bravo) placed and closed; Charlie, alone in set 2, unplaced.

@@ -14,6 +14,7 @@
     onclear = () => {},
     onname = () => {}, // an unlinked tune's name was tapped: say which tune it was
     onunlog = () => {}, // remove a tune the segmenter itself logged (spec 050)
+    revealId = null, // a tune to scroll into view (a row just logged from the audio)
   } = $props()
 
   const sets = $derived(groupIntoSets(tunes))
@@ -28,6 +29,16 @@
     if (cursorId == null || !listEl) return
     const row = listEl.querySelector(`[data-tune-id="${cursorId}"]`)
     if (row) row.scrollIntoView({ block: 'nearest' })
+  })
+
+  // A tune the mark key just logged has no cursor to follow it (logging mode
+  // has none), and it lands at the end of a long list -- out of sight, one
+  // scroll away from the tap that names it. Bring it to the bottom edge, so it
+  // is the last thing in view and the next thing under the thumb.
+  $effect(() => {
+    if (revealId == null || !listEl) return
+    const row = listEl.querySelector(`[data-tune-id="${revealId}"]`)
+    if (row) row.scrollIntoView({ block: 'end' })
   })
 </script>
 
