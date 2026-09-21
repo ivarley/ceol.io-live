@@ -173,7 +173,11 @@
                                     <a class="rec-meta-item rec-meta-link" href="/sessions/{{ r.session_path }}">session</a>
                                 </div>
 
-                                {% if r.tunes and r.status == 'ready' %}
+                                {% if r.status == 'ready' and not r.tunes %}
+                                <div class="rec-placed">
+                                    <span class="rec-placed-text">No log yet &mdash; segmenting writes one, a tune per mark</span>
+                                </div>
+                                {% elif r.tunes and r.status == 'ready' %}
                                 <div class="rec-placed">
                                     <div class="rec-bar" role="img"
                                          aria-label="{{ r.segments }} of {{ r.tunes }} tunes placed">
@@ -203,12 +207,10 @@
                             </div>
 
                             <div class="rec-actions">
-                                {% if can_segment and r.tunes %}
-                                <a class="btn btn-sm btn-primary" href="{{ url_for('segment_recording', recording_id=r.recording_id) }}">Segment</a>
-                                {% elif can_segment %}
-                                {# Nothing logged for that night, so there is nothing
-                                   to place against. The log is the actual next step. #}
-                                <a class="btn btn-sm btn-primary" href="{{ url_for('live_logging_screen', session_instance_id=r.session_instance_id) }}">Open the log</a>
+                                {% if can_segment %}
+                                {# With or without a log: the tool logs a tune per mark
+                                   when there is nothing left to place (spec 050). #}
+                                <a class="btn btn-sm btn-primary" href="{{ url_for('segment_recording', recording_id=r.recording_id) }}">{{ 'Segment' if r.tunes else 'Log & segment' }}</a>
                                 {% else %}
                                 <button type="button" class="btn btn-sm btn-outline-secondary rec-retry" data-recording-id="{{ r.recording_id }}">Retry</button>
                                 {% endif %}

@@ -305,9 +305,10 @@ ingest from March under thirty finished nights, and on a phone six columns of
 table either scroll sideways or crush the one thing being looked for.
 
 So it groups. Each recording is filed by **what it is waiting for**, and the
-groups print most urgent first: Failed, Needs timestamps, Processing, Nothing to
-place yet (audio exists, but that night has no logged tunes to place against),
-Done. Done is folded shut, because it is the group that grows without bound.
+groups print most urgent first: Failed, Needs timestamps, Processing, Needs
+logging and timestamps (audio exists, but that night has no log — the tool
+writes one from the audio, see "Logging while segmenting"; a separate heading
+because it is a different job, and it counts as outstanding), Done. Done is folded shut, because it is the group that grows without bound.
 `serializers.recording_work_state` decides the bucket and
 `build_admin_recordings_payload` assembles the queue, so the ordering is one
 testable function rather than an ORDER BY nobody can assert on.

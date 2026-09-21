@@ -123,7 +123,7 @@ def _outstanding_ids(payload):
     return {
         r["recording_id"]
         for g in payload["groups"]
-        if g["slug"] in ("failed", "todo")
+        if g["slug"] in ("failed", "todo", "blocked")
         for r in g["recordings"]
     }
 
@@ -141,10 +141,11 @@ def test_the_payload_is_grouped_in_the_order_the_page_prints(worklist_world):
     assert sum(len(g["recordings"]) for g in payload["groups"]) == len(payload["recordings"])
 
 
-def test_a_night_with_no_logged_tunes_is_not_counted_as_work(worklist_world):
-    """It is a real recording and it isn't finished, but the segmenter has
-    nothing to place against it, so putting it in the work pile would be a
-    standing lie about how much there is to do."""
+def test_a_night_with_no_logged_tunes_is_its_own_kind_of_work(worklist_world):
+    """A recording with no log used to be "nothing to place yet". The tool now
+    writes the log from the audio (spec 050 "Logging while segmenting"), so it is
+    work -- filed under its own heading, because it is a different job from
+    timestamping a night someone already wrote down."""
     from serializers import build_admin_recordings_payload
 
     cur = worklist_world.cursor()
@@ -156,7 +157,10 @@ def test_a_night_with_no_logged_tunes_is_not_counted_as_work(worklist_world):
 
     payload = build_admin_recordings_payload(worklist_world)
     assert _ours(payload)["group"] == "blocked"
-    assert WL_RECORDING not in _outstanding_ids(payload)
+    assert _ours(payload)["state_label"] == "No log yet"
+    assert WL_RECORDING in _outstanding_ids(payload)
+    heading = next(g["heading"] for g in payload["groups"] if g["slug"] == "blocked")
+    assert heading == "Needs logging and timestamps"
 
     cur.execute(
         "UPDATE recording SET session_instance_id = %s WHERE recording_id = %s",

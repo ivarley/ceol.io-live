@@ -1996,9 +1996,12 @@ RECORDING_WORK_GROUPS: List[Dict[str, str]] = [
         "note": "Being ingested. Nothing to do; the rows update themselves.",
     },
     {
+        # Kept apart from "Needs timestamps" because it is a different job: the
+        # log gets written from the audio as it is timestamped (spec 050
+        # "Logging while segmenting"), one mark per tune, named afterwards.
         "slug": "blocked",
-        "heading": "Nothing to place yet",
-        "note": "There is audio but no logged tunes for that night to place against.",
+        "heading": "Needs logging and timestamps",
+        "note": "There is audio but no log for that night. Segmenting writes one: each mark logs a tune, and tapping it names it.",
     },
     {
         "slug": "done",
@@ -2039,7 +2042,7 @@ def recording_work_state(
     if tunes and segments >= tunes:
         return {"group": "done", "state_label": "All placed", "complete": True}
     if not tunes:
-        return {"group": "blocked", "state_label": "No tunes logged", "complete": False}
+        return {"group": "blocked", "state_label": "No log yet", "complete": False}
     if segments:
         return {"group": "todo", "state_label": "Part placed", "complete": False}
     return {"group": "todo", "state_label": "Not started", "complete": False}
@@ -2124,7 +2127,8 @@ def build_admin_recordings_payload(conn) -> Dict[str, Any]:
         "recordings": recordings,
         "groups": [g for g in groups if g["recordings"]],
         # What the operator is actually being asked to do, for the summary line.
-        "outstanding": sum(1 for r in recordings if r["group"] in ("failed", "todo")),
+        # A night with audio and no log is work too, now that the tool logs.
+        "outstanding": sum(1 for r in recordings if r["group"] in ("failed", "todo", "blocked")),
     }
 
 
