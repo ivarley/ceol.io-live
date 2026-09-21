@@ -48,6 +48,20 @@ beforeEach(() => {
   // jsdom has no media pipeline; play/pause just need to not throw.
   window.HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined)
   window.HTMLMediaElement.prototype.pause = vi.fn()
+  window.HTMLMediaElement.prototype.load = vi.fn()
+  // This jsdom exposes no localStorage at all; the app reads and writes the
+  // remembered encode through it, and one test asserts on what it remembered.
+  if (!window.localStorage) {
+    const store = new Map()
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: (k) => (store.has(k) ? store.get(k) : null),
+        setItem: (k, v) => store.set(k, String(v)),
+        removeItem: (k) => store.delete(k),
+      },
+    })
+  }
   // ...and its currentTime is read-only, so the playhead can never leave 0.
   // Make it a plain writable property: the app both writes it (seek) and reads
   // it back (the rAF tick), so a test can put the playhead somewhere real.
@@ -831,5 +845,211 @@ describe('phone layout', () => {
     expect(container.querySelector('.sg-progress').textContent).toContain('placed')
     expect(container.querySelector('.sg-editlog').textContent.trim()).toBe('✎ Fix the log')
     expect(container.querySelector('.sg-end')).toBeTruthy()
+  })
+})
+
+// ---- offline (spec 050 "Offline") -------------------------------------------
+//
+// The store itself (static/js/segmenter_offline.js) has its own tests; here it
+// is a hand-rolled fake, so these pin what the TOOL does with it: which copy of
+// the log it opens on, how a queued mark looks, and what happens on sync.
+
+function fakeOffline({ mirror = null, queue = [], audio = [], submit = null } = {}) {
+  return {
+    mirrorGet: vi.fn().mockResolvedValue(mirror),
+    mirrorPut: vi.fn().mockResolvedValue(undefined),
+    pending: vi.fn().mockResolvedValue(queue),
+    audioList: vi.fn().mockResolvedValue(audio),
+    audioGet: vi.fn().mockResolvedValue(undefined),
+    audioDelete: vi.fn().mockResolvedValue(undefined),
+    saveAudio: vi.fn(),
+    submit: submit ?? vi.fn().mockResolvedValue({
+      online: true, queued: false,
+      data: { segment: { recording_tune_segment_id: 9, session_instance_tune_id: 1, start_ms: 0, end_ms: null } },
+    }),
+    flush: vi.fn().mockResolvedValue(undefined),
+  }
+}
+
+const stamped = (generated_at) => ({ ...payload(), generated_at })
+
+describe('offline', () => {
+  beforeEach(() => {
+    URL.createObjectURL = vi.fn(() => 'blob:local')
+    URL.revokeObjectURL = vi.fn()
+  })
+  afterEach(() => {
+    delete window.SegmenterOffline
+  })
+
+  it('writes marks through the queue and keeps a queued one on screen, counted', async () => {
+    const offline = fakeOffline({ submit: vi.fn().mockResolvedValue({ online: false, queued: true }) })
+    window.SegmenterOffline = offline
+    const { container } = render(App, { props: { pageData: stamped('2026-09-20T10:00:00+00:00') } })
+    await waitFor(() => expect(offline.mirrorGet).toHaveBeenCalled())
+
+    offline.pending.mockResolvedValue([{ key: '7:1', recording_id: 7, session_instance_tune_id: 1, kind: 'put', start_ms: 0, end_ms: null, ts: 1 }])
+    await fireEvent.keyDown(window, { key: 'm' })
+
+    await waitFor(() => {
+      expect(offline.submit).toHaveBeenCalledWith(
+        expect.objectContaining({ recording_id: 7, session_instance_tune_id: 1, kind: 'put', start_ms: 0, end_ms: null }),
+      )
+    })
+    // Nothing went to fetch directly.
+    expect(global.fetch).not.toHaveBeenCalled()
+    // The mark stays, flagged, and the header counts it.
+    await waitFor(() => expect(container.querySelector('.sg-saving').textContent).toBe('1 queued'))
+    expect(container.querySelector('.tl-row[data-tune-id="1"]').classList.contains('is-pending')).toBe(true)
+    expect(container.querySelector('.tl-row[data-tune-id="1"]').classList.contains('is-placed')).toBe(true)
+    // ...and the working copy was mirrored with the pending mark in it.
+    const last = offline.mirrorPut.mock.calls.at(-1)[1]
+    expect(last.generated_at).toBe('2026-09-20T10:00:00+00:00')
+    expect(last.tunes[0].segment).toMatchObject({ start_ms: 0, pending: true })
+  })
+
+  it('opens on the mirror when the page is a snapshot no newer than it', async () => {
+    // Offline, the service worker hands back the page as it was last loaded
+    // online. Everything marked since lives only in the mirror.
+    window.SegmenterOffline = fakeOffline({
+      mirror: {
+        generated_at: '2026-09-20T12:00:00+00:00',
+        tunes: payload().tunes.map((t, i) => (i === 0 ? { ...t, segment: { start_ms: 4000, end_ms: null } } : t)),
+      },
+    })
+    const { container } = render(App, { props: { pageData: stamped('2026-09-20T10:00:00+00:00') } })
+    await waitFor(() => {
+      expect(container.querySelector('.tl-row[data-tune-id="1"]').classList.contains('is-placed')).toBe(true)
+    })
+    expect(container.querySelector('.sg-progress strong').textContent).toBe('1')
+    // The cursor moved past the placed tune.
+    expect(container.querySelector('.sg-next-name').textContent).toBe('Bravo Jig')
+  })
+
+  it('trusts a fresher payload over the mirror, with queued ops laid on top', async () => {
+    // Online again: the server's picture is newer than the mirror, but the
+    // queue holds a mark the server has not seen — that one still shows.
+    window.SegmenterOffline = fakeOffline({
+      mirror: {
+        generated_at: '2026-09-20T10:00:00+00:00',
+        tunes: payload().tunes.map((t, i) => (i === 1 ? { ...t, segment: { start_ms: 4000, end_ms: null } } : t)),
+      },
+      queue: [{ key: '7:3', recording_id: 7, session_instance_tune_id: 3, kind: 'put', start_ms: 9000, end_ms: null, ts: 1 }],
+    })
+    const { container } = render(App, { props: { pageData: stamped('2026-09-20T12:00:00+00:00') } })
+    await waitFor(() => {
+      expect(container.querySelector('.tl-row[data-tune-id="3"]').classList.contains('is-pending')).toBe(true)
+    })
+    // The mirror's mark on tune 2 was stale (the fresh payload has none).
+    expect(container.querySelector('.tl-row[data-tune-id="2"]').classList.contains('is-placed')).toBe(false)
+    expect(container.querySelector('.sg-saving').textContent).toBe('1 queued')
+  })
+
+  it('refetches the log from the server once the queue drains', async () => {
+    window.SegmenterOffline = fakeOffline({
+      queue: [{ key: '7:1', recording_id: 7, session_instance_tune_id: 1, kind: 'put', start_ms: 0, end_ms: null, ts: 1 }],
+    })
+    const { container } = render(App, { props: { pageData: stamped('2026-09-20T10:00:00+00:00') } })
+    await waitFor(() => expect(container.querySelector('.sg-saving').textContent).toBe('1 queued'))
+
+    const fresh = stamped('2026-09-20T13:00:00+00:00')
+    fresh.tunes[0].segment = { recording_tune_segment_id: 1, session_instance_tune_id: 1, start_ms: 0, end_ms: null }
+    global.fetch.mockResolvedValue({ ok: true, status: 200, json: async () => fresh })
+    window.SegmenterOffline.pending.mockResolvedValue([])
+
+    window.dispatchEvent(new CustomEvent('segmenter-synced', { detail: { cleared: 1, rejected: [], recording_ids: [7] } }))
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledWith('/api/recordings/7/segmenter', expect.anything()))
+    await waitFor(() => expect(container.querySelector('.sg-saving').classList.contains('is-queued')).toBe(false))
+    const row = container.querySelector('.tl-row[data-tune-id="1"]')
+    expect(row.classList.contains('is-placed')).toBe(true)
+    expect(row.classList.contains('is-pending')).toBe(false)
+  })
+
+  it('ignores a drain for some other recording', async () => {
+    window.SegmenterOffline = fakeOffline()
+    render(App, { props: { pageData: stamped('2026-09-20T10:00:00+00:00') } })
+    await waitFor(() => expect(window.SegmenterOffline.mirrorGet).toHaveBeenCalled())
+    window.dispatchEvent(new CustomEvent('segmenter-synced', { detail: { cleared: 1, rejected: [], recording_ids: [99] } }))
+    await new Promise((r) => setTimeout(r, 20))
+    expect(global.fetch).not.toHaveBeenCalled()
+  })
+
+  it('plays a saved copy from a blob URL and prefers it over the remembered encode', async () => {
+    try { window.localStorage.setItem('ceol.segmenter.audioSource', 'master') } catch { /* ignore */ }
+    window.SegmenterOffline = fakeOffline({
+      audio: [{ recording_id: 7, source_id: 'proxy', blob: new Blob(['x']), size_bytes: 44716235, saved_at: 1 }],
+    })
+    const { container } = render(App, { props: { pageData: payload() } })
+    const el = container.querySelector('audio')
+    // No src until the lookup is done: a presigned URL offline is an error for nothing.
+    expect(el.hasAttribute('src')).toBe(false)
+    await waitFor(() => expect(el.getAttribute('src')).toBe('blob:local'))
+    expect(container.querySelector('.sg-offline.is-saved')).toBeTruthy()
+    const select = [...container.querySelectorAll('.sg-opt select')].find((s) => s.value === 'proxy' || s.value === 'master')
+    expect(select.value).toBe('proxy')
+    expect([...select.options].find((o) => o.value === 'proxy').textContent).toContain('✓')
+    try { window.localStorage.removeItem('ceol.segmenter.audioSource') } catch { /* ignore */ }
+  })
+
+  it('streams the presigned URL when nothing is saved, and offers to save it', async () => {
+    window.SegmenterOffline = fakeOffline()
+    const { container } = render(App, { props: { pageData: payload() } })
+    const el = container.querySelector('audio')
+    await waitFor(() => expect(el.getAttribute('src')).toBe('blob:proxy'))
+    const btn = container.querySelector('button.sg-offline')
+    expect(btn.textContent).toContain('save offline')
+    expect(btn.textContent).toContain('45 MB')
+  })
+
+  it('saving downloads the current encode and switches playback to the copy in place', async () => {
+    const offline = fakeOffline()
+    offline.saveAudio.mockResolvedValue({ blob: new Blob(['x']), size_bytes: 44716235, saved_at: 2 })
+    window.SegmenterOffline = offline
+    const { container } = render(App, { props: { pageData: payload() } })
+    const el = container.querySelector('audio')
+    await waitFor(() => expect(el.getAttribute('src')).toBe('blob:proxy'))
+    await fireEvent(el, new Event('canplay'))
+    el.currentTime = 321
+
+    await fireEvent.click(container.querySelector('button.sg-offline'))
+    expect(offline.saveAudio).toHaveBeenCalledWith(7, expect.objectContaining({ id: 'proxy' }), expect.anything())
+    await waitFor(() => expect(el.getAttribute('src')).toBe('blob:local'))
+    await fireEvent(el, new Event('loadedmetadata'))
+    expect(el.currentTime).toBe(321)
+    expect(container.querySelector('.sg-offline.is-saved')).toBeTruthy()
+  })
+
+  it('removing the copy goes back to streaming', async () => {
+    window.SegmenterOffline = fakeOffline({
+      audio: [{ recording_id: 7, source_id: 'proxy', blob: new Blob(['x']), size_bytes: 1, saved_at: 1 }],
+    })
+    const { container } = render(App, { props: { pageData: payload() } })
+    const el = container.querySelector('audio')
+    await waitFor(() => expect(el.getAttribute('src')).toBe('blob:local'))
+    await fireEvent.click(container.querySelector('.sg-offline.is-saved .sg-offline-x'))
+    await waitFor(() => expect(el.getAttribute('src')).toBe('blob:proxy'))
+    expect(window.SegmenterOffline.audioDelete).toHaveBeenCalledWith(7, 'proxy')
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:local')
+  })
+
+  it('a clear the server has no row for is still a clear', async () => {
+    // The mark only ever lived in the queue; the server answering 404 to the
+    // delete is the state being asked for, not a failure to roll back.
+    const err = Object.assign(new Error('No segment for that tune'), { status: 404 })
+    const offline = fakeOffline({
+      mirror: {
+        generated_at: '2026-09-20T12:00:00+00:00',
+        tunes: payload().tunes.map((t, i) => (i === 0 ? { ...t, segment: { start_ms: 4000, end_ms: null, pending: true } } : t)),
+      },
+      submit: vi.fn().mockRejectedValue(err),
+    })
+    window.SegmenterOffline = offline
+    const { container } = render(App, { props: { pageData: stamped('2026-09-20T10:00:00+00:00') } })
+    await waitFor(() => expect(container.querySelector('.tl-row[data-tune-id="1"]').classList.contains('is-placed')).toBe(true))
+    await fireEvent.click(container.querySelector('.tl-row[data-tune-id="1"] .tl-clear'))
+    await waitFor(() => expect(offline.submit).toHaveBeenCalledWith(expect.objectContaining({ kind: 'delete', session_instance_tune_id: 1 })))
+    await waitFor(() => expect(container.querySelector('.tl-row[data-tune-id="1"]').classList.contains('is-placed')).toBe(false))
+    expect(container.querySelector('.sg-toast.is-error')).toBeNull()
   })
 })

@@ -43,6 +43,7 @@
           class="tl-row"
           class:is-cursor={tune.session_instance_tune_id === cursorId}
           class:is-placed={!!seg}
+          class:is-pending={!!tune.segment?.pending}
           data-tune-id={tune.session_instance_tune_id}
         >
           <button class="tl-main" type="button" onclick={() => onpick(idx)}>
@@ -73,7 +74,7 @@
             <button
               class="tl-time"
               type="button"
-              title="Jump to {formatTime(seg.startMs, { millis: true })}"
+              title="Jump to {formatTime(seg.startMs, { millis: true })}{tune.segment?.pending ? ' — saved on this device, waiting to sync' : ''}"
               onclick={() => onseek(seg.startMs)}
             >
               {formatTime(seg.startMs)}
@@ -207,6 +208,10 @@
   }
   .tl-dur.is-implicit {
     font-style: italic;
+  }
+  /* A mark the server has not seen yet (offline queue): the connection dot's orange. */
+  .tl-row.is-pending .tl-time {
+    color: #e0a23e;
   }
   .tl-clear {
     flex: none;

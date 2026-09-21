@@ -494,6 +494,61 @@ while a 350MB file is still loading over cellular — reported from a phone as
 because `preload="metadata"` means the browser fetches nothing until asked:
 disabling it would deadlock (no play → no load → no canplay → no play).
 
+### Offline
+
+The tool is used where the audio was made: a pub, a back room, a car on the way
+home. Before this it needed a connection for all three of its inputs — the page
+itself (an `/admin` route, which the service worker deliberately never
+snapshots), the audio (a presigned S3 URL, which expires after six hours and
+needs a network anyway), and every mark (a PUT that failed with a red toast and
+rolled itself back). Now it works with none:
+
+- **The page.** `handleNav` in `static/service-worker.js` makes the segmenter's
+  path the one `/admin` navigation it snapshots (`snapshottable()`); the bundle
+  and the waveform were already cached (versioned static, `GET /api/*`). Open a
+  recording online once and it reopens offline. The way back in with no signal is
+  the home page's Continue Segmenting card, which is snapshotted too.
+- **The marks.** Placing, clearing, dragging and undo all write through
+  `SegmenterOffline.submit` (`static/js/segmenter_offline.js`, a plain global
+  loaded from `base.html` beside the My Tunes queue). Online it is the same PUT
+  or DELETE as before. Offline the op is parked and the mark stays on screen,
+  its time in orange, with an *N queued* count in the header where "saving…"
+  goes. The queue holds **one entry per tune, latest wins**: a placement is an
+  absolute upsert and a clear is idempotent, so re-marking a tune three times
+  offline is one replay, not three. It drains on `online`, on the next page load
+  anywhere in the app, and from the connection dot's probe; when it has drained,
+  the open tool refetches the log from the server and adopts it, so what is on
+  screen is what the server has. A mark the server refuses on replay (the tune
+  was deleted from the log in the meantime, say) is dropped and named in a
+  toast; a DELETE the server 404s is not a refusal, since a tune placed and then
+  cleared offline never reached it.
+- **The working copy.** The snapshot the worker hands back is the page *as it
+  was last loaded online*, and the marks embedded in it can be an evening out
+  of date — every mark saved since then went to the server, not into the
+  snapshot. So the tool mirrors its working copy after every change, stamped
+  with the `generated_at` the payload now carries (server clock). On mount it
+  compares the embed's stamp with the mirror's: a mirror at least as new wins
+  (it is that payload plus everything done since); a fresher embed wins (the
+  server has seen more than the mirror), with the queue laid over either. Two
+  server stamps, so the browser's clock never enters into it.
+- **The audio.** *save offline*, next to the encode picker, fetches the current
+  encode in full — a CORS GET against the presigned URL, which the bucket rule
+  from `configure_s3_cors.py` already permits because the `<audio>` element's
+  range requests needed it — with a percentage while it runs and a cancel. The
+  bytes go into IndexedDB as a Blob and the element plays a `blob:` URL from then
+  on: seekable natively, no expiry, and preferred over streaming whenever a copy
+  exists, whatever encode was remembered as the preference. The picker marks a
+  saved encode with a tick; the × beside *offline ✓* removes it and goes back to
+  streaming, keeping the playhead either way. The proxy is the one to save (45MB
+  for three hours); the master is offered at its own size for anyone who wants
+  it. `<audio>` gets no `src` at all until the saved copies have been looked up,
+  because pointing it at a presigned URL first, offline, is an error toast for
+  nothing.
+
+Not covered: the `/admin/recordings` work queue and the export link still need a
+connection, and a log fixed offline in the live logger does not reach the
+segmenter until both have synced — the two queues are independent by design.
+
 ### API
 
 | Endpoint | Purpose |
@@ -504,7 +559,7 @@ disabling it would deadlock (no play → no load → no canplay → no play).
 | `POST /api/recordings/<id>/reprocess` | run ingest again after a failure or a stall |
 | `DELETE /api/recordings/<id>` | remove the recording, its segments, and its audio |
 | `GET /api/admin/sessions/<id>/instances` | the nights to attach a recording to |
-| `GET /api/recordings/<id>/segmenter` | the full payload (= the page embed) |
+| `GET /api/recordings/<id>/segmenter` | the full payload (= the page embed), stamped `generated_at` |
 | `GET /api/recordings/<id>/peaks` | the envelope as raw bytes, cached |
 | `PUT /api/recordings/<id>/segments/<sit_id>` | place or move a tune (upsert) |
 | `DELETE /api/recordings/<id>/segments/<sit_id>` | unplace a tune |

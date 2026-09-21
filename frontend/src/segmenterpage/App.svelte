@@ -25,6 +25,24 @@
   const recording = $derived(pageData?.recording ?? null)
   const instance = $derived(pageData?.session_instance ?? null)
 
+  // Offline (spec 050 "Offline"): the app-wide store in static/js/segmenter_offline.js
+  // -- a write queue for marks, a mirror of the working copy, and saved audio.
+  // Without it (an older shell, or the component tests) the tool behaves exactly
+  // as it always did: straight writes, streamed audio.
+  const offline = typeof window !== 'undefined' ? (window.SegmenterOffline ?? null) : null
+  let queued = $state(0)
+  // Server timestamp of the payload the working copy was built from; the mirror
+  // carries it so a later load can tell a stale page snapshot from local truth.
+  // svelte-ignore state_referenced_locally
+  let baseGeneratedAt = pageData?.generated_at ?? null
+  // Saved encodes by source id: {url: blob:, size_bytes, saved_at}. A saved copy
+  // is what plays with no signal, and it beats streaming on any signal.
+  let local = $state({})
+  // The <audio> gets no src until the saved copies have been looked up: pointing
+  // it at a presigned URL first, offline, is an error toast for nothing.
+  let localChecked = $state(!offline)
+  let download = $state(null) // {source_id, loaded, total, abort} while saving audio
+
   // A deliberate one-time snapshot, not a mirror: `tunes` is the working copy the
   // operator edits, and pageData is a server-embedded blob that never changes
   // after mount. Re-deriving it would throw away every unsaved mark.
@@ -97,6 +115,8 @@
   const mediaBusy = $derived(mediaState === 'loading' || mediaState === 'buffering')
   const audioSources = $derived(recording?.audio_sources ?? [])
   const currentSource = $derived(audioSources.find((s) => s.id === sourceId) ?? audioSources[0] ?? null)
+  const audioSrc = $derived(!localChecked ? '' : (local[sourceId]?.url ?? currentSource?.url ?? ''))
+  const mb = (bytes) => Math.round((bytes ?? 0) / 1e6)
 
   // The tune whose resolved range covers the playhead -- what "this tune ends
   // here" refers to.
@@ -162,6 +182,8 @@
     if (audio && audio.readyState >= 1) applyPendingSeek()
     if (audio && audio.readyState >= 3) mediaState = 'ready'
     loadPeaks()
+    initOffline()
+    window.addEventListener('segmenter-synced', onSynced)
     const tick = () => {
       // A pending restore means the element's clock is not authoritative yet:
       // it still reads 0 (and reads 0 forever if the audio never loads), which
@@ -184,6 +206,9 @@
     return () => {
       cancelAnimationFrame(raf)
       window.removeEventListener('keydown', onKeydown)
+      window.removeEventListener('segmenter-synced', onSynced)
+      download?.abort?.abort()
+      for (const copy of Object.values(local)) URL.revokeObjectURL(copy.url)
       window.removeEventListener('pageshow', dropResumeMarkOnRestore)
       media?.removeEventListener('change', onMedia)
       window.removeEventListener('resize', measureTop)
@@ -198,6 +223,172 @@
       peaks = new Uint8Array(await res.arrayBuffer())
     } catch (err) {
       flash(`Could not load the waveform: ${err.message}`, 'error')
+    }
+  }
+
+  // ---- offline ---------------------------------------------------------------
+  //
+  // The page the service worker hands back offline is a snapshot of the LAST
+  // ONLINE LOAD, so its embedded marks can be an evening out of date. The mirror
+  // is written after every change and carries the server timestamp of the
+  // payload it grew from; whichever of the two is newer is the working copy, and
+  // the queue is overlaid on it either way (idempotent: every op is the final
+  // state of one tune).
+
+  function applyOp(list, op) {
+    const i = list.findIndex((t) => t.session_instance_tune_id === op.session_instance_tune_id)
+    if (i < 0) return
+    list[i] = {
+      ...list[i],
+      segment:
+        op.kind === 'delete'
+          ? null
+          : {
+              ...(list[i].segment ?? {}),
+              session_instance_tune_id: op.session_instance_tune_id,
+              start_ms: op.start_ms,
+              end_ms: op.end_ms ?? null,
+              pending: true,
+            },
+    }
+  }
+
+  async function initOffline() {
+    if (!offline || !recording) return
+    try {
+      const [mirror, queue, saved] = await Promise.all([
+        offline.mirrorGet(recording.recording_id),
+        offline.pending(recording.recording_id),
+        offline.audioList(recording.recording_id),
+      ])
+      const embedAt = pageData?.generated_at ?? null
+      // Both stamps come from the server clock, so the comparison is safe; equal
+      // means the same payload, and then the mirror has the edits made since.
+      const mirrorWins = !!(mirror?.tunes && embedAt && mirror.generated_at && mirror.generated_at >= embedAt)
+      const next = (mirrorWins ? mirror.tunes : tunes).map((t) => ({ ...t }))
+      if (mirrorWins) baseGeneratedAt = mirror.generated_at
+      for (const op of queue) applyOp(next, op)
+      tunes = next
+      cursorIndex = Math.max(0, nextUnplacedIndex(tunes, 0))
+      queued = queue.length
+      await persistMirror()
+
+      const copies = {}
+      for (const entry of saved) {
+        copies[entry.source_id] = {
+          url: URL.createObjectURL(entry.blob),
+          size_bytes: entry.size_bytes,
+          saved_at: entry.saved_at,
+        }
+      }
+      local = copies
+      // A saved copy outranks the remembered encode: it is the one that works
+      // with no signal, and it costs nothing on any signal.
+      if (!copies[sourceId]) {
+        const savedId = audioSources.map((s) => s.id).find((id) => copies[id])
+        if (savedId) sourceId = savedId
+      }
+    } catch (err) {
+      // No IndexedDB (private mode, quota): the tool still works online.
+      console.warn('segmenter: offline store unavailable', err)
+    } finally {
+      localChecked = true
+    }
+  }
+
+  async function persistMirror() {
+    if (!offline || !recording) return
+    try {
+      await offline.mirrorPut(recording.recording_id, { generated_at: baseGeneratedAt, tunes: $state.snapshot(tunes) })
+    } catch {
+      // Best-effort: a mirror that fails to write costs offline reopening, not marks.
+    }
+  }
+
+  async function refreshQueued() {
+    if (!offline || !recording) return
+    try {
+      queued = (await offline.pending(recording.recording_id)).length
+    } catch {
+      // Keep the last count.
+    }
+  }
+
+  // The queue drained -- from this page or any other. The server now holds every
+  // mark it accepted, so adopt its picture rather than the optimistic one, and
+  // say so if it refused any.
+  async function onSynced(event) {
+    if (!recording) return
+    const detail = event?.detail ?? {}
+    if (Array.isArray(detail.recording_ids) && !detail.recording_ids.includes(recording.recording_id)) return
+    const refused = (detail.rejected ?? []).filter((r) => r.recording_id === recording.recording_id)
+    try {
+      const res = await fetch(`/api/recordings/${recording.recording_id}/segmenter`, {
+        credentials: 'same-origin',
+        cache: 'no-store',
+      })
+      const body = await res.json()
+      if (!res.ok || !body.success) throw new Error(body.error || `HTTP ${res.status}`)
+      const cursorId = cursorTune?.session_instance_tune_id ?? null
+      tunes = (body.tunes ?? []).map((t) => ({ ...t }))
+      baseGeneratedAt = body.generated_at ?? baseGeneratedAt
+      const at = tunes.findIndex((t) => t.session_instance_tune_id === cursorId)
+      cursorIndex = at >= 0 ? at : Math.max(0, nextUnplacedIndex(tunes, 0))
+      await refreshQueued()
+      await persistMirror()
+      if (refused.length) {
+        flash(`Synced, but ${refused.length} mark${refused.length === 1 ? '' : 's'} could not be saved: ${refused[0].error}`, 'error')
+      } else {
+        const n = detail.recording_ids?.length === 1 ? detail.cleared : null
+        flash(n ? `Synced ${n} queued mark${n === 1 ? '' : 's'}` : 'Synced your queued marks')
+      }
+    } catch (err) {
+      flash(`Synced, but could not refresh the log: ${err.message}`, 'error')
+    }
+  }
+
+  // Keep this encode on the device. The presigned URL is fetched in full and the
+  // bytes stored as a Blob; from then on the element plays a blob: URL, which
+  // seeks natively and never expires.
+  async function saveOffline() {
+    if (!offline || !recording || !currentSource || download) return
+    const source = currentSource
+    const abort = typeof AbortController !== 'undefined' ? new AbortController() : null
+    download = { source_id: source.id, loaded: 0, total: source.size_bytes ?? 0, abort }
+    try {
+      const entry = await offline.saveAudio(recording.recording_id, source, {
+        signal: abort?.signal,
+        onProgress: ({ loaded, total }) => {
+          if (download) download = { ...download, loaded, total: total || download.total }
+        },
+      })
+      local = {
+        ...local,
+        [source.id]: { url: URL.createObjectURL(entry.blob), size_bytes: entry.size_bytes, saved_at: entry.saved_at },
+      }
+      flash(`Saved the ${source.label} encode on this device (${mb(entry.size_bytes)} MB) — the tool now works offline`)
+      if (sourceId === source.id) await reloadAudioKeepingPlace()
+    } catch (err) {
+      if (err?.name === 'AbortError') flash('Download cancelled')
+      else flash(`Could not save the audio: ${err.message}`, 'error')
+    } finally {
+      download = null
+    }
+  }
+
+  async function forgetOffline(id = sourceId) {
+    if (!offline || !recording || !local[id]) return
+    const held = local[id]
+    try {
+      await offline.audioDelete(recording.recording_id, id)
+      const rest = { ...local }
+      delete rest[id]
+      local = rest
+      if (id === sourceId) await reloadAudioKeepingPlace()
+      URL.revokeObjectURL(held.url)
+      flash('Removed the offline copy')
+    } catch (err) {
+      flash(`Could not remove the offline copy: ${err.message}`, 'error')
     }
   }
 
@@ -247,15 +438,22 @@
    */
   async function switchSource(id) {
     if (!audio || id === sourceId || !audioSources.some((s) => s.id === id)) return
-    const resumeAt = audio.currentTime
-    const wasPlaying = !audio.paused
-    mediaState = 'loading'
     sourceId = id
     try {
       window.localStorage.setItem(SOURCE_PREF_KEY, id)
     } catch {
       // Not being able to remember the choice is not worth failing the switch.
     }
+    await reloadAudioKeepingPlace()
+  }
+
+  // Reload the element after its src has changed -- a different encode, or the
+  // same one now coming from a saved copy -- without losing the spot.
+  async function reloadAudioKeepingPlace() {
+    if (!audio) return
+    const resumeAt = audio.currentTime
+    const wasPlaying = !audio.paused
+    mediaState = 'loading'
     await tick() // the src attribute has now been rewritten
 
     // Wait for metadata unconditionally, and subscribe BEFORE calling load().
@@ -308,14 +506,32 @@
 
   async function save(tune, startMs, endMs) {
     saving += 1
+    const start_ms = Math.round(startMs)
+    const end_ms = endMs == null ? null : Math.round(endMs)
     try {
+      if (offline) {
+        // Through the queue: a network failure parks the op and resolves
+        // {queued}, a server refusal throws (and rolls the mark back, below).
+        const result = await offline.submit({
+          recording_id: recording.recording_id,
+          session_instance_tune_id: tune.session_instance_tune_id,
+          kind: 'put',
+          start_ms,
+          end_ms,
+        })
+        if (result.queued) {
+          await refreshQueued()
+          return { session_instance_tune_id: tune.session_instance_tune_id, start_ms, end_ms, pending: true }
+        }
+        return result.data.segment
+      }
       const res = await fetch(
         `/api/recordings/${recording.recording_id}/segments/${tune.session_instance_tune_id}`,
         {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'same-origin',
-          body: JSON.stringify({ start_ms: Math.round(startMs), end_ms: endMs == null ? null : Math.round(endMs) }),
+          body: JSON.stringify({ start_ms, end_ms }),
         },
       )
       const body = await res.json()
@@ -342,6 +558,7 @@
       undoStack.pop()
       flash(`Could not save "${tune.name}": ${err.message}`, 'error')
     }
+    persistMirror()
   }
 
   /**
@@ -494,19 +711,37 @@
     if (moveCursor) cursorIndex = index
     saving += 1
     try {
-      const res = await fetch(
-        `/api/recordings/${recording.recording_id}/segments/${tune.session_instance_tune_id}`,
-        { method: 'DELETE', credentials: 'same-origin' },
-      )
-      const body = await res.json()
-      if (!res.ok || !body.success) throw new Error(body.error || `HTTP ${res.status}`)
+      if (offline) {
+        const result = await offline.submit({
+          recording_id: recording.recording_id,
+          session_instance_tune_id: tune.session_instance_tune_id,
+          kind: 'delete',
+        })
+        if (result.queued) await refreshQueued()
+      } else {
+        const res = await fetch(
+          `/api/recordings/${recording.recording_id}/segments/${tune.session_instance_tune_id}`,
+          { method: 'DELETE', credentials: 'same-origin' },
+        )
+        const body = await res.json()
+        if (!res.ok || !body.success) {
+          const err = new Error(body.error || `HTTP ${res.status}`)
+          err.status = res.status
+          throw err
+        }
+      }
     } catch (err) {
-      tunes[index] = { ...tunes[index], segment: previous }
-      if (moveCursor) cursorIndex = previousCursor
-      flash(`Could not clear "${tune.name}": ${err.message}`, 'error')
+      // "No segment for that tune" is the state being asked for: the mark only
+      // ever lived in the queue, and the server never saw it.
+      if (err?.status !== 404) {
+        tunes[index] = { ...tunes[index], segment: previous }
+        if (moveCursor) cursorIndex = previousCursor
+        flash(`Could not clear "${tune.name}": ${err.message}`, 'error')
+      }
     } finally {
       saving -= 1
     }
+    persistMirror()
   }
 
   async function undo() {
@@ -636,11 +871,37 @@
       <select value={sourceId} onchange={(e) => switchSource(e.currentTarget.value)}>
         {#each audioSources as src (src.id)}
           <option value={src.id}>
-            {src.label}{src.size_bytes ? ` · ${Math.round(src.size_bytes / 1e6)} MB` : ''}
+            {src.label}{src.size_bytes ? ` · ${mb(src.size_bytes)} MB` : ''}{local[src.id] ? ' ✓' : ''}
           </option>
         {/each}
       </select>
     </label>
+  {/if}
+{/snippet}
+
+<!-- Keep the current encode on the device (spec 050 "Offline"). Sits next to
+     the picker wherever that is rendered; shown even with a single encode,
+     since one source is still one worth keeping. -->
+{#snippet offlineAudio()}
+  {#if offline && currentSource}
+    {#if download}
+      <span class="sg-opt sg-offline is-busy" role="status">
+        saving {download.total ? `${Math.min(99, Math.round((download.loaded / download.total) * 100))}%` : `${mb(download.loaded)} MB`}
+        <button type="button" class="sg-offline-x" onclick={() => download?.abort?.abort()} aria-label="Cancel the download">×</button>
+      </span>
+    {:else if local[sourceId]}
+      <span class="sg-opt sg-offline is-saved" title="Saved on this device ({mb(local[sourceId].size_bytes)} MB) — plays with no connection">
+        offline ✓
+        <button type="button" class="sg-offline-x" onclick={() => forgetOffline()} aria-label="Remove the offline copy" title="Remove the offline copy">×</button>
+      </span>
+    {:else}
+      <button
+        type="button"
+        class="sg-opt sg-offline"
+        onclick={saveOffline}
+        title="Download this encode to the device so the tool works with no connection"
+      >⤓ {compact ? 'offline' : 'save offline'}{#if currentSource.size_bytes} · {mb(currentSource.size_bytes)} MB{/if}</button>
+    {/if}
   {/if}
 {/snippet}
 
@@ -664,12 +925,17 @@
              disappearing on every mark rewrapped the header, which moved the
              whole page under a thumb already on its way to +15s. A dot on a
              phone, where the word would cost the header a line of its own. -->
-        <span class="sg-saving" class:is-on={saving > 0} title="saving">{compact ? '•' : 'saving…'}</span>
+        <span
+          class="sg-saving"
+          class:is-on={saving > 0 || queued > 0}
+          class:is-queued={queued > 0}
+          title={queued > 0 ? `${queued} mark${queued === 1 ? '' : 's'} waiting to sync` : 'saving'}
+        >{#if queued > 0}{compact ? `${queued}⇡` : `${queued} queued`}{:else}{compact ? '•' : 'saving…'}{/if}</span>
         <!-- On a phone the encode switch rides up here with the other header
              controls: down in the options row it was one more line of the
              sticky column, and it is the one option you reach for when the
              connection changes rather than while marking. -->
-        {#if compact}{@render audioPicker()}{/if}
+        {#if compact}{@render audioPicker()}{@render offlineAudio()}{/if}
         <button
           type="button"
           class="sg-editlog"
@@ -808,7 +1074,7 @@
             <input type="checkbox" bind:checked={snapEnabled} />
             snap to onset
           </label>
-          {#if !compact}{@render audioPicker()}{/if}
+          {#if !compact}{@render audioPicker()}{@render offlineAudio()}{/if}
         </div>
 
         <details class="sg-keys">
@@ -843,7 +1109,7 @@
 
     <audio
       bind:this={audio}
-      src={currentSource ? currentSource.url : ''}
+      src={audioSrc || undefined}
       preload="metadata"
       onplay={() => (playing = true)}
       onpause={() => (playing = false)}
@@ -857,7 +1123,14 @@
       onstalled={() => (mediaState = 'buffering')}
       onerror={() => {
         mediaState = 'error'
-        flash('The audio file could not be loaded. The signed URL may have expired — reload the page.', 'error')
+        flash(
+          local[sourceId]
+            ? 'The saved audio could not be played. Remove the offline copy and save it again.'
+            : offline
+              ? 'The audio could not be loaded. Offline, the tool needs a copy saved on this device ("save offline" while connected); online, the signed URL may have expired — reload the page.'
+              : 'The audio file could not be loaded. The signed URL may have expired — reload the page.',
+          'error',
+        )
       }}
     ></audio>
 
@@ -922,6 +1195,48 @@
   }
   .sg-saving.is-on {
     visibility: visible;
+  }
+  /* Marks parked in the offline queue: the same orange as the connection dot. */
+  .sg-saving.is-queued {
+    color: #e0a23e;
+    font-weight: 600;
+  }
+  .sg-offline {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: var(--header-bg, #2d2d2d);
+    color: var(--text-color, #e0e0e0);
+    border: 1px solid var(--border-color, #444);
+    border-radius: 4px;
+    padding: 3px 7px;
+    font: inherit;
+    font-size: 0.82rem;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  button.sg-offline:hover {
+    background: var(--hover-bg, #3d3d3d);
+  }
+  .sg-offline.is-saved {
+    color: var(--success, #4caf50);
+    cursor: default;
+  }
+  .sg-offline.is-busy {
+    color: #e0a23e;
+    cursor: default;
+  }
+  .sg-offline-x {
+    background: none;
+    border: 0;
+    color: var(--disabled-text, #888);
+    font-size: 1rem;
+    line-height: 1;
+    padding: 0 2px;
+    cursor: pointer;
+  }
+  .sg-offline-x:hover {
+    color: var(--danger, #e85a5a);
   }
   /* Sits between the count and the export link, so it reads as part of the same
      header cluster rather than as a control on the tool itself. */
@@ -1250,6 +1565,10 @@
       padding: 2px 3px;
       font-size: 0.75rem;
       max-width: 96px;
+    }
+    .sg-progress .sg-offline {
+      padding: 2px 5px;
+      font-size: 0.75rem;
     }
     .sg-editlog {
       padding: 4px 8px;

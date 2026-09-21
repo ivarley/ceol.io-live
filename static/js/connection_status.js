@@ -51,9 +51,25 @@
     return h + 'h ' + (m % 60) + 'm'
   }
 
+  // Every offline op-queue in the app. Each exposes pending() -> Promise<array>
+  // and flush() -> Promise. The two built-ins load from base.html ahead of this
+  // script; anything else registers itself (CeolConnection.register).
+  var extraQueues = []
+  function queues() {
+    var list = []
+    if (window.MyTunesOffline && window.MyTunesOffline.pending) list.push(window.MyTunesOffline)
+    if (window.SegmenterOffline && window.SegmenterOffline.pending) list.push(window.SegmenterOffline)
+    return list.concat(extraQueues)
+  }
+
   function hasPending() {
-    if (!window.MyTunesOffline || !window.MyTunesOffline.pending) return Promise.resolve(0)
-    return window.MyTunesOffline.pending().then(function (o) { return (o || []).length }).catch(function () { return 0 })
+    return Promise.all(
+      queues().map(function (q) {
+        return q.pending().then(function (o) { return (o || []).length }).catch(function () { return 0 })
+      })
+    ).then(function (counts) {
+      return counts.reduce(function (a, b) { return a + b }, 0)
+    })
   }
 
   function render() {
@@ -131,7 +147,7 @@
         if (n > 0) {
           setState('syncing')
           startPolling()
-          if (window.MyTunesOffline) window.MyTunesOffline.flush() // -> 'mytunes-synced' on drain
+          queues().forEach(function (q) { q.flush() }) // -> '*-synced' on drain
         } else {
           stopPolling()
           if (state === 'offline' || state === 'syncing') setState('online')
@@ -175,9 +191,19 @@
     })
   }
 
-  // The op-queue tells us when it queued (went offline) and when it drained (synced).
-  window.addEventListener('mytunes-queued', function () { setState('offline'); startPolling() })
-  window.addEventListener('mytunes-synced', function () { showCaughtUp() })
+  // Each op-queue tells us when it queued (went offline) and when it drained (synced).
+  function onQueued() { setState('offline'); startPolling() }
+  function onSynced() {
+    // One queue draining is not the app caught up while another still holds work
+    // (e.g. segmenter marks behind a My Tunes edit): green only when nothing is left.
+    hasPending().then(function (n) {
+      if (n > 0) { setState('syncing'); startPolling() } else showCaughtUp()
+    })
+  }
+  window.addEventListener('mytunes-queued', onQueued)
+  window.addEventListener('mytunes-synced', onSynced)
+  window.addEventListener('segmenter-queued', onQueued)
+  window.addEventListener('segmenter-synced', onSynced)
   // Browser hints (treated as triggers to verify, never as ground truth).
   window.addEventListener('offline', function () { setState('offline'); startPolling() })
   window.addEventListener('online', function () { tick() })
@@ -195,5 +221,9 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init)
   else init()
 
-  window.CeolConnection = { refresh: tick }
+  window.CeolConnection = {
+    refresh: tick,
+    // Another op-queue ({pending, flush}) to count and drain alongside the built-ins.
+    register: function (q) { if (q && q.pending && q.flush && extraQueues.indexOf(q) < 0) extraQueues.push(q) },
+  }
 })(window, document)

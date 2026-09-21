@@ -611,3 +611,62 @@ test.describe("offline bundle model", () => {
     }
   });
 });
+
+/**
+ * The recording segmenter (spec 050 "Offline"): the one admin page that is
+ * snapshotted. Opened online once, it reopens with the network cut; a mark
+ * placed offline stays on screen (orange, counted in the header), survives a
+ * reload from the local mirror + queue, and reaches the server once the queue
+ * is flushed after reconnecting.
+ */
+test.describe("offline segmenter (spec 050)", () => {
+  test.use({ storageState: STORAGE.admin });
+
+  test("reopens offline, queues a mark, and syncs it on reconnect", async ({ page, context }) => {
+    // The seeded recording (schema/seed_recording.sql) is id 1. Start from a
+    // known state: its first logged tune unplaced.
+    const before = await (await page.request.get("/api/recordings/1/segmenter")).json();
+    expect(before.success).toBe(true);
+    const tune = before.tunes[0];
+    await page.request.delete(`/api/recordings/1/segments/${tune.session_instance_tune_id}`); // 404 is fine
+    const row = page.locator(`.tl-row[data-tune-id="${tune.session_instance_tune_id}"]`);
+
+    await page.goto("/");
+    await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 8000 });
+    await page.goto("/admin/recordings/1/segment"); // online + controlled -> snapshotted
+    await expect(row).toBeVisible();
+    await expect(row).not.toHaveClass(/is-placed/);
+    // Let the tool finish its mirror write before the network goes.
+    await page.waitForTimeout(500);
+
+    await context.setOffline(true);
+    try {
+      await page.reload(); // served from the snapshot
+      await expect(row).toBeVisible();
+      await page.keyboard.press("m");
+      await expect(page.locator(".sg-saving")).toHaveText(/1 queued/);
+      await expect(row).toHaveClass(/is-pending/);
+
+      // Still offline, reload again: the mark comes back from the mirror.
+      await page.reload();
+      await expect(row).toHaveClass(/is-pending/);
+      await expect(page.locator(".sg-saving")).toHaveText(/1 queued/);
+    } finally {
+      await context.setOffline(false);
+    }
+
+    // Reconnected: drain the queue (the probe would do this within seconds;
+    // call it directly so the test doesn't wait on the poll interval).
+    await page.evaluate(() => (window as any).SegmenterOffline.flush());
+    await expect(page.locator(".sg-saving")).not.toHaveClass(/is-queued/);
+    await expect(row).toHaveClass(/is-placed/);
+    await expect(row).not.toHaveClass(/is-pending/);
+
+    const after = await (await page.request.get("/api/recordings/1/segmenter")).json();
+    const placed = after.tunes.find((t: any) => t.session_instance_tune_id === tune.session_instance_tune_id);
+    expect(placed.segment).not.toBeNull();
+
+    // Leave the seed as it was found.
+    await page.request.delete(`/api/recordings/1/segments/${tune.session_instance_tune_id}`);
+  });
+});

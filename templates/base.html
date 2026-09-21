@@ -55,8 +55,11 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tune_detail_modal.css') }}">
     {% endblock %}
 
-    <!-- App-wide My-Tunes offline op-queue + connection / offline-sync indicator -->
+    <!-- App-wide offline op-queues (My Tunes; the recording segmenter's marks) +
+         connection / offline-sync indicator. The queues load BEFORE the indicator so
+         it can count and drain them. -->
     <script src="{{ url_for('static', filename='js/mytunes_offline.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='js/segmenter_offline.js') }}" defer></script>
     <script src="{{ url_for('static', filename='js/connection_status.js') }}" defer></script>
     {% if current_user.is_authenticated %}
     <!-- Offline data mirror (tunebook + notation + popular) and page warm-up -->

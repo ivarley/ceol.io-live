@@ -12,7 +12,10 @@
 // a fixed-name asset served cache-first could strand users on a stale build.
 // Never our concern (straight to network): /api/*, /live/*, /admin*, non-GET and the
 // logout flow. The legacy word-processor editor is fetched live but never snapshotted
-// (the server marks it X-Offline-Exclude).
+// (the server marks it X-Offline-Exclude). The one admin page that IS snapshotted is
+// the recording segmenter (/admin/recordings/<id>/segment): it is a tool you sit with
+// for an evening, often somewhere with no signal, and its page carries its own data
+// (spec 050 "Offline"). Its marks queue in static/js/segmenter_offline.js.
 //
 // TWO non-obvious correctness rules, both learned from breaking the logout e2e test:
 //   1. handleNav AWAITS a cache handle BEFORE issuing the navigation fetch. That await
@@ -29,13 +32,19 @@
 // performs those awaits before consuming the response.
 // Data is never stored here.
 
-const VERSION = 'v33'
+const VERSION = 'v34'
 const SHELL = `ceol-io-shell-${VERSION}` // shared, non-personalized assets + public/help pages
 // Page/api caches are VERSION-scoped too, so a VERSION bump (e.g. a deploy) invalidates
 // stale page snapshots + cached API data, not just the shell.
 const pagesCache = (uid) => `ceol-io-pages-${VERSION}-${uid}` // per-user HTML snapshots (no cross-user leak)
 const apiCache = (uid) => `ceol-io-api-${VERSION}-${uid}` // per-user GET /api/* responses (Tier 1)
 const UID_MARKER = '/__ceol_uid__'
+// The recording segmenter: the only /admin page whose navigation is snapshotted.
+const SEGMENTER_PATH = /^\/admin\/recordings\/\d+\/segment\/?$/
+
+function snapshottable(pathname) {
+  return !pathname.startsWith('/admin') || SEGMENTER_PATH.test(pathname)
+}
 
 // Non-personalized shell, precached (from the 'init' message) best-effort.
 const PRECACHE = [
@@ -59,6 +68,7 @@ const PRECACHE = [
   '/static/tunesheet/sheet.js',
   '/static/js/tunebook_status.js',
   '/static/js/mytunes_offline.js',
+  '/static/js/segmenter_offline.js',
   '/static/js/components/TuneSearchComponent.js',
   '/static/manifest.json',
   '/static/images/logo3-1.png',
@@ -244,13 +254,14 @@ async function handleNav(req, event) {
   const cache = await caches.open(pagesCache(uid))
   try {
     const res = (preload && (await preload)) || (await fetch(req))
-    // Snapshot for offline — but never cache admin (excluded from offline support) or
-    // pages the server marks X-Offline-Exclude (the legacy editor). They still get the
-    // offline page on failure below; they just aren't stored.
+    // Snapshot for offline — but never cache admin (excluded from offline support,
+    // bar the segmenter) or pages the server marks X-Offline-Exclude (the legacy
+    // editor). They still get the offline page on failure below; they just aren't
+    // stored.
     if (
       res && res.ok && !res.redirected &&
       res.headers.get('X-Offline-Exclude') == null &&
-      !new URL(req.url).pathname.startsWith('/admin')
+      snapshottable(new URL(req.url).pathname)
     ) {
       cache.put(req, res.clone())
     }

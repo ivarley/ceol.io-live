@@ -120,11 +120,44 @@ write fails offline, keeps the optimistic UI, and replays on reconnect.
 - **Adding a tune offline** navigates to My Tunes and shows a non-blocking toast there
   ("…will sync when you are back online"), instead of a blocking `alert`.
 
+### The recording segmenter (`static/js/segmenter_offline.js`)
+
+The one `/admin` page that works offline: `/admin/recordings/<id>/segment` (spec 050). It is a
+tool you sit with for an evening, often somewhere with no signal, so it gets its own store —
+the `ceol-segmenter` IndexedDB database — rather than a third tier of the general mechanism.
+Full account in [spec 050, "Offline"](../../changes/inprogress/050-recording-segmenter.md#offline);
+the shape, in brief:
+
+- **The page.** `handleNav` snapshots the segmenter's navigation (`snapshottable()` in the
+  worker: every other `/admin` path is still excluded). Its bundle is a `?v=`-stamped static
+  asset (cache-first), and the waveform is a `GET /api/*` (Tier 1). So the tool opens offline
+  from the last online load of that recording.
+- **The marks.** Every placement and clear goes through `SegmenterOffline.submit` — a write
+  queue with **one entry per (recording, tune), latest wins**, because a placement is an
+  absolute upsert and a clear is idempotent. Replayed by `flush()` on `online`, on page load
+  (from any page, since the script loads app-wide from `base.html`), and by the connection
+  indicator's probe. A refused op is dropped and reported so the page can refresh from the
+  server; a `DELETE` the server 404s is not a refusal (the mark only ever lived in the queue).
+- **The working copy.** The snapshotted page carries the marks as they were at the last
+  *online load*, which can be an evening stale. The tool therefore mirrors its working copy
+  after every change, stamped with the server `generated_at` of the payload it grew from; on
+  mount, mirror and embed are compared and the newer one wins, with the queue overlaid on
+  either. Both stamps are the server's clock, so browser skew cannot invert the comparison.
+- **The audio.** Playback is a presigned S3 URL, which needs a network and expires. "save
+  offline" fetches the chosen encode in full (CORS GET, which the bucket rule already allows
+  for the `<audio>` element's range requests), stores it as a Blob, and from then on the
+  element plays a `blob:` URL — seekable natively, never expiring, and preferred over
+  streaming whenever a copy exists. The proxy is ~45MB for three hours; the master is offered
+  too, at its own size. `navigator.storage.persist()` is requested best-effort.
+
 ### Connection indicator (`static/js/connection_status.js`)
 
 A dot in the header, sharing one visual language with the live logger's own connection
 dot (`App.svelte`, `.conn-*` in `frontend/src/app.css`): **orange** = offline (queued
 changes waiting), **orange pulsing** = syncing/reconnecting, **green** = caught up / live.
+It counts and drains every app-wide op-queue — `MyTunesOffline` and `SegmenterOffline`
+today, plus anything registered through `CeolConnection.register({pending, flush})` — and
+goes green only when *all* of them are empty.
 The app-wide dot sits by the hamburger and hides when idle-online. The live logger's dot is
 floated in the same spot (beside its shared hamburger) but only appears when a live stream
 is actually in play — in **edit** mode, or in an open **view** when at least one other
@@ -186,6 +219,8 @@ status persists across reopen).
   (`/api/my-tunes/ops`).
 - `static/js/offline_data.js` — `window.CeolOffline` bundle mirror.
 - `static/js/mytunes_offline.js` — `window.MyTunesOffline` write op-queue.
+- `static/js/segmenter_offline.js` — `window.SegmenterOffline`: the segmenter's mark queue,
+  working-copy mirror, and saved audio (spec 050).
 - `static/js/connection_status.js` — header connection/sync indicator.
 - `static/js/prefetch.js` — background page/asset/bundle warm-up.
 - `templates/base.html` — app-wide tune drawer + offline scripts; `templates/offline.html` —

@@ -1910,8 +1910,16 @@ def build_recording_segmenter_payload(
         for r in cur.fetchall()
     ]
 
+    from datetime import datetime, timezone
+
     return {
         "success": True,
+        # When this payload was built, server clock, ISO-8601 UTC. The segmenter
+        # keeps a local mirror of its marks so it can open offline from a page
+        # snapshot the service worker took earlier; this is how it tells whether
+        # that snapshot or the mirror is the newer picture of the recording. Only
+        # ever compared against itself, so clock skew to the browser is irrelevant.
+        "generated_at": datetime.now(timezone.utc).isoformat(),
         "recording": {
             "recording_id": row["recording_id"],
             "session_instance_id": row["session_instance_id"],
