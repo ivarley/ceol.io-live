@@ -1053,3 +1053,150 @@ describe('offline', () => {
     expect(container.querySelector('.sg-toast.is-error')).toBeNull()
   })
 })
+
+// ---- logging while segmenting (spec 050) -------------------------------------
+
+// A written log with every tune placed and its last set CLOSED (an explicit end
+// on the last tune) -- otherwise the tool's written-log rule applies first and
+// the next M means "end of set", not "log a tune".
+const allPlaced = () => {
+  const p = payload()
+  p.tunes = p.tunes.map((t, i) => ({
+    ...t,
+    segment: { session_instance_tune_id: t.session_instance_tune_id, start_ms: (i + 1) * 10000, end_ms: i === 2 ? 40000 : null },
+  }))
+  return p
+}
+const ganAinm = (id, start_ms, extra = {}) => ({
+  session_instance_tune_id: id, tune_id: null, name: 'Gan Ainm', tune_type: null, set_number: 2, position_in_set: 2,
+  is_set_end: true, source: 'segmenter', segment: { session_instance_tune_id: id, start_ms, end_ms: null }, ...extra,
+})
+const jsonResponse = (body, status = 200) => ({ ok: status < 400, status, json: async () => body })
+
+describe('logging while segmenting', () => {
+  beforeEach(() => {
+    // jsdom has neither: the search's incipits lazy-load on intersection, and the
+    // pane shell animates.
+    globalThis.IntersectionObserver = class { observe() {} unobserve() {} disconnect() {} }
+    Element.prototype.animate = vi.fn(() => ({ finished: Promise.resolve(), cancel() {}, finish() {}, onfinish: null }))
+  })
+
+  it('with every tune placed, the mark key logs a new tune at the playhead', async () => {
+    const p = allPlaced()
+    const logged = { ...p, tunes: [...p.tunes, ganAinm(4, 45000)] }
+    global.fetch = vi.fn().mockResolvedValue(jsonResponse({ success: true, tunes: logged.tunes, tune: logged.tunes[3] }, 201))
+    const { container } = render(App, { props: { pageData: p } })
+    // No cursor: the banner and the button both say a mark logs a tune.
+    expect(container.querySelector('.sg-next-label').textContent).toBe('log a tune')
+    expect(container.querySelector('.sg-mark').textContent).toContain('Log a tune')
+    expect(container.querySelector('.tl-row.is-cursor')).toBeNull()
+
+    await movePlayheadTo(container, 45)
+    await fireEvent.keyDown(window, { key: 'm' })
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledWith('/api/recordings/7/segments', expect.objectContaining({ method: 'POST' })))
+    expect(JSON.parse(global.fetch.mock.calls[0][1].body)).toEqual({ start_ms: 45000, end_ms: null })
+    // The server's list is adopted wholesale, the new row reads as unlinked, and
+    // the next mark logs again rather than ending the set.
+    await waitFor(() => expect(container.querySelector('.tl-row[data-tune-id="4"] .tl-name.is-unlinked')).toBeTruthy())
+    expect(container.querySelector('.sg-mark').textContent).toContain('Log a tune')
+    expect(container.querySelector('.sg-progress strong').textContent).toBe('4')
+  })
+
+  it('after a written log\'s last tune, M still ends its set, and the mark after that logs', async () => {
+    const p = payload()
+    // Set 1 (Alpha, Bravo) placed and closed; Charlie, alone in set 2, unplaced.
+    p.tunes = p.tunes.map((t, i) => (i < 2 ? { ...t, segment: { start_ms: (i + 1) * 10000, end_ms: i === 1 ? 25000 : null } } : t))
+    const calls = []
+    global.fetch = vi.fn(async (url, init) => {
+      calls.push([url, init?.method])
+      if (init?.method === 'POST') return jsonResponse({ success: true, tunes: [...allPlaced().tunes, ganAinm(4, 90000)], tune: ganAinm(4, 90000) }, 201)
+      const sent = JSON.parse(init.body)
+      return jsonResponse({ success: true, segment: { session_instance_tune_id: 3, start_ms: sent.start_ms, end_ms: sent.end_ms } })
+    })
+    const { container } = render(App, { props: { pageData: p } })
+    expect(container.querySelector('.sg-next-name').textContent).toBe('Charlie Polka')
+    await movePlayheadTo(container, 30)
+    await fireEvent.keyDown(window, { key: 'm' }) // places Charlie, the last tune
+    await waitFor(() => expect(container.querySelector('.sg-mark').textContent).toContain('End of set'))
+    await movePlayheadTo(container, 60)
+    await fireEvent.keyDown(window, { key: 'm' }) // ends its set (the written log's rule)
+    await waitFor(() => expect(container.querySelector('.sg-mark').textContent).toContain('Log a tune'))
+    await movePlayheadTo(container, 90)
+    await fireEvent.keyDown(window, { key: 'm' }) // logs a new tune
+    await waitFor(() => expect(calls.some(([u, m]) => u === '/api/recordings/7/segments' && m === 'POST')).toBe(true))
+  })
+
+  it('shows the End-set button on a phone while logging, since M never flips to end', async () => {
+    window.matchMedia = vi.fn().mockReturnValue({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() })
+    try {
+      const { container } = render(App, { props: { pageData: allPlaced() } })
+      expect(container.querySelector('.sg-end')).toBeTruthy()
+      const { container: c2 } = render(App, { props: { pageData: payload() } })
+      expect(c2.querySelector('.sg-end')).toBeNull()
+    } finally {
+      delete window.matchMedia
+    }
+  })
+
+  it('tapping an unlinked tune\'s name opens the logger\'s search over the tool', async () => {
+    const p = allPlaced()
+    p.tunes.push(ganAinm(4, 45000))
+    global.fetch = vi.fn().mockResolvedValue(jsonResponse({ success: true, results: [] }))
+    const { container } = render(App, { props: { pageData: p } })
+    await fireEvent.click(container.querySelector('.tl-row[data-tune-id="4"] .tl-main-unlinked'))
+    await waitFor(() => expect(container.querySelector('.sg-pick .deep-field')).toBeTruthy())
+    expect(container.querySelector('.sg-pick .deep-title').textContent).toBe('Which tune was this?')
+    // The tool's keys are off while it is up: M must not log another tune.
+    global.fetch.mockClear()
+    await fireEvent.keyDown(window, { key: 'm' })
+    expect(global.fetch.mock.calls.filter(([u]) => u === '/api/recordings/7/segments')).toHaveLength(0)
+  })
+
+  it('a pick names the tune through the recording API and the list adopts it', async () => {
+    const p = allPlaced()
+    p.tunes.push(ganAinm(4, 45000))
+    const named = p.tunes.map((t) => (t.session_instance_tune_id === 4 ? { ...t, tune_id: 101, name: 'Alpha Reel', tune_type: 'Reel' } : t))
+    global.fetch = vi.fn(async (url, init) => {
+      if (init?.method === 'PUT') return jsonResponse({ success: true, tune: named[3], tunes: named })
+      return jsonResponse({ success: true, results: [{ tune_id: 101, name: 'Alpha Reel', tune_type: 'Reel', tunebook_count: 5 }] })
+    })
+    const { container } = render(App, { props: { pageData: p } })
+    await fireEvent.click(container.querySelector('.tl-row[data-tune-id="4"] .tl-main-unlinked'))
+    await waitFor(() => expect(container.querySelector('.sg-pick .deep-card')).toBeTruthy())
+    // The ＋ rail is the one-tap add.
+    await fireEvent.click(container.querySelector('.sg-pick .deep-card .deep-quick'))
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledWith('/api/recordings/7/segments/4/tune', expect.objectContaining({ method: 'PUT' })))
+    const body = JSON.parse(global.fetch.mock.calls.find(([, i]) => i?.method === 'PUT')[1].body)
+    expect(body).toMatchObject({ tune_id: 101, name: 'Alpha Reel' })
+    await waitFor(() => expect(container.querySelector('.tl-row[data-tune-id="4"] .tl-name').textContent).toBe('Alpha Reel'))
+    expect(container.querySelector('.tl-row[data-tune-id="4"] .tl-name.is-unlinked')).toBeNull()
+  })
+
+  it('× on a tune the tool logged removes it from the log, not just its placement', async () => {
+    const p = allPlaced()
+    p.tunes.push(ganAinm(4, 45000))
+    global.fetch = vi.fn().mockResolvedValue(jsonResponse({ success: true, tunes: allPlaced().tunes }))
+    const { container } = render(App, { props: { pageData: p } })
+    const x = container.querySelector('.tl-row[data-tune-id="4"] .tl-clear')
+    expect(x.title).toMatch(/Remove/)
+    await fireEvent.click(x)
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledWith('/api/recordings/7/segments/4/unlog', expect.objectContaining({ method: 'POST' })))
+    await waitFor(() => expect(container.querySelector('.tl-row[data-tune-id="4"]')).toBeNull())
+    // A tune written on the night keeps the plain unplace.
+    expect(container.querySelector('.tl-row[data-tune-id="1"] .tl-clear').title).toMatch(/Unplace/)
+  })
+
+  it('undo after a mark that logged a tune takes the tune back out', async () => {
+    const p = allPlaced()
+    global.fetch = vi.fn(async (url, init) => {
+      if (url.endsWith('/unlog')) return jsonResponse({ success: true, tunes: allPlaced().tunes })
+      return jsonResponse({ success: true, tunes: [...allPlaced().tunes, ganAinm(4, 45000)], tune: ganAinm(4, 45000) }, 201)
+    })
+    const { container } = render(App, { props: { pageData: p } })
+    await fireEvent.keyDown(window, { key: 'm' })
+    await waitFor(() => expect(container.querySelector('.tl-row[data-tune-id="4"]')).toBeTruthy())
+    await fireEvent.keyDown(window, { key: 'u' })
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledWith('/api/recordings/7/segments/4/unlog', expect.anything()))
+    await waitFor(() => expect(container.querySelector('.tl-row[data-tune-id="4"]')).toBeNull())
+  })
+})

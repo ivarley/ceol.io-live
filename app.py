@@ -17,6 +17,9 @@ from recording_routes import (
     get_recording_peaks,
     put_recording_segment,
     delete_recording_segment,
+    log_recording_tune,
+    set_recording_tune,
+    unlog_recording_tune,
     get_instance_recordings,
     get_instance_audio,
     download_recording_segment,
@@ -1633,6 +1636,25 @@ app.add_url_rule(
     "delete_recording_segment",
     delete_recording_segment,
     methods=["DELETE"],
+)
+# Logging while segmenting (spec 050): a night with no log gets one from the audio.
+app.add_url_rule(
+    "/api/recordings/<int:recording_id>/segments",
+    "log_recording_tune",
+    log_recording_tune,
+    methods=["POST"],
+)
+app.add_url_rule(
+    "/api/recordings/<int:recording_id>/segments/<int:session_instance_tune_id>/tune",
+    "set_recording_tune",
+    set_recording_tune,
+    methods=["PUT"],
+)
+app.add_url_rule(
+    "/api/recordings/<int:recording_id>/segments/<int:session_instance_tune_id>/unlog",
+    "unlog_recording_tune",
+    unlog_recording_tune,
+    methods=["POST"],
 )
 app.add_url_rule(
     "/api/recordings/<int:recording_id>/export",

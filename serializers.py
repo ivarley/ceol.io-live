@@ -1765,7 +1765,7 @@ def _load_instance_tune_log(conn, session_instance_id: int, session_id: int) -> 
         """
         SELECT sit.session_instance_tune_id, sit.tune_id, sit.record_type, sit.order_position,
                COALESCE(sit.name, st.alias, t.name) AS display_name,
-               t.tune_type
+               t.tune_type, sit.source
         FROM session_instance_tune sit
         LEFT JOIN tune t ON t.tune_id = sit.tune_id
         LEFT JOIN session_tune st ON st.tune_id = sit.tune_id AND st.session_id = %s
@@ -1796,6 +1796,10 @@ def _load_instance_tune_log(conn, session_instance_id: int, session_id: int) -> 
                 "order_position": row["order_position"],
                 "set_number": set_number,
                 "position_in_set": position_in_set,
+                # 'segmenter' marks a row the timestamping tool logged itself
+                # (spec 050 "Logging while segmenting"); the tool treats those
+                # differently from a log someone wrote down on the night.
+                "source": row["source"],
                 "segment": None,
             }
         )
@@ -1806,6 +1810,28 @@ def _load_instance_tune_log(conn, session_instance_id: int, session_id: int) -> 
         nxt = tunes[idx + 1] if idx + 1 < len(tunes) else None
         tune["is_set_end"] = nxt is None or nxt["set_number"] != tune["set_number"]
 
+    return tunes
+
+
+def load_recording_tunes(conn, recording_id: int, session_instance_id: int, session_id: int) -> List[Dict[str, Any]]:
+    """The night's tune log with this recording's placements attached — the
+    segmenter's `tunes` list. Shared by the page payload and by the writes that
+    reshape the log (logging a tune from the tool inserts a row and can renumber
+    every set after it), so a client can always adopt the list wholesale.
+    """
+    tunes = _load_instance_tune_log(conn, session_instance_id, session_id)
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(
+        """
+        SELECT recording_tune_segment_id, session_instance_tune_id, start_ms, end_ms
+        FROM recording_tune_segment
+        WHERE recording_id = %s
+        """,
+        (recording_id,),
+    )
+    by_tune = {r["session_instance_tune_id"]: _segment_row_to_dict(r) for r in cur.fetchall()}
+    for tune in tunes:
+        tune["segment"] = by_tune.get(tune["session_instance_tune_id"])
     return tunes
 
 
@@ -1876,19 +1902,7 @@ def build_recording_segmenter_payload(
             audio_sources = []
             audio_error = str(exc)
 
-    tunes = _load_instance_tune_log(conn, row["session_instance_id"], row["session_id"])
-
-    cur.execute(
-        """
-        SELECT recording_tune_segment_id, session_instance_tune_id, start_ms, end_ms
-        FROM recording_tune_segment
-        WHERE recording_id = %s
-        """,
-        (recording_id,),
-    )
-    by_tune = {r["session_instance_tune_id"]: _segment_row_to_dict(r) for r in cur.fetchall()}
-    for tune in tunes:
-        tune["segment"] = by_tune.get(tune["session_instance_tune_id"])
+    tunes = load_recording_tunes(conn, recording_id, row["session_instance_id"], row["session_id"])
 
     cur.execute(
         """

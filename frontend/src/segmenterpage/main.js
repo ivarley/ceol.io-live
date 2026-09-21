@@ -2,6 +2,10 @@
 // templates/recording_segmenter.html onto #segmenter-root, with the server-embedded
 // payload (window.__PAGE_DATA__) passed as a prop so first paint needs no fetch.
 import { mount } from 'svelte'
+// The "which tune was this?" pane reuses the add panes' shell and the live
+// logger's search styles, scoped under .mt-add-pane (spec 050 "Logging while
+// segmenting").
+import '../mytunes/mytunes-add.css'
 import App from './App.svelte'
 
 const target = document.getElementById('segmenter-root')

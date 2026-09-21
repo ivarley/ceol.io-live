@@ -632,8 +632,11 @@ def _handle_add_tune(cur, session_instance_id, data, user_id):
     # Name -> tune matching takes priority for typed text. Tapping a typeahead result sends a
     # tune_id directly; hitting Enter sends just the text, which we resolve here via the same
     # matching the rest of the app uses. An ambiguous/unknown name stays unlinked (raw name,
-    # tune_id NULL). Skipped when a thesession_id was supplied (already resolved above).
-    if ts_id is None and tune_id is None and name and session_id is not None:
+    # tune_id NULL). Skipped when a thesession_id was supplied (already resolved above), or
+    # when the caller says the name is a placeholder (no_match): the segmenter logs a
+    # tune it hasn't identified yet as "Gan Ainm", and thesession.org has real tunes by
+    # that name, so matching would link the placeholder to one of them.
+    if ts_id is None and tune_id is None and name and session_id is not None and not data.get("no_match"):
         matched_id, final_name, err = find_matching_tune(cur, session_id, name)
         if matched_id and not err:
             tune_id, name = matched_id, final_name
@@ -1440,14 +1443,68 @@ def _people_ops_blocked(cur, session_instance_id):
     return blocked
 
 
+def apply_live_op(cur, session_instance_id, op_type, data, user_id, op_id=None):
+    """Run one op against an OPEN transaction: mutate, append its session_event row,
+    NOTIFY. Returns (event_id, event_op_type, payload); raises OpRejected.
+
+    This is the body of `live_op` without the HTTP: the recording segmenter calls it
+    (spec 050 "Logging while segmenting") to log a tune and place its segment in ONE
+    transaction, so the live screens see the new row and the log and the audio can't
+    disagree. The caller owns BEGIN/COMMIT/ROLLBACK and any idempotency check;
+    `op_id` may be None, which the event row allows.
+    """
+    handler = HANDLERS.get(op_type)
+    if handler is None:
+        raise OpRejected("invalid", f"unknown op_type '{op_type}'")
+    payload = handler(cur, session_instance_id, data, user_id)
+
+    # Stamp the actor (person, per §D) so observers can render "Sarah added …"
+    # notices and, later, attribution colors. user_id is the audit fact; the
+    # person is what the UI shows.
+    payload["actor"] = {
+        "person_id": getattr(current_user, "person_id", None),
+        "name": _display_name(getattr(current_user, "first_name", None), getattr(current_user, "last_name", None)) or "",
+    }
+
+    # A handler may emit a different event type than the client requested
+    # (e.g. add_tune that collapsed into a server-generated `corroborate`, §H30).
+    event_op_type = payload.pop("_op_type", op_type)
+
+    # Carry op_id in the event payload (not just the column) so the SSE echo lets the
+    # ORIGINATING client reconcile this op against its optimistic row and replace it
+    # immediately — instead of leaving a duplicate until the (possibly slow) POST ack
+    # lands. Other clients simply don't have this op_id pending, so they just apply it.
+    payload["op_id"] = op_id
+
+    # Feed write (same txn) + NOTIFY. Truth and feed cannot diverge (§B). A
+    # UniqueViolation on op_id propagates to the caller (live_op turns it into
+    # "the concurrent retry won").
+    cur.execute(
+        """
+        INSERT INTO session_event (session_instance_id, op_type, payload, op_id, created_by_user_id)
+        VALUES (%s, %s, %s, %s, %s) RETURNING event_id
+        """,
+        (session_instance_id, event_op_type, json.dumps(payload), op_id, user_id),
+    )
+    event_id = cur.fetchone()[0]
+    # Claim this instance for the live editor (one-way lock): once a live op lands,
+    # the legacy editor is read-only for it (spec 024 beta rollout). No-op after the
+    # first claim; an admin can reset logging_mode back to 'legacy'.
+    cur.execute(
+        "UPDATE session_instance SET logging_mode = 'live' WHERE session_instance_id = %s AND logging_mode <> 'live'",
+        (session_instance_id,),
+    )
+    cur.execute("SELECT pg_notify(%s, %s)", (LIVE_EVENT_CHANNEL, f"{session_instance_id}:{event_id}"))
+    return event_id, event_op_type, payload
+
+
 @api_login_required
 def live_op(session_instance_id):
     """Generic op endpoint: dispatch by op_type, one atomic txn, idempotent by op_id."""
     data = request.get_json(silent=True) or {}
     op_type = data.get("op_type")
     op_id = data.get("op_id")
-    handler = HANDLERS.get(op_type)
-    if handler is None:
+    if op_type not in HANDLERS:
         return jsonify({"success": False, "error": f"unknown op_type '{op_type}'"}), 400
     if op_id is not None:
         try:
@@ -1487,39 +1544,11 @@ def live_op(session_instance_id):
                                 "op_id": op_id, "op_type": existing[1], **existing[2]})
 
         try:
-            payload = handler(cur, session_instance_id, data, user_id)
+            event_id, event_op_type, payload = apply_live_op(cur, session_instance_id, op_type, data, user_id, op_id)
         except OpRejected as r:
             cur.execute("ROLLBACK")
             return jsonify({"success": False, "rejected": True, "reason": r.reason,
                             "message": r.message, "op_id": op_id, "op_type": op_type})
-
-        # Stamp the actor (person, per §D) so observers can render "Sarah added …"
-        # notices and, later, attribution colors. user_id is the audit fact; the
-        # person is what the UI shows.
-        payload["actor"] = {
-            "person_id": getattr(current_user, "person_id", None),
-            "name": _display_name(getattr(current_user, "first_name", None), getattr(current_user, "last_name", None)) or "",
-        }
-
-        # A handler may emit a different event type than the client requested
-        # (e.g. add_tune that collapsed into a server-generated `corroborate`, §H30).
-        event_op_type = payload.pop("_op_type", op_type)
-
-        # Carry op_id in the event payload (not just the column) so the SSE echo lets the
-        # ORIGINATING client reconcile this op against its optimistic row and replace it
-        # immediately — instead of leaving a duplicate until the (possibly slow) POST ack
-        # lands. Other clients simply don't have this op_id pending, so they just apply it.
-        payload["op_id"] = op_id
-
-        # Feed write (same txn) + NOTIFY. Truth and feed cannot diverge (§B).
-        try:
-            cur.execute(
-                """
-                INSERT INTO session_event (session_instance_id, op_type, payload, op_id, created_by_user_id)
-                VALUES (%s, %s, %s, %s, %s) RETURNING event_id
-                """,
-                (session_instance_id, event_op_type, json.dumps(payload), op_id, user_id),
-            )
         except psycopg2.errors.UniqueViolation:
             # Concurrent retry of the same op_id won the race; discard ours, return theirs.
             cur.execute("ROLLBACK")
@@ -1529,15 +1558,6 @@ def live_op(session_instance_id):
                 return jsonify({"success": True, "duplicate": True, "event_id": row[0],
                                 "op_id": op_id, "op_type": row[1], **row[2]})
             raise
-        event_id = cur.fetchone()[0]
-        # Claim this instance for the live editor (one-way lock): once a live op lands,
-        # the legacy editor is read-only for it (spec 024 beta rollout). No-op after the
-        # first claim; an admin can reset logging_mode back to 'legacy'.
-        cur.execute(
-            "UPDATE session_instance SET logging_mode = 'live' WHERE session_instance_id = %s AND logging_mode <> 'live'",
-            (session_instance_id,),
-        )
-        cur.execute("SELECT pg_notify(%s, %s)", (LIVE_EVENT_CHANNEL, f"{session_instance_id}:{event_id}"))
         cur.execute("COMMIT")
 
         return jsonify({"success": True, "event_id": event_id, "op_id": op_id,

@@ -10,6 +10,7 @@
   import { onMount, tick } from 'svelte'
   import Waveform from './Waveform.svelte'
   import TuneList from './TuneList.svelte'
+  import TunePicker from './TunePicker.svelte'
   import {
     edgeLimits,
     formatTime,
@@ -48,6 +49,9 @@
   // after mount. Re-deriving it would throw away every unsaved mark.
   // svelte-ignore state_referenced_locally
   let tunes = $state((pageData?.tunes ?? []).map((t) => ({ ...t })))
+  // Which logged tune the mark key places next. -1 means NONE: every tune in
+  // the log is placed (or there is no log), and a mark logs a new tune instead
+  // (spec 050 "Logging while segmenting").
   let cursorIndex = $state(0)
   let currentMs = $state(0)
   let playing = $state(false)
@@ -111,7 +115,13 @@
   const durationMs = $derived(recording?.duration_ms ?? 0)
   const segments = $derived(resolveSegments(tunes, durationMs))
   const placedCount = $derived(tunes.filter((t) => t.segment).length)
-  const cursorTune = $derived(tunes[cursorIndex] ?? null)
+  const cursorTune = $derived(cursorIndex >= 0 ? tunes[cursorIndex] ?? null : null)
+  // Logging from the audio: the mark key writes a new tune into the log.
+  const appendMode = $derived(cursorTune == null && pendingSetEndIndex == null)
+  const GAN_AINM = 'Gan Ainm'
+  let picker = $state(null) // the TunePicker instance
+  let pickerOpen = $state(false)
+  const searchConfig = $derived({ sessionInstanceId: instance?.session_instance_id })
   const mediaBusy = $derived(mediaState === 'loading' || mediaState === 'buffering')
   const audioSources = $derived(recording?.audio_sources ?? [])
   const currentSource = $derived(audioSources.find((s) => s.id === sourceId) ?? audioSources[0] ?? null)
@@ -175,7 +185,7 @@
       currentMs = resumeAt
       flash('Back where you left off')
     }
-    cursorIndex = Math.max(0, nextUnplacedIndex(tunes, 0))
+    cursorIndex = nextUnplacedIndex(tunes, 0)
     // On a warm cache the element can already be playable before the handlers
     // above are bound, and then no event ever fires to clear the spinner --
     // and no loadedmetadata either, so a pending restore has to be applied here.
@@ -269,7 +279,7 @@
       if (mirrorWins) baseGeneratedAt = mirror.generated_at
       for (const op of queue) applyOp(next, op)
       tunes = next
-      cursorIndex = Math.max(0, nextUnplacedIndex(tunes, 0))
+      cursorIndex = nextUnplacedIndex(tunes, 0)
       queued = queue.length
       await persistMirror()
 
@@ -333,7 +343,7 @@
       tunes = (body.tunes ?? []).map((t) => ({ ...t }))
       baseGeneratedAt = body.generated_at ?? baseGeneratedAt
       const at = tunes.findIndex((t) => t.session_instance_tune_id === cursorId)
-      cursorIndex = at >= 0 ? at : Math.max(0, nextUnplacedIndex(tunes, 0))
+      cursorIndex = at >= 0 ? at : nextUnplacedIndex(tunes, 0)
       await refreshQueued()
       await persistMirror()
       if (refused.length) {
@@ -569,10 +579,15 @@
    * tune, when the only sensible next act is to say where that set stopped.
    */
   const pendingSetEndIndex = $derived.by(() => {
-    const prev = cursorIndex - 1
+    const prev = cursorIndex >= 0 ? cursorIndex - 1 : tunes.length - 1
     const tune = prev >= 0 ? tunes[prev] : null
     if (!tune?.segment) return null
     if (!tune.is_set_end || tune.segment.end_ms != null) return null
+    // The last tune in the log is always "the end of its set" -- but when the
+    // tool logged that tune itself, nothing is known about what follows it, and
+    // the next mark is far more often the next tune of the SAME set than the
+    // end. The End-set button (E) is the explicit way to close it.
+    if (prev === tunes.length - 1 && tune.source === 'segmenter') return null
     return prev
   })
 
@@ -585,14 +600,16 @@
       markEndAt(pendingSetEndIndex)
       return
     }
+    const ms = snapEnabled ? snapToOnset(peaks, recording.peaks_hz, currentMs) : currentMs
     if (!cursorTune) {
-      flash('Every tune in the log is placed.', 'info')
+      logNewTune(ms)
       return
     }
-    const ms = snapEnabled ? snapToOnset(peaks, recording.peaks_hz, currentMs) : currentMs
     const name = cursorTune.name
     place(cursorIndex, ms, cursorTune.segment?.end_ms ?? null)
-    cursorIndex = Math.min(tunes.length - 1, cursorIndex + 1)
+    // Past the last tune the cursor goes to NONE rather than sticking on the
+    // last row: from there a mark logs a new tune.
+    cursorIndex = cursorIndex + 1 < tunes.length ? cursorIndex + 1 : -1
 
     // Say when snap moved the mark. It used to move silently, which reads as
     // the tool ignoring where you put the playhead -- and leaves you with no
@@ -750,6 +767,14 @@
       flash('Nothing to undo.', 'info')
       return
     }
+    if (step.kind === 'log') {
+      // The mark logged a tune: undoing it takes the tune back out of the log.
+      const index = tunes.findIndex((t) => t.session_instance_tune_id === step.sitId)
+      if (index >= 0) await unlogAt(index, false)
+      cursorIndex = step.cursor
+      flash('Undid that tune')
+      return
+    }
     cursorIndex = step.cursor
     if (step.previous) {
       await place(step.index, step.previous.start_ms, step.previous.end_ms)
@@ -760,8 +785,109 @@
     flash(`Undid "${tunes[step.index]?.name ?? 'that mark'}"`)
   }
 
+  // ---- logging while segmenting -------------------------------------------
+  //
+  // A night nobody wrote down still has audio worth timestamping. Once every
+  // logged tune is placed -- or there was never a log -- the mark key logs a
+  // NEW tune, unidentified ("Gan Ainm"), placed where the playhead is, in the
+  // same call. The server decides its set from the audio: it joins the set of
+  // the placed tune before it when that tune's end is implicit (they abut),
+  // and opens a new set when that end was marked with End-set. Tapping the
+  // tune's name in the log opens the live logger's own search to say which
+  // tune it was. All three writes return the whole list, because inserting a
+  // tune can renumber every set after it.
+
+  function adoptTunes(list, keepCursorId = null) {
+    tunes = (list ?? []).map((t) => ({ ...t }))
+    if (keepCursorId != null) {
+      const at = tunes.findIndex((t) => t.session_instance_tune_id === keepCursorId)
+      cursorIndex = at >= 0 ? at : nextUnplacedIndex(tunes, 0)
+    }
+  }
+
+  async function logNewTune(ms) {
+    if (!recording) return
+    const startMs = Math.round(ms)
+    saving += 1
+    try {
+      const res = await fetch(`/api/recordings/${recording.recording_id}/segments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ start_ms: startMs, end_ms: null }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok || !body.success) throw new Error(body.error || `HTTP ${res.status}`)
+      adoptTunes(body.tunes)
+      cursorIndex = -1 // the next mark logs the next tune
+      undoStack.push({ kind: 'log', sitId: body.tune?.session_instance_tune_id, cursor: -1 })
+      flash(`${GAN_AINM} at ${formatTime(startMs)} — tap it in the log to name it`)
+    } catch (err) {
+      const offlineNow = err instanceof TypeError
+      flash(offlineNow ? 'Logging a new tune needs a connection.' : `Could not log a tune: ${err.message}`, 'error')
+    } finally {
+      saving -= 1
+    }
+    persistMirror()
+  }
+
+  async function unlogAt(index, moveCursor = true) {
+    const tune = tunes[index]
+    if (!tune || !recording) return
+    saving += 1
+    try {
+      const res = await fetch(
+        `/api/recordings/${recording.recording_id}/segments/${tune.session_instance_tune_id}/unlog`,
+        { method: 'POST', credentials: 'same-origin' },
+      )
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok || !body.success) throw new Error(body.error || `HTTP ${res.status}`)
+      const cursorId = cursorTune?.session_instance_tune_id ?? null
+      adoptTunes(body.tunes, cursorId)
+      if (moveCursor) flash(`Removed "${tune.name}" from the log`)
+    } catch (err) {
+      flash(`Could not remove "${tune.name}": ${err.message}`, 'error')
+    } finally {
+      saving -= 1
+    }
+    persistMirror()
+  }
+
+  function openPicker(index) {
+    const tune = tunes[index]
+    if (!tune || !picker) return
+    pickerOpen = true
+    picker.open(tune)
+  }
+
+  // The picker's pick: TuneSearch's own payload (tune_id, or thesession_id for
+  // an import, or just a typed name for "log as-is", plus a chosen setting),
+  // written onto the tune being named. Resolves false to keep the pane open.
+  async function nameTune(tune, payload) {
+    const res = await fetch(
+      `/api/recordings/${recording.recording_id}/segments/${tune.session_instance_tune_id}/tune`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(payload),
+      },
+    )
+    const body = await res.json().catch(() => ({}))
+    if (!res.ok || !body.success) throw new Error(body.error || `HTTP ${res.status}`)
+    const cursorId = cursorTune?.session_instance_tune_id ?? null
+    adoptTunes(body.tunes, cursorId)
+    flash(body.setting_failed ? `Named it "${body.tune?.name}" (setting not saved: ${body.setting_failed})` : `Named it "${body.tune?.name}"`)
+    persistMirror()
+    return true
+  }
+
   function moveCursor(delta) {
-    cursorIndex = Math.min(tunes.length - 1, Math.max(0, cursorIndex + delta))
+    if (!tunes.length) return
+    // From NONE, up steps onto the last row; down stays at NONE.
+    const from = cursorIndex >= 0 ? cursorIndex : tunes.length
+    const next = from + delta
+    cursorIndex = next >= tunes.length ? -1 : Math.max(0, next)
   }
 
   function jumpToCursor() {
@@ -793,6 +919,12 @@
   // ---- keyboard --------------------------------------------------------------
 
   function onKeydown(event) {
+    // The picker owns the keyboard while it is up -- typing a tune name must
+    // not scrub the audio -- except Escape, which closes it from anywhere.
+    if (pickerOpen) {
+      if (event.key === 'Escape') picker?.close()
+      return
+    }
     const el = event.target
     if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return
     if (event.metaKey || event.ctrlKey) return
@@ -920,7 +1052,7 @@
         </p>
       </div>
       <div class="sg-progress">
-        <span class="sg-count"><strong>{placedCount}</strong> / {tunes.length}{#if !compact} placed{/if}</span>
+        <span class="sg-count"><strong>{placedCount}</strong> / {tunes.length}{#if !compact}{' placed'}{/if}</span>
         <!-- Always in the DOM, merely invisible when idle. Appearing and
              disappearing on every mark rewrapped the header, which moved the
              whole page under a thumb already on its way to +15s. A dot on a
@@ -996,13 +1128,15 @@
               <span class="sg-next-meta">M marks where it stopped</span>
             </div>
           {:else}
-            <div class="sg-next">
+            <div class="sg-next" class:is-logging={!cursorTune}>
               {#if cursorTune}
                 <span class="sg-next-label">next up</span>
                 <span class="sg-next-name">{cursorTune.name}</span>
                 <span class="sg-next-meta">set {cursorTune.set_number}{cursorTune.is_set_end ? ' · last of set' : ''}</span>
               {:else}
-                <span class="sg-next-label">log complete</span>
+                <span class="sg-next-label">log a tune</span>
+                <span class="sg-next-name">{GAN_AINM}</span>
+                <span class="sg-next-meta">M logs a new tune starting here · E ends the set</span>
               {/if}
             </div>
           {/if}
@@ -1036,25 +1170,28 @@
           {#if compact}
             {@const ending = pendingSetEndIndex != null ? tunes[pendingSetEndIndex] : null}
             <div class="sg-next-inline" class:is-ending={ending != null}>
-              <span class="sg-next-label">{ending ? 'end of set' : cursorTune ? 'next up' : 'done'}</span>
-              <span class="sg-next-name">{(ending ?? cursorTune)?.name ?? 'every tune placed'}</span>
+              <span class="sg-next-label">{ending ? 'end of set' : cursorTune ? 'next up' : 'new tune'}</span>
+              <span class="sg-next-name">{(ending ?? cursorTune)?.name ?? GAN_AINM}</span>
             </div>
           {/if}
           <button
             type="button"
             class="sg-mark"
             class:is-ending={pendingSetEndIndex != null}
+            class:is-logging={appendMode}
             onclick={markStart}
-            disabled={!cursorTune && pendingSetEndIndex == null}
           >
-            {pendingSetEndIndex != null ? 'End of set' : 'Mark start'}{#if !compact} <kbd>M</kbd>{/if}
+            {pendingSetEndIndex != null ? 'End of set' : appendMode ? 'Log a tune' : 'Mark start'}{#if !compact} <kbd>M</kbd>{/if}
           </button>
           <!-- The separate end key is for ending a set you have already scrolled
                past; the mark button covers the ordinary case on its own, by
                switching mode. On a phone that second button is a whole row for
-               the rarer of the two, so the one that changes with you wins. -->
-          {#if !compact}
-            <button type="button" class="sg-end" onclick={markEnd}>End of set <kbd>E</kbd></button>
+               the rarer of the two, so the one that changes with you wins --
+               except while logging from the audio, where the mark button never
+               flips (the tool can't know a set's last tune) and this IS the
+               only way to close a set. -->
+          {#if !compact || appendMode}
+            <button type="button" class="sg-end" onclick={markEnd}>{compact ? 'End set' : 'End of set'}{#if !compact} <kbd>E</kbd>{/if}</button>
           {/if}
           <button type="button" class="sg-undo" onclick={undo} title="Undo the last mark" aria-label="Undo">
             {#if compact}↺{:else}Undo <kbd>U</kbd>{/if}
@@ -1107,9 +1244,20 @@
           onpick={(i) => (cursorIndex = i)}
           onseek={seek}
           onclear={(i) => clearAt(i, true)}
+          onname={openPicker}
+          onunlog={(i) => unlogAt(i)}
         />
       </section>
     </div>
+
+    <!-- "Which tune was this?" -- the live logger's search, over the tool. The
+         audio element below is untouched by it, so playback carries on. -->
+    <TunePicker
+      bind:this={picker}
+      config={searchConfig}
+      onPick={(tune, payload) => nameTune(tune, payload)}
+      onClosed={() => (pickerOpen = false)}
+    />
 
     <audio
       bind:this={audio}
@@ -1209,6 +1357,13 @@
   .sg-saving {
     color: var(--warning, #f5c842);
     visibility: hidden;
+  }
+  /* Logging from the audio: the banner and the mark button read as "new tune". */
+  .sg-next.is-logging .sg-next-name {
+    font-style: italic;
+  }
+  .sg-mark.is-logging {
+    border-style: dashed;
   }
   .sg-saving.is-on {
     visibility: visible;
@@ -1610,6 +1765,27 @@
       flex: 0 0 auto !important;
       min-width: 48px;
       font-size: 1.15rem !important;
+    }
+    /* Logging from the audio adds End-set to that row (it is the only way to
+       close a set then), so all four have to fit: the banner gives up some of
+       its share and End-set takes only what its label needs. */
+    .sg-controls-main .sg-next-inline {
+      /* Zero basis: the row divides what is left rather than wrapping on the
+         sum of everyone's natural width. */
+      flex: 1 1 0;
+      padding-left: 6px;
+      padding-right: 6px;
+    }
+    .sg-controls-main .sg-mark {
+      flex: 1.3 1 0 !important;
+      padding-left: 6px;
+      padding-right: 6px;
+      white-space: nowrap;
+    }
+    .sg-controls-main .sg-end {
+      flex: 0 0 auto !important;
+      padding: 0 10px;
+      white-space: nowrap;
     }
   }
 

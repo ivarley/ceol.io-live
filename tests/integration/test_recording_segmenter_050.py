@@ -83,6 +83,15 @@ def _teardown(cur):
     cur.execute("DELETE FROM recording_tune_segment_history WHERE recording_id = %s", (REC_ID,))
     cur.execute("DELETE FROM recording_history WHERE recording_id = %s", (REC_ID,))
     cur.execute("DELETE FROM recording WHERE recording_id = %s", (REC_ID,))
+    # Logging from the segmenter goes through the live referee, which writes the
+    # feed, per-row history and repertoire enrollment for this instance too.
+    cur.execute("DELETE FROM session_event WHERE session_instance_id = %s", (REC_INSTANCE,))
+    cur.execute(
+        "DELETE FROM session_instance_tune_history WHERE session_instance_tune_id IN "
+        "(SELECT session_instance_tune_id FROM session_instance_tune WHERE session_instance_id = %s)",
+        (REC_INSTANCE,),
+    )
+    cur.execute("DELETE FROM session_tune WHERE session_id = %s", (REC_SESSION,))
     cur.execute("DELETE FROM session_instance_tune WHERE session_instance_id = %s", (REC_INSTANCE,))
     cur.execute("DELETE FROM session_instance WHERE session_instance_id = %s", (REC_INSTANCE,))
     cur.execute("DELETE FROM session WHERE session_id = %s", (REC_SESSION,))
@@ -381,3 +390,157 @@ def test_payload_lists_both_urls_proxy_first(db_conn, db_cursor, monkeypatch):
     assert sources[0]["url"].endswith("k.stream.m4a")
     assert sources[1]["url"].endswith("recordings/test/seg050.m4a")
     assert sources[0]["size_bytes"] < sources[1]["size_bytes"]
+
+
+# --------------------------------------------------------------------------- #
+# 4. Logging while segmenting (spec 050): a log written from the audio
+# --------------------------------------------------------------------------- #
+
+
+def _log_at(client, start_ms, end_ms=None):
+    resp = client.post(f"/api/recordings/{REC_ID}/segments", json={"start_ms": start_ms, "end_ms": end_ms})
+    return resp, resp.get_json()
+
+
+def _names(tunes):
+    return [(t["name"], t["set_number"]) for t in tunes]
+
+
+def test_log_appends_gan_ainm_to_the_open_set_when_the_last_tune_runs_into_it(
+    client, admin_user, committed_recording, db_cursor
+):
+    """[A, B] break [C] break [D]: place D with an implicit end, then mark later
+    -> the new tune shares D's set. Unlinked, named "Gan Ainm", source 'segmenter',
+    placed at the mark, and announced on the live feed like any other add."""
+    with admin_user:
+        client.put(f"/api/recordings/{REC_ID}/segments/{committed_recording['D']}", json={"start_ms": 100000})
+        resp, body = _log_at(client, 130000)
+        assert resp.status_code == 201, body
+        new = body["tune"]
+        assert new["name"] == "Gan Ainm"
+        assert new["tune_id"] is None
+        assert new["source"] == "segmenter"
+        assert new["segment"]["start_ms"] == 130000 and new["segment"]["end_ms"] is None
+        assert _names(body["tunes"]) == [("Alpha Reel", 1), ("Bravo Jig", 1), ("Charlie Polka", 2), ("Delta Hornpipe", 3), ("Gan Ainm", 3)]
+
+    db_cursor.execute(
+        "SELECT op_type FROM session_event WHERE session_instance_id = %s ORDER BY event_id", (REC_INSTANCE,)
+    )
+    assert [r[0] for r in db_cursor.fetchall()] == ["add_tune"]
+
+
+def test_log_opens_a_new_set_after_an_explicit_end(client, admin_user, committed_recording, db_cursor):
+    """An End-set mark on D closes its set on purpose, so the next tune starts set 4
+    -- a break is written into the log between them."""
+    with admin_user:
+        client.put(f"/api/recordings/{REC_ID}/segments/{committed_recording['D']}", json={"start_ms": 100000, "end_ms": 120000})
+        resp, body = _log_at(client, 130000)
+        assert resp.status_code == 201, body
+        assert _names(body["tunes"])[-2:] == [("Delta Hornpipe", 3), ("Gan Ainm", 4)]
+
+    db_cursor.execute(
+        "SELECT op_type FROM session_event WHERE session_instance_id = %s ORDER BY event_id", (REC_INSTANCE,)
+    )
+    assert [r[0] for r in db_cursor.fetchall()] == ["add_tune", "set_break"]
+
+
+def test_log_reuses_the_break_that_already_follows_an_ended_tune(client, admin_user, committed_recording):
+    """C is placed and ended explicitly; a break already sits between C and D in
+    the log, so a tune marked between them joins D's set rather than minting a
+    second break."""
+    with admin_user:
+        client.put(f"/api/recordings/{REC_ID}/segments/{committed_recording['C']}", json={"start_ms": 50000, "end_ms": 60000})
+        client.put(f"/api/recordings/{REC_ID}/segments/{committed_recording['D']}", json={"start_ms": 100000})
+        resp, body = _log_at(client, 70000)
+        assert resp.status_code == 201, body
+        assert _names(body["tunes"]) == [("Alpha Reel", 1), ("Bravo Jig", 1), ("Charlie Polka", 2), ("Gan Ainm", 3), ("Delta Hornpipe", 3)]
+
+
+def test_log_goes_in_front_when_nothing_placed_precedes_it(client, admin_user, committed_recording):
+    with admin_user:
+        client.put(f"/api/recordings/{REC_ID}/segments/{committed_recording['A']}", json={"start_ms": 50000})
+        resp, body = _log_at(client, 10000)
+        assert resp.status_code == 201, body
+        assert _names(body["tunes"])[:2] == [("Gan Ainm", 1), ("Alpha Reel", 1)]
+
+
+def test_log_is_built_from_nothing_on_an_empty_night(client, admin_user, committed_recording, db_cursor):
+    db_cursor.execute("DELETE FROM session_instance_tune WHERE session_instance_id = %s", (REC_INSTANCE,))
+    db_cursor.connection.commit()
+    with admin_user:
+        _, first = _log_at(client, 1000)
+        _, second = _log_at(client, 20000)
+        # End the first set at the second tune, then mark a third.
+        client.put(f"/api/recordings/{REC_ID}/segments/{second['tune']['session_instance_tune_id']}", json={"start_ms": 20000, "end_ms": 40000})
+        _, third = _log_at(client, 60000)
+        assert _names(third["tunes"]) == [("Gan Ainm", 1), ("Gan Ainm", 1), ("Gan Ainm", 2)]
+        assert [t["is_set_end"] for t in third["tunes"]] == [False, True, True]
+
+
+def test_log_refuses_a_duplicate_moment_and_the_usual_bad_input(client, admin_user, committed_recording):
+    with admin_user:
+        client.put(f"/api/recordings/{REC_ID}/segments/{committed_recording['A']}", json={"start_ms": 5000})
+        assert _log_at(client, 5000)[0].status_code == 409
+        assert client.post(f"/api/recordings/{REC_ID}/segments", json={}).status_code == 400
+        assert _log_at(client, 999999999)[0].status_code == 400
+        assert _log_at(client, 8000, 7000)[0].status_code == 400
+
+
+def test_set_tune_links_renames_and_logs_as_is(client, admin_user, committed_recording, db_cursor):
+    with admin_user:
+        _, body = _log_at(client, 130000)
+        sit = body["tune"]["session_instance_tune_id"]
+
+        # Pick a catalog tune: linked, the display name follows the catalog.
+        resp = client.put(f"/api/recordings/{REC_ID}/segments/{sit}/tune", json={"tune_id": 95110, "name": "Alpha Reel"})
+        assert resp.status_code == 200, resp.get_json()
+        assert (resp.get_json()["tune"]["tune_id"], resp.get_json()["tune"]["name"]) == (95110, "Alpha Reel")
+        assert resp.get_json()["tune"]["tune_type"] == "Reel"
+        # ...and the segment placed on it survived the relink.
+        assert resp.get_json()["tune"]["segment"]["start_ms"] == 130000
+
+        # "Log as is": the typed name, unlinked.
+        resp = client.put(f"/api/recordings/{REC_ID}/segments/{sit}/tune", json={"name": "The Squirrely Hobbit"})
+        assert resp.status_code == 200
+        assert (resp.get_json()["tune"]["tune_id"], resp.get_json()["tune"]["name"]) == (None, "The Squirrely Hobbit")
+
+        assert client.put(f"/api/recordings/{REC_ID}/segments/{sit}/tune", json={}).status_code == 400
+        assert client.put(f"/api/recordings/{REC_ID}/segments/1/tune", json={"name": "x"}).status_code == 404
+
+    db_cursor.execute(
+        "SELECT op_type FROM session_event WHERE session_instance_id = %s ORDER BY event_id", (REC_INSTANCE,)
+    )
+    assert [r[0] for r in db_cursor.fetchall()] == ["add_tune", "change_tune", "change_tune"]
+
+
+def test_unlog_removes_only_what_the_segmenter_logged(client, admin_user, committed_recording, db_cursor):
+    with admin_user:
+        _, body = _log_at(client, 130000)
+        sit = body["tune"]["session_instance_tune_id"]
+        # A tune written down on the night is not the tool's to remove.
+        resp = client.post(f"/api/recordings/{REC_ID}/segments/{committed_recording['A']}/unlog")
+        assert resp.status_code == 409
+        resp = client.post(f"/api/recordings/{REC_ID}/segments/{sit}/unlog")
+        assert resp.status_code == 200
+        assert "Gan Ainm" not in [t["name"] for t in resp.get_json()["tunes"]]
+        assert client.post(f"/api/recordings/{REC_ID}/segments/{sit}/unlog").status_code == 404
+
+    db_cursor.execute("SELECT deleted FROM session_instance_tune WHERE session_instance_tune_id = %s", (sit,))
+    assert db_cursor.fetchone()[0] is True  # tombstoned, like any live removal
+    db_cursor.execute("SELECT COUNT(*) FROM recording_tune_segment WHERE session_instance_tune_id = %s", (sit,))
+    assert db_cursor.fetchone()[0] == 0
+
+
+def test_logging_endpoints_require_authentication(client, committed_recording):
+    sit = committed_recording["A"]
+    assert client.post(f"/api/recordings/{REC_ID}/segments", json={"start_ms": 1}).status_code == 401
+    assert client.put(f"/api/recordings/{REC_ID}/segments/{sit}/tune", json={"name": "x"}).status_code == 401
+    assert client.post(f"/api/recordings/{REC_ID}/segments/{sit}/unlog").status_code == 401
+
+
+def test_logging_endpoints_require_the_recording_grant(client, authenticated_user, committed_recording):
+    sit = committed_recording["A"]
+    with authenticated_user:
+        assert client.post(f"/api/recordings/{REC_ID}/segments", json={"start_ms": 1}).status_code == 403
+        assert client.put(f"/api/recordings/{REC_ID}/segments/{sit}/tune", json={"name": "x"}).status_code == 403
+        assert client.post(f"/api/recordings/{REC_ID}/segments/{sit}/unlog").status_code == 403

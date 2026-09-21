@@ -12,6 +12,8 @@
     onpick = () => {},
     onseek = () => {},
     onclear = () => {},
+    onname = () => {}, // an unlinked tune's name was tapped: say which tune it was
+    onunlog = () => {}, // remove a tune the segmenter itself logged (spec 050)
   } = $props()
 
   const sets = $derived(groupIntoSets(tunes))
@@ -46,10 +48,26 @@
           class:is-pending={!!tune.segment?.pending}
           data-tune-id={tune.session_instance_tune_id}
         >
-          <button class="tl-main" type="button" onclick={() => onpick(idx)}>
-            <span class="tl-name">{tune.name}</span>
-            {#if tune.tune_type}<span class="tl-type">{tune.tune_type}</span>{/if}
-          </button>
+          {#if tune.tune_id == null}
+            <!-- Not linked to a catalog tune -- the segmenter's own "Gan Ainm", or a
+                 name typed on the night that matched nothing. The name is the way
+                 to say which tune it was; the cursor still moves with the row's
+                 time column and the arrow keys. -->
+            <button
+              class="tl-main tl-main-unlinked"
+              type="button"
+              title="Not linked to a tune yet — tap to search for it"
+              onclick={() => onname(idx)}
+            >
+              <span class="tl-name is-unlinked">{tune.name || 'Gan Ainm'}</span>
+              <span class="tl-type">name it</span>
+            </button>
+          {:else}
+            <button class="tl-main" type="button" onclick={() => onpick(idx)}>
+              <span class="tl-name">{tune.name}</span>
+              {#if tune.tune_type}<span class="tl-type">{tune.tune_type}</span>{/if}
+            </button>
+          {/if}
 
           <!-- The set-end badge is a jump once the tune is placed: the end is
                the one time in a set you cannot reach from the list otherwise
@@ -82,7 +100,14 @@
                 {formatDuration(seg.endMs - seg.startMs)}{seg.explicitEnd ? '' : '~'}
               </span>
             </button>
-            <button class="tl-clear" type="button" title="Unplace this tune" onclick={() => onclear(idx)}>×</button>
+            {#if tune.source === 'segmenter'}
+              <!-- The tool logged this tune itself; unplacing it would leave a
+                   nameless row with no time, which is nothing. Taking it back
+                   out of the log is what × means here. -->
+              <button class="tl-clear" type="button" title="Remove this tune from the log" onclick={() => onunlog(idx)}>×</button>
+            {:else}
+              <button class="tl-clear" type="button" title="Unplace this tune" onclick={() => onclear(idx)}>×</button>
+            {/if}
           {:else}
             <span class="tl-unplaced">—</span>
           {/if}
@@ -163,6 +188,14 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .tl-name.is-unlinked {
+    font-style: italic;
+    color: var(--warning, #f5c842);
+  }
+  .tl-main-unlinked .tl-type {
+    color: var(--warning, #f5c842);
+    opacity: 0.8;
   }
   .tl-type {
     font-size: 0.68rem;

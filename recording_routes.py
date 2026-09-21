@@ -819,6 +819,292 @@ def put_recording_segment(recording_id, session_instance_tune_id):
     )
 
 
+# ---- Logging while segmenting (spec 050) -------------------------------------
+#
+# A night nobody wrote down still has audio worth timestamping. Once every logged
+# tune is placed (or the log is empty), a mark logs a NEW tune -- unidentified,
+# named "Gan Ainm" -- and places it in one transaction, through the live logger's
+# own op machinery so the log's feed, history and any open live screen see it.
+#
+#   POST /api/recordings/<id>/segments                  log a new tune starting here
+#   PUT  /api/recordings/<id>/segments/<sit_id>/tune    say which tune it was
+#   POST /api/recordings/<id>/segments/<sit_id>/unlog   take it back out of the log
+#
+# Set membership is read off the audio, not typed: a new tune joins the set of the
+# placed tune before it when that tune's end is implicit (they abut), and starts a
+# fresh set when that end was marked explicitly (the End-set button).
+
+GAN_AINM = "Gan Ainm"
+
+
+def _recording_for_logging(cur, recording_id):
+    """(session_instance_id, session_id, duration_ms) for a READY recording, or an
+    error response. A mark validated against a provisional duration is a mark
+    validated against nothing (schema/052)."""
+    cur.execute(
+        "SELECT r.session_instance_id, si.session_id, r.duration_ms, r.status FROM recording r "
+        "JOIN session_instance si ON si.session_instance_id = r.session_instance_id "
+        "WHERE r.recording_id = %s",
+        (recording_id,),
+    )
+    rec = cur.fetchone()
+    if not rec:
+        return None, (jsonify({"success": False, "error": "Recording not found"}), 404)
+    if rec[3] != "ready":
+        return None, (jsonify({"success": False, "error": "That recording is still being processed"}), 409)
+    return (rec[0], rec[1], int(rec[2])), None
+
+
+def _tunes_response(conn, recording_id, instance_id, session_id, **extra):
+    from serializers import load_recording_tunes
+
+    return jsonify({"success": True, "tunes": load_recording_tunes(conn, recording_id, instance_id, session_id), **extra})
+
+
+def _placement_for_new_tune(cur, recording_id, instance_id, start_ms):
+    """Where a tune starting at `start_ms` goes in the log: (after_record_id,
+    before_record_id, new_set).
+
+    The anchor is the placed tune that starts last before this one. Its end
+    decides the set: implicit (NULL) means the two abut and the new tune joins
+    its set, directly after it; explicit means that set was closed on purpose --
+    the new tune then opens the next set (after the break that already follows,
+    or a fresh break when nothing does). With no placed tune before it, the new
+    tune goes in front of the whole log and runs into whatever comes next.
+    """
+    from live_logging_routes import _live_records_in_order
+
+    records = _live_records_in_order(cur, instance_id)  # (id, record_type, order_position)
+    cur.execute(
+        "SELECT session_instance_tune_id, start_ms, end_ms FROM recording_tune_segment WHERE recording_id = %s",
+        (recording_id,),
+    )
+    segments = {r[0]: (int(r[1]), r[2]) for r in cur.fetchall()}
+
+    anchor = None
+    for rid, rtype, _pos in records:
+        seg = segments.get(rid)
+        if rtype != "tune" or seg is None:
+            continue
+        if seg[0] == start_ms:
+            raise ValueError("A tune already starts at that moment")
+        if seg[0] < start_ms and (anchor is None or seg[0] > anchor[1]):
+            anchor = (rid, seg[0], seg[1])
+
+    if anchor is None:
+        first = records[0][0] if records else None
+        return None, first, False
+
+    anchor_id, _start, end_ms = anchor
+    if end_ms is None:
+        return anchor_id, None, False
+
+    idx = next(i for i, r in enumerate(records) if r[0] == anchor_id)
+    following = records[idx + 1] if idx + 1 < len(records) else None
+    if following is not None and following[1] == "break":
+        return following[0], None, False  # the break is already there; open the next set
+    return anchor_id, None, True
+
+
+@api_login_required
+def log_recording_tune(recording_id):
+    """POST /api/recordings/<id>/segments -- log a new, unidentified tune starting here.
+
+    Body: {"start_ms": int, "end_ms": int|null}. Returns the whole tune list
+    (`tunes`) plus the new row (`tune`): an insert can renumber every set after it.
+    """
+    from live_logging_routes import OpRejected, apply_live_op
+
+    payload = request.get_json(silent=True) or {}
+    try:
+        start_ms = _int_or_none(payload, "start_ms")
+        end_ms = _int_or_none(payload, "end_ms")
+    except ValueError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 400
+    if start_ms is None:
+        return jsonify({"success": False, "error": "start_ms is required"}), 400
+    if start_ms < 0:
+        return jsonify({"success": False, "error": "start_ms cannot be negative"}), 400
+    if end_ms is not None and end_ms <= start_ms:
+        return jsonify({"success": False, "error": "end_ms must be after start_ms"}), 400
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        denied = _recording_gate(cur, recording_id)
+        if denied:
+            return denied
+        info, err = _recording_for_logging(cur, recording_id)
+        if err:
+            return err
+        instance_id, session_id, duration_ms = info
+        if start_ms > duration_ms:
+            return jsonify({"success": False, "error": "start_ms is past the end of the recording"}), 400
+
+        user_id = get_current_user_id()
+        try:
+            after_id, before_id, new_set = _placement_for_new_tune(cur, recording_id, instance_id, start_ms)
+        except ValueError as exc:
+            return jsonify({"success": False, "error": str(exc)}), 409
+
+        try:
+            _eid, _typ, added = apply_live_op(
+                cur, instance_id, "add_tune",
+                {"name": GAN_AINM, "source": "segmenter", "no_match": True, "no_merge": True,
+                 "after_record_id": after_id, "before_record_id": before_id},
+                user_id,
+            )
+            record_id = added["record"]["session_instance_tune_id"]
+            if new_set:
+                apply_live_op(cur, instance_id, "set_break", {"action": "insert", "before_record_id": record_id}, user_id)
+        except OpRejected as r:
+            conn.rollback()
+            return jsonify({"success": False, "error": r.message}), 409
+
+        cur.execute(
+            "INSERT INTO recording_tune_segment "
+            "(recording_id, session_instance_tune_id, start_ms, end_ms, created_by_user_id, last_modified_user_id) "
+            "VALUES (%s, %s, %s, %s, %s, %s) RETURNING recording_tune_segment_id",
+            (recording_id, record_id, start_ms, end_ms, user_id, user_id),
+        )
+        save_to_history(cur, "recording_tune_segment", "INSERT", cur.fetchone()[0], user_id)
+        conn.commit()
+
+        resp = _tunes_response(conn, recording_id, instance_id, session_id)
+        body = resp.get_json()
+        body["tune"] = next((t for t in body["tunes"] if t["session_instance_tune_id"] == record_id), None)
+        return jsonify(body), 201
+    finally:
+        conn.close()
+
+
+@api_login_required
+def set_recording_tune(recording_id, session_instance_tune_id):
+    """PUT /api/recordings/<id>/segments/<sit_id>/tune -- say which tune this is.
+
+    Body: {"tune_id"?, "thesession_id"?, "name", "setting_id"?} -- the same payload
+    the live logger's search hands its add. tune_id links; thesession_id imports
+    first when the tune isn't local yet; a bare name logs it as-is (unlinked, the
+    typed name); setting_id records the setting chosen in the preview.
+    """
+    from live_logging_routes import (
+        OpRejected, TuneImportError, _import_tune_for_live, _maybe_apply_chosen_setting,
+        _parse_thesession_id, apply_live_op, emit_change_tune,
+    )
+
+    payload = request.get_json(silent=True) or {}
+    name = (payload.get("name") or "").strip()
+    tune_id = payload.get("tune_id")
+    ts_id = _parse_thesession_id(payload.get("thesession_id"))
+    if tune_id is None and ts_id is None and not name:
+        return jsonify({"success": False, "error": "A tune or a name is required"}), 400
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        denied = _recording_gate(cur, recording_id)
+        if denied:
+            return denied
+        info, err = _recording_for_logging(cur, recording_id)
+        if err:
+            return err
+        instance_id, session_id, _duration = info
+        cur.execute(
+            "SELECT session_instance_id, record_type, deleted FROM session_instance_tune WHERE session_instance_tune_id = %s",
+            (session_instance_tune_id,),
+        )
+        sit = cur.fetchone()
+        if not sit or sit[0] != instance_id or sit[2]:
+            return jsonify({"success": False, "error": "Tune not found"}), 404
+        if sit[1] != "tune":
+            return jsonify({"success": False, "error": "That record is a set break, not a tune"}), 400
+
+        user_id = get_current_user_id()
+        try:
+            if ts_id is not None and tune_id is None:
+                cur.execute("SELECT name, redirect_to_tune_id FROM tune WHERE tune_id = %s", (ts_id,))
+                row = cur.fetchone()
+                if row:
+                    tune_id = row[1] or ts_id
+                else:
+                    imported_name, _tt = _import_tune_for_live(cur, ts_id, user_id)
+                    tune_id, name = ts_id, (name or imported_name)
+            change = {"record_id": session_instance_tune_id, "name": name or None}
+            if tune_id is not None:
+                change["tune_id"] = int(tune_id)
+            else:
+                change["unlink"] = True
+            apply_live_op(cur, instance_id, "change_tune", change, user_id)
+            applied, failed = _maybe_apply_chosen_setting(cur, session_id, tune_id, session_instance_tune_id, payload, user_id)
+            if applied:
+                emit_change_tune(cur, instance_id, session_instance_tune_id, user_id)
+        except TuneImportError as exc:
+            conn.rollback()
+            return jsonify({"success": False, "error": exc.message}), 502
+        except OpRejected as r:
+            conn.rollback()
+            return jsonify({"success": False, "error": r.message}), 409
+        conn.commit()
+
+        from serializers import load_recording_tunes
+
+        tunes = load_recording_tunes(conn, recording_id, instance_id, session_id)
+        tune = next((t for t in tunes if t["session_instance_tune_id"] == session_instance_tune_id), None)
+        body = {"success": True, "tune": tune, "tunes": tunes}
+        if failed:
+            body["setting_failed"] = failed
+        return jsonify(body)
+    finally:
+        conn.close()
+
+
+@api_login_required
+def unlog_recording_tune(recording_id, session_instance_tune_id):
+    """POST /api/recordings/<id>/segments/<sit_id>/unlog -- remove a tune the
+    segmenter logged, and its placement. Only rows the tool created itself
+    (source = 'segmenter'): a tune someone wrote down on the night is unplaced
+    with DELETE .../segments/<sit_id>, never removed from here.
+    """
+    from live_logging_routes import OpRejected, apply_live_op
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        denied = _recording_gate(cur, recording_id)
+        if denied:
+            return denied
+        instance_id, session_id = _session_of_recording(cur, recording_id)[::-1]
+        cur.execute(
+            "SELECT session_instance_id, source, deleted FROM session_instance_tune WHERE session_instance_tune_id = %s",
+            (session_instance_tune_id,),
+        )
+        sit = cur.fetchone()
+        if not sit or sit[0] != instance_id or sit[2]:
+            return jsonify({"success": False, "error": "Tune not found"}), 404
+        if sit[1] != "segmenter":
+            return jsonify({"success": False, "error": "That tune was logged on the night; unplace it instead"}), 409
+
+        user_id = get_current_user_id()
+        cur.execute(
+            "SELECT recording_tune_segment_id FROM recording_tune_segment "
+            "WHERE recording_id = %s AND session_instance_tune_id = %s",
+            (recording_id, session_instance_tune_id),
+        )
+        seg = cur.fetchone()
+        if seg:
+            save_to_history(cur, "recording_tune_segment", "DELETE", seg[0], user_id)
+            cur.execute("DELETE FROM recording_tune_segment WHERE recording_tune_segment_id = %s", (seg[0],))
+        try:
+            apply_live_op(cur, instance_id, "remove_tune", {"record_id": session_instance_tune_id}, user_id)
+        except OpRejected as r:
+            conn.rollback()
+            return jsonify({"success": False, "error": r.message}), 409
+        conn.commit()
+        return _tunes_response(conn, recording_id, instance_id, session_id)
+    finally:
+        conn.close()
+
+
 @api_login_required
 def delete_recording_segment(recording_id, session_instance_tune_id):
     """DELETE /api/recordings/<id>/segments/<sit_id> — unplace a tune."""

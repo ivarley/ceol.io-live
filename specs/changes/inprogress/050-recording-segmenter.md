@@ -494,6 +494,55 @@ while a 350MB file is still loading over cellular — reported from a phone as
 because `preload="metadata"` means the browser fetches nothing until asked:
 disabling it would deadlock (no play → no load → no canplay → no play).
 
+### Logging while segmenting
+
+A night nobody wrote down still has audio worth timestamping, and the two jobs
+are one job: find where a tune starts, say which tune it is. So once every
+logged tune is placed — or there never was a log — the mark key **logs a new
+tune** instead of doing nothing. `POST /api/recordings/<id>/segments` inserts a
+`session_instance_tune` row and its segment in one transaction, through the
+live logger's own op machinery (`apply_live_op`, the body of the referee
+endpoint lifted out so another write path can run an op inside its own
+transaction): the feed gets an `add_tune`, history and enrollment happen as
+they would from the logger, and an open live screen sees the row appear.
+
+The row is **unidentified**: `tune_id NULL`, name "Gan Ainm", `source =
+'segmenter'`. The name is sent with `no_match` because thesession.org has real
+tunes called Gan Ainm and `add_tune`'s name matcher would otherwise link the
+placeholder to one of them. In the log it shows in italic with a *name it*
+hint; tapping it opens **the live logger's own search** (`TuneSearch`, hosted in
+the add panes' slide-in shell as `TunePicker.svelte`) over the tool — catalog
+search, "Search on thesession.org", paste-a-URL, the preview with its settings
+pager, and "log as-is" all behave exactly as they do in the logger, because it
+is the same component. A pick is `PUT .../segments/<sit_id>/tune` with
+TuneSearch's own payload (`tune_id`, or `thesession_id` to import, or a bare
+name for as-is, plus a chosen `setting_id`), applied as a `change_tune` op.
+Closing the pane leaves the tune as it was. The pane floats over the tool, so
+the audio keeps playing; the segmenter's keys are off while it is up (typing a
+name must not scrub the audio), bar Escape.
+
+**Sets come from the audio, not the keyboard.** A new tune joins the set of the
+placed tune before it when that tune's end is implicit — they abut — and opens a
+new set when that end was marked with End-set (a break is written, or the one
+already following that tune is reused). With nothing placed before it, it goes
+in front of the log and runs into whatever follows. The tool cannot know a
+freshly logged tune is its set's last, so for a tune the tool logged the mark
+key never flips to "end of set" the way it does after a written log's last
+tune; the End-set button (E) is the way to close one, and on a phone it is
+shown in this mode. The cursor has a real "none" state now (`cursorIndex ===
+-1`): past the last tune it goes there rather than sticking on the last row, so
+the flow for a written log — place the last tune, M ends its set, M logs the
+next — reads naturally, and picking a row in the list still re-marks it.
+
+`×` on a tune the tool logged removes it from the log (`POST
+.../segments/<sit_id>/unlog`: segment deleted, row tombstoned as a `remove_tune`
+op), not just its placement — an unplaced nameless row is nothing. Undo after a
+mark that logged a tune does the same. Rows logged on the night are refused by
+that endpoint and keep their unplace `×`. All three writes return the whole
+tune list, since an insert can renumber every set after it. Logging a tune
+needs a connection (a row id has to come from the server); everything else in
+the tool still works offline.
+
 ### Offline
 
 The tool is used where the audio was made: a pub, a back room, a car on the way
@@ -563,6 +612,9 @@ segmenter until both have synced — the two queues are independent by design.
 | `GET /api/recordings/<id>/peaks` | the envelope as raw bytes, cached |
 | `PUT /api/recordings/<id>/segments/<sit_id>` | place or move a tune (upsert) |
 | `DELETE /api/recordings/<id>/segments/<sit_id>` | unplace a tune |
+| `POST /api/recordings/<id>/segments` | log a new, unidentified tune starting here (returns the whole list) |
+| `PUT /api/recordings/<id>/segments/<sit_id>/tune` | say which tune it was (TuneSearch's payload) |
+| `POST /api/recordings/<id>/segments/<sit_id>/unlog` | remove a tune the tool logged, and its placement |
 | `GET /api/recordings/<id>/export` | the resolved slice list |
 | `GET /api/session-instances/<id>/recordings` | recordings + progress |
 
