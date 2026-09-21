@@ -867,7 +867,7 @@
 {#snippet audioPicker()}
   {#if audioSources.length > 1}
     <label class="sg-opt sg-opt-audio">
-      audio
+      {#if !compact}audio{/if}
       <select value={sourceId} onchange={(e) => switchSource(e.currentTarget.value)}>
         {#each audioSources as src (src.id)}
           <option value={src.id}>
@@ -920,7 +920,7 @@
         </p>
       </div>
       <div class="sg-progress">
-        <strong>{placedCount}</strong> / {tunes.length}{#if !compact} placed{/if}
+        <span class="sg-count"><strong>{placedCount}</strong> / {tunes.length}{#if !compact} placed{/if}</span>
         <!-- Always in the DOM, merely invisible when idle. Appearing and
              disappearing on every mark rewrapped the header, which moved the
              whole page under a thumb already on its way to +15s. A dot on a
@@ -936,13 +936,17 @@
              sticky column, and it is the one option you reach for when the
              connection changes rather than while marking. -->
         {#if compact}{@render audioPicker()}{@render offlineAudio()}{/if}
-        <button
-          type="button"
-          class="sg-editlog"
-          onclick={editLog}
-          title="Open this night's log in edit mode — you'll come back here, at this moment in the audio"
-        >✎ {compact ? 'Fix' : 'Fix the log'}</button>
-        <a class="sg-export" href="/api/recordings/{recording.recording_id}/export" target="_blank" rel="noopener">export</a>
+        <!-- Fix and export travel together: when the phone header wraps, they
+             move to the next row as a pair rather than stranding "export". -->
+        <span class="sg-actions">
+          <button
+            type="button"
+            class="sg-editlog"
+            onclick={editLog}
+            title="Open this night's log in edit mode — you'll come back here, at this moment in the audio"
+          >✎ {compact ? 'Fix' : 'Fix the log'}</button>
+          <a class="sg-export" href="/api/recordings/{recording.recording_id}/export" target="_blank" rel="noopener">export</a>
+        </span>
       </div>
     </header>
 
@@ -1188,6 +1192,19 @@
   .sg-progress strong {
     color: var(--text-color, #e0e0e0);
     font-size: 1.05rem;
+  }
+  /* The fraction is one word: "40 /" on one line and "82" on the next is
+     exactly the wrap a squeezed phone header produced. */
+  .sg-count,
+  .sg-editlog,
+  .sg-export {
+    white-space: nowrap;
+  }
+  .sg-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    white-space: nowrap;
   }
   .sg-saving {
     color: var(--warning, #f5c842);
@@ -1552,19 +1569,28 @@
     .sg-keys {
       display: none;
     }
-    /* The header is one line on a phone: count, encode, Fix, export. */
+    /* On a phone the controls get a row of their own under the title rather
+       than squeezing in beside it, and that row wraps between controls,
+       never inside one: count and queue on the left, the encode switch and
+       the offline copy in the middle, Fix and export pushed to the right. */
     .sg-head {
       gap: 4px;
     }
     .sg-progress {
-      gap: 8px;
+      flex: 1 0 100%;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px 8px;
       font-size: 0.8rem;
     }
     .sg-progress .sg-opt-audio select {
-      margin-left: 3px;
+      margin-left: 0;
       padding: 2px 3px;
       font-size: 0.75rem;
-      max-width: 96px;
+      max-width: 118px;
+    }
+    .sg-progress .sg-actions {
+      margin-left: auto;
     }
     .sg-progress .sg-offline {
       padding: 2px 5px;
