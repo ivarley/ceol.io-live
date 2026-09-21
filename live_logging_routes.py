@@ -1812,7 +1812,12 @@ def _deep_search_core(cur, q, tune_type, prefer_type, mode, limit, person_id,
     type/popularity.
 
     session_id scopes the "in this session" / "played here" card fields; without a
-    session (My Tunes) they are constant FALSE/0. on_list_last pushes tunes already
+    session (My Tunes) they are constant FALSE/0. With a session, the ranking is the
+    composer's: after the set's type and an exact hit, the tunes THIS session plays
+    most come first, then how the name matched (prefix before substring), then global
+    popularity -- "maggie" is Drowsy Maggie at a session that plays it every week,
+    not whichever Maggie the world likes best. Session aliases match too, so a tune
+    the session calls by its own name is found by that name. on_list_last pushes tunes already
     on the person's list to the bottom of the ranking (the My Tunes add pane dims
     them — they're addable-again noise there, not targets); in_session_last does the
     same for tunes already in the session's repertoire (the session-tunes add pane).
@@ -1834,50 +1839,85 @@ def _deep_search_core(cur, q, tune_type, prefer_type, mode, limit, person_id,
 
     # SELECT-clause params first (subqueries + type_pref), then abc_only, then rank,
     # then WHERE, then LIMIT — matching the textual order of %s placeholders below.
+    # The session's own name for the tune (session_tune.alias) is a second name to
+    # match and rank on. Joined once; the alias is NULL without a session.
+    _al = f"LOWER(unaccent({normalize_quotes_sql('st.alias')}))"
+    join_sql = ""
+    join_params = []
     params = [person_id]
     if session_id is not None:
-        in_session_sql = "EXISTS(SELECT 1 FROM session_tune st WHERE st.tune_id = t.tune_id AND st.session_id = %s)"
+        join_sql = "LEFT JOIN session_tune st ON st.session_id = %s AND st.tune_id = t.tune_id"
+        join_params = [session_id]
+        in_session_sql = "(st.session_id IS NOT NULL)"
         played_here_sql = """(SELECT COUNT(*) FROM session_instance_tune sit
                       JOIN session_instance si ON si.session_instance_id = sit.session_instance_id
                       WHERE si.session_id = %s AND sit.tune_id = t.tune_id
                         AND sit.record_type = 'tune' AND sit.deleted = FALSE)"""
-        params += [session_id, session_id]
+        params += [session_id]
     else:
         in_session_sql = "FALSE"
         played_here_sql = "0"
     params.append(prefer_type)
 
+    # A name test that also accepts the session alias (when there is one).
+    def name_like(pattern_placeholder="%s"):
+        if session_id is None:
+            return f"{_nm} LIKE LOWER(unaccent({pattern_placeholder}))"
+        return f"({_nm} LIKE LOWER(unaccent({pattern_placeholder})) OR {_al} LIKE LOWER(unaccent({pattern_placeholder})))"
+
+    def name_eq():
+        if session_id is None:
+            return f"{_nm} = LOWER(unaccent(%s))"
+        return f"({_nm} = LOWER(unaccent(%s)) OR {_al} = LOWER(unaccent(%s)))"
+
+    # How many %s each of the two helpers consumes.
+    n_like = 1 if session_id is None else 2
+
     # abc_only flag: row matched notation but NOT name (so the card can badge it).
     if use_abc and use_name:
-        abc_only_sql = f"({_abc_exists} AND NOT ({_nm} LIKE LOWER(unaccent(%s))))"
-        params += [abc_pattern, f"%{q}%"]
+        abc_only_sql = f"({_abc_exists} AND NOT {name_like()})"
+        params += [abc_pattern] + [f"%{q}%"] * n_like
     elif use_abc:  # abc-only mode: every match is a notation match
         abc_only_sql = "TRUE"
     else:
         abc_only_sql = "FALSE"
 
-    # rank: name matches sort above ABC-only (ELSE 4 = notation-only rows).
+    # rank: how the NAME matched -- exact, prefix, substring; ELSE 4 = notation-only
+    # rows, which always sort after every name hit.
+    #
+    # The order is the composer's quick type-ahead, not a dictionary's: the set's
+    # type first, an exact hit next, then the tunes this session actually plays
+    # (most-played first), then prefix before substring, then the world's
+    # popularity, then the name. Without a session played_here is 0 everywhere and
+    # this collapses to type, rank, popularity -- the My Tunes ordering as before.
     order_prefix = ("on_list, " if on_list_last else "") + ("in_session, " if in_session_last else "")
+    # Ordered OUTSIDE the select (see the subquery below) so the computed columns
+    # can be used in expressions; Postgres only allows bare aliases in ORDER BY.
+    ranked_order = (f"{order_prefix}type_pref, (rank = 4), (rank <> 1), played_here DESC, rank, "
+                    "tunebook_count_cached DESC NULLS LAST, name")
     if use_name and use_abc:
-        rank = f"""CASE WHEN {_nm} = LOWER(unaccent(%s)) THEN 1
-                       WHEN {_nm} LIKE LOWER(unaccent(%s)) THEN 2
-                       WHEN {_nm} LIKE LOWER(unaccent(%s)) THEN 3 ELSE 4 END"""
-        params += [q, f"{q}%", f"%{q}%"]
-        order = f"{order_prefix}type_pref, rank, t.tunebook_count_cached DESC NULLS LAST, t.name"
+        rank = f"""CASE WHEN {name_eq()} THEN 1
+                       WHEN {name_like()} THEN 2
+                       WHEN {name_like()} THEN 3 ELSE 4 END"""
+        params += [q] * n_like + [f"{q}%"] * n_like + [f"%{q}%"] * n_like
+        order = ranked_order
     elif use_name:
-        rank = f"""CASE WHEN {_nm} = LOWER(unaccent(%s)) THEN 1
-                       WHEN {_nm} LIKE LOWER(unaccent(%s)) THEN 2 ELSE 3 END"""
-        params += [q, f"{q}%"]
-        order = f"{order_prefix}type_pref, rank, t.tunebook_count_cached DESC NULLS LAST, t.name"
+        rank = f"""CASE WHEN {name_eq()} THEN 1
+                       WHEN {name_like()} THEN 2 ELSE 3 END"""
+        params += [q] * n_like + [f"{q}%"] * n_like
+        order = ranked_order
     else:
         rank = "0"
-        order = f"{order_prefix}type_pref, t.tunebook_count_cached DESC NULLS LAST, t.name"
+        order = f"{order_prefix}type_pref, played_here DESC, tunebook_count_cached DESC NULLS LAST, name"
+
+    # Textual order of placeholders: SELECT clause (above), then the JOIN, then WHERE.
+    params += join_params
 
     where = ["t.redirect_to_tune_id IS NULL"]
     clauses = []
     if use_name:
-        clauses.append(f"{_nm} LIKE LOWER(unaccent(%s))")
-        params.append(f"%{q}%")
+        clauses.append(name_like())
+        params += [f"%{q}%"] * n_like
     if use_abc:
         clauses.append(_abc_exists)
         params.append(abc_pattern)
@@ -1889,15 +1929,18 @@ def _deep_search_core(cur, q, tune_type, prefer_type, mode, limit, person_id,
     params.append(limit)
 
     sql = f"""
-        SELECT t.tune_id, t.name, t.tune_type, t.tunebook_count_cached,
-               EXISTS(SELECT 1 FROM person_tune pt WHERE pt.tune_id = t.tune_id AND pt.person_id = %s) AS on_list,
-               {in_session_sql} AS in_session,
-               {played_here_sql} AS played_here,
-               CASE WHEN t.tune_type = %s THEN 0 ELSE 1 END AS type_pref,
-               {abc_only_sql} AS abc_only,
-               {rank} AS rank
-        FROM tune t
-        WHERE {' AND '.join(where)}
+        SELECT * FROM (
+            SELECT t.tune_id, t.name, t.tune_type, t.tunebook_count_cached,
+                   EXISTS(SELECT 1 FROM person_tune pt WHERE pt.tune_id = t.tune_id AND pt.person_id = %s) AS on_list,
+                   {in_session_sql} AS in_session,
+                   {played_here_sql} AS played_here,
+                   CASE WHEN t.tune_type = %s THEN 0 ELSE 1 END AS type_pref,
+                   {abc_only_sql} AS abc_only,
+                   {rank} AS rank
+            FROM tune t
+            {join_sql}
+            WHERE {' AND '.join(where)}
+        ) ranked
         ORDER BY {order}
         LIMIT %s
     """

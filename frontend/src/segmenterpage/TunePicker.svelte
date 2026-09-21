@@ -16,12 +16,16 @@
   const pane = createPaneState('sg-pick-open')
   let target = $state(null) // the tune being named
   let initialQuery = $state('')
+  // The set's tune type, as the live logger passes it: a soft ranking
+  // preference, so a reel's neighbours come up reels first.
+  let preferType = $state(null)
   let history = $state([]) // search recall (MRU) for the page's lifetime
   let busy = $state(false)
   let errorMsg = $state('')
 
-  export function open(tune) {
+  export function open(tune, opts = {}) {
     target = tune
+    preferType = opts.preferType ?? null
     // A tune logged on the night with a real name but no link seeds the search
     // with that name; the segmenter's own placeholder seeds nothing.
     initialQuery = tune?.tune_id == null && tune?.name && tune.name !== 'Gan Ainm' ? tune.name : ''
@@ -78,6 +82,7 @@
       allowAsIs={true}
       actionLabel="＋ Log This Tune"
       {initialQuery}
+      {preferType}
       {history}
       onRemember={remember}
       onAdd={pick}

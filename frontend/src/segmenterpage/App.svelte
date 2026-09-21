@@ -853,11 +853,26 @@
     persistMirror()
   }
 
+  // The type the search should favour: what the rest of this tune's set is,
+  // when the set agrees on one -- the same rule the live logger's composer
+  // uses (cursorSetType), so a reel's neighbours come up reels first.
+  function setTypeAround(index) {
+    const tune = tunes[index]
+    if (!tune) return null
+    const types = new Set(
+      tunes
+        .filter((t) => t.set_number === tune.set_number && t.session_instance_tune_id !== tune.session_instance_tune_id)
+        .map((t) => t.tune_type)
+        .filter(Boolean),
+    )
+    return types.size === 1 ? [...types][0] : null
+  }
+
   function openPicker(index) {
     const tune = tunes[index]
     if (!tune || !picker) return
     pickerOpen = true
-    picker.open(tune)
+    picker.open(tune, { preferType: setTypeAround(index) })
   }
 
   // The picker's pick: TuneSearch's own payload (tune_id, or thesession_id for

@@ -333,6 +333,17 @@ clears the pane search (same end state as a direct edit-mode add); cancelling ke
 search. Reading never mutates silently (complete logs get a notice instead — un-complete
 from the header first).
 
+**Deep-search ranking.** With a session in scope (the live screen's modal and pane,
+the segmenter's "which tune was this?" pane) `_deep_search_core` orders results the way
+the composer's quick type-ahead does: the set's type first, an exact hit next, then the
+tunes **this session plays most**, then how the name matched (prefix before substring),
+then global popularity. Session aliases (`session_tune.alias`) match and rank alongside
+the catalog name. It used to sort by match kind and popularity alone, which put the
+world's favourite "Maggie" above the one the session plays every week; nobody noticed
+because the composer resolves the common tunes before the panel is ever opened. Without
+a session (My Tunes, session-tunes add pane) there are no plays to rank on and the order
+is unchanged.
+
 **Deep-search preview (spec 032).** Tapping a result card no longer adds immediately — it
 opens **`TunePreview.svelte`** in the same real estate (TuneSearch swaps its content; search
 state survives underneath), showing full notation with the tune-detail modal's anatomy.

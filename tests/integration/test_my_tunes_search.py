@@ -230,3 +230,96 @@ def test_tune_search_link_to_unimported_tune_is_empty_not_an_error(client):
 def test_tune_search_short_name_query_still_rejected(client):
     resp = client.get("/api/tunes/search?q=z")
     assert resp.status_code == 400
+
+
+# --------------------------------------------------------------------------- #
+# Ranking with a session: the composer's order, not a dictionary's
+# --------------------------------------------------------------------------- #
+
+RANK_SID = 9420
+RANK_INSTANCE = 9421
+RANK_POPULAR = 9422   # "Glorp Maggie Alpha": the world's favourite, never played here
+RANK_LOCAL = 9423     # "Glorp Maggie Beta": obscure, but played at this session three times
+RANK_PREFIX = 9424    # "Maggie Glorp Gamma": a PREFIX hit for "maggie", never played here
+
+
+@pytest.fixture
+def ranking_world():
+    """A session with a night's log: the obscure tune was played three times, the
+    popular one never; the session calls the obscure one 'Glorpy'."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO tune (tune_id, name, tune_type, tunebook_count_cached) VALUES "
+        "(%s, 'Glorp Maggie Alpha', 'Reel', 900), (%s, 'Glorp Maggie Beta', 'Reel', 3), "
+        "(%s, 'Maggie Glorp Gamma', 'Jig', 400)",
+        (RANK_POPULAR, RANK_LOCAL, RANK_PREFIX),
+    )
+    cur.execute("INSERT INTO session (session_id, name, path) VALUES (%s, 'Glorp Rank', 'glorp-rank-test')", (RANK_SID,))
+    cur.execute(
+        "INSERT INTO session_instance (session_instance_id, session_id, date) VALUES (%s, %s, '2026-05-01')",
+        (RANK_INSTANCE, RANK_SID),
+    )
+    cur.execute("INSERT INTO session_tune (session_id, tune_id, alias) VALUES (%s, %s, 'Glorpy')", (RANK_SID, RANK_LOCAL))
+    for pos in ("a0", "a1", "a2"):
+        cur.execute(
+            "INSERT INTO session_instance_tune (session_instance_id, tune_id, order_position, record_type) VALUES (%s, %s, %s, 'tune')",
+            (RANK_INSTANCE, RANK_LOCAL, pos),
+        )
+    conn.commit()
+    yield
+    cur.execute("DELETE FROM session_instance_tune WHERE session_instance_id = %s", (RANK_INSTANCE,))
+    cur.execute("DELETE FROM session_instance WHERE session_instance_id = %s", (RANK_INSTANCE,))
+    cur.execute("DELETE FROM session_tune_history WHERE session_id = %s", (RANK_SID,))
+    cur.execute("DELETE FROM session_tune WHERE session_id = %s", (RANK_SID,))
+    cur.execute("DELETE FROM session_history WHERE session_id = %s", (RANK_SID,))
+    cur.execute("DELETE FROM session WHERE session_id = %s", (RANK_SID,))
+    cur.execute("DELETE FROM tune_history WHERE tune_id = ANY(%s)", ([RANK_POPULAR, RANK_LOCAL, RANK_PREFIX],))
+    cur.execute("DELETE FROM tune WHERE tune_id = ANY(%s)", ([RANK_POPULAR, RANK_LOCAL, RANK_PREFIX],))
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def _live_ids(client, q, **extra):
+    from urllib.parse import urlencode
+
+    resp = client.get(f"/api/live/instances/{RANK_INSTANCE}/deep-search?" + urlencode({"q": q, **extra}))
+    assert resp.status_code == 200, resp.get_data(as_text=True)
+    return [r["tune_id"] for r in resp.get_json()["results"] if r["tune_id"] in (RANK_POPULAR, RANK_LOCAL, RANK_PREFIX)]
+
+
+def test_live_deep_search_ranks_what_this_session_plays_above_popularity(client, authenticated_user, ranking_world):
+    """"maggie" at a session that plays Beta every week is Beta -- above the
+    world's favourite AND above a prefix hit. The quick type-ahead already did
+    this; the panel used to sort by how the name matched, then popularity."""
+    with authenticated_user:
+        ids = _live_ids(client, "maggie", prefer_type="Reel")
+    assert ids == [RANK_LOCAL, RANK_POPULAR, RANK_PREFIX]
+
+
+def test_live_deep_search_prefers_the_sets_type_first(client, authenticated_user, ranking_world):
+    with authenticated_user:
+        ids = _live_ids(client, "maggie", prefer_type="Jig")
+    assert ids[0] == RANK_PREFIX
+
+
+def test_live_deep_search_puts_an_exact_hit_first(client, authenticated_user, ranking_world):
+    with authenticated_user:
+        ids = _live_ids(client, "Glorp Maggie Alpha")
+    assert ids[0] == RANK_POPULAR
+
+
+def test_live_deep_search_matches_the_sessions_own_name_for_a_tune(client, authenticated_user, ranking_world):
+    with authenticated_user:
+        ids = _live_ids(client, "glorpy")
+    assert ids == [RANK_LOCAL]
+
+
+def test_my_tunes_deep_search_ranking_is_unchanged_without_a_session(client, authenticated_user, ranking_world):
+    """No session: no plays to rank on, so it stays type, name match, popularity."""
+    with authenticated_user:
+        resp = client.get("/api/my-tunes/deep-search?q=glorp")
+    ids = [r["tune_id"] for r in resp.get_json()["results"] if r["tune_id"] in (RANK_POPULAR, RANK_LOCAL, RANK_PREFIX)]
+    # Two prefix hits by popularity, then the substring hit.
+    assert ids == [RANK_POPULAR, RANK_LOCAL, RANK_PREFIX]
