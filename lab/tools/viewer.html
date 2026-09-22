@@ -7,7 +7,7 @@
   :root {
     --bg: #12141a; --panel: #1a1d26; --line: #2a2f3d; --ink: #e6e9f0;
     --dim: #8b93a7; --heard: #4a9eff; --matched: #3ddc97; --truth: #ffd166;
-    --playhead: #ff6b6b;
+    --playhead: #ff6b6b; --sel: #ffffff;
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--ink);
@@ -21,11 +21,12 @@
   .ok { background: rgba(61,220,151,.15); color: var(--matched); }
   .bad { background: rgba(255,107,107,.15); color: var(--playhead); }
   main { padding: 12px 16px 26px; }
-  .bar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
-  button, select {
+  .bar { display: flex; align-items: center; gap: 9px; margin-bottom: 9px; flex-wrap: wrap; }
+  button, select, input[type=range] {
     background: var(--panel); color: var(--ink); border: 1px solid var(--line);
     padding: 5px 11px; border-radius: 5px; cursor: pointer; font: inherit;
   }
+  input[type=range] { padding: 0; width: 84px; }
   button:hover { border-color: var(--dim); }
   button.on { background: #253044; border-color: var(--heard); color: #fff; }
   button.save { border-color: var(--truth); color: var(--truth); }
@@ -71,10 +72,14 @@
       </select>
     </label>
     <span class="sep"></span>
-    <button id="m-listen" class="mode on" data-mode="listen">listen</button>
-    <button id="m-accept" class="mode" data-mode="accept">accept</button>
-    <button id="m-draw" class="mode" data-mode="draw">draw</button>
-    <button id="m-erase" class="mode" data-mode="erase">erase</button>
+    <button class="mode on" data-mode="listen">listen</button>
+    <button class="mode" data-mode="edit">edit</button>
+    <button class="mode" data-mode="accept">accept</button>
+    <button class="mode" data-mode="draw">draw</button>
+    <button class="mode" data-mode="erase">erase</button>
+    <span class="sep"></span>
+    <button id="sing" title="sound your labels as the music plays">♪ sing labels</button>
+    <label>tone <input type="range" id="vol" min="0" max="100" value="45"></label>
     <span class="sep"></span>
     <button id="zoomout">−</button><button id="zoomin">+</button><button id="zoomfit">fit</button>
     <span class="sep"></span>
@@ -82,7 +87,7 @@
     <span id="agree"></span>
   </div>
 
-  <canvas id="roll" height="440"></canvas>
+  <canvas id="roll" height="460"></canvas>
   <canvas id="mini"></canvas>
 
   <div class="legend">
@@ -92,13 +97,17 @@
     <span><span class="swatch" style="background:var(--playhead)"></span>playhead</span>
   </div>
   <div class="hint">
-    <b>listen</b> click to seek ·
+    The strip along the top is the ruler — click or drag it to move the playhead, in any mode.
+    <b>listen</b> click anywhere to seek, click a note to hear it ·
+    <b>edit</b> drag a label to move it, drag its right edge to lengthen it, and it sounds as you go ·
     <b>accept</b> drag a box over notes that are right ·
-    <b>draw</b> drag to paint the pitch you actually hear ·
-    <b>erase</b> drag a box to remove labels ·
-    <kbd>space</kbd> play · <kbd>1-4</kbd> modes · <kbd>+</kbd><kbd>−</kbd> zoom ·
-    <kbd>←</kbd><kbd>→</kbd> pan · <kbd>↑</kbd><kbd>↓</kbd> move last label an octave ·
-    <kbd>cmd-z</kbd> undo · <kbd>cmd-s</kbd> save · scroll to zoom, shift-scroll to pan
+    <b>draw</b> paint the pitch you hear ·
+    <b>erase</b> drag a box to remove labels
+    <br>
+    <kbd>space</kbd> play · <kbd>1-5</kbd> modes · <kbd>+</kbd><kbd>−</kbd> zoom ·
+    <kbd>←</kbd><kbd>→</kbd> pan · <kbd>↑</kbd><kbd>↓</kbd> nudge a semitone
+    (<kbd>shift</kbd> an octave) · <kbd>⌫</kbd> delete · <kbd>s</kbd> sing ·
+    <kbd>cmd-z</kbd> undo · <kbd>cmd-s</kbd> save
   </div>
 
   <section>
@@ -120,20 +129,51 @@ const mini = document.getElementById('mini');
 const rc = roll.getContext('2d');
 const mc = mini.getContext('2d');
 let dpr = window.devicePixelRatio || 1;
-
 audio.src = D.audio_url;
 
-// ---- state ---------------------------------------------------------------
-let view = { t0: 0, t1: D.duration_s };            // visible time window
+const LO = D.midi_lo, HI = D.midi_hi;
+const PAD = 34, RULER = 22;          // ruler strip lives inside the top padding
+const fmt = s => { s = Math.max(0, s | 0); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+let view = { t0: 0, t1: D.duration_s };
 let mode = 'listen';
-let labels = (D.labels || []).map(l => ({ ...l }));  // [{t0,t1,midi}]
+let labels = (D.labels || []).map(l => ({ ...l }));
 let undoStack = [];
 let dirty = false;
 let drag = null;
+let selected = null;
+let singing = false;
 
-const LO = D.midi_lo, HI = D.midi_hi;
-const fmt = s => { s = Math.max(0, s | 0); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+// ---- sound ---------------------------------------------------------------
+// A sine for each note, so a label can be checked by ear against the audio it
+// sits on. Being an octave out is the commonest error and it is instantly
+// obvious when you hear it beside the music, and nearly invisible on a grid.
+let actx = null;
+function audioCtx() {
+  if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+  if (actx.state === 'suspended') actx.resume();
+  return actx;
+}
+const hz = m => 440 * Math.pow(2, (m - 69) / 12);
+function tone(midi, seconds) {
+  const gainValue = document.getElementById('vol').value / 100;
+  if (gainValue <= 0) return;
+  const ctx = audioCtx();
+  const t = ctx.currentTime;
+  const dur = clamp(seconds || 0.25, 0.06, 2.0);
+  const osc = ctx.createOscillator(), g = ctx.createGain();
+  osc.type = 'sine';
+  osc.frequency.value = hz(midi);
+  // a soft envelope, because a square-edged sine clicks and the click is
+  // what you end up listening to instead of the pitch
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(gainValue * 0.5, t + 0.012);
+  g.gain.setValueAtTime(gainValue * 0.5, t + dur - 0.04);
+  g.gain.linearRampToValueAtTime(0, t + dur);
+  osc.connect(g).connect(ctx.destination);
+  osc.start(t); osc.stop(t + dur + 0.02);
+}
 
 // ---- header --------------------------------------------------------------
 document.getElementById('title').innerHTML =
@@ -145,7 +185,6 @@ document.getElementById('meta').innerHTML =
   (D.truth_rank ? '<b>' + D.truth_rank + '</b>' : '<b>not found</b>') +
   ' <span class="verdict ' + (D.truth_rank === 1 ? 'ok' : 'bad') + '">' +
   (D.truth_rank === 1 ? 'correct' : 'wrong') + '</span>';
-
 document.getElementById('ranked').innerHTML =
   '<tr><th>#</th><th>tune</th><th>score</th><th>hits</th></tr>' +
   D.ranked.map((r, i) => '<tr class="' + (r.tune_id === D.truth_tune_id ? 'truthrow' : '') + '">' +
@@ -154,72 +193,131 @@ document.getElementById('ranked').innerHTML =
 document.getElementById('truthabc').innerHTML = D.truth_abc || '<i>no notation held for this tune</i>';
 
 // ---- geometry ------------------------------------------------------------
-const PAD = 34;
-function xOf(t) { return PAD * dpr + ((t - view.t0) / (view.t1 - view.t0)) * (roll.width - PAD * 1.5 * dpr); }
-function tOf(px) { return view.t0 + ((px - PAD * dpr) / (roll.width - PAD * 1.5 * dpr)) * (view.t1 - view.t0); }
-function yOf(m) { return roll.height - PAD * dpr - ((m - LO) / Math.max(1, HI - LO)) * (roll.height - PAD * 2 * dpr); }
-function mOf(py) { return LO + ((roll.height - PAD * dpr - py) / (roll.height - PAD * 2 * dpr)) * (HI - LO); }
+const plotL = () => PAD * dpr;
+const plotW = () => roll.width - PAD * 1.5 * dpr;
+const plotT = () => RULER * dpr;
+const plotB = () => roll.height - PAD * dpr;
+function xOf(t) { return plotL() + ((t - view.t0) / (view.t1 - view.t0)) * plotW(); }
+function tOf(px) { return view.t0 + ((px - plotL()) / plotW()) * (view.t1 - view.t0); }
+function yOf(m) { return plotB() - ((m - LO) / Math.max(1, HI - LO)) * (plotB() - plotT() - 8 * dpr); }
+function mOf(py) { return LO + ((plotB() - py) / (plotB() - plotT() - 8 * dpr)) * (HI - LO); }
 function evPos(e) {
   const r = roll.getBoundingClientRect();
-  return { x: (e.clientX - r.left) * dpr, y: (e.clientY - r.top) * dpr };
+  return { x: (e.clientX - r.left) * (roll.width / r.width),
+           y: (e.clientY - r.top) * (roll.height / r.height) };
+}
+const noteH = () => Math.max(3 * dpr, (plotB() - plotT()) / Math.max(12, HI - LO) * 0.8);
+
+// ---- seeking -------------------------------------------------------------
+function seek(t) {
+  t = clamp(t, 0, D.duration_s);
+  const apply = () => { try { audio.currentTime = t; } catch (_) {} };
+  if (audio.readyState >= 1) apply();
+  else audio.addEventListener('loadedmetadata', apply, { once: true });
+  const span = view.t1 - view.t0;
+  if (t < view.t0 || t > view.t1) {
+    const t0 = clamp(t - span / 2, 0, D.duration_s - span);
+    view = { t0, t1: t0 + span };
+  }
+  resetSung();
+  draw();
+}
+
+// ---- hit testing ---------------------------------------------------------
+function labelAt(p) {
+  const h = noteH();
+  for (let i = labels.length - 1; i >= 0; i--) {
+    const l = labels[i];
+    const x0 = xOf(l.t0), x1 = Math.max(x0 + 3 * dpr, xOf(l.t1)), y = yOf(l.midi);
+    if (p.x >= x0 - 3 * dpr && p.x <= x1 + 4 * dpr && Math.abs(p.y - y) <= h) {
+      return { label: l, index: i, onEdge: p.x >= x1 - 5 * dpr };
+    }
+  }
+  return null;
+}
+function heardAt(p) {
+  const h = noteH();
+  for (const n of D.notes) {
+    const x0 = xOf(n.t0), x1 = Math.max(x0 + 3 * dpr, xOf(n.t1));
+    if (p.x >= x0 && p.x <= x1 && Math.abs(p.y - yOf(n.midi)) <= h) return n;
+  }
+  return null;
 }
 
 // ---- drawing -------------------------------------------------------------
 function draw() {
-  const W = roll.width, H = roll.height, pad = PAD * dpr;
+  const W = roll.width, H = roll.height;
   rc.clearRect(0, 0, W, H);
   rc.font = (11 * dpr) + 'px ui-monospace, monospace';
 
+  // ruler
+  rc.fillStyle = '#161922';
+  rc.fillRect(0, 0, W, plotT());
+  rc.strokeStyle = '#2a2f3d'; rc.lineWidth = dpr;
+  rc.beginPath(); rc.moveTo(0, plotT()); rc.lineTo(W, plotT()); rc.stroke();
+
   rc.textBaseline = 'middle';
   for (let m = Math.ceil(LO / 12) * 12; m <= HI; m += 12) {
-    rc.strokeStyle = '#2a2f3d'; rc.lineWidth = dpr;
-    rc.beginPath(); rc.moveTo(pad, yOf(m)); rc.lineTo(W - pad * 0.5, yOf(m)); rc.stroke();
+    rc.strokeStyle = '#2a2f3d';
+    rc.beginPath(); rc.moveTo(plotL(), yOf(m)); rc.lineTo(W - PAD * 0.5 * dpr, yOf(m)); rc.stroke();
     rc.fillStyle = '#8b93a7'; rc.fillText('C' + (Math.floor(m / 12) - 1), 4 * dpr, yOf(m));
   }
   const span = view.t1 - view.t0;
-  const step = span > 60 ? 10 : span > 20 ? 5 : span > 8 ? 2 : 1;
-  rc.textBaseline = 'top';
+  const step = span > 60 ? 10 : span > 24 ? 5 : span > 10 ? 2 : span > 4 ? 1 : 0.5;
+  rc.textBaseline = 'middle';
   for (let t = Math.ceil(view.t0 / step) * step; t <= view.t1; t += step) {
     rc.strokeStyle = '#232734';
-    rc.beginPath(); rc.moveTo(xOf(t), pad * 0.55); rc.lineTo(xOf(t), H - pad); rc.stroke();
-    rc.fillStyle = '#8b93a7'; rc.fillText(fmt(t), xOf(t) + 3 * dpr, 5 * dpr);
+    rc.beginPath(); rc.moveTo(xOf(t), plotT()); rc.lineTo(xOf(t), plotB()); rc.stroke();
+    rc.fillStyle = '#8b93a7';
+    rc.fillText(step < 1 ? t.toFixed(1) : fmt(t), xOf(t) + 3 * dpr, plotT() / 2);
   }
 
-  const noteH = Math.max(3 * dpr, (H - pad * 2) / Math.max(12, HI - LO) * 0.82);
+  const h = noteH();
   for (const n of D.notes) {
     if (n.t1 < view.t0 || n.t0 > view.t1) continue;
     const x0 = xOf(n.t0), x1 = Math.max(x0 + 1.5 * dpr, xOf(n.t1));
-    rc.globalAlpha = n.matched ? 1 : 0.7;
+    rc.globalAlpha = n.matched ? 1 : 0.62;
     rc.fillStyle = n.matched ? '#3ddc97' : '#4a9eff';
-    rc.beginPath(); rc.roundRect(x0, yOf(n.midi) - noteH / 2, x1 - x0, noteH,
+    rc.beginPath(); rc.roundRect(x0, yOf(n.midi) - h / 2, x1 - x0, h,
       Math.min(2.5 * dpr, (x1 - x0) / 2)); rc.fill();
   }
   rc.globalAlpha = 1;
 
   for (const l of labels) {
     if (l.t1 < view.t0 || l.t0 > view.t1) continue;
-    const x0 = xOf(l.t0), x1 = Math.max(x0 + 2 * dpr, xOf(l.t1));
+    const x0 = xOf(l.t0), x1 = Math.max(x0 + 2.5 * dpr, xOf(l.t1));
     rc.fillStyle = '#ffd166';
-    rc.beginPath(); rc.roundRect(x0, yOf(l.midi) - noteH * 0.42, x1 - x0, noteH * 0.84,
+    rc.beginPath(); rc.roundRect(x0, yOf(l.midi) - h * 0.44, x1 - x0, h * 0.88,
       Math.min(2.5 * dpr, (x1 - x0) / 2)); rc.fill();
+    if (l === selected) {
+      rc.strokeStyle = '#fff'; rc.lineWidth = 1.5 * dpr;
+      rc.strokeRect(x0 - 1.5 * dpr, yOf(l.midi) - h * 0.44 - 1.5 * dpr,
+                    x1 - x0 + 3 * dpr, h * 0.88 + 3 * dpr);
+      rc.fillStyle = '#fff';
+      rc.fillText(noteName(l.midi), x1 + 6 * dpr, yOf(l.midi));
+    }
   }
 
   if (drag && drag.box) {
     const x0 = Math.min(drag.x0, drag.x), x1 = Math.max(drag.x0, drag.x);
     const y0 = Math.min(drag.y0, drag.y), y1 = Math.max(drag.y0, drag.y);
     rc.fillStyle = mode === 'erase' ? 'rgba(255,107,107,.15)' : 'rgba(61,220,151,.15)';
-    rc.strokeStyle = mode === 'erase' ? '#ff6b6b' : '#3ddc97';
-    rc.lineWidth = dpr;
+    rc.strokeStyle = mode === 'erase' ? '#ff6b6b' : '#3ddc97'; rc.lineWidth = dpr;
     rc.fillRect(x0, y0, x1 - x0, y1 - y0); rc.strokeRect(x0, y0, x1 - x0, y1 - y0);
   }
 
   const t = audio.currentTime;
   if (t >= view.t0 && t <= view.t1) {
     rc.strokeStyle = '#ff6b6b'; rc.lineWidth = 1.5 * dpr;
-    rc.beginPath(); rc.moveTo(xOf(t), pad * 0.55); rc.lineTo(xOf(t), H - pad); rc.stroke();
+    rc.beginPath(); rc.moveTo(xOf(t), 0); rc.lineTo(xOf(t), plotB()); rc.stroke();
+    rc.fillStyle = '#ff6b6b';
+    rc.beginPath(); rc.moveTo(xOf(t) - 4 * dpr, 0); rc.lineTo(xOf(t) + 4 * dpr, 0);
+    rc.lineTo(xOf(t), 7 * dpr); rc.closePath(); rc.fill();
   }
   drawMini();
 }
+const NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const noteName = m => NAMES[((m % 12) + 12) % 12] + (Math.floor(m / 12) - 1);
 
 function drawMini() {
   const W = mini.width, H = mini.height;
@@ -228,7 +326,7 @@ function drawMini() {
   const y = m => H - 3 - ((m - LO) / Math.max(1, HI - LO)) * (H - 6);
   for (const n of D.notes) {
     mc.fillStyle = n.matched ? '#3ddc97' : '#4a9eff';
-    mc.globalAlpha = n.matched ? .9 : .45;
+    mc.globalAlpha = n.matched ? .9 : .4;
     mc.fillRect(x(n.t0), y(n.midi) - dpr, Math.max(dpr, x(n.t1) - x(n.t0)), 2 * dpr);
   }
   mc.globalAlpha = 1;
@@ -236,7 +334,7 @@ function drawMini() {
     mc.fillStyle = '#ffd166';
     mc.fillRect(x(l.t0), y(l.midi) - dpr, Math.max(dpr, x(l.t1) - x(l.t0)), 2 * dpr);
   }
-  mc.fillStyle = 'rgba(255,255,255,.08)';
+  mc.fillStyle = 'rgba(255,255,255,.07)';
   mc.fillRect(x(view.t0), 0, x(view.t1) - x(view.t0), H);
   mc.strokeStyle = '#4a9eff'; mc.lineWidth = dpr;
   mc.strokeRect(x(view.t0), 0, x(view.t1) - x(view.t0), H);
@@ -247,7 +345,7 @@ function drawMini() {
 // ---- labels --------------------------------------------------------------
 function pushUndo() {
   undoStack.push(JSON.stringify(labels));
-  if (undoStack.length > 60) undoStack.shift();
+  if (undoStack.length > 80) undoStack.shift();
   dirty = true;
   document.getElementById('save').disabled = false;
 }
@@ -256,8 +354,9 @@ function mergeLabels() {
   const out = [];
   for (const l of labels) {
     const prev = out[out.length - 1];
-    if (prev && prev.midi === l.midi && l.t0 - prev.t1 < 0.06) prev.t1 = Math.max(prev.t1, l.t1);
-    else out.push({ ...l });
+    if (prev && prev.midi === l.midi && l.t0 - prev.t1 < 0.06 && prev !== selected && l !== selected)
+      prev.t1 = Math.max(prev.t1, l.t1);
+    else out.push(l);
   }
   labels = out;
 }
@@ -277,25 +376,75 @@ function agreement() {
 }
 function refresh() { mergeLabels(); document.getElementById('agree').textContent = agreement(); draw(); }
 
-// ---- interaction ---------------------------------------------------------
+// ---- pointer -------------------------------------------------------------
 roll.addEventListener('pointerdown', e => {
   const p = evPos(e);
   roll.setPointerCapture(e.pointerId);
-  if (mode === 'listen') { audio.currentTime = clamp(tOf(p.x), 0, D.duration_s); draw(); return; }
-  if (mode === 'draw') {
-    pushUndo();
-    drag = { mode: 'draw', last: null };
-    paint(p);
-  } else {
-    drag = { mode: 'box', box: true, x0: p.x, y0: p.y, x: p.x, y: p.y };
+
+  if (p.y <= plotT()) { drag = { mode: 'scrub' }; seek(tOf(p.x)); return; }
+
+  if (mode === 'edit') {
+    const hit = labelAt(p);
+    if (hit) {
+      pushUndo();
+      selected = hit.label;
+      tone(hit.label.midi, hit.label.t1 - hit.label.t0);
+      drag = { mode: hit.onEdge ? 'resize' : 'move', label: hit.label,
+               grabT: tOf(p.x), t0: hit.label.t0, t1: hit.label.t1, midi: hit.label.midi };
+      draw();
+      return;
+    }
+    const heard = heardAt(p);
+    if (heard) { tone(heard.midi, heard.t1 - heard.t0); selected = null; draw(); return; }
+    selected = null; draw(); return;
   }
+
+  if (mode === 'listen') {
+    // Always move the playhead. Sounding a note under the cursor is a bonus,
+    // never a replacement: a click that sometimes seeks and sometimes does
+    // not is the most annoying thing an editor can do.
+    seek(tOf(p.x));
+    drag = { mode: 'scrub' };
+    const lab = labelAt(p);
+    const heard = lab ? null : heardAt(p);
+    if (lab) tone(lab.label.midi, lab.label.t1 - lab.label.t0);
+    else if (heard) tone(heard.midi, heard.t1 - heard.t0);
+    return;
+  }
+
+  if (mode === 'draw') { pushUndo(); drag = { mode: 'draw' }; paint(p); return; }
+  drag = { mode: 'box', box: true, x0: p.x, y0: p.y, x: p.x, y: p.y };
 });
+
 roll.addEventListener('pointermove', e => {
-  if (!drag) return;
+  if (!drag) {
+    if (mode === 'edit') {
+      const hit = labelAt(evPos(e));
+      roll.style.cursor = hit ? (hit.onEdge ? 'ew-resize' : 'move') : 'default';
+    }
+    return;
+  }
   const p = evPos(e);
-  if (drag.mode === 'draw') paint(p);
-  else { drag.x = p.x; drag.y = p.y; draw(); }
+  if (drag.mode === 'scrub') { seek(tOf(p.x)); return; }
+  if (drag.mode === 'draw') { paint(p); return; }
+  if (drag.mode === 'move') {
+    const dt = tOf(p.x) - drag.grabT;
+    const m = Math.round(clamp(mOf(p.y), LO, HI));
+    const len = drag.t1 - drag.t0;
+    drag.label.t0 = clamp(drag.t0 + dt, 0, D.duration_s - len);
+    drag.label.t1 = drag.label.t0 + len;
+    if (m !== drag.label.midi) { drag.label.midi = m; tone(m, 0.16); }
+    dirty = true; document.getElementById('save').disabled = false;
+    draw(); return;
+  }
+  if (drag.mode === 'resize') {
+    drag.label.t1 = clamp(tOf(p.x), drag.label.t0 + 0.03, D.duration_s);
+    dirty = true; document.getElementById('save').disabled = false;
+    draw(); return;
+  }
+  drag.x = p.x; drag.y = p.y; draw();
 });
+
 roll.addEventListener('pointerup', () => {
   if (drag && drag.mode === 'box') {
     const t0 = tOf(Math.min(drag.x0, drag.x)), t1 = tOf(Math.max(drag.x0, drag.x));
@@ -303,18 +452,19 @@ roll.addEventListener('pointerup', () => {
     if (mode === 'accept') {
       pushUndo();
       for (const n of D.notes) {
-        if (n.t1 < t0 || n.t0 > t1) continue;
-        if (n.midi < mLo || n.midi > mHi) continue;
+        if (n.t1 < t0 || n.t0 > t1 || n.midi < mLo || n.midi > mHi) continue;
         labels.push({ t0: n.t0, t1: n.t1, midi: n.midi, from: 'accepted' });
       }
     } else if (mode === 'erase') {
       pushUndo();
       labels = labels.filter(l => l.t1 < t0 || l.t0 > t1 || l.midi < mLo || l.midi > mHi);
+      selected = null;
     }
   }
   drag = null;
   refresh();
 });
+
 function paint(p) {
   const t = clamp(tOf(p.x), 0, D.duration_s);
   const m = Math.round(clamp(mOf(p.y), LO, HI));
@@ -323,23 +473,41 @@ function paint(p) {
   if (last && last.from === 'drawn' && last.midi === m && t - last.t1 < w * 4) {
     last.t1 = Math.max(last.t1, t + w);
   } else {
+    if (!last || last.midi !== m) tone(m, 0.14);
     labels.push({ t0: t, t1: t + w, midi: m, from: 'drawn' });
   }
   draw();
 }
 
+// ---- singing the labels over the music -----------------------------------
+let sungUpTo = -1;
+function resetSung() { sungUpTo = audio.currentTime - 0.001; }
+document.getElementById('sing').onclick = () => {
+  singing = !singing;
+  document.getElementById('sing').classList.toggle('on', singing);
+  resetSung();
+  if (singing) audioCtx();
+};
+function singTick() {
+  if (!singing || audio.paused) { if (audio.paused) resetSung(); return; }
+  const t = audio.currentTime;
+  for (const l of labels) {
+    if (l.t0 > sungUpTo && l.t0 <= t) tone(l.midi, (l.t1 - l.t0) / (audio.playbackRate || 1));
+  }
+  sungUpTo = t;
+}
+
 // ---- zoom and pan --------------------------------------------------------
 function zoomAt(t, factor) {
-  const span = clamp((view.t1 - view.t0) * factor, 1.0, D.duration_s);
+  const span = clamp((view.t1 - view.t0) * factor, 0.5, D.duration_s);
   const frac = clamp((t - view.t0) / (view.t1 - view.t0), 0, 1);
-  let t0 = t - span * frac;
-  t0 = clamp(t0, 0, D.duration_s - span);
+  const t0 = clamp(t - span * frac, 0, Math.max(0, D.duration_s - span));
   view = { t0, t1: t0 + span };
   draw();
 }
 function panBy(seconds) {
   const span = view.t1 - view.t0;
-  const t0 = clamp(view.t0 + seconds, 0, D.duration_s - span);
+  const t0 = clamp(view.t0 + seconds, 0, Math.max(0, D.duration_s - span));
   view = { t0, t1: t0 + span };
   draw();
 }
@@ -352,7 +520,7 @@ mini.addEventListener('pointerdown', e => {
   const r = mini.getBoundingClientRect();
   const t = ((e.clientX - r.left) / r.width) * D.duration_s;
   const span = view.t1 - view.t0;
-  const t0 = clamp(t - span / 2, 0, D.duration_s - span);
+  const t0 = clamp(t - span / 2, 0, Math.max(0, D.duration_s - span));
   view = { t0, t1: t0 + span };
   draw();
 });
@@ -364,19 +532,21 @@ document.getElementById('zoomfit').onclick = () => { view = { t0: 0, t1: D.durat
 function setMode(m) {
   mode = m;
   document.querySelectorAll('.mode').forEach(b => b.classList.toggle('on', b.dataset.mode === m));
-  roll.style.cursor = m === 'listen' ? 'pointer' : m === 'draw' ? 'crosshair' : 'cell';
+  roll.style.cursor = m === 'listen' ? 'pointer' : m === 'draw' ? 'crosshair'
+    : m === 'edit' ? 'default' : 'cell';
 }
 document.querySelectorAll('.mode').forEach(b => b.onclick = () => setMode(b.dataset.mode));
 
 const playBtn = document.getElementById('play');
-playBtn.onclick = () => audio.paused ? audio.play() : audio.pause();
-audio.addEventListener('play', () => playBtn.textContent = '❚❚ Pause');
+playBtn.onclick = () => { audioCtx(); audio.paused ? audio.play() : audio.pause(); };
+audio.addEventListener('play', () => { playBtn.textContent = '❚❚ Pause'; resetSung(); });
 audio.addEventListener('pause', () => playBtn.textContent = '▶ Play');
+audio.addEventListener('seeked', resetSung);
 audio.addEventListener('timeupdate', () => {
   document.getElementById('cur').textContent = fmt(audio.currentTime);
   const t = audio.currentTime, span = view.t1 - view.t0;
   if (!audio.paused && (t < view.t0 || t > view.t1 - span * 0.15)) {
-    const t0 = clamp(t - span * 0.3, 0, D.duration_s - span);
+    const t0 = clamp(t - span * 0.3, 0, Math.max(0, D.duration_s - span));
     view = { t0, t1: t0 + span };
   }
 });
@@ -400,39 +570,43 @@ document.getElementById('save').onclick = save;
 window.addEventListener('beforeunload', e => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
 
 document.addEventListener('keydown', e => {
-  if (e.target.tagName === 'SELECT') return;
+  if (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') return;
   const meta = e.metaKey || e.ctrlKey;
   if (meta && e.key === 's') { e.preventDefault(); save(); return; }
   if (meta && e.key === 'z') {
     e.preventDefault();
-    if (undoStack.length) { labels = JSON.parse(undoStack.pop()); refresh(); }
+    if (undoStack.length) { labels = JSON.parse(undoStack.pop()); selected = null; refresh(); }
     return;
   }
-  const keys = { '1': 'listen', '2': 'accept', '3': 'draw', '4': 'erase' };
-  if (keys[e.key]) { setMode(keys[e.key]); return; }
-  if (e.code === 'Space') { e.preventDefault(); audio.paused ? audio.play() : audio.pause(); return; }
+  const modes = { '1': 'listen', '2': 'edit', '3': 'accept', '4': 'draw', '5': 'erase' };
+  if (modes[e.key]) { setMode(modes[e.key]); return; }
+  if (e.code === 'Space') { e.preventDefault(); audioCtx(); audio.paused ? audio.play() : audio.pause(); return; }
+  if (e.key === 's') { document.getElementById('sing').click(); return; }
   if (e.key === '+' || e.key === '=') { zoomAt((view.t0 + view.t1) / 2, 0.6); return; }
   if (e.key === '-') { zoomAt((view.t0 + view.t1) / 2, 1.7); return; }
+  if ((e.key === 'Backspace' || e.key === 'Delete') && selected) {
+    e.preventDefault(); pushUndo();
+    labels = labels.filter(l => l !== selected); selected = null; refresh(); return;
+  }
+  if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+    if (!selected) return;
+    e.preventDefault(); pushUndo();
+    selected.midi = clamp(selected.midi + (e.key === 'ArrowUp' ? 1 : -1) * (e.shiftKey ? 12 : 1), LO, HI);
+    tone(selected.midi, 0.18);
+    refresh(); return;
+  }
   if (e.key === 'ArrowLeft') { panBy(-(view.t1 - view.t0) * 0.25); return; }
   if (e.key === 'ArrowRight') { panBy((view.t1 - view.t0) * 0.25); return; }
-  if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && labels.length) {
-    e.preventDefault();
-    pushUndo();
-    const shift = e.key === 'ArrowUp' ? 12 : -12;
-    const last = labels[labels.length - 1];
-    for (const l of labels) if (Math.abs(l.t0 - last.t0) < 0.001) l.midi = clamp(l.midi + shift, LO, HI);
-    refresh();
-  }
 });
 
 function resize() {
   dpr = window.devicePixelRatio || 1;
-  roll.width = roll.clientWidth * dpr; roll.height = 440 * dpr;
+  roll.width = roll.clientWidth * dpr; roll.height = 460 * dpr;
   mini.width = mini.clientWidth * dpr; mini.height = 44 * dpr;
   draw();
 }
 window.addEventListener('resize', resize);
-(function tick() { draw(); requestAnimationFrame(tick); })();
+(function tick() { singTick(); draw(); requestAnimationFrame(tick); })();
 resize();
 setMode('listen');
 refresh();
