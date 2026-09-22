@@ -178,6 +178,29 @@ For quick schema testing, you can run SQL files directly:
 PGPASSWORD=test_password psql -h localhost -U test_user -d ceol_test -f schema/your_migration.sql
 ```
 
+## Working in a git worktree
+
+A second worktree (`git worktree add ../ceol-<branch> -b <branch>`) starts out
+**unable to run anything**, because everything it needs is gitignored. Two steps:
+
+```bash
+cd ../ceol-<branch>
+M=/path/to/the/main/checkout
+ln -s "$M/venv" venv                                   # same deps, safe to share
+ln -s "$M/node_modules" node_modules
+ln -s "$M/frontend/node_modules" frontend/node_modules
+ln -s "$M/.env" .env                                   # same local DB
+npm run build && (cd frontend && npm run build)        # bundles are NOT shared
+```
+
+The venv, `node_modules` and `.env` can be symlinked — they are the same for every
+branch. **`static/<page>/` cannot.** Those are Vite/webpack output built from the
+branch's own sources, so each worktree needs its own build. Skipping it is quiet and
+confusing rather than loud: Flask serves the pages fine, the Svelte bundles are simply
+absent, and the e2e suite fails in bulk on elements that never mounted.
+
+Both worktrees share one `ceol_test` database, so don't run two test suites at once.
+
 ## Troubleshooting
 
 ### PostgreSQL Not Running
