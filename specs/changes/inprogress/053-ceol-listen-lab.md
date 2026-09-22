@@ -306,6 +306,46 @@ be inspected on its own, and the next idea has somewhere to be scored.
 
 ## Status
 
-Spec written 2026-09-22. Nothing built yet. The build order, with a
-verification for each step, is in
-[053 files/steel-thread-plan.md](053%20files/steel-thread-plan.md).
+Built and running against synthetic audio; **not yet run against the corpus**.
+
+Working end to end: the corpus pull and the ABC parser (99.99% of the 55,384
+settings in the public dump parse), the interval n-gram index, the feature
+grid, the bench's tasks and five candidates, the board, the reactive driver
+with windows and the scheduler hook, all nine experts, the identification and
+segmentation harness, and the four inspection tools. Forty-two lab tests pass,
+eleven of them driving the whole thread on a synthetic night rendered from
+indexed ABC. That fixture removes every hard thing about the problem — no
+room, no heterophony, no chatter — so it proves the machinery and nothing
+about accuracy.
+
+**Blocked on two things, both outside the code.** A production database URL,
+for `lab pull` to write manifests; and AWS credentials in `.env`, for it to
+fetch the master audio. Until then no real night has been pulled, the bench
+has never been scored on real labels, and the two learned candidates have
+never been fitted.
+
+**Seven corpus fixes are wanted before the first real scoring run.** Six
+segments have no explicit end where the log says a set ended, so their tails
+have swallowed chatter — recording 4's last tune runs 91 minutes to the end of
+the file, and five others by one to three minutes. One segment in recording 1
+ends 583ms after the next one starts. With those fixed, `end_is_explicit` is
+authoritative and the set-break cross-check stays a warning that should never
+fire.
+
+What the synthetic run already shows, and expect to see again at scale: the
+assembler holds on to a tune after it has stopped. With no boundary detected
+it kept claiming the first tune through the whole of the second, because
+accumulated evidence for an open span outweighs a newcomer. The change hazard
+exists for this and is plainly not yet strong enough. Separately,
+`boundary_novelty` reads a two-minute window with sixteen seconds of
+lookahead, so it says nothing at all about the first two minutes of a night —
+a fast, low-precision partner is the obvious next producer of that type.
+
+Costs measured on the synthetic run, per minute of audio: pyin about twelve
+seconds, yin about a third of a second, everything else under a tenth. A full
+pass of the 15.6-hour corpus is therefore a few hours, dominated entirely by
+pyin, which is what the window cache and `--segments` exist for.
+
+Not done, deliberately: no learned candidate has graduated (the lab does not
+persist fitted models yet, and `CandidateExpert` refuses rather than guessing);
+no `tune_pair` task; no audio-embedding probe; and nothing runs live.
