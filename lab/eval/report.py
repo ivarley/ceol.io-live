@@ -45,8 +45,6 @@ def to_markdown(r):
             f"| segments scored | {ident['n_evaluated']} ({ident['n_capped']} capped) |",
             f"| top-1 at end | {_pct(ident['top1'])} |",
             f"| top-5 at end | {_pct(ident['top5'])} |",
-            f"| top-1 finally | {_pct(ident.get('top1_final'))} |",
-            f"| top-5 finally | {_pct(ident.get('top5_final'))} |",
             f"| right within 30s | {_pct(ident['found_within_30s'])} |",
             f"| right within 60s | {_pct(ident['found_within_60s'])} |",
             f"| never right | {ident['never_found']} |",
@@ -106,8 +104,7 @@ def summary_line(r):
     if not i.get("n_evaluated"):
         return f"{r['run_id']}: no segments scored"
     seg = r["segmentation"].get("boundary_observations", {}).get("by_tolerance", {}).get("3000", {})
-    return (f"{r['run_id']}: top-1 {_pct(i['top1'])} (finally {_pct(i.get('top1_final'))}), "
-            f"top-5 {_pct(i['top5'])}, "
+    return (f"{r['run_id']}: top-1 {_pct(i['top1'])}, top-5 {_pct(i['top5'])}, "
             f"ttfc median {fmt_ms(i['ttfc_median_ms'])}, flips {i['flips_mean']:.1f}/segment, "
             f"boundary f1 {seg.get('f1', 0):.2f}")
 

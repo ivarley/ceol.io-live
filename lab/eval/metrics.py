@@ -48,29 +48,6 @@ def _answer_at(events, spans, t_ms):
     return current
 
 
-def _final_answer(events, spans, seg_start, seg_end):
-    """The last thing ever said about the span covering this segment.
-
-    A hypothesis can be superseded long after its tune has finished, when the
-    tunes either side of it make a different reading better. That is a claim
-    withdrawn in favour of a better one, and it is what the reader ends up
-    with, so it deserves its own number.
-    """
-    best_hyp, best_overlap = None, 0
-    for hyp_id, h in spans.items():
-        start = h["t_start_ms"]
-        end = h["t_end_ms"] if h["t_end_ms"] is not None else seg_end
-        overlap = min(end, seg_end) - max(start, seg_start)
-        if overlap > best_overlap:
-            best_hyp, best_overlap = hyp_id, overlap
-    if best_hyp is None:
-        return None
-    for e in reversed(events):
-        if e["hyp_id"] == best_hyp and e["event"] != "withdrawn":
-            return e
-    return None
-
-
 def score_identification(board, run_id, gt, replay_range=None):
     """Per-segment identification results for one run.
 
@@ -119,16 +96,6 @@ def score_identification(board, run_id, gt, replay_range=None):
         if final is not None and ttsc is not None and top1_end == 0:
             ttsc = None
 
-        # What it settled on in the end, after any later revision. The
-        # during-the-tune answer and the final answer are different questions
-        # and the bench only ever answered the second: it decodes a whole set
-        # once the set has been heard. Reporting both stops the two being
-        # compared as though they were one number.
-        final_answer = _final_answer(events, spans, s, e)
-        top1_final = int(bool(final_answer and final_answer["top1_tune_id"] == seg.tune_id))
-        top5_final = int(seg.tune_id in
-                         [c["tune_id"] for c in (final_answer["ranked"][:5] if final_answer else [])])
-
         flips = sum(1 for a, b in zip(tops, tops[1:]) if a != b)
         cost = sum(c for t, c in costs_by_window if s <= t < e)
 
@@ -140,7 +107,6 @@ def score_identification(board, run_id, gt, replay_range=None):
         })
         rows.append((seg, {
             "ttfc_ms": ttfc, "ttsc_ms": ttsc, "top1_end": top1_end, "top5_end": top5_end,
-            "top1_final": top1_final, "top5_final": top5_final,
             "flips": flips, "end_conf": end_conf, "cost_ms": cost,
         }, detail))
     return rows
@@ -158,8 +124,6 @@ def aggregate_identification(rows):
 
     top1 = sum(m["top1_end"] for _, m in scored)
     top5 = sum(m["top5_end"] for _, m in scored)
-    top1f = sum(m.get("top1_final", 0) for _, m in scored)
-    top5f = sum(m.get("top5_final", 0) for _, m in scored)
     found30 = sum(1 for _, m in scored if m["ttfc_ms"] is not None and m["ttfc_ms"] <= 30000)
     found60 = sum(1 for _, m in scored if m["ttfc_ms"] is not None and m["ttfc_ms"] <= 60000)
     never = sum(1 for _, m in scored if m["ttfc_ms"] is None)
@@ -177,8 +141,6 @@ def aggregate_identification(rows):
         "skipped": dict(skipped),
         "top1": pct(top1),
         "top5": pct(top5),
-        "top1_final": pct(top1f),
-        "top5_final": pct(top5f),
         "found_within_30s": pct(found30),
         "found_within_60s": pct(found60),
         "never_found": never,
