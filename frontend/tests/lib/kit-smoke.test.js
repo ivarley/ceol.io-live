@@ -17,6 +17,10 @@ const COMPONENTS = {
   Pager: { index: 0, count: 0 },
   SearchField: {},
   Seg: { options: [{ id: 'a', label: 'A' }] },
+  // spec 052 §B8 Stage 1 — the phone-shaped primitives.
+  Row: { title: 'x' },
+  Toolbar: {},
+  SectionHeader: { title: 'x' },
   // Composed from the kit rather than a primitive, but shared app-wide (spec 034).
   PersonPicker: { open: false, people: [] },
   SessionPicker: { open: false, sessions: [] },
