@@ -31,7 +31,8 @@ class SalienceMelody(FrontEnd):
     version = "1"
     cost = 4.0
     TRACK_PARAMS = ("fmin", "fmax", "n_fft", "hop", "n_harmonics", "harmonic_decay",
-                    "highpass_hz", "lowpass_hz", "hpss", "smooth_frames")
+                    "highpass_hz", "lowpass_hz", "hpss", "smooth_frames",
+                    "tracking", "jump_bins", "jump_penalty")
 
     @classmethod
     def defaults(cls):
@@ -49,6 +50,12 @@ class SalienceMelody(FrontEnd):
             "smooth_frames": 3,
             "highpass_hz": None, "lowpass_hz": None, "hpss": None,
             "min_voiced": 0.15,
+            # "peak": strongest candidate per frame, deciding afresh each time.
+            # "viterbi": the best path through the surface, which is what the
+            # surface was built for.
+            "tracking": "peak",
+            "jump_bins": 40,       # how far the path may move between frames
+            "jump_penalty": 0.06,  # cost per bin of movement
         })
         return d
 
@@ -82,7 +89,10 @@ class SalienceMelody(FrontEnd):
             kernel = np.ones(k, dtype=np.float32) / k
             sal = np.apply_along_axis(lambda r: np.convolve(r, kernel, mode="same"), 1, sal)
 
-        peak = np.argmax(sal, axis=0)
+        if p["tracking"] == "viterbi":
+            peak = self._viterbi(sal, int(p["jump_bins"]), float(p["jump_penalty"]))
+        else:
+            peak = np.argmax(sal, axis=0)
         f0 = self._interpolate(sal, peak, freqs[idx])
 
         # Voicing: how much the winning candidate stands out from the rest of
@@ -94,6 +104,55 @@ class SalienceMelody(FrontEnd):
 
         times = np.arange(f0.size) * p["hop"] * 1000.0 / sr
         return times, f0, voiced.astype(float)
+
+    @staticmethod
+    def _viterbi(sal, jump_bins, jump_penalty):
+        """The best path through the salience surface, not the best frame of it.
+
+        Taking the strongest candidate in each frame throws away the one thing
+        the surface offers, which is that every candidate is still visible.
+        Nothing then stops the answer hopping between a pitch and the octave
+        below it, whose harmonics overlap almost entirely: measured, 41% of
+        the steps it produced were octave-sized.
+
+        A path is scored by the salience it passes through, less a penalty for
+        how far it moves each frame. Melodies move by small intervals most of
+        the time, so the penalty is what makes an octave leap need real
+        evidence rather than a hair of noise.
+        """
+        n_bins, n_frames = sal.shape
+        if n_frames == 0:
+            return np.zeros(0, dtype=int)
+        # log salience, so the path score adds evidence rather than multiplying
+        obs = np.log(sal + 1e-9)
+        obs -= obs.max(axis=0, keepdims=True)
+
+        shifts = np.arange(-jump_bins, jump_bins + 1)
+        costs = jump_penalty * np.abs(shifts).astype(np.float64)
+        best = obs[:, 0].astype(np.float64)
+        back = np.empty((n_frames, n_bins), dtype=np.int32)
+        back[0] = np.arange(n_bins)
+        very_negative = -1e18
+
+        for t in range(1, n_frames):
+            # candidate[d, j] = best[j - shift[d]] - cost[d], i.e. arriving at j
+            # from a bin `shift[d]` away
+            stack = np.full((shifts.size, n_bins), very_negative)
+            for d, (shift, cost) in enumerate(zip(shifts, costs)):
+                if shift >= 0:
+                    stack[d, shift:] = best[:n_bins - shift] - cost
+                else:
+                    stack[d, :n_bins + shift] = best[-shift:] - cost
+            argd = np.argmax(stack, axis=0)
+            best = stack[argd, np.arange(n_bins)] + obs[:, t]
+            back[t] = np.arange(n_bins) - shifts[argd]
+            np.clip(back[t], 0, n_bins - 1, out=back[t])
+
+        path = np.empty(n_frames, dtype=int)
+        path[-1] = int(np.argmax(best))
+        for t in range(n_frames - 1, 0, -1):
+            path[t - 1] = back[t][path[t]]
+        return path
 
     @staticmethod
     def _interpolate(sal, peak, band_freqs):
@@ -119,6 +178,19 @@ class SalienceMelody(FrontEnd):
                         np.log(band_freqs[np.minimum(centre + 1, n_bins - 1)]) - lo,
                         lo - np.log(band_freqs[np.maximum(centre - 1, 0)]))
         return np.exp(lo + shift * step)
+
+
+class SalienceViterbi(SalienceMelody):
+    """The salience surface with a path tracked through it."""
+
+    name = "salience_viterbi"
+    version = "1"
+
+    @classmethod
+    def defaults(cls):
+        d = dict(SalienceMelody.defaults())
+        d["tracking"] = "viterbi"
+        return d
 
 
 class SalienceCleaned(SalienceMelody):

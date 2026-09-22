@@ -25,6 +25,7 @@ so trying a different index, a different n, or a prior costs nothing.
 
 import json
 import time
+from collections import defaultdict
 
 import numpy as np
 
@@ -111,8 +112,17 @@ def rerank(ranked, weights, beta=1.0, index=None, audio_floor=1e-3, prior_top=50
     return out
 
 
+def _blend(weights_by_prev, belief, floor=1e-4):
+    """Weights when the previous tune is a distribution rather than a fact."""
+    out = defaultdict(lambda: floor)
+    for prev_id, p in belief.items():
+        for tune_id, w in weights_by_prev(prev_id).items():
+            out[tune_id] = out[tune_id] + p * w
+    return out
+
+
 def score_night(frontend, recording_id, index, seconds=DEFAULT_SECONDS, board=None,
-                top_k=25, quiet=True, prior="none", beta=1.0):
+                top_k=25, quiet=True, prior="none", beta=1.0, belief_k=5):
     gt = load_ground_truth(recording_id)
     sequence = previous_of = None
     if prior != "none":
@@ -121,6 +131,13 @@ def score_night(frontend, recording_id, index, seconds=DEFAULT_SECONDS, board=No
         # the night being scored is held out of its own model
         sequence = SequenceModel(gt.session_id, exclude_instance_ids=[gt.session_instance_id])
         previous_of = gt.previous_tune_map()
+    # For the self-chaining modes the system feeds its own answer forward
+    # instead of being handed the true previous tune. Where a SET begins is
+    # still taken from the log, because this measures the prior and not
+    # boundary detection; only the identity of the previous tune is the
+    # system's own. `belief` is what it currently thinks that was.
+    belief = {}
+    opens_set = True
     store = AudioStore(paths.wav_path(recording_id))
     store.clock_ms = store.duration_ms      # offline: the whole file is available
     sha = wav_sha1(recording_id) or ""
@@ -133,6 +150,10 @@ def score_night(frontend, recording_id, index, seconds=DEFAULT_SECONDS, board=No
             t1 = min(seg.end_ms, t0 + int(seconds * 1000))
             if t1 - t0 < 5000:
                 continue
+            if prior in ("sequence_self", "sequence_soft"):
+                opens_set = previous_of.get(seg.session_instance_tune_id) is None
+                if opens_set:
+                    belief = {}
             if prior == "prior_only":
                 # the control: no audio at all, rank the repertoire by what
                 # usually follows. If this beats the audio system, the audio
@@ -150,6 +171,20 @@ def score_night(frontend, recording_id, index, seconds=DEFAULT_SECONDS, board=No
                 if prior == "sequence":
                     weights = sequence.weights(previous_of.get(seg.session_instance_tune_id))
                     ranked = rerank(ranked, weights, beta=beta, index=index)[:top_k]
+                elif prior in ("sequence_self", "sequence_soft"):
+                    if not belief:
+                        weights = sequence.weights(None)
+                    elif prior == "sequence_self":
+                        weights = sequence.weights(max(belief, key=belief.get))
+                    else:
+                        weights = _blend(sequence.weights, belief)
+                    ranked = rerank(ranked, weights, beta=beta, index=index)[:top_k]
+                    # carry forward what it now believes it just heard
+                    head = ranked[:belief_k]
+                    total = sum(max(1e-9, r["score"]) for r in head) or 1.0
+                    belief = {r["tune_id"]: max(1e-9, r["score"]) / total for r in head}
+                    if prior == "sequence_self":
+                        belief = {ranked[0]["tune_id"]: 1.0}
             rank = next((i + 1 for i, r in enumerate(ranked) if r["tune_id"] == seg.tune_id), None)
             true_score = next((r["score"] for r in ranked if r["tune_id"] == seg.tune_id), 0.0)
             best_wrong = next((r["score"] for r in ranked if r["tune_id"] != seg.tune_id), 0.0)
@@ -167,6 +202,71 @@ def score_night(frontend, recording_id, index, seconds=DEFAULT_SECONDS, board=No
     finally:
         store.close()
     return rows
+
+
+def decode_set(candidates, sequence, beta=1.0, audio_floor=1e-3, opener_bonus=True):
+    """Best tune sequence for a whole set, rather than one tune at a time.
+
+    Greedy chaining was barely worth anything: feeding the system's own answer
+    forward gained one point over no prior, because that answer is wrong about
+    two thirds of the time and a transition conditioned on a wrong tune is
+    noise. The mistake is committing. A set is a short sequence with strong
+    couplings, so the right thing is to score whole sequences and let later
+    tunes correct an earlier guess.
+
+    States are each segment's candidate tunes, emission is the audio score,
+    transition is how often one tune follows another at this session. The
+    result is the highest-scoring path, which can pick a tune the audio
+    ranked third because the two tunes either side of it agree.
+    """
+    import math
+
+    if not candidates:
+        return []
+    trans_cache = {}
+
+    def weights_for(prev):
+        if prev not in trans_cache:
+            trans_cache[prev] = sequence.weights(prev)
+        return trans_cache[prev]
+
+    # first segment of the set: audio plus how often each tune opens a set
+    opener = sequence.weights(None) if opener_bonus else None
+    scores = []
+    backs = []
+    first = candidates[0]
+    scores.append({
+        c["tune_id"]: math.log(max(audio_floor, c["score"]))
+        + (beta * math.log(max(1e-12, opener.get(c["tune_id"], 1e-4))) if opener else 0.0)
+        for c in first})
+    backs.append({c["tune_id"]: None for c in first})
+
+    for step in range(1, len(candidates)):
+        here = candidates[step]
+        previous = scores[-1]
+        best_here, back_here = {}, {}
+        for c in here:
+            tune_id = c["tune_id"]
+            emission = math.log(max(audio_floor, c["score"]))
+            best_score, best_prev = None, None
+            for prev_id, prev_score in previous.items():
+                w = weights_for(prev_id).get(tune_id, 1e-4)
+                total = prev_score + beta * math.log(max(1e-12, w))
+                if best_score is None or total > best_score:
+                    best_score, best_prev = total, prev_id
+            best_here[tune_id] = (best_score or 0.0) + emission
+            back_here[tune_id] = best_prev
+        scores.append(best_here)
+        backs.append(back_here)
+
+    path = [None] * len(candidates)
+    last = scores[-1]
+    if not last:
+        return path
+    path[-1] = max(last, key=last.get)
+    for i in range(len(candidates) - 1, 0, -1):
+        path[i - 1] = backs[i].get(path[i])
+    return path
 
 
 def summarise(rows):
@@ -193,9 +293,91 @@ def summarise(rows):
     }
 
 
+def score_night_set_decoded(frontend, recording_id, index, seconds=DEFAULT_SECONDS,
+                            board=None, top_k=25, beta=1.0, audio_top=40):
+    """Score a night by decoding each set as a whole.
+
+    Two passes: transcribe and rank every segment as usual, then group the
+    segments into sets using the log's breaks and run one Viterbi per set.
+    Set boundaries come from the log because this measures the prior, not
+    boundary detection; the tune identities are entirely the system's own.
+    """
+    from lab.corpus.sequence import SequenceModel
+
+    gt = load_ground_truth(recording_id)
+    sequence = SequenceModel(gt.session_id, exclude_instance_ids=[gt.session_instance_id])
+    previous_of = gt.previous_tune_map()
+    store = AudioStore(paths.wav_path(recording_id))
+    store.clock_ms = store.duration_ms
+    sha = wav_sha1(recording_id) or ""
+
+    prepared = []
+    try:
+        for seg in gt.eval_segments():
+            if not seg.evaluated or seg.tune_id is None:
+                continue
+            t0 = seg.start_ms
+            t1 = min(seg.end_ms, t0 + int(seconds * 1000))
+            if t1 - t0 < 5000:
+                continue
+            notes, cost, cached = transcribe_segment(frontend, store, sha, t0, t1, board=board)
+            intervals = intervals_from_notes(notes, fold=index.fold_octaves)
+            ranked = index.lookup(intervals, top_k=audio_top)
+            prepared.append({"seg": seg, "ranked": ranked, "notes": notes,
+                             "cost": cost, "cached": cached,
+                             "opens_set": previous_of.get(seg.session_instance_tune_id) is None})
+    finally:
+        store.close()
+
+    # split into sets, then decode each one
+    sets, current = [], []
+    for item in prepared:
+        if item["opens_set"] and current:
+            sets.append(current)
+            current = []
+        current.append(item)
+    if current:
+        sets.append(current)
+
+    rows = []
+    for group in sets:
+        # union the audio's candidates with what the prior would suggest, so a
+        # tune the transcription missed can still be carried by the sequence
+        candidates = []
+        for item in group:
+            ranked = item["ranked"]
+            known = {c["tune_id"] for c in ranked}
+            extra = [{"tune_id": t, "setting_id": None, "name": index.tune_names.get(t),
+                      "tune_type": index.tune_types.get(t), "score": 0.0, "coverage": 0.0,
+                      "hits": 0, "n_grams_queried": 0}
+                     for t in sequence.popularity() if t not in known][:0]
+            candidates.append(ranked + extra)
+        path = decode_set(candidates, sequence, beta=beta)
+        for item, chosen in zip(group, path):
+            seg = item["seg"]
+            ordered = sorted(item["ranked"], key=lambda c: -c["score"])
+            if chosen is not None:
+                ordered = ([c for c in ordered if c["tune_id"] == chosen]
+                           + [c for c in ordered if c["tune_id"] != chosen])
+            rank = next((i + 1 for i, c in enumerate(ordered) if c["tune_id"] == seg.tune_id), None)
+            true_score = next((c["score"] for c in ordered if c["tune_id"] == seg.tune_id), 0.0)
+            best_wrong = next((c["score"] for c in ordered if c["tune_id"] != seg.tune_id), 0.0)
+            rows.append({
+                "segment_id": seg.segment_id, "tune_id": seg.tune_id, "name": seg.name,
+                "tune_type": seg.tune_type, "seconds": seconds,
+                "n_notes": len(item["notes"]),
+                "n_intervals": len(item["notes"]) - 1 if item["notes"] else 0,
+                "rank": rank, "true_score": true_score, "best_wrong_score": best_wrong,
+                "margin": true_score - best_wrong,
+                "top1_name": ordered[0]["name"] if ordered else None,
+                "cost_ms": item["cost"], "cached": item["cached"],
+            })
+    return rows
+
+
 def run_retrieval(frontend, recording_ids=None, candidate_set="repertoire", n=5,
                   seconds=DEFAULT_SECONDS, quiet=False, prior="none", beta=1.0,
-                  fold_octaves=False):
+                  fold_octaves=False, belief_k=5):
     from lab.corpus.index import Index
 
     index = Index.load(candidate_set, n=n, fold_octaves=fold_octaves)
@@ -204,8 +386,12 @@ def run_retrieval(frontend, recording_ids=None, candidate_set="repertoire", n=5,
     with Board() as board:
         for rid in recording_ids:
             t0 = time.time()
-            rows = score_night(frontend, rid, index, seconds=seconds, board=board,
-                               quiet=quiet, prior=prior, beta=beta)
+            if prior == "set_viterbi":
+                rows = score_night_set_decoded(frontend, rid, index, seconds=seconds,
+                                               board=board, beta=beta)
+            else:
+                rows = score_night(frontend, rid, index, seconds=seconds, board=board,
+                                   quiet=quiet, prior=prior, beta=beta, belief_k=belief_k)
             board.conn.commit()
             gt = load_ground_truth(rid)
             m = summarise(rows)

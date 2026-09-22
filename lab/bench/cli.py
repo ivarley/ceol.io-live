@@ -39,8 +39,13 @@ def add_parser(sub):
     ret.add_argument("-n", type=int, default=5)
     ret.add_argument("--seconds", type=float, default=30.0,
                      help="how much of each segment to transcribe (default 30)")
-    ret.add_argument("--prior", default="none", choices=["none", "sequence", "prior_only"],
+    ret.add_argument("--prior", default="none",
+                     choices=["none", "sequence", "sequence_self", "sequence_soft",
+                              "set_viterbi", "prior_only"],
                      help="sequence: re-rank by what usually follows (oracle previous tune); "
+                          "sequence_self: chain the system's own top answer forward; "
+                          "sequence_soft: chain its whole distribution forward; "
+                          "set_viterbi: decode a whole set at once; "
                           "prior_only: ignore the audio entirely, as a control")
     ret.add_argument("--beta", type=float, default=1.0, help="how hard the prior pulls")
     ret.add_argument("--fold-octaves", action="store_true",
