@@ -381,15 +381,48 @@ pins (spec 035's discipline), and whether it changes navigation.
 
 ---
 
-#### Stage 0 — Widen the mobile e2e net
+#### Stage 0 — Widen the mobile e2e net — **DONE 2026-09-22**
 
 **What.** Mobile specs for the screens stages 2–6 touch: the session page's three tabs
 (filter, search, scroll), My Tunes filtering and the status Seg, the tune drawer opening
 and a status change persisting, Home's blocks.
 **Why first.** Pure addition; nothing ships. It is the only thing that makes stages 4–6
 safe to attempt, and it is the one step I would argue against skipping.
-**Done when.** The mobile project runs ~15–20 specs instead of 4, all green on `master`
-before any UI changes.
+**Done when.** The mobile project runs ~15–20 specs instead of 4, all green before any
+UI changes.
+
+**Built:** the `mobile` project now runs **24 specs across 5 files** (was 4 in 1);
+26 tests including setup, all green.
+
+| File | Pins |
+|---|---|
+| `core.mobile.spec.ts` (unchanged) | the four original smoke tests |
+| `sessions.mobile.spec.ts` | tabs are VISUAL on a phone and switch; Tunes search narrows; the filter panel expands from its toggle; Logs lists instances + its tune filter; People roster + search |
+| `my-tunes.mobile.spec.ts` | controls render; the status filter works WITHOUT opening the panel; the panel expands; notation search marks `abc-only` hits; the add pane opens via `?add=1` |
+| `tune-drawer.mobile.spec.ts` | opens from a My Tunes card and from a session tune row; notation renders; a status change persists to the server |
+| `home.mobile.spec.ts` | greeting + counts; **the page and `GET /api/home` agree** (the embed==API invariant Stage 4 formalizes); this week renders or says so; every hamburger destination is listed (the inventory Stage 5 must not shrink) |
+
+Three deliberate choices, so the later stages don't have to rewrite this file:
+
+- **Behaviour, not markup.** The specs assert what a surface *does*. The one structural
+  assertion is Home's page-vs-API agreement, because that is precisely what Stage 4
+  establishes and the thing most likely to rot unnoticed.
+- **A no-sideways-scroll assertion on all three scrolling pages.** One `scrollWidth`
+  check each. This is the regression a right-aligned trailing element (Stage 2) causes,
+  and it is invisible in a screenshot.
+- **The hamburger inventory is recorded in `home.mobile.spec.ts`**, so Stage 5's tab bar
+  is checked against a list rather than against recollection. That test changes meaning
+  in Stage 5 — deliberately, and it is why it exists.
+
+New fixture: `SCRATCH_TUNES.mobileDrawerStatus` (tune 208), the drawer spec's own row,
+so it can never race a parallel worker.
+
+**Pre-existing failures, NOT introduced here** (verified by running the same specs on a
+clean tree): 5 in `e2e/live/*` — Playwright's `webServer` starts Flask but not the
+spec-024 streaming sidecar, so anything asserting live SSE fan-out cannot pass — plus 4
+that fail on a clean tree for their own reasons: `profile.spec.ts` (My Sessions tab,
+Tunes tab, the empty-session review sheet) and `my-tunes.spec.ts` (the preview form in
+the add pane's footer). **Worth a look before Stage 2 touches those pages.**
 
 #### Stage 1 — The three missing kit primitives, adopted by nobody
 

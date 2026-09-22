@@ -85,4 +85,9 @@ export const SCRATCH_TUNES = {
   drawerStatusSeg: { id: 19, name: "Connaughtman's Rambles, The" },
   drawerOfflineAdd: { id: 75, name: "Miss McLeod's" },
   offlineAddedCard: { id: 248, name: "Tam Lin" },
+  // Stage 0 of spec 052 §B8: the mobile tune-drawer spec's own row. Same contract as
+  // the entries above (seeded, not on sarah's seed list, has incipit notation), minus
+  // the popular-top-100 requirement — that one exists for the offline bundle, and this
+  // tune is never read offline.
+  mobileDrawerStatus: { id: 208, name: "Congress, The" },
 } as const;
