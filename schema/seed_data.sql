@@ -249,7 +249,13 @@ INSERT INTO person (person_id, first_name, last_name, email, city, state, countr
 -- person the next time she's back for a night.
 (21, 'Maura', 'Gone', 'maura.gone@example.com', 'Doolin', 'Clare', 'Ireland'),
 -- James walked in once and got checked in. Visitor, unconfirmed: he can't see the roster.
-(22, 'James', 'Quinn', 'james.quinn@example.com', 'Galway', 'Galway', 'Ireland');
+(22, 'James', 'Quinn', 'james.quinn@example.com', 'Galway', 'Galway', 'Ireland'),
+-- Fiona made an ACCOUNT and joined Mueller herself, and nobody has confirmed her yet.
+-- The difference from James matters: he has no account, so nothing is waiting on the
+-- admin. She does, so the People tab nudges an admin to confirm her ("1 person has
+-- joined and can't see who plays here yet"). That nudge counts people who are
+-- unconfirmed AND unarchived AND have an account, so it needs all three to appear.
+(23, 'Fiona', 'Doherty', 'fiona.doherty@example.com', 'Austin', 'TX', 'USA');
 
 -- =============================================================================
 -- USER ACCOUNTS
@@ -265,7 +271,10 @@ INSERT INTO user_account (user_id, person_id, username, user_email, hashed_passw
 (2, 2, 'sarah_fiddle', 'sarah.oconnor@example.com', '$2b$12$/YvbW.M2JbUhytoG1so4be2RgUcFEHghuIWGeOGaSIx1Rt7zdl1im', 'America/Chicago', TRUE, FALSE, TRUE, TRUE),
 (3, 6, 'siobhan_flute', 'siobhan.w@example.com', '$2b$12$/YvbW.M2JbUhytoG1so4be2RgUcFEHghuIWGeOGaSIx1Rt7zdl1im', 'America/New_York', TRUE, FALSE, TRUE, TRUE),
 (4, 9, 'sean_banjo', 'sobrien@example.com', '$2b$12$/YvbW.M2JbUhytoG1so4be2RgUcFEHghuIWGeOGaSIx1Rt7zdl1im', 'America/Chicago', TRUE, FALSE, TRUE, TRUE),
-(5, 12, 'maeve_accordion', 'maeve.brennan@example.com', '$2b$12$/YvbW.M2JbUhytoG1so4be2RgUcFEHghuIWGeOGaSIx1Rt7zdl1im', 'America/Los_Angeles', TRUE, FALSE, FALSE, FALSE);
+(5, 12, 'maeve_accordion', 'maeve.brennan@example.com', '$2b$12$/YvbW.M2JbUhytoG1so4be2RgUcFEHghuIWGeOGaSIx1Rt7zdl1im', 'America/Los_Angeles', TRUE, FALSE, FALSE, FALSE),
+-- Fiona: verified and able to log in, so the OTHER side of unconfirmed is reachable
+-- too -- what a joined-but-unconfirmed member sees when she opens the People tab.
+(6, 23, 'fiona_fiddle', 'fiona.doherty@example.com', '$2b$12$/YvbW.M2JbUhytoG1so4be2RgUcFEHghuIWGeOGaSIx1Rt7zdl1im', 'America/Chicago', TRUE, FALSE, TRUE, TRUE);
 
 -- =============================================================================
 -- PERSON INSTRUMENTS
@@ -274,6 +283,7 @@ INSERT INTO user_account (user_id, person_id, username, user_email, hashed_passw
 INSERT INTO person_instrument (person_id, instrument) VALUES
 (1, 'fiddle'), (1, 'mandolin'),
 (2, 'fiddle'),
+(23, 'fiddle'),
 (3, 'tin whistle'), (3, 'flute'),
 (4, 'concertina'),
 (5, 'guitar'), (5, 'bouzouki'),
@@ -321,7 +331,11 @@ INSERT INTO session_person (session_id, person_id, relationship, confirmed, arch
 (1, 21, 'member', TRUE, TRUE, FALSE),
 -- James: a walk-in. Exactly what check-in creates -- visitor, unconfirmed, so he cannot see
 -- the session's people list even though he has a session_person row.
-(1, 22, 'visitor', FALSE, FALSE, FALSE);
+(1, 22, 'visitor', FALSE, FALSE, FALSE),
+-- Fiona: exactly what POST /api/sessions/<path>/join writes. Self-serve joining always
+-- lands confirmed = FALSE, because people-visibility is granted BY the session, never
+-- taken. She is the one an admin is nudged to confirm.
+(1, 23, 'member', FALSE, FALSE, FALSE);
 
 -- =============================================================================
 -- SESSION INSTANCES (past 3 months)

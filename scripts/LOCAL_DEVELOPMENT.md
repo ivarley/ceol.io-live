@@ -93,6 +93,21 @@ All test accounts use password: `password123`
 | `siobhan_flute` | siobhan.w@example.com | Regular User |
 | `sean_banjo` | sobrien@example.com | Regular User |
 | `maeve_accordion` | maeve.brennan@example.com | Regular User (unverified) |
+| `fiona_fiddle` | fiona.doherty@example.com | Joined Mueller, NOT yet confirmed |
+
+`fiona_fiddle` exists to make the confirmation states reachable without hand-editing
+the database. She has an account and joined the Mueller Session herself, and nobody
+has confirmed her — which is what a self-serve join always produces, since
+people-visibility is granted by the session rather than taken. So:
+
+- Log in as **`ian`** and open Mueller's People tab to see the admin's side: *"1 person
+  has joined and can't see who plays here yet. Open them to confirm."* The nudge only
+  renders for a session admin, so `sarah_fiddle` never sees it.
+- Log in as **`fiona_fiddle`** for the other side: a member who cannot see the roster.
+
+She is distinct from `James Quinn`, the seed's other unconfirmed person at Mueller.
+James is a walk-in with NO account, so nothing is waiting on the admin and he is not
+counted by the nudge, which needs unconfirmed AND unarchived AND has-an-account.
 
 ## Database Connection
 
