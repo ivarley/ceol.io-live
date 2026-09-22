@@ -7,20 +7,9 @@ transcription comparable with a corpus written in whatever key its author
 liked.
 """
 
-import numpy as np
 
 from lab.experts.base import Expert
-
-
-def _median_filter(x, k):
-    if k <= 1 or x.size == 0:
-        return x
-    pad = k // 2
-    padded = np.pad(x, (pad, pad), mode="edge")
-    out = np.empty_like(x)
-    for i in range(x.size):
-        out[i] = np.median(padded[i:i + k])
-    return out
+from lab.frontends.segmentation import notes_from_pitch
 
 
 class Notes(Expert):
@@ -47,7 +36,7 @@ class Notes(Expert):
         # settled middle instead cost a second of latency and recovered the
         # note rate the bench gets from one long pass.
         return {"sources": None, "min_note_ms": 60, "median_frames": 5,
-                "min_voiced": 0.2, "edge_margin_ms": 1200}
+                "min_voiced": 0.2, "edge_margin_ms": 1200, "fold_pitch_classes": True}
 
     def setup(self):
         self._emitted_to = {}
@@ -80,38 +69,20 @@ class Notes(Expert):
         return out
 
     def _segment(self, payload):
-        import librosa
+        """Delegates to the one implementation, shared with the front ends.
 
-        times = np.asarray(payload.get("times_ms") or [], dtype=float)
-        f0 = np.asarray(payload.get("f0_hz") or [], dtype=float)
-        voiced = np.asarray(payload.get("voiced_prob") or [], dtype=float)
-        if f0.size == 0:
-            return []
-        keep = voiced >= self.params["min_voiced"]
-        if not np.any(keep):
-            return []
-        midi = np.full(f0.shape, np.nan)
-        midi[keep] = np.round(librosa.hz_to_midi(f0[keep]))
-        smoothed = midi.copy()
-        valid = np.isfinite(midi)
-        if np.any(valid):
-            smoothed[valid] = _median_filter(midi[valid], int(self.params["median_frames"]))
-        notes = []
-        start = None
-        current = None
-        for i in range(smoothed.size + 1):
-            value = smoothed[i] if i < smoothed.size else np.nan
-            if current is not None and (not np.isfinite(value) or value != current):
-                t0, t1 = times[start], times[i - 1] if i - 1 < times.size else times[-1]
-                span = (times[i] - t0) if i < times.size else (t1 - t0)
-                if span >= self.params["min_note_ms"]:
-                    conf = float(np.mean(voiced[start:i])) if i > start else 0.0
-                    notes.append({"t0_ms": int(t0), "t1_ms": int(t0 + span),
-                                  "midi": int(current), "conf": round(conf, 3)})
-                current, start = None, None
-            if np.isfinite(value) and current is None:
-                current, start = value, i
-        return notes
+        This used to be a second copy of the same logic, and the copies drifted:
+        the front end learned to fold pitch to classes before cutting notes,
+        worth thirteen points on the bench, and the board did not. A test
+        already checks the two agree; having one of them is better.
+        """
+        return notes_from_pitch(
+            payload.get("times_ms") or [], payload.get("f0_hz") or [],
+            payload.get("voiced_prob") or [],
+            min_note_ms=self.params["min_note_ms"],
+            median_frames=self.params["median_frames"],
+            min_voiced=self.params["min_voiced"],
+            fold_pitch_classes=self.params["fold_pitch_classes"])
 
 
 class Intervals(Expert):
