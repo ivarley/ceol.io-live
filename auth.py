@@ -66,7 +66,7 @@ class User(UserMixin):
                 SELECT ua.user_id, ua.person_id, ua.username, ua.is_active, ua.is_system_admin,
                        ua.timezone, ua.email_verified, p.first_name, p.last_name, ua.user_email, ua.auto_save_tunes, ua.auto_save_interval,
                        p.at_active_session_instance_id, si.session_id, si.date, si.start_time, si.end_time, si.location_override, s.name, s.path,
-                       ua.beta_live_logging
+                       ua.beta_live_logging, ua.hashed_password
                 FROM user_account ua
                 JOIN person p ON ua.person_id = p.person_id
                 LEFT JOIN session_instance si ON p.at_active_session_instance_id = si.session_instance_id
@@ -91,7 +91,7 @@ class User(UserMixin):
                         'session_path': user_data[19]
                     }
 
-                return User(
+                user = User(
                     user_id=user_data[0],
                     person_id=user_data[1],
                     username=user_data[2],
@@ -107,6 +107,11 @@ class User(UserMixin):
                     active_session=active_session,
                     beta_live_logging=user_data[20],
                 )
+                # So has_password() is right on every request, not only the login
+                # request (GET /api/me reports it; token-authenticated requests load
+                # the user through here).
+                user.hashed_password = user_data[21]
+                return user
             return None
         finally:
             conn.close()
@@ -363,6 +368,29 @@ def update_session_activity(session_id):
         conn.commit()
     finally:
         conn.close()
+
+
+def needs_profile_setup(person_id):
+    """True when a person is missing a name or has no location at all — the test
+    the post-login flow uses to send new (magic-link) users to profile setup.
+    Shared by web_routes (redirect) and api_app_routes (the `next` field)."""
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT first_name, last_name, city, state, country FROM person WHERE person_id = %s",
+            (person_id,),
+        )
+        row = cur.fetchone()
+    finally:
+        conn.close()
+    if not row:
+        return True
+    first_name, last_name, city, state, country = row
+    if not (first_name and first_name.strip()) or not (last_name and last_name.strip()):
+        return True
+    has_location = (city and city.strip()) or (state and state.strip()) or (country and country.strip())
+    return not has_location
 
 
 def generate_password_reset_token():

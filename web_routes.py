@@ -62,208 +62,19 @@ def _page_error():
 
 
 def home():
+    """The home page. Signed in, it renders serializers.build_home_payload — the
+    same dict GET /api/home returns (spec 052 A2) — so the two can't drift."""
     try:
-        if current_user.is_authenticated:
-            from timezone_utils import get_today_in_timezone
-
-            conn = get_db_connection()
-            cur = conn.cursor()
-            person_id = current_user.person_id
-
-            # Learning counts
-            cur.execute(
-                """
-                SELECT learn_status, COUNT(*)
-                FROM person_tune
-                WHERE person_id = %s AND learn_status IN ('learning', 'want to learn')
-                GROUP BY learn_status
-                """,
-                (person_id,),
-            )
-            learning_counts = dict(cur.fetchall())
-            learning_count = learning_counts.get("learning", 0)
-            want_to_learn_count = learning_counts.get("want to learn", 0)
-
-            # Suggested tune: most played at user's sessions (spec 033 R3 — member
-            # sessions only, a visited session isn't "yours"), not already on their list
-            cur.execute(
-                """
-                SELECT t.tune_id, t.name, t.tune_type, COUNT(sit.session_instance_tune_id) AS play_count
-                FROM session_instance_tune sit
-                JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
-                JOIN session_person sp ON si.session_id = sp.session_id
-                    AND sp.person_id = %s AND sp.relationship = 'member'
-                JOIN tune t ON sit.tune_id = t.tune_id
-                WHERE sit.tune_id IS NOT NULL
-                  AND sit.deleted = FALSE AND sit.record_type <> 'break'
-                  AND t.redirect_to_tune_id IS NULL
-                  AND NOT EXISTS (
-                    SELECT 1 FROM person_tune pt WHERE pt.person_id = %s AND pt.tune_id = sit.tune_id
-                  )
-                GROUP BY t.tune_id, t.name, t.tune_type, t.tunebook_count_cached
-                ORDER BY play_count DESC, t.tunebook_count_cached DESC
-                LIMIT 1
-                """,
-                (person_id, person_id),
-            )
-            suggested_tune_row = cur.fetchone()
-            suggested_tune = None
-            if suggested_tune_row:
-                suggested_tune = {
-                    "tune_id": suggested_tune_row[0],
-                    "name": suggested_tune_row[1],
-                    "tune_type": suggested_tune_row[2],
-                }
-
-            # Upcoming sessions this week (Monday-Sunday in user's timezone)
-            today = get_today_in_timezone(current_user.timezone or "UTC")
-            monday = today - timedelta(days=today.weekday())
-            sunday = monday + timedelta(days=6)
-
-            cur.execute(
-                """
-                SELECT s.name, s.path, si.session_instance_id, si.date, si.start_time,
-                       si.log_complete_date
-                FROM session_person sp
-                JOIN session s ON sp.session_id = s.session_id
-                JOIN session_instance si ON s.session_id = si.session_id
-                WHERE sp.person_id = %s AND sp.relationship = 'member'
-                  AND si.date BETWEEN %s AND %s
-                  AND si.is_cancelled = FALSE
-                ORDER BY si.date, si.start_time
-                """,
-                (person_id, monday, sunday),
-            )
-            upcoming_rows = cur.fetchall()
-            upcoming_sessions = [
-                {
-                    "name": row[0],
-                    "path": row[1],
-                    "session_instance_id": row[2],
-                    "date": row[3],
-                    "start_time": row[4],
-                    "log_complete_date": row[5],
-                }
-                for row in upcoming_rows
-            ]
-
-            # In-progress logs: instances the user edited in the last 30 days
-            # that aren't marked complete and still have at least one tune logged
-            cur.execute(
-                """
-                SELECT s.name, s.path, si.session_instance_id, si.date,
-                       MAX(sit.last_modified_date) AS last_edit
-                FROM session_instance_tune sit
-                JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
-                JOIN session s ON si.session_id = s.session_id
-                WHERE sit.last_modified_user_id = %s
-                  AND sit.last_modified_date >= (NOW() AT TIME ZONE 'UTC') - INTERVAL '30 days'
-                  AND si.log_complete_date IS NULL
-                  AND si.is_cancelled = FALSE
-                  AND EXISTS (
-                    SELECT 1 FROM session_instance_tune sit2
-                    WHERE sit2.session_instance_id = si.session_instance_id
-                      AND sit2.deleted = FALSE
-                      AND sit2.record_type <> 'break'
-                  )
-                GROUP BY s.name, s.path, si.session_instance_id, si.date
-                ORDER BY last_edit DESC
-                LIMIT 3
-                """,
-                (current_user.user_id,),
-            )
-            in_progress_logs = [
-                {
-                    "name": row[0],
-                    "path": row[1],
-                    "session_instance_id": row[2],
-                    "date": row[3],
-                    "last_edit": row[4],
-                }
-                for row in cur.fetchall()
-            ]
-
-            # In-progress timestamping (spec 050): recordings this user has placed
-            # tunes on in the last 30 days that still have tunes left to place.
-            # The same shape as the logging list above, and for the same reason --
-            # a three-hour recording is not finished in one sitting, and the way
-            # back to a half-tagged one was to remember it existed.
-            #
-            # Two ways to be finished. Placing every logged tune is one.
-            # The other is recording.segmenting_complete (schema/055), set by
-            # hand for audio that covers only part of the night -- a phone
-            # started an hour in, a battery that died -- where the count can
-            # never reach the instance's tune count however much work is done.
-            # Without that second test those recordings sit here forever, which
-            # is the same complaint /admin/recordings answers.
-            cur.execute(
-                """
-                WITH mine AS (
-                    SELECT rts.recording_id, MAX(rts.last_modified_date) AS last_edit
-                    FROM recording_tune_segment rts
-                    WHERE rts.last_modified_user_id = %s
-                      AND rts.last_modified_date >= (NOW() AT TIME ZONE 'UTC') - INTERVAL '30 days'
-                    GROUP BY rts.recording_id
-                )
-                SELECT r.recording_id, r.label, s.name, si.date, mine.last_edit,
-                       (SELECT COUNT(*) FROM recording_tune_segment x
-                         WHERE x.recording_id = r.recording_id) AS placed,
-                       (SELECT COUNT(*) FROM session_instance_tune sit
-                         WHERE sit.session_instance_id = r.session_instance_id
-                           AND sit.deleted = FALSE AND sit.record_type <> 'break') AS tune_count
-                FROM mine
-                JOIN recording r ON r.recording_id = mine.recording_id
-                JOIN session_instance si ON si.session_instance_id = r.session_instance_id
-                JOIN session s ON s.session_id = si.session_id
-                WHERE r.status = 'ready'
-                  AND r.segmenting_complete = FALSE
-                  -- Who may still open the tool (schema/053). Having placed marks
-                  -- once is not the same as being allowed to now, and a card that
-                  -- links into a refusal is worse than no card.
-                  AND (%s OR EXISTS (
-                        SELECT 1 FROM session_person sp
-                        WHERE sp.session_id = s.session_id AND sp.person_id = %s
-                          AND sp.is_admin = TRUE AND sp.can_manage_recordings = TRUE
-                      ))
-                  AND (SELECT COUNT(*) FROM recording_tune_segment x
-                        WHERE x.recording_id = r.recording_id)
-                      < (SELECT COUNT(*) FROM session_instance_tune sit
-                          WHERE sit.session_instance_id = r.session_instance_id
-                            AND sit.deleted = FALSE AND sit.record_type <> 'break')
-                ORDER BY mine.last_edit DESC
-                LIMIT 3
-                """,
-                (current_user.user_id, bool(current_user.is_system_admin), person_id),
-            )
-            in_progress_recordings = [
-                {
-                    "recording_id": row[0],
-                    "label": row[1],
-                    "name": row[2],
-                    "date": row[3],
-                    "last_edit": row[4],
-                    "placed": row[5],
-                    "tune_count": row[6],
-                }
-                for row in cur.fetchall()
-            ]
-
-            cur.close()
-            conn.close()
-
-            return render_template(
-                "home.html",
-                learning_count=learning_count,
-                want_to_learn_count=want_to_learn_count,
-                suggested_tune=suggested_tune,
-                upcoming_sessions=upcoming_sessions,
-                in_progress_logs=in_progress_logs,
-                in_progress_recordings=in_progress_recordings,
-                current_year=today.year,
-            )
-        else:
+        if not current_user.is_authenticated:
             return render_template("home.html")
+        from serializers import build_home_payload
 
+        conn = get_db_connection()
+        try:
+            payload = build_home_payload(conn, current_user)
+        finally:
+            conn.close()
+        return render_template("home.html", **payload)
     except Exception:
         return _page_error()
 
@@ -1530,48 +1341,16 @@ def login_password_api():
             "action": "resend_verification"
         }), 403
 
-    # Successful login
-    login_user(user, remember=True)
+    # Successful login. establish_session (api_app_routes) records the session the
+    # way every login path does; a native caller (X-Ceol-Client: ios/...) gets a
+    # Bearer token in the body and no cookie, the web gets the cookie and its
+    # redirect (spec 052 A1).
+    from api_app_routes import establish_session
 
-    # Create session record
-    session_id = create_session(user.user_id, ip_address, user_agent)
-
-    log_login_event(
-        user.user_id,
-        email,
-        "LOGIN_SUCCESS",
-        ip_address,
-        user_agent,
-        session_id=session_id,
-    )
-
-    session.permanent = True
-    session["db_session_id"] = session_id
-
-    # Cache admin session IDs
-    conn = get_db_connection()
-    try:
-        cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT s.session_id
-            FROM session_person sp
-            JOIN session s ON sp.session_id = s.session_id
-            WHERE sp.person_id = %s AND sp.is_admin = TRUE
-        """,
-            (user.person_id,),
-        )
-        admin_session_ids = [row[0] for row in cur.fetchall()]
-        session["admin_session_ids"] = admin_session_ids
-    finally:
-        conn.close()
-
-    cleanup_expired_sessions()
-
-    return jsonify({
-        "success": True,
-        "redirect": url_for("home")
-    })
+    body = establish_session(user, "password", email)
+    if "token" not in body:
+        body["redirect"] = url_for("home")
+    return jsonify(body)
 
 
 def login_with_token(token):
@@ -1656,6 +1435,12 @@ def login_with_token(token):
 
     cleanup_expired_sessions()
 
+    # App -> web handoff (spec 052 A7): a link minted by POST /api/auth/web-session
+    # carries ?next=<site path>; the person is already set up, so go straight there.
+    next_path = (request.args.get("next") or "").strip()
+    if next_path.startswith("/") and not next_path.startswith("//"):
+        return redirect(next_path)
+
     # Redirect to password setup (optional) for users without password
     if not user.has_password():
         return redirect(url_for("set_password_optional"))
@@ -1665,37 +1450,10 @@ def login_with_token(token):
 
 
 def _needs_profile_setup(person_id):
-    """Check if a person needs to complete their profile (missing name or location)"""
-    conn = get_db_connection()
-    try:
-        cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT first_name, last_name, city, state, country
-            FROM person WHERE person_id = %s
-        """,
-            (person_id,),
-        )
-        row = cur.fetchone()
-        if not row:
-            return True
+    """Shared with the API (spec 052): see auth.needs_profile_setup."""
+    from auth import needs_profile_setup
 
-        first_name, last_name, city, state, country = row
-
-        # Need setup if first name or last name is missing/empty
-        if not first_name or not first_name.strip():
-            return True
-        if not last_name or not last_name.strip():
-            return True
-
-        # Need setup if all location fields are empty
-        has_location = (city and city.strip()) or (state and state.strip()) or (country and country.strip())
-        if not has_location:
-            return True
-
-        return False
-    finally:
-        conn.close()
+    return needs_profile_setup(person_id)
 
 
 @login_required

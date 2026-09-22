@@ -543,7 +543,7 @@ class TestEmailVerificationFlow:
                 person_id,
                 username,
                 email,
-                "hashedpass",
+                None,  # passwordless (magic-link) signup — the flow this test describes
                 False,
                 verification_token,
                 verification_expires,
@@ -555,8 +555,11 @@ class TestEmailVerificationFlow:
         # Verify email
         response = client.get(f"/verify-email/{verification_token}")
 
-        # Verification now auto-logs the user in and forwards them to the
-        # (optional) password-setup page rather than back to the login form.
+        # Verification auto-logs the user in and forwards a PASSWORDLESS user to the
+        # (optional) password-setup page rather than back to the login form. (A user
+        # who already has a password goes home: User.get_by_id loads the hash since
+        # spec 052, so has_password() is right here — before that every verified user
+        # landed on set-password.)
         assert response.status_code == 302
         assert "/auth/set-password" in response.headers["Location"]
 

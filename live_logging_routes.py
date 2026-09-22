@@ -2904,3 +2904,117 @@ def live_vocabulary(session_instance_id):
         return jsonify({"success": True, "known_tunes": known_tunes, "known_aliases": known_aliases})
     finally:
         conn.close()
+
+
+# ---------------------------------------------------------------------------
+# The ONE search family: /api/tunes/* with an optional scope (spec 052 A6).
+#
+# The seven search endpoints above exist three times — under the live instance,
+# the session path, and /api/my-tunes — because each page grew its own tree. The
+# native client gets one tree. Scope rides in the query string, the way
+# /api/tunes/<id>/detail already does it:
+#     (none)               personal — on-list tunes sort last (add pane)
+#     ?session=<path>      session repertoire — in-session tunes sort last
+#     ?instance=<id>       live screen — flags only, no re-sort
+# The old trees stay registered for the web bundles until they move over.
+# ---------------------------------------------------------------------------
+
+def _resolve_search_scope(cur):
+    """-> (session_id | None, kind) for the current request's ?session= / ?instance=.
+    Raises LookupError with a message when the named scope doesn't exist."""
+    instance = (request.args.get("instance") or "").strip()
+    path = (request.args.get("session") or "").strip().strip("/")
+    if instance:
+        if not instance.isdigit():
+            raise LookupError("instance must be an id")
+        cur.execute("SELECT session_id FROM session_instance WHERE session_instance_id = %s", (int(instance),))
+        row = cur.fetchone()
+        if not row:
+            raise LookupError("Session instance not found")
+        return row[0], "instance"
+    if path:
+        session_id = _session_id_by_path(cur, path)
+        if session_id is None:
+            raise LookupError("Session not found")
+        return session_id, "session"
+    return None, "personal"
+
+
+def _scope_or_404():
+    """Resolve the scope on its own connection; (session_id, kind, error_response)."""
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        try:
+            session_id, kind = _resolve_search_scope(cur)
+        except LookupError as e:
+            return None, None, (jsonify({"success": False, "error": str(e), "code": "not_found"}), 404)
+        return session_id, kind, None
+    finally:
+        conn.close()
+
+
+@api_login_required
+def tunes_deep_search():
+    """GET /api/tunes/deep-search?q=&type=&prefer_type=&mode=&limit=[&session=|&instance=]"""
+    q, tune_type, prefer_type, mode, limit = _parse_deep_search_args()
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        try:
+            session_id, kind = _resolve_search_scope(cur)
+        except LookupError as e:
+            return jsonify({"success": False, "error": str(e), "code": "not_found"}), 404
+        person_id = getattr(current_user, "person_id", None)
+        results = _deep_search_core(
+            cur, q, tune_type, prefer_type, mode, limit, person_id,
+            session_id=session_id,
+            on_list_last=(kind == "personal"),
+            in_session_last=(kind == "session"),
+        )
+        return jsonify({"success": True, "results": results, "scope": kind})
+    finally:
+        conn.close()
+
+
+@api_login_required
+def tunes_thesession_search():
+    """GET /api/tunes/thesession-search?q=&type=[&session=|&instance=]"""
+    session_id, kind, err = _scope_or_404()
+    if err:
+        return err
+    return _thesession_search_core(session_id=session_id,
+                                   person_id=getattr(current_user, "person_id", None))
+
+
+@api_login_required
+def tunes_incipit_image(tune_id):
+    """GET /api/tunes/<id>/incipit-image?kind=incipit|both — scope-free."""
+    return _incipit_response(tune_id)
+
+
+@api_login_required
+def tunes_preview(tune_id):
+    """GET /api/tunes/<id>/preview[?session=|?instance=]"""
+    session_id, kind, err = _scope_or_404()
+    if err:
+        return err
+    return _tune_preview_core(tune_id, session_id=session_id)
+
+
+@api_login_required
+def tunes_setting_image(setting_id):
+    """GET /api/tunes/settings/<id>/image?kind=incipit|full — scope-free."""
+    return _setting_image_response(setting_id)
+
+
+@api_login_required
+def tunes_thesession_preview(thesession_id):
+    """GET /api/tunes/thesession/<id>/preview[?full=1] — scope-free."""
+    return _thesession_preview_core(thesession_id)
+
+
+@api_login_required
+def tunes_render_abc():
+    """POST /api/tunes/render-abc {abc, key, tune_type, kind} — scope-free."""
+    return _render_abc_core()
