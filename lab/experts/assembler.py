@@ -56,7 +56,7 @@ class Assembler(Expert):
     @classmethod
     def defaults(cls):
         return {
-            "base_temperature": 0.35,
+            "base_temperature": 0.25,
             "sharpen_after_s": 30.0,
             "other_mass": 0.25,
             "confirm_conf": 0.9,
@@ -108,10 +108,18 @@ class Assembler(Expert):
             return []
         elapsed = self._elapsed_s(clock_ms)
         temperature = self.params["base_temperature"] / (1.0 + elapsed / self.params["sharpen_after_s"])
+        # Evidence is normalised against the best candidate before the
+        # softmax. The matcher's scores are small and close together - a good
+        # match is about 0.05 and the gap to the runner-up about 0.02 - so
+        # dividing the raw values by any sensible temperature produced a
+        # nearly uniform distribution, and every confidence came out around
+        # 0.04 whether the answer was obvious or a coin toss. Relative
+        # evidence is what the temperature should act on.
+        best_ev = max(self._evidence.values()) or 1e-9
         scaled = {}
         for tune_id, ev in self._evidence.items():
             weight = self._prior.get(str(tune_id), self._prior_default)
-            scaled[tune_id] = (ev / max(1e-6, temperature)
+            scaled[tune_id] = ((ev / best_ev) / max(1e-6, temperature)
                                + self._prior_beta * math.log(max(1e-9, weight)))
         peak = max(scaled.values())
         exps = {t: math.exp(v - peak) for t, v in scaled.items()}

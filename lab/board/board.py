@@ -46,7 +46,7 @@ class Board:
         # Running two bench jobs at once is a normal thing to want, and under
         # WAL two writers still contend. Without this the second one dies with
         # "database is locked" part way through an hour of transcription.
-        self.conn.execute("PRAGMA busy_timeout=60000")
+        self.conn.execute("PRAGMA busy_timeout=300000")
         with open(SCHEMA_PATH) as f:
             self.conn.executescript(f.read())
         self.conn.commit()
