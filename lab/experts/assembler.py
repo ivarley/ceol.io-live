@@ -71,10 +71,28 @@ class Assembler(Expert):
             # the newest match, which is what the bench does with one lookup
             # over the whole span.
             "evidence_mode": "latest",
+            # OFF, and measured. Scoring whole sequences rather than
+            # committing to each tune is worth eight points on the bench, so
+            # revising earlier claims when a later tune settles looked like
+            # the live version of that. It is not, and it is harmful: the
+            # final answer falls from 58.6% to 43.1% using confidences, and to
+            # 39.7% using raw evidence with flips going from four a segment to
+            # eighteen.
+            #
+            # The reason is the same one the oracle experiment found. The
+            # bench decodes SEGMENTS, whose boundaries it is given. The board
+            # decodes SPANS, which are whatever the assembler opened and
+            # closed, and with a boundary detector at 0.26 precision those
+            # spans are not tunes. Decoding a sequence of the wrong units
+            # cannot help however good the transition model is. This becomes
+            # worth turning on when boundaries are, and not before.
+            "revise_last": 0,
         }
 
     def setup(self):
         self._reset_span()
+        self._history = []      # recently closed spans, for reconsidering
+        self._sequence = None
         self._prior = {}
         self._prior_default = 1.0
         self._prior_beta = 1.0
@@ -252,4 +270,55 @@ class Assembler(Expert):
         event = "confirmed" if conf >= self.params["confirm_conf"] else "withdrawn"
         obs = self._write(view, self._hyp_id, clock, event, ranked, inputs)
         view.board.close_hypothesis(self._hyp_id, event, t_end_ms, clock)
-        return [obs]
+        out = [obs]
+        self._history.append({"hyp_id": self._hyp_id, "ranked": ranked,
+                              "t_start_ms": self._span_start_ms, "t_end_ms": t_end_ms})
+        del self._history[:-max(1, int(self.params["revise_last"]))]
+        out.extend(self._revise(view, clock, inputs))
+        return out
+
+    def _revise(self, view, clock, inputs):
+        """Reconsider the last few tunes now that this one is known.
+
+        A tune that was second by a hair becomes first once the tune after it
+        agrees, and saying so late is better than being wrong quietly. The
+        earlier hypothesis is superseded rather than edited, so the record
+        still shows what was claimed at the time and the harness can count how
+        often a reader saw an answer change.
+        """
+        n = int(self.params["revise_last"])
+        if n < 2 or len(self._history) < 2:
+            return []
+        window = self._history[-n:]
+        try:
+            sequence = self._sequence_model(view)
+        except Exception:
+            return []
+        from lab.bench.retrieval import decode_set
+
+        # The RAW evidence, not the confidence. The confidence already has the
+        # prior in it, so feeding it back into a decoder that applies the prior
+        # again counts the sequence twice and pulls a correct answer off it.
+        candidates = [[{"tune_id": c["tune_id"], "name": c.get("name"),
+                        "tune_type": c.get("tune_type"),
+                        "score": max(1e-6, c.get("evidence", c["conf"]))}
+                       for c in h["ranked"]] for h in window]
+        path = decode_set(candidates, sequence, beta=self._prior_beta)
+        out = []
+        for h, chosen in zip(window[:-1], path[:-1]):
+            if chosen is None or not h["ranked"] or h["ranked"][0]["tune_id"] == chosen:
+                continue
+            reordered = ([c for c in h["ranked"] if c["tune_id"] == chosen]
+                         + [c for c in h["ranked"] if c["tune_id"] != chosen])
+            out.append(self._write(view, h["hyp_id"], clock, "superseded", reordered, inputs))
+            h["ranked"] = reordered
+        return out
+
+    def _sequence_model(self, view):
+        if self._sequence is None:
+            from lab.corpus.sequence import SequenceModel
+
+            rec = view.manifest["recording"]
+            self._sequence = SequenceModel(
+                rec["session_id"], exclude_instance_ids=[rec["session_instance_id"]])
+        return self._sequence
