@@ -58,6 +58,12 @@ sites are conformed at runtime, not rewritten; the web bundles still call the ol
 search trees; the AASA file needs the real Team ID; Universal-Link handling in the app
 itself is app work.
 
+**Section B has a clickable prototype and a staged plan (2026-09-22).**
+`mockups/tabbar/` (served at `/mockups/tabbar/`) is the interaction prototype for the
+reshaping — four tabs, session-centric Home, inline filters, the tune sheet. It settled
+several questions the first draft of §B left open; those answers are folded into B1–B4
+below, and **§B8 is the stage-by-stage conversion plan**. Nothing in §B is built yet.
+
 ---
 
 This is the survey of what the web codebase
@@ -246,6 +252,12 @@ sender in `jobs/`; don't build it before the app exists.
 
 ## B. UI — what to reshape on the web so the port is a translation
 
+**Prototype: [`mockups/tabbar/`](../../../mockups/tabbar/README.md)** (`/mockups/tabbar/`) —
+clickable, phone-first, dummy data. It is a *guide, not a spec*: it covers a dozen screens
+and says nothing about admin, the live logger, attendance, bulk selection, merge/copy-to,
+the offline indicator, or the add-tune configure step. Where it and this document
+disagree, the prototype is newer.
+
 The kit already maps cleanly. This table is the translation dictionary; the point of the
 rest of this section is the places where the web *doesn't* follow it yet.
 
@@ -271,21 +283,40 @@ rest of this section is the places where the web *doesn't* follow it yet.
 `templates/hamburger_menu.html` has 9 items for a signed-in user: Me, Admin, Find a tune,
 My Tunes, My Sessions, Add A Session, Log Out, Share, Help. iOS wants 3–5 tabs. Proposed:
 
-**Home · Sessions · My Tunes · Search · Me**
+**Home · Sessions · Tunes · Me** — four, settled in the prototype (the first draft
+proposed five, with Search as its own tab).
 
 - Add A Session → "+" inside Sessions. Share → the system share sheet (`/share?url=`
-  remains the web fallback). Help/Admin/Log Out → inside Me. Find a tune → its own tab
-  (it is the most-used action; a tab is faster than a menu).
+  remains the web fallback). Help/Admin/Log Out → inside Me.
+- **Search is not a tab.** It is the search field at the top of Tunes, which reaches the
+  whole catalogue: on the "All" filter, your matching tunes stay where they are and a
+  `Not on your list` divider appears *below* them with catalogue matches; on
+  Know/Learning/Want it simply filters that list. This replaces the `FindTuneOverlay`
+  bolted to the hamburger without spending a tab on it.
+- **Home's icon is the C from the wordmark** (`static/images/android-chrome-192x192.png`),
+  greyed by a CSS mask at rest and full-colour when active; the wordmark itself
+  (`logo3-1.png`) sits top-left on Home in place of a title.
 - Building this as a bottom tab bar on the web's <768px layout now (a) validates the IA
-  with real users before it's baked into a binary, (b) forces Home to become a real payload
-  (A2), and (c) makes Search a page (`/search`) rather than an overlay bolted to the
-  hamburger via `window.FindTuneOverlay`.
+  with real users before it's baked into a binary, and (b) forces Home to become a real
+  payload (A2).
 
 ### B2. Home as a Svelte page
 
-Follows from A2 and B1. Content stays what it is (learning counts, suggested tune, this
-week's sessions, in-progress logs and recordings), but each block should be a payload
-section the app can render as cards.
+Follows from A2 and B1; `build_home_payload` already exists. The prototype's ordering,
+which differs from today's page:
+
+1. **Today** — present *only* when a session is on today. The whole card opens that
+   session's log; one green **View** button does the same. It carries the live/finished/
+   starts-at chip, the venue, who is there, and the running tally ("18 tunes logged so
+   far"). **More than one session today (a festival) is a horizontal scroll-snap strip**
+   with the next card peeking and page dots — not a stack, because at a festival the
+   thing you need to see is *that there are three*.
+2. **This week** (calendar icon), 3. **Learning** (notes icon), 4. **Pick up where you
+   left off** (pencil icon) — the unfinished log and the half-placed recording.
+
+The payload already carries everything except the per-instance "logged so far" tally and
+the people-here count; both exist elsewhere (`live_bootstrap`, `active_session_manager`)
+and need folding into `build_home_payload` when this is built.
 
 ### B3. Retire `Tabs mobileSelect`
 
@@ -331,6 +362,142 @@ two-pane logger, hover states, ⌘Enter) simply don't port. The <768px paths are
 for iOS. The tune-detail drawer's payload-derived variants, the Seg/Chip/Dialog
 conventions, and the id-keyed live-ops protocol port as-is.
 
+### B8. The staged conversion plan
+
+Ordered by **blast radius, not by visibility**. Three things make a stage risky here:
+how many pages it touches, whether it disturbs the DOM contract the Playwright suite
+pins (spec 035's discipline), and whether it changes navigation.
+
+**Two standing hazards, true of every stage:**
+
+- **The mobile safety net is thin.** `e2e/mobile/core.mobile.spec.ts` is four smoke
+  tests on a Pixel 5 (`testMatch: /\.mobile\.spec\.ts/`), against 88 desktop tests.
+  Mobile is where all of this work lands.
+- **`static/css/my_tunes_mobile.css` is 1,767 lines** loaded by three templates
+  (`my_tunes.html`, `session_detail.html`, `admin_tunes.html`) and referenced from
+  `sessionpage/page.css` and `mytunespage/TuneCard.svelte`. It is the de-facto mobile
+  stylesheet. **Every stage should delete from it, never add to it**; a stage that grows
+  it has gone wrong.
+
+---
+
+#### Stage 0 — Widen the mobile e2e net
+
+**What.** Mobile specs for the screens stages 2–6 touch: the session page's three tabs
+(filter, search, scroll), My Tunes filtering and the status Seg, the tune drawer opening
+and a status change persisting, Home's blocks.
+**Why first.** Pure addition; nothing ships. It is the only thing that makes stages 4–6
+safe to attempt, and it is the one step I would argue against skipping.
+**Done when.** The mobile project runs ~15–20 specs instead of 4, all green on `master`
+before any UI changes.
+
+#### Stage 1 — The three missing kit primitives, adopted by nobody
+
+**What.** `frontend/src/lib/` gains:
+- **`Row.svelte`** — lead / (title + subtitle) / trailing. **Flex, not grid**: the
+  prototype's first cut used `grid-template-columns: auto 1fr auto` with
+  `.lead:empty { display: none }`, and a hidden lead pushed the body into column 1 and
+  the trailing chip into the stretchy column, so status chips sat beside the text instead
+  of at the right margin. Flex with `margin-left: auto` on the trailing element has no
+  such failure mode. Worth pinning in a test.
+- **`Toolbar.svelte`** — one line: `SearchField` + optional filter / sort / add buttons,
+  with the **filter panel expanding beneath it** (a notch pointing back at the button
+  that opened it). Open/close is a class toggle on live nodes so both directions animate.
+- **`SectionHeader.svelte`** — title + optional icon + optional "See all".
+
+**Why here.** Pure addition; no page imports them yet. Vitest only.
+**Done when.** Three components, their tests, and `lib/README.md` updated. Zero diff in
+`static/` output for existing pages.
+
+#### Stage 2 — Visual conformance, one page per commit
+
+**What.** Adopt `Row` and `SectionHeader`; right-align trailing status; make the counts
+in tab labels faint (`Tunes · 96` with the number muted) and **add a count to People,
+which lacks one**; section icons.
+**Why here.** No behaviour changes. Keep the legacy ids/classes per spec 035 so existing
+selectors keep passing; each commit is independently revertible.
+**Done when.** Per page: desktop + mobile e2e green, and a measurable deletion from
+`my_tunes_mobile.css`.
+
+#### Stage 3 — One toolbar everywhere
+
+**What.** The session page's Tunes / Logs / People tabs each get a `Toolbar`: search on
+every tab, a filter panel (tune type / complete-or-year / role), `+` on Tunes. My Tunes
+gets the sort control **moved out of the page header and into the toolbar row**.
+**Why here — and why this is the best value in the plan.** My Tunes *already ships this
+pattern*: `filters-container` → `filter-panel-toggle` → `filter-panel` with a
+`clear-filters-btn`, in `mytunespage/App.svelte` (~line 598ff). This stage generalizes
+proven production code rather than inventing a pattern. It also kills the
+filter-as-bottom-sheet idea the prototype briefly tried: **a control at the top of the
+screen must not open a panel at the bottom of it**. (On iPhone a popover anchored to a
+button adapts into a bottom sheet by default, so "popover" is not the escape hatch
+either — inline expansion is the answer on both platforms.)
+**Done when.** All four tab surfaces use one component; the bespoke filter markup in
+`sessionpage/TunesTab.svelte` and the `.filter-*` block in `my_tunes_mobile.css` are
+gone; mobile e2e green.
+
+#### Stage 4 — Home becomes a Svelte page
+
+**What.** `templates/home.html` → thin shell + `frontend/src/homepage/`, rendering
+`build_home_payload` (already written, already the `/api/home` body). Content per B2.
+**Why here.** Self-contained: one route, one serializer that exists, and the page is
+currently simple Jinja. It must precede the tab bar — a tab bar whose first tab is the
+old Home is a menu in a different place.
+**Done when.** `/` and `GET /api/home` render from one payload; the festival strip works
+at 400px; `test_home_continue_tagging_050.py` still passes.
+
+#### Stage 5 — The tab bar, behind a flag
+
+**What.** A bottom tab bar in `base.html` at <768px: Home / Sessions / Tunes / Me. Help,
+Admin, Share and Log Out move into Me *first*; the hamburger stays alive until Me has
+absorbed them, then dies.
+**Why here, and why flagged.** This is the only stage that touches every page, and
+`e2e/mobile/core.mobile.spec.ts` currently asserts "hamburger menu opens on mobile" —
+that test changes meaning here, which is exactly why Stage 0 exists.
+**Done when.** Flag on: four tabs, no hamburger, every hamburger destination reachable.
+Flag off: today's behaviour, byte-identical. Both paths green in e2e.
+
+#### Stage 6 — Push/pop slide transitions
+
+**What.** `/sessions` → `/sessions/<path>` slides in from the right; Back slides it out.
+**The honest caveat.** The prototype fakes this with a hash router and absolutely
+positioned screens. The real app does a **server round trip** between those URLs, so the
+prototype's mechanism does not port. The cheap answer is **cross-document View
+Transitions** — `@view-transition { navigation: auto; }` plus a named transition on the
+content area: Chrome and Safari animate it, Firefox ignores it, no SPA router, no
+JS. If that degradation is unacceptable, **drop this stage** rather than reaching for a
+client-side router; the slide is polish and a router is an architecture change that
+spec 035 deliberately avoided ("No SPA, no client-side router").
+**Done when.** The transition runs in Chrome/Safari, is absent and harmless in Firefox,
+and no navigation behaviour changed.
+
+#### Anytime — independent of the sequence
+
+- **Toast diet (B4).** Trim success toasts to the cases where the effect is off-screen.
+  In the prototype exactly one survives: adding a tune to My Tunes from a catalogue
+  search result, because the change lands on a list you are not looking at. Low risk,
+  many small call sites, blocks nothing.
+- **Person page → sections (B3).** Six tabs behind a `<select>` become a profile screen
+  with sections and "See all" drill-downs. Self-contained to one page; retires the one
+  kit behaviour with no iOS counterpart.
+- **Design tokens as data (B6).**
+
+#### Already done — no work
+
+The **tune drawer**. The prototype's sheet was built to look like today's drawer on
+purpose (type pill · title · ×, "Log to …" when a session is live, notation first, then
+My List / Details / History / Played With). It rises to ~94% height on a phone; that is
+the only change, and it is a Sheet prop.
+
+#### What the prototype does not cover
+
+Decide these per page as the stages reach them; do not assume the prototype settled them:
+admin (session admin, people admin, recordings, activity), the live logger itself,
+attendance/check-in, the session-tune add's configure step (alias/setting/key), the
+non-modal `.mt-add-pane`, bulk selection (spec 029), tune merge and copy-to, the
+connection/offline indicator, the in-session badge, per-instrument status, My Tunes
+pagination, the tunebook sync pane, and the auth/help pages.
+
 ---
 
 ## C. Architecture choice: native vs WKWebView
@@ -348,19 +515,15 @@ nothing over the installable PWA the 021 prototype already demonstrated.
 
 Everything in A and B is web-repo work and can ship incrementally behind the web app.
 
-1. **Auth handshake + `me` + `app-config`** (A1, A8) — nothing else can be tested
-   end-to-end from a device without it.
-2. **ISO JSON provider + envelope on the native surface + raw-beside-display audit**
-   (A3, A4) — cheap, mechanical, and the Swift models depend on it.
-3. **Native surface list + OpenAPI + contract test** (A5) — freezes the contract before
-   the first Swift file. Fold A6 (search family collapse) into this since it changes URLs.
-4. **Home payload + tab-bar IA on the web** (A2, B1, B2) — validates the app's shape
-   with real users.
-5. **Fixture tests for the pure client logic** (B5) — can start any time; must be done
-   before the Swift logger.
-6. **Person page restructure, toast diet, tokens.json** (B3, B4, B6) — polish; do
-   opportunistically.
-7. **Universal Links + web handoff** (A7) when the app exists; **push** (A9) after.
+1. ~~**Auth handshake + `me` + `app-config`** (A1, A8)~~ — **DONE 2026-09-21.**
+2. ~~**ISO JSON provider + envelope + raw-beside-display audit** (A3, A4)~~ — **DONE.**
+3. ~~**Native surface + OpenAPI + contract test** (A5), with A6 folded in~~ — **DONE.**
+4. **The web reshaping (§B)** — now has its own stage-by-stage plan: **see §B8**. Its
+   Stage 4 (Home) and Stage 5 (tab bar) are what item 4 of this list used to be.
+5. **Fixture tests for the pure client logic** (B5) — can start any time, independent of
+   §B8; must be done before the Swift logger. **This is the highest-leverage prep work
+   in this document** and nothing blocks it.
+6. **Universal Links + web handoff** (A7) when the app exists; **push** (A9) after.
 
 Explicitly **not** recommended now: a global REST URL rename (035's call stands), rewriting
 existing Svelte pages, or promoting/deleting the pill logger as a prerequisite (035 Step 6
