@@ -72,7 +72,17 @@ def _final_answer(events, spans, seg_start, seg_end):
 
 
 def score_identification(board, run_id, gt, replay_range=None):
-    """Per-segment identification results for one run."""
+    """Per-segment identification results for one run.
+
+    Reports what the system was claiming when the tune ended. There was
+    briefly a second number here for what it *finally* settled on, added to
+    make retroactive revision comparable with the bench, which decodes a whole
+    set once it has been heard. It came out because it could not be defined
+    cleanly: the assembler withdraws a span when a tune stops, so there is
+    often no final claim to report, and a span that runs on into the next tune
+    makes its later events about something else. Revision is off for separate
+    and measured reasons; see the assembler.
+    """
     events = board.hypothesis_events(run_id)
     spans = {h["hyp_id"]: h for h in board.hypotheses(run_id)}
     costs_by_window = [
