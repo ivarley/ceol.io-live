@@ -156,20 +156,39 @@ def compute_features(recording_id, force=False):
     print(f"recording {recording_id:>4}  computing features ...", flush=True)
     # Streamed in blocks: three hours at 22.05 kHz is 240M samples, and holding
     # the signal and its STFT at once is the one place this would blow up.
+    #
+    # The blocks OVERLAP by a whole number of hops and the padded frames are
+    # discarded. Without that, librosa's centred STFT pads each block with
+    # zeros, so every block edge is a small discontinuity in the features —
+    # and a discontinuity every sixty seconds is exactly what a boundary
+    # detector is built to notice. That would have been a false boundary a
+    # minute, baked into the cache and then measured.
     block_frames = 600  # 60 s of grid frames per block
     block_samples = block_frames * HOP
+    pad_frames = -(-N_FFT // HOP)          # whole hops covering one FFT window
+    pad_samples = pad_frames * HOP
     chunks = {k: [] for k in FEATURE_NAMES}
     with sf.SoundFile(wav, "r") as f:
         if f.samplerate != SAMPLE_RATE:
             raise SystemExit(f"{wav}: expected {SAMPLE_RATE} Hz, got {f.samplerate}")
-        while True:
-            y = f.read(block_samples, dtype="float32", always_2d=False)
+        total = f.frames
+        start = 0
+        while start < total:
+            read_from = max(0, start - pad_samples)
+            lead_frames = (start - read_from) // HOP
+            f.seek(read_from)
+            y = f.read(block_samples + (start - read_from) + pad_samples,
+                       dtype="float32", always_2d=False)
             if y.size == 0:
                 break
             arr = compute_arrays(np.asarray(y, dtype=np.float32))
-            take = min(block_frames, arr["rms_db"].shape[0]) if y.size == block_samples else arr["rms_db"].shape[0]
+            available = arr["rms_db"].shape[0]
+            want = min(block_frames, max(0, -(-min(block_samples, total - start) // HOP)))
+            lo = min(lead_frames, available)
+            hi = min(lo + want, available)
             for k in FEATURE_NAMES:
-                chunks[k].append(arr[k][:take])
+                chunks[k].append(arr[k][lo:hi])
+            start += block_samples
     arrays = {k: (np.concatenate(v, axis=0) if v else np.zeros(0, dtype=np.float32)) for k, v in chunks.items()}
     n = min(a.shape[0] for a in arrays.values())
     arrays = {k: v[:n] for k, v in arrays.items()}
