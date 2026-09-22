@@ -161,3 +161,10 @@ logs/
 # Ceol Listen lab (spec 053): pulled masters, derived wavs, features, the
 # SQLite board, indexes and run output. Anchored for the same reason /data/ is.
 /lab/data/
+
+# The lab's own environment file: production database URL and AWS keys, which
+# the app's .env deliberately does not hold. The unanchored `.env` rule above
+# already catches this, but it is named explicitly because these are live
+# credentials and a later tidy-up that anchors that rule must not silently
+# start tracking them.
+/lab/.env
