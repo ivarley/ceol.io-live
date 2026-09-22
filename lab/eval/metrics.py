@@ -172,10 +172,11 @@ def score_segmentation(board, run_id, gt, replay_range=None, tolerances=(1000, 3
     and where the assembler actually opened and closed spans. They are not the
     same thing, and the difference is the assembler's own contribution.
     """
-    truth = [b["t_ms"] for b in gt.boundaries()]
+    covered = gt.covered_intervals()
     if replay_range:
         r0, r1 = replay_range
-        truth = [t for t in truth if r0 <= t < r1]
+        covered = [(max(a, r0), min(b, r1)) for a, b in covered if b > r0 and a < r1]
+    truth = [b["t_ms"] for b in gt.boundaries() if gt.within(b["t_ms"], covered)]
 
     sources = {
         "boundary_observations": [
@@ -186,10 +187,11 @@ def score_segmentation(board, run_id, gt, replay_range=None, tolerances=(1000, 3
     }
 
     out = {}
-    duration_ms = (replay_range[1] - replay_range[0]) if replay_range else gt.duration_ms
-    hours = max(1e-9, duration_ms / 3600000.0)
+    hours = max(1e-9, sum(b - a for a, b in covered) / 3600000.0)
     for source, pairs in sources.items():
-        predicted = sorted({int(t) for t, _ in pairs})
+        # scored only where tunes were placed, so a night segmented over a
+        # quarter of its length is not punished for the other three quarters
+        predicted = sorted({int(t) for t, _ in pairs if gt.within(int(t), covered)})
         clock_of = {}
         for t, c in pairs:
             clock_of.setdefault(int(t), c)
@@ -207,6 +209,7 @@ def score_segmentation(board, run_id, gt, replay_range=None, tolerances=(1000, 3
         latencies = sorted(clock_of[t] - t for t in predicted if t in clock_of)
         out[source] = {
             "n_true": len(truth), "n_predicted": len(predicted),
+            "scored_minutes": round(sum(b - a for a, b in covered) / 60000.0, 1),
             "by_tolerance": per_tol,
             "median_latency_ms": _median(latencies),
         }

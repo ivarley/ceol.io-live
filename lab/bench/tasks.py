@@ -40,6 +40,7 @@ BOUNDARY_TOL_MS = 3000   # default "near enough" for the boundary task
 MIN_EVAL_SEGMENT_MS = 10000    # shorter segments are marks, not tunes
 SETEND_TRUST_MS = 30000  # after an unmarked set end's start, music is certain this long
 IDENT_CAP_MS = 600000    # hard cap on any segment for identification scoring
+MAX_UNSEGMENTED_GAP_MS = 360000   # a longer hole in the placings is not scorable
 
 
 @dataclass
@@ -103,6 +104,36 @@ class GroundTruth:
                 continue
             merged.append(b)
         return merged
+
+    # -- coverage ---------------------------------------------------------
+
+    def covered_intervals(self, max_gap_ms=MAX_UNSEGMENTED_GAP_MS, pad_ms=BOUNDARY_TOL_MS):
+        """Where the corpus can judge a boundary prediction at all.
+
+        A night is not always segmented end to end: recording 140 is placed
+        over its first 52 minutes of three and a half hours. Counting a
+        detection in the other three hours as a false alarm measures how much
+        was segmented, not how well anything detects. So predictions are only
+        scored inside the placed region, and long gaps within it — where a
+        set may simply never have been logged — are dropped too.
+        """
+        segs = sorted(self.segments, key=lambda s: s.start_ms)
+        if not segs:
+            return []
+        merged = [[segs[0].start_ms - pad_ms, segs[0].end_ms + pad_ms]]
+        for s in segs[1:]:
+            if s.start_ms - merged[-1][1] <= max_gap_ms:
+                merged[-1][1] = max(merged[-1][1], s.end_ms + pad_ms)
+            else:
+                merged.append([s.start_ms - pad_ms, s.end_ms + pad_ms])
+        return [(max(0, a), min(self.duration_ms, b)) for a, b in merged]
+
+    def covered_ms(self, intervals=None):
+        return sum(b - a for a, b in (intervals or self.covered_intervals()))
+
+    @staticmethod
+    def within(t_ms, intervals):
+        return any(a <= t_ms <= b for a, b in intervals)
 
     # -- music activity ---------------------------------------------------
 
@@ -295,11 +326,14 @@ class BoundaryTask(Task):
 
         if gt is None:
             return {"n": 0}
+        covered = gt.covered_intervals(pad_ms=self.tol_ms)
         truth = [b["t_ms"] for b in gt.boundaries()]
         thr = threshold if threshold is not None else best_threshold(y, scores, minimum=0.0)
         predicted = peak_times_ms(scores, threshold=thr, min_distance_ms=self.tol_ms * 2)
+        # only where the corpus placed tunes; see GroundTruth.covered_intervals
+        predicted = [t for t in predicted if gt.within(t, covered)]
         matched, fp, fn, errors = match_events(truth, predicted, tol_ms=self.tol_ms)
-        hours = max(1e-9, (scores.size * GRID_MS) / 3600000.0)
+        hours = max(1e-9, gt.covered_ms(covered) / 3600000.0)
         recall = matched / len(truth) if truth else 0.0
         precision = matched / len(predicted) if predicted else 0.0
         f1 = (2 * recall * precision / (recall + precision)) if (recall + precision) else 0.0
@@ -309,6 +343,7 @@ class BoundaryTask(Task):
             "false_per_hour": fp / hours, "missed": fn,
             "median_abs_error_ms": float(np.median(np.abs(errors))) if errors else None,
             "threshold": float(thr), "tol_ms": self.tol_ms,
+            "scored_minutes": round(gt.covered_ms(covered) / 60000.0, 1),
         }
 
 
