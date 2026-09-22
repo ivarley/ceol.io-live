@@ -19,6 +19,11 @@ class Candidate:
     version = "0"
     needs = ()          # feature names this reads, checked before running
     fittable = False
+    # Set to pin the operating point instead of fitting it. Only a baseline
+    # should: fitting picks whatever scores best, and for an event metric
+    # that can be "fire constantly", which is a different strategy from the
+    # one the baseline is meant to represent.
+    fixed_threshold = None
 
     def __init__(self, **params):
         self.params = dict(self.defaults())

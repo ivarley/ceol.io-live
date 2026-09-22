@@ -6,13 +6,17 @@ bench is meant to cover, not just what it covers today.
 """
 
 from lab.bench.candidates.base import Candidate  # noqa: F401
+from lab.bench.candidates.baselines import AlwaysMusic, PeriodicBoundary, SprayBoundary
 from lab.bench.candidates.boundary_keychange import BoundaryKeyChange
 from lab.bench.candidates.boundary_mel_lr import BoundaryMelLR
 from lab.bench.candidates.boundary_novelty import BoundaryNovelty
 from lab.bench.candidates.music_energy import MusicEnergy
 from lab.bench.candidates.music_mel_lr import MusicMelLR
 
-REGISTRY = {c.name: c for c in (MusicEnergy, MusicMelLR, BoundaryNovelty, BoundaryKeyChange, BoundaryMelLR)}
+REGISTRY = {c.name: c for c in (
+    AlwaysMusic, PeriodicBoundary, SprayBoundary,
+    MusicEnergy, MusicMelLR, BoundaryNovelty, BoundaryKeyChange, BoundaryMelLR,
+)}
 
 # Ideas the spec names but that are not built. Listed so the gap is visible.
 UNBUILT = {
@@ -22,8 +26,8 @@ UNBUILT = {
 }
 
 TASK_HINT = {
-    "music_activity": ("music_energy", "music_mel_lr"),
-    "boundary": ("boundary_novelty", "boundary_keychange", "boundary_mel_lr"),
+    "music_activity": ("always_music", "music_energy", "music_mel_lr"),
+    "boundary": ("boundary_spray", "boundary_periodic", "boundary_novelty", "boundary_keychange", "boundary_mel_lr"),
 }
 
 

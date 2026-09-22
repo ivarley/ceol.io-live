@@ -218,18 +218,17 @@ def run_bench(task_name, candidate, recording_ids=None, tol_ms=None, quiet=False
         if getattr(candidate, "fittable", False):
             model.fit([(loaded[r][0], loaded[r][2], loaded[r][3]) for r in train_ids])
         fit_s = time.time() - t0
-        # a threshold is part of the model: fit it on the training nights too
-        threshold = None
-        if task.needs_threshold and train_ids:
-            tr_scores, tr_y = [], []
-            for r in train_ids:
-                feats, gt, y, mask = loaded[r]
-                s = model.predict(feats)
-                tr_scores.append(s[mask])
-                tr_y.append(y[mask])
-            if tr_scores:
-                threshold = best_threshold(np.concatenate(tr_y), np.concatenate(tr_scores),
-                                           minimum=0.0 if task_name == "boundary" else None)
+        # The operating point is part of the model, and it is fitted on the
+        # training nights against THE METRIC BEING REPORTED. Fitting it on
+        # frame-level agreement instead was wrong in a way that only a
+        # deliberately stupid baseline exposed: for the boundary task the
+        # score is event-based, computed after peak-picking, so a threshold
+        # that maximises frame overlap can be one that fires constantly. The
+        # periodic baseline came back with 555 false boundaries an hour and a
+        # recall of 0.99, which is not a baseline, it is a broken dial.
+        threshold = getattr(candidate, "fixed_threshold", None)
+        if threshold is None and task.needs_threshold and train_ids:
+            threshold = fit_threshold(task, model, [loaded[r] for r in train_ids])
         feats, gt, y, mask = loaded[held_out]
         t1 = time.time()
         scores = model.predict(feats)
@@ -260,6 +259,39 @@ def run_bench(task_name, candidate, recording_ids=None, tol_ms=None, quiet=False
         git_sha=git_sha(),
     )
     return result
+
+
+def fit_threshold(task, model, nights, n_steps=21):
+    """Pick the operating point that scores best on the training nights.
+
+    Predictions are computed once per night and re-thresholded, because the
+    prediction is the expensive part and the sweep is the cheap one.
+    """
+    predicted = []
+    lo, hi = np.inf, -np.inf
+    for feats, gt, y, mask in nights:
+        scores = np.asarray(model.predict(feats), dtype=float)
+        if scores.size:
+            lo = min(lo, float(np.nanmin(scores)))
+            hi = max(hi, float(np.nanmax(scores)))
+        predicted.append((feats, gt, y, mask, scores))
+    if not np.isfinite(lo) or not np.isfinite(hi) or hi <= lo:
+        return float(lo) if np.isfinite(lo) else 0.0
+
+    best, best_score = None, -1.0
+    for thr in np.linspace(lo, hi, n_steps):
+        total, weight = 0.0, 0
+        for feats, gt, y, mask, scores in predicted:
+            m = task.score(y, mask, scores, gt=gt, threshold=float(thr))
+            f1 = m.get("f1")
+            if f1 is None:
+                continue
+            n = m.get("n_true") or m.get("n") or 1
+            total += f1 * n
+            weight += n
+        if weight and total / weight > best_score:
+            best, best_score = float(thr), total / weight
+    return best if best is not None else float(lo)
 
 
 def _fmt_metrics(m):

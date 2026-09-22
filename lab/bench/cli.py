@@ -81,16 +81,25 @@ def cmd_leaderboard(args):
     results = load_results(args.task)
     if not results:
         raise SystemExit(f"no results for task '{args.task}'; run `lab bench run --task {args.task} --candidate ...`")
-    key = "f1"
+    # Rank by accuracy where the task has it. For music-vs-not the classes are
+    # lopsided — about three quarters of labelled frames are music — so f1
+    # puts "always music" within a hair of a real detector, and accuracy is
+    # the column that separates them.
+    has_accuracy = any(r["pooled"].get("accuracy") is not None for r in results)
+    key = "accuracy" if has_accuracy else "f1"
     results.sort(key=lambda r: -(r["pooled"].get(key) or 0))
-    print(f"{args.task}  ({len(results)} candidates, leave-one-night-out)")
-    print(f"{'candidate':<24} {'ver':<4} {'f1':>6} {'recall':>7} {'prec':>6} {'spread (f1)':>18}  params")
+    extra = f"{'accuracy':>9}" if has_accuracy else f"{'false/h':>9}"
+    print(f"{args.task}  ({len(results)} candidates, leave-one-night-out, ranked by {key})")
+    print(f"{'candidate':<22} {'ver':<4}{extra} {'f1':>6} {'recall':>7} {'prec':>6} "
+          f"{'spread':>12}  params")
     for r in results:
         p = r["pooled"]
-        spread = [n["metrics"].get("f1") for n in r["nights"] if n["metrics"].get("f1") is not None]
+        spread = [n["metrics"].get(key) for n in r["nights"] if n["metrics"].get(key) is not None]
         sp = f"{min(spread):.2f}-{max(spread):.2f}" if spread else "-"
-        print(f"{r['candidate']:<24} {r['version']:<4} {(p.get('f1') or 0):>6.3f} "
-              f"{(p.get('recall') or 0):>7.3f} {(p.get('precision') or 0):>6.3f} {sp:>18}  "
+        col = (f"{p['accuracy']:>9.3f}" if has_accuracy
+               else f"{(p.get('false_per_hour') or 0):>9.1f}")
+        print(f"{r['candidate']:<22} {r['version']:<4}{col} {(p.get('f1') or 0):>6.3f} "
+              f"{(p.get('recall') or 0):>7.3f} {(p.get('precision') or 0):>6.3f} {sp:>12}  "
               f"{json.dumps(r['params'], sort_keys=True)}")
     return 0
 
