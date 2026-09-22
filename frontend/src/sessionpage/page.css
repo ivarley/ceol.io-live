@@ -651,6 +651,51 @@
     color: var(--text-color);
 }
 
+/* ---- Pinned chrome (spec 052 §B8 Stage 3) ---------------------------------
+   Three sticky layers under the fixed site header: the tab strip, then the active
+   tab's toolbar, then (on Logs) the year headers. The session's own title, address
+   and schedule deliberately scroll away — pinning those too costs 291px, which on
+   an 800px phone is nearly half the list, in exchange for information you read
+   once.
+
+   The offsets are measured, not hard-coded: sticky.js publishes each layer's
+   height as a custom property, because a toolbar wraps at narrow widths and the
+   Tunes filter panel grows every time it opens. The fallbacks are only for the
+   first frame, before the ResizeObserver has reported.
+
+   Only Logs publishes its toolbar height, because only Logs has a third layer
+   under it. All three tabs stay MOUNTED across switches (their state survives),
+   so three writers to one variable meant whichever hidden pane reported last
+   won — and a hidden pane measures 0.
+
+   Stacking order matters: tabs above toolbar above year headers, so a layer
+   scrolling up slides UNDER the one that outranks it. */
+
+.tab-buttons {
+    position: -webkit-sticky;
+    position: sticky;
+    top: var(--site-header-h, 42px);
+    z-index: 3;
+    background: var(--bg-color);
+}
+
+.filters-container,
+.logs-filter-header,
+.people-controls {
+    position: -webkit-sticky;
+    position: sticky;
+    top: calc(var(--site-header-h, 42px) + var(--session-tabs-h, 50px));
+    z-index: 2;
+    background: var(--bg-color);
+}
+
+.logs-add-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
 /* ---- Logs list (spec 052 §B8 Stage 3) -------------------------------------
    One list, not three tables. What was here: .instances-table, its header/content
    rows and date/location/time cells, plus .year-view-link — an anchor to #view
@@ -667,8 +712,16 @@
    The header is also the collapse control (see .year-header above). */
 .logs-group-header {
     position: sticky;
-    top: 0;
-    z-index: 2;
+    /* NOT top:0 — the site header is fixed at the top of the viewport, so a group
+       header stuck at 0 slides underneath it and is never seen. That looks exactly
+       like sticky not working at all. */
+    position: -webkit-sticky;
+    position: sticky;
+    top: calc(
+        var(--site-header-h, 42px) + var(--session-tabs-h, 50px) +
+            var(--logs-toolbar-h, 40px)
+    );
+    z-index: 1;
     gap: 8px;
     padding: 6px 8px;
     background: var(--bg-color);

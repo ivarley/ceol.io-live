@@ -25,6 +25,7 @@
     matchLoggedTunes,
     tunePlayLinks,
   } from './logic.js'
+  import { publishHeight } from './sticky.js'
   import { Row, SearchField, Seg } from '../lib/index.js'
 
   let { active, session, isLoggedIn, onAddInstance } = $props()
@@ -270,7 +271,7 @@
 {/snippet}
 
 {#snippet filterHeader()}
-  <div class="logs-filter-header" id="logs-filter-header">
+  <div class="logs-filter-header" id="logs-filter-header" use:publishHeight={'--logs-toolbar-h'}>
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div class="logs-tune-filter" onkeydown={onFilterKey}>
       <SearchField
@@ -315,6 +316,11 @@
         <div class="logs-tune-options logs-tune-status" id="logs-tune-status">{dropdownStatus}</div>
       {/if}
     </div>
+    {#if isLoggedIn}
+      <!-- In the toolbar, not in the current year's header: the toolbar is pinned,
+           so Add is reachable from 2019 as easily as from this week. -->
+      <button type="button" class="year-add-link logs-add-btn" id="add-session-btn" onclick={addClick}>Add</button>
+    {/if}
     <Seg
       options={LOG_VIEW_OPTIONS}
       value={viewMode}
@@ -423,9 +429,6 @@
                   {isFestival ? festivalDayLabel(instances[0].date) : groupKey}
                 </h3>
                 <span class="logs-group-count">{instances.length} log{instances.length !== 1 ? 's' : ''}</span>
-                {#if index === 0 && isLoggedIn}
-                  <button type="button" class="year-add-link logs-group-add" id="add-session-btn" data-year={groupKey} onclick={addClick}>Add</button>
-                {/if}
               </div>
 
               {#if !isCollapsed}

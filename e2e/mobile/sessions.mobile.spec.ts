@@ -88,6 +88,66 @@ test.describe("session page (mobile)", () => {
     await expect(page.locator("#tunes-list")).toBeVisible();
   });
 
+  test("the tabs and the toolbar stay put while the list scrolls under them", async ({ page }) => {
+    // Spec 052 §B8 Stage 3. The session's title, address and schedule scroll away
+    // deliberately — pinning those too costs ~291px, nearly half the list on a
+    // phone, for information you read once. The tabs and the search line stay.
+    //
+    // The offsets are MEASURED at runtime (sticky.js publishes each layer's
+    // height), because a toolbar wraps at narrow widths and the Tunes filter panel
+    // grows when it opens. So this asserts the layers hold their position, not any
+    // particular number — except that they must not overlap or swap order.
+    for (const [tab, toolbar] of [
+      ["tunes", "#tunes-tab .filters-container"],
+      ["logs", "#logs-tab .logs-filter-header"],
+      ["people", "#people-tab .people-controls"],
+    ] as const) {
+      await page.goto(`/sessions/${SESSIONS.mueller.path}/${tab}`);
+      await page.waitForSelector(".tab-buttons");
+      await page.waitForSelector(toolbar);
+
+      const before = await page.evaluate(
+        (sel) => ({
+          tabs: Math.round(document.querySelector(".tab-buttons")!.getBoundingClientRect().top),
+          toolbar: Math.round(document.querySelector(sel)!.getBoundingClientRect().top),
+        }),
+        toolbar,
+      );
+
+      await page.evaluate(() => window.scrollBy(0, 600));
+      await page.waitForTimeout(300);
+
+      const after = await page.evaluate(
+        (sel) => ({
+          tabs: Math.round(document.querySelector(".tab-buttons")!.getBoundingClientRect().top),
+          toolbar: Math.round(document.querySelector(sel)!.getBoundingClientRect().top),
+          scrolled: Math.round(window.scrollY),
+        }),
+        toolbar,
+      );
+
+      expect(after.scrolled, `${tab}: the page did not scroll`).toBeGreaterThan(100);
+      // Pinned: still on screen, and no lower than where they began.
+      expect(after.tabs, `${tab}: the tab strip scrolled away`).toBeGreaterThanOrEqual(0);
+      expect(after.tabs).toBeLessThanOrEqual(before.tabs);
+      expect(after.toolbar, `${tab}: the toolbar scrolled away`).toBeGreaterThan(after.tabs);
+      expect(after.toolbar).toBeLessThanOrEqual(before.toolbar);
+    }
+  });
+
+  test("Logs: Add is in the toolbar, so it survives scrolling back years", async ({ page }) => {
+    // It used to live in the current year's section header, which meant it left
+    // the screen as soon as you scrolled past this year.
+    await page.goto(`/sessions/${SESSIONS.mueller.path}/logs`);
+    const add = page.locator("#add-session-btn");
+    await expect(add).toBeVisible();
+    await expect(page.locator("#logs-filter-header #add-session-btn")).toHaveCount(1);
+
+    await page.evaluate(() => window.scrollBy(0, 900));
+    await page.waitForTimeout(300);
+    await expect(add).toBeInViewport();
+  });
+
   test("Logs: instances render and the tune filter is reachable", async ({ page }) => {
     await page.goto(SESSION);
     await page.getByRole("tab", { name: /^Logs$/ }).click();

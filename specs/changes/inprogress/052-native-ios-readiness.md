@@ -558,7 +558,31 @@ class nothing ever added: invisible and inert, so deleted rather than ported. An
 subtitle separator has to be `{' · '}` rather than literal whitespace, because Svelte
 trims text at a block boundary and the two facts run together.
 
-Remaining on this page: **tab counts**. Counts are NOT
+**Pinned chrome (2026-09-22).** The tab strip and the active tab's toolbar are now
+sticky under the fixed site header; the session's title, address and schedule scroll
+away. Pinning those too was asked for and measured first: the hero is 291px, which on
+an 800px phone leaves 377px of list (~6 rows) against 668px (~11) with only the tabs
+pinned. The mockup did not pin it either — only its app bar and tab bar were fixed.
+
+`Add` moved from the current year's section header into the Logs toolbar, so it is
+reachable from 2019 as easily as from this week.
+
+Three things this cost, all worth recording:
+
+- **`top: 0` is wrong on this site.** The site header is `position: fixed` at 42px, so
+  anything sticking at 0 slides underneath and is never seen — which looks exactly
+  like sticky being broken. `--site-header-h` now names it (theme.css).
+- **The offsets are measured, not hard-coded** (`sessionpage/sticky.js` publishes each
+  layer's height via ResizeObserver). A toolbar wraps at narrow widths and the Tunes
+  filter panel grows every time it opens, so a magic number would be wrong within a
+  day.
+- **Only Logs publishes its toolbar height.** All three tabs stay MOUNTED across
+  switches so their state survives, so three writers to one shared variable meant
+  whichever hidden pane reported last won — and a hidden pane measures 0.
+
+Remaining on this page: **tab counts**, and converting the three toolbars to the kit
+`Toolbar` (this change pinned the existing ones rather than replacing them, so each
+step stays reviewable). Counts are NOT
 free — `total_tunes_count` is in the payload but the logs and people counts load
 lazily inside their own tabs, so a count on Tunes alone would be worse than none.
 That needs `build_session_detail_payload` to carry all three, which is server work

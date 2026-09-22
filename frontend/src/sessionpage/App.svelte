@@ -13,6 +13,17 @@
   import AddInstanceModal from './AddInstanceModal.svelte'
   import SessionTuneAddApp from '../mytunes/SessionTuneAddApp.svelte'
   import { basePathOf } from './logic.js'
+  import { publishHeight } from './sticky.js'
+
+  // The tab strip is sticky under the fixed site header, and the active tab's
+  // toolbar sticks under IT. Tabs renders the strip itself, so its height is
+  // published from here by id rather than with an action on the element.
+  $effect(() => {
+    const strip = document.getElementById('session-tabs')
+    if (!strip) return
+    const handle = publishHeight(strip, '--session-tabs-h')
+    return () => handle.destroy()
+  })
 
   let { pageData, ctx = {} } = $props()
 
@@ -95,6 +106,7 @@
     bind:value={activeTab}
     onValueChange={onTabChange}
     styled={false}
+    listId="session-tabs"
     listClass="tab-buttons"
     tabClass="tab-button">
     {#snippet children(active)}

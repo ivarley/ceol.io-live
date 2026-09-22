@@ -40,6 +40,10 @@
       "Liberation Mono", "Courier New", monospace;
     
     /* Theme surface/text variables (the app is dark-only) */
+    /* The site header is position:fixed at this height on every width, so anything
+       that sticks to the top of the viewport has to start BELOW it or it slides
+       underneath and disappears. Named here rather than repeated as a magic 42. */
+    --site-header-h: 42px;
     --bg-color: #1a1a1a;
     --text-color: #e0e0e0;
     --header-bg: #2d2d2d;
