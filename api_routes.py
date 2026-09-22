@@ -4242,18 +4242,27 @@ def get_session_person_detail(session_path, person_id):
                        array_agg(DISTINCT pi.instrument ORDER BY pi.instrument) FILTER (WHERE pi.instrument IS NOT NULL),
                        '{}'::text[]
                    ) as instruments,
-                   COALESCE(
-                       json_agg(
-                           json_build_object('date', si.date, 'session_instance_id', si.session_instance_id)
-                           ORDER BY si.date DESC
-                       ) FILTER (WHERE sip.attendance = 'yes' AND si.session_instance_id IS NOT NULL),
-                       '[]'::json
-                   ) as attended_instances
+                   -- Attendance is aggregated in its OWN subquery, not by joining
+                   -- session_instance_person into this one. Joined, it fanned out
+                   -- against person_instrument: every attended night came back once
+                   -- PER INSTRUMENT, so a fiddle-and-mandolin player with 13 nights
+                   -- got 26 rows, every date twice. The sibling array_agg(DISTINCT)
+                   -- collapsed the same fan-out on its own side, which is why the
+                   -- instruments looked right and only attendance was wrong.
+                   COALESCE((
+                       SELECT json_agg(
+                                  json_build_object('date', si.date, 'session_instance_id', si.session_instance_id)
+                                  ORDER BY si.date DESC, si.session_instance_id DESC
+                              )
+                       FROM session_instance_person sip
+                       JOIN session_instance si ON si.session_instance_id = sip.session_instance_id
+                       WHERE sip.person_id = p.person_id
+                         AND si.session_id = %s
+                         AND sip.attendance = 'yes'
+                   ), '[]'::json) as attended_instances
             FROM person p
             LEFT JOIN user_account u ON p.person_id = u.person_id
             LEFT JOIN person_instrument pi ON p.person_id = pi.person_id
-            LEFT JOIN session_instance_person sip ON p.person_id = sip.person_id
-            LEFT JOIN session_instance si ON sip.session_instance_id = si.session_instance_id AND si.session_id = %s
             WHERE p.person_id = %s
             GROUP BY p.person_id, p.first_name, p.last_name, p.city, p.state, p.country, p.thesession_user_id, u.user_id
             """,

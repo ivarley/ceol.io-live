@@ -447,10 +447,15 @@
                 <tr><th>Date</th></tr>
               </thead>
               <tbody>
-                {#each detailPerson.attended_instances as instance (instance.date)}
+                <!-- Keyed by instance id, not date: a session may legitimately run
+                     twice in one day (a festival, spec 047), so a date is not a
+                     unique key — and a duplicate key is a hard render error, not a
+                     cosmetic one. The link goes to the id for the same reason: a
+                     date URL resolves to whichever instance is first (spec 046). -->
+                {#each detailPerson.attended_instances as instance (instance.session_instance_id)}
                   <tr>
                     <td>
-                      <a href="/sessions/{sessionPath}/{instance.date}" class="person-detail-link">{instance.date}</a>
+                      <a href="/sessions/{sessionPath}/{instance.session_instance_id}" class="person-detail-link">{instance.date}</a>
                     </td>
                   </tr>
                 {/each}
