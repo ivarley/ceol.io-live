@@ -78,6 +78,47 @@ def transcribe_segment(frontend, store, audio_sha1, t0_ms, t1_ms, board=None):
     return notes, cost, cached
 
 
+def fuse(rankings, method="rrf", k=20):
+    """Combine rankings from several front ends.
+
+    The board's premise, tested: several experts produce the same kind of
+    evidence and disagree, and the disagreement is worth something. Their
+    scores are not on a common scale, so the default is reciprocal rank
+    fusion, which only uses the order each one produced. A tune that two
+    different transcriptions both rank highly is better supported than one
+    that a single transcription loves.
+    """
+    if len(rankings) == 1:
+        return rankings[0]
+    merged = {}
+    meta = {}
+    for ranked in rankings:
+        total = sum(max(0.0, r["score"]) for r in ranked) or 1.0
+        for position, r in enumerate(ranked, start=1):
+            tid = r["tune_id"]
+            meta.setdefault(tid, r)
+            if method == "sum":
+                merged[tid] = merged.get(tid, 0.0) + max(0.0, r["score"]) / total
+            else:
+                merged[tid] = merged.get(tid, 0.0) + 1.0 / (k + position)
+    out = [{**meta[t], "score": v} for t, v in merged.items()]
+    out.sort(key=lambda d: -d["score"])
+    return out
+
+
+def ranked_for_segment(frontends, store, sha, t0, t1, index, board, audio_top, fusion="rrf"):
+    """Transcribe with each front end and fuse what the index says about each."""
+    rankings, notes_all, cost_all, cached_all = [], [], 0.0, True
+    for fe in frontends:
+        notes, cost, cached = transcribe_segment(fe, store, sha, t0, t1, board=board)
+        intervals = intervals_from_notes(notes, fold=index.fold_octaves)
+        rankings.append(index.lookup(intervals, top_k=audio_top))
+        notes_all.extend(notes)
+        cost_all += cost
+        cached_all = cached_all and cached
+    return fuse(rankings, method=fusion), notes_all, cost_all, cached_all
+
+
 def _apply_type_filter(ranked, seg, type_filter, type_probs):
     """Narrow or reweight candidates by what kind of tune this is.
 
@@ -157,9 +198,9 @@ def _blend(weights_by_prev, belief, floor=1e-4):
     return out
 
 
-def score_night(frontend, recording_id, index, seconds=DEFAULT_SECONDS, board=None,
+def score_night(frontends, recording_id, index, seconds=DEFAULT_SECONDS, board=None,
                 top_k=25, quiet=True, prior="none", beta=1.0, belief_k=5,
-                type_filter="none"):
+                type_filter="none", fusion="rrf"):
     gt = load_ground_truth(recording_id)
     sequence = previous_of = None
     if prior != "none":
@@ -208,9 +249,10 @@ def score_night(frontend, recording_id, index, seconds=DEFAULT_SECONDS, board=No
                            "hits": 0, "n_grams_queried": 0}
                           for t, w in sorted(weights.items(), key=lambda kv: -kv[1])[:top_k]]
             else:
-                notes, cost, cached = transcribe_segment(frontend, store, sha, t0, t1, board=board)
-                intervals = intervals_from_notes(notes, fold=index.fold_octaves)
-                ranked = index.lookup(intervals, top_k=(200 if prior == "sequence" else top_k))
+                ranked, notes, cost, cached = ranked_for_segment(
+                    frontends, store, sha, t0, t1, index, board,
+                    audio_top=(200 if prior.startswith("sequence") else top_k), fusion=fusion)
+                intervals = []
                 if prior == "sequence":
                     weights = sequence.weights(previous_of.get(seg.session_instance_tune_id))
                     ranked = rerank(ranked, weights, beta=beta, index=index)[:top_k]
@@ -337,9 +379,9 @@ def summarise(rows):
     }
 
 
-def score_night_set_decoded(frontend, recording_id, index, seconds=DEFAULT_SECONDS,
+def score_night_set_decoded(frontends, recording_id, index, seconds=DEFAULT_SECONDS,
                             board=None, top_k=25, beta=1.0, audio_top=40,
-                            type_filter="none"):
+                            type_filter="none", fusion="rrf"):
     """Score a night by decoding each set as a whole.
 
     Two passes: transcribe and rank every segment as usual, then group the
@@ -372,9 +414,8 @@ def score_night_set_decoded(frontend, recording_id, index, seconds=DEFAULT_SECON
             t1 = min(seg.end_ms, t0 + int(seconds * 1000))
             if t1 - t0 < 5000:
                 continue
-            notes, cost, cached = transcribe_segment(frontend, store, sha, t0, t1, board=board)
-            intervals = intervals_from_notes(notes, fold=index.fold_octaves)
-            ranked = index.lookup(intervals, top_k=audio_top)
+            ranked, notes, cost, cached = ranked_for_segment(
+                frontends, store, sha, t0, t1, index, board, audio_top=audio_top, fusion=fusion)
             ranked = _apply_type_filter(ranked, seg, type_filter, type_probs)
             prepared.append({"seg": seg, "ranked": ranked, "notes": notes,
                              "cost": cost, "cached": cached,
@@ -428,25 +469,27 @@ def score_night_set_decoded(frontend, recording_id, index, seconds=DEFAULT_SECON
     return rows
 
 
-def run_retrieval(frontend, recording_ids=None, candidate_set="repertoire", n=5,
+def run_retrieval(frontends, recording_ids=None, candidate_set="repertoire", n=5,
                   seconds=DEFAULT_SECONDS, quiet=False, prior="none", beta=1.0,
-                  fold_octaves=False, belief_k=5, type_filter="none"):
+                  fold_octaves=False, belief_k=5, type_filter="none", fusion="rrf"):
     from lab.corpus.index import Index
 
     index = Index.load(candidate_set, n=n, fold_octaves=fold_octaves)
+    if not isinstance(frontends, (list, tuple)):
+        frontends = [frontends]
     recording_ids = recording_ids or paths.prepared_recording_ids()
     nights, all_rows = [], []
     with Board() as board:
         for rid in recording_ids:
             t0 = time.time()
             if prior == "set_viterbi":
-                rows = score_night_set_decoded(frontend, rid, index, seconds=seconds,
+                rows = score_night_set_decoded(frontends, rid, index, seconds=seconds,
                                                board=board, beta=beta,
-                                               type_filter=type_filter)
+                                               type_filter=type_filter, fusion=fusion)
             else:
-                rows = score_night(frontend, rid, index, seconds=seconds, board=board,
+                rows = score_night(frontends, rid, index, seconds=seconds, board=board,
                                    quiet=quiet, prior=prior, beta=beta, belief_k=belief_k,
-                                   type_filter=type_filter)
+                                   type_filter=type_filter, fusion=fusion)
             board.conn.commit()
             gt = load_ground_truth(rid)
             m = summarise(rows)
@@ -463,8 +506,10 @@ def run_retrieval(frontend, recording_ids=None, candidate_set="repertoire", n=5,
     pooled["nights"] = len(nights)
     result = BenchResult(
         task="tune_retrieval",
-        candidate=frontend.name if prior == "none" else f"{frontend.name}+{prior}", version=frontend.version,
-        params={**frontend.params, "candidate_set": candidate_set, "n": n,
+        candidate=("+".join(f.name for f in frontends)
+                   + ("" if prior == "none" else f"+{prior}")), version=frontends[0].version,
+        params={**frontends[0].params, "candidate_set": candidate_set, "n": n,
+                "frontends": [f.name for f in frontends], "fusion": fusion,
                 "seconds": seconds, "prior": prior, "beta": beta,
                 "fold_octaves": fold_octaves, "type_filter": type_filter},
         features_version="audio", split="per-night",

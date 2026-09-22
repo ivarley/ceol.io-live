@@ -33,7 +33,9 @@ def add_parser(sub):
     board.set_defaults(func=cmd_leaderboard)
 
     ret = inner.add_parser("retrieval", help="does the tune come back from the index (front ends)")
-    ret.add_argument("--frontend", required=True)
+    ret.add_argument("--frontend", required=True,
+                     help="one name, or several comma-separated to fuse their rankings")
+    ret.add_argument("--fusion", default="rrf", choices=["rrf", "sum"])
     ret.add_argument("--recordings")
     ret.add_argument("--candidate-set", default="repertoire")
     ret.add_argument("-n", type=int, default=5)
@@ -115,11 +117,12 @@ def cmd_retrieval(args):
     from lab.bench.retrieval import format_retrieval, run_retrieval
     from lab.frontends import get_frontend
 
-    frontend = get_frontend(args.frontend, **_parse_params(args.param))
+    params = _parse_params(args.param)
+    frontends = [get_frontend(name.strip(), **params) for name in args.frontend.split(",")]
     result, rows = run_retrieval(
-        frontend, recording_ids=_ids(args.recordings), candidate_set=args.candidate_set,
+        frontends, recording_ids=_ids(args.recordings), candidate_set=args.candidate_set,
         n=args.n, seconds=args.seconds, prior=args.prior, beta=args.beta,
-        fold_octaves=args.fold_octaves, type_filter=args.type_filter)
+        fold_octaves=args.fold_octaves, type_filter=args.type_filter, fusion=args.fusion)
     print(format_retrieval(result, rows))
     if not args.no_save:
         print(f"  saved {result.save()}")
