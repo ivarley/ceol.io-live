@@ -306,88 +306,91 @@ be inspected on its own, and the next idea has somewhere to be scored.
 
 ## Status
 
-Both loops run against the corpus, and the recogniser works well enough to be
-worth arguing with.
+Both loops run against the corpus, the recogniser works, and the largest
+single improvement came from a sentence of domain knowledge rather than from
+anything the harness could have discovered on its own.
 
 ### Where it stands
 
-A whole night through the board, 58 segments of recording 2: **top-1 46.6%
-[34-59], top-5 58.6%**, median time to first correct 51 seconds, at 49x
-realtime. That reproduces what the bench predicted, which is the property the
-two loops were built to have.
-
-On the retrieval bench, over all 503 segments:
+On the retrieval bench, all 503 segments, two minutes of audio each:
 
 | Configuration | top-1 | top-5 |
 |---|---|---|
-| yin, 30s of audio | 0.338 | 0.475 |
-| yin, 120s | 0.485 | 0.706 |
-| yin, 120s, sets decoded | 0.646 | 0.753 |
+| yin, absolute pitch, 130Hz band | 0.485 | 0.706 |
+| pitch folded to classes | 0.616 | 0.793 |
+| and the band raised to 160Hz | 0.702 | 0.825 |
+| and each set decoded as a whole | **0.783** | **0.849** |
 | the session's transitions alone, no audio | 0.245 | 0.368 |
 
-Against the whole 23,307-tune corpus instead of the session's 1,279-tune
-repertoire, set decoding scores 0.425 against 0.427. The transition prior
-concentrates probability on what this session plays, so the repertoire
-restriction turns out to be unnecessary and the numbers are not an artefact
-of a small candidate set.
+A whole night through the board scores top-1 58.6%, top-5 74.1%, median time
+to first correct 58 seconds, at 63x realtime.
 
-### What moved the needle, in order
+Against the full 23,307-tune corpus rather than the session's 1,279-tune
+repertoire, set decoding scores the same to within a point. The transition
+prior concentrates probability where it belongs, so the repertoire
+restriction is unnecessary and these numbers are not an artefact of a small
+candidate set.
 
-**Octave folding.** A transcription of a room recovers the note names and
-loses the register: measured on one segment, both trackers matched the
-notation's pitch classes exactly while 12% and 41% of their steps were
-octave-sized. Folding intervals to their nearest-direction form took top-1
-from 0.137 to 0.338. The control matters: the same n-gram length unfolded
-scores 0.137, so it is the folding and not the window.
+### What moved it, in order
 
-**How long it listens.** The strongest single lever, and the
-latency-against-certainty curve the project wanted: 0.123 at ten seconds,
-0.338 at thirty, 0.485 at ninety. A tune played three times through gives
-three chances, and the system uses all of them.
+**Octave carries no information.** No two Irish tunes, and no two parts of
+one, differ by octave alone. The matcher already worked this way without
+anyone deciding it, because folding an interval to its nearest direction is
+the same operation as taking the difference of pitch classes. The note
+segmenter did not, and it mattered: a tracker that jumps an octave inside a
+held note made the run-length step cut that note in two and insert an
+interval the tune does not contain. Folding first is worth thirteen points.
+The viewer and the labels now work in one octave for the same reason.
 
-**Decoding a whole set.** Handed the true previous tune the transition prior
-was worth twelve points; chaining its own answer forward, one point, because
-that answer is wrong two thirds of the time. Scoring whole sequences instead
-of committing to each tune recovers most of the difference, 0.427 against the
-oracle's 0.461.
+**The melody band.** Sweeping the tracker's lower bound: 0.616 at 130Hz,
+0.702 at 160, 0.666 at 190. Below about 150 it is offered energy that is not
+the melody at all, and takes it. Independent of the fold, which was the
+surprise.
 
-**Fusing front ends.** yin and the salience tracker fused beat both parts,
-and their recall gain is larger than their precision gain, which is what the
-set decoder wants. How they are fused matters: reciprocal rank fusion costs
-six points of top-1 against summing normalised scores.
+**Interval folding** took top-1 from 0.137 to 0.338, with the control that
+the same n-gram length unfolded scores 0.137.
 
-**A voicing threshold.** pyin's default discarded 96% of its own output on
-this material, because its voicing model is built for one instrument.
+**How long it listens**, the latency-against-certainty curve: 0.123 at ten
+seconds, 0.338 at thirty, 0.485 at ninety, still climbing at two minutes.
+
+**Decoding a whole set.** Handed the true previous tune the prior was worth
+twelve points; chaining its own answer forward, one, because that answer is
+often wrong and a transition conditioned on a wrong tune is noise. Scoring
+whole sequences recovers most of the difference.
+
+**A voicing threshold** that discarded 96% of pyin's output, because its
+voicing model is built for one instrument and this is six.
 
 ### What did not work, and is on the board anyway
 
-Input cleanup, harmonic separation plus a melody band, took yin from 0.109 to
-0.024. A tune type classifier reaches 0.799 accuracy against a 0.480 majority
-baseline and is worth three points on its own, but nothing at all once sets
-are decoded, because sets do not mix types and the transition counts already
-knew. Hard filtering on that classifier is worse than no filter. A third
-tracker in the fusion adds nothing. Predominant melody extraction, the method
-with the best story for this music, is still behind yin.
+Harmonic separation plus a melody band took yin from 0.109 to 0.024. A tune
+type classifier reaches 0.799 accuracy against a 0.480 baseline and is worth
+three points alone, but nothing once sets are decoded, because sets do not
+mix types and the transitions already knew. Weighting the prior by each
+segment's own evidence strength does not help, because scoring in log space
+already self-normalises: a weak segment's candidates sit close together, so
+the sequence dominates without being told to. Predominant melody extraction,
+the method with the best story for this music, is still behind yin. A third
+tracker in the fusion adds nothing.
 
-### The transfer bugs, which are the lesson
+### The tools that found all of it
 
-The ensemble scored zero while the bench scored 0.47 on the same audio, and
-every cause was a place where the board's streaming shape diverged from the
-bench's single pass: a 48-note window that was eight seconds of audio, notes
-emitted five times over because the tracker's windows overlap, notes
-harvested from a window edge where they are truncated, and an assembler
-summing matches that already integrated their own history. A fifth was in the
-harness itself, scoring correct answers as misses because it compared audio
-spans against clock times.
+`lab timeline` reads a run segment by segment. `lab trace-set` shows one set
+at every stage: heard, shaped, matched, expected, decided. `lab view` plays
+the audio with the notes drawn over it, sounds them as sine tones, sings the
+labels over the music, and is where hand-drawn pitch labels come from.
+`lab bench pitch` scores a front end against those labels directly rather
+than through what it happens to retrieve.
 
-None of those would have been visible without both loops and the tools to put
-one beside the other.
+Reading the trace across two nights gave the clearest statement of the
+bottleneck: everything turns on how much of the tune's notation the
+transcription recovers. Above twenty shared six-note phrases the system is
+right six times in seven; below ten it is never right.
 
 ### Still open
 
-Boundary detection remains the weak part, at f1 0.09 on the board against the
-bench's 0.46 for the best detector, because the graduated one is the novelty
-curve rather than the learned model; the lab does not persist fitted models
-yet, and `CandidateExpert` refuses rather than guessing. Fusion is a bench
-finding not yet ported to the board. Set boundaries in the decoder still come
-from the log. And nothing runs live.
+Boundary detection is the weak part, f1 0.09 on the board against the bench's
+0.46 for the best detector, because the graduated one is the novelty curve
+and the lab cannot yet persist a fitted model. Front-end fusion is a bench
+finding not yet on the board. Set boundaries in the decoder still come from
+the log. Per-night variation is wide and unexplained. And nothing runs live.
