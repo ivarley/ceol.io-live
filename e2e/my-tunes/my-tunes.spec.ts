@@ -56,6 +56,48 @@ test.describe("Add a tune", () => {
   // body opens the preview whose footer hosts the add form. Each mutating test
   // owns its OWN scratch tune (fullyParallel workers must not race on a row).
 
+  /**
+   * Type into the add pane's deep search and WAIT FOR THAT QUERY'S RESPONSE.
+   *
+   * Without this, a test races its own debounce. Opening the pane fires an empty
+   * deep-search (browse mode, ~30 popular tunes), so a card bearing the tune's name
+   * can already be on screen when `fill()` returns — `toBeVisible()` passes against
+   * a BROWSE result, the test clicks it, and ~150ms later the debounced query search
+   * lands, replaces `deepResults`, and takes the open preview down with it. That is
+   * the "element was detached from the DOM" this spec used to fail with, and it
+   * depended on whether the tune happened to appear in the browse list.
+   *
+   * Waiting for the response whose URL carries the query makes the click land on a
+   * settled list.
+   */
+  async function searchPane(page: any, pane: any, query: string) {
+    const settled = page.waitForResponse(
+      (r: any) => r.url().includes("/deep-search") && r.url().includes(`q=${encodeURIComponent(query).replace(/%20/g, "+")}`),
+    );
+    await pane.locator(".deep-field").fill(query);
+    await settled;
+  }
+
+  /**
+   * Stub the thesession.org settings backfill for every test in this block.
+   *
+   * Opening a preview shows the LOCAL settings at once and then asks thesession.org
+   * for the rest in the background (TunePreview.backfillSettings). This is NOT what
+   * caused the detach above — searchPane covers that — but it is a live third-party
+   * call in the middle of an assertion, and a second source of re-render. Stubbing it
+   * with "nothing further to add" is exactly what these tests see when thesession.org
+   * is down, and makes them hermetic.
+   */
+  test.beforeEach(async ({ page }) => {
+    await page.route("**/thesession-preview/**", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ success: true, settings: [], aliases: [] }),
+      }),
+    );
+  });
+
   test("the legacy add URL redirects to My Tunes with the pane open and q searched", async ({
     page,
   }) => {
@@ -77,7 +119,7 @@ test.describe("Add a tune", () => {
     await page.goto("/my-tunes?add=1");
     const pane = page.locator(".mt-add-pane");
     await expect(pane).toBeVisible();
-    await pane.locator(".deep-field").fill("Cooley");
+    await searchPane(page, pane, "Cooley");
     await expect(pane.locator(".deep-card", { hasText: /Cooley/i }).first()).toBeVisible();
   });
 
@@ -88,7 +130,7 @@ test.describe("Add a tune", () => {
     await page.goto("/my-tunes?add=1");
     const pane = page.locator(".mt-add-pane");
     await expect(pane).toBeVisible();
-    await pane.locator(".deep-field").fill(tune.name);
+    await searchPane(page, pane, tune.name);
     const card = pane.locator(".deep-card", { hasText: tune.name }).first();
     await expect(card).toBeVisible();
     await card.locator(".deep-quick").click(); // one-tap add — no configure step
@@ -109,7 +151,7 @@ test.describe("Add a tune", () => {
     await page.goto("/my-tunes?add=1");
     const pane = page.locator(".mt-add-pane");
     await expect(pane).toBeVisible();
-    await pane.locator(".deep-field").fill(tune.name);
+    await searchPane(page, pane, tune.name);
     await pane.locator(".deep-card-body", { hasText: tune.name }).first().click();
     // The preview IS the configure screen now: pager + status seg + notes + add.
     await expect(pane.locator(".pv")).toBeVisible();
@@ -132,7 +174,7 @@ test.describe("Add a tune", () => {
     await page.goto("/my-tunes?add=1");
     const pane = page.locator(".mt-add-pane");
     await expect(pane).toBeVisible();
-    await pane.locator(".deep-field").fill("Cooley");
+    await searchPane(page, pane, "Cooley");
     await pane.locator(".deep-card-body", { hasText: /Cooley/i }).first().click();
     const onlist = pane.locator(".mt-onlist-panel");
     await expect(onlist).toContainText(/Already on your list/i);

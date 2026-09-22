@@ -14,17 +14,19 @@ test.describe("profile (/me)", () => {
     await expectNoServerError(page);
   });
 
-  test("switching to the My Sessions tab works", async ({ page }) => {
+  test("switching to the Sessions tab works", async ({ page }) => {
     await page.goto("/me");
     // Desktop renders the sections as ARIA tabs (mobile uses a <select>).
-    await page.getByRole("tab", { name: /My Sessions/i }).click();
+    // Labelled "Sessions", not "My Sessions", since spec 034.
+    await page.getByRole("tab", { name: /^Sessions$/ }).click();
     await expect(page.locator("#sessions")).toBeVisible();
     await expectNoServerError(page);
   });
 
-  test("switching to the Tunes tab works", async ({ page }) => {
+  test("switching to the Tunebook tab works", async ({ page }) => {
     await page.goto("/me");
-    await page.getByRole("tab", { name: /^Tunes$/i }).click();
+    // The tab reads "Tunebook"; the pane it opens is still #tunes.
+    await page.getByRole("tab", { name: /^Tunebook$/ }).click();
     await expect(page.locator("#tunes")).toBeVisible();
   });
 
@@ -57,8 +59,10 @@ test.describe("add a session", () => {
     await expect(page.locator("#sessionName")).toHaveValue("");
     // Saving the empty form surfaces validation instead of creating a row.
     await page.locator("#saveSessionBtn").click();
+    // Path is NOT in this list: it is generated from name + city, so those are what
+    // a person actually has to supply (SessionSheet.svelte).
     await expect(page.locator(".session-sheet-actions .field-error")).toContainText(
-      /Name, Path, City, State, Country/
+      /Name, City, State, Country/
     );
     await expect(page).toHaveURL(/\/add-session/);
     // Escape abandons the sheet and returns to the wizard.

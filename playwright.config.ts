@@ -16,6 +16,10 @@ const PORT = Number(process.env.E2E_PORT || 3232);
 // sidecar's host (localhost:8080) or EventSource(withCredentials) can't authenticate —
 // cookies ignore ports but not hostnames. Spec 029's multiplayer e2e needs live SSE.
 const BASE_URL = process.env.E2E_BASE_URL || `http://localhost:${PORT}`;
+// The live-logging SSE sidecar (spec 024). Flask hands its URL to the live screen
+// via STREAMING_BASE_URL, defaulting to :8080 — match that here.
+const STREAM_PORT = Number(process.env.STREAMING_PORT || 8080);
+const STREAM_URL = process.env.STREAMING_BASE_URL || `http://localhost:${STREAM_PORT}`;
 
 export default defineConfig({
   testDir: "./e2e",
@@ -51,6 +55,11 @@ export default defineConfig({
     // 2. Desktop Chromium — the bulk of the suite.
     {
       name: "chromium",
+      // *.mobile.spec.ts belongs to the `mobile` project ONLY. Without this they
+      // run here too, at a desktop viewport, where their phone assertions are
+      // meaningless or wrong (visual tabs vs a <select>, no-sideways-scroll at
+      // 400px, a filter panel that is laid out differently above 768px).
+      testIgnore: /\.mobile\.spec\.ts/,
       use: { ...devices["Desktop Chrome"] },
       dependencies: ["setup"],
     },
@@ -64,13 +73,32 @@ export default defineConfig({
     },
   ],
 
-  webServer: {
-    command:
-      "./venv/bin/flask --app app run --port " + PORT + " --no-reload",
-    url: BASE_URL,
-    timeout: 60_000,
-    reuseExistingServer: !process.env.CI,
-    stdout: "ignore",
-    stderr: "pipe",
-  },
+  // Two processes, because the app is two processes (spec 024 §A4). Without the
+  // streaming sidecar the logger still works — ops POST fine and catch-up on
+  // reconnect fills the gap — but nothing arrives LIVE, so any spec asserting a
+  // change reaching a second client fails in a way that looks like a UI bug.
+  // (It is worse than "no SSE": an SSE connection the sidecar cannot authenticate
+  // is served anonymously, and an anonymous payload has its people stripped — so
+  // the records arrive with no `actor`, the change lands, and only the attribution
+  // toast is missing. The sidecar reads .env itself, which is what keeps its
+  // session secret in step with Flask's; they must match or that is what you get.)
+  webServer: [
+    {
+      command:
+        "./venv/bin/flask --app app run --port " + PORT + " --no-reload",
+      url: BASE_URL,
+      timeout: 60_000,
+      reuseExistingServer: !process.env.CI,
+      stdout: "ignore",
+      stderr: "pipe",
+    },
+    {
+      command: "./venv/bin/python -m streaming.service",
+      url: STREAM_URL + "/health",
+      timeout: 60_000,
+      reuseExistingServer: !process.env.CI,
+      stdout: "ignore",
+      stderr: "pipe",
+    },
+  ],
 });

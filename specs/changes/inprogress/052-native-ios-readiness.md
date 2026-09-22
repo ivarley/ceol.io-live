@@ -417,12 +417,41 @@ Three deliberate choices, so the later stages don't have to rewrite this file:
 New fixture: `SCRATCH_TUNES.mobileDrawerStatus` (tune 208), the drawer spec's own row,
 so it can never race a parallel worker.
 
-**Pre-existing failures, NOT introduced here** (verified by running the same specs on a
-clean tree): 5 in `e2e/live/*` — Playwright's `webServer` starts Flask but not the
-spec-024 streaming sidecar, so anything asserting live SSE fan-out cannot pass — plus 4
-that fail on a clean tree for their own reasons: `profile.spec.ts` (My Sessions tab,
-Tunes tab, the empty-session review sheet) and `my-tunes.spec.ts` (the preview form in
-the add pane's footer). **Worth a look before Stage 2 touches those pages.**
+**Config fix that came with this:** the `chromium` project had no `testIgnore`, so every
+`*.mobile.spec.ts` ran under BOTH projects — 24 phone specs replayed at a desktop
+viewport, where their assertions are meaningless or wrong (visual tabs vs the `<select>`,
+"no sideways scroll at 400px" measured at 1280px, a filter panel laid out differently
+above 768px). The four original smoke tests were loose enough to survive it, which is why
+nobody noticed. `chromium` now carries `testIgnore: /\.mobile\.spec\.ts/`, so the suite
+is 149 tests (123 desktop + 24 mobile + 2 setup) instead of 173 with 24 duplicated.
+
+**Also fixed: the 9 pre-existing desktop failures** (confirmed pre-existing by running
+them on a clean tree first). None were product bugs; all were tests that had drifted from
+the app, plus one missing process. Worth recording because three of them would otherwise
+have been re-diagnosed during Stage 2-3:
+
+| Failure | Cause | Fix |
+|---|---|---|
+| `profile.spec.ts` ×2 | spec 034 renamed the tab **"My Sessions" → "Sessions"**, and the tunebook tab reads **"Tunebook"**, not "Tunes". Pane ids (`#sessions`, `#tunes`) never changed. | Update the expectations |
+| `profile.spec.ts` ×1 | the add-session validation message no longer lists **Path** — it is generated from name + city (`SessionSheet.svelte`), so only Name/City/State/Country are required | Update the expectation |
+| `my-tunes.spec.ts` ×1 | **the test raced its own debounce.** Opening the add pane fires an empty deep-search (browse mode, ~30 popular tunes), so a card with the tune's name can already be on screen when `fill()` returns: `toBeVisible()` passed against a *browse* result, the click opened a preview, and ~150ms later the debounced query search landed, replaced `deepResults`, and took the preview down with it — "element was detached from the DOM". Whether it failed depended on whether that tune happened to be in the browse list. | A `searchPane()` helper that waits for the response carrying the query. Also stubbed the thesession.org backfill so these tests stop making a live third-party call mid-assertion |
+| `live-logger.spec.ts` ×4 | **instance 90's log is `log_complete_date` in the seed.** A complete log is read-only for everyone — the viewbar shows "✓ This session has been fully logged" where the edit affordance would be, and completion actively locks edit mode — so there is no "✎ Edit log" button on it at all, and four tests were clicking one. | Moved those four to **throwaway instances**, the pattern `live-logger-bulk.spec.ts` already used. Helpers extracted to `e2e/support/live.ts` and both specs now share them |
+| `live-logger-bulk.spec.ts` ×1 | the SSE sidecar was not running: Playwright started Flask only | `playwright.config.ts` now starts **both** processes |
+
+The sidecar one is worth spelling out, because the failure mode is not "no live
+updates". An SSE connection the sidecar cannot authenticate is served **anonymously**,
+and an anonymous payload has its people stripped — so records arrive with no `actor`,
+the change lands correctly, and only the attribution toast is missing. A mismatched
+`FLASK_SESSION_SECRET_KEY` between Flask and the sidecar produces exactly that, and it
+reads as a UI bug. (I hit this myself while diagnosing: started the sidecar with the
+wrong secret, saw the test still fail, and briefly concluded the sidecar was not the
+cause.) Both processes read `.env`, which is what keeps them in step.
+
+**One real product fragility surfaced and NOT fixed** (it is product code, outside this
+stage): the add pane's preview footer can be torn out from under a tap. A late
+`deepResults` replacement destroys the open preview, and a late settings backfill
+re-renders the footer. A person can tap a status and have it swallowed. The test no
+longer races it; the UI still can. Worth addressing when Stage 3 touches the add pane.
 
 #### Stage 1 — The three missing kit primitives, adopted by nobody
 
