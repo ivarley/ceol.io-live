@@ -249,8 +249,10 @@ describe('session detail page view', () => {
     expect(link2025.classList.contains('empty-log')).toBe(false)
     expect(container.querySelector('#logs-tab').textContent).toContain('3 tunes logged')
     expect(container.querySelector('a[data-instance-id="10"]').classList.contains('empty-log')).toBe(true)
-    // Latest year gets the Add link (logged in).
-    expect(container.querySelector('.year-add-link#add-session-btn')).toBeTruthy()
+    // Add lives in the TOOLBAR now, not in the latest year's section header, so it
+    // stays reachable however far back you scroll (spec 052 §B8 Stage 3).
+    expect(container.querySelector('#logs-filter-header #add-session-btn')).toBeTruthy()
+    expect(container.querySelector('.logs-group-header #add-session-btn')).toBeNull()
     // Collapsing a year hides its rows.
     await fireEvent.click(container.querySelector('.year-toggle[data-year="2025"]'))
     expect(container.querySelector('.year-toggle[data-year="2025"]').textContent).toBe('▶')

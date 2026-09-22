@@ -20,6 +20,12 @@
   // Toolbar owns only the chrome.
   let {
     // --- search ---
+    // `search` replaces the built-in field entirely. Two of the three session
+    // tabs need it: the Logs filter is a combobox whose dropdown is positioned
+    // against its own wrapper, and the Tunes field carries a long tail of
+    // autocomplete/spellcheck attributes. Toolbar's real job is the LINE and the
+    // panel beneath it; which control does the searching is the page's business.
+    search = null, // snippet
     query = $bindable(''),
     placeholder = 'Search…',
     debounce = 300,
@@ -35,6 +41,16 @@
     onSort = null, // set => a sort button (host opens its own menu from it)
     sortActive = false, // mark it when sorting is not the default
     onAdd = null, // set => an add (+) button
+    addHref = null, // render the add control as a real link (it navigates)
+    addTitle = 'Add',
+
+    // Legacy hooks. These pages already have ids and a button skin that CSS and
+    // the e2e suite key on, and this component is meant to wear them rather than
+    // rename everything at once (spec 035's DOM-contract discipline).
+    filterId = null,
+    panelId = null,
+    addId = null,
+    buttonClass = '',
 
     styled = true,
     toolbarClass = '',
@@ -56,30 +72,41 @@
 
 <div class="kit-toolbar-wrap">
   <div {...rest} class="kit-toolbar {toolbarClass}">
-    <SearchField
-      bind:this={searchEl}
-      bind:value={query}
-      {placeholder}
-      {debounce}
-      {onSearch}
-      {styled}
-      wrapperClass="kit-toolbar-search {searchWrapperClass}"
-      inputClass={searchInputClass}
-    />
+    {#if search}
+      {@render search()}
+    {:else}
+      <SearchField
+        bind:this={searchEl}
+        bind:value={query}
+        {placeholder}
+        {debounce}
+        {onSearch}
+        {styled}
+        wrapperClass="kit-toolbar-search {searchWrapperClass}"
+        inputClass={searchInputClass}
+      />
+    {/if}
 
     {#if filter}
       <button
         type="button"
-        class="kit-tool-btn kit-tool-filter"
+        id={filterId}
+        class="kit-tool-btn kit-tool-filter {buttonClass}"
         class:on={activeCount > 0}
         class:open
+        class:active={open || activeCount > 0}
+        title="Show filters"
         aria-label="Filter"
         aria-expanded={open}
         onclick={() => (open = !open)}
       >
-        <svg viewBox="0 0 24 24" aria-hidden="true"
-          ><path d="M4 6h16M7 12h10M10 18h4" /></svg
-        >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" />
+          <line x1="12" y1="21" x2="12" y2="12" /><line x1="12" y1="8" x2="12" y2="3" />
+          <line x1="20" y1="21" x2="20" y2="16" /><line x1="20" y1="12" x2="20" y2="3" />
+          <line x1="1" y1="14" x2="7" y2="14" /><line x1="9" y1="8" x2="15" y2="8" />
+          <line x1="17" y1="16" x2="23" y2="16" />
+        </svg>
         {#if activeCount > 0}<span class="kit-tool-badge"></span>{/if}
       </button>
     {/if}
@@ -98,13 +125,31 @@
       </button>
     {/if}
 
-    {#if onAdd}
-      <button type="button" class="kit-tool-btn kit-tool-add" aria-label="Add" onclick={onAdd}>+</button>
+    {#if onAdd || addHref}
+      <!-- An anchor when it navigates, a button when it acts: the session-tunes
+           add is a real URL you can open in a new tab, the others are not. -->
+      {#if addHref}
+        <a
+          id={addId}
+          href={addHref}
+          class="kit-tool-btn kit-tool-add {buttonClass}"
+          title={addTitle}
+          aria-label={addTitle}
+          onclick={onAdd}>+</a>
+      {:else}
+        <button
+          type="button"
+          id={addId}
+          class="kit-tool-btn kit-tool-add {buttonClass}"
+          title={addTitle}
+          aria-label={addTitle}
+          onclick={onAdd}>+</button>
+      {/if}
     {/if}
   </div>
 
   {#if filter}
-    <div class="kit-filter-panel" class:open style="--kit-notch-right: {notchRight}px">
+    <div id={panelId} class="kit-filter-panel" class:open style="--kit-notch-right: {notchRight}px">
       <div class="kit-filter-inner">
         {@render filter()}
         {#if onClear && activeCount > 0}

@@ -26,7 +26,7 @@
     tunePlayLinks,
   } from './logic.js'
   import { publishHeight } from './sticky.js'
-  import { Row, SearchField, Seg } from '../lib/index.js'
+  import { Row, SearchField, Seg, Toolbar } from '../lib/index.js'
 
   let { active, session, isLoggedIn, onAddInstance } = $props()
 
@@ -125,6 +125,7 @@
   let inputFocused = $state(false)
   let highlight = $state(0)
   let selectToken = 0 // drops stale instance-id responses when picks come fast
+  let filterOpen = $state(false) // the toolbar's filter panel
 
   const totalInstances = $derived.by(() => {
     if (!data) return 0
@@ -271,9 +272,23 @@
 {/snippet}
 
 {#snippet filterHeader()}
+  <!-- One toolbar, same as the Tunes and People tabs (spec 052 §B8 Stage 3):
+       search, a + to add, and a filter button whose panel expands beneath the
+       line. Logged/All lives in that panel now — it is a filter, and it was
+       taking a third of a phone's toolbar to say so. -->
   <div class="logs-filter-header" id="logs-filter-header" use:publishHeight={'--logs-toolbar-h'}>
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="logs-tune-filter" onkeydown={onFilterKey}>
+    <Toolbar
+      styled={false}
+      toolbarClass="filter-top-row"
+      buttonClass="filter-panel-toggle"
+      bind:open={filterOpen}
+      activeCount={viewMode === 'all' ? 1 : 0}
+      addId={isLoggedIn ? 'add-session-btn' : null}
+      addTitle="Add a log"
+      onAdd={isLoggedIn ? addClick : null}>
+      {#snippet search()}
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div class="logs-tune-filter" onkeydown={onFilterKey}>
       <SearchField
         bind:value={tuneQuery}
         id="logs-tune-filter-input"
@@ -312,25 +327,25 @@
             </li>
           {/each}
         </ul>
-      {:else if dropdownStatus}
-        <div class="logs-tune-options logs-tune-status" id="logs-tune-status">{dropdownStatus}</div>
-      {/if}
-    </div>
-    {#if isLoggedIn}
-      <!-- In the toolbar, not in the current year's header: the toolbar is pinned,
-           so Add is reachable from 2019 as easily as from this week. -->
-      <button type="button" class="year-add-link logs-add-btn" id="add-session-btn" onclick={addClick}>Add</button>
-    {/if}
-    <Seg
-      options={LOG_VIEW_OPTIONS}
-      value={viewMode}
-      onSelect={(id) => (viewMode = id)}
-      idAttr="data-log-view"
-      styled={false}
-      segClass="filter-button-group logs-view-toggle"
-      optClass="filter-sort-btn"
-      role="group"
-      aria-label="Show all logs or only logged ones" />
+          {:else if dropdownStatus}
+            <div class="logs-tune-options logs-tune-status" id="logs-tune-status">{dropdownStatus}</div>
+          {/if}
+        </div>
+      {/snippet}
+
+      {#snippet filter()}
+        <Seg
+          options={LOG_VIEW_OPTIONS}
+          value={viewMode}
+          onSelect={(id) => (viewMode = id)}
+          idAttr="data-log-view"
+          styled={false}
+          segClass="filter-button-group logs-view-toggle"
+          optClass="filter-sort-btn"
+          role="group"
+          aria-label="Show all logs or only logged ones" />
+      {/snippet}
+    </Toolbar>
   </div>
   {#if selectedTune || tunesError}
     <div class="logs-filter-note" id="logs-filter-note">
@@ -369,13 +384,6 @@
 
 <!-- Logs Tab Content -->
 <div class="tab-content" class:active id="logs-tab" style="padding-left: 10px;">
-  <a href="/help/session-tracking/logs" class="help-icon" title="About session logs" style="float: right; margin: 4px 8px 0 0;">
-    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="12" cy="12" r="10"></circle>
-      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
-      <line x1="12" y1="17" x2="12.01" y2="17"></line>
-    </svg>
-  </a>
   {#if loadError}
     <div style="text-align: center; padding: 40px;">
       <p style="color: var(--danger, #dc3545);">

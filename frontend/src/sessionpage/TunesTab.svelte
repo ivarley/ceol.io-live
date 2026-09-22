@@ -27,7 +27,7 @@
   const sessionPath = session.path
   const isLoggedIn = permissions.is_logged_in
 
-  import { Chip, Row, SearchField, Seg, Sheet, toast } from '../lib/index.js'
+  import { Chip, Row, SearchField, Seg, Sheet, Toolbar, toast } from '../lib/index.js'
   import { createAbcMatcher } from '../shared/abcfilter.svelte.js'
   import { STATUSES, STATUS_LABELS } from '../mylist.js'
 
@@ -58,7 +58,6 @@
   const selectedTuneIds = new SvelteSet()
 
   let panelVisible = $state(false)
-  let panelAnim = $state('') // '', 'opening', 'closing'
 
   // Notation search: the filter takes notes as well as names, but the payload carries no
   // ABC, so the matching ids come from the server. A query that isn't note-shaped never
@@ -181,19 +180,6 @@
 
   // ---- search / filters -----------------------------------------------------------
 
-  function toggleFilterPanel() {
-    if (!panelVisible) {
-      panelVisible = true
-      panelAnim = 'opening'
-      setTimeout(() => (panelAnim = ''), 300)
-    } else {
-      panelAnim = 'closing'
-      setTimeout(() => {
-        panelVisible = false
-        panelAnim = ''
-      }, 300)
-    }
-  }
 
   function setSortMode(sortType) {
     if (sort.type === sortType) {
@@ -487,58 +473,34 @@
 <div class="tab-content" class:active id="tunes-tab">
   <div class="tunes-container">
     <div class="filters-container">
-      <div class="filter-top-row">
-<SearchField
-          bind:value={rawSearch}
-          id="tune-search"
-          inputClass="filter-search-input"
-          wrapperClass="filter-search-wrap"
-          styled={false}
-          placeholder="Search"
-          autocomplete="off"
-          autocorrect="off"
-          autocapitalize="off"
-          spellcheck="false"
-          debounce={300}
-          onSearch={(q) => (filters.search = q.toLowerCase().trim())} />
-        {#if isLoggedIn}
-          <a
-            href="/sessions/{sessionPath}/tunes?add=1"
-            class="filter-panel-toggle"
-            id="add-session-tune-btn"
-            title="Add tune"
-            style="text-decoration: none; font-size: 24px; font-weight: 300; line-height: 1;"
-            onclick={handleAddSessionTuneClick}>+</a>
-        {/if}
-        <button
-          id="filter-panel-toggle"
-          class="filter-panel-toggle"
-          class:active={panelVisible || hasActiveFilters}
-          title="Show filters"
-          onclick={toggleFilterPanel}>
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="4" y1="21" x2="4" y2="14"></line>
-            <line x1="4" y1="10" x2="4" y2="3"></line>
-            <line x1="12" y1="21" x2="12" y2="12"></line>
-            <line x1="12" y1="8" x2="12" y2="3"></line>
-            <line x1="20" y1="21" x2="20" y2="16"></line>
-            <line x1="20" y1="12" x2="20" y2="3"></line>
-            <line x1="1" y1="14" x2="7" y2="14"></line>
-            <line x1="9" y1="8" x2="15" y2="8"></line>
-            <line x1="17" y1="16" x2="23" y2="16"></line>
-          </svg>
-        </button>
-        <a href="/help/session-tracking/tunes" class="help-icon" title="About session tunes">
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"></circle>
-            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
-            <line x1="12" y1="17" x2="12.01" y2="17"></line>
-          </svg>
-        </a>
-      </div>
-
-      {#if panelVisible}
-        <div id="filter-panel" class="filter-panel {panelAnim}">
+      <Toolbar
+        styled={false}
+        toolbarClass="filter-top-row"
+        buttonClass="filter-panel-toggle"
+        filterId="filter-panel-toggle"
+        panelId="filter-panel"
+        bind:open={panelVisible}
+        activeCount={hasActiveFilters ? 1 : 0}
+        addId={isLoggedIn ? 'add-session-tune-btn' : null}
+        addHref={isLoggedIn ? `/sessions/${sessionPath}/tunes?add=1` : null}
+        addTitle="Add tune"
+        onAdd={isLoggedIn ? handleAddSessionTuneClick : null}>
+        {#snippet search()}
+          <SearchField
+            bind:value={rawSearch}
+            id="tune-search"
+            inputClass="filter-search-input"
+            wrapperClass="filter-search-wrap"
+            styled={false}
+            placeholder="Search"
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="off"
+            spellcheck="false"
+            debounce={300}
+            onSearch={(q) => (filters.search = q.toLowerCase().trim())} />
+        {/snippet}
+        {#snippet filter()}
           <div class="filter-panel-row">
             <select id="type-filter" class="filter-panel-select" title="Tune type" bind:value={filters.type}>
               <option value="">All Tune Types</option>
@@ -623,8 +585,8 @@
               <button id="copy-to-btn" class="selection-btn primary" disabled={selectedTuneIds.size === 0} onclick={showCopyModal}>And Copy To...</button>
             </div>
           {/if}
-        </div>
-      {/if}
+        {/snippet}
+      </Toolbar>
     </div>
 
     <div class="results-count">

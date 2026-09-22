@@ -580,9 +580,35 @@ Three things this cost, all worth recording:
   switches so their state survives, so three writers to one shared variable meant
   whichever hidden pane reported last won — and a hidden pane measures 0.
 
-Remaining on this page: **tab counts**, and converting the three toolbars to the kit
-`Toolbar` (this change pinned the existing ones rather than replacing them, so each
-step stays reviewable). Counts are NOT
+**One toolbar on all three tabs (2026-09-22).** Search, a `+`, and a filter button
+whose panel expands beneath the line — the same controls, icons and skin everywhere.
+Logged/All (Logs) and Members/Visitors/Archived (People) moved into their filter
+panels: they are filters, and they were each taking a third of a phone's toolbar to
+say so. The `?` help link is gone from all three; it was competing with the controls
+for the narrowest row on the page.
+
+The kit `Toolbar` grew four things to make this a port rather than a rewrite:
+
+- **A pluggable `search` snippet.** Two of the three tabs need it — the Logs filter is
+  a combobox whose dropdown positions against its own wrapper, and the Tunes field
+  carries a tail of autocomplete/spellcheck attributes. Toolbar's job is the LINE and
+  the panel; which control does the searching is the page's business.
+- **Legacy hooks** (`filterId`, `panelId`, `addId`, `buttonClass`) so `#filter-panel`,
+  `#filter-panel-toggle` and the `.filter-panel-toggle` skin survive untouched.
+- **`addHref`**, because the session-tunes `+` is a real URL you can open in a new tab
+  while the other two are actions.
+- **The app's own filter glyph** as the default icon, so a converted toolbar is
+  indistinguishable from the hand-rolled ones it replaced.
+
+Deleted on the way: `panelAnim` and `toggleFilterPanel` (the Toolbar animates the panel
+by toggling a class on live nodes, so the hand-rolled opening/closing classes and their
+timers are dead), `.logs-add-btn`, and the `.help-icon` rules.
+
+**One behaviour genuinely changed**, and a test had to say so: the panel now stays in
+the DOM and collapses, where the old Tunes panel was conditionally rendered. That is
+what lets CLOSING animate rather than just vanishing.
+
+Remaining on this page: **tab counts**. Counts are NOT
 free — `total_tunes_count` is in the payload but the logs and people counts load
 lazily inside their own tabs, so a count on Tunes alone would be worse than none.
 That needs `build_session_detail_payload` to carry all three, which is server work

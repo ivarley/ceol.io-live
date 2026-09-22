@@ -689,12 +689,6 @@
     background: var(--bg-color);
 }
 
-.logs-add-btn {
-    background: none;
-    border: none;
-    cursor: pointer;
-    white-space: nowrap;
-}
 
 /* ---- Logs list (spec 052 §B8 Stage 3) -------------------------------------
    One list, not three tables. What was here: .instances-table, its header/content

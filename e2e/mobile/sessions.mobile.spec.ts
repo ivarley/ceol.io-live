@@ -62,11 +62,15 @@ test.describe("session page (mobile)", () => {
 
   test("Tunes: the filter panel opens from its own button", async ({ page }) => {
     await page.goto(SESSION);
-    // The panel is absent until asked for — it expands from the toggle, in place.
-    // Stage 3 generalizes this exact pattern; it must not become a bottom sheet.
-    await expect(page.locator("#filter-panel")).toHaveCount(0);
+    // Collapsed until asked for, then it expands from the toggle, in place — never
+    // a bottom sheet. It stays in the DOM rather than being re-rendered, which is
+    // what lets CLOSING animate too (the kit Toolbar toggles a class on live
+    // nodes); collapsed it has no height, so it is present but not visible.
+    const panel = page.locator("#filter-panel");
+    await expect(panel).toHaveCount(1);
+    await expect(panel).not.toBeVisible();
     await page.locator("#filter-panel-toggle").click();
-    await expect(page.locator("#filter-panel")).toBeVisible();
+    await expect(panel).toBeVisible();
     await expectNoServerError(page);
   });
 
@@ -114,7 +118,14 @@ test.describe("session page (mobile)", () => {
         toolbar,
       );
 
-      await page.evaluate(() => window.scrollBy(0, 600));
+      // How far this tab CAN scroll. People is a short list, and other specs add
+      // and remove people from this session, so on some runs there is simply
+      // nothing to scroll — which is not a pinning failure, it is a page that
+      // fits. Assert against what the page can actually do.
+      const scrollable = await page.evaluate(
+        () => document.documentElement.scrollHeight - window.innerHeight,
+      );
+      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
       await page.waitForTimeout(300);
 
       const after = await page.evaluate(
@@ -126,6 +137,11 @@ test.describe("session page (mobile)", () => {
         toolbar,
       );
 
+      if (scrollable < 100) {
+        // Nothing to scroll: the layers just have to be there, in order.
+        expect(after.toolbar, `${tab}: toolbar above the tabs`).toBeGreaterThan(after.tabs);
+        continue;
+      }
       expect(after.scrolled, `${tab}: the page did not scroll`).toBeGreaterThan(100);
       // Pinned: still on screen, and no lower than where they began.
       expect(after.tabs, `${tab}: the tab strip scrolled away`).toBeGreaterThanOrEqual(0);

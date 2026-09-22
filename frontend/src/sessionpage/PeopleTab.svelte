@@ -18,7 +18,7 @@
    */
   import { untrack } from 'svelte'
   import { SvelteSet } from 'svelte/reactivity'
-  import { Chip, PersonPicker, Row, SearchField, Seg, Sheet, toast } from '../lib/index.js'
+  import { Chip, PersonPicker, Row, SearchField, Seg, Sheet, Toolbar, toast } from '../lib/index.js'
   import { normalizeQuotes } from '../shared/parse.js'
   import { filterPeople } from './logic.js'
 
@@ -42,6 +42,7 @@
   let peopleError = $state('')
   let currentPeopleFilter = $state('members') // 'members' | 'visitors' | 'archived'
   let searchText = $state('')
+  let filterOpen = $state(false) // the toolbar's filter panel
 
   const searchQuery = $derived(normalizeQuotes(searchText.toLowerCase().trim()))
   const filteredPeople = $derived(filterPeople(peopleData, currentPeopleFilter, searchQuery))
@@ -238,30 +239,39 @@
 <!-- People Tab Content -->
 <div class="tab-content" class:active id="people-tab">
   <div class="people-container">
+    <!-- One toolbar, same as Tunes and Logs (spec 052 §B8 Stage 3). -->
     <div class="people-controls">
-      <SearchField
-        bind:value={searchText}
-        id="people-search-box"
-        inputClass="people-search-box"
-        wrapperClass="people-search-wrap"
+      <Toolbar
         styled={false}
-        placeholder="Search people..." />
-      <button class="people-add-btn" onclick={openAddPerson}>Add</button>
-      <a href="/help/session-tracking/members" class="help-icon" title="About session people">
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="10"></circle>
-          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
-          <line x1="12" y1="17" x2="12.01" y2="17"></line>
-        </svg>
-      </a>
+        toolbarClass="filter-top-row"
+        buttonClass="filter-panel-toggle"
+        bind:open={filterOpen}
+        activeCount={currentPeopleFilter === FILTERS[0].id ? 0 : 1}
+        addId="add-person-btn"
+        addTitle="Add someone to this session"
+        onAdd={openAddPerson}>
+        {#snippet search()}
+          <SearchField
+            bind:value={searchText}
+            id="people-search-box"
+            inputClass="people-search-box filter-search-input"
+            wrapperClass="people-search-wrap filter-search-wrap"
+            styled={false}
+            placeholder="Search people..." />
+        {/snippet}
+        {#snippet filter()}
+          <Seg
+            options={FILTERS}
+            value={currentPeopleFilter}
+            onSelect={(id) => (currentPeopleFilter = id)}
+            idAttr="data-people-filter"
+            styled={false}
+            segClass="filter-button-group"
+            optClass="filter-sort-btn"
+            aria-label="Filter people" />
+        {/snippet}
+      </Toolbar>
     </div>
-
-    <Seg
-      options={FILTERS}
-      value={currentPeopleFilter}
-      onSelect={(id) => (currentPeopleFilter = id)}
-      idAttr="data-people-filter"
-      aria-label="Filter people" />
 
     {#if isSessionAdmin && awaitingConfirmation.length > 0}
       <!-- Confirming is the ONLY way people-visibility is granted, so an admin needs to know
