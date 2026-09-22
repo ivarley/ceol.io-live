@@ -151,17 +151,82 @@ test.describe("home (mobile)", () => {
     expect(overflow).toBeLessThanOrEqual(1);
   });
 
-  test("every hamburger destination is reachable (the tab bar must not lose one)", async ({ page }) => {
-    // Stage 5 replaces this menu with a four-tab bar and moves Help / Admin / Share /
-    // Log Out into Me. This records what the menu offers TODAY so that migration can
-    // be checked against a list rather than against recollection.
+  test("every hamburger destination survived the move to the tab bar", async ({ page }) => {
+    // The hamburger had nine items for a signed-in user and the tab bar has four
+    // slots, so five things had to go somewhere. This walks to each of them the way
+    // a person on a phone now would. It is the whole safety argument for deleting a
+    // menu: a destination that ends up in neither place is a feature quietly removed,
+    // and nothing else in the suite would notice.
     await page.goto("/");
-    await page.locator("button.hamburger-btn").click();
-    const menu = page.locator("#hamburgerDropdown");
-    await expect(menu).toBeVisible();
+    const bar = page.locator("#tab-bar");
+    await expect(bar).toBeVisible();
 
-    for (const name of [/My Tunes/i, /My Sessions/i, /Add A Session/i, /Help/i, /Log Out/i]) {
-      await expect(menu.getByRole("link", { name })).toBeVisible();
+    // Four tabs, in order, each pointing where it says.
+    const tabs = bar.locator(".tab-bar-item");
+    await expect(tabs).toHaveCount(4);
+    for (const [tab, href] of [
+      ["home", "/"],
+      ["sessions", "/sessions"],
+      ["tunes", "/my-tunes"],
+      ["me", "/me"],
+    ] as const) {
+      await expect(bar.locator(`.tab-bar-item[data-tab="${tab}"]`)).toHaveAttribute("href", href);
     }
+
+    // Add A Session: the "+" on the Sessions tab, not a menu item.
+    await page.goto("/sessions");
+    await expect(page.locator("#add-session-link")).toBeVisible();
+    await expect(page.locator("#add-session-link")).toHaveAttribute("href", "/add-session");
+
+    // Find a tune: the Tunes tab's add pane, which is the same deep catalogue
+    // search the hamburger overlay ran.
+    await page.goto("/my-tunes");
+    await expect(page.locator("#add-tune-btn")).toBeVisible();
+
+    // Help, Share and Log Out: the Account section on Me. (Admin too, for a system
+    // admin — covered separately, since this spec signs in as a regular user.)
+    await page.goto("/me");
+    const account = page.locator("#account-section");
+    await expect(account).toBeVisible();
+    await expect(page.locator("#account-help")).toHaveAttribute("href", "/help");
+    await expect(page.locator("#account-logout")).toHaveAttribute("href", "/logout");
+    await expect(page.locator("#account-share")).toBeVisible();
+  });
+
+  test("the tab bar marks where you are", async ({ page }) => {
+    for (const [path, tab] of [
+      ["/", "home"],
+      ["/sessions", "sessions"],
+      ["/my-tunes", "tunes"],
+      ["/me", "me"],
+    ] as const) {
+      await page.goto(path);
+      const active = page.locator("#tab-bar .tab-bar-item.active");
+      await expect(active).toHaveCount(1);
+      await expect(active).toHaveAttribute("data-tab", tab);
+      // Marked for a screen reader too, not only in colour.
+      await expect(active).toHaveAttribute("aria-current", "page");
+    }
+  });
+
+  test("the tab bar does not cover the end of the page", async ({ page }) => {
+    // A fixed bar with nothing reserving room for it hides the last row of every
+    // list, and the page just looks like it ends early.
+    await page.goto("/");
+    const bar = page.locator("#tab-bar");
+    await expect(bar).toBeVisible();
+
+    const { barTop, contentBottom } = await page.evaluate(() => {
+      window.scrollTo(0, document.body.scrollHeight);
+      const b = document.querySelector("#tab-bar")!.getBoundingClientRect();
+      const w = document.querySelector(".docs-wrapper")!;
+      const style = getComputedStyle(w);
+      const r = w.getBoundingClientRect();
+      return {
+        barTop: b.top,
+        contentBottom: r.bottom - parseFloat(style.paddingBottom || "0"),
+      };
+    });
+    expect(contentBottom).toBeLessThanOrEqual(barTop + 1);
   });
 });

@@ -1,6 +1,5 @@
 import { test, expect } from "@playwright/test";
 import { SESSIONS, STORAGE } from "../support/data";
-import { openMenu } from "../support/nav";
 
 /**
  * Mobile-viewport subset (Pixel 5 device profile — see playwright.config.ts).
@@ -10,10 +9,17 @@ import { openMenu } from "../support/nav";
 
 test.use({ storageState: STORAGE.regular });
 
-test("home: hamburger menu opens on mobile", async ({ page }) => {
+test("home: the tab bar is the phone navigation, and the hamburger is gone", async ({ page }) => {
+  // This test used to open the hamburger and look for "My Tunes" in it. Spec 052
+  // §B8 Stage 5 replaced that menu with a four-tab bar below 768px, so the
+  // assertion is now the replacement rather than the thing replaced. The menu
+  // still exists and is still the navigation above 768px — see the desktop check
+  // in this file's sibling specs — which is why it is hidden here, not deleted.
   await page.goto("/");
-  const menu = await openMenu(page);
-  await expect(menu.getByRole("link", { name: /My Tunes/i })).toBeVisible();
+  const bar = page.locator("#tab-bar");
+  await expect(bar).toBeVisible();
+  await expect(bar.locator(".tab-bar-item")).toHaveCount(4);
+  await expect(page.locator(".hamburger-menu")).toBeHidden();
 });
 
 test("sessions directory is usable on mobile", async ({ page }) => {

@@ -62,9 +62,10 @@ itself is app work.
 `mockups/tabbar/` (served at `/mockups/tabbar/`) is the interaction prototype for the
 reshaping — four tabs, session-centric Home, inline filters, the tune sheet. It settled
 several questions the first draft of §B left open; those answers are folded into B1–B4
-below, and **§B8 is the stage-by-stage conversion plan**. Stages 0-4 of that plan are
-built: the kit primitives exist, the session page's three tabs are converted, and Home
-is a Svelte page rendering the same payload `GET /api/home` returns.
+below, and **§B8 is the stage-by-stage conversion plan**. Stages 0-5 of that plan are
+built: the kit primitives exist, the session page's three tabs are converted, Home is a
+Svelte page rendering the same payload `GET /api/home` returns, and the phone navigation
+is the four-tab bar rather than the hamburger.
 
 ---
 
@@ -704,7 +705,52 @@ old Home is a menu in a different place.
 **Done when.** `/` and `GET /api/home` render from one payload; the festival strip works
 at 400px; `test_home_continue_tagging_050.py` still passes.
 
-#### Stage 5 — The tab bar, behind a flag — **NEXT**
+#### Stage 5 — The tab bar — **DONE 2026-09-22**
+
+**Not behind a flag.** The plan called for one; the decision was to skip it and take a
+`git revert` as the rollback instead. What the flag would have bought was a dual-path
+e2e run; what it cost was a second code path through every page's navigation for as long
+as it lived. The tests were rewritten to assert the new behaviour rather than both.
+
+**Status.** `templates/tab_bar.html` + `static/css/tab_bar.css`, included from
+`base.html` below 768px for signed-in users: Home, Sessions, Tunes, Me. Home wears the C
+from the wordmark as a CSS **mask**, so one file greys with its neighbours at rest and
+takes the accent when active rather than needing a second asset.
+
+**Where the other five hamburger items went** — the whole safety argument, since nine
+items had to fit four slots:
+
+| Was in the menu | Is now |
+| --- | --- |
+| Me | its own tab |
+| My Tunes | the Tunes tab |
+| My Sessions | the Sessions tab |
+| Admin, Help, Share, Log Out | the **Account section on `/me`** (`personpage/AccountSection.svelte`) |
+| Add A Session | the **"+" on `/sessions`** |
+| Find a tune | the Tunes tab's add pane, which runs the same deep catalogue search the overlay did |
+
+Me absorbed its four FIRST, as the plan required: a destination in neither place is a
+feature quietly deleted, and nothing else in the suite would have noticed.
+`e2e/mobile/home.mobile.spec.ts` now walks to every one of them the way a person on a
+phone would.
+
+**The hamburger is hidden, not deleted.** It is still the navigation above 768px, and
+still the navigation for signed-out visitors on a phone — they have no Me and no Tunes,
+so a four-tab bar would be two tabs and two rejections. `e2e/app/navigation.spec.ts`
+still checks the menu on desktop.
+
+**Two details worth keeping.** The hide/reserve rules key off a `has-tab-bar` class that
+`base.html` sets from the same condition the bar renders under, NOT off `:has(.tab-bar)`
+— if `:has()` were ever unsupported that would fail *open*, showing both navigations at
+once. And the live logger never gets a bar, because `live_logging.html` has its own
+shell; a bar pinned to the bottom of that screen would sit on the composer.
+
+**One thing it broke and fixed.** Adding "+" to the sessions toolbar left the search box
+162px of a 360px row, about twelve characters. The Mine/All filter's padding gave the
+room back.
+
+**Still pending from B1.** The Tunes tab's search does not yet reach the catalogue inline
+with a `Not on your list` divider — that is what the add pane is standing in for.
 
 **What.** A bottom tab bar in `base.html` at <768px: Home / Sessions / Tunes / Me. Help,
 Admin, Share and Log Out move into Me *first*; the hamburger stays alive until Me has

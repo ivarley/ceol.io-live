@@ -21,6 +21,7 @@
   const personId = person.id
 
   import { toast, Tabs } from '../lib/index.js'
+  import AccountSection from './AccountSection.svelte'
 
   const validTabs = ['profile', 'sessions', 'attended', 'tunes', 'logged', 'logins']
 
@@ -233,3 +234,12 @@
 </div>
   {/snippet}
 </Tabs>
+
+{#if isUserProfile}
+  <!-- Help / Admin / Share / Log Out, moved off the hamburger (spec 052 §B8
+       Stage 5). Below the tabs, because it is where you GO from here rather than
+       something about you. -->
+  <!-- is_system_admin is a TOP-LEVEL payload key, not a field of `person`: it is a
+       fact about the signed-in account, not about the human being displayed. -->
+  <AccountSection isSystemAdmin={pageData.is_system_admin} personName={person.name} />
+{/if}

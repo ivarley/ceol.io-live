@@ -31,6 +31,29 @@
     color: var(--text-color);
 }
 
+/* Matches the "+" on the session page's three tabs: same 42px square, same accent,
+   so "add one of these" looks the same wherever it appears. */
+.add-session-btn {
+    flex: 0 0 auto;
+    width: 42px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    line-height: 1;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background-color: var(--bg-color);
+    color: var(--primary);
+    text-decoration: none;
+}
+
+.add-session-btn:hover {
+    text-decoration: none;
+    color: var(--primary);
+    border-color: var(--primary);
+}
+
 .filter-toggle-button {
     padding: 0.75rem 1.5rem;
     border: 1px solid var(--border-color);
@@ -41,6 +64,17 @@
     transition: all 0.2s;
     white-space: nowrap;
     font-weight: 500;
+}
+
+/* The row holds three controls on a phone: search, the Mine/All filter, and "+".
+   The filter's desktop padding left the search box 162px of a 360px row, which is
+   about twelve characters — too narrow to read back what you typed. The filter's
+   label is the widest thing in it, so the padding goes rather than the label. */
+@media (max-width: 575.98px) {
+    .filter-toggle-button {
+        padding: 0.75rem 0.6rem;
+        font-size: 0.85rem;
+    }
 }
 
 .filter-toggle-button:hover {

@@ -167,6 +167,18 @@
       onclick={() => (filterIndex = (filterIndex + 1) % filterStates.length)}>
       {filterButtonLabels[currentFilter]}
     </button>
+    {#if isLoggedIn}
+      <!-- Add A Session (spec 052 §B8 Stage 5). It was a hamburger item; the tab bar
+           that replaces the hamburger has no menu, so it becomes the "+" on the page
+           it belongs to. It was already reachable from the empty state's "add it!",
+           but only when the list happened to be empty. -->
+      <a
+        href="/add-session"
+        class="add-session-btn"
+        id="add-session-link"
+        title="Add a session"
+        aria-label="Add a session">+</a>
+    {/if}
   </div>
 
   <div class="session-count" id="session-count">

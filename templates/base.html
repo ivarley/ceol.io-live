@@ -46,6 +46,10 @@
 
     <!-- Shared hamburger menu (also used by the live editor) -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/hamburger_menu.css') }}">
+    <!-- Bottom tab bar (spec 052 §B8 Stage 5): the phone navigation that replaces
+         the hamburger below 768px. Loaded after it so the rule that hides the
+         hamburger on a phone wins without !important. -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tab_bar.css') }}">
     <script src="{{ url_for('static', filename='js/hamburger_menu.js') }}"></script>
 
     <!-- Unified tune-detail modal, available app-wide (the hamburger "Find a tune" opens it
@@ -273,7 +277,12 @@
 
 </head> 
 
-<body class="docs-page">
+{# has-tab-bar drives the phone-layout rules in css/tab_bar.css: reserve room at
+   the foot of the page, and hide the hamburger the bar replaces. Set here from the
+   same condition tab_bar.html renders under, rather than inferred in CSS with
+   :has(.tab-bar) — if :has() were ever unsupported that would fail OPEN, showing
+   both navigations at once. #}
+<body class="docs-page{% if current_user.is_authenticated %} has-tab-bar{% endif %}">
 <header class="header fixed-top">	    
     <div class="branding docs-branding">
         <div class="container-fluid position-relative" style="padding-top: 3px; padding-bottom: 3px;">
@@ -326,6 +335,9 @@
             {% block content %}{% endblock %}
         </div>
     </div>
+
+{# Bottom tab bar -- phone only, signed-in only. See templates/tab_bar.html. #}
+{% include 'tab_bar.html' %}
 
 <script>
 // Hamburger menu + dark mode + share + 'Find a tune' moved to
