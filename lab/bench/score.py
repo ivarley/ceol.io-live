@@ -170,8 +170,20 @@ class BenchResult:
         return d
 
     def save(self):
+        """One file per (candidate, version, parameters).
+
+        The parameters are in the name because a sweep is the normal way to
+        use this, and naming files by candidate alone meant six threshold
+        values overwrote each other and only the last survived. A result that
+        lost is worth keeping: it is the record of what was tried, and it gets
+        re-scored for free when something upstream changes.
+        """
+        import hashlib
+
         out_dir = paths.ensure_dir(paths.bench_dir(self.task))
-        path = os.path.join(out_dir, f"{self.candidate}-v{self.version}.json")
+        blob = json.dumps(self.params, sort_keys=True, default=str)
+        digest = hashlib.sha1(blob.encode()).hexdigest()[:8]
+        path = os.path.join(out_dir, f"{self.candidate}-v{self.version}-{digest}.json")
         with open(path, "w") as f:
             json.dump(self.to_json(), f, indent=1)
         return path

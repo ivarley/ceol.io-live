@@ -81,6 +81,8 @@ class GroundTruth:
     date: str
     segments: List[Segment]
     warnings: List[str] = field(default_factory=list)
+    logged_order: List[dict] = field(default_factory=list)
+    session_instance_id: int = 0
 
     # -- boundaries -------------------------------------------------------
 
@@ -185,6 +187,27 @@ class GroundTruth:
             y[max(0, c - half):min(n_frames, c + half + 1)] = 1
         return y, np.ones(n_frames, dtype=bool)
 
+    # -- oracle helpers (ground truth; never an expert input) --------------
+
+    def previous_tune_map(self):
+        """{session_instance_tune_id: the tune before it in its set, or None}.
+
+        ORACLE. Read from the night's logged order, which is the ground
+        truth's sibling and is never given to an expert. The bench uses it to
+        measure the ceiling of a sequence prior: how well could this work if
+        the previous tune were always known. On the board the previous tune
+        comes from a confirmed hypothesis instead.
+        """
+        out = {}
+        previous = None
+        for row in (self.logged_order or []):
+            if row.get("record_type") == "break":
+                previous = None
+                continue
+            out[row["session_instance_tune_id"]] = previous
+            previous = row.get("tune_id") if row.get("tune_id") is not None else None
+        return out
+
     # -- identification ---------------------------------------------------
 
     def eval_segments(self, range_ms=None):
@@ -267,6 +290,8 @@ def load_ground_truth(recording_id) -> GroundTruth:
         date=str(rec.get("date"))[:10],
         segments=segments,
         warnings=warnings,
+        logged_order=order,
+        session_instance_id=int(rec["session_instance_id"]),
     )
 
 

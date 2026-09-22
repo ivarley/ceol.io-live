@@ -21,6 +21,7 @@ class _LibrosaTracker(FrontEnd):
         d = dict(FrontEnd.defaults())
         d.update({
             "fmin": 130.0, "fmax": 1400.0, "hop": 256, "frame_length": 2048,
+            "min_voiced": 0.2,
             # input cleanup, off by default so the plain tracker is the floor
             "highpass_hz": None, "lowpass_hz": None, "hpss": None,
         })
@@ -46,6 +47,16 @@ class PyinFrontEnd(_LibrosaTracker):
     name = "pyin"
     version = "1"
     cost = 10.0
+
+    @classmethod
+    def defaults(cls):
+        d = dict(_LibrosaTracker.defaults())
+        # Measured, not chosen: swept over all 503 segments, every threshold
+        # above zero is worse, and 0.5 takes top-1 from 0.141 to 0.000. The
+        # voicing probability is not a usable gate on this material, so the
+        # gate is off and the note segmenter sees everything pyin produced.
+        d["min_voiced"] = 0.0
+        return d
 
     def track(self, y, sr):
         import librosa

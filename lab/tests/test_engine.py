@@ -254,3 +254,75 @@ def test_track_cache_is_keyed_on_tracking_params_only(lab_data):
 
     c = get_frontend("yin", fmin=200.0)
     assert a.cache_key("sha", 0, 1000) != c.cache_key("sha", 0, 1000)
+
+
+def test_sequence_prior_leaves_its_own_night_out(lab_data, tmp_path, monkeypatch):
+    """A transition model that saw tonight would be reading the answer sheet."""
+    import json
+    import os
+
+    from lab.corpus.sequence import SequenceModel
+
+    hist = {
+        "session_id": 1,
+        "rows": [
+            # two nights where A is followed by B, and one where A is followed by C
+            {"session_instance_id": 10, "tune_id": 1, "record_type": "tune", "order_position": "a"},
+            {"session_instance_id": 10, "tune_id": 2, "record_type": "tune", "order_position": "b"},
+            {"session_instance_id": 11, "tune_id": 1, "record_type": "tune", "order_position": "a"},
+            {"session_instance_id": 11, "tune_id": 2, "record_type": "tune", "order_position": "b"},
+            {"session_instance_id": 12, "tune_id": 1, "record_type": "tune", "order_position": "a"},
+            {"session_instance_id": 12, "tune_id": 3, "record_type": "tune", "order_position": "b"},
+        ],
+    }
+    path = os.path.join(str(tmp_path), "sessions", "1", "logged_order.json")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        json.dump(hist, f)
+
+    everything = SequenceModel(1)
+    assert everything.follow_totals[1] == 3
+
+    without = SequenceModel(1, exclude_instance_ids=[12])
+    assert without.follow_totals[1] == 2
+    assert 3 not in without.follows[1], "the held-out night's transition leaked in"
+    assert without.n_instances == 2
+
+
+def test_sequence_prior_never_assigns_zero(lab_data, tmp_path):
+    """A prior that can veto must not, since the log is human and fallible."""
+    import json
+    import os
+
+    from lab.corpus.sequence import SequenceModel
+
+    path = os.path.join(str(tmp_path), "sessions", "1", "logged_order.json")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        json.dump({"session_id": 1, "rows": [
+            {"session_instance_id": 1, "tune_id": 1, "record_type": "tune", "order_position": "a"},
+            {"session_instance_id": 1, "tune_id": 2, "record_type": "tune", "order_position": "b"},
+        ]}, f)
+    m = SequenceModel(1)
+    w = m.weights(1)
+    assert w[2] > 0
+    assert w[999999] > 0, "a tune never seen must still be possible"
+
+
+def test_a_break_ends_the_chain(lab_data, tmp_path):
+    import json
+    import os
+
+    from lab.corpus.sequence import SequenceModel
+
+    path = os.path.join(str(tmp_path), "sessions", "1", "logged_order.json")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        json.dump({"session_id": 1, "rows": [
+            {"session_instance_id": 1, "tune_id": 1, "record_type": "tune", "order_position": "a"},
+            {"session_instance_id": 1, "tune_id": None, "record_type": "break", "order_position": "b"},
+            {"session_instance_id": 1, "tune_id": 2, "record_type": "tune", "order_position": "c"},
+        ]}, f)
+    m = SequenceModel(1)
+    assert m.follow_totals.get(1, 0) == 0, "a set boundary is not a transition"
+    assert m.set_openers[1] == 1 and m.set_openers[2] == 1

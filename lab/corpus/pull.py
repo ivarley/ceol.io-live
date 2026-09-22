@@ -90,6 +90,19 @@ def dump_mirrors():
     ]
 
 
+# Every tune-to-tune transition this session has ever logged, with the night
+# it happened on so a model can leave that night out. Not ground truth about
+# the night being scored, and not read from the current night at all: it is
+# what a live system would already know from every previous evening.
+TRANSITIONS_SQL = """
+    SELECT si.session_instance_id, si.date::text AS date,
+           sit.session_instance_tune_id, sit.tune_id, sit.record_type, sit.order_position
+    FROM session_instance_tune sit
+    JOIN session_instance si ON si.session_instance_id = sit.session_instance_id
+    WHERE si.session_id = %s AND sit.deleted = FALSE
+    ORDER BY si.session_instance_id, sit.order_position COLLATE "C"
+"""
+
 _EXT_BY_MIME = {
     "audio/mpeg": "mp3",
     "audio/mp3": "mp3",
@@ -155,6 +168,7 @@ def write_manifests(conn, wanted_ids):
     cur.execute("SELECT current_database(), inet_server_addr()::text")
     dbname, host = cur.fetchone()
     repertoire_cache = {}
+    history_cache = {}
     manifests = []
     for rec in recordings:
         rid = rec["recording_id"]
@@ -165,6 +179,9 @@ def write_manifests(conn, wanted_ids):
         if sid not in repertoire_cache:
             repertoire_cache[sid] = _rows(cur, REPERTOIRE_SQL, (sid,))
         logged = _rows(cur, LOGGED_ORDER_SQL, (rec["session_instance_id"],))
+        if sid not in history_cache:
+            history_cache[sid] = _rows(cur, TRANSITIONS_SQL, (sid,))
+            _write_session_history(sid, history_cache[sid])
         manifest = {
             "manifest_version": 1,
             "pulled_at": datetime.now(timezone.utc).isoformat(),
@@ -182,6 +199,17 @@ def write_manifests(conn, wanted_ids):
               f"{len(repertoire_cache[sid])} repertoire, {len(logged)} logged")
         manifests.append(manifest)
     return manifests
+
+
+def _write_session_history(session_id, rows):
+    """The session's whole logged order, one file per session."""
+    path = paths.ensure_dir(paths.data("sessions", str(session_id)))
+    out = os.path.join(path, "logged_order.json")
+    with open(out, "w") as f:
+        json.dump({"session_id": session_id, "rows": rows,
+                   "pulled_at": datetime.now(timezone.utc).isoformat()}, f)
+    instances = len({r["session_instance_id"] for r in rows})
+    print(f"session   {session_id}  history: {len(rows)} logged records over {instances} nights -> {out}")
 
 
 def master_path(manifest):

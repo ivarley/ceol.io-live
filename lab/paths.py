@@ -31,6 +31,10 @@ def features_path(recording_id):
     return os.path.join(recording_dir(recording_id), "features.npz")
 
 
+def session_history_path(session_id):
+    return data("sessions", str(int(session_id)), "logged_order.json")
+
+
 def corpus_dir():
     return data("corpus")
 

@@ -77,9 +77,50 @@ def transcribe_segment(frontend, store, audio_sha1, t0_ms, t1_ms, board=None):
     return notes, cost, cached
 
 
+def rerank(ranked, weights, beta=1.0, index=None, audio_floor=1e-3, prior_top=50):
+    """Combine audio and prior over the UNION of what each proposes.
+
+    Re-ranking only the audio's shortlist was wrong, and measurably so: the
+    prior alone scored 0.245 top-1 while the prior applied to the audio's top
+    25 scored 0.201. A tune the audio missed was excluded before the prior
+    ever saw it, so the combination inherited the audio's recall and threw
+    away the prior's. Scoring the union fixes that. A tune with no audio
+    evidence gets `audio_floor`, which is what makes the prior able to carry
+    a candidate the transcription never found.
+    """
+    import math
+
+    if not weights:
+        return ranked
+    scores = {r["tune_id"]: r for r in ranked}
+    for tune_id, _w in sorted(weights.items(), key=lambda kv: -kv[1])[:prior_top]:
+        if tune_id not in scores:
+            scores[tune_id] = {
+                "tune_id": tune_id, "setting_id": None,
+                "name": (index.tune_names.get(tune_id) if index else None),
+                "tune_type": (index.tune_types.get(tune_id) if index else None),
+                "score": 0.0, "coverage": 0.0, "hits": 0, "n_grams_queried": 0,
+            }
+    out = []
+    for tune_id, r in scores.items():
+        w = weights.get(tune_id, 1e-4)
+        audio = max(audio_floor, r["score"])
+        out.append({**r, "prior": w,
+                    "combined": math.log(audio) + beta * math.log(max(1e-12, w))})
+    out.sort(key=lambda d: -d["combined"])
+    return out
+
+
 def score_night(frontend, recording_id, index, seconds=DEFAULT_SECONDS, board=None,
-                top_k=25, quiet=True):
+                top_k=25, quiet=True, prior="none", beta=1.0):
     gt = load_ground_truth(recording_id)
+    sequence = previous_of = None
+    if prior != "none":
+        from lab.corpus.sequence import SequenceModel
+
+        # the night being scored is held out of its own model
+        sequence = SequenceModel(gt.session_id, exclude_instance_ids=[gt.session_instance_id])
+        previous_of = gt.previous_tune_map()
     store = AudioStore(paths.wav_path(recording_id))
     store.clock_ms = store.duration_ms      # offline: the whole file is available
     sha = wav_sha1(recording_id) or ""
@@ -92,9 +133,23 @@ def score_night(frontend, recording_id, index, seconds=DEFAULT_SECONDS, board=No
             t1 = min(seg.end_ms, t0 + int(seconds * 1000))
             if t1 - t0 < 5000:
                 continue
-            notes, cost, cached = transcribe_segment(frontend, store, sha, t0, t1, board=board)
-            intervals = intervals_from_notes(notes)
-            ranked = index.lookup(intervals, top_k=top_k)
+            if prior == "prior_only":
+                # the control: no audio at all, rank the repertoire by what
+                # usually follows. If this beats the audio system, the audio
+                # is not yet earning its keep.
+                notes, cost, cached, intervals = [], 0.0, True, []
+                weights = sequence.weights(previous_of.get(seg.session_instance_tune_id))
+                ranked = [{"tune_id": t, "setting_id": None, "name": index.tune_names.get(t),
+                           "tune_type": index.tune_types.get(t), "score": w, "coverage": 0.0,
+                           "hits": 0, "n_grams_queried": 0}
+                          for t, w in sorted(weights.items(), key=lambda kv: -kv[1])[:top_k]]
+            else:
+                notes, cost, cached = transcribe_segment(frontend, store, sha, t0, t1, board=board)
+                intervals = intervals_from_notes(notes)
+                ranked = index.lookup(intervals, top_k=(200 if prior == "sequence" else top_k))
+                if prior == "sequence":
+                    weights = sequence.weights(previous_of.get(seg.session_instance_tune_id))
+                    ranked = rerank(ranked, weights, beta=beta, index=index)[:top_k]
             rank = next((i + 1 for i, r in enumerate(ranked) if r["tune_id"] == seg.tune_id), None)
             true_score = next((r["score"] for r in ranked if r["tune_id"] == seg.tune_id), 0.0)
             best_wrong = next((r["score"] for r in ranked if r["tune_id"] != seg.tune_id), 0.0)
@@ -139,7 +194,7 @@ def summarise(rows):
 
 
 def run_retrieval(frontend, recording_ids=None, candidate_set="repertoire", n=5,
-                  seconds=DEFAULT_SECONDS, quiet=False):
+                  seconds=DEFAULT_SECONDS, quiet=False, prior="none", beta=1.0):
     from lab.corpus.index import Index
 
     index = Index.load(candidate_set, n=n)
@@ -148,7 +203,8 @@ def run_retrieval(frontend, recording_ids=None, candidate_set="repertoire", n=5,
     with Board() as board:
         for rid in recording_ids:
             t0 = time.time()
-            rows = score_night(frontend, rid, index, seconds=seconds, board=board, quiet=quiet)
+            rows = score_night(frontend, rid, index, seconds=seconds, board=board,
+                               quiet=quiet, prior=prior, beta=beta)
             board.conn.commit()
             gt = load_ground_truth(rid)
             m = summarise(rows)
@@ -164,8 +220,10 @@ def run_retrieval(frontend, recording_ids=None, candidate_set="repertoire", n=5,
     pooled = summarise(all_rows)
     pooled["nights"] = len(nights)
     result = BenchResult(
-        task="tune_retrieval", candidate=frontend.name, version=frontend.version,
-        params={**frontend.params, "candidate_set": candidate_set, "n": n, "seconds": seconds},
+        task="tune_retrieval",
+        candidate=frontend.name if prior == "none" else f"{frontend.name}+{prior}", version=frontend.version,
+        params={**frontend.params, "candidate_set": candidate_set, "n": n,
+                "seconds": seconds, "prior": prior, "beta": beta},
         features_version="audio", split="per-night",
         nights=nights, pooled=pooled, warnings=[],
         created_at=time.strftime("%Y-%m-%dT%H:%M:%S"), git_sha=git_sha())
