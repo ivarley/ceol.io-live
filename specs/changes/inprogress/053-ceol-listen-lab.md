@@ -306,74 +306,88 @@ be inspected on its own, and the next idea has somewhere to be scored.
 
 ## Status
 
-Running against the corpus. All eight nights are pulled, decoded and
-featured; both loops work; the first real scores are in. The lab does what it
-was built to do, and what it says is that the recogniser does not work yet
-and it is clear why.
+Both loops run against the corpus, and the recogniser works well enough to be
+worth arguing with.
 
-### The bench, leave-one-night-out
+### Where it stands
 
-| Task | Candidate | Score |
+A whole night through the board, 58 segments of recording 2: **top-1 46.6%
+[34-59], top-5 58.6%**, median time to first correct 51 seconds, at 49x
+realtime. That reproduces what the bench predicted, which is the property the
+two loops were built to have.
+
+On the retrieval bench, over all 503 segments:
+
+| Configuration | top-1 | top-5 |
 |---|---|---|
-| music_activity | music_mel_lr | 0.948 accuracy |
-| | music_energy | 0.765 |
-| | always_music (baseline) | 0.739 |
-| boundary | boundary_mel_lr | 0.462 f1, 31 false/hour |
-| | boundary_keychange | 0.372 f1, 30 false/hour |
-| | boundary_novelty | 0.348 f1, 55 false/hour |
-| | boundary_spray (baseline) | 0.108 f1, 557 false/hour |
-| | boundary_periodic (baseline) | 0.082 f1 |
+| yin, 30s of audio | 0.338 | 0.475 |
+| yin, 120s | 0.485 | 0.706 |
+| yin, 120s, sets decoded | 0.646 | 0.753 |
+| the session's transitions alone, no audio | 0.245 | 0.368 |
 
-Two things this settles. The energy rule for music-versus-not is worth 2.6
-points over saying "music" every time, so it is not a detector; a small
-learned model on mel frames is, at 0.948 on nights it never saw. And the
-Foote novelty curve, which is the textbook answer for structural boundaries,
-is beaten by a thirty-second chroma comparison and by a small learned model.
-None of that was predictable from a docstring, which is the argument for the
-bench.
+Against the whole 23,307-tune corpus instead of the session's 1,279-tune
+repertoire, set decoding scores 0.425 against 0.427. The transition prior
+concentrates probability on what this session plays, so the repertoire
+restriction turns out to be unnecessary and the numbers are not an artefact
+of a small candidate set.
 
-### The ensemble
+### What moved the needle, in order
 
-The first real run scored **zero**: top-1 0 of 5 segments, top-5 0 of 5, and
-five flips a segment. The inspection tools locate the failure exactly, and it
-is not the symbolic back end. The index parses 100% of the repertoire's
-settings and puts 25 of 25 settings' own notes first. The features carry
-enough for a classifier to reach 0.948 on music-versus-not. What fails is the
-step between: monophonic pitch tracking of six people playing the same melody
-their own way.
+**Octave folding.** A transcription of a room recovers the note names and
+loses the register: measured on one segment, both trackers matched the
+notation's pitch classes exactly while 12% and 41% of their steps were
+octave-sized. Folding intervals to their nearest-direction form took top-1
+from 0.137 to 0.338. The control matters: the same n-gram length unfolded
+scores 0.137, so it is the folding and not the window.
 
-pyin locks on. Two minutes of a reel transcribe as a near-constant g-a-b with
-a median note of 105ms. yin scatters instead, 2,012 notes flung across
-octaves. Neither has the tune in the top ten, and every candidate's coverage
-sits at 1-3%, meaning no tune is explained at all and the ranking is noise
-among near-ties. The assembler then reports 0.6-0.7 confidence on a wrong
-answer for two minutes, which is the calibration failure the harness exists
-to catch.
+**How long it listens.** The strongest single lever, and the
+latency-against-certainty curve the project wanted: 0.123 at ten seconds,
+0.338 at thirty, 0.485 at ninety. A tune played three times through gives
+three chances, and the system uses all of them.
 
-So the next move is a better front end, and the bench is where it gets
-chosen: a multi-pitch or neural transcriber producing `pitch_track` or
-`note_events` alongside the two that exist. Nothing else in the thread needs
-to change to accept it.
+**Decoding a whole set.** Handed the true previous tune the transition prior
+was worth twelve points; chaining its own answer forward, one point, because
+that answer is wrong two thirds of the time. Scoring whole sequences instead
+of committing to each tune recovers most of the difference, 0.427 against the
+oracle's 0.461.
 
-### Costs, measured
+**Fusing front ends.** yin and the salience tracker fused beat both parts,
+and their recall gain is larger than their precision gain, which is what the
+set decoder wants. How they are fused matters: reciprocal rank fusion costs
+six points of top-1 against summing normalised scores.
 
-Per minute of audio: pyin about twelve seconds, yin about a third of a
-second, everything else under a tenth. A replay runs at roughly 4x realtime
-with pyin in the config. Downloading the corpus took minutes and decoding
-plus featuring a three-hour night takes about fifteen seconds.
+**A voicing threshold.** pyin's default discarded 96% of its own output on
+this material, because its voicing model is built for one instrument.
 
-### Corpus
+### What did not work, and is on the board anyway
 
-505 segments over eight nights, 709 boundaries, 15.0 hours of labelled music
-and 5.5 hours of labelled silence. Two nights are segmented over part of
-their length, 44% and 25%, and boundary scoring is restricted to the placed
-region so those nights are not punished for the rest.
+Input cleanup, harmonic separation plus a melody band, took yin from 0.109 to
+0.024. A tune type classifier reaches 0.799 accuracy against a 0.480 majority
+baseline and is worth three points on its own, but nothing at all once sets
+are decoded, because sets do not mix types and the transition counts already
+knew. Hard filtering on that classifier is worse than no filter. A third
+tracker in the fusion adds nothing. Predominant melody extraction, the method
+with the best story for this music, is still behind yin.
 
-Five segments still have no explicit end where the log says a set ended, all
-between 1.4 and 3.4 minutes, and one segment in recording 1 ends 583ms after
-the next begins. The harness names them on every run and excludes what it
-cannot vouch for.
+### The transfer bugs, which are the lesson
 
-Not done: no learned candidate has graduated into an expert (the lab does not
-persist fitted models, and `CandidateExpert` refuses rather than guessing);
-no `tune_pair` task; no audio-embedding probe; nothing runs live.
+The ensemble scored zero while the bench scored 0.47 on the same audio, and
+every cause was a place where the board's streaming shape diverged from the
+bench's single pass: a 48-note window that was eight seconds of audio, notes
+emitted five times over because the tracker's windows overlap, notes
+harvested from a window edge where they are truncated, and an assembler
+summing matches that already integrated their own history. A fifth was in the
+harness itself, scoring correct answers as misses because it compared audio
+spans against clock times.
+
+None of those would have been visible without both loops and the tools to put
+one beside the other.
+
+### Still open
+
+Boundary detection remains the weak part, at f1 0.09 on the board against the
+bench's 0.46 for the best detector, because the graduated one is the novelty
+curve rather than the learned model; the lab does not persist fitted models
+yet, and `CandidateExpert` refuses rather than guessing. Fusion is a bench
+finding not yet ported to the board. Set boundaries in the decoder still come
+from the log. And nothing runs live.
