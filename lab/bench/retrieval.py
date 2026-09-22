@@ -290,7 +290,25 @@ def score_night(frontends, recording_id, index, seconds=DEFAULT_SECONDS, board=N
     return rows
 
 
-def decode_set(candidates, sequence, beta=1.0, audio_floor=1e-3, opener_bonus=True):
+def evidence_strength(ranked):
+    """How much this segment's audio is worth listening to, without the answer.
+
+    Measured over 503 segments, the index's top score correlates +0.55 with
+    being right and the gap to the runner-up +0.53, while the note rate
+    correlates +0.02. The tracker always produces notes; what varies is
+    whether they are the right ones, and the score says so before the truth
+    does. A segment whose evidence is weak should defer to the sequence more
+    than one whose evidence is strong, and a fixed weight cannot do that.
+    """
+    if not ranked:
+        return 0.0
+    top = max(0.0, ranked[0]["score"])
+    second = max(0.0, ranked[1]["score"]) if len(ranked) > 1 else 0.0
+    return top + (top - second)
+
+
+def decode_set(candidates, sequence, beta=1.0, audio_floor=1e-3, opener_bonus=True,
+               adaptive=False, reference_strength=0.11):
     """Best tune sequence for a whole set, rather than one tune at a time.
 
     Greedy chaining was barely worth anything: feeding the system's own answer
@@ -310,6 +328,14 @@ def decode_set(candidates, sequence, beta=1.0, audio_floor=1e-3, opener_bonus=Tr
     if not candidates:
         return []
     trans_cache = {}
+    betas = []
+    for ranked in candidates:
+        if not adaptive:
+            betas.append(beta)
+            continue
+        strength = evidence_strength(ranked)
+        # weak audio leans on the sequence, strong audio is left alone
+        betas.append(beta * min(3.0, max(0.35, reference_strength / max(1e-6, strength))))
 
     def weights_for(prev):
         if prev not in trans_cache:
@@ -323,7 +349,7 @@ def decode_set(candidates, sequence, beta=1.0, audio_floor=1e-3, opener_bonus=Tr
     first = candidates[0]
     scores.append({
         c["tune_id"]: math.log(max(audio_floor, c["score"]))
-        + (beta * math.log(max(1e-12, opener.get(c["tune_id"], 1e-4))) if opener else 0.0)
+        + (betas[0] * math.log(max(1e-12, opener.get(c["tune_id"], 1e-4))) if opener else 0.0)
         for c in first})
     backs.append({c["tune_id"]: None for c in first})
 
@@ -337,7 +363,7 @@ def decode_set(candidates, sequence, beta=1.0, audio_floor=1e-3, opener_bonus=Tr
             best_score, best_prev = None, None
             for prev_id, prev_score in previous.items():
                 w = weights_for(prev_id).get(tune_id, 1e-4)
-                total = prev_score + beta * math.log(max(1e-12, w))
+                total = prev_score + betas[step] * math.log(max(1e-12, w))
                 if best_score is None or total > best_score:
                     best_score, best_prev = total, prev_id
             best_here[tune_id] = (best_score or 0.0) + emission
@@ -381,7 +407,7 @@ def summarise(rows):
 
 def score_night_set_decoded(frontends, recording_id, index, seconds=DEFAULT_SECONDS,
                             board=None, top_k=25, beta=1.0, audio_top=40,
-                            type_filter="none", fusion="rrf"):
+                            type_filter="none", fusion="rrf", adaptive=False):
     """Score a night by decoding each set as a whole.
 
     Two passes: transcribe and rank every segment as usual, then group the
@@ -446,7 +472,7 @@ def score_night_set_decoded(frontends, recording_id, index, seconds=DEFAULT_SECO
                       "hits": 0, "n_grams_queried": 0}
                      for t in sequence.popularity() if t not in known][:0]
             candidates.append(ranked + extra)
-        path = decode_set(candidates, sequence, beta=beta)
+        path = decode_set(candidates, sequence, beta=beta, adaptive=adaptive)
         for item, chosen in zip(group, path):
             seg = item["seg"]
             ordered = sorted(item["ranked"], key=lambda c: -c["score"])
@@ -471,7 +497,8 @@ def score_night_set_decoded(frontends, recording_id, index, seconds=DEFAULT_SECO
 
 def run_retrieval(frontends, recording_ids=None, candidate_set="repertoire", n=5,
                   seconds=DEFAULT_SECONDS, quiet=False, prior="none", beta=1.0,
-                  fold_octaves=False, belief_k=5, type_filter="none", fusion="rrf"):
+                  fold_octaves=False, belief_k=5, type_filter="none", fusion="rrf",
+                  adaptive=False):
     from lab.corpus.index import Index
 
     index = Index.load(candidate_set, n=n, fold_octaves=fold_octaves)
@@ -484,7 +511,7 @@ def run_retrieval(frontends, recording_ids=None, candidate_set="repertoire", n=5
             t0 = time.time()
             if prior == "set_viterbi":
                 rows = score_night_set_decoded(frontends, rid, index, seconds=seconds,
-                                               board=board, beta=beta,
+                                               board=board, beta=beta, adaptive=adaptive,
                                                type_filter=type_filter, fusion=fusion)
             else:
                 rows = score_night(frontends, rid, index, seconds=seconds, board=board,
@@ -511,7 +538,8 @@ def run_retrieval(frontends, recording_ids=None, candidate_set="repertoire", n=5
         params={**frontends[0].params, "candidate_set": candidate_set, "n": n,
                 "frontends": [f.name for f in frontends], "fusion": fusion,
                 "seconds": seconds, "prior": prior, "beta": beta,
-                "fold_octaves": fold_octaves, "type_filter": type_filter},
+                "fold_octaves": fold_octaves, "type_filter": type_filter,
+                "adaptive": adaptive},
         features_version="audio", split="per-night",
         nights=nights, pooled=pooled, warnings=[],
         created_at=time.strftime("%Y-%m-%dT%H:%M:%S"), git_sha=git_sha())

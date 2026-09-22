@@ -1,0 +1,73 @@
+{
+ "annotation_version": 1,
+ "recording_id": 2,
+ "segment_id": 117,
+ "t0_ms": 3567950,
+ "duration_s": 91.4,
+ "tune_id": 1706,
+ "tune_name": "Coleman's Cross",
+ "labelled_against": "yin v1",
+ "saved_at": "2026-09-22T19:58:35+00:00",
+ "labels": [
+  {
+   "t0": 7.427,
+   "t1": 7.715,
+   "midi": 59,
+   "from": "drawn"
+  },
+  {
+   "t0": 7.432,
+   "t1": 7.662,
+   "midi": 83,
+   "from": "drawn"
+  },
+  {
+   "t0": 7.686,
+   "t1": 7.822,
+   "midi": 64,
+   "from": "drawn"
+  },
+  {
+   "t0": 7.714,
+   "t1": 7.928,
+   "midi": 88,
+   "from": "drawn"
+  },
+  {
+   "t0": 7.893,
+   "t1": 8.03,
+   "midi": 64,
+   "from": "drawn"
+  },
+  {
+   "t0": 7.966,
+   "t1": 8.076,
+   "midi": 88,
+   "from": "drawn"
+  },
+  {
+   "t0": 8.067,
+   "t1": 8.183,
+   "midi": 66,
+   "from": "drawn"
+  },
+  {
+   "t0": 8.077,
+   "t1": 8.168,
+   "midi": 90,
+   "from": "drawn"
+  },
+  {
+   "t0": 8.16,
+   "t1": 8.398,
+   "midi": 64,
+   "from": "drawn"
+  },
+  {
+   "t0": 8.182,
+   "t1": 8.411,
+   "midi": 88,
+   "from": "drawn"
+  }
+ ]
+}

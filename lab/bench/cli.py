@@ -50,6 +50,8 @@ def add_parser(sub):
                           "set_viterbi: decode a whole set at once; "
                           "prior_only: ignore the audio entirely, as a control")
     ret.add_argument("--beta", type=float, default=1.0, help="how hard the prior pulls")
+    ret.add_argument("--adaptive", action="store_true",
+                     help="let each segment's own evidence decide how hard the prior pulls")
     ret.add_argument("--fold-octaves", action="store_true",
                      help="use the folded index, where an octave error costs nothing")
     ret.add_argument("--type-filter", default="none",
@@ -129,7 +131,8 @@ def cmd_retrieval(args):
     result, rows = run_retrieval(
         frontends, recording_ids=_ids(args.recordings), candidate_set=args.candidate_set,
         n=args.n, seconds=args.seconds, prior=args.prior, beta=args.beta,
-        fold_octaves=args.fold_octaves, type_filter=args.type_filter, fusion=args.fusion)
+        fold_octaves=args.fold_octaves, type_filter=args.type_filter, fusion=args.fusion,
+        adaptive=args.adaptive)
     print(format_retrieval(result, rows))
     if not args.no_save:
         print(f"  saved {result.save()}")

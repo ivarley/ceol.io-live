@@ -46,8 +46,27 @@ def merge_interlopers(notes, max_interloper_ms=70):
     return out
 
 
+PITCH_CLASS_BASE = 60          # labels and folded notes live in C4..B4
+
+
+def fold_pitch(midi):
+    """A pitch reduced to its class, in one fixed octave.
+
+    Octave carries no information about which tune this is: no two Irish tunes,
+    and no two parts of one, differ by octave alone. Everything downstream
+    already works in pitch classes, because folding an interval to its nearest
+    direction is the same operation as taking the difference of pitch classes.
+
+    Doing it here as well, before notes are cut, is not cosmetic. A tracker
+    that jumps an octave in the middle of a held note makes the run-length
+    step see a new pitch and cut the note in two, inserting an interval the
+    tune does not contain. Folding first leaves the note whole.
+    """
+    return PITCH_CLASS_BASE + (int(round(midi)) % 12)
+
+
 def notes_from_pitch(times_ms, f0_hz, voiced_prob, min_note_ms=60, median_frames=5,
-                     min_voiced=0.5, merge_interlopers_ms=0):
+                     min_voiced=0.5, merge_interlopers_ms=0, fold_pitch_classes=False):
     """A pitch track to note events.
 
     Known weakness, and a real one for this music: a cut or a roll fragments
@@ -67,6 +86,8 @@ def notes_from_pitch(times_ms, f0_hz, voiced_prob, min_note_ms=60, median_frames
     midi = np.full(f0.shape, np.nan)
     valid_hz = keep & np.isfinite(f0) & (f0 > 0)
     midi[valid_hz] = np.round(librosa.hz_to_midi(f0[valid_hz]))
+    if fold_pitch_classes:
+        midi[valid_hz] = PITCH_CLASS_BASE + np.mod(midi[valid_hz], 12)
     smoothed = midi.copy()
     valid = np.isfinite(midi)
     if np.any(valid):
