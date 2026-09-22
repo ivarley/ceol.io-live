@@ -100,7 +100,10 @@ class TestAttendedInstancesAreNotMultipliedByInstruments:
     ):
         dates = ["2031-03-04", "2031-03-11", "2031-03-18"]
         session_path, person_id, instance_ids = self._make(
-            db_conn, db_cursor, ["fiddle", "mandolin"], dates,
+            db_conn,
+            db_cursor,
+            ["fiddle", "mandolin"],
+            dates,
             authenticated_regular_user.person_id,
         )
 
@@ -127,7 +130,10 @@ class TestAttendedInstancesAreNotMultipliedByInstruments:
         # have looked like a near-miss. Five makes the failure unmistakable.
         dates = ["2031-04-01", "2031-04-08"]
         session_path, person_id, _ = self._make(
-            db_conn, db_cursor, ["fiddle", "flute", "banjo", "guitar", "bodhran"], dates,
+            db_conn,
+            db_cursor,
+            ["fiddle", "flute", "banjo", "guitar", "bodhran"],
+            dates,
             authenticated_regular_user.person_id,
         )
 
@@ -144,7 +150,11 @@ class TestAttendedInstancesAreNotMultipliedByInstruments:
         # keeps one NULL row, and it must not swallow the attendance.
         dates = ["2031-05-06", "2031-05-13", "2031-05-20"]
         session_path, person_id, _ = self._make(
-            db_conn, db_cursor, [], dates, authenticated_regular_user.person_id,
+            db_conn,
+            db_cursor,
+            [],
+            dates,
+            authenticated_regular_user.person_id,
         )
 
         with authenticated_regular_user:
@@ -161,7 +171,10 @@ class TestAttendedInstancesAreNotMultipliedByInstruments:
         unique key. Both nights must come back, with distinct instance ids — which
         is why the UI keys this list on the id rather than the date."""
         session_path, person_id, instance_ids = self._make(
-            db_conn, db_cursor, ["fiddle"], ["2031-06-07", "2031-06-07"],
+            db_conn,
+            db_cursor,
+            ["fiddle"],
+            ["2031-06-07", "2031-06-07"],
             authenticated_regular_user.person_id,
         )
 
