@@ -29,18 +29,36 @@ class RepertoirePrior(Expert):
 
     @classmethod
     def defaults(cls):
-        return {"repertoire_weight": 20.0, "played_tonight_weight": 0.2, "refresh_ms": 30000}
+        return {"repertoire_weight": 20.0, "played_tonight_weight": 0.2,
+                "refresh_ms": 30000, "use_sequence": True, "beta": 0.15}
 
     def setup(self):
         self._repertoire = None
         self._last_emit_ms = None
         self._last_confirmed = None
+        self._sequence = None
+
+    def _sequence_model(self, view):
+        """Transitions from every other night this session has logged.
+
+        Tonight is excluded, which is both the right discipline and what a
+        live system faces: it knows every previous evening and nothing about
+        this one. Measured on the bench, decoding a whole set against these
+        counts is worth nearly as much as being told the previous tune.
+        """
+        if self._sequence is None:
+            from lab.corpus.sequence import SequenceModel
+
+            rec = view.manifest["recording"]
+            self._sequence = SequenceModel(
+                rec["session_id"], exclude_instance_ids=[rec["session_instance_id"]])
+        return self._sequence
 
     def process(self, view, window):
         if self._repertoire is None:
             self._repertoire = {int(r["tune_id"]) for r in (view.manifest.get("repertoire") or [])
                                 if r.get("tune_id")}
-        confirmed = tuple(sorted(view.confirmed_tune_ids()))
+        confirmed = tuple(view.confirmed_tune_ids())
         stale = (self._last_emit_ms is None
                  or window.clock_ms - self._last_emit_ms >= self.params["refresh_ms"])
         if not stale and confirmed == self._last_confirmed:
@@ -48,14 +66,22 @@ class RepertoirePrior(Expert):
         self._last_emit_ms = window.clock_ms
         self._last_confirmed = confirmed
 
-        weights = {t: float(self.params["repertoire_weight"]) for t in self._repertoire}
-        for t in confirmed:
-            # a tune played twice in a night happens, but it is the exception
-            weights[t] = weights.get(t, 1.0) * float(self.params["played_tonight_weight"])
+        basis = {"repertoire": len(self._repertoire), "confirmed_tonight": list(confirmed)}
+        if self.params["use_sequence"]:
+            sequence = self._sequence_model(view)
+            previous = confirmed[-1] if confirmed else None
+            weights = dict(sequence.weights(previous))
+            basis["previous_tune_id"] = previous
+            basis["source"] = "sequence"
+        else:
+            weights = {t: float(self.params["repertoire_weight"]) for t in self._repertoire}
+            for t in confirmed:
+                weights[t] = weights.get(t, 1.0) * float(self.params["played_tonight_weight"])
+            basis["source"] = "repertoire"
+
         inputs = [o.obs_id for o in (view.new("music_activity") + view.new("hypothesis_update"))][:4]
         return [self.obs(
             "tune_prior", window.t_start_ms, window.t_end_ms,
-            {"weights": {str(k): round(v, 4) for k, v in weights.items()},
-             "default_w": 1.0,
-             "basis": {"repertoire": len(self._repertoire), "confirmed_tonight": list(confirmed)}},
+            {"weights": {str(k): round(v, 6) for k, v in weights.items()},
+             "default_w": 1e-4, "beta": self.params["beta"], "basis": basis},
             inputs=inputs)]

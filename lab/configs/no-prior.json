@@ -32,7 +32,8 @@
     {
       "name": "intervals",
       "params": {
-        "window_notes": 48
+        "window_ms": 120000,
+        "min_notes": 12
       }
     },
     {

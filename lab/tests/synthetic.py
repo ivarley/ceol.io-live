@@ -131,7 +131,28 @@ def build_night(data_dir, recording_id=9001, note_ms=NOTE_MS):
     }
     with open(os.path.join(rec_dir, "manifest.json"), "w") as f:
         json.dump(manifest, f, indent=1)
+    write_session_history(data_dir, manifest)
     return manifest
+
+
+def write_session_history(data_dir, manifest, extra_nights=3):
+    """A few earlier nights, so the sequence prior has transitions to learn.
+
+    Tonight is included in the file and excluded by the model, which is the
+    same shape as the real corpus: one file per session holding every night,
+    and each night held out of its own model.
+    """
+    rows = []
+    for instance in range(1, extra_nights + 1):
+        for position, tune in enumerate((TUNE_A, TUNE_B)):
+            rows.append({"session_instance_id": 100 + instance, "tune_id": tune["tune_id"],
+                         "record_type": "tune", "order_position": chr(ord("a") + position)})
+    for row in manifest["logged_order"]:
+        rows.append({**row, "session_instance_id": manifest["recording"]["session_instance_id"]})
+    path = os.path.join(data_dir, "sessions", str(manifest["recording"]["session_id"]))
+    os.makedirs(path, exist_ok=True)
+    with open(os.path.join(path, "logged_order.json"), "w") as f:
+        json.dump({"session_id": manifest["recording"]["session_id"], "rows": rows}, f)
 
 
 def build_index(data_dir, n=6, fold_octaves=True):

@@ -40,7 +40,17 @@ class Notes(Expert):
 
     @classmethod
     def defaults(cls):
-        return {"sources": None, "min_note_ms": 60, "median_frames": 5, "min_voiced": 0.5}
+        # `edge_margin_ms`: stay back from the trailing edge of the tracker's
+        # window. The last note there is cut off by the window rather than by
+        # the player, and the smoothing has nothing to its right, so notes
+        # harvested from the edge are both fewer and worse. Harvesting the
+        # settled middle instead cost a second of latency and recovered the
+        # note rate the bench gets from one long pass.
+        return {"sources": None, "min_note_ms": 60, "median_frames": 5,
+                "min_voiced": 0.2, "edge_margin_ms": 1200}
+
+    def setup(self):
+        self._emitted_to = {}
 
     def process(self, view, window):
         out = []
@@ -51,9 +61,22 @@ class Notes(Expert):
             notes = self._segment(track.payload)
             if not notes:
                 continue
+            # A pitch expert reads long windows on a short hop, so every
+            # stretch of audio is transcribed several times over. Emitting all
+            # of it put near-duplicates of the same phrase into the interval
+            # sequence - not exact duplicates, because each window segments
+            # the notes slightly differently, so they could not be removed
+            # later either. The board matched nothing while the bench matched
+            # the same audio correctly, and this was the difference.
+            since = self._emitted_to.get(src, -1)
+            settled = track.t_end_ms - int(self.params["edge_margin_ms"])
+            fresh = [n for n in notes if since < n["t0_ms"] and n["t1_ms"] <= settled]
+            if not fresh:
+                continue
+            self._emitted_to[src] = max(n["t0_ms"] for n in fresh)
             out.append(self.obs(
-                "note_events", track.t_start_ms, track.t_end_ms,
-                {"source": src, "notes": notes}, inputs=[track.obs_id]))
+                "note_events", fresh[0]["t0_ms"], track.t_end_ms,
+                {"source": src, "notes": fresh}, inputs=[track.obs_id]))
         return out
 
     def _segment(self, payload):
@@ -109,8 +132,16 @@ class Intervals(Expert):
 
     @classmethod
     def defaults(cls):
-        return {"window_notes": 48, "clip": 12, "max_gap_ms": 1500, "min_notes": 8,
-                "fold_octaves": True}
+        # How much of the tune the matcher gets to see, and the single
+        # strongest lever measured on the bench: 10s of audio scores 0.12
+        # top-1, 30s scores 0.34, 120s scores 0.49. The old 48-note window was
+        # about eight seconds, which is the worst point on that curve, and it
+        # is why the ensemble scored zero while the bench scored 0.47.
+        #
+        # Bounded by time rather than by count, because the note rate varies
+        # with the tune and with how well the tracker is doing.
+        return {"window_ms": 120000, "window_notes": 900, "clip": 12,
+                "max_gap_ms": 1500, "min_notes": 12, "fold_octaves": True}
 
     def setup(self):
         self._by_source = {}
@@ -125,6 +156,9 @@ class Intervals(Expert):
                 if n["t0_ms"] not in known:   # windows overlap; notes repeat
                     buf.append(n)
             buf.sort(key=lambda n: n["t0_ms"])
+            horizon = ev.t_end_ms - int(self.params["window_ms"])
+            while buf and buf[0]["t1_ms"] < horizon:
+                buf.pop(0)
             keep = int(self.params["window_notes"])
             if len(buf) > keep:
                 del buf[:-keep]

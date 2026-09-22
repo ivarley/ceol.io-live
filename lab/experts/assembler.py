@@ -60,16 +60,24 @@ class Assembler(Expert):
             "sharpen_after_s": 30.0,
             "other_mass": 0.25,
             "confirm_conf": 0.9,
-            "silence_close_s": 4.0,
+            "silence_close_s": 10.0,
             "min_update_ms": 2000,
             "top_k": 10,
             "hazard_at_expected": 0.5,
+            # How to treat successive matches. The interval expert keeps a
+            # trailing window, so each match already integrates everything
+            # heard in it; summing them then counts the same phrase once per
+            # update and lets an early wrong guess run away. "latest" trusts
+            # the newest match, which is what the bench does with one lookup
+            # over the whole span.
+            "evidence_mode": "latest",
         }
 
     def setup(self):
         self._reset_span()
         self._prior = {}
         self._prior_default = 1.0
+        self._prior_beta = 1.0
         self._silence_since = None
         self._counter = 0
 
@@ -103,7 +111,8 @@ class Assembler(Expert):
         scaled = {}
         for tune_id, ev in self._evidence.items():
             weight = self._prior.get(str(tune_id), self._prior_default)
-            scaled[tune_id] = ev / max(1e-6, temperature) + math.log(max(1e-9, weight))
+            scaled[tune_id] = (ev / max(1e-6, temperature)
+                               + self._prior_beta * math.log(max(1e-9, weight)))
         peak = max(scaled.values())
         exps = {t: math.exp(v - peak) for t, v in scaled.items()}
         # reserved mass for "a tune not in these candidates", shrinking as
@@ -129,6 +138,7 @@ class Assembler(Expert):
         if prior is not None:
             self._prior = prior.payload.get("weights") or {}
             self._prior_default = prior.payload.get("default_w", 1.0)
+            self._prior_beta = float(prior.payload.get("beta", 1.0))
 
         for act in view.new("music_activity"):
             if act.payload.get("is_music"):
@@ -156,6 +166,8 @@ class Assembler(Expert):
 
         # 3. accumulate
         for m in matches:
+            if self.params["evidence_mode"] == "latest":
+                self._evidence = {}
             for c in m.payload.get("candidates", []):
                 tune_id = c["tune_id"]
                 self._evidence[tune_id] = self._evidence.get(tune_id, 0.0) + float(c["score"])

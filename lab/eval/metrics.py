@@ -28,25 +28,24 @@ from lab.bench.tasks import load_ground_truth
 
 
 def _answer_at(events, spans, t_ms):
-    """The system's claim at a moment: the latest live event at or before it.
+    """What a reader would have on screen at this moment.
 
-    A withdrawn hypothesis is not an answer, and an event belonging to a span
-    that does not cover this moment is about a different tune.
+    The lifecycle replayed forward: an event sets the answer, a withdrawal
+    clears it, and whatever survives is what was showing. An earlier version
+    also required the hypothesis's SPAN to cover `t_ms`, which was wrong in a
+    way that quietly scored correct answers as misses: a span is a range of
+    audio, an event carries a clock time, and a span closed at the moment
+    silence began is stamped earlier than the events that followed it.
     """
-    best = None
+    current = None
     for e in events:
         if e["clock_ms"] > t_ms:
             break
         if e["event"] == "withdrawn":
-            continue
-        span = spans.get(e["hyp_id"])
-        if span is None:
-            continue
-        start = span["t_start_ms"]
-        end = span["t_end_ms"] if span["t_end_ms"] is not None else float("inf")
-        if start <= t_ms <= end:
-            best = e
-    return best
+            current = None
+        else:
+            current = e
+    return current
 
 
 def score_identification(board, run_id, gt, replay_range=None):
