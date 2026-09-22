@@ -164,6 +164,14 @@
   .kit-toolbar-wrap {
     display: flex;
     flex-direction: column;
+    /* Fill the host, whatever the host is. In a block parent this is already
+       true; in a FLEX parent a lone child is `flex: 0 1 auto` and shrinks to its
+       content, which is how two of the three session tabs ended up with a
+       toolbar ~100px narrower than the tab it sat in. A toolbar is the full
+       width of the list it filters, so the component guarantees that itself
+       rather than asking every host to remember. */
+    flex: 1 1 auto;
+    min-width: 0;
   }
   .kit-toolbar {
     display: flex;

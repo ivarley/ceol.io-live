@@ -112,11 +112,6 @@
     }
 }
 
-.filters-container {
-    padding: 6px;
-    margin-bottom: 10px;
-}
-
 .results-count {
     margin-bottom: 15px;
     color: var(--text-muted, #6c757d);
@@ -299,10 +294,6 @@
         margin: 0;
     }
 
-    .filters-container {
-        padding: 8px;
-    }
-
     .results-count {
         margin-bottom: 4px;
         padding: 0 8px;
@@ -431,21 +422,6 @@
     color: var(--text-color);
 }
 
-/* Logs tab filter header: the All/Logged toggle + the tune autocomplete.
-   Skins come from my_tunes_mobile.css (.filter-button-group / .filter-sort-btn /
-   .filter-search-input), the same ones the Tunes tab's filter row wears. */
-.logs-filter-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin: 0 8px 12px 0;
-    /* 12px = .instance-date-cell's own padding, so the search box's left edge
-       lines up with the column of dates below it. */
-    padding-left: 12px;
-    /* clear the floated help icon so the row doesn't run under it */
-    padding-right: 24px;
-}
-
 .logs-view-toggle {
     flex: 0 0 auto;
 }
@@ -470,11 +446,13 @@
     font-weight: 500;
 }
 
+/* The toolbar's search slot. .filter-top-row .kit-search flexes the field
+   itself, but on Logs the field is wrapped one deeper (the combobox positions
+   its dropdown against this element), so the flex has to be declared here. */
 .logs-tune-filter {
     position: relative;
     flex: 1;
     min-width: 0;
-    max-width: 320px;
 }
 
 /* Autocomplete list — overlays the grid below it. */
@@ -595,17 +573,10 @@
 }
 
 @media (max-width: 768px) {
-    .logs-tune-filter {
-        max-width: none;
-    }
     /* my_tunes_mobile.css gives .filter-button-group width:100% on phones (it owns a
-       whole filter-panel row there). Here it shares the row with the tune box. */
+       whole filter-panel row there). Here it shares the filter panel with nothing. */
     .logs-view-toggle {
         width: auto;
-    }
-    .logs-filter-header {
-        gap: 6px;
-        padding-right: 20px;
     }
 }
 
@@ -679,6 +650,11 @@
     background: var(--bg-color);
 }
 
+/* The three tabs' toolbar containers. Each holds exactly ONE child now — the
+   kit Toolbar, which owns the row layout — so all that is left for them is to
+   stick and to set the gutter. They share one rule because the three toolbars
+   have to line up: switching tabs should move the list underneath, not shift the
+   search box sideways. Nothing below may re-add display/padding/margin here. */
 .filters-container,
 .logs-filter-header,
 .people-controls {
@@ -687,6 +663,17 @@
     top: calc(var(--site-header-h, 42px) + var(--session-tabs-h, 50px));
     z-index: 2;
     background: var(--bg-color);
+    display: block;
+    padding: 6px;
+    margin: 0 0 10px;
+}
+
+@media (max-width: 768px) {
+    .filters-container,
+    .logs-filter-header,
+    .people-controls {
+        padding: 8px;
+    }
 }
 
 
@@ -1034,26 +1021,6 @@ a.empty-log {
         margin-left: 0 !important;
         margin-right: 0 !important;
     }
-}
-
-.people-controls {
-    display: flex;
-    gap: 12px;
-    margin-bottom: 16px;
-    padding: 0 8px;
-    align-items: center;
-}
-
-@media (max-width: 768px) {
-    .people-controls {
-        padding: 8px;
-    }
-}
-
-/* The kit SearchField wrapper takes the input's old flex slot in the row */
-.people-controls .kit-search {
-    flex: 1;
-    min-width: 0;
 }
 
 .people-search-box {

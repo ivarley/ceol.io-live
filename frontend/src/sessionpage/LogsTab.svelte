@@ -383,7 +383,7 @@
 {/snippet}
 
 <!-- Logs Tab Content -->
-<div class="tab-content" class:active id="logs-tab" style="padding-left: 10px;">
+<div class="tab-content" class:active id="logs-tab">
   {#if loadError}
     <div style="text-align: center; padding: 40px;">
       <p style="color: var(--danger, #dc3545);">

@@ -179,6 +179,47 @@ test.describe("session page (mobile)", () => {
     await expectNoServerError(page);
   });
 
+  test("the three toolbars are the same toolbar: same width, same search box", async ({ page }) => {
+    // They drifted once. Tunes' container was a plain block so the Toolbar filled
+    // it; Logs' and People's were flex rows left over from when each tab laid its
+    // own controls out, and a lone flex child is `flex: 0 1 auto` — it shrank to
+    // its content and the search box came out ~100px short. Logs was inset another
+    // 10px by a stray inline padding on the pane. None of that is visible in a
+    // screenshot of ONE tab; it only shows when you switch tabs and the search box
+    // jumps sideways. So this measures all three and demands they agree.
+    const geometry = async (tab: string, container: string) => {
+      await page.goto(`/sessions/${SESSIONS.mueller.path}/${tab}`);
+      await expect(page.locator(`#${tab}-tab ${container} .kit-toolbar`)).toBeVisible({
+        timeout: 8000,
+      });
+      return page.evaluate((sel) => {
+        const round = (el: Element | null | undefined) => {
+          if (!el) return null;
+          const r = el.getBoundingClientRect();
+          return { left: Math.round(r.left), width: Math.round(r.width) };
+        };
+        const box = document.querySelector(sel);
+        return {
+          row: round(box?.querySelector(".kit-toolbar")),
+          input: round(box?.querySelector("input")),
+        };
+      }, `#${tab}-tab ${container}`);
+    };
+
+    const tunes = await geometry("tunes", ".filters-container");
+    const logs = await geometry("logs", ".logs-filter-header");
+    const people = await geometry("people", ".people-controls");
+
+    // Full width: the row reaches both gutters of a 400px-ish phone viewport.
+    const width = page.viewportSize()!.width;
+    expect(tunes.row!.left).toBeLessThanOrEqual(12);
+    expect(tunes.row!.left + tunes.row!.width).toBeGreaterThanOrEqual(width - 12);
+
+    // ...and the other two are the same row, to the pixel.
+    expect(logs).toEqual(tunes);
+    expect(people).toEqual(tunes);
+  });
+
   test("People: the roster renders and its search box filters", async ({ page }) => {
     await page.goto(SESSION);
     await page.getByRole("tab", { name: /^People$/ }).click();
