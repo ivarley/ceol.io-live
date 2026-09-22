@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { SESSIONS, STORAGE } from "../support/data";
 import { expectNoServerError } from "../support/nav";
+import { expectToolbarsIdentical } from "../support/toolbars";
 
 /**
  * The session page on a phone — spec 052 §B8 Stage 0.
@@ -179,45 +180,39 @@ test.describe("session page (mobile)", () => {
     await expectNoServerError(page);
   });
 
-  test("the three toolbars are the same toolbar: same width, same search box", async ({ page }) => {
-    // They drifted once. Tunes' container was a plain block so the Toolbar filled
-    // it; Logs' and People's were flex rows left over from when each tab laid its
-    // own controls out, and a lone flex child is `flex: 0 1 auto` — it shrank to
-    // its content and the search box came out ~100px short. Logs was inset another
-    // 10px by a stray inline padding on the pane. None of that is visible in a
-    // screenshot of ONE tab; it only shows when you switch tabs and the search box
-    // jumps sideways. So this measures all three and demands they agree.
-    const geometry = async (tab: string, container: string) => {
-      await page.goto(`/sessions/${SESSIONS.mueller.path}/${tab}`);
-      await expect(page.locator(`#${tab}-tab ${container} .kit-toolbar`)).toBeVisible({
-        timeout: 8000,
-      });
-      return page.evaluate((sel) => {
-        const round = (el: Element | null | undefined) => {
-          if (!el) return null;
-          const r = el.getBoundingClientRect();
-          return { left: Math.round(r.left), width: Math.round(r.width) };
-        };
-        const box = document.querySelector(sel);
-        return {
-          row: round(box?.querySelector(".kit-toolbar")),
-          input: round(box?.querySelector("input")),
-        };
-      }, `#${tab}-tab ${container}`);
-    };
+  test("the three toolbars are the same toolbar: position, size and type", async ({ page }) => {
+    const toolbar = await expectToolbarsIdentical(page);
 
-    const tunes = await geometry("tunes", ".filters-container");
-    const logs = await geometry("logs", ".logs-filter-header");
-    const people = await geometry("people", ".people-controls");
-
-    // Full width: the row reaches both gutters of a 400px-ish phone viewport.
+    // ...and it reaches both gutters of the phone viewport.
     const width = page.viewportSize()!.width;
-    expect(tunes.row!.left).toBeLessThanOrEqual(12);
-    expect(tunes.row!.left + tunes.row!.width).toBeGreaterThanOrEqual(width - 12);
+    expect(toolbar.row.left).toBeLessThanOrEqual(12);
+    expect(toolbar.row.left + toolbar.row.width).toBeGreaterThanOrEqual(width - 12);
 
-    // ...and the other two are the same row, to the pixel.
-    expect(logs).toEqual(tunes);
-    expect(people).toEqual(tunes);
+    // 16px is what stops iOS zooming the page when you focus the field. The
+    // People box used to override it to 14px.
+    expect(toolbar.font).toContain("16px");
+  });
+
+  test("the three tabs split the phone's width evenly", async ({ page }) => {
+    await page.goto(SESSION);
+    const tabs = page.locator(".tab-button");
+    await expect(tabs).toHaveCount(3);
+
+    const boxes = await tabs.evaluateAll((els) =>
+      els.map((e) => {
+        const r = e.getBoundingClientRect();
+        return { left: Math.round(r.left), width: Math.round(r.width) };
+      }),
+    );
+    const width = page.viewportSize()!.width;
+
+    // Equal thirds, and the row fills the width: no ragged gap after the last
+    // tab, and no tab with a bigger tap target than its neighbours.
+    const widths = boxes.map((b) => b.width);
+    expect(Math.max(...widths) - Math.min(...widths)).toBeLessThanOrEqual(1);
+    expect(boxes[0].left).toBeLessThanOrEqual(1);
+    const right = boxes[2].left + boxes[2].width;
+    expect(right).toBeGreaterThanOrEqual(width - 1);
   });
 
   test("People: the roster renders and its search box filters", async ({ page }) => {

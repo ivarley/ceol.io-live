@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { SESSIONS, STORAGE } from "../support/data";
 import { expectNoServerError } from "../support/nav";
+import { expectToolbarsIdentical } from "../support/toolbars";
 
 /**
  * Sessions directory + the session-detail SPA (tabs switch client-side; tune
@@ -89,5 +90,12 @@ test.describe("session detail (admin)", () => {
     await page.goto(`/sessions/${SESSIONS.mueller.path}`);
     await expect(page.locator("h1")).toContainText(SESSIONS.mueller.name);
     await expectNoServerError(page);
+  });
+
+  test("the three tabs' toolbars are identical on a wide screen too", async ({ page }) => {
+    // The desktop half of the same rule. The panes disagreed here longer than
+    // they did on a phone: Tunes and People were inset 20px, Logs was not, so
+    // the search box jumped sideways AND upwards when you switched to Logs.
+    await expectToolbarsIdentical(page);
   });
 });

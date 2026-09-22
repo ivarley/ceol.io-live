@@ -81,6 +81,18 @@
     font-weight: 500;
 }
 
+/* On a phone the three tabs split the width evenly. With padding-sized tabs the
+   row ends wherever the longest label happens to end, which leaves a ragged gap
+   on the right and gives "People" a bigger tap target than "Logs" for no reason.
+   Equal thirds also means the underline reads as a position indicator. */
+@media (max-width: 768px) {
+    .tab-button {
+        flex: 1 1 0;
+        padding: 10px 4px;
+        text-align: center;
+    }
+}
+
 .tab-content {
     display: none;
 }
@@ -90,10 +102,13 @@
 }
 
 /* Tunes tab styles */
+/* No padding: the Logs pane has none, and a tab that shifts its content 20px
+   when you switch to it looks like a bug. The toolbar and the list rows set
+   their own gutters. */
 .tunes-container {
     width: 100%;
     margin: 0;
-    padding: 20px;
+    padding: 0;
 }
 
 /* Mobile: zero padding for tunes container and parent docs-content */
@@ -453,6 +468,13 @@
     position: relative;
     flex: 1;
     min-width: 0;
+    /* Centre like .kit-search does. The toolbar stretches its children to the
+       row's full height, and on the other two tabs the stretched child IS
+       .kit-search, which centres the field inside itself. Here there is this
+       wrapper in between, so without these the field sat 1px higher than on
+       Tunes and People. */
+    display: flex;
+    align-items: center;
 }
 
 /* Autocomplete list — overlays the grid below it. */
@@ -1008,10 +1030,11 @@ a.empty-log {
 }
 
 /* People tab styles */
+/* See .tunes-container: flush, like the Logs pane. */
 .people-container {
     width: 100%;
     margin: 0;
-    padding: 20px;
+    padding: 0;
 }
 
 /* Mobile: zero padding for people container */
@@ -1021,54 +1044,6 @@ a.empty-log {
         margin-left: 0 !important;
         margin-right: 0 !important;
     }
-}
-
-.people-search-box {
-    flex: 1;
-    padding: 8px 12px;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    font-size: 14px;
-    background-color: var(--bg-color);
-    color: var(--text-color);
-}
-
-.people-search-box:focus {
-    outline: none;
-    border-color: var(--primary);
-}
-
-.people-filter-btn {
-    padding: 8px 16px;
-    background-color: var(--bg-color);
-    color: var(--text-color);
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 14px;
-    transition: background-color 0.2s;
-    white-space: nowrap;
-    min-width: 100px;
-}
-
-.people-filter-btn:hover {
-    background-color: var(--hover-bg);
-}
-
-.people-add-btn {
-    padding: 8px 16px;
-    background-color: var(--primary);
-    color: white;
-    border: 1px solid var(--primary);
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 14px;
-    transition: background-color 0.2s, opacity 0.2s;
-    white-space: nowrap;
-}
-
-.people-add-btn:hover {
-    opacity: 0.9;
 }
 
 .people-list {

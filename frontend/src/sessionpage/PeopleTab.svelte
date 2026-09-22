@@ -254,7 +254,7 @@
           <SearchField
             bind:value={searchText}
             id="people-search-box"
-            inputClass="people-search-box filter-search-input"
+            inputClass="filter-search-input"
             wrapperClass="people-search-wrap filter-search-wrap"
             styled={false}
             placeholder="Search people..." />

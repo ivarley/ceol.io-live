@@ -130,6 +130,14 @@
     min-width: 0;
 }
 
+/* The session People box used to carry its own skin, and a focus border was the
+   one thing that skin had which this one did not. Kept, and given to every
+   search box that wears this class rather than to one of them. */
+.filter-search-input:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
 .filter-panel-toggle {
     padding: 8px;
     border: 1px solid var(--border-color);
