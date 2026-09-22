@@ -6,47 +6,53 @@
 <style>
   :root {
     --bg: #12141a; --panel: #1a1d26; --line: #2a2f3d; --ink: #e6e9f0;
-    --dim: #8b93a7; --heard: #4a9eff; --matched: #3ddc97; --truth: #b48ead;
-    --playhead: #ff6b6b; --accent: #ffd166;
+    --dim: #8b93a7; --heard: #4a9eff; --matched: #3ddc97; --truth: #ffd166;
+    --playhead: #ff6b6b;
   }
   * { box-sizing: border-box; }
-  body {
-    margin: 0; background: var(--bg); color: var(--ink);
-    font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
-  }
-  header { padding: 14px 18px; border-bottom: 1px solid var(--line); background: var(--panel); }
-  h1 { margin: 0 0 4px; font-size: 16px; font-weight: 600; letter-spacing: .01em; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 13.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  header { padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  h1 { margin: 0 0 3px; font-size: 15px; font-weight: 600; }
   h1 .type { color: var(--dim); font-weight: 400; }
-  .meta { color: var(--dim); font-size: 12.5px; }
+  .meta { color: var(--dim); font-size: 12px; }
   .meta b { color: var(--ink); font-weight: 600; }
-  .verdict { display: inline-block; padding: 1px 7px; border-radius: 3px; font-size: 12px; }
+  .verdict { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 11.5px; }
   .ok { background: rgba(61,220,151,.15); color: var(--matched); }
   .bad { background: rgba(255,107,107,.15); color: var(--playhead); }
-  main { padding: 14px 18px 28px; }
-  .bar { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; flex-wrap: wrap; }
-  button {
+  main { padding: 12px 16px 26px; }
+  .bar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+  button, select {
     background: var(--panel); color: var(--ink); border: 1px solid var(--line);
-    padding: 6px 14px; border-radius: 5px; cursor: pointer; font: inherit;
+    padding: 5px 11px; border-radius: 5px; cursor: pointer; font: inherit;
   }
   button:hover { border-color: var(--dim); }
+  button.on { background: #253044; border-color: var(--heard); color: #fff; }
+  button.save { border-color: var(--truth); color: var(--truth); }
+  button.save:disabled { opacity: .4; cursor: default; border-color: var(--line); color: var(--dim); }
+  .sep { width: 1px; height: 22px; background: var(--line); }
   .time { font-variant-numeric: tabular-nums; color: var(--dim); }
   .time b { color: var(--ink); }
-  label { color: var(--dim); display: inline-flex; align-items: center; gap: 6px; }
+  label { color: var(--dim); display: inline-flex; align-items: center; gap: 5px; }
   canvas { display: block; width: 100%; border: 1px solid var(--line); border-radius: 6px;
-           background: var(--panel); cursor: crosshair; }
-  .legend { margin-top: 10px; color: var(--dim); font-size: 12.5px; display: flex; gap: 18px; flex-wrap: wrap; }
+           background: var(--panel); touch-action: none; }
+  #mini { height: 44px; margin-top: 6px; cursor: pointer; }
+  .legend { margin-top: 9px; color: var(--dim); font-size: 12px; display: flex; gap: 16px; flex-wrap: wrap; }
   .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px;
             vertical-align: -1px; }
-  section { margin-top: 22px; }
-  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim);
-       margin: 0 0 8px; font-weight: 600; }
-  table { border-collapse: collapse; font-size: 13px; }
-  td, th { text-align: left; padding: 3px 16px 3px 0; }
+  .hint { color: var(--dim); font-size: 12px; margin-top: 8px; }
+  .hint kbd { background: var(--panel); border: 1px solid var(--line); border-radius: 3px;
+              padding: 0 4px; color: var(--ink); }
+  section { margin-top: 20px; }
+  h2 { font-size: 12.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim);
+       margin: 0 0 7px; font-weight: 600; }
+  table { border-collapse: collapse; font-size: 12.5px; }
+  td, th { text-align: left; padding: 3px 15px 3px 0; }
   th { color: var(--dim); font-weight: 600; }
   .truthrow { color: var(--matched); }
-  .abc { color: var(--dim); word-break: break-all; line-height: 1.8; font-size: 12.5px; }
-  .abc b { color: var(--matched); font-weight: 600; }
-  @media (max-width: 700px) { main { padding: 12px; } header { padding: 12px; } }
+  .abc { color: var(--dim); word-break: break-all; line-height: 1.7; font-size: 12px; }
+  #agree { color: var(--truth); }
+  @media (max-width: 700px) { main { padding: 10px; } header { padding: 10px; } }
 </style>
 </head>
 <body>
@@ -60,29 +66,45 @@
     <span class="time"><b id="cur">0:00</b> / <span id="dur">0:00</span></span>
     <label>speed
       <select id="rate">
-        <option value="0.5">0.5×</option>
-        <option value="0.75">0.75×</option>
-        <option value="1" selected>1×</option>
-        <option value="1.5">1.5×</option>
+        <option value="0.4">0.4×</option><option value="0.6">0.6×</option>
+        <option value="0.8">0.8×</option><option value="1" selected>1×</option>
       </select>
     </label>
-    <label><input type="checkbox" id="onlymatched"> dim unmatched notes</label>
-    <span class="meta">click the roll to seek · space to play</span>
+    <span class="sep"></span>
+    <button id="m-listen" class="mode on" data-mode="listen">listen</button>
+    <button id="m-accept" class="mode" data-mode="accept">accept</button>
+    <button id="m-draw" class="mode" data-mode="draw">draw</button>
+    <button id="m-erase" class="mode" data-mode="erase">erase</button>
+    <span class="sep"></span>
+    <button id="zoomout">−</button><button id="zoomin">+</button><button id="zoomfit">fit</button>
+    <span class="sep"></span>
+    <button id="save" class="save" disabled>save labels</button>
+    <span id="agree"></span>
   </div>
 
-  <canvas id="roll" height="420"></canvas>
+  <canvas id="roll" height="440"></canvas>
+  <canvas id="mini"></canvas>
+
   <div class="legend">
-    <span><span class="swatch" style="background:var(--heard)"></span>note heard</span>
-    <span><span class="swatch" style="background:var(--matched)"></span>part of a phrase the real tune also has</span>
+    <span><span class="swatch" style="background:var(--heard)"></span>heard</span>
+    <span><span class="swatch" style="background:var(--matched)"></span>heard, and in a phrase the real tune has</span>
+    <span><span class="swatch" style="background:var(--truth)"></span>your label</span>
     <span><span class="swatch" style="background:var(--playhead)"></span>playhead</span>
-    <span id="octnote"></span>
+  </div>
+  <div class="hint">
+    <b>listen</b> click to seek ·
+    <b>accept</b> drag a box over notes that are right ·
+    <b>draw</b> drag to paint the pitch you actually hear ·
+    <b>erase</b> drag a box to remove labels ·
+    <kbd>space</kbd> play · <kbd>1-4</kbd> modes · <kbd>+</kbd><kbd>−</kbd> zoom ·
+    <kbd>←</kbd><kbd>→</kbd> pan · <kbd>↑</kbd><kbd>↓</kbd> move last label an octave ·
+    <kbd>cmd-z</kbd> undo · <kbd>cmd-s</kbd> save · scroll to zoom, shift-scroll to pan
   </div>
 
   <section>
     <h2>What the index made of it</h2>
     <table id="ranked"></table>
   </section>
-
   <section>
     <h2>The tune's own notation, for comparison</h2>
     <div class="abc" id="truthabc"></div>
@@ -93,125 +115,327 @@
 <script>
 const D = window.__DATA__;
 const audio = document.getElementById('audio');
-const canvas = document.getElementById('roll');
-const ctx = canvas.getContext('2d');
+const roll = document.getElementById('roll');
+const mini = document.getElementById('mini');
+const rc = roll.getContext('2d');
+const mc = mini.getContext('2d');
 let dpr = window.devicePixelRatio || 1;
 
 audio.src = D.audio_url;
 
-function fmt(s) {
-  s = Math.max(0, s|0);
-  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
-}
+// ---- state ---------------------------------------------------------------
+let view = { t0: 0, t1: D.duration_s };            // visible time window
+let mode = 'listen';
+let labels = (D.labels || []).map(l => ({ ...l }));  // [{t0,t1,midi}]
+let undoStack = [];
+let dirty = false;
+let drag = null;
 
+const LO = D.midi_lo, HI = D.midi_hi;
+const fmt = s => { s = Math.max(0, s | 0); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+// ---- header --------------------------------------------------------------
 document.getElementById('title').innerHTML =
   D.truth_name + ' <span class="type">' + (D.tune_type || '') + '</span>';
 document.getElementById('meta').innerHTML =
   '<b>' + D.notes.length + '</b> notes heard over <b>' + fmt(D.duration_s) + '</b> · ' +
-  'front end <b>' + D.frontend + '</b> · ' +
-  'shares <b>' + D.shared_ngrams + '</b> of the tune\'s ' + D.n + '-note phrases · ' +
-  'index rank ' + (D.truth_rank ? '<b>' + D.truth_rank + '</b>' : '<b>not found</b>') + ' ' +
-  '<span class="verdict ' + (D.truth_rank === 1 ? 'ok' : 'bad') + '">' +
+  'front end <b>' + D.frontend + '</b> · shares <b>' + D.shared_ngrams + '</b> of the tune\'s ' +
+  D.n + '-note phrases · index rank ' +
+  (D.truth_rank ? '<b>' + D.truth_rank + '</b>' : '<b>not found</b>') +
+  ' <span class="verdict ' + (D.truth_rank === 1 ? 'ok' : 'bad') + '">' +
   (D.truth_rank === 1 ? 'correct' : 'wrong') + '</span>';
-document.getElementById('octnote').textContent =
-  'pitch axis ' + D.midi_lo + '–' + D.midi_hi + ' (MIDI)';
 
-const rankedTable = document.getElementById('ranked');
-rankedTable.innerHTML = '<tr><th>#</th><th>tune</th><th>score</th><th>hits</th></tr>' +
-  D.ranked.map((r, i) =>
-    '<tr class="' + (r.tune_id === D.truth_tune_id ? 'truthrow' : '') + '">' +
-    '<td>' + (i + 1) + '</td><td>' + r.name + '</td>' +
-    '<td>' + r.score.toFixed(4) + '</td><td>' + r.hits + '</td></tr>').join('');
-
+document.getElementById('ranked').innerHTML =
+  '<tr><th>#</th><th>tune</th><th>score</th><th>hits</th></tr>' +
+  D.ranked.map((r, i) => '<tr class="' + (r.tune_id === D.truth_tune_id ? 'truthrow' : '') + '">' +
+    '<td>' + (i + 1) + '</td><td>' + r.name + '</td><td>' + r.score.toFixed(4) +
+    '</td><td>' + r.hits + '</td></tr>').join('');
 document.getElementById('truthabc').innerHTML = D.truth_abc || '<i>no notation held for this tune</i>';
 
-function resize() {
-  dpr = window.devicePixelRatio || 1;
-  canvas.width = canvas.clientWidth * dpr;
-  canvas.height = 420 * dpr;
-  draw();
+// ---- geometry ------------------------------------------------------------
+const PAD = 34;
+function xOf(t) { return PAD * dpr + ((t - view.t0) / (view.t1 - view.t0)) * (roll.width - PAD * 1.5 * dpr); }
+function tOf(px) { return view.t0 + ((px - PAD * dpr) / (roll.width - PAD * 1.5 * dpr)) * (view.t1 - view.t0); }
+function yOf(m) { return roll.height - PAD * dpr - ((m - LO) / Math.max(1, HI - LO)) * (roll.height - PAD * 2 * dpr); }
+function mOf(py) { return LO + ((roll.height - PAD * dpr - py) / (roll.height - PAD * 2 * dpr)) * (HI - LO); }
+function evPos(e) {
+  const r = roll.getBoundingClientRect();
+  return { x: (e.clientX - r.left) * dpr, y: (e.clientY - r.top) * dpr };
 }
 
+// ---- drawing -------------------------------------------------------------
 function draw() {
-  const W = canvas.width, H = canvas.height, pad = 30 * dpr;
-  const lo = D.midi_lo, hi = D.midi_hi;
-  const dimUnmatched = document.getElementById('onlymatched').checked;
-  ctx.clearRect(0, 0, W, H);
+  const W = roll.width, H = roll.height, pad = PAD * dpr;
+  rc.clearRect(0, 0, W, H);
+  rc.font = (11 * dpr) + 'px ui-monospace, monospace';
 
-  const x = t => pad + (t / D.duration_s) * (W - pad * 1.4);
-  const y = m => H - pad - ((m - lo) / Math.max(1, hi - lo)) * (H - pad * 2);
-
-  // horizontal guides every octave, labelled
-  ctx.font = (11 * dpr) + 'px ui-monospace, monospace';
-  ctx.textBaseline = 'middle';
-  for (let m = Math.ceil(lo / 12) * 12; m <= hi; m += 12) {
-    ctx.strokeStyle = '#2a2f3d';
-    ctx.lineWidth = 1 * dpr;
-    ctx.beginPath(); ctx.moveTo(pad, y(m)); ctx.lineTo(W - pad * 0.4, y(m)); ctx.stroke();
-    ctx.fillStyle = '#8b93a7';
-    ctx.fillText('C' + (Math.floor(m / 12) - 1), 4 * dpr, y(m));
+  rc.textBaseline = 'middle';
+  for (let m = Math.ceil(LO / 12) * 12; m <= HI; m += 12) {
+    rc.strokeStyle = '#2a2f3d'; rc.lineWidth = dpr;
+    rc.beginPath(); rc.moveTo(pad, yOf(m)); rc.lineTo(W - pad * 0.5, yOf(m)); rc.stroke();
+    rc.fillStyle = '#8b93a7'; rc.fillText('C' + (Math.floor(m / 12) - 1), 4 * dpr, yOf(m));
   }
-  // time guides every 10s
-  ctx.textBaseline = 'top';
-  for (let t = 0; t <= D.duration_s; t += 10) {
-    ctx.strokeStyle = '#232734';
-    ctx.beginPath(); ctx.moveTo(x(t), pad * 0.6); ctx.lineTo(x(t), H - pad); ctx.stroke();
-    ctx.fillStyle = '#8b93a7';
-    ctx.fillText(fmt(t), x(t) + 3 * dpr, 6 * dpr);
+  const span = view.t1 - view.t0;
+  const step = span > 60 ? 10 : span > 20 ? 5 : span > 8 ? 2 : 1;
+  rc.textBaseline = 'top';
+  for (let t = Math.ceil(view.t0 / step) * step; t <= view.t1; t += step) {
+    rc.strokeStyle = '#232734';
+    rc.beginPath(); rc.moveTo(xOf(t), pad * 0.55); rc.lineTo(xOf(t), H - pad); rc.stroke();
+    rc.fillStyle = '#8b93a7'; rc.fillText(fmt(t), xOf(t) + 3 * dpr, 5 * dpr);
   }
 
+  const noteH = Math.max(3 * dpr, (H - pad * 2) / Math.max(12, HI - LO) * 0.82);
   for (const n of D.notes) {
-    const x0 = x(n.t0), x1 = Math.max(x0 + 1.5 * dpr, x(n.t1));
-    const yy = y(n.midi), h = Math.max(3 * dpr, (H - pad * 2) / Math.max(12, hi - lo) * 0.8);
-    const matched = n.matched;
-    ctx.globalAlpha = matched ? 1 : (dimUnmatched ? 0.18 : 0.75);
-    ctx.fillStyle = matched ? '#3ddc97' : '#4a9eff';
-    ctx.beginPath();
-    const r = Math.min(2.5 * dpr, (x1 - x0) / 2);
-    ctx.roundRect(x0, yy - h / 2, x1 - x0, h, r);
-    ctx.fill();
+    if (n.t1 < view.t0 || n.t0 > view.t1) continue;
+    const x0 = xOf(n.t0), x1 = Math.max(x0 + 1.5 * dpr, xOf(n.t1));
+    rc.globalAlpha = n.matched ? 1 : 0.7;
+    rc.fillStyle = n.matched ? '#3ddc97' : '#4a9eff';
+    rc.beginPath(); rc.roundRect(x0, yOf(n.midi) - noteH / 2, x1 - x0, noteH,
+      Math.min(2.5 * dpr, (x1 - x0) / 2)); rc.fill();
   }
-  ctx.globalAlpha = 1;
+  rc.globalAlpha = 1;
+
+  for (const l of labels) {
+    if (l.t1 < view.t0 || l.t0 > view.t1) continue;
+    const x0 = xOf(l.t0), x1 = Math.max(x0 + 2 * dpr, xOf(l.t1));
+    rc.fillStyle = '#ffd166';
+    rc.beginPath(); rc.roundRect(x0, yOf(l.midi) - noteH * 0.42, x1 - x0, noteH * 0.84,
+      Math.min(2.5 * dpr, (x1 - x0) / 2)); rc.fill();
+  }
+
+  if (drag && drag.box) {
+    const x0 = Math.min(drag.x0, drag.x), x1 = Math.max(drag.x0, drag.x);
+    const y0 = Math.min(drag.y0, drag.y), y1 = Math.max(drag.y0, drag.y);
+    rc.fillStyle = mode === 'erase' ? 'rgba(255,107,107,.15)' : 'rgba(61,220,151,.15)';
+    rc.strokeStyle = mode === 'erase' ? '#ff6b6b' : '#3ddc97';
+    rc.lineWidth = dpr;
+    rc.fillRect(x0, y0, x1 - x0, y1 - y0); rc.strokeRect(x0, y0, x1 - x0, y1 - y0);
+  }
 
   const t = audio.currentTime;
-  ctx.strokeStyle = '#ff6b6b';
-  ctx.lineWidth = 1.5 * dpr;
-  ctx.beginPath(); ctx.moveTo(x(t), pad * 0.6); ctx.lineTo(x(t), H - pad); ctx.stroke();
+  if (t >= view.t0 && t <= view.t1) {
+    rc.strokeStyle = '#ff6b6b'; rc.lineWidth = 1.5 * dpr;
+    rc.beginPath(); rc.moveTo(xOf(t), pad * 0.55); rc.lineTo(xOf(t), H - pad); rc.stroke();
+  }
+  drawMini();
 }
 
-canvas.addEventListener('click', e => {
-  const rect = canvas.getBoundingClientRect();
-  const pad = 30;
-  const frac = (e.clientX - rect.left - pad) / (rect.width - pad * 1.4);
-  audio.currentTime = Math.max(0, Math.min(D.duration_s, frac * D.duration_s));
+function drawMini() {
+  const W = mini.width, H = mini.height;
+  mc.clearRect(0, 0, W, H);
+  const x = t => (t / D.duration_s) * W;
+  const y = m => H - 3 - ((m - LO) / Math.max(1, HI - LO)) * (H - 6);
+  for (const n of D.notes) {
+    mc.fillStyle = n.matched ? '#3ddc97' : '#4a9eff';
+    mc.globalAlpha = n.matched ? .9 : .45;
+    mc.fillRect(x(n.t0), y(n.midi) - dpr, Math.max(dpr, x(n.t1) - x(n.t0)), 2 * dpr);
+  }
+  mc.globalAlpha = 1;
+  for (const l of labels) {
+    mc.fillStyle = '#ffd166';
+    mc.fillRect(x(l.t0), y(l.midi) - dpr, Math.max(dpr, x(l.t1) - x(l.t0)), 2 * dpr);
+  }
+  mc.fillStyle = 'rgba(255,255,255,.08)';
+  mc.fillRect(x(view.t0), 0, x(view.t1) - x(view.t0), H);
+  mc.strokeStyle = '#4a9eff'; mc.lineWidth = dpr;
+  mc.strokeRect(x(view.t0), 0, x(view.t1) - x(view.t0), H);
+  mc.strokeStyle = '#ff6b6b';
+  mc.beginPath(); mc.moveTo(x(audio.currentTime), 0); mc.lineTo(x(audio.currentTime), H); mc.stroke();
+}
+
+// ---- labels --------------------------------------------------------------
+function pushUndo() {
+  undoStack.push(JSON.stringify(labels));
+  if (undoStack.length > 60) undoStack.shift();
+  dirty = true;
+  document.getElementById('save').disabled = false;
+}
+function mergeLabels() {
+  labels.sort((a, b) => a.t0 - b.t0 || a.midi - b.midi);
+  const out = [];
+  for (const l of labels) {
+    const prev = out[out.length - 1];
+    if (prev && prev.midi === l.midi && l.t0 - prev.t1 < 0.06) prev.t1 = Math.max(prev.t1, l.t1);
+    else out.push({ ...l });
+  }
+  labels = out;
+}
+function agreement() {
+  if (!labels.length) return '';
+  let exact = 0, octave = 0, total = 0;
+  for (const l of labels) {
+    const mid = (l.t0 + l.t1) / 2;
+    const hit = D.notes.find(n => n.t0 <= mid && n.t1 >= mid);
+    total++;
+    if (!hit) continue;
+    if (hit.midi === l.midi) exact++;
+    else if (Math.abs(hit.midi - l.midi) % 12 === 0) octave++;
+  }
+  return total ? labels.length + ' labels · heard agrees ' + Math.round(100 * exact / total) +
+    '% exactly, ' + Math.round(100 * (exact + octave) / total) + '% ignoring octave' : '';
+}
+function refresh() { mergeLabels(); document.getElementById('agree').textContent = agreement(); draw(); }
+
+// ---- interaction ---------------------------------------------------------
+roll.addEventListener('pointerdown', e => {
+  const p = evPos(e);
+  roll.setPointerCapture(e.pointerId);
+  if (mode === 'listen') { audio.currentTime = clamp(tOf(p.x), 0, D.duration_s); draw(); return; }
+  if (mode === 'draw') {
+    pushUndo();
+    drag = { mode: 'draw', last: null };
+    paint(p);
+  } else {
+    drag = { mode: 'box', box: true, x0: p.x, y0: p.y, x: p.x, y: p.y };
+  }
+});
+roll.addEventListener('pointermove', e => {
+  if (!drag) return;
+  const p = evPos(e);
+  if (drag.mode === 'draw') paint(p);
+  else { drag.x = p.x; drag.y = p.y; draw(); }
+});
+roll.addEventListener('pointerup', () => {
+  if (drag && drag.mode === 'box') {
+    const t0 = tOf(Math.min(drag.x0, drag.x)), t1 = tOf(Math.max(drag.x0, drag.x));
+    const mHi = Math.round(mOf(Math.min(drag.y0, drag.y))), mLo = Math.round(mOf(Math.max(drag.y0, drag.y)));
+    if (mode === 'accept') {
+      pushUndo();
+      for (const n of D.notes) {
+        if (n.t1 < t0 || n.t0 > t1) continue;
+        if (n.midi < mLo || n.midi > mHi) continue;
+        labels.push({ t0: n.t0, t1: n.t1, midi: n.midi, from: 'accepted' });
+      }
+    } else if (mode === 'erase') {
+      pushUndo();
+      labels = labels.filter(l => l.t1 < t0 || l.t0 > t1 || l.midi < mLo || l.midi > mHi);
+    }
+  }
+  drag = null;
+  refresh();
+});
+function paint(p) {
+  const t = clamp(tOf(p.x), 0, D.duration_s);
+  const m = Math.round(clamp(mOf(p.y), LO, HI));
+  const w = Math.max(0.03, (view.t1 - view.t0) / 400);
+  const last = labels[labels.length - 1];
+  if (last && last.from === 'drawn' && last.midi === m && t - last.t1 < w * 4) {
+    last.t1 = Math.max(last.t1, t + w);
+  } else {
+    labels.push({ t0: t, t1: t + w, midi: m, from: 'drawn' });
+  }
+  draw();
+}
+
+// ---- zoom and pan --------------------------------------------------------
+function zoomAt(t, factor) {
+  const span = clamp((view.t1 - view.t0) * factor, 1.0, D.duration_s);
+  const frac = clamp((t - view.t0) / (view.t1 - view.t0), 0, 1);
+  let t0 = t - span * frac;
+  t0 = clamp(t0, 0, D.duration_s - span);
+  view = { t0, t1: t0 + span };
+  draw();
+}
+function panBy(seconds) {
+  const span = view.t1 - view.t0;
+  const t0 = clamp(view.t0 + seconds, 0, D.duration_s - span);
+  view = { t0, t1: t0 + span };
+  draw();
+}
+roll.addEventListener('wheel', e => {
+  e.preventDefault();
+  if (e.shiftKey) panBy((e.deltaY || e.deltaX) * (view.t1 - view.t0) / 600);
+  else zoomAt(tOf(evPos(e).x), e.deltaY > 0 ? 1.15 : 0.87);
+}, { passive: false });
+mini.addEventListener('pointerdown', e => {
+  const r = mini.getBoundingClientRect();
+  const t = ((e.clientX - r.left) / r.width) * D.duration_s;
+  const span = view.t1 - view.t0;
+  const t0 = clamp(t - span / 2, 0, D.duration_s - span);
+  view = { t0, t1: t0 + span };
   draw();
 });
+document.getElementById('zoomin').onclick = () => zoomAt((view.t0 + view.t1) / 2, 0.6);
+document.getElementById('zoomout').onclick = () => zoomAt((view.t0 + view.t1) / 2, 1.7);
+document.getElementById('zoomfit').onclick = () => { view = { t0: 0, t1: D.duration_s }; draw(); };
+
+// ---- modes, transport, saving -------------------------------------------
+function setMode(m) {
+  mode = m;
+  document.querySelectorAll('.mode').forEach(b => b.classList.toggle('on', b.dataset.mode === m));
+  roll.style.cursor = m === 'listen' ? 'pointer' : m === 'draw' ? 'crosshair' : 'cell';
+}
+document.querySelectorAll('.mode').forEach(b => b.onclick = () => setMode(b.dataset.mode));
 
 const playBtn = document.getElementById('play');
-playBtn.addEventListener('click', () => audio.paused ? audio.play() : audio.pause());
+playBtn.onclick = () => audio.paused ? audio.play() : audio.pause();
 audio.addEventListener('play', () => playBtn.textContent = '❚❚ Pause');
 audio.addEventListener('pause', () => playBtn.textContent = '▶ Play');
 audio.addEventListener('timeupdate', () => {
   document.getElementById('cur').textContent = fmt(audio.currentTime);
+  const t = audio.currentTime, span = view.t1 - view.t0;
+  if (!audio.paused && (t < view.t0 || t > view.t1 - span * 0.15)) {
+    const t0 = clamp(t - span * 0.3, 0, D.duration_s - span);
+    view = { t0, t1: t0 + span };
+  }
 });
-audio.addEventListener('loadedmetadata', () => {
-  document.getElementById('dur').textContent = fmt(audio.duration);
-});
-document.getElementById('rate').addEventListener('change', e => {
-  audio.playbackRate = parseFloat(e.target.value);
-});
-document.getElementById('onlymatched').addEventListener('change', draw);
+audio.addEventListener('loadedmetadata', () => document.getElementById('dur').textContent = fmt(audio.duration));
+document.getElementById('rate').onchange = e => audio.playbackRate = parseFloat(e.target.value);
+
+async function save() {
+  const body = {
+    recording_id: D.recording_id, segment_id: D.segment_id, t0_ms: D.t0_ms,
+    duration_s: D.duration_s, tune_id: D.truth_tune_id, tune_name: D.truth_name,
+    frontend: D.frontend, labels,
+  };
+  const res = await fetch('annotation', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const out = await res.json();
+  dirty = false;
+  document.getElementById('save').disabled = true;
+  document.getElementById('agree').textContent = 'saved ' + out.labels + ' labels → ' + out.path;
+}
+document.getElementById('save').onclick = save;
+window.addEventListener('beforeunload', e => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+
 document.addEventListener('keydown', e => {
-  if (e.code === 'Space' && e.target.tagName !== 'SELECT') {
+  if (e.target.tagName === 'SELECT') return;
+  const meta = e.metaKey || e.ctrlKey;
+  if (meta && e.key === 's') { e.preventDefault(); save(); return; }
+  if (meta && e.key === 'z') {
     e.preventDefault();
-    audio.paused ? audio.play() : audio.pause();
+    if (undoStack.length) { labels = JSON.parse(undoStack.pop()); refresh(); }
+    return;
+  }
+  const keys = { '1': 'listen', '2': 'accept', '3': 'draw', '4': 'erase' };
+  if (keys[e.key]) { setMode(keys[e.key]); return; }
+  if (e.code === 'Space') { e.preventDefault(); audio.paused ? audio.play() : audio.pause(); return; }
+  if (e.key === '+' || e.key === '=') { zoomAt((view.t0 + view.t1) / 2, 0.6); return; }
+  if (e.key === '-') { zoomAt((view.t0 + view.t1) / 2, 1.7); return; }
+  if (e.key === 'ArrowLeft') { panBy(-(view.t1 - view.t0) * 0.25); return; }
+  if (e.key === 'ArrowRight') { panBy((view.t1 - view.t0) * 0.25); return; }
+  if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && labels.length) {
+    e.preventDefault();
+    pushUndo();
+    const shift = e.key === 'ArrowUp' ? 12 : -12;
+    const last = labels[labels.length - 1];
+    for (const l of labels) if (Math.abs(l.t0 - last.t0) < 0.001) l.midi = clamp(l.midi + shift, LO, HI);
+    refresh();
   }
 });
 
-function tick() { draw(); requestAnimationFrame(tick); }
+function resize() {
+  dpr = window.devicePixelRatio || 1;
+  roll.width = roll.clientWidth * dpr; roll.height = 440 * dpr;
+  mini.width = mini.clientWidth * dpr; mini.height = 44 * dpr;
+  draw();
+}
 window.addEventListener('resize', resize);
+(function tick() { draw(); requestAnimationFrame(tick); })();
 resize();
-tick();
+setMode('listen');
+refresh();
 </script>
 </body>
 </html>

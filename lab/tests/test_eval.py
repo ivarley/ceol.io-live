@@ -177,3 +177,55 @@ def test_transcribe_prints_notes_and_can_match(lab_data, capsys):
     out = capsys.readouterr().out
     assert "notes, median" in out
     assert "against the repertoire index" in out
+
+
+def test_pitch_labels_round_trip_and_score(lab_data, tmp_path, monkeypatch):
+    """Hand-drawn pitch is the only thing that can score a front end directly.
+
+    The corpus says which tune was playing, never which notes. These labels
+    are made by hand and are not reproducible from anything else, so they are
+    written outside lab/data and this checks they survive the trip.
+    """
+    import numpy as np
+
+    from lab.bench import pitch as pitch_mod
+    from lab.tools import viewer
+
+    monkeypatch.setattr(viewer, "ANNOTATIONS", str(tmp_path / "annotations"))
+    monkeypatch.setattr(pitch_mod, "ANNOTATIONS", str(tmp_path / "annotations"))
+
+    assert viewer.load_annotation(RECORDING_ID, 1, 0) == []
+    path, count = viewer.save_annotation({
+        "recording_id": RECORDING_ID, "segment_id": 1, "t0_ms": 4000, "duration_s": 6.0,
+        "tune_id": synthetic.TUNE_A["tune_id"], "tune_name": synthetic.TUNE_A["name"],
+        "frontend": "yin v1",
+        "labels": [{"t0": 1.0, "t1": 1.4, "midi": 62, "from": "accepted"},
+                   {"t0": 0.2, "t1": 0.6, "midi": 74, "from": "drawn"}],
+    })
+    assert count == 2
+    back = viewer.load_annotation(RECORDING_ID, 1, 4000)
+    assert [v["t0"] for v in back] == [0.2, 1.0], "labels come back in time order"
+    assert back[0]["midi"] == 74
+
+    # the grid is what scoring compares, one question per 10ms
+    grid = pitch_mod._to_grid(back, 6.0)
+    assert grid.size == 600
+    assert grid[30] == 74 and grid[110] == 62
+    assert grid[400] == -1, "unlabelled time must not be scored"
+
+    from lab.frontends import get_frontend
+
+    result = pitch_mod.run_pitch(get_frontend("yin"), quiet=True)
+    for key in ("coverage", "exact", "octave_blind", "within_semitone"):
+        assert 0.0 <= result.pooled[key] <= 1.0
+    assert result.pooled["segments"] == 1
+    assert np.isclose(result.pooled["labelled_s"], 0.8, atol=0.05)
+
+
+def test_pitch_task_says_so_when_there_is_nothing_to_score(lab_data, tmp_path, monkeypatch):
+    from lab.bench import pitch as pitch_mod
+    from lab.frontends import get_frontend
+
+    monkeypatch.setattr(pitch_mod, "ANNOTATIONS", str(tmp_path / "empty"))
+    with pytest.raises(SystemExit, match="no pitch labels yet"):
+        pitch_mod.run_pitch(get_frontend("yin"))

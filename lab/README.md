@@ -53,6 +53,15 @@ venv/bin/python -m lab diff <run_a> <run_b>
 venv/bin/python -m lab view --recording 2 --segment 117
 venv/bin/python -m lab view --recording 2 --range 23:50-25:26 --frontend salience_viterbi
 
+# In that page: listen, then mark what you actually hear. Box-drag in "accept"
+# over notes that are right, "draw" to paint the pitch it missed, cmd-S to
+# save. Labels land in lab/annotations/ and are committed, because they are
+# hand-made and not reproducible from anything else.
+
+# Then score any front end against them directly, rather than through what it
+# happens to retrieve:
+venv/bin/python -m lab bench pitch --frontend yin,salience_viterbi
+
 # One set, stage by stage: heard, shaped, matched, expected, decided
 venv/bin/python -m lab trace-set --recording 2 --segment 117
 ```

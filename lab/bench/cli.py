@@ -67,6 +67,13 @@ def add_parser(sub):
     tt.add_argument("--no-save", action="store_true")
     tt.set_defaults(func=cmd_tunetype)
 
+    pitch = inner.add_parser("pitch", help="score a front end against hand-labelled pitch")
+    pitch.add_argument("--frontend", required=True,
+                       help="one name, or several comma-separated to compare")
+    pitch.add_argument("--param", action="append", default=[], metavar="K=V")
+    pitch.add_argument("--no-save", action="store_true")
+    pitch.set_defaults(func=cmd_pitch)
+
     fronts = inner.add_parser("frontends", help="list front ends (built and not)")
     fronts.set_defaults(func=cmd_frontends)
 
@@ -136,6 +143,20 @@ def cmd_tunetype(args):
     print(format_tune_type(result))
     if not args.no_save:
         print(f"  saved {result.save()}")
+    return 0
+
+
+def cmd_pitch(args):
+    from lab.bench.pitch import format_pitch, run_pitch
+    from lab.frontends import get_frontend
+
+    params = _parse_params(args.param)
+    for name in args.frontend.split(","):
+        result = run_pitch(get_frontend(name.strip(), **params))
+        print(format_pitch(result))
+        if not args.no_save:
+            print(f"  saved {result.save()}")
+        print()
     return 0
 
 

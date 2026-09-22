@@ -11,6 +11,16 @@ relationship is stark: a segment sharing twenty or more of the tune's
 six-note phrases is identified correctly six times in seven, and one sharing
 fewer than ten never is.
 
+It is also where note-level ground truth comes from. The corpus says which
+tune was playing and when; it does not say which notes. Accepting the notes a
+tracker got right and drawing the ones it missed produces that, and a pitch
+label is the only thing that can score a front end directly rather than
+through what it happens to retrieve.
+
+Labels are written to `lab/annotations/`, which is NOT gitignored. They are
+the same kind of asset as the segment timestamps: slow to make by hand, and
+not reproducible from anything else.
+
 Serves a local page rather than writing a file, because the audio has to come
 from somewhere and the corpus never leaves this machine.
 """
@@ -22,6 +32,7 @@ import socketserver
 import subprocess
 import threading
 import webbrowser
+from datetime import datetime, timezone
 
 import lab.env  # noqa: F401
 from lab import paths
@@ -37,6 +48,50 @@ from lab.frontends import get_frontend
 from lab.frontends.segmentation import intervals_from_notes
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+# Deliberately outside lab/data: hand-made labels are not derived data and
+# must survive a `rm -rf lab/data`.
+ANNOTATIONS = os.path.join(os.path.dirname(HERE), "annotations")
+ANNOTATION_VERSION = 1
+
+
+def annotation_path(recording_id, segment_id, t0_ms):
+    name = (f"r{int(recording_id)}-s{int(segment_id)}.json" if segment_id is not None
+            else f"r{int(recording_id)}-t{int(t0_ms)}.json")
+    return os.path.join(ANNOTATIONS, name)
+
+
+def load_annotation(recording_id, segment_id, t0_ms):
+    path = annotation_path(recording_id, segment_id, t0_ms)
+    if not os.path.exists(path):
+        return []
+    with open(path) as f:
+        return json.load(f).get("labels", [])
+
+
+def save_annotation(payload):
+    os.makedirs(ANNOTATIONS, exist_ok=True)
+    path = annotation_path(payload["recording_id"], payload.get("segment_id"),
+                           payload.get("t0_ms", 0))
+    labels = sorted(
+        ({"t0": round(float(v["t0"]), 3), "t1": round(float(v["t1"]), 3),
+          "midi": int(v["midi"]), "from": v.get("from", "drawn")}
+         for v in payload.get("labels", [])),
+        key=lambda v: (v["t0"], v["midi"]))
+    record = {
+        "annotation_version": ANNOTATION_VERSION,
+        "recording_id": payload["recording_id"],
+        "segment_id": payload.get("segment_id"),
+        "t0_ms": payload.get("t0_ms"),
+        "duration_s": payload.get("duration_s"),
+        "tune_id": payload.get("tune_id"),
+        "tune_name": payload.get("tune_name"),
+        "labelled_against": payload.get("frontend"),
+        "saved_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "labels": labels,
+    }
+    with open(path, "w") as f:
+        json.dump(record, f, indent=1)
+    return path, len(labels)
 
 
 def add_parser(sub):
@@ -162,6 +217,7 @@ def build_payload(args):
                     "score": round(r["score"], 5), "hits": r["hits"]} for r in ranked],
         "truth_abc": truth_abc,
         "audio_url": "clip.mp3",
+        "labels": load_annotation(args.recording, args.segment, t0),
     }, t0, t1
 
 
@@ -201,5 +257,27 @@ def _quiet_handler(directory):
 
         def log_message(self, *a):
             pass   # the request log is noise next to the thing being looked at
+
+        def do_POST(self):
+            if self.path.rstrip("/") not in ("/annotation", "annotation"):
+                self.send_error(404)
+                return
+            length = int(self.headers.get("Content-Length") or 0)
+            try:
+                payload = json.loads(self.rfile.read(length) or b"{}")
+                path, count = save_annotation(payload)
+            except Exception as e:   # a bad save must not take the page down
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": f"{type(e).__name__}: {e}"}).encode())
+                return
+            print(f"  saved {count} labels -> {os.path.relpath(path)}")
+            body = json.dumps({"labels": count, "path": os.path.relpath(path)}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
 
     return Handler
