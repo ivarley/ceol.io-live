@@ -52,9 +52,10 @@ class Index:
     settings. Document frequency is likewise a count of tunes.
     """
 
-    def __init__(self, n=DEFAULT_N, candidate_set="all"):
+    def __init__(self, n=DEFAULT_N, candidate_set="all", fold_octaves=False):
         self.n = n
         self.candidate_set = candidate_set
+        self.fold_octaves = fold_octaves
         self.postings = {}        # gram -> tuple of (tune_id, setting_id)
         self.df = {}              # gram -> number of distinct TUNES containing it
         self.tune_gram_count = {}  # tune_id -> distinct grams across its settings
@@ -66,8 +67,9 @@ class Index:
     # -- building ---------------------------------------------------------
 
     @classmethod
-    def build(cls, settings, n=DEFAULT_N, candidate_set="all", progress_every=10000):
-        idx = cls(n=n, candidate_set=candidate_set)
+    def build(cls, settings, n=DEFAULT_N, candidate_set="all", progress_every=10000,
+              fold_octaves=False):
+        idx = cls(n=n, candidate_set=candidate_set, fold_octaves=fold_octaves)
         postings = defaultdict(set)
         parsed = failed = 0
         failures = []
@@ -80,7 +82,7 @@ class Index:
             try:
                 notes = abc_pitch.parse_abc(s.abc, key=s.mode, meter=s.meter)
                 pitches = abc_pitch.pitch_sequence(notes)
-                intervals = abc_pitch.interval_sequence(pitches)
+                intervals = abc_pitch.interval_sequence(pitches, fold=fold_octaves)
                 grams = abc_pitch.ngrams(intervals, n=n)
             except Exception as e:  # a bad setting must not lose the corpus
                 failed += 1
@@ -106,6 +108,7 @@ class Index:
         idx.meta = {
             "n": n,
             "candidate_set": candidate_set,
+            "fold_octaves": fold_octaves,
             "index_version": INDEX_VERSION,
             "parser_version": abc_pitch.PARSER_VERSION,
             "settings_parsed": parsed,
@@ -198,7 +201,8 @@ class Index:
     def path(self):
         return os.path.join(
             paths.index_dir(),
-            f"{self.candidate_set}-n{self.n}-p{abc_pitch.PARSER_VERSION}i{INDEX_VERSION}.pkl",
+            f"{self.candidate_set}-n{self.n}{'-folded' if self.fold_octaves else ''}"
+            f"-p{abc_pitch.PARSER_VERSION}i{INDEX_VERSION}.pkl",
         )
 
     def save(self, path=None):
@@ -206,7 +210,8 @@ class Index:
         paths.ensure_dir(os.path.dirname(path))
         with open(path, "wb") as f:
             pickle.dump(
-                {"n": self.n, "candidate_set": self.candidate_set, "postings": self.postings,
+                {"n": self.n, "candidate_set": self.candidate_set,
+                 "fold_octaves": self.fold_octaves, "postings": self.postings,
                  "df": self.df, "tune_gram_count": self.tune_gram_count,
                  "tune_names": self.tune_names, "tune_types": self.tune_types,
                  "n_tunes": self.n_tunes, "meta": self.meta},
@@ -217,8 +222,8 @@ class Index:
         return path
 
     @classmethod
-    def load(cls, candidate_set="all", n=DEFAULT_N, path=None):
-        idx = cls(n=n, candidate_set=candidate_set)
+    def load(cls, candidate_set="all", n=DEFAULT_N, path=None, fold_octaves=False):
+        idx = cls(n=n, candidate_set=candidate_set, fold_octaves=fold_octaves)
         path = path or idx.path()
         if not os.path.exists(path):
             raise SystemExit(f"no index at {path}; build it with `lab index --candidate-set {candidate_set}`")
@@ -226,6 +231,7 @@ class Index:
             d = pickle.load(f)
         idx.n = d["n"]
         idx.candidate_set = d["candidate_set"]
+        idx.fold_octaves = d.get("fold_octaves", False)
         idx.postings = d["postings"]
         idx.df = d["df"]
         idx.tune_gram_count = d["tune_gram_count"]
@@ -274,6 +280,8 @@ def add_parser(sub):
     p.add_argument("--candidate-set", default="all", choices=["all", "repertoire", "eval_tunes"])
     p.add_argument("--recording", type=int, help="restrict repertoire/eval_tunes to one recording")
     p.add_argument("-n", type=int, default=DEFAULT_N, help=f"n-gram length (default {DEFAULT_N})")
+    p.add_argument("--fold-octaves", action="store_true",
+                   help="reduce intervals so an octave error cannot matter")
     p.add_argument("--selftest", action="store_true", help="after building, look a known setting up in its own index")
     p.set_defaults(func=main)
 
@@ -285,7 +293,8 @@ def main(args):
     tune_ids = candidate_tune_ids(args.candidate_set, args.recording)
     print(f"building {args.candidate_set} index (n={args.n}) over "
           f"{'every tune' if tune_ids is None else f'{len(tune_ids)} tunes'} ...", flush=True)
-    idx = Index.build(iter_settings(csv_path, tune_ids=tune_ids), n=args.n, candidate_set=args.candidate_set)
+    idx = Index.build(iter_settings(csv_path, tune_ids=tune_ids), n=args.n,
+                      candidate_set=args.candidate_set, fold_octaves=args.fold_octaves)
     path = idx.save()
     m = idx.meta
     print(f"{path}\n  {m['n_tunes']} tunes, {m['n_grams']} distinct {args.n}-grams, "
@@ -308,7 +317,8 @@ def selftest(idx, csv_path, tune_ids, n_probe=25):
     ranks = []
     for s in iter_settings(csv_path, tune_ids=tune_ids):
         notes = abc_pitch.parse_abc(s.abc, key=s.mode, meter=s.meter)
-        intervals = abc_pitch.interval_sequence(abc_pitch.pitch_sequence(notes))
+        intervals = abc_pitch.interval_sequence(abc_pitch.pitch_sequence(notes),
+                                                fold=idx.fold_octaves)
         if len(abc_pitch.ngrams(intervals, n=idx.n)) < 10:
             continue
         tried += 1

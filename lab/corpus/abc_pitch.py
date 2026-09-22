@@ -283,11 +283,28 @@ def pitch_sequence(notes) -> List[Optional[int]]:
     return [n.midi if n is not None else None for n in notes]
 
 
-def interval_sequence(pitches, clip=12) -> List[Optional[int]]:
+def fold_interval(d: int) -> int:
+    """An interval reduced to its nearest-direction form in [-6, 5].
+
+    Octave errors then cost nothing: a step of +1 and a step of +13 become the
+    same thing. That matters because a transcription of a room recovers the
+    note names well and the octave badly - measured on a real segment, 41% of
+    one tracker's steps were octave-sized while its pitch classes matched the
+    notation exactly.
+
+    The price is discrimination: twelve possible values instead of
+    twenty-five, so n-grams collide more often. Which way that trades is an
+    empirical question, and both forms are built so it can be answered.
+    """
+    return ((int(d) + 6) % 12) - 6
+
+
+def interval_sequence(pitches, clip=12, fold=False) -> List[Optional[int]]:
     """Semitone steps between consecutive pitches; None where a rest intervenes.
 
     Clipped to ±clip so an octave error in a transcription (or a real octave
-    leap) stays comparable rather than producing a wild value.
+    leap) stays comparable rather than producing a wild value. With `fold`,
+    reduced further so an octave error cannot matter at all.
     """
     out = []
     prev = None
@@ -298,7 +315,7 @@ def interval_sequence(pitches, clip=12) -> List[Optional[int]]:
             continue
         if prev is not None:
             d = p - prev
-            out.append(max(-clip, min(clip, d)))
+            out.append(fold_interval(d) if fold else max(-clip, min(clip, d)))
         prev = p
     return out
 

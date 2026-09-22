@@ -173,7 +173,7 @@ def test_transcribe_prints_notes_and_can_match(lab_data, capsys):
 
     transcribe_main(argparse.Namespace(
         recording=RECORDING_ID, segment=1, time_range=None, source="pitch_yin",
-        match=True, candidate_set="repertoire", run=None))
+        match=True, candidate_set="repertoire", run=None, n=6, no_fold=False))
     out = capsys.readouterr().out
     assert "notes, median" in out
     assert "against the repertoire index" in out

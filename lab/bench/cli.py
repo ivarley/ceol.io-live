@@ -43,6 +43,8 @@ def add_parser(sub):
                      help="sequence: re-rank by what usually follows (oracle previous tune); "
                           "prior_only: ignore the audio entirely, as a control")
     ret.add_argument("--beta", type=float, default=1.0, help="how hard the prior pulls")
+    ret.add_argument("--fold-octaves", action="store_true",
+                     help="use the folded index, where an octave error costs nothing")
     ret.add_argument("--param", action="append", default=[], metavar="K=V")
     ret.add_argument("--no-save", action="store_true")
     ret.set_defaults(func=cmd_retrieval)
@@ -100,7 +102,8 @@ def cmd_retrieval(args):
     frontend = get_frontend(args.frontend, **_parse_params(args.param))
     result, rows = run_retrieval(
         frontend, recording_ids=_ids(args.recordings), candidate_set=args.candidate_set,
-        n=args.n, seconds=args.seconds, prior=args.prior, beta=args.beta)
+        n=args.n, seconds=args.seconds, prior=args.prior, beta=args.beta,
+        fold_octaves=args.fold_octaves)
     print(format_retrieval(result, rows))
     if not args.no_save:
         print(f"  saved {result.save()}")
@@ -136,7 +139,7 @@ def cmd_leaderboard(args):
               f"{'in top 25':>10} {'notes':>6}  params")
         for r in results:
             p = r["pooled"]
-            keep = ("prior", "beta", "seconds", "min_voiced", "candidate_set")
+            keep = ("n", "fold_octaves", "prior", "beta", "seconds", "min_voiced")
             shown = {k: v for k, v in r["params"].items() if k in keep}
             print(f"{r['candidate']:<22} {p.get('top1', 0):>7.3f} {p.get('top5', 0):>7.3f} "
                   f"{p.get('top10', 0):>7.3f} {p.get('mrr', 0):>7.3f} "

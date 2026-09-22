@@ -23,6 +23,9 @@ def add_parser(sub):
     p.add_argument("--source", default="pitch_pyin", choices=["pitch_pyin", "pitch_yin"])
     p.add_argument("--match", action="store_true", help="also ask the index")
     p.add_argument("--candidate-set", default="repertoire")
+    p.add_argument("-n", type=int, default=6, help="n-gram length of the index to query")
+    p.add_argument("--no-fold", action="store_true",
+                   help="query the unfolded index instead of the folded one")
     p.add_argument("--run", help="read an existing run instead of transcribing again")
     p.set_defaults(func=main)
 
@@ -88,8 +91,8 @@ def main(args):
             from lab.corpus.abc_pitch import interval_sequence
             from lab.corpus.index import Index
 
-            index = Index.load(args.candidate_set)
-            iv = interval_sequence([n["midi"] for n in notes])
+            index = Index.load(args.candidate_set, n=args.n, fold_octaves=not args.no_fold)
+            iv = interval_sequence([n["midi"] for n in notes], fold=index.fold_octaves)
             print(f"\n  against the {args.candidate_set} index "
                   f"({index.n_tunes} tunes, {len(iv)} intervals):")
             ranked = index.lookup(iv, top_k=10)

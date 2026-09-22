@@ -3,16 +3,63 @@
   "chunk_ms": 2000,
   "candidate_set": "repertoire",
   "experts": [
-    {"name": "music_energy", "params": {"threshold": 0.35}},
-    {"name": "boundary_novelty", "params": {"threshold": 0.55}},
-    {"name": "pitch_pyin"},
-    {"name": "pitch_yin"},
-    {"name": "notes", "params": {"sources": ["pitch_pyin"]}},
-    {"name": "intervals", "params": {"window_notes": 48}},
-    {"name": "matcher", "params": {"candidate_set": "repertoire", "top_k": 20}},
-    {"name": "prior", "params": {"repertoire_weight": 20.0, "played_tonight_weight": 0.2}},
-    {"name": "assembler"}
+    {
+      "name": "music_energy",
+      "params": {
+        "threshold": 0.35
+      }
+    },
+    {
+      "name": "boundary_novelty",
+      "params": {
+        "threshold": 0.55
+      }
+    },
+    {
+      "name": "pitch_pyin"
+    },
+    {
+      "name": "pitch_yin"
+    },
+    {
+      "name": "notes",
+      "params": {
+        "sources": [
+          "pitch_yin"
+        ]
+      }
+    },
+    {
+      "name": "intervals",
+      "params": {
+        "window_notes": 48
+      }
+    },
+    {
+      "name": "matcher",
+      "params": {
+        "candidate_set": "repertoire",
+        "n": 6,
+        "fold_octaves": true,
+        "top_k": 20
+      }
+    },
+    {
+      "name": "prior",
+      "params": {
+        "repertoire_weight": 20.0,
+        "played_tonight_weight": 0.2
+      }
+    },
+    {
+      "name": "assembler"
+    }
   ],
-  "scheduler": {"rule": "skip_expensive_when_confident", "cost_threshold": 5, "conf_threshold": 0.9, "min_evidence_s": 20},
-  "_why": "The steel thread. Two pitch trackers so disagreement is visible; notes reads only pyin so the comparison is deliberate rather than accidental."
+  "scheduler": {
+    "rule": "skip_expensive_when_confident",
+    "cost_threshold": 5,
+    "conf_threshold": 0.9,
+    "min_evidence_s": 20
+  },
+  "_why": "The steel thread. Two pitch trackers so disagreement is visible; notes reads only pyin so the comparison is deliberate rather than accidental. Matcher and notes fold octaves at n=6: measured best on the retrieval bench."
 }

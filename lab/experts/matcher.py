@@ -22,12 +22,17 @@ class Matcher(Expert):
 
     @classmethod
     def defaults(cls):
-        return {"candidate_set": "repertoire", "n": 5, "top_k": 20, "recording_id": None}
+        # n=6 over the folded index: measured on all 503 segments, folding
+        # takes top-1 from 0.137 to 0.338 because a transcription of a room
+        # gets the note names right and the octave wrong.
+        return {"candidate_set": "repertoire", "n": 6, "top_k": 20,
+                "fold_octaves": True, "recording_id": None}
 
     def setup(self):
         from lab.corpus.index import Index
 
-        self._index = Index.load(self.params["candidate_set"], n=self.params["n"])
+        self._index = Index.load(self.params["candidate_set"], n=self.params["n"],
+                                 fold_octaves=self.params["fold_octaves"])
         self.index_meta = {"file": self._index.meta.get("file"), "sha1": self._index.meta.get("sha1"),
                            "n_tunes": self._index.n_tunes}
 

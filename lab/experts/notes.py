@@ -109,7 +109,8 @@ class Intervals(Expert):
 
     @classmethod
     def defaults(cls):
-        return {"window_notes": 48, "clip": 12, "max_gap_ms": 1500, "min_notes": 8}
+        return {"window_notes": 48, "clip": 12, "max_gap_ms": 1500, "min_notes": 8,
+                "fold_octaves": True}
 
     def setup(self):
         self._by_source = {}
@@ -129,14 +130,12 @@ class Intervals(Expert):
                 del buf[:-keep]
             if len(buf) < self.params["min_notes"]:
                 continue
-            intervals, starts = [], []
-            for prev, nxt in zip(buf, buf[1:]):
-                if nxt["t0_ms"] - prev["t1_ms"] > self.params["max_gap_ms"]:
-                    intervals.append(None)   # a gap breaks the phrase
-                else:
-                    d = nxt["midi"] - prev["midi"]
-                    intervals.append(int(np.clip(d, -self.params["clip"], self.params["clip"])))
-                starts.append(prev["t0_ms"])
+            from lab.frontends.segmentation import intervals_from_notes
+
+            intervals = intervals_from_notes(
+                buf, clip=self.params["clip"], max_gap_ms=self.params["max_gap_ms"],
+                fold=self.params["fold_octaves"])
+            starts = [n["t0_ms"] for n in buf[:-1]]
             out.append(self.obs(
                 "interval_sequence", buf[0]["t0_ms"], buf[-1]["t1_ms"],
                 {"source": src, "intervals": intervals, "note_t0_ms": starts, "n_notes": len(buf)},

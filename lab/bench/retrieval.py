@@ -145,7 +145,7 @@ def score_night(frontend, recording_id, index, seconds=DEFAULT_SECONDS, board=No
                           for t, w in sorted(weights.items(), key=lambda kv: -kv[1])[:top_k]]
             else:
                 notes, cost, cached = transcribe_segment(frontend, store, sha, t0, t1, board=board)
-                intervals = intervals_from_notes(notes)
+                intervals = intervals_from_notes(notes, fold=index.fold_octaves)
                 ranked = index.lookup(intervals, top_k=(200 if prior == "sequence" else top_k))
                 if prior == "sequence":
                     weights = sequence.weights(previous_of.get(seg.session_instance_tune_id))
@@ -194,10 +194,11 @@ def summarise(rows):
 
 
 def run_retrieval(frontend, recording_ids=None, candidate_set="repertoire", n=5,
-                  seconds=DEFAULT_SECONDS, quiet=False, prior="none", beta=1.0):
+                  seconds=DEFAULT_SECONDS, quiet=False, prior="none", beta=1.0,
+                  fold_octaves=False):
     from lab.corpus.index import Index
 
-    index = Index.load(candidate_set, n=n)
+    index = Index.load(candidate_set, n=n, fold_octaves=fold_octaves)
     recording_ids = recording_ids or paths.prepared_recording_ids()
     nights, all_rows = [], []
     with Board() as board:
@@ -223,7 +224,8 @@ def run_retrieval(frontend, recording_ids=None, candidate_set="repertoire", n=5,
         task="tune_retrieval",
         candidate=frontend.name if prior == "none" else f"{frontend.name}+{prior}", version=frontend.version,
         params={**frontend.params, "candidate_set": candidate_set, "n": n,
-                "seconds": seconds, "prior": prior, "beta": beta},
+                "seconds": seconds, "prior": prior, "beta": beta,
+                "fold_octaves": fold_octaves},
         features_version="audio", split="per-night",
         nights=nights, pooled=pooled, warnings=[],
         created_at=time.strftime("%Y-%m-%dT%H:%M:%S"), git_sha=git_sha())

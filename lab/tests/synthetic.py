@@ -134,8 +134,12 @@ def build_night(data_dir, recording_id=9001, note_ms=NOTE_MS):
     return manifest
 
 
-def build_index(data_dir, n=5):
-    """An index over exactly the two synthetic tunes."""
+def build_index(data_dir, n=6, fold_octaves=True):
+    """An index over exactly the two synthetic tunes.
+
+    Defaults match the matcher expert's, so the fixture exercises the same
+    configuration the board actually runs.
+    """
     from lab.corpus.index import Index
     from lab.corpus.tunes_csv import Setting
 
@@ -144,6 +148,7 @@ def build_index(data_dir, n=5):
                 tune_type=t["type"], meter=t["meter"], mode=t["mode"], abc=t["abc"])
         for t in (TUNE_A, TUNE_B)
     ]
-    idx = Index.build(settings, n=n, candidate_set="repertoire", progress_every=0)
+    idx = Index.build(settings, n=n, candidate_set="repertoire", progress_every=0,
+                      fold_octaves=fold_octaves)
     os.makedirs(os.path.join(data_dir, "index"), exist_ok=True)
     return idx.save()

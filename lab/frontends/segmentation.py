@@ -63,12 +63,18 @@ def notes_from_pitch(times_ms, f0_hz, voiced_prob, min_note_ms=60, median_frames
     return notes
 
 
-def intervals_from_notes(notes, clip=12, max_gap_ms=1500):
-    """Semitone steps, with a gap breaking the phrase so no n-gram spans one."""
+def intervals_from_notes(notes, clip=12, max_gap_ms=1500, fold=False):
+    """Semitone steps, with a gap breaking the phrase so no n-gram spans one.
+
+    `fold` must match the index being queried: see abc_pitch.fold_interval.
+    """
+    from lab.corpus.abc_pitch import fold_interval
+
     out = []
     for prev, nxt in zip(notes, notes[1:]):
         if nxt["t0_ms"] - prev["t1_ms"] > max_gap_ms:
             out.append(None)
         else:
-            out.append(int(np.clip(nxt["midi"] - prev["midi"], -clip, clip)))
+            d = int(nxt["midi"] - prev["midi"])
+            out.append(fold_interval(d) if fold else int(np.clip(d, -clip, clip)))
     return out
