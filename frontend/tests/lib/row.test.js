@@ -82,6 +82,25 @@ describe('Row', () => {
     })
   })
 
+  it('lets a page supply the whole body when it has its own layout', () => {
+    // The session People row lays name / badges / instruments out INLINE on desktop
+    // and stacked on a phone — a shape title+subtitle cannot express. The `body`
+    // snippet hands that back to the page while Row keeps the three-slot frame.
+    render(Row, {
+      props: {
+        title: 'ignored when body is given',
+        subtitle: 'also ignored',
+        body: createRawSnippet(() => ({ render: () => '<div class="person-info">Sarah</div>' })),
+        trailing: createRawSnippet(() => ({ render: () => '<span class="count">12</span>' })),
+      },
+    })
+    const row = document.querySelector('.kit-row')
+    expect(row.querySelector('.kit-row-body .person-info')).toBeTruthy()
+    expect(row.querySelector('.kit-row-title')).toBeNull() // not both
+    expect(row.querySelector('.kit-row-sub')).toBeNull()
+    expect(row.lastElementChild.className).toContain('kit-row-trail') // still right
+  })
+
   describe('semantics follow behaviour', () => {
     it('is a real button when it does something', async () => {
       const onclick = vi.fn()

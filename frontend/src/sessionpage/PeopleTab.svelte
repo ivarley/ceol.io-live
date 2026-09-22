@@ -18,7 +18,7 @@
    */
   import { untrack } from 'svelte'
   import { SvelteSet } from 'svelte/reactivity'
-  import { toast, SearchField, Chip, Sheet, Seg, PersonPicker } from '../lib/index.js'
+  import { Chip, PersonPicker, Row, SearchField, Seg, Sheet, toast } from '../lib/index.js'
   import { normalizeQuotes } from '../shared/parse.js'
   import { filterPeople } from './logic.js'
 
@@ -303,37 +303,51 @@
         </div>
       {:else}
         {#each filteredPeople as person (person.person_id)}
-          <div class="person-row" class:archived={person.archived} onclick={() => showPersonDetail(person.person_id)}>
-            <div class="person-icon {person.has_user_account ? 'has-account' : 'no-account'}">
-              <i class="fa fa-user-circle"></i>
-            </div>
-            <div class="person-info">
-              <!-- Badges are SIBLINGS of .person-name, not children: the name element's text
-                   content should be the name, nothing else. -->
-              <div class="person-name">{person.first_name} {person.last_name}</div>
-              {#if person.relationship === 'visitor' || person.archived || (!person.confirmed && person.has_user_account)}
-                <div class="person-badges">
-                  {#if person.relationship === 'visitor'}
-                    <Chip label="Visitor" variant="warning" />
-                  {/if}
-                  {#if person.archived}
-                    <Chip label="Archived" />
-                  {/if}
-                  {#if !person.confirmed && person.has_user_account}
-                    <Chip label="Unconfirmed" variant="warning" title="Can't see this session's people yet" />
-                  {/if}
+          <!-- The kit Row owns the three-slot layout (spec 052 §B8 Stage 2); this
+               file keeps every legacy class, so page.css and the e2e selectors are
+               untouched. `body` carries .person-info unchanged, because it lays name/
+               badges/instruments out INLINE on desktop and stacked on a phone — a
+               shape Row's title+subtitle cannot express. -->
+          <Row
+            styled={false}
+            rowClass="person-row{person.archived ? ' archived' : ''}"
+            onclick={() => showPersonDetail(person.person_id)}>
+            {#snippet lead()}
+              <div class="person-icon {person.has_user_account ? 'has-account' : 'no-account'}">
+                <i class="fa fa-user-circle"></i>
+              </div>
+            {/snippet}
+            {#snippet body()}
+              <div class="person-info">
+                <!-- Badges are SIBLINGS of .person-name, not children: the name element's text
+                     content should be the name, nothing else. -->
+                <div class="person-name">{person.first_name} {person.last_name}</div>
+                {#if person.relationship === 'visitor' || person.archived || (!person.confirmed && person.has_user_account)}
+                  <div class="person-badges">
+                    {#if person.relationship === 'visitor'}
+                      <Chip label="Visitor" variant="warning" />
+                    {/if}
+                    {#if person.archived}
+                      <Chip label="Archived" />
+                    {/if}
+                    {#if !person.confirmed && person.has_user_account}
+                      <Chip label="Unconfirmed" variant="warning" title="Can't see this session's people yet" />
+                    {/if}
+                  </div>
+                {/if}
+                <div class="person-instruments">
+                  {person.instruments && person.instruments.length > 0 ? person.instruments.join(', ') : 'No instruments listed'}
+                </div>
+              </div>
+            {/snippet}
+            {#snippet trailing()}
+              {#if trackAttendance}
+                <div class="person-meta">
+                  <Chip label={String(person.attendance_count || 0)} styled={false} chipClass="person-attendance-badge" title="Nights attended" />
                 </div>
               {/if}
-              <div class="person-instruments">
-                {person.instruments && person.instruments.length > 0 ? person.instruments.join(', ') : 'No instruments listed'}
-              </div>
-            </div>
-            {#if trackAttendance}
-              <div class="person-meta">
-                <Chip label={String(person.attendance_count || 0)} styled={false} chipClass="person-attendance-badge" title="Nights attended" />
-              </div>
-            {/if}
-          </div>
+            {/snippet}
+          </Row>
         {/each}
       {/if}
     </div>

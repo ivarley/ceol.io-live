@@ -498,6 +498,32 @@ selectors keep passing; each commit is independently revertible.
 **Done when.** Per page: desktop + mobile e2e green, and a measurable deletion from
 `my_tunes_mobile.css`.
 
+**First adoption: the session page's People tab (2026-09-22).** Picked as the least
+risky surface on the page — 4 e2e references against the Tunes tab's 50, and no
+selection-mode machinery (spec 029) to disturb. Verified **pixel-identical**: 0
+differing pixels at 400px and at 1280px, same row heights (75 / 62) and the same 8px
+trailing inset. The only DOM change is `div` → `button`, because a row that does
+something should be a control.
+
+Two things learned on first contact, both folded back into the kit:
+
+- **Row needed a `body` snippet.** `.person-info` lays name / badges / instruments
+  INLINE on desktop and stacked under 768px — a shape `title` + `subtitle` cannot
+  express. Rather than flatten it (a redesign, not conformance), `body` hands the
+  body's layout back to the page while Row keeps the three-slot frame. This is
+  exactly what Stage 1's "adopted by nobody" was for: the gap surfaced before four
+  pages had been built on the wrong shape.
+- **`.person-row` was declaring the very grid Row exists to avoid** —
+  `grid-template-columns: auto 1fr auto`. Harmless here (the person icon always
+  renders, so the columns are always filled) but one conditional lead away from the
+  bug. Deleted; the layout now comes from Row.
+
+Remaining on this page: the Tunes and Logs tabs, and **tab counts**. Counts are NOT
+free — `total_tunes_count` is in the payload but the logs and people counts load
+lazily inside their own tabs, so a count on Tunes alone would be worse than none.
+That needs `build_session_detail_payload` to carry all three, which is server work
+and belongs with Stage 3 rather than a visual pass.
+
 #### Stage 3 — One toolbar everywhere
 
 **What.** The session page's Tunes / Logs / People tabs each get a `Toolbar`: search on

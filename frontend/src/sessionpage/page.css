@@ -1052,16 +1052,17 @@ a.empty-log {
     margin-bottom: 30px;
 }
 
+/* Layout (flex, 12px gap, centred, the trailing slot hard right) comes from the
+   kit Row this renders through now — spec 052 §B8 Stage 2. What stays here is the
+   skin. The grid this used to declare was `auto 1fr auto`, the same shape that put
+   a trailing chip in the stretchy middle column whenever a row lacked its leading
+   one; harmless here (the person icon always renders) but not worth keeping. */
 .person-row {
     background-color: var(--bg-color);
     border-bottom: 1px solid var(--border-color);
     padding: 12px 8px;
     transition: background-color 0.1s;
     cursor: pointer;
-    display: grid;
-    grid-template-columns: auto 1fr auto;
-    gap: 12px;
-    align-items: center;
 }
 
 .person-row:first-child {

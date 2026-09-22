@@ -26,6 +26,9 @@
     styled = true, // false: structure only; skin comes from the page
     rowClass = '',
     lead, // snippet: leading slot (date block, avatar, icon)
+    body, // snippet: replaces title+subtitle entirely, for a body with its own
+    //       layout (the session People row lays name/badges/instruments inline on
+    //       desktop and stacked on a phone — a shape title+subtitle cannot express)
     titleContent, // snippet: replaces `title` when the heading needs markup
     trailing, // snippet: trailing slot (status chip, count, chevron)
     ...rest // id, data-*, aria-*, title… pass through to the row element
@@ -46,8 +49,12 @@
 >
   {#if lead}<span class="kit-row-lead">{@render lead()}</span>{/if}
   <span class="kit-row-body">
-    <span class="kit-row-title">{#if titleContent}{@render titleContent()}{:else}{title}{/if}</span>
-    {#if subtitle}<span class="kit-row-sub">{subtitle}</span>{/if}
+    {#if body}
+      {@render body()}
+    {:else}
+      <span class="kit-row-title">{#if titleContent}{@render titleContent()}{:else}{title}{/if}</span>
+      {#if subtitle}<span class="kit-row-sub">{subtitle}</span>{/if}
+    {/if}
   </span>
   {#if trailing}<span class="kit-row-trail">{@render trailing()}</span>{/if}
 </svelte:element>
@@ -72,6 +79,10 @@
   .kit-row-body {
     flex: 1 1 auto;
     min-width: 0;
+  }
+  /* The default stack. A `body` snippet brings its own layout, so it must not
+     inherit this — hence the :has() rather than styling .kit-row-body flatly. */
+  .kit-row-body:has(> .kit-row-title) {
     display: flex;
     flex-direction: column;
     gap: 2px;
