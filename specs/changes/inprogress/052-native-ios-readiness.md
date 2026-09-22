@@ -62,7 +62,8 @@ itself is app work.
 `mockups/tabbar/` (served at `/mockups/tabbar/`) is the interaction prototype for the
 reshaping — four tabs, session-centric Home, inline filters, the tune sheet. It settled
 several questions the first draft of §B left open; those answers are folded into B1–B4
-below, and **§B8 is the stage-by-stage conversion plan**. Nothing in §B is built yet.
+below, and **§B8 is the stage-by-stage conversion plan**. Stages 0-3 of that plan are
+built: the kit primitives exist and the session page's three tabs are converted.
 
 ---
 
@@ -488,7 +489,14 @@ Two notes for the stages that adopt them:
   already live, and means adopting it in Stage 3 is a markup change, not a state
   rewrite.
 
-#### Stage 2 — Visual conformance, one page per commit
+#### Stage 2 — Visual conformance, one page per commit — **MOSTLY DONE 2026-09-22**
+
+**Status.** All three session tabs render through `Row`: People and Tunes were verified
+pixel-identical to the previous build at 400px and 1280px, and Logs was rebuilt as one
+list (its three table layouts collapsed into rows under sticky group headers). **Not
+done: the faint counts in the tab labels, and the count on People** — both need
+`build_session_detail_payload` to carry logs and people counts, which it does not,
+because those two tabs load their data lazily inside themselves.
 
 **What.** Adopt `Row` and `SectionHeader`; right-align trailing status; make the counts
 in tab labels faint (`Tunes · 96` with the number muted) and **add a count to People,
@@ -614,7 +622,25 @@ lazily inside their own tabs, so a count on Tunes alone would be worse than none
 That needs `build_session_detail_payload` to carry all three, which is server work
 and belongs with Stage 3 rather than a visual pass.
 
-#### Stage 3 — One toolbar everywhere
+#### Stage 3 — One toolbar everywhere — **PARTLY DONE 2026-09-22**
+
+**Status.** The session page's three tabs share one `Toolbar`: search, a filter button
+whose panel expands beneath the line, and `+`. The Logged/All and Members/Visitors/
+Archived segmented controls moved into that panel, the help icons are gone, and Add moved
+out of the Logs year header into the toolbar so it survives scrolling. The tabs and the
+toolbar are pinned under the fixed site header, which needed `--site-header-h` and a
+measured `--logs-toolbar-h` rather than magic numbers.
+
+The three toolbars are verified identical at 400px and 1280px — position, size, font and
+padding — by `e2e/support/toolbars.ts`, called from both the phone and desktop suites.
+Getting there meant deleting two containers' leftover `display: flex`, a stray inline
+`padding-left` on the Logs pane, 20px of pane padding on Tunes and People, and a second
+skin on the People search box that set 14px where the shared class sets the 16px that
+stops iOS zooming on focus.
+
+**Not done: My Tunes.** It still has its own filter markup, so the `.filter-*` block in
+`my_tunes_mobile.css` stays for now, and the sort control has not moved into its toolbar
+row. The "done when" below is not satisfied until that page is on the same component.
 
 **What.** The session page's Tunes / Logs / People tabs each get a `Toolbar`: search on
 every tab, a filter panel (tune type / complete-or-year / role), `+` on Tunes. My Tunes
