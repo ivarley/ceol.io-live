@@ -306,46 +306,74 @@ be inspected on its own, and the next idea has somewhere to be scored.
 
 ## Status
 
-Built and running against synthetic audio; **not yet run against the corpus**.
+Running against the corpus. All eight nights are pulled, decoded and
+featured; both loops work; the first real scores are in. The lab does what it
+was built to do, and what it says is that the recogniser does not work yet
+and it is clear why.
 
-Working end to end: the corpus pull and the ABC parser (99.99% of the 55,384
-settings in the public dump parse), the interval n-gram index, the feature
-grid, the bench's tasks and five candidates, the board, the reactive driver
-with windows and the scheduler hook, all nine experts, the identification and
-segmentation harness, and the four inspection tools. Forty-two lab tests pass,
-eleven of them driving the whole thread on a synthetic night rendered from
-indexed ABC. That fixture removes every hard thing about the problem — no
-room, no heterophony, no chatter — so it proves the machinery and nothing
-about accuracy.
+### The bench, leave-one-night-out
 
-**Blocked on two things, both outside the code.** A production database URL,
-for `lab pull` to write manifests; and AWS credentials in `.env`, for it to
-fetch the master audio. Until then no real night has been pulled, the bench
-has never been scored on real labels, and the two learned candidates have
-never been fitted.
+| Task | Candidate | Score |
+|---|---|---|
+| music_activity | music_mel_lr | 0.948 accuracy |
+| | music_energy | 0.765 |
+| | always_music (baseline) | 0.739 |
+| boundary | boundary_mel_lr | 0.462 f1, 31 false/hour |
+| | boundary_keychange | 0.372 f1, 30 false/hour |
+| | boundary_novelty | 0.348 f1, 55 false/hour |
+| | boundary_spray (baseline) | 0.108 f1, 557 false/hour |
+| | boundary_periodic (baseline) | 0.082 f1 |
 
-**Seven corpus fixes are wanted before the first real scoring run.** Six
-segments have no explicit end where the log says a set ended, so their tails
-have swallowed chatter — recording 4's last tune runs 91 minutes to the end of
-the file, and five others by one to three minutes. One segment in recording 1
-ends 583ms after the next one starts. With those fixed, `end_is_explicit` is
-authoritative and the set-break cross-check stays a warning that should never
-fire.
+Two things this settles. The energy rule for music-versus-not is worth 2.6
+points over saying "music" every time, so it is not a detector; a small
+learned model on mel frames is, at 0.948 on nights it never saw. And the
+Foote novelty curve, which is the textbook answer for structural boundaries,
+is beaten by a thirty-second chroma comparison and by a small learned model.
+None of that was predictable from a docstring, which is the argument for the
+bench.
 
-What the synthetic run already shows, and expect to see again at scale: the
-assembler holds on to a tune after it has stopped. With no boundary detected
-it kept claiming the first tune through the whole of the second, because
-accumulated evidence for an open span outweighs a newcomer. The change hazard
-exists for this and is plainly not yet strong enough. Separately,
-`boundary_novelty` reads a two-minute window with sixteen seconds of
-lookahead, so it says nothing at all about the first two minutes of a night —
-a fast, low-precision partner is the obvious next producer of that type.
+### The ensemble
 
-Costs measured on the synthetic run, per minute of audio: pyin about twelve
-seconds, yin about a third of a second, everything else under a tenth. A full
-pass of the 15.6-hour corpus is therefore a few hours, dominated entirely by
-pyin, which is what the window cache and `--segments` exist for.
+The first real run scored **zero**: top-1 0 of 5 segments, top-5 0 of 5, and
+five flips a segment. The inspection tools locate the failure exactly, and it
+is not the symbolic back end. The index parses 100% of the repertoire's
+settings and puts 25 of 25 settings' own notes first. The features carry
+enough for a classifier to reach 0.948 on music-versus-not. What fails is the
+step between: monophonic pitch tracking of six people playing the same melody
+their own way.
 
-Not done, deliberately: no learned candidate has graduated (the lab does not
-persist fitted models yet, and `CandidateExpert` refuses rather than guessing);
-no `tune_pair` task; no audio-embedding probe; and nothing runs live.
+pyin locks on. Two minutes of a reel transcribe as a near-constant g-a-b with
+a median note of 105ms. yin scatters instead, 2,012 notes flung across
+octaves. Neither has the tune in the top ten, and every candidate's coverage
+sits at 1-3%, meaning no tune is explained at all and the ranking is noise
+among near-ties. The assembler then reports 0.6-0.7 confidence on a wrong
+answer for two minutes, which is the calibration failure the harness exists
+to catch.
+
+So the next move is a better front end, and the bench is where it gets
+chosen: a multi-pitch or neural transcriber producing `pitch_track` or
+`note_events` alongside the two that exist. Nothing else in the thread needs
+to change to accept it.
+
+### Costs, measured
+
+Per minute of audio: pyin about twelve seconds, yin about a third of a
+second, everything else under a tenth. A replay runs at roughly 4x realtime
+with pyin in the config. Downloading the corpus took minutes and decoding
+plus featuring a three-hour night takes about fifteen seconds.
+
+### Corpus
+
+505 segments over eight nights, 709 boundaries, 15.0 hours of labelled music
+and 5.5 hours of labelled silence. Two nights are segmented over part of
+their length, 44% and 25%, and boundary scoring is restricted to the placed
+region so those nights are not punished for the rest.
+
+Five segments still have no explicit end where the log says a set ended, all
+between 1.4 and 3.4 minutes, and one segment in recording 1 ends 583ms after
+the next begins. The harness names them on every run and excludes what it
+cannot vouch for.
+
+Not done: no learned candidate has graduated into an expert (the lab does not
+persist fitted models, and `CandidateExpert` refuses rather than guessing);
+no `tune_pair` task; no audio-embedding probe; nothing runs live.
