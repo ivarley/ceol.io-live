@@ -262,15 +262,39 @@ class BoardView:
         self.clock_ms = 0
         self._seen: Dict[str, int] = {}     # expert name -> last obs_id it was shown
         self._pending: List[Observation] = []   # this chunk's observations, not yet committed
+        self._appended = set()                  # ids of those already written
         self._expert = None
+        self._feature_store = None
 
     # -- the engine drives these -----------------------------------------
+
+    @property
+    def board(self):
+        """Direct board access. Only the assembler needs it, because a
+        hypothesis event has to reference the observation carrying its
+        provenance, which means the observation must exist first."""
+        return self._board
+
+    @property
+    def run_id(self):
+        return self._run_id
 
     def begin_expert(self, expert_name):
         self._expert = expert_name
 
     def note(self, obs: Observation):
         self._pending.append(obs)
+
+    def note_now(self, obs: Observation):
+        """Append immediately and hand back the id. The engine will not
+        append it a second time."""
+        self._board.append(self._run_id, obs, clock_ms=self.clock_ms)
+        self._pending.append(obs)
+        self._appended.add(id(obs))
+        return obs.obs_id
+
+    def was_appended(self, obs):
+        return id(obs) in self._appended
 
     def mark_seen(self, expert_name, obs_id):
         self._seen[expert_name] = max(self._seen.get(expert_name, 0), obs_id or 0)
@@ -280,6 +304,15 @@ class BoardView:
     def audio(self, t0_ms, t1_ms):
         """Samples for a window. The only way to reach the signal."""
         return self._audio.read(t0_ms, t1_ms)
+
+    def features(self, t0_ms, t1_ms):
+        """Cached features for a window, clipped at the clock like audio is."""
+        if self._feature_store is None:
+            raise SystemExit("this run has no feature store; `lab prepare` computes one")
+        return self._feature_store.window(t0_ms, t1_ms)
+
+    def attach_features(self, store):
+        self._feature_store = store
 
     def query(self, type_, t0=None, t1=None, expert=None):
         return self._board.observations(self._run_id, types=[type_], t0=t0, t1=t1, expert=expert)

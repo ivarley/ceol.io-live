@@ -6,3 +6,11 @@ scipy
 librosa>=0.10
 soundfile
 scikit-learn
+
+# numba is librosa's, not ours, but its version is our problem: from 0.61 it
+# subclasses coverage.types.Tracer at import time, which does not exist in the
+# coverage 7.3.2 that requirements-test.txt pins, so importing librosa dies
+# with AttributeError inside numba. Pinning numba here rather than bumping the
+# app's coverage pin keeps the blast radius in the lab. (numba < 0.61 also
+# caps numpy below 2.1.) Lift this when the app's coverage pin moves past 7.4.
+numba<0.61

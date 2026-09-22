@@ -1,0 +1,7 @@
+{
+  "name": "null",
+  "chunk_ms": 2000,
+  "experts": [],
+  "scheduler": {"rule": "always"},
+  "_why": "Chunk source only. Proves the clock advances, the board records, and a stored config re-executes."
+}

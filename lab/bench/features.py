@@ -9,9 +9,9 @@ A candidate that needs something new adds it here and bumps FEATURES_VERSION,
 which is recorded on every bench result — a score computed against different
 features is not comparable, and the version is how that stays visible.
 
-Live experts compute the same features over their own windows (see
-`lab/experts/live_features.py`), from the same functions, so a candidate that
-graduates behaves the same way on the board as it did on the bench.
+On the board, experts read the same cached grid through
+`lab/audio/feature_store.py`, clipped at the clock, so a candidate that
+graduates behaves the same way live as it did on the bench.
 """
 
 import argparse
@@ -57,16 +57,27 @@ def compute_arrays(y, sr=SAMPLE_RATE):
             "t_ms": np.zeros(0, dtype=np.int64),
         }
     y = np.ascontiguousarray(y, dtype=np.float32)
-    stft = np.abs(librosa.stft(y, n_fft=N_FFT, hop_length=HOP, center=True))
-    power = stft ** 2
-    mel_fb = librosa.filters.mel(sr=sr, n_fft=N_FFT, n_mels=N_MELS, fmin=FMIN, fmax=min(FMAX, sr / 2))
-    mel = librosa.power_to_db(mel_fb @ power, ref=1.0, top_db=None).T.astype(np.float32)
-    chroma = librosa.feature.chroma_stft(S=power, sr=sr, n_fft=N_FFT).T.astype(np.float32)
-    rms = librosa.feature.rms(S=stft, frame_length=N_FFT, hop_length=HOP)[0]
-    # a floor well under a quiet pub, so silence is a number rather than -inf
-    rms_db = (20.0 * np.log10(np.maximum(rms, 1e-7))).astype(np.float32)
-    onset = librosa.onset.onset_strength(S=mel.T, sr=sr, hop_length=HOP).astype(np.float32)
+    # numpy 2 on Apple's Accelerate BLAS raises divide-by-zero, overflow and
+    # invalid-value flags out of matmul while returning entirely finite,
+    # correct results. Ignoring the flags and checking the invariant at the
+    # end is honest; leaving three RuntimeWarnings per block is not.
+    with np.errstate(divide="ignore", over="ignore", invalid="ignore"):
+        stft = np.abs(librosa.stft(y, n_fft=N_FFT, hop_length=HOP, center=True))
+        power = stft ** 2
+        mel_fb = librosa.filters.mel(sr=sr, n_fft=N_FFT, n_mels=N_MELS, fmin=FMIN, fmax=min(FMAX, sr / 2))
+        mel = librosa.power_to_db(mel_fb @ power, ref=1.0, top_db=None).T.astype(np.float32)
+        chroma = librosa.feature.chroma_stft(S=power, sr=sr, n_fft=N_FFT).T.astype(np.float32)
+        rms = librosa.feature.rms(S=stft, frame_length=N_FFT, hop_length=HOP)[0]
+        # a floor well under a quiet pub, so silence is a number, not -inf
+        rms_db = (20.0 * np.log10(np.maximum(rms, 1e-7))).astype(np.float32)
+        onset = librosa.onset.onset_strength(S=mel.T, sr=sr, hop_length=HOP).astype(np.float32)
     n = min(mel.shape[0], chroma.shape[0], rms_db.shape[0], onset.shape[0])
+    for name, arr in (("mel", mel), ("chroma", chroma), ("rms_db", rms_db), ("onset_strength", onset)):
+        if not np.isfinite(arr[:n]).all():
+            bad = int((~np.isfinite(arr[:n])).sum())
+            print(f"  warning: {bad} non-finite values in {name}; zeroed. "
+                  f"This is not the spurious BLAS flag — investigate.")
+            np.nan_to_num(arr, nan=0.0, posinf=0.0, neginf=0.0, copy=False)
     return {
         "mel": mel[:n],
         "chroma": chroma[:n],

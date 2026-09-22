@@ -13,9 +13,14 @@ Two ideas that must stay separate (spec 053):
 """
 
 from dataclasses import dataclass
-from typing import Iterator, List, Optional
+from typing import Iterator, Optional
 
 import numpy as np
+
+# The window schedule lives with the expert contract, next to the protocol
+# that uses it; re-exported here because a chunk source and a window grid are
+# two halves of one idea and callers want them from one place.
+from lab.experts.base import WindowSpec  # noqa: F401
 
 
 @dataclass(frozen=True)
@@ -24,26 +29,6 @@ class Chunk:
     t_end_ms: int
     sr: int
     samples: np.ndarray  # float32 mono
-
-
-@dataclass(frozen=True)
-class WindowSpec:
-    """A windowed expert's schedule: read `length_ms` ending at each grid point,
-    every `hop_ms`, but only once the clock is `lookahead_ms` past the end."""
-
-    length_ms: int
-    hop_ms: int
-    lookahead_ms: int = 0
-
-    def windows_complete_by(self, clock_ms: int, start_ms: int = 0) -> List[tuple]:
-        """All (t_start, t_end) windows, aligned to `start_ms` on the hop grid,
-        whose t_end + lookahead <= clock."""
-        out = []
-        t_end = start_ms + self.length_ms
-        while t_end + self.lookahead_ms <= clock_ms:
-            out.append((max(start_ms, t_end - self.length_ms), t_end))
-            t_end += self.hop_ms
-        return out
 
 
 class AudioStore:
