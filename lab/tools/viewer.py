@@ -72,9 +72,14 @@ def save_annotation(payload):
     os.makedirs(ANNOTATIONS, exist_ok=True)
     path = annotation_path(payload["recording_id"], payload.get("segment_id"),
                            payload.get("t0_ms", 0))
+    from lab.frontends.segmentation import fold_pitch
+
+    # Stored as pitch classes in one octave. Octave says nothing about which
+    # tune this is, so a label that recorded it would be recording noise, and
+    # two labels an octave apart would look like disagreement.
     labels = sorted(
         ({"t0": round(float(v["t0"]), 3), "t1": round(float(v["t1"]), 3),
-          "midi": int(v["midi"]), "from": v.get("from", "drawn")}
+          "midi": fold_pitch(v["midi"]), "from": v.get("from", "drawn")}
          for v in payload.get("labels", [])),
         key=lambda v: (v["t0"], v["midi"]))
     record = {
@@ -195,7 +200,9 @@ def build_payload(args):
                     for k in range(start, min(len(notes), start + args.n + 1)):
                         matched[k] = True
 
-    midis = [n["midi"] for n in notes] or [60]
+    from lab.frontends.segmentation import PITCH_CLASS_BASE
+
+    midis = [PITCH_CLASS_BASE, PITCH_CLASS_BASE + 11]
     return {
         "recording_id": args.recording,
         "segment_id": args.segment,
@@ -208,8 +215,8 @@ def build_payload(args):
         "t0_ms": t0,
         "shared_ngrams": shared,
         "truth_rank": truth_rank,
-        "midi_lo": max(24, min(midis) - 2),
-        "midi_hi": min(108, max(midis) + 2),
+        "midi_lo": min(midis),
+        "midi_hi": max(midis),
         "notes": [{"t0": (n["t0_ms"] - t0) / 1000.0, "t1": (n["t1_ms"] - t0) / 1000.0,
                    "midi": n["midi"], "conf": n.get("conf", 0), "matched": bool(m)}
                   for n, m in zip(notes, matched)],

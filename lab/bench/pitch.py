@@ -6,8 +6,9 @@ end has a frame-level accuracy, an octave-blind accuracy, and a recall of the
 notes that were actually there, and those three separate the failures that
 retrieval lumps together.
 
-Scored over time rather than over notes, because two transcriptions that
-disagree about where notes begin should still be comparable. Every 10ms of
+Scored in pitch classes, because octave says nothing about which tune is
+playing, and over time rather than over notes, because two transcriptions
+that disagree about where notes begin should still be comparable. Every 10ms of
 labelled audio asks one question: what pitch is sounding, and did the front
 end say so.
 
@@ -26,6 +27,7 @@ from lab.audio.prepare import wav_sha1
 from lab.bench.retrieval import transcribe_segment
 from lab.bench.score import BenchResult, NightResult, git_sha
 from lab.board.board import Board
+from lab.frontends.segmentation import fold_pitch
 from lab.tools.viewer import ANNOTATIONS
 
 GRID_S = 0.01
@@ -46,14 +48,14 @@ def load_annotations():
 
 
 def _to_grid(labels, duration_s):
-    """Pitch per 10ms, or -1 where nothing was labelled."""
+    """Pitch class per 10ms, or -1 where nothing was labelled."""
     n = max(1, int(round(duration_s / GRID_S)))
     grid = np.full(n, -1, dtype=np.int16)
     for v in labels:
         a = max(0, int(round(v["t0"] / GRID_S)))
         b = min(n, int(round(v["t1"] / GRID_S)))
         if b > a:
-            grid[a:b] = int(v["midi"])
+            grid[a:b] = fold_pitch(v["midi"])
     return grid
 
 
@@ -80,11 +82,13 @@ def score_annotation(frontend, record, board=None):
         a = max(0, int(round((nt["t0_ms"] - t0) / 1000.0 / GRID_S)))
         b = min(truth.size, int(round((nt["t1_ms"] - t0) / 1000.0 / GRID_S)))
         if b > a:
-            heard[a:b] = int(nt["midi"])
+            heard[a:b] = fold_pitch(nt["midi"])
 
     sel = labelled
     both = sel & (heard >= 0)
     exact = int(np.sum(both & (heard == truth)))
+    # both sides are already pitch classes, so this is now always zero and is
+    # kept only so a run recorded before the fold stays readable
     octave = int(np.sum(both & (heard != truth) & (((heard - truth) % 12) == 0)))
     near = int(np.sum(both & (np.abs(heard.astype(int) - truth.astype(int)) <= 1)))
     total = int(np.sum(sel))

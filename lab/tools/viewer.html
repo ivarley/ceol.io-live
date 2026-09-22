@@ -95,6 +95,7 @@
     <span><span class="swatch" style="background:var(--matched)"></span>heard, and in a phrase the real tune has</span>
     <span><span class="swatch" style="background:var(--truth)"></span>your label</span>
     <span><span class="swatch" style="background:var(--playhead)"></span>playhead</span>
+    <span>one octave: octave carries no information about which tune this is</span>
   </div>
   <div class="hint">
     The strip along the top is the ruler — click or drag it to move the playhead, in any mode.
@@ -105,8 +106,7 @@
     <b>erase</b> drag a box to remove labels
     <br>
     <kbd>space</kbd> play · <kbd>1-5</kbd> modes · <kbd>+</kbd><kbd>−</kbd> zoom ·
-    <kbd>←</kbd><kbd>→</kbd> pan · <kbd>↑</kbd><kbd>↓</kbd> nudge a semitone
-    (<kbd>shift</kbd> an octave) · <kbd>⌫</kbd> delete · <kbd>s</kbd> sing ·
+    <kbd>←</kbd><kbd>→</kbd> pan · <kbd>↑</kbd><kbd>↓</kbd> nudge a semitone · <kbd>⌫</kbd> delete · <kbd>s</kbd> sing ·
     <kbd>cmd-z</kbd> undo · <kbd>cmd-s</kbd> save
   </div>
 
@@ -131,14 +131,20 @@ const mc = mini.getContext('2d');
 let dpr = window.devicePixelRatio || 1;
 audio.src = D.audio_url;
 
-const LO = D.midi_lo, HI = D.midi_hi;
+// One octave, because octave carries no information about which tune this is.
+// Everything downstream already works in pitch classes; showing two octaves
+// only made the same note look like two different ones.
+const BASE = 60;                       // C4..B4
+const LO = BASE, HI = BASE + 11;
+const pc = m => BASE + (((Math.round(m) % 12) + 12) % 12);
 const PAD = 34, RULER = 22;          // ruler strip lives inside the top padding
 const fmt = s => { s = Math.max(0, s | 0); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 let view = { t0: 0, t1: D.duration_s };
 let mode = 'listen';
-let labels = (D.labels || []).map(l => ({ ...l }));
+let labels = (D.labels || []).map(l => ({ ...l, midi: pc(l.midi) }));
+const HEARD = D.notes.map(n => ({ ...n, midi: pc(n.midi) }));
 let undoStack = [];
 let dirty = false;
 let drag = null;
@@ -237,7 +243,7 @@ function labelAt(p) {
 }
 function heardAt(p) {
   const h = noteH();
-  for (const n of D.notes) {
+  for (const n of HEARD) {
     const x0 = xOf(n.t0), x1 = Math.max(x0 + 3 * dpr, xOf(n.t1));
     if (p.x >= x0 && p.x <= x1 && Math.abs(p.y - yOf(n.midi)) <= h) return n;
   }
@@ -257,10 +263,12 @@ function draw() {
   rc.beginPath(); rc.moveTo(0, plotT()); rc.lineTo(W, plotT()); rc.stroke();
 
   rc.textBaseline = 'middle';
-  for (let m = Math.ceil(LO / 12) * 12; m <= HI; m += 12) {
-    rc.strokeStyle = '#2a2f3d';
-    rc.beginPath(); rc.moveTo(plotL(), yOf(m)); rc.lineTo(W - PAD * 0.5 * dpr, yOf(m)); rc.stroke();
-    rc.fillStyle = '#8b93a7'; rc.fillText('C' + (Math.floor(m / 12) - 1), 4 * dpr, yOf(m));
+  for (let m = LO; m <= HI; m++) {
+    const sharp = [1, 3, 6, 8, 10].includes(m % 12);
+    rc.fillStyle = sharp ? 'rgba(255,255,255,.018)' : 'rgba(255,255,255,.045)';
+    rc.fillRect(plotL(), yOf(m) - noteH() / 2, W - plotL() - PAD * 0.5 * dpr, noteH());
+    rc.fillStyle = sharp ? '#5d657a' : '#8b93a7';
+    rc.fillText(NAMES[m % 12], 4 * dpr, yOf(m));
   }
   const span = view.t1 - view.t0;
   const step = span > 60 ? 10 : span > 24 ? 5 : span > 10 ? 2 : span > 4 ? 1 : 0.5;
@@ -273,7 +281,7 @@ function draw() {
   }
 
   const h = noteH();
-  for (const n of D.notes) {
+  for (const n of HEARD) {
     if (n.t1 < view.t0 || n.t0 > view.t1) continue;
     const x0 = xOf(n.t0), x1 = Math.max(x0 + 1.5 * dpr, xOf(n.t1));
     rc.globalAlpha = n.matched ? 1 : 0.62;
@@ -317,14 +325,14 @@ function draw() {
   drawMini();
 }
 const NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-const noteName = m => NAMES[((m % 12) + 12) % 12] + (Math.floor(m / 12) - 1);
+const noteName = m => NAMES[((m % 12) + 12) % 12];
 
 function drawMini() {
   const W = mini.width, H = mini.height;
   mc.clearRect(0, 0, W, H);
   const x = t => (t / D.duration_s) * W;
   const y = m => H - 3 - ((m - LO) / Math.max(1, HI - LO)) * (H - 6);
-  for (const n of D.notes) {
+  for (const n of HEARD) {
     mc.fillStyle = n.matched ? '#3ddc97' : '#4a9eff';
     mc.globalAlpha = n.matched ? .9 : .4;
     mc.fillRect(x(n.t0), y(n.midi) - dpr, Math.max(dpr, x(n.t1) - x(n.t0)), 2 * dpr);
@@ -365,7 +373,7 @@ function agreement() {
   let exact = 0, octave = 0, total = 0;
   for (const l of labels) {
     const mid = (l.t0 + l.t1) / 2;
-    const hit = D.notes.find(n => n.t0 <= mid && n.t1 >= mid);
+    const hit = HEARD.find(n => n.t0 <= mid && n.t1 >= mid);
     total++;
     if (!hit) continue;
     if (hit.midi === l.midi) exact++;
@@ -433,7 +441,7 @@ roll.addEventListener('pointermove', e => {
     const len = drag.t1 - drag.t0;
     drag.label.t0 = clamp(drag.t0 + dt, 0, D.duration_s - len);
     drag.label.t1 = drag.label.t0 + len;
-    if (m !== drag.label.midi) { drag.label.midi = m; tone(m, 0.16); }
+    if (m !== drag.label.midi) { drag.label.midi = pc(m); tone(drag.label.midi, 0.16); }
     dirty = true; document.getElementById('save').disabled = false;
     draw(); return;
   }
@@ -451,7 +459,7 @@ roll.addEventListener('pointerup', () => {
     const mHi = Math.round(mOf(Math.min(drag.y0, drag.y))), mLo = Math.round(mOf(Math.max(drag.y0, drag.y)));
     if (mode === 'accept') {
       pushUndo();
-      for (const n of D.notes) {
+      for (const n of HEARD) {
         if (n.t1 < t0 || n.t0 > t1 || n.midi < mLo || n.midi > mHi) continue;
         labels.push({ t0: n.t0, t1: n.t1, midi: n.midi, from: 'accepted' });
       }
@@ -591,7 +599,9 @@ document.addEventListener('keydown', e => {
   if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
     if (!selected) return;
     e.preventDefault(); pushUndo();
-    selected.midi = clamp(selected.midi + (e.key === 'ArrowUp' ? 1 : -1) * (e.shiftKey ? 12 : 1), LO, HI);
+    // wraps, because there is nowhere above B to go and an octave nudge
+    // would mean nothing on a folded axis
+    selected.midi = pc(selected.midi + (e.key === 'ArrowUp' ? 1 : -1));
     tone(selected.midi, 0.18);
     refresh(); return;
   }

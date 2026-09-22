@@ -205,12 +205,14 @@ def test_pitch_labels_round_trip_and_score(lab_data, tmp_path, monkeypatch):
     assert count == 2
     back = viewer.load_annotation(RECORDING_ID, 1, 4000)
     assert [v["t0"] for v in back] == [0.2, 1.0], "labels come back in time order"
-    assert back[0]["midi"] == 74
+    # stored as pitch classes: 74 is a D two octaves up, and octave says
+    # nothing about which tune is playing
+    assert back[0]["midi"] == 62 and back[1]["midi"] == 62
 
     # the grid is what scoring compares, one question per 10ms
     grid = pitch_mod._to_grid(back, 6.0)
     assert grid.size == 600
-    assert grid[30] == 74 and grid[110] == 62
+    assert grid[30] == 62 and grid[110] == 62
     assert grid[400] == -1, "unlabelled time must not be scored"
 
     from lab.frontends import get_frontend
