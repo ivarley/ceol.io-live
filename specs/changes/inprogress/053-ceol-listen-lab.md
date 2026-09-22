@@ -387,6 +387,29 @@ bottleneck: everything turns on how much of the tune's notation the
 transcription recovers. Above twenty shared six-note phrases the system is
 right six times in seven; below ten it is never right.
 
+### The board against the bench
+
+They answer different questions and the gap between them is mostly that. The
+bench is handed each segment and decodes a whole set once it has heard it;
+the board must answer while the tune is playing, without being told where
+tunes start. An oracle that reads true segment starts closes three and a half
+points of it and halves the time to first correct, from 58 seconds to 31, so
+boundaries matter for how fast it knows far more than for whether it knows.
+
+Two things that follow from that, both measured and both off:
+
+- Clearing the interval window at a detected boundary is right in principle
+  and harmful in practice, because the detector's precision is 0.26 and three
+  resets in four throw away good context.
+- Retroactive revision, letting a later tune change what was said about an
+  earlier one, is worth eight points on the bench and costs fifteen on the
+  board. The bench decodes segments; the board decodes spans, and with
+  boundaries this noisy those spans are not tunes. Decoding a sequence of the
+  wrong units cannot help however good the transition model is.
+
+Both become worth turning on when boundary detection is, which makes it the
+next thing to build rather than a side quest.
+
 ### Still open
 
 Boundary detection is the weak part, f1 0.09 on the board against the bench's
