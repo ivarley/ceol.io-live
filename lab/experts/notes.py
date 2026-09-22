@@ -97,7 +97,7 @@ class Intervals(Expert):
 
     name = "intervals"
     version = "1"
-    consumes = ("note_events",)
+    consumes = ("note_events", "boundary")
     produces = ("interval_sequence",)
     cost = 1.0
 
@@ -112,13 +112,29 @@ class Intervals(Expert):
         # Bounded by time rather than by count, because the note rate varies
         # with the tune and with how well the tracker is doing.
         return {"window_ms": 120000, "window_notes": 900, "clip": 12,
-                "max_gap_ms": 1500, "min_notes": 12, "fold_octaves": True}
+                "max_gap_ms": 1500, "min_notes": 12, "fold_octaves": True,
+                # OFF by default, and measured: clearing the window at a
+                # detected boundary is right in principle and harmful in
+                # practice, because the detector's precision is 0.26, so three
+                # resets in four throw away good context. Turning it on took
+                # two nights from 29.6% and 40.5% to 19.8% and 27.0%, with
+                # flips a segment going from about 5 to 14. It belongs with a
+                # boundary source worth trusting, which is why the oracle
+                # config turns it on and the baseline does not.
+                "reset_on_boundary": False}
 
     def setup(self):
         self._by_source = {}
 
     def process(self, view, window):
         out = []
+        if self.params["reset_on_boundary"]:
+            for b in view.new("boundary"):
+                # everything before a tune change is the previous tune, and
+                # keeping it in the window is worse than having no context
+                at = b.payload.get("t_ms", window.t_end_ms)
+                for src, buf in self._by_source.items():
+                    self._by_source[src] = [n for n in buf if n["t0_ms"] >= at]
         for ev in view.new("note_events"):
             src = ev.payload.get("source") or "?"
             buf = self._by_source.setdefault(src, [])

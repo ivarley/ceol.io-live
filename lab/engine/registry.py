@@ -10,13 +10,14 @@ from lab.experts.assembler import Assembler
 from lab.experts.boundary import BoundaryNovelty
 from lab.experts.matcher import Matcher
 from lab.experts.notes import Intervals, Notes
+from lab.experts.oracle import OracleBoundary
 from lab.experts.pitch import PitchPyin, PitchYin
 from lab.experts.prior import RepertoirePrior
 
 REGISTRY = {
     c.name: c for c in (
         MusicEnergy, BoundaryNovelty, PitchPyin, PitchYin, Notes, Intervals,
-        Matcher, RepertoirePrior, Assembler,
+        Matcher, RepertoirePrior, Assembler, OracleBoundary,
     )
 }
 
