@@ -232,6 +232,28 @@ export function matchLoggedTunes(tunes, query, limit = 8) {
 // Festival day header, e.g. "Sunday, June 1, 2025". Parsed as a LOCAL date —
 // the legacy new Date("YYYY-MM-DD") semantics rendered the previous day west
 // of UTC (same bug class as the admin logs tab).
+// A log row's date block: the weekday over the day-of-month, so a list of nights
+// is scannable without reading a single full date. Split in two because they are
+// styled as two lines, and derived here rather than in the component so the
+// timezone handling stays in one place (parseLocalDate, never new Date(str)).
+export function dowOf(dateStr) {
+  return parseLocalDate(dateStr).toLocaleDateString('en-US', { weekday: 'short' })
+}
+
+export function domOf(dateStr) {
+  return parseLocalDate(dateStr).getDate()
+}
+
+// The date as a row TITLE, for a night with no name of its own. Carries the year
+// only when it is not the current one: inside a 2024 group every row saying 2024
+// is noise, but a row lifted out by a tune filter needs it.
+export function rowDateLabel(dateStr, today = new Date()) {
+  const d = parseLocalDate(dateStr)
+  const opts = { weekday: 'long', month: 'short', day: 'numeric' }
+  if (d.getFullYear() !== today.getFullYear()) opts.year = 'numeric'
+  return d.toLocaleDateString('en-US', opts)
+}
+
 export function festivalDayLabel(dateStr) {
   const dateObj = parseLocalDate(dateStr)
   return dateObj.toLocaleDateString('en-US', {

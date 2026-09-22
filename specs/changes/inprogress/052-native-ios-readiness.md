@@ -534,11 +534,29 @@ redesign rather than a port.
 `.tune-row` was another `auto`-shaped grid (`1fr auto`), saved only by both children
 always rendering and by explicit `grid-column` assignments. Those are gone too.
 
-**The Logs tab is NOT a Stage 2 target.** It is a collapsible `<table>` of year
-sections whose rows are inline date links with a tune-count suffix — no lead, no
-trailing, no subtitle. Putting it on Row would be the mockup's redesign (date block,
-name-or-date title, details subtitle, an "Open" chip), which is a design decision, not
-conformance. It should be taken deliberately, not smuggled in under a visual pass.
+**The Logs tab: taken deliberately as a VISUAL change (2026-09-22), not conformance.**
+It was three near-identical render paths — a multi-year `<table>`, a compact
+single-year `<ul>`, and a day-grouped `<table>` for festivals — differing only in what
+labels a group and what leads a row. `view` already handed all three the same
+`sortedKeys` / `byKey`, so they collapsed into ONE list with two ternaries.
+
+The shape now: a flat list of `Row`s under a **sticky group header that stays tappable
+to collapse**. A regular session leads each row with a date block (weekday over
+day-of-month) and titles it with the log's own name or its date; a festival day names
+itself in the header, so its rows carry no date block at all and lead with the room,
+with the time in the subtitle. Both put time and tune count in the subtitle.
+
+**Why not fully flat, as the mockup implied.** The seed's biggest session has 14 logs,
+which would have made flat look fine and proved nothing. A weekly session five years
+deep is ~260 logs and eight years is ~400: sticky headers tell you where you are, but
+collapsing is what gets you to 2019. Kept as it was — in-memory only, so it resets on
+reload.
+
+**Two things found while doing it.** `.year-view-link` ("view N logs") had no handler
+anywhere and its CSS set `opacity: 0; pointer-events: none`, revealed by a `.visible`
+class nothing ever added: invisible and inert, so deleted rather than ported. And the
+subtitle separator has to be `{' · '}` rather than literal whitespace, because Svelte
+trims text at a block boundary and the two facts run together.
 
 Remaining on this page: **tab counts**. Counts are NOT
 free — `total_tunes_count` is in the payload but the logs and people counts load

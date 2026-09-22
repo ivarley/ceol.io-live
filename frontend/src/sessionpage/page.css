@@ -651,106 +651,117 @@
     color: var(--text-color);
 }
 
-.year-view-link {
-    font-size: 0.9rem;
-    color: var(--primary);
-    text-decoration: none;
-    opacity: 0;
-    transition: opacity 0.2s ease;
-    pointer-events: none;
-    margin-left: 0.5rem;
+/* ---- Logs list (spec 052 §B8 Stage 3) -------------------------------------
+   One list, not three tables. What was here: .instances-table, its header/content
+   rows and date/location/time cells, plus .year-view-link — an anchor to #view
+   that had no handler anywhere and whose CSS set opacity:0 and
+   pointer-events:none, revealed by a .visible class nothing ever added. It had
+   been invisible and inert; it is gone rather than ported. */
+
+.logs-list {
+    display: flex;
+    flex-direction: column;
 }
 
-.year-view-link.visible {
-    opacity: 1;
-    pointer-events: auto;
-}
-
-.year-add-link {
-    font-size: 0.9rem;
-    color: var(--primary);
-    text-decoration: none;
-    opacity: 1;
-    transition: opacity 0.2s ease;
-    pointer-events: auto;
-    margin-left: 0.5rem;
-    cursor: pointer;
-}
-
-.year-add-link.hidden {
-    display: none;
-}
-
-.year-view-link:hover {
-    text-decoration: underline;
-}
-
-/* Instances Table Styles */
-.instances-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-bottom: 1.5rem;
-}
-
-.year-header-row {
-    border: none;
-}
-
-.year-header-cell {
-    border: none;
-    padding: 0;
-    background: transparent;
-}
-
-.year-content-row {
-    transition: max-height 0.3s ease, opacity 0.3s ease;
+/* Sticky, so on a session years deep you always know which year you are in.
+   The header is also the collapse control (see .year-header above). */
+.logs-group-header {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    gap: 8px;
+    padding: 6px 8px;
+    background: var(--bg-color);
     border-bottom: 1px solid var(--border-color);
 }
 
-.year-content-row.collapsed {
-    display: none;
+.logs-group-toggle {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
 }
 
-.instance-date-cell,
-.instance-location-cell {
-    padding: 8px 12px;
-    vertical-align: middle;
+.logs-group-count {
+    color: var(--text-muted, #6c757d);
+    font-size: 0.85rem;
+    font-variant-numeric: tabular-nums;
 }
 
-.instance-date-cell a,
-.instance-location-cell a {
+.logs-group-add {
+    margin-left: auto;
+    background: none;
+    border: none;
+    cursor: pointer;
+}
+
+.logs-row {
+    padding: 10px 8px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.logs-row:hover {
+    background-color: var(--hover-bg);
+}
+
+/* The weekday over the day-of-month: a column of dates you can scan without
+   reading any of them in full. Absent at a festival, where the day is the
+   group header and the time is what tells the rows apart. */
+.logs-date-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 38px;
+    line-height: 1.1;
+}
+
+.logs-date-dow {
+    font-size: 0.7rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted, #6c757d);
+}
+
+.logs-date-dom {
+    font-size: 1.15rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.logs-row-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.logs-row-title {
     color: var(--primary);
     text-decoration: none;
+    font-size: 1rem;
 }
 
-.instance-date-cell a:hover,
-.instance-location-cell a:hover {
+.logs-row-title:hover {
     text-decoration: underline;
 }
 
-/* Faint parenthetical count of tunes logged for an instance */
-.log-tune-count {
-    color: var(--text-muted, #6c757d);
-    font-size: 0.85em;
-    margin-left: 6px;
-}
-
-/* An instance with no tunes logged is just an empty placeholder,
-   so render its link as a fainter blue tint (still the link color,
-   just dimmer) to signal it isn't a real log yet. */
-.instance-date-cell a.empty-log,
-.instance-location-cell a.empty-log,
+/* An instance with no tunes logged is an empty placeholder, not a log: same
+   link colour, dimmer. */
+.logs-row-title.empty-log,
 a.empty-log {
     color: var(--primary);
     opacity: 0.5;
 }
 
-.instance-time-cell {
-    padding: 8px 12px;
-    vertical-align: middle;
-    text-align: right;
-    white-space: nowrap;
-    color: var(--text-color);
+.logs-row-sub {
+    font-size: 0.85rem;
+    color: var(--text-muted, #6c757d);
+}
+
+/* Faint count of tunes logged for an instance */
+.log-tune-count {
+    color: var(--text-muted, #6c757d);
+    font-size: 0.85em;
 }
 
 /* Active Session Instance Highlighting */

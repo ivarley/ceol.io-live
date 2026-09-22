@@ -247,14 +247,14 @@ describe('session detail page view', () => {
     const link2025 = container.querySelector('a[data-instance-id="11"]')
     expect(link2025.getAttribute('href')).toBe('/sessions/test/2025-06-01')
     expect(link2025.classList.contains('empty-log')).toBe(false)
-    expect(container.querySelector('#logs-tab').textContent).toContain('(3 tunes logged)')
+    expect(container.querySelector('#logs-tab').textContent).toContain('3 tunes logged')
     expect(container.querySelector('a[data-instance-id="10"]').classList.contains('empty-log')).toBe(true)
     // Latest year gets the Add link (logged in).
     expect(container.querySelector('.year-add-link#add-session-btn')).toBeTruthy()
     // Collapsing a year hides its rows.
     await fireEvent.click(container.querySelector('.year-toggle[data-year="2025"]'))
     expect(container.querySelector('.year-toggle[data-year="2025"]').textContent).toBe('▶')
-    expect(container.querySelector('.year-content-row[data-year="2025"]').style.display).toBe('none')
+    expect(container.querySelector('.year-content-row[data-year="2025"]')).toBeNull()
   })
 
   it('the logged/all toggle defaults to logged and hides sections with nothing logged', async () => {
@@ -375,8 +375,11 @@ describe('session detail page view', () => {
       expect(container.querySelector('#logs-tab .year-title')).toBeTruthy()
     })
     expect(container.querySelector('.year-title').textContent).toContain('2025')
-    expect(container.querySelector('.instance-location-cell a').textContent.trim()).toBe('The Pub')
-    expect(container.querySelector('.instance-time-cell').textContent).toBe('7:00pm-10:00pm')
+    // A festival day names itself in the group header, so the row leads with the
+    // room and carries the time in its subtitle — no date block, nothing repeated.
+    expect(container.querySelector('.logs-row a').textContent.trim()).toBe('The Pub')
+    expect(container.querySelector('.logs-row-sub').textContent).toContain('7:00pm-10:00pm')
+    expect(container.querySelector('.logs-row .logs-date-block')).toBeNull()
   })
 
   it('tab switching pushes a path-based URL and lazy-loads the target tab', async () => {

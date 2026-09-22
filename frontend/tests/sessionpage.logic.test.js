@@ -3,20 +3,23 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { extractTuneId, normalizeQuotes, parseLocalDate } from '../src/shared/parse.js'
 import { formatTime } from '../src/shared/format.js'
 import {
-  sortFunctions,
-  filterAndSortTunes,
-  resultsCountLabel,
-  stateFromParams,
   applyStateToParams,
   basePathOf,
-  instanceTimeLabel,
-  isEmptyLog,
-  instanceUrlId,
-  parseTheSessionId,
-  filterPeople,
-  keepInstance,
+  domOf,
+  dowOf,
+  filterAndSortTunes,
   filterInstanceGroups,
+  filterPeople,
+  instanceTimeLabel,
+  instanceUrlId,
+  isEmptyLog,
+  keepInstance,
   matchLoggedTunes,
+  parseTheSessionId,
+  resultsCountLabel,
+  rowDateLabel,
+  sortFunctions,
+  stateFromParams,
   tunePlayLinks,
 } from '../src/sessionpage/logic.js'
 
@@ -388,5 +391,36 @@ describe('tunePlayLinks', () => {
   it('is empty for an instance with no plays, and with no map at all', () => {
     expect(tunePlayLinks(plays, { session_instance_id: 11 }, 'p', 1)).toEqual([])
     expect(tunePlayLinks(null, { session_instance_id: 10 }, 'p', 1)).toEqual([])
+  })
+})
+
+describe('log row date helpers (spec 052 §B8 Stage 3)', () => {
+  // Every one of these goes through parseLocalDate, never new Date(str): a bare
+  // "2026-01-27" is parsed as UTC midnight by the Date constructor, which is the
+  // previous evening anywhere west of Greenwich — so the row would show the wrong
+  // weekday and day-of-month for every user in the Americas.
+  it('splits a date into the weekday and day-of-month the block renders', () => {
+    expect(dowOf('2026-01-27')).toBe('Tue')
+    expect(domOf('2026-01-27')).toBe(27)
+  })
+
+  it('does not drift across a timezone boundary', () => {
+    expect(domOf('2026-01-01')).toBe(1)
+    expect(dowOf('2026-01-01')).toBe('Thu')
+    expect(domOf('2026-12-31')).toBe(31)
+  })
+
+  describe('rowDateLabel', () => {
+    const today = new Date(2026, 0, 15)
+
+    it('omits the year inside the current one — the group header already said it', () => {
+      expect(rowDateLabel('2026-01-27', today)).toBe('Tuesday, Jan 27')
+    })
+
+    it('keeps the year for any other, so a filtered row still stands alone', () => {
+      // A tune filter lifts rows out of their groups, and then the year is the
+      // only thing telling 2024 from 2025.
+      expect(rowDateLabel('2024-11-19', today)).toBe('Tuesday, Nov 19, 2024')
+    })
   })
 })
