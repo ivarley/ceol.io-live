@@ -132,16 +132,14 @@
     margin-bottom: 30px;
 }
 
+/* Layout (flex, 12px gap, centred, the meta chips hard right) comes from the kit
+   Row this renders through now — spec 052 §B8 Stage 2. What stays here is the skin. */
 .tune-row {
     background-color: var(--bg-color);
     border-bottom: 1px solid var(--border-color);
     padding: 12px 8px;
     transition: background-color 0.1s;
     cursor: pointer;
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 12px;
-    align-items: center;
 }
 
 .tune-row:first-child {
@@ -157,7 +155,6 @@
     align-items: center;
     gap: 12px;
     margin-bottom: 0;
-    grid-column: 1;
     min-width: 0;
 }
 
@@ -194,6 +191,10 @@
     margin-left: 0;
 }
 
+/* No grid-column and no justify-content: Row's trailing slot already sits hard
+   against the right margin, and it does so whether or not this div has anything
+   in it — which the grid column only managed because both children always
+   rendered. */
 .tune-meta {
     display: flex;
     flex-direction: row;
@@ -201,8 +202,6 @@
     margin-bottom: 0;
     font-size: 13px;
     align-items: center;
-    grid-column: 2;
-    justify-content: flex-end;
 }
 
 .tune-count-badge {

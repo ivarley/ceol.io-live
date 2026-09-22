@@ -119,6 +119,18 @@ describe('Row', () => {
       expect(row).toHaveAttribute('href', '/sessions/austin/mueller')
     })
 
+    it('can be forced to a div, for a row that carries its own controls', () => {
+      // Interactive content inside a <button> is invalid HTML and browsers disagree
+      // about whether the inner control ever sees the click. The session Tunes row
+      // has a selection checkbox, so it stays a div with a handler — a rule, not a
+      // preference.
+      const onclick = vi.fn()
+      render(Row, { props: { title: "Cooley's", onclick, as: 'div' } })
+      const row = document.querySelector('.kit-row')
+      expect(row.tagName).toBe('DIV')
+      expect(row).not.toHaveAttribute('type')
+    })
+
     it('is a plain div when it is only text', () => {
       render(Row, { props: { title: 'Fiddle' } })
       expect(document.querySelector('.kit-row').tagName).toBe('DIV')

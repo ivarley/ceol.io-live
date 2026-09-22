@@ -27,7 +27,7 @@
   const sessionPath = session.path
   const isLoggedIn = permissions.is_logged_in
 
-  import { toast, SearchField, Chip, Seg, Sheet } from '../lib/index.js'
+  import { Chip, Row, SearchField, Seg, Sheet, toast } from '../lib/index.js'
   import { createAbcMatcher } from '../shared/abcfilter.svelte.js'
   import { STATUSES, STATUS_LABELS } from '../mylist.js'
 
@@ -662,10 +662,17 @@
       {:else}
         {#each filteredTunes as tune (tune.tune_id)}
           {@const st = rowStatus(tune)}
-          <div
-            class="tune-row{selectionMode ? ' selection-mode' : ''}{st ? ' ' + st.cls : ''}"
+          <!-- The kit Row owns the three-slot layout (spec 052 §B8 Stage 2); every
+               legacy class stays, so page.css and the e2e selectors are untouched.
+               as="div" because this row carries its own checkbox, and interactive
+               content inside a <button> is invalid HTML — see Row's comment. -->
+          <Row
+            as="div"
+            styled={false}
+            rowClass="tune-row{selectionMode ? ' selection-mode' : ''}{st ? ' ' + st.cls : ''}"
             data-tune-id={tune.tune_id}
             onclick={() => handleTuneRowClick(tune)}>
+            {#snippet body()}
             <div class="tune-row-header">
               <input
                 type="checkbox"
@@ -680,6 +687,8 @@
               <!-- Here because its NOTATION matched, not its name. -->
               {#if tune._abcOnly}<span class="abc-only-badge" title="Matched the notation, not the name">♪</span>{/if}
             </div>
+            {/snippet}
+            {#snippet trailing()}
             <div class="tune-meta">
               {#if st}<Chip label={st.status} styled={false} chipClass="ls-chip {st.cls}" />{/if}
               {#if tune.tune_type}<Chip label={tune.tune_type} styled={false} chipClass="tune-type" />{/if}
@@ -703,7 +712,8 @@
                   title="TheSession.org tunebooks" />
               {/if}
             </div>
-          </div>
+            {/snippet}
+          </Row>
         {/each}
       {/if}
     </div>

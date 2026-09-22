@@ -23,6 +23,7 @@
     subtitle = '',
     onclick = null, // set => the row is a real <button>
     href = null, // set (and no onclick) => the row is a real <a>
+    as = null, // force the element, overriding the two lines above
     styled = true, // false: structure only; skin comes from the page
     rowClass = '',
     lead, // snippet: leading slot (date block, avatar, icon)
@@ -36,9 +37,19 @@
 
   // A row that does something is a control, not a div: real button/anchor
   // semantics mean keyboard and screen readers get it for free.
-  const tag = onclick ? 'button' : href ? 'a' : 'div'
+  //
+  // `as` exists for the rows that CANNOT take that deal. A row carrying its own
+  // control — the session Tunes row has a selection checkbox — must not be a
+  // <button>, because interactive content inside a button is invalid HTML and
+  // browsers disagree about whether the inner control ever sees the click. That
+  // is a rule, not a preference, so those rows stay a div with a click handler,
+  // exactly as they were. They are no less accessible than before, but no more
+  // either: reaching them by keyboard needs a real control INSIDE the row, which
+  // is a redesign rather than a port.
+  const tag = as || (onclick ? 'button' : href ? 'a' : 'div')
 </script>
 
+<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 <svelte:element
   this={tag}
   {...rest}

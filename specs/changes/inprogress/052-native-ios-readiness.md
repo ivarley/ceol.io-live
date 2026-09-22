@@ -518,7 +518,29 @@ Two things learned on first contact, both folded back into the kit:
   renders, so the columns are always filled) but one conditional lead away from the
   bug. Deleted; the layout now comes from Row.
 
-Remaining on this page: the Tunes and Logs tabs, and **tab counts**. Counts are NOT
+**Second: the Tunes tab (2026-09-22).** Also pixel-identical (0 differing pixels at
+400px and 1280px, same row heights 41 / 49, same 8px meta inset), and selection mode
+verified unchanged against the pre-change build: checkboxes tick, the row click still
+opens the drawer, and the drawer does not leak through a checkbox press.
+
+It forced a second addition to Row, `as`. This row carries its own checkbox, and
+**interactive content inside a `<button>` is invalid HTML** — browsers disagree about
+whether the inner control ever sees the click — so it must stay a div. That is a rule
+rather than a preference, and it means the "a row that does something is a control"
+default cannot be universal. Rows like this are no less accessible than before, but no
+more either; giving them keyboard reach needs a real control INSIDE the row, which is a
+redesign rather than a port.
+
+`.tune-row` was another `auto`-shaped grid (`1fr auto`), saved only by both children
+always rendering and by explicit `grid-column` assignments. Those are gone too.
+
+**The Logs tab is NOT a Stage 2 target.** It is a collapsible `<table>` of year
+sections whose rows are inline date links with a tune-count suffix — no lead, no
+trailing, no subtitle. Putting it on Row would be the mockup's redesign (date block,
+name-or-date title, details subtitle, an "Open" chip), which is a design decision, not
+conformance. It should be taken deliberately, not smuggled in under a visual pass.
+
+Remaining on this page: **tab counts**. Counts are NOT
 free — `total_tunes_count` is in the payload but the logs and people counts load
 lazily inside their own tabs, so a count on Tunes alone would be worse than none.
 That needs `build_session_detail_payload` to carry all three, which is server work

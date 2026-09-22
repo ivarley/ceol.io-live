@@ -181,6 +181,8 @@ row and the page scrolls sideways.
 | `title` / `titleContent` | `''` | plain text, or a snippet when the heading needs markup |
 | `subtitle` | `''` | omitted entirely when empty |
 | `onclick` / `href` | `null` | decides the element: button / anchor / div |
+| `as` | `null` | force the element. Needed by any row carrying its OWN control — interactive content inside a `<button>` is invalid HTML and browsers disagree about whether the inner control sees the click, so e.g. the session Tunes row (selection checkbox) passes `as="div"` |
+| `body` | — | snippet replacing title+subtitle, for a body with its own layout (the session People row is inline on desktop, stacked on a phone) |
 | `lead` / `trailing` | — | snippets; neither renders an empty slot when absent |
 | `styled` | `true` | `false` = structure only |
 | `rowClass` / `...rest` | — | legacy skin + id/data-* passthrough |
