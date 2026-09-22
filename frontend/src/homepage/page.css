@@ -1,0 +1,250 @@
+/* Home page styles (spec 052 §B8 Stage 4).
+ *
+ * Ported from the <style> block templates/home.html used to carry. The class names
+ * are the old ones on purpose: e2e/mobile/home.mobile.spec.ts selects .home-greeting,
+ * .session-item, .session-name and .empty-state, and spec 035's contract discipline
+ * says a migration keeps its hooks so the tests can check it.
+ *
+ * What changed is the container. The old page wrapped each block in a bordered
+ * .home-card; sections are now plain, separated by their headings and a rule, which
+ * is the prototype's shape and reads as one screen rather than a deck of panels.
+ * The anonymous landing hero is still server-rendered Jinja and its styles are still
+ * in the shell — a signed-out visitor never downloads this bundle.
+ */
+
+.home-section {
+  margin-bottom: 1.6rem;
+}
+
+.home-sechead {
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.home-sechead .kit-sechead-title {
+  font-family: 'Poppins', sans-serif;
+  font-weight: 600;
+  font-size: 1.05rem;
+  letter-spacing: 0.01em;
+  color: var(--text-color);
+  gap: 0.5rem;
+}
+
+.home-sechead .kit-sechead-seeall {
+  font-size: 0.85rem;
+}
+
+.home-icon {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.75;
+}
+
+.home-greeting {
+  font-family: 'Poppins', sans-serif;
+  font-weight: 300;
+  font-size: 1.6rem;
+  margin-bottom: 1.5rem;
+  color: var(--text-color);
+}
+
+.home-greeting strong {
+  font-weight: 600;
+}
+
+/* ---- rows -------------------------------------------------------------------- */
+
+/* .session-item is a kit Row now (styled={false}), so Row supplies the flex box and
+   this supplies the skin it had before. The trailing slot's right alignment comes
+   from Row itself rather than from anything here. */
+.session-item {
+  padding: 0.6rem 0;
+  gap: 0.75rem;
+  width: 100%;
+  text-align: left;
+  color: inherit;
+  text-decoration: none;
+}
+
+a.session-item:hover {
+  text-decoration: none;
+  color: inherit;
+}
+
+.session-item + .session-item {
+  border-top: 1px solid var(--border-color);
+}
+
+.session-date {
+  flex-shrink: 0;
+  width: 3rem;
+  text-align: center;
+}
+
+.session-date-day {
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.6;
+  line-height: 1;
+}
+
+.session-date-num {
+  font-family: 'Poppins', sans-serif;
+  font-size: 1.4rem;
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--primary);
+}
+
+/* The name used to be a nested <a> inside a static row. The whole row is the link
+   now, so this is the accent the anchor used to provide. */
+.session-name {
+  font-weight: 500;
+  font-size: 0.95rem;
+  color: var(--primary);
+}
+
+.session-item .kit-row-sub {
+  font-size: 0.8rem;
+  opacity: 0.6;
+}
+
+.badge-logged {
+  font-size: 0.7rem;
+  font-weight: 500;
+  padding: 0.15rem 0.5rem;
+  border-radius: 3px;
+  background: var(--success);
+  color: #fff;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+}
+
+.home-badge {
+  font-size: 0.7rem;
+  font-weight: 500;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  opacity: 0.8;
+  white-space: nowrap;
+}
+
+.home-badge.live {
+  color: var(--primary);
+  border-color: var(--primary);
+  opacity: 1;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 1rem 0;
+  opacity: 0.5;
+  font-size: 0.92rem;
+}
+
+/* ---- learning ----------------------------------------------------------------- */
+
+.tune-stats {
+  display: flex;
+  gap: 0.75rem;
+  margin: 0.75rem 0 1rem;
+}
+
+.tune-stat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.7rem 0.5rem;
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--text-color);
+  transition: border-color 0.2s ease, transform 0.15s ease;
+}
+
+.tune-stat:hover {
+  border-color: var(--primary);
+  transform: translateY(-1px);
+  text-decoration: none;
+  color: var(--text-color);
+}
+
+.tune-stat-number {
+  font-family: 'Poppins', sans-serif;
+  font-size: 1.7rem;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--primary);
+}
+
+.tune-stat-label {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 0.3rem;
+  opacity: 0.7;
+  text-align: center;
+}
+
+.suggested-tune {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  font-size: 0.92rem;
+  color: var(--text-color);
+  opacity: 0.85;
+}
+
+.suggested-tune .label-text {
+  white-space: nowrap;
+}
+
+.suggested-tune a {
+  font-weight: 500;
+}
+
+.suggested-tune .tune-type {
+  opacity: 0.6;
+  font-size: 0.85rem;
+}
+
+/* ---- phone -------------------------------------------------------------------- */
+
+@media (max-width: 576px) {
+  .home-greeting {
+    font-size: 1.3rem;
+    margin-bottom: 1rem;
+  }
+  .home-section {
+    margin-bottom: 1.3rem;
+  }
+  .home-sechead .kit-sechead-title {
+    font-size: 0.95rem;
+  }
+  .tune-stats {
+    gap: 0.5rem;
+    margin: 0.6rem 0 0.75rem;
+  }
+  .tune-stat {
+    padding: 0.5rem 0.35rem;
+  }
+  .tune-stat-number {
+    font-size: 1.4rem;
+  }
+  .tune-stat-label {
+    font-size: 0.7rem;
+  }
+}

@@ -135,11 +135,21 @@ components:
             name: { type: string }
             tune_type: { type: [string, "null"] }
             play_count: { type: integer }
+        viewer:
+          type: object
+          required: [person_id, first_name]
+          properties:
+            person_id: { type: [integer, "null"] }
+            first_name: { type: [string, "null"] }
         upcoming_sessions:
+          # This week's instances at the viewer's sessions. The Today card is the
+          # subset whose date == `today`; there is no second list for it, so the two
+          # cannot disagree (spec 052 §B2).
           type: array
           items:
             type: object
-            required: [name, path, session_id, session_instance_id, date, start_time, log_complete_date]
+            required: [name, path, session_id, session_instance_id, date, start_time, log_complete_date,
+                       end_time, location_name, is_active, tunes_logged, people_here]
             properties:
               name: { type: string }
               path: { type: string }
@@ -147,7 +157,12 @@ components:
               session_instance_id: { type: integer }
               date: { $ref: "#/components/schemas/Date" }
               start_time: { $ref: "#/components/schemas/TimeOrNull" }
+              end_time: { $ref: "#/components/schemas/TimeOrNull" }
+              location_name: { type: [string, "null"] }
               log_complete_date: { $ref: "#/components/schemas/DateTimeOrNull" }
+              is_active: { type: boolean }
+              tunes_logged: { type: integer }
+              people_here: { type: integer }
         in_progress_logs:
           type: array
           items:

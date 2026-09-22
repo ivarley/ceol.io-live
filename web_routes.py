@@ -74,7 +74,10 @@ def home():
             payload = build_home_payload(conn, current_user)
         finally:
             conn.close()
-        return render_template("home.html", **payload)
+        # One `payload` rather than **payload: the shell embeds it whole as
+        # __PAGE_DATA__ for the Svelte bundle (spec 052 §B8 Stage 4) instead of
+        # picking the keys apart in Jinja.
+        return render_template("home.html", payload=payload)
     except Exception:
         return _page_error()
 

@@ -22,6 +22,7 @@ quietly become wrong:
    refusal is worse than no card.
 """
 
+import json
 from unittest.mock import patch
 
 import pytest
@@ -138,34 +139,47 @@ class as_the_tagger:
 
 
 def _home(client):
+    """The home payload, as the page embeds it.
+
+    These tests used to read the rendered HTML for the card's heading and its
+    link. Since spec 052 §B8 Stage 4 the page is a thin shell around
+    build_home_payload and the Svelte bundle draws the card, so the heading is
+    no longer a server-rendered string and the link is built in the client from
+    `recording_id`. The RULES being tested did not change at all — which
+    recordings are offered back to you, and with what counts — so they are
+    asserted one layer down, against the payload the page and GET /api/home
+    share. Reading the HTML would now be testing Jinja's ability to print JSON.
+    """
     with as_the_tagger(client):
         res = client.get("/")
     assert res.status_code == 200
-    return res.get_data(as_text=True)
+    body = res.get_data(as_text=True)
+    assert "window.__PAGE_DATA__" in body, "home is a thin shell; it must embed its payload"
+    raw = body.split("window.__PAGE_DATA__ = ", 1)[1].split(";\n", 1)[0].strip().rstrip(";")
+    return json.loads(raw)
 
 
-SEGMENT_LINK = f"/admin/recordings/{CT_RECORDING}/segment"
+def _offered(payload):
+    """The recording ids the "pick up where you left off" section would show."""
+    return {r["recording_id"] for r in payload["in_progress_recordings"]}
 
 
 def test_half_tagged_recording_appears_with_its_counts(client, tagging_world):
     conn, cur = tagging_world
     _place(cur, conn, 2)
 
-    html = _home(client)
+    payload = _home(client)
 
-    assert "Continue Segmenting" in html
-    assert SEGMENT_LINK in html
-    assert f"2 of {TUNE_COUNT} tunes placed" in html
+    assert CT_RECORDING in _offered(payload)
+    row = next(r for r in payload["in_progress_recordings"] if r["recording_id"] == CT_RECORDING)
+    assert (row["placed"], row["tune_count"]) == (2, TUNE_COUNT)
 
 
 def test_fully_tagged_recording_drops_off(client, tagging_world):
     conn, cur = tagging_world
     _place(cur, conn, TUNE_COUNT)
 
-    html = _home(client)
-
-    assert SEGMENT_LINK not in html
-    assert "Continue Segmenting" not in html
+    assert CT_RECORDING not in _offered(_home(client))
 
 
 def test_a_recording_marked_segmenting_complete_drops_off(client, tagging_world):
@@ -182,10 +196,7 @@ def test_a_recording_marked_segmenting_complete_drops_off(client, tagging_world)
     )
     conn.commit()
 
-    html = _home(client)
-
-    assert SEGMENT_LINK not in html
-    assert "Continue Segmenting" not in html
+    assert CT_RECORDING not in _offered(_home(client))
 
 
 def test_reopening_it_brings_the_card_back(client, tagging_world):
@@ -198,7 +209,7 @@ def test_reopening_it_brings_the_card_back(client, tagging_world):
         (CT_RECORDING,),
     )
     conn.commit()
-    assert SEGMENT_LINK not in _home(client)
+    assert CT_RECORDING not in _offered(_home(client))
 
     cur.execute(
         "UPDATE recording SET segmenting_complete = FALSE, segmenting_complete_at = NULL "
@@ -207,24 +218,20 @@ def test_reopening_it_brings_the_card_back(client, tagging_world):
     )
     conn.commit()
 
-    assert SEGMENT_LINK in _home(client)
+    assert CT_RECORDING in _offered(_home(client))
 
 
 def test_untouched_recording_never_appears(client, tagging_world):
     """The card continues work; it does not advertise work never started —
     same rule as the logging list, which needs an edit of yours to show."""
-    html = _home(client)
-
-    assert SEGMENT_LINK not in html
+    assert CT_RECORDING not in _offered(_home(client))
 
 
 def test_someone_elses_marks_are_not_my_unfinished_work(client, tagging_world):
     conn, cur = tagging_world
     _place(cur, conn, 2, user_id=CT_OTHER_USER)
 
-    html = _home(client)
-
-    assert SEGMENT_LINK not in html
+    assert CT_RECORDING not in _offered(_home(client))
 
 
 def test_revoked_grant_removes_the_card(client, tagging_world):
@@ -238,6 +245,4 @@ def test_revoked_grant_removes_the_card(client, tagging_world):
     )
     conn.commit()
 
-    html = _home(client)
-
-    assert SEGMENT_LINK not in html
+    assert CT_RECORDING not in _offered(_home(client))

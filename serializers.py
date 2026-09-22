@@ -2374,10 +2374,29 @@ def _load_home_suggested_tune(cur, person_id: int) -> Optional[Dict[str, Any]]:
 
 
 def _load_home_upcoming_sessions(cur, person_id: int, monday, sunday) -> List[Dict[str, Any]]:
+    """This week's instances at the sessions the viewer belongs to.
+
+    Carries what the Today card needs (spec 052 §B2): where it is, whether it is
+    live right now, how many people are there, and how many tunes are on the log.
+    The client picks today's entries out of this list rather than being handed a
+    second copy of them, so the two can never disagree about a night.
+
+    The two counts are SCALAR SUBQUERIES on purpose. Joining `session_instance_tune`
+    and `person` into this query would be two one-to-many joins in one aggregate,
+    which multiplies each side by the other — the exact shape of the bug that made a
+    player's attended nights come back once per instrument they play.
+    """
     cur.execute(
         """
         SELECT s.name, s.path, s.session_id, si.session_instance_id, si.date, si.start_time,
-               si.log_complete_date
+               si.end_time, si.log_complete_date, si.is_active,
+               COALESCE(si.location_override, s.location_name) AS location_name,
+               (SELECT COUNT(*) FROM session_instance_tune sit
+                 WHERE sit.session_instance_id = si.session_instance_id
+                   AND sit.deleted = FALSE
+                   AND sit.record_type <> 'break') AS tunes_logged,
+               (SELECT COUNT(*) FROM person p
+                 WHERE p.at_active_session_instance_id = si.session_instance_id) AS people_here
         FROM session_person sp
         JOIN session s ON sp.session_id = s.session_id
         JOIN session_instance si ON s.session_id = si.session_id
@@ -2396,7 +2415,12 @@ def _load_home_upcoming_sessions(cur, person_id: int, monday, sunday) -> List[Di
             "session_instance_id": row["session_instance_id"],
             "date": row["date"],
             "start_time": row["start_time"],
+            "end_time": row["end_time"],
+            "location_name": row["location_name"],
             "log_complete_date": row["log_complete_date"],
+            "is_active": row["is_active"],
+            "tunes_logged": row["tunes_logged"],
+            "people_here": row["people_here"],
         }
         for row in cur.fetchall()
     ]
@@ -2526,6 +2550,14 @@ def build_home_payload(conn, user) -> Dict[str, Any]:
         payload["today"] = today
         payload["week"] = {"start": monday, "end": sunday}
         payload["current_year"] = today.year
+        # The greeting's name. It lived in the Jinja template as
+        # `current_user.first_name`; now that the page renders from this payload it
+        # has to travel in the payload, and a native Home screen wants it too rather
+        # than having to hold /api/me alongside this.
+        payload["viewer"] = {
+            "person_id": user.person_id,
+            "first_name": user.first_name,
+        }
         return payload
     finally:
         cur.close()

@@ -5,16 +5,16 @@ import { expectNoServerError } from "../support/nav";
 /**
  * Home on a phone — spec 052 §B8 Stage 0.
  *
- * Stage 4 replaces this Jinja page with a Svelte shell rendering
- * serializers.build_home_payload (already written, already the GET /api/home body),
- * and reorders it: Today (only when a session is on, a swipeable strip at a
- * festival), then This week, Learning, and Pick up where you left off.
+ * Stage 4 HAS HAPPENED: this is a Svelte shell rendering serializers.build_home_payload
+ * (the GET /api/home body), ordered Today, This week, Learning, and Pick up where you
+ * left off. The tests written before that move are unchanged below, which was the
+ * point of writing them first — they pin the CONTENT, not the markup, so they check
+ * the migration instead of being rewritten by it.
  *
- * So these tests pin the CONTENT that must survive that move — the learning counts,
- * the week's sessions, the continue-work cards — and deliberately not the markup
- * carrying it. The one structural assertion is that the page and the API agree,
- * which is the invariant Stage 4 exists to establish and the thing most likely to
- * rot silently.
+ * The Today tests are new, because there was nothing to test before. They depend on
+ * the seed dating two instances CURRENT_DATE (one live at Mueller, one later at
+ * Downtown): a card that only exists on the day a session runs cannot be reached from
+ * fixed historical dates.
  */
 
 test.use({ storageState: STORAGE.regular });
@@ -62,6 +62,84 @@ test.describe("home (mobile)", () => {
       await expect(page.locator(".empty-state").first()).toBeVisible();
     }
     await expectNoServerError(page);
+  });
+
+  test("Today: a live session leads the page, with its tally and its room", async ({ page }) => {
+    await page.goto("/");
+    const res = await page.request.get("/api/home");
+    const body = await res.json();
+    const todays = (body.upcoming_sessions || []).filter((s) => s.date === body.today);
+
+    if (!todays.length) {
+      // No session today, so there must be no card — the whole rule of this block.
+      await expect(page.locator(".today-card")).toHaveCount(0);
+      return;
+    }
+
+    const cards = page.locator(".today-card");
+    await expect(cards).toHaveCount(todays.length);
+
+    const live = todays.find((s) => s.is_active);
+    if (live) {
+      const card = page.locator('.today-card[data-status="live"]').first();
+      await expect(card).toContainText("Live now");
+      await expect(card).toContainText(live.name);
+      // The tally is the payload's number, not a second count made in the client.
+      await expect(card).toContainText(`${live.tunes_logged} tune`);
+      if (live.people_here > 0) await expect(card).toContainText(`${live.people_here} `);
+    }
+    await expectNoServerError(page);
+  });
+
+  test("Today: the card and its View button go to that night's log", async ({ page }) => {
+    await page.goto("/");
+    const res = await page.request.get("/api/home");
+    const body = await res.json();
+    const todays = (body.upcoming_sessions || []).filter((s) => s.date === body.today);
+    test.skip(!todays.length, "no session on today's date in this database");
+
+    const first = todays[0];
+    const view = page.locator(".today-card .today-view").first();
+    await expect(view).toHaveAttribute("href", `/sessions/${first.path}/${first.date}`);
+  });
+
+  test("Today: two sessions on one day are a strip you can page through", async ({ page }) => {
+    // The festival case. A stack would hide the fact that there are two, which is
+    // the one thing you need to know when there are.
+    await page.goto("/");
+    const res = await page.request.get("/api/home");
+    const body = await res.json();
+    const todays = (body.upcoming_sessions || []).filter((s) => s.date === body.today);
+    test.skip(todays.length < 2, "needs two sessions on today's date");
+
+    await expect(page.locator(".today-dots span")).toHaveCount(todays.length);
+    const strip = page.locator(".today-strip");
+    await expect(strip).toHaveClass(/multi/);
+
+    // The second card starts off-screen: that is what makes the first one peek.
+    const overflow = await strip.evaluate((e) => e.scrollWidth - e.clientWidth);
+    expect(overflow).toBeGreaterThan(0);
+  });
+
+  test("the page renders from the embedded payload, with no extra fetch", async ({ page }) => {
+    // The thin-shell invariant (spec 035 §1d). If the bundle had to call /api/home to
+    // paint, the page and the API could not drift — but every load would cost a round
+    // trip, and a native client reading the same payload would be doing it differently.
+    const calls: string[] = [];
+    page.on("request", (r) => {
+      if (r.url().includes("/api/home")) calls.push(r.url());
+    });
+    await page.goto("/");
+    await expect(page.locator(".home-greeting")).toBeVisible();
+    await page.waitForTimeout(600);
+    expect(calls).toHaveLength(0);
+  });
+
+  test("the greeting comes from the payload, not from a template variable", async ({ page }) => {
+    await page.goto("/");
+    const res = await page.request.get("/api/home");
+    const body = await res.json();
+    await expect(page.locator(".home-greeting")).toContainText(body.viewer.first_name);
   });
 
   test("does not scroll sideways at phone width", async ({ page }) => {

@@ -62,8 +62,9 @@ itself is app work.
 `mockups/tabbar/` (served at `/mockups/tabbar/`) is the interaction prototype for the
 reshaping — four tabs, session-centric Home, inline filters, the tune sheet. It settled
 several questions the first draft of §B left open; those answers are folded into B1–B4
-below, and **§B8 is the stage-by-stage conversion plan**. Stages 0-3 of that plan are
-built: the kit primitives exist and the session page's three tabs are converted.
+below, and **§B8 is the stage-by-stage conversion plan**. Stages 0-4 of that plan are
+built: the kit primitives exist, the session page's three tabs are converted, and Home
+is a Svelte page rendering the same payload `GET /api/home` returns.
 
 ---
 
@@ -657,7 +658,43 @@ either — inline expansion is the answer on both platforms.)
 `sessionpage/TunesTab.svelte` and the `.filter-*` block in `my_tunes_mobile.css` are
 gone; mobile e2e green.
 
-#### Stage 4 — Home becomes a Svelte page
+#### Stage 4 — Home becomes a Svelte page — **DONE 2026-09-22**
+
+**Status.** `templates/home.html` is a thin shell embedding `build_home_payload`, and
+`frontend/src/homepage/` renders it in the prototype's order: Today, This week,
+Learning, Pick up where you left off. The two in-progress cards became one section,
+merged and sorted by last edit, because each holds at most three rows and two headings
+above two single rows was most of what they were.
+
+`_load_home_upcoming_sessions` gained what the Today card needs — `end_time`,
+`location_name`, `is_active`, `tunes_logged`, `people_here` — as scalar subqueries, not
+joins, for the reason spelled out in `tests/integration/test_home_today_052.py`. The
+payload also carries `viewer.first_name` now; the greeting used to read `current_user`
+in Jinja, and a native Home screen should not need `/api/me` to say hello. Both
+additions are in `specs/api/native-surface.yaml`.
+
+**Today is a subset of `upcoming_sessions`, not its own list.** A second list would be a
+second chance to disagree about a night, and the disagreement would show as a card
+saying one thing above a row saying another.
+
+**The rules live in `frontend/src/homepage/logic.js`** — which nights are today, whether
+one is live, what the tally says, what order the unfinished work comes back in — as pure
+functions with 34 tests against payload fixtures. That is §B5's highest-leverage prep
+work done for one screen: a SwiftUI Home has to make the same decisions, and this is what
+makes "do the two agree?" a question you can answer.
+
+**Seeded, because it could not otherwise be reached.** Two instances dated
+`CURRENT_DATE`. The live one with the log and the people is **Downtown, not Mueller**:
+the live logger suggests the next tune from the session's own history, so a set seeded at
+Mueller gave the composer a suggestion it did not have, which opened its dropdown on an
+empty input and turned ArrowUp into "move the highlight" rather than "leave the box" —
+failing a keyboard test on an unrelated instance.
+
+**Not done.** `test_home_continue_tagging_050.py` does NOT still pass unchanged, contrary
+to the "done when" below: it read the rendered HTML for the card's heading and its
+`/admin/recordings/<id>/segment` link, and the link is now built in the client from
+`recording_id`. The seven rules it pins are unchanged and now asserted against the
+payload instead. The old assertions were testing Jinja's ability to print JSON.
 
 **What.** `templates/home.html` → thin shell + `frontend/src/homepage/`, rendering
 `build_home_payload` (already written, already the `/api/home` body). Content per B2.
@@ -667,7 +704,7 @@ old Home is a menu in a different place.
 **Done when.** `/` and `GET /api/home` render from one payload; the festival strip works
 at 400px; `test_home_continue_tagging_050.py` still passes.
 
-#### Stage 5 — The tab bar, behind a flag
+#### Stage 5 — The tab bar, behind a flag — **NEXT**
 
 **What.** A bottom tab bar in `base.html` at <768px: Home / Sessions / Tunes / Me. Help,
 Admin, Share and Log Out move into Me *first*; the hamburger stays alive until Me has

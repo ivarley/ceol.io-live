@@ -38,7 +38,9 @@ class TestHomeRoute:
             [{"learn_status": "learning", "n": 3}, {"learn_status": "want to learn", "n": 2}],
             [{"name": "Austin Session", "path": "austin/session", "session_id": 1,
               "session_instance_id": 101, "date": datetime(2023, 8, 15).date(),
-              "start_time": None, "log_complete_date": None}],  # upcoming sessions
+              "start_time": None, "end_time": None, "location_name": "The Pub",
+              "log_complete_date": None, "is_active": False,
+              "tunes_logged": 0, "people_here": 0}],  # upcoming sessions
             [{"name": "Mueller Session", "path": "austin/mueller", "session_id": 2,
               "session_instance_id": 102, "date": datetime(2023, 8, 10).date(),
               "last_edit": datetime(2023, 8, 12)}],  # in-progress logs
@@ -55,11 +57,28 @@ class TestHomeRoute:
             response = client.get("/")
 
         assert response.status_code == 200
-        assert b"Austin Session" in response.data
-        assert b"Continue Logging" in response.data
-        assert b"Mueller Session" in response.data
-        assert b"Continue Segmenting" in response.data
-        assert b"4 of 11 tunes placed" in response.data
+
+        # Since §B8 Stage 4 the page is a thin shell: the assertions are about the
+        # PAYLOAD it embeds, not about strings Jinja printed. It used to look for
+        # the card headings "Continue Logging" and "Continue Segmenting" and for
+        # "4 of 11 tunes placed" — all of those are the bundle's words now, and one
+        # of the headings no longer exists at all (the two lists became one section).
+        body = response.data.decode()
+        assert "window.__PAGE_DATA__" in body
+        assert '<div id="home-root"' in body
+
+        payload = json.loads(
+            body.split("window.__PAGE_DATA__ = ", 1)[1].split(";\n", 1)[0].strip().rstrip(";")
+        )
+        assert payload["success"] is True
+        assert payload["learning_count"] == 3
+        assert payload["want_to_learn_count"] == 2
+        assert payload["upcoming_sessions"][0]["name"] == "Austin Session"
+        assert payload["in_progress_logs"][0]["name"] == "Mueller Session"
+        assert payload["in_progress_recordings"][0]["placed"] == 4
+        assert payload["in_progress_recordings"][0]["tune_count"] == 11
+        # ISO 8601, via the JSON provider added in §A4 — never RFC 822.
+        assert payload["upcoming_sessions"][0]["date"] == "2023-08-15"
 
     @patch("web_routes.get_db_connection")
     def test_home_database_error(self, mock_get_conn, client, authenticated_user):
