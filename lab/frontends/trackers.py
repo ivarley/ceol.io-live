@@ -20,7 +20,10 @@ class _LibrosaTracker(FrontEnd):
     def defaults(cls):
         d = dict(FrontEnd.defaults())
         d.update({
-            "fmin": 130.0, "fmax": 1400.0, "hop": 256, "frame_length": 2048,
+            # 160Hz, measured: sweeping it over all 503 segments gives 0.616
+            # at 130, 0.702 at 160, 0.666 at 190. Below about 150 the tracker
+            # is offered energy that is not the melody at all, and takes it.
+            "fmin": 160.0, "fmax": 1400.0, "hop": 256, "frame_length": 2048,
             "min_voiced": 0.2,
             # input cleanup, off by default so the plain tracker is the floor
             "highpass_hz": None, "lowpass_hz": None, "hpss": None,
