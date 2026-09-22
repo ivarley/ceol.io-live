@@ -211,3 +211,46 @@ def test_a_windowed_expert_reads_more_than_one_chunk(lab_data):
         tracks = board.observations(run_id, types=["pitch_track"])
         assert tracks
         assert max(o.t_end_ms - o.t_start_ms for o in tracks) > 1000
+
+
+def test_frontend_and_expert_produce_the_same_notes(lab_data):
+    """One implementation of note segmentation, used by both loops.
+
+    A front end that scores well on the bench and an expert that behaves
+    differently on the board would be the exact bug the two loops exist to
+    prevent, so they share the code and this checks they still agree.
+    """
+    import numpy as np
+
+    from lab.audio.chunks import AudioStore
+    from lab.frontends import get_frontend
+    from lab.frontends.segmentation import notes_from_pitch
+
+    store = AudioStore(paths.wav_path(RECORDING_ID))
+    store.clock_ms = store.duration_ms
+    fe = get_frontend("yin", min_voiced=0.3)
+    y = store.read(5000, 15000)
+    direct = fe.note_events(y, store.sr, t_offset_ms=5000)
+    times, f0, voiced = fe.track(y, store.sr)
+    viaseg = notes_from_pitch(times, f0, voiced, **fe.note_params())
+    store.close()
+    assert len(direct) == len(viaseg)
+    assert [n["midi"] for n in direct] == [n["midi"] for n in viaseg]
+    assert all(np.isfinite(n["midi"]) for n in direct)
+
+
+def test_track_cache_is_keyed_on_tracking_params_only(lab_data):
+    """Sweeping a voicing threshold must not re-run the tracker.
+
+    pyin over a night is minutes; note segmentation is milliseconds. Keying
+    the cache on every parameter made a six-value threshold sweep cost six
+    full passes over the audio instead of one.
+    """
+    from lab.frontends import get_frontend
+
+    a = get_frontend("yin", min_voiced=0.1)
+    b = get_frontend("yin", min_voiced=0.9)
+    assert a.cache_key("sha", 0, 1000) == b.cache_key("sha", 0, 1000)
+
+    c = get_frontend("yin", fmin=200.0)
+    assert a.cache_key("sha", 0, 1000) != c.cache_key("sha", 0, 1000)
