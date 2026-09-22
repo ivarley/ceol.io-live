@@ -19,8 +19,35 @@ def median_filter(x, k):
     return out
 
 
+def merge_interlopers(notes, max_interloper_ms=70):
+    """Drop a brief wrong note wedged between two of the same pitch.
+
+    A tracker on a room wobbles. One frame of the note above, in the middle of
+    a held note, splits it into three and inserts two intervals that are not
+    in the tune. The run-length step cannot see this because it only compares
+    neighbours; this looks at the note either side.
+    """
+    if len(notes) < 3:
+        return notes
+    out = [notes[0]]
+    i = 1
+    while i < len(notes) - 1:
+        before, here, after = out[-1], notes[i], notes[i + 1]
+        short = (here["t1_ms"] - here["t0_ms"]) <= max_interloper_ms
+        bridged = before["midi"] == after["midi"] != here["midi"]
+        if short and bridged:
+            out[-1] = {**before, "t1_ms": after["t1_ms"]}   # swallow all three
+            i += 2
+            continue
+        out.append(here)
+        i += 1
+    if i < len(notes):
+        out.append(notes[i])
+    return out
+
+
 def notes_from_pitch(times_ms, f0_hz, voiced_prob, min_note_ms=60, median_frames=5,
-                     min_voiced=0.5):
+                     min_voiced=0.5, merge_interlopers_ms=0):
     """A pitch track to note events.
 
     Known weakness, and a real one for this music: a cut or a roll fragments
@@ -60,6 +87,8 @@ def notes_from_pitch(times_ms, f0_hz, voiced_prob, min_note_ms=60, median_frames
             current, start = None, None
         if np.isfinite(value) and current is None:
             current, start = value, i
+    if merge_interlopers_ms:
+        notes = merge_interlopers(notes, max_interloper_ms=merge_interlopers_ms)
     return notes
 
 

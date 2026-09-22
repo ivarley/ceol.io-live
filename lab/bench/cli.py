@@ -50,9 +50,20 @@ def add_parser(sub):
     ret.add_argument("--beta", type=float, default=1.0, help="how hard the prior pulls")
     ret.add_argument("--fold-octaves", action="store_true",
                      help="use the folded index, where an octave error costs nothing")
+    ret.add_argument("--type-filter", default="none",
+                     choices=["none", "oracle", "predicted",
+                              "predicted_hard", "predicted_plausible"],
+                     help="oracle: keep only candidates of the true tune type, to size "
+                          "what a type classifier would be worth before building one")
     ret.add_argument("--param", action="append", default=[], metavar="K=V")
     ret.add_argument("--no-save", action="store_true")
     ret.set_defaults(func=cmd_retrieval)
+
+    tt = inner.add_parser("tunetype", help="classify a segment's tune type from its rhythm")
+    tt.add_argument("--recordings")
+    tt.add_argument("--seconds", type=float, default=30.0)
+    tt.add_argument("--no-save", action="store_true")
+    tt.set_defaults(func=cmd_tunetype)
 
     fronts = inner.add_parser("frontends", help="list front ends (built and not)")
     fronts.set_defaults(func=cmd_frontends)
@@ -108,8 +119,18 @@ def cmd_retrieval(args):
     result, rows = run_retrieval(
         frontend, recording_ids=_ids(args.recordings), candidate_set=args.candidate_set,
         n=args.n, seconds=args.seconds, prior=args.prior, beta=args.beta,
-        fold_octaves=args.fold_octaves)
+        fold_octaves=args.fold_octaves, type_filter=args.type_filter)
     print(format_retrieval(result, rows))
+    if not args.no_save:
+        print(f"  saved {result.save()}")
+    return 0
+
+
+def cmd_tunetype(args):
+    from lab.bench.tunetype import format_tune_type, run_tune_type
+
+    result = run_tune_type(recording_ids=_ids(args.recordings), seconds=args.seconds)
+    print(format_tune_type(result))
     if not args.no_save:
         print(f"  saved {result.save()}")
     return 0

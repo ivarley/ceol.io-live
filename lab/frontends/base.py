@@ -37,11 +37,12 @@ class FrontEnd:
     # these alone and a threshold sweep costs one transcription rather than
     # one per threshold.
     TRACK_PARAMS = ()
-    NOTE_PARAMS = ("min_note_ms", "median_frames", "min_voiced")
+    NOTE_PARAMS = ("min_note_ms", "median_frames", "min_voiced", "merge_interlopers_ms")
 
     @classmethod
     def defaults(cls):
-        return {"min_note_ms": 60, "median_frames": 5, "min_voiced": 0.5}
+        return {"min_note_ms": 60, "median_frames": 5, "min_voiced": 0.5,
+                "merge_interlopers_ms": 0}
 
     def fresh(self):
         return type(self)(**self.params)

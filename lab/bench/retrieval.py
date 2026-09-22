@@ -78,6 +78,42 @@ def transcribe_segment(frontend, store, audio_sha1, t0_ms, t1_ms, board=None):
     return notes, cost, cached
 
 
+def _apply_type_filter(ranked, seg, type_filter, type_probs):
+    """Narrow or reweight candidates by what kind of tune this is.
+
+    Three strengths, because the right one is an empirical question. Hard
+    filtering on the classifier's best guess is worse than no filter at all
+    (0.479 against 0.485): when it is wrong it removes the answer. Keeping
+    every type it has not ruled out is best (0.517), because a repertoire
+    that is 43% reels still loses most of its field.
+    """
+    if type_filter == "none" or not ranked:
+        return ranked
+
+    def type_of(r):
+        return (r.get("tune_type") or "").strip().lower()
+
+    if type_filter == "oracle":
+        if not seg.tune_type:
+            return ranked
+        kept = [r for r in ranked if type_of(r) == seg.tune_type.strip().lower()]
+        return kept or ranked
+
+    probs = (type_probs or {}).get(str(seg.segment_id)) or {}
+    if not probs:
+        return ranked
+    if type_filter == "predicted_hard":
+        best = max(probs, key=probs.get)
+        return [r for r in ranked if type_of(r) == best] or ranked
+    if type_filter == "predicted_plausible":
+        allowed = {k for k, v in probs.items() if v >= 0.12}
+        return [r for r in ranked if type_of(r) in allowed] or ranked
+    if type_filter == "predicted":
+        return sorted(ranked, key=lambda r: -(max(1e-6, r["score"])
+                                              * max(0.05, probs.get(type_of(r), 0.0))))
+    return ranked
+
+
 def rerank(ranked, weights, beta=1.0, index=None, audio_floor=1e-3, prior_top=50):
     """Combine audio and prior over the UNION of what each proposes.
 
@@ -122,7 +158,8 @@ def _blend(weights_by_prev, belief, floor=1e-4):
 
 
 def score_night(frontend, recording_id, index, seconds=DEFAULT_SECONDS, board=None,
-                top_k=25, quiet=True, prior="none", beta=1.0, belief_k=5):
+                top_k=25, quiet=True, prior="none", beta=1.0, belief_k=5,
+                type_filter="none"):
     gt = load_ground_truth(recording_id)
     sequence = previous_of = None
     if prior != "none":
@@ -138,6 +175,12 @@ def score_night(frontend, recording_id, index, seconds=DEFAULT_SECONDS, board=No
     # system's own. `belief` is what it currently thinks that was.
     belief = {}
     opens_set = True
+    type_probs = None
+    if type_filter.startswith("predicted"):
+        from lab.bench.tunetype import predictions_path
+
+        with open(predictions_path()) as f:
+            type_probs = json.load(f)["by_segment"]
     store = AudioStore(paths.wav_path(recording_id))
     store.clock_ms = store.duration_ms      # offline: the whole file is available
     sha = wav_sha1(recording_id) or ""
@@ -185,6 +228,7 @@ def score_night(frontend, recording_id, index, seconds=DEFAULT_SECONDS, board=No
                     belief = {r["tune_id"]: max(1e-9, r["score"]) / total for r in head}
                     if prior == "sequence_self":
                         belief = {ranked[0]["tune_id"]: 1.0}
+            ranked = _apply_type_filter(ranked, seg, type_filter, type_probs)
             rank = next((i + 1 for i, r in enumerate(ranked) if r["tune_id"] == seg.tune_id), None)
             true_score = next((r["score"] for r in ranked if r["tune_id"] == seg.tune_id), 0.0)
             best_wrong = next((r["score"] for r in ranked if r["tune_id"] != seg.tune_id), 0.0)
@@ -294,7 +338,8 @@ def summarise(rows):
 
 
 def score_night_set_decoded(frontend, recording_id, index, seconds=DEFAULT_SECONDS,
-                            board=None, top_k=25, beta=1.0, audio_top=40):
+                            board=None, top_k=25, beta=1.0, audio_top=40,
+                            type_filter="none"):
     """Score a night by decoding each set as a whole.
 
     Two passes: transcribe and rank every segment as usual, then group the
@@ -311,6 +356,13 @@ def score_night_set_decoded(frontend, recording_id, index, seconds=DEFAULT_SECON
     store.clock_ms = store.duration_ms
     sha = wav_sha1(recording_id) or ""
 
+    type_probs = None
+    if type_filter.startswith("predicted"):
+        from lab.bench.tunetype import predictions_path
+
+        with open(predictions_path()) as f:
+            type_probs = json.load(f)["by_segment"]
+
     prepared = []
     try:
         for seg in gt.eval_segments():
@@ -323,6 +375,7 @@ def score_night_set_decoded(frontend, recording_id, index, seconds=DEFAULT_SECON
             notes, cost, cached = transcribe_segment(frontend, store, sha, t0, t1, board=board)
             intervals = intervals_from_notes(notes, fold=index.fold_octaves)
             ranked = index.lookup(intervals, top_k=audio_top)
+            ranked = _apply_type_filter(ranked, seg, type_filter, type_probs)
             prepared.append({"seg": seg, "ranked": ranked, "notes": notes,
                              "cost": cost, "cached": cached,
                              "opens_set": previous_of.get(seg.session_instance_tune_id) is None})
@@ -377,7 +430,7 @@ def score_night_set_decoded(frontend, recording_id, index, seconds=DEFAULT_SECON
 
 def run_retrieval(frontend, recording_ids=None, candidate_set="repertoire", n=5,
                   seconds=DEFAULT_SECONDS, quiet=False, prior="none", beta=1.0,
-                  fold_octaves=False, belief_k=5):
+                  fold_octaves=False, belief_k=5, type_filter="none"):
     from lab.corpus.index import Index
 
     index = Index.load(candidate_set, n=n, fold_octaves=fold_octaves)
@@ -388,10 +441,12 @@ def run_retrieval(frontend, recording_ids=None, candidate_set="repertoire", n=5,
             t0 = time.time()
             if prior == "set_viterbi":
                 rows = score_night_set_decoded(frontend, rid, index, seconds=seconds,
-                                               board=board, beta=beta)
+                                               board=board, beta=beta,
+                                               type_filter=type_filter)
             else:
                 rows = score_night(frontend, rid, index, seconds=seconds, board=board,
-                                   quiet=quiet, prior=prior, beta=beta, belief_k=belief_k)
+                                   quiet=quiet, prior=prior, beta=beta, belief_k=belief_k,
+                                   type_filter=type_filter)
             board.conn.commit()
             gt = load_ground_truth(rid)
             m = summarise(rows)
@@ -411,7 +466,7 @@ def run_retrieval(frontend, recording_ids=None, candidate_set="repertoire", n=5,
         candidate=frontend.name if prior == "none" else f"{frontend.name}+{prior}", version=frontend.version,
         params={**frontend.params, "candidate_set": candidate_set, "n": n,
                 "seconds": seconds, "prior": prior, "beta": beta,
-                "fold_octaves": fold_octaves},
+                "fold_octaves": fold_octaves, "type_filter": type_filter},
         features_version="audio", split="per-night",
         nights=nights, pooled=pooled, warnings=[],
         created_at=time.strftime("%Y-%m-%dT%H:%M:%S"), git_sha=git_sha())
