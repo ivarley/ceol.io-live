@@ -5,7 +5,8 @@ User registration, login, password management, email verification.
 ## Key Files
 
 - `auth.py` - User model, session management, permissions
-- `web_routes.py:790-1520` - Registration, login, logout, password reset routes
+- `web_routes.py` - Registration, login, logout, password reset routes (HTML + the spec-013 JSON login steps)
+- `api_app_routes.py` - the native auth handshake, `/api/me`, `/api/app-config` (spec 052)
 - `email_utils.py` - SendGrid integration
 
 ## User Model
@@ -41,9 +42,22 @@ User registration, login, password management, email verification.
 ## API Authentication
 
 - Cookie sessions via flask_login's `user_loader`; additionally a
-  `request_loader` (`app.py:106`) accepts `Authorization: Bearer
-  <user_session id>` on any route — the tokens minted by `/api/live/token`
-  (spec 035; the streaming sidecar validates the same tokens).
+  `request_loader` (`app.py`) accepts `Authorization: Bearer
+  <user_session id>` on any route (the streaming sidecar validates the same
+  tokens).
+- **Native handshake (spec 052, `api_app_routes.py`)**: a caller sending
+  `X-Ceol-Client: ios/<version>` gets a Bearer token (a `user_session` id) from
+  `POST /api/auth/login-password` or `POST /api/auth/exchange {token}` (the
+  magic-link and email-verification tokens, delivered as Universal Links), and
+  no cookie. `POST /api/auth/logout` revokes it. `GET /api/me`,
+  `GET|PUT /api/me/profile`, `POST /api/auth/set-password`,
+  `POST /api/auth/resend-verification` and `POST /api/auth/web-session` (a
+  one-time `/auth/login/<token>?next=` link for opening the web signed in)
+  complete the set. `establish_session()` there is the single login-recording
+  path; `web_routes.login_password_api` delegates to it. Full table:
+  [AJAX Patterns](../ui/ajax.md#the-native-handshake-api_app_routespy-spec-052).
+- `auth.needs_profile_setup(person_id)` (missing name or no location) drives
+  both the web redirect to `/auth/setup-profile` and the API's `next` field.
 - `/api/*` endpoints use the decorators in `api_auth.py`
   (`@api_login_required` 401 JSON, `@api_admin_or_self_required` 401/403,
   `@public_api` marker for deliberately-anonymous endpoints) — see

@@ -10,6 +10,11 @@ from dotenv import load_dotenv
 # Import our custom modules
 from auth import User, SESSION_LIFETIME_WEEKS
 from api_auth import public_api
+from api_app_routes import (
+    auth_exchange, auth_resend_verification, auth_logout, auth_set_password,
+    api_me, me_profile, app_config, api_home, resolve_path, auth_web_session,
+    apple_app_site_association,
+)
 from api_routes import *
 from web_routes import *
 from recording_routes import (
@@ -51,7 +56,7 @@ from api_person_tune_routes import (
     update_my_profile,
     get_common_tunes
 )
-from live_logging_routes import live_bootstrap, live_vocabulary, live_op, live_issue_token, live_tune_detail, live_people, live_deep_search, live_incipit, live_match, live_thesession_search, my_tunes_deep_search, my_tunes_thesession_search, my_tunes_incipit, session_tunes_deep_search, session_tunes_thesession_search, session_tunes_incipit, live_tune_preview, my_tunes_tune_preview, session_tunes_tune_preview, live_setting_image, my_tunes_setting_image, session_tunes_setting_image, live_thesession_preview, my_tunes_thesession_preview, session_tunes_thesession_preview, live_render_abc, my_tunes_render_abc, session_tunes_render_abc
+from live_logging_routes import tunes_deep_search, tunes_thesession_search, tunes_incipit_image, tunes_preview, tunes_setting_image, tunes_thesession_preview, tunes_render_abc, live_bootstrap, live_vocabulary, live_op, live_issue_token, live_tune_detail, live_people, live_deep_search, live_incipit, live_match, live_thesession_search, my_tunes_deep_search, my_tunes_thesession_search, my_tunes_incipit, session_tunes_deep_search, session_tunes_thesession_search, session_tunes_incipit, live_tune_preview, my_tunes_tune_preview, session_tunes_tune_preview, live_setting_image, my_tunes_setting_image, session_tunes_setting_image, live_thesession_preview, my_tunes_thesession_preview, session_tunes_thesession_preview, live_render_abc, my_tunes_render_abc, session_tunes_render_abc
 from timezone_utils import format_datetime_with_timezone, utc_to_local
 from flask_login import current_user
 
@@ -73,6 +78,37 @@ class DateOrIdConverter(BaseConverter):
 
 app = Flask(__name__)
 app.url_map.converters['date_or_id'] = DateOrIdConverter
+
+
+# --- JSON: ISO 8601 dates, always (spec 052 A4) ---------------------------------
+#
+# Flask's stock provider renders date/datetime as RFC 822 ("Sun, 21 Sep 2026
+# 00:00:00 GMT") and cannot render time or Decimal at all. The serializers are
+# careful (~70 .isoformat() calls) but nothing enforced it; one missed field
+# would hand a native client the wrong format. This provider makes the careful
+# path the only path. It applies to jsonify() AND Jinja's |tojson, so the page
+# embed and the API can't disagree either.
+from flask.json.provider import DefaultJSONProvider as _DefaultJSONProvider
+import datetime as _dt
+import decimal as _decimal
+
+
+def _iso_json_default(o):
+    if isinstance(o, (_dt.datetime, _dt.date, _dt.time)):
+        return o.isoformat()
+    if isinstance(o, _decimal.Decimal):
+        return float(o)
+    if isinstance(o, (set, frozenset)):
+        return sorted(o)
+    return _DefaultJSONProvider.default(o)
+
+
+class CeolJSONProvider(_DefaultJSONProvider):
+    default = staticmethod(_iso_json_default)
+    sort_keys = False
+
+
+app.json = CeolJSONProvider(app)
 
 # Secret key required for Flask sessions (used by flash messages to store temporary messages in signed cookies)
 app.secret_key = os.environ.get(
@@ -256,6 +292,31 @@ def _log_request_timing(resp):
     return resp
 
 
+# --- API error envelope + client identification (spec 052 A3 / A8) -------------
+#
+# Every /api/* error response ends up in the one shape api_auth.api_error() builds:
+# {success:false, error, message, code}. New handlers call api_error() directly; this
+# back-fills the legacy sites (four different hand-rolled shapes across ~400 call
+# sites) so a native client can rely on `code` everywhere without a 400-site sweep.
+# Only JSON responses with a 4xx/5xx status are touched, and only when a key is
+# missing — a handler that already returns the full envelope is passed through
+# byte-for-byte.
+@app.after_request
+def _normalize_api_errors(resp):
+    if resp.status_code < 400 or not request.path.startswith("/api/"):
+        return resp
+    if resp.direct_passthrough or not (resp.mimetype or "").endswith("json"):
+        return resp
+    from api_auth import normalize_error_body
+    try:
+        body = resp.get_json(silent=True)
+    except Exception:
+        return resp
+    if isinstance(body, dict) and normalize_error_body(body, resp.status_code):
+        resp.set_data(app.json.dumps(body))
+    return resp
+
+
 def health():
     """Liveness + database reachability, so an uptime check can tell the
     difference between 'app is down' and 'database is slow'."""
@@ -403,6 +464,27 @@ app.add_url_rule("/logout", "logout", logout)
 app.add_url_rule("/api/auth/check-email", "check_email_api", public_api(check_email_api), methods=["POST"])
 app.add_url_rule("/api/auth/login-password", "login_password_api", public_api(login_password_api), methods=["POST"])
 app.add_url_rule("/auth/login/<token>", "login_with_token", login_with_token)
+# The app-shell API (spec 052): auth handshake, identity, config, home, resolve.
+# Handlers carry their own @public_api / @api_login_required markers.
+app.add_url_rule("/api/auth/exchange", "auth_exchange", auth_exchange, methods=["POST"])
+app.add_url_rule("/api/auth/resend-verification", "auth_resend_verification", auth_resend_verification, methods=["POST"])
+app.add_url_rule("/api/auth/logout", "auth_logout", auth_logout, methods=["POST"])
+app.add_url_rule("/api/auth/set-password", "auth_set_password", auth_set_password, methods=["POST"])
+app.add_url_rule("/api/auth/web-session", "auth_web_session", auth_web_session, methods=["POST"])
+app.add_url_rule("/api/me", "api_me", api_me, methods=["GET"])
+app.add_url_rule("/api/me/profile", "me_profile", me_profile, methods=["GET", "PUT"])
+app.add_url_rule("/api/app-config", "app_config", app_config, methods=["GET"])
+app.add_url_rule("/api/home", "api_home", api_home, methods=["GET"])
+app.add_url_rule("/api/resolve", "resolve_path", resolve_path, methods=["GET"])
+app.add_url_rule("/.well-known/apple-app-site-association", "apple_app_site_association", apple_app_site_association)
+# The one tune-search family (spec 052 A6); the per-page trees below stay as aliases.
+app.add_url_rule("/api/tunes/deep-search", "tunes_deep_search", tunes_deep_search, methods=["GET"])
+app.add_url_rule("/api/tunes/thesession-search", "tunes_thesession_search", tunes_thesession_search, methods=["GET"])
+app.add_url_rule("/api/tunes/<int:tune_id>/incipit-image", "tunes_incipit_image", tunes_incipit_image, methods=["GET"])
+app.add_url_rule("/api/tunes/<int:tune_id>/preview", "tunes_preview", tunes_preview, methods=["GET"])
+app.add_url_rule("/api/tunes/settings/<int:setting_id>/image", "tunes_setting_image", tunes_setting_image, methods=["GET"])
+app.add_url_rule("/api/tunes/thesession/<int:thesession_id>/preview", "tunes_thesession_preview", tunes_thesession_preview, methods=["GET"])
+app.add_url_rule("/api/tunes/render-abc", "tunes_render_abc", tunes_render_abc, methods=["POST"])
 app.add_url_rule("/auth/set-password", "set_password_optional", set_password_optional, methods=["GET", "POST"])
 app.add_url_rule("/auth/setup-profile", "setup_profile", setup_profile, methods=["GET", "POST"])
 app.add_url_rule(

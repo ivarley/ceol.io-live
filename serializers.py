@@ -2314,3 +2314,218 @@ def build_instance_audio_payload(conn, session_instance_id: int) -> Dict[str, An
         },
         "segments": segments,
     }
+
+
+# ---------------------------------------------------------------------------
+# home — the / page and GET /api/home (spec 052 A2). The five blocks the home
+# screen renders, for the signed-in viewer. The Jinja home renders exactly this
+# dict; GET /api/home returns exactly this dict.
+# ---------------------------------------------------------------------------
+
+def _load_home_learning_counts(cur, person_id: int) -> Dict[str, int]:
+    cur.execute(
+        """
+        SELECT learn_status, COUNT(*) AS n
+        FROM person_tune
+        WHERE person_id = %s AND learn_status IN ('learning', 'want to learn')
+        GROUP BY learn_status
+        """,
+        (person_id,),
+    )
+    counts = {row["learn_status"]: row["n"] for row in cur.fetchall()}
+    return {
+        "learning_count": counts.get("learning", 0),
+        "want_to_learn_count": counts.get("want to learn", 0),
+    }
+
+
+def _load_home_suggested_tune(cur, person_id: int) -> Optional[Dict[str, Any]]:
+    # Most played at the viewer's MEMBER sessions (spec 033 R3 — a visited session
+    # isn't "yours"), not already on their list.
+    cur.execute(
+        """
+        SELECT t.tune_id, t.name, t.tune_type, COUNT(sit.session_instance_tune_id) AS play_count
+        FROM session_instance_tune sit
+        JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
+        JOIN session_person sp ON si.session_id = sp.session_id
+            AND sp.person_id = %s AND sp.relationship = 'member'
+        JOIN tune t ON sit.tune_id = t.tune_id
+        WHERE sit.tune_id IS NOT NULL
+          AND sit.deleted = FALSE AND sit.record_type <> 'break'
+          AND t.redirect_to_tune_id IS NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM person_tune pt WHERE pt.person_id = %s AND pt.tune_id = sit.tune_id
+          )
+        GROUP BY t.tune_id, t.name, t.tune_type, t.tunebook_count_cached
+        ORDER BY play_count DESC, t.tunebook_count_cached DESC
+        LIMIT 1
+        """,
+        (person_id, person_id),
+    )
+    row = cur.fetchone()
+    if not row:
+        return None
+    return {
+        "tune_id": row["tune_id"],
+        "name": row["name"],
+        "tune_type": row["tune_type"],
+        "play_count": row["play_count"],
+    }
+
+
+def _load_home_upcoming_sessions(cur, person_id: int, monday, sunday) -> List[Dict[str, Any]]:
+    cur.execute(
+        """
+        SELECT s.name, s.path, s.session_id, si.session_instance_id, si.date, si.start_time,
+               si.log_complete_date
+        FROM session_person sp
+        JOIN session s ON sp.session_id = s.session_id
+        JOIN session_instance si ON s.session_id = si.session_id
+        WHERE sp.person_id = %s AND sp.relationship = 'member'
+          AND si.date BETWEEN %s AND %s
+          AND si.is_cancelled = FALSE
+        ORDER BY si.date, si.start_time
+        """,
+        (person_id, monday, sunday),
+    )
+    return [
+        {
+            "name": row["name"],
+            "path": row["path"],
+            "session_id": row["session_id"],
+            "session_instance_id": row["session_instance_id"],
+            "date": row["date"],
+            "start_time": row["start_time"],
+            "log_complete_date": row["log_complete_date"],
+        }
+        for row in cur.fetchall()
+    ]
+
+
+def _load_home_in_progress_logs(cur, user_id: int) -> List[Dict[str, Any]]:
+    # Instances the viewer edited in the last 30 days that aren't marked complete
+    # and still have at least one tune logged.
+    cur.execute(
+        """
+        SELECT s.name, s.path, s.session_id, si.session_instance_id, si.date,
+               MAX(sit.last_modified_date) AS last_edit
+        FROM session_instance_tune sit
+        JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
+        JOIN session s ON si.session_id = s.session_id
+        WHERE sit.last_modified_user_id = %s
+          AND sit.last_modified_date >= (NOW() AT TIME ZONE 'UTC') - INTERVAL '30 days'
+          AND si.log_complete_date IS NULL
+          AND si.is_cancelled = FALSE
+          AND EXISTS (
+            SELECT 1 FROM session_instance_tune sit2
+            WHERE sit2.session_instance_id = si.session_instance_id
+              AND sit2.deleted = FALSE
+              AND sit2.record_type <> 'break'
+          )
+        GROUP BY s.name, s.path, s.session_id, si.session_instance_id, si.date
+        ORDER BY last_edit DESC
+        LIMIT 3
+        """,
+        (user_id,),
+    )
+    return [
+        {
+            "name": row["name"],
+            "path": row["path"],
+            "session_id": row["session_id"],
+            "session_instance_id": row["session_instance_id"],
+            "date": row["date"],
+            "last_edit": row["last_edit"],
+        }
+        for row in cur.fetchall()
+    ]
+
+
+def _load_home_in_progress_recordings(cur, user_id: int, person_id: int, is_admin: bool) -> List[Dict[str, Any]]:
+    # In-progress timestamping (spec 050): recordings this user has placed tunes on
+    # in the last 30 days that still have tunes left to place. Two ways to be
+    # finished: every logged tune placed, or recording.segmenting_complete
+    # (schema/055) for audio covering only part of the night. The permission is
+    # re-checked now (schema/053): a card that links into a refusal is worse than
+    # no card.
+    cur.execute(
+        """
+        WITH mine AS (
+            SELECT rts.recording_id, MAX(rts.last_modified_date) AS last_edit
+            FROM recording_tune_segment rts
+            WHERE rts.last_modified_user_id = %s
+              AND rts.last_modified_date >= (NOW() AT TIME ZONE 'UTC') - INTERVAL '30 days'
+            GROUP BY rts.recording_id
+        )
+        SELECT r.recording_id, r.label, s.name, s.path, si.session_instance_id, si.date, mine.last_edit,
+               (SELECT COUNT(*) FROM recording_tune_segment x
+                 WHERE x.recording_id = r.recording_id) AS placed,
+               (SELECT COUNT(*) FROM session_instance_tune sit
+                 WHERE sit.session_instance_id = r.session_instance_id
+                   AND sit.deleted = FALSE AND sit.record_type <> 'break') AS tune_count
+        FROM mine
+        JOIN recording r ON r.recording_id = mine.recording_id
+        JOIN session_instance si ON si.session_instance_id = r.session_instance_id
+        JOIN session s ON s.session_id = si.session_id
+        WHERE r.status = 'ready'
+          AND r.segmenting_complete = FALSE
+          AND (%s OR EXISTS (
+                SELECT 1 FROM session_person sp
+                WHERE sp.session_id = s.session_id AND sp.person_id = %s
+                  AND sp.is_admin = TRUE AND sp.can_manage_recordings = TRUE
+              ))
+          AND (SELECT COUNT(*) FROM recording_tune_segment x
+                WHERE x.recording_id = r.recording_id)
+              < (SELECT COUNT(*) FROM session_instance_tune sit
+                  WHERE sit.session_instance_id = r.session_instance_id
+                    AND sit.deleted = FALSE AND sit.record_type <> 'break')
+        ORDER BY mine.last_edit DESC
+        LIMIT 3
+        """,
+        (user_id, bool(is_admin), person_id),
+    )
+    return [
+        {
+            "recording_id": row["recording_id"],
+            "label": row["label"],
+            "name": row["name"],
+            "path": row["path"],
+            "session_instance_id": row["session_instance_id"],
+            "date": row["date"],
+            "last_edit": row["last_edit"],
+            "placed": row["placed"],
+            "tune_count": row["tune_count"],
+        }
+        for row in cur.fetchall()
+    ]
+
+
+def build_home_payload(conn, user) -> Dict[str, Any]:
+    """The COMPLETE home payload for a signed-in user. GET /api/home returns exactly
+    this; the / page renders exactly this (web_routes.home). Dates are date/datetime
+    objects: the JSON provider (app.py) emits them as ISO 8601, and the Jinja home
+    still formats them itself."""
+    from datetime import timedelta
+
+    from timezone_utils import get_today_in_timezone
+
+    today = get_today_in_timezone(user.timezone or "UTC")
+    monday = today - timedelta(days=today.weekday())
+    sunday = monday + timedelta(days=6)
+
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    try:
+        payload: Dict[str, Any] = {"success": True}
+        payload.update(_load_home_learning_counts(cur, user.person_id))
+        payload["suggested_tune"] = _load_home_suggested_tune(cur, user.person_id)
+        payload["upcoming_sessions"] = _load_home_upcoming_sessions(cur, user.person_id, monday, sunday)
+        payload["in_progress_logs"] = _load_home_in_progress_logs(cur, user.user_id)
+        payload["in_progress_recordings"] = _load_home_in_progress_recordings(
+            cur, user.user_id, user.person_id, user.is_system_admin
+        )
+        payload["today"] = today
+        payload["week"] = {"start": monday, "end": sunday}
+        payload["current_year"] = today.year
+        return payload
+    finally:
+        cur.close()

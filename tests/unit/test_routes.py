@@ -29,19 +29,27 @@ class TestHomeRoute:
         mock_conn.cursor.return_value = mock_cursor
         mock_get_conn.return_value = mock_conn
 
-        # Authed home issues five queries in order: learning counts (fetchall),
-        # suggested tune (fetchone), upcoming sessions (fetchall), in-progress
-        # logs (fetchall), then in-progress timestamping (fetchall, spec 050).
+        # Authed home renders serializers.build_home_payload (spec 052 A2), which
+        # issues five queries in order on a RealDictCursor: learning counts
+        # (fetchall), suggested tune (fetchone), upcoming sessions (fetchall),
+        # in-progress logs (fetchall), then in-progress timestamping (fetchall,
+        # spec 050). Rows are read BY NAME.
         mock_cursor.fetchall.side_effect = [
-            [("learning", 3), ("want to learn", 2)],  # learning counts
-            [("Austin Session", "austin/session", 101,
-              datetime(2023, 8, 15).date(), None, None)],  # upcoming sessions
-            [("Mueller Session", "austin/mueller", 102,
-              datetime(2023, 8, 10).date(), datetime(2023, 8, 12))],  # in-progress logs
-            [(77, "Mueller Night", "Mueller Session", datetime(2023, 8, 10).date(),
-              datetime(2023, 8, 12), 4, 11)],  # in-progress timestamping
+            [{"learn_status": "learning", "n": 3}, {"learn_status": "want to learn", "n": 2}],
+            [{"name": "Austin Session", "path": "austin/session", "session_id": 1,
+              "session_instance_id": 101, "date": datetime(2023, 8, 15).date(),
+              "start_time": None, "log_complete_date": None}],  # upcoming sessions
+            [{"name": "Mueller Session", "path": "austin/mueller", "session_id": 2,
+              "session_instance_id": 102, "date": datetime(2023, 8, 10).date(),
+              "last_edit": datetime(2023, 8, 12)}],  # in-progress logs
+            [{"recording_id": 77, "label": "Mueller Night", "name": "Mueller Session",
+              "path": "austin/mueller", "session_instance_id": 102,
+              "date": datetime(2023, 8, 10).date(), "last_edit": datetime(2023, 8, 12),
+              "placed": 4, "tune_count": 11}],  # in-progress timestamping
         ]
-        mock_cursor.fetchone.return_value = (1, "Cooley's", "reel", 9)  # suggested tune
+        mock_cursor.fetchone.return_value = {
+            "tune_id": 1, "name": "Cooley's", "tune_type": "reel", "play_count": 9,
+        }  # suggested tune
 
         with authenticated_user:
             response = client.get("/")

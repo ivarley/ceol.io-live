@@ -87,6 +87,7 @@ class TestUser:
             None,  # session name
             None,  # session path
             False,  # beta_live_logging
+            None,  # hashed_password (spec 052: loaded so has_password() is right per-request)
         )
         mock_cursor.fetchone.return_value = user_tuple
 
