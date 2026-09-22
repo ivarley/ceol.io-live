@@ -46,6 +46,19 @@ venv/bin/python -m lab diff <run_a> <run_b>
 ## Looking at one part
 
 ```bash
+# Play a segment with the notes it heard drawn over it. Notes belonging to a
+# phrase the real tune also has are coloured differently, which is the thing
+# worth watching: above ~20 shared phrases it identifies the tune six times
+# in seven, below ten it never does.
+venv/bin/python -m lab view --recording 2 --segment 117
+venv/bin/python -m lab view --recording 2 --range 23:50-25:26 --frontend salience_viterbi
+
+# One set, stage by stage: heard, shaped, matched, expected, decided
+venv/bin/python -m lab trace-set --recording 2 --segment 117
+```
+
+
+```bash
 venv/bin/python -m lab board <run_id> --type pitch_track --range 12:00-12:10
 venv/bin/python -m lab transcribe --recording 2 --segment 5 --source pitch_pyin --match
 venv/bin/python -m lab runs
