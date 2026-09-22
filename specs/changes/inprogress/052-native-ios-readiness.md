@@ -453,7 +453,7 @@ stage): the add pane's preview footer can be torn out from under a tap. A late
 re-renders the footer. A person can tap a status and have it swallowed. The test no
 longer races it; the UI still can. Worth addressing when Stage 3 touches the add pane.
 
-#### Stage 1 — The three missing kit primitives, adopted by nobody
+#### Stage 1 — The three missing kit primitives, adopted by nobody — **DONE 2026-09-22**
 
 **What.** `frontend/src/lib/` gains:
 - **`Row.svelte`** — lead / (title + subtitle) / trailing. **Flex, not grid**: the
@@ -470,6 +470,23 @@ longer races it; the UI still can. Worth addressing when Stage 3 touches the add
 **Why here.** Pure addition; no page imports them yet. Vitest only.
 **Done when.** Three components, their tests, and `lib/README.md` updated. Zero diff in
 `static/` output for existing pages.
+
+**Built.** `Row`, `Toolbar`, `SectionHeader` in `frontend/src/lib/`, exported from
+`index.js`, documented in `lib/README.md`, and registered in the kit's export-surface
+smoke test. 136 kit tests, 820 frontend tests, clean vite build. Nothing imports them.
+
+Two notes for the stages that adopt them:
+
+- **Testing Row's layout.** jsdom does not apply a component's scoped `<style>`, so
+  `getComputedStyle` cannot see it. Structure (no empty lead element; trailing is the
+  last child, with and without a lead) is asserted against the DOM; the two rules the
+  component turns on — flex-not-grid, and `min-width: 0` on the body — are asserted
+  against its own `<style>` block. Crude, but it pins the contract at unit speed, and
+  the real-browser behaviour is already covered by Stage 0's no-sideways-scroll checks.
+- **Toolbar deliberately owns only the chrome.** The host owns `open`, the filter state
+  and the sort menu. That keeps the filter state where the page's URL sync and payload
+  already live, and means adopting it in Stage 3 is a markup change, not a state
+  rewrite.
 
 #### Stage 2 — Visual conformance, one page per commit
 
