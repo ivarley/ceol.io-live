@@ -65,6 +65,7 @@ Internal services, microservices, background jobs
 - **Recording Segmenter (Feature 050)**: [Spec](specs/changes/inprogress/050-recording-segmenter.md) — audio → per-tune timestamps at `/admin/recordings`, the training corpus for tune recognition. Supersedes the abandoned Feature 022 audio recording.
 - **Live Logging (Feature 024)**: [Logic](specs/current/logic/live-logging.md) | [Spec](specs/changes/024-live-logging-architecture.md)
 - **Offline Support**: [Logic](specs/current/logic/offline.md)
+- **Ceol Listen lab (Feature 053)**: [Spec](specs/changes/inprogress/053-ceol-listen-lab.md) | [`lab/`](lab/README.md) — offline tune-recognition lab: blackboard, experts, task bench, replay harness. Not deployed, own tests (`make lab-test`).
 - **Svelte UI Consolidation (Feature 035)**: [UI](specs/current/ui/svelte-pages.md) | [Spec](specs/changes/inprogress/035-svelte-ui-consolidation.md) — `/my-tunes`, `/sessions`, `/sessions/<path>`, `/me`, `/admin/people/<id>`, `/admin/sessions/<path>` migrated to Svelte shells
 
 ## Development

@@ -157,3 +157,7 @@ static/segmenterpage/
 
 # ./start writes the streaming sidecar's output here
 logs/
+
+# Ceol Listen lab (spec 053): pulled masters, derived wavs, features, the
+# SQLite board, indexes and run output. Anchored for the same reason /data/ is.
+/lab/data/

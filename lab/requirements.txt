@@ -1,0 +1,8 @@
+# Ceol Listen lab (spec 053). Installed into ./venv by `make lab-install`.
+# Never listed in the root requirements.txt: Render installs only that file,
+# which is what keeps ~300MB of numba/scipy/sklearn off the web service.
+numpy
+scipy
+librosa>=0.10
+soundfile
+scikit-learn
