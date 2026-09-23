@@ -74,7 +74,10 @@
     <style>
         /* Header customization for new logo */
         body {
-            padding-top: 40px !important;
+            /* Clears the fixed header. From the same token the header's height comes
+               from, so the two cannot disagree — it was hard-coded 40px against a
+               42px bar, which left content sitting 2px under it. */
+            padding-top: var(--site-header-h, 42px) !important;
         }
 
         /* Ensure header is above modal overlay so hamburger menu remains clickable and not dimmed */
@@ -83,8 +86,34 @@
             z-index: 2000 !important;
         }
 
+        /* The header is exactly --site-header-h tall, whatever is inside it.
+           Everything that sticks below it offsets by that variable, and the logo is
+           position:absolute so it adds no height of its own — which meant the bar's
+           height came entirely from the tallest thing in the utilities row. When the
+           phone tab bar hid the hamburger, that was nothing: the header collapsed to
+           10px and the logo hung out of the bottom of it, with the page scrolling
+           through behind. Stated here instead of emerging from the contents. */
+        .header.fixed-top {
+            min-height: var(--site-header-h, 42px);
+        }
+
         .docs-branding {
-            min-height: auto !important;
+            min-height: var(--site-header-h, 42px) !important;
+        }
+
+        /* The bar's inner row, given the full height rather than inheriting it from
+           whatever happens to be inside. .docs-logo-wrapper is position:absolute
+           against THIS box, so a short row drags the logo down with it — centring the
+           row was what left the logo hanging below the header. Flex here keeps the
+           badges vertically centred now that the hamburger is not setting the height. */
+        .docs-branding > .container-fluid {
+            min-height: var(--site-header-h, 42px);
+            display: flex;
+            align-items: center;
+        }
+
+        .docs-top-utilities {
+            flex: 1;
         }
 
         .docs-logo-wrapper {
