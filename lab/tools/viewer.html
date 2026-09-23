@@ -123,6 +123,7 @@
     <br>
     <kbd>space</kbd> play · <kbd>1-6</kbd> modes · <kbd>+</kbd><kbd>−</kbd> zoom ·
     <kbd>,</kbd><kbd>.</kbd> back/forward 3s · <kbd>r</kbd> replay this view · <kbd>Home</kbd> start ·
+    <kbd>l</kbd> loop on/off (drag the strip above the ruler to draw one) ·
     <kbd>←</kbd><kbd>→</kbd> pan · <kbd>↑</kbd><kbd>↓</kbd> nudge a semitone · <kbd>⌫</kbd> delete · <kbd>s</kbd> sing · <kbd>g</kbd> grid ·
     <kbd>cmd-z</kbd> undo · <kbd>cmd-s</kbd> save · swipe to pan, pinch or shift-scroll to zoom
   </div>
@@ -154,7 +155,7 @@ audio.src = D.audio_url;
 const BASE = 60;                       // C4..B4
 const LO = BASE, HI = BASE + 11;
 const pc = m => BASE + (((Math.round(m) % 12) + 12) % 12);
-const PAD = 34, RULER = 22;          // ruler strip lives inside the top padding
+const PAD = 34, RULER = 22, LOOPH = 15;   // loop strip, then ruler, both above the plot
 const fmt = s => { s = Math.max(0, s | 0); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
@@ -178,6 +179,9 @@ let beats = (D.tapped_pulse && D.tapped_pulse.beats) ? D.tapped_pulse.beats.slic
 // derived grid used to assume the first beat drawn was one, so a bar line was
 // a guess with a one-in-four chance on a reel.
 let downbeats = (D.tapped_pulse && D.tapped_pulse.downbeats) ? D.tapped_pulse.downbeats.slice() : [];
+// A stretch to play over and over. Not saved with the annotation: it is a
+// way of listening, not a statement about the music.
+let loop = null;            // {t0, t1, on}
 let selectedBeat = null;
 let tapped = null;          // the derived grid, rebuilt from `beats`
 
@@ -242,7 +246,8 @@ document.getElementById('truthabc').innerHTML = D.truth_abc || '<i>no notation h
 // ---- geometry ------------------------------------------------------------
 const plotL = () => PAD * dpr;
 const plotW = () => roll.width - PAD * 1.5 * dpr;
-const plotT = () => RULER * dpr;
+const loopB = () => LOOPH * dpr;         // bottom of the loop strip
+const plotT = () => (LOOPH + RULER) * dpr;
 const plotB = () => roll.height - PAD * dpr;
 function xOf(t) { return plotL() + ((t - view.t0) / (view.t1 - view.t0)) * plotW(); }
 function tOf(px) { return view.t0 + ((px - plotL()) / plotW()) * (view.t1 - view.t0); }
@@ -254,6 +259,25 @@ function evPos(e) {
            y: (e.clientY - r.top) * (roll.height / r.height) };
 }
 const noteH = () => Math.max(3 * dpr, (plotB() - plotT()) / Math.max(12, HI - LO) * 0.8);
+
+// ---- looping -------------------------------------------------------------
+function loopTick() {
+  if (!loop || !loop.on || audio.paused) return;
+  // Checked every frame rather than on timeupdate, which fires about four
+  // times a second and would overshoot the end of a short loop by enough to
+  // hear. Only the END is enforced: yanking the playhead forward when it sits
+  // before the loop would make it impossible to scrub back and listen in.
+  if (audio.currentTime >= loop.t1) {
+    try { audio.currentTime = loop.t0; } catch (_) {}
+    resetSung();
+  }
+}
+
+function setLoop(t0, t1) {
+  const a = Math.max(0, Math.min(t0, t1)), b = Math.min(D.duration_s, Math.max(t0, t1));
+  loop = (b - a) < 0.15 ? null : { t0: a, t1: b, on: true };
+  draw();
+}
 
 // ---- seeking -------------------------------------------------------------
 const NUDGE_S = 3;
@@ -427,11 +451,29 @@ function draw() {
   rc.clearRect(0, 0, W, H);
   rc.font = (11 * dpr) + 'px ui-monospace, monospace';
 
-  // ruler
+  // loop strip, then ruler
+  rc.fillStyle = '#12151c';
+  rc.fillRect(0, 0, W, loopB());
   rc.fillStyle = '#161922';
-  rc.fillRect(0, 0, W, plotT());
+  rc.fillRect(0, loopB(), W, plotT() - loopB());
   rc.strokeStyle = '#2a2f3d'; rc.lineWidth = dpr;
   rc.beginPath(); rc.moveTo(0, plotT()); rc.lineTo(W, plotT()); rc.stroke();
+  if (loop) {
+    const a = xOf(loop.t0), b = xOf(loop.t1);
+    rc.fillStyle = loop.on ? 'rgba(255,209,102,.85)' : 'rgba(139,147,167,.35)';
+    rc.fillRect(a, 2 * dpr, Math.max(2 * dpr, b - a), loopB() - 4 * dpr);
+    if (loop.on) {
+      rc.fillStyle = 'rgba(255,209,102,.07)';
+      rc.fillRect(a, plotT(), Math.max(1, b - a), plotB() - plotT());
+      rc.strokeStyle = 'rgba(255,209,102,.4)';
+      rc.beginPath(); rc.moveTo(a, plotT()); rc.lineTo(a, plotB());
+      rc.moveTo(b, plotT()); rc.lineTo(b, plotB()); rc.stroke();
+    }
+  } else {
+    rc.fillStyle = '#3b4252';
+    rc.textBaseline = 'middle';
+    rc.fillText('drag here to loop', 4 * dpr, loopB() / 2);
+  }
 
   rc.textBaseline = 'middle';
   for (let m = LO; m <= HI; m++) {
@@ -448,7 +490,7 @@ function draw() {
     rc.strokeStyle = '#232734';
     rc.beginPath(); rc.moveTo(xOf(t), plotT()); rc.lineTo(xOf(t), plotB()); rc.stroke();
     rc.fillStyle = '#8b93a7';
-    rc.fillText(step < 1 ? t.toFixed(1) : fmt(t), xOf(t) + 3 * dpr, plotT() / 2);
+    rc.fillText(step < 1 ? t.toFixed(1) : fmt(t), xOf(t) + 3 * dpr, (loopB() + plotT()) / 2);
   }
 
   // The eighth-note grid, drawn behind the notes: light at each eighth,
@@ -609,6 +651,11 @@ roll.addEventListener('pointerdown', e => {
   const p = evPos(e);
   roll.setPointerCapture(e.pointerId);
 
+  if (p.y < loopB()) {
+    // click the bar to turn it off and on, drag anywhere to draw a new one
+    drag = { mode: 'loop', x0: p.x, x: p.x, moved: false };
+    return;
+  }
   if (p.y <= plotT()) { drag = { mode: 'scrub' }; seek(tOf(p.x)); return; }
 
   if (mode === 'edit') {
@@ -679,6 +726,12 @@ roll.addEventListener('pointermove', e => {
     return;
   }
   const p = evPos(e);
+  if (drag.mode === 'loop') {
+    if (Math.abs(p.x - drag.x0) > 3 * dpr) drag.moved = true;
+    drag.x = p.x;
+    if (drag.moved) setLoop(tOf(drag.x0), tOf(p.x));
+    return;
+  }
   if (drag.mode === 'scrub') { seek(tOf(p.x)); return; }
   if (drag.mode === 'draw') { paint(p); return; }
   if (drag.mode === 'beat') {
@@ -708,6 +761,12 @@ roll.addEventListener('pointermove', e => {
 });
 
 roll.addEventListener('pointerup', () => {
+  if (drag && drag.mode === 'loop' && !drag.moved) {
+    const t = tOf(drag.x0);
+    if (loop && t >= loop.t0 && t <= loop.t1) loop.on = !loop.on;
+    else if (loop) loop = null;      // a click outside the bar clears it
+    draw();
+  }
   if (drag && drag.mode === 'beat') {
     beats.sort((a, b) => a - b);
     fitTaps();
@@ -883,6 +942,11 @@ document.addEventListener('keydown', e => {
     e.preventDefault(); seek(view.t0); return;
   }
   if (e.key === 'Home') { e.preventDefault(); seek(0); return; }
+  if (e.key === 'l') {
+    // with no loop drawn, loop what you are looking at
+    if (!loop) setLoop(view.t0, view.t1); else loop.on = !loop.on;
+    draw(); return;
+  }
   if ((e.key === 'Backspace' || e.key === 'Delete') && mode === 'beats' && selectedBeat != null) {
     e.preventDefault();
     beats.splice(selectedBeat, 1); selectedBeat = null; fitTaps(); draw(); return;
@@ -908,12 +972,12 @@ document.addEventListener('keydown', e => {
 
 function resize() {
   dpr = window.devicePixelRatio || 1;
-  roll.width = roll.clientWidth * dpr; roll.height = 460 * dpr;
+  roll.width = roll.clientWidth * dpr; roll.height = (460 + LOOPH) * dpr;
   mini.width = mini.clientWidth * dpr; mini.height = 44 * dpr;
   draw();
 }
 window.addEventListener('resize', resize);
-(function tick() { singTick(); draw(); requestAnimationFrame(tick); })();
+(function tick() { loopTick(); singTick(); draw(); requestAnimationFrame(tick); })();
 resize();
 setMode('listen');
 if (D.tapped_pulse && beats.length) {
