@@ -22,6 +22,9 @@
       "name": "pitch_yin"
     },
     {
+      "name": "pulse"
+    },
+    {
       "name": "notes",
       "params": {
         "sources": [

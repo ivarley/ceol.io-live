@@ -319,11 +319,12 @@ On the retrieval bench, all 503 segments, two minutes of audio each:
 | yin, absolute pitch, 130Hz band | 0.485 | 0.706 |
 | pitch folded to classes | 0.616 | 0.793 |
 | and the band raised to 160Hz | 0.702 | 0.825 |
-| and each set decoded as a whole | **0.783** | **0.849** |
+| and fused repeats split back apart | 0.771 | 0.877 |
+| and each set decoded as a whole | **0.809** | **0.897** |
 | the session's transitions alone, no audio | 0.245 | 0.368 |
 
-A whole night through the board scores top-1 58.6%, top-5 74.1%, median time
-to first correct 58 seconds, at 63x realtime.
+A whole night through the board scores top-1 60.3%, top-5 75.9%, median time
+to first correct 52 seconds, at 56x realtime.
 
 Against the full 23,307-tune corpus rather than the session's 1,279-tune
 repertoire, set decoding scores the same to within a point. The transition
@@ -341,6 +342,22 @@ segmenter did not, and it mattered: a tracker that jumps an octave inside a
 held note made the run-length step cut that note in two and insert an
 interval the tune does not contain. Folding first is worth thirteen points.
 The viewer and the labels now work in one octave for the same reason.
+
+**Splitting fused repeats**, which the grid made possible and which is worth
+seven points. Two eighth notes of the same pitch in a row look exactly like
+one quarter note to a run-length step over a pitch track, because the pitch
+never changes. The corpus notates them as two notes, so the zero between them
+is a real symbol the transcription was dropping: the notation has a repeated
+note in 8.1% of its intervals and the plain segmenter recovered 4.1%. One
+repeat in two was lost.
+
+A grid alone cannot fix it, because a held note and two struck notes of the
+same pitch occupy the same span, so the split is gated on an onset at the
+interior grid line. The gate has to be tight. At a third of a grid spacing it
+LOSES thirteen points, because a session has an onset near almost every line
+and everything long gets cut; at an eighth of a spacing it gains seven. The
+crude control, split every long note, triples the repeated-note rate and is
+much worse than not splitting at all.
 
 **The melody band.** Sweeping the tracker's lower bound: 0.616 at 130Hz,
 0.702 at 160, 0.666 at 190. Below about 150 it is offered energy that is not
@@ -440,6 +457,28 @@ Reading the trace across two nights gave the clearest statement of the
 bottleneck: everything turns on how much of the tune's notation the
 transcription recovers. Above twenty shared six-note phrases the system is
 right six times in seven; below ten it is never right.
+
+### Two places the loops had drifted apart
+
+Both found by building the grid, and both the same shape as the bug that
+motivated sharing the segmentation code in the first place.
+
+The board's pitch expert was reading from 130Hz while the bench had been
+measured at 160 and the board's own config claimed 160 in its comment. Fixing
+it is worth five points of top-1 on a whole night, and the reason it went
+unnoticed is that nothing compared the two configurations, only the two
+implementations.
+
+The note splitter then grew a second copy of its own mode-to-behaviour
+decision, one in the front end and one in the expert, and they disagreed
+within the hour: the front end honoured the crude mode and the expert
+silently ignored it. There is now one entry point that both call, and the
+agreement test exercises the splitting step rather than only the segmenting
+one. Extending that test immediately turned up a real defect -- a note
+beginning a fraction of a millisecond before a grid line was split into a
+sliver and the rest, and the sliver rounded to zero length with the same
+pitch as its neighbour, so the splitter was inventing the very repeated notes
+it exists to recover.
 
 ### The board against the bench
 

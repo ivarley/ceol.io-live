@@ -226,17 +226,49 @@ def test_frontend_and_expert_produce_the_same_notes(lab_data):
     from lab.frontends import get_frontend
     from lab.frontends.segmentation import notes_from_pitch
 
+    from types import SimpleNamespace
+
+    from lab.analysis.pulse import attack_times_ms, estimate_pulse
+    from lab.experts.notes import Notes
+
     store = AudioStore(paths.wav_path(RECORDING_ID))
     store.clock_ms = store.duration_ms
     fe = get_frontend("yin", min_voiced=0.3)
-    y = store.read(5000, 15000)
-    direct = fe.note_events(y, store.sr, t_offset_ms=5000)
+    y = store.read(5000, 35000)
     times, f0, voiced = fe.track(y, store.sr)
-    viaseg = notes_from_pitch(times, f0, voiced, **fe.note_params())
     store.close()
-    assert len(direct) == len(viaseg)
-    assert [n["midi"] for n in direct] == [n["midi"] for n in viaseg]
-    assert all(np.isfinite(n["midi"]) for n in direct)
+
+    # the segmentation half
+    segmented = fe.notes_from_track(times, f0, voiced, t_offset_ms=5000)
+    viaseg = notes_from_pitch(times, f0, voiced, **fe.note_params())
+    assert len(segmented) == len(viaseg)
+    assert [n["midi"] for n in segmented] == [n["midi"] for n in viaseg]
+    assert all(np.isfinite(n["midi"]) for n in segmented)
+
+    # the regridding half, which is where the two loops last drifted apart
+    pulse = estimate_pulse(y, store.sr)
+    assert pulse, "this fixture should have a pulse"
+    obs = SimpleNamespace(payload={
+        "period_ms": pulse["period_ms"], "phase_ms": 5000 + pulse["phase_ms"],
+        "grouping": pulse["grouping"],
+        "attacks_ms": [5000 + t for t in attack_times_ms(y, store.sr)]})
+
+    # A note deliberately long enough to split, because the synthetic fixture
+    # has no repeated notes and so nothing to fuse. Both modes, because the
+    # expert used to honour only one of them.
+    long_note = {"t0_ms": 5000 + int(pulse["phase_ms"]),
+                 "t1_ms": 5000 + int(pulse["phase_ms"] + 3 * pulse["period_ms"]),
+                 "midi": 64, "conf": 0.9}
+    for mode in ("attack", "grid"):
+        fe2 = get_frontend("yin", min_voiced=0.3, split_repeats=mode)
+        expert = Notes(sources=["pitch_yin"], min_voiced=0.3, split_repeats=mode)
+        direct = fe2.regrid([dict(long_note)], y, store.sr, t_offset_ms=5000)
+        viaboard = expert._split([dict(long_note)], obs)
+        assert [(n["t0_ms"], n["t1_ms"], n["midi"]) for n in direct] == \
+               [(n["t0_ms"], n["t1_ms"], n["midi"]) for n in viaboard], mode
+    pieces = expert._split([dict(long_note)], obs)
+    assert len(pieces) == 3, "grid mode splits every slot"
+    assert all(n["t1_ms"] > n["t0_ms"] for n in pieces)
 
 
 def test_track_cache_is_keyed_on_tracking_params_only(lab_data):

@@ -46,7 +46,22 @@ class FrontEnd:
                 # On by default: measured over all 503 segments it takes
                 # top-1 from 0.485 to 0.616 at two minutes of audio, because
                 # an octave jump no longer cuts a held note in half.
-                "merge_interlopers_ms": 0, "fold_pitch_classes": True}
+                "merge_interlopers_ms": 0, "fold_pitch_classes": True,
+                # Putting the notes back on the grid. ON, and measured over
+                # all 503 segments at two minutes each: top-1 0.702 -> 0.767,
+                # top-5 0.825 -> 0.875, and it stacks with set decoding, which
+                # goes 0.783 -> 0.809. "attack" splits a long note at an
+                # interior grid line only where something was struck; "grid"
+                # splits every long note, which is the crude control and is
+                # much worse (it triples the repeated-note rate).
+                #
+                # The tolerance is tight for a reason. At 0.35 of a grid
+                # spacing this LOSES thirteen points, because a session has an
+                # onset near almost every grid line and everything long gets
+                # cut. Swept: 0.04/0.06/0.09/0.12/0.16 -> 0.569/0.569/0.569/
+                # 0.586/0.569 top-1 on one night.
+                "split_repeats": "attack", "split_min_slots": 1.6,
+                "split_tolerance": 0.12}
 
     def fresh(self):
         return type(self)(**self.params)
@@ -56,6 +71,31 @@ class FrontEnd:
 
     def note_params(self):
         return {k: self.params[k] for k in self.NOTE_PARAMS if k in self.params}
+
+    def regrid(self, notes, y, sr, t_offset_ms=0):
+        """Split fused repeats, if this front end is configured to.
+
+        Needs the audio, which the note step does not, so it is a separate
+        call: the pitch track is cached and the grid is derived from the same
+        span of audio that produced it.
+        """
+        mode = self.params.get("split_repeats")
+        if not mode or not notes:
+            return notes
+        from lab.analysis.pulse import attack_times_ms, estimate_pulse
+        from lab.frontends.grid import regrid_notes
+
+        pulse = estimate_pulse(y, sr)
+        if not pulse:
+            return notes
+        attacks = None
+        if mode == "attack":
+            attacks = [t + t_offset_ms for t in attack_times_ms(y, sr)]
+        return regrid_notes(
+            notes, pulse["period_ms"], pulse["phase_ms"] + t_offset_ms,
+            attacks_ms=attacks, mode=mode,
+            min_slots=self.params["split_min_slots"],
+            tolerance=self.params["split_tolerance"])
 
     def notes_from_track(self, times_ms, f0_hz, voiced_prob, t_offset_ms=0):
         notes = notes_from_pitch(times_ms, f0_hz, voiced_prob, **self.note_params())
@@ -73,7 +113,8 @@ class FrontEnd:
     def note_events(self, y, sr, t_offset_ms=0):
         """-> [{t0_ms, t1_ms, midi, conf}] with absolute timestamps."""
         times, f0, voiced = self.track(y, sr)
-        return self.notes_from_track(times, f0, voiced, t_offset_ms=t_offset_ms)
+        notes = self.notes_from_track(times, f0, voiced, t_offset_ms=t_offset_ms)
+        return self.regrid(notes, y, sr, t_offset_ms=t_offset_ms)
 
     def intervals(self, y, sr):
         return intervals_from_notes(self.note_events(y, sr))

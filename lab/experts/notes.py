@@ -23,7 +23,7 @@ class Notes(Expert):
 
     name = "notes"
     version = "1"
-    consumes = ("pitch_track",)
+    consumes = ("pitch_track", "pulse")
     produces = ("note_events",)
     cost = 1.0
 
@@ -36,18 +36,25 @@ class Notes(Expert):
         # settled middle instead cost a second of latency and recovered the
         # note rate the bench gets from one long pass.
         return {"sources": None, "min_note_ms": 60, "median_frames": 5,
-                "min_voiced": 0.2, "edge_margin_ms": 1200, "fold_pitch_classes": True}
+                "min_voiced": 0.2, "edge_margin_ms": 1200, "fold_pitch_classes": True,
+                # Splitting fused repeats, same values the bench measured. Needs
+                # a `pulse` observation; without one this degrades to not
+                # splitting, which is the old behaviour.
+                "split_repeats": "attack", "split_min_slots": 1.6,
+                "split_tolerance": 0.12}
 
     def setup(self):
         self._emitted_to = {}
 
     def process(self, view, window):
         out = []
+        pulse = view.latest("pulse")
         for track in view.new("pitch_track"):
             src = track.payload.get("source")
             if self.params["sources"] and src not in self.params["sources"]:
                 continue
             notes = self._segment(track.payload)
+            notes = self._split(notes, pulse)
             if not notes:
                 continue
             # A pitch expert reads long windows on a short hop, so every
@@ -67,6 +74,28 @@ class Notes(Expert):
                 "note_events", fresh[0]["t0_ms"], track.t_end_ms,
                 {"source": src, "notes": fresh}, inputs=[track.obs_id]))
         return out
+
+    def _split(self, notes, pulse):
+        """Two eighths of one pitch look like one quarter to a run-length step.
+
+        The corpus notates them as two notes, so the zero between them is a
+        real symbol the transcription was dropping: measured over sixty
+        segments, the notation has a repeated note in 8.1% of its intervals
+        and the plain segmenter recovers 4.1%. Splitting them back is worth
+        six and a half points of top-1 on the bench.
+        """
+        if not notes or not pulse:
+            return notes
+        from lab.frontends.grid import regrid_notes
+
+        p = pulse.payload
+        if not p.get("period_ms"):
+            return notes
+        return regrid_notes(
+            notes, p["period_ms"], p["phase_ms"], attacks_ms=p.get("attacks_ms"),
+            mode=self.params["split_repeats"],
+            min_slots=self.params["split_min_slots"],
+            tolerance=self.params["split_tolerance"])
 
     def _segment(self, payload):
         """Delegates to the one implementation, shared with the front ends.

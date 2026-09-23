@@ -227,3 +227,23 @@ def expected_grouping(tune_type):
     if t in TRIPLE_TYPES:
         return 3
     return None
+
+
+def attack_times_ms(y, sr, hop=HOP, delta=0.06):
+    """Where notes are struck, in ms from the start of `y`.
+
+    The grid says where a note COULD start; this says where one audibly did.
+    Both are needed to split a note the tracker fused: two eighths of the same
+    pitch look exactly like one quarter to a run-length segmenter, and the
+    only thing that tells them apart is whether anything was struck in the
+    middle.
+    """
+    import librosa
+
+    onset = onset_envelope(y, sr, hop=hop)
+    if onset.size < 4:
+        return np.zeros(0, dtype=float)
+    with np.errstate(divide="ignore", over="ignore", invalid="ignore"):
+        frames = librosa.onset.onset_detect(
+            onset_envelope=onset, sr=sr, hop_length=hop, units="frames", delta=delta)
+    return np.asarray(frames, dtype=float) * hop * 1000.0 / sr

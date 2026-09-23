@@ -26,7 +26,11 @@ class _PitchExpert(Expert):
 
     @classmethod
     def defaults(cls):
-        return {"fmin": 130.0, "fmax": 1400.0, "hop": 256, "sr": 22050}
+        # 160Hz, the same band the front ends use and for the same measured
+        # reason: swept over all 503 segments, top-1 is 0.616 at 130, 0.702 at
+        # 160 and 0.666 at 190. It was 130 here while the bench ran at 160,
+        # which is the divergence the two loops exist to catch.
+        return {"fmin": 160.0, "fmax": 1400.0, "hop": 256, "sr": 22050}
 
     def _track(self, y, sr):
         raise NotImplementedError
