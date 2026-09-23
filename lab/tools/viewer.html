@@ -96,6 +96,7 @@
     </label>
     <button id="tapsnap" title="slide the grid onto the onsets">snap to notes</button>
     <button id="tapclear">clear taps</button>
+    <label>shift <input type="number" id="offsetinput" step="5" value="0" style="width:74px">ms</label>
     <span class="time" id="offsetlabel"></span>
     <label>tone <input type="range" id="vol" min="0" max="100" value="45"></label>
     <span class="sep"></span>
@@ -124,7 +125,7 @@
     <b>erase</b> drag a box to remove labels
     <br>
     <kbd>space</kbd> play · <kbd>1-5</kbd> modes · <kbd>+</kbd><kbd>−</kbd> zoom ·
-    <kbd>←</kbd><kbd>→</kbd> pan · <kbd>↑</kbd><kbd>↓</kbd> nudge a semitone · <kbd>⌫</kbd> delete · <kbd>s</kbd> sing · <kbd>g</kbd> grid · <kbd>t</kbd> tap the beat · <kbd>[</kbd><kbd>]</kbd> shift the grid 5ms (25 with shift) ·
+    <kbd>←</kbd><kbd>→</kbd> pan · <kbd>↑</kbd><kbd>↓</kbd> nudge a semitone · <kbd>⌫</kbd> delete · <kbd>s</kbd> sing · <kbd>g</kbd> grid · <kbd>t</kbd> tap the beat · <kbd>[</kbd><kbd>]</kbd> shift the grid 10ms (50 with shift) ·
     <kbd>cmd-z</kbd> undo · <kbd>cmd-s</kbd> save · swipe to pan, pinch or shift-scroll to zoom
   </div>
 
@@ -363,20 +364,28 @@ function fitTaps() {
   const eighth = level === 'eighth' ? period
     : level === 'bar' ? period / perBar : period / grouping;
 
+  // Index every line from the tapped phase itself, not from wherever the
+  // first visible line happens to fall. Indexing from the latter meant the
+  // beat and bar emphasis jumped a whole position each time the offset
+  // crossed half an eighth, so nudging slid the lines smoothly and then threw
+  // the accents somewhere else - which looked exactly like the grid hopping
+  // off the spot you were aiming at.
   const grid = [];
-  let start = phase + offset;
-  while (start - eighth > 0) start -= eighth;
-  const offsetIndex = Math.round((phase - start) / eighth);
-  for (let i = 0, t = start; t < D.duration_s; i++, t = start + i * eighth) {
-    if (t < 0) continue;
-    const k = i - offsetIndex;
-    grid.push({ t, beat: ((k % grouping) + grouping) % grouping === 0,
-                bar: ((k % perBar) + perBar) % perBar === 0 });
+  const anchor = phase + offset;
+  const mod = (a, b) => ((a % b) + b) % b;
+  const firstIndex = Math.ceil((0 - anchor) / eighth);
+  const lastIndex = Math.floor((D.duration_s - anchor) / eighth);
+  for (let j = firstIndex; j <= lastIndex; j++) {
+    grid.push({ t: anchor + j * eighth,
+                beat: mod(j, grouping) === 0,
+                bar: mod(j, perBar) === 0 });
   }
   tapped = { period_ms: eighth * 1000, phase_ms: start * 1000, grouping,
              level, offset_ms: tapOffsetMs, taps: sorted.slice(), grid };
+  const box = document.getElementById('offsetinput');
+  if (document.activeElement !== box) box.value = tapOffsetMs.toFixed(0);
   document.getElementById('offsetlabel').textContent =
-    tapOffsetMs ? 'grid shifted ' + (tapOffsetMs > 0 ? '+' : '') + tapOffsetMs.toFixed(0) + 'ms' : '';
+    tapOffsetMs ? ((tapOffsetMs / eighth * 100 / 1000).toFixed(0) + '% of an eighth') : '';
   dirty = true;
   document.getElementById('save').disabled = false;
 }
@@ -696,10 +705,15 @@ function snapToOnsets() {
   fitTaps();
   draw();
 }
+document.getElementById('offsetinput').oninput = e => {
+  const v = parseFloat(e.target.value);
+  if (!isNaN(v)) { tapOffsetMs = v; fitTaps(); draw(); }
+};
 document.getElementById('tapsnap').onclick = snapToOnsets;
 document.getElementById('tapbtn').onclick = tapNow;
 document.getElementById('tapclear').onclick = () => {
   taps = []; tapped = null; tapOffsetMs = 0;
+  document.getElementById('offsetinput').value = '0';
   document.getElementById('offsetlabel').textContent = '';
   document.getElementById('agree').textContent = agreement();
   draw();
@@ -828,7 +842,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 't') { e.preventDefault(); tapNow(); return; }
   if (e.key === '[' || e.key === ']') {
     e.preventDefault();
-    tapOffsetMs += (e.key === '[' ? -1 : 1) * (e.shiftKey ? 25 : 5);
+    tapOffsetMs += (e.key === '[' ? -1 : 1) * (e.shiftKey ? 50 : 10);
     fitTaps(); draw(); return;
   }
   if (e.key === '+' || e.key === '=') { zoomAt((view.t0 + view.t1) / 2, 0.6); return; }
