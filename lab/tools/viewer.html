@@ -79,6 +79,7 @@
     <button class="mode" data-mode="erase">erase</button>
     <span class="sep"></span>
     <button id="sing" title="sound your labels as the music plays">♪ sing labels</button>
+    <button id="pulsebtn" class="on" title="the eighth-note grid the music is on">grid</button>
     <label>tone <input type="range" id="vol" min="0" max="100" value="45"></label>
     <span class="sep"></span>
     <button id="zoomout">−</button><button id="zoomin">+</button><button id="zoomfit">fit</button>
@@ -106,7 +107,7 @@
     <b>erase</b> drag a box to remove labels
     <br>
     <kbd>space</kbd> play · <kbd>1-5</kbd> modes · <kbd>+</kbd><kbd>−</kbd> zoom ·
-    <kbd>←</kbd><kbd>→</kbd> pan · <kbd>↑</kbd><kbd>↓</kbd> nudge a semitone · <kbd>⌫</kbd> delete · <kbd>s</kbd> sing ·
+    <kbd>←</kbd><kbd>→</kbd> pan · <kbd>↑</kbd><kbd>↓</kbd> nudge a semitone · <kbd>⌫</kbd> delete · <kbd>s</kbd> sing · <kbd>g</kbd> grid ·
     <kbd>cmd-z</kbd> undo · <kbd>cmd-s</kbd> save · swipe to pan, pinch or shift-scroll to zoom
   </div>
 
@@ -150,6 +151,7 @@ let dirty = false;
 let drag = null;
 let selected = null;
 let singing = false;
+let showPulse = true;
 
 // ---- sound ---------------------------------------------------------------
 // A sine for each note, so a label can be checked by ear against the audio it
@@ -191,6 +193,17 @@ document.getElementById('meta').innerHTML =
   (D.truth_rank ? '<b>' + D.truth_rank + '</b>' : '<b>not found</b>') +
   ' <span class="verdict ' + (D.truth_rank === 1 ? 'ok' : 'bad') + '">' +
   (D.truth_rank === 1 ? 'correct' : 'wrong') + '</span>';
+if (D.pulse) {
+  const p = D.pulse;
+  const meter = p.grouping === 3 ? '6/8-ish (groups of three)' : '4/4-ish (groups of two)';
+  const agree = D.pulse_expected == null ? ''
+    : p.grouping === D.pulse_expected ? ' ✓' : ' ✗ the corpus says the other';
+  document.getElementById('meta').innerHTML +=
+    '<br>pulse: eighth every <b>' + p.period_ms.toFixed(0) + 'ms</b> · ' +
+    '<b>' + p.bpm_beat.toFixed(0) + '</b> beats a minute · ' + meter + agree +
+    ' · confidence ' + (p.grouping_margin).toFixed(2);
+}
+
 document.getElementById('ranked').innerHTML =
   '<tr><th>#</th><th>tune</th><th>score</th><th>hits</th></tr>' +
   D.ranked.map((r, i) => '<tr class="' + (r.tune_id === D.truth_tune_id ? 'truthrow' : '') + '">' +
@@ -242,6 +255,20 @@ function labelAt(p) {
   return null;
 }
 function heardAt(p) {
+  // The eighth-note grid, drawn behind the notes: light at each eighth,
+  // brighter at the beat, brightest at the bar. Notation is entirely on this
+  // grid, so seeing where the music sits on it is the first step to
+  // comparing durations rather than only pitch shapes.
+  if (showPulse && D.pulse_grid && D.pulse_grid.length) {
+    for (const g of D.pulse_grid) {
+      if (g.t < view.t0 || g.t > view.t1) continue;
+      rc.strokeStyle = g.bar ? 'rgba(255,209,102,.40)'
+        : g.beat ? 'rgba(255,209,102,.20)' : 'rgba(255,209,102,.075)';
+      rc.lineWidth = (g.bar ? 1.6 : 1) * dpr;
+      rc.beginPath(); rc.moveTo(xOf(g.t), plotT()); rc.lineTo(xOf(g.t), plotB()); rc.stroke();
+    }
+  }
+
   const h = noteH();
   for (const n of HEARD) {
     const x0 = xOf(n.t0), x1 = Math.max(x0 + 3 * dpr, xOf(n.t1));
@@ -278,6 +305,20 @@ function draw() {
     rc.beginPath(); rc.moveTo(xOf(t), plotT()); rc.lineTo(xOf(t), plotB()); rc.stroke();
     rc.fillStyle = '#8b93a7';
     rc.fillText(step < 1 ? t.toFixed(1) : fmt(t), xOf(t) + 3 * dpr, plotT() / 2);
+  }
+
+  // The eighth-note grid, drawn behind the notes: light at each eighth,
+  // brighter at the beat, brightest at the bar. Notation is entirely on this
+  // grid, so seeing where the music sits on it is the first step to
+  // comparing durations rather than only pitch shapes.
+  if (showPulse && D.pulse_grid && D.pulse_grid.length) {
+    for (const g of D.pulse_grid) {
+      if (g.t < view.t0 || g.t > view.t1) continue;
+      rc.strokeStyle = g.bar ? 'rgba(255,209,102,.40)'
+        : g.beat ? 'rgba(255,209,102,.20)' : 'rgba(255,209,102,.075)';
+      rc.lineWidth = (g.bar ? 1.6 : 1) * dpr;
+      rc.beginPath(); rc.moveTo(xOf(g.t), plotT()); rc.lineTo(xOf(g.t), plotB()); rc.stroke();
+    }
   }
 
   const h = noteH();
@@ -490,6 +531,11 @@ function paint(p) {
 // ---- singing the labels over the music -----------------------------------
 let sungUpTo = -1;
 function resetSung() { sungUpTo = audio.currentTime - 0.001; }
+document.getElementById('pulsebtn').onclick = () => {
+  showPulse = !showPulse;
+  document.getElementById('pulsebtn').classList.toggle('on', showPulse);
+  draw();
+};
 document.getElementById('sing').onclick = () => {
   singing = !singing;
   document.getElementById('sing').classList.toggle('on', singing);
@@ -598,6 +644,7 @@ document.addEventListener('keydown', e => {
   if (modes[e.key]) { setMode(modes[e.key]); return; }
   if (e.code === 'Space') { e.preventDefault(); audioCtx(); audio.paused ? audio.play() : audio.pause(); return; }
   if (e.key === 's') { document.getElementById('sing').click(); return; }
+  if (e.key === 'g') { document.getElementById('pulsebtn').click(); return; }
   if (e.key === '+' || e.key === '=') { zoomAt((view.t0 + view.t1) / 2, 0.6); return; }
   if (e.key === '-') { zoomAt((view.t0 + view.t1) / 2, 1.7); return; }
   if ((e.key === 'Backspace' || e.key === 'Delete') && selected) {

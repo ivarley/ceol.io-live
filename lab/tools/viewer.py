@@ -167,6 +167,14 @@ def build_payload(args):
         notes, _cost, _cached = transcribe_segment(frontend, store, sha, t0, t1, board=board)
     store.close()
 
+    from lab.analysis.pulse import estimate_pulse, expected_grouping, pulse_grid
+
+    pulse_store = AudioStore(paths.wav_path(args.recording))
+    pulse_store.clock_ms = pulse_store.duration_ms
+    # a minute is plenty to find a steady grid, and the whole segment is not
+    pulse = estimate_pulse(pulse_store.read(t0, min(t1, t0 + 60000)), pulse_store.sr)
+    pulse_store.close()
+
     intervals = intervals_from_notes(notes, fold=True)
     index = Index.load(args.candidate_set, n=args.n, fold_octaves=True)
     ranked = index.lookup(intervals, top_k=12)
@@ -225,6 +233,9 @@ def build_payload(args):
         "truth_abc": truth_abc,
         "audio_url": "clip.mp3",
         "labels": load_annotation(args.recording, args.segment, t0),
+        "pulse": pulse,
+        "pulse_grid": pulse_grid(pulse, (t1 - t0) / 1000.0) if pulse else [],
+        "pulse_expected": expected_grouping(seg.tune_type) if seg else None,
     }, t0, t1
 
 
