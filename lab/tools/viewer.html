@@ -116,7 +116,10 @@
     <b>erase</b> drag a box to remove labels ·
     <b>draw beats</b> click where each quarter note lands; drag one to move it,
     backspace to remove it. The eighths are the spaces between them, and your
-    spacing carries on to the end of the segment
+    spacing carries on to the end of the segment.
+    <b>Shift-click a beat to mark it as the start of a bar</b> — nothing
+    estimates that from the audio, so one marked bar start is worth a great
+    deal more than more beats
     <br>
     <kbd>space</kbd> play · <kbd>1-6</kbd> modes · <kbd>+</kbd><kbd>−</kbd> zoom ·
     <kbd>←</kbd><kbd>→</kbd> pan · <kbd>↑</kbd><kbd>↓</kbd> nudge a semitone · <kbd>⌫</kbd> delete · <kbd>s</kbd> sing · <kbd>g</kbd> grid ·
@@ -170,6 +173,10 @@ let showPulse = true;
 // actually are removes the fit altogether - the lines are the answer, and
 // the eighths are simply the spaces between them.
 let beats = (D.tapped_pulse && D.tapped_pulse.beats) ? D.tapped_pulse.beats.slice() : [];
+// Which drawn beats start a bar. Nothing estimates this from audio, and the
+// derived grid used to assume the first beat drawn was one, so a bar line was
+// a guess with a one-in-four chance on a reel.
+let downbeats = (D.tapped_pulse && D.tapped_pulse.downbeats) ? D.tapped_pulse.downbeats.slice() : [];
 let selectedBeat = null;
 let tapped = null;          // the derived grid, rebuilt from `beats`
 
@@ -354,7 +361,18 @@ function fitTaps() {
   for (let t = sorted[0] - typical; t > 0; t -= typical) marks.push({ t, drawn: false });
   marks.sort((a, b) => a.t - b.t);
 
-  const anchorIndex = marks.findIndex(m => m.drawn);
+  // Count bars from a marked downbeat if there is one; otherwise fall back to
+  // the first beat drawn, which is a guess and is recorded as one.
+  let anchorIndex = -1;
+  if (downbeats.length) {
+    const d = downbeats[0];
+    let best = Infinity;
+    for (let i = 0; i < marks.length; i++) {
+      const gap = Math.abs(marks[i].t - d);
+      if (gap < best) { best = gap; anchorIndex = i; }
+    }
+  }
+  if (anchorIndex < 0) anchorIndex = marks.findIndex(m => m.drawn);
   const grid = [];
   for (let i = 0; i < marks.length; i++) {
     const beatNumber = i - anchorIndex;
@@ -370,7 +388,9 @@ function fitTaps() {
   }
   const eighth = typical / grouping;
   tapped = { period_ms: eighth * 1000, phase_ms: sorted[0] * 1000, grouping,
-             level: 'beat', beats: sorted.slice(), grid };
+             level: 'beat', beats: sorted.slice(),
+             downbeats: downbeats.slice().sort((a, b) => a - b),
+             bar_anchored: downbeats.length > 0, grid };
   dirty = true;
   document.getElementById('save').disabled = false;
   refreshBeatReadout();
@@ -380,7 +400,8 @@ function refreshBeatReadout() {
   const el = document.getElementById('offsetlabel');
   if (!tapped) { el.textContent = beats.length ? beats.length + ' beat drawn' : ''; return; }
   const bpm = 60000 / (tapped.period_ms * tapped.grouping);
-  el.textContent = beats.length + ' beats drawn · ' + bpm.toFixed(0) + ' bpm · eighth ' +
+  const bars = downbeats.length ? downbeats.length + ' bar starts · ' : 'no bar start marked · ';
+  el.textContent = beats.length + ' beats drawn · ' + bars + bpm.toFixed(0) + ' bpm · eighth ' +
     tapped.period_ms.toFixed(0) + 'ms · bar ' +
     (tapped.period_ms * (tapped.grouping === 3 ? 6 : 8) / 1000).toFixed(2) + 's';
 }
@@ -458,10 +479,16 @@ function draw() {
   for (let i = 0; i < beats.length; i++) {
     const t = beats[i];
     if (t < view.t0 || t > view.t1) continue;
-    rc.fillStyle = i === selectedBeat ? '#ffffff' : '#3ddc97';
-    rc.beginPath(); rc.moveTo(xOf(t) - 5 * dpr, plotB());
-    rc.lineTo(xOf(t) + 5 * dpr, plotB()); rc.lineTo(xOf(t), plotB() - 10 * dpr);
+    const isBar = downbeats.some(d => Math.abs(d - t) < 1e-6);
+    rc.fillStyle = i === selectedBeat ? '#ffffff' : (isBar ? '#ffd166' : '#3ddc97');
+    const w = isBar ? 7 : 5, h = isBar ? 15 : 10;
+    rc.beginPath(); rc.moveTo(xOf(t) - w * dpr, plotB());
+    rc.lineTo(xOf(t) + w * dpr, plotB()); rc.lineTo(xOf(t), plotB() - h * dpr);
     rc.closePath(); rc.fill();
+    if (isBar) {
+      rc.strokeStyle = 'rgba(255,209,102,.55)'; rc.lineWidth = 1.5 * dpr;
+      rc.beginPath(); rc.moveTo(xOf(t), plotT()); rc.lineTo(xOf(t), plotB()); rc.stroke();
+    }
   }
 
   const h = noteH();
@@ -606,6 +633,16 @@ roll.addEventListener('pointerdown', e => {
 
   if (mode === 'beats') {
     const hit = beatAt(p);
+    if (e.shiftKey) {
+      // shift marks where a bar starts, on an existing beat or a new one
+      let t = hit >= 0 ? beats[hit] : clamp(tOf(p.x), 0, D.duration_s);
+      if (hit < 0) { beats.push(t); beats.sort((a, b) => a - b); }
+      const at = downbeats.findIndex(d => Math.abs(d - t) < 1e-6);
+      if (at >= 0) downbeats.splice(at, 1); else downbeats.push(t);
+      selectedBeat = beats.indexOf(t);
+      fitTaps(); draw();
+      return;
+    }
     if (hit >= 0) {
       selectedBeat = hit;
       drag = { mode: 'beat', index: hit };
@@ -636,7 +673,11 @@ roll.addEventListener('pointermove', e => {
   if (drag.mode === 'scrub') { seek(tOf(p.x)); return; }
   if (drag.mode === 'draw') { paint(p); return; }
   if (drag.mode === 'beat') {
-    beats[drag.index] = clamp(tOf(p.x), 0, D.duration_s);
+    const was = beats[drag.index];
+    const now = clamp(tOf(p.x), 0, D.duration_s);
+    const at = downbeats.findIndex(d => Math.abs(d - was) < 1e-6);
+    if (at >= 0) downbeats[at] = now;
+    beats[drag.index] = now;
     fitTaps(); draw(); return;
   }
   if (drag.mode === 'move') {
@@ -795,6 +836,7 @@ async function save() {
     pulse: tapped ? {
       period_ms: tapped.period_ms, phase_ms: tapped.phase_ms,
       grouping: tapped.grouping, tapped_level: 'beat', beats: tapped.beats,
+      downbeats: tapped.downbeats, bar_anchored: tapped.bar_anchored,
     } : null,
   };
   const res = await fetch('annotation', {

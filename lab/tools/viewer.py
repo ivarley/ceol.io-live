@@ -102,6 +102,12 @@ def save_annotation(payload):
             # where a beat is, and a fitted period is an inference from
             # several of them.
             "beats": [round(float(t), 3) for t in (pulse.get("beats") or [])],
+            # Which of those beats starts a bar. Nothing estimates bar phase
+            # from audio at all -- the derived grid counts bars from the first
+            # beat drawn and calls it a downbeat, which on a reel is a one in
+            # four guess. One marked bar start is worth more than more beats.
+            "downbeats": [round(float(t), 3) for t in (pulse.get("downbeats") or [])],
+            "bar_anchored": bool(pulse.get("bar_anchored")),
         }
     record = {
         "annotation_version": ANNOTATION_VERSION,

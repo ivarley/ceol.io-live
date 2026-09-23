@@ -93,6 +93,18 @@ def truth_phase_ms(pulse):
     return float(intercept) * 1000.0, rms
 
 
+def truth_bar_phase_ms(pulse):
+    """When a bar starts, from the beats marked as bar starts. None if none are.
+
+    A marked bar line is the only statement about bar phase anywhere in the
+    lab. The estimator infers one by fitting a train at the bar period, which
+    is plausible and has never been checked, because until a person marks one
+    there is nothing to check it against.
+    """
+    downs = sorted(pulse.get("downbeats") or [])
+    return (float(downs[0]) * 1000.0) if downs else None
+
+
 def score_record(record, seconds=60.0):
     truth = dict(record["pulse"])
     truth["period_ms"] = truth_period_ms(truth) or truth.get("period_ms")
@@ -111,10 +123,22 @@ def score_record(record, seconds=60.0):
         period = truth["period_ms"]
         diff = (got["phase_ms"] - truth_phase) % period
         phase_err = min(diff, period - diff)
+    # Bar phase, in beats rather than milliseconds: being a whole beat out is a
+    # different mistake from being a little early, and only the first is audible
+    # as the wrong note starting the bar.
+    bar_err_beats = None
+    truth_bar = truth_bar_phase_ms(truth)
+    if truth_bar is not None and abs(ratio - 1.0) <= 0.08:
+        beat = truth["period_ms"] * int(truth.get("grouping") or 2)
+        bar = beat * (4 if int(truth.get("grouping") or 2) == 2 else 2)
+        diff = (got.get("bar_phase_ms", got["phase_ms"]) - truth_bar) % bar
+        bar_err_beats = min(diff, bar - diff) / max(1e-6, beat)
     return {
         "tune": record.get("tune_name"),
         "recording_id": record["recording_id"],
         "found": True,
+        "bar_error_beats": bar_err_beats,
+        "bars_marked": len(truth.get("downbeats") or []),
         "truth_period_ms": truth["period_ms"],
         "got_period_ms": got["period_ms"],
         "ratio": ratio,
@@ -149,6 +173,10 @@ def run_pulse(seconds=60.0, quiet=False):
     }
     errs = [r["phase_error_ms"] for r in scored if r["phase_error_ms"] is not None]
     pooled["median_phase_error_ms"] = float(np.median(errs)) if errs else None
+    bar = [r["bar_error_beats"] for r in scored if r.get("bar_error_beats") is not None]
+    pooled["n_with_bars_marked"] = sum(1 for r in scored if r.get("bars_marked"))
+    pooled["median_bar_error_beats"] = float(np.median(bar)) if bar else None
+    pooled["bar_phase_right"] = float(np.mean([b < 0.5 for b in bar])) if bar else None
     verdicts = {}
     for r in scored:
         verdicts[r["verdict"]] = verdicts.get(r["verdict"], 0) + 1
@@ -170,6 +198,13 @@ def format_pulse(result):
              f"  median estimate / drawn   {p['median_ratio']:.3f}"]
     if p.get("median_phase_error_ms") is not None:
         lines.append(f"  phase error when the period is right  {p['median_phase_error_ms']:.0f}ms")
+    if p.get("n_with_bars_marked"):
+        lines.append(f"  bar lines marked on {p['n_with_bars_marked']} segment(s)")
+        if p.get("median_bar_error_beats") is not None:
+            lines.append(f"  bar start off by (median)  {p['median_bar_error_beats']:.2f} beats")
+            lines.append(f"  bar start within half a beat  {p['bar_phase_right']:.3f}")
+    else:
+        lines.append("  bar lines: none marked, so nothing here checks the downbeat")
     if p["verdicts"]:
         where = ", ".join(f"{k} x{v}" for k, v
                           in sorted(p["verdicts"].items(), key=lambda kv: -kv[1]))

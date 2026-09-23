@@ -165,11 +165,28 @@ def estimate_pulse(y, sr, hop=HOP):
     period_s = beat_s / grouping
     phase_s = _phase(onset, beat_s * frames_per_s,
                      frames_per_s=frames_per_s) / frames_per_s
+    # Which beat starts the bar. Entirely unverified: nothing has ever been
+    # scored against a hand-marked bar line, and the beat phase it is built on
+    # is itself known only to about 50ms on one segment. It is computed the
+    # same way one level up, by fitting a train at the bar period, and a
+    # caller that needs to be right about bar lines should treat it as a
+    # guess until `lab bench pulse` has something to say about it.
+    beats_per_bar = 4 if grouping == 2 else 2
+    bar_s = beat_s * beats_per_bar
+    bar_phase_s = _phase(onset, bar_s * frames_per_s,
+                         frames_per_s=frames_per_s) / frames_per_s
+    # keep it on the beat grid: a bar line that is not a beat is not a bar line
+    k = round((bar_phase_s - phase_s) / beat_s)
+    bar_phase_s = phase_s + k * beat_s
     return {
         "period_ms": period_s * 1000.0,
         "phase_ms": phase_s * 1000.0,
         "grouping": grouping,
         "beat_ms": beat_s * 1000.0,
+        "beats_per_bar": beats_per_bar,
+        "bar_ms": bar_s * 1000.0,
+        "bar_phase_ms": bar_phase_s * 1000.0,
+        "bar_phase_verified": False,
         "duple_strength": duple,
         "triple_strength": triple,
         "grouping_margin": _grouping_margin(duple, triple),
