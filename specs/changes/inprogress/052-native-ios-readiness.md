@@ -624,7 +624,7 @@ lazily inside their own tabs, so a count on Tunes alone would be worse than none
 That needs `build_session_detail_payload` to carry all three, which is server work
 and belongs with Stage 3 rather than a visual pass.
 
-#### Stage 3 — One toolbar everywhere — **PARTLY DONE 2026-09-22**
+#### Stage 3 — One toolbar everywhere — **DONE 2026-09-22**
 
 **Status.** The session page's three tabs share one `Toolbar`: search, a filter button
 whose panel expands beneath the line, and `+`. The Logged/All and Members/Visitors/
@@ -640,9 +640,21 @@ Getting there meant deleting two containers' leftover `display: flex`, a stray i
 skin on the People search box that set 14px where the shared class sets the 16px that
 stops iOS zooming on focus.
 
-**Not done: My Tunes.** It still has its own filter markup, so the `.filter-*` block in
-`my_tunes_mobile.css` stays for now, and the sort control has not moved into its toolbar
-row. The "done when" below is not satisfied until that page is on the same component.
+**My Tunes is on it too now.** All four surfaces use one `Toolbar`. Converting it
+deleted `panelOpen`, `panelAnim` and a pair of 300ms timers: the panel was inside an
+`{#if}`, and a node that does not exist cannot animate out, so closing had to keep it
+mounted for the length of the transition and then remove it. Toolbar toggles a class on
+live nodes, so both directions animate for nothing. Two consequences worth knowing: the
+panel now sits directly beneath the toolbar row rather than below the status segment,
+which is the point of the component (it attaches to the button that opened it), and it
+stays in the DOM when shut — four tests asserted its *absence* and now assert that it is
+closed, which is what they always meant.
+
+**The `.filter-*` block in `my_tunes_mobile.css` stays**, contrary to the "done when"
+below. It is no longer this page's private skin: it is the shared one all four toolbars
+wear via `styled={false}`. Deleting it would mean restyling the session tabs, which were
+verified pixel-identical on adoption. One component with one skin is the outcome that
+was wanted; the file it lives in is a rename, not a deletion, and not worth the churn.
 
 **What.** The session page's Tunes / Logs / People tabs each get a `Toolbar`: search on
 every tab, a filter panel (tune type / complete-or-year / role), `+` on Tunes. My Tunes

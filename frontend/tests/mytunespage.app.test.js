@@ -146,7 +146,10 @@ describe('the status filter lives outside the filter drawer', () => {
   it('filters from first paint, with the drawer never opened', async () => {
     const { container } = render(App, { pageData: payload() })
     await waitFor(() => expect(container.querySelectorAll('.tune-card')).toHaveLength(2))
-    expect(container.querySelector('#filter-panel')).toBeNull() // drawer still shut
+    // Shut, not absent: since Stage 3 this is a kit Toolbar panel, which stays
+    // mounted and animates with a class, because a node that does not exist cannot
+    // animate out. `.open` is what "shut" means now.
+    expect(container.querySelector('#filter-panel').classList.contains('open')).toBe(false)
 
     await fireEvent.click(statusBtn(container, 'learned'))
     await waitFor(() => expect(container.querySelectorAll('.tune-card')).toHaveLength(1))
@@ -170,7 +173,9 @@ describe('the status filter lives outside the filter drawer', () => {
     expect(container.querySelector('#filter-panel-toggle').classList.contains('active')).toBe(false)
 
     await fireEvent.click(container.querySelector('#filter-panel-toggle'))
-    await waitFor(() => expect(container.querySelector('#filter-panel')).toBeTruthy())
+    await waitFor(() =>
+      expect(container.querySelector('#filter-panel').classList.contains('open')).toBe(true),
+    )
     // One status control on the page, and it's the one outside the drawer.
     expect(container.querySelector('#filter-panel [data-status]')).toBeNull()
     expect(statusBtn(container, 'learned')).toBeTruthy()

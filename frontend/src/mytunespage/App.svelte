@@ -27,8 +27,7 @@
   import { STATUS_LABELS } from '../mylist.js'
 
   let { pageData = null } = $props()
-
-  import { toast, SearchField, Chip, Seg } from '../lib/index.js'
+  import { Chip, SearchField, Seg, Toolbar, toast } from '../lib/index.js'
 
   // ---- state -----------------------------------------------------------------
   const initial = stateFromParams(new URLSearchParams(window.location.search))
@@ -159,24 +158,12 @@
 
 
   // ---- filter panel / dropdowns ---------------------------------------------------
-  let panelOpen = $state(false)
-  let panelAnim = $state('') // '', 'opening', 'closing'
+  // Just the open flag now: Toolbar owns the animation. The three variables and the
+  // 300ms timers that used to live here existed because the panel was inside an
+  // `{#if}` — a node that does not exist cannot animate out, so closing had to keep
+  // it mounted for the length of the transition and then remove it. Toolbar toggles
+  // a class on live nodes instead, so both directions animate for free.
   let panelVisible = $state(false)
-  function toggleFilterPanel() {
-    if (!panelVisible) {
-      panelVisible = true
-      panelOpen = true
-      panelAnim = 'opening'
-      setTimeout(() => (panelAnim = ''), 300)
-    } else {
-      panelAnim = 'closing'
-      panelOpen = false
-      setTimeout(() => {
-        panelVisible = false
-        panelAnim = ''
-      }, 300)
-    }
-  }
 
   let typeMenuOpen = $state(false)
   let instMenuOpen = $state(false)
@@ -596,7 +583,26 @@
     </div>
 
     <div class="filters-container">
-      <div class="filter-top-row">
+      <!-- One Toolbar, the same component the session page's three tabs use
+           (spec 052 §B8 Stage 3). It wears this page's legacy classes and ids so the
+           skin in my_tunes_mobile.css and the e2e selectors keep working — that skin
+           is now shared by all four surfaces rather than belonging to this one.
+           Toolbar owns opening and closing, so panelAnim/toggleFilterPanel are gone;
+           its panel is a class toggle on live nodes, which is why both directions
+           animate where the old `{#if}` could only animate one. -->
+      <Toolbar
+        styled={false}
+        toolbarClass="filter-top-row"
+        buttonClass="filter-panel-toggle"
+        filterId="filter-panel-toggle"
+        panelId="filter-panel"
+        bind:open={panelVisible}
+        activeCount={hasDrawerFilters ? 1 : 0}
+        addId="add-tune-btn"
+        addHref={addTuneHref}
+        addTitle="Add tune"
+        onAdd={handleAddTuneClick}>
+        {#snippet search()}
         <SearchField
           bind:value={rawSearch}
           id="search-input"
@@ -611,32 +617,106 @@
           spellcheck="false"
           debounce={300}
           onSearch={(q) => (filters.search = q.toLowerCase().trim())} />
-        <a
-          href={addTuneHref}
-          class="filter-panel-toggle"
-          id="add-tune-btn"
-          title="Add tune"
-          style="text-decoration: none; font-size: 24px; font-weight: 300; line-height: 1;"
-          onclick={handleAddTuneClick}>+</a>
+        {/snippet}
+
+        {#snippet filter()}
+    <div class="filter-panel-row">
+      <button
+        id="sort-direction-toggle"
+        class="filter-sort-direction-btn"
+        title="Toggle sort direction"
+        onclick={() => (sort.dir = sort.dir === 'asc' ? 'desc' : 'asc')}>
+        <span id="sort-direction-icon">{sort.dir === 'desc' ? '↓' : '↑'}</span>
+      </button>
+      <Seg
+        options={[
+          { id: 'alpha', label: 'a-z' },
+          { id: 'popularity', label: 'popularity' },
+          { id: 'plays', label: 'my plays' },
+          { id: 'attended', label: 'attended' },
+          { id: 'heard', label: 'heard' },
+        ]}
+        value={sort.type}
+        secondary={sort.type2}
+        idAttr="data-sort"
+        styled={false}
+        segClass="filter-button-group"
+        optClass="filter-sort-btn"
+        onSelect={setSortMode} />
+    </div>
+    <div class="filter-panel-row" id="rel-filter-row">
+      {#each REL_CHIPS as chip (chip.id)}
+        <Chip
+          label={chip.label}
+          active={filters.rel === chip.id}
+          styled={false}
+          chipClass="filter-rel-chip{filters.rel === chip.id ? ' active' : ''}"
+          onclick={() => (filters.rel = filters.rel === chip.id ? '' : chip.id)} />
+      {/each}
+    </div>
+    <div class="filter-panel-row">
+      <div class="inst-select" class:open={typeMenuOpen} id="type-filter">
         <button
-          id="filter-panel-toggle"
-          class="filter-panel-toggle"
-          class:active={panelVisible || hasDrawerFilters}
-          title="Show filters"
-          onclick={toggleFilterPanel}>
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="4" y1="21" x2="4" y2="14"></line>
-            <line x1="4" y1="10" x2="4" y2="3"></line>
-            <line x1="12" y1="21" x2="12" y2="12"></line>
-            <line x1="12" y1="8" x2="12" y2="3"></line>
-            <line x1="20" y1="21" x2="20" y2="16"></line>
-            <line x1="20" y1="12" x2="20" y2="3"></line>
-            <line x1="1" y1="14" x2="7" y2="14"></line>
-            <line x1="9" y1="8" x2="15" y2="8"></line>
-            <line x1="17" y1="16" x2="23" y2="16"></line>
-          </svg>
+          type="button"
+          class="inst-select-trigger"
+          onclick={(e) => {
+            e.stopPropagation()
+            instMenuOpen = false
+            typeMenuOpen = !typeMenuOpen
+          }}>
+          <span id="type-filter-label">{typeLabelText}</span>
+          <span class="inst-select-caret">▾</span>
         </button>
+        <div class="inst-select-menu" id="type-filter-menu">
+          {#each [{ value: '', label: 'All Tune Types' }, ...tuneTypes.map((t) => ({ value: t, label: cap(t) }))] as opt (opt.value)}
+            <button
+              type="button"
+              class="inst-select-option"
+              class:active={opt.value === filters.type}
+              onclick={() => {
+                typeMenuOpen = false
+                filters.type = opt.value
+              }}>{opt.label}</button>
+          {/each}
+        </div>
       </div>
+    </div>
+    {#if instruments.length >= 2}
+      <div class="filter-panel-row" id="instrument-filter-row">
+        <div class="inst-select" class:open={instMenuOpen} id="instrument-filter">
+          <button
+            type="button"
+            class="inst-select-trigger"
+            onclick={(e) => {
+              e.stopPropagation()
+              typeMenuOpen = false
+              instMenuOpen = !instMenuOpen
+            }}>
+            <span id="instrument-filter-label">{instLabelText}</span>
+            <span class="inst-select-caret">▾</span>
+          </button>
+          <div class="inst-select-menu" id="instrument-filter-menu">
+            {#each [{ value: '', label: 'All My Instruments' }, ...instruments.map((i) => ({ value: i.instrument, label: i.instrument }))] as opt (opt.value)}
+              <button
+                type="button"
+                class="inst-select-option"
+                class:active={opt.value === filters.instrument}
+                onclick={() => {
+                  instMenuOpen = false
+                  filters.instrument = opt.value
+                }}>{opt.label}</button>
+            {/each}
+          </div>
+        </div>
+      </div>
+    {/if}
+    <div class="filter-panel-actions">
+      {#if hasActiveFilters}
+        <button id="clear-filters-btn" class="filter-panel-clear-btn" onclick={clearFilters}>Clear Filters</button>
+      {/if}
+    </div>
+        {/snippet}
+      </Toolbar>
 
       <!-- Status is the filter people actually live in — "what am I learning right now?"
            is the question the page exists to answer — so it sits in the open, one tap
@@ -656,106 +736,6 @@
           optClass="filter-status-btn"
           onSelect={(v) => (filters.status = v)} />
       </div>
-
-      {#if panelVisible}
-        <div id="filter-panel" class="filter-panel {panelAnim}">
-          <div class="filter-panel-row">
-            <button
-              id="sort-direction-toggle"
-              class="filter-sort-direction-btn"
-              title="Toggle sort direction"
-              onclick={() => (sort.dir = sort.dir === 'asc' ? 'desc' : 'asc')}>
-              <span id="sort-direction-icon">{sort.dir === 'desc' ? '↓' : '↑'}</span>
-            </button>
-            <Seg
-              options={[
-                { id: 'alpha', label: 'a-z' },
-                { id: 'popularity', label: 'popularity' },
-                { id: 'plays', label: 'my plays' },
-                { id: 'attended', label: 'attended' },
-                { id: 'heard', label: 'heard' },
-              ]}
-              value={sort.type}
-              secondary={sort.type2}
-              idAttr="data-sort"
-              styled={false}
-              segClass="filter-button-group"
-              optClass="filter-sort-btn"
-              onSelect={setSortMode} />
-          </div>
-          <div class="filter-panel-row" id="rel-filter-row">
-            {#each REL_CHIPS as chip (chip.id)}
-              <Chip
-                label={chip.label}
-                active={filters.rel === chip.id}
-                styled={false}
-                chipClass="filter-rel-chip{filters.rel === chip.id ? ' active' : ''}"
-                onclick={() => (filters.rel = filters.rel === chip.id ? '' : chip.id)} />
-            {/each}
-          </div>
-          <div class="filter-panel-row">
-            <div class="inst-select" class:open={typeMenuOpen} id="type-filter">
-              <button
-                type="button"
-                class="inst-select-trigger"
-                onclick={(e) => {
-                  e.stopPropagation()
-                  instMenuOpen = false
-                  typeMenuOpen = !typeMenuOpen
-                }}>
-                <span id="type-filter-label">{typeLabelText}</span>
-                <span class="inst-select-caret">▾</span>
-              </button>
-              <div class="inst-select-menu" id="type-filter-menu">
-                {#each [{ value: '', label: 'All Tune Types' }, ...tuneTypes.map((t) => ({ value: t, label: cap(t) }))] as opt (opt.value)}
-                  <button
-                    type="button"
-                    class="inst-select-option"
-                    class:active={opt.value === filters.type}
-                    onclick={() => {
-                      typeMenuOpen = false
-                      filters.type = opt.value
-                    }}>{opt.label}</button>
-                {/each}
-              </div>
-            </div>
-          </div>
-          {#if instruments.length >= 2}
-            <div class="filter-panel-row" id="instrument-filter-row">
-              <div class="inst-select" class:open={instMenuOpen} id="instrument-filter">
-                <button
-                  type="button"
-                  class="inst-select-trigger"
-                  onclick={(e) => {
-                    e.stopPropagation()
-                    typeMenuOpen = false
-                    instMenuOpen = !instMenuOpen
-                  }}>
-                  <span id="instrument-filter-label">{instLabelText}</span>
-                  <span class="inst-select-caret">▾</span>
-                </button>
-                <div class="inst-select-menu" id="instrument-filter-menu">
-                  {#each [{ value: '', label: 'All My Instruments' }, ...instruments.map((i) => ({ value: i.instrument, label: i.instrument }))] as opt (opt.value)}
-                    <button
-                      type="button"
-                      class="inst-select-option"
-                      class:active={opt.value === filters.instrument}
-                      onclick={() => {
-                        instMenuOpen = false
-                        filters.instrument = opt.value
-                      }}>{opt.label}</button>
-                  {/each}
-                </div>
-              </div>
-            </div>
-          {/if}
-          <div class="filter-panel-actions">
-            {#if hasActiveFilters}
-              <button id="clear-filters-btn" class="filter-panel-clear-btn" onclick={clearFilters}>Clear Filters</button>
-            {/if}
-          </div>
-        </div>
-      {/if}
     </div>
 
     {#if pills.length > 0}

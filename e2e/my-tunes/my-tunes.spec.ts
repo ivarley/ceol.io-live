@@ -18,7 +18,10 @@ test.describe("My Tunes list", () => {
   test("learn-status filters are clickable without opening the filter panel", async ({ page }) => {
     await page.goto("/my-tunes");
     // The status filter is the one control that lives OUTSIDE the collapsed panel.
-    await expect(page.locator("#filter-panel")).toHaveCount(0);
+    // Closed, not absent. Since Stage 3 the panel is a kit Toolbar panel, which
+    // stays mounted and animates via a class — a node that does not exist cannot
+    // animate out. "Not visible" is what this test always meant.
+    await expect(page.locator("#filter-panel")).toBeHidden();
 
     const learning = page.locator('.filter-status-row button[data-status="learning"]');
     await learning.click();
