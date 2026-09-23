@@ -97,6 +97,7 @@ def save_annotation(payload):
             "phase_ms": round(float(pulse["phase_ms"]), 2),
             "grouping": int(pulse["grouping"]),
             "tapped_level": pulse.get("tapped_level"),
+            "offset_ms": round(float(pulse.get("offset_ms") or 0.0), 2),
             "taps": [round(float(t), 3) for t in (pulse.get("taps") or [])],
         }
     record = {
@@ -187,13 +188,22 @@ def build_payload(args):
         notes, _cost, _cached = transcribe_segment(frontend, store, sha, t0, t1, board=board)
     store.close()
 
-    from lab.analysis.pulse import estimate_pulse, expected_grouping, pulse_grid
+    from lab.analysis.pulse import (estimate_pulse, expected_grouping, onset_envelope,
+                                    pulse_grid, HOP as ONSET_HOP)
 
     pulse_store = AudioStore(paths.wav_path(args.recording))
     pulse_store.clock_ms = pulse_store.duration_ms
     # a minute is plenty to find a steady grid, and the whole segment is not
     pulse = estimate_pulse(pulse_store.read(t0, min(t1, t0 + 60000)), pulse_store.sr)
+    # The onset envelope goes to the page as well, so a tapped grid can be
+    # snapped to where the notes actually are. Tapping is late by a fairly
+    # constant amount - people anticipate, and the browser reports a position
+    # ahead of what comes out of the speakers - and the envelope is the only
+    # thing that knows the truth.
+    envelope = onset_envelope(pulse_store.read(t0, t1), pulse_store.sr)
     pulse_store.close()
+    peak = float(envelope.max()) if envelope.size else 1.0
+    onset_hop_ms = ONSET_HOP * 1000.0 / 22050.0
 
     intervals = intervals_from_notes(notes, fold=True)
     index = Index.load(args.candidate_set, n=args.n, fold_octaves=True)
@@ -256,6 +266,8 @@ def build_payload(args):
         "pulse": pulse,
         "pulse_grid": pulse_grid(pulse, (t1 - t0) / 1000.0) if pulse else [],
         "tapped_pulse": load_pulse(args.recording, args.segment, t0),
+        "onset": [round(float(v) / max(1e-9, peak), 3) for v in envelope],
+        "onset_hop_ms": onset_hop_ms,
         "pulse_expected": expected_grouping(seg.tune_type) if seg else None,
     }, t0, t1
 

@@ -94,7 +94,9 @@
         <option value="3">3 (jig)</option>
       </select>
     </label>
+    <button id="tapsnap" title="slide the grid onto the onsets">snap to notes</button>
     <button id="tapclear">clear taps</button>
+    <span class="time" id="offsetlabel"></span>
     <label>tone <input type="range" id="vol" min="0" max="100" value="45"></label>
     <span class="sep"></span>
     <button id="zoomout">−</button><button id="zoomin">+</button><button id="zoomfit">fit</button>
@@ -122,7 +124,7 @@
     <b>erase</b> drag a box to remove labels
     <br>
     <kbd>space</kbd> play · <kbd>1-5</kbd> modes · <kbd>+</kbd><kbd>−</kbd> zoom ·
-    <kbd>←</kbd><kbd>→</kbd> pan · <kbd>↑</kbd><kbd>↓</kbd> nudge a semitone · <kbd>⌫</kbd> delete · <kbd>s</kbd> sing · <kbd>g</kbd> grid · <kbd>t</kbd> tap the beat ·
+    <kbd>←</kbd><kbd>→</kbd> pan · <kbd>↑</kbd><kbd>↓</kbd> nudge a semitone · <kbd>⌫</kbd> delete · <kbd>s</kbd> sing · <kbd>g</kbd> grid · <kbd>t</kbd> tap the beat · <kbd>[</kbd><kbd>]</kbd> shift the grid 5ms (25 with shift) ·
     <kbd>cmd-z</kbd> undo · <kbd>cmd-s</kbd> save · swipe to pan, pinch or shift-scroll to zoom
   </div>
 
@@ -171,6 +173,10 @@ let showPulse = true;
 // and a person tapping along with the music settles it in fifteen seconds.
 let taps = (D.tapped_pulse && D.tapped_pulse.taps) ? D.tapped_pulse.taps.slice() : [];
 let tapped = null;          // {period_ms, phase_ms, grouping, taps}
+// Taps land late by a fairly constant amount: a person anticipates the beat
+// and the browser reports a position ahead of what reaches the speakers.
+// Both push the same way, so one offset corrects both.
+let tapOffsetMs = (D.tapped_pulse && D.tapped_pulse.offset_ms) || 0;
 
 // ---- sound ---------------------------------------------------------------
 // A sine for each note, so a label can be checked by ear against the audio it
@@ -290,6 +296,21 @@ function heardAt(p) {
     }
   }
 
+  if (D.onset && D.onset.length) {
+    const hop = D.onset_hop_ms / 1000;
+    const base = plotB(), height = 26 * dpr;
+    rc.strokeStyle = 'rgba(230,233,240,.30)'; rc.lineWidth = dpr;
+    rc.beginPath();
+    let started = false;
+    for (let i = Math.max(0, Math.floor(view.t0 / hop)); i < D.onset.length; i++) {
+      const t = i * hop;
+      if (t > view.t1) break;
+      const y = base - D.onset[i] * height;
+      if (!started) { rc.moveTo(xOf(t), y); started = true; } else rc.lineTo(xOf(t), y);
+    }
+    rc.stroke();
+  }
+
   for (const t of taps) {
     if (t < view.t0 || t > view.t1) continue;
     rc.fillStyle = '#3ddc97';
@@ -334,6 +355,7 @@ function fitTaps() {
   const phase = (sy - period * sx) / n;
   if (!(period > 0.05)) { tapped = null; return; }
 
+  const offset = tapOffsetMs / 1000;
   const grouping = parseInt(document.getElementById('tapmeter').value, 10);
   const level = document.getElementById('taplevel').value;
   const perBar = grouping === 3 ? 6 : 8;
@@ -342,7 +364,7 @@ function fitTaps() {
     : level === 'bar' ? period / perBar : period / grouping;
 
   const grid = [];
-  let start = phase;
+  let start = phase + offset;
   while (start - eighth > 0) start -= eighth;
   const offsetIndex = Math.round((phase - start) / eighth);
   for (let i = 0, t = start; t < D.duration_s; i++, t = start + i * eighth) {
@@ -352,7 +374,9 @@ function fitTaps() {
                 bar: ((k % perBar) + perBar) % perBar === 0 });
   }
   tapped = { period_ms: eighth * 1000, phase_ms: start * 1000, grouping,
-             level, taps: sorted.slice(), grid };
+             level, offset_ms: tapOffsetMs, taps: sorted.slice(), grid };
+  document.getElementById('offsetlabel').textContent =
+    tapOffsetMs ? 'grid shifted ' + (tapOffsetMs > 0 ? '+' : '') + tapOffsetMs.toFixed(0) + 'ms' : '';
   dirty = true;
   document.getElementById('save').disabled = false;
 }
@@ -416,6 +440,21 @@ function draw() {
       rc.lineWidth = (g.bar ? 1.6 : 1) * dpr;
       rc.beginPath(); rc.moveTo(xOf(g.t), plotT()); rc.lineTo(xOf(g.t), plotB()); rc.stroke();
     }
+  }
+
+  if (D.onset && D.onset.length) {
+    const hop = D.onset_hop_ms / 1000;
+    const base = plotB(), height = 26 * dpr;
+    rc.strokeStyle = 'rgba(230,233,240,.30)'; rc.lineWidth = dpr;
+    rc.beginPath();
+    let started = false;
+    for (let i = Math.max(0, Math.floor(view.t0 / hop)); i < D.onset.length; i++) {
+      const t = i * hop;
+      if (t > view.t1) break;
+      const y = base - D.onset[i] * height;
+      if (!started) { rc.moveTo(xOf(t), y); started = true; } else rc.lineTo(xOf(t), y);
+    }
+    rc.stroke();
   }
 
   for (const t of taps) {
@@ -636,9 +675,32 @@ function paint(p) {
 // ---- singing the labels over the music -----------------------------------
 let sungUpTo = -1;
 function resetSung() { sungUpTo = audio.currentTime - 0.001; }
+function snapToOnsets() {
+  if (!tapped || !D.onset || !D.onset.length) return;
+  const hop = D.onset_hop_ms / 1000;
+  const period = tapped.period_ms / 1000;
+  // Slide the whole grid within one eighth and keep the position where the
+  // most onset energy lands on a grid line.
+  let best = 0, bestScore = -Infinity;
+  for (let shift = -period / 2; shift <= period / 2; shift += period / 120) {
+    let score = 0, n = 0;
+    for (const g of tapped.grid) {
+      const i = Math.round((g.t + shift) / hop);
+      if (i < 0 || i >= D.onset.length) continue;
+      score += D.onset[i] * (g.beat ? 2 : 1);
+      n++;
+    }
+    if (n && score / n > bestScore) { bestScore = score / n; best = shift; }
+  }
+  tapOffsetMs += best * 1000;
+  fitTaps();
+  draw();
+}
+document.getElementById('tapsnap').onclick = snapToOnsets;
 document.getElementById('tapbtn').onclick = tapNow;
 document.getElementById('tapclear').onclick = () => {
-  taps = []; tapped = null;
+  taps = []; tapped = null; tapOffsetMs = 0;
+  document.getElementById('offsetlabel').textContent = '';
   document.getElementById('agree').textContent = agreement();
   draw();
 };
@@ -735,7 +797,8 @@ async function save() {
     frontend: D.frontend, labels,
     pulse: tapped ? {
       period_ms: tapped.period_ms, phase_ms: tapped.phase_ms,
-      grouping: tapped.grouping, tapped_level: tapped.level, taps: tapped.taps,
+      grouping: tapped.grouping, tapped_level: tapped.level,
+      offset_ms: tapped.offset_ms, taps: tapped.taps,
     } : null,
   };
   const res = await fetch('annotation', {
@@ -763,6 +826,11 @@ document.addEventListener('keydown', e => {
   if (e.key === 's') { document.getElementById('sing').click(); return; }
   if (e.key === 'g') { document.getElementById('pulsebtn').click(); return; }
   if (e.key === 't') { e.preventDefault(); tapNow(); return; }
+  if (e.key === '[' || e.key === ']') {
+    e.preventDefault();
+    tapOffsetMs += (e.key === '[' ? -1 : 1) * (e.shiftKey ? 25 : 5);
+    fitTaps(); draw(); return;
+  }
   if (e.key === '+' || e.key === '=') { zoomAt((view.t0 + view.t1) / 2, 0.6); return; }
   if (e.key === '-') { zoomAt((view.t0 + view.t1) / 2, 1.7); return; }
   if ((e.key === 'Backspace' || e.key === 'Delete') && selected) {
