@@ -361,6 +361,59 @@ whole sequences recovers most of the difference.
 **A voicing threshold** that discarded 96% of pyin's output, because its
 voicing model is built for one instrument and this is six.
 
+### The grid, and what one hand-drawn segment overturned
+
+Nothing in the matcher uses rhythm yet: the index compares pitch shapes and
+throws every duration away. Putting the transcription on the same grid the
+corpus is notated on requires knowing where that grid is, and the first
+attempt assumed the fastest steady periodicity in a recording is the eighth
+note.
+
+Hand-drawing the beats on one jig killed that assumption outright. Against
+Coleman's Cross, whose eighth is 159ms, the onset envelope correlates 0.011
+at 159ms, 0.060 at two eighths, 0.455 at the 478ms beat and 0.464 at the
+955ms bar. The eighth is not the weakest of the three levels, it is absent:
+players slur and roll across it, so most eighths are never struck. The
+estimator, told to search between 110ms and 300ms, could not see the beat at
+all and returned whatever noise sat in its band.
+
+So the beat is found first and the grid divided out of it. Surveying 288
+segments, the tallest autocorrelation peak is the beat every time, and the
+meter is legible in where the subdivision peaks sit relative to it:
+
+| | subdivision peaks, as a fraction of the beat |
+|---|---|
+| reels, polkas | 0.50, 1.00, 1.50, 2.00 |
+| jigs, slip jigs | 0.36, 0.64, 1.00, 1.36 |
+
+Halves against thirds, which is the definition of the reel-versus-jig
+question rather than a proxy for it. Scored against the tune types the corpus
+records, that reads the meter right on 0.95 of 288 segments where searching
+for the eighth directly managed 0.80 of the 244 it answered at all.
+
+The triple peaks sit at 0.36 and 0.64 rather than 0.33 and 0.67 because a
+jig's first eighth is longer than its second, which is most of what makes it
+sound like a jig. The period is still reported as an even third, because the
+corpus notates it evenly and the grid exists to line the two up.
+
+One more correction came out of the same survey. Reels were landing with a
+median beat of 322ms and a 95th percentile of 603ms, which is one
+distribution with a copy of itself at twice the period: a half-bar inherits
+every peak the beat has, so it scores at least as well and wins about a fifth
+of the time. Stepping down an octave whenever half the period is still a
+plausible beat collapses that to 255-376ms and leaves the meter accuracy
+untouched. It is safe only because the band stops it, since a reel's eighth
+IS articulated and nothing in the curve distinguishes it from a beat; what
+distinguishes it is that 161ms is not a tempo anyone's foot keeps.
+
+On the one segment with drawn beats the period is now right to 0.15%, 160ms
+against 159ms, and the meter is right. Phase is not settled and cannot be
+settled from one segment: the estimate sits 50ms from a least-squares line
+through the drawn beats, and those beats scatter 32ms rms about that line.
+The transcribed note onsets cannot adjudicate it either, since even the
+best-fitting grid sits 31.7ms from them against 39.9ms for a random phase.
+More drawn segments, not more tuning, is what would move it.
+
 ### What did not work, and is on the board anyway
 
 Harmonic separation plus a melody band took yin from 0.109 to 0.024. A tune
@@ -380,7 +433,8 @@ at every stage: heard, shaped, matched, expected, decided. `lab view` plays
 the audio with the notes drawn over it, sounds them as sine tones, sings the
 labels over the music, and is where hand-drawn pitch labels come from.
 `lab bench pitch` scores a front end against those labels directly rather
-than through what it happens to retrieve.
+than through what it happens to retrieve. The same viewer draws in the beats,
+and `lab bench pulse` scores the grid estimator against them.
 
 Reading the trace across two nights gave the clearest statement of the
 bottleneck: everything turns on how much of the tune's notation the

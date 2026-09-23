@@ -60,7 +60,7 @@ def _payload():
         "labels": [{"t0": 1.0, "t1": 1.2, "midi": 62, "from": "accepted"}],
         "pulse": {"period_ms": 240.0, "phase_ms": 100.0, "grouping": 2,
                   "duple_strength": 0.4, "triple_strength": 0.1, "grouping_margin": 0.7,
-                  "pulse_strength": 0.2, "comb_score": 0.5, "bpm_eighths": 250.0,
+                  "pulse_strength": 0.2, "bpm_eighths": 250.0,
                   "bpm_beat": 125.0},
         "pulse_grid": [{"t": 0.1, "beat": True, "bar": True},
                        {"t": 0.34, "beat": False, "bar": False}],

@@ -2,12 +2,20 @@
 
 The estimator was landing about half again too fast and nothing in the lab
 could say so, because there was no ground truth for tempo. Drawing the
-quarter notes where they actually fall produces one.
+quarter notes where they actually fall produces one, and the first segment
+anyone drew overturned the estimator's central assumption: on a jig whose
+eighth note is 159ms, the onset envelope correlates 0.011 at 159ms and 0.455
+at the 478ms beat. The eighth was not weak, it was absent.
 
 The scoring is deliberately about ratios rather than differences. A grid at
 twice or half the true spacing is not "a bit wrong", it is a different answer
 that happens to line up, and it is the mistake this estimator actually makes,
 so the report names which multiple it landed on.
+
+Phase is reported but should be read with the scatter beside it. A beat drawn
+by hand lands about 30ms from the line a least-squares fit puts through all of
+them, so a phase error of that order is not distinguishable from the ground
+truth's own noise, and there is one drawn segment to go on.
 """
 
 import json
@@ -51,8 +59,43 @@ def load_drawn():
     return out
 
 
+def truth_period_ms(pulse):
+    """The eighth note, taken from the beats themselves.
+
+    The drawn beats are the fact; the stored period is an inference from them
+    and the meter, and it goes stale the moment the meter is changed without
+    re-saving. That happened on the first segment anyone drew, so it is
+    derived here instead of trusted.
+    """
+    beats = sorted(pulse.get("beats") or [])
+    grouping = int(pulse.get("grouping") or 2)
+    if len(beats) >= 2:
+        gaps = np.diff(np.asarray(beats))
+        return float(np.median(gaps)) * 1000.0 / grouping
+    return float(pulse.get("period_ms") or 0.0)
+
+
+def truth_phase_ms(pulse):
+    """Where the beats start, fitted rather than read off the first one.
+
+    The stored phase is whichever beat happened to be drawn first, and a hand
+    drawn beat scatters about 30ms. A least-squares line through all of them
+    is the same quantity measured eighty times, which is the only reason it is
+    worth comparing an estimate against at all.
+    """
+    beats = np.asarray(sorted(pulse.get("beats") or []), dtype=float)
+    if beats.size < 3:
+        return float(pulse.get("phase_ms") or 0.0), None
+    i = np.arange(beats.size)
+    a = np.vstack([i, np.ones(i.size)]).T
+    (slope, intercept), residuals, *_ = np.linalg.lstsq(a, beats, rcond=None)
+    rms = float(np.sqrt(residuals[0] / beats.size)) * 1000.0 if residuals.size else None
+    return float(intercept) * 1000.0, rms
+
+
 def score_record(record, seconds=60.0):
-    truth = record["pulse"]
+    truth = dict(record["pulse"])
+    truth["period_ms"] = truth_period_ms(truth) or truth.get("period_ms")
     t0 = int(record.get("t0_ms") or 0)
     store = AudioStore(paths.wav_path(record["recording_id"]))
     store.clock_ms = store.duration_ms
@@ -63,9 +106,10 @@ def score_record(record, seconds=60.0):
     ratio = got["period_ms"] / max(1e-6, truth["period_ms"])
     # phase only means anything once the period is right
     phase_err = None
+    truth_phase, drawn_rms = truth_phase_ms(truth)
     if abs(ratio - 1.0) <= 0.08:
         period = truth["period_ms"]
-        diff = (got["phase_ms"] - truth["phase_ms"]) % period
+        diff = (got["phase_ms"] - truth_phase) % period
         phase_err = min(diff, period - diff)
     return {
         "tune": record.get("tune_name"),
@@ -78,6 +122,7 @@ def score_record(record, seconds=60.0):
         "period_right": abs(ratio - 1.0) <= 0.08,
         "grouping_right": int(got["grouping"]) == int(truth["grouping"]),
         "phase_error_ms": phase_err,
+        "drawn_scatter_ms": drawn_rms,
         "f1": float(abs(ratio - 1.0) <= 0.08),
     }
 
@@ -109,7 +154,7 @@ def run_pulse(seconds=60.0, quiet=False):
         verdicts[r["verdict"]] = verdicts.get(r["verdict"], 0) + 1
     pooled["verdicts"] = verdicts
     return BenchResult(
-        task="pulse", candidate="autocorrelation_comb", version="1",
+        task="pulse", candidate="beat_first", version="1",
         params={"seconds": seconds}, features_version="audio", split="per-drawn-segment",
         nights=[NightResult(recording_id=r.get("recording_id", 0), label=str(r["tune"]), date="",
                             metrics=r, n_frames=1) for r in scored],
