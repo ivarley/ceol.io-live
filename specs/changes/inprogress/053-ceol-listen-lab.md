@@ -451,7 +451,35 @@ to that number and `analysis/key.py` produces it from audio.
 Collapsing this way barely changes how much the corpus agrees with itself:
 77.8% of tunes have every setting on the same mode string, 78.8% on the same
 notes. So the remaining fifth are genuine transpositions, a tune written in D
-and also in G, and a tune's key is properly a set rather than a value.
+and also in G.
+
+That does not make a tune's key merely a set, though, because the session
+says which setting it plays: `session_tune.setting_id` is filled for 650
+repertoire tunes and is a real choice rather than a default, pointing at the
+lowest-numbered setting only 41% of the time. Each setting has exactly one
+mode, so for those tunes the key is a value.
+
+Scored against that value the estimator reads 0.783 where against the set it
+reads 0.921, and the gap is mostly not error. Of the 80 disagreements:
+
+| | |
+|---|---|
+| the deciding note is barely played, under 2% either way | 38 |
+| both are played: the tune moves between modes | 23 |
+| clearly the note heard, not the one notated | 15 |
+| more than one accidental apart | 4 |
+
+So 15 of 369 look like a real mismatch between what is notated and what is
+played. The estimator already knows which of these it should not have
+claimed: its margin is 0.003 on the undecidable group against 0.023 where it
+agrees, so abstaining below about 0.005 costs almost nothing and removes
+half the apparent disagreement.
+
+The single accidental is the whole question, which makes each case checkable
+by ear. The Gooseberry Bush is recorded as D major and played with a C
+natural on both nights it appears, 13.2% against 1.8% of note time in 2026-01
+and 9.7% against 2.6% in 2026-08, with F# present throughout: D mixolydian on
+the evidence, D major in the setting.
 
 **It is easy to hear.** The best-fitting seven-note set holds 95.5% of note
 time in the median segment, which is a lot of agreement from a monophonic
@@ -461,6 +489,17 @@ repertoire mostly plays in. Of the forty it gets wrong, 34 are one accidental
 out, which is D against G: a tune in D that rarely reaches its C# is a tune
 in G. The estimate is well calibrated, being right on all 103 segments where
 the winning set beat the runner-up by more than five points of note time.
+
+**The mode cannot be named, only the signature.** One sharp is G major, E
+minor, D mixolydian or A dorian, and the session plays all of them: by the
+setting each tune records, 40% of what it plays is not plain major, with D
+mixolydian, E dorian and A dorian the commonest. Naming the mode needs the
+tonic, and four ways of finding it all lose to simply assuming major, which
+is right 0.668 of the time: the longest note gets 0.526, the heaviest scale
+degree 0.498, the commonest phrase ending 0.363 and the last note heard
+0.325. The usual error is calling D major's tonic A, which is the dominant
+outweighing the tonic. For writing notation this costs only the mode label,
+since the signature alone gives the right accidentals.
 
 **And it is worth nothing as a filter.** Restricting candidates to tunes the
 corpus records in the TRUE key, an oracle no classifier could beat, moves
