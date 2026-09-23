@@ -38,19 +38,24 @@
   const showPeopleTab = permissions.is_logged_in && permissions.can_view_people
 
   // Festival sessions label the logs tab "Sessions" and order it first.
-  const tabs = (() => {
-    const t = isFestival
-      ? [
-          { id: 'logs', label: 'Sessions' },
-          { id: 'tunes', label: 'Tunes' },
-        ]
-      : [
-          { id: 'tunes', label: 'Tunes' },
-          { id: 'logs', label: 'Logs' },
-        ]
-    if (showPeopleTab) t.push({ id: 'people', label: 'People' })
+  // Counts come from the payload, not from the tabs' own data: Logs and People load
+  // lazily when you open them, so a count derived client-side could only appear after
+  // you had already gone and looked (spec 052 §B8 Stage 2).
+  const tabs = $derived.by(() => {
+    const tunes = { id: 'tunes', label: 'Tunes', count: pageData.total_tunes_count }
+    const logs = {
+      id: 'logs',
+      label: isFestival ? 'Sessions' : 'Logs',
+      count: pageData.total_logs_count,
+    }
+    const t = isFestival ? [logs, tunes] : [tunes, logs]
+    if (showPeopleTab) {
+      // null when the viewer may not see the roster; Tabs renders nothing for null,
+      // and 0 is a real count.
+      t.push({ id: 'people', label: 'People', count: pageData.total_people_count })
+    }
     return t
-  })()
+  })
 
   let activeTab = $state(ctx.activeTab || defaultTab)
 

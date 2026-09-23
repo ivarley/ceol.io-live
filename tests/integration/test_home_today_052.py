@@ -51,8 +51,13 @@ def _cleanup(cur):
 def tonight(db_conn, db_cursor, authenticated_regular_user):
     """One live session on today's date, with a part-written log and people present.
 
-    Dated with CURRENT_DATE rather than a literal, because "today" is the whole
+    Dated relative to now rather than with a literal, because "today" is the whole
     condition for the card existing and a fixed date stops being today tomorrow.
+
+    In the SESSION's timezone, not CURRENT_DATE: database.py pins app connections to
+    `timezone=utc`, so CURRENT_DATE is the UTC day while the payload works out today
+    in the viewer's. For the hours between the two, a CURRENT_DATE instance is
+    tomorrow's, and the card these tests are about does not exist.
     """
     person_id = authenticated_regular_user.person_id
     cur = db_cursor
@@ -84,7 +89,7 @@ def tonight(db_conn, db_cursor, authenticated_regular_user):
         """
         INSERT INTO session_instance (session_instance_id, session_id, date, start_time, end_time,
                                       is_active, is_cancelled)
-        VALUES (%s, %s, CURRENT_DATE, '19:00', '22:00', TRUE, FALSE)
+        VALUES (%s, %s, (NOW() AT TIME ZONE 'America/Chicago')::date, '19:00', '22:00', TRUE, FALSE)
         """,
         (HT_INSTANCE, HT_SESSION),
     )
@@ -258,7 +263,7 @@ class TestTwoSessionsOnOneDay:
             """
             INSERT INTO session_instance (session_instance_id, session_id, date, start_time, end_time,
                                           is_active, is_cancelled)
-            VALUES (%s, %s, CURRENT_DATE, '20:00', '23:00', FALSE, FALSE)
+            VALUES (%s, %s, (NOW() AT TIME ZONE 'America/Chicago')::date, '20:00', '23:00', FALSE, FALSE)
             """,
             (HT_INSTANCE_B, HT_SESSION_B),
         )

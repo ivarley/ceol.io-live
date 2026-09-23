@@ -70,7 +70,7 @@ test.describe("session detail", () => {
   test("Logs tab switches view client-side", async ({ page }) => {
     await page.goto(`/sessions/${SESSIONS.mueller.path}`);
     // The tabs are a real tablist now (kit Tabs on bits-ui) — role is "tab".
-    await page.getByRole("tab", { name: /^Logs$/ }).click();
+    await page.getByRole("tab", { name: /^Logs( \d+)?$/ }).click();
     await expectNoServerError(page);
     // Still on the same session shell, no navigation error.
     await expect(page.locator("h1")).toContainText(SESSIONS.mueller.name);

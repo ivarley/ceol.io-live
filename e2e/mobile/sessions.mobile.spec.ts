@@ -29,8 +29,8 @@ test.describe("session page (mobile)", () => {
     // sessionpage keeps VISUAL tabs under 768px (mobileSelect 'auto', 2-3 tabs) —
     // it does not collapse to a <select> the way the person page does. Stage 5 of
     // the plan must not change that.
-    const tunes = page.getByRole("tab", { name: /^Tunes$/ });
-    const logs = page.getByRole("tab", { name: /^Logs$/ });
+    const tunes = page.getByRole("tab", { name: /^Tunes( \d+)?$/ });
+    const logs = page.getByRole("tab", { name: /^Logs( \d+)?$/ });
     await expect(tunes).toBeVisible();
     await expect(logs).toBeVisible();
 
@@ -167,7 +167,7 @@ test.describe("session page (mobile)", () => {
 
   test("Logs: instances render and the tune filter is reachable", async ({ page }) => {
     await page.goto(SESSION);
-    await page.getByRole("tab", { name: /^Logs$/ }).click();
+    await page.getByRole("tab", { name: /^Logs( \d+)?$/ }).click();
 
     const header = page.locator("#logs-filter-header");
     await expect(header).toBeVisible({ timeout: 8000 });
@@ -215,9 +215,32 @@ test.describe("session page (mobile)", () => {
     expect(right).toBeGreaterThanOrEqual(width - 1);
   });
 
+  test("the tab labels carry counts, and they match the payload", async ({ page }) => {
+    // The Logs and People tabs load their data lazily, so these numbers come from the
+    // detail payload rather than from the lists. Comparing against that payload is the
+    // only way to catch a count drifting from what its tab would show.
+    await page.goto(SESSION);
+    const res = await page.request.get(`/api/sessions/${SESSIONS.mueller.path}/detail`);
+    const body = await res.json();
+
+    const counts = page.locator(".tab-button .kit-tab-count");
+    await expect(counts.first()).toBeVisible();
+
+    const labelled = async (name: string) =>
+      (await page.locator(`.tab-button[data-tab="${name}"] .kit-tab-count`).innerText()).trim();
+
+    expect(await labelled("tunes")).toBe(String(body.total_tunes_count));
+    expect(await labelled("logs")).toBe(String(body.total_logs_count));
+    if (body.total_people_count != null) {
+      expect(await labelled("people")).toBe(String(body.total_people_count));
+    } else {
+      await expect(page.locator('.tab-button[data-tab="people"] .kit-tab-count')).toHaveCount(0);
+    }
+  });
+
   test("People: the roster renders and its search box filters", async ({ page }) => {
     await page.goto(SESSION);
-    await page.getByRole("tab", { name: /^People$/ }).click();
+    await page.getByRole("tab", { name: /^People( \d+)?$/ }).click();
 
     const list = page.locator("#people-list");
     await expect(list).toBeVisible({ timeout: 8000 });

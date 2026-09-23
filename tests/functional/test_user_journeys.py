@@ -521,6 +521,10 @@ class TestLongRunningWorkflows:
                     "track_set_starters": True,
                 },
                 {"n": 4},  # total session_tune count
+                # Tab-label counts (spec 052 §B8 Stage 2). No people count follows:
+                # this viewer is signed out, so can_view_people is false and the
+                # serializer does not run that query at all.
+                {"n": 3},  # total non-cancelled session_instance count
             ]
 
             mock_cursor.fetchall.side_effect = [

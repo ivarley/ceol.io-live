@@ -995,6 +995,32 @@ def build_session_detail_payload(
     cur.execute("SELECT COUNT(DISTINCT tune_id) AS n FROM session_tune WHERE session_id = %s", (session_id,))
     total_tunes_count = cur.fetchone()["n"]
 
+    # Counts for the tab labels (spec 052 §B8 Stage 2). The Logs and People tabs load
+    # their own data lazily once you open them, so without these the label could only
+    # say how many there are AFTER you had already gone and looked.
+    #
+    # Each count must match what its tab shows on arrival, or the label is a small lie
+    # you notice immediately: cancelled nights are not listed, and People opens on the
+    # Members filter, which is everyone not a visitor and not archived.
+    cur.execute(
+        "SELECT COUNT(*) AS n FROM session_instance WHERE session_id = %s AND is_cancelled = FALSE",
+        (session_id,),
+    )
+    total_logs_count = cur.fetchone()["n"]
+
+    # Only for someone allowed to see the roster. The size of a group is information
+    # about it, so it travels under the same gate as its contents.
+    total_people_count = None
+    if can_view_people:
+        cur.execute(
+            """
+            SELECT COUNT(*) AS n FROM session_person
+            WHERE session_id = %s AND relationship <> 'visitor' AND archived = FALSE
+            """,
+            (session_id,),
+        )
+        total_people_count = cur.fetchone()["n"]
+
     tunes = load_session_tunes(conn, session_id, limit=first_page, person_id=person_id)
 
     return {
@@ -1012,6 +1038,10 @@ def build_session_detail_payload(
         "default_tab": "logs" if session["session_type"] == "festival" else "tunes",
         "tunes": tunes,
         "total_tunes_count": total_tunes_count,
+        "total_logs_count": total_logs_count,
+        # null, not 0, when the viewer may not see the roster — "you can't know" and
+        # "there is nobody" are different, and a 0 would render as a count of none.
+        "total_people_count": total_people_count,
         "has_more_tunes": total_tunes_count > first_page,
         "popular_tunes": popular_tunes,
     }

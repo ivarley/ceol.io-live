@@ -23,7 +23,13 @@
   //  carry data-tab={id} and an `active` class so legacy CSS and e2e selectors
   //  keep working.
   let {
-    tabs = [], // [{ id, label, href?, domId? }] — href per tab in navigate mode; domId = DOM id for the trigger (aria-labelledby targets)
+    // [{ id, label, count?, href?, domId? }] — href per tab in navigate mode; domId =
+    // DOM id for the trigger (aria-labelledby targets). `count` renders muted after the
+    // label (spec 052 §B8 Stage 2): how many are in there is worth knowing before you
+    // open it, but it is not the name of the tab, so it must not compete with it.
+    // Omit it (or pass null) where the number is unknown or the viewer may not see it —
+    // 0 is a real count and renders as one.
+    tabs = [],
     value = $bindable(), // active tab id; defaults to the first tab
     onValueChange = () => {},
     navigate = false,
@@ -77,12 +83,14 @@
           class:active={value === t.id}
           data-tab={t.id}
           data-state={value === t.id ? 'active' : 'inactive'}
-          aria-current={value === t.id ? 'page' : undefined}>{t.label}</a>
+          aria-current={value === t.id ? 'page' : undefined}
+          >{t.label}{#if t.count != null}{' '}<span class="kit-tab-count">{t.count}</span>{/if}</a>
       {/each}
     </nav>
     <select id={selectId} class="kit-tabs-select {selectClass}" aria-label={selectLabel} {value} onchange={onSelectChange}>
       {#each tabs as t (t.id)}
-        <option value={t.id}>{t.label}</option>
+        <!-- An <option> cannot carry markup, so the count joins the text here. -->
+        <option value={t.id}>{t.label}{t.count != null ? ` · ${t.count}` : ''}</option>
       {/each}
     </select>
     <div class="kit-tabs-pane {paneClass}">
@@ -97,12 +105,15 @@
           value={t.id}
           id={t.domId}
           class="kit-tab {tabClass}{value === t.id ? ' active' : ''}"
-          data-tab={t.id}>{t.label}</BitsTabs.Trigger>
+          data-tab={t.id}
+          >{t.label}{#if t.count != null}{' '}<span class="kit-tab-count">{t.count}</span
+            >{/if}</BitsTabs.Trigger>
       {/each}
     </BitsTabs.List>
     <select id={selectId} class="kit-tabs-select {selectClass}" aria-label={selectLabel} {value} onchange={onSelectChange}>
       {#each tabs as t (t.id)}
-        <option value={t.id}>{t.label}</option>
+        <!-- An <option> cannot carry markup, so the count joins the text here. -->
+        <option value={t.id}>{t.label}{t.count != null ? ` · ${t.count}` : ''}</option>
       {/each}
     </select>
     <div class="kit-tabs-pane {paneClass}">
@@ -114,6 +125,17 @@
 <style>
   /* A clicked tab shouldn't wear the browser's focus ring — that's for
      keyboard navigation (:focus-visible) only. Applies to every skin. */
+  /* Muted and a size down: present, secondary to the tab's name. */
+  :global(.kit-tab-count) {
+    /* A real space already separates it (see the markup — the accessible name is
+       the concatenated text), so this is the rest of the gap, not all of it. */
+    margin-left: 0.15em;
+    opacity: 0.55;
+    font-weight: 400;
+    font-size: 0.85em;
+    font-variant-numeric: tabular-nums;
+  }
+
   :global(.kit-tab:focus) {
     outline: none;
   }
