@@ -129,8 +129,10 @@ describe('session admin page view', () => {
     expect(tabs.map((t) => t.textContent.trim())).toEqual(['Details', 'Tunes', 'Members', 'Logs', 'Local Cache'])
     expect(tabs[0].classList.contains('active')).toBe(true)
     expect(tabs[3].getAttribute('href')).toBe('/admin/sessions/austin/mueller/logs')
-    // Mobile <select> mirrors the active tab.
-    expect(container.querySelector('#session-admin-mobile-select').value).toBe('details')
+    // The mobile <select> that used to mirror the active tab is retired (spec 052
+    // §B3); the active link carries the state instead, and the five tabs scroll.
+    expect(container.querySelector('#session-admin-mobile-select')).toBeNull()
+    expect(tabs[0].getAttribute('aria-current')).toBe('page')
     // Form pre-filled from the embed; timezone options come from the payload.
     expect(container.querySelector('#session-name').value).toBe('Mueller Session')
     expect(container.querySelector('#auto-create-hours').value).toBe('48')

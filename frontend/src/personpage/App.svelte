@@ -133,23 +133,21 @@
   </nav>
 {/if}
 
-<!-- Responsive tabs: the kit engine (bits-ui tablist on desktop, <select> on
-     mobile) with this page's Bootstrap nav-tabs skin. listId keeps the
-     #profileTabs e2e/CSS hook; the select keeps its legacy id/class.
-     mobileSelect={true}: this page is where the mobile-select rule originated
-     (person_details.html), and its 4-5 tabs overflow a phone width. -->
+<!-- The kit tab engine with this page's Bootstrap nav-tabs skin; listId keeps the
+     #profileTabs e2e/CSS hook.
+
+     This page is where the mobile <select> originated (person_details.html), and it
+     is where it ends (spec 052 §B3). Six tabs still do not fit a phone, but they now
+     SCROLL sideways rather than collapsing into a dropdown — an idiom iOS has, where
+     "tab bar becomes a <select>" is one only the web has. -->
 <Tabs
   tabs={profileTabs}
-  mobileSelect={true}
   bind:value={activeTab}
   onValueChange={(id) => activateTab(id)}
   styled={false}
   listId="profileTabs"
   listClass="nav nav-tabs"
-  tabClass="nav-link"
-  selectId="profile-tab-select"
-  selectClass="form-select"
-  selectLabel="Profile section">
+  tabClass="nav-link">
   {#snippet children(active)}
 <!-- Tab Content -->
 <div class="tab-content" id="profileTabContent">

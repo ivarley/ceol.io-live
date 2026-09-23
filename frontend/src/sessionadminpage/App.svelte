@@ -52,23 +52,20 @@
   {/if}
 </nav>
 
-<!-- Session Admin Tab Navigation: kit Tabs in navigate mode (tabs are routes;
-     real links on desktop, the mobile select navigates). Legacy skin classes kept.
-     mobileSelect={true}: the select predates the unification here (admin_tabs.html)
-     and 5 tabs overflow a phone width. -->
+<!-- Session Admin Tab Navigation: kit Tabs in navigate mode (the tabs are routes,
+     so they are real links). Legacy skin classes kept.
+
+     The mobile <select> that used to stand in for these five on a phone is gone
+     (spec 052 §B3); they scroll sideways instead. -->
 <nav class="session-admin-tabs-nav">
   <Tabs
     tabs={adminTabs}
-    mobileSelect={true}
     navigate={true}
     value={activeTab}
     styled={false}
     listId="session-admin-tabs"
     listClass="nav nav-tabs"
-    tabClass="nav-link"
-    selectId="session-admin-mobile-select"
-    selectClass="form-select"
-    selectLabel="Admin section" />
+    tabClass="nav-link" />
 </nav>
 
 <!-- Tab Content -->

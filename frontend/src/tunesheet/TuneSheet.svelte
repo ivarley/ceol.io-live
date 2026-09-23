@@ -2285,8 +2285,7 @@
             onValueChange={switchTab}
             styled={false}
             listClass="modal-tabs-header"
-            tabClass="modal-tab"
-            selectLabel="Tune info section" />
+            tabClass="modal-tab" />
           <div class="modal-tabs-content">
             <!-- MY LIST — the personal status / notes / tags / configure, the drawer's
                  default tab (rendered from the snippet defined above). -->

@@ -1,6 +1,6 @@
 // Characterization tests for the person-details page view (spec 035 Step 5a):
 // first paint comes from the embedded payload, the legacy DOM contract holds
-// (#profileTabs ARIA tabs + #profile-tab-select mobile fallback, #edit-btn /
+// (#profileTabs ARIA tabs, #edit-btn /
 // #save-btn reveal, pane ids #profile/#sessions/#attended/#tunes/#logins — the
 // shell's <style> block and e2e/profile select on these), and the ported flows
 // (save PUT body, lazy tab loads, leave-session, add-to-session, admin-flavor
@@ -131,10 +131,11 @@ describe('person details page view (user profile flavor)', () => {
     const { container } = renderApp()
     expect(container.querySelector('h1.docs-heading').textContent).toBe('Profile: Ian Varley')
     expect(container.querySelector('#profileTabs')).toBeTruthy()
-    // Desktop = real ARIA tabs; mobile fallback = a <select>.
+    // Six real ARIA tabs at every width. The mobile <select> that used to stand in
+    // for them on a phone is retired (spec 052 §B3) — they scroll instead.
     const tabs = container.querySelectorAll('#profileTabs [role="tab"]')
     expect([...tabs].map((t) => t.textContent)).toEqual(['Profile', 'Sessions', "I've Attended", 'Tunebook', 'Logged', 'Logins'])
-    expect(container.querySelector('#profile-tab-select')).toBeTruthy()
+    expect(container.querySelector('#profile-tab-select')).toBeNull()
     // Profile pane active; person + account info rendered from the embed.
     expect(container.querySelector('#profile').classList.contains('active')).toBe(true)
     // Connected person: the email lives on the account (User Email), not on the
@@ -169,11 +170,11 @@ describe('person details page view (user profile flavor)', () => {
     expect(calls()).toBe(1)
   })
 
-  it('the mobile <select> switches tabs too', async () => {
+  it('every tab switches, including the ones a phone has to scroll to', async () => {
+    // Tunebook is fourth of six: on a phone it is past the right edge, which is
+    // exactly the case the retired <select> existed to serve.
     const { container } = renderApp()
-    const select = container.querySelector('#profile-tab-select')
-    select.value = 'tunes'
-    await fireEvent.change(select)
+    await fireEvent.click(container.querySelector('#tunes-tab'))
     expect(container.querySelector('#tunes').classList.contains('active')).toBe(true)
     await waitFor(() => {
       expect(container.querySelector('#tunes-content .stat-value')).toBeTruthy()
@@ -185,7 +186,7 @@ describe('person details page view (user profile flavor)', () => {
     window.history.replaceState({}, '', '/me?tab=sessions')
     const { container } = renderApp()
     expect(container.querySelector('#sessions').classList.contains('active')).toBe(true)
-    expect(container.querySelector('#profile-tab-select').value).toBe('sessions')
+    expect(container.querySelector('#sessions-tab').getAttribute('data-state')).toBe('active')
     expect(window.location.search).toBe('?tab=sessions')
   })
 

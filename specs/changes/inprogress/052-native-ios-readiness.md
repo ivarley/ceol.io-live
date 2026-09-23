@@ -321,13 +321,27 @@ The payload already carries everything except the per-instance "logged so far" t
 the people-here count; both exist elsewhere (`live_bootstrap`, `active_session_manager`)
 and need folding into `build_home_payload` when this is built.
 
-### B3. Retire `Tabs mobileSelect`
+### B3. Retire `Tabs mobileSelect` — **DONE 2026-09-23**
 
-Person page and session admin collapse 5+ tabs into a `<select>` on phones. There is no
-iOS idiom for that. The person page (Profile / Sessions / Tune stats / Attended / Logged /
-Logins) is over-tabbed; on iOS it would be a profile screen with sections and drill-downs.
-Restructure it that way on the web (sections + "See all" links), which also removes the
-one kit component with no native counterpart.
+Person page and session admin collapsed 5+ tabs into a `<select>` on phones. There is no
+iOS idiom for that, so a page navigated by one could not be ported, only redesigned.
+
+**The `<select>` is gone from the kit entirely** — not switched off, deleted, along with
+the `mobileSelect`, `selectId`, `selectClass` and `selectLabel` props. Too many tabs for
+the width now **scroll sideways**, which both platforms do. The person page's six tabs
+overflow 400px by ~140px and push.
+
+One trap worth recording: the scroll rule disables **shrinking only** (`flex-shrink: 0`),
+not the whole shorthand. `flex: 0 0 auto` would also cancel any grow a page had set, and
+`.kit-tabs .kit-tab` outranks a page's own `.tab-button` — it flattened the session page's
+three evenly-divided tabs on the first attempt.
+
+**Not done: the person page restructure.** B3 also proposed turning Profile / Sessions /
+Tune stats / Attended / Logged / Logins into a profile screen with sections and "See all"
+drill-downs. That is a redesign of six lazily-loaded surfaces, it is listed under
+"Anytime" below rather than in the staged plan, and the thing that blocked the port — the
+control with no native counterpart — is gone without it. Six scrolling tabs is a shape
+iOS can express; whether it is the *best* shape for that page is a separate question.
 
 ### B4. Toast diet
 
