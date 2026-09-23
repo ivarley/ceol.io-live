@@ -80,25 +80,15 @@
     <span class="sep"></span>
     <button id="sing" title="sound your labels as the music plays">♪ sing labels</button>
     <button id="pulsebtn" class="on" title="the eighth-note grid the music is on">grid</button>
-    <button id="tapbtn" title="tap T in time with the music">tap tempo</button>
-    <label>tapping
-      <select id="taplevel">
-        <option value="beat" selected>the beat</option>
-        <option value="bar">the bar</option>
-        <option value="eighth">eighths</option>
-      </select>
-    </label>
+    <button class="mode" data-mode="beats">draw beats</button>
     <label>meter
       <select id="tapmeter">
         <option value="2">2 (reel)</option>
         <option value="3">3 (jig)</option>
       </select>
     </label>
-    <button id="tapsnap" title="slide the grid onto the onsets">snap to notes</button>
-    <button id="tapclear">clear taps</button>
-    <label>shift <input type="number" id="offsetinput" step="5" value="0" style="width:74px">ms</label>
+    <button id="tapclear">clear beats</button>
     <span class="time" id="offsetlabel"></span>
-    <label>tone <input type="range" id="vol" min="0" max="100" value="45"></label>
     <span class="sep"></span>
     <button id="zoomout">−</button><button id="zoomin">+</button><button id="zoomfit">fit</button>
     <span class="sep"></span>
@@ -122,10 +112,13 @@
     <b>edit</b> drag a label to move it, drag its right edge to lengthen it, and it sounds as you go ·
     <b>accept</b> drag a box over notes that are right ·
     <b>draw</b> paint the pitch you hear ·
-    <b>erase</b> drag a box to remove labels
+    <b>erase</b> drag a box to remove labels ·
+    <b>draw beats</b> click where each quarter note lands; drag one to move it,
+    backspace to remove it. The eighths are the spaces between them, and your
+    spacing carries on to the end of the segment
     <br>
-    <kbd>space</kbd> play · <kbd>1-5</kbd> modes · <kbd>+</kbd><kbd>−</kbd> zoom ·
-    <kbd>←</kbd><kbd>→</kbd> pan · <kbd>↑</kbd><kbd>↓</kbd> nudge a semitone · <kbd>⌫</kbd> delete · <kbd>s</kbd> sing · <kbd>g</kbd> grid · <kbd>t</kbd> tap the beat · <kbd>[</kbd><kbd>]</kbd> shift the grid 10ms (50 with shift) ·
+    <kbd>space</kbd> play · <kbd>1-6</kbd> modes · <kbd>+</kbd><kbd>−</kbd> zoom ·
+    <kbd>←</kbd><kbd>→</kbd> pan · <kbd>↑</kbd><kbd>↓</kbd> nudge a semitone · <kbd>⌫</kbd> delete · <kbd>s</kbd> sing · <kbd>g</kbd> grid ·
     <kbd>cmd-z</kbd> undo · <kbd>cmd-s</kbd> save · swipe to pan, pinch or shift-scroll to zoom
   </div>
 
@@ -170,165 +163,15 @@ let drag = null;
 let selected = null;
 let singing = false;
 let showPulse = true;
-// Tapped tempo. The estimator's grid was landing about half again too fast,
-// and a person tapping along with the music settles it in fifteen seconds.
-let taps = (D.tapped_pulse && D.tapped_pulse.taps) ? D.tapped_pulse.taps.slice() : [];
-let tapped = null;          // {period_ms, phase_ms, grouping, taps}
-// Taps land late by a fairly constant amount: a person anticipates the beat
-// and the browser reports a position ahead of what reaches the speakers.
-// Both push the same way, so one offset corrects both.
-let tapOffsetMs = (D.tapped_pulse && D.tapped_pulse.offset_ms) || 0;
+// Beats drawn by hand. Tapping along and then nudging the result never
+// settled: a person taps late by an amount that drifts, and correcting a
+// fitted grid means fighting the fit. Drawing the quarter notes where they
+// actually are removes the fit altogether - the lines are the answer, and
+// the eighths are simply the spaces between them.
+let beats = (D.tapped_pulse && D.tapped_pulse.beats) ? D.tapped_pulse.beats.slice() : [];
+let selectedBeat = null;
+let tapped = null;          // the derived grid, rebuilt from `beats`
 
-// ---- sound ---------------------------------------------------------------
-// A sine for each note, so a label can be checked by ear against the audio it
-// sits on. Being an octave out is the commonest error and it is instantly
-// obvious when you hear it beside the music, and nearly invisible on a grid.
-let actx = null;
-function audioCtx() {
-  if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
-  if (actx.state === 'suspended') actx.resume();
-  return actx;
-}
-const hz = m => 440 * Math.pow(2, (m - 69) / 12);
-function tone(midi, seconds) {
-  const gainValue = document.getElementById('vol').value / 100;
-  if (gainValue <= 0) return;
-  const ctx = audioCtx();
-  const t = ctx.currentTime;
-  const dur = clamp(seconds || 0.25, 0.06, 2.0);
-  const osc = ctx.createOscillator(), g = ctx.createGain();
-  osc.type = 'sine';
-  osc.frequency.value = hz(midi);
-  // a soft envelope, because a square-edged sine clicks and the click is
-  // what you end up listening to instead of the pitch
-  g.gain.setValueAtTime(0, t);
-  g.gain.linearRampToValueAtTime(gainValue * 0.5, t + 0.012);
-  g.gain.setValueAtTime(gainValue * 0.5, t + dur - 0.04);
-  g.gain.linearRampToValueAtTime(0, t + dur);
-  osc.connect(g).connect(ctx.destination);
-  osc.start(t); osc.stop(t + dur + 0.02);
-}
-
-// ---- header --------------------------------------------------------------
-document.getElementById('title').innerHTML =
-  D.truth_name + ' <span class="type">' + (D.tune_type || '') + '</span>';
-document.getElementById('meta').innerHTML =
-  '<b>' + D.notes.length + '</b> notes heard over <b>' + fmt(D.duration_s) + '</b> · ' +
-  'front end <b>' + D.frontend + '</b> · shares <b>' + D.shared_ngrams + '</b> of the tune\'s ' +
-  D.n + '-note phrases · index rank ' +
-  (D.truth_rank ? '<b>' + D.truth_rank + '</b>' : '<b>not found</b>') +
-  ' <span class="verdict ' + (D.truth_rank === 1 ? 'ok' : 'bad') + '">' +
-  (D.truth_rank === 1 ? 'correct' : 'wrong') + '</span>';
-if (D.pulse) {
-  const p = D.pulse;
-  const meter = p.grouping === 3 ? '6/8-ish (groups of three)' : '4/4-ish (groups of two)';
-  const agree = D.pulse_expected == null ? ''
-    : p.grouping === D.pulse_expected ? ' ✓' : ' ✗ the corpus says the other';
-  document.getElementById('meta').innerHTML +=
-    '<br>pulse: eighth every <b>' + p.period_ms.toFixed(0) + 'ms</b> · ' +
-    '<b>' + p.bpm_beat.toFixed(0) + '</b> beats a minute · ' + meter + agree +
-    ' · confidence ' + (p.grouping_margin).toFixed(2);
-}
-
-document.getElementById('ranked').innerHTML =
-  '<tr><th>#</th><th>tune</th><th>score</th><th>hits</th></tr>' +
-  D.ranked.map((r, i) => '<tr class="' + (r.tune_id === D.truth_tune_id ? 'truthrow' : '') + '">' +
-    '<td>' + (i + 1) + '</td><td>' + r.name + '</td><td>' + r.score.toFixed(4) +
-    '</td><td>' + r.hits + '</td></tr>').join('');
-document.getElementById('truthabc').innerHTML = D.truth_abc || '<i>no notation held for this tune</i>';
-
-// ---- geometry ------------------------------------------------------------
-const plotL = () => PAD * dpr;
-const plotW = () => roll.width - PAD * 1.5 * dpr;
-const plotT = () => RULER * dpr;
-const plotB = () => roll.height - PAD * dpr;
-function xOf(t) { return plotL() + ((t - view.t0) / (view.t1 - view.t0)) * plotW(); }
-function tOf(px) { return view.t0 + ((px - plotL()) / plotW()) * (view.t1 - view.t0); }
-function yOf(m) { return plotB() - ((m - LO) / Math.max(1, HI - LO)) * (plotB() - plotT() - 8 * dpr); }
-function mOf(py) { return LO + ((plotB() - py) / (plotB() - plotT() - 8 * dpr)) * (HI - LO); }
-function evPos(e) {
-  const r = roll.getBoundingClientRect();
-  return { x: (e.clientX - r.left) * (roll.width / r.width),
-           y: (e.clientY - r.top) * (roll.height / r.height) };
-}
-const noteH = () => Math.max(3 * dpr, (plotB() - plotT()) / Math.max(12, HI - LO) * 0.8);
-
-// ---- seeking -------------------------------------------------------------
-function seek(t) {
-  t = clamp(t, 0, D.duration_s);
-  const apply = () => { try { audio.currentTime = t; } catch (_) {} };
-  if (audio.readyState >= 1) apply();
-  else audio.addEventListener('loadedmetadata', apply, { once: true });
-  const span = view.t1 - view.t0;
-  if (t < view.t0 || t > view.t1) {
-    const t0 = clamp(t - span / 2, 0, D.duration_s - span);
-    view = { t0, t1: t0 + span };
-  }
-  resetSung();
-  draw();
-}
-
-// ---- hit testing ---------------------------------------------------------
-function labelAt(p) {
-  const h = noteH();
-  for (let i = labels.length - 1; i >= 0; i--) {
-    const l = labels[i];
-    const x0 = xOf(l.t0), x1 = Math.max(x0 + 3 * dpr, xOf(l.t1)), y = yOf(l.midi);
-    if (p.x >= x0 - 3 * dpr && p.x <= x1 + 4 * dpr && Math.abs(p.y - y) <= h) {
-      return { label: l, index: i, onEdge: p.x >= x1 - 5 * dpr };
-    }
-  }
-  return null;
-}
-function heardAt(p) {
-  // The eighth-note grid, drawn behind the notes: light at each eighth,
-  // brighter at the beat, brightest at the bar. Notation is entirely on this
-  // grid, so seeing where the music sits on it is the first step to
-  // comparing durations rather than only pitch shapes.
-  const grid = activeGrid();
-  if (grid.length) {
-    for (const g of grid) {
-      if (g.t < view.t0 || g.t > view.t1) continue;
-      const tint = tapped ? '61,220,151' : '255,209,102';
-      rc.strokeStyle = g.bar ? 'rgba(' + tint + ',.45)'
-        : g.beat ? 'rgba(' + tint + ',.22)' : 'rgba(' + tint + ',.08)';
-      rc.lineWidth = (g.bar ? 1.6 : 1) * dpr;
-      rc.beginPath(); rc.moveTo(xOf(g.t), plotT()); rc.lineTo(xOf(g.t), plotB()); rc.stroke();
-    }
-  }
-
-  if (D.onset && D.onset.length) {
-    const hop = D.onset_hop_ms / 1000;
-    const base = plotB(), height = 26 * dpr;
-    rc.strokeStyle = 'rgba(230,233,240,.30)'; rc.lineWidth = dpr;
-    rc.beginPath();
-    let started = false;
-    for (let i = Math.max(0, Math.floor(view.t0 / hop)); i < D.onset.length; i++) {
-      const t = i * hop;
-      if (t > view.t1) break;
-      const y = base - D.onset[i] * height;
-      if (!started) { rc.moveTo(xOf(t), y); started = true; } else rc.lineTo(xOf(t), y);
-    }
-    rc.stroke();
-  }
-
-  for (const t of taps) {
-    if (t < view.t0 || t > view.t1) continue;
-    rc.fillStyle = '#3ddc97';
-    rc.beginPath(); rc.moveTo(xOf(t) - 4 * dpr, plotB());
-    rc.lineTo(xOf(t) + 4 * dpr, plotB()); rc.lineTo(xOf(t), plotB() - 8 * dpr);
-    rc.closePath(); rc.fill();
-  }
-
-  const h = noteH();
-  for (const n of HEARD) {
-    const x0 = xOf(n.t0), x1 = Math.max(x0 + 3 * dpr, xOf(n.t1));
-    if (p.x >= x0 && p.x <= x1 && Math.abs(p.y - yOf(n.midi)) <= h) return n;
-  }
-  return null;
-}
-
-// ---- drawing -------------------------------------------------------------
 function activeGrid() {
   // A tapped grid wins over an estimated one: it is ground truth and the
   // estimate is what it exists to correct.
@@ -337,73 +180,65 @@ function activeGrid() {
 }
 
 function fitTaps() {
-  if (taps.length < 3) { tapped = null; return; }
-  const sorted = [...taps].sort((a, b) => a - b);
-  const iois = [];
-  for (let i = 1; i < sorted.length; i++) iois.push(sorted[i] - sorted[i - 1]);
-  iois.sort((a, b) => a - b);
-  const medianIoi = iois[Math.floor(iois.length / 2)];
-  if (!(medianIoi > 0.05)) { tapped = null; return; }
-  // Index each tap against the median spacing so a missed tap costs nothing,
-  // then fit a line: the slope is the period and the intercept the phase.
-  const idx = sorted.map(t => Math.round((t - sorted[0]) / medianIoi));
-  const n = idx.length;
-  const sx = idx.reduce((a, b) => a + b, 0), sy = sorted.reduce((a, b) => a + b, 0);
-  const sxx = idx.reduce((a, b) => a + b * b, 0);
-  const sxy = idx.reduce((a, b, i) => a + b * sorted[i], 0);
-  const denom = n * sxx - sx * sx;
-  const period = denom === 0 ? medianIoi : (n * sxy - sx * sy) / denom;
-  const phase = (sy - period * sx) / n;
-  if (!(period > 0.05)) { tapped = null; return; }
-
-  const offset = tapOffsetMs / 1000;
+  if (beats.length < 1) { tapped = null; refreshBeatReadout(); return; }
   const grouping = parseInt(document.getElementById('tapmeter').value, 10);
-  const level = document.getElementById('taplevel').value;
   const perBar = grouping === 3 ? 6 : 8;
-  // whatever was tapped, reduce it to the eighth note
-  const eighth = level === 'eighth' ? period
-    : level === 'bar' ? period / perBar : period / grouping;
+  const beatsPerBar = perBar / grouping;
+  const sorted = [...beats].sort((a, b) => a - b);
 
-  // Index every line from the tapped phase itself, not from wherever the
-  // first visible line happens to fall. Indexing from the latter meant the
-  // beat and bar emphasis jumped a whole position each time the offset
-  // crossed half an eighth, so nudging slid the lines smoothly and then threw
-  // the accents somewhere else - which looked exactly like the grid hopping
-  // off the spot you were aiming at.
-  const grid = [];
-  const anchor = phase + offset;
-  const mod = (a, b) => ((a % b) + b) % b;
-  const firstIndex = Math.ceil((0 - anchor) / eighth);
-  const lastIndex = Math.floor((D.duration_s - anchor) / eighth);
-  for (let j = firstIndex; j <= lastIndex; j++) {
-    grid.push({ t: anchor + j * eighth,
-                beat: mod(j, grouping) === 0,
-                bar: mod(j, perBar) === 0 });
+  // Spacing is taken from the drawn beats themselves, pair by pair, so a set
+  // that speeds up or drags is followed rather than averaged away.
+  const gaps = [];
+  for (let i = 1; i < sorted.length; i++) gaps.push(sorted[i] - sorted[i - 1]);
+  const sortedGaps = [...gaps].sort((a, b) => a - b);
+  const typical = sortedGaps.length ? sortedGaps[Math.floor(sortedGaps.length / 2)] : 0.5;
+
+  const marks = [];          // {t, beatIndex, drawn}
+  for (let i = 0; i < sorted.length; i++) marks.push({ t: sorted[i], drawn: true });
+  // carry the last spacing forward to the end, and the first one backwards,
+  // so a few drawn beats cover the whole segment
+  for (let t = sorted[sorted.length - 1] + typical; t < D.duration_s; t += typical) {
+    marks.push({ t, drawn: false });
   }
-  tapped = { period_ms: eighth * 1000, phase_ms: start * 1000, grouping,
-             level, offset_ms: tapOffsetMs, taps: sorted.slice(), grid };
-  const box = document.getElementById('offsetinput');
-  if (document.activeElement !== box) box.value = tapOffsetMs.toFixed(0);
-  document.getElementById('offsetlabel').textContent =
-    tapOffsetMs ? ((tapOffsetMs / eighth * 100 / 1000).toFixed(0) + '% of an eighth') : '';
+  for (let t = sorted[0] - typical; t > 0; t -= typical) marks.push({ t, drawn: false });
+  marks.sort((a, b) => a.t - b.t);
+
+  const anchorIndex = marks.findIndex(m => m.drawn);
+  const grid = [];
+  for (let i = 0; i < marks.length; i++) {
+    const beatNumber = i - anchorIndex;
+    grid.push({ t: marks[i].t, beat: true, drawn: marks[i].drawn,
+                bar: ((beatNumber % beatsPerBar) + beatsPerBar) % beatsPerBar === 0 });
+    const next = marks[i + 1];
+    if (!next) continue;
+    // the eighths are simply the spaces between two beats, divided evenly
+    const step = (next.t - marks[i].t) / grouping;
+    for (let k = 1; k < grouping; k++) {
+      grid.push({ t: marks[i].t + k * step, beat: false, bar: false, drawn: false });
+    }
+  }
+  const eighth = typical / grouping;
+  tapped = { period_ms: eighth * 1000, phase_ms: sorted[0] * 1000, grouping,
+             level: 'beat', beats: sorted.slice(), grid };
   dirty = true;
   document.getElementById('save').disabled = false;
+  refreshBeatReadout();
 }
 
-function tapNow() {
-  audioCtx();
-  taps.push(audio.currentTime);
-  if (taps.length > 64) taps.shift();
-  fitTaps();
-  const el = document.getElementById('agree');
-  if (tapped) {
-    el.textContent = taps.length + ' taps · eighth ' + tapped.period_ms.toFixed(0) +
-      'ms · ' + (60000 / (tapped.period_ms * tapped.grouping)).toFixed(0) + ' bpm · bar ' +
-      (tapped.period_ms * (tapped.grouping === 3 ? 6 : 8) / 1000).toFixed(2) + 's';
-  } else {
-    el.textContent = taps.length + ' taps, keep going';
+function refreshBeatReadout() {
+  const el = document.getElementById('offsetlabel');
+  if (!tapped) { el.textContent = beats.length ? beats.length + ' beat drawn' : ''; return; }
+  const bpm = 60000 / (tapped.period_ms * tapped.grouping);
+  el.textContent = beats.length + ' beats drawn · ' + bpm.toFixed(0) + ' bpm · eighth ' +
+    tapped.period_ms.toFixed(0) + 'ms · bar ' +
+    (tapped.period_ms * (tapped.grouping === 3 ? 6 : 8) / 1000).toFixed(2) + 's';
+}
+
+function beatAt(p) {
+  for (let i = 0; i < beats.length; i++) {
+    if (Math.abs(xOf(beats[i]) - p.x) <= 6 * dpr) return i;
   }
-  draw();
+  return -1;
 }
 
 function draw() {
@@ -444,9 +279,12 @@ function draw() {
     for (const g of grid) {
       if (g.t < view.t0 || g.t > view.t1) continue;
       const tint = tapped ? '61,220,151' : '255,209,102';
-      rc.strokeStyle = g.bar ? 'rgba(' + tint + ',.45)'
-        : g.beat ? 'rgba(' + tint + ',.22)' : 'rgba(' + tint + ',.08)';
-      rc.lineWidth = (g.bar ? 1.6 : 1) * dpr;
+      // a beat you drew is solid; one carried forward from your spacing is
+      // faint, so it is always clear which lines are yours
+      const alpha = g.drawn ? (g.bar ? 0.85 : 0.6)
+        : g.bar ? 0.34 : g.beat ? 0.20 : 0.07;
+      rc.strokeStyle = 'rgba(' + tint + ',' + alpha + ')';
+      rc.lineWidth = (g.bar ? 1.8 : g.drawn ? 1.4 : 1) * dpr;
       rc.beginPath(); rc.moveTo(xOf(g.t), plotT()); rc.lineTo(xOf(g.t), plotB()); rc.stroke();
     }
   }
@@ -466,11 +304,12 @@ function draw() {
     rc.stroke();
   }
 
-  for (const t of taps) {
+  for (let i = 0; i < beats.length; i++) {
+    const t = beats[i];
     if (t < view.t0 || t > view.t1) continue;
-    rc.fillStyle = '#3ddc97';
-    rc.beginPath(); rc.moveTo(xOf(t) - 4 * dpr, plotB());
-    rc.lineTo(xOf(t) + 4 * dpr, plotB()); rc.lineTo(xOf(t), plotB() - 8 * dpr);
+    rc.fillStyle = i === selectedBeat ? '#ffffff' : '#3ddc97';
+    rc.beginPath(); rc.moveTo(xOf(t) - 5 * dpr, plotB());
+    rc.lineTo(xOf(t) + 5 * dpr, plotB()); rc.lineTo(xOf(t), plotB() - 10 * dpr);
     rc.closePath(); rc.fill();
   }
 
@@ -614,6 +453,22 @@ roll.addEventListener('pointerdown', e => {
     return;
   }
 
+  if (mode === 'beats') {
+    const hit = beatAt(p);
+    if (hit >= 0) {
+      selectedBeat = hit;
+      drag = { mode: 'beat', index: hit };
+    } else {
+      beats.push(clamp(tOf(p.x), 0, D.duration_s));
+      beats.sort((a, b) => a - b);
+      selectedBeat = beats.indexOf(clamp(tOf(p.x), 0, D.duration_s));
+      drag = { mode: 'beat', index: selectedBeat };
+      fitTaps();
+    }
+    draw();
+    return;
+  }
+
   if (mode === 'draw') { pushUndo(); drag = { mode: 'draw' }; paint(p); return; }
   drag = { mode: 'box', box: true, x0: p.x, y0: p.y, x: p.x, y: p.y };
 });
@@ -629,6 +484,10 @@ roll.addEventListener('pointermove', e => {
   const p = evPos(e);
   if (drag.mode === 'scrub') { seek(tOf(p.x)); return; }
   if (drag.mode === 'draw') { paint(p); return; }
+  if (drag.mode === 'beat') {
+    beats[drag.index] = clamp(tOf(p.x), 0, D.duration_s);
+    fitTaps(); draw(); return;
+  }
   if (drag.mode === 'move') {
     const dt = tOf(p.x) - drag.grabT;
     const m = Math.round(clamp(mOf(p.y), LO, HI));
@@ -648,6 +507,10 @@ roll.addEventListener('pointermove', e => {
 });
 
 roll.addEventListener('pointerup', () => {
+  if (drag && drag.mode === 'beat') {
+    beats.sort((a, b) => a - b);
+    fitTaps();
+  }
   if (drag && drag.mode === 'box') {
     const t0 = tOf(Math.min(drag.x0, drag.x)), t1 = tOf(Math.max(drag.x0, drag.x));
     const mHi = Math.round(mOf(Math.min(drag.y0, drag.y))), mLo = Math.round(mOf(Math.max(drag.y0, drag.y)));
@@ -684,41 +547,10 @@ function paint(p) {
 // ---- singing the labels over the music -----------------------------------
 let sungUpTo = -1;
 function resetSung() { sungUpTo = audio.currentTime - 0.001; }
-function snapToOnsets() {
-  if (!tapped || !D.onset || !D.onset.length) return;
-  const hop = D.onset_hop_ms / 1000;
-  const period = tapped.period_ms / 1000;
-  // Slide the whole grid within one eighth and keep the position where the
-  // most onset energy lands on a grid line.
-  let best = 0, bestScore = -Infinity;
-  for (let shift = -period / 2; shift <= period / 2; shift += period / 120) {
-    let score = 0, n = 0;
-    for (const g of tapped.grid) {
-      const i = Math.round((g.t + shift) / hop);
-      if (i < 0 || i >= D.onset.length) continue;
-      score += D.onset[i] * (g.beat ? 2 : 1);
-      n++;
-    }
-    if (n && score / n > bestScore) { bestScore = score / n; best = shift; }
-  }
-  tapOffsetMs += best * 1000;
-  fitTaps();
-  draw();
-}
-document.getElementById('offsetinput').oninput = e => {
-  const v = parseFloat(e.target.value);
-  if (!isNaN(v)) { tapOffsetMs = v; fitTaps(); draw(); }
-};
-document.getElementById('tapsnap').onclick = snapToOnsets;
-document.getElementById('tapbtn').onclick = tapNow;
 document.getElementById('tapclear').onclick = () => {
-  taps = []; tapped = null; tapOffsetMs = 0;
-  document.getElementById('offsetinput').value = '0';
-  document.getElementById('offsetlabel').textContent = '';
-  document.getElementById('agree').textContent = agreement();
-  draw();
+  beats = []; selectedBeat = null; tapped = null;
+  refreshBeatReadout(); draw();
 };
-document.getElementById('taplevel').onchange = () => { fitTaps(); draw(); };
 document.getElementById('tapmeter').onchange = () => { fitTaps(); draw(); };
 document.getElementById('pulsebtn').onclick = () => {
   showPulse = !showPulse;
@@ -784,7 +616,7 @@ function setMode(m) {
   mode = m;
   document.querySelectorAll('.mode').forEach(b => b.classList.toggle('on', b.dataset.mode === m));
   roll.style.cursor = m === 'listen' ? 'pointer' : m === 'draw' ? 'crosshair'
-    : m === 'edit' ? 'default' : 'cell';
+    : m === 'edit' ? 'default' : m === 'beats' ? 'col-resize' : 'cell';
 }
 document.querySelectorAll('.mode').forEach(b => b.onclick = () => setMode(b.dataset.mode));
 
@@ -811,8 +643,7 @@ async function save() {
     frontend: D.frontend, labels,
     pulse: tapped ? {
       period_ms: tapped.period_ms, phase_ms: tapped.phase_ms,
-      grouping: tapped.grouping, tapped_level: tapped.level,
-      offset_ms: tapped.offset_ms, taps: tapped.taps,
+      grouping: tapped.grouping, tapped_level: 'beat', beats: tapped.beats,
     } : null,
   };
   const res = await fetch('annotation', {
@@ -834,16 +665,15 @@ document.addEventListener('keydown', e => {
     if (undoStack.length) { labels = JSON.parse(undoStack.pop()); selected = null; refresh(); }
     return;
   }
-  const modes = { '1': 'listen', '2': 'edit', '3': 'accept', '4': 'draw', '5': 'erase' };
+  const modes = { '1': 'listen', '2': 'edit', '3': 'accept', '4': 'draw', '5': 'erase',
+                  '6': 'beats' };
   if (modes[e.key]) { setMode(modes[e.key]); return; }
   if (e.code === 'Space') { e.preventDefault(); audioCtx(); audio.paused ? audio.play() : audio.pause(); return; }
   if (e.key === 's') { document.getElementById('sing').click(); return; }
   if (e.key === 'g') { document.getElementById('pulsebtn').click(); return; }
-  if (e.key === 't') { e.preventDefault(); tapNow(); return; }
-  if (e.key === '[' || e.key === ']') {
+  if ((e.key === 'Backspace' || e.key === 'Delete') && mode === 'beats' && selectedBeat != null) {
     e.preventDefault();
-    tapOffsetMs += (e.key === '[' ? -1 : 1) * (e.shiftKey ? 50 : 10);
-    fitTaps(); draw(); return;
+    beats.splice(selectedBeat, 1); selectedBeat = null; fitTaps(); draw(); return;
   }
   if (e.key === '+' || e.key === '=') { zoomAt((view.t0 + view.t1) / 2, 0.6); return; }
   if (e.key === '-') { zoomAt((view.t0 + view.t1) / 2, 1.7); return; }
@@ -874,11 +704,8 @@ window.addEventListener('resize', resize);
 (function tick() { singTick(); draw(); requestAnimationFrame(tick); })();
 resize();
 setMode('listen');
-if (D.tapped_pulse) {
-  const sel = document.getElementById('tapmeter');
-  sel.value = String(D.tapped_pulse.grouping);
-  const lvl = document.getElementById('taplevel');
-  if (D.tapped_pulse.tapped_level) lvl.value = D.tapped_pulse.tapped_level;
+if (D.tapped_pulse && beats.length) {
+  document.getElementById('tapmeter').value = String(D.tapped_pulse.grouping);
   fitTaps();
   dirty = false;
   document.getElementById('save').disabled = true;

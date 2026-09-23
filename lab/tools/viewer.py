@@ -96,9 +96,12 @@ def save_annotation(payload):
             "period_ms": round(float(pulse["period_ms"]), 2),
             "phase_ms": round(float(pulse["phase_ms"]), 2),
             "grouping": int(pulse["grouping"]),
-            "tapped_level": pulse.get("tapped_level"),
-            "offset_ms": round(float(pulse.get("offset_ms") or 0.0), 2),
-            "taps": [round(float(t), 3) for t in (pulse.get("taps") or [])],
+            "tapped_level": pulse.get("tapped_level") or "beat",
+            # The quarter notes as drawn. The period above is derived from
+            # them and these are the record: a drawn line is a fact about
+            # where a beat is, and a fitted period is an inference from
+            # several of them.
+            "beats": [round(float(t), 3) for t in (pulse.get("beats") or [])],
         }
     record = {
         "annotation_version": ANNOTATION_VERSION,
@@ -109,7 +112,7 @@ def save_annotation(payload):
         "tune_id": payload.get("tune_id"),
         "tune_name": payload.get("tune_name"),
         "labelled_against": payload.get("frontend"),
-        # Tapped by hand. The estimator lands about half again too fast, so
+        # Drawn by hand. The estimator lands about half again too fast, so
         # this is the ground truth it gets scored against rather than a hint.
         "pulse": pulse,
         "saved_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),

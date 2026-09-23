@@ -1,8 +1,8 @@
-"""`lab bench pulse` — score the grid estimator against tapped tempo.
+"""`lab bench pulse` — score the grid estimator against hand-drawn beats.
 
 The estimator was landing about half again too fast and nothing in the lab
-could say so, because there was no ground truth for tempo. Tapping along with
-the music for fifteen seconds produces one.
+could say so, because there was no ground truth for tempo. Drawing the
+quarter notes where they actually fall produces one.
 
 The scoring is deliberately about ratios rather than differences. A grid at
 twice or half the true spacing is not "a bit wrong", it is a different answer
@@ -35,7 +35,7 @@ def name_ratio(ratio, tolerance=0.08):
     return "unrelated"
 
 
-def load_tapped():
+def load_drawn():
     import os
 
     out = []
@@ -83,17 +83,17 @@ def score_record(record, seconds=60.0):
 
 
 def run_pulse(seconds=60.0, quiet=False):
-    records = load_tapped()
+    records = load_drawn()
     if not records:
         raise SystemExit(
-            "no tapped tempo yet. Open a segment with `lab view --recording N --segment K`, "
-            "play it and tap T in time with the beat, then save.")
+            "no beats drawn yet. Open a segment with `lab view --recording N --segment K`, "
+            "switch to draw beats, click where the quarter notes fall, and save.")
     rows = [score_record(r, seconds=seconds) for r in records]
     scored = [r for r in rows if r.get("found")]
     if not quiet:
         for r in scored:
             phase = "" if r["phase_error_ms"] is None else f", phase off {r['phase_error_ms']:.0f}ms"
-            print(f"  {str(r['tune'])[:30]:<30} tapped {r['truth_period_ms']:>5.0f}ms  "
+            print(f"  {str(r['tune'])[:30]:<30} drawn {r['truth_period_ms']:>5.0f}ms  "
                   f"got {r['got_period_ms']:>5.0f}ms  ({r['verdict']}{phase})")
     pooled = {
         "n": len(scored),
@@ -110,7 +110,7 @@ def run_pulse(seconds=60.0, quiet=False):
     pooled["verdicts"] = verdicts
     return BenchResult(
         task="pulse", candidate="autocorrelation_comb", version="1",
-        params={"seconds": seconds}, features_version="audio", split="per-tapped-segment",
+        params={"seconds": seconds}, features_version="audio", split="per-drawn-segment",
         nights=[NightResult(recording_id=r.get("recording_id", 0), label=str(r["tune"]), date="",
                             metrics=r, n_frames=1) for r in scored],
         pooled=pooled, warnings=[], created_at=time.strftime("%Y-%m-%dT%H:%M:%S"),
@@ -119,10 +119,10 @@ def run_pulse(seconds=60.0, quiet=False):
 
 def format_pulse(result):
     p = result.pooled
-    lines = [f"{result.candidate} on pulse  [{p['n']} tapped segments]",
+    lines = [f"{result.candidate} on pulse  [{p['n']} segments with beats drawn]",
              f"  period right (within 8%)  {p['period_right']:.3f}",
              f"  grouping right            {p['grouping_right']:.3f}",
-             f"  median estimate / tapped  {p['median_ratio']:.3f}"]
+             f"  median estimate / drawn   {p['median_ratio']:.3f}"]
     if p.get("median_phase_error_ms") is not None:
         lines.append(f"  phase error when the period is right  {p['median_phase_error_ms']:.0f}ms")
     if p["verdicts"]:
