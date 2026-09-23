@@ -76,6 +76,11 @@ def add_parser(sub):
     pitch.add_argument("--no-save", action="store_true")
     pitch.set_defaults(func=cmd_pitch)
 
+    pu = inner.add_parser("pulse", help="score the grid estimator against tapped tempo")
+    pu.add_argument("--seconds", type=float, default=60.0)
+    pu.add_argument("--no-save", action="store_true")
+    pu.set_defaults(func=cmd_pulse)
+
     fronts = inner.add_parser("frontends", help="list front ends (built and not)")
     fronts.set_defaults(func=cmd_frontends)
 
@@ -160,6 +165,16 @@ def cmd_pitch(args):
         if not args.no_save:
             print(f"  saved {result.save()}")
         print()
+    return 0
+
+
+def cmd_pulse(args):
+    from lab.bench.pulse import format_pulse, run_pulse
+
+    result = run_pulse(seconds=args.seconds)
+    print(format_pulse(result))
+    if not args.no_save:
+        print(f"  saved {result.save()}")
     return 0
 
 

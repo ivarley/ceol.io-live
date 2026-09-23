@@ -68,6 +68,14 @@ def load_annotation(recording_id, segment_id, t0_ms):
         return json.load(f).get("labels", [])
 
 
+def load_pulse(recording_id, segment_id, t0_ms):
+    path = annotation_path(recording_id, segment_id, t0_ms)
+    if not os.path.exists(path):
+        return None
+    with open(path) as f:
+        return json.load(f).get("pulse")
+
+
 def save_annotation(payload):
     os.makedirs(ANNOTATIONS, exist_ok=True)
     path = annotation_path(payload["recording_id"], payload.get("segment_id"),
@@ -82,6 +90,15 @@ def save_annotation(payload):
           "midi": fold_pitch(v["midi"]), "from": v.get("from", "drawn")}
          for v in payload.get("labels", [])),
         key=lambda v: (v["t0"], v["midi"]))
+    pulse = payload.get("pulse")
+    if pulse:
+        pulse = {
+            "period_ms": round(float(pulse["period_ms"]), 2),
+            "phase_ms": round(float(pulse["phase_ms"]), 2),
+            "grouping": int(pulse["grouping"]),
+            "tapped_level": pulse.get("tapped_level"),
+            "taps": [round(float(t), 3) for t in (pulse.get("taps") or [])],
+        }
     record = {
         "annotation_version": ANNOTATION_VERSION,
         "recording_id": payload["recording_id"],
@@ -91,6 +108,9 @@ def save_annotation(payload):
         "tune_id": payload.get("tune_id"),
         "tune_name": payload.get("tune_name"),
         "labelled_against": payload.get("frontend"),
+        # Tapped by hand. The estimator lands about half again too fast, so
+        # this is the ground truth it gets scored against rather than a hint.
+        "pulse": pulse,
         "saved_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "labels": labels,
     }
@@ -235,6 +255,7 @@ def build_payload(args):
         "labels": load_annotation(args.recording, args.segment, t0),
         "pulse": pulse,
         "pulse_grid": pulse_grid(pulse, (t1 - t0) / 1000.0) if pulse else [],
+        "tapped_pulse": load_pulse(args.recording, args.segment, t0),
         "pulse_expected": expected_grouping(seg.tune_type) if seg else None,
     }, t0, t1
 
