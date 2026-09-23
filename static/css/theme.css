@@ -5,6 +5,10 @@
  * Licensed under MIT (https://github.com/twbs/bootstrap/blob/main/LICENSE)
  */
  :root {
+  /* BEGIN generated tokens — see design/tokens.json */
+    /* Generated from design/tokens.json by scripts/build_tokens.py. Do not edit. */
+
+    /* ===== Bootstrap palette, theme surfaces and text ===== */
     /* Dark-only app: render native controls (selects, scrollbars, pickers) dark */
     color-scheme: dark;
     --blue: #007bff;
@@ -33,17 +37,13 @@
     --breakpoint-md: 768px;
     --breakpoint-lg: 992px;
     --breakpoint-xl: 1200px;
-    --font-family-sans-serif: -apple-system, BlinkMacSystemFont, "Segoe UI",
-      Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif,
-      "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
-    --font-family-monospace: SFMono-Regular, Menlo, Monaco, Consolas,
-      "Liberation Mono", "Courier New", monospace;
-    
-    /* Theme surface/text variables (the app is dark-only) */
-    /* The site header is position:fixed at this height on every width, so anything
-       that sticks to the top of the viewport has to start BELOW it or it slides
-       underneath and disappears. Named here rather than repeated as a magic 42. */
+    --font-family-sans-serif: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    --font-family-monospace: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    /* The site header is position:fixed at this height on every width, so anything that
+       sticks to the top of the viewport has to start BELOW it or it slides underneath and
+       disappears. Named here rather than repeated as a magic 42. */
     --site-header-h: 42px;
+    /* Theme surface/text variables (the app is dark-only) */
     --bg-color: #1a1a1a;
     --text-color: #e0e0e0;
     --header-bg: #2d2d2d;
@@ -71,7 +71,6 @@
     --input-bg: #2d2d2d;
     --secondary-text: #888;
     --table-header-bg: #3d3d3d;
-
     /* Muted text (formerly a phantom var) */
     --text-muted: #888;
     /* Hover-state darks (formerly phantom vars; values match the fallbacks in use) */
@@ -85,7 +84,7 @@
     --modal-text-muted: #888;
     --modal-primary-dark: #3385cc;
 
-    /* ============ Design token scales (spec 035) ============ */
+    /* ===== Design token scales (spec 035) ===== */
     /* Radius */
     --r-sm: 4px;
     --r: 8px;
@@ -111,8 +110,8 @@
     --dur: 0.25s;
     --ease: ease-out;
 
-    /* ============ Z-index layers (folded in from z-index-layers.css) ============
-       Tier 1: component layering (1-10) */
+    /* ===== Z-index layers (folded in from z-index-layers.css) ===== */
+    /* Tier 1: component layering (1-10) */
     --z-background: -1;
     --z-base: 0;
     --z-component-1: 1;
@@ -127,8 +126,8 @@
     --z-bootstrap-modal: 1050;
     --z-bootstrap-popover: 1060;
     --z-bootstrap-tooltip: 1070;
-    /* Tier 3: application UI. Modals sit BELOW the header (2000) on purpose,
-       so the hamburger menu stays accessible while a modal is open. */
+    /* Tier 3: application UI. Modals sit BELOW the header (2000) on purpose, so the
+       hamburger menu stays accessible while a modal is open. */
     --z-modal-overlay: 1900;
     --z-modal-content: 1910;
     --z-modal-sidebar: 1920;
@@ -136,9 +135,9 @@
     --z-header: 2000;
     --z-hamburger-dropdown: 2010;
     --z-in-session-popup: 2020;
-    /* Kit Sheet/Dialog (spec 035): full-screen sheet chrome carries its own
-       header (Cancel/title/Done), so unlike the legacy modals it must cover
-       the fixed header. Search dropdowns (2100) still float above sheets. */
+    /* Kit Sheet/Dialog (spec 035): full-screen sheet chrome carries its own header
+       (Cancel/title/Done), so unlike the legacy modals it must cover the fixed header.
+       Search dropdowns (2100) still float above sheets. */
     --z-sheet-overlay: 2030;
     --z-sheet-content: 2040;
     --z-search-dropdown: 2100;
@@ -147,6 +146,7 @@
     --z-pull-to-refresh: 2850;
     /* Tier 4: top layer — toasts only */
     --z-toast: 9999;
+  /* END generated tokens */
   }
 
   /* The one spinner keyframe. Every spinner animates `spin`; do not redeclare. */

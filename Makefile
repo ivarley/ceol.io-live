@@ -91,6 +91,13 @@ lint:
 	flake8 . --exclude=venv,env,htmlcov --ignore=E501,W503,F403,F405,E402,E712 --per-file-ignores="tests/*:F401,F841,scripts/*:F541"
 	black . --check
 
+tokens: ## Regenerate the design tokens (CSS + Swift) from design/tokens.json
+	python3 scripts/build_tokens.py
+
+tokens-check: ## Fail if the generated tokens have drifted from design/tokens.json
+	python3 scripts/build_tokens.py --check
+
+
 format:
 	black .
 

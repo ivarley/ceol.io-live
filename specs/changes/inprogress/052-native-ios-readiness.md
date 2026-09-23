@@ -389,12 +389,32 @@ modules, in the pattern `namematch.fixtures.json` already uses. Vitest runs them
 the Swift package runs the same files. That is the single highest-leverage piece of prep
 work in this document.
 
-### B6. Design tokens as data
+### B6. Design tokens as data — **DONE 2026-09-23**
 
-`static/css/theme.css` is the palette. Emit it from a `tokens.json` (colors, radii,
-spacing, type scale, z-order names) and generate both the CSS vars and an Xcode asset
-catalog / Swift enum from it. Keeps the two clients on one palette without hand-syncing.
-Small, do it whenever.
+`design/tokens.json` is the source: 111 tokens in three groups (Bootstrap palette and
+theme surfaces, the spec-035 scales, the z-order tiers), comments included.
+`scripts/build_tokens.py` renders it into the `:root` block of `static/css/theme.css`
+and into `design/Tokens.swift`. `make tokens` regenerates, `make tokens-check` fails if
+they have drifted.
+
+**Written back INTO theme.css between markers**, not emitted as a separate stylesheet.
+theme.css is loaded by every template plus the live logger's own shell, so a new file
+would have to be added to each of them in the right order; rewriting a marked region
+changes nothing about how the CSS loads. The lift was verified value-for-value: 110
+custom properties before, the same 110 after, none added, none changed.
+
+**The check is a test, because this is the kind of drift nothing else notices.** A
+colour that diverges between the two clients throws no error and fails no build — the
+app just stops matching itself on a device nobody is looking at.
+`tests/unit/test_design_tokens_052.py` regenerates and compares, and also pins that the
+z-order tiers keep their relative order (a toast under a sheet is the sort of thing
+found during a demo).
+
+**Not everything crosses.** Font stacks, multi-part shadows and `rgba()` scrims have no
+useful Swift form, and CSS breakpoints describe the web's responsive layout where iOS
+has size classes — `--breakpoint-xs` is also literally `0`, which the first cut read as
+a z-order and emitted as one. They are listed by name in the Swift file rather than
+dropped silently, so nobody hunts for a token the generator quietly declined to emit.
 
 ### B7. Things that need no change
 
