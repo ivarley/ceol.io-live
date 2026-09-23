@@ -443,6 +443,18 @@ the sequence dominates without being told to. Predominant melody extraction,
 the method with the best story for this music, is still behind yin. A third
 tracker in the fusion adds nothing.
 
+Breaking the phrase at a folded tritone does nothing either, which is worth
+knowing because the tritone looked like the most damaged symbol in the
+transcription: it appears in 1.4% of the transcription's intervals against
+0.1% of the notation's, a 23-fold excess in a music that is almost entirely
+diatonic. Refusing to let an n-gram span one changes top-1 and top-5 by
+nothing at all across 125 segments and 987 tritones. They were already
+harmless, because scoring counts the phrases that match rather than the
+fraction of the query that matched, so a phrase built on a symbol the corpus
+does not contain never votes and costs nothing by existing. That reasoning
+stops holding the moment scoring is normalised by query length, which is why
+it is written down.
+
 ### The tools that found all of it
 
 `lab timeline` reads a run segment by segment. `lab trace-set` shows one set
