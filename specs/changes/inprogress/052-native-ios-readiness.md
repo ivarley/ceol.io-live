@@ -343,12 +343,36 @@ drill-downs. That is a redesign of six lazily-loaded surfaces, it is listed unde
 control with no native counterpart — is gone without it. Six scrolling tabs is a shape
 iOS can express; whether it is the *best* shape for that page is a separate question.
 
-### B4. Toast diet
+### B4. Toast diet — **DONE 2026-09-23**
 
-`toast()` fires on most successful saves. iOS convention is that obvious success is
-silent (the row updated) and only errors interrupt. Trim success toasts to the cases where
-the effect is off-screen (e.g. "Added to My Tunes" from a session page). The web gets
-quieter and the port doesn't need a toast system.
+`toast()` fired on most successful saves. iOS convention is that obvious success is
+silent and only errors interrupt.
+
+Of 23 success toasts, **7 are gone** — the ones where the change was already visible
+where you were looking, or where the page moved on before you could read it:
+
+| Removed | Because |
+| --- | --- |
+| "X added to session" | the refetch puts them in the list in front of you |
+| "X archived. / restored." | the row leaves the filter you are on, or returns to it |
+| "Heard count: 2 → 3" | said beside a card that had just changed from 2 to 3 |
+| "Session instance deleted" | you confirmed it and the row is gone |
+| add-instance success | the next line navigates to the instance it just made |
+| profile activate/deactivate | a reload follows a second later and destroys the toast |
+| "X has been created" (people admin) | the refetch updates the row you are looking at |
+
+**The 16 that stay, and the line between them.** Anything whose effect is off-screen or
+invisible: copy-to-another-session, people merged, verification email sent, live-logger
+mode switched, the offline notices, and the landing toasts that explain a redirect you
+did not ask for. Permission changes stay too — "X can now see this session's people"
+reports something the screen does not show, unlike archiving, which is the list moving.
+
+**Form saves stay, deliberately, against the letter of the rule.** Session details,
+recurrence and cache settings all save and leave you sitting on the same form. There is
+no row to update and no view to pop, so removing the toast leaves a Save button with no
+feedback at all, which reads as broken rather than as quiet. On iOS these would confirm
+by popping the view; until the web does something equivalent, the toast is doing real
+work. Two component imports became dead and went with the calls.
 
 ### B5. The live logger is the real port cost — prepare its logic, not its controls
 

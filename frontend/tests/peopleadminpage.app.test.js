@@ -252,7 +252,9 @@ describe('admin people table', () => {
     await waitFor(() =>
       expect(fetch.mock.calls.some(([u]) => String(u).includes('/api/admin/people'))).toBe(true)
     )
-    expect(window.showMessage).toHaveBeenCalledWith('John Smith has been created successfully', 'success')
+    // No success toast (spec 052 §B4): the refetch above puts the new person in the
+    // table you are looking at, which is the confirmation.
+    expect(window.showMessage).not.toHaveBeenCalled()
   })
 
   it('a thesession id routes through validate-thesession-user and locks the id field', async () => {

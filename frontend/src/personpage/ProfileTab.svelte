@@ -348,7 +348,8 @@
       .then((response) => response.json())
       .then((data) => {
         if (data.success) {
-          toast(data.message, 'success')
+          // No toast (spec 052 §B4): the reload below is the confirmation, and it
+          // destroys the toast a second after showing it.
           // Reload page to reflect new state
           setTimeout(() => {
             window.location.reload()

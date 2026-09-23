@@ -110,7 +110,8 @@
       })
       const data = await res.json()
       if (!res.ok || !data.success) throw new Error(data.message || 'Could not add person')
-      toast(`${first_name} ${last_name} added to session`, 'success')
+      // No success toast (spec 052 §B4): fetchPeople() puts them in the list you
+      // are looking at, and a banner saying so says it twice.
       pickerOpen = false
       fetchPeople()
     } catch (e) {
@@ -211,9 +212,10 @@
   async function toggleArchived() {
     if (!detailRow) return
     const next = !detailRow.archived
-    if (await setField(detailRow.person_id, 'archived', next)) {
-      toast(next ? `${nameOf(detailRow)} archived.` : `${nameOf(detailRow)} restored.`, 'success')
-    }
+    // Silent (spec 052 §B4): the row leaves the filter you are on, or comes back to
+    // it. Unlike the confirmed toggle above, which changes what somebody can SEE and
+    // shows nothing here, this one's effect is the list in front of you.
+    await setField(detailRow.person_id, 'archived', next)
   }
 
   async function setRelationship(value) {

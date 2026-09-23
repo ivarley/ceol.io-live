@@ -103,11 +103,13 @@ describe('My Tunes page view', () => {
     )
   })
 
-  it('heard + shows the N -> N+1 toast and sends an absolute set_heard', async () => {
+  it('heard + updates the card silently and sends an absolute set_heard', async () => {
     const { container } = render(App, { pageData: payload() })
     await waitFor(() => expect(container.querySelector('.tune-card[data-tune-id="101"] .increment-heard-btn')).toBeTruthy())
     await fireEvent.click(container.querySelector('.tune-card[data-tune-id="101"] .increment-heard-btn'))
-    expect(window.showMessage).toHaveBeenCalledWith('Heard count: 2 → 3', 'success')
+    // No toast (spec 052 §B4). It used to say "Heard count: 2 → 3" beside a card
+    // that had just changed from 2 to 3; the number on the card is the feedback.
+    expect(window.showMessage).not.toHaveBeenCalled()
     await waitFor(() => {
       const opCall = fetch.mock.calls.find(
         ([url, init]) => String(url).includes('/api/my-tunes/ops') && init && JSON.parse(init.body).type === 'set_heard'

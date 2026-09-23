@@ -285,12 +285,15 @@
     }
   }
 
-  // Heard +: optimistic with a "N -> N+1" toast; sent as an ABSOLUTE set_heard so
-  // a queued replay can't double-count. Reverts only on a server rejection.
+  // Heard +: optimistic, sent as an ABSOLUTE set_heard so a queued replay can't
+  // double-count. Reverts only on a server rejection.
+  //
+  // No toast (spec 052 §B4). It used to announce "Heard count: 3 → 4" next to a card
+  // that had just changed from 3 to 4 — the number is the feedback, and a banner
+  // repeating it is the kind of chatter iOS does not do.
   function incrementHeard(tune) {
     const oldCount = tune.heard_count || 0
     const newCount = oldCount + 1
-    toast(`Heard count: ${oldCount} → ${newCount}`, 'success')
     replaceTune(tune.tune_id, { heard_count: newCount })
     submitOp({ type: 'set_heard', tune_id: tune.tune_id, heard_count: newCount })
       .then((res) => {

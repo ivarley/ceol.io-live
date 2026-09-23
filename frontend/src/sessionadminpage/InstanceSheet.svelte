@@ -4,9 +4,9 @@
   // chrome replaces the slide-in overlay; the body (info rows, comments, the
   // View/Edit/Delete actions and the inline delete confirmation) is ported
   // behavior-for-behavior: details come from the same admin logs endpoint,
-  // delete calls the same DELETE route and reports through the site toast.
+  // delete calls the same DELETE route; failures surface inline in the sheet.
   import { parseLocalDate } from '../shared/parse.js'
-  import { Sheet, toast } from '../lib/index.js'
+  import { Sheet } from '../lib/index.js'
 
   let { onDeleted = () => {} } = $props()
 
@@ -87,7 +87,7 @@
       })
       .then((data) => {
         if (!data.success) throw new Error(data.message || 'Failed to delete session instance')
-        toast(data.message || 'Session instance deleted successfully', 'success')
+        // Silent (spec 052 §B4): you confirmed the delete and the row is gone.
         open = false
         onDeleted() // refresh the logs table
       })
