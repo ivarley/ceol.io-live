@@ -8,7 +8,7 @@
  "tune_name": "Coleman's Cross",
  "labelled_against": "yin v1",
  "pulse": {
-  "period_ms": 159.17,
+  "period_ms": 159.21,
   "phase_ms": 1611.69,
   "grouping": 3,
   "tapped_level": "beat",
@@ -96,7 +96,7 @@
    40.062
   ]
  },
- "saved_at": "2026-09-23T03:12:53+00:00",
+ "saved_at": "2026-09-23T11:31:43+00:00",
  "labels": [
   {
    "t0": 7.427,

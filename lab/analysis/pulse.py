@@ -94,6 +94,19 @@ def _strongest_peak(ac, lo_s, hi_s, frames_per_s):
     return height, _refine(ac, lag) / frames_per_s
 
 
+def _grouping_margin(duple, triple):
+    """How much the winning subdivision beats both the loser and nothing at all.
+
+    This was a ratio, and on a segment with no rhythm in it at all the two
+    strengths were 0.005 and -0.048, which the ratio reported as a confidence
+    of 288380. The quantity wanted is bounded and falls to zero in both ways a
+    meter call can be unsupported: when the two subdivisions are equally
+    strong, and when neither is strong.
+    """
+    winner, loser = max(duple, triple), min(duple, triple)
+    return float(np.clip(winner - max(loser, 0.0), 0.0, 1.0))
+
+
 def _prefer_faster(ac, strength, beat_s, frames_per_s, ratio=HALVING_RATIO):
     """Step down an octave while half the period is still a plausible beat.
 
@@ -159,7 +172,7 @@ def estimate_pulse(y, sr, hop=HOP):
         "beat_ms": beat_s * 1000.0,
         "duple_strength": duple,
         "triple_strength": triple,
-        "grouping_margin": abs(duple - triple) / max(1e-6, max(duple, triple)),
+        "grouping_margin": _grouping_margin(duple, triple),
         "pulse_strength": beat_strength,
         "bpm_eighths": 60.0 / period_s,
         "bpm_beat": 60.0 / beat_s,

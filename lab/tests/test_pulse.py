@@ -102,3 +102,16 @@ def test_expected_grouping_covers_the_common_types():
     assert expected_grouping("hornpipe") == 2
     assert expected_grouping("air") is None
     assert expected_grouping(None) is None
+
+
+@pytest.mark.parametrize("duple,triple,expected", [
+    (0.005, -0.048, 0.005),   # no rhythm at all: the old ratio said 288380
+    (0.30, 0.28, 0.02),       # two equally good readings: unsupported
+    (0.14, -0.03, 0.14),      # a clear reel
+    (0.05, 0.17, 0.12),       # a clear jig: the gap, once both are real
+    (2.0, -1.0, 1.0),         # bounded above
+])
+def test_grouping_margin_is_bounded_and_falls_to_zero_both_ways(duple, triple, expected):
+    from lab.analysis.pulse import _grouping_margin
+
+    assert _grouping_margin(duple, triple) == pytest.approx(expected, abs=1e-6)
