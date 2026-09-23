@@ -1,0 +1,20 @@
+{
+  "_why": "Segments the eval set should not be scored on, and why. Checked in, because each entry is a judgement about the audio that only a person who was there can make, and it has to travel with the repo rather than live in someone's head. A segment listed here still exists and is still labelled correctly in production; it is simply not a fair question to ask a recogniser.",
+  "_rules": [
+    "Exclude for what the AUDIO is, never for how the recogniser did on it. A tune that is hard is the point of the exercise; a tune that was never really played is not.",
+    "A wrong label is not an exclusion. Fix it in the segmenter and re-pull.",
+    "Say who decided and when, so an entry can be revisited rather than inherited."
+  ],
+  "excluded": [
+    {
+      "recording_id": 1,
+      "segment_id": 42,
+      "date": "2025-03-27",
+      "tune": "The Star Of Ireland",
+      "at": "1:12:36",
+      "reason": "One player alone, starting and stopping several times rather than playing the tune through. Not a session performance, so not a fair test of recognising one.",
+      "excluded_by": "ian",
+      "on": "2026-09-23"
+    }
+  ]
+}

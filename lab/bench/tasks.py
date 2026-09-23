@@ -27,7 +27,9 @@ in ground-truth code, and nowhere else. No expert ever sees them.
 """
 
 import json
+import os
 from dataclasses import dataclass, field
+from functools import lru_cache
 from typing import List, Optional
 
 import numpy as np
@@ -41,6 +43,26 @@ MIN_EVAL_SEGMENT_MS = 10000    # shorter segments are marks, not tunes
 SETEND_TRUST_MS = 30000  # after an unmarked set end's start, music is certain this long
 IDENT_CAP_MS = 600000    # hard cap on any segment for identification scoring
 MAX_UNSEGMENTED_GAP_MS = 360000   # a longer hole in the placings is not scorable
+
+EXCLUSIONS_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                               "exclusions.json")
+
+
+@lru_cache(maxsize=1)
+def _exclusions():
+    """(recording_id, segment_id) -> reason, from the checked-in list.
+
+    Kept out of the manifest on purpose. The manifest mirrors production and is
+    overwritten by every pull; this is a judgement about the audio that has to
+    survive one.
+    """
+    try:
+        with open(EXCLUSIONS_PATH) as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        return {}
+    return {(int(e["recording_id"]), int(e["segment_id"])): e.get("reason") or "excluded"
+            for e in data.get("excluded", [])}
 
 
 @dataclass
@@ -61,6 +83,7 @@ class Segment:
     capped: bool = False
     evaluated: bool = True
     skip_reason: Optional[str] = None
+    exclusion_reason: Optional[str] = None
 
     @property
     def duration_ms(self):
@@ -215,7 +238,11 @@ class GroundTruth:
         out = []
         for s in self.segments:
             s = Segment(**{**s.__dict__})
-            if s.tune_id is None:
+            excluded = _exclusions().get((self.recording_id, s.segment_id))
+            if excluded:
+                s.evaluated, s.skip_reason = False, "excluded"
+                s.exclusion_reason = excluded
+            elif s.tune_id is None:
                 s.evaluated, s.skip_reason = False, "no_tune_id"
             elif s.duration_ms < MIN_EVAL_SEGMENT_MS:
                 s.evaluated, s.skip_reason = False, "too_short"
