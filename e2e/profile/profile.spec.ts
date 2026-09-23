@@ -7,27 +7,42 @@ import { expectNoServerError } from "../support/nav";
 test.use({ storageState: STORAGE.regular });
 
 test.describe("profile (/me)", () => {
-  test("renders the profile with tabbed sections", async ({ page }) => {
+  test("is one vertical list: details, then sections, then account", async ({ page }) => {
+    // Spec 052 §B3. This page used to carry a six-tab strip AND a vertical account
+    // list beneath it — two kinds of menu on one screen. The tabs became rows, so
+    // everything below your details is the same shape of thing.
     await page.goto("/me");
     await expect(page.locator("h1")).toContainText(/Profile/i);
-    await expect(page.locator("#profileTabs")).toBeVisible();
+    await expect(page.locator("#profileTabs")).toHaveCount(0);
+
+    await expect(page.locator("#profile-sections")).toBeVisible();
+    await expect(page.locator("#profile-sections .section-row")).toHaveCount(5);
+    await expect(page.locator("#account-section")).toBeVisible();
     await expectNoServerError(page);
   });
 
-  test("switching to the Sessions tab works", async ({ page }) => {
-    await page.goto("/me");
-    // Desktop renders the sections as ARIA tabs (mobile uses a <select>).
+  test("opening Sessions drills in, and Back returns", async ({ page }) => {
     // Labelled "Sessions", not "My Sessions", since spec 034.
-    await page.getByRole("tab", { name: /^Sessions$/ }).click();
+    await page.goto("/me");
+    await page.locator("#sessions-tab").click();
+
     await expect(page.locator("#sessions")).toBeVisible();
+    await expect(page).toHaveURL(/\?tab=sessions/);
+    // The section has the screen to itself; the list it came from is gone.
+    await expect(page.locator("#profile-sections")).toHaveCount(0);
+
+    await page.locator("#section-back").click();
+    await expect(page.locator("#profile-sections")).toBeVisible();
+    await expect(page).not.toHaveURL(/\?tab=/);
     await expectNoServerError(page);
   });
 
-  test("switching to the Tunebook tab works", async ({ page }) => {
-    await page.goto("/me");
-    // The tab reads "Tunebook"; the pane it opens is still #tunes.
-    await page.getByRole("tab", { name: /^Tunebook$/ }).click();
+  test("a ?tab= link still lands on its section", async ({ page }) => {
+    // The URLs did not change when the tabs did, so anything already pointing at
+    // one of these keeps working.
+    await page.goto("/me?tab=tunes");
     await expect(page.locator("#tunes")).toBeVisible();
+    await expect(page.locator("#section-back")).toBeVisible();
   });
 
   test("entering edit mode reveals the save control", async ({ page }) => {

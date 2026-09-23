@@ -130,13 +130,18 @@ describe('person details page view (user profile flavor)', () => {
   it('first paint renders the embedded payload with the legacy DOM contract (no fetch needed)', () => {
     const { container } = renderApp()
     expect(container.querySelector('h1.docs-heading').textContent).toBe('Profile: Ian Varley')
-    expect(container.querySelector('#profileTabs')).toBeTruthy()
-    // Six real ARIA tabs at every width. The mobile <select> that used to stand in
-    // for them on a phone is retired (spec 052 §B3) — they scroll instead.
-    const tabs = container.querySelectorAll('#profileTabs [role="tab"]')
-    expect([...tabs].map((t) => t.textContent)).toEqual(['Profile', 'Sessions', "I've Attended", 'Tunebook', 'Logged', 'Logins'])
+    // No tab strip and no mobile <select>: the sections are a vertical list now
+    // (spec 052 §B3), the same shape as the Account list below them, because one
+    // screen carrying two kinds of menu was the thing that change removed.
+    expect(container.querySelector('#profileTabs')).toBeNull()
     expect(container.querySelector('#profile-tab-select')).toBeNull()
-    // Profile pane active; person + account info rendered from the embed.
+    const rows = container.querySelectorAll('#profile-sections .section-row')
+    expect([...rows].map((r) => r.querySelector('.kit-row-title').textContent.trim())).toEqual(
+      ['Sessions', "I've Attended", 'Tunebook', 'Logged', 'Logins'],
+    )
+    // Profile is not one of them — it is the page you are already on.
+    expect(container.querySelector('#profile-sections #profile-tab')).toBeNull()
+    // Profile content rendered from the embed.
     expect(container.querySelector('#profile').classList.contains('active')).toBe(true)
     // Connected person: the email lives on the account (User Email), not on the
     // person record — the person-level Email row is hidden.
@@ -149,14 +154,21 @@ describe('person details page view (user profile flavor)', () => {
     expect(fetch).not.toHaveBeenCalled()
   })
 
-  it('tab clicks activate panes, update the URL, and lazy-load exactly once', async () => {
+  it('drilling in opens the section, updates the URL, and lazy-loads exactly once', async () => {
     const { container } = renderApp()
     await fireEvent.click(container.querySelector('#sessions-tab'))
     expect(container.querySelector('#sessions').classList.contains('show')).toBe(true)
     expect(new URLSearchParams(window.location.search).get('tab')).toBe('sessions')
     expect(container.querySelector('.session-card[data-session-path="austin/mueller"]')).toBeTruthy()
+    // The section has the screen; the list it came from is not underneath it.
+    expect(container.querySelector('#profile-sections')).toBeNull()
 
-    // Attended lazy-loads on first activation only.
+    // Back returns to the list and clears ?tab=.
+    await fireEvent.click(container.querySelector('#section-back'))
+    expect(container.querySelector('#profile-sections')).toBeTruthy()
+    expect(new URLSearchParams(window.location.search).get('tab')).toBeNull()
+
+    // Attended lazy-loads on first open only, and stays loaded across a round trip.
     expect(fetch.mock.calls.some(([u]) => String(u).includes('/attended'))).toBe(false)
     await fireEvent.click(container.querySelector('#attended-tab'))
     await waitFor(() => {
@@ -164,15 +176,12 @@ describe('person details page view (user profile flavor)', () => {
     })
     const calls = () => fetch.mock.calls.filter(([u]) => String(u).includes('/attended')).length
     expect(calls()).toBe(1)
-    await fireEvent.click(container.querySelector('#profile-tab'))
-    expect(new URLSearchParams(window.location.search).get('tab')).toBeNull()
+    await fireEvent.click(container.querySelector('#section-back'))
     await fireEvent.click(container.querySelector('#attended-tab'))
     expect(calls()).toBe(1)
   })
 
-  it('every tab switches, including the ones a phone has to scroll to', async () => {
-    // Tunebook is fourth of six: on a phone it is past the right edge, which is
-    // exactly the case the retired <select> existed to serve.
+  it('every section opens, including the ones far down the list', async () => {
     const { container } = renderApp()
     await fireEvent.click(container.querySelector('#tunes-tab'))
     expect(container.querySelector('#tunes').classList.contains('active')).toBe(true)
@@ -185,8 +194,10 @@ describe('person details page view (user profile flavor)', () => {
   it('?tab= in the URL selects the initial tab without rewriting the URL', async () => {
     window.history.replaceState({}, '', '/me?tab=sessions')
     const { container } = renderApp()
+    // A ?tab= link lands straight on that section, showing it rather than the list.
     expect(container.querySelector('#sessions').classList.contains('active')).toBe(true)
-    expect(container.querySelector('#sessions-tab').getAttribute('data-state')).toBe('active')
+    expect(container.querySelector('#section-back')).toBeTruthy()
+    expect(container.querySelector('#profile-sections')).toBeNull()
     expect(window.location.search).toBe('?tab=sessions')
   })
 
@@ -367,9 +378,19 @@ describe('person details page view (admin flavor)', () => {
     expect(container.querySelector('h1')).toBeNull()
     expect(container.querySelector('.admin-breadcrumb')).toBeTruthy()
     expect(container.querySelector('#breadcrumb-person-name').textContent).toBe('Ian Varley')
-    // Tabs use the admin labels.
-    const tabs = [...container.querySelectorAll('#profileTabs [role="tab"]')].map((t) => t.textContent)
-    expect(tabs).toEqual(['Profile', 'Sessions', 'Attended', 'Tunebook', 'Logged', 'Logins'])
+    // The section rows use the admin labels — "Attended", not "I've Attended",
+    // because this is somebody else's profile.
+    const rows = [...container.querySelectorAll('#profile-sections .section-row')].map((r) =>
+      r.querySelector('.kit-row-title').textContent.trim()
+    )
+    expect(rows).toEqual(['Sessions', 'Attended', 'Tunebook', 'Logged', 'Logins'])
+    // …and the hints are in the third person too.
+    const hints = [...container.querySelectorAll('#profile-sections .kit-row-sub')].map((r) =>
+      r.textContent.trim()
+    )
+    expect(hints[0]).toBe('Sessions they belong to')
+    // No Account list on somebody else's profile.
+    expect(container.querySelector('#account-section')).toBeNull()
     // Danger zone + verify email exist only on the admin flavor; the beta
     // toggle shows on both (self-serve opt-in).
     expect(container.querySelector('#danger-zone')).toBeTruthy()

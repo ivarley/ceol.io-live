@@ -670,3 +670,34 @@
         font-size: 1.5rem;
     }
 }
+
+/* ---- sectioned profile (spec 052 §B3) ------------------------------------------
+   The page is a vertical list now rather than a tab strip over a vertical list.
+   These two belong to the drill-down screens: the way back, and the title of the
+   section you opened. */
+
+.section-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin: 0.5rem 0 0.75rem;
+    padding: 0;
+    background: none;
+    border: none;
+    font: inherit;
+    font-size: 0.95rem;
+    color: var(--primary);
+    cursor: pointer;
+}
+
+.section-back:hover {
+    text-decoration: underline;
+}
+
+.section-heading {
+    font-family: 'Poppins', sans-serif;
+    font-weight: 600;
+    font-size: 1.3rem;
+    margin: 0 0 1rem;
+    color: var(--text-color);
+}

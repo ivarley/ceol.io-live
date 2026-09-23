@@ -336,12 +336,19 @@ not the whole shorthand. `flex: 0 0 auto` would also cancel any grow a page had 
 `.kit-tabs .kit-tab` outranks a page's own `.tab-button` — it flattened the session page's
 three evenly-divided tabs on the first attempt.
 
-**Not done: the person page restructure.** B3 also proposed turning Profile / Sessions /
-Tune stats / Attended / Logged / Logins into a profile screen with sections and "See all"
-drill-downs. That is a redesign of six lazily-loaded surfaces, it is listed under
-"Anytime" below rather than in the staged plan, and the thing that blocked the port — the
-control with no native counterpart — is gone without it. Six scrolling tabs is a shape
-iOS can express; whether it is the *best* shape for that page is a separate question.
+**The person page restructure is DONE too (2026-09-23)**, after the tabs-plus-account-list
+combination was called out as two menus on one screen. The tab strip is gone: `/me` is
+your details, then a list of sections to open, then the account actions — every row the
+same shape. Opening one is a drill-down with a back link, on the existing `?tab=` URLs,
+so every link that already pointed at a section still lands there.
+
+Rows buy something tabs could not: a line under each saying what is in it, phrased for
+whose profile it is ("Sessions you belong to" / "Sessions they belong to").
+
+**The panes stay MOUNTED**, shown and hidden as before. Rendering only the open one
+inside an `{#if}` read better and quietly undid the lazy-load contract — leaving a
+section destroyed its component, so returning refetched. The unit test that pins
+"loads exactly once" caught it.
 
 ### B4. Toast diet — **DONE 2026-09-23**
 

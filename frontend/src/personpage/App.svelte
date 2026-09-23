@@ -20,7 +20,8 @@
   const isSystemAdmin = pageData.is_system_admin
   const personId = person.id
 
-  import { toast, Tabs } from '../lib/index.js'
+  import { toast } from '../lib/index.js'
+  import SectionList from './SectionList.svelte'
   import AccountSection from './AccountSection.svelte'
 
   const validTabs = ['profile', 'sessions', 'attended', 'tunes', 'logged', 'logins']
@@ -47,19 +48,40 @@
   }
   noteActivated(initialTab)
 
-  // The person tabs (Logins only when a user account exists); labels differ
-  // between the /me and admin flavors.
-  const profileTabs = $derived.by(() => {
+  // The sections you can open from the profile. Profile itself is not in the list:
+  // it is the page you are already on (spec 052 §B3). Logins only exists when the
+  // person has a login account. domId keeps the legacy `#<name>-tab` hooks, which
+  // CSS and the tests still name.
+  const drilldowns = $derived.by(() => {
     const t = [
-      { id: 'profile', label: 'Profile', domId: 'profile-tab' },
-      { id: 'sessions', label: sessionsTabLabel, domId: 'sessions-tab' },
-      { id: 'attended', label: attendedTabLabel, domId: 'attended-tab' },
-      { id: 'tunes', label: 'Tunebook', domId: 'tunes-tab' },
-      { id: 'logged', label: 'Logged', domId: 'logged-tab' },
+      { id: 'sessions', label: sessionsTabLabel, domId: 'sessions-tab',
+        hint: 'Sessions they belong to' },
+      { id: 'attended', label: attendedTabLabel, domId: 'attended-tab',
+        hint: 'Nights they turned up' },
+      { id: 'tunes', label: 'Tunebook', domId: 'tunes-tab',
+        hint: 'What they know and are learning' },
+      { id: 'logged', label: 'Logged', domId: 'logged-tab',
+        hint: 'Tunes they put on a log' },
     ]
-    if (user) t.push({ id: 'logins', label: 'Logins', domId: 'logins-tab' })
-    return t
+    if (user) t.push({ id: 'logins', label: 'Logins', domId: 'logins-tab',
+                       hint: 'Recent sign-ins' })
+    return isUserProfile
+      ? t.map((x) => ({ ...x, hint: MY_HINTS[x.id] || x.hint }))
+      : t
   })
+
+  // On your own profile the same rows are about you, so they say so.
+  const MY_HINTS = {
+    sessions: 'Sessions you belong to',
+    attended: 'Nights you turned up',
+    tunes: 'What you know and are learning',
+    logged: 'Tunes you put on a log',
+    logins: 'Your recent sign-ins',
+  }
+
+  const drilldownLabel = $derived(
+    drilldowns.find((d) => d.id === activeTab)?.label || ''
+  )
 
   // Kit Tabs drives activeTab via bind:value; this handler adds the page's
   // ?tab= URL sync + lazy-load bookkeeping (also called by the breadcrumb).
@@ -133,32 +155,46 @@
   </nav>
 {/if}
 
-<!-- The kit tab engine with this page's Bootstrap nav-tabs skin; listId keeps the
-     #profileTabs e2e/CSS hook.
+<!-- One idiom, not two (spec 052 §B3).
+     This page used to carry six tabs across the top AND a vertical Account list
+     underneath, so the same screen offered two different kinds of menu. It is a
+     vertical list now: your details, then the places you can go from here, then the
+     account actions — all the same shape of row. That is also the only form iOS has
+     for this screen, where a six-tab strip has no counterpart.
 
-     This page is where the mobile <select> originated (person_details.html), and it
-     is where it ends (spec 052 §B3). Six tabs still do not fit a phone, but they now
-     SCROLL sideways rather than collapsing into a dropdown — an idiom iOS has, where
-     "tab bar becomes a <select>" is one only the web has. -->
-<Tabs
-  tabs={profileTabs}
-  bind:value={activeTab}
-  onValueChange={(id) => activateTab(id)}
-  styled={false}
-  listId="profileTabs"
-  listClass="nav nav-tabs"
-  tabClass="nav-link">
-  {#snippet children(active)}
-<!-- Tab Content -->
+     The `?tab=` URLs are unchanged, so every existing link still lands where it did;
+     what was a tab switch is now a drill-down, and each section renders in full on
+     its own screen rather than being squeezed under a strip. -->
+{#if activeTab === 'profile'}
+  <SectionList
+    sections={drilldowns}
+    onOpen={(id) => activateTab(id)}
+    heading={isUserProfile ? 'More about you' : 'More'} />
+
+  {#if isUserProfile}
+    <AccountSection isSystemAdmin={pageData.is_system_admin} personName={person.name} />
+  {/if}
+{:else}
+  <!-- A drill-down: the way back, then the section's own title. -->
+  <button type="button" class="section-back" id="section-back" onclick={() => activateTab('profile')}>
+    <span aria-hidden="true">‹</span> {isUserProfile ? 'Profile' : person.name}
+  </button>
+
+  <h2 class="section-heading">{drilldownLabel}</h2>
+{/if}
+
+<!-- Every pane stays MOUNTED and is shown or hidden, exactly as it was under the
+     tabs. Rendering only the open one inside an {#if} looked tidier and quietly
+     undid the lazy-load contract: leaving a section destroyed its component, so
+     coming back refetched. The panes keep their legacy ids and Bootstrap classes,
+     which CSS and the tests still name. -->
 <div class="tab-content" id="profileTabContent">
-  <!-- Profile Tab (Person & User Info Combined) -->
   <div
     class="tab-pane fade"
     class:show={activeTab === 'profile'}
     class:active={activeTab === 'profile'}
     id="profile"
-    role="tabpanel"
-    aria-labelledby="profile-tab">
+    role="tabpanel">
     <ProfileTab
       {person}
       {user}
@@ -168,14 +204,12 @@
       canonicalInstruments={ctx.canonicalInstruments || []} />
   </div>
 
-  <!-- Sessions Tab -->
   <div
     class="tab-pane fade"
     class:show={activeTab === 'sessions'}
     class:active={activeTab === 'sessions'}
     id="sessions"
-    role="tabpanel"
-    aria-labelledby="sessions-tab">
+    role="tabpanel">
     <SessionsTab
       initialSessions={pageData.sessions || []}
       {person}
@@ -184,60 +218,41 @@
       {isSystemAdmin} />
   </div>
 
-  <!-- Attended Tab -->
   <div
     class="tab-pane fade"
     class:show={activeTab === 'attended'}
     class:active={activeTab === 'attended'}
     id="attended"
-    role="tabpanel"
-    aria-labelledby="attended-tab">
+    role="tabpanel">
     <AttendedTab {personId} load={attendedLoaded} />
   </div>
 
-  <!-- Tunes Tab -->
   <div
     class="tab-pane fade"
     class:show={activeTab === 'tunes'}
     class:active={activeTab === 'tunes'}
     id="tunes"
-    role="tabpanel"
-    aria-labelledby="tunes-tab">
+    role="tabpanel">
     <TunesStatsTab {personId} load={tunesLoaded} {isUserProfile} />
   </div>
 
-  <!-- Logged Tab -->
   <div
     class="tab-pane fade"
     class:show={activeTab === 'logged'}
     class:active={activeTab === 'logged'}
     id="logged"
-    role="tabpanel"
-    aria-labelledby="logged-tab">
+    role="tabpanel">
     <LoggedTab {personId} load={loggedLoaded} />
   </div>
 
-  <!-- Logins Tab -->
   {#if user}
     <div
       class="tab-pane fade"
       class:show={activeTab === 'logins'}
       class:active={activeTab === 'logins'}
       id="logins"
-      role="tabpanel"
-      aria-labelledby="logins-tab">
+      role="tabpanel">
       <LoginsTab {personId} load={loginsLoaded} />
     </div>
   {/if}
 </div>
-  {/snippet}
-</Tabs>
-
-{#if isUserProfile}
-  <!-- Help / Admin / Share / Log Out, moved off the hamburger (spec 052 §B8
-       Stage 5). Below the tabs, because it is where you GO from here rather than
-       something about you. -->
-  <!-- is_system_admin is a TOP-LEVEL payload key, not a field of `person`: it is a
-       fact about the signed-in account, not about the human being displayed. -->
-  <AccountSection isSystemAdmin={pageData.is_system_admin} personName={person.name} />
-{/if}
