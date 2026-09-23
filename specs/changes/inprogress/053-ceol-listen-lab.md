@@ -463,7 +463,31 @@ the audio with the notes drawn over it, sounds them as sine tones, sings the
 labels over the music, and is where hand-drawn pitch labels come from.
 `lab bench pitch` scores a front end against those labels directly rather
 than through what it happens to retrieve. The same viewer draws in the beats,
-and `lab bench pulse` scores the grid estimator against them.
+and `lab bench pulse` scores the grid estimator against them. `lab suspects`
+lists labelled segments whose audio does not sound like a tune.
+
+That last one exists because of a miss the lab could not see. A segment
+labelled as a reel was two and a half minutes of between-sets noise with the
+tune stapled to the end, and it had been counting as a failure in every run
+since the corpus was pulled. It was spotted by ear in seconds. The measure
+that separates it is the height of the onset envelope's autocorrelation at
+the beat: music repeats and a room between sets does not. That segment read
+0.047, and once the label was corrected the same audio read 0.334 and the
+tune came back at rank 1 from rank 84.
+
+The measure also predicts accuracy in general, which is the more useful half:
+
+| pulse strength | segments | top-1 | never found |
+|---|---|---|---|
+| under 0.10 | 6 | 0.333 | 0.500 |
+| 0.10-0.28 | 51 | 0.529 | 0.275 |
+| over 0.28 | 445 | 0.809 | 0.043 |
+
+It is not a label checker. Plenty of weak-pulse segments are labelled
+correctly and simply have no dance rhythm, which is what a slow air is, so
+the report shows the tune type and leaves the judging to a person. Nor are
+these segments candidates for removal from the eval set: a recogniser that
+only works where the pulse is strong is not one worth having.
 
 Reading the trace across two nights gave the clearest statement of the
 bottleneck: everything turns on how much of the tune's notation the

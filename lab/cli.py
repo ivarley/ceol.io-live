@@ -25,6 +25,7 @@ COMMANDS = {
     "transcribe": "lab.tools.transcribe",
     "timeline": "lab.tools.timeline",
     "trace-set": "lab.tools.traceset",
+    "suspects": "lab.tools.suspects",
     "view": "lab.tools.viewer",
 }
 
