@@ -79,6 +79,7 @@
     <button class="mode" data-mode="erase">erase</button>
     <span class="sep"></span>
     <button id="sing" title="sound your labels as the music plays">♪ sing labels</button>
+    <label>tone <input type="range" id="vol" min="0" max="100" value="45"></label>
     <button id="pulsebtn" class="on" title="the eighth-note grid the music is on">grid</button>
     <button class="mode" data-mode="beats">draw beats</button>
     <label>meter
@@ -172,6 +173,156 @@ let beats = (D.tapped_pulse && D.tapped_pulse.beats) ? D.tapped_pulse.beats.slic
 let selectedBeat = null;
 let tapped = null;          // the derived grid, rebuilt from `beats`
 
+// ---- sound ---------------------------------------------------------------
+// A sine for each note, so a label can be checked by ear against the audio it
+// sits on. Being an octave out is the commonest error and it is instantly
+// obvious when you hear it beside the music, and nearly invisible on a grid.
+let actx = null;
+function audioCtx() {
+  if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+  if (actx.state === 'suspended') actx.resume();
+  return actx;
+}
+const hz = m => 440 * Math.pow(2, (m - 69) / 12);
+function tone(midi, seconds) {
+  const gainValue = document.getElementById('vol').value / 100;
+  if (gainValue <= 0) return;
+  const ctx = audioCtx();
+  const t = ctx.currentTime;
+  const dur = clamp(seconds || 0.25, 0.06, 2.0);
+  const osc = ctx.createOscillator(), g = ctx.createGain();
+  osc.type = 'sine';
+  osc.frequency.value = hz(midi);
+  // a soft envelope, because a square-edged sine clicks and the click is
+  // what you end up listening to instead of the pitch
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(gainValue * 0.5, t + 0.012);
+  g.gain.setValueAtTime(gainValue * 0.5, t + dur - 0.04);
+  g.gain.linearRampToValueAtTime(0, t + dur);
+  osc.connect(g).connect(ctx.destination);
+  osc.start(t); osc.stop(t + dur + 0.02);
+}
+
+// ---- header --------------------------------------------------------------
+document.getElementById('title').innerHTML =
+  D.truth_name + ' <span class="type">' + (D.tune_type || '') + '</span>';
+document.getElementById('meta').innerHTML =
+  '<b>' + D.notes.length + '</b> notes heard over <b>' + fmt(D.duration_s) + '</b> · ' +
+  'front end <b>' + D.frontend + '</b> · shares <b>' + D.shared_ngrams + '</b> of the tune\'s ' +
+  D.n + '-note phrases · index rank ' +
+  (D.truth_rank ? '<b>' + D.truth_rank + '</b>' : '<b>not found</b>') +
+  ' <span class="verdict ' + (D.truth_rank === 1 ? 'ok' : 'bad') + '">' +
+  (D.truth_rank === 1 ? 'correct' : 'wrong') + '</span>';
+if (D.pulse) {
+  const p = D.pulse;
+  const meter = p.grouping === 3 ? '6/8-ish (groups of three)' : '4/4-ish (groups of two)';
+  const agree = D.pulse_expected == null ? ''
+    : p.grouping === D.pulse_expected ? ' ✓' : ' ✗ the corpus says the other';
+  document.getElementById('meta').innerHTML +=
+    '<br>pulse: eighth every <b>' + p.period_ms.toFixed(0) + 'ms</b> · ' +
+    '<b>' + p.bpm_beat.toFixed(0) + '</b> beats a minute · ' + meter + agree +
+    ' · confidence ' + (p.grouping_margin).toFixed(2);
+}
+
+document.getElementById('ranked').innerHTML =
+  '<tr><th>#</th><th>tune</th><th>score</th><th>hits</th></tr>' +
+  D.ranked.map((r, i) => '<tr class="' + (r.tune_id === D.truth_tune_id ? 'truthrow' : '') + '">' +
+    '<td>' + (i + 1) + '</td><td>' + r.name + '</td><td>' + r.score.toFixed(4) +
+    '</td><td>' + r.hits + '</td></tr>').join('');
+document.getElementById('truthabc').innerHTML = D.truth_abc || '<i>no notation held for this tune</i>';
+
+// ---- geometry ------------------------------------------------------------
+const plotL = () => PAD * dpr;
+const plotW = () => roll.width - PAD * 1.5 * dpr;
+const plotT = () => RULER * dpr;
+const plotB = () => roll.height - PAD * dpr;
+function xOf(t) { return plotL() + ((t - view.t0) / (view.t1 - view.t0)) * plotW(); }
+function tOf(px) { return view.t0 + ((px - plotL()) / plotW()) * (view.t1 - view.t0); }
+function yOf(m) { return plotB() - ((m - LO) / Math.max(1, HI - LO)) * (plotB() - plotT() - 8 * dpr); }
+function mOf(py) { return LO + ((plotB() - py) / (plotB() - plotT() - 8 * dpr)) * (HI - LO); }
+function evPos(e) {
+  const r = roll.getBoundingClientRect();
+  return { x: (e.clientX - r.left) * (roll.width / r.width),
+           y: (e.clientY - r.top) * (roll.height / r.height) };
+}
+const noteH = () => Math.max(3 * dpr, (plotB() - plotT()) / Math.max(12, HI - LO) * 0.8);
+
+// ---- seeking -------------------------------------------------------------
+function seek(t) {
+  t = clamp(t, 0, D.duration_s);
+  const apply = () => { try { audio.currentTime = t; } catch (_) {} };
+  if (audio.readyState >= 1) apply();
+  else audio.addEventListener('loadedmetadata', apply, { once: true });
+  const span = view.t1 - view.t0;
+  if (t < view.t0 || t > view.t1) {
+    const t0 = clamp(t - span / 2, 0, D.duration_s - span);
+    view = { t0, t1: t0 + span };
+  }
+  resetSung();
+  draw();
+}
+
+// ---- hit testing ---------------------------------------------------------
+function labelAt(p) {
+  const h = noteH();
+  for (let i = labels.length - 1; i >= 0; i--) {
+    const l = labels[i];
+    const x0 = xOf(l.t0), x1 = Math.max(x0 + 3 * dpr, xOf(l.t1)), y = yOf(l.midi);
+    if (p.x >= x0 - 3 * dpr && p.x <= x1 + 4 * dpr && Math.abs(p.y - y) <= h) {
+      return { label: l, index: i, onEdge: p.x >= x1 - 5 * dpr };
+    }
+  }
+  return null;
+}
+function heardAt(p) {
+  // The eighth-note grid, drawn behind the notes: light at each eighth,
+  // brighter at the beat, brightest at the bar. Notation is entirely on this
+  // grid, so seeing where the music sits on it is the first step to
+  // comparing durations rather than only pitch shapes.
+  const grid = activeGrid();
+  if (grid.length) {
+    for (const g of grid) {
+      if (g.t < view.t0 || g.t > view.t1) continue;
+      const tint = tapped ? '61,220,151' : '255,209,102';
+      rc.strokeStyle = g.bar ? 'rgba(' + tint + ',.45)'
+        : g.beat ? 'rgba(' + tint + ',.22)' : 'rgba(' + tint + ',.08)';
+      rc.lineWidth = (g.bar ? 1.6 : 1) * dpr;
+      rc.beginPath(); rc.moveTo(xOf(g.t), plotT()); rc.lineTo(xOf(g.t), plotB()); rc.stroke();
+    }
+  }
+
+  if (D.onset && D.onset.length) {
+    const hop = D.onset_hop_ms / 1000;
+    const base = plotB(), height = 26 * dpr;
+    rc.strokeStyle = 'rgba(230,233,240,.30)'; rc.lineWidth = dpr;
+    rc.beginPath();
+    let started = false;
+    for (let i = Math.max(0, Math.floor(view.t0 / hop)); i < D.onset.length; i++) {
+      const t = i * hop;
+      if (t > view.t1) break;
+      const y = base - D.onset[i] * height;
+      if (!started) { rc.moveTo(xOf(t), y); started = true; } else rc.lineTo(xOf(t), y);
+    }
+    rc.stroke();
+  }
+
+  for (const t of taps) {
+    if (t < view.t0 || t > view.t1) continue;
+    rc.fillStyle = '#3ddc97';
+    rc.beginPath(); rc.moveTo(xOf(t) - 4 * dpr, plotB());
+    rc.lineTo(xOf(t) + 4 * dpr, plotB()); rc.lineTo(xOf(t), plotB() - 8 * dpr);
+    rc.closePath(); rc.fill();
+  }
+
+  const h = noteH();
+  for (const n of HEARD) {
+    const x0 = xOf(n.t0), x1 = Math.max(x0 + 3 * dpr, xOf(n.t1));
+    if (p.x >= x0 && p.x <= x1 && Math.abs(p.y - yOf(n.midi)) <= h) return n;
+  }
+  return null;
+}
+
+// ---- drawing -------------------------------------------------------------
 function activeGrid() {
   // A tapped grid wins over an estimated one: it is ground truth and the
   // estimate is what it exists to correct.
