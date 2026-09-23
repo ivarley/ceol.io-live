@@ -117,12 +117,21 @@ class TestTheGeneratedCssIsStillUsable:
 
 
 class TestTheSwiftSideIsHonest:
-    def test_colors_carry_their_source_hex(self):
+    def test_colors_carry_their_source_hex(self, tokens):
+        # Read the expected hex from the source rather than naming one here: this
+        # assertion pinned the old blue accent and had to be rewritten the day the
+        # palette went green, which is exactly the rot it was meant to detect.
         swift = SWIFT.read_text()
         assert "static let primary = Color(" in swift
+        primary = next(
+            t["value"]
+            for g in tokens["groups"]
+            for t in g["tokens"]
+            if t["name"] == "primary"
+        )
         assert (
-            "// #4da6ff" in swift
-        ), "the hex a designer would search for should survive"
+            f"// {primary}" in swift
+        ), "the hex a designer would search for should survive into Swift"
 
     def test_web_only_values_are_listed_rather_than_silently_dropped(self):
         # Font stacks, multi-part shadows and rgba() scrims have no useful Swift form.

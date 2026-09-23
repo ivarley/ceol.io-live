@@ -65,10 +65,10 @@
     letter-spacing: -0.01em;
   }
   .kit-sechead--styled .kit-sechead-icon {
-    color: var(--primary, #00a1e0);
+    color: var(--primary, #65b464);
   }
   .kit-sechead--styled .kit-sechead-seeall {
     font-size: 0.9rem;
-    color: var(--link-color, #00a1e0);
+    color: var(--link-color, #65b464);
   }
 </style>

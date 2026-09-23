@@ -86,7 +86,7 @@
 }
 
 .btn:hover {
-    background-color: var(--primary-dark, #0056b3);
+    background-color: var(--primary-dark, #3d863c);
     color: white !important;
     text-decoration: none;
 }
@@ -833,7 +833,7 @@
 }
 
 .modal-save-btn:hover:not(:disabled) {
-    background-color: var(--primary-dark, #0056b3);
+    background-color: var(--primary-dark, #3d863c);
 }
 
 .modal-save-btn:disabled {
@@ -868,7 +868,7 @@
 }
 
 .modal-view-btn:hover {
-    background-color: var(--primary-dark, #0056b3);
+    background-color: var(--primary-dark, #3d863c);
     color: white !important;
     text-decoration: none;
 }

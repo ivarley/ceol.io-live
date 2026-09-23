@@ -240,7 +240,7 @@
     font-size: 0.75rem;
     background: none;
     border: 0;
-    color: var(--primary, #4da6ff);
+    color: var(--primary, #65b464);
     cursor: pointer;
     padding: 2px 4px;
     text-align: right;

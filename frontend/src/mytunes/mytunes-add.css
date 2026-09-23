@@ -9,7 +9,7 @@
   --panel: var(--hover-bg, #f8f9fa);
   --text: var(--text-color, #252930);
   --muted: var(--secondary-text, #6c757d);
-  --accent: var(--primary, #00a1e0);
+  --accent: var(--primary, #65b464);
   --border: var(--border-color, #ddd);
 
   position: fixed;

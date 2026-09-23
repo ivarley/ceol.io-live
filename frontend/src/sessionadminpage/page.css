@@ -508,7 +508,7 @@
 }
 
 .instance-action-btn-primary:hover {
-    background-color: var(--modal-primary-dark, #0056b3);
+    background-color: var(--modal-primary-dark, #3d863c);
     color: white !important;
 }
 

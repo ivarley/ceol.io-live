@@ -109,7 +109,7 @@
 
 .attendance-item:hover {
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    border-color: var(--primary, #007bff);
+    border-color: var(--primary, #65b464);
     background: var(--light, #374151);
 }
 
@@ -256,7 +256,7 @@
 
 /* Regular Badge */
 .badge-primary {
-    background-color: var(--primary, #007bff);
+    background-color: var(--primary, #65b464);
 }
 
 .badge-sm {
@@ -291,7 +291,7 @@
 }
 
 .modal .form-control:focus {
-    border-color: var(--primary, #007bff);
+    border-color: var(--primary, #65b464);
     box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
 }
 
@@ -334,7 +334,7 @@
     height: 20px;
     margin: -10px 0 0 -10px;
     border: 2px solid var(--border-color, #ccc);
-    border-top: 2px solid var(--primary, #007bff);
+    border-top: 2px solid var(--primary, #65b464);
     border-radius: 50%;
     animation: spin 1s linear infinite;
 }
@@ -497,7 +497,7 @@
 .attendance-item:focus,
 .search-result-item:focus,
 .attendance-status:focus {
-    outline: 2px solid var(--primary, #007bff);
+    outline: 2px solid var(--primary, #65b464);
     outline-offset: 2px;
 }
 
@@ -596,7 +596,7 @@
 }
 
 .person-name.person-edit-link:focus {
-    outline: 2px solid var(--primary, #007bff);
+    outline: 2px solid var(--primary, #65b464);
     outline-offset: 2px;
     border-radius: 2px;
 }

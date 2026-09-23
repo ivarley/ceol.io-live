@@ -156,7 +156,7 @@
     border: none;
     padding: 0;
     font-size: 1rem;
-    color: var(--primary, #00a1e0);
+    color: var(--primary, #65b464);
     cursor: pointer;
     white-space: nowrap;
   }

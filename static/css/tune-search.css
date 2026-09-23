@@ -94,7 +94,7 @@
 }
 
 .no-results.clickable:hover {
-    color: var(--primary-dark, #0056b3);
+    color: var(--primary-dark, #3d863c);
 }
 
 .no-match-option {
@@ -113,7 +113,7 @@
 }
 
 .no-match-option.clickable:hover {
-    color: var(--primary-dark, #0056b3);
+    color: var(--primary-dark, #3d863c);
     background-color: var(--hover-bg, #f8f9fa);
 }
 
@@ -141,7 +141,7 @@
     width: 16px;
     height: 16px;
     border: 2px solid var(--border-color, #ddd);
-    border-top-color: var(--primary, #007bff);
+    border-top-color: var(--primary, #65b464);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
 }
@@ -191,7 +191,7 @@
     width: 12px;
     height: 12px;
     border: 2px solid var(--border-color, #ddd);
-    border-top-color: var(--primary, #007bff);
+    border-top-color: var(--primary, #65b464);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
     margin-left: 8px;

@@ -1462,14 +1462,14 @@ button.nb-pend { cursor: pointer; } /* mid-render it's still a working incipitâ‡
   --text-color: #e0e0e0;
   --border-color: #444;
   --hover-bg: #3d3d3d;
-  --primary: #4da6ff;
+  --primary: #65b464;
   --secondary-text: #9a9aa3;
-  --link-color: #4da6ff;
+  --link-color: #65b464;
   --input-bg: #2a2a2a;
   --modal-bg: #1a1a1a;
   --modal-bg-secondary: #2a2a2a;
   --modal-text-muted: #9a9aa3;
-  --modal-primary-dark: #3385cc;
+  --modal-primary-dark: #499e47;
 }
 /* The legacy modal is already a full-width right-slide drawer at <=768px; force
    that at all widths on the live screen (this stylesheet loads after the modal's),
@@ -1952,6 +1952,6 @@ main.wide .sidepane { grid-area: pane; overflow-y: auto; min-height: 0; }
   --text-color: #e0e0e0;
   --border-color: #444;
   --hover-bg: #3d3d3d;
-  --primary: #4da6ff;
+  --primary: #65b464;
   --text-muted: #9a9aa3;
 }

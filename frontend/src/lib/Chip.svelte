@@ -91,13 +91,13 @@
   }
   .kit-chip--styled.active,
   .kit-chip-primary {
-    background: var(--primary, #00a1e0);
-    border-color: var(--primary, #00a1e0);
+    background: var(--primary, #65b464);
+    border-color: var(--primary, #65b464);
     color: #fff;
   }
   .kit-chip--styled.active.clickable:hover,
   .kit-chip-primary.clickable:hover {
-    background: var(--primary-dark, #0056b3);
+    background: var(--primary-dark, #3d863c);
   }
   .kit-chip-success {
     background: var(--success-bg, #d4edda);

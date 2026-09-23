@@ -13,7 +13,7 @@
 <div class="landing-page" style="display: block;">
 
     <div style="padding: 10px 10px 5px 10px;">
-        <h1 class="session-title-heading">{{ session.name }} <a href="/sessions" style="color: var(--border-color, #dee2e6); text-decoration: none; margin-left: 10px; font-size: 0.6em; transition: color 0.2s ease;" onmouseover="this.style.color='var(--primary, #007bff)'" onmouseout="this.style.color='var(--border-color, #dee2e6)'">⮐</a>{% if is_session_admin %}<a href="/admin/sessions/{{ session.path }}" class="add-link">Admin</a>{% endif %}</h1>
+        <h1 class="session-title-heading">{{ session.name }} <a href="/sessions" style="color: var(--border-color, #dee2e6); text-decoration: none; margin-left: 10px; font-size: 0.6em; transition: color 0.2s ease;" onmouseover="this.style.color='var(--primary, #65b464)'" onmouseout="this.style.color='var(--border-color, #dee2e6)'">⮐</a>{% if is_session_admin %}<a href="/admin/sessions/{{ session.path }}" class="add-link">Admin</a>{% endif %}</h1>
 
         <div class="session-details">
             {# Role badge (Admin / Member / Visitor) -- mounted by the Svelte bundle. #}

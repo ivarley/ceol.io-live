@@ -1180,11 +1180,11 @@
     border: none;
     padding: 0;
     font: inherit;
-    color: var(--link-color, #4da6ff);
+    color: var(--link-color, #65b464);
     cursor: pointer;
     text-decoration: underline;
 }
-.notation-mismatch-link:hover { color: var(--link-hover-color, #80c0ff); }
+.notation-mismatch-link:hover { color: var(--link-hover-color, #92ca91); }
 
 /* The action row at the foot of the status block. Configure + View By Instrument cluster
    left and wrap together (both expand more UI); Remove stays right and TOP-aligned, so it
@@ -1216,7 +1216,7 @@
     text-decoration: none;
 }
 .tsc-action-link:hover {
-    color: var(--link-hover-color, #80c0ff);
+    color: var(--link-hover-color, #92ca91);
     text-decoration: underline;
 }
 .tsc-action-danger:hover { color: var(--danger, #e85a5a); }
@@ -1366,7 +1366,7 @@
     cursor: pointer;
     white-space: nowrap;
 }
-.hist-filter input { accent-color: var(--primary, #4da6ff); cursor: pointer; }
+.hist-filter input { accent-color: var(--primary, #65b464); cursor: pointer; }
 .hist-filter:hover { color: var(--text-color, #e0e0e0); }
 
 /* Were you there? A quiet mark on the row, not a label competing with it. */
@@ -1404,7 +1404,7 @@
     text-align: left;
 }
 .sess-edit-link:hover {
-    color: var(--link-hover-color, #80c0ff);
+    color: var(--link-hover-color, #92ca91);
     text-decoration: underline;
 }
 .sess-form-readonly .configure-value {

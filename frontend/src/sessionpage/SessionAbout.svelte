@@ -68,7 +68,7 @@
     border: 0;
     padding: 0;
     background: none;
-    color: var(--primary, #007bff);
+    color: var(--primary, #65b464);
     font: inherit;
     cursor: pointer;
   }

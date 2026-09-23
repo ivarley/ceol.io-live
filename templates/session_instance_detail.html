@@ -377,8 +377,8 @@
                 box-shadow: 0 0 8px rgba(255, 193, 7, 0.6);
             }
             100% {
-                background-color: var(--primary, #007bff) !important;
-                border-color: var(--primary, #007bff) !important;
+                background-color: var(--primary, #65b464) !important;
+                border-color: var(--primary, #65b464) !important;
                 box-shadow: none;
             }
         }
@@ -443,7 +443,7 @@
             display: inline-block;
             width: 2px;
             height: 21px;
-            background-color: var(--primary, #007bff);
+            background-color: var(--primary, #65b464);
             animation: blink 1s infinite;
             vertical-align: middle;
             margin: 0 1px;
@@ -1314,7 +1314,7 @@
     {% endif %}
     {% endif %}
 
-    <h1>{{ session_instance.session_name }} <a href="/sessions/{{ session_instance.session_path }}" style="color: var(--border-color, #dee2e6); text-decoration: none; margin-left: 10px; font-size: 0.6em; transition: color 0.2s ease;" onmouseover="this.style.color='var(--primary, #007bff)'" onmouseout="this.style.color='var(--border-color, #dee2e6)'">⮐</a></h1>
+    <h1>{{ session_instance.session_name }} <a href="/sessions/{{ session_instance.session_path }}" style="color: var(--border-color, #dee2e6); text-decoration: none; margin-left: 10px; font-size: 0.6em; transition: color 0.2s ease;" onmouseover="this.style.color='var(--primary, #65b464)'" onmouseout="this.style.color='var(--border-color, #dee2e6)'">⮐</a></h1>
     <h2 class="editable-header{% if session_instance.is_cancelled %} cancelled-date{% endif %}">{{ session_instance.date }}{% if session_instance.is_active %}<span class="badge on-now-badge">On Now</span>{% endif %}<span class="edit-link" id="edit-date-btn">Edit</span></h2>
 
     {% if session_instance.location_override %}

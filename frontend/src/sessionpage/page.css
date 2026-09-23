@@ -914,7 +914,7 @@ a.empty-log {
 }
 
 .selection-btn.primary:hover {
-    background-color: var(--primary-dark, #0056b3);
+    background-color: var(--primary-dark, #3d863c);
 }
 
 .selection-btn:disabled {

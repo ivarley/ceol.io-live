@@ -78,6 +78,6 @@
   }
   .kit-list-row.active {
     background: var(--hover-bg, #f8f9fa);
-    box-shadow: inset 2px 0 0 var(--primary, #00a1e0);
+    box-shadow: inset 2px 0 0 var(--primary, #65b464);
   }
 </style>

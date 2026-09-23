@@ -23,7 +23,7 @@
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 
-  .tab-bar-item {
+  .tab-bar .tab-bar-item {
     flex: 1 1 0;
     display: flex;
     flex-direction: column;
@@ -33,23 +33,30 @@
     /* 50px + the label keeps every tab over the 44px minimum touch target. */
     min-height: 50px;
     padding: 6px 2px 5px;
-    color: var(--secondary-text, #888);
+    /* The bar wears the logo's green rather than a neutral grey. --logo-green-soft
+       is that hue at the legibility the grey had (4.9:1, the same as #888), because
+       the mark's own #4a8049 is 3.7:1 — right for a logo, too dark for a 0.68rem
+       label. The active tab then steps up to the full accent. */
+    color: var(--logo-green-soft, #569654);
     text-decoration: none;
     font-size: 0.68rem;
     letter-spacing: 0.01em;
     -webkit-tap-highlight-color: transparent;
   }
 
-  .tab-bar-item:hover,
-  .tab-bar-item:focus {
-    color: var(--secondary-text, #888);
+  .tab-bar .tab-bar-item:hover,
+  .tab-bar .tab-bar-item:focus {
+    color: var(--logo-green-soft, #569654);
     text-decoration: none;
   }
 
-  .tab-bar-item.active,
-  .tab-bar-item.active:hover {
-    color: var(--primary, #00a1e0);
+  .tab-bar .tab-bar-item.active,
+  .tab-bar .tab-bar-item.active:hover {
+    color: var(--primary, #65b464);
   }
+
+  /* The C is a mask taking currentColor, so it greens with its label for free —
+     which is the reason it is a mask and not an <img> (see .tab-bar-c below). */
 
   .tab-bar-glyph {
     display: block;

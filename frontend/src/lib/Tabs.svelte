@@ -110,7 +110,7 @@
     outline: none;
   }
   :global(.kit-tab:focus-visible) {
-    outline: 2px solid var(--primary, #00a1e0);
+    outline: 2px solid var(--primary, #65b464);
     outline-offset: -2px;
   }
 
@@ -129,7 +129,7 @@
     padding: var(--sp-2, 8px) var(--sp-4, 16px);
     margin-bottom: -1px;
     font: inherit;
-    color: var(--primary, #00a1e0);
+    color: var(--primary, #65b464);
     cursor: pointer;
     text-decoration: none;
   }

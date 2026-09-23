@@ -212,7 +212,7 @@
   .kit-tool-btn.on,
   .kit-tool-btn.open,
   .kit-tool-add {
-    color: var(--primary, #00a1e0);
+    color: var(--primary, #65b464);
   }
   /* A dot, not a number: "there are filters on" is the fact that matters, and a
      count would compete with the list's own numbers for attention. */
@@ -223,7 +223,7 @@
     width: 7px;
     height: 7px;
     border-radius: 50%;
-    background: var(--primary, #00a1e0);
+    background: var(--primary, #65b464);
     border: 2px solid var(--bg-color, #fff);
   }
 
@@ -278,7 +278,7 @@
     border: none;
     padding: 0;
     cursor: pointer;
-    color: var(--primary, #00a1e0);
+    color: var(--primary, #65b464);
   }
 
   @media (prefers-reduced-motion: reduce) {

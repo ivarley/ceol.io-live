@@ -100,7 +100,7 @@
   }
   .kit-search--styled .kit-search-field:focus {
     outline: none;
-    border-color: var(--primary, #00a1e0);
+    border-color: var(--primary, #65b464);
   }
   .kit-x {
     position: absolute;
