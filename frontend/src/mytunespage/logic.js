@@ -343,3 +343,33 @@ export async function fetchAllTunes(sortParam) {
   }
   return { tunes, instruments, thesession_user_id: thesessionUserId }
 }
+
+// ---- catalogue search: "Not on your list" (spec 052 §B1) --------------------------
+//
+// Search on this page reaches the whole catalogue, which is what lets the tab bar drop
+// the hamburger's "Find a tune" without spending a tab on it. These two rules decide
+// when that happens and what comes back; they are here rather than inline in the
+// component because they are the part a native Tunes screen has to agree with.
+
+/**
+ * Should the catalogue be searched at all?
+ *
+ * Only on the All filter: on Learning / To Learn / Learned the question is "which of
+ * MY tunes match", and catalogue results would answer one nobody asked.
+ *
+ * Only once the viewer's list is fully loaded, because `catalogueExtras` decides
+ * "not yours" against that list — offering to add a tune you already own, because the
+ * page had not finished loading it, is the one wrong answer this section can give.
+ *
+ * Only from two characters: one letter matches a sizeable fraction of the catalogue,
+ * so the request is expensive and the answer is useless.
+ */
+export function shouldSearchCatalogue(status, query, fullyLoaded) {
+  return status === '' && !!fullyLoaded && typeof query === 'string' && query.length >= 2
+}
+
+/** Catalogue hits minus the tunes already on the viewer's list. */
+export function catalogueExtras(results, myTunes) {
+  const mine = new Set((myTunes || []).map((t) => t.tune_id))
+  return (results || []).filter((t) => t && !mine.has(t.tune_id))
+}

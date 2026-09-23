@@ -761,8 +761,22 @@ shell; a bar pinned to the bottom of that screen would sit on the composer.
 162px of a 360px row, about twelve characters. The Mine/All filter's padding gave the
 room back.
 
-**Still pending from B1.** The Tunes tab's search does not yet reach the catalogue inline
-with a `Not on your list` divider — that is what the add pane is standing in for.
+**B1's catalogue search is built (2026-09-23).** On the All filter, typing on My Tunes
+searches the whole catalogue and anything you do not already have appears below a
+`Not on your list` divider; tapping a row opens the add pane for it. On a status filter
+it does not appear, because there the question is "which of MY tunes match".
+
+Two decisions worth keeping. "Not yours" is decided in the client against the list the
+page already holds, not by passing `person_id` to `/api/tunes/search` — that endpoint
+answers for whatever `person_id` it is given, and this page has no business asking about
+anybody but its viewer. And it waits for the list to finish loading, because offering to
+add a tune you already own, on the grounds that the page had not loaded it yet, is the
+one wrong answer the section can give. Both rules are pure functions in
+`mytunespage/logic.js` with tests, for the same reason as Home's.
+
+"No tunes found" now reads "None of your tunes match" when the section has results, and
+the empty state's Add Tune button steps aside: the rows below name the tunes and adding
+one is a tap on the row it belongs to.
 
 **What.** A bottom tab bar in `base.html` at <768px: Home / Sessions / Tunes / Me. Help,
 Admin, Share and Log Out move into Me *first*; the hamburger stays alive until Me has

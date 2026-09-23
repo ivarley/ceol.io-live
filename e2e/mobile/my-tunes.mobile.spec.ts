@@ -69,6 +69,50 @@ test.describe("my tunes (mobile)", () => {
     await expectNoServerError(page);
   });
 
+  test("search reaches the catalogue, under a divider that says so", async ({ page }) => {
+    // This is what lets the tab bar drop the hamburger's "Find a tune" without
+    // spending a tab on search (spec 052 §B1). Your own matches stay where they are;
+    // anything else appears below, labelled, because tapping one adds a tune rather
+    // than opening one you already have.
+    await page.goto("/my-tunes");
+    await expect(page.locator("#search-input")).toBeVisible();
+
+    // A tune in the catalogue that this user does not have.
+    await page.locator("#search-input").fill("banshee");
+
+    const section = page.locator("#not-on-your-list");
+    await expect(section).toBeVisible({ timeout: 8000 });
+    await expect(section).toContainText(/not on your list/i);
+    await expect(section.locator(".notlist-row").first()).toContainText(/banshee/i);
+    await expectNoServerError(page);
+  });
+
+  test("the catalogue section is only for the All filter", async ({ page }) => {
+    // On a status filter the question is "which of MY tunes match".
+    await page.goto("/my-tunes");
+    await page.locator("#search-input").fill("banshee");
+    await expect(page.locator("#not-on-your-list")).toBeVisible({ timeout: 8000 });
+
+    await page.locator('.filter-status-row button[data-status="learning"]').click();
+    await expect(page.locator("#not-on-your-list")).toHaveCount(0);
+  });
+
+  test("a tune already on your list is not offered back to you", async ({ page }) => {
+    await page.goto("/my-tunes");
+    const res = await page.request.get("/api/my-tunes?per_page=2000&sort=alpha-asc");
+    const mine = (await res.json()).tunes || [];
+    test.skip(!mine.length, "this user has no tunes");
+
+    const owned = mine[0];
+    await page.locator("#search-input").fill(owned.tune_name.slice(0, 8));
+    await page.waitForTimeout(1200);
+
+    const rows = page.locator("#not-on-your-list .notlist-row");
+    for (let i = 0; i < (await rows.count()); i++) {
+      await expect(rows.nth(i)).not.toContainText(owned.tune_name, { ignoreCase: true });
+    }
+  });
+
   test("the page does not scroll sideways at phone width", async ({ page }) => {
     await page.goto("/my-tunes");
     await expect(page.locator(".tune-name").first()).toBeVisible({ timeout: 8000 });

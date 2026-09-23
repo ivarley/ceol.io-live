@@ -3,21 +3,23 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { extractTuneId, parseThesessionSessionId } from '../src/shared/parse.js'
 import {
-  resolveTuneInstrumentStatus,
-  buildSortFunction,
-  filterAndSort,
-  noResultsMessage,
-  resultsCountText,
-  typeBadgeLabel,
-  typeBadgeTitle,
-  stateFromParams,
-  paramsFromState,
   applyPendingOps,
-  nextStatus,
+  attendedPlays,
+  buildSortFunction,
+  catalogueExtras,
   cycleInstrumentOverride,
   fetchAllTunes,
+  filterAndSort,
   memberPlays,
-  attendedPlays,
+  nextStatus,
+  noResultsMessage,
+  paramsFromState,
+  resolveTuneInstrumentStatus,
+  resultsCountText,
+  shouldSearchCatalogue,
+  stateFromParams,
+  typeBadgeLabel,
+  typeBadgeTitle,
 } from '../src/mytunespage/logic.js'
 
 const tune = (over = {}) => ({
@@ -315,5 +317,54 @@ describe('fetchAllTunes', () => {
     expect(fetch.mock.calls[1][0]).toContain('page=2')
     expect(out.tunes.map((t) => t.tune_id)).toEqual([1, 2])
     expect(out.instruments).toEqual([{ instrument: 'Fiddle', is_auto: true }])
+  })
+})
+
+// ---- catalogue search: "Not on your list" (spec 052 §B1) --------------------------
+describe('shouldSearchCatalogue', () => {
+  it('only on the All filter', () => {
+    // On a status filter the question is "which of MY tunes match".
+    expect(shouldSearchCatalogue('', 'cooley', true)).toBe(true)
+    expect(shouldSearchCatalogue('learning', 'cooley', true)).toBe(false)
+    expect(shouldSearchCatalogue('learned', 'cooley', true)).toBe(false)
+  })
+
+  it('waits for the whole list, because "not yours" is decided against it', () => {
+    // Offering to add a tune you already own, because the page had not finished
+    // loading it, is the one wrong answer this section can give.
+    expect(shouldSearchCatalogue('', 'cooley', false)).toBe(false)
+  })
+
+  it('needs two characters', () => {
+    expect(shouldSearchCatalogue('', '', true)).toBe(false)
+    expect(shouldSearchCatalogue('', 'c', true)).toBe(false)
+    expect(shouldSearchCatalogue('', 'co', true)).toBe(true)
+  })
+
+  it('survives a missing query instead of throwing', () => {
+    expect(shouldSearchCatalogue('', null, true)).toBe(false)
+    expect(shouldSearchCatalogue('', undefined, true)).toBe(false)
+  })
+})
+
+describe('catalogueExtras', () => {
+  const hits = [{ tune_id: 1, name: 'Cooley’s' }, { tune_id: 2, name: 'The Banshee' }]
+
+  it('drops the tunes already on the list', () => {
+    expect(catalogueExtras(hits, [{ tune_id: 1 }]).map((t) => t.tune_id)).toEqual([2])
+  })
+
+  it('keeps everything when the list is empty', () => {
+    expect(catalogueExtras(hits, []).map((t) => t.tune_id)).toEqual([1, 2])
+  })
+
+  it('matches on tune_id, not on name', () => {
+    // A tune you own under an alias still must not be offered back to you.
+    expect(catalogueExtras(hits, [{ tune_id: 2, tune_name: 'A Name Of My Own' }])).toHaveLength(1)
+  })
+
+  it('is empty, not undefined, with nothing to work from', () => {
+    expect(catalogueExtras(null, null)).toEqual([])
+    expect(catalogueExtras(undefined, [{ tune_id: 1 }])).toEqual([])
   })
 })

@@ -10,24 +10,27 @@
   import { extractTuneId } from '../shared/parse.js'
   import { createAbcMatcher } from '../shared/abcfilter.svelte.js'
   import {
-    resolveTuneInstrumentStatus,
-    filterAndSort,
-    noResultsMessage,
-    resultsCountText,
-    typeBadgeLabel,
-    typeBadgeTitle,
-    stateFromParams,
-    paramsFromState,
-    overlayPendingOps,
-    submitOp,
-    nextStatus,
+    catalogueExtras,
     cycleInstrumentOverride,
     fetchAllTunes,
+    filterAndSort,
+    nextStatus,
+    noResultsMessage,
+    overlayPendingOps,
+    paramsFromState,
+    resolveTuneInstrumentStatus,
+    resultsCountText,
+    shouldSearchCatalogue,
+    stateFromParams,
+    submitOp,
+    typeBadgeLabel,
+    typeBadgeTitle,
   } from './logic.js'
   import { STATUS_LABELS } from '../mylist.js'
 
   let { pageData = null } = $props()
   import { Chip, SearchField, Seg, Toolbar, toast } from '../lib/index.js'
+  import NotOnYourList from './NotOnYourList.svelte'
 
   // ---- state -----------------------------------------------------------------
   const initial = stateFromParams(new URLSearchParams(window.location.search))
@@ -381,6 +384,50 @@
   const addTuneHref = $derived(
     rawSearch.trim() ? `/my-tunes?add=1&q=${encodeURIComponent(rawSearch.trim())}` : '/my-tunes?add=1'
   )
+
+  // ---- catalogue search: "Not on your list" (spec 052 §B1) ------------------------
+  //
+  // Only on the All filter. On Learning / To Learn / Learned the question is "which of
+  // MY tunes match", and catalogue results would be answering a question nobody asked.
+  // `filters.search` is already debounced by the SearchField, so this fires once per
+  // settled query rather than once per keystroke.
+  let catalogue = $state([])
+  let catalogueLoading = $state(false)
+  let catalogueQuery = $state('')
+  let catalogueSeq = 0
+
+  $effect(() => {
+    const q = filters.search
+    if (!shouldSearchCatalogue(filters.status, q, fullTunesLoaded)) {
+      catalogue = []
+      catalogueLoading = false
+      catalogueQuery = ''
+      return
+    }
+    const seq = ++catalogueSeq
+    catalogueQuery = q
+    catalogueLoading = true
+    fetch(`/api/tunes/search?q=${encodeURIComponent(q)}&limit=10`)
+      .then((r) => (r.ok ? r.json() : { tunes: [] }))
+      .catch(() => ({ tunes: [] }))
+      .then((d) => {
+        // A late reply for an older query must not overwrite a newer one's results.
+        if (seq !== catalogueSeq) return
+        // "Not on your list" is decided HERE, against the list this page already
+        // holds in full, rather than by passing person_id to the search endpoint.
+        // The endpoint would happily answer for any person_id it is given, and
+        // asking it "does person N have this tune?" is not a question this page
+        // needs to ask about anybody but its own viewer.
+        catalogue = catalogueExtras(d.tunes, allTunes)
+        catalogueLoading = false
+      })
+  })
+
+  function addFromCatalogue(tune) {
+    // The add pane resolves a name the same way it resolves a pasted link, so handing
+    // it the name reuses one flow instead of inventing a second way to add a tune.
+    openAddPane(tune.name || '')
+  }
 
   // After the pane adds (or finds we already have) a tune: reuse the existing
   // ?show/?added/?already landing flow — same toast, scroll + highlight, cleanup.
@@ -779,14 +826,20 @@
   {:else if visible.length === 0}
     {#if fullTunesLoaded}
       <div id="no-results" class="no-results">
-        <h3>No tunes found</h3>
+        <!-- "No tunes found" stops being true the moment the catalogue section below
+             is showing tunes. They were found; they are just not yours yet. -->
+        <h3>{catalogue.length ? 'None of your tunes match' : 'No tunes found'}</h3>
         <p id="no-results-message">
           {allTunes.length === 0 && !filters.search && !hasActiveFilters
             ? 'Try adjusting your filters or add your first tune to get started!'
             : noResultsMessage(filters)}
         </p>
         <div id="no-results-action" style="margin-top: 15px;">
-          {#if searchTuneRef != null}
+          {#if catalogue.length}
+            <!-- Nothing here: the rows below already name the tunes and adding one is
+                 a tap on the row it belongs to, which beats a button that reopens the
+                 same search in a pane. -->
+          {:else if searchTuneRef != null}
             <!-- A pasted link/id that isn't on your list yet: adding it is the point, and
                  the pane resolves the same link (setting included). Clear Filters still
                  rides along when other filters could be what's hiding it. -->
@@ -863,6 +916,15 @@
       {/if}
     </div>
   {/if}
+
+  <!-- Catalogue matches, under a divider (spec 052 §B1). Outside the {#if} above so
+       it shows whether or not your own list had hits — "no tunes found" and "here is
+       one you could add" belong together. -->
+  <NotOnYourList
+    results={catalogue}
+    loading={catalogueLoading}
+    query={catalogueQuery}
+    onPick={addFromCatalogue} />
 
   <div id="loading-more" class="loading-more" class:visible={fetchingMore && !fullTunesLoaded}>
     <span class="loading-spinner"></span>
