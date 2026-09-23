@@ -431,6 +431,64 @@ The transcribed note onsets cannot adjudicate it either, since even the
 best-fitting grid sits 31.7ms from them against 39.9ms for a random phase.
 More drawn segments, not more tuning, is what would move it.
 
+### Key: easy to hear, worth nothing to know
+
+Worth writing down because the intuition behind it is sound and the
+measurement still says no.
+
+**The corpus is in good shape here.** Every one of 55,392 settings carries a
+mode, none blank, in 23 distinct spellings that collapse to just eight
+seven-note sets. Two of them dominate: 40.8% of settings use G major's notes
+and 37.8% use D major's. E major is 0.7%, which is why hearing it would
+narrow the field so sharply.
+
+The number worth comparing on is the key SIGNATURE, not the key name. D
+major, B minor, A mixolydian and E dorian are the same seven notes with a
+different note called home, and nothing in a pitch-class histogram
+distinguishes them. `abc_pitch.key_sharps` reduces the corpus's mode column
+to that number and `analysis/key.py` produces it from audio.
+
+Collapsing this way barely changes how much the corpus agrees with itself:
+77.8% of tunes have every setting on the same mode string, 78.8% on the same
+notes. So the remaining fifth are genuine transpositions, a tune written in D
+and also in G, and a tune's key is properly a set rather than a value.
+
+**It is easy to hear.** The best-fitting seven-note set holds 95.5% of note
+time in the median segment, which is a lot of agreement from a monophonic
+tracker in a room. It matches the corpus on 92.0% of 501 segments, against
+81.9% for never listening and always saying two sharps, which is what this
+repertoire mostly plays in. Of the forty it gets wrong, 34 are one accidental
+out, which is D against G: a tune in D that rarely reaches its C# is a tune
+in G. The estimate is well calibrated, being right on all 103 segments where
+the winning set beat the runner-up by more than five points of note time.
+
+**And it is worth nothing as a filter.** Restricting candidates to tunes the
+corpus records in the TRUE key, an oracle no classifier could beat, moves
+top-1 from 0.776 to 0.780. Using the heard key instead costs six points,
+because a wrong key removes the answer. The reason is the repertoire: 452 of
+501 segments are in D or G, and those two sets cover 45% and 47% of the
+corpus, so hearing one of them rules almost nothing out. This is not a
+statement that key is uninformative in general. It is a statement that it is
+uninformative about the tunes this session plays.
+
+**The by-product is the useful part.** How diatonic a transcription is says
+nothing about which tune it is and a great deal about whether the
+transcription is worth believing:
+
+| share of note time in one key | segments | top-1 | never found |
+|---|---|---|---|
+| under 0.85 | 14 | 0.357 | 0.500 |
+| 0.85-0.92 | 63 | 0.460 | 0.190 |
+| 0.92-0.95 | 128 | 0.758 | 0.078 |
+| 0.95-0.97 | 155 | 0.826 | 0.032 |
+| over 0.97 | 141 | 0.922 | 0.007 |
+
+It correlates +0.386 with getting the tune right where pulse strength manages
++0.163, and the two are nearly independent (+0.237 with each other), so a
+segment weak on both is the one to look at. `lab suspects` reports both, and
+the next use for it is the assembler's confidence, which is the one number
+the board reports that nothing has yet been fitted to.
+
 ### What did not work, and is on the board anyway
 
 Harmonic separation plus a melody band took yin from 0.109 to 0.024. A tune

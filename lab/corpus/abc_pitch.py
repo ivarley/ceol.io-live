@@ -65,6 +65,38 @@ class AbcParseError(ValueError):
     pass
 
 
+def key_sharps(key_text: str) -> Optional[int]:
+    """`K:` field text (or the dump's mode, e.g. 'Edorian') -> sharps, flats negative.
+
+    This one number is the whole of what a key signature is, and it is the
+    right currency for comparing a notated key with a heard one. Relative
+    modes collapse onto it exactly: Dmajor, Bminor, Emixolydian and Adorian
+    all come back as 2, because they are the same seven notes with a different
+    note called home, and an audio estimate cannot tell those apart anyway.
+
+    None for a key that cannot be read, which `key_signature` treats as no
+    accidentals but a key estimator should treat as no information.
+    """
+    text = (key_text or "").strip()
+    m = re.match(r"^([A-Ga-g])\s*([#b])?\s*([A-Za-z]*)", text)
+    if not m or text.lower() in ("none", "hp"):
+        return None
+    tonic = m.group(1).upper() + (m.group(2) or "")
+    mode_word = (m.group(3) or "").lower()
+    offset = None
+    for name, off in sorted(_MODE_OFFSET.items(), key=lambda kv: -len(kv[0])):
+        if mode_word.startswith(name):
+            offset = off
+            break
+    if offset is None:
+        offset = 0
+    sharps = _MAJOR_SHARPS.get(tonic)
+    if sharps is None:
+        sharps = _MAJOR_SHARPS.get({"A#": "Bb", "D#": "Eb", "G#": "Ab", "Fb": "E",
+                                    "E#": "F", "B#": "C"}.get(tonic, "C"), 0)
+    return sharps + offset
+
+
 def key_signature(key_text: str) -> dict:
     """`K:` field text (or the dump's mode, e.g. 'Edorian') -> {letter: +1/-1/0}.
 

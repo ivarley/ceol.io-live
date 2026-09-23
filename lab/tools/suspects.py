@@ -6,10 +6,15 @@ as a reel turned out to be two and a half minutes of between-sets noise with
 the tune stapled to the end. It was spotted by ear in seconds and by nothing
 in the lab at all, having quietly counted as a miss in every run since.
 
-The measure that separates it is the height of the onset envelope's
-autocorrelation at the beat. Music repeats; a room between sets does not. On
-that segment it read 0.047; once the label was corrected the same audio read
-0.334 and the tune came back at rank 1 from rank 84.
+Two measures separate it. The height of the onset envelope's autocorrelation
+at the beat says whether the audio repeats, which music does and a room
+between sets does not: on that segment it read 0.047, and once the label was
+corrected the same audio read 0.334 and the tune came back at rank 1 from
+rank 84. The share of note time inside one seven-note set says whether the
+transcription is diatonic, which this music is and noise is not, and it turns
+out to be the better predictor of the two: it correlates +0.386 with getting
+the tune right where the pulse manages +0.163, and the two are nearly
+independent, so a segment weak on both is the one to look at.
 
 Two things this is not. It is not a label checker: plenty of weak-pulse
 segments are labelled perfectly and simply have no dance rhythm, which is
@@ -22,6 +27,7 @@ not one worth having. The output is a list of places to look.
 import numpy as np
 
 from lab import paths
+from lab.analysis.key import diatonic_fraction
 from lab.analysis.pulse import estimate_pulse
 from lab.audio.chunks import AudioStore, fmt_ms
 from lab.audio.prepare import wav_sha1
@@ -34,7 +40,8 @@ from lab.frontends.segmentation import intervals_from_notes
 
 # Types with no dance pulse by nature, so a weak reading says nothing.
 UNMETERED = {"waltz", "air", "slow air", "planxty", "song"}
-BANDS = ((0.0, 0.10), (0.10, 0.18), (0.18, 0.28), (0.28, 0.40), (0.40, 9.0))
+PULSE_BANDS = ((0.0, 0.10), (0.10, 0.18), (0.18, 0.28), (0.28, 0.40), (0.40, 9.0))
+DIATONIC_BANDS = ((0.0, 0.85), (0.85, 0.92), (0.92, 0.95), (0.95, 0.97), (0.97, 1.01))
 
 
 def add_parser(sub):
@@ -46,6 +53,8 @@ def add_parser(sub):
     p.add_argument("--candidate-set", default="repertoire")
     p.add_argument("--threshold", type=float, default=0.18,
                    help="pulse strength below which a segment is listed (default 0.18)")
+    p.add_argument("--diatonic", type=float, default=0.90,
+                   help="diatonic fraction below which a segment is listed (default 0.90)")
     p.add_argument("--top", type=int, default=20)
     p.set_defaults(func=main)
 
@@ -73,6 +82,7 @@ def scan(recording_ids, frontend, index, seconds=120.0):
                              if r["tune_id"] == seg.tune_id), None)
                 pulse = estimate_pulse(store.read(seg.start_ms, t1), store.sr)
                 rows.append({
+                    "diatonic": diatonic_fraction(notes) or 0.0,
                     "recording_id": rid, "date": gt.date, "segment_id": seg.segment_id,
                     "name": seg.name, "tune_type": (seg.tune_type or "").strip().lower(),
                     "start_ms": seg.start_ms, "length_s": (seg.end_ms - seg.start_ms) / 1000.0,
@@ -96,27 +106,35 @@ def main(args):
     vals = np.array([r["strength"] for r in rows])
     print(f"{len(rows)} segments over {len(ids)} recordings; pulse strength "
           f"median {np.median(vals):.3f}, 5th percentile {np.percentile(vals, 5):.3f}\n")
-    print(f"{'pulse strength':<16}{'n':>5}{'top-1':>8}{'never found':>13}")
-    for lo, hi in BANDS:
-        band = [r for r in rows if lo <= r["strength"] < hi]
-        if not band:
-            continue
-        label = f"{lo:.2f}-{hi:.2f}" if hi < 9 else f"over {lo:.2f}"
-        print(f"{label:<16}{len(band):>5}"
-              f"{np.mean([r['rank'] == 1 for r in band]):>8.3f}"
-              f"{np.mean([r['rank'] is None for r in band]):>13.3f}")
+    for title, field, bands in (("pulse strength", "strength", PULSE_BANDS),
+                                ("diatonic fraction", "diatonic", DIATONIC_BANDS)):
+        print(f"{title:<20}{'n':>5}{'top-1':>8}{'never found':>13}")
+        for lo, hi in bands:
+            band = [r for r in rows if lo <= r[field] < hi]
+            if not band:
+                continue
+            label = f"{lo:.2f}-{hi:.2f}" if hi < 1.02 else f"over {lo:.2f}"
+            print(f"  {label:<18}{len(band):>5}"
+                  f"{np.mean([r['rank'] == 1 for r in band]):>8.3f}"
+                  f"{np.mean([r['rank'] is None for r in band]):>13.3f}")
+        print()
 
     # Weak pulse AND the tune never came back is the shape the one known bad
     # label had. Weak pulse alone is common and usually means a slow tune.
     flagged = [r for r in rows
-               if r["strength"] < args.threshold and r["tune_type"] not in UNMETERED]
+               if (r["strength"] < args.threshold or r["diatonic"] < args.diatonic)
+               and r["tune_type"] not in UNMETERED]
     worst = [r for r in flagged if r["rank"] is None]
     rest = [r for r in flagged if r["rank"] is not None]
-    print(f"\nno rhythm AND the tune never comes back ({len(worst)}) — look at these first:")
-    _table(sorted(worst, key=lambda r: r["strength"])[:args.top])
-    print(f"\nno rhythm but the tune is found anyway ({len(rest)}) — probably just slow:")
-    _table(sorted(rest, key=lambda r: r["strength"])[:args.top])
-    skipped = [r for r in rows if r["strength"] < args.threshold and r["tune_type"] in UNMETERED]
+    rank_key = lambda r: (r["strength"] / 0.18) + (r["diatonic"] / 0.90)   # noqa: E731
+    print(f"weak on rhythm or key AND the tune never comes back ({len(worst)}) "
+          f"— look at these first:")
+    _table(sorted(worst, key=rank_key)[:args.top])
+    print(f"\nweak but the tune is found anyway ({len(rest)}) — probably just hard:")
+    _table(sorted(rest, key=rank_key)[:args.top])
+    skipped = [r for r in rows
+               if (r["strength"] < args.threshold or r["diatonic"] < args.diatonic)
+               and r["tune_type"] in UNMETERED]
     if skipped:
         print(f"\n{len(skipped)} unmetered ({', '.join(sorted({r['tune_type'] for r in skipped}))}) "
               f"not listed: no dance pulse is the correct reading there")
@@ -127,10 +145,10 @@ def _table(rows):
     if not rows:
         print("  none")
         return
-    print(f"  {'rec':>4} {'date':<12}{'seg':>6}  {'at':<9}{'len':>6}{'pulse':>7}  "
+    print(f"  {'rec':>4} {'date':<12}{'seg':>6}  {'at':<9}{'len':>6}{'pulse':>7}{'diat':>7}  "
           f"{'rank':<6}{'type':<10}tune")
     for r in rows:
         rank = "none" if r["rank"] is None else str(r["rank"])
         print(f"  {r['recording_id']:>4} {r['date']:<12}{r['segment_id']:>6}  "
-              f"{fmt_ms(r['start_ms']):<9}{r['length_s']:>5.0f}s{r['strength']:>7.3f}  "
-              f"{rank:<6}{(r['tune_type'] or '?'):<10}{r['name'][:30]}")
+              f"{fmt_ms(r['start_ms']):<9}{r['length_s']:>5.0f}s{r['strength']:>7.3f}"
+              f"{r['diatonic']:>7.3f}  {rank:<6}{(r['tune_type'] or '?'):<10}{r['name'][:30]}")
