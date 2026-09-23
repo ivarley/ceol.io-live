@@ -9851,17 +9851,24 @@
     color: #c8c8c8; /* Slightly darker than main text for section headings */
   }
 
-  /* Lighter blue hyperlinks for dark mode */
-  :root a {
-    color: var(--link-color); /* Lighter shade of blue */
+  /* Link colour for the dark theme.
+     `a`, NOT `:root a`. The :root prefix was there to out-rank Bootstrap's own `a`
+     rule, but it also bought specificity (0,1,1) that silently beat every
+     single-class component rule on an anchor — so a styled link had to win a
+     contest it did not know it was in. Source order does that job on its own,
+     since this sits ~9,500 lines below the rule it is overriding.
+     It matters more since the accent went green: an anchor with an accent
+     BACKGROUND that loses its own colour here inherits --link-color, which is now
+     the same green, and its text disappears into its own button. */
+  a {
+    color: var(--link-color);
   }
 
-  :root a:hover {
-    color: var(--link-hover-color); /* Even lighter on hover */
+  a:hover {
+    color: var(--link-hover-color);
   }
 
-  /* Ensure visited links are also light blue in dark mode */
-  :root a:visited {
+  a:visited {
     color: var(--link-color);
   }
 
