@@ -107,7 +107,7 @@
     <br>
     <kbd>space</kbd> play · <kbd>1-5</kbd> modes · <kbd>+</kbd><kbd>−</kbd> zoom ·
     <kbd>←</kbd><kbd>→</kbd> pan · <kbd>↑</kbd><kbd>↓</kbd> nudge a semitone · <kbd>⌫</kbd> delete · <kbd>s</kbd> sing ·
-    <kbd>cmd-z</kbd> undo · <kbd>cmd-s</kbd> save
+    <kbd>cmd-z</kbd> undo · <kbd>cmd-s</kbd> save · swipe to pan, pinch or shift-scroll to zoom
   </div>
 
   <section>
@@ -521,8 +521,16 @@ function panBy(seconds) {
 }
 roll.addEventListener('wheel', e => {
   e.preventDefault();
-  if (e.shiftKey) panBy((e.deltaY || e.deltaX) * (view.t1 - view.t0) / 600);
-  else zoomAt(tOf(evPos(e).x), e.deltaY > 0 ? 1.15 : 0.87);
+  // A trackpad pinch arrives as a wheel event with ctrlKey set; a two-finger
+  // swipe arrives without it. Zooming on the swipe was backwards and made the
+  // view jump every time you tried to move along the tune.
+  if (e.ctrlKey || e.metaKey) {
+    zoomAt(tOf(evPos(e).x), e.deltaY > 0 ? 1.08 : 0.93);
+    return;
+  }
+  if (e.shiftKey) { zoomAt(tOf(evPos(e).x), e.deltaY > 0 ? 1.15 : 0.87); return; }
+  const delta = Math.abs(e.deltaX) >= Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+  panBy(delta * (view.t1 - view.t0) / 700);
 }, { passive: false });
 mini.addEventListener('pointerdown', e => {
   const r = mini.getBoundingClientRect();

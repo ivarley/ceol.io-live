@@ -259,11 +259,67 @@ def main(args):
 
 def _quiet_handler(directory):
     class Handler(http.server.SimpleHTTPRequestHandler):
+        protocol_version = "HTTP/1.1"
+
         def __init__(self, *a, **kw):
             super().__init__(*a, directory=directory, **kw)
 
         def log_message(self, *a):
             pass   # the request log is noise next to the thing being looked at
+
+        def do_GET(self):
+            """Serve byte ranges, because otherwise the audio cannot be seeked.
+
+            Python's file server ignores the Range header and answers 200 with
+            the whole file. A browser will not seek a media element served that
+            way: setting currentTime silently collapses back to zero, which
+            looked exactly like clicking the roll doing nothing.
+            """
+            rng = self.headers.get("Range")
+            if not rng or not rng.startswith("bytes="):
+                return super().do_GET()
+            path = self.translate_path(self.path)
+            if not os.path.isfile(path):
+                return super().do_GET()
+            size = os.path.getsize(path)
+            spec = rng[len("bytes="):].split(",")[0].strip()
+            try:
+                first, _, last = spec.partition("-")
+                if first == "":                       # suffix range: last N bytes
+                    start, end = max(0, size - int(last)), size - 1
+                else:
+                    start = int(first)
+                    end = int(last) if last else size - 1
+            except ValueError:
+                return super().do_GET()
+            if start >= size:
+                self.send_response(416)
+                self.send_header("Content-Range", f"bytes */{size}")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+            end = min(end, size - 1)
+            length = end - start + 1
+            self.send_response(206)
+            self.send_header("Content-Type", self.guess_type(path))
+            self.send_header("Accept-Ranges", "bytes")
+            self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+            self.send_header("Content-Length", str(length))
+            self.end_headers()
+            with open(path, "rb") as f:
+                f.seek(start)
+                remaining = length
+                while remaining > 0:
+                    chunk = f.read(min(64 * 1024, remaining))
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    remaining -= len(chunk)
+
+        def end_headers(self):
+            if self.path.endswith(".mp3"):
+                self.send_header("Accept-Ranges", "bytes")
+            super().end_headers()
 
         def do_POST(self):
             if self.path.rstrip("/") not in ("/annotation", "annotation"):
