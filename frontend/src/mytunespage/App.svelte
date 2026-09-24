@@ -10,6 +10,7 @@
   import { extractTuneId } from '../shared/parse.js'
   import { createAbcMatcher } from '../shared/abcfilter.svelte.js'
   import {
+    SORT_MODES,
     catalogueExtras,
     cycleInstrumentOverride,
     fetchAllTunes,
@@ -21,6 +22,7 @@
     resolveTuneInstrumentStatus,
     resultsCountText,
     shouldSearchCatalogue,
+    sortModeLabel,
     stateFromParams,
     submitOp,
     typeBadgeLabel,
@@ -86,14 +88,13 @@
       filters.status ||
       filters.instrument ||
       filters.rel ||
-      filters.addedFrom ||
-      filters.addedTo
+      filters.addedDate
     )
   )
   // What's set INSIDE the collapsed drawer. Status is excluded: it has its own always-
   // visible control, so lighting the drawer button for it would point at nothing.
   const hasDrawerFilters = $derived(
-    !!(filters.type || filters.instrument || filters.rel || filters.addedFrom || filters.addedTo)
+    !!(filters.type || filters.instrument || filters.rel || filters.addedDate)
   )
 
   // Relationship chips (spec 033) — single-select, click the active one to clear.
@@ -179,15 +180,14 @@
   // a class on live nodes instead, so both directions animate for free.
   let panelVisible = $state(false)
 
-  let typeMenuOpen = $state(false)
-  let instMenuOpen = $state(false)
+  // Which droplist is open: 'sort' | 'type' | 'inst' | 'added' | null. One variable
+  // rather than a boolean each, because they are mutually exclusive — with four
+  // booleans, "close the others" is a line every opener has to remember.
+  let openMenu = $state(null)
   $effect(() => {
-    if (!typeMenuOpen && !instMenuOpen) return
+    if (!openMenu) return
     const handler = (e) => {
-      if (!e.target.closest('.inst-select')) {
-        typeMenuOpen = false
-        instMenuOpen = false
-      }
+      if (!e.target.closest('.inst-select')) openMenu = null
     }
     document.addEventListener('click', handler)
     return () => document.removeEventListener('click', handler)
@@ -233,8 +233,8 @@
     filters.status = ''
     filters.instrument = ''
     filters.rel = ''
-    filters.addedFrom = ''
-    filters.addedTo = ''
+    filters.addedDate = ''
+    filters.addedDir = 'after'
     sort.type2 = null
     sort.dir2 = null
   }
@@ -683,68 +683,58 @@
         {/snippet}
 
         {#snippet filter()}
-    <div class="filter-panel-row">
-      <button
-        id="sort-direction-toggle"
-        class="filter-sort-direction-btn"
-        title="Toggle sort direction"
-        onclick={() => (sort.dir = sort.dir === 'asc' ? 'desc' : 'asc')}>
-        <span id="sort-direction-icon">{sort.dir === 'desc' ? '↓' : '↑'}</span>
-      </button>
-      <Seg
-        options={[
-          { id: 'alpha', label: 'a-z' },
-          { id: 'popularity', label: 'popularity' },
-          { id: 'plays', label: 'my plays' },
-          { id: 'attended', label: 'attended' },
-          { id: 'heard', label: 'heard' },
-        ]}
-        value={sort.type}
-        secondary={sort.type2}
-        idAttr="data-sort"
-        styled={false}
-        segClass="filter-button-group"
-        optClass="filter-sort-btn"
-        onSelect={setSortMode} />
-    </div>
-    <div class="filter-panel-row" id="rel-filter-row">
-      {#each REL_CHIPS as chip (chip.id)}
-        <Chip
-          label={chip.label}
-          active={filters.rel === chip.id}
-          styled={false}
-          chipClass="filter-rel-chip{filters.rel === chip.id ? ' active' : ''}"
-          onclick={() => (filters.rel = filters.rel === chip.id ? '' : chip.id)} />
-      {/each}
-    </div>
-    <!-- Added-date range. The profile's Tunebook section was this same collection
-         filtered by this same field, so it is a filter here rather than a page
-         there (spec 052 §B1). -->
-    <div class="filter-panel-row filter-date-row" id="added-date-row">
-      <label class="filter-date-label" for="added-from">Added</label>
-      <input
-        type="date"
-        id="added-from"
-        class="filter-date-input"
-        aria-label="Added on or after"
-        bind:value={filters.addedFrom} />
-      <span class="filter-date-sep">to</span>
-      <input
-        type="date"
-        id="added-to"
-        class="filter-date-input"
-        aria-label="Added on or before"
-        bind:value={filters.addedTo} />
-    </div>
-    <div class="filter-panel-row">
-      <div class="inst-select" class:open={typeMenuOpen} id="type-filter">
+    <!-- Panel order (spec 052 §B1): how it is sorted, then what is in it, then when
+         you added it, then where it was played. Sorting first because it is the one
+         you change most; the rest narrow the list rather than reorder it. -->
+
+    <!-- Sort: a droplist plus a direction button, on one line. Five modes in a
+         segmented control took the full width and still truncated ("popularity",
+         "attended"), and sorting is a pick-one. Direction is its own control because
+         it is orthogonal to the field. -->
+    <div class="filter-panel-row filter-sort-row">
+      <div class="inst-select sort-select" class:open={openMenu === 'sort'} id="sort-filter">
         <button
           type="button"
           class="inst-select-trigger"
           onclick={(e) => {
             e.stopPropagation()
-            instMenuOpen = false
-            typeMenuOpen = !typeMenuOpen
+            openMenu = openMenu === 'sort' ? null : 'sort'
+          }}>
+          <span id="sort-filter-label">{sortModeLabel(sort.type)}</span>
+          <span class="inst-select-caret">▾</span>
+        </button>
+        <div class="inst-select-menu" id="sort-filter-menu">
+          {#each SORT_MODES as mode (mode.id)}
+            <button
+              type="button"
+              class="inst-select-option"
+              class:active={mode.id === sort.type}
+              data-sort={mode.id}
+              onclick={() => {
+                openMenu = null
+                setSortMode(mode.id)
+              }}>{mode.label}</button>
+          {/each}
+        </div>
+      </div>
+      <button
+        id="sort-direction-toggle"
+        class="filter-sort-direction-btn"
+        title={sort.dir === 'desc' ? 'Sorting downward — click for upward' : 'Sorting upward — click for downward'}
+        aria-label="Toggle sort direction"
+        onclick={() => (sort.dir = sort.dir === 'asc' ? 'desc' : 'asc')}>
+        <span id="sort-direction-icon">{sort.dir === 'desc' ? '↓' : '↑'}</span>
+      </button>
+    </div>
+
+    <div class="filter-panel-row">
+      <div class="inst-select" class:open={openMenu === 'type'} id="type-filter">
+        <button
+          type="button"
+          class="inst-select-trigger"
+          onclick={(e) => {
+            e.stopPropagation()
+            openMenu = openMenu === 'type' ? null : 'type'
           }}>
           <span id="type-filter-label">{typeLabelText}</span>
           <span class="inst-select-caret">▾</span>
@@ -756,23 +746,23 @@
               class="inst-select-option"
               class:active={opt.value === filters.type}
               onclick={() => {
-                typeMenuOpen = false
+                openMenu = null
                 filters.type = opt.value
               }}>{opt.label}</button>
           {/each}
         </div>
       </div>
     </div>
+
     {#if instruments.length >= 2}
       <div class="filter-panel-row" id="instrument-filter-row">
-        <div class="inst-select" class:open={instMenuOpen} id="instrument-filter">
+        <div class="inst-select" class:open={openMenu === 'inst'} id="instrument-filter">
           <button
             type="button"
             class="inst-select-trigger"
             onclick={(e) => {
               e.stopPropagation()
-              typeMenuOpen = false
-              instMenuOpen = !instMenuOpen
+              openMenu = openMenu === 'inst' ? null : 'inst'
             }}>
             <span id="instrument-filter-label">{instLabelText}</span>
             <span class="inst-select-caret">▾</span>
@@ -784,7 +774,7 @@
                 class="inst-select-option"
                 class:active={opt.value === filters.instrument}
                 onclick={() => {
-                  instMenuOpen = false
+                  openMenu = null
                   filters.instrument = opt.value
                 }}>{opt.label}</button>
             {/each}
@@ -792,6 +782,57 @@
         </div>
       </div>
     {/if}
+
+    <!-- Added: one date and a direction, not a range. Two pickers implied a span
+         nobody asks for — the question is "what have I added since X" or "what did
+         I have before X". -->
+    <div class="filter-panel-row filter-date-row" id="added-date-row">
+      <span class="filter-date-label">Added</span>
+      <div class="inst-select added-dir-select" class:open={openMenu === 'added'} id="added-dir">
+        <button
+          type="button"
+          class="inst-select-trigger"
+          onclick={(e) => {
+            e.stopPropagation()
+            openMenu = openMenu === 'added' ? null : 'added'
+          }}>
+          <span id="added-dir-label">{filters.addedDir === 'before' ? 'Before' : 'After'}</span>
+          <span class="inst-select-caret">▾</span>
+        </button>
+        <div class="inst-select-menu" id="added-dir-menu">
+          {#each [{ value: 'after', label: 'After' }, { value: 'before', label: 'Before' }] as opt (opt.value)}
+            <button
+              type="button"
+              class="inst-select-option"
+              class:active={opt.value === filters.addedDir}
+              data-added-dir={opt.value}
+              onclick={() => {
+                openMenu = null
+                filters.addedDir = opt.value
+              }}>{opt.label}</button>
+          {/each}
+        </div>
+      </div>
+      <input
+        type="date"
+        id="added-date"
+        class="filter-date-input"
+        aria-label="Added date"
+        bind:value={filters.addedDate} />
+    </div>
+
+    <div class="filter-panel-row filter-played-row" id="rel-filter-row">
+      <span class="filter-played-label">Played</span>
+      {#each REL_CHIPS as chip (chip.id)}
+        <Chip
+          label={chip.label}
+          active={filters.rel === chip.id}
+          styled={false}
+          chipClass="filter-rel-chip{filters.rel === chip.id ? ' active' : ''}"
+          onclick={() => (filters.rel = filters.rel === chip.id ? '' : chip.id)} />
+      {/each}
+    </div>
+
     <div class="filter-panel-actions">
       {#if hasActiveFilters}
         <button id="clear-filters-btn" class="filter-panel-clear-btn" onclick={clearFilters}>Clear Filters</button>

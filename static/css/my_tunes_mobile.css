@@ -1810,3 +1810,45 @@
     outline: none;
     border-color: var(--primary);
 }
+
+/* Sort row: droplist + direction button on one line (spec 052 §B1). Five modes in a
+   segmented control took the panel's full width and still truncated. */
+.filter-sort-row {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+}
+
+.filter-sort-row .sort-select {
+    flex: 1;
+    min-width: 0;
+}
+
+.filter-sort-row .filter-sort-direction-btn {
+    flex: 0 0 auto;
+}
+
+/* "Added [After|Before] [date]" — one date and a direction, not a range. */
+.filter-date-row .added-dir-select {
+    flex: 0 0 auto;
+    min-width: 96px;
+}
+
+.filter-played-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.filter-played-label,
+.filter-date-label {
+    font-size: 0.85rem;
+    opacity: 0.75;
+    white-space: nowrap;
+}
+
+.filter-date-row .filter-date-input {
+    flex: 1;
+    min-width: 0;
+}

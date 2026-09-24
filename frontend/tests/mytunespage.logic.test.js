@@ -250,19 +250,33 @@ describe('URL state round-trip', () => {
       status: 'learned',
       instrument: 'Fiddle',
       rel: '',
-      addedFrom: '',
-      addedTo: '',
+      addedDir: 'after',
+      addedDate: '',
     })
     expect(sort).toEqual({ type: 'heard', dir: 'desc', type2: 'alpha', dir2: 'asc' })
-    // The added-date range travels too (spec 052 §B1), so a filtered view is a
-    // link you can send somebody.
-    const dated = paramsFromState(
-      { search: '', type: '', status: '', instrument: '', addedFrom: '2026-01-01', addedTo: '2026-06-30' },
+    // The added-date filter travels too, so a filtered view is a link you can send.
+    const after = paramsFromState(
+      { search: '', type: '', status: '', instrument: '', addedDir: 'after', addedDate: '2026-01-01' },
       { type: 'alpha', dir: 'asc', type2: null, dir2: null }
     )
-    expect(dated.get('addedFrom')).toBe('2026-01-01')
-    expect(dated.get('addedTo')).toBe('2026-06-30')
-    expect(stateFromParams(dated).filters.addedFrom).toBe('2026-01-01')
+    expect(after.get('addedDate')).toBe('2026-01-01')
+    // "after" is the default, so it costs nothing in the URL.
+    expect(after.get('addedDir')).toBeNull()
+    expect(stateFromParams(after).filters.addedDate).toBe('2026-01-01')
+    expect(stateFromParams(after).filters.addedDir).toBe('after')
+
+    const before = paramsFromState(
+      { search: '', type: '', status: '', instrument: '', addedDir: 'before', addedDate: '2026-01-01' },
+      { type: 'alpha', dir: 'asc', type2: null, dir2: null }
+    )
+    expect(before.get('addedDir')).toBe('before')
+
+    // A direction with no date means nothing, so it does not travel alone.
+    const dirOnly = paramsFromState(
+      { search: '', type: '', status: '', instrument: '', addedDir: 'before', addedDate: '' },
+      { type: 'alpha', dir: 'asc', type2: null, dir2: null }
+    )
+    expect(dirOnly.toString()).toBe('')
 
     // alpha-asc default writes nothing
     expect(paramsFromState({ search: '', type: '', status: '', instrument: '' }, { type: 'alpha', dir: 'asc', type2: null, dir2: null }).toString()).toBe('')
@@ -384,5 +398,50 @@ describe('catalogueExtras', () => {
   it('is empty, not undefined, with nothing to work from', () => {
     expect(catalogueExtras(null, null)).toEqual([])
     expect(catalogueExtras(undefined, [{ tune_id: 1 }])).toEqual([])
+  })
+})
+
+// ---- added-date filter (spec 052 §B1) --------------------------------------------
+describe('filtering by when a tune was added', () => {
+  const t = (id, created) => ({
+    tune_id: id,
+    person_tune_id: id,
+    tune_name: `Tune ${id}`,
+    learn_status: 'learning',
+    created_date: created,
+  })
+  const NONE = { search: '', type: '', status: '', instrument: '', rel: '' }
+  const SORT = { type: 'alpha', dir: 'asc', type2: null, dir2: null }
+  const ids = (out) => out.map((x) => x.tune_id)
+
+  const list = [t(1, '2026-01-10T09:00:00'), t(2, '2026-06-01T09:00:00'), t(3, '2026-09-01T09:00:00')]
+
+  it('"after" keeps what you added on or after the date', () => {
+    const f = { ...NONE, addedDir: 'after', addedDate: '2026-06-01' }
+    expect(ids(filterAndSort(list, f, SORT, []))).toEqual([2, 3])
+  })
+
+  it('"before" keeps what you already had', () => {
+    const f = { ...NONE, addedDir: 'before', addedDate: '2026-06-01' }
+    // Strictly before, so the boundary day belongs to "after" and to only one side.
+    expect(ids(filterAndSort(list, f, SORT, []))).toEqual([1])
+  })
+
+  it('does nothing at all without a date', () => {
+    const f = { ...NONE, addedDir: 'before', addedDate: '' }
+    expect(ids(filterAndSort(list, f, SORT, []))).toEqual([1, 2, 3])
+  })
+
+  it('drops a tune with no added date rather than guessing which side it is on', () => {
+    const f = { ...NONE, addedDir: 'after', addedDate: '2026-01-01' }
+    expect(ids(filterAndSort([...list, t(4, null)], f, SORT, []))).toEqual([1, 2, 3])
+  })
+
+  it('compares as ISO strings, so a timestamp is judged by its date alone', () => {
+    // 23:59 on the boundary day is still that day, which a Date-with-timezone
+    // comparison is exactly the kind of thing to get wrong.
+    const late = [t(9, '2026-06-01T23:59:59')]
+    const f = { ...NONE, addedDir: 'after', addedDate: '2026-06-01' }
+    expect(ids(filterAndSort(late, f, SORT, []))).toEqual([9])
   })
 })

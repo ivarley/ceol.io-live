@@ -113,6 +113,66 @@ test.describe("my tunes (mobile)", () => {
     }
   });
 
+  test("the filter panel reads top to bottom: sort, what, when, where", async ({ page }) => {
+    // Order is the point (spec 052 §B1): how it is sorted first, because that is the
+    // one you change most, then what is in the list, then when you added it, then
+    // where it was played. Sorting is a droplist, not five toggles — they took the
+    // panel's whole width and still truncated.
+    await page.goto("/my-tunes");
+    await page.locator("#filter-panel-toggle").click();
+
+    const rows = await page
+      .locator("#filter-panel .filter-panel-row")
+      .evaluateAll((rs) => rs.map((r) => r.id || r.className.split(" ").pop()));
+
+    // The instrument droplist only appears for somebody who plays more than one, so
+    // the assertion is about ORDER rather than a fixed list — otherwise it passes or
+    // fails on which account the suite happens to sign in as.
+    const expected = [
+      "filter-sort-row",
+      "filter-panel-row", // tune types
+      "instrument-filter-row",
+      "added-date-row",
+      "rel-filter-row",
+    ].filter((id) => id !== "instrument-filter-row" || rows.includes(id));
+    expect(rows).toEqual(expected);
+
+    await expect(page.locator("#sort-filter-label")).toBeVisible();
+    await expect(page.locator("#sort-direction-toggle")).toBeVisible();
+  });
+
+  test("the sort droplist picks a mode and the arrow flips the direction", async ({ page }) => {
+    await page.goto("/my-tunes");
+    await page.locator("#filter-panel-toggle").click();
+    await page.locator("#sort-filter .inst-select-trigger").click();
+    await page.locator('#sort-filter-menu [data-sort="heard"]').click();
+
+    await expect(page.locator("#sort-filter-label")).toHaveText(/heard/i);
+    await expect(page).toHaveURL(/sortType=heard/);
+
+    const before = await page.locator("#sort-direction-icon").innerText();
+    await page.locator("#sort-direction-toggle").click();
+    await expect(page.locator("#sort-direction-icon")).not.toHaveText(before);
+  });
+
+  test("Added filters by one date and a direction, not a range", async ({ page }) => {
+    await page.goto("/my-tunes");
+    await expect(page.locator(".tune-card").first()).toBeVisible({ timeout: 8000 });
+    const all = await page.locator(".tune-card").count();
+
+    await page.locator("#filter-panel-toggle").click();
+    await page.locator("#added-date").fill("2030-01-01");
+
+    // Nothing was added after 2030, so "After" empties the list and "Before" restores
+    // it — the two sides together are the whole collection, with no overlap.
+    await expect.poll(async () => page.locator(".tune-card").count()).toBe(0);
+
+    await page.locator("#added-dir .inst-select-trigger").click();
+    await page.locator('#added-dir-menu [data-added-dir="before"]').click();
+    await expect.poll(async () => page.locator(".tune-card").count()).toBe(all);
+    await expect(page).toHaveURL(/addedDir=before/);
+  });
+
   test("the page does not scroll sideways at phone width", async ({ page }) => {
     await page.goto("/my-tunes");
     await expect(page.locator(".tune-name").first()).toBeVisible({ timeout: 8000 });

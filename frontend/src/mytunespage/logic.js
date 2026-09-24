@@ -97,15 +97,17 @@ export function filterAndSort(allTunes, filters, sort, instruments, abcIds = nul
     if (filters.type && tune.tune_type !== filters.type) continue
 
     // When you added it to your list. This is where the profile's Tunebook section
-    // went (spec 052 §B1): that page filtered the same collection by the same field,
-    // so it was this page with a date range and worse ergonomics. Compared as
-    // ISO date strings, which sort lexicographically — no Date objects, so no
-    // timezone to get wrong.
-    if (filters.addedFrom || filters.addedTo) {
+    // went (spec 052 §B1): that page filtered the same collection by the same field.
+    //
+    // ONE date and a direction, not a from/to pair. Two date pickers implied a range
+    // nobody was asking for — the question is almost always "what have I added since
+    // X" or "what did I have before X". Compared as ISO date strings, which sort
+    // lexicographically, so there is no Date object and no timezone to get wrong.
+    if (filters.addedDate) {
       const added = (tune.created_date || '').slice(0, 10)
       if (!added) continue
-      if (filters.addedFrom && added < filters.addedFrom) continue
-      if (filters.addedTo && added > filters.addedTo) continue
+      if (filters.addedDir === 'before' ? added >= filters.addedDate : added < filters.addedDate)
+        continue
     }
 
     // Relationship chips (spec 033): member = played at my sessions (R3),
@@ -187,6 +189,22 @@ export function typeBadgeTitle(sortType) {
   return ''
 }
 
+// The sort modes, as a droplist rather than a row of toggles: five options in a
+// segmented control ate the panel's whole width and still truncated, and sorting is
+// a pick-one, which is what a droplist is for. Direction is a separate control
+// beside it, because it is orthogonal to which field you sort on.
+export const SORT_MODES = [
+  { id: 'alpha', label: 'Name (a-z)' },
+  { id: 'popularity', label: 'Popularity' },
+  { id: 'plays', label: 'My plays' },
+  { id: 'attended', label: 'Plays I attended' },
+  { id: 'heard', label: 'Times heard' },
+]
+
+export function sortModeLabel(id) {
+  return SORT_MODES.find((m) => m.id === id)?.label || SORT_MODES[0].label
+}
+
 // --- URL state (filters + sort mirrored via replaceState) --------------------
 
 export function stateFromParams(params) {
@@ -196,8 +214,8 @@ export function stateFromParams(params) {
     status: params.get('status') || '',
     instrument: params.get('instrument') || '',
     rel: params.get('rel') || '',
-    addedFrom: params.get('addedFrom') || '',
-    addedTo: params.get('addedTo') || '',
+    addedDir: params.get('addedDir') === 'before' ? 'before' : 'after',
+    addedDate: params.get('addedDate') || '',
   }
   const sort = {
     type: params.get('sortType') || 'alpha',
@@ -215,8 +233,11 @@ export function paramsFromState(filters, sort) {
   if (filters.status) params.set('status', filters.status)
   if (filters.instrument) params.set('instrument', filters.instrument)
   if (filters.rel) params.set('rel', filters.rel)
-  if (filters.addedFrom) params.set('addedFrom', filters.addedFrom)
-  if (filters.addedTo) params.set('addedTo', filters.addedTo)
+  // The direction only means anything alongside a date, so it only travels with one.
+  if (filters.addedDate) {
+    params.set('addedDate', filters.addedDate)
+    if (filters.addedDir === 'before') params.set('addedDir', 'before')
+  }
   if (sort.type !== 'alpha' || sort.dir !== 'asc') {
     params.set('sortType', sort.type)
     params.set('sortDir', sort.dir)

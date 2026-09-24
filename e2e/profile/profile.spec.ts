@@ -31,6 +31,7 @@ test.describe("profile (/me)", () => {
     await page.goto("/my-tunes");
     await page.locator("#filter-panel-toggle").click();
     await expect(page.locator("#added-date-row")).toBeVisible();
+    await expect(page.locator("#added-dir-label")).toHaveText(/After/i);
 
     await page.goto(`/sessions/${SESSIONS.mueller.path}/logs`);
     await page.locator("#logs-tab .kit-tool-filter").click();
