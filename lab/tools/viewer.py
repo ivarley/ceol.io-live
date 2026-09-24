@@ -294,8 +294,18 @@ def main(args):
         f.write(page)
 
     handler = _quiet_handler(out)
-    socketserver.TCPServer.allow_reuse_address = True
-    with socketserver.TCPServer(("127.0.0.1", args.port), handler) as httpd:
+    # Threaded, and it has to be. The handler speaks HTTP/1.1, so a browser
+    # keeps its connection open, and a single-threaded server then serves that
+    # one socket and nothing else: the page loads, the audio connection stays
+    # open behind it, and every later request queues forever. The visible
+    # symptom is a reload that appears to do nothing, still showing the
+    # previous segment, which is what happened.
+
+    class Server(socketserver.ThreadingTCPServer):
+        allow_reuse_address = True
+        daemon_threads = True          # do not hang on ctrl-c waiting for readers
+
+    with Server(("127.0.0.1", args.port), handler) as httpd:
         url = f"http://127.0.0.1:{args.port}/"
         print(f"{payload['truth_name']} — {payload['duration_s']:.0f}s, "
               f"{len(payload['notes'])} notes, {payload['shared_ngrams']} shared phrases, "
@@ -372,6 +382,10 @@ def _quiet_handler(directory):
         def end_headers(self):
             if self.path.endswith(".mp3"):
                 self.send_header("Accept-Ranges", "bytes")
+            # Every file here is regenerated for whatever segment is being
+            # looked at, under the same two names, so a cached copy is always
+            # the wrong segment.
+            self.send_header("Cache-Control", "no-store, must-revalidate")
             super().end_headers()
 
         def do_POST(self):
