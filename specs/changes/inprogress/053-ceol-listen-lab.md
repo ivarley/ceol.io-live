@@ -423,13 +423,42 @@ untouched. It is safe only because the band stops it, since a reel's eighth
 IS articulated and nothing in the curve distinguishes it from a beat; what
 distinguishes it is that 161ms is not a tempo anyone's foot keeps.
 
-On the one segment with drawn beats the period is now right to 0.15%, 160ms
-against 159ms, and the meter is right. Phase is not settled and cannot be
-settled from one segment: the estimate sits 50ms from a least-squares line
-through the drawn beats, and those beats scatter 32ms rms about that line.
-The transcribed note onsets cannot adjudicate it either, since even the
-best-fitting grid sits 31.7ms from them against 39.9ms for a random phase.
-More drawn segments, not more tuning, is what would move it.
+On both segments with drawn beats the period is now exactly right, 147ms
+against 147 on a reel and 159 against 159 on a jig, and so is the meter.
+
+The reel is the one that tested the design, because it is played with a
+swing. Its eighth note is 147ms and the onset envelope correlates 0.014
+there: with the eighths uneven, no two consecutive onsets are the same
+distance apart, so the eighth has no periodicity at all. The swung PAIR does,
+reaching 0.685 at 294ms. Finding the beat and dividing is what survives that;
+searching for the eighth could not have found it.
+
+It also exposed a hole in the annotation format. The drawn beats came out
+twice too slow, because the format recorded a meter where what it needed was
+how many eighth notes are inside one drawn beat. A reel counted in two has
+four and counted in four has two, and it is the same reel. The notation
+settles which: at a 147ms eighth the segment is 3.07 times through the tune,
+which is what a session plays, and at 295ms it would be 1.53 times, which is
+nothing. The field now records eighths per beat, and offers 2, 3, 4 and 6.
+
+Phase is still not settled. The estimate sits 54ms from a line fitted through
+the drawn beats on the reel and 57ms on the jig, and those beats scatter 61ms
+and 32ms rms about their own lines, so the error is the same size as the
+ground truth's noise. The transcribed note onsets cannot adjudicate it
+either, since even the best-fitting grid sits 31.7ms from them against 39.9ms
+for a random phase.
+
+**The downbeat is the weak part, and it is now measured.** Nineteen marked
+bar starts on the reel put the estimated bar phase 1.19 eighths out of eight
+away from the true one, where guessing would average 2.00, so it is barely
+better than picking an eighth at random. Four rules were tried on that one
+segment and none separated: the mean onset on the line, the strongest onset
+near it, whether a transcribed note begins there, and whether a LONG note
+begins there all choose the same wrong eighth. The tempo is not the problem,
+since one constant bar fits all nineteen marks with a 61ms residual and the
+estimator reads within 5ms of it across six overlapping windows. Something
+other than onset energy has to say where the bar is, and one marked segment
+cannot say what.
 
 ### Key: easy to hear, worth nothing to know
 

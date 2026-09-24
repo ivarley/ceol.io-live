@@ -82,10 +82,13 @@
     <label>tone <input type="range" id="vol" min="0" max="100" value="45"></label>
     <button id="pulsebtn" class="on" title="the eighth-note grid the music is on">grid</button>
     <button class="mode" data-mode="beats">draw beats</button>
-    <label>meter
+    <label title="how many eighth notes fit inside one beat you draw"
+           >a beat is
       <select id="tapmeter">
-        <option value="2">2 (reel)</option>
-        <option value="3">3 (jig)</option>
+        <option value="2">2 eighths · reel counted in 4</option>
+        <option value="3">3 eighths · jig, the dotted quarter</option>
+        <option value="4">4 eighths · reel counted in 2</option>
+        <option value="6">6 eighths · jig counted in 2</option>
       </select>
     </label>
     <button id="tapclear">clear beats</button>
@@ -372,9 +375,13 @@ function activeGrid() {
 
 function fitTaps() {
   if (beats.length < 1) { tapped = null; refreshBeatReadout(); return; }
+  // How many eighths are inside one beat you draw. Not the meter: a reel
+  // counted in two has four, counted in four has two, and the tune is the
+  // same either way. Castle Kelly was drawn at the half note and read as the
+  // quarter, which made the whole grid twice too slow.
   const grouping = parseInt(document.getElementById('tapmeter').value, 10);
-  const perBar = grouping === 3 ? 6 : 8;
-  const beatsPerBar = perBar / grouping;
+  const perBar = (grouping === 3 || grouping === 6) ? 6 : 8;
+  const beatsPerBar = Math.max(1, Math.round(perBar / grouping));
   const sorted = [...beats].sort((a, b) => a - b);
 
   // Spacing is taken from the drawn beats themselves, pair by pair, so a set
@@ -434,9 +441,10 @@ function refreshBeatReadout() {
   if (!tapped) { el.textContent = beats.length ? beats.length + ' beat drawn' : ''; return; }
   const bpm = 60000 / (tapped.period_ms * tapped.grouping);
   const bars = downbeats.length ? downbeats.length + ' bar starts · ' : 'no bar start marked · ';
+  const perBar = (tapped.grouping === 3 || tapped.grouping === 6) ? 6 : 8;
   el.textContent = beats.length + ' beats drawn · ' + bars + bpm.toFixed(0) + ' bpm · eighth ' +
     tapped.period_ms.toFixed(0) + 'ms · bar ' +
-    (tapped.period_ms * (tapped.grouping === 3 ? 6 : 8) / 1000).toFixed(2) + 's';
+    (tapped.period_ms * perBar / 1000).toFixed(2) + 's';
 }
 
 function beatAt(p) {

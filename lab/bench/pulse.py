@@ -59,19 +59,54 @@ def load_drawn():
     return out
 
 
+def eighths_per_beat(pulse):
+    """How many eighth notes are inside one drawn beat.
+
+    NOT the meter, which is the mistake this field used to encode. A reel
+    counted in two has four eighths to a beat and counted in four has two, and
+    it is the same reel; a jig has three, or six if counted in two. Castle
+    Kelly was drawn at the half note and read as the quarter, and every number
+    derived from it came out twice too slow.
+    """
+    return int(pulse.get("grouping") or 2)
+
+
+def truth_meter(pulse):
+    """2 or 3: how the beat divides, which is what the estimator reports."""
+    return 3 if eighths_per_beat(pulse) in (3, 6) else 2
+
+
+def eighths_per_bar(pulse):
+    return 6 if truth_meter(pulse) == 3 else 8
+
+
+def drawn_beat_ms(pulse):
+    """The spacing of the drawn beats, ignoring the gaps between runs.
+
+    Beats are drawn in patches -- a few bars here, a few bars there -- so the
+    median over every consecutive pair includes the silences between patches.
+    On Castle Kelly that was a 599ms median with a 1432ms spread over what are
+    really two steady runs at 593 and 584ms.
+    """
+    beats = np.asarray(sorted(pulse.get("beats") or []), dtype=float)
+    if beats.size < 2:
+        return 0.0
+    gaps = np.diff(beats)
+    within = gaps[gaps < 2.5 * np.median(gaps)]
+    return float(np.median(within if within.size else gaps)) * 1000.0
+
+
 def truth_period_ms(pulse):
     """The eighth note, taken from the beats themselves.
 
     The drawn beats are the fact; the stored period is an inference from them
-    and the meter, and it goes stale the moment the meter is changed without
-    re-saving. That happened on the first segment anyone drew, so it is
-    derived here instead of trusted.
+    and the level they were drawn at, and it goes stale the moment that is
+    changed without re-saving. That happened on the first segment anyone drew,
+    so it is derived here instead of trusted.
     """
-    beats = sorted(pulse.get("beats") or [])
-    grouping = int(pulse.get("grouping") or 2)
-    if len(beats) >= 2:
-        gaps = np.diff(np.asarray(beats))
-        return float(np.median(gaps)) * 1000.0 / grouping
+    beat = drawn_beat_ms(pulse)
+    if beat:
+        return beat / max(1, eighths_per_beat(pulse))
     return float(pulse.get("period_ms") or 0.0)
 
 
@@ -94,15 +129,27 @@ def truth_phase_ms(pulse):
 
 
 def truth_bar_phase_ms(pulse):
-    """When a bar starts, from the beats marked as bar starts. None if none are.
+    """When a bar starts, fitted across every mark. None if there are none.
 
     A marked bar line is the only statement about bar phase anywhere in the
-    lab. The estimator infers one by fitting a train at the bar period, which
-    is plausible and has never been checked, because until a person marks one
-    there is nothing to check it against.
+    lab, and taking the first mark alone wastes the other eighteen. Marks are
+    not placed every bar -- the gaps on Castle Kelly run 2, 2, 2, 8, 2, 2, 2,
+    8, 4, 4, 2, 6 bars -- so each one is first snapped to the nearest whole
+    number of bars from the first, and a line is fitted through the lot. That
+    turns 61ms of drawing scatter into an estimate worth comparing against.
     """
-    downs = sorted(pulse.get("downbeats") or [])
-    return (float(downs[0]) * 1000.0) if downs else None
+    downs = np.asarray(sorted(pulse.get("downbeats") or []), dtype=float)
+    if downs.size == 0:
+        return None
+    if downs.size < 3:
+        return float(downs[0]) * 1000.0
+    bar_s = truth_period_ms(pulse) / 1000.0 * eighths_per_bar(pulse)
+    if bar_s <= 0:
+        return float(downs[0]) * 1000.0
+    n = np.round((downs - downs[0]) / bar_s)
+    a = np.vstack([n, np.ones(n.size)]).T
+    (_slope, intercept), *_ = np.linalg.lstsq(a, downs, rcond=None)
+    return float(intercept) * 1000.0
 
 
 def score_record(record, seconds=60.0):
@@ -129,10 +176,12 @@ def score_record(record, seconds=60.0):
     bar_err_beats = None
     truth_bar = truth_bar_phase_ms(truth)
     if truth_bar is not None and abs(ratio - 1.0) <= 0.08:
-        beat = truth["period_ms"] * int(truth.get("grouping") or 2)
-        bar = beat * (4 if int(truth.get("grouping") or 2) == 2 else 2)
+        # In WRITTEN bars, not in whatever span the marks were placed at: a
+        # mark every second bar is still a statement about where a bar starts,
+        # and the modulo takes care of the rest.
+        bar = truth["period_ms"] * eighths_per_bar(truth)
         diff = (got.get("bar_phase_ms", got["phase_ms"]) - truth_bar) % bar
-        bar_err_beats = min(diff, bar - diff) / max(1e-6, beat)
+        bar_err_beats = min(diff, bar - diff) / max(1e-6, truth["period_ms"])
     return {
         "tune": record.get("tune_name"),
         "recording_id": record["recording_id"],
@@ -144,7 +193,7 @@ def score_record(record, seconds=60.0):
         "ratio": ratio,
         "verdict": name_ratio(ratio),
         "period_right": abs(ratio - 1.0) <= 0.08,
-        "grouping_right": int(got["grouping"]) == int(truth["grouping"]),
+        "grouping_right": int(got["grouping"]) == truth_meter(truth),
         "phase_error_ms": phase_err,
         "drawn_scatter_ms": drawn_rms,
         "f1": float(abs(ratio - 1.0) <= 0.08),
@@ -201,8 +250,8 @@ def format_pulse(result):
     if p.get("n_with_bars_marked"):
         lines.append(f"  bar lines marked on {p['n_with_bars_marked']} segment(s)")
         if p.get("median_bar_error_beats") is not None:
-            lines.append(f"  bar start off by (median)  {p['median_bar_error_beats']:.2f} beats")
-            lines.append(f"  bar start within half a beat  {p['bar_phase_right']:.3f}")
+            lines.append(f"  bar start off by (median)  {p['median_bar_error_beats']:.2f} eighths")
+            lines.append(f"  bar start within half an eighth  {p['bar_phase_right']:.3f}")
     else:
         lines.append("  bar lines: none marked, so nothing here checks the downbeat")
     if p["verdicts"]:
