@@ -101,7 +101,7 @@
   // (R2 "in my sessions' repertoire" was deliberately dropped: plays auto-enroll
   // into session_tune, so it only differed for on-list-but-never-played tunes.)
   const REL_CHIPS = [
-    { id: 'member', label: 'Played at my sessions' },
+    { id: 'member', label: 'At my sessions' },
     { id: 'attended', label: 'While I was there' },
   ]
   const relLabel = (id) => REL_CHIPS.find((c) => c.id === id)?.label || id
@@ -682,6 +682,29 @@
           onSearch={(q) => (filters.search = q.toLowerCase().trim())} />
         {/snippet}
 
+        {#snippet aside()}
+        <!-- Status is the filter people actually live in — "what am I learning right
+             now?" is the question the page exists to answer — so it sits in the open,
+             one tap away, while the drawer keeps the filters you set once and forget.
+             In Toolbar's `aside` slot, so it stays put directly under the search line
+             and the drawer opens BELOW it rather than shoving it down the page. -->
+        <div class="filter-status-row">
+          <Seg
+            options={[
+              { id: 'want to learn', label: STATUS_LABELS['want to learn'] },
+              { id: 'learning', label: STATUS_LABELS.learning },
+              { id: 'learned', label: STATUS_LABELS.learned },
+              { id: '', label: 'All' },
+            ]}
+            value={filters.status}
+            idAttr="data-status"
+            styled={false}
+            segClass="filter-button-group"
+            optClass="filter-status-btn"
+            onSelect={(v) => (filters.status = v)} />
+        </div>
+        {/snippet}
+
         {#snippet filter()}
     <!-- Panel order (spec 052 §B1): how it is sorted, then what is in it, then when
          you added it, then where it was played. Sorting first because it is the one
@@ -692,6 +715,7 @@
          "attended"), and sorting is a pick-one. Direction is its own control because
          it is orthogonal to the field. -->
     <div class="filter-panel-row filter-sort-row">
+      <span class="filter-row-label">Sort</span>
       <div class="inst-select sort-select" class:open={openMenu === 'sort'} id="sort-filter">
         <button
           type="button"
@@ -787,7 +811,7 @@
          nobody asks for — the question is "what have I added since X" or "what did
          I have before X". -->
     <div class="filter-panel-row filter-date-row" id="added-date-row">
-      <span class="filter-date-label">Added</span>
+      <span class="filter-row-label">Added</span>
       <div class="inst-select added-dir-select" class:open={openMenu === 'added'} id="added-dir">
         <button
           type="button"
@@ -822,7 +846,7 @@
     </div>
 
     <div class="filter-panel-row filter-played-row" id="rel-filter-row">
-      <span class="filter-played-label">Played</span>
+      <span class="filter-row-label">Played</span>
       {#each REL_CHIPS as chip (chip.id)}
         <Chip
           label={chip.label}
@@ -841,24 +865,6 @@
         {/snippet}
       </Toolbar>
 
-      <!-- Status is the filter people actually live in — "what am I learning right now?"
-           is the question the page exists to answer — so it sits in the open, one tap
-           away, while the drawer keeps the filters you set once and forget. -->
-      <div class="filter-status-row">
-        <Seg
-          options={[
-            { id: 'want to learn', label: STATUS_LABELS['want to learn'] },
-            { id: 'learning', label: STATUS_LABELS.learning },
-            { id: 'learned', label: STATUS_LABELS.learned },
-            { id: '', label: 'All' },
-          ]}
-          value={filters.status}
-          idAttr="data-status"
-          styled={false}
-          segClass="filter-button-group"
-          optClass="filter-status-btn"
-          onSelect={(v) => (filters.status = v)} />
-      </div>
     </div>
 
     {#if pills.length > 0}

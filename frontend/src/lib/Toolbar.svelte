@@ -32,6 +32,11 @@
     onSearch = () => {},
 
     // --- filter ---
+    // `aside` renders BETWEEN the toolbar line and the filter panel: for a control
+    // that is always visible and belongs with the search rather than inside the
+    // drawer. My Tunes puts its learn-status segment here, so opening the drawer
+    // pushes the drawer's own contents down and leaves the status where it was.
+    aside = null, // snippet
     filter = null, // snippet: the panel's contents (the host's own controls)
     open = $bindable(false), // is the panel expanded?
     activeCount = 0, // how many filters are set (dots the button, shows Clear)
@@ -147,6 +152,10 @@
       {/if}
     {/if}
   </div>
+
+  {#if aside}
+    {@render aside()}
+  {/if}
 
   {#if filter}
     <div id={panelId} class="kit-filter-panel" class:open style="--kit-notch-right: {notchRight}px">

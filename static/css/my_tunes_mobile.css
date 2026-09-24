@@ -265,7 +265,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-bottom: 10px;
+    margin-bottom: 6px;
 }
 
 .filter-panel-row:last-of-type {
@@ -368,7 +368,10 @@
     background-color: var(--hover-bg);
 }
 
-.filter-panel-actions {
+/* :has() so the divider only exists when something is under it — without this the
+   row is a border-top and nothing else whenever no filters are set, which reads as
+   a stray rule across the foot of the panel. */
+.filter-panel-actions:has(> *) {
     margin-top: 10px;
     padding-top: 10px;
     border-top: 1px solid var(--border-color);
@@ -1783,17 +1786,6 @@
     flex-wrap: wrap;
 }
 
-.filter-date-label {
-    margin: 0;
-    font-size: 0.85rem;
-    opacity: 0.75;
-}
-
-.filter-date-sep {
-    font-size: 0.85rem;
-    opacity: 0.55;
-}
-
 .filter-date-input {
     flex: 1;
     min-width: 0;
@@ -1841,14 +1833,31 @@
     flex-wrap: wrap;
 }
 
-.filter-played-label,
-.filter-date-label {
+.filter-date-row .filter-date-input {
+    flex: 1;
+    min-width: 0;
+}
+
+/* The three labelled rows (Sort / Added / Played) share one label style, and one
+   width, so their controls start at the same x rather than stepping in and out. */
+.filter-row-label {
+    flex: 0 0 auto;
+    min-width: 44px;
     font-size: 0.85rem;
     opacity: 0.75;
     white-space: nowrap;
 }
 
-.filter-date-row .filter-date-input {
-    flex: 1;
-    min-width: 0;
+/* The trigger inside .inst-select is the visible box, so stretching the wrapper is
+   not enough: without this the droplist keeps its natural height inside a taller
+   row and the direction button beside it looks a size too big. */
+.filter-sort-row .inst-select,
+.filter-sort-row .inst-select-trigger,
+.filter-sort-row .filter-sort-direction-btn {
+    height: 100%;
+}
+
+.filter-sort-row .filter-sort-direction-btn {
+    padding: 8px 10px;
+    font-size: 14px;
 }
