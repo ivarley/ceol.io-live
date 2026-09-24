@@ -7,24 +7,16 @@
   // destination that exists in neither place is a feature quietly deleted.
   //
   // Only on /me. An admin looking at somebody else's profile must not be offered
-  // "Log Out" under their name, and Share here means share this page, which is a
-  // different thing when the page is not yours.
+  // "Log Out" under their name.
+  //
+  // Share is NOT here any more. It gives a link and a QR for the page you are
+  // looking at, so parking it on one particular page made it mean "share your
+  // profile" half the time and something else the rest. It is a header control now
+  // (spec 052 §B1), present on every screen.
   import { Row } from '../lib/index.js'
 
   let { isSystemAdmin = false, personName = '' } = $props()
 
-  // The same helper the hamburger called. It is defined app-wide in base.html, so
-  // it is reached through window rather than imported; absent (an old cached shell,
-  // or a page that did not load it) we fall back to the /share URL that has always
-  // been the no-JS path.
-  function share(event) {
-    event.preventDefault()
-    if (typeof window.shareCurrentPage === 'function') {
-      window.shareCurrentPage()
-      return
-    }
-    window.location.href = `/share?url=${encodeURIComponent(window.location.href)}`
-  }
 </script>
 
 <section class="account-section" id="account-section">
@@ -37,19 +29,6 @@
     {/if}
 
     <Row styled={false} rowClass="account-row" href="/help" title="Help" id="account-help">
-      {#snippet trailing()}<span class="account-chev" aria-hidden="true">›</span>{/snippet}
-    </Row>
-
-    <!-- An anchor with a real href, not a button: on a phone this hands off to the
-         system share sheet, and where that does not exist /share is a working page. -->
-    <Row
-      styled={false}
-      rowClass="account-row"
-      as="a"
-      href="/share"
-      title="Share"
-      id="account-share"
-      onclick={share}>
       {#snippet trailing()}<span class="account-chev" aria-hidden="true">›</span>{/snippet}
     </Row>
 

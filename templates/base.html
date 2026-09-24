@@ -50,6 +50,10 @@
          the hamburger below 768px. Loaded after it so the rule that hides the
          hamburger on a phone wins without !important. -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tab_bar.css') }}">
+    <!-- Share this page: a header control, because it acts on whatever page you are
+         on and so cannot live on one particular page (spec 052 §B1). -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/share.css') }}">
+    <script src="{{ url_for('static', filename='js/share.js') }}" defer></script>
     <script src="{{ url_for('static', filename='js/hamburger_menu.js') }}"></script>
 
     <!-- Unified tune-detail modal, available app-wide (the hamburger "Find a tune" opens it
@@ -93,12 +97,18 @@
            phone tab bar hid the hamburger, that was nothing: the header collapsed to
            10px and the logo hung out of the bottom of it, with the page scrolling
            through behind. Stated here instead of emerging from the contents. */
+        /* EXACTLY --site-header-h, not "at least". Everything that sticks below the
+           header offsets by that variable, so a bar that can grow is a bar that
+           quietly stops matching the offsets — and it grows from the most trivial
+           edit, which is how adding a 34px share button turned it into 44px. Fixed
+           height, contents centred inside it. */
         .header.fixed-top {
-            min-height: var(--site-header-h, 42px);
+            height: var(--site-header-h, 42px);
         }
 
         .docs-branding {
-            min-height: var(--site-header-h, 42px) !important;
+            height: var(--site-header-h, 42px) !important;
+            min-height: 0 !important;
         }
 
         /* The bar's inner row, given the full height rather than inheriting it from
@@ -107,9 +117,12 @@
            row was what left the logo hanging below the header. Flex here keeps the
            badges vertically centred now that the hamburger is not setting the height. */
         .docs-branding > .container-fluid {
-            min-height: var(--site-header-h, 42px);
+            height: var(--site-header-h, 42px);
             display: flex;
             align-items: center;
+            /* The 3px the inline style adds would make 42 into 48. */
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
         }
 
         .docs-top-utilities {
@@ -348,6 +361,17 @@
                 </div>
                 {% endif %}
 
+                <!-- Share this page (spec 052 §B1). Sits where it is reachable from
+                     every screen, which is the whole point of it: the URL and QR it
+                     offers are for the page you are looking at now. -->
+                <button type="button" class="share-btn" id="share-btn"
+                        title="Share this page" aria-label="Share this page">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+                        <line x1="8.6" y1="10.5" x2="15.4" y2="6.5"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/>
+                    </svg>
+                </button>
+
                 <!-- Hamburger Menu -->
                 {% include 'hamburger_menu.html' %}
                 
@@ -367,6 +391,22 @@
 
 {# Bottom tab bar -- phone only, signed-in only. See templates/tab_bar.html. #}
 {% include 'tab_bar.html' %}
+
+{# Share sheet. Hidden until the header button opens it; the QR's src is set at that
+   point rather than on page load, so carrying this on every page costs nothing. #}
+<div class="share-dialog" id="share-dialog" role="dialog" aria-modal="true"
+     aria-labelledby="share-title" hidden>
+  <div class="share-panel">
+    <h2 class="share-title" id="share-title">Share this page</h2>
+    <img class="share-qr" id="share-qr" alt="">
+    <code class="share-url" id="share-url"></code>
+    <div class="share-actions">
+      <button type="button" class="share-action primary" id="share-copy">Copy link</button>
+      <button type="button" class="share-action" id="share-native" hidden>Share&hellip;</button>
+      <button type="button" class="share-action" data-share-close>Close</button>
+    </div>
+  </div>
+</div>
 
 <script>
 // Hamburger menu + dark mode + share + 'Find a tune' moved to

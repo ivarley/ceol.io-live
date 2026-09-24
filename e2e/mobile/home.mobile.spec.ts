@@ -183,14 +183,18 @@ test.describe("home (mobile)", () => {
     await page.goto("/my-tunes");
     await expect(page.locator("#add-tune-btn")).toBeVisible();
 
-    // Help, Share and Log Out: the Account section on Me. (Admin too, for a system
-    // admin — covered separately, since this spec signs in as a regular user.)
+    // Share: the header control, on every page, because it gives a link and a QR
+    // for whatever page you are on (spec 052 §B1). It briefly lived in the Account
+    // list, which made it mean "share your profile" half the time.
+    await expect(page.locator("#share-btn")).toBeVisible();
+
+    // Help and Log Out: the Account section on Me. (Admin too, for a system admin —
+    // covered separately, since this spec signs in as a regular user.)
     await page.goto("/me");
     const account = page.locator("#account-section");
     await expect(account).toBeVisible();
     await expect(page.locator("#account-help")).toHaveAttribute("href", "/help");
     await expect(page.locator("#account-logout")).toHaveAttribute("href", "/logout");
-    await expect(page.locator("#account-share")).toBeVisible();
   });
 
   test("the tab bar marks where you are", async ({ page }) => {
