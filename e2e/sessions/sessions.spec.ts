@@ -11,22 +11,52 @@ import { expectToolbarsIdentical } from "../support/toolbars";
  */
 
 test.describe("sessions directory", () => {
-  test("lists sessions and loads the table", async ({ page }) => {
+  test("lists sessions as rows, with no page heading", async ({ page }) => {
+    // Spec 052 §B1: the three-column table became one line per session, the same
+    // shape as the tune lists. The "Sessions" heading went with it — the tab bar
+    // already says where you are.
     await page.goto("/sessions");
-    await expect(page.locator("h1")).toContainText(/Sessions/i);
-    const tbody = page.locator("#sessions-tbody");
-    await expect(tbody.locator("tr").first()).toBeVisible();
+    await expect(page.locator("h1")).toHaveCount(0);
+
+    const rows = page.locator("#sessions-list .session-row");
+    await expect(rows.first()).toBeVisible();
     await expect(page.locator("body")).toContainText(SESSIONS.mueller.name);
+
+    // Name on the left, place quiet on the right.
+    const row = rows.filter({ hasText: SESSIONS.mueller.name }).first();
+    await expect(row.locator(".session-row-name")).toHaveText(SESSIONS.mueller.name);
+    await expect(row.locator(".session-row-where")).not.toBeEmpty();
+  });
+
+  test("the row leaves off your own country but keeps a foreign one", async ({ page }) => {
+    // "Austin, TX, USA" is three facts to somebody abroad and one to somebody in
+    // Austin. The country only earns its place when it differs from yours.
+    await page.goto("/sessions");
+    const res = await page.request.get("/api/sessions/with-today-status");
+    const body = await res.json();
+    const mine = (body.viewer_country || "").trim().toLowerCase();
+    test.skip(!mine, "this viewer has no country set");
+
+    for (const s of body.sessions || []) {
+      const row = page.locator(`.session-row[data-session-path="${s.path}"] .session-row-where`);
+      if (!(await row.count())) continue;
+      const shown = await row.innerText();
+      if ((s.country || "").trim().toLowerCase() === mine) {
+        expect(shown, `${s.name} should not repeat your own country`).not.toContain(s.country);
+      } else if (s.country) {
+        expect(shown, `${s.name} is abroad, so its country matters`).toContain(s.country);
+      }
+    }
   });
 
   test("search filters the directory", async ({ page }) => {
     await page.goto("/sessions");
-    await expect(page.locator("#sessions-tbody tr").first()).toBeVisible();
+    await expect(page.locator("#sessions-list .session-row").first()).toBeVisible();
 
     await page.fill("#search-bar", "Mueller");
-    await expect(page.locator("#sessions-tbody")).toContainText(/Mueller/i);
+    await expect(page.locator("#sessions-list")).toContainText(/Mueller/i);
     await expect
-      .poll(async () => page.locator("#sessions-tbody tr:visible").count())
+      .poll(async () => page.locator("#sessions-list .session-row:visible").count())
       .toBeGreaterThan(0);
 
     // A query that matches nothing surfaces the empty state.

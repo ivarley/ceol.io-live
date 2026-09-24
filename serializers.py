@@ -615,10 +615,21 @@ def build_sessions_directory_payload(conn, person_id, user_timezone="UTC"):
         for r in session_rows
     ]
 
+    # The viewer's own country, so the list can leave it off the rows. "Austin, TX,
+    # USA" carries three pieces of information for somebody abroad and one for
+    # somebody in Austin; the country only earns its place when it differs from yours.
+    viewer_country = None
+    if person_id:
+        cur.execute("SELECT country FROM person WHERE person_id = %s", (person_id,))
+        row = cur.fetchone()
+        if row:
+            viewer_country = row["country"]
+
     return {
         "success": True,
         "sessions": sessions,
         "today": get_today_in_timezone(user_timezone or "UTC").isoformat(),
+        "viewer_country": viewer_country,
     }
 
 

@@ -56,8 +56,9 @@ test("the fixed header keeps its full height with the hamburger hidden", async (
 
 test("sessions directory is usable on mobile", async ({ page }) => {
   await page.goto("/sessions");
-  await expect(page.locator("h1")).toContainText(/Sessions/i);
-  await expect(page.locator("#sessions-tbody tr").first()).toBeVisible();
+  // No heading since spec 052 §B1; the list itself is the page.
+  await expect(page.locator("h1")).toHaveCount(0);
+  await expect(page.locator("#sessions-list .session-row").first()).toBeVisible();
 });
 
 test("session detail renders on mobile", async ({ page }) => {

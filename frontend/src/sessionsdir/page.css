@@ -8,121 +8,13 @@
     margin-bottom: 1.5rem;
 }
 
-.search-and-toggle {
-    display: flex;
-    gap: 0.75rem;
-    margin-bottom: 1rem;
-    align-items: stretch;
-}
-
-/* The kit SearchField wrapper takes the input's old flex slot in the row */
-.search-and-toggle .kit-search {
-    flex: 1;
-    min-width: 0;
-}
-
-.search-bar {
-    flex: 1;
-    padding: 0.75rem;
-    font-size: 1.125rem;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    background-color: var(--input-bg);
-    color: var(--text-color);
-}
-
-/* Matches the "+" on the session page's three tabs: same 42px square, same accent,
-   so "add one of these" looks the same wherever it appears. */
-.add-session-btn {
-    flex: 0 0 auto;
-    width: 42px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 24px;
-    line-height: 1;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    background-color: var(--bg-color);
-    color: var(--primary);
-    text-decoration: none;
-}
-
-.add-session-btn:hover {
-    text-decoration: none;
-    color: var(--primary);
-    border-color: var(--primary);
-}
-
-.filter-toggle-button {
-    padding: 0.75rem 1.5rem;
-    border: 1px solid var(--border-color);
-    background-color: var(--primary);
-    color: white;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: all 0.2s;
-    white-space: nowrap;
-    font-weight: 500;
-}
-
-/* The row holds three controls on a phone: search, the Mine/All filter, and "+".
-   The filter's desktop padding left the search box 162px of a 360px row, which is
-   about twelve characters — too narrow to read back what you typed. The filter's
-   label is the widest thing in it, so the padding goes rather than the label. */
-@media (max-width: 575.98px) {
-    .filter-toggle-button {
-        padding: 0.75rem 0.6rem;
-        font-size: 0.85rem;
-    }
-}
-
-.filter-toggle-button:hover {
-    opacity: 0.9;
-}
-
+/* Matches the tune lists' count line: small and muted, a caption on the list
+   rather than a sentence above it. */
 .session-count {
-    margin-bottom: 1rem;
-    color: var(--secondary-text);
-}
-
-.sessions-grid {
-    width: 100%;
-    border-collapse: collapse;
-    margin-bottom: 1.5rem;
-}
-
-.sessions-grid thead {
-    background-color: var(--table-header-bg);
-    border-bottom: 2px solid var(--border-color);
-}
-
-.sessions-grid th {
-    padding: 0.75rem;
-    text-align: left;
-    font-weight: 600;
-}
-
-.sessions-grid tbody tr {
-    border-bottom: 1px solid var(--border-color);
-    transition: background-color 0.2s;
-}
-
-.sessions-grid tbody tr:hover {
-    background-color: var(--hover-bg);
-}
-
-.sessions-grid td {
-    padding: 0.75rem;
-}
-
-.sessions-grid a {
-    color: var(--link-color);
-    text-decoration: none;
-}
-
-.sessions-grid a:hover {
-    text-decoration: underline;
+    margin: 4px 0 8px;
+    padding: 0 8px;
+    color: var(--text-muted, #6c757d);
+    font-size: 14px;
 }
 
 .no-sessions {
@@ -131,9 +23,12 @@
     color: var(--secondary-text);
 }
 
+/* Small enough that a live session does not make its row taller than its
+   neighbours — a list where one line is bigger reads as a mistake before it reads
+   as emphasis, and the colour is doing the emphasis already. */
 .today-action-btn {
-    padding: 0.4rem 0.8rem;
-    font-size: 0.85rem;
+    padding: 3px 9px;
+    font-size: 0.72rem;
     border-radius: 4px;
     border: none;
     cursor: pointer;
@@ -142,8 +37,9 @@
     white-space: nowrap;
 }
 
+/* The accent, not a hard-coded Bootstrap green, so it follows the palette. */
 .btn-goto-today {
-    background-color: #28a745;
+    background-color: var(--primary);
     color: white;
 }
 
@@ -158,11 +54,6 @@ select.today-action-btn {
     padding-right: 24px;
     background-image: none;
     cursor: pointer;
-}
-
-.action-cell {
-    text-align: right;
-    white-space: nowrap;
 }
 
 .loading-message {
@@ -186,15 +77,62 @@ select.today-action-btn {
     }
 }
 
-/* Mobile responsive fixes */
-@media (max-width: 576px) {
-    .search-bar {
-        min-width: 0;
-        flex-shrink: 1;
-    }
+/* ---- session rows (spec 052 §B1) -----------------------------------------------
+   Same shape as the tune lists: one line, the name in full-strength text on the
+   left where the eye starts, the place quiet and right-aligned. This replaced a
+   three-column table with a header row, which was a lot of furniture for two
+   fields. */
 
-    .filter-toggle-button {
-        flex-shrink: 0;
-        padding: 0.75rem 1rem;
-    }
+.sessions-list {
+    margin-bottom: 1.5rem;
+}
+
+.session-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 15px 8px;
+    background-color: var(--bg-color);
+    border-bottom: 1px solid var(--border-color);
+    text-decoration: none;
+    transition: background-color 0.1s;
+}
+
+.session-row:first-child {
+    border-top: 1px solid var(--border-color);
+}
+
+.session-row:hover {
+    background-color: var(--hover-bg);
+    text-decoration: none;
+}
+
+/* Full-strength, not link-coloured: the whole row is the link, so colouring the
+   name too would make the place look like the only thing NOT clickable. */
+.session-row-name {
+    flex: 1;
+    min-width: 0;
+    color: var(--text-color);
+    font-size: 1rem;
+}
+
+.session-row-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
+.session-row-where {
+    font-size: 0.8rem;
+    color: var(--secondary-text);
+    text-align: right;
+    white-space: nowrap;
+}
+
+/* 8px each side, the same gutter the rows carry, so the search box's edge lines up
+   with the text below it rather than running to the screen edge. */
+.filters-container {
+    padding: 8px;
 }

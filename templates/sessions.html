@@ -3,6 +3,11 @@
 {% block extra_css %}
 {# Page styles are built with the Svelte bundle (frontend/src/sessionsdir/page.css)
    so the component is portable; same cascade position as the old <style> block. #}
+<!-- The shared toolbar skin (spec 052 §B1): .filter-top-row / .filter-search-input /
+     .filter-panel-toggle, worn by My Tunes and the session tabs. This page uses the
+     same Toolbar, so it needs the same stylesheet — loaded BEFORE the page's own,
+     which overrides it. -->
+<link rel="stylesheet" href="{{ url_for('static', filename='css/my_tunes_mobile.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='sessionsdir/page.css') }}">
 {% endblock %}
 
