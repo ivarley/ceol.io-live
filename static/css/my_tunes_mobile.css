@@ -1773,3 +1773,40 @@
     text-decoration: underline;
     opacity: 0.8;
 }
+
+/* Added-date range in the filter panel (spec 052 §B1). The profile's Tunebook
+   section filtered the same collection by the same field; it is a filter here now. */
+.filter-date-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.filter-date-label {
+    margin: 0;
+    font-size: 0.85rem;
+    opacity: 0.75;
+}
+
+.filter-date-sep {
+    font-size: 0.85rem;
+    opacity: 0.55;
+}
+
+.filter-date-input {
+    flex: 1;
+    min-width: 0;
+    padding: 6px 8px;
+    font: inherit;
+    font-size: 0.85rem;
+    color: var(--text-color);
+    background-color: var(--input-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+}
+
+.filter-date-input:focus {
+    outline: none;
+    border-color: var(--primary);
+}

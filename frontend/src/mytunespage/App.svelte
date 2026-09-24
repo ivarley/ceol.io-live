@@ -80,10 +80,21 @@
   // ---- derived ----------------------------------------------------------------
   const visible = $derived(filterAndSort(allTunes, filters, sort, instruments, abcMatch.ids))
   const tuneTypes = $derived([...new Set(allTunes.map((t) => t.tune_type).filter(Boolean))].sort())
-  const hasActiveFilters = $derived(!!(filters.type || filters.status || filters.instrument || filters.rel))
+  const hasActiveFilters = $derived(
+    !!(
+      filters.type ||
+      filters.status ||
+      filters.instrument ||
+      filters.rel ||
+      filters.addedFrom ||
+      filters.addedTo
+    )
+  )
   // What's set INSIDE the collapsed drawer. Status is excluded: it has its own always-
   // visible control, so lighting the drawer button for it would point at nothing.
-  const hasDrawerFilters = $derived(!!(filters.type || filters.instrument || filters.rel))
+  const hasDrawerFilters = $derived(
+    !!(filters.type || filters.instrument || filters.rel || filters.addedFrom || filters.addedTo)
+  )
 
   // Relationship chips (spec 033) — single-select, click the active one to clear.
   // (R2 "in my sessions' repertoire" was deliberately dropped: plays auto-enroll
@@ -222,6 +233,8 @@
     filters.status = ''
     filters.instrument = ''
     filters.rel = ''
+    filters.addedFrom = ''
+    filters.addedTo = ''
     sort.type2 = null
     sort.dir2 = null
   }
@@ -703,6 +716,25 @@
           chipClass="filter-rel-chip{filters.rel === chip.id ? ' active' : ''}"
           onclick={() => (filters.rel = filters.rel === chip.id ? '' : chip.id)} />
       {/each}
+    </div>
+    <!-- Added-date range. The profile's Tunebook section was this same collection
+         filtered by this same field, so it is a filter here rather than a page
+         there (spec 052 §B1). -->
+    <div class="filter-panel-row filter-date-row" id="added-date-row">
+      <label class="filter-date-label" for="added-from">Added</label>
+      <input
+        type="date"
+        id="added-from"
+        class="filter-date-input"
+        aria-label="Added on or after"
+        bind:value={filters.addedFrom} />
+      <span class="filter-date-sep">to</span>
+      <input
+        type="date"
+        id="added-to"
+        class="filter-date-input"
+        aria-label="Added on or before"
+        bind:value={filters.addedTo} />
     </div>
     <div class="filter-panel-row">
       <div class="inst-select" class:open={typeMenuOpen} id="type-filter">

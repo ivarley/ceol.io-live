@@ -162,10 +162,24 @@ export function instanceUrlId(instance) {
 // The Logs tab's view toggle. "logged" is the default: an instance with nothing
 // logged is a placeholder for a night, not a log, and a long-running session
 // accumulates far more of those than real logs.
+//
+// "Attended" is only offered to someone signed in, because signed out there is no
+// "you" for it to mean anything about. It is where the profile's Attended section
+// went (spec 052 §B1): which nights you turned up to is a fact about THIS session,
+// so it belongs among this session's nights rather than on a page about you.
 export const LOG_VIEW_OPTIONS = [
   { id: 'logged', label: 'Logged' },
   { id: 'all', label: 'All' },
 ]
+
+export function logViewOptions(isLoggedIn) {
+  if (!isLoggedIn) return LOG_VIEW_OPTIONS
+  return [
+    { id: 'logged', label: 'Logged' },
+    { id: 'attended', label: 'Attended' },
+    { id: 'all', label: 'All' },
+  ]
+}
 
 // One instance's fate under the two filters. A tune filter SUPERSEDES the
 // all/logged toggle rather than ANDing with it — every instance where a tune was
@@ -173,6 +187,10 @@ export const LOG_VIEW_OPTIONS = [
 export function keepInstance(instance, mode, tuneInstanceIds) {
   if (tuneInstanceIds) return tuneInstanceIds.has(instance.session_instance_id)
   if (mode === 'logged') return !isEmptyLog(instance)
+  // "Attended" is where the profile's Attended section went (spec 052 §B1). The flag
+  // is the SERVER's answer for the signed-in viewer; signed out it is absent, and the
+  // filter that would set this mode is not offered.
+  if (mode === 'attended') return !!instance.attended
   return true
 }
 

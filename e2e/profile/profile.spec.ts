@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { STORAGE } from "../support/data";
+import { SESSIONS, STORAGE } from "../support/data";
 import { expectNoServerError } from "../support/nav";
 
 /** User profile (/me) and the add-session wizard. */
@@ -7,42 +7,35 @@ import { expectNoServerError } from "../support/nav";
 test.use({ storageState: STORAGE.regular });
 
 test.describe("profile (/me)", () => {
-  test("is one vertical list: details, then sections, then account", async ({ page }) => {
-    // Spec 052 §B3. This page used to carry a six-tab strip AND a vertical account
-    // list beneath it — two kinds of menu on one screen. The tabs became rows, so
-    // everything below your details is the same shape of thing.
+  test("is your profile and the account actions, and nothing else", async ({ page }) => {
+    // Spec 052 §B1. The six tabs became five section rows and then went entirely:
+    // four of them were the same data framed differently (Sessions duplicated
+    // /sessions, Attended is now a filter on the session's Logs tab, Tunebook is
+    // My Tunes with an added-date filter) and Logged was not earning its place.
     await page.goto("/me");
     await expect(page.locator("h1")).toContainText(/Profile/i);
+    await expect(page.locator("#profile")).toBeVisible();
+
     await expect(page.locator("#profileTabs")).toHaveCount(0);
-
-    await expect(page.locator("#profile-sections")).toBeVisible();
-    await expect(page.locator("#profile-sections .section-row")).toHaveCount(5);
-    await expect(page.locator("#account-section")).toBeVisible();
-    await expectNoServerError(page);
-  });
-
-  test("opening Sessions drills in, and Back returns", async ({ page }) => {
-    // Labelled "Sessions", not "My Sessions", since spec 034.
-    await page.goto("/me");
-    await page.locator("#sessions-tab").click();
-
-    await expect(page.locator("#sessions")).toBeVisible();
-    await expect(page).toHaveURL(/\?tab=sessions/);
-    // The section has the screen to itself; the list it came from is gone.
     await expect(page.locator("#profile-sections")).toHaveCount(0);
 
-    await page.locator("#section-back").click();
-    await expect(page.locator("#profile-sections")).toBeVisible();
-    await expect(page).not.toHaveURL(/\?tab=/);
+    await expect(page.locator("#account-section")).toBeVisible();
+    await expect(page.locator("#account-help")).toHaveAttribute("href", "/help");
+    await expect(page.locator("#account-logout")).toHaveAttribute("href", "/logout");
     await expectNoServerError(page);
   });
 
-  test("a ?tab= link still lands on its section", async ({ page }) => {
-    // The URLs did not change when the tabs did, so anything already pointing at
-    // one of these keeps working.
-    await page.goto("/me?tab=tunes");
-    await expect(page.locator("#tunes")).toBeVisible();
-    await expect(page.locator("#section-back")).toBeVisible();
+  test("the things that moved are reachable where they moved to", async ({ page }) => {
+    // The whole safety argument for deleting four sections: each one's job is done
+    // somewhere else now, and that somewhere is a real place you can get to.
+    await page.goto("/my-tunes");
+    await page.locator("#filter-panel-toggle").click();
+    await expect(page.locator("#added-date-row")).toBeVisible();
+
+    await page.goto(`/sessions/${SESSIONS.mueller.path}/logs`);
+    await page.locator("#logs-tab .kit-tool-filter").click();
+    await expect(page.locator('#logs-tab [data-log-view="attended"]')).toBeVisible();
+    await expectNoServerError(page);
   });
 
   test("entering edit mode reveals the save control", async ({ page }) => {

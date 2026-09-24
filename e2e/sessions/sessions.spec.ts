@@ -92,6 +92,29 @@ test.describe("session detail (admin)", () => {
     await expectNoServerError(page);
   });
 
+  test("leaving a session is offered on the session, behind a confirm", async ({ page }) => {
+    // It used to live on /me, in a list of every session you belong to. That list
+    // duplicated the Sessions tab, so it is gone and this is where its one unique
+    // control landed (spec 052 §B1) — on the session you would be leaving, which is
+    // where you are when you decide to.
+    await page.goto(`/sessions/${SESSIONS.mueller.path}`);
+    await page.locator("#session-role-root .kit-chip").click();
+
+    const leave = page.locator("#leave-session-btn");
+    await expect(leave).toBeVisible();
+    await leave.click();
+
+    // Confirmed, and the confirm says what it costs — which is nothing you logged.
+    // .kit-dialog, not getByRole("dialog"): the role sheet this button sits in is
+    // also a dialog, and it matches first.
+    const confirm = page.locator(".kit-dialog");
+    await expect(confirm).toContainText(/stays exactly where it is/i);
+    // Backing out leaves you a member: this test must not actually leave, or it
+    // would change the seed for everything after it.
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#session-role-root .kit-chip")).toBeVisible();
+  });
+
   test("the three tabs' toolbars are identical on a wide screen too", async ({ page }) => {
     // The desktop half of the same rule. The panes disagreed here longer than
     // they did on a phone: Tunes and People were inset 20px, Logs was not, so

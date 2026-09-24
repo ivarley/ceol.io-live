@@ -244,8 +244,26 @@ describe('URL state round-trip', () => {
       { type: 'heard', dir: 'desc', type2: 'alpha', dir2: 'asc' }
     )
     const { filters, sort } = stateFromParams(params)
-    expect(filters).toEqual({ search: 'x', type: 'jig', status: 'learned', instrument: 'Fiddle', rel: '' })
+    expect(filters).toEqual({
+      search: 'x',
+      type: 'jig',
+      status: 'learned',
+      instrument: 'Fiddle',
+      rel: '',
+      addedFrom: '',
+      addedTo: '',
+    })
     expect(sort).toEqual({ type: 'heard', dir: 'desc', type2: 'alpha', dir2: 'asc' })
+    // The added-date range travels too (spec 052 §B1), so a filtered view is a
+    // link you can send somebody.
+    const dated = paramsFromState(
+      { search: '', type: '', status: '', instrument: '', addedFrom: '2026-01-01', addedTo: '2026-06-30' },
+      { type: 'alpha', dir: 'asc', type2: null, dir2: null }
+    )
+    expect(dated.get('addedFrom')).toBe('2026-01-01')
+    expect(dated.get('addedTo')).toBe('2026-06-30')
+    expect(stateFromParams(dated).filters.addedFrom).toBe('2026-01-01')
+
     // alpha-asc default writes nothing
     expect(paramsFromState({ search: '', type: '', status: '', instrument: '' }, { type: 'alpha', dir: 'asc', type2: null, dir2: null }).toString()).toBe('')
   })

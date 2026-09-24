@@ -11608,6 +11608,12 @@ def get_session_logs(session_path):
         session_id = session_result[0]
         session_type = session_result[1] or "regular"
 
+        # Signed out there is no "you", so nothing is attended and the filter that
+        # reads this flag is not offered.
+        viewer_person_id = (
+            current_user.person_id if current_user.is_authenticated else None
+        )
+
         # Fetch past session instances with instance counts per date
         cur.execute(
             """
@@ -11617,12 +11623,26 @@ def get_session_logs(session_path):
                    (SELECT COUNT(*) FROM session_instance_tune sit
                     WHERE sit.session_instance_id = si.session_instance_id
                       AND sit.record_type = 'tune'
-                      AND sit.deleted = FALSE) as tune_count
+                      AND sit.deleted = FALSE) as tune_count,
+                   -- Did the VIEWER turn up to this one? Drives the Logs tab's
+                   -- "Attended" filter (spec 052 §B1), which is where the profile's
+                   -- Attended section went: a night you were at is a fact about this
+                   -- session, so it belongs on this session's list of nights.
+                   --
+                   -- A scalar subquery, not a join. session_instance_person is
+                   -- one-to-many with the instance, and joining it here would
+                   -- multiply every row by the number of people who came.
+                   (%s IS NOT NULL AND EXISTS (
+                       SELECT 1 FROM session_instance_person sip
+                       WHERE sip.session_instance_id = si.session_instance_id
+                         AND sip.person_id = %s
+                         AND sip.attendance = 'yes'
+                   )) as attended
             FROM session_instance si
             WHERE si.session_id = %s
             ORDER BY si.date DESC, si.session_instance_id ASC
         """,
-            (session_id,),
+            (viewer_person_id, viewer_person_id, session_id),
         )
         past_instances = cur.fetchall()
         cur.close()
@@ -11646,7 +11666,8 @@ def get_session_logs(session_path):
                     'end_time': instance[3].isoformat() if instance[3] else None,
                     'session_instance_id': instance[4],
                     'multiple_on_date': instance[5] > 1,
-                    'tune_count': instance[6]
+                    'tune_count': instance[6],
+                    'attended': bool(instance[7]),
                 })
         else:
             # For regular sessions, group by year and include time info
@@ -11662,7 +11683,8 @@ def get_session_logs(session_path):
                     'end_time': instance[3].isoformat() if instance[3] else None,
                     'session_instance_id': instance[4],
                     'multiple_on_date': instance[5] > 1,
-                    'tune_count': instance[6]
+                    'tune_count': instance[6],
+                    'attended': bool(instance[7]),
                 })
 
         # Sort instances within each group by start_time

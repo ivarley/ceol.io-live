@@ -20,7 +20,7 @@
     dowOf,
     domOf,
     rowDateLabel,
-    LOG_VIEW_OPTIONS,
+    logViewOptions,
     filterInstanceGroups,
     matchLoggedTunes,
     tunePlayLinks,
@@ -282,7 +282,7 @@
       toolbarClass="filter-top-row"
       buttonClass="filter-panel-toggle"
       bind:open={filterOpen}
-      activeCount={viewMode === 'all' ? 1 : 0}
+      activeCount={viewMode === 'logged' ? 0 : 1}
       addId={isLoggedIn ? 'add-session-btn' : null}
       addTitle="Add a log"
       onAdd={isLoggedIn ? addClick : null}>
@@ -335,7 +335,7 @@
 
       {#snippet filter()}
         <Seg
-          options={LOG_VIEW_OPTIONS}
+          options={logViewOptions(isLoggedIn)}
           value={viewMode}
           onSelect={(id) => (viewMode = id)}
           idAttr="data-log-view"
@@ -343,7 +343,7 @@
           segClass="filter-button-group logs-view-toggle"
           optClass="filter-sort-btn"
           role="group"
-          aria-label="Show all logs or only logged ones" />
+          aria-label="Which nights to show" />
       {/snippet}
     </Toolbar>
   </div>

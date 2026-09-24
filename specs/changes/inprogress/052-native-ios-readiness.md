@@ -336,7 +336,30 @@ not the whole shorthand. `flex: 0 0 auto` would also cancel any grow a page had 
 `.kit-tabs .kit-tab` outranks a page's own `.tab-button` — it flattened the session page's
 three evenly-divided tabs on the first attempt.
 
-**The person page restructure is DONE too (2026-09-23)**, after the tabs-plus-account-list
+**And then most of the person page went (2026-09-24).** The sections turned out to be
+the same data wearing a different frame, so four of the five are gone and their jobs are
+done where they belong:
+
+| Was a section on /me | Is now |
+| --- | --- |
+| Sessions | `/sessions` already listed them. Its one unique control, **leaving a session**, moved to that session's own role sheet — where you are when you decide to leave |
+| Attended | the Logs tab's **"Attended"** filter, offered only when signed in, on the session it is about |
+| Tunebook | **My Tunes with an added-date range** in the filter panel, which is what it was |
+| Logged | deleted |
+
+Nothing was lost checking: granting somebody session-admin, the other control that
+section carried, already lives on `/admin/sessions/<path>/people/<id>`.
+
+**Share left too.** It gives a link and a QR for the page you are looking at, so parking
+it on `/me` made it mean "share your profile" half the time. It is a header button now,
+present on every screen, opening a sheet with the QR first (that is how you hand a link
+to somebody across a table), then Copy link, then the system share sheet where one
+exists. Its QR is fetched on open, not on page load, because the button is on every page.
+
+What is left of /me is your profile and Admin / Help / Log Out — which is what a Me
+screen is for.
+
+**The earlier restructure (2026-09-23)**, after the tabs-plus-account-list
 combination was called out as two menus on one screen. The tab strip is gone: `/me` is
 your details, then a list of sections to open, then the account actions — every row the
 same shape. Opening one is a drill-down with a back link, on the existing `?tab=` URLs,
