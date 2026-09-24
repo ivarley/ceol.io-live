@@ -20,7 +20,6 @@
 </script>
 
 <section class="account-section" id="account-section">
-  <h2 class="account-heading">Account</h2>
   <div class="account-list">
     {#if isSystemAdmin}
       <Row styled={false} rowClass="account-row" href="/admin" title="Admin" id="account-admin">
@@ -49,14 +48,12 @@
     margin: 2rem 0 1rem;
   }
 
-  .account-heading {
-    font-family: 'Poppins', sans-serif;
-    font-weight: 600;
-    font-size: 1.05rem;
-    margin: 0 0 0.5rem;
-    padding-bottom: 0.4rem;
-    border-bottom: 1px solid var(--border-color);
-    color: var(--text-color);
+  /* The "Account" heading is gone: the cards above are already labelled Personal
+     Information and Account Information, so it named a section nobody could mistake.
+     It was also drawing the rule that separated these rows from those cards, which
+     the list still wants whether or not a word sits above it. */
+  .account-list {
+    border-top: 1px solid var(--border-color);
   }
 
   .account-list :global(.account-row) {
