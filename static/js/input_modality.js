@@ -30,6 +30,12 @@
   window.addEventListener(
     'keydown',
     function (e) {
+      // A real KeyboardEvent always carries a string `key`. This one may not: form
+      // autofill and password managers announce themselves with a bare
+      // `new Event('keydown')`, which has no `key` property at all, and reading
+      // .indexOf off undefined threw on every filled-in login field. Nothing was
+      // typed, so there is nothing to classify either way.
+      if (typeof e.key !== 'string') return
       // Only keys that MOVE focus or act on it count. Typing into a field you
       // clicked should not turn the ring on underneath your cursor.
       if (e.metaKey || e.altKey || e.ctrlKey) return
