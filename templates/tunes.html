@@ -177,10 +177,19 @@
 
   // The tune drawer is app-wide (base.html loads the tunesheet bundle) and its feed
   // is public, so a signed-out visitor gets the full tune detail on a tap.
+  // Bound once, to both lists. Not inside showDeep: re-binding on every search
+  // stacked a fresh handler each time.
   list.addEventListener('click', openFromEvent)
+  deepOut.addEventListener('click', openFromEvent)
+
   function openFromEvent(e) {
     var card = e.target.closest ? e.target.closest('.pt-row') : null
     if (!card) return
+    // An external row is an <a> to thesession.org and carries no tune id — there is
+    // no local tune for the drawer to show. Without this guard the click did BOTH:
+    // followed the link AND opened the drawer on Number(undefined), so coming back
+    // to the app you were met with "Failed to load the tune details".
+    if (!card.dataset.tuneId) return
     // .show({...}), not .open(id) — the drawer takes a descriptor so it can paint the
     // name and type immediately and fill the rest in behind. scope:null means the
     // global view of the tune, which is the only one a visitor has.
@@ -265,9 +274,9 @@
     note.className = 'pt-note'
     note.textContent = 'Not in Ceol yet — these open on thesession.org.'
     deepOut.appendChild(note)
+    // A hit we DO hold gets a tune id and opens here, like any other local row; the
+    // rest are links out. The click handler is bound once, above.
     fresh.forEach(function (t) { deepOut.appendChild(row(t, !t.is_local)) })
-    // A hit we DO hold opens here, like any other local row.
-    deepOut.addEventListener('click', openFromEvent)
   }
 
   render(TOP, false)

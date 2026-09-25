@@ -224,6 +224,48 @@ test.describe("reaching past Ceol's catalogue", () => {
     await expect(page.locator("#pt-deeper-btn")).toBeEnabled();
   });
 
+  test("following a thesession link does not also open an empty drawer", async ({ page }) => {
+    // The bug: the click handler matched any .pt-row, which includes the external
+    // <a>. Those carry no tune id, so the tap BOTH followed the link and opened the
+    // drawer on Number(undefined) — and coming back to the app you were met with
+    // "Failed to load the tune details".
+    await stub(page);
+    await page.goto("/tunes");
+    await searchFor(page, "banish");
+    await page.locator("#pt-deeper-btn").click();
+
+    const external = page.locator("#pt-deep-results a.pt-row");
+    await expect(external).toHaveCount(1);
+    // Stop the navigation so we are left looking at the page the tap came from,
+    // which is exactly where the stray drawer appeared.
+    await page.route("https://thesession.org/**", (r) => r.abort());
+    await external.click();
+    await page.waitForTimeout(800);
+
+    await expect(page.locator("body")).not.toContainText(/failed to load/i);
+    await expect(page.locator('[role="dialog"]:not(#share-dialog)')).toHaveCount(0);
+  });
+
+  test("a thesession hit Ceol DOES have still opens the drawer", async ({ page }) => {
+    // The other side of that guard: a deep hit with is_local gets a tune id and
+    // behaves like any local row. Nothing local here, so it survives the dedup.
+    await page.route("**/api/tunes/search**", (r) =>
+      r.fulfill({ json: { success: true, tunes: [] } })
+    );
+    await page.route("**/api/tunes/thesession-search**", (r) => r.fulfill({ json: REMOTE }));
+    await page.goto("/tunes");
+    await searchFor(page, "banish");
+    await page.locator("#pt-deeper-btn").click();
+
+    const localHit = page.locator("#pt-deep-results button.pt-row");
+    await expect(localHit).toHaveCount(1);
+    await localHit.click();
+    await expect
+      .poll(() => page.evaluate(() => /Banish Misfortune/.test(document.body.innerText)))
+      .toBe(true);
+    await expect(page.locator("body")).not.toContainText(/failed to load/i);
+  });
+
   test("an unreachable thesession.org says so rather than looking empty", async ({ page }) => {
     await stub(page, { success: false, error: "Could not reach thesession.org" });
     await page.goto("/tunes");
