@@ -13,7 +13,10 @@ test.describe("profile (/me)", () => {
     // /sessions, Attended is now a filter on the session's Logs tab, Tunebook is
     // My Tunes with an added-date filter) and Logged was not earning its place.
     await page.goto("/me");
-    await expect(page.locator("h1")).toContainText(/Profile/i);
+    // No page heading (spec 052 §B12) — the identity header carries the name, and
+    // the tab bar underneath already says Me.
+    await expect(page.locator("h1")).toHaveCount(0);
+    await expect(page.locator("#identity-name")).toContainText(/\S/);
     await expect(page.locator("#profile")).toBeVisible();
 
     await expect(page.locator("#profileTabs")).toHaveCount(0);
@@ -39,10 +42,31 @@ test.describe("profile (/me)", () => {
     await expectNoServerError(page);
   });
 
-  test("entering edit mode reveals the save control", async ({ page }) => {
+  test("editing happens in the rows you were just reading", async ({ page }) => {
     await page.goto("/me");
-    await page.getByRole("button", { name: /^Edit$/ }).first().click();
-    await expect(page.getByRole("button", { name: /^Save$/ }).first()).toBeVisible();
+    // Display and edit are the same grouped rows, so entering edit mode does not
+    // rearrange the screen — the values become inputs in place.
+    await expect(page.locator("#person-display .kit-field").first()).toBeVisible();
+
+    await page.locator("#edit-btn").click();
+    // Save and Cancel are in the identity header, where Edit was.
+    await expect(page.locator("#identity-header #save-btn")).toBeVisible();
+    await expect(page.locator("#identity-header #cancel-btn")).toBeVisible();
+    await expect(page.locator("#edit-btn")).toHaveCount(0);
+    await expect(page.locator("#person-edit input#city")).toBeVisible();
+
+    await page.locator("#cancel-btn").click();
+    await expect(page.locator("#edit-btn")).toBeVisible();
+  });
+
+  test("what you signed up on is behind a row, not on the screen", async ({ page }) => {
+    // Created / last login are evidence on somebody else's profile and noise on
+    // your own, so /me folds them away. An admin gets them outright.
+    await page.goto("/me");
+    await expect(page.locator("#account-details")).toHaveCount(0);
+    await page.locator("#account-details-toggle").click();
+    await expect(page.locator("#account-details")).toBeVisible();
+    await expect(page.locator("#account-details")).toContainText(/Created/);
   });
 });
 

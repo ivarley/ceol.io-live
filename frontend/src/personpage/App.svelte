@@ -41,11 +41,13 @@
   })
 </script>
 
-{#if isUserProfile}
-  <header class="docs-header">
-    <h1 class="docs-heading">Profile: {person.name}</h1>
-  </header>
-{:else}
+<!-- No "Profile: Ian Varley" heading (spec 052 §B12). It spent 36px of a 664px
+     screen telling you your own name, on the one page where you already know it,
+     and the tab bar underneath already says Me. The identity header inside
+     ProfileTab carries the name, and does it in the shape iOS uses at the top of
+     Settings. The admin flavour keeps its breadcrumb, which is navigation rather
+     than decoration. -->
+{#if !isUserProfile}
   <!-- Admin Breadcrumb Navigation -->
   <nav class="admin-breadcrumb" aria-label="breadcrumb">
     <a href="/admin" class="breadcrumb-item">Admin</a>

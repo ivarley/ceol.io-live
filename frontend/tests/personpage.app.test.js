@@ -129,7 +129,10 @@ const renderApp = (pageData = payload(), c = ctx()) => render(App, { pageData, c
 describe('person details page view (user profile flavor)', () => {
   it('first paint renders the embedded payload with the legacy DOM contract (no fetch needed)', () => {
     const { container } = renderApp()
-    expect(container.querySelector('h1.docs-heading').textContent).toBe('Profile: Ian Varley')
+    // No "Profile: Ian Varley" heading (spec 052 §B12): the identity header says
+    // the name, in the shape iOS puts at the top of a settings screen.
+    expect(container.querySelector('h1')).toBeNull()
+    expect(container.querySelector('#identity-name').textContent).toContain('Ian Varley')
     // Your profile and the account actions, and nothing else (spec 052 §B1). The
     // tab strip went first, then the section rows that replaced it: four of the five
     // were the same data framed differently and the fifth was not earning its place.
@@ -141,22 +144,30 @@ describe('person details page view (user profile flavor)', () => {
     expect(container.querySelector('#profile').classList.contains('active')).toBe(true)
     // Connected person: the email lives on the account (User Email), not on the
     // person record — the person-level Email row is hidden.
-    expect(container.querySelector('#person-display').textContent).toContain('Ian Varley')
+    // The name is the identity header's job now, so this group carries what a
+    // profile is actually about: instruments, where you play, how to reach you.
+    expect(container.querySelector('#person-display').textContent).toContain('Fiddle, Whistle')
     expect(container.querySelector('#person-display').textContent).not.toContain('ian@example.com')
     expect(container.querySelector('#user-display').textContent).toContain('ian@example.com')
     expect(container.querySelector('#instruments-display').textContent).toBe('Fiddle, Whistle')
     expect(container.querySelector('#user-display').textContent).toContain('Central Time')
-    expect(container.querySelector('#user-display').textContent).toContain('2026-07-01 20:15')
+    // When you signed up is evidence on somebody else's profile and noise on your
+    // own, so on /me it starts folded away behind the Details row.
+    expect(container.querySelector('#account-details')).toBeNull()
+    expect(container.querySelector('#user-display').textContent).not.toContain('2026-07-01 20:15')
     expect(fetch).not.toHaveBeenCalled()
   })
 
   it('Edit reveals Save/Cancel + the edit forms, loads the live instrument editor', async () => {
     const { container } = renderApp()
-    expect(container.querySelector('#edit-buttons').style.display).toBe('none')
+    // Save/Cancel live in the identity header now, where Edit is. The duplicate
+    // pair at the bottom of the page went with the cards they were anchoring.
+    expect(container.querySelector('#save-btn')).toBeNull()
+    expect(container.querySelector('#bottom-edit-buttons')).toBeNull()
     await fireEvent.click(container.querySelector('#edit-btn'))
-    expect(container.querySelector('#edit-buttons').style.display).toBe('block')
+    expect(container.querySelector('#edit-btn')).toBeNull()
     expect(container.querySelector('#save-btn')).toBeVisible()
-    expect(container.querySelector('#bottom-edit-buttons').style.display).toBe('block')
+    expect(container.querySelector('#cancel-btn')).toBeVisible()
     expect(container.querySelector('#person-edit').style.display).toBe('block')
     expect(container.querySelector('#person-display').style.display).toBe('none')
     // Live instrument editor loads immediately (decoupled from Save).
@@ -228,7 +239,7 @@ describe('person details page view (user profile flavor)', () => {
 
   it('no user account: the "not connected" alert shows and the Logins tab is absent', () => {
     const { container } = renderApp(payload({ user: null }))
-    expect(container.textContent).toContain('This person is not connected with a user account.')
+    expect(container.textContent).toContain('Not connected to a user account.')
     expect(container.querySelector('#logins-tab')).toBeNull()
     expect(container.querySelector('#user-edit')).toBeNull()
   })
@@ -239,7 +250,7 @@ describe('person details page view (user profile flavor)', () => {
     fetchRoutes['/beta-logging'] = { success: true, user_id: 9, beta_live_logging: true }
     const { container } = renderApp()
     const btn = container.querySelector('#beta-logging-btn')
-    expect(btn.textContent.trim()).toBe('Use live logger')
+    expect(btn.textContent.trim()).toBe('Switch to the live logger')
     await fireEvent.click(btn)
     await waitFor(() => {
       const call = fetch.mock.calls.find(([u]) => String(u).includes('/beta-logging'))
@@ -283,7 +294,7 @@ describe('person details page view (admin flavor)', () => {
     // with the person), not an edit-form checkbox; opt-in is self-serve only.
     expect(container.querySelector('#is_active')).toBeNull()
     expect(container.querySelector('#receive_update_emails')).toBeNull()
-    await fireEvent.click(container.querySelector('#bottom-save-btn'))
+    await fireEvent.click(container.querySelector('#save-btn'))
     await waitFor(() => {
       const call = fetch.mock.calls.find(([u]) => String(u).includes('/api/person/5/update'))
       expect(call).toBeTruthy()

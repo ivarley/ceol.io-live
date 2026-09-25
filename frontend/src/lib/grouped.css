@@ -1,0 +1,217 @@
+/* Grouped tables (spec 052 §B12).
+ *
+ * The shape iOS uses for settings, contacts and "review this before you commit":
+ * a quiet section title, then an inset rounded card whose rows are label-left /
+ * value-right. A row reads as a sentence at a glance — "City  Austin" — where a
+ * label stacked above an empty box reads as a form to fill in.
+ *
+ * Plain CSS rather than a component, because the rows carry anything: text, an
+ * input bound to page state, a select, a checkbox, a chevron. A component over
+ * that would be snippets all the way down and harder to read than the markup.
+ *
+ * Imported by the bundles that use it, so it lands in each one. Every colour is
+ * a token with a fallback, so it also renders in the theme-less live shell.
+ */
+
+.kit-group {
+  background: var(--input-bg, #2d2d2d);
+  border-radius: var(--r-lg, 12px);
+  overflow: hidden;
+  margin-bottom: var(--sp-5, 20px);
+}
+
+/* `:root` prefix, per the pattern in specs/current/ui/theming.md: the legacy
+   `.docs-article h3` rule is (0,1,1) and a bare class is (0,1,0), so without this
+   a section title renders at 1.5rem in the old docs grey. */
+:root .kit-group-head {
+  margin: 0 0 var(--sp-2, 8px) var(--sp-3, 12px);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--secondary-text, #888);
+}
+
+.kit-field {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3, 12px);
+  width: 100%;
+  /* 44px is the tap target the rest of the app is built to. */
+  min-height: 44px;
+  padding: var(--sp-2, 8px) var(--sp-3, 12px);
+  /* The page colour, so the divider reads as a gap in the card rather than a line
+     drawn on it — which is what separates these from a bordered table. */
+  border-bottom: 1px solid var(--bg-color, #1a1a1a);
+  background: none;
+  color: var(--text-color, #e0e0e0);
+  font: inherit;
+  text-align: left;
+}
+
+.kit-group > .kit-field:last-child,
+.kit-group > *:last-child > .kit-field:last-child {
+  border-bottom: none;
+}
+
+/* The label column is fixed so values line up down the card, and never grows, so
+   a long value ellipsizes instead of shoving the label around. */
+.kit-field-label {
+  flex: 0 0 auto;
+  width: 38%;
+  max-width: 150px;
+  margin: 0;
+  font-weight: 400;
+  color: var(--text-color, #e0e0e0);
+}
+
+/* The value is the thing you came to read, so it gets the right-hand side and
+   full-strength text. The label is the caption. */
+.kit-field-value {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-color, #e0e0e0);
+}
+
+/* Absent is not the same as unset: "Not provided" is a statement about the field,
+   not a value in it, so it recedes. */
+.kit-field-value.is-empty {
+  color: var(--secondary-text, #888);
+}
+
+/* A value too long for one line (an instrument list, a sentence) wraps instead. */
+.kit-field-wrap .kit-field-value {
+  white-space: normal;
+  overflow: visible;
+}
+
+.kit-field input[type='text'],
+.kit-field input[type='email'],
+.kit-field input[type='tel'],
+.kit-field input[type='url'],
+.kit-field input[type='date'],
+.kit-field input[type='number'],
+.kit-field select {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 4px 0;
+  font: inherit;
+  color: var(--text-color, #e0e0e0);
+  background: none;
+  border: none;
+  text-align: right;
+  /* Selects ignore text-align in most engines; this is the one that lands. */
+  text-align-last: right;
+}
+
+/* The browser draws its own arrow inside the select's padding box, so a
+   right-aligned value runs straight into it without this. */
+.kit-field select {
+  padding-right: 1.15em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kit-field input::placeholder {
+  color: var(--disabled-text, #888);
+  opacity: 1;
+}
+
+/* There is no border to tint, so an invalid value says so in the text and a ring. */
+.kit-field input.is-invalid,
+.kit-field select.is-invalid {
+  color: var(--danger, #dc3545);
+  outline: 1px solid var(--danger, #dc3545);
+  outline-offset: 3px;
+  border-radius: var(--r-sm, 4px);
+}
+
+.kit-field select:disabled,
+.kit-field input:disabled {
+  opacity: 0.5;
+}
+
+/* ---- rows that go somewhere ------------------------------------------------ */
+
+a.kit-field,
+button.kit-field {
+  cursor: pointer;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  text-decoration: none;
+}
+
+a.kit-field:hover,
+button.kit-field:hover {
+  background: var(--hover-bg, #3d3d3d);
+  text-decoration: none;
+}
+
+.kit-chev {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: var(--secondary-text, #888);
+  font-size: 1.25rem;
+  line-height: 1;
+  transition: transform 0.15s ease;
+}
+
+.kit-chev.open {
+  transform: rotate(90deg);
+}
+
+/* A disclosure row: label left, current value quiet on the right, chevron. */
+.kit-disclosure .kit-field-value {
+  color: var(--secondary-text, #888);
+}
+
+/* ---- help text and checkbox rows ------------------------------------------- */
+
+.kit-field-help {
+  margin: 0;
+  padding: 0 var(--sp-3, 12px) var(--sp-2, 8px);
+  font-size: 0.78rem;
+  color: var(--secondary-text, #888);
+}
+
+.kit-check-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--sp-2, 8px) var(--sp-3, 12px);
+  border-bottom: 1px solid var(--bg-color, #1a1a1a);
+}
+
+.kit-check-field:last-child {
+  border-bottom: none;
+}
+
+.kit-check-label {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2, 8px);
+  margin: 0;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.kit-check-label input[type='checkbox'] {
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  flex: 0 0 auto;
+  accent-color: var(--primary-fill, #4a8049);
+  cursor: pointer;
+}
+
+/* A row whose action is destructive is the last one and says so in its colour. */
+.kit-field-danger,
+.kit-field-danger .kit-field-label {
+  color: var(--danger, #dc3545);
+}

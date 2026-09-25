@@ -20,20 +20,20 @@
 </script>
 
 <section class="account-section" id="account-section">
-  <div class="account-list">
+  <div class="account-list kit-group">
     {#if isSystemAdmin}
-      <Row styled={false} rowClass="account-row" href="/admin" title="Admin" id="account-admin">
-        {#snippet trailing()}<span class="account-chev" aria-hidden="true">›</span>{/snippet}
+      <Row styled={false} rowClass="kit-field account-row" href="/admin" title="Admin" id="account-admin">
+        {#snippet trailing()}<span class="kit-chev" aria-hidden="true">›</span>{/snippet}
       </Row>
     {/if}
 
-    <Row styled={false} rowClass="account-row" href="/help" title="Help" id="account-help">
-      {#snippet trailing()}<span class="account-chev" aria-hidden="true">›</span>{/snippet}
+    <Row styled={false} rowClass="kit-field account-row" href="/help" title="Help" id="account-help">
+      {#snippet trailing()}<span class="kit-chev" aria-hidden="true">›</span>{/snippet}
     </Row>
 
     <Row
       styled={false}
-      rowClass="account-row account-row-out"
+      rowClass="kit-field account-row account-row-out"
       href="/logout"
       title="Log Out"
       id="account-logout" />
@@ -45,55 +45,46 @@
 
 <style>
   .account-section {
-    margin: 2rem 0 1rem;
+    /* A little more than the 20px between groups: these are somewhere to go, not
+       more of your details. */
+    margin: var(--sp-3, 12px) 0 var(--sp-4, 16px);
+    padding: 0 var(--sp-3, 12px);
   }
 
-  /* The "Account" heading is gone: the cards above are already labelled Personal
-     Information and Account Information, so it named a section nobody could mistake.
-     It was also drawing the rule that separated these rows from those cards, which
-     the list still wants whether or not a word sits above it. */
-  .account-list {
-    border-top: 1px solid var(--border-color);
-  }
-
+  /* These are grouped-table rows like everything else on the page now. They used
+     to be bare rows under a hairline, which made the one list on the screen that
+     was not in a card. */
   .account-list :global(.account-row) {
-    width: 100%;
-    padding: 0.85rem 0.25rem;
     color: var(--text-color);
     text-decoration: none;
-    text-align: left;
-    background: none;
-    border: none;
-  }
-
-  .account-list :global(.account-row + .account-row) {
-    border-top: 1px solid var(--border-color);
   }
 
   .account-list :global(.account-row:hover) {
-    color: var(--primary);
+    color: var(--text-color);
     text-decoration: none;
   }
 
+  /* Row renders the title into .kit-row-title, so that is what has to pick up the
+     label column's weight rather than shrinking to a caption. */
+  .account-list :global(.kit-row-body) {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
   /* Log Out is the one destructive-ish action in the list, and the last one. */
-  .account-list :global(.account-row-out) {
+  .account-list :global(.account-row-out),
+  .account-list :global(.account-row-out:hover) {
     color: var(--danger, #dc3545);
   }
 
   .account-list :global(.account-row-out:hover) {
-    color: var(--danger, #dc3545);
     opacity: 0.85;
   }
 
-  .account-chev {
-    opacity: 0.4;
-    font-size: 1.2rem;
-    line-height: 1;
-  }
-
   .account-who {
-    margin: 0.75rem 0 0;
-    font-size: 0.85rem;
-    opacity: 0.55;
+    margin: var(--sp-3, 12px) 0 0;
+    padding-left: var(--sp-3, 12px);
+    font-size: 0.8rem;
+    color: var(--secondary-text, #888);
   }
 </style>

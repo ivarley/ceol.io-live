@@ -586,6 +586,53 @@ first Tab — that last one guards the real hazard, a latch that leaves a keyboa
 user with no visible focus at all. Verified by reverting the reboot rule and
 watching the first test fail.
 
+### B12. The profile screen — **DONE 2026-09-24**
+
+`/me` opened with `<h1>Profile: Ian Varley</h1>` — 36px of a 664px screen spent
+telling you your own name, on the one page where you already know it, under a tab
+bar that already says Me. Below it sat two Bootstrap cards with grey header bars,
+and inside those, twenty facts as bold grey `Label:` stacked over a dimmer value.
+The hierarchy was upside down: the word "Name" was brighter than your name. 1,619px
+of scroll.
+
+It is grouped tables now — label left, value right, so each row reads as a sentence
+("Location  Austin, TX") — and **1,081px**, a third shorter with nothing removed
+that anyone needed.
+
+**What changed, and why each one:**
+
+- **The heading became an identity header**: initials, name, and one quiet line of
+  context (`@ian · Austin, TX, USA`), with Edit at the trailing edge. That is where
+  iOS puts you at the top of Settings, and it puts Edit next to the thing it edits
+  — the old button floated above the first card, anchored to nothing.
+- **City / State / Country became one Location row.** Three rows were saying one
+  thing.
+- **Created, last login and active status moved behind a Details row** on `/me`.
+  Nobody checks when they signed up. An admin looking at somebody else gets them
+  outright: the same facts are evidence there and noise here.
+- **Email verified only appears when it is a problem.** "✓ Verified" on every visit
+  says nothing; "Not verified" is worth a row.
+- **The duplicate Save/Cancel pair at the bottom of the page went.** They existed
+  because the page was long; it is short now, and the header carries them.
+- **Display and edit are the same rows.** Entering edit mode turns values into
+  inputs in place rather than swapping in a differently-shaped form, so the screen
+  you were reading is the screen you are editing.
+
+**Two bugs found by measuring rather than looking:**
+
+1. `.kit-group-head` rendered at 24px in the old docs grey — `.docs-article h3` is
+   (0,1,1) and a bare class is (0,1,0). Fixed with the `:root` prefix that
+   `specs/current/ui/theming.md` documents for exactly this.
+2. `.tab-content` still drew a three-sided rounded box around the whole page: the
+   panel that used to hang off the tab strip, which went in §B1. It had been
+   framing nothing for a while, plus adding a second 16px gutter.
+
+The row styles live in `frontend/src/lib/grouped.css`, shared rather than copied,
+because this is the second screen to want them after the add-a-session sheet
+(§B9). **Follow-up:** `DetailsSheet.svelte` still carries its own scoped copy of
+the same rules. It should adopt the shared sheet, but it ships scoped styles that
+would need re-verifying, and it is not what this change was for.
+
 ### B8. The staged conversion plan
 
 Ordered by **blast radius, not by visibility**. Three things make a stage risky here:
