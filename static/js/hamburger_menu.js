@@ -28,6 +28,18 @@ function shareCurrentPage() {
 }
 
 // --- 'Find a tune' (context-aware) ---------------------------------------
+// NO UI REACHES THIS ANY MORE. Its only caller was the menu item, dropped when the
+// menu was re-cut to mirror the tab bar (spec 052 §B8): the live logger inserts tunes
+// from the composer's own Search button, and everywhere else the Tunes tab's add pane
+// runs the same deep search over the catalogue. The capability moved; only the
+// shortcut went.
+//
+// Still called directly by two offline tests (e2e/app/offline.spec.ts), which use it
+// to drive the overlay — so this is unreachable, not untested. Left in place rather
+// than deleted because removing it also means FindTune.svelte, window.FindTuneOverlay
+// and App.svelte's window.__liveFindTune, and that is a removal to make on purpose
+// rather than in passing.
+//
 // In the live editor, App.svelte sets window.__liveFindTune to insert into the current
 // set. Everywhere else, open a small search overlay that opens the shared tune-detail
 // modal on a result.

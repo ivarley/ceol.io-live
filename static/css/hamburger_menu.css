@@ -71,6 +71,36 @@
     background-color: transparent;
 }
 
+/* Where you are now, the same thing the tab bar says with a filled glyph. */
+.hamburger-item.active,
+.hamburger-item.active:hover {
+    color: var(--primary, #65b464);
+}
+
+/* The menu is two groups: where you can go, then what you can do from here. The
+   break is a gap, not a second line — every item already draws a hairline under
+   itself, so a heavier rule on top of one just reads as a smudge. */
+.hamburger-group-break {
+    margin-top: 5px;
+}
+
+/* Log Out is the one item that undoes something, and the last one you can act on.
+   Same treatment as the Account row it mirrors on /me. The fallback matters: the
+   live-logging shell scopes its own vars onto .live-menu and does not define this
+   one. */
+.hamburger-item-out,
+.hamburger-item-out:hover {
+    color: var(--danger, #e85a5a);
+}
+
+/* Not an item — it is the line /me ends on, and nothing happens if you click it. */
+.hamburger-who {
+    margin: 0;
+    padding: 10px 16px;
+    font-size: 0.8rem;
+    color: var(--secondary-text, #9a9aa3);
+}
+
 /* 'Find a tune' sheet BODY (app-wide; opens the tune-detail modal on a result).
    The overlay chrome (#find-tune-overlay/.ft-scrim/.ft-panel/.ft-head/.ft-close)
    is the kit Sheet's now — only the body content classes remain.

@@ -1,8 +1,22 @@
-{# Shared app hamburger menu (spec 024). Included by base.html and the live-logging
-   shell so both render the SAME menu (not a reimplementation). Needs hamburger_menu.css
-   + hamburger_menu.js. 'Find a tune' is context-aware via findTune(): in the live editor
-   it inserts into the current set (window.__liveFindTune); elsewhere it opens a search
-   overlay -> tune-detail modal. #}
+{# Shared app menu (spec 024, re-cut for spec 052 §B8). Included by base.html and the
+   live-logging shell so both render the SAME menu, not a reimplementation. Needs
+   hamburger_menu.css + hamburger_menu.js.
+
+   Phones never see this: tab_bar.css hides .hamburger-menu under 768px, where the tab
+   bar is the navigation. So this is the DESKTOP form of that same bar, and it mirrors
+   it — same destinations, same order — followed by what the phone puts in the Account
+   section of /me. Two places, one IA; a destination that appears in only one of them is
+   how the two drift apart.
+
+   Home is the exception, deliberately: the logo beside this button is the home link, on
+   both shells. A menu row for it would be the second one on the same bar.
+
+   Gone from the old menu:
+     Add A Session -> the "+" on /sessions, where the phone already sends you
+     Find a tune   -> the composer's own "Search" in the live logger (the only screen
+                      that could insert the result), and the Tunes tab elsewhere
+#}
+{% set p = request.path %}
 <div class="hamburger-menu">
     <button class="hamburger-btn" onclick="toggleHamburgerMenu()" aria-label="Toggle menu">
         <span class="hamburger-line"></span>
@@ -11,23 +25,43 @@
     </button>
     <div class="hamburger-dropdown" id="hamburgerDropdown">
         {% if current_user.is_authenticated %}
-            <a href="/me" class="hamburger-item">{{ current_user.first_name }} {{ current_user.last_name[0] }}.</a>
+            {# --- the tab bar's destinations, in the tab bar's order ------------- #}
+            <a href="/sessions" class="hamburger-item{% if p.startswith('/sessions') %} active{% endif %}"
+               {% if p.startswith('/sessions') %}aria-current="page"{% endif %}>Sessions</a>
+            <a href="/my-tunes" class="hamburger-item{% if p.startswith('/my-tunes') %} active{% endif %}"
+               {% if p.startswith('/my-tunes') %}aria-current="page"{% endif %}>Tunes</a>
+            <a href="/me" class="hamburger-item{% if p == '/me' or p.startswith('/me/') %} active{% endif %}"
+               {% if p == '/me' or p.startswith('/me/') %}aria-current="page"{% endif %}>Me</a>
             {% if current_user.is_system_admin %}
-            <a href="/admin" class="hamburger-item">Admin</a>
+            <a href="/admin" class="hamburger-item{% if p.startswith('/admin') %} active{% endif %}"
+               {% if p.startswith('/admin') %}aria-current="page"{% endif %}>Admin</a>
             {% endif %}
-            <a href="#" class="hamburger-item" id="menu-find-tune" onclick="findTune(); return false;">🔍 Find a tune</a>
-            <a href="/my-tunes" class="hamburger-item">My Tunes</a>
-            <a href="/sessions" class="hamburger-item">My Sessions</a>
-            <a href="/add-session" class="hamburger-item">Add A Session</a>
-            <a href="/logout" class="hamburger-item">Log Out</a>
-            <a href="#" class="hamburger-item share-link" onclick="shareCurrentPage(); return false;">Share</a>
-            <a href="/help" class="hamburger-item">Help</a>
+
+            {# --- and what /me's Account section holds --------------------------- #}
+            <a href="#" class="hamburger-item share-link hamburger-group-break"
+               onclick="shareCurrentPage(); return false;">Share</a>
+            <a href="/help" class="hamburger-item{% if p.startswith('/help') %} active{% endif %}"
+               {% if p.startswith('/help') %}aria-current="page"{% endif %}>Help</a>
+            <a href="/logout" class="hamburger-item hamburger-item-out">Log Out</a>
+
+            {# The same line /me ends on. Without it the menu is the one place in the app
+               that never says whose account you are in. #}
+            <p class="hamburger-who">Signed in as {{ current_user.first_name }} {{ current_user.last_name[0] }}.</p>
         {% else %}
+            {# The signed-out tab bar is Home / Sessions / Tunes / About, and /tunes is
+               the tradition's tunes rather than yours — the one that needs no account. #}
+            <a href="/sessions" class="hamburger-item{% if p.startswith('/sessions') %} active{% endif %}"
+               {% if p.startswith('/sessions') %}aria-current="page"{% endif %}>Sessions</a>
+            <a href="/tunes" class="hamburger-item{% if p.startswith('/tunes') %} active{% endif %}"
+               {% if p.startswith('/tunes') %}aria-current="page"{% endif %}>Tunes</a>
+            <a href="/about" class="hamburger-item{% if p.startswith('/about') %} active{% endif %}"
+               {% if p.startswith('/about') %}aria-current="page"{% endif %}>About</a>
+
+            <a href="#" class="hamburger-item share-link hamburger-group-break"
+               onclick="shareCurrentPage(); return false;">Share</a>
+            <a href="/help" class="hamburger-item{% if p.startswith('/help') %} active{% endif %}"
+               {% if p.startswith('/help') %}aria-current="page"{% endif %}>Help</a>
             <a href="/login" class="hamburger-item">Log In or Register</a>
-            <a href="#" class="hamburger-item" id="menu-find-tune" onclick="findTune(); return false;">🔍 Find a tune</a>
-            <a href="/sessions" class="hamburger-item">Session Logs</a>
-            <a href="#" class="hamburger-item share-link" onclick="shareCurrentPage(); return false;">Share</a>
-            <a href="/help" class="hamburger-item">Help</a>
         {% endif %}
     </div>
 </div>
