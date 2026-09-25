@@ -125,3 +125,76 @@ class TestPublicIsReadOnly:
     def test_people_and_vocabulary_stay_gated(self, client, public_instance, path):
         resp = client.get(f"/api/live/instances/{public_instance['instance_id']}/{path}")
         assert resp.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# searching thesession.org while signed out (spec 052 §B20)
+# ---------------------------------------------------------------------------
+
+
+class TestThesessionSearchIsPublic:
+    """The tune catalogue is thesession.org's and is public there; this endpoint only
+    proxies a search of it. It is offered signed-out so the public /tunes tab can
+    reach past Ceol's own catalogue.
+
+    The network is mocked: a test that really calls thesession.org fails when their
+    site is slow, which says nothing about this code.
+    """
+
+    _PAYLOAD = {
+        "tunes": [
+            {"id": 9, "name": "Banish Misfortune", "type": "jig",
+             "url": "https://thesession.org/tunes/9"},
+            {"id": 999999, "name": "Not In Ceol", "type": "reel",
+             "url": "https://thesession.org/tunes/999999"},
+        ]
+    }
+
+    def _mock(self):
+        from unittest.mock import patch, Mock
+
+        resp = Mock(status_code=200)
+        resp.json.return_value = self._PAYLOAD
+        return patch("live_logging_routes.requests.get", return_value=resp)
+
+    def test_a_signed_out_visitor_gets_results(self, client):
+        with self._mock():
+            resp = client.get("/api/tunes/thesession-search?q=banish")
+        assert resp.status_code == 200, "this is the public tune tab's reach"
+        body = resp.get_json()
+        assert body["success"] is True
+        assert [r["name"] for r in body["results"]] == ["Banish Misfortune", "Not In Ceol"]
+
+    def test_it_says_which_hits_ceol_already_has(self, client):
+        # The /tunes page uses this to decide whether a row opens the tune drawer or
+        # leaves for thesession.org — without it every hit would have to leave.
+        with self._mock():
+            body = client.get("/api/tunes/thesession-search?q=banish").get_json()
+        by_id = {r["tune_id"]: r for r in body["results"]}
+        assert by_id[9]["is_local"] is True
+        assert by_id[999999]["is_local"] is False
+
+    def test_signed_out_carries_no_personalisation(self, client):
+        # current_user is personalisation ONLY. With nobody signed in there is no list
+        # to compare against, and the flags must not claim otherwise.
+        with self._mock():
+            body = client.get("/api/tunes/thesession-search?q=banish").get_json()
+        for r in body["results"]:
+            assert r["on_list"] is False
+            assert r["in_session"] is False
+
+    def test_a_short_query_never_reaches_thesession(self, client):
+        # One character would match most of the catalogue; the guard is in the handler
+        # rather than only in the UI, because the UI is not the only caller.
+        from unittest.mock import patch
+
+        with patch("live_logging_routes.requests.get") as get:
+            resp = client.get("/api/tunes/thesession-search?q=a")
+        assert resp.status_code == 200
+        assert resp.get_json()["results"] == []
+        get.assert_not_called()
+
+    def test_the_personalised_deep_search_is_still_gated(self, client):
+        # Relaxing the proxy does not relax the rest: /api/tunes/deep-search reports
+        # what is on YOUR list, so it still needs an account.
+        assert client.get("/api/tunes/deep-search?q=banish").status_code == 401

@@ -151,3 +151,84 @@ test.describe("the public tunes list", () => {
     expect((await request.get("/api/tunes/popular")).status()).toBe(401);
   });
 });
+
+test.describe("reaching past Ceol's catalogue", () => {
+  // serviceWorkers: "block" is load-bearing. The app registers an offline service
+  // worker, and a SW handles fetches BEFORE page.route sees them — so the stubs below
+  // were silently ignored and the tests quietly hit the real thesession.org, which is
+  // both slow and the opposite of deterministic.
+  test.use({ storageState: { cookies: [], origins: [] }, serviceWorkers: "block" });
+
+  // BOTH searches are stubbed. The remote one because a test that really calls
+  // thesession.org fails when their site is slow, and the local one because the
+  // dedup below keys on tune_id — leaving it to the seed would make the assertion
+  // depend on which id "Banish Misfortune" happens to have.
+  const LOCAL = {
+    success: true,
+    tunes: [{ tune_id: 9, name: "Banish Misfortune", tune_type: "Jig", tunebook_count: 900 }],
+  };
+  const REMOTE = {
+    success: true,
+    results: [
+      { tune_id: 9, name: "Banish Misfortune", tune_type: "Jig", is_local: true,
+        url: "https://thesession.org/tunes/9", in_session: false, on_list: false },
+      { tune_id: 999999, name: "Not In Ceol", tune_type: "Reel", is_local: false,
+        url: "https://thesession.org/tunes/999999", in_session: false, on_list: false },
+    ],
+  };
+
+  async function stub(page: import("@playwright/test").Page, remote: object = REMOTE) {
+    await page.route("**/api/tunes/search**", (r) => r.fulfill({ json: LOCAL }));
+    await page.route("**/api/tunes/thesession-search**", (r) => r.fulfill({ json: remote }));
+  }
+
+  /** Type, and wait for the local search to settle — that is what reveals the offer. */
+  async function searchFor(page: import("@playwright/test").Page, q: string) {
+    await page.locator("#pt-search").fill(q);
+    await expect(page.locator("#pt-deeper")).toBeVisible();
+  }
+
+  test("the offer appears only once you have searched, and reaches out on demand", async ({ page }) => {
+    await stub(page);
+    await page.goto("/tunes");
+
+    // Not at rest: there is nothing to search thesession.org FOR yet.
+    await expect(page.locator("#pt-deeper")).toBeHidden();
+    await searchFor(page, "banish");
+
+    // It is a button, not a keystroke — the endpoint proxies an external site and
+    // its own contract is that it runs on explicit user action.
+    await page.locator("#pt-deeper-btn").click();
+    await expect(page.locator("#pt-deep-results .pt-row")).toHaveCount(1);
+
+    // The hit Ceol does not have leaves for thesession.org and says so; the one it
+    // does have is already in the list above, so it is not repeated.
+    const external = page.locator("#pt-deep-results a.pt-row");
+    await expect(external).toHaveAttribute("href", "https://thesession.org/tunes/999999");
+    await expect(external).toHaveAttribute("target", "_blank");
+    await expect(external).toContainText("Not In Ceol");
+    await expect(page.locator("#pt-deep-results")).not.toContainText("Banish Misfortune");
+  });
+
+  test("a new query clears the last set of thesession results", async ({ page }) => {
+    await stub(page);
+    await page.goto("/tunes");
+    await searchFor(page, "banish");
+    await page.locator("#pt-deeper-btn").click();
+    await expect(page.locator("#pt-deep-results .pt-row")).toHaveCount(1);
+
+    // Leaving results for "banish" on screen under a search for something else would
+    // be worse than showing nothing.
+    await page.locator("#pt-search").fill("cooley");
+    await expect(page.locator("#pt-deep-results .pt-row")).toHaveCount(0);
+    await expect(page.locator("#pt-deeper-btn")).toBeEnabled();
+  });
+
+  test("an unreachable thesession.org says so rather than looking empty", async ({ page }) => {
+    await stub(page, { success: false, error: "Could not reach thesession.org" });
+    await page.goto("/tunes");
+    await searchFor(page, "banish");
+    await page.locator("#pt-deeper-btn").click();
+    await expect(page.locator("#pt-deep-results")).toContainText(/could not reach/i);
+  });
+});

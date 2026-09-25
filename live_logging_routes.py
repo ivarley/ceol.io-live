@@ -2977,9 +2977,16 @@ def tunes_deep_search():
         conn.close()
 
 
-@api_login_required
+@public_api  # the tune catalogue is thesession.org's and it is public there; this
+# only proxies a search of it. Offered signed-out so the public /tunes tab can reach
+# past Ceol's own catalogue (spec 052 §B20). current_user is used for personalisation
+# ONLY — without it the hits simply carry no on_list flag.
 def tunes_thesession_search():
-    """GET /api/tunes/thesession-search?q=&type=[&session=|&instance=]"""
+    """GET /api/tunes/thesession-search?q=&type=[&session=|&instance=]
+
+    Unscoped and signed-out is a supported call: _resolve_search_scope returns
+    (None, "personal") when no ?session=/?instance= is given, and the core takes
+    session_id=None, person_id=None."""
     session_id, kind, err = _scope_or_404()
     if err:
         return err

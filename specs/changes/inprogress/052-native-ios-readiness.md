@@ -970,6 +970,41 @@ Two things the fix taught, both by reverting halves of it:
 - The guard bites: restoring the original toolbar rules fails with
   "/admin/people is 522px wide on a 393px screen".
 
+### B20. The public Tunes tab reaches thesession.org — **DONE 2026-09-25**
+
+`/tunes` searched only Ceol's own catalogue, so a visitor looking for a tune we have
+not imported got "no tunes match that name" about a tune that plainly exists. It can
+reach past us now, on an explicit tap.
+
+**One endpoint relaxed, not a new one.** `GET /api/tunes/thesession-search` was
+`@api_login_required`; it is `@public_api` now. It already supported being called
+unscoped — `_resolve_search_scope` returns `(None, "personal")` with no
+`?session=`/`?instance=`, and the core takes `session_id=None, person_id=None` — so
+signing out simply means the hits carry no `on_list` flag. Same "current_user is
+personalisation only" shape as `get_sessions_with_today_status`.
+
+**`/api/tunes/deep-search` stays gated.** It reports what is on YOUR list, which is
+not a thing a visitor has.
+
+**The UI is a button, not a keystroke.** That endpoint proxies an external site and
+its own docstring says it runs on explicit user action only. So: local search stays
+debounced-as-you-type against our own table, and a "Also search thesession.org"
+control appears once you have typed something. Hits we already hold are dropped (they
+are in the list above); hits we do not open on thesession.org in a new tab and say so
+on the row, because there is no local tune for the drawer to show.
+
+**Worth knowing: `page.route` does not see requests a service worker handles.** The
+first cut of these tests stubbed both searches and silently hit the real
+thesession.org anyway — slow, and the opposite of deterministic. The tests set
+`serviceWorkers: "block"`, and that line is load-bearing rather than tidiness.
+
+**Not done: rate limiting.** This is now the second public endpoint that proxies
+thesession.org (`search_sessions_ajax`, which backs /add-session, has been one for a
+while and carries its own "TODO tighten?"). There is no limiter in the app — only a
+`429: "rate_limited"` code in `api_auth.py` with nothing raising it. Both endpoints
+should get one; it is a single piece of work covering both rather than something to
+bolt onto this change.
+
 ### B8. The staged conversion plan
 
 Ordered by **blast radius, not by visibility**. Three things make a stage risky here:
