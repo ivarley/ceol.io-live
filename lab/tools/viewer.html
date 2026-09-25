@@ -38,7 +38,16 @@
   canvas { display: block; width: 100%; border: 1px solid var(--line); border-radius: 6px;
            background: var(--panel); touch-action: none; }
   #mini { height: 44px; margin-top: 6px; cursor: pointer; }
-  #staff { height: 92px; margin-top: 6px; }
+  #staffwrap { margin-top: 8px; border: 1px solid var(--line); border-radius: 6px;
+               background: #f7f7f4; }
+  #staffhead { display: flex; gap: 14px; align-items: center; padding: 5px 8px;
+               background: var(--panel); border-bottom: 1px solid var(--line);
+               border-radius: 6px 6px 0 0; font-size: 12px; color: var(--dim); }
+  #staffhead .dim { color: #5d657a; }
+  #staff { max-height: 260px; overflow-y: auto; padding: 4px 2px; }
+  #staff svg { display: block; }
+  #staff .abcjs-note.here, #staff .abcjs-rest.here { fill: #c2410c; }
+  #staff .abcjs-note, #staff .abcjs-rest { cursor: pointer; }
   .legend { margin-top: 9px; color: var(--dim); font-size: 12px; display: flex; gap: 16px; flex-wrap: wrap; }
   .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px;
             vertical-align: -1px; }
@@ -102,7 +111,14 @@
   </div>
 
   <canvas id="roll" height="460"></canvas>
-  <canvas id="staff" height="92" title="what was heard, on the eighth-note grid"></canvas>
+  <div id="staffwrap">
+    <div id="staffhead">
+      <span id="staffkey"></span>
+      <label><input type="checkbox" id="stafffollow" checked> follow the playhead</label>
+      <span class="dim">click a note to hear from there</span>
+    </div>
+    <div id="staff"></div>
+  </div>
   <canvas id="mini"></canvas>
 
   <div class="legend">
@@ -144,6 +160,7 @@
 </main>
 
 <audio id="audio" preload="auto"></audio>
+<script src="abcjs-basic-min.js"></script>
 <script>
 const D = window.__DATA__;
 const audio = document.getElementById('audio');
@@ -266,71 +283,59 @@ function evPos(e) {
 const noteH = () => Math.max(3 * dpr, (plotB() - plotT()) / Math.max(12, HI - LO) * 0.8);
 
 // ---- the staff ------------------------------------------------------------
-// What was heard, quantised to eighths and spelled in the key it seems to be
-// in. No bar lines, on purpose: the lab knows the grid's period but not its
-// phase, so it knows how long each note is and not where a bar starts. The
-// sequence of pitches and lengths is what identifies a tune anyway, which is
-// the whole reason this is worth drawing without them.
+// What was heard, quantised to eighths and engraved by abcjs, which the repo
+// already carries for the app's own notation rendering. No bar lines, on
+// purpose: the lab knows the grid's period but not its phase, so it knows how
+// long each note is and not where a bar starts.
+//
+// This was hand-drawn on a canvas first and it was unreadable -- the range
+// needed 126 device pixels and the canvas was 92, so the low notes were drawn
+// off the bottom edge. Engraving is not a thing to do by hand.
 const staffEl = document.getElementById('staff');
-const sc = staffEl.getContext('2d');
-// Pitches are folded to one octave, so the range is C up to B: a ledger line
-// below the stave up to its middle line, in the treble clef.
-const STEP_Y = { 0: 6, 1: 5, 2: 4, 3: 3, 4: 2, 5: 1, 6: 0 };   // C D E F G A B
+let staffNotes = [];        // the drawn elements, in order, with their times
 
-function drawStaff() {
-  const W = staffEl.width, H = staffEl.height;
-  sc.clearRect(0, 0, W, H);
-  if (!D.staff || !D.staff.length) {
-    sc.fillStyle = '#3b4252'; sc.font = (12 * dpr) + 'px ui-monospace, monospace';
-    sc.textBaseline = 'middle';
-    sc.fillText('no grid, so nothing to write', 8 * dpr, H / 2);
+function renderStaff() {
+  document.getElementById('staffkey').textContent =
+    D.staff_key ? ('key of ' + D.staff_key + ', eighth notes on the grid') : 'no grid';
+  if (!D.staff_abc) { staffEl.textContent = 'no grid, so nothing to write'; return; }
+  if (typeof ABCJS === 'undefined') {
+    staffEl.innerHTML = '<pre style="color:#222;padding:8px">' + D.staff_abc + '</pre>';
     return;
   }
-  const gap = 9 * dpr;                 // one step between a line and a space
-  const top = H / 2 - 3.2 * gap;       // top line of the stave
-  sc.strokeStyle = '#3a4152'; sc.lineWidth = dpr;
-  for (let i = 0; i < 5; i++) {
-    const y = top + i * gap * 2;
-    sc.beginPath(); sc.moveTo(plotL(), y); sc.lineTo(W - 6 * dpr, y); sc.stroke();
+  ABCJS.renderAbc(staffEl, D.staff_abc, {
+    add_classes: true, responsive: 'resize', staffwidth: 900,
+    paddingtop: 4, paddingbottom: 4, paddingleft: 6, paddingright: 6,
+  });
+  // abcjs draws notes and rests in source order, which is the order of
+  // D.staff, so the two line up one for one and each drawn note knows when it
+  // sounds.
+  const drawn = staffEl.querySelectorAll('.abcjs-note, .abcjs-rest');
+  staffNotes = [];
+  for (let i = 0; i < drawn.length && i < D.staff.length; i++) {
+    const item = D.staff[i];
+    staffNotes.push({ el: drawn[i], t: item.t,
+                      t1: item.t + item.eighths * (D.pulse ? D.pulse.period_ms / 1000 : 0.15) });
+    drawn[i].addEventListener('click', () => { seek(item.t); audioCtx(); });
   }
-  sc.fillStyle = '#8b93a7'; sc.font = (11 * dpr) + 'px ui-monospace, monospace';
-  sc.textBaseline = 'middle';
-  sc.fillText('K:' + (D.staff_key || '?'), 4 * dpr, top - gap * 1.6);
+}
 
-  const yOfStep = st => top + 4 * gap + STEP_Y[st] * gap;   // middle line = B
-  for (const e of D.staff) {
-    const t1 = e.t + e.eighths * (D.pulse ? D.pulse.period_ms / 1000 : 0.15);
-    if (t1 < view.t0 || e.t > view.t1) continue;
-    const x = xOf(e.t), w = Math.max(4 * dpr, xOf(t1) - x - 2 * dpr);
-    if (e.rest) {
-      sc.fillStyle = '#4a5162';
-      sc.fillRect(x, top + 3 * gap, Math.min(w, 10 * dpr), gap * 0.7);
-      continue;
-    }
-    const y = yOfStep(e.step);
-    // ledger line for anything below the stave
-    if (y > top + 8 * gap) {
-      sc.strokeStyle = '#3a4152';
-      for (let ly = top + 10 * gap; ly <= y + 0.1; ly += 2 * gap) {
-        sc.beginPath(); sc.moveTo(x - 5 * dpr, ly); sc.lineTo(x + 9 * dpr, ly); sc.stroke();
-      }
-    }
-    sc.fillStyle = e.eighths >= 2 ? '#0f1116' : '#e8ecf5';
-    sc.strokeStyle = '#e8ecf5'; sc.lineWidth = 1.6 * dpr;
-    sc.beginPath(); sc.ellipse(x + 3 * dpr, y, 4.2 * dpr, 3.1 * dpr, -0.35, 0, 7);
-    sc.fill(); if (e.eighths >= 2) sc.stroke();
-    // stem, and a beam-ish tail whose length shows how many eighths
-    sc.strokeStyle = '#e8ecf5'; sc.lineWidth = 1.3 * dpr;
-    sc.beginPath(); sc.moveTo(x + 7 * dpr, y); sc.lineTo(x + 7 * dpr, y - 7 * gap * 0.55);
-    sc.stroke();
-    if (e.eighths > 1) {
-      sc.strokeStyle = 'rgba(232,236,245,.45)'; sc.lineWidth = 2.4 * dpr;
-      sc.beginPath(); sc.moveTo(x + 7 * dpr, y + 5 * dpr);
-      sc.lineTo(x + w, y + 5 * dpr); sc.stroke();
-    }
-    if (e.acc) {
-      sc.fillStyle = '#ffd166'; sc.font = (11 * dpr) + 'px ui-monospace, monospace';
-      sc.fillText(e.acc > 0 ? '#' : 'b', x - 8 * dpr, y);
+let staffHere = -1;
+function followStaff() {
+  if (!staffNotes.length || !document.getElementById('stafffollow').checked) return;
+  const t = audio.currentTime;
+  let idx = -1;
+  for (let i = 0; i < staffNotes.length; i++) {
+    if (staffNotes[i].t <= t && t < staffNotes[i].t1) { idx = i; break; }
+  }
+  if (idx === staffHere) return;
+  if (staffHere >= 0 && staffNotes[staffHere]) staffNotes[staffHere].el.classList.remove('here');
+  staffHere = idx;
+  if (idx >= 0) {
+    const el = staffNotes[idx].el;
+    el.classList.add('here');
+    const box = el.getBoundingClientRect(), wrap = staffEl.getBoundingClientRect();
+    if (box.top < wrap.top || box.bottom > wrap.bottom) {
+      staffEl.scrollTop += (box.top - wrap.top) - wrap.height / 3;
     }
   }
 }
@@ -1054,11 +1059,11 @@ function resize() {
   dpr = window.devicePixelRatio || 1;
   roll.width = roll.clientWidth * dpr; roll.height = (460 + LOOPH) * dpr;
   mini.width = mini.clientWidth * dpr; mini.height = 44 * dpr;
-  staffEl.width = staffEl.clientWidth * dpr; staffEl.height = 92 * dpr;
   draw();
 }
 window.addEventListener('resize', resize);
-(function tick() { loopTick(); singTick(); draw(); drawStaff(); requestAnimationFrame(tick); })();
+(function tick() { loopTick(); singTick(); draw(); followStaff(); requestAnimationFrame(tick); })();
+renderStaff();
 resize();
 setMode('listen');
 if (D.tapped_pulse && beats.length) {

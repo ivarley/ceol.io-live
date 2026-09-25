@@ -69,7 +69,7 @@ def test_abc_has_no_bar_lines():
     q = quantise(notes((62, 0, 150), (66, 150, 450)), 150.0)
     abc = to_abc(q, sharps=2)
     assert "|" not in abc
-    assert "K:D" in abc and "L:1/8" in abc
+    assert "K:D" in abc and "L:1/8" in abc and "M:none" in abc
     assert "D F2" in abc
 
 

@@ -28,6 +28,7 @@ from somewhere and the corpus never leaves this machine.
 import http.server
 import json
 import os
+import shutil
 import socketserver
 import subprocess
 import threading
@@ -271,8 +272,9 @@ def build_payload(args):
             staff.append(entry)
         staff_key = written["key"]
         staff_sharps = written["sharps"]
+        staff_abc = written["abc"]
     else:
-        staff_key, staff_sharps = None, 0
+        staff_key, staff_sharps, staff_abc = None, 0, None
 
     return {
         "recording_id": args.recording,
@@ -305,6 +307,7 @@ def build_payload(args):
         "staff": staff,
         "staff_key": staff_key,
         "staff_sharps": staff_sharps,
+        "staff_abc": staff_abc,
     }, t0, t1
 
 
@@ -319,6 +322,18 @@ def main(args):
                         "const D = " + json.dumps(payload) + ";")
     with open(os.path.join(out, "index.html"), "w") as f:
         f.write(page)
+
+    # abcjs, if the ABC renderer service has been installed. Copied rather than
+    # linked to a CDN: this tool has to work with no network, and the repo
+    # already carries the library for the app's own notation rendering.
+    abcjs_src = os.path.join(os.path.dirname(HERE), "..", "abc-renderer",
+                             "node_modules", "abcjs", "dist", "abcjs-basic-min.js")
+    abcjs_src = os.path.normpath(abcjs_src)
+    if os.path.exists(abcjs_src):
+        shutil.copyfile(abcjs_src, os.path.join(out, "abcjs-basic-min.js"))
+    else:
+        print("abcjs not found; the stave will show ABC text instead.\n"
+              "  (cd abc-renderer && npm install)")
 
     handler = _quiet_handler(out)
     # Threaded, and it has to be. The handler speaks HTTP/1.1, so a browser

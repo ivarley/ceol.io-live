@@ -141,7 +141,9 @@ def to_abc(quantised, sharps=2, key_name=None, per_line=32):
             line, used = [], 0
     if line:
         body.append(" ".join(line))
-    return f"L:1/8\nK:{key}\n" + "\n".join(body)
+    # M:none is the truthful header: this has no bar lines because the lab
+    # does not know where they go, and a meter would imply it did.
+    return f"X:1\nM:none\nL:1/8\nK:{key}\n" + "\n".join(body)
 
 
 def notate(notes, period_ms, phase_ms=0.0, sharps=None, max_eighths=8):
