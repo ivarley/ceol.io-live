@@ -1005,6 +1005,51 @@ while and carries its own "TODO tighten?"). There is no limiter in the app — o
 should get one; it is a single piece of work covering both rather than something to
 bolt onto this change.
 
+### B21. Notation for visitors, without becoming an open proxy — **DONE 2026-09-25**
+
+Notation is not stored on a tune; it lives on a **cached setting** fetched from
+thesession.org. A tune with none showed a drawer with no notation area — and for a
+signed-out visitor, no way to ask for any, because
+`POST /api/tunes/<id>/settings/cache` was `@api_login_required`. In the local seed
+that is 66 of 216 tunes; in production it is rarer, but it is the first impression a
+visitor gets when it happens.
+
+**A shared in-app secret would not have worked**, and it is worth writing down why:
+anything the browser can send, a reader of our own page source can send too. A
+constant embedded in the app stops casual scripting and nothing else.
+
+**What guards it instead is a per-tune, signed, expiring token** (`notation_token.py`):
+
+- minted only by `GET /api/tunes/<id>/detail`, the drawer's own feed, and only when
+  that tune has no cached notation and the viewer is signed out;
+- signed with the app's `SECRET_KEY` (via `itsdangerous`, already a Flask dependency),
+  so it cannot be forged or edited to name a different tune;
+- valid for 15 minutes.
+
+The property that matters is not secrecy — it is **cost**. A token unlocks one tune,
+so back-filling a thousand tunes through Ceol means first making a thousand requests
+to Ceol to collect a thousand tokens. That is exactly what calling thesession.org
+directly would have cost, so the reason to use us as a proxy disappears. The signature
+is only how that is enforced.
+
+A signed-in caller needs no token; their session is their authority, and the payload
+mints none for them — a second credential for the same permission is a second thing
+to look after.
+
+`tests/integration/test_notation_token_052.py` pins the bounds: a token works on its
+own tune, is refused on any other, refused when tampered, refused when expired, and
+refused when signed with another deployment's key. Those tests assert the mocked
+thesession.org was never called, because "401" and "401 after fetching anyway" look
+identical from outside.
+
+**Still outstanding: rate limiting** (§B20). This removes the open-proxy *shape* from
+three endpoints' worth of thesession.org access; it does not cap volume, and there is
+still no limiter in the app.
+
+**Also found, not fixed:** `/tunes?tune=<id>` opens the drawer but never fetches — the
+deep link renders the shell and no request goes out. Clicking a row works. Worth a
+look on its own.
+
 ### B8. The staged conversion plan
 
 Ordered by **blast radius, not by visibility**. Three things make a stage risky here:

@@ -1792,6 +1792,18 @@ def build_tune_detail_payload(
         ),
     }
 
+    # A token letting a signed-out viewer pull this ONE tune's notation from
+    # thesession.org (spec 052 §B21). Minted only when there is nothing cached, so
+    # the common case — a tune we already hold notation for — carries none.
+    # Logged-in callers do not need one; their session is their authority.
+    notation_token = None
+    if not logged_in and not any(
+        session_tune.get(k) for k in ("abc", "incipit_abc", "image", "incipit_image")
+    ):
+        from notation_token import mint
+
+        notation_token = mint(tune_id)
+
     return {
         "success": True,
         "redirected_from": redirected_from,
@@ -1802,6 +1814,7 @@ def build_tune_detail_payload(
             "is_session_member": is_session_member,
         },
         "session_tune": session_tune,
+        "notation_token": notation_token,
     }
 
 

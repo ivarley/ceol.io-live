@@ -1465,13 +1465,29 @@ def refresh_tunebook_count_ajax(session_path, tune_id):
         )
 
 
-@api_login_required
+@public_api  # guarded in the body instead: a signed-in caller, OR a per-tune token
+# minted by this tune's own detail payload (spec 052 §B21). Opening it outright would
+# have made Ceol an anonymous proxy to thesession.org.
 def cache_tune_setting_ajax(tune_id):
     """
     Fetch and cache a tune setting from thesession.org.
     If setting_id is provided in query params, cache that specific setting.
     If not provided, cache the first setting in the list.
+
+    Auth: signed in, or ?token= from GET /api/tunes/<tune_id>/detail. The token is
+    signed, expires, and is bound to THIS tune id — so it cannot be replayed against
+    another tune, and collecting one per tune costs the caller exactly what calling
+    thesession.org directly would have cost. See notation_token.py.
     """
+    if not current_user.is_authenticated:
+        from notation_token import is_valid_for
+
+        if not is_valid_for(request.args.get("token", ""), tune_id):
+            return jsonify({
+                "success": False,
+                "error": "Authentication required",
+                "code": "unauthenticated",
+            }), 401
     try:
         # Get optional setting_id from query parameters
         setting_id = request.args.get('setting_id', type=int)

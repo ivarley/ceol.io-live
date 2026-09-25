@@ -76,6 +76,11 @@
   let errorMsg = $state('')
   let config = $state(null) // normalized show() config {tuneId, ptid, scope, callbacks, hints}
   let viewer = $state(null) // payload viewer block {logged_in, is_admin, is_session_admin}
+  // Per-tune permission to pull this tune's notation from thesession.org, minted by
+  // the detail payload for signed-out viewers when nothing is cached (spec 052 §B21).
+  // Null for everyone else: a signed-in viewer's session is their authority, and a
+  // tune we already hold notation for has nothing to fetch.
+  let notationToken = $state(null)
   let tune = $state(null) // payload session_tune block (mutated optimistically)
   let mergedFrom = $state(null) // healed merged-tune permalink (spec 030)
   let modalShowTime = 0 // scrim-click guard (500ms)
@@ -344,10 +349,10 @@
   const hasCachedNotation = $derived(
     !!(tune && (tune.abc || tune.incipit_abc || tune.image || tune.incipit_image))
   )
-  // The settings/cache endpoint is login-required, so the Generate Notation
-  // affordance only shows for logged-in viewers (payload-derived, so a call
-  // site can never forget the flag again).
-  const canGenerateNotation = $derived(!!tune && loggedIn)
+  // Generate Notation shows for a signed-in viewer, and for a signed-out one holding
+  // a token for this tune (spec 052 §B21). Both are payload-derived, so a call site
+  // can never forget the flag.
+  const canGenerateNotation = $derived(!!tune && (loggedIn || !!notationToken))
 
   // The status segs (overall and per-instrument) speak the app's one status
   // vocabulary — see STATUS_LABELS in mylist.js.
@@ -528,6 +533,7 @@
   // collapsed except admin, fields re-seeded).
   function applyPayload(data, opts = {}) {
     viewer = data.viewer || viewer || { logged_in: false, is_admin: false, is_session_admin: false }
+    notationToken = data.notation_token || null
     tune = data.session_tune
     mergedFrom = null
 
@@ -1392,10 +1398,15 @@
     }
 
     let apiUrl = `/api/tunes/${tuneId}/settings/cache`
+    const params = new URLSearchParams()
     if (settingIdValue) {
       const validation = validateSettingInput(settingIdValue, tuneId)
-      apiUrl += `?setting_id=${validation.settingId || settingIdValue}`
+      params.set('setting_id', String(validation.settingId || settingIdValue))
     }
+    // A signed-out viewer's authority to make this one call. Harmless to send when
+    // signed in; the server prefers the session.
+    if (notationToken) params.set('token', notationToken)
+    if ([...params].length) apiUrl += `?${params}`
 
     // Where the chosen setting id gets persisted. Personal writes person_tune; session
     // writes whichever layer the droplist points at; 'none' writes nowhere.
