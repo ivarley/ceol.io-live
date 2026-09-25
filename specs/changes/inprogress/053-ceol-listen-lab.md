@@ -319,8 +319,9 @@ On the retrieval bench, all 503 segments, two minutes of audio each:
 | yin, absolute pitch, 130Hz band | 0.485 | 0.706 |
 | pitch folded to classes | 0.616 | 0.793 |
 | and the band raised to 160Hz | 0.702 | 0.825 |
-| and fused repeats split back apart | 0.771 | 0.877 |
-| and each set decoded as a whole | **0.809** | **0.897** |
+| and fused repeats split back apart | 0.775 | 0.880 |
+| and read again as runs of eighths, fused | 0.833 | 0.912 |
+| and each set decoded as a whole | **0.865** | **0.924** |
 | the session's transitions alone, no audio | 0.245 | 0.368 |
 
 A whole night through the board scores top-1 60.3%, top-5 75.9%, median time
@@ -358,6 +359,26 @@ LOSES thirteen points, because a session has an onset near almost every line
 and everything long gets cut; at an eighth of a spacing it gains seven. The
 crude control, split every long note, triples the repeated-note rate and is
 much worse than not splitting at all.
+
+**Writing both sides as runs of eighth notes**, worth six points, and the
+idea came from a player looking at the stave rather than from the bench.
+
+A transcriber hears pitch and not articulation. Two tongued Gs and one held G
+of the same length are the same pitch track, and nothing in a monophonic
+tracker will separate them, so the matcher was being asked to distinguish
+something it had no evidence about. Writing every note longer than an eighth
+as a repeat of itself, on the transcription AND on the corpus, removes the
+question: the notation's `GG` and its `G2` both become two eighths, and so
+does whatever the tracker heard.
+
+It is not free, because it leans on the grid being right where the plain
+reading does not. Alone it takes top-1 from 0.776 to 0.816, but unevenly:
+reels go 0.734 to 0.797 and jigs 0.844 to 0.906, while hornpipes fall 0.857
+to 0.643 and polkas 0.731 to 0.615. The two readings are wrong about
+different tunes, which is the condition under which fusing two opinions is
+worth anything, and fusing them by score beats both on every tune type:
+0.834 overall, with hornpipes at 0.929 and slides at 0.667 above either view
+on its own. Segments never found at all fall from 7.0% to 4.0%.
 
 **The melody band.** Sweeping the tracker's lower bound: 0.616 at 130Hz,
 0.702 at 160, 0.666 at 190. Below about 150 it is offered energy that is not

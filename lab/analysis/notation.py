@@ -114,6 +114,68 @@ def quantise(notes, period_ms, phase_ms=0.0, max_eighths=8,
     return out
 
 
+def particalize(notes, period_ms, phase_ms=0.0, max_lag=1):
+    """Notes -> one pitch class per eighth-note slot, or None for a silence.
+
+    This music is a stream of eighth notes, so this is the form it wants to be
+    in. Everything longer than an eighth becomes a run of eighths at the same
+    pitch, which sounds odd until you notice that a transcriber hears pitch
+    and not articulation: two tongued Gs and one held G of the same length are
+    the same pitch track, and no amount of care will separate them. Writing
+    both as two eighths stops pretending otherwise.
+
+    The corpus gets the same treatment (`abc_pitch.particalized_pitches`), so
+    the two become directly comparable. That is what makes it worth doing:
+    the notation has a repeated note in 8.1% of its intervals and a plain
+    transcription recovers 4.1%, and most of that gap is this one confusion.
+
+    `max_lag` bounds how far a note may be pushed to find a free slot. A
+    transcription of a room produces more notes than the tune has, and the
+    extra ones are ornaments; letting them all push would drift, so a note
+    that cannot land within `max_lag` slots of where it was heard is dropped
+    as ornament rather than moved.
+    """
+    slots = []
+    if period_ms <= 0 or not notes:
+        return slots
+    placed = {}
+    previous = None
+    for n in sorted(notes, key=lambda n: n["t0_ms"]):
+        want = int(round((n["t0_ms"] - phase_ms) / period_ms))
+        at = want if previous is None else max(want, previous + 1)
+        if at - want > max_lag:
+            continue
+        length = max(1, int(round((n["t1_ms"] - n["t0_ms"]) / period_ms)))
+        placed[at] = (int(n["midi"]) % 12, length)
+        previous = at
+    if not placed:
+        return slots
+    order = sorted(placed)
+    first, last = order[0], order[-1]
+    out = [None] * (last - first + placed[last][1])
+    for i, at in enumerate(order):
+        pc, length = placed[at]
+        following = order[i + 1] if i + 1 < len(order) else None
+        if following is not None:
+            length = min(length, following - at)
+        for k in range(max(1, length)):
+            out[at - first + k] = pc
+    return out
+
+
+def particalized_abc(slots, sharps=2, key_name=None):
+    """A run of eighth notes as ABC, one per slot, no bar lines."""
+    key = key_name or KEY_NAMES.get(sharps, "C")
+    tokens = []
+    for pc in slots:
+        if pc is None:
+            tokens.append("z")
+            continue
+        letter, alteration = spell(pc, sharps)
+        tokens.append(abc_accidental(letter, alteration, sharps) + letter)
+    return f"X:1\nM:none\nL:1/8\nK:{key}\n" + " ".join(tokens)
+
+
 def key_signature_map(sharps):
     """{letter: -1/+1} for the letters this key signature alters."""
     sig = {}

@@ -251,31 +251,36 @@ def build_payload(args):
     from lab.frontends.segmentation import PITCH_CLASS_BASE
 
     midis = [PITCH_CLASS_BASE, PITCH_CLASS_BASE + 11]
-    # What was heard, put on the eighth-note grid and spelled. Needs the
-    # grid's period and not its phase, which is the whole reason it can be
-    # drawn at all: a note's length in eighths does not depend on where the
-    # bar starts, and the bar is the one thing the lab cannot find.
+    # What was heard, written as a run of eighth notes. Every note longer than
+    # an eighth becomes a repeat of itself, because a transcriber hears pitch
+    # and not articulation: two tongued Gs and one held G are the same pitch
+    # track. The corpus is read the same way, so the two are comparable, and
+    # fusing that reading with the plain one is worth six points of top-1.
+    #
+    # Needs the grid's period and not its phase, which is why it can be drawn
+    # at all: how many eighths a note lasts does not depend on where the bar
+    # starts, and the bar is the one thing the lab cannot find.
     staff = []
+    staff_key, staff_sharps, staff_abc = None, 0, None
     if pulse and pulse.get("period_ms"):
-        from lab.analysis.notation import notate, spell
+        from lab.analysis.key import NAMES as KEY_NAMES
+        from lab.analysis.key import estimate_key
+        from lab.analysis.notation import particalize, particalized_abc, spell
 
-        written = notate(notes, pulse["period_ms"], phase_ms=t0)
-        tick_s = pulse["period_ms"] / 1000.0 / written["ticks_per_eighth"]
-        for item in written["quantised"]:
-            entry = {"t": round(item["start"] * tick_s, 4),
-                     "eighths": item["ticks"] / written["ticks_per_eighth"],
-                     "rest": item["rest"]}
-            if not item["rest"]:
-                letter, alteration = spell(item["pc"], written["sharps"])
+        key = estimate_key(notes)
+        staff_sharps = key["sharps"] if key else 0
+        staff_key = KEY_NAMES.get(staff_sharps, "C")
+        slots = particalize(notes, pulse["period_ms"], phase_ms=t0)
+        staff_abc = particalized_abc(slots, sharps=staff_sharps, key_name=staff_key)
+        eighth_s = pulse["period_ms"] / 1000.0
+        for i, pc in enumerate(slots):
+            entry = {"t": round(i * eighth_s, 4), "eighths": 1, "rest": pc is None}
+            if pc is not None:
+                letter, alteration = spell(pc, staff_sharps)
                 entry["step"] = "CDEFGAB".index(letter)
                 entry["acc"] = alteration
-                entry["pc"] = item["pc"]
+                entry["pc"] = pc
             staff.append(entry)
-        staff_key = written["key"]
-        staff_sharps = written["sharps"]
-        staff_abc = written["abc"]
-    else:
-        staff_key, staff_sharps, staff_abc = None, 0, None
 
     return {
         "recording_id": args.recording,

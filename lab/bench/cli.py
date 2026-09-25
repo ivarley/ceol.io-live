@@ -52,6 +52,8 @@ def add_parser(sub):
     ret.add_argument("--beta", type=float, default=1.0, help="how hard the prior pulls")
     ret.add_argument("--adaptive", action="store_true",
                      help="let each segment's own evidence decide how hard the prior pulls")
+    ret.add_argument("--particalized", action="store_true",
+                     help="also read the notes as a run of eighths and fuse the two")
     ret.add_argument("--fold-octaves", action="store_true",
                      help="use the folded index, where an octave error costs nothing")
     ret.add_argument("--type-filter", default="none",
@@ -136,7 +138,7 @@ def cmd_retrieval(args):
     result, rows = run_retrieval(
         frontends, recording_ids=_ids(args.recordings), candidate_set=args.candidate_set,
         n=args.n, seconds=args.seconds, prior=args.prior, beta=args.beta,
-        fold_octaves=args.fold_octaves, type_filter=args.type_filter, fusion=args.fusion,
+        fold_octaves=args.fold_octaves, particalized=args.particalized, type_filter=args.type_filter, fusion=args.fusion,
         adaptive=args.adaptive)
     print(format_retrieval(result, rows))
     if not args.no_save:

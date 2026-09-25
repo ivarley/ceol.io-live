@@ -311,6 +311,27 @@ def _make_note(m, sig, bar_accidentals, unit) -> Note:
     return Note(midi=midi, eighths=eighths)
 
 
+def particalized_pitches(notes, max_eighths: int = 8) -> List[Optional[int]]:
+    """Notes -> one entry per eighth note, repeating a held pitch.
+
+    The same reduction `analysis.notation.particalize` performs on a
+    transcription, so that the two can be compared without either side having
+    to guess at articulation. A quarter note and two tongued eighths of the
+    same pitch are one entry and two entries in the notation, and are
+    indistinguishable in a pitch track; here they are two entries in both.
+
+    Rests stay as None so an n-gram never spans one, as everywhere else.
+    """
+    out: List[Optional[int]] = []
+    for n in notes:
+        if n is None:
+            out.append(None)
+            continue
+        count = int(round(float(n.eighths))) or 1
+        out.extend([n.midi] * min(count, max_eighths))
+    return out
+
+
 def pitch_sequence(notes) -> List[Optional[int]]:
     return [n.midi if n is not None else None for n in notes]
 

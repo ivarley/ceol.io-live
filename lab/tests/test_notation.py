@@ -142,3 +142,44 @@ def test_duration_histogram_sums_to_one():
     h = duration_histogram(q)
     assert sum(h.values()) == pytest.approx(1.0)
     assert h[1.0] == pytest.approx(2 / 3)
+
+
+def test_particalize_writes_held_notes_as_repeats():
+    """The point of it: a transcriber hears pitch, not articulation.
+
+    Two tongued Gs and one held G of the same length are the same pitch
+    track, so both become two eighths and the matcher stops pretending it can
+    tell them apart.
+    """
+    from lab.analysis.notation import particalize
+
+    held = particalize(notes((67, 0, 300)), 150.0)
+    tongued = particalize(notes((67, 0, 150), (67, 150, 300)), 150.0)
+    assert held == [7, 7] == tongued
+
+
+def test_particalize_gives_one_slot_per_eighth_of_audio():
+    from lab.analysis.notation import particalize
+
+    n = notes(*[(60 + (i % 7), i * 150, i * 150 + 140) for i in range(40)])
+    assert len(particalize(n, 150.0)) == 40
+
+
+def test_particalize_drops_notes_it_cannot_place_rather_than_drifting():
+    """Ornaments arrive faster than the grid; letting them push would drift."""
+    from lab.analysis.notation import particalize
+
+    crowded = notes(*[(60 + i % 3, i * 40, i * 40 + 35) for i in range(30)])
+    slots = particalize(crowded, 150.0, max_lag=1)
+    assert len(slots) <= 12          # 30 notes in 1.2s cannot be 30 eighths
+
+
+def test_the_corpus_particalizes_the_same_way():
+    """The two sides have to agree or comparing them means nothing."""
+    from lab.analysis.notation import particalize
+    from lab.corpus.abc_pitch import parse_abc, particalized_pitches
+
+    written = particalized_pitches(parse_abc("G2 A", key="Gmajor", meter="4/4"))
+    assert [p % 12 for p in written] == [7, 7, 9]
+    heard = particalize(notes((67, 0, 300), (69, 300, 450)), 150.0)
+    assert heard == [7, 7, 9]

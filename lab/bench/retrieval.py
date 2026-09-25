@@ -111,13 +111,35 @@ def fuse(rankings, method="rrf", k=20):
     return out
 
 
-def ranked_for_segment(frontends, store, sha, t0, t1, index, board, audio_top, fusion="rrf"):
-    """Transcribe with each front end and fuse what the index says about each."""
+def ranked_for_segment(frontends, store, sha, t0, t1, index, board, audio_top,
+                       fusion="rrf", particalized_index=None):
+    """Transcribe with each front end and fuse what the index says about each.
+
+    With `particalized_index`, the same transcription is also read as a run of
+    eighth notes and looked up in an index built the same way, and the two
+    rankings are fused. They disagree usefully: a transcriber hears pitch and
+    not articulation, so two tongued Gs and one held G are indistinguishable
+    to it, and writing both sides as eighths removes that confusion at the
+    cost of leaning on the grid being right. One view is wrong about
+    articulation, the other about tempo, and they are wrong about different
+    tunes.
+    """
     rankings, notes_all, cost_all, cached_all = [], [], 0.0, True
     for fe in frontends:
         notes, cost, cached = transcribe_segment(fe, store, sha, t0, t1, board=board)
         intervals = intervals_from_notes(notes, fold=index.fold_octaves)
         rankings.append(index.lookup(intervals, top_k=audio_top))
+        if particalized_index is not None and len(notes) >= 30:
+            from lab.analysis.notation import particalize
+            from lab.analysis.pulse import estimate_pulse
+            from lab.corpus.abc_pitch import interval_sequence
+
+            pulse = estimate_pulse(store.read(t0, t1), store.sr)
+            if pulse:
+                slots = particalize(notes, pulse["period_ms"], phase_ms=t0)
+                rankings.append(particalized_index.lookup(
+                    interval_sequence(slots, fold=particalized_index.fold_octaves),
+                    top_k=audio_top))
         notes_all.extend(notes)
         cost_all += cost
         cached_all = cached_all and cached
@@ -205,7 +227,7 @@ def _blend(weights_by_prev, belief, floor=1e-4):
 
 def score_night(frontends, recording_id, index, seconds=DEFAULT_SECONDS, board=None,
                 top_k=25, quiet=True, prior="none", beta=1.0, belief_k=5,
-                type_filter="none", fusion="rrf"):
+                type_filter="none", fusion="rrf", particalized_index=None):
     gt = load_ground_truth(recording_id)
     sequence = previous_of = None
     if prior != "none":
@@ -256,7 +278,7 @@ def score_night(frontends, recording_id, index, seconds=DEFAULT_SECONDS, board=N
             else:
                 ranked, notes, cost, cached = ranked_for_segment(
                     frontends, store, sha, t0, t1, index, board,
-                    audio_top=(200 if prior.startswith("sequence") else top_k), fusion=fusion)
+                    audio_top=(200 if prior.startswith("sequence") else top_k), fusion=fusion, particalized_index=particalized_index)
                 intervals = []
                 if prior == "sequence":
                     weights = sequence.weights(previous_of.get(seg.session_instance_tune_id))
@@ -412,7 +434,8 @@ def summarise(rows):
 
 def score_night_set_decoded(frontends, recording_id, index, seconds=DEFAULT_SECONDS,
                             board=None, top_k=25, beta=1.0, audio_top=40,
-                            type_filter="none", fusion="rrf", adaptive=False):
+                            type_filter="none", fusion="rrf", adaptive=False,
+                            particalized_index=None):
     """Score a night by decoding each set as a whole.
 
     Two passes: transcribe and rank every segment as usual, then group the
@@ -446,7 +469,7 @@ def score_night_set_decoded(frontends, recording_id, index, seconds=DEFAULT_SECO
             if t1 - t0 < 5000:
                 continue
             ranked, notes, cost, cached = ranked_for_segment(
-                frontends, store, sha, t0, t1, index, board, audio_top=audio_top, fusion=fusion)
+                frontends, store, sha, t0, t1, index, board, audio_top=audio_top, fusion=fusion, particalized_index=particalized_index)
             ranked = _apply_type_filter(ranked, seg, type_filter, type_probs)
             prepared.append({"seg": seg, "ranked": ranked, "notes": notes,
                              "cost": cost, "cached": cached,
@@ -503,10 +526,12 @@ def score_night_set_decoded(frontends, recording_id, index, seconds=DEFAULT_SECO
 def run_retrieval(frontends, recording_ids=None, candidate_set="repertoire", n=5,
                   seconds=DEFAULT_SECONDS, quiet=False, prior="none", beta=1.0,
                   fold_octaves=False, belief_k=5, type_filter="none", fusion="rrf",
-                  adaptive=False):
+                  adaptive=False, particalized=False):
     from lab.corpus.index import Index
 
     index = Index.load(candidate_set, n=n, fold_octaves=fold_octaves)
+    particalized_index = (Index.load(candidate_set, n=n, fold_octaves=fold_octaves,
+                                     particalized=True) if particalized else None)
     if not isinstance(frontends, (list, tuple)):
         frontends = [frontends]
     recording_ids = recording_ids or paths.prepared_recording_ids()
@@ -517,11 +542,13 @@ def run_retrieval(frontends, recording_ids=None, candidate_set="repertoire", n=5
             if prior == "set_viterbi":
                 rows = score_night_set_decoded(frontends, rid, index, seconds=seconds,
                                                board=board, beta=beta, adaptive=adaptive,
-                                               type_filter=type_filter, fusion=fusion)
+                                               type_filter=type_filter, fusion=fusion,
+                                               particalized_index=particalized_index)
             else:
                 rows = score_night(frontends, rid, index, seconds=seconds, board=board,
                                    quiet=quiet, prior=prior, beta=beta, belief_k=belief_k,
-                                   type_filter=type_filter, fusion=fusion)
+                                   type_filter=type_filter, fusion=fusion,
+                                   particalized_index=particalized_index)
             board.conn.commit()
             gt = load_ground_truth(rid)
             m = summarise(rows)
