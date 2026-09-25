@@ -72,11 +72,28 @@ def eighths_per_beat(pulse):
 
 
 def truth_meter(pulse):
-    """2 or 3: how the beat divides, which is what the estimator reports."""
-    return 3 if eighths_per_beat(pulse) in (3, 6) else 2
+    """2 or 3: how the beat divides, which is what the estimator reports.
+
+    A slip jig and a slide divide it in three, like a jig; they differ from
+    one another only in how many beats make a bar.
+    """
+    beat = eighths_per_beat(pulse)
+    bar = pulse.get("eighths_per_bar")
+    if beat in (3, 6) or bar in (6, 9, 12):
+        return 3
+    return 2
 
 
 def eighths_per_bar(pulse):
+    """How many eighths make a bar, as recorded; else what the beat implied.
+
+    Recorded explicitly once the viewer could say 9/8. Before that only the
+    beat was stored, and every triple meter was taken to be 6/8, which is why
+    the first slip jig anyone opened could not be marked.
+    """
+    bar = pulse.get("eighths_per_bar")
+    if bar:
+        return int(bar)
     return 6 if truth_meter(pulse) == 3 else 8
 
 

@@ -98,13 +98,16 @@
     <label>tone <input type="range" id="vol" min="0" max="100" value="45"></label>
     <button id="pulsebtn" class="on" title="the eighth-note grid the music is on">grid</button>
     <button class="mode" data-mode="beats">draw beats</button>
-    <label title="how many eighth notes fit inside one beat you draw"
-           >a beat is
+    <label title="what one beat you draw is, and how many of them make a bar"
+           >meter
       <select id="tapmeter">
-        <option value="2">2 eighths · reel counted in 4</option>
-        <option value="3">3 eighths · jig, the dotted quarter</option>
-        <option value="4">4 eighths · reel counted in 2</option>
-        <option value="6">6 eighths · jig counted in 2</option>
+        <option value="2:8">reel / hornpipe · 4/4 · beat = quarter</option>
+        <option value="4:8">reel / hornpipe · 4/4 · beat = half</option>
+        <option value="3:6">jig · 6/8 · beat = dotted quarter</option>
+        <option value="6:6">jig · 6/8 · beat = whole bar</option>
+        <option value="3:9">slip jig · 9/8 · beat = dotted quarter</option>
+        <option value="3:12">slide · 12/8 · beat = dotted quarter</option>
+        <option value="2:4">polka · 2/4 · beat = quarter</option>
       </select>
     </label>
     <button id="tapclear">clear beats</button>
@@ -512,14 +515,28 @@ function stepFrom(t, typical, anchorT) {
   return (a && b) ? typical * b / a : typical;
 }
 
+// "beat:bar" in eighths, from the meter control.
+function meterChoice() {
+  const [beat, bar] = document.getElementById('tapmeter').value.split(':').map(Number);
+  return [beat || 2, bar || 8];
+}
+// The control's value for a saved annotation. Older ones stored only the beat,
+// and for those the bar is the one they always implied.
+function meterValue(tp) {
+  const beat = tp.grouping || 2;
+  const bar = tp.eighths_per_bar || ((beat === 3 || beat === 6) ? 6 : 8);
+  return beat + ':' + bar;
+}
+
 function fitTaps() {
   if (beats.length < 1) { tapped = null; refreshBeatReadout(); return; }
-  // How many eighths are inside one beat you draw. Not the meter: a reel
-  // counted in two has four, counted in four has two, and the tune is the
-  // same either way. Castle Kelly was drawn at the half note and read as the
-  // quarter, which made the whole grid twice too slow.
-  const grouping = parseInt(document.getElementById('tapmeter').value, 10);
-  const perBar = (grouping === 3 || grouping === 6) ? 6 : 8;
+  // Two numbers, because one could not tell a jig from a slip jig. The
+  // first is how many eighths are inside one beat you draw -- a reel counted
+  // in two has four, counted in four has two, and it is the same reel. The
+  // second is how many eighths make a bar, which is what separates a jig (six)
+  // from a slip jig (nine) from a slide (twelve) when all three are drawn at
+  // the same dotted-quarter beat.
+  const [grouping, perBar] = meterChoice();
   const beatsPerBar = Math.max(1, Math.round(perBar / grouping));
   const sorted = [...beats].sort((a, b) => a - b);
 
@@ -574,7 +591,7 @@ function fitTaps() {
     }
   }
   const eighth = typical / grouping;
-  tapped = { period_ms: eighth * 1000, phase_ms: sorted[0] * 1000, grouping,
+  tapped = { period_ms: eighth * 1000, phase_ms: sorted[0] * 1000, grouping, eighths_per_bar: perBar,
              level: 'beat', beats: sorted.slice(),
              downbeats: downbeats.slice().sort((a, b) => a - b),
              bar_anchored: downbeats.length > 0, grid };
@@ -587,8 +604,8 @@ function refreshBeatReadout() {
   const el = document.getElementById('offsetlabel');
   if (!tapped) { el.textContent = beats.length ? beats.length + ' beat drawn' : ''; return; }
   const bpm = 60000 / (tapped.period_ms * tapped.grouping);
+  const perBar = tapped.eighths_per_bar;
   const bars = downbeats.length ? downbeats.length + ' bar starts · ' : 'no bar start marked · ';
-  const perBar = (tapped.grouping === 3 || tapped.grouping === 6) ? 6 : 8;
   el.textContent = beats.length + ' beats drawn · ' + bars + bpm.toFixed(0) + ' bpm · eighth ' +
     tapped.period_ms.toFixed(0) + 'ms · bar ' +
     (tapped.period_ms * perBar / 1000).toFixed(2) + 's';
@@ -1058,7 +1075,8 @@ async function save() {
     frontend: D.frontend, labels,
     pulse: tapped ? {
       period_ms: tapped.period_ms, phase_ms: tapped.phase_ms,
-      grouping: tapped.grouping, tapped_level: 'beat', beats: tapped.beats,
+      grouping: tapped.grouping, eighths_per_bar: tapped.eighths_per_bar,
+      tapped_level: 'beat', beats: tapped.beats,
       downbeats: tapped.downbeats, bar_anchored: tapped.bar_anchored,
     } : null,
   };
@@ -1145,7 +1163,7 @@ renderStaff();
 resize();
 setMode('listen');
 if (D.tapped_pulse && beats.length) {
-  document.getElementById('tapmeter').value = String(D.tapped_pulse.grouping);
+  document.getElementById('tapmeter').value = meterValue(D.tapped_pulse);
   fitTaps();
   dirty = false;
   document.getElementById('save').disabled = true;

@@ -170,3 +170,18 @@ def test_tempo_map_hears_a_tune_speed_up():
     late = [p for t, p in zip(tm["t_ms"], tm["period_ms"]) if t > 40000]
     assert np.median(early) == pytest.approx(160.0, rel=0.04)
     assert np.median(late) == pytest.approx(145.0, rel=0.04)
+
+
+@pytest.mark.parametrize("pulse,meter,bar", [
+    ({"grouping": 3}, 3, 6),                              # old jig annotations
+    ({"grouping": 2}, 2, 8),                              # old reel annotations
+    ({"grouping": 4}, 2, 8),                              # reel drawn at the half note
+    ({"grouping": 3, "eighths_per_bar": 9}, 3, 9),        # slip jig
+    ({"grouping": 3, "eighths_per_bar": 12}, 3, 12),      # slide
+    ({"grouping": 2, "eighths_per_bar": 4}, 2, 4),        # polka
+])
+def test_the_bar_is_read_from_the_annotation_when_it_says(pulse, meter, bar):
+    from lab.bench.pulse import eighths_per_bar, truth_meter
+
+    assert truth_meter(pulse) == meter
+    assert eighths_per_bar(pulse) == bar

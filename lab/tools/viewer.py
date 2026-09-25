@@ -99,6 +99,10 @@ def save_annotation(payload):
             "period_ms": round(float(pulse["period_ms"]), 2),
             "phase_ms": round(float(pulse["phase_ms"]), 2),
             "grouping": int(pulse["grouping"]),
+            # How many eighths make a bar, which the beat alone cannot say: a
+            # jig and a slip jig are both drawn at the dotted quarter, and one
+            # has six eighths to a bar and the other nine.
+            "eighths_per_bar": int(pulse.get("eighths_per_bar") or 0) or None,
             "tapped_level": pulse.get("tapped_level") or "beat",
             # The quarter notes as drawn. The period above is derived from
             # them and these are the record: a drawn line is a fact about
