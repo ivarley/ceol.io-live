@@ -250,6 +250,30 @@ def build_payload(args):
     from lab.frontends.segmentation import PITCH_CLASS_BASE
 
     midis = [PITCH_CLASS_BASE, PITCH_CLASS_BASE + 11]
+    # What was heard, put on the eighth-note grid and spelled. Needs the
+    # grid's period and not its phase, which is the whole reason it can be
+    # drawn at all: a note's length in eighths does not depend on where the
+    # bar starts, and the bar is the one thing the lab cannot find.
+    staff = []
+    if pulse and pulse.get("period_ms"):
+        from lab.analysis.notation import notate, spell
+
+        written = notate(notes, pulse["period_ms"], phase_ms=t0)
+        eighth_s = pulse["period_ms"] / 1000.0
+        for item in written["quantised"]:
+            entry = {"t": round(item["start"] * eighth_s, 4),
+                     "eighths": item["eighths"], "rest": item["rest"]}
+            if not item["rest"]:
+                letter, alteration = spell(item["pc"], written["sharps"])
+                entry["step"] = "CDEFGAB".index(letter)
+                entry["acc"] = alteration
+                entry["pc"] = item["pc"]
+            staff.append(entry)
+        staff_key = written["key"]
+        staff_sharps = written["sharps"]
+    else:
+        staff_key, staff_sharps = None, 0
+
     return {
         "recording_id": args.recording,
         "segment_id": args.segment,
@@ -278,6 +302,9 @@ def build_payload(args):
         "onset": [round(float(v) / max(1e-9, peak), 3) for v in envelope],
         "onset_hop_ms": onset_hop_ms,
         "pulse_expected": expected_grouping(seg.tune_type) if seg else None,
+        "staff": staff,
+        "staff_key": staff_key,
+        "staff_sharps": staff_sharps,
     }, t0, t1
 
 
