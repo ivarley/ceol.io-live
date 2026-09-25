@@ -43,7 +43,19 @@
     display: block;
 }
 
-.hamburger-item {
+/* The :visited half is load-bearing, not belt-and-braces. theme.css carries
+   `a:visited { color: var(--link-color) }` so that a visited link does not go the
+   browser's purple — and at (0,1,1) that out-specifies a bare `.hamburger-item`
+   (0,1,0). The effect: every destination you had actually been to turned accent
+   green, one at a time as you used the app, while Share stayed white because
+   href="#" never counts as visited. It read as "Share is the odd one out" rather
+   than "six items are wrong", which is why it took a screenshot of a browser with
+   real history to see. A fresh automation profile has none, so it never reproduced.
+
+   Anything here that sets a colour needs its own :visited, or it has to beat
+   (0,1,1) on its own. */
+.hamburger-item,
+.hamburger-item:visited {
     display: block;
     padding: 12px 16px;
     text-decoration: none;
@@ -71,12 +83,6 @@
     background-color: transparent;
 }
 
-/* Where you are now, the same thing the tab bar says with a filled glyph. */
-.hamburger-item.active,
-.hamburger-item.active:hover {
-    color: var(--primary, #65b464);
-}
-
 /* The menu is two groups: where you can go, then what you can do from here. The
    break is a gap, not a second line — every item already draws a hairline under
    itself, so a heavier rule on top of one just reads as a smudge. */
@@ -89,6 +95,7 @@
    live-logging shell scopes its own vars onto .live-menu and does not define this
    one. */
 .hamburger-item-out,
+.hamburger-item-out:visited,
 .hamburger-item-out:hover {
     color: var(--danger, #e85a5a);
 }
