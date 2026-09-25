@@ -102,4 +102,21 @@
   body.has-tab-bar .hamburger-menu {
     display: none;
   }
+
+  /* Logging is a task, not navigation (spec 052 §B14). While you are writing a log
+     the bar goes away — it would otherwise sit on the composer, which is why this
+     screen had no bar at all — and comes back the moment you are done. The class is
+     set by the logger; nothing else uses it. */
+  body.logging-edit .tab-bar {
+    display: none;
+  }
+
+  /* The logger owns its own scrolling, so it does not get the wrapper padding above.
+     The reservation goes on its flex COLUMN, not on the scroller: the scroller is
+     only the middle of that column, and below it sits the dock holding "✎ Edit log".
+     Padding the scroller left the dock exactly where it was — under the bar, with
+     the bar swallowing its taps. Shortening the column moves both. */
+  body.has-tab-bar:not(.logging-edit) main {
+    padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+  }
 }

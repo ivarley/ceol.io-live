@@ -676,6 +676,43 @@ furniture: the recurrence editor, the generated web address, the buffer row, the
 footer. `grouped.css` also grew one rule, `.kit-field > label`, so an editable row does
 not have to name its own label column.
 
+### B14. The tab bar reaches the logger; the session page needs no back — **DONE 2026-09-25**
+
+**The rule.** A screen gets a back control only when the active tab does not already
+land where back would go. One level below a tab root, the tab *is* back — and it is
+already highlighted as active, which is exactly what "you are inside this section,
+tap to return" looks like on a phone. So the session page gets nothing, and the `⮐`
+that used to hang off the end of its `<h1>` is deleted: 0.6em, border-grey, aligned
+to nothing, too small to hit, and a second worse way of saying what the tab bar
+already says.
+
+**The logger has the tab bar now, in view mode only.** It was the one phone screen
+without one — not a decision, just the screen §B8 Stage 5 had not reached. The
+original reason for caution was real: a bar pinned to the bottom would sit on the
+composer. That is true while you are *writing* a log and false the rest of the time,
+so the bar is there while you read one and hides while you write. Reading a log is an
+ordinary screen of the app; logging one is the full-screen task it has always been.
+
+- `live_logging.html` renders `tab_bar.html` and carries `has-tab-bar`, so the
+  existing `body.has-tab-bar .hamburger-menu { display: none }` rule takes the
+  hamburger off this screen too — the last phone surface that still had one for a
+  signed-in user.
+- `App.svelte` toggles `body.logging-edit` from `mode`, because the bar is rendered
+  by the Jinja shell and lives outside the component.
+
+**One bug, caught by a test rather than by looking.** The first cut reserved the
+bar's height on `.sets`, the scroller. But the logger's `main` is a flex column, the
+scroller is only its middle, and below it sits `.dock` holding "✎ Edit log" — which
+stayed exactly where it was, under the bar, with the bar swallowing its taps. The
+screen looked perfect and the button did nothing. The reservation belongs on the flex
+column, which moves both. `e2e/mobile/tab-bar-logger.mobile.spec.ts` asserts the gap
+is non-negative *and* clicks the button, because the geometry is only a proxy.
+
+**Still open:** the logger is two levels below the Sessions tab, so tapping Sessions
+skips the session it belongs to. It keeps its `⮐` for now. A proper back control
+there is the remaining design decision, along with the signed-out case — a signed-out
+visitor has no Me and no Tunes, so they still get the hamburger, on every page.
+
 ### B8. The staged conversion plan
 
 Ordered by **blast radius, not by visibility**. Three things make a stage risky here:

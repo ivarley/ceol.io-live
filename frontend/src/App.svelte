@@ -757,6 +757,15 @@
   // log can put it back -- completion locks editing for everyone (spec 024).
   let requestedEdit = false
   const viewing = $derived(mode === 'view')
+  // The tab bar is app navigation, and logging is a task, not navigation (spec 052
+  // §B14). So it is there while you read a log and gone while you write one — which
+  // is also what keeps it off the composer, the reason it was left off this screen
+  // in the first place. Driven from a body class because the bar is rendered by the
+  // Jinja shell, outside this component.
+  $effect(() => {
+    document.body.classList.toggle('logging-edit', !viewing)
+    return () => document.body.classList.remove('logging-edit')
+  })
   // Editing affordances (seams, row actions, composer) are allowed only when in edit mode
   // AND not filtering — search mode hides them regardless of the underlying view/edit mode.
   const canEdit = $derived(!viewing && !searchMode)

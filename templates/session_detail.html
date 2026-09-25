@@ -13,7 +13,13 @@
 <div class="landing-page" style="display: block;">
 
     <div style="padding: 10px 10px 5px 10px;">
-        <h1 class="session-title-heading">{{ session.name }} <a href="/sessions" style="color: var(--border-color, #dee2e6); text-decoration: none; margin-left: 10px; font-size: 0.6em; transition: color 0.2s ease;" onmouseover="this.style.color='var(--primary, #65b464)'" onmouseout="this.style.color='var(--border-color, #dee2e6)'">⮐</a>{% if is_session_admin %}<a href="/admin/sessions/{{ session.path }}" class="add-link">Admin</a>{% endif %}</h1>
+        {# No back control here (spec 052 §B14). This page is one level below the
+           Sessions tab, and that tab is already highlighted as active — which is
+           exactly what "you are inside this section, tap to go back" looks like on
+           a phone. The ⮐ that used to hang off the end of this heading was a
+           second, worse way to do the same thing: 0.6em, border-grey, not aligned
+           to anything and too small to hit. #}
+        <h1 class="session-title-heading">{{ session.name }}{% if is_session_admin %}<a href="/admin/sessions/{{ session.path }}" class="add-link">Admin</a>{% endif %}</h1>
 
         <div class="session-details">
             {# Role badge (Admin / Member / Visitor) -- mounted by the Svelte bundle. #}
