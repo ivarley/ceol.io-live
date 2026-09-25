@@ -32,7 +32,7 @@
 // performs those awaits before consuming the response.
 // Data is never stored here.
 
-const VERSION = 'v34'
+const VERSION = 'v35'
 const SHELL = `ceol-io-shell-${VERSION}` // shared, non-personalized assets + public/help pages
 // Page/api caches are VERSION-scoped too, so a VERSION bump (e.g. a deploy) invalidates
 // stale page snapshots + cached API data, not just the shell.
