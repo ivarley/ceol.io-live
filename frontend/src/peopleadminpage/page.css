@@ -313,15 +313,42 @@
 /* ---- mobile ------------------------------------------------------------------ */
 
 @media (max-width: 768px) {
-    /* Toolbar responsive - keep on same line */
+    /* This toolbar used to come to ~522px on a 390px screen, and the symptom showed
+       up somewhere else entirely: a page wider than the device makes the browser
+       widen the LAYOUT viewport and zoom out, and `position: fixed` pins to that
+       wider viewport — so the tab bar stopped sitting on the bottom edge and looked
+       like it was scrolling. The footer was fine; the toolbar was too wide.
+
+       The culprit was the two <select>s. A select's intrinsic width comes from its
+       longest option ("Site Users Only"), and with no `min-width: 0` a flex item
+       will not shrink below that — so the row could not fit however much the search
+       box gave up. The rule below is what actually fixes it; `flex-wrap` is for the
+       narrower screens where even the shrunk row runs out of space. (Checked by
+       reverting each half: without the select rules the page is 522px again.) */
     .people-toolbar {
         gap: 0.5rem;
+        flex-wrap: wrap;
     }
 
+    /* Search gets its own line — it is the control people actually use here. */
     .people-search-wrap {
-        flex: 1;
+        flex: 1 1 100%;
         min-width: 0;
         max-width: none;
+    }
+
+    /* The two filters share a line. A basis rather than 0, so their labels stay
+       readable — squeezed to "All F⌄" they say nothing — and the count and button
+       wrap below them when there is no room. */
+    .people-toolbar .people-account-filter {
+        flex: 1 1 130px;
+        min-width: 0;
+        width: auto;
+    }
+
+    .people-count {
+        flex: 0 0 auto;
+        white-space: nowrap;
     }
 
     .btn-add-person {

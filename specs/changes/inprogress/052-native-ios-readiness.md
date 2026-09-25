@@ -939,6 +939,37 @@ No new bundle: it is a list and a search box, so it is a Jinja page with the emb
 that `GET /api/tunes/top` returns (spec 035's rule holds) and about 60 lines of
 vanilla JS. The rows are real `<button>`s, so keyboard access needs no invented roles.
 
+### B19. A page wider than the phone breaks the tab bar — **DONE 2026-09-25**
+
+Reported as "the footer scrolls on admin > people". The footer was fine.
+
+`/admin/people` came to **522px on a 390px screen**. A page wider than the device
+makes the browser widen the LAYOUT viewport and zoom the whole thing out, and
+`position: fixed` pins to that wider viewport — so the tab bar stops sitting on the
+bottom edge and appears to scroll. The symptom and the cause were on opposite ends of
+the page.
+
+The culprit was the two `<select>` filters in the toolbar. A select's intrinsic width
+is its longest option ("Site Users Only"), and **a flex item will not shrink below its
+intrinsic width without `min-width: 0`** — so the row could not fit however much the
+search box gave up. The mobile block even said "keep on same line", which is fine at
+tablet width and impossible at 390 with five controls.
+
+`e2e/mobile/no-horizontal-overflow.mobile.spec.ts` asserts `scrollWidth <=
+clientWidth` across **every phone surface**, not just the one that broke — the check
+is cheap and the failure mode is this indirect. Elements inside a deliberate
+horizontal scroller (`.table-responsive`, the logger's `.sets`) are exempt, because a
+data table on a phone has to scroll somehow. A scan of all 14 phone pages found this
+was the only one.
+
+Two things the fix taught, both by reverting halves of it:
+
+- `flex-wrap` was **not** what fixed it — the `min-width: 0` on the selects was. The
+  first version of the comment credited the wrap, and removing the wrap alone left
+  the page fitting fine. The wrap earns its place only on narrower screens.
+- The guard bites: restoring the original toolbar rules fails with
+  "/admin/people is 522px wide on a 393px screen".
+
 ### B8. The staged conversion plan
 
 Ordered by **blast radius, not by visibility**. Three things make a stage risky here:
