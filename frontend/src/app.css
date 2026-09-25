@@ -205,6 +205,10 @@ main {
 /* Points right when closed, down when open — the drawer expands in place under the
    band, so the chevron says which way it went. */
 .header-chevron {
+  /* Fixed box, so rotating the glyph turns it in place instead of changing the
+     size of its own rect and nudging what sits beside it. */
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px;
   color: var(--muted); font-size: 18px; line-height: 1;
   transition: transform 0.18s ease;
 }
@@ -215,6 +219,10 @@ main {
    rather than pushed. z-35 puts it over the log (unlayered) and under the appbar
    (40) — and well under the dialog tier, so "Mark complete" and the date editor land
    on top of it instead of behind it. */
+/* The band sits one above the drawer so the drawer slides out from BEHIND it
+   rather than across it. */
+.topbar { position: relative; z-index: 36; }
+
 .hx-drawer {
   position: fixed;
   top: var(--hx-top, 110px);

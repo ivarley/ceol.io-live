@@ -730,9 +730,35 @@ bar and the session name both — so you never lose your place on the screen you
 standing on. And the Sheet version had a bug that made its own buttons look broken:
 "Mark complete" opens a Dialog at the modal tier (1910) while the Sheet sat at the
 sheet tier (2040), so the confirmation rendered BEHIND the panel. A plain drawer at
-z-35 lets every dialog land on top of it. The chevron turns to point down, and the
-summary line hides while it is open — the drawer is already saying the date and the
-tune count.
+z-35 lets every dialog land on top of it. The chevron turns to point down.
+
+**The band does not move.** The first cut hid the summary line while the drawer was
+open, on the grounds that the drawer repeats the date. That shortened the band, which
+walked the avatars, the help icon and the chevron down the screen on every open — a
+header that jumps is more distracting than a date that appears twice. The summary
+stays, and a test snapshots the icons' positions before and after and requires them
+equal. (It has to wait for the log to load first: the band grows as the date line and
+the avatars arrive, so an early snapshot measures loading-vs-loaded.)
+
+**It slides; it does not unroll.** Svelte's `slide` animates height, so the panel
+grew a row at a time. A one-line custom transition moves it as a single piece —
+`translateY(-100%)` to `0` — and `.topbar` sits one z-index above it, so it comes out
+from behind the band rather than across it.
+
+**The second stacking bug, which the first fix did not reach.** The recordings panel
+still opened underneath. `main` carries an identity transform — `matrix(1,0,0,1,0,0)`,
+not `none` — which is enough to make it a stacking context, so that panel's z-index
+of 91 could never rise above a drawer sitting OUTSIDE `main` at z-35, however much
+larger 91 is. The drawer is rendered inside `main` now. Worth remembering: an
+identity transform is invisible and still changes what z-index means.
+
+**One-field editors are cards, not screens.** The kit Sheet is full-screen below
+768px, which overstates what is happening when the content is a label, a text box and
+Save — and it buries the drawer you opened it from. `Sheet` gained `compact`: the
+centred-card treatment the desktop sheet already had, at every width. The name and
+date editors use it. Note the rule needs BOTH classes (`.kit-sheet.kit-sheet-compact`)
+— a single class ties with the base `inset: 0` and loses on source order, which
+pinned the card to the top-left corner and then translated it off screen.
 
 **It is also where back-to-the-session finally belongs.** The logger sits two levels
 under the Sessions tab, so the tab alone lands on the list; the last group in the

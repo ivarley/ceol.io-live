@@ -27,6 +27,11 @@
     open = $bindable(false),
     title = '',
     desktop = 'center', // 'center' | 'dock' — the ONE responsive knob
+    // A centred card on EVERY width, phones included. For an editor that is one
+    // field and two buttons: taking the whole screen for it overstates what is
+    // happening, and it buries whatever you opened it from. A Sheet is for a task
+    // with enough in it to fill a screen; this is for the ones without.
+    compact = false,
     back = null, // label for a back chevron ("‹ Label") replacing Cancel
     cancelLabel = 'Cancel',
     onCancel = () => {}, // abandon: Cancel button, back chevron, scrim tap, Escape
@@ -67,7 +72,7 @@
 <BitsDialog.Root bind:open onOpenChange={handleOpenChange}>
   <BitsDialog.Portal>
     <BitsDialog.Overlay class="kit-sheet-scrim" />
-    <BitsDialog.Content class="kit-sheet kit-sheet-{desktop}" preventScroll={false} aria-describedby={undefined}>
+    <BitsDialog.Content class="kit-sheet kit-sheet-{desktop}{compact ? ' kit-sheet-compact' : ''}" preventScroll={false} aria-describedby={undefined}>
       <header class="kit-sheet-head">
         {#if back != null}
           <button type="button" class="kit-sheet-back" onclick={cancel}>‹ {back}</button>
@@ -112,6 +117,21 @@
     background: var(--bg-color, #fff);
     color: var(--text-color, #252930);
   }
+  /* Compact: the centred-card treatment the desktop sheet gets, at every width.
+     Two classes, not one: the base .kit-sheet rule sets `inset: 0` and ties on
+     specificity, and a tie is decided by source order — which left the card pinned
+     to the top-left corner and then translated off the screen by its own centring
+     transform. */
+  :global(.kit-sheet.kit-sheet-compact) {
+    inset: 50% auto auto 50%;
+    transform: translate(-50%, -50%);
+    width: min(420px, calc(100vw - 32px));
+    max-height: 80vh;
+    border: 1px solid var(--border-color, #ddd);
+    border-radius: var(--r-lg, 12px);
+    box-shadow: var(--shadow-lg, 0 8px 30px rgba(0, 0, 0, 0.45));
+  }
+
   @media (min-width: 768px) {
     :global(.kit-sheet-center) {
       inset: auto;

@@ -1,6 +1,7 @@
 <script>
   import { onMount, onDestroy, untrack, tick } from 'svelte'
-  import { fly, slide } from 'svelte/transition'
+  import { fly } from 'svelte/transition'
+  import { cubicOut } from 'svelte/easing'
   import { flip } from 'svelte/animate'
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
   import { bootstrap, vocabulary, sendOp, sendTyping, liveMatch, livePeople, deepSearch, fetchIncipit, openStream, probeServers, tuneDetail, myTunesList, myTunesOp, instanceAudio } from './client.js'
@@ -332,6 +333,12 @@
   let notesDraft = $state('') // editable buffer in the expanded header
   let logComplete = $state(false) // session marked "completely logged" — hides editing (§024)
   let expanded = $state(false)
+  // Svelte's `slide` animates HEIGHT, which unrolls the panel a row at a time. This
+  // moves it as one piece, out from under the session band (which sits a z-index
+  // above it) — the drawer arrives, it does not grow.
+  function slideOut(node, { duration = 220 } = {}) {
+    return { duration, easing: cubicOut, css: (t) => `transform: translateY(${(t - 1) * 100}%)` }
+  }
   // The drawer hangs off the bottom of the session band, which is not a fixed height
   // — a festival log carries its own name on an extra line. Measured on open rather
   // than guessed.
@@ -3831,12 +3838,12 @@
           {#if instanceName}
             <div class="session-instance-name">{instanceName}</div>
           {/if}
-          <!-- Hidden while the drawer is open: it says the date and the tune count,
-               and the drawer directly below is already saying both. -->
-          {#if !expanded}
-            <div class="session-date">{sessionDate}{#if ordered.length}{sessionDate ? ' · ' : ''}{tuneSummary}{/if}</div>
-          {/if}
-          {#if notesText && !expanded && logComplete}
+          <!-- Stays put while the drawer is open. Hiding it shortened the band, which
+               moved the avatars, the help icon and the chevron down the screen every
+               time you opened the drawer — a header that jumps is more distracting
+               than a date that appears twice. -->
+          <div class="session-date">{sessionDate}{#if ordered.length}{sessionDate ? ' · ' : ''}{tuneSummary}{/if}</div>
+          {#if notesText && logComplete}
             <div class="session-notes">{notesText}</div>
           {/if}
         </div>
@@ -4610,6 +4617,156 @@
       />
     </div>
   {/if}
+  {#if expanded}
+    <!-- A drawer, not a modal sheet (spec 052 §B15). It slides down from under the
+         session band and leaves the whole header — the ceol bar AND the session name —
+         exactly where it was, so you never lose your place. Fixed rather than in flow
+         so it overlays the log instead of shoving it down, and its top is measured
+         from the band's own bottom edge, which changes with the session's name and
+         whether this log has one of its own.
+
+         It is also NOT modal, which is what fixes the buttons inside it: Mark complete
+         opens a Dialog at the modal tier (1910) and the Sheet sat at the sheet tier
+         (2040), so the confirmation rendered BEHIND the panel and the button looked
+         broken. A plain drawer at z-35 lets every dialog land on top of it. -->
+    <div class="hx-drawer" style:--hx-top="{topbarBottom}px" transition:slideOut={{ duration: 220 }}>
+    <div class="hx-drawer-body">
+      <div class="kit-group">
+        <!-- Stacked because the value is a date AND a time range — "Fri · Sep 25, 2026 ·
+             8:00pm-11pm" does not fit a value column next to an action, and the year is
+             the first thing a middle-truncation eats. -->
+        <div class="kit-field kit-field-stack">
+          <span class="kit-field-head">
+            <span class="kit-field-label">Date</span>
+            {#if !readOnly}
+              <button class="hx-act" onclick={openDateEditor}>Change</button>
+            {/if}
+          </span>
+          <span class="kit-field-value">
+            <!-- Separator inside the expression: Svelte trims whitespace at the
+                 start of an element, so a literal " · " here loses its space. -->
+            {sessionDate || '—'}{#if timeLabel}<span class="hx-time">{` · ${timeLabel}`}</span>{/if}
+          </span>
+        </div>
+
+        <!-- Name sits under Date because it answers the same question — which log is
+             this? — and because at a festival the date can't answer it alone. Shown
+             even when unset, since an unnamed log that COULD be named is exactly the
+             case the row exists to fix. Unnamed reads differently by session type:
+             "The usual" is a true statement about a weekly session's venue, but says
+             nothing at a festival where there is no usual. -->
+        {#if instanceName || !readOnly}
+          <div class="kit-field">
+            <span class="kit-field-label">Name</span>
+            <span class="kit-field-value">{instanceName || (isFestival ? 'Unnamed' : 'The usual')}</span>
+            {#if !readOnly}
+              <button class="hx-act" onclick={openNameEditor}>{instanceName ? 'Rename' : 'Name it'}</button>
+            {/if}
+          </div>
+        {/if}
+
+        <div class="kit-field">
+          <span class="kit-field-label">Tunes</span>
+          <span class="kit-field-value">{tuneSummary}</span>
+        </div>
+
+        <div class="kit-field header-complete">
+          <span class="kit-field-label">Status</span>
+          {#if logComplete}
+            <span class="kit-field-value hc-done">✓ Marked complete</span>
+            {#if !readOnly}
+              <button class="hx-act" onclick={markIncomplete}>Re-open</button>
+            {/if}
+          {:else}
+            <span class="kit-field-value">Still logging</span>
+            {#if !readOnly}
+              <button class="hx-act" onclick={markComplete}>Mark complete</button>
+            {/if}
+          {/if}
+        </div>
+      </div>
+
+      {#if (trackAttendance && !readOnly) || canManageRecordings || (!readOnly && roster.length)}
+        <h3 class="kit-group-head">Who and what</h3>
+        <div class="kit-group">
+          {#if trackAttendance && !readOnly}
+            <div class="kit-field kit-field-stack">
+              <span class="kit-field-head">
+                <span class="kit-field-label">{attendanceLabel}</span>
+                <b class="hx-count">{checkedIn.length}</b>
+                <button class="hx-act" onclick={openAttendance}>Manage</button>
+              </span>
+              <span class="kit-field-value">
+                {checkedIn.length ? checkedIn.map((a) => a.display_name).join(', ') : 'No one checked in yet'}
+              </span>
+            </div>
+          {/if}
+
+          {#if !readOnly && roster.length}
+            <div class="kit-field kit-field-stack">
+              <span class="kit-field-head"><span class="kit-field-label">Logging</span></span>
+              <span class="kit-field-value">
+                {roster.filter((p) => !p.away).map((p) => p.name).join(', ') || 'No one right now'}
+                {#if roster.some((p) => p.away)}
+                  <span class="hx-away">· away: {roster.filter((p) => p.away).map((p) => p.name).join(', ')}</span>
+                {/if}
+              </span>
+            </div>
+          {/if}
+
+          {#if canManageRecordings}
+            <div class="kit-field">
+              <span class="kit-field-label">Recordings</span>
+              <span class="kit-field-value">
+                {#if recordingCount === null}
+                  —
+                {:else if recordingCount === 0}
+                  none uploaded yet
+                {:else}
+                  <b class="hx-strong">{recordingCount}</b>
+                  {recordingCount === 1 ? 'recording' : 'recordings'}
+                {/if}
+              </span>
+              <button class="hx-act" onclick={() => (recordingsOpen = true)}>Manage</button>
+            </div>
+          {/if}
+        </div>
+      {/if}
+
+      {#if readOnly}
+        <!-- Signed out: notes are part of the public log, but read-only. -->
+        {#if notesText}
+          <h3 class="kit-group-head">Notes</h3>
+          <div class="kit-group">
+            <div class="kit-field kit-field-stack">
+              <span class="kit-field-value header-notes-ro">{notesText}</span>
+            </div>
+          </div>
+        {/if}
+      {:else}
+        <h3 class="kit-group-head">Notes</h3>
+        <div class="kit-group">
+          <div class="hx-notes">
+            <textarea class="hn-area" rows="3" placeholder="Add notes for this session…" bind:value={notesDraft}></textarea>
+            {#if notesDraft !== notesText}
+              <span class="hn-actions">
+                <button class="hn-save" onclick={saveNotes}>Save</button>
+                <button class="hn-cancel" onclick={() => (notesDraft = notesText)}>Cancel</button>
+              </span>
+            {/if}
+          </div>
+        </div>
+      {/if}
+
+      <div class="kit-group">
+        <a class="kit-field" id="go-to-session" href="/sessions/{config.sessionPath}">
+          <span class="kit-field-label">{sessionName || 'The session'}</span>
+          <span class="kit-chev" aria-hidden="true">›</span>
+        </a>
+      </div>
+      </div>
+    </div>
+  {/if}
 </main>
 
 <Dialog
@@ -4641,156 +4798,6 @@
   two levels under the Sessions tab, so the tab alone lands you on the list; this row
   is the missing level, and it replaces a ⮐ that hung off the end of the title.
 -->
-{#if expanded}
-  <!-- A drawer, not a modal sheet (spec 052 §B15). It slides down from under the
-       session band and leaves the whole header — the ceol bar AND the session name —
-       exactly where it was, so you never lose your place. Fixed rather than in flow
-       so it overlays the log instead of shoving it down, and its top is measured
-       from the band's own bottom edge, which changes with the session's name and
-       whether this log has one of its own.
-
-       It is also NOT modal, which is what fixes the buttons inside it: Mark complete
-       opens a Dialog at the modal tier (1910) and the Sheet sat at the sheet tier
-       (2040), so the confirmation rendered BEHIND the panel and the button looked
-       broken. A plain drawer at z-35 lets every dialog land on top of it. -->
-  <div class="hx-drawer" style:--hx-top="{topbarBottom}px" transition:slide={{ duration: 180 }}>
-  <div class="hx-drawer-body">
-    <div class="kit-group">
-      <!-- Stacked because the value is a date AND a time range — "Fri · Sep 25, 2026 ·
-           8:00pm-11pm" does not fit a value column next to an action, and the year is
-           the first thing a middle-truncation eats. -->
-      <div class="kit-field kit-field-stack">
-        <span class="kit-field-head">
-          <span class="kit-field-label">Date</span>
-          {#if !readOnly}
-            <button class="hx-act" onclick={openDateEditor}>Change</button>
-          {/if}
-        </span>
-        <span class="kit-field-value">
-          <!-- Separator inside the expression: Svelte trims whitespace at the
-               start of an element, so a literal " · " here loses its space. -->
-          {sessionDate || '—'}{#if timeLabel}<span class="hx-time">{` · ${timeLabel}`}</span>{/if}
-        </span>
-      </div>
-
-      <!-- Name sits under Date because it answers the same question — which log is
-           this? — and because at a festival the date can't answer it alone. Shown
-           even when unset, since an unnamed log that COULD be named is exactly the
-           case the row exists to fix. Unnamed reads differently by session type:
-           "The usual" is a true statement about a weekly session's venue, but says
-           nothing at a festival where there is no usual. -->
-      {#if instanceName || !readOnly}
-        <div class="kit-field">
-          <span class="kit-field-label">Name</span>
-          <span class="kit-field-value">{instanceName || (isFestival ? 'Unnamed' : 'The usual')}</span>
-          {#if !readOnly}
-            <button class="hx-act" onclick={openNameEditor}>{instanceName ? 'Rename' : 'Name it'}</button>
-          {/if}
-        </div>
-      {/if}
-
-      <div class="kit-field">
-        <span class="kit-field-label">Tunes</span>
-        <span class="kit-field-value">{tuneSummary}</span>
-      </div>
-
-      <div class="kit-field header-complete">
-        <span class="kit-field-label">Status</span>
-        {#if logComplete}
-          <span class="kit-field-value hc-done">✓ Marked complete</span>
-          {#if !readOnly}
-            <button class="hx-act" onclick={markIncomplete}>Re-open</button>
-          {/if}
-        {:else}
-          <span class="kit-field-value">Still logging</span>
-          {#if !readOnly}
-            <button class="hx-act" onclick={markComplete}>Mark complete</button>
-          {/if}
-        {/if}
-      </div>
-    </div>
-
-    {#if (trackAttendance && !readOnly) || canManageRecordings || (!readOnly && roster.length)}
-      <h3 class="kit-group-head">Who and what</h3>
-      <div class="kit-group">
-        {#if trackAttendance && !readOnly}
-          <div class="kit-field kit-field-stack">
-            <span class="kit-field-head">
-              <span class="kit-field-label">{attendanceLabel}</span>
-              <b class="hx-count">{checkedIn.length}</b>
-              <button class="hx-act" onclick={openAttendance}>Manage</button>
-            </span>
-            <span class="kit-field-value">
-              {checkedIn.length ? checkedIn.map((a) => a.display_name).join(', ') : 'No one checked in yet'}
-            </span>
-          </div>
-        {/if}
-
-        {#if !readOnly && roster.length}
-          <div class="kit-field kit-field-stack">
-            <span class="kit-field-head"><span class="kit-field-label">Logging</span></span>
-            <span class="kit-field-value">
-              {roster.filter((p) => !p.away).map((p) => p.name).join(', ') || 'No one right now'}
-              {#if roster.some((p) => p.away)}
-                <span class="hx-away">· away: {roster.filter((p) => p.away).map((p) => p.name).join(', ')}</span>
-              {/if}
-            </span>
-          </div>
-        {/if}
-
-        {#if canManageRecordings}
-          <div class="kit-field">
-            <span class="kit-field-label">Recordings</span>
-            <span class="kit-field-value">
-              {#if recordingCount === null}
-                —
-              {:else if recordingCount === 0}
-                none uploaded yet
-              {:else}
-                <b class="hx-strong">{recordingCount}</b>
-                {recordingCount === 1 ? 'recording' : 'recordings'}
-              {/if}
-            </span>
-            <button class="hx-act" onclick={() => (recordingsOpen = true)}>Manage</button>
-          </div>
-        {/if}
-      </div>
-    {/if}
-
-    {#if readOnly}
-      <!-- Signed out: notes are part of the public log, but read-only. -->
-      {#if notesText}
-        <h3 class="kit-group-head">Notes</h3>
-        <div class="kit-group">
-          <div class="kit-field kit-field-stack">
-            <span class="kit-field-value header-notes-ro">{notesText}</span>
-          </div>
-        </div>
-      {/if}
-    {:else}
-      <h3 class="kit-group-head">Notes</h3>
-      <div class="kit-group">
-        <div class="hx-notes">
-          <textarea class="hn-area" rows="3" placeholder="Add notes for this session…" bind:value={notesDraft}></textarea>
-          {#if notesDraft !== notesText}
-            <span class="hn-actions">
-              <button class="hn-save" onclick={saveNotes}>Save</button>
-              <button class="hn-cancel" onclick={() => (notesDraft = notesText)}>Cancel</button>
-            </span>
-          {/if}
-        </div>
-      </div>
-    {/if}
-
-    <div class="kit-group">
-      <a class="kit-field" id="go-to-session" href="/sessions/{config.sessionPath}">
-        <span class="kit-field-label">{sessionName || 'The session'}</span>
-        <span class="kit-chev" aria-hidden="true">›</span>
-      </a>
-    </div>
-    </div>
-  </div>
-{/if}
 
 <!--
   Re-date this log (spec 046). The motivating case is a session logged past midnight,
@@ -4800,6 +4807,7 @@
 <Sheet
   bind:open={dateOpen}
   title="Date &amp; time"
+  compact
   onCancel={() => { dateOpen = false }}>
   <div class="dt-body">
     <p class="dt-note">
@@ -4859,6 +4867,7 @@
 <Sheet
   bind:open={nameOpen}
   title="Log name"
+  compact
   onCancel={() => { nameOpen = false }}>
   <div class="dt-body">
     <!-- The help knows which kind of session this is (spec 004). At a festival naming is
