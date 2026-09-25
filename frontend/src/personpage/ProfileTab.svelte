@@ -5,7 +5,7 @@
   // button), and the admin-only verify-email / danger-zone controls.
   let { person, user, isUserProfile, personId, timezoneOptions = [], canonicalInstruments = [] } = $props()
 
-  import { Dialog, Sheet, toast } from '../lib/index.js'
+  import { Chevron, Dialog, Sheet, toast } from '../lib/index.js'
   import '../lib/grouped.css'
   import MergeSection from './MergeSection.svelte'
   import IdentityHeader from './IdentityHeader.svelte'
@@ -485,7 +485,7 @@
               <button type="button" class="kit-field instrument-row" onclick={() => openInstrumentConfig(inst.instrument)}>
                 <span class="kit-field-label">{inst.instrument}</span>
                 <span class="instrument-row-badge{inst.is_auto ? ' auto' : ''}">{inst.is_auto ? 'Auto' : 'Manual'}</span>
-                <span class="kit-chev" aria-hidden="true">›</span>
+                <Chevron class="kit-chev" />
               </button>
             {/each}
           {/if}
@@ -538,7 +538,7 @@
         <div class="kit-group">
           <a class="kit-field" href="/change-password">
             <span class="kit-field-label">{user.has_password ? 'Change my password' : 'Create a password'}</span>
-            <span class="kit-chev" aria-hidden="true">›</span>
+            <Chevron class="kit-chev" />
           </a>
         </div>
       {/if}
@@ -548,7 +548,7 @@
       <div class="kit-group">
         <button type="button" id="account-details-toggle" class="kit-field kit-disclosure" aria-expanded={detailsOpen} aria-controls="account-details" onclick={() => (detailsOpen = !detailsOpen)}>
           <span class="kit-field-label">Details</span>
-          <span class="kit-chev" class:open={detailsOpen} aria-hidden="true">›</span>
+          <Chevron class="kit-chev" dir={detailsOpen ? "down" : "right"} />
         </button>
         {#if detailsOpen}
           <div id="account-details">

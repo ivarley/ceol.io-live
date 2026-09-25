@@ -822,6 +822,45 @@ that reached into the component's own tree had to reach into the document instea
 One of them caught a real slip — I had folded the attendance count into the label
 ("Attended 5"), and a test that reads labels expecting labels was right to object.
 
+### B16. One chevron, drawn — **DONE 2026-09-25**
+
+Everything that pointed somewhere was a typographic character: `›` and `‹` (single
+angle QUOTATION marks), `▸ ▾` (geometric triangles), `←`. Punctuation makes a poor
+icon. It inherits the font's metrics, so its stroke weight never matches the UI
+around it; it sits on a text baseline instead of being optically centred; and it
+renders differently per font and platform. The tune drawer's disclosure caret was a
+**9px `▸`**, which is where that ends up.
+
+`frontend/src/lib/Chevron.svelte` is the one arrow now: a single stroked path, 2px,
+square box, matching the tab-bar icons. **19 call sites** converted across the kit
+(`Sheet`'s back button, `PersonPicker`), the grouped rows (`/me`, add-a-session, the
+logger drawer), the disclosures (Schedule, Advanced, Details, tune config,
+SessionTuneAdd's Advanced), the four My Tunes dropdown carets, the steppers in
+`TunePreview`, and the logger's date nudge.
+
+Direction is a **class**, not an inline transform, so a caller can still rotate it
+with its own CSS — and the CSS that used to carry `font-size`, `line-height` and a
+rotation for each of these lost all three, because a drawn icon has no baseline to
+fight and the component owns its own direction.
+
+Two things worth remembering:
+
+- **Svelte's scoped CSS does not reach a class passed into a child component.** The
+  add-a-session sheet styled `.as-chev` in its own `<style>`, and the moment that
+  class went onto a `<Chevron>` the rule was dead — the compiler said so. Those rows
+  use the shared `.kit-chev` from `grouped.css` instead.
+- A drawn chevron in a **square** box cannot change the size of its own rect when it
+  rotates, which is what the logger's band needed: the glyph version nudged the help
+  icon 6px every time the drawer opened.
+
+**Deliberately not converted:** the `▸` on the logger's starter pill (`▸ Ian V`).
+That is a play marker meaning "started this set", not navigation — a triangle is the
+right semantic there, and it is not pretending to be a chevron.
+
+**Still outstanding:** the four `← Back to X` links on legacy templates, one of them
+`javascript:history.back()`, which breaks on a deep link. They are on pages the phone
+IA has not reached yet.
+
 ### B8. The staged conversion plan
 
 Ordered by **blast radius, not by visibility**. Three things make a stage risky here:

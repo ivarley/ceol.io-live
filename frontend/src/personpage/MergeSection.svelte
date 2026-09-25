@@ -8,7 +8,7 @@
   // direction without leaving the sheet.
   let { person, personId } = $props()
 
-  import { Dialog, Sheet, SearchField, List, Chip, toast } from '../lib/index.js'
+  import { Chevron, Dialog, Sheet, SearchField, List, Chip, toast } from '../lib/index.js'
 
   let open = $state(false)
   let step = $state('pick') // 'pick' | 'preview'
@@ -207,12 +207,12 @@
       {/if}
     {/if}
   {:else if previewError}
-    <button type="button" class="ms-back" onclick={() => (step = 'pick')}>‹ Back to list</button>
+    <button type="button" class="ms-back" onclick={() => (step = 'pick')}><Chevron dir="left" size={14} /> Back to list</button>
     <div class="alert alert-danger">{previewError}</div>
   {:else if !preview}
     <p class="ms-empty">Building preview…</p>
   {:else}
-    <button type="button" class="ms-back" onclick={() => (step = 'pick')}>‹ Back to list</button>
+    <button type="button" class="ms-back" onclick={() => (step = 'pick')}><Chevron dir="left" size={14} /> Back to list</button>
     <div class="ms-direction">
       <div class="ms-person ms-loser">
         <span class="ms-fate">Merged away</span>

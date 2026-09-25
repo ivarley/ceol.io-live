@@ -1,4 +1,5 @@
 <script>
+  import Chevron from './Chevron.svelte'
   /**
    * PersonPicker (spec 034) — the ONE flow for finding and adding a person to a session.
    *
@@ -168,7 +169,7 @@
 <Sheet bind:open title={heading} desktop="dock" compact onCancel={close} doneLabel="Done" onDone={close}>
   {#if showCreate}
     <div class="pp-create">
-      <button class="pp-back" onclick={resetCreate}>‹ Back to list</button>
+      <button class="pp-back" onclick={resetCreate}><Chevron dir="left" size={14} /> Back to list</button>
       <label class="pp-field">
         <span>First name</span>
         <input bind:value={newFirst} placeholder="First name" />

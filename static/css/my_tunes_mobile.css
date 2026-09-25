@@ -177,8 +177,10 @@
     white-space: nowrap;
     text-align: left;
 }
-.inst-select-caret { flex: 0 0 auto; font-size: 10px; opacity: 0.7; transition: transform 0.15s ease; }
-.inst-select.open .inst-select-caret { transform: rotate(180deg); }
+/* Drawn (lib/Chevron.svelte), already pointing down, so opening flips it to up
+   rather than rotating a 10px `▾` by 180 degrees. */
+.inst-select-caret { opacity: 0.7; }
+.inst-select.open .inst-select-caret { transform: rotate(-90deg); }
 .inst-select-menu {
     display: none;
     position: absolute;

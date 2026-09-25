@@ -189,17 +189,12 @@ button.kit-field:hover {
   text-decoration: none;
 }
 
+/* A drawn chevron (lib/Chevron.svelte) rather than a `›`, so there is no font size
+   or baseline to fight — only where it sits and what colour it is. Direction is the
+   component's job. */
 .kit-chev {
-  flex: 0 0 auto;
   margin-left: auto;
   color: var(--secondary-text, #888);
-  font-size: 1.25rem;
-  line-height: 1;
-  transition: transform 0.15s ease;
-}
-
-.kit-chev.open {
-  transform: rotate(90deg);
 }
 
 /* A disclosure row: label left, current value quiet on the right, chevron. */

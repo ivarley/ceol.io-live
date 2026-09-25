@@ -6,7 +6,7 @@
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
   import { bootstrap, vocabulary, sendOp, sendTyping, liveMatch, livePeople, deepSearch, fetchIncipit, openStream, probeServers, tuneDetail, myTunesList, myTunesOp, instanceAudio } from './client.js'
   import TuneSearch from './TuneSearch.svelte'
-  import { Dialog, PersonPicker, Sheet } from './lib/index.js'
+  import { Chevron, Dialog, PersonPicker, Sheet } from './lib/index.js'
   import './lib/grouped.css'
   import SidePane from './SidePane.svelte'
   import RecordingsModal from './RecordingsModal.svelte'
@@ -3863,7 +3863,7 @@
               <line x1="12" y1="17" x2="12.01" y2="17"></line>
             </svg>
           </a>
-          <span class="header-chevron" class:open={expanded} aria-hidden="true">›</span>
+          <Chevron class="header-chevron" dir={expanded ? "down" : "right"} size={18} />
         </span>
       </div>
       <!-- The details moved out of this header and into a Sheet (spec 052 §B15).
@@ -4761,7 +4761,7 @@
       <div class="kit-group">
         <a class="kit-field" id="go-to-session" href="/sessions/{config.sessionPath}">
           <span class="kit-field-label">{sessionName || 'The session'}</span>
-          <span class="kit-chev" aria-hidden="true">›</span>
+          <Chevron class="kit-chev" />
         </a>
       </div>
       </div>
@@ -4815,8 +4815,8 @@
       session actually happened. Set it to the right night here.
     </p>
     <div class="dt-nudge">
-      <button class="dt-step" onclick={() => nudgeDate(-1)}>‹ Previous day</button>
-      <button class="dt-step" onclick={() => nudgeDate(1)}>Next day ›</button>
+      <button class="dt-step" onclick={() => nudgeDate(-1)}><Chevron dir="left" size={14} /> Previous day</button>
+      <button class="dt-step" onclick={() => nudgeDate(1)}>Next day <Chevron size={14} /></button>
     </div>
     <label class="dt-field">
       <span class="dt-label">Date</span>

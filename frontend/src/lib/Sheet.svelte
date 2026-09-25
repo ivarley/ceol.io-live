@@ -19,6 +19,7 @@
 
 <script>
   import { Dialog as BitsDialog } from 'bits-ui'
+  import Chevron from './Chevron.svelte'
 
   // Sheet (spec 035): holds a task or scrollable detail — never a bare decision
   // (that's Dialog). Full-screen under 768px; on desktop a single prop picks
@@ -32,7 +33,7 @@
     // happening, and it buries whatever you opened it from. A Sheet is for a task
     // with enough in it to fill a screen; this is for the ones without.
     compact = false,
-    back = null, // label for a back chevron ("‹ Label") replacing Cancel
+    back = null, // label for a back chevron ("< Label") replacing Cancel
     cancelLabel = 'Cancel',
     onCancel = () => {}, // abandon: Cancel button, back chevron, scrim tap, Escape
     onDone = null, // commit; the Done button only renders when this is passed
@@ -75,7 +76,7 @@
     <BitsDialog.Content class="kit-sheet kit-sheet-{desktop}{compact ? ' kit-sheet-compact' : ''}" preventScroll={false} aria-describedby={undefined}>
       <header class="kit-sheet-head">
         {#if back != null}
-          <button type="button" class="kit-sheet-back" onclick={cancel}>‹ {back}</button>
+          <button type="button" class="kit-sheet-back" onclick={cancel}><Chevron dir="left" size={15} /> {back}</button>
         {:else}
           <button type="button" class="kit-sheet-cancel" onclick={cancel}>{cancelLabel}</button>
         {/if}

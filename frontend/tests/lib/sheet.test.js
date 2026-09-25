@@ -78,7 +78,12 @@ describe('Sheet', () => {
 
   it('back prop swaps Cancel for a back chevron', () => {
     render(Sheet, { props: { open: true, back: 'Search', children: body } })
-    expect(screen.getByText('‹ Search')).toBeInTheDocument()
+    // The chevron is drawn now (spec 052 §B16), so the button's text is the label
+    // alone and the arrow beside it is an <svg>, not a `‹`.
+    const btn = document.querySelector('.kit-sheet-back')
+    expect(btn).toBeInTheDocument()
+    expect(btn.textContent.trim()).toBe('Search')
+    expect(btn.querySelector('svg.kit-chevron--left')).toBeTruthy()
     expect(screen.queryByText('Cancel')).not.toBeInTheDocument()
   })
 

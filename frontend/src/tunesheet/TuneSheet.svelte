@@ -32,7 +32,7 @@
   // e2e suite all select on it. For the same reason this component has NO
   // <style> block: Svelte scoping would detach it from the shared stylesheet.
   import { onMount, untrack } from 'svelte'
-  import { Chip, Dialog, Seg, SessionPicker, TagInput, Tabs, toast } from '../lib/index.js'
+  import { Chevron, Chip, Dialog, Seg, SessionPicker, Tabs, TagInput, toast } from '../lib/index.js'
   import {
     MUSICAL_KEYS,
     OTHER_SESSION,
@@ -2141,7 +2141,7 @@
                     aria-expanded={isConfigVisible}
                     onclick={toggleConfigSection}
                   >
-                    <span class="tsc-caret">{isConfigVisible ? '▾' : '▸'}</span>Configure
+                    <Chevron class="tsc-caret" dir={isConfigVisible ? "down" : "right"} size={14} />Configure
                   </button>
                 </span>
                 <button type="button" class="tsc-action-link tsc-action-danger" onclick={removeFromMyTunes}>

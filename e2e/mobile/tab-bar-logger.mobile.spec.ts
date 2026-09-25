@@ -108,7 +108,9 @@ test.describe("live logger navigation", () => {
     // The chevron turns, and NOTHING in the band moves. Hiding the summary while the
     // drawer was open shortened the band, which walked the avatars, the help icon and
     // the chevron down the screen on every open.
-    await expect(page.locator(".header-chevron")).toHaveClass(/open/);
+    // The chevron is drawn now (spec 052 §B16) and its direction is a class on the
+    // svg, not an `.open` modifier on a text glyph.
+    await expect(page.locator("svg.header-chevron")).toHaveClass(/kit-chevron--down/);
     await expect(page.locator(".session-date")).toBeVisible();
     const after = await page.evaluate(() => {
       const t = (s: string) => Math.round(document.querySelector(s)!.getBoundingClientRect().top);

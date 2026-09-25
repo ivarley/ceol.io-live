@@ -16,7 +16,7 @@
   // Save is in the footer rather than a header Done: a failed save has to keep
   // the sheet open for another try, which is the kit's rule for server commits.
   import { tick } from 'svelte'
-  import { Sheet, Seg } from '../lib/index.js'
+  import { Chevron, Sheet, Seg } from '../lib/index.js'
   import '../lib/grouped.css'
   import { parseThesessionSessionId } from '../shared/parse.js'
   import { normalizeSessionPath } from '../shared/sessionpath.js'
@@ -371,7 +371,7 @@
           onclick={() => (recExpanded = !recExpanded)}>
           <span class="kit-field-label">Schedule</span>
           <span id="recurrence-summary-text" class="kit-field-value">{recurrence.summary}</span>
-          <span class="kit-chev" class:open={recExpanded} aria-hidden="true">›</span>
+          <Chevron class="kit-chev" dir={recExpanded ? "down" : "right"} />
         </button>
 
         {#if recExpanded}
@@ -483,7 +483,7 @@
         aria-controls="advanced-section"
         onclick={() => (advancedOpen = !advancedOpen)}>
         <span class="kit-field-label">Advanced</span>
-        <span class="kit-chev" class:open={advancedOpen} aria-hidden="true">›</span>
+        <Chevron class="kit-chev" dir={advancedOpen ? "down" : "right"} />
       </button>
     </div>
 

@@ -31,7 +31,7 @@
   import { STATUS_LABELS } from '../mylist.js'
 
   let { pageData = null } = $props()
-  import { Chip, SearchField, Seg, Toolbar, toast } from '../lib/index.js'
+  import { Chevron, Chip, SearchField, Seg, Toolbar, toast } from '../lib/index.js'
   import NotOnYourList from './NotOnYourList.svelte'
 
   // ---- state -----------------------------------------------------------------
@@ -716,7 +716,7 @@
             openMenu = openMenu === 'sort' ? null : 'sort'
           }}>
           <span id="sort-filter-label">{sortModeLabel(sort.type)}</span>
-          <span class="inst-select-caret">▾</span>
+          <Chevron class="inst-select-caret" dir="down" size={14} />
         </button>
         <div class="inst-select-menu" id="sort-filter-menu">
           {#each SORT_MODES as mode (mode.id)}
@@ -752,7 +752,7 @@
             openMenu = openMenu === 'type' ? null : 'type'
           }}>
           <span id="type-filter-label">{typeLabelText}</span>
-          <span class="inst-select-caret">▾</span>
+          <Chevron class="inst-select-caret" dir="down" size={14} />
         </button>
         <div class="inst-select-menu" id="type-filter-menu">
           {#each [{ value: '', label: 'All Tune Types' }, ...tuneTypes.map((t) => ({ value: t, label: cap(t) }))] as opt (opt.value)}
@@ -780,7 +780,7 @@
               openMenu = openMenu === 'inst' ? null : 'inst'
             }}>
             <span id="instrument-filter-label">{instLabelText}</span>
-            <span class="inst-select-caret">▾</span>
+            <Chevron class="inst-select-caret" dir="down" size={14} />
           </button>
           <div class="inst-select-menu" id="instrument-filter-menu">
             {#each [{ value: '', label: 'All My Instruments' }, ...instruments.map((i) => ({ value: i.instrument, label: i.instrument }))] as opt (opt.value)}
@@ -812,7 +812,7 @@
             openMenu = openMenu === 'added' ? null : 'added'
           }}>
           <span id="added-dir-label">{filters.addedDir === 'before' ? 'Before' : 'After'}</span>
-          <span class="inst-select-caret">▾</span>
+          <Chevron class="inst-select-caret" dir="down" size={14} />
         </button>
         <div class="inst-select-menu" id="added-dir-menu">
           {#each [{ value: 'after', label: 'After' }, { value: 'before', label: 'Before' }] as opt (opt.value)}

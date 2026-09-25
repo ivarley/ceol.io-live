@@ -11,7 +11,8 @@
   // The lesson is gone. The field takes a name, an ID or a link because
   // parseSessionInput already sorts that out, and a placeholder says so in six
   // words.
-  import { Dialog, Row, SearchField, Sheet } from '../lib/index.js'
+  import { Chevron, Dialog, Row, SearchField, Sheet } from '../lib/index.js'
+  import '../lib/grouped.css'
   import DetailsSheet from './DetailsSheet.svelte'
   import { parseSessionInput, parseTheSessionRecurrence, generatePath, guessTimezone } from './logic.js'
 
@@ -267,7 +268,7 @@
           onclick={() => checkExistingSession(pendingId)}
           title="Open session {pendingId}"
           subtitle="thesession.org/sessions/{pendingId}">
-          {#snippet trailing()}<span class="as-chev" aria-hidden="true">›</span>{/snippet}
+          {#snippet trailing()}<Chevron class="kit-chev" />{/snippet}
         </Row>
       </div>
     {:else if results && results.length > 0}
@@ -283,7 +284,7 @@
               {#if result.exists_in_db}
                 <span class="as-added existing-indicator">Already added</span>
               {/if}
-              <span class="as-chev" aria-hidden="true">›</span>
+              <Chevron class="kit-chev" />
             {/snippet}
           </Row>
         {/each}
@@ -307,7 +308,7 @@
         onclick={addManually}
         title="Add a session manually"
         subtitle="For sessions that aren't on thesession.org">
-        {#snippet trailing()}<span class="as-chev" aria-hidden="true">›</span>{/snippet}
+        {#snippet trailing()}<Chevron class="kit-chev" />{/snippet}
       </Row>
     </div>
   </div>
@@ -424,9 +425,4 @@
     color: var(--secondary-text, #888);
   }
 
-  .as-chev {
-    color: var(--secondary-text, #888);
-    font-size: 1.25rem;
-    line-height: 1;
-  }
 </style>

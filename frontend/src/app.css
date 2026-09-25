@@ -204,15 +204,9 @@ main {
 .topbar-presence { display: flex; gap: 4px; }
 /* Points right when closed, down when open — the drawer expands in place under the
    band, so the chevron says which way it went. */
-.header-chevron {
-  /* Fixed box, so rotating the glyph turns it in place instead of changing the
-     size of its own rect and nudging what sits beside it. */
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 18px; height: 18px;
-  color: var(--muted); font-size: 18px; line-height: 1;
-  transition: transform 0.18s ease;
-}
-.header-chevron.open { transform: rotate(90deg); }
+/* Drawn, so the box is square by construction and rotating it cannot change the
+   size of its own rect or nudge the icons beside it. */
+.header-chevron { color: var(--muted); }
 
 /* The log-details drawer (spec 052 §B15). Fixed, starting at the measured bottom of
    the session band, so the header above it never moves and the log below is covered

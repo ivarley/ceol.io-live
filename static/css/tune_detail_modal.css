@@ -1220,9 +1220,9 @@
     text-decoration: underline;
 }
 .tsc-action-danger:hover { color: var(--danger, #e85a5a); }
+/* Was a 9px `▸` — a triangle at a size no icon should be, inheriting the font's
+   metrics. Drawn now (lib/Chevron.svelte), so only its placement lives here. */
 .tsc-caret {
-    display: inline-block;
-    font-size: 9px;
     margin-right: 4px;
 }
 /* The expand link sits in the row now, not centred under the roll-up. */

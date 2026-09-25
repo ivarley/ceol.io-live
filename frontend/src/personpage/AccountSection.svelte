@@ -13,7 +13,7 @@
   // looking at, so parking it on one particular page made it mean "share your
   // profile" half the time and something else the rest. It is a header control now
   // (spec 052 §B1), present on every screen.
-  import { Row } from '../lib/index.js'
+  import { Chevron, Row } from '../lib/index.js'
 
   let { isSystemAdmin = false, personName = '' } = $props()
 
@@ -23,12 +23,12 @@
   <div class="account-list kit-group">
     {#if isSystemAdmin}
       <Row styled={false} rowClass="kit-field account-row" href="/admin" title="Admin" id="account-admin">
-        {#snippet trailing()}<span class="kit-chev" aria-hidden="true">›</span>{/snippet}
+        {#snippet trailing()}<Chevron class="kit-chev" />{/snippet}
       </Row>
     {/if}
 
     <Row styled={false} rowClass="kit-field account-row" href="/help" title="Help" id="account-help">
-      {#snippet trailing()}<span class="kit-chev" aria-hidden="true">›</span>{/snippet}
+      {#snippet trailing()}<Chevron class="kit-chev" />{/snippet}
     </Row>
 
     <Row

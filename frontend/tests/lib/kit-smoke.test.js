@@ -17,6 +17,8 @@ const COMPONENTS = {
   Pager: { index: 0, count: 0 },
   SearchField: {},
   Seg: { options: [{ id: 'a', label: 'A' }] },
+  // spec 052 §B16 — the one arrow in the app, drawn rather than punctuation.
+  Chevron: {},
   // spec 052 §B8 Stage 1 — the phone-shaped primitives.
   Row: { title: 'x' },
   Toolbar: {},

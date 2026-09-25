@@ -12,6 +12,9 @@ export { default as List } from './List.svelte'
 export { default as Pager } from './Pager.svelte'
 export { default as SearchField } from './SearchField.svelte'
 export { default as Seg } from './Seg.svelte'
+// Chevron (spec 052 §B16): the one arrow in the app. Everything that used to be a
+// `›`, `‹`, `▸` or `▾` is this, drawn, at one stroke weight.
+export { default as Chevron } from './Chevron.svelte'
 // Row / Toolbar / SectionHeader (spec 052 §B8 Stage 1): the three primitives the
 // phone-shaped pages are built from — a list row whose trailing slot stays at the
 // right margin, one search+filter+sort+add line whose filter panel expands beneath

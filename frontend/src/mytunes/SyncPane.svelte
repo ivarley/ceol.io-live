@@ -2,7 +2,7 @@
   // Tunebook sync view inside the add pane (folded-away /my-tunes/sync page):
   // fetch the person's thesession.org tunebook and add everything not already on
   // the list. Three sub-phases: form -> progress (indeterminate) -> results.
-  import { Seg } from '../lib/index.js'
+  import { Chevron, Seg } from '../lib/index.js'
   import { STATUS_LABELS } from '../mylist.js'
 
   let {
@@ -78,7 +78,7 @@
 </script>
 
 <div class="deep-head">
-  <button class="mt-back" onclick={onBack} aria-label="Back to search">‹</button>
+  <button class="mt-back" onclick={onBack} aria-label="Back to search"><Chevron dir="left" size={18} /></button>
   <span class="deep-title">Sync from TheSession.org</span>
   <button class="deep-done" onclick={onClose}>Done</button>
 </div>
