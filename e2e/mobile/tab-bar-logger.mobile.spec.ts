@@ -125,6 +125,30 @@ test.describe("live logger navigation", () => {
     await expect(page.locator(".hx-drawer")).toHaveCount(0);
   });
 
+  test("the drawer slides out from BEHIND the header, not across it", async ({ page }) => {
+    // The band is inside .topnav, which is a stacking context at z-30 — so raising
+    // the band's own z-index does nothing, and a drawer above 30 paints over the
+    // whole header on its way down. Checked DURING the animation, because that is
+    // the only time the two overlap.
+    await page.goto(OPEN_LOG);
+    await expect(page.locator(".session-date")).toBeVisible();
+
+    const bandIsOnTop = () =>
+      page.evaluate(() => {
+        const band = document.querySelector(".topbar")!.getBoundingClientRect();
+        const hit = document.elementFromPoint(band.left + 60, band.top + band.height / 2);
+        return !!hit?.closest(".topbar");
+      });
+
+    await page.locator(".topbar-row").click();
+    for (let i = 0; i < 6; i++) {
+      expect(await bandIsOnTop(), "the drawer is passing over the header").toBe(true);
+      await page.waitForTimeout(45);
+    }
+    await expect(page.locator(".hx-drawer")).toBeVisible();
+    expect(await bandIsOnTop()).toBe(true);
+  });
+
   test("Manage opens the recordings panel ON TOP of the drawer", async ({ page }) => {
     // The subtler half of the stacking bug. `main` carries an identity transform,
     // which is enough to make it a stacking context — so the recordings panel's

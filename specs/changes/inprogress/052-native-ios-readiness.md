@@ -740,10 +740,21 @@ stays, and a test snapshots the icons' positions before and after and requires t
 equal. (It has to wait for the log to load first: the band grows as the date line and
 the avatars arrive, so an early snapshot measures loading-vs-loaded.)
 
-**It slides; it does not unroll.** Svelte's `slide` animates height, so the panel
-grew a row at a time. A one-line custom transition moves it as a single piece —
-`translateY(-100%)` to `0` — and `.topbar` sits one z-index above it, so it comes out
-from behind the band rather than across it.
+**It slides out from behind the header; it does not unroll, and it does not pass
+over.** Svelte's `slide` animates height, so the panel grew a row at a time. A
+one-line custom transition moves it as a single piece — `translateY(-100%)` to `0`.
+
+Getting it BEHIND the band is a z-index story worth writing down, because the obvious
+fix does nothing. `.topnav` wraps the ceol bar and the session band in a stacking
+context at **z-30**, so a z-index on `.topbar` is scoped inside that context and
+cannot lift the band above anything outside it. The drawer had to go **under 30**
+instead: it is z-25, which still covers the unlayered log and still sits far below
+the recordings panel (91) and the dialog tier (1910+).
+
+The test for this samples `elementFromPoint` at the band's centre six times DURING
+the animation, because mid-slide is the only moment the two overlap — a settled
+screenshot looks correct either way. Verified by putting the drawer back at z-35 and
+watching it fail.
 
 **The second stacking bug, which the first fix did not reach.** The recordings panel
 still opened underneath. `main` carries an identity transform — `matrix(1,0,0,1,0,0)`,

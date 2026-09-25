@@ -216,18 +216,21 @@ main {
 
 /* The log-details drawer (spec 052 §B15). Fixed, starting at the measured bottom of
    the session band, so the header above it never moves and the log below is covered
-   rather than pushed. z-35 puts it over the log (unlayered) and under the appbar
-   (40) — and well under the dialog tier, so "Mark complete" and the date editor land
-   on top of it instead of behind it. */
-/* The band sits one above the drawer so the drawer slides out from BEHIND it
-   rather than across it. */
-.topbar { position: relative; z-index: 36; }
+   rather than pushed.
 
+   z-25 is the whole trick to sliding out from BEHIND the header. .topnav wraps the
+   ceol bar and the session band in a stacking context at z-30, so anything above 30
+   paints over the entire header no matter what z-index the band itself carries —
+   raising .topbar did nothing, because its z-index is scoped INSIDE .topnav. Under
+   30, the drawer emerges from behind the band, which is what a drawer does.
+
+   It still covers the log, which is unlayered, and stays far below the recordings
+   panel (91) and the dialog tier (1910+). */
 .hx-drawer {
   position: fixed;
   top: var(--hx-top, 110px);
   left: 0; right: 0; bottom: 0;
-  z-index: 35;
+  z-index: 25;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   background: var(--bg);
