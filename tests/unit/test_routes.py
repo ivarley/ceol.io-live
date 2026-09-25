@@ -411,12 +411,23 @@ class TestAPIRoutes:
         response = client.get("/api/sessions/data")
         assert response.status_code == 404
 
-    def test_add_session_page(self, client):
-        """Test add session page."""
+    def test_add_session_redirects_to_the_list_with_the_sheet_open(self, client):
+        """Adding a session is a sheet over the sessions list, not a page of its
+        own (spec 052 §B9). The URL survives because help, the hamburger and the
+        admin list all link to it, and people have it bookmarked."""
         response = client.get("/add-session")
 
-        assert response.status_code == 200
-        assert b"session" in response.data.lower()
+        assert response.status_code == 302
+        assert response.headers["Location"] == "/sessions?add=1"
+
+    def test_add_session_carries_acu_through(self, client):
+        """The admin sessions list links with ?acu=false to pre-uncheck "Add me
+        as". Dropping it on the redirect would quietly add the admin to every
+        session they create on somebody else's behalf."""
+        response = client.get("/add-session?acu=false")
+
+        assert response.status_code == 302
+        assert response.headers["Location"] == "/sessions?add=1&acu=false"
 
     def test_help_page(self, client):
         """Test help page."""

@@ -1,6 +1,10 @@
-// Pure logic for the add-session wizard (spec 035 final migration) — ported
-// behavior-for-behavior from the inline script in the legacy
-// templates/add_session.html so it's unit-testable.
+// Pure logic for adding a session (spec 052 §B9) — the input classifier, the
+// path generator, the timezone guess, and the thesession.org schedule parser.
+//
+// Originally the brains of the /add-session page (spec 035). That page is gone:
+// adding a session is a sheet presented from the Sessions list, so this module
+// moved out of the page bundle and is imported by the sheet instead. The
+// functions themselves are unchanged.
 
 /**
  * Classify the wizard's one input box: a thesession.org session URL or a bare

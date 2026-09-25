@@ -351,8 +351,11 @@ class TestSessionCreationWorkflow:
         request rather than only around the create call.)
         """
         with authenticated_user:
-            # Phase 1: Access add session page
+            # Phase 1: Open the add-a-session sheet. It lives on the sessions
+            # list now (spec 052 §B9), so the old URL redirects there.
             response = client.get("/add-session")
+            assert response.status_code == 302
+            response = client.get(response.headers["Location"])
             assert response.status_code == 200
             assert b"session" in response.data.lower()
 

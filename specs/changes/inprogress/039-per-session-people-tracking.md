@@ -91,7 +91,7 @@ R3/member logic in the same file is **not** filtered — it reads the viewer's o
 | Logger UI | `frontend/src/App.svelte` (`trackAttendance`/`trackStarters` derived) |
 | Session page | `frontend/src/sessionpage/{App,PeopleTab}.svelte` |
 | Admin UI | `frontend/src/sessionadminpage/{DetailsTab,PeopleAdminTab}.svelte` |
-| Create form | `frontend/src/addsessionpage/SessionSheet.svelte` |
+| Create form | `frontend/src/addsession/DetailsSheet.svelte` |
 | Drawer filter gate | `frontend/src/tunesheet/TuneSheet.svelte` (`showAttendedFilter`) |
 | Tests | `tests/integration/test_people_tracking_039.py`, additions to `test_live_logging_ops.py` |
 

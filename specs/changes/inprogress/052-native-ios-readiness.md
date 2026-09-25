@@ -453,6 +453,63 @@ two-pane logger, hover states, ⌘Enter) simply don't port. The <768px paths are
 for iOS. The tune-detail drawer's payload-derived variants, the Seg/Chip/Dialog
 conventions, and the id-keyed live-ops protocol port as-is.
 
+### B9. Add-a-session becomes a sheet — **DONE 2026-09-24**
+
+`/add-session` was the last screen still shaped like a document. It opened with a
+36px two-line heading, an intro paragraph and a bulleted lesson in what the input
+box accepts — and the input box accepts all three of those things already, because
+`parseSessionInput` sorts a name from an ID from a URL without being told. Measured
+on an iPhone 13 viewport (664px): the field started at **y=538**, and the "Next"
+button rendered at 598–635 against a tab bar starting at 613. Eighty-one percent of
+the first screen was preamble, and the primary action arrived half-hidden behind the
+navigation.
+
+The fix is not styling. Adding a session is **adding a row to the sessions list**, so
+it is a sheet presented over that list: you are standing where the result appears,
+and Cancel leaves the list exactly as it was. That is what the "+" in the sessions
+toolbar does now.
+
+**Shape.** Two stacked sheets, `frontend/src/addsession/`:
+
+- `AddSessionSheet.svelte` — find it. A `SearchField` at the top, results as `Row`s
+  (name, place, chevron; "Already added" as a trailing chip), and a permanent row at
+  the foot for a session that is not on thesession.org. That escape hatch used to be
+  a hyperlink inside a sentence, which made the only route for those sessions the
+  least visible thing on the screen.
+- `DetailsSheet.svelte` — review and commit. Grouped-table sections, label left and
+  value right, presented `back="Back"` over stage 1 so a wrong pick costs one tap
+  instead of a retyped query.
+
+**Three rules this stage settled**, each with a test:
+
+1. **Offer, do not guess.** Search runs as you type (450ms), and a pasted link
+   resolves on its own because it is unambiguous. Bare digits do not: a pause while
+   typing `1247` settles the debounce on `124`, and opening session 124 on that basis
+   would be a wrong answer delivered confidently. Those become a row you tap.
+2. **An error waits for you.** The old one cleared itself after five seconds — long
+   enough to start reading and not long enough to finish.
+3. **A hidden field cannot own an error.** Everything whose default is already right
+   (web address, venue phone and website, first-met date, thesession link, type, the
+   60-minute active window, the three people-tracking flags) folds behind Advanced —
+   nine fields on the main path instead of twenty. So validation has to open Advanced
+   when the thing you got wrong is inside it, or the message points at a control that
+   is not on the screen.
+
+**The URL stays.** `/add-session` → `/sessions?add=1` (carrying `?acu=false`, which
+the admin sessions list uses to pre-uncheck "Add me as"). Help, the hamburger and the
+admin list all link to it and people have it bookmarked. The sheet clears the query
+parameter once it opens, so reloading after Cancel does not reopen what you dismissed.
+
+**What went.** `templates/add_session.html`, `frontend/src/addsessionpage/`,
+`vite.addsessionpage.config.js` — nine bundles are eight. `GET /api/add-session`
+survives as the sheet's own payload, fetched on open rather than embedded in the
+sessions-list payload: 44 timezone options on every `/sessions` load, to be read on
+almost none of them. The create POST on the same rule stays login-gated.
+
+Every field id is unchanged. The layout is a rewrite; the behaviour is not, and the
+generated web address, the refused unusable paths and the refused tune URL are pinned
+by the same assertions as before.
+
 ### B8. The staged conversion plan
 
 Ordered by **blast radius, not by visibility**. Three things make a stage risky here:

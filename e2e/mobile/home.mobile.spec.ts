@@ -173,10 +173,13 @@ test.describe("home (mobile)", () => {
       await expect(bar.locator(`.tab-bar-item[data-tab="${tab}"]`)).toHaveAttribute("href", href);
     }
 
-    // Add A Session: the "+" on the Sessions tab, not a menu item.
+    // Add A Session: the "+" on the Sessions tab, not a menu item. It opens a
+    // sheet over the list rather than navigating (spec 052 §B9), so it is a
+    // button now and has no href to check.
     await page.goto("/sessions");
     await expect(page.locator("#add-session-link")).toBeVisible();
-    await expect(page.locator("#add-session-link")).toHaveAttribute("href", "/add-session");
+    await page.locator("#add-session-link").click();
+    await expect(page.locator("#sessionUrl")).toBeVisible();
 
     // Find a tune: the Tunes tab's add pane, which is the same deep catalogue
     // search the hamburger overlay ran.

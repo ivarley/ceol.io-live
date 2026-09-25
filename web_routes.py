@@ -15,6 +15,7 @@ from flask_login import login_user, logout_user, login_required, current_user
 import datetime
 from datetime import timedelta
 import re
+from urllib.parse import urlencode
 
 # Import from local modules
 from database import get_db_connection, save_to_history, get_current_user_id
@@ -645,14 +646,24 @@ def session_instance_players(full_path):
 
 
 def add_session():
-    """Add-session wizard (spec 035 final migration): a thin shell embedding the
-    SAME payload GET /api/add-session returns (one serializer — they can't
-    drift). Deliberately public — anyone can browse the wizard; only the final
-    POST /api/add-session requires login."""
-    from serializers import build_add_session_payload
+    """/add-session is no longer a page (spec 052 §B9).
 
-    payload = build_add_session_payload(current_user.is_authenticated)
-    return render_template("add_session.html", payload=payload)
+    Adding a session is a sheet presented over the sessions list: you are adding a
+    row to that list, so that is where you should be standing when you do it, and
+    where Cancel should leave you. The page it replaced opened with a heading and
+    an intro that pushed its only text field 538px down a 664px phone screen.
+
+    The URL stays, because it is linked from help, from the admin sessions list and
+    from the hamburger, and because people have it bookmarked. It redirects to the
+    list with ?add=1, which is what opens the sheet. ?acu=false rides along — the
+    admin list uses it to pre-uncheck "Add me as".
+
+    Still public: anyone may look, and only POST /api/add-session is gated.
+    """
+    params = {"add": "1"}
+    if request.args.get("acu") == "false":
+        params["acu"] = "false"
+    return redirect(url_for("sessions") + "?" + urlencode(params))
 
 
 def help_page():

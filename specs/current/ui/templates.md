@@ -55,7 +55,6 @@ loads a page bundle in `{% block extra_js %}`. See
 - `session_detail.html` → `#session-detail-root` + `static/sessionpage/page.js` (also mounts `#session-tune-add-root` for the add pane)
 - `person_details.html` → `#person-details-root` + `static/personpage/page.js` (serves both `/me` and `/admin/people/<id>`)
 - `session_admin.html` → `#session-admin-root` + `static/sessionadminpage/page.js`
-- `add_session.html` → `#add-session-root` + `static/addsessionpage/page.js` (public page; only the create POST is gated)
 - `admin_people.html` → `#admin-people-root` + `static/peopleadminpage/page.js` (keeps the Jinja `admin_tabs.html` chrome above the mount)
 
 Several of these shells still carry large page `<style>` blocks; moving that

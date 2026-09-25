@@ -8,6 +8,7 @@
   import { SearchField, Seg, Toolbar } from '../lib/index.js'
   import { parseLocalDate } from '../shared/parse.js'
   import { locationLabel } from './logic.js'
+  import AddSessionSheet from '../addsession/AddSessionSheet.svelte'
 
   let { pageData = null, isLoggedIn = false } = $props()
 
@@ -131,6 +132,31 @@
 
   const goto = (url) => (window.location.href = url)
 
+  // Adding a session is a sheet over this list, not a page you navigate to
+  // (spec 052 §B9). /add-session still exists and still works — it redirects
+  // here with ?add=1, which is what opens this.
+  let addOpen = $state(untrack(() => new URLSearchParams(window.location.search).get('add') === '1'))
+
+  // ?acu=false pre-unchecks "Add me as" (the admin sessions list links this way).
+  const addMeDefault = untrack(
+    () => new URLSearchParams(window.location.search).get('acu') !== 'false'
+  )
+
+  function openAdd(e) {
+    e?.preventDefault()
+    addOpen = true
+  }
+
+  // Arriving with ?add=1 should not leave it in the URL: reloading after you
+  // cancelled would reopen the sheet you just dismissed.
+  function clearAddParam() {
+    const url = new URL(window.location.href)
+    if (!url.searchParams.has('add')) return
+    url.searchParams.delete('add')
+    url.searchParams.delete('acu')
+    window.history.replaceState({}, '', url.pathname + url.search + url.hash)
+  }
+
   let searchField = $state(null)
   let panelVisible = $state(false)
 
@@ -159,7 +185,7 @@
     bind:open={panelVisible}
     activeCount={currentFilter === filterStates[0] ? 0 : 1}
     addId={isLoggedIn ? 'add-session-link' : null}
-    addHref={isLoggedIn ? '/add-session' : null}
+    onAdd={isLoggedIn ? openAdd : null}
     addTitle="Add a session">
     {#snippet search()}
       <SearchField
@@ -242,8 +268,10 @@
   Don't see your session?
   {#if currentFilter === 'my'}
     <a href="/sessions" onclick={searchAllSessions}>Search all sessions</a> or
-    <a href="/add-session">add it!</a>
+    <a href="/add-session" onclick={openAdd}>add it!</a>
   {:else}
-    <a href="/add-session">Add it!</a>
+    <a href="/add-session" onclick={openAdd}>Add it!</a>
   {/if}
 </p>
+
+<AddSessionSheet bind:open={addOpen} {addMeDefault} onCancel={clearAddParam} />

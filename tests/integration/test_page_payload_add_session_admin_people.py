@@ -1,8 +1,11 @@
-"""The last two page-payload endpoints (spec 035 final migration):
+"""Two payload endpoints:
 
-  * GET /api/add-session   — @public_api; the /add-session shell embeds the same
-    serializers.build_add_session_payload output. POST /api/add-session (the
-    actual create, @api_login_required) shares the rule and must stay gated.
+  * GET /api/add-session   — @public_api. It used to be the other half of the
+    /add-session shell's embed (spec 035). That page is gone: adding a session is
+    a sheet over the sessions list now (spec 052 §B9), and the sheet fetches this
+    when it opens rather than riding along on the list payload — 44 timezones on
+    every /sessions load, to be read on almost none of them. POST /api/add-session
+    (the actual create, @api_login_required) shares the rule and must stay gated.
   * GET /api/admin/people  — system-admin only; the /admin/people shell embeds
     the same serializers.build_admin_people_payload output.
 """
@@ -45,7 +48,7 @@ def logged_in(client, person_id, is_system_admin=False):
 @pytest.mark.integration
 class TestAddSessionPayload:
     def test_anonymous_gets_payload(self, client):
-        """The wizard is public — anyone can browse it."""
+        """Adding a session is public to look at — only the create POST is gated."""
         resp = client.get("/api/add-session")
         assert resp.status_code == 200
         data = resp.get_json()
@@ -63,12 +66,16 @@ class TestAddSessionPayload:
             data = client.get("/api/add-session").get_json()
         assert data["viewer"]["logged_in"] is True
 
-    def test_shell_embeds_same_payload(self, client):
-        """The invariant: the page shell and the API share one serializer."""
-        page = client.get("/add-session")
-        assert page.status_code == 200
-        assert b"window.__PAGE_DATA__" in page.data
-        assert b"timezone_options" in page.data
+    def test_the_sheet_can_fetch_it_without_a_page_of_its_own(self, client):
+        """There is no /add-session shell to embed this any more, so the endpoint
+        is the only way the sheet gets its timezone list. It has to answer a plain
+        GET, from any page, signed in or not."""
+        resp = client.get("/add-session")
+        assert resp.status_code == 302, "the page is a redirect now"
+
+        data = client.get("/api/add-session").get_json()
+        assert data["timezone_options"]
+        assert data["default_timezone"]
 
     def test_post_contract_unchanged(self, client):
         """The create POST on the same rule stays login-gated (401 JSON)."""
