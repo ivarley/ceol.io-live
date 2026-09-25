@@ -18,6 +18,7 @@ wrong far more often than the note name.
 
 from lab.analysis.key import NAMES as KEY_NAMES
 from lab.analysis.key import estimate_key
+from lab.analysis.pulse import eighths_elapsed
 
 # The seven letters and the pitch classes they take in C major.
 LETTERS = ["C", "D", "E", "F", "G", "A", "B"]
@@ -114,7 +115,8 @@ def quantise(notes, period_ms, phase_ms=0.0, max_eighths=8,
     return out
 
 
-def particalize(notes, period_ms, phase_ms=0.0, max_lag=1):
+def particalize(notes, period_ms, phase_ms=0.0, max_lag=1, tmap=None,
+                max_fill=0):
     """Notes -> one pitch class per eighth-note slot, or None for a silence.
 
     This music is a stream of eighth notes, so this is the form it wants to be
@@ -125,9 +127,26 @@ def particalize(notes, period_ms, phase_ms=0.0, max_lag=1):
     both as two eighths stops pretending otherwise.
 
     The corpus gets the same treatment (`abc_pitch.particalized_pitches`), so
-    the two become directly comparable. That is what makes it worth doing:
-    the notation has a repeated note in 8.1% of its intervals and a plain
-    transcription recovers 4.1%, and most of that gap is this one confusion.
+    the two become directly comparable.
+
+    `max_fill` is how long a gap may be before it is believed. Rests are very
+    rare in this music -- players hold a note rather than stop -- so a gap in
+    the transcription is far more likely to be a note the tracker lost than a
+    silence, and gaps up to this many eighths are filled by holding the note
+    before them. Beyond it the silence is taken at face value, because the
+    ends of tunes and the pauses between them are real.
+
+    It defaults to 0, which is what the MATCHER wants: over 501 segments,
+    holding gaps of up to 2, 4 or 8 eighths gave 0.832 top-1 against 0.840 for
+    leaving them open. A gap left open tells the index "unknown" and costs
+    nothing; a gap held guesses the pitch, and a lost note was usually not the
+    pitch before it. The viewer asks for 8, because for reading, a stave full
+    of rests misrepresents this music far more than a held note does.
+
+    `tmap`, when given, is a tempo map from `analysis.pulse.tempo_map` and the
+    grid follows it. Without one the tempo is fixed for the whole span, which
+    on a hundred-second reel put the end of the grid ten eighth notes away
+    from the music.
 
     `max_lag` bounds how far a note may be pushed to find a free slot. A
     transcription of a room produces more notes than the tune has, and the
@@ -135,21 +154,32 @@ def particalize(notes, period_ms, phase_ms=0.0, max_lag=1):
     that cannot land within `max_lag` slots of where it was heard is dropped
     as ornament rather than moved.
     """
-    slots = []
-    if period_ms <= 0 or not notes:
-        return slots
+    if not notes or (tmap is None and period_ms <= 0):
+        return []
+
+    def slot_of(t_ms):
+        if tmap is not None:
+            return int(round(eighths_elapsed(tmap, t_ms, origin_ms=phase_ms)))
+        return int(round((t_ms - phase_ms) / period_ms))
+
+    if tmap is not None:
+        # build the whole integral once, up front, rather than grow it note by note
+        span = [n["t0_ms"] for n in notes] + [n["t1_ms"] for n in notes] + [phase_ms]
+        eighths_elapsed(tmap, max(span), origin_ms=min(span))
+
     placed = {}
     previous = None
     for n in sorted(notes, key=lambda n: n["t0_ms"]):
-        want = int(round((n["t0_ms"] - phase_ms) / period_ms))
+        want = slot_of(n["t0_ms"])
         at = want if previous is None else max(want, previous + 1)
         if at - want > max_lag:
             continue
-        length = max(1, int(round((n["t1_ms"] - n["t0_ms"]) / period_ms)))
+        length = max(1, slot_of(n["t1_ms"]) - want)
         placed[at] = (int(n["midi"]) % 12, length)
         previous = at
     if not placed:
-        return slots
+        return []
+
     order = sorted(placed)
     first, last = order[0], order[-1]
     out = [None] * (last - first + placed[last][1])
@@ -157,7 +187,12 @@ def particalize(notes, period_ms, phase_ms=0.0, max_lag=1):
         pc, length = placed[at]
         following = order[i + 1] if i + 1 < len(order) else None
         if following is not None:
-            length = min(length, following - at)
+            gap = following - at - length
+            # hold the note through a short gap rather than calling it a rest
+            if 0 < gap <= max_fill:
+                length = following - at
+            else:
+                length = min(length, following - at)
         for k in range(max(1, length)):
             out[at - first + k] = pc
     return out

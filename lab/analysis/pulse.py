@@ -277,3 +277,146 @@ def attack_times_ms(y, sr, hop=HOP, delta=0.06):
         frames = librosa.onset.onset_detect(
             onset_envelope=onset, sr=sr, hop_length=hop, units="frames", delta=delta)
     return np.asarray(frames, dtype=float) * hop * 1000.0 / sr
+
+
+def tempo_map(y, sr, window_s=20.0, hop_s=10.0, hop=HOP):
+    """How the eighth note changes through a span -> {t_ms, period_ms, grouping}.
+
+    One estimate for a whole segment is both blunt and, on at least one reel,
+    simply wrong. Measured in twenty-second windows Father Kelly runs at 139
+    to 143ms with most windows near 142, which is what a player drawing beats
+    by hand also gave; the single whole-segment estimate came out 139.3 and a
+    grid built on it ends the segment 1.48 seconds adrift, which is ten and a
+    half eighth notes. The tempo is not drifting much -- under 3% -- but a
+    grid integrates whatever error it starts with, so a small bias becomes a
+    large displacement.
+
+    The meter is taken across the whole span rather than per window, because
+    a tune does not change from a jig to a reel halfway through and a short
+    window is a much worse judge of it.
+    """
+    whole = estimate_pulse(y, sr, hop=hop)
+    if not whole:
+        return None
+    n = y.size
+    step = int(hop_s * sr)
+    width = int(window_s * sr)
+    times, periods = [], []
+    start = 0
+    while start < n:
+        end = min(n, start + width)
+        if end - start >= int(4.0 * sr):
+            local = estimate_pulse(y[start:end], sr, hop=hop)
+            if local:
+                # A window that disagrees by a factor is an octave error, not
+                # a tempo change; fold it back rather than letting it bend the
+                # map in half.
+                p = local["period_ms"]
+                while p > 1.5 * whole["period_ms"]:
+                    p /= 2.0
+                while p < 0.67 * whole["period_ms"]:
+                    p *= 2.0
+                times.append((start + end) / 2.0 / sr * 1000.0)
+                periods.append(p)
+        if end >= n:
+            break
+        start += step
+    if not times:
+        return None
+    return {"t_ms": times, "period_ms": periods, "grouping": whole["grouping"],
+            "median_period_ms": float(np.median(periods)),
+            "whole_period_ms": whole["period_ms"],
+            "spread_ms": float(max(periods) - min(periods))}
+
+
+def period_at(tmap, t_ms):
+    """The eighth-note length at a moment, interpolated between windows."""
+    if not tmap:
+        return 0.0
+    times, periods = tmap["t_ms"], tmap["period_ms"]
+    if len(times) == 1 or t_ms <= times[0]:
+        return periods[0]
+    if t_ms >= times[-1]:
+        return periods[-1]
+    i = int(np.searchsorted(times, t_ms))
+    a, b = i - 1, min(i, len(times) - 1)
+    span = times[b] - times[a]
+    if span <= 0:
+        return periods[a]
+    f = (t_ms - times[a]) / span
+    return periods[a] * (1 - f) + periods[b] * f
+
+
+def _cumulative(tmap, lo_ms, hi_ms, step_ms=20.0):
+    """The running count of eighth notes across a span, built once and kept.
+
+    The first version integrated in 50ms steps from the start of the segment
+    on every call, and it is called twice for every note, so a two-minute
+    segment cost millions of Python iterations and a sweep over five hundred
+    of them did not finish in twenty minutes. Integrating once into a table
+    and reading off it is the same answer for the price of a lookup.
+    """
+    cache = tmap.get("_cumulative")
+    if cache is not None and cache[0] <= lo_ms and cache[1] >= hi_ms:
+        return cache
+    if cache is not None:
+        lo_ms, hi_ms = min(lo_ms, cache[0]), max(hi_ms, cache[1])
+    ts = np.arange(lo_ms, hi_ms + step_ms, step_ms)
+    mids = (ts[:-1] + ts[1:]) / 2.0
+    periods = np.interp(mids, tmap["t_ms"], tmap["period_ms"])
+    cum = np.concatenate([[0.0], np.cumsum(np.diff(ts) / np.maximum(periods, 1e-6))])
+    cache = (float(ts[0]), float(ts[-1]), ts, cum)
+    tmap["_cumulative"] = cache
+    return cache
+
+
+def eighths_elapsed(tmap, t_ms, origin_ms=0.0):
+    """How many eighth notes have gone by between two moments.
+
+    The integral of 1/period, which is what a grid actually is once the tempo
+    is allowed to move. Returned as a float so a caller can round it to a
+    slot, and negative when `t_ms` is before `origin_ms`.
+    """
+    if not tmap:
+        return 0.0
+    lo, hi = min(t_ms, origin_ms), max(t_ms, origin_ms)
+    _, _, ts, cum = _cumulative(tmap, lo - 2000.0, hi + 2000.0)
+    return float(np.interp(t_ms, ts, cum) - np.interp(origin_ms, ts, cum))
+
+
+def pulse_grid_mapped(pulse, tmap, duration_s):
+    """Like `pulse_grid`, but the lines follow the tempo instead of a ruler.
+
+    `pulse_grid` lays lines at one fixed spacing from the phase to the end of
+    the clip, so any error in that spacing accumulates: on Father Kelly the
+    lines were ten eighth notes adrift by the end, which is what a player
+    watching them saw as bar lines sliding off the starts of the notes. Here
+    each line is placed where the running count of eighths from the tempo map
+    reaches the next whole number, so a small local error stays small.
+
+    It does nothing about the PHASE, which is still wrong on reels (see the
+    spec). The lines will sit consistently in the wrong place rather than
+    wandering there, which is easier to read and easier to correct by hand.
+
+    Lines before the phase are drawn too, which the fixed version skipped.
+    `tmap` times are relative to the start of the clip, as `pulse` is.
+    """
+    if not pulse or pulse.get("period_ms", 0) <= 0:
+        return []
+    if not tmap:
+        return pulse_grid(pulse, duration_s)
+    end_ms = duration_s * 1000.0
+    _, _, ts, cum = _cumulative(tmap, -2000.0, end_ms + 2000.0)
+    origin = float(pulse["phase_ms"])
+    c0 = float(np.interp(origin, ts, cum))
+    first = int(np.ceil(float(np.interp(0.0, ts, cum)) - c0))
+    last = int(np.floor(float(np.interp(end_ms, ts, cum)) - c0))
+    grouping = int(pulse["grouping"])
+    per_bar = 8 if grouping == 2 else 6
+    out = []
+    for k in range(first, last + 1):
+        t = float(np.interp(k + c0, cum, ts))
+        if 0.0 <= t <= end_ms:
+            out.append({"t": round(t / 1000.0, 4), "beat": k % grouping == 0,
+                        "bar": k % per_bar == 0})
+    return out

@@ -494,6 +494,24 @@ function activeGrid() {
   return showPulse ? (D.pulse_grid || []) : [];
 }
 
+// The estimator's tempo through the clip, in ms per eighth. Used only to bend
+// a drawn grid where there are no drawn beats to follow.
+function periodAt(t) {
+  const m = D.tempo_map;
+  if (!m || !m.t || !m.t.length) return null;
+  const n = m.t.length;
+  if (t <= m.t[0]) return m.period[0];
+  if (t >= m.t[n - 1]) return m.period[n - 1];
+  let i = 1;
+  while (i < n - 1 && m.t[i] < t) i++;
+  const f = (t - m.t[i - 1]) / Math.max(1e-6, m.t[i] - m.t[i - 1]);
+  return m.period[i - 1] * (1 - f) + m.period[i] * f;
+}
+function stepFrom(t, typical, anchorT) {
+  const a = periodAt(anchorT), b = periodAt(t);
+  return (a && b) ? typical * b / a : typical;
+}
+
 function fitTaps() {
   if (beats.length < 1) { tapped = null; refreshBeatReadout(); return; }
   // How many eighths are inside one beat you draw. Not the meter: a reel
@@ -514,12 +532,20 @@ function fitTaps() {
 
   const marks = [];          // {t, beatIndex, drawn}
   for (let i = 0; i < sorted.length; i++) marks.push({ t: sorted[i], drawn: true });
-  // carry the last spacing forward to the end, and the first one backwards,
-  // so a few drawn beats cover the whole segment
-  for (let t = sorted[sorted.length - 1] + typical; t < D.duration_s; t += typical) {
+  // Carry the drawn spacing forward to the end, and backwards to the start,
+  // so a few drawn beats cover the whole segment. The spacing is YOURS where
+  // you drew it; beyond that it follows the estimator's tempo map, scaled to
+  // agree with you at the last beat you drew. Carrying one fixed spacing on
+  // for a minute is what made the bar lines slide off the notes.
+  const lastT = sorted[sorted.length - 1], firstT = sorted[0];
+  for (let t = lastT + stepFrom(lastT, typical, lastT); t < D.duration_s;
+       t += stepFrom(t, typical, lastT)) {
     marks.push({ t, drawn: false });
   }
-  for (let t = sorted[0] - typical; t > 0; t -= typical) marks.push({ t, drawn: false });
+  for (let t = firstT - stepFrom(firstT, typical, firstT); t > 0;
+       t -= stepFrom(t, typical, firstT)) {
+    marks.push({ t, drawn: false });
+  }
   marks.sort((a, b) => a.t - b.t);
 
   // Count bars from a marked downbeat if there is one; otherwise fall back to

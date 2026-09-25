@@ -183,3 +183,37 @@ def test_the_corpus_particalizes_the_same_way():
     assert [p % 12 for p in written] == [7, 7, 9]
     heard = particalize(notes((67, 0, 300), (69, 300, 450)), 150.0)
     assert heard == [7, 7, 9]
+
+
+def test_a_short_gap_is_held_rather_than_rested():
+    """Rests are rare in this music; a gap is usually a note the tracker lost."""
+    from lab.analysis.notation import particalize
+
+    gapped = notes((67, 0, 150), (69, 600, 750))          # three eighths of silence
+    assert particalize(gapped, 150.0, max_fill=0) == [7, None, None, None, 9]
+    assert particalize(gapped, 150.0, max_fill=4) == [7, 7, 7, 7, 9]
+
+
+def test_a_long_gap_is_believed():
+    """The ends of tunes and the pauses between them are real silences."""
+    from lab.analysis.notation import particalize
+
+    apart = notes((67, 0, 150), (69, 3000, 3150))         # nineteen eighths apart
+    slots = particalize(apart, 150.0, max_fill=8)
+    assert slots[0] == 7 and slots[-1] == 9
+    assert None in slots
+
+
+def test_particalize_follows_a_tempo_map():
+    """Notes played at a changing tempo land one to a slot when the grid follows."""
+    from lab.analysis.notation import particalize
+
+    times, t = [], 0.0
+    for i in range(80):
+        period = 140.0 + 20.0 * i / 79.0          # slowing down
+        times.append((t, t + period * 0.9))
+        t += period
+    n = notes(*[(60 + i % 7, int(a), int(b)) for i, (a, b) in enumerate(times)])
+    ramp = {"t_ms": [0.0, t], "period_ms": [140.0, 160.0]}
+    mapped = particalize(n, 150.0, tmap=ramp, max_fill=0)
+    assert len(mapped) == 80 and None not in mapped

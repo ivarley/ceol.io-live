@@ -33,6 +33,8 @@ import socketserver
 import subprocess
 import threading
 import webbrowser
+
+import numpy as np
 from datetime import datetime, timezone
 
 import lab.env  # noqa: F401
@@ -199,12 +201,15 @@ def build_payload(args):
     store.close()
 
     from lab.analysis.pulse import (estimate_pulse, expected_grouping, onset_envelope,
-                                    pulse_grid, HOP as ONSET_HOP)
+                                    pulse_grid_mapped, tempo_map, HOP as ONSET_HOP)
 
     pulse_store = AudioStore(paths.wav_path(args.recording))
     pulse_store.clock_ms = pulse_store.duration_ms
-    # a minute is plenty to find a steady grid, and the whole segment is not
+    # A minute is plenty to find the meter and the grid's phase. The tempo is
+    # then mapped across the whole clip, because holding one tempo from the
+    # first minute to the end is exactly what made the grid drift.
     pulse = estimate_pulse(pulse_store.read(t0, min(t1, t0 + 60000)), pulse_store.sr)
+    tmap = tempo_map(pulse_store.read(t0, t1), pulse_store.sr) if pulse else None
     # The onset envelope goes to the page as well, so a tapped grid can be
     # snapped to where the notes actually are. Tapping is late by a fairly
     # constant amount - people anticipate, and the browser reports a position
@@ -266,15 +271,42 @@ def build_payload(args):
         from lab.analysis.key import NAMES as KEY_NAMES
         from lab.analysis.key import estimate_key
         from lab.analysis.notation import particalize, particalized_abc, spell
+        from lab.analysis.pulse import _cumulative, eighths_elapsed
 
         key = estimate_key(notes)
         staff_sharps = key["sharps"] if key else 0
         staff_key = KEY_NAMES.get(staff_sharps, "C")
-        slots = particalize(notes, pulse["period_ms"], phase_ms=t0)
+        # absolute times, because the notes are in absolute times
+        abs_map = None
+        if tmap:
+            abs_map = {k: v for k, v in tmap.items() if k != "_cumulative"}
+            abs_map["t_ms"] = [t + t0 for t in tmap["t_ms"]]
+        # Held through gaps of up to a bar for READING, because rests are
+        # rare in this music and a gap is far more often a note the tracker
+        # lost. The matcher does not do this: filling guesses the pitch, and
+        # measured over 501 segments it costs a little rather than helping.
+        slots = particalize(notes, pulse["period_ms"], phase_ms=t0, tmap=abs_map,
+                            max_fill=8)
         staff_abc = particalized_abc(slots, sharps=staff_sharps, key_name=staff_key)
+        # Each slot's time comes from the same map that placed it, so the
+        # stave and the audio stay together however the tempo moves.
+        first_slot = None
+        for n in sorted(notes, key=lambda n: n["t0_ms"]):
+            first_slot = n["t0_ms"]
+            break
+        base = 0.0
+        if abs_map and first_slot is not None:
+            base = round(eighths_elapsed(abs_map, first_slot, origin_ms=t0))
         eighth_s = pulse["period_ms"] / 1000.0
+        if abs_map:
+            _, _, ts, cum = _cumulative(abs_map, t0 - 2000.0, t1 + 2000.0)
+            c0 = float(np.interp(t0, ts, cum))
         for i, pc in enumerate(slots):
-            entry = {"t": round(i * eighth_s, 4), "eighths": 1, "rest": pc is None}
+            if abs_map:
+                t_rel = (float(np.interp(base + i + c0, cum, ts)) - t0) / 1000.0
+            else:
+                t_rel = i * eighth_s
+            entry = {"t": round(t_rel, 4), "eighths": 1, "rest": pc is None}
             if pc is not None:
                 letter, alteration = spell(pc, staff_sharps)
                 entry["step"] = "CDEFGAB".index(letter)
@@ -305,7 +337,10 @@ def build_payload(args):
         "audio_url": "clip.mp3",
         "labels": load_annotation(args.recording, args.segment, t0),
         "pulse": pulse,
-        "pulse_grid": pulse_grid(pulse, (t1 - t0) / 1000.0) if pulse else [],
+        "pulse_grid": pulse_grid_mapped(pulse, tmap, (t1 - t0) / 1000.0) if pulse else [],
+        "tempo_map": ({"t": [round(t / 1000.0, 3) for t in tmap["t_ms"]],
+                       "period": [round(p, 2) for p in tmap["period_ms"]]}
+                      if tmap else None),
         "tapped_pulse": load_pulse(args.recording, args.segment, t0),
         "onset": [round(float(v) / max(1e-9, peak), 3) for v in envelope],
         "onset_hop_ms": onset_hop_ms,

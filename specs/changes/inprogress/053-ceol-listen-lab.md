@@ -321,7 +321,7 @@ On the retrieval bench, all 503 segments, two minutes of audio each:
 | and the band raised to 160Hz | 0.702 | 0.825 |
 | and fused repeats split back apart | 0.775 | 0.880 |
 | and read again as runs of eighths, fused | 0.833 | 0.912 |
-| and each set decoded as a whole | **0.865** | **0.924** |
+| and each set decoded as a whole | **0.861** | **0.922** |
 | the session's transitions alone, no audio | 0.245 | 0.368 |
 
 A whole night through the board scores top-1 60.3%, top-5 75.9%, median time
@@ -379,6 +379,34 @@ different tunes, which is the condition under which fusing two opinions is
 worth anything, and fusing them by score beats both on every tune type:
 0.834 overall, with hornpipes at 0.929 and slides at 0.667 above either view
 on its own. Segments never found at all fall from 7.0% to 4.0%.
+
+**Two things that help the reader and not the matcher.** Both came from a
+player, both are right about the music, and both are measured as changing
+nothing or slightly worse for identification, so they live in the viewer
+and not in the index.
+
+The grid used to hold one tempo for a whole segment, taken from its first
+minute. Measured in twenty-second windows the tempo moves by 1.4 to 2.6%, and
+on Father Kelly the whole-segment estimate was also biased -- 139.3ms where
+the windows and a hand-drawn beat both say about 142.7 -- so a fixed grid
+ended the segment 1.48 seconds adrift, ten and a half eighth notes, and the
+bar lines slid visibly off the notes. Against the hand-marked bar lines on
+that reel, a fixed grid anchored on the first mark was 0.72 eighths out after
+five seconds and 3.26 after nineteen; a grid that follows a tempo map built
+from those windows stayed under 0.3 through twelve seconds and was 0.94 out
+at nineteen. The viewer's grid, its stave and its extension of hand-drawn
+beats beyond where they were drawn now all follow the map. The matcher does
+not care: top-1 is 0.840 either way, because it compares six-interval
+phrases about a second long, and a 2% tempo error does not change how many
+eighths a note lasts locally, only where the grid is a minute later.
+
+Rests are rare in this music, so a gap in a transcription is much more often
+a note the tracker lost than a silence. The stave now holds the note before a
+gap of up to a bar, which took Father Kelly from 45 rests to none. The
+matcher leaves gaps open: holding them for up to 2, 4 or 8 eighths gave
+0.832 top-1 against 0.840, because an open gap tells the index "unknown" and
+costs nothing, while a held one guesses the pitch and a lost note was
+usually not the pitch before it.
 
 **The melody band.** Sweeping the tracker's lower bound: 0.616 at 130Hz,
 0.702 at 160, 0.666 at 190. Below about 150 it is offered energy that is not
