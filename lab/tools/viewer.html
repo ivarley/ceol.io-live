@@ -120,7 +120,7 @@
   <div id="staffwrap">
     <div id="staffhead">
       <span id="staffkey"></span>
-      <label><input type="checkbox" id="stafffollow" checked> follow the playhead</label>
+      <label><input type="checkbox" id="stafffollow" checked> follow the roll</label>
       <span class="dim">click a note to hear from there</span>
     </div>
     <div id="staff"></div>
@@ -298,7 +298,10 @@ const noteH = () => Math.max(3 * dpr, (plotB() - plotT()) / Math.max(12, HI - LO
 // needed 126 device pixels and the canvas was 92, so the low notes were drawn
 // off the bottom edge. Engraving is not a thing to do by hand.
 const staffEl = document.getElementById('staff');
+const MAX_STAFF_PX = 24000;   // as wide as it is worth asking abcjs to engrave
 let staffNotes = [];        // the drawn elements, in order, with their times
+let staffSpan = 0;          // the roll's zoom the strip was last engraved for
+let staffRedraw = null;
 
 function renderStaff() {
   document.getElementById('staffkey').textContent =
@@ -308,24 +311,63 @@ function renderStaff() {
     staffEl.innerHTML = '<pre style="color:#222;padding:8px">' + D.staff_abc + '</pre>';
     return;
   }
-  // One unbroken line, roughly 15px per eighth, so it reads alongside the
-  // piano roll instead of becoming a page of sheet music.
-  const eighths = D.staff.reduce((a, e) => a + e.eighths, 0);
+  // One unbroken line, drawn wide enough that the piano roll's current zoom
+  // fits the visible strip. Engraved width is capped, because abcjs lays out
+  // every note on every render and a segment zoomed right in would otherwise
+  // ask for a canvas tens of thousands of pixels wide.
+  const wide = staffEl.clientWidth || 900;
+  const span = Math.max(0.5, view.t1 - view.t0);
+  const perSecond = Math.min(MAX_STAFF_PX / Math.max(1, D.duration_s), wide / span);
   ABCJS.renderAbc(staffEl, D.staff_abc, {
-    add_classes: true, staffwidth: Math.max(600, eighths * 15),
+    add_classes: true, staffwidth: Math.max(600, D.duration_s * perSecond),
     wrap: false, paddingtop: 2, paddingbottom: 2, paddingleft: 6, paddingright: 6,
   });
+  staffSpan = span;
   // abcjs draws notes and rests in source order, which is the order of
   // D.staff, so the two line up one for one and each drawn note knows when it
-  // sounds.
+  // sounds. Reading back where each one LANDED is what lets the strip be
+  // scrolled to a time: abcjs spaces by duration but not exactly, so the
+  // drawn positions are the truth and an assumed linear layout is not.
   const drawn = staffEl.querySelectorAll('.abcjs-note, .abcjs-rest');
   staffNotes = [];
   for (let i = 0; i < drawn.length && i < D.staff.length; i++) {
     const item = D.staff[i];
-    staffNotes.push({ el: drawn[i], t: item.t,
+    let x = 0;
+    try { x = drawn[i].getBBox().x; } catch (_) { x = 0; }
+    staffNotes.push({ el: drawn[i], t: item.t, x,
                       t1: item.t + item.eighths * (D.pulse ? D.pulse.period_ms / 1000 : 0.15) });
     drawn[i].addEventListener('click', () => { seek(item.t); audioCtx(); });
   }
+  syncStaff(true);
+}
+
+// Where on the engraved strip a moment in the audio landed, by interpolating
+// between the two notes either side of it.
+function staffXat(t) {
+  if (!staffNotes.length) return 0;
+  if (t <= staffNotes[0].t) return staffNotes[0].x;
+  let lo = 0, hi = staffNotes.length - 1;
+  while (lo < hi - 1) {
+    const mid = (lo + hi) >> 1;
+    if (staffNotes[mid].t <= t) lo = mid; else hi = mid;
+  }
+  const a = staffNotes[lo], b = staffNotes[hi];
+  if (b.t <= a.t) return a.x;
+  return a.x + (b.x - a.x) * (t - a.t) / (b.t - a.t);
+}
+
+// Keep the strip showing the same stretch of time as the piano roll. Panning
+// is a scroll, which is cheap; zooming needs a re-engrave, so it waits until
+// the zoom has actually settled.
+function syncStaff(force) {
+  if (!staffNotes.length || !document.getElementById('stafffollow').checked) return;
+  const span = Math.max(0.5, view.t1 - view.t0);
+  if (!force && Math.abs(Math.log(span / staffSpan)) > 0.18) {
+    clearTimeout(staffRedraw);
+    staffRedraw = setTimeout(renderStaff, 120);
+    return;
+  }
+  staffEl.scrollLeft = Math.max(0, staffXat(view.t0) - 4);
 }
 
 let staffHere = -1;
@@ -339,14 +381,7 @@ function followStaff() {
   if (idx === staffHere) return;
   if (staffHere >= 0 && staffNotes[staffHere]) staffNotes[staffHere].el.classList.remove('here');
   staffHere = idx;
-  if (idx >= 0) {
-    const el = staffNotes[idx].el;
-    el.classList.add('here');
-    const box = el.getBoundingClientRect(), wrap = staffEl.getBoundingClientRect();
-    if (box.left < wrap.left + 40 || box.right > wrap.right - 40) {
-      staffEl.scrollLeft += (box.left - wrap.left) - wrap.width / 3;
-    }
-  }
+  if (idx >= 0) staffNotes[idx].el.classList.add('here');
 }
 
 // ---- looping -------------------------------------------------------------
@@ -1071,7 +1106,15 @@ function resize() {
   draw();
 }
 window.addEventListener('resize', resize);
-(function tick() { loopTick(); singTick(); draw(); followStaff(); requestAnimationFrame(tick); })();
+let staffLastT0 = null, staffLastT1 = null;
+(function tick() {
+  loopTick(); singTick(); draw(); followStaff();
+  if (view.t0 !== staffLastT0 || view.t1 !== staffLastT1) {
+    staffLastT0 = view.t0; staffLastT1 = view.t1;
+    syncStaff(false);
+  }
+  requestAnimationFrame(tick);
+})();
 renderStaff();
 resize();
 setMode('listen');
