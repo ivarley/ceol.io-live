@@ -78,6 +78,48 @@ class YinFrontEnd(_LibrosaTracker):
     version = "1"
     cost = 1.0
 
+    # librosa's own default, which every track cached before this parameter
+    # existed was made with. Only THAT value is left out of the cache key, so
+    # those tracks stay usable -- and the new default is always in the key, so
+    # a request for it can never be answered with one of them.
+    LEGACY_TROUGH = 0.1
+    # Measured over all 502 segments: 0.861 -> 0.873 top-1 with set decoding,
+    # top-5 unchanged. Hand labels agreed on where to stop: a solo whistle
+    # went from 25% of labelled time right to 42%, the other labelled
+    # segments rose slightly, and at 0.8 those others fell away.
+    DEFAULT_TROUGH = 0.5
+
+    @classmethod
+    def defaults(cls):
+        d = dict(_LibrosaTracker.defaults())
+        # How deep a dip in yin's difference function must be before the
+        # SHORTEST period that has one is accepted. Too strict and yin walks
+        # past the true period to a multiple of it. A multiple of two or four
+        # is harmless here, since pitch is folded to one octave; a multiple of
+        # three is not, because a third of a frequency is a twelfth below it
+        # and lands on a different note name, a fifth away. On a solo tin
+        # whistle that one error was most of what went wrong: F# heard as B,
+        # B as E, D as G, with 88% of the reported frames below the lowest
+        # note the instrument can play.
+        d["trough_threshold"] = cls.DEFAULT_TROUGH
+        # Put back a note that yin reported a twelfth too low; see
+        # `correct_twelfths`. The value is how many times the energy at 3*f0
+        # must exceed what sits at f0 and 2*f0. Measured over 502 segments
+        # with set decoding: off 0.873 / 0.922 (top-1 / top-5), at 1.5
+        # 0.873 / 0.930 but costing notes-only top-1 a point, at 3.0
+        # 0.878 / 0.930 with nothing lost anywhere. At 1.5 it was also firing
+        # on notes that were right.
+        d["fix_twelfths"] = 3.0
+        return d
+
+    def track_params(self):
+        out = super().track_params()
+        if self.params.get("trough_threshold", self.LEGACY_TROUGH) != self.LEGACY_TROUGH:
+            out["trough_threshold"] = self.params["trough_threshold"]
+        if self.params.get("fix_twelfths"):
+            out["fix_twelfths"] = self.params["fix_twelfths"]
+        return out
+
     def track(self, y, sr):
         import librosa
 
@@ -85,7 +127,11 @@ class YinFrontEnd(_LibrosaTracker):
         if y.size < self.params["frame_length"]:
             return np.zeros(0), np.zeros(0), np.zeros(0)
         f0 = librosa.yin(y, fmin=self.params["fmin"], fmax=self.params["fmax"], sr=sr,
-                         frame_length=self.params["frame_length"], hop_length=self.params["hop"])
+                         frame_length=self.params["frame_length"], hop_length=self.params["hop"],
+                         trough_threshold=self.params.get("trough_threshold", self.DEFAULT_TROUGH))
+        if self.params.get("fix_twelfths"):
+            f0 = correct_twelfths(y, sr, f0, self.params["frame_length"], self.params["hop"],
+                                  ratio=float(self.params["fix_twelfths"]))
         # yin has no voicing model; loudness relative to this span stands in
         rms = librosa.feature.rms(y=y, frame_length=self.params["frame_length"],
                                   hop_length=self.params["hop"])[0]
@@ -122,3 +168,46 @@ class YinCleaned(YinFrontEnd):
         d = dict(YinFrontEnd.defaults())
         d.update({"highpass_hz": 180.0, "lowpass_hz": 2500.0, "hpss": 2.0})
         return d
+
+
+def correct_twelfths(y, sr, f0, n_fft, hop, ratio=2.0):
+    """Undo yin's one harmful mistake: reporting a third of the true pitch.
+
+    A period-finding tracker can settle on a multiple of the true period.
+    Twice or four times is harmless here, because pitch is folded to one
+    octave. Three times is not: a third of a frequency is a twelfth below it,
+    which is a different note name, a fifth away. On a solo tin whistle that
+    error alone accounted for about a third of every labelled frame -- F#
+    heard as B, B as E, D as G -- with most reported frames below the lowest
+    note the instrument can play.
+
+    The spectrum tells the two apart. If the true pitch is f0, there is energy
+    at f0 and 2*f0. If it is 3*f0 (or 1.5*f0, which is the same note name),
+    neither of those is a harmonic of what is sounding, and the energy sits at
+    3*f0 instead. A true octave error, f/2, still has energy at 2*f0, so it is
+    left alone -- which is right, since folding already absorbs it.
+    """
+    import librosa
+
+    f0 = np.asarray(f0, dtype=float).copy()
+    spec = np.abs(librosa.stft(y, n_fft=n_fft, hop_length=hop, center=True))
+    bin_hz = sr / float(n_fft)
+    nyquist = sr / 2.0
+
+    def energy(frame, hz):
+        if hz <= 0 or hz >= nyquist:
+            return 0.0
+        b = int(round(hz / bin_hz))
+        lo, hi = max(0, b - 1), min(spec.shape[0], b + 2)
+        return float(spec[lo:hi, frame].max()) if hi > lo else 0.0
+
+    frames = min(f0.size, spec.shape[1])
+    for i in range(frames):
+        f = f0[i]
+        if not np.isfinite(f) or f <= 0 or 3 * f >= nyquist:
+            continue
+        own = energy(i, f) + energy(i, 2 * f)
+        third = energy(i, 3 * f)
+        if third > ratio * (own + 1e-9):
+            f0[i] = 3 * f
+    return f0

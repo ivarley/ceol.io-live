@@ -30,7 +30,8 @@ class _PitchExpert(Expert):
         # reason: swept over all 503 segments, top-1 is 0.616 at 130, 0.702 at
         # 160 and 0.666 at 190. It was 130 here while the bench ran at 160,
         # which is the divergence the two loops exist to catch.
-        return {"fmin": 160.0, "fmax": 1400.0, "hop": 256, "sr": 22050}
+        return {"fmin": 160.0, "fmax": 1400.0, "hop": 256, "sr": 22050,
+                "trough_threshold": 0.5, "fix_twelfths": 3.0}
 
     def _track(self, y, sr):
         raise NotImplementedError
@@ -84,8 +85,17 @@ class PitchYin(_PitchExpert):
     def _track(self, y, sr):
         import librosa
 
+        # The same trough threshold as the bench's front end, for the same
+        # reason; left at librosa's default here, this would be the fourth
+        # time the board ran a different tracker from the one measured.
         f0 = librosa.yin(y, fmin=self.params["fmin"], fmax=self.params["fmax"], sr=sr,
-                         frame_length=2048, hop_length=self.params["hop"])
+                         frame_length=2048, hop_length=self.params["hop"],
+                         trough_threshold=self.params["trough_threshold"])
+        if self.params.get("fix_twelfths"):
+            from lab.frontends.trackers import correct_twelfths
+
+            f0 = correct_twelfths(y, sr, f0, 2048, self.params["hop"],
+                                  ratio=float(self.params["fix_twelfths"]))
         # yin has no voicing model at all. Standing in for one with "is the
         # frame loud relative to this window" is crude and deliberately so:
         # this expert is here to be the fast, worse opinion.

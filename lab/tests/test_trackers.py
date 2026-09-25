@@ -1,0 +1,65 @@
+"""The pitch tracker's two settings that exist because of a solo tin whistle.
+
+yin can settle on a multiple of the true period. Twice or four times is
+harmless here, because pitch is folded to one octave; three times is not, and
+it is what made a whistle's F# come out as B, a fifth away.
+"""
+
+import numpy as np
+import pytest
+
+from lab.frontends import get_frontend
+from lab.frontends.trackers import correct_twelfths
+
+SR = 22050
+N_FFT, HOP = 2048, 256
+
+
+def tone(f, seconds=1.0, harmonics=(1.0, 0.5, 0.3, 0.2)):
+    t = np.arange(int(SR * seconds)) / SR
+    y = sum(a * np.sin(2 * np.pi * f * (k + 1) * t) for k, a in enumerate(harmonics))
+    return (y / np.max(np.abs(y))).astype(np.float32)
+
+
+def frames_of(y):
+    return 1 + y.size // HOP
+
+
+def test_a_third_of_the_pitch_is_put_back():
+    f = 740.0                                    # F#5, a whistle note
+    y = tone(f)
+    wrong = np.full(frames_of(y), f / 3.0)       # what yin reported: B3
+    fixed = correct_twelfths(y, SR, wrong, N_FFT, HOP, ratio=1.5)
+    middle = fixed[10:-10]
+    assert np.median(middle) == pytest.approx(f, rel=0.01)
+
+
+def test_an_octave_error_is_left_alone():
+    """Folding absorbs it already, and the spectrum still has energy at 2*f0."""
+    f = 740.0
+    y = tone(f)
+    octave_down = np.full(frames_of(y), f / 2.0)
+    fixed = correct_twelfths(y, SR, octave_down, N_FFT, HOP, ratio=1.5)
+    assert np.median(fixed[10:-10]) == pytest.approx(f / 2.0, rel=0.01)
+
+
+def test_a_correct_pitch_is_left_alone():
+    f = 440.0
+    y = tone(f)
+    right = np.full(frames_of(y), f)
+    fixed = correct_twelfths(y, SR, right, N_FFT, HOP, ratio=1.5)
+    assert np.median(fixed[10:-10]) == pytest.approx(f, rel=0.01)
+
+
+def test_the_old_cached_tracks_keep_their_key_and_the_new_default_does_not_reuse_it():
+    """Tracks cached before the threshold existed were made at 0.1.
+
+    Leaving the default out of the cache key would have let a request for 0.5
+    be answered with one of those, silently. Only the legacy value is left
+    out.
+    """
+    legacy = get_frontend("yin", trough_threshold=0.1)
+    default = get_frontend("yin")
+    assert "trough_threshold" not in legacy.track_params()
+    assert default.track_params().get("trough_threshold") == 0.5
+    assert legacy.cache_key("sha", 0, 1000) != default.cache_key("sha", 0, 1000)

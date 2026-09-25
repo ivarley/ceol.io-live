@@ -321,7 +321,8 @@ On the retrieval bench, all 503 segments, two minutes of audio each:
 | and the band raised to 160Hz | 0.702 | 0.825 |
 | and fused repeats split back apart | 0.775 | 0.880 |
 | and read again as runs of eighths, fused | 0.833 | 0.912 |
-| and each set decoded as a whole | **0.861** | **0.922** |
+| and each set decoded as a whole | 0.861 | 0.922 |
+| and the tracker kept off a third of the pitch | **0.878** | **0.930** |
 | the session's transitions alone, no audio | 0.245 | 0.368 |
 
 A whole night through the board scores top-1 60.3%, top-5 75.9%, median time
@@ -359,6 +360,47 @@ LOSES thirteen points, because a session has an onset near almost every line
 and everything long gets cut; at an eighth of a spacing it gains seven. The
 crude control, split every long note, triples the repeated-note rate and is
 much worse than not splitting at all.
+
+**Keeping the tracker off a third of the pitch**, worth a point and a half,
+found by labelling eight bars of a solo tin whistle that the recogniser had
+never once identified.
+
+Every wrong note on it was wrong by the same interval: F# heard as B, B as E,
+D as G, each a fifth below the note played. With no accompaniment that could
+only be the tracker, and the frequencies said how. It reported 248Hz for an
+F# at 740Hz, which is exactly a third of it, and 88% of the frames under the
+labels were below 587Hz, the lowest note a D whistle can play. yin had
+settled on three periods of the waveform instead of one.
+
+A multiple of two or four would not have mattered, since pitch is folded to
+one octave. Three does matter: a third of a frequency is a twelfth below it,
+a different note name, and no folding undoes that. Two changes, each
+measured on the hand labels and then on all 502 segments:
+
+- yin's `trough_threshold`, which decides how readily the shortest period
+  with a dip is accepted, raised from librosa's 0.1 to 0.5. The whistle went
+  from 25% of labelled time right to 42%, the other labelled segments rose
+  slightly, and at 0.8 they fell away. Across the corpus with set decoding,
+  0.861 to 0.873 top-1.
+- A correction for the error that remains: where the energy at 3*f0 is three
+  times what sits at f0 and 2*f0, the note is taken to be 3*f0. An octave
+  error still has energy at 2*f0 and is left alone. At a ratio of 1.5 it also
+  fired on correct notes and cost a point of notes-only top-1; at 3.0 nothing
+  is lost and the corpus reads 0.878 top-1, 0.930 top-5.
+
+Together they take the whistle to 43% of labelled time right. That is still
+poor, and the rest is not explained yet: with both in place, nearly half the
+frames under the labels still sit below anything the instrument can play.
+
+**A slip jig's bar is not in the onset envelope**, which is a negative worth
+keeping. The estimator only asks whether a beat divides in two or three, and
+then assumes every triple-time tune has two beats to a bar; a slip jig has
+three. Autocorrelation at three beats beats two beats on only 11% of the 18
+slip jigs, against 5% of the 180 jigs, so it separates nothing. It costs
+identification nothing either -- slip jigs are at 0.944 top-1, since the
+eighth-note reading never needed the bar -- but it does mean the viewer's
+estimated bar lines are wrong on every slip jig and slide, and something
+other than onset energy will have to say where their bars are.
 
 **Writing both sides as runs of eighth notes**, worth six points, and the
 idea came from a player looking at the stave rather than from the bench.
