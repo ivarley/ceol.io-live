@@ -43,6 +43,10 @@
     
     <!-- Theme CSS -->
     <link id="theme-style" rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+    {# Grouped-table rows (spec 052 §B12/§B16): the app's one label-left/value-right
+       list shape. A stylesheet rather than a bundle import, so a plain Jinja page can
+       use it too — /about is three rows and does not want a Svelte bundle. #}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/grouped.css') }}">
 
     <!-- Shared hamburger menu (also used by the live editor) -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/hamburger_menu.css') }}">
@@ -327,7 +331,7 @@
    same condition tab_bar.html renders under, rather than inferred in CSS with
    :has(.tab-bar) — if :has() were ever unsupported that would fail OPEN, showing
    both navigations at once. #}
-<body class="docs-page{% if current_user.is_authenticated %} has-tab-bar{% endif %}">
+<body class="docs-page has-tab-bar">
 <header class="header fixed-top">	    
     <div class="branding docs-branding">
         <div class="container-fluid position-relative" style="padding-top: 3px; padding-bottom: 3px;">

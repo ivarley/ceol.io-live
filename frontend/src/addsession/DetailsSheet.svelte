@@ -17,7 +17,6 @@
   // the sheet open for another try, which is the kit's rule for server commits.
   import { tick } from 'svelte'
   import { Chevron, Sheet, Seg } from '../lib/index.js'
-  import '../lib/grouped.css'
   import { parseThesessionSessionId } from '../shared/parse.js'
   import { normalizeSessionPath } from '../shared/sessionpath.js'
   import { generatePath, summarizeRecurrence } from './logic.js'

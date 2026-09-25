@@ -6,7 +6,6 @@
   let { person, user, isUserProfile, personId, timezoneOptions = [], canonicalInstruments = [] } = $props()
 
   import { Chevron, Dialog, Sheet, toast } from '../lib/index.js'
-  import '../lib/grouped.css'
   import MergeSection from './MergeSection.svelte'
   import IdentityHeader from './IdentityHeader.svelte'
 

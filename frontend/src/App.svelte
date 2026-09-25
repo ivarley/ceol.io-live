@@ -7,7 +7,6 @@
   import { bootstrap, vocabulary, sendOp, sendTyping, liveMatch, livePeople, deepSearch, fetchIncipit, openStream, probeServers, tuneDetail, myTunesList, myTunesOp, instanceAudio } from './client.js'
   import TuneSearch from './TuneSearch.svelte'
   import { Chevron, Dialog, PersonPicker, Sheet } from './lib/index.js'
-  import './lib/grouped.css'
   import SidePane from './SidePane.svelte'
   import RecordingsModal from './RecordingsModal.svelte'
   import { queuePut, queueAll, queueDelete, snapshotPut, snapshotGet, matchCachePut, matchCacheGet } from './offline.js'

@@ -667,6 +667,17 @@ def add_session():
     return redirect(url_for("sessions") + "?" + urlencode(params))
 
 
+def about_page():
+    """The signed-out "Me" (spec 052 §B17).
+
+    A visitor who followed a shared link to one session needs a way in and some idea
+    what this place is; that is what the hamburger's signed-out list was for, and the
+    tab bar had nowhere to put it. Public, and it works signed in too — the first row
+    becomes a link to your profile rather than to the login page.
+    """
+    return render_template("about.html")
+
+
 def help_page():
     return render_template("help.html")
 
@@ -3024,6 +3035,22 @@ def common_tunes(person_id):
         current_person = cur.fetchone()
         current_person_name = f"{current_person[0]} {current_person[1]}" if current_person else "You"
 
+        # Where you came from, so the page can offer a real way back (spec 052 §B17).
+        # It used to be `javascript:history.back()`, which has nothing to go back to
+        # when the URL was opened from a link — and the app is display:standalone, so
+        # an installed visitor has no browser Back either.
+        #
+        # A session PATH, not a URL: the only thing that can come out of this is
+        # /sessions/<something that is really a session>, so there is no redirect to
+        # validate. An unknown path simply yields no row.
+        back = None
+        from_path = (request.args.get("from") or "").strip().strip("/")
+        if from_path and re.fullmatch(r"[a-z0-9-]+/[a-z0-9-]+", from_path):
+            cur.execute("SELECT name FROM session WHERE path = %s", (from_path,))
+            row = cur.fetchone()
+            if row:
+                back = {"href": f"/sessions/{from_path}", "label": row[0]}
+
         cur.close()
         conn.close()
 
@@ -3031,7 +3058,8 @@ def common_tunes(person_id):
             "common_tunes.html",
             current_person_name=current_person_name,
             other_person_name=other_person_name,
-            other_person_id=person_id
+            other_person_id=person_id,
+            back=back,
         )
 
     except Exception as e:

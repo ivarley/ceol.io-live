@@ -56,6 +56,7 @@
      composer — true while you are logging, and not true the rest of the time.
      The bar is here in VIEW mode and hides itself in EDIT, so reading a log is an
      ordinary screen of the app and logging one is the full-screen task it is. #}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/grouped.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/tab_bar.css') }}">
   <script src="{{ url_for('static', filename='js/hamburger_menu.js') }}"></script>
   <!-- The app-wide font (base.html loads the same family) — used by the replicated
@@ -74,10 +75,8 @@
     }
   </style>
 </head>
-<body class="{% if current_user.is_authenticated %}has-tab-bar{% endif %}">
+<body class="has-tab-bar">
   <div id="app"></div>
-  {# Signed-out visitors get no tab bar (there is no Me and no Tunes for them), so
-     they keep the menu, exactly as on every other page. #}
   <div class="live-menu">{% include 'hamburger_menu.html' %}</div>
   <script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
   <script src="{{ url_for('static', filename='js/mytunes_offline.js') }}"></script>

@@ -446,6 +446,7 @@ app.add_url_rule("/sessions/<path:session_path>/logs", "session_logs", session_l
 app.add_url_rule("/sessions/<path:full_path>", "session_handler", session_handler)
 app.add_url_rule("/sessions/<path:full_path>/players", "session_instance_players", session_instance_players)
 app.add_url_rule("/add-session", "add_session", add_session)
+app.add_url_rule("/about", "about_page", about_page)
 app.add_url_rule("/help", "help_page", help_page)
 app.add_url_rule("/help/sessions", "help_sessions", help_sessions)
 app.add_url_rule("/help/offline", "help_offline", help_offline)

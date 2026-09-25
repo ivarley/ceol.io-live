@@ -861,6 +861,51 @@ right semantic there, and it is not pretending to be a chevron.
 `javascript:history.back()`, which breaks on a deep link. They are on pages the phone
 IA has not reached yet.
 
+### B17. The signed-out phone, and the last back link — **DONE 2026-09-25**
+
+**Signed out gets a tab bar too, with three tabs.** It was signed-in only, for a
+reason that still holds: `/my-tunes` and `/me` both redirect to login, so a four-tab
+bar there would be two tabs and two rejections. Three that work beats four where one
+apologises — **Home · Sessions · About** — and it is what finally takes the hamburger
+off phones entirely (`body.has-tab-bar` is now unconditional, so the existing
+hide-the-hamburger rule covers every page).
+
+`/about` is where the signed-out hamburger's list went: a sentence about what Ceol
+is, "Log in or register", "How Ceol works", and a row pointing at thesession.org.
+Signed in, the first row becomes your profile instead. Share needed no row — it has
+been a header control since §B1. **Find-a-tune is not carried over**: it was never a
+page, only an overlay, and the catalogue is thesession.org's, which the last row
+links to directly.
+
+`grouped.css` moved from `frontend/src/lib/` to `static/css/` and is linked by
+`base.html` and the logger shell rather than imported by four components. /about is
+three rows; it should not need a Svelte bundle to get the app's list shape. The
+action-row rule (`a.kit-field > .kit-field-label` takes the full width) moved with
+it, from the profile page's CSS where it had been stranded — which is why About's
+labels wrapped to two lines on the first pass.
+
+**The last `javascript:history.back()` is gone.** `/me/and/<id>` — tunes in common,
+reached from a session's People tab — now takes `?from=<session path>` and renders a
+row naming that session. A session PATH rather than a URL, so the only thing that can
+come out of it is `/sessions/<a session that really exists>` and there is no redirect
+to validate; an unknown or malformed origin simply yields no row. This matters
+because the app is `display: standalone`: an installed visitor has no browser Back,
+and a shared link has no history at all.
+
+**Deleted:** `templates/user_sessions.html`, zero references anywhere.
+
+**Left alone, with reasons:**
+- `/sessions/<path>/players` is **orphaned** — its only inbound links are the dead
+  pill editor and the admin test-links page. It dies with them in spec 035 Step 6.
+- The `← Back to X` links in `session_bulk_import.html` and `session_admin_person.html`
+  are admin, which is a desktop-first sub-app with breadcrumbs of its own.
+
+One process note: the first cut of the back link 500'd, because `common_tunes.html`
+already had an `extra_css` block and Jinja refuses a second. The route catches
+`Exception` broadly and renders an error page, so the browser check reported "no back
+row" rather than "this page is broken" — the failure looked like a feature not
+working. Worth remembering that a broad except turns a crash into a wrong answer.
+
 ### B8. The staged conversion plan
 
 Ordered by **blast radius, not by visibility**. Three things make a stage risky here:

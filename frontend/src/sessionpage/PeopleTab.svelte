@@ -381,7 +381,7 @@
           <div style="margin-bottom: 16px;"><a href="/me" class="person-detail-link">View my profile</a></div>
         {/if}
         {#if detailPerson.has_user_account && detailPerson.person_id !== currentUserId}
-          <div style="margin-bottom: 16px;"><a href="/me/and/{detailPerson.person_id}" class="person-detail-link">Common Tunes?</a></div>
+          <div style="margin-bottom: 16px;"><a href="/me/and/{detailPerson.person_id}?from={sessionPath}" class="person-detail-link">Common Tunes?</a></div>
         {/if}
 
         {#if detailRow && (isSessionAdmin || detailPerson.person_id === currentUserId)}

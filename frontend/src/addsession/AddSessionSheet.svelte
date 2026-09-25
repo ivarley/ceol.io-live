@@ -12,7 +12,6 @@
   // parseSessionInput already sorts that out, and a placeholder says so in six
   // words.
   import { Chevron, Dialog, Row, SearchField, Sheet } from '../lib/index.js'
-  import '../lib/grouped.css'
   import DetailsSheet from './DetailsSheet.svelte'
   import { parseSessionInput, parseTheSessionRecurrence, generatePath, guessTimezone } from './logic.js'
 

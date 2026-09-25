@@ -197,6 +197,15 @@ button.kit-field:hover {
   color: var(--secondary-text, #888);
 }
 
+/* An action row's label IS the row, so it takes the width the value column would
+   otherwise reserve. "Change my password" has no value to line up against, and at
+   38% it wraps to two lines for no reason. */
+a.kit-field > .kit-field-label,
+button.kit-field > .kit-field-label {
+  width: auto;
+  max-width: none;
+}
+
 /* A disclosure row: label left, current value quiet on the right, chevron. */
 .kit-disclosure .kit-field-value {
   color: var(--secondary-text, #888);

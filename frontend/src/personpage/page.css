@@ -787,10 +787,3 @@
 .pd-inline-action:hover { opacity: 0.85; }
 .pd-inline-action:disabled { opacity: 0.5; cursor: not-allowed; }
 
-/* An action row's label IS the row, so it takes the width the value column would
-   otherwise reserve — "Change my password" has no value to line up against. */
-a.kit-field > .kit-field-label,
-button.kit-field > .kit-field-label {
-    width: auto;
-    max-width: none;
-}
