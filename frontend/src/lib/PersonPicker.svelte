@@ -162,7 +162,10 @@
   }
 </script>
 
-<Sheet bind:open title={heading} desktop="dock" onCancel={close} doneLabel="Done" onDone={close}>
+<!-- compact: on a phone this is a card, not the whole screen. It is a list you
+     consult — who is here — and taking the screen for it buries the log or the drawer
+     you opened it from. Desktop keeps the docked pane. -->
+<Sheet bind:open title={heading} desktop="dock" compact onCancel={close} doneLabel="Done" onDone={close}>
   {#if showCreate}
     <div class="pp-create">
       <button class="pp-back" onclick={resetCreate}>‹ Back to list</button>

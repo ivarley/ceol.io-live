@@ -763,13 +763,19 @@ of 91 could never rise above a drawer sitting OUTSIDE `main` at z-35, however mu
 larger 91 is. The drawer is rendered inside `main` now. Worth remembering: an
 identity transform is invisible and still changes what z-index means.
 
-**One-field editors are cards, not screens.** The kit Sheet is full-screen below
+**Phone modals are cards, not screens.** The kit Sheet is full-screen below
 768px, which overstates what is happening when the content is a label, a text box and
 Save — and it buries the drawer you opened it from. `Sheet` gained `compact`: the
 centred-card treatment the desktop sheet already had, at every width. The name and
-date editors use it. Note the rule needs BOTH classes (`.kit-sheet.kit-sheet-compact`)
-— a single class ties with the base `inset: 0` and loses on source order, which
-pinned the card to the top-left corner and then translated it off screen.
+date editors use it, and so does `PersonPicker` — attendance is a list you consult,
+and taking the screen for it buries whatever you opened it from.
+
+Two things about that rule. It is **phone-only** (`max-width: 767.98px`): above that
+the existing desktop rules already give a card or a docked pane, and compact must not
+override a deliberate `dock`. And it needs **both classes**
+(`.kit-sheet.kit-sheet-compact`) — a single class ties with the base `inset: 0` and
+loses on source order, which pinned the card to the top-left corner and then
+translated it off screen.
 
 **It is also where back-to-the-session finally belongs.** The logger sits two levels
 under the Sessions tab, so the tab alone lands on the list; the last group in the

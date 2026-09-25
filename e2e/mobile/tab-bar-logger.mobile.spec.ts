@@ -173,6 +173,26 @@ test.describe("live logger navigation", () => {
     expect(onTop, "the recordings panel is behind the drawer again").toBe(true);
   });
 
+  test("attendance is a card too, not the whole screen", async ({ page }) => {
+    // It is a list you consult — who is here — so taking the screen for it buries
+    // the drawer you opened it from. Compact is phone-only: desktop keeps the
+    // docked pane PersonPicker was designed around.
+    await page.goto(OPEN_LOG);
+    await page.locator(".topbar-row").click();
+    await page
+      .locator(".kit-field", { hasText: "Attending" })
+      .getByRole("button", { name: "Manage" })
+      .click();
+
+    const card = page.locator(".kit-sheet");
+    await expect(card).toBeVisible();
+    await expect(card).toHaveClass(/kit-sheet-compact/);
+    const box = await card.boundingBox();
+    expect(box!.y, "it should not start at the top of the screen").toBeGreaterThan(0);
+    // The band it was opened from is still there behind it.
+    await expect(page.locator(".topbar")).toBeVisible();
+  });
+
   test("a one-field editor is a card, not the whole screen", async ({ page }) => {
     await page.goto(OPEN_LOG);
     await page.locator(".topbar-row").click();
