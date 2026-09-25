@@ -450,6 +450,37 @@ set begins and ends; the live board has neither, and its earlier attempt to
 let later tunes revise earlier ones was harmful because the spans it decodes
 are not tunes. That part waits on boundary detection.
 
+**What true boundaries are worth, measured on four nights (304 segments).**
+Feeding the board the true start of every tune, with everything else as
+shipped:
+
+| | top-1 at end | top-5 | right within 30s | right within 60s | never right |
+|---|---|---|---|---|---|
+| detected boundaries | 0.737 | 0.859 | 12.8% | 45.4% | 21.4% |
+| true starts | 0.763 | 0.872 | 49.7% | 78.0% | 13.8% |
+
+So boundary detection is worth a little at the end of a tune and a great deal
+in how SOON the tune is named: four times as many right within thirty seconds.
+That is the case for building it, and it is mostly a case about speed.
+
+Revision, letting later tunes change what was said about earlier ones, does
+nothing even with true starts, and the reason sharpens what the detector has
+to deliver. A first attempt at this measurement showed revision changing
+nothing at all; that was a mistake in the experiment, since `revise_last`
+below 2 never revises. At 3 it revises, and the live metrics cannot see it,
+because they score what was shown during the tune and a revision only lands
+after the next tune settles. So the record was scored instead -- the
+evaluator's own answer at the end of each tune, followed forward to that
+hypothesis's last word -- and with no revision at all that record is already
+worse than what was shown, 0.628 against 0.763, with 82 answers changing
+after their tune ended. The reason is that true STARTS are not true ends: a
+span runs on through the chat or silence after its tune until the next start
+arrives, and its last word is about whatever came next. Revision decodes
+those contaminated rankings and makes the record slightly worse again, 0.622.
+A detector therefore has to find where a tune stops as well as where the
+next one starts; with only starts, the part of set decoding that needs
+hindsight stays out of reach.
+
 **A slip jig's bar is not in the onset envelope**, which is a negative worth
 keeping. The estimator only asks whether a beat divides in two or three, and
 then assumes every triple-time tune has two beats to a bar; a slip jig has
