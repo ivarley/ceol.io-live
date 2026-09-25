@@ -7,6 +7,7 @@
   import { untrack } from 'svelte'
   import { SearchField, Seg, Toolbar } from '../lib/index.js'
   import { parseLocalDate } from '../shared/parse.js'
+  import { locationLabel } from './logic.js'
 
   let { pageData = null, isLoggedIn = false } = $props()
 
@@ -116,15 +117,11 @@
     return endTime ? `${start}-${formatTime(endTime)}` : start + ' - ?'
   }
 
-  // The viewer's own country is noise on every row, so it is dropped when it matches.
-  // "Austin, TX" to somebody in the USA; "Galway, Ireland" to that same person.
-  const viewerCountry = (pageData?.viewer_country || '').trim().toLowerCase()
-  const locationOf = (s) => {
-    const sameCountry = viewerCountry && (s.country || '').trim().toLowerCase() === viewerCountry
-    return (
-      [s.city, s.state, sameCountry ? null : s.country].filter(Boolean).join(', ') || 'Unknown'
-    )
-  }
+  // The rule itself is in ./logic.js, where both of its branches can be tested:
+  // every seeded session is in the USA, so a browser test can only ever see the
+  // "drop my own country" half.
+  const viewerCountry = pageData?.viewer_country || ''
+  const locationOf = (s) => locationLabel(s, viewerCountry)
 
   function instanceLabel(session, instance) {
     const timeStr = formatTimeRange(instance.start_time, instance.end_time)
@@ -238,7 +235,10 @@
   </div>
 {/if}
 
-<p style="font-size: 0.85rem; color: var(--secondary-text);">
+<!-- The one thing worth saying after the list, so it is centred under it rather
+     than left-aligned like a caption. "Back to home" went with the page heading:
+     the tab bar has a Home tab, and a link that repeats a tab is furniture. -->
+<p class="sessions-footnote">
   Don't see your session?
   {#if currentFilter === 'my'}
     <a href="/sessions" onclick={searchAllSessions}>Search all sessions</a> or
@@ -247,5 +247,3 @@
     <a href="/add-session">Add it!</a>
   {/if}
 </p>
-
-<p><a href="/">← Back to home</a></p>

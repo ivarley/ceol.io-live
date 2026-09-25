@@ -28,25 +28,43 @@ test.describe("sessions directory", () => {
     await expect(row.locator(".session-row-where")).not.toBeEmpty();
   });
 
-  test("the row leaves off your own country but keeps a foreign one", async ({ page }) => {
-    // "Austin, TX, USA" is three facts to somebody abroad and one to somebody in
-    // Austin. The country only earns its place when it differs from yours.
-    await page.goto("/sessions");
-    const res = await page.request.get("/api/sessions/with-today-status");
-    const body = await res.json();
-    const mine = (body.viewer_country || "").trim().toLowerCase();
-    test.skip(!mine, "this viewer has no country set");
+  test.describe("signed in", () => {
+    // The rule needs a viewer who has a country. Logged out there is nothing to
+    // match, every row keeps its "USA", and the test proves nothing — so this one
+    // runs as a seeded user.
+    test.use({ storageState: STORAGE.admin });
 
-    for (const s of body.sessions || []) {
-      const row = page.locator(`.session-row[data-session-path="${s.path}"] .session-row-where`);
-      if (!(await row.count())) continue;
-      const shown = await row.innerText();
-      if ((s.country || "").trim().toLowerCase() === mine) {
-        expect(shown, `${s.name} should not repeat your own country`).not.toContain(s.country);
-      } else if (s.country) {
-        expect(shown, `${s.name} is abroad, so its country matters`).toContain(s.country);
+    test("the row leaves off your own country", async ({ page }) => {
+      // "Austin, TX, USA" is three facts to somebody abroad and one to somebody in
+      // Austin. The country only earns its place when it differs from yours.
+      //
+      // Only the "drop it" half is checked here: every seeded session is in the USA,
+      // so this database cannot produce a foreign row. The other half is covered in
+      // frontend/tests/sessionsdir.logic.test.js.
+      await page.goto("/sessions");
+      await expect(page.locator("#sessions-list .session-row").first()).toBeVisible();
+
+      const res = await page.request.get("/api/sessions/with-today-status");
+      const body = await res.json();
+      const mine = (body.viewer_country || "").trim().toLowerCase();
+      expect(mine, "the seeded admin should have a country").toBeTruthy();
+
+      let checked = 0;
+      for (const s of body.sessions || []) {
+        const row = page.locator(`.session-row[data-session-path="${s.path}"] .session-row-where`);
+        if (!(await row.count())) continue;
+        const shown = await row.innerText();
+        if ((s.country || "").trim().toLowerCase() === mine) {
+          expect(shown, `${s.name} should not repeat your own country`).not.toContain(s.country);
+          checked += 1;
+        } else if (s.country) {
+          expect(shown, `${s.name} is abroad, so its country matters`).toContain(s.country);
+          checked += 1;
+        }
       }
-    }
+      // Without this, a loop that visited no rows at all would pass.
+      expect(checked, "no session rows were actually compared").toBeGreaterThan(0);
+    });
   });
 
   test("search filters the directory", async ({ page }) => {

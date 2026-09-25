@@ -132,7 +132,20 @@ select.today-action-btn {
 }
 
 /* 8px each side, the same gutter the rows carry, so the search box's edge lines up
-   with the text below it rather than running to the screen edge. */
+   with the text below it. The 14px above matches My Tunes, so the two list pages
+   start their toolbars at the same height — they sat 6px apart, which is invisible
+   on either page alone and obvious the moment you switch tabs. */
 .filters-container {
-    padding: 8px;
+    padding: 14px 8px 0;
+}
+
+.sessions-footnote {
+    margin-top: 1.25rem;
+    /* Wider gutter than the rows: centred text needs room on both sides or the last
+       word sits against the screen edge, which reads as a clipping bug. */
+    padding: 0 16px;
+    text-align: center;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    color: var(--secondary-text);
 }
