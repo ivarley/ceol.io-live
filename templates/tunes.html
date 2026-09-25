@@ -280,6 +280,40 @@
   }
 
   render(TOP, false)
+
+  // The drawer puts ?tune=<id> in the address bar when it opens, so that is the URL
+  // people copy, bookmark and reload. Nothing here read it back, so every one of
+  // those links landed on the bare top-100 list — the one thing the URL promises it
+  // will not do. Re-open the drawer on load.
+  //
+  // The tune does not have to be in the top 100. The drawer only needs the id; the
+  // name and type come off the row when there is one, purely so it can paint
+  // something before /detail lands.
+  var wanted = Number(new URLSearchParams(window.location.search).get('tune')) || null
+  if (wanted) {
+    whenDrawerReady(function () {
+      var known = list.querySelector('.pt-row[data-tune-id="' + wanted + '"]')
+      window.TuneDetailModal.show({
+        tuneId: wanted,
+        scope: null,
+        tuneName: known ? known.querySelector('.pt-name').textContent : '',
+        tuneType: (known && known.dataset.tuneType) || '',
+      })
+    })
+  }
+
+  // base.html loads the tunesheet bundle as a module, which means it can install
+  // window.TuneDetailModal after this script has already run. Poll for it rather
+  // than depend on a load order neither file states, and give up quietly: a missing
+  // drawer should cost the deep link, not the page.
+  function whenDrawerReady(fn) {
+    var tries = 0
+    ;(function check() {
+      if (window.TuneDetailModal && window.TuneDetailModal.show) return fn()
+      if (++tries > 40) return
+      setTimeout(check, 50)
+    })()
+  }
 })()
 </script>
 {% endblock %}

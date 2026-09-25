@@ -40,7 +40,9 @@ _SALT = "notation-backfill-v1"
 def _serializer() -> URLSafeTimedSerializer:
     # Read at call time, not import time: the key comes from the environment and
     # tests patch it.
-    secret = os.environ.get("FLASK_SESSION_SECRET_KEY", "dev-secret-key-change-in-production")
+    secret = os.environ.get(
+        "FLASK_SESSION_SECRET_KEY", "dev-secret-key-change-in-production"
+    )
     return URLSafeTimedSerializer(secret, salt=_SALT)
 
 

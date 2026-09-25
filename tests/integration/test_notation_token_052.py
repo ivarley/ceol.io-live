@@ -127,11 +127,13 @@ class TestTheTokenIsOnlyMintedWhereItIsNeeded:
         assert body["notation_token"], "a visitor needs a way to ask for what we lack"
         assert notation_token.is_valid_for(body["notation_token"], bare_tune)
 
-    def test_a_tune_that_already_has_notation_gets_none(self, client, notated_tune):
-        # Nothing to fetch, so nothing to authorise. Keeps tokens off the common path.
+    def test_a_tune_that_already_has_notation_gets_one_too(self, client, notated_tune):
+        # Holding one setting is not the same as holding them all: thesession.org may
+        # have others, and Refresh re-pulls the current one. Withholding the token
+        # here hid both controls on exactly the tunes most worth looking at.
         body = client.get(f"/api/tunes/{notated_tune}/detail").get_json()
         assert body["session_tune"]["abc"], "fixture check: this tune should have notation"
-        assert body["notation_token"] is None
+        assert notation_token.is_valid_for(body["notation_token"], notated_tune)
 
     def test_a_signed_in_viewer_gets_none(self, client, authenticated_user, bare_tune):
         # Their session is their authority; issuing a token as well would be a second

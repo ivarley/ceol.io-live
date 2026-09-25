@@ -1793,13 +1793,20 @@ def build_tune_detail_payload(
     }
 
     # A token letting a signed-out viewer pull this ONE tune's notation from
-    # thesession.org (spec 052 §B21). Minted only when there is nothing cached, so
-    # the common case — a tune we already hold notation for — carries none.
-    # Logged-in callers do not need one; their session is their authority.
+    # thesession.org (spec 052 §B21).
+    #
+    # Minted for every signed-out viewer, not only for tunes with nothing cached. The
+    # first cut did the latter as a tidiness measure and it removed a real
+    # capability: a tune we hold ONE setting for still has others on thesession.org,
+    # and Refresh re-pulls the current one. Withholding the token hid both controls on
+    # exactly the tunes most worth looking at.
+    #
+    # It costs nothing to widen: the token is still bound to this one tune and still
+    # expires, so what a holder can do is unchanged.
+    #
+    # Logged-in callers get none; their session is already the authority.
     notation_token = None
-    if not logged_in and not any(
-        session_tune.get(k) for k in ("abc", "incipit_abc", "image", "incipit_image")
-    ):
+    if not logged_in:
         from notation_token import mint
 
         notation_token = mint(tune_id)
