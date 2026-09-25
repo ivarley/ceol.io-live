@@ -164,6 +164,7 @@ def execute(config, recording_id, board=None, quiet=False, parent_run_id=None, s
                             payload={"expert": expert.name, "reason": decision.reason},
                             expert="scheduler", expert_version="1", params={})
                         board.append(run_id, skip, clock_ms=chunk.t_end_ms)
+                        board.conn.commit()
                         n_obs += 1
                         ran.add(expert.name)
                         continue
@@ -179,6 +180,15 @@ def execute(config, recording_id, board=None, quiet=False, parent_run_id=None, s
                                 obs.cost_ms = share
                             if not view.was_appended(obs):
                                 board.append(run_id, obs, clock_ms=chunk.t_end_ms)
+                                # Commit now rather than at the end of the
+                                # chunk. The write lock is taken by the first
+                                # insert and held until commit, and the old
+                                # placement held it through every expert's
+                                # computation for the chunk -- pitch tracking
+                                # included -- so parallel runs queued behind
+                                # one another and ran one at a time. Measured:
+                                # five of six runs at 0% CPU, waiting.
+                                board.conn.commit()
                                 view.note(obs)
                             n_obs += 1
                             newly.add(obs.type)
