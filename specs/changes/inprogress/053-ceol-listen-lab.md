@@ -448,17 +448,49 @@ ground truth's noise. The transcribed note onsets cannot adjudicate it
 either, since even the best-fitting grid sits 31.7ms from them against 39.9ms
 for a random phase.
 
-**The downbeat is the weak part, and it is now measured.** Nineteen marked
-bar starts on the reel put the estimated bar phase 1.19 eighths out of eight
-away from the true one, where guessing would average 2.00, so it is barely
-better than picking an eighth at random. Four rules were tried on that one
-segment and none separated: the mean onset on the line, the strongest onset
-near it, whether a transcribed note begins there, and whether a LONG note
-begins there all choose the same wrong eighth. The tempo is not the problem,
-since one constant bar fits all nineteen marks with a 61ms residual and the
-estimator reads within 5ms of it across six overlapping windows. Something
-other than onset energy has to say where the bar is, and one marked segment
-cannot say what.
+**The downbeat is wrong, and wrong the same way twice.** Marked bar starts on
+two reels, on different nights and different recordings, put the estimated
+bar phase out by 1.19 and 1.20 eighths. Guessing an eighth at random averages
+2.00, so on one segment this looked like chance. On two it is a systematic
+offset, and systematic offsets are correctable.
+
+| | Castle Kelly | Father Kelly |
+|---|---|---|
+| eighth | 147.5 ms | 142.7 ms |
+| bar phase error | +176 ms | +172 ms |
+| as eighths | +1.19 | +1.20 |
+| as a fraction of the bar | +0.149 | +0.151 |
+
+What it cannot yet say is which of those is the quantity. The two tempos are
+3% apart, so a fixed time, a fixed number of eighths and a fixed fraction of
+the bar all fit to within a couple of milliseconds. Coleman's Cross separates
+them cleanly, its bar being 955ms against the reels' 1142 and 1180, and it
+already has 81 drawn beats and no bar marks:
+
+| if the error is | the jig's error should be |
+|---|---|
+| a fixed 174 ms | 1.09 eighths |
+| a fixed 1.20 eighths | 1.20 eighths |
+| a fixed 0.150 of a bar | 0.90 eighths |
+| a fixed 0.60 of a beat | 1.80 eighths |
+
+Nothing is corrected until that is known, because with two points three
+paces apart any of the four can be made to fit and only one of them would
+survive a tune at a different tempo.
+
+One explanation is already dead. The offset is 0.60 of a quarter note, which
+is where the second note of a swung pair would fall, so the obvious guess was
+that the phase fitter locks onto the offbeat. It does not: the subdivision
+peak sits at 0.51 and 0.50 of the beat on these two reels, which is even.
+What makes their eighth-note lag vanish is not uneven timing but alternating
+strength, strong-weak, which repeats every two eighths rather than every one.
+
+Four rules for choosing the eighth were also tried and none separated: the
+mean onset on the line, the strongest onset near it, whether a transcribed
+note begins there, and whether a LONG note begins there all pick the same
+wrong eighth. The tempo is not the problem either, since one constant bar
+fits all nineteen marks on Castle Kelly with a 61ms residual and the
+estimator reads within 5ms of it across six overlapping windows.
 
 ### Key: easy to hear, worth nothing to know
 
