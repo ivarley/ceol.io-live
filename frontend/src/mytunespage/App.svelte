@@ -632,19 +632,10 @@
 
 <div class="my-tunes-container">
   <div class="my-tunes-header-section">
-    <div class="page-header">
-      <h1>
-        My Tunes
-        <a href="/help/my-tunes" class="help-icon" title="How to use My Tunes">
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"></circle>
-            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
-            <line x1="12" y1="17" x2="12.01" y2="17"></line>
-          </svg>
-        </a>
-      </h1>
-    </div>
-
+    <!-- No page heading (spec 052 §B1), matching the sessions list. The tab bar
+         already says where you are, and "My Tunes" over your tunes was a line of
+         chrome between you and the list. The "How to use My Tunes" link went with
+         it; the help sidebar carries it. -->
     <div class="filters-container">
       <!-- One Toolbar, the same component the session page's three tabs use
            (spec 052 §B8 Stage 3). It wears this page's legacy classes and ids so the

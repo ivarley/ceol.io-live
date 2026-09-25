@@ -9,7 +9,10 @@ test.use({ storageState: STORAGE.regular });
 test.describe("My Tunes list", () => {
   test("renders the collection with filter + sort controls", async ({ page }) => {
     await page.goto("/my-tunes");
-    await expect(page.locator("h1")).toContainText(/My Tunes/i);
+    // No heading since spec 052 §B1 — the tab bar says where you are. The page's own
+    // controls are what identify it now.
+    await expect(page.locator("h1")).toHaveCount(0);
+    await expect(page.locator("#search-input")).toBeVisible();
     await expect(page.locator("#search-input")).toBeVisible();
     await expect(page.locator("#add-tune-btn")).toBeVisible();
     await expectNoServerError(page);

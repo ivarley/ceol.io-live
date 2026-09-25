@@ -69,6 +69,6 @@ test("session detail renders on mobile", async ({ page }) => {
 
 test("my tunes renders on mobile", async ({ page }) => {
   await page.goto("/my-tunes");
-  await expect(page.locator("h1")).toContainText(/My Tunes/i);
+  await expect(page.locator("h1")).toHaveCount(0);
   await expect(page.locator("#search-input")).toBeVisible();
 });

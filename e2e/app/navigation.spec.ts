@@ -21,7 +21,8 @@ test.describe("authenticated navigation", () => {
     const menu = await openMenu(page);
     await menu.getByRole("link", { name: /^My Tunes$/i }).click();
     await expect(page).toHaveURL(/\/my-tunes/);
-    await expect(page.locator("h1")).toContainText(/My Tunes/i);
+    // The page has no heading (spec 052 §B1); its search box is the landmark.
+    await expect(page.locator("#search-input")).toBeVisible();
   });
 
   test("regular user does NOT see the Admin link", async ({ page }) => {

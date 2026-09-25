@@ -36,41 +36,6 @@
     padding: 20px;
 }
 
-.page-header {
-    margin-bottom: 10px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-}
-
-.page-header h1 {
-    margin: 0;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.help-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--text-muted, #6c757d);
-    opacity: 0.5;
-    text-decoration: none;
-    transition: opacity 0.2s, color 0.2s;
-}
-
-.help-icon:hover {
-    opacity: 1;
-    color: var(--primary);
-    text-decoration: none;
-}
-
-.help-icon svg {
-    vertical-align: middle;
-}
-
 .btn {
     padding: 4px 12px;
     background-color: var(--primary);
@@ -1084,16 +1049,6 @@
         padding-right: 8px;
     }
 
-    .page-header {
-        margin-bottom: 4px;
-        padding: 0;
-        gap: 6px;
-    }
-
-    .page-header h1 {
-        font-size: 22px;
-    }
-
     .btn {
         padding: 4px 10px;
         font-size: 12px;
@@ -1638,10 +1593,6 @@
         padding: 10px;
     }
 
-    .page-header h1 {
-        font-size: 20px;
-    }
-
     .tune-name {
         font-size: 15px;
     }
@@ -1672,11 +1623,6 @@
     /* The tune list is always a single column (even in landscape) */
     .tunes-grid {
         grid-template-columns: 1fr;
-    }
-
-    /* Reduce vertical spacing */
-    .page-header {
-        margin-bottom: 15px;
     }
 
     .filters-container {

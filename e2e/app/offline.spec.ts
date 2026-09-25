@@ -79,21 +79,21 @@ test.describe("offline data (Tier 1)", () => {
     await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 8000 });
     // Online + controlled: caches both the page snapshot and the GET /api/my-tunes response.
     await page.goto("/my-tunes");
-    await expect(page.locator("h1")).toContainText(/My Tunes/i);
+    await expect(page.locator("#search-input")).toBeVisible();
     await expect(page.getByText(/Cooley's/i).first()).toBeVisible();
     await page.waitForTimeout(500); // let the snapshot + api cache writes land
 
     await context.setOffline(true);
     try {
       await page.goto("/my-tunes"); // page + /api/my-tunes both served from cache
-      await expect(page.locator("h1")).toContainText(/My Tunes/i);
+      await expect(page.locator("#search-input")).toBeVisible();
       await expect(page.getByText(/Cooley's/i).first()).toBeVisible();
 
       // A never-visited filter/sort URL must also work offline: the route ignores the
       // query and the list is filtered client-side, so the SW shares one cached entry
       // across query variants (ignoreSearch).
       await page.goto("/my-tunes?status=want+to+learn&sortType=heard&sortDir=desc");
-      await expect(page.locator("h1")).toContainText(/My Tunes/i);
+      await expect(page.locator("#search-input")).toBeVisible();
       await expect(page.locator("body")).not.toContainText(/You're offline/i);
       await expect(page.getByText(/Cooley's/i).first()).toBeVisible(); // a "want to learn" tune
     } finally {
@@ -401,7 +401,7 @@ test.describe("background prefetch", () => {
       const cssStatus = await page.evaluate(async () => (await fetch("/static/css/my_tunes_mobile.css")).status);
       expect(cssStatus).toBe(200);
       await page.goto("/my-tunes");
-      await expect(page.locator("h1")).toContainText(/My Tunes/i);
+      await expect(page.locator("#search-input")).toBeVisible();
       await expect(page.locator("body")).not.toContainText(/You're offline/i);
     } finally {
       await context.setOffline(false);
