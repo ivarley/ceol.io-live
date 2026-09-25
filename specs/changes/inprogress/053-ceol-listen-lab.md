@@ -448,146 +448,59 @@ ground truth's noise. The transcribed note onsets cannot adjudicate it
 either, since even the best-fitting grid sits 31.7ms from them against 39.9ms
 for a random phase.
 
-**The downbeat is wrong, and wrong the same way twice.** Marked bar starts on
-two reels, on different nights and different recordings, put the estimated
-bar phase out by 1.19 and 1.20 eighths. Guessing an eighth at random averages
-2.00, so on one segment this looked like chance. On two it is a systematic
-offset, and systematic offsets are correctable.
+**The downbeat is not the problem. The beat phase is.** Three hand-marked
+segments took two goes to read, because the first reading was an artefact of
+how they were scored.
 
-| | Castle Kelly | Father Kelly |
-|---|---|---|
-| eighth | 147.5 ms | 142.7 ms |
-| bar phase error | +176 ms | +172 ms |
-| as eighths | +1.19 | +1.20 |
-| as a fraction of the bar | +0.149 | +0.151 |
-
-What it cannot yet say is which of those is the quantity. The two tempos are
-3% apart, so a fixed time, a fixed number of eighths and a fixed fraction of
-the bar all fit to within a couple of milliseconds. Coleman's Cross separates
-them cleanly, its bar being 955ms against the reels' 1142 and 1180, and it
-already has 81 drawn beats and no bar marks:
-
-| if the error is | the jig's error should be |
-|---|---|
-| a fixed 174 ms | 1.09 eighths |
-| a fixed 1.20 eighths | 1.20 eighths |
-| a fixed 0.150 of a bar | 0.90 eighths |
-| a fixed 0.60 of a beat | 1.80 eighths |
-
-Nothing is corrected until that is known, because with two points three
-paces apart any of the four can be made to fit and only one of them would
-survive a tune at a different tempo.
-
-One explanation is already dead. The offset is 0.60 of a quarter note, which
-is where the second note of a swung pair would fall, so the obvious guess was
-that the phase fitter locks onto the offbeat. It does not: the subdivision
-peak sits at 0.51 and 0.50 of the beat on these two reels, which is even.
-What makes their eighth-note lag vanish is not uneven timing but alternating
-strength, strong-weak, which repeats every two eighths rather than every one.
-
-Four rules for choosing the eighth were also tried and none separated: the
-mean onset on the line, the strongest onset near it, whether a transcribed
-note begins there, and whether a LONG note begins there all pick the same
-wrong eighth. The tempo is not the problem either, since one constant bar
-fits all nineteen marks on Castle Kelly with a 61ms residual and the
-estimator reads within 5ms of it across six overlapping windows.
-
-### Key: easy to hear, worth nothing to know
-
-Worth writing down because the intuition behind it is sound and the
-measurement still says no.
-
-**The corpus is in good shape here.** Every one of 55,392 settings carries a
-mode, none blank, in 23 distinct spellings that collapse to just eight
-seven-note sets. Two of them dominate: 40.8% of settings use G major's notes
-and 37.8% use D major's. E major is 0.7%, which is why hearing it would
-narrow the field so sharply.
-
-The number worth comparing on is the key SIGNATURE, not the key name. D
-major, B minor, A mixolydian and E dorian are the same seven notes with a
-different note called home, and nothing in a pitch-class histogram
-distinguishes them. `abc_pitch.key_sharps` reduces the corpus's mode column
-to that number and `analysis/key.py` produces it from audio.
-
-Collapsing this way barely changes how much the corpus agrees with itself:
-77.8% of tunes have every setting on the same mode string, 78.8% on the same
-notes. So the remaining fifth are genuine transpositions, a tune written in D
-and also in G.
-
-That does not make a tune's key merely a set, though, because the session
-says which setting it plays: `session_tune.setting_id` is filled for 650
-repertoire tunes and is a real choice rather than a default, pointing at the
-lowest-numbered setting only 41% of the time. Each setting has exactly one
-mode, so for those tunes the key is a value.
-
-Scored against that value the estimator reads 0.783 where against the set it
-reads 0.921, and the gap is mostly not error. Of the 80 disagreements:
-
-| | |
-|---|---|
-| the deciding note is barely played, under 2% either way | 38 |
-| both are played: the tune moves between modes | 23 |
-| clearly the note heard, not the one notated | 15 |
-| more than one accidental apart | 4 |
-
-So 15 of 369 look like a real mismatch between what is notated and what is
-played. The estimator already knows which of these it should not have
-claimed: its margin is 0.003 on the undecidable group against 0.023 where it
-agrees, so abstaining below about 0.005 costs almost nothing and removes
-half the apparent disagreement.
-
-The single accidental is the whole question, which makes each case checkable
-by ear. The Gooseberry Bush is recorded as D major and played with a C
-natural on both nights it appears, 13.2% against 1.8% of note time in 2026-01
-and 9.7% against 2.6% in 2026-08, with F# present throughout: D mixolydian on
-the evidence, D major in the setting.
-
-**It is easy to hear.** The best-fitting seven-note set holds 95.5% of note
-time in the median segment, which is a lot of agreement from a monophonic
-tracker in a room. It matches the corpus on 92.0% of 501 segments, against
-81.9% for never listening and always saying two sharps, which is what this
-repertoire mostly plays in. Of the forty it gets wrong, 34 are one accidental
-out, which is D against G: a tune in D that rarely reaches its C# is a tune
-in G. The estimate is well calibrated, being right on all 103 segments where
-the winning set beat the runner-up by more than five points of note time.
-
-**The mode cannot be named, only the signature.** One sharp is G major, E
-minor, D mixolydian or A dorian, and the session plays all of them: by the
-setting each tune records, 40% of what it plays is not plain major, with D
-mixolydian, E dorian and A dorian the commonest. Naming the mode needs the
-tonic, and four ways of finding it all lose to simply assuming major, which
-is right 0.668 of the time: the longest note gets 0.526, the heaviest scale
-degree 0.498, the commonest phrase ending 0.363 and the last note heard
-0.325. The usual error is calling D major's tonic A, which is the dominant
-outweighing the tonic. For writing notation this costs only the mode label,
-since the signature alone gives the right accidentals.
-
-**And it is worth nothing as a filter.** Restricting candidates to tunes the
-corpus records in the TRUE key, an oracle no classifier could beat, moves
-top-1 from 0.776 to 0.780. Using the heard key instead costs six points,
-because a wrong key removes the answer. The reason is the repertoire: 452 of
-501 segments are in D or G, and those two sets cover 45% and 47% of the
-corpus, so hearing one of them rules almost nothing out. This is not a
-statement that key is uninformative in general. It is a statement that it is
-uninformative about the tunes this session plays.
-
-**The by-product is the useful part.** How diatonic a transcription is says
-nothing about which tune it is and a great deal about whether the
-transcription is worth believing:
-
-| share of note time in one key | segments | top-1 | never found |
+| | Castle Kelly | Father Kelly | Coleman's Cross |
 |---|---|---|---|
-| under 0.85 | 14 | 0.357 | 0.500 |
-| 0.85-0.92 | 63 | 0.460 | 0.190 |
-| 0.92-0.95 | 128 | 0.758 | 0.078 |
-| 0.95-0.97 | 155 | 0.826 | 0.032 |
-| over 0.97 | 141 | 0.922 | 0.007 |
+| | reel | reel | jig |
+| period | right | right | right |
+| beat phase, as a fraction of a beat | -0.43 | +0.47 | +0.12 |
+| bar phase, as a fraction of a bar | +0.15 | +0.15 | +0.06 |
 
-It correlates +0.386 with getting the tune right where pulse strength manages
-+0.163, and the two are nearly independent (+0.237 with each other), so a
-segment weak on both is the one to look at. `lab suspects` reports both, and
-the next use for it is the assembler's confidence, which is the one number
-the board reports that nothing has yet been fitted to.
+Half a beat is as wrong as a beat phase can be, so both reels are close to
+maximally wrong and the jig is close to right. The bar error then follows
+from it: the estimated bar line is built as the beat phase plus a whole
+number of beats, and on all three the bar error equals the beat error to
+within the noise of the marks. Choosing WHICH beat starts the bar is already
+right. Placing the beats is not.
+
+Two scoring bugs had to be fixed before that was visible, and both had made
+the estimator look better than it is:
+
+- Phase error was wrapped at the eighth note, so it could never report more
+  than half an eighth however wrong the grid was. A grid sitting on the
+  offbeat came back as "54ms", which sounded like precision. Wrapped at the
+  beat it reads 0.43.
+- The true phase was fitted against each beat's position in the list rather
+  than against elapsed beats. Marks are drawn in patches, so a nine-second
+  gap counted as one beat, and on Castle Kelly the fit put the first beat at
+  -4668ms, before the segment began. Every phase number taken from it was
+  meaningless, including the "+1.19 and +1.20 eighths, identical on two
+  reels" that looked like a systematic offset worth correcting.
+
+The reason is visible in the onset envelope, folded onto one beat starting
+where the beat truly starts:
+
+| | energy across one beat | peak-to-trough |
+|---|---|---|
+| Coleman's Cross | `+##+...+..+#+.+.` | 0.61 |
+| Castle Kelly | `+.+++..+#+++++++` | 0.52 |
+| Father Kelly | `++++++++++++++++` | 0.06 |
+
+The jig's energy peaks where the beat starts. Father Kelly's is flat: there
+is nothing in it to lock onto, and the phase fitter returns what amounts to a
+coin toss. Castle Kelly has structure and still chooses wrong, because its
+strongest moment is in the MIDDLE of the beat rather than at its start.
+
+So onset energy locates the period reliably and the phase not at all, at
+least on reels, and no constant correction can fix that: one of these two
+reels has no signal to correct and the other has a signal pointing the wrong
+way. Phase has to come from somewhere else. The candidates worth trying are
+the transcribed note starts rather than the spectral flux, the fact that a
+bar tends to begin a melodic phrase, and the tune's own eight-bar repetition,
+which is a much longer lever than anything inside one beat.
 
 ### What did not work, and is on the board anyway
 

@@ -121,9 +121,17 @@ def truth_phase_ms(pulse):
     beats = np.asarray(sorted(pulse.get("beats") or []), dtype=float)
     if beats.size < 3:
         return float(pulse.get("phase_ms") or 0.0), None
-    i = np.arange(beats.size)
-    a = np.vstack([i, np.ones(i.size)]).T
-    (slope, intercept), residuals, *_ = np.linalg.lstsq(a, beats, rcond=None)
+    # Index by ELAPSED beats, not by position in the list. Beats are drawn in
+    # patches, and counting the list straight through treats a nine-second gap
+    # as one beat: on Castle Kelly that fitted a phase of -4668ms, which is
+    # before the segment starts, and every phase number derived from it was
+    # meaningless.
+    spacing = drawn_beat_ms(pulse) / 1000.0
+    if spacing <= 0:
+        return float(beats[0]) * 1000.0, None
+    n = np.round((beats - beats[0]) / spacing)
+    a = np.vstack([n, np.ones(n.size)]).T
+    (_slope, intercept), residuals, *_ = np.linalg.lstsq(a, beats, rcond=None)
     rms = float(np.sqrt(residuals[0] / beats.size)) * 1000.0 if residuals.size else None
     return float(intercept) * 1000.0, rms
 
@@ -164,12 +172,19 @@ def score_record(record, seconds=60.0):
         return {"tune": record.get("tune_name"), "found": False}
     ratio = got["period_ms"] / max(1e-6, truth["period_ms"])
     # phase only means anything once the period is right
+    # Wrapped at the BEAT, not the eighth. Wrapping at the eighth could only
+    # ever report half an eighth of error, so a grid sitting on the offbeat --
+    # which is what it does on a reel -- came back as a small number. The
+    # figure that means something is the fraction of a beat, where 0.5 is as
+    # wrong as it is possible to be.
     phase_err = None
+    phase_err_beats = None
     truth_phase, drawn_rms = truth_phase_ms(truth)
     if abs(ratio - 1.0) <= 0.08:
-        period = truth["period_ms"]
-        diff = (got["phase_ms"] - truth_phase) % period
-        phase_err = min(diff, period - diff)
+        beat = got.get("beat_ms") or truth["period_ms"]
+        diff = (got["phase_ms"] - truth_phase) % beat
+        phase_err = min(diff, beat - diff)
+        phase_err_beats = phase_err / max(1e-6, beat)
     # Bar phase, in beats rather than milliseconds: being a whole beat out is a
     # different mistake from being a little early, and only the first is audible
     # as the wrong note starting the bar.
@@ -195,6 +210,7 @@ def score_record(record, seconds=60.0):
         "period_right": abs(ratio - 1.0) <= 0.08,
         "grouping_right": int(got["grouping"]) == truth_meter(truth),
         "phase_error_ms": phase_err,
+        "phase_error_beats": phase_err_beats,
         "drawn_scatter_ms": drawn_rms,
         "f1": float(abs(ratio - 1.0) <= 0.08),
     }
@@ -222,6 +238,8 @@ def run_pulse(seconds=60.0, quiet=False):
     }
     errs = [r["phase_error_ms"] for r in scored if r["phase_error_ms"] is not None]
     pooled["median_phase_error_ms"] = float(np.median(errs)) if errs else None
+    pb = [r["phase_error_beats"] for r in scored if r.get("phase_error_beats") is not None]
+    pooled["median_phase_error_beats"] = float(np.median(pb)) if pb else None
     bar = [r["bar_error_beats"] for r in scored if r.get("bar_error_beats") is not None]
     pooled["n_with_bars_marked"] = sum(1 for r in scored if r.get("bars_marked"))
     pooled["median_bar_error_beats"] = float(np.median(bar)) if bar else None
@@ -246,7 +264,8 @@ def format_pulse(result):
              f"  grouping right            {p['grouping_right']:.3f}",
              f"  median estimate / drawn   {p['median_ratio']:.3f}"]
     if p.get("median_phase_error_ms") is not None:
-        lines.append(f"  phase error when the period is right  {p['median_phase_error_ms']:.0f}ms")
+        lines.append(f"  beat phase off by (median)  {p['median_phase_error_ms']:.0f}ms"
+                     f" = {p['median_phase_error_beats']:.2f} of a beat (0.5 is the worst possible)")
     if p.get("n_with_bars_marked"):
         lines.append(f"  bar lines marked on {p['n_with_bars_marked']} segment(s)")
         if p.get("median_bar_error_beats") is not None:
