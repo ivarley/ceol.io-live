@@ -26,7 +26,7 @@ The high level view of the system is documented in the /specs directory. Before 
 Frontend, templates, interactions, theming
 - [Svelte Pages](specs/current/ui/svelte-pages.md) - Thin shell + `__PAGE_DATA__` + page bundle; how to add/change a page; the component kit
 - [Templates & Pages](specs/current/ui/templates.md) - HTML structure, base layouts, shells vs. Jinja pages
-- [Session Logging UI](specs/current/ui/session-logging.md) - QUARANTINED legacy pill editor (spec 035 Step 6 deletes it)
+- [Session Logging UI](specs/current/ui/session-logging.md) - Legacy pill editor, now UNREACHABLE (spec 035 Step 6 deletes it)
 - [Theming](specs/current/ui/theming.md) - CSS variables (dark-only palette)
 - [AJAX Patterns](specs/current/ui/ajax.md) - Serializer layer, API auth decorators, Bearer tokens
 

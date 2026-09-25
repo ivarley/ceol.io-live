@@ -48,6 +48,6 @@ Standard form controls, search boxes, CSS variables
 - `templates/base.html` - Base layout: navigation and the app-wide tune-detail sheet bundle (`static/tunesheet/sheet.js` → `window.TuneDetailModal` / `window.FindTuneOverlay`)
 - `frontend/src/` - Svelte sources (page dirs + `lib/` kit); one Vite config per bundle
 - `serializers.py` - One function per page/API payload (the embed==API invariant)
-- `templates/session_instance_detail.html` - Quarantined legacy pill editor (spec 035 Step 6 deletes it)
+- `templates/session_instance_detail.html` - Legacy pill editor, UNREACHABLE since spec 052 §B13 (spec 035 Step 6 deletes it)
 - `templates/admin_*.html` - Plain admin tables (still Jinja)
 - `static/` - CSS, images, and the built bundles (gitignored; rebuilt on deploy)
