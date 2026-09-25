@@ -26,7 +26,6 @@ class User(UserMixin):
         auto_save_tunes=False,
         auto_save_interval=60,
         active_session=None,
-        beta_live_logging=True,
     ):
         self.id = str(user_id)
         self.user_id = user_id
@@ -42,10 +41,6 @@ class User(UserMixin):
         self.auto_save_tunes = auto_save_tunes
         self.auto_save_interval = auto_save_interval
         self.active_session = active_session  # Dict with session instance data or None
-        # The live logger is the default for everyone (spec 024). This flag is now an
-        # opt-OUT: False means "put me back on the legacy pill editor". Column name kept
-        # for continuity with the beta rollout that introduced it.
-        self.beta_live_logging = beta_live_logging
         self.hashed_password = None  # Will be set when loading from database
 
     @property
@@ -66,7 +61,7 @@ class User(UserMixin):
                 SELECT ua.user_id, ua.person_id, ua.username, ua.is_active, ua.is_system_admin,
                        ua.timezone, ua.email_verified, p.first_name, p.last_name, ua.user_email, ua.auto_save_tunes, ua.auto_save_interval,
                        p.at_active_session_instance_id, si.session_id, si.date, si.start_time, si.end_time, si.location_override, s.name, s.path,
-                       ua.beta_live_logging, ua.hashed_password
+                       ua.hashed_password
                 FROM user_account ua
                 JOIN person p ON ua.person_id = p.person_id
                 LEFT JOIN session_instance si ON p.at_active_session_instance_id = si.session_instance_id
@@ -105,12 +100,11 @@ class User(UserMixin):
                     auto_save_tunes=user_data[10],
                     auto_save_interval=user_data[11],
                     active_session=active_session,
-                    beta_live_logging=user_data[20],
                 )
                 # So has_password() is right on every request, not only the login
                 # request (GET /api/me reports it; token-authenticated requests load
                 # the user through here).
-                user.hashed_password = user_data[21]
+                user.hashed_password = user_data[20]
                 return user
             return None
         finally:

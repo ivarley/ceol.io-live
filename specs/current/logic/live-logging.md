@@ -202,13 +202,17 @@ The live screen is **the** session-instance page, for everyone.
 `/live/instances/<id>` (forwarding `?highlight=`, never `?tune=` — on the live screen that
 means "append this tune").
 
-- `user_account.beta_live_logging` is now an **opt-OUT**, not an opt-in: column default
-  `TRUE` (migration `043`), every existing row backfilled to `TRUE`. Only a user who sets
-  it `FALSE` from **Account Information → Tune logger** on their profile
-  (`POST /api/users/<id>/beta-logging`, admin-or-self) lands on the legacy pill editor.
-  There is no other route to it, and signed-out visitors can't reach it at all.
-- Names (`beta_live_logging`, `/beta-logging`) are kept from the beta rollout to avoid a
-  rename migration; they no longer mean "beta".
+There is **no branch and no preference** (spec 052 §B13). `beta_live_logging` used to
+let a signed-in user opt back to the legacy pill editor; the live logger is the only
+logger now, so the flag, its endpoint (`POST /api/users/<id>/beta-logging`), its
+`User` attribute and the profile row that set it are all gone.
+
+- The `user_account.beta_live_logging` **column still exists** and is no longer read or
+  written. Dropping it is a separate migration, deliberately not bundled here: stop
+  reading a column first, drop it once nothing deployed can still want it.
+- **The legacy pill editor is now unreachable.** `templates/session_instance_detail.html`
+  (~1,970 lines) and the branch of `session_instance_detail` that rendered it have no
+  route in. Deleting them is spec 035 Step 6, still outstanding.
 
 ### The public (signed-out) view
 

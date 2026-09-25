@@ -1062,12 +1062,6 @@ app.add_url_rule(
     methods=["GET"],
 )
 app.add_url_rule(
-    "/api/users/<int:user_id>/beta-logging",
-    "set_beta_logging",
-    set_beta_logging,
-    methods=["POST"],
-)
-app.add_url_rule(
     "/api/admin/instances/<int:session_instance_id>/logging-mode",
     "admin_reset_logging_mode",
     admin_reset_logging_mode,

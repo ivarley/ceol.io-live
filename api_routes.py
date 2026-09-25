@@ -433,32 +433,6 @@ def get_tune_played_with(tune_id):
 
 
 @api_login_required
-def set_beta_logging(user_id):
-    """Set a user's tune-logger preference. enabled=True (the default for every
-    account) means the live logger; False drops them back to the legacy pill editor,
-    which is otherwise unreachable. System admins can set it for anyone; users can set
-    their own. Endpoint/flag names date from the spec 024 beta rollout.
-    POST /api/users/<user_id>/beta-logging  body {enabled: bool}"""
-    is_self = getattr(current_user, "user_id", None) == user_id
-    if not (current_user.is_system_admin or is_self):
-        return jsonify({"success": False, "error": "Not authorized"}), 403
-    enabled = bool((request.get_json(silent=True) or {}).get("enabled"))
-    conn = get_db_connection()
-    try:
-        cur = conn.cursor()
-        cur.execute(
-            "UPDATE user_account SET beta_live_logging = %s WHERE user_id = %s",
-            (enabled, user_id),
-        )
-        if cur.rowcount == 0:
-            return jsonify({"success": False, "error": "User not found"}), 404
-        conn.commit()
-        return jsonify({"success": True, "user_id": user_id, "beta_live_logging": enabled})
-    finally:
-        conn.close()
-
-
-@api_login_required
 def admin_reset_logging_mode(session_instance_id):
     """System-admin only: reset an instance to the classic editor (undo the one-way lock).
     POST /api/admin/instances/<id>/logging-mode  body {mode: 'legacy'|'live'}"""

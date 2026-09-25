@@ -76,8 +76,8 @@ class TestUser:
             sample_user_data["email"],
             sample_user_data["auto_save_tunes"],
             sample_user_data.get("auto_save_interval", 60),
-            # Active-session join columns (None: user has no active session) +
-            # beta_live_logging — see User.get_by_id's SELECT.
+            # Active-session join columns (None: user has no active session) —
+            # see User.get_by_id's SELECT.
             None,  # at_active_session_instance_id
             None,  # session_id
             None,  # date
@@ -86,7 +86,6 @@ class TestUser:
             None,  # location_override
             None,  # session name
             None,  # session path
-            False,  # beta_live_logging
             None,  # hashed_password (spec 052: loaded so has_password() is right per-request)
         )
         mock_cursor.fetchone.return_value = user_tuple

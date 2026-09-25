@@ -17,6 +17,7 @@
   // the sheet open for another try, which is the kit's rule for server commits.
   import { tick } from 'svelte'
   import { Sheet, Seg } from '../lib/index.js'
+  import '../lib/grouped.css'
   import { parseThesessionSessionId } from '../shared/parse.js'
   import { normalizeSessionPath } from '../shared/sessionpath.js'
   import { generatePath, summarizeRecurrence } from './logic.js'
@@ -314,40 +315,40 @@
 <Sheet bind:open title="Session Details" {back} {onCancel}>
   <form id="sessionDetailsForm" class="as-form" onsubmit={(e) => e.preventDefault()}>
     <!-- What the session is. Name is the only thing here anyone must supply. -->
-    <div class="as-group">
-      <div class="as-field">
+    <div class="kit-group">
+      <div class="kit-field">
         <label for="sessionName">Name</label>
         <input type="text" id="sessionName" required bind:value={name} placeholder="Required"
           class:is-invalid={invalidFields.includes('sessionName')}
           oninput={() => markValid('sessionName')} />
       </div>
-      <div class="as-field">
+      <div class="kit-field">
         <label for="locationName">Venue</label>
         <input type="text" id="locationName" bind:value={locationName} placeholder="Pub or hall" />
       </div>
     </div>
 
-    <h3 class="as-group-head">Where</h3>
-    <div class="as-group">
-      <div class="as-field">
+    <h3 class="kit-group-head">Where</h3>
+    <div class="kit-group">
+      <div class="kit-field">
         <label for="cityName">City</label>
         <input type="text" id="cityName" required bind:value={city} placeholder="Required"
           class:is-invalid={invalidFields.includes('cityName')}
           oninput={() => markValid('cityName')} />
       </div>
-      <div class="as-field">
+      <div class="kit-field">
         <label for="stateName">State / area</label>
         <input type="text" id="stateName" required bind:value={stateArea} placeholder="Required"
           class:is-invalid={invalidFields.includes('stateName')}
           oninput={() => markValid('stateName')} />
       </div>
-      <div class="as-field">
+      <div class="kit-field">
         <label for="countryName">Country</label>
         <input type="text" id="countryName" required bind:value={country} placeholder="Required"
           class:is-invalid={invalidFields.includes('countryName')}
           oninput={() => markValid('countryName')} />
       </div>
-      <div class="as-field">
+      <div class="kit-field">
         <label for="timezone">Time zone</label>
         <select id="timezone" bind:value={timezone}>
           {#each tzOptions as tz (tz.value)}
@@ -359,18 +360,18 @@
 
     <!-- When it meets. This is the point of the app, so it sits on the main path
          rather than in Advanced, and the summary reads as a sentence. -->
-    <h3 class="as-group-head">When</h3>
-    <div class="as-group">
+    <h3 class="kit-group-head">When</h3>
+    <div class="kit-group">
       <div id="recurrence-section" class="recurrence-section" class:expanded={recExpanded}>
         <button
           type="button"
           id="recurrence-summary"
-          class="as-field as-disclosure"
+          class="kit-field kit-disclosure"
           aria-expanded={recExpanded}
           onclick={() => (recExpanded = !recExpanded)}>
-          <span class="as-disclosure-label">Schedule</span>
-          <span id="recurrence-summary-text" class="as-disclosure-value">{recurrence.summary}</span>
-          <span class="as-chev" class:open={recExpanded} aria-hidden="true">›</span>
+          <span class="kit-field-label">Schedule</span>
+          <span id="recurrence-summary-text" class="kit-field-value">{recurrence.summary}</span>
+          <span class="kit-chev" class:open={recExpanded} aria-hidden="true">›</span>
         </button>
 
         {#if recExpanded}
@@ -456,10 +457,10 @@
 
     <!-- Your own relationship to it. On by default, and the one thing here that
          decides whether you can administer the session you just created. -->
-    <h3 class="as-group-head">You</h3>
-    <div class="as-group">
-      <div class="as-field add-user-control">
-        <label class="checkbox-label" for="addCurrentUser">
+    <h3 class="kit-group-head">You</h3>
+    <div class="kit-group">
+      <div class="kit-field add-user-control">
+        <label class="kit-check-label" for="addCurrentUser">
           <input type="checkbox" id="addCurrentUser" bind:checked={addMe} />
           Add me as
         </label>
@@ -473,25 +474,25 @@
 
     <!-- Everything whose default is already right. Folded away so the main path is
          the nine fields above rather than twenty. -->
-    <div class="as-group as-advanced-group">
+    <div class="kit-group as-advanced-group">
       <button
         type="button"
         id="advanced-toggle"
-        class="as-field as-disclosure"
+        class="kit-field kit-disclosure"
         aria-expanded={advancedOpen}
         aria-controls="advanced-section"
         onclick={() => (advancedOpen = !advancedOpen)}>
-        <span class="as-disclosure-label">Advanced</span>
-        <span class="as-chev" class:open={advancedOpen} aria-hidden="true">›</span>
+        <span class="kit-field-label">Advanced</span>
+        <span class="kit-chev" class:open={advancedOpen} aria-hidden="true">›</span>
       </button>
     </div>
 
     {#if advancedOpen}
       <div id="advanced-section">
-        <div class="as-group">
+        <div class="kit-group">
           <!-- Sits after name + city because it's generated from them. -->
-          <div class="as-field as-field-path">
-            <span class="as-path-label" id="sessionPathLabel">Web address</span>
+          <div class="kit-field as-field-path">
+            <span class="kit-field-label" id="sessionPathLabel">Web address</span>
             {#if pathIsManual}
               <span class="as-path-edit">
                 <input type="text" id="sessionPath" required bind:value={manualPath}
@@ -515,41 +516,41 @@
               </span>
             {/if}
           </div>
-          <div class="as-field">
+          <div class="kit-field">
             <label for="locationPhone">Venue phone</label>
             <input type="text" id="locationPhone" bind:value={locationPhone} />
           </div>
-          <div class="as-field">
+          <div class="kit-field">
             <label for="locationWebsite">Venue website</label>
             <input type="url" id="locationWebsite" bind:value={locationWebsite} />
           </div>
-          <div class="as-field">
+          <div class="kit-field">
             <label for="inceptionDate">First met</label>
             <input type="date" id="inceptionDate" bind:value={inceptionDate} />
           </div>
         </div>
 
-        <div class="as-group">
+        <div class="kit-group">
           <!-- Seeded by the import; editable so a hand-added session can be linked too. -->
-          <div class="as-field">
+          <div class="kit-field">
             <label for="thesessionId">thesession.org</label>
             <input type="text" id="thesessionId" bind:value={thesessionId}
               placeholder="ID or link"
               class:is-invalid={invalidFields.includes('thesessionId')}
               oninput={() => markValid('thesessionId')} />
           </div>
-          <p class="as-field-help">Links this session to its listing on thesession.org.</p>
+          <p class="kit-field-help">Links this session to its listing on thesession.org.</p>
         </div>
 
-        <div class="as-group">
-          <div class="as-field">
+        <div class="kit-group">
+          <div class="kit-field">
             <label for="sessionType">Type</label>
             <select id="sessionType" bind:value={sessionType}>
               <option value="regular">Regular (recurring)</option>
               <option value="festival">Festival</option>
             </select>
           </div>
-          <p class="as-field-help">
+          <p class="kit-field-help">
             {#if sessionType === 'festival'}
               Runs between its first and last dates instead of recurring; its sessions are listed by day and may overlap.
             {:else}
@@ -558,9 +559,9 @@
           </p>
         </div>
 
-        <div class="as-group">
-          <div class="as-field as-buffer-field">
-            <span class="as-path-label" id="activeWindowLabel">Active window</span>
+        <div class="kit-group">
+          <div class="kit-field as-buffer-field">
+            <span class="kit-field-label" id="activeWindowLabel">Active window</span>
             <span class="as-buffer-row" aria-labelledby="activeWindowLabel">
               <input type="number" id="activeBufferBefore" min="0" max="1440" bind:value={bufferBefore}
                 aria-label="Minutes before the session starts"
@@ -574,28 +575,28 @@
               <span>after</span>
             </span>
           </div>
-          <p class="as-field-help">Minutes either side of the scheduled time that count as "happening now".</p>
+          <p class="kit-field-help">Minutes either side of the scheduled time that count as "happening now".</p>
         </div>
 
         <!-- People tracking (spec 039): all on by default; the creator can opt out. -->
-        <h3 class="as-group-head">People</h3>
-        <div class="as-group people-tracking-control">
-          <div class="as-check-field">
-            <label class="checkbox-label" for="showPeopleList">
+        <h3 class="kit-group-head">People</h3>
+        <div class="kit-group people-tracking-control">
+          <div class="kit-check-field">
+            <label class="kit-check-label" for="showPeopleList">
               <input type="checkbox" id="showPeopleList" bind:checked={showPeopleList} />
               Show a members list
             </label>
             <small class="people-tracking-help">Lets session members see who else plays here.</small>
           </div>
-          <div class="as-check-field">
-            <label class="checkbox-label" for="trackAttendance">
+          <div class="kit-check-field">
+            <label class="kit-check-label" for="trackAttendance">
               <input type="checkbox" id="trackAttendance" bind:checked={trackAttendance} />
               Record attendance
             </label>
             <small class="people-tracking-help">Record who attends each session. Visible only to members.</small>
           </div>
-          <div class="as-check-field">
-            <label class="checkbox-label" for="trackSetStarters">
+          <div class="kit-check-field">
+            <label class="kit-check-label" for="trackSetStarters">
               <input type="checkbox" id="trackSetStarters" bind:checked={trackSetStarters} disabled={!trackAttendance} />
               Record set starters
             </label>
@@ -627,152 +628,6 @@
      glance — "City  Austin" — instead of as a label hovering over an empty box,
      which is what made a twenty-field scroll unreadable.
 
-     The sheet body already pads 16px, so that is the inset gutter. */
-
-  .as-form {
-    /* A little breathing room under the last group, above the footer. */
-    padding-bottom: var(--sp-2, 8px);
-  }
-
-  .as-group {
-    background: var(--input-bg, #2d2d2d);
-    border-radius: var(--r-lg, 12px);
-    overflow: hidden;
-    margin-bottom: var(--sp-5, 20px);
-  }
-
-  .as-group-head {
-    margin: 0 0 var(--sp-2, 8px) var(--sp-3, 12px);
-    font-size: 0.75rem;
-    font-weight: 600;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    color: var(--secondary-text, #888);
-  }
-
-  .as-field {
-    display: flex;
-    align-items: center;
-    gap: var(--sp-3, 12px);
-    width: 100%;
-    /* 44px is the tap target everything else in the app is built to. */
-    min-height: 44px;
-    padding: var(--sp-2, 8px) var(--sp-3, 12px);
-    border-bottom: 1px solid var(--bg-color, #1a1a1a);
-    background: none;
-    color: var(--text-color);
-    font: inherit;
-    text-align: left;
-  }
-
-  .as-group > .as-field:last-child,
-  .as-group > :last-child .as-field:last-child {
-    border-bottom: none;
-  }
-
-  /* The label column is fixed so values line up down the card; it never grows,
-     so a long value ellipsizes rather than pushing the label around. */
-  .as-field :global(label),
-  .as-field .as-path-label {
-    flex: 0 0 auto;
-    width: 38%;
-    max-width: 150px;
-    margin: 0;
-    font-weight: 400;
-    color: var(--text-color);
-  }
-
-  .as-field :global(input[type='text']),
-  .as-field :global(input[type='url']),
-  .as-field :global(input[type='date']),
-  .as-field :global(input[type='number']),
-  .as-field :global(select) {
-    flex: 1 1 auto;
-    min-width: 0;
-    padding: 4px 0;
-    font: inherit;
-    color: var(--text-color);
-    background: none;
-    border: none;
-    text-align: right;
-    /* Selects ignore text-align in most engines; this is the one that lands. */
-    text-align-last: right;
-  }
-
-  /* The browser draws its own arrow inside the select's padding box, so a
-     right-aligned value runs straight into it without this. The ellipsis is for
-     the timezone list, whose longest labels do not fit the value column — better
-     a trailing "…" than a name sliced through the middle of a character. */
-  .as-field :global(select) {
-    padding-right: 1.15em;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .as-field :global(input::placeholder) {
-    color: var(--disabled-text, #888);
-    opacity: 1;
-  }
-
-  /* No border to tint, so an invalid value says so in the text itself plus a ring. */
-  .as-field :global(input.is-invalid),
-  .as-field :global(select.is-invalid) {
-    color: var(--danger, #dc3545);
-    outline: 1px solid var(--danger, #dc3545);
-    outline-offset: 3px;
-    border-radius: var(--r-sm, 4px);
-  }
-
-  .as-field :global(input:focus-visible),
-  .as-field :global(select:focus-visible) {
-    outline: 2px solid var(--primary, #65b464);
-    outline-offset: 3px;
-    border-radius: var(--r-sm, 4px);
-  }
-
-  .as-field :global(select:disabled) {
-    opacity: 0.5;
-  }
-
-  /* ---- disclosure rows (Schedule, Advanced) --------------------------------- */
-
-  .as-disclosure {
-    cursor: pointer;
-    border: none;
-    border-bottom: 1px solid var(--bg-color, #1a1a1a);
-  }
-
-  .as-disclosure:hover {
-    background: var(--hover-bg, #3d3d3d);
-  }
-
-  .as-disclosure-label {
-    flex: 0 0 auto;
-  }
-
-  .as-disclosure-value {
-    flex: 1 1 auto;
-    min-width: 0;
-    text-align: right;
-    color: var(--secondary-text, #888);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .as-chev {
-    flex: 0 0 auto;
-    margin-left: auto;
-    color: var(--secondary-text, #888);
-    font-size: 1.25rem;
-    line-height: 1;
-    transition: transform 0.15s ease;
-  }
-
-  .as-chev.open {
-    transform: rotate(90deg);
-  }
 
   .as-advanced-group .as-disclosure {
     border-bottom: none;
@@ -909,76 +764,6 @@
     color: var(--disabled-text, #888);
   }
 
-  .as-path-action {
-    flex: 0 0 auto;
-    padding: 0;
-    font: inherit;
-    font-size: 0.8rem;
-    color: var(--primary, #65b464);
-    background: none;
-    border: none;
-    cursor: pointer;
-  }
-
-  .as-path-action:hover {
-    opacity: 0.85;
-  }
-
-  /* ---- help text, buffers, checkboxes ---------------------------------------- */
-
-  .as-field-help {
-    margin: 0;
-    padding: 0 var(--sp-3, 12px) var(--sp-2, 8px);
-    font-size: 0.78rem;
-    color: var(--secondary-text, #888);
-  }
-
-  .as-buffer-field .as-buffer-row {
-    flex: 1 1 auto;
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 6px;
-    font-size: 0.85rem;
-    color: var(--secondary-text, #888);
-  }
-
-  .as-buffer-field :global(input[type='number']) {
-    width: 3.5em;
-    flex: 0 0 auto;
-    text-align: right;
-  }
-
-  .as-check-field {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: var(--sp-2, 8px) var(--sp-3, 12px);
-    border-bottom: 1px solid var(--bg-color, #1a1a1a);
-  }
-
-  .as-check-field:last-child {
-    border-bottom: none;
-  }
-
-  .checkbox-label {
-    display: flex;
-    align-items: center;
-    gap: var(--sp-2, 8px);
-    margin: 0;
-    font-weight: 400;
-    cursor: pointer;
-  }
-
-  .checkbox-label :global(input[type='checkbox']) {
-    width: 17px;
-    height: 17px;
-    margin: 0;
-    flex: 0 0 auto;
-    accent-color: var(--primary-fill, #4a8049);
-    cursor: pointer;
-  }
-
   .people-tracking-help {
     /* Lines up under the label text, past the checkbox. */
     padding-left: calc(17px + var(--sp-2, 8px));
@@ -988,7 +773,7 @@
 
   /* "Add me as [an admin]" is one sentence, so the select sits next to the
      checkbox label rather than in the value column. */
-  .add-user-control .checkbox-label {
+  .add-user-control .kit-check-label {
     flex: 0 0 auto;
     width: auto;
     max-width: none;

@@ -212,9 +212,11 @@
   </Toolbar>
 </div>
 
+<!-- "3 sessions in your list", not "Showing 3 sessions in your list." — My Tunes
+     says "10 tunes" in the same spot, and the extra words were the difference. -->
 <div class="session-count" id="session-count">
-  Showing <span id="count-number">{filtered.length}</span>
-  <span id="count-filter-type">{countLabels[currentFilter] || 'sessions'}</span>.
+  <span id="count-number">{filtered.length}</span>
+  <span id="count-filter-type">{countLabels[currentFilter] || 'sessions'}</span>
 </div>
 
 {#if !loaded}

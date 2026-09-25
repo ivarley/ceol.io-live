@@ -1,8 +1,8 @@
 <script>
-  // Profile tab: person + account cards with a display/edit mode toggle, the live
-  // per-instrument profile editor (saves immediately, decoupled from the profile
-  // Save button), admin-only verify-email / danger-zone controls, and the
-  // beta live-editor toggle (admin or self).
+  // The profile screen: grouped rows for the person and their account, with a
+  // display/edit toggle that keeps the same rows either way, the live
+  // per-instrument editor (saves immediately, decoupled from the profile Save
+  // button), and the admin-only verify-email / danger-zone controls.
   let { person, user, isUserProfile, personId, timezoneOptions = [], canonicalInstruments = [] } = $props()
 
   import { Dialog, Sheet, toast } from '../lib/index.js'
@@ -169,35 +169,6 @@
         toast('Error verifying email: ' + error.message, 'error')
         verifyingEmail = false
         verifyBtnLabel = 'Verify Email'
-      })
-  }
-
-  // --- Session logger preference (admin or self) -------------------------------
-  // The live logger is the default; this flips back to the legacy pill editor, which
-  // is otherwise unreachable. Endpoint/flag names date from the beta rollout.
-  let betaBusy = $state(false)
-
-  function toggleBetaLogging() {
-    const enable = !user.beta_live_logging
-    betaBusy = true
-    fetch(`/api/users/${user.user_id}/beta-logging`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ enabled: enable }),
-    })
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.success) {
-          toast('Now using the ' + (enable ? 'live logger' : 'classic editor') + '.', 'success')
-          setTimeout(() => window.location.reload(), 800)
-        } else {
-          toast('Error: ' + (data.error || 'failed'), 'error')
-          betaBusy = false
-        }
-      })
-      .catch((err) => {
-        toast('Error: ' + err.message, 'error')
-        betaBusy = false
       })
   }
 
@@ -560,28 +531,17 @@
         </div>
       </div>
 
-      <div class="kit-group">
-        {#if isUserProfile}
+      <!-- The card, not just the row, is conditional: the tune-logger row used to
+           keep it company, and without that an admin looking at somebody else
+           would get an empty card. -->
+      {#if isUserProfile}
+        <div class="kit-group">
           <a class="kit-field" href="/change-password">
             <span class="kit-field-label">{user.has_password ? 'Change my password' : 'Create a password'}</span>
             <span class="kit-chev" aria-hidden="true">›</span>
           </a>
-        {/if}
-        <div class="kit-field">
-          <span class="kit-field-label">Tune logger</span>
-          <span class="kit-field-value" id="beta-logging-status">{user.beta_live_logging ? 'Live logger' : 'Classic editor'}</span>
         </div>
-        <p class="kit-field-help">
-          {#if user.beta_live_logging}
-            The live logger is the default.
-          {:else}
-            The classic editor is being retired; the live logger is the default.
-          {/if}
-          <button type="button" id="beta-logging-btn" class="pd-inline-action" disabled={betaBusy} onclick={(e) => { e.preventDefault(); toggleBetaLogging() }}>
-            {user.beta_live_logging ? 'Switch to the classic editor' : 'Switch to the live logger'}
-          </button>
-        </p>
-      </div>
+      {/if}
 
       <!-- When you signed up and when you last logged in: evidence on somebody
            else's profile, noise on your own. -->

@@ -633,6 +633,49 @@ because this is the second screen to want them after the add-a-session sheet
 the same rules. It should adopt the shared sheet, but it ships scoped styles that
 would need re-verifying, and it is not what this change was for.
 
+### B13. One logger, and two lists that match — **DONE 2026-09-24**
+
+**The tune-logger preference is gone.** `beta_live_logging` let a signed-in user drop
+back to the legacy pill editor; the live logger is the only logger now, so a setting
+offering one option was a question with no answer. Removed: the profile row, the
+`POST /api/users/<id>/beta-logging` endpoint and its route, the `User` attribute, the
+`SELECT` column in `auth.py` (and the index shift after it — `hashed_password` moved
+from 21 to 20), and the field in the person payload. The routing branch in
+`session_instance_detail` is unconditional: everyone lands on the live screen, signed
+out included, where it renders read-only.
+
+Two things deliberately **not** done, because they are separable and larger than the
+ask:
+
+- The `user_account.beta_live_logging` **column stays.** Stop reading a column first,
+  drop it once nothing deployed can still want it.
+- The **legacy pill editor is now unreachable** —
+  `templates/session_instance_detail.html` (~1,970 lines) plus the branch that rendered
+  it. That deletion is spec 035 Step 6 and wants its own change.
+
+**The two list pages match.** Sessions and Tunes sit one tap apart on the tab bar, so
+anything that changes size between them reads as the page redrawing itself. Measured
+and closed:
+
+| | Tunes was | Sessions was | now |
+|---|---|---|---|
+| row height | 39px | 56px | 39px (padding 15px→8px, line-height 1.5→1.2) |
+| name | 18px / 500 | 16px / 400 | 18px / 500 |
+| right-hand meta | 12px | 12.8px | 12px |
+| count line | 12px, 4px below | 14px, 8px below | 12px, 4px below |
+| count text | "10 tunes" | "Showing 3 sessions in your list." | "3 sessions in your list" |
+
+The toolbars were already identical (§B8 Stage 1) — this is the rest of the page
+catching up with them.
+
+**The grouped-table rules are shared.** `DetailsSheet.svelte` carried its own scoped
+copy of the rules `/me` was using from `frontend/src/lib/grouped.css` — the follow-up
+§B12 recorded. It imports the shared sheet now and is **182 lines shorter**, with the
+`.as-*` names replaced by the `kit-*` ones. What stays local is the sheet's own
+furniture: the recurrence editor, the generated web address, the buffer row, the
+footer. `grouped.css` also grew one rule, `.kit-field > label`, so an editable row does
+not have to name its own label column.
+
 ### B8. The staged conversion plan
 
 Ordered by **blast radius, not by visibility**. Three things make a stage risky here:

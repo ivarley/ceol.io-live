@@ -10,11 +10,14 @@
 
 /* Matches the tune lists' count line: small and muted, a caption on the list
    rather than a sentence above it. */
+/* Matched to My Tunes' .results-count (12px, 4px below) — the two list pages sit
+   one tap apart on the tab bar, so a count line that changes size between them
+   reads as the page redrawing itself. */
 .session-count {
-    margin: 4px 0 8px;
+    margin: 0 0 4px;
     padding: 0 8px;
     color: var(--text-muted, #6c757d);
-    font-size: 14px;
+    font-size: 12px;
 }
 
 .no-sessions {
@@ -87,11 +90,13 @@ select.today-action-btn {
     margin-bottom: 1.5rem;
 }
 
+/* 8px, like a tune card: 15px made a 56px row against My Tunes' 39px, so the two
+   lists scrolled at visibly different rates. */
 .session-row {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 15px 8px;
+    padding: 8px;
     background-color: var(--bg-color);
     border-bottom: 1px solid var(--border-color);
     text-decoration: none;
@@ -109,11 +114,20 @@ select.today-action-btn {
 
 /* Full-strength, not link-coloured: the whole row is the link, so colouring the
    name too would make the place look like the only thing NOT clickable. */
+/* Same as .tune-name: 18px at 500. The name is the thing you are scanning for on
+   both pages, so it carries the same weight on both. */
 .session-row-name {
     flex: 1;
     min-width: 0;
     color: var(--text-color);
-    font-size: 1rem;
+    font-size: 18px;
+    font-weight: 500;
+    /* 1.2, like .tune-name. The inherited 1.5 was making the row 45px against My
+       Tunes' 39px — the last few pixels of the difference between the two lists. */
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .session-row-meta {
@@ -124,8 +138,10 @@ select.today-action-btn {
     flex-shrink: 0;
 }
 
+/* 12px, the size of the tune-type chip that sits in the same place on the other
+   list. */
 .session-row-where {
-    font-size: 0.8rem;
+    font-size: 12px;
     color: var(--secondary-text);
     text-align: right;
     white-space: nowrap;

@@ -301,19 +301,20 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
             session_instance = cur.fetchone()
 
             if session_instance:
-                # Logger routing (spec 024): the live logger is THE session-instance page.
-                # EVERYONE lands on it — signed out too, where it renders read-only. The
-                # only way to the legacy pill editor is a signed-in user turning the live
-                # logger off in their profile preferences; there is no other route to it.
-                if not current_user.is_authenticated or getattr(current_user, "beta_live_logging", True):
-                    cur.close(); conn.close()
-                    # Forward a play-history deep-link (?highlight=<record>) so the live
-                    # screen can scroll to it. Deliberately NOT ?tune= — on the live
-                    # screen that means "append this tune".
-                    live_kwargs = {"session_instance_id": session_instance[3]}
-                    if request.args.get("highlight"):
-                        live_kwargs["highlight"] = request.args["highlight"]
-                    return redirect(url_for("live_logging_screen", **live_kwargs))
+                # The live logger is THE session-instance page (spec 024, §B13).
+                # EVERYONE lands on it — signed out too, where it renders read-only.
+                # There used to be a per-user opt-out that routed to the legacy pill
+                # editor; the live logger is the only logger now, so there is no
+                # branch here any more.
+                cur.close()
+                conn.close()
+                # Forward a play-history deep-link (?highlight=<record>) so the live
+                # screen can scroll to it. Deliberately NOT ?tune= — on the live
+                # screen that means "append this tune".
+                live_kwargs = {"session_instance_id": session_instance[3]}
+                if request.args.get("highlight"):
+                    live_kwargs["highlight"] = request.args["highlight"]
+                return redirect(url_for("live_logging_screen", **live_kwargs))
                 logging_mode = session_instance[13]
                 # Use s.path from database (index 11) for consistency
                 session_path_from_db = session_instance[11]

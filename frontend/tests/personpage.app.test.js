@@ -38,7 +38,6 @@ const payload = (over = {}) => ({
     timezone: 'America/Chicago',
     timezone_display: 'Central Time',
     has_password: true,
-    beta_live_logging: false,
     receive_update_emails: true,
   },
   sessions: [
@@ -244,20 +243,15 @@ describe('person details page view (user profile flavor)', () => {
     expect(container.querySelector('#user-edit')).toBeNull()
   })
 
-  it('the tune-logger preference is self-serve: the button shows and POSTs the flip', async () => {
-    // The fixture user is opted out (beta_live_logging: false), i.e. on the legacy pill
-    // editor, so the button offers the way back to the default live logger.
-    fetchRoutes['/beta-logging'] = { success: true, user_id: 9, beta_live_logging: true }
+  it('there is no tune-logger preference to set any more', () => {
+    // The live logger is the only logger (spec 052 §B13), so the row that chose
+    // between it and the legacy pill editor is gone rather than showing a choice
+    // with one option.
     const { container } = renderApp()
-    const btn = container.querySelector('#beta-logging-btn')
-    expect(btn.textContent.trim()).toBe('Switch to the live logger')
-    await fireEvent.click(btn)
-    await waitFor(() => {
-      const call = fetch.mock.calls.find(([u]) => String(u).includes('/beta-logging'))
-      expect(call).toBeTruthy()
-      expect(String(call[0])).toBe('/api/users/9/beta-logging')
-      expect(JSON.parse(call[1].body)).toEqual({ enabled: true })
-    })
+    expect(container.querySelector('#beta-logging-btn')).toBeNull()
+    expect(container.querySelector('#beta-logging-status')).toBeNull()
+    expect(container.textContent).not.toContain('Tune logger')
+    expect(container.textContent).not.toContain('classic editor')
   })
 })
 
@@ -277,12 +271,10 @@ describe('person details page view (admin flavor)', () => {
     expect(container.querySelector('#account-section')).toBeNull()
     // The breadcrumb ends at the person; there is no tab left to nest under it.
     expect(container.querySelector('#breadcrumb-tab-name').textContent).toBe('')
-    // Danger zone + verify email exist only on the admin flavor; the beta
-    // toggle shows on both (self-serve opt-in).
+    // Danger zone + verify email exist only on the admin flavor.
     expect(container.querySelector('#danger-zone')).toBeTruthy()
     expect(container.querySelector('#deactivate-person-btn').textContent.trim()).toBe('Deactivate Ian')
     expect(container.querySelector('#verify-email-btn')).toBeTruthy()
-    expect(container.querySelector('#beta-logging-btn')).toBeTruthy()
     // No change-password link on the admin flavor.
     expect(container.textContent).not.toContain('Change My Password')
   })

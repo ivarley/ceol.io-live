@@ -55,8 +55,12 @@
 }
 
 /* The label column is fixed so values line up down the card, and never grows, so
-   a long value ellipsizes instead of shoving the label around. */
-.kit-field-label {
+   a long value ellipsizes instead of shoving the label around.
+
+   A bare <label> in a row is the label column by definition, so an editable row
+   does not have to say so twice. */
+.kit-field-label,
+.kit-field > label {
   flex: 0 0 auto;
   width: 38%;
   max-width: 150px;
