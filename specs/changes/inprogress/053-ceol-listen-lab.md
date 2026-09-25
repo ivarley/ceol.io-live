@@ -392,6 +392,28 @@ Together they take the whistle to 43% of labelled time right. That is still
 poor, and the rest is not explained yet: with both in place, nearly half the
 frames under the labels still sit below anything the instrument can play.
 
+**The in-key fraction cannot see the error that mattered most.** It was
+adopted above as a confidence signal, and it is one, but the tin whistle
+showed its blind spot. A note heard a fifth low is almost always still in the
+key: in D, F# heard as B, B as E and D as G are all D-major notes. So that
+whistle transcription read 94% in key while being right 25% of the time, and
+across its later windows the fraction climbed to 97% with no improvement at
+all in the phrases it shared with the notation. It catches noise and wrong
+accidentals; it is no evidence against a transcription that is consistently
+a fifth out.
+
+Where it stands after the tracker change, the whole pipeline on the bench:
+0.878 top-1, 0.930 top-5, 3.0% never found, up from 0.861, 0.922 and 3.4%.
+Eighteen segments became right and nine became wrong. The gain is uneven by
+type -- jigs 0.922 to 0.961, polkas 0.731 to 0.808, slides 0.762 to 0.810,
+reels flat at 0.832 -- and the nights run from 0.826 to 0.960.
+
+The board, answering live on recording 2 with the same tracker, reads 63.8%
+top-1 and 75.9% top-5 against 86% for the bench on that same night. It has
+neither the eighth-note reading nor whole-set decoding, and it must answer
+while the tune is playing without being told where tunes start. Bringing the
+first two across is now the largest single gap in the project.
+
 **A slip jig's bar is not in the onset envelope**, which is a negative worth
 keeping. The estimator only asks whether a beat divides in two or three, and
 then assumes every triple-time tune has two beats to a bar; a slip jig has
