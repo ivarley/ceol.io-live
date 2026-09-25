@@ -57,6 +57,17 @@
     <span class="tab-bar-label">Me</span>
   </a>
   {% else %}
+  {# The tradition's tunes rather than yours (spec 052 §B18). /my-tunes is your own
+     tunebook and needs an account; /tunes is the most common tunes with search over
+     the rest, and offers nothing that would need a login. #}
+  <a href="/tunes" class="tab-bar-item{% if p.startswith('/tunes') %} active{% endif %}"
+     {% if p.startswith('/tunes') %}aria-current="page"{% endif %} data-tab="tunes">
+    <span class="tab-bar-glyph" aria-hidden="true">
+      <svg viewBox="0 0 24 24"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg>
+    </span>
+    <span class="tab-bar-label">Tunes</span>
+  </a>
+
   {# Where Me would be. It holds what the signed-out hamburger held: the way in, and
      what this place is. Tunes has no signed-out destination at all — /my-tunes and
      /my-tunes/add both redirect to login, and "find a tune" was never a page, only an

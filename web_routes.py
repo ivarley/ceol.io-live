@@ -667,6 +667,27 @@ def add_session():
     return redirect(url_for("sessions") + "?" + urlencode(params))
 
 
+def tunes_page():
+    """The public Tunes list (spec 052 §B18).
+
+    /my-tunes is your own tunebook and needs an account. This is the tradition's:
+    the most common tunes by tunebook count, with search over everything past them.
+    It is what the Tunes tab points at when you are signed out, so it can offer
+    nothing that needs a login — no "add to my tunes", no learn status.
+
+    Thin shell on spec 035's rule: the embed and GET /api/tunes/top are one
+    function.
+    """
+    from serializers import build_popular_tunes_payload
+
+    conn = get_db_connection()
+    try:
+        payload = build_popular_tunes_payload(conn, 100)
+    finally:
+        conn.close()
+    return render_template("tunes.html", payload=payload)
+
+
 def about_page():
     """The signed-out "Me" (spec 052 §B17).
 

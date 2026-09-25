@@ -116,6 +116,44 @@ def timezone_options() -> List[Dict[str, str]]:
 # ---------------------------------------------------------------------------
 
 
+_POPULAR_TUNES_SQL = """
+    SELECT tune_id, name, tune_type, COALESCE(tunebook_count_cached, 0) AS tunebook_count
+    FROM tune
+    WHERE redirect_to_tune_id IS NULL
+      AND COALESCE(tunebook_count_cached, 0) > 0
+    ORDER BY tunebook_count_cached DESC, name ASC
+    LIMIT %s
+"""
+
+
+def build_popular_tunes_payload(conn, limit: int = 100) -> Dict[str, Any]:
+    """The COMPLETE /api/tunes/top response, and what the /tunes page embeds
+    (spec 052 §B18) — one function, so shell and API cannot drift.
+
+    The most-played tunes in the tradition, by thesession.org's tunebook count. It is
+    the public face of the Tunes tab: a signed-out visitor gets something worth
+    looking at rather than a login wall, and searching past the top 100 is the
+    already-public GET /api/tunes/search.
+
+    Merged-away tunes are excluded (spec 030 leaves a redirect row behind), as are
+    tunes nobody has in a tunebook — a "most common tunes" list of zeroes is a list
+    of nothing, ordered by name.
+    """
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(_POPULAR_TUNES_SQL, (limit,))
+    tunes = [
+        {
+            "tune_id": r["tune_id"],
+            "name": r["name"],
+            "tune_type": r["tune_type"],
+            "tunebook_count": r["tunebook_count"],
+        }
+        for r in cur.fetchall()
+    ]
+    cur.close()
+    return {"success": True, "tunes": tunes, "limit": limit}
+
+
 def build_add_session_payload(logged_in: bool = False) -> Dict[str, Any]:
     """The /add-session page payload (spec 035 final migration). The page is
     payload-light — its data comes from thesession.org at interaction time —

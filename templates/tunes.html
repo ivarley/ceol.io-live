@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+
+{% block title %}Tunes{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* Matched to the sessions and My Tunes lists by MEASUREMENT, not by borrowing their
+     stylesheet: my_tunes_mobile.css lays a row out as a three-column grid with a 20px
+     learn-status column and `display: contents` on the meta, which is built for a row
+     this page does not have. Same numbers, none of the assumptions. */
+  .pt-row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 8px; background: var(--bg-color);
+      /* A <button> brings its own border on all four sides; only the divider is wanted. */
+      border: none; border-bottom: 1px solid var(--border-color);
+      cursor: pointer; width: 100%; text-align: left;
+      font: inherit; color: inherit;
+  }
+  .pt-row:first-child { border-top: 1px solid var(--border-color); }
+  .pt-row:hover { background: var(--hover-bg); }
+  .pt-name {
+      flex: 1 1 auto; min-width: 0;
+      font-size: 18px; font-weight: 500; line-height: 1.2; color: var(--text-color);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .pt-meta { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
+  .pt-type {
+      font-size: 12px; padding: 2px 6px; border-radius: 3px;
+      background: var(--primary-fill); color: #fff; white-space: nowrap;
+  }
+
+  .pt-toolbar { padding: 14px 8px 0; }
+  .pt-search {
+      width: 100%; box-sizing: border-box; padding: 8px 10px; font: inherit;
+      color: var(--text-color); background: var(--input-bg);
+      border: 1px solid var(--border-color); border-radius: 4px;
+  }
+  .pt-search:focus { outline: none; border-color: var(--primary); }
+  .pt-count { margin: 0 0 4px; padding: 0 8px; font-size: 12px; color: var(--text-muted); }
+  .pt-empty { padding: 2rem; text-align: center; color: var(--secondary-text); }
+  /* The count is what this list is ordered BY, so it earns a place on the row —
+     quiet, to the left of the type chip. */
+  .pt-books { font-size: 12px; color: var(--secondary-text); white-space: nowrap; }
+  .pt-meta { gap: 10px; }
+  .pt-foot {
+      margin-top: 1.25rem; padding: 0 16px; text-align: center;
+      font-size: 0.95rem; line-height: 1.5; color: var(--secondary-text);
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+{# Spec 035's thin-shell rule: this payload and GET /api/tunes/top come out of
+   one function (serializers.build_popular_tunes_payload), so they cannot drift. #}
+<script>window.__PAGE_DATA__ = {{ payload | tojson }};</script>
+
+<div class="pt-toolbar">
+  <input id="pt-search" class="pt-search" type="text" autocomplete="off"
+         placeholder="Search every tune by name…" aria-label="Search tunes">
+</div>
+<p class="pt-count" id="pt-count"></p>
+<div id="pt-list"></div>
+<p class="pt-foot" id="pt-foot">
+  The {{ payload.tunes | length }} most common tunes, by how many players have them in a
+  tunebook on <a href="https://thesession.org" target="_blank" rel="noopener">thesession.org</a>.
+  Search to reach the rest.
+</p>
+
+<script>
+(function () {
+  'use strict'
+  // No bundle: this is a list and a search box. It deliberately offers nothing that
+  // needs an account — no "add to my tunes", no learn status — because it is what the
+  // Tunes tab points at when you are signed out (spec 052 §B18).
+  var TOP = (window.__PAGE_DATA__ && window.__PAGE_DATA__.tunes) || []
+  var list = document.getElementById('pt-list')
+  var count = document.getElementById('pt-count')
+  var foot = document.getElementById('pt-foot')
+  var input = document.getElementById('pt-search')
+
+  function render(tunes, searching) {
+    list.textContent = ''
+    if (!tunes.length) {
+      var p = document.createElement('p')
+      p.className = 'pt-empty'
+      p.textContent = searching ? 'No tunes match that name.' : 'No tunes yet.'
+      list.appendChild(p)
+    }
+    tunes.forEach(function (t) {
+      // A real <button>: the whole row opens the tune, so it should be reachable by
+      // keyboard without inventing roles and key handlers.
+      var card = document.createElement('button')
+      card.type = 'button'
+      card.className = 'pt-row'
+      card.dataset.tuneId = t.tune_id
+      card.dataset.tuneType = t.tune_type || ''
+
+      var name = document.createElement('span')
+      name.className = 'pt-name'
+      name.textContent = t.name || 'Unknown'
+
+      var meta = document.createElement('span')
+      meta.className = 'pt-meta'
+      if (t.tunebook_count) {
+        var books = document.createElement('span')
+        books.className = 'pt-books'
+        books.textContent = t.tunebook_count.toLocaleString()
+        books.title = t.tunebook_count.toLocaleString() + ' tunebooks on thesession.org'
+        meta.appendChild(books)
+      }
+      if (t.tune_type) {
+        var type = document.createElement('span')
+        type.className = 'pt-type'
+        type.textContent = t.tune_type
+        meta.appendChild(type)
+      }
+      card.appendChild(name)
+      card.appendChild(meta)
+      list.appendChild(card)
+    })
+    count.textContent = tunes.length + (tunes.length === 1 ? ' tune' : ' tunes')
+    foot.style.display = searching ? 'none' : ''
+  }
+
+  // The tune drawer is app-wide (base.html loads the tunesheet bundle) and its feed
+  // is public, so a signed-out visitor gets the full tune detail on a tap.
+  list.addEventListener('click', openFromEvent)
+  function openFromEvent(e) {
+    var card = e.target.closest ? e.target.closest('.pt-row') : null
+    if (!card) return
+    // .show({...}), not .open(id) — the drawer takes a descriptor so it can paint the
+    // name and type immediately and fill the rest in behind. scope:null means the
+    // global view of the tune, which is the only one a visitor has.
+    if (!(window.TuneDetailModal && window.TuneDetailModal.show)) return
+    window.TuneDetailModal.show({
+      tuneId: Number(card.dataset.tuneId),
+      scope: null,
+      tuneName: card.querySelector('.pt-name').textContent,
+      tuneType: card.dataset.tuneType || '',
+    })
+  }
+
+  var timer = null
+  var seq = 0
+  input.addEventListener('input', function () {
+    clearTimeout(timer)
+    timer = setTimeout(search, 300)
+  })
+  input.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); clearTimeout(timer); search() }
+    else if (e.key === 'Escape' && input.value) { input.value = ''; clearTimeout(timer); search() }
+  })
+
+  function search() {
+    var q = input.value.trim()
+    if (!q) { render(TOP, false); return }
+    // Guard against an earlier request landing after a later one and overwriting it.
+    var mine = ++seq
+    fetch('/api/tunes/search?limit=50&q=' + encodeURIComponent(q))
+      .then(function (r) { return r.json() })
+      .then(function (d) {
+        if (mine !== seq) return
+        render((d && d.tunes) || [], true)
+      })
+      .catch(function () {
+        if (mine !== seq) return
+        render([], true)
+      })
+  }
+
+  render(TOP, false)
+})()
+</script>
+{% endblock %}

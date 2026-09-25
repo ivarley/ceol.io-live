@@ -863,11 +863,12 @@ IA has not reached yet.
 
 ### B17. The signed-out phone, and the last back link — **DONE 2026-09-25**
 
-**Signed out gets a tab bar too, with three tabs.** It was signed-in only, for a
-reason that still holds: `/my-tunes` and `/me` both redirect to login, so a four-tab
-bar there would be two tabs and two rejections. Three that work beats four where one
-apologises — **Home · Sessions · About** — and it is what finally takes the hamburger
-off phones entirely (`body.has-tab-bar` is now unconditional, so the existing
+**Signed out gets a tab bar too.** Four tabs, once §B18 gave Tunes a public home:
+Home · Sessions · Tunes · About. It began as three — it was signed-in only, for a reason that
+held at the time: `/my-tunes` and `/me` both redirect to login, so a four-tab bar
+would have been two tabs and two rejections. The answer was not to offer a tab that
+apologises but to give it somewhere real to go. Either way it is what finally takes
+the hamburger off phones entirely (`body.has-tab-bar` is now unconditional, so the existing
 hide-the-hamburger rule covers every page).
 
 `/about` is where the signed-out hamburger's list went: a sentence about what Ceol
@@ -905,6 +906,38 @@ already had an `extra_css` block and Jinja refuses a second. The route catches
 `Exception` broadly and renders an error page, so the browser check reported "no back
 row" rather than "this page is broken" — the failure looked like a feature not
 working. Worth remembering that a broad except turns a crash into a wrong answer.
+
+### B18. A public Tunes tab — **DONE 2026-09-25**
+
+`/my-tunes` is your tunebook and needs an account, which is why the signed-out bar
+started at three tabs. `/tunes` is the tradition's: **the 100 most common tunes by
+thesession.org tunebook count**, with search over everything past them, and nothing
+on it that would need a login — no add-to-my-tunes, no learn status. Tapping a row
+opens the tune drawer, whose feed has been `@public_api` all along.
+
+**It is a separate endpoint from the one that already existed**, and that is the
+point. `/api/tunes/popular` is login-gated and *personalised*: it joins `person_tune`
+to report which of the popular tunes are in YOUR tunebook, so My Tunes can cache them
+for offline adding. This one answers a different question for a different audience,
+so it is `/api/tunes/top` and returns four columns and no personal data. A test
+asserts exactly those four keys, and that `/api/tunes/popular` still 401s.
+
+Two things the build got wrong first, both worth recording:
+
+- **The new handler was shadowed.** `get_popular_tunes` already existed in
+  `api_person_tune_routes.py`, `app.py` imports both modules, and the later import
+  won — so the "public" endpoint answered 401 and the URL map carried the rule twice.
+  Same-named handlers across route modules fail silently like this.
+- **Borrowing `my_tunes_mobile.css` did not work.** On a phone a tune row there is a
+  three-column grid with a 20px learn-status column and `display: contents` on the
+  meta — a shape built for a row this page does not have, and the count and type chip
+  landed on top of the name. The page carries its own ~20 lines instead, matched to
+  the other lists by measurement: 8px padding, 18px/500 name at line-height 1.2, 12px
+  muted meta.
+
+No new bundle: it is a list and a search box, so it is a Jinja page with the embed
+that `GET /api/tunes/top` returns (spec 035's rule holds) and about 60 lines of
+vanilla JS. The rows are real `<button>`s, so keyboard access needs no invented roles.
 
 ### B8. The staged conversion plan
 

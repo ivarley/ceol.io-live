@@ -3113,6 +3113,29 @@ def mark_session_log_incomplete_ajax(session_path, date_or_id):
         )
 
 
+@public_api  # the public Tunes tab (spec 052 §B18): a signed-out visitor's first
+# look at the app, so it must not need an account. Read-only aggregate, no personal data.
+def get_top_tunes():
+    """GET /api/tunes/top — the most common tunes by tunebook count.
+
+    NOT /api/tunes/popular, which already exists, requires a login and joins
+    person_tune to say which of them are in YOUR tunebook. This one answers a
+    different question for a different audience and returns no personal data.
+
+    Same dict the /tunes page embeds (serializers.build_popular_tunes_payload)."""
+    from serializers import build_popular_tunes_payload
+
+    try:
+        limit = min(max(int(request.args.get("limit", 100)), 1), 500)
+    except (TypeError, ValueError):
+        limit = 100
+    conn = get_db_connection()
+    try:
+        return jsonify(build_popular_tunes_payload(conn, limit))
+    finally:
+        conn.close()
+
+
 @public_api  # backs the /add-session page, which has no @login_required (only the final POST /api/add-session is gated) — TODO tighten?
 def check_existing_session_ajax():
     if not request.json:
