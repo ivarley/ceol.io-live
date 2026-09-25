@@ -260,10 +260,11 @@ def build_payload(args):
         from lab.analysis.notation import notate, spell
 
         written = notate(notes, pulse["period_ms"], phase_ms=t0)
-        eighth_s = pulse["period_ms"] / 1000.0
+        tick_s = pulse["period_ms"] / 1000.0 / written["ticks_per_eighth"]
         for item in written["quantised"]:
-            entry = {"t": round(item["start"] * eighth_s, 4),
-                     "eighths": item["eighths"], "rest": item["rest"]}
+            entry = {"t": round(item["start"] * tick_s, 4),
+                     "eighths": item["ticks"] / written["ticks_per_eighth"],
+                     "rest": item["rest"]}
             if not item["rest"]:
                 letter, alteration = spell(item["pc"], written["sharps"])
                 entry["step"] = "CDEFGAB".index(letter)

@@ -17,36 +17,81 @@ def notes(*spec):
     return [{"midi": m, "t0_ms": a, "t1_ms": b, "conf": 0.9} for m, a, b in spec]
 
 
-def test_lengths_come_out_in_whole_eighths():
+def eighths_of(q):
+    return [i["ticks"] / 2 for i in q]
+
+
+def test_lengths_come_out_in_eighths():
     q = quantise(notes((60, 0, 140), (62, 150, 450), (64, 450, 1050)), 150.0)
     played = [i for i in q if not i["rest"]]
-    assert [i["eighths"] for i in played] == [1, 2, 4]
+    assert eighths_of(played) == [1, 2, 4]
     assert [i["pc"] for i in played] == [0, 2, 4]
 
 
-def test_the_phase_cannot_change_any_length():
-    """The property the whole approach rests on."""
+def test_notes_faster_than_the_grid_are_kept_not_dropped():
+    """The bug that made the stave unreadable.
+
+    Rounding every note to the nearest eighth put a fifth of them in a slot
+    that was already taken, and dropping those turned C B A C B A G B into
+    C A C B G B, which is not the tune. Positions go on sixteenths so they
+    survive; durations are still written in eighths.
+    """
+    run = [(p, int(i * 115), int(i * 115 + 110))
+           for i, p in enumerate([60, 59, 57, 60, 59, 57, 55, 59])]
+    q = [i for i in quantise(notes(*run), 139.0) if not i["rest"]]
+    assert [i["pc"] % 12 for i in q] == [0, 11, 9, 0, 11, 9, 7, 11]
+
+
+def test_the_phase_barely_moves_the_lengths():
+    """The property the whole approach rests on, stated as it actually holds.
+
+    Moving the phase cannot stretch or shrink the music, so the total length
+    is identical whatever the phase. What it can do, at exactly half a grid
+    step, is round two neighbouring notes into the same eighth, and then the
+    shorter one loses its slot. That is inherent to quantising and is a
+    different thing entirely from the drift this replaced, which accumulated
+    without limit.
+    """
     n = notes((60, 0, 140), (62, 150, 450), (64, 600, 900), (67, 900, 1200))
-    base = [i["eighths"] for i in quantise(n, 150.0, phase_ms=0.0)]
+    base = quantise(n, 150.0, phase_ms=0.0)
+    total = sum(i["ticks"] for i in base)
+    played = sum(1 for i in base if not i["rest"])
     for phase in (10.0, 40.0, 75.0, 120.0, -30.0):
-        assert [i["eighths"] for i in quantise(n, 150.0, phase_ms=phase)] == base
+        got = quantise(n, 150.0, phase_ms=phase)
+        assert sum(i["ticks"] for i in got) == total
+        assert abs(sum(1 for i in got if not i["rest"]) - played) <= 1
 
 
 def test_a_gap_becomes_a_rest():
     q = quantise(notes((60, 0, 150), (62, 600, 750)), 150.0)
-    assert [(i["rest"], i["eighths"]) for i in q] == [(False, 1), (True, 3), (False, 1)]
+    assert [(i["rest"], i["ticks"] / 2) for i in q] == [(False, 1), (True, 3), (False, 1)]
 
 
 def test_overlapping_notes_do_not_overlap_afterwards():
     q = quantise(notes((60, 0, 400), (62, 150, 550)), 150.0)
     played = [i for i in q if not i["rest"]]
-    assert played[0]["start"] + played[0]["eighths"] <= played[1]["start"]
+    assert played[0]["start"] + played[0]["ticks"] <= played[1]["start"]
+
+
+def test_a_note_never_moves_from_its_own_slot():
+    """The bug this replaced: overlaps pushed notes forward and the pushes
+    piled up, until a hundred seconds of music ran eight seconds long and the
+    note highlighted during playback was fourteen notes from the one heard."""
+    n = notes(*[(60 + (i % 5), i * 140, i * 140 + 300) for i in range(60)])
+    q = [i for i in quantise(n, 150.0) if not i["rest"]]
+    last = q[-1]
+    assert last["start"] <= round(n[-1]["t0_ms"] / 75.0) + 1
+
+
+def test_two_notes_in_one_eighth_keep_the_longer():
+    q = [i for i in quantise(notes((60, 0, 30), (64, 20, 300)), 150.0) if not i["rest"]]
+    assert [i["pc"] for i in q] == [4]
 
 
 def test_a_note_never_vanishes():
     """Even something far shorter than an eighth keeps a slot."""
     q = quantise(notes((60, 0, 20)), 150.0)
-    assert [i["eighths"] for i in q] == [1]
+    assert len(q) == 1 and q[0]["ticks"] >= 1
 
 
 @pytest.mark.parametrize("sharps,pc,letter,alteration,symbol", [
@@ -96,4 +141,4 @@ def test_duration_histogram_sums_to_one():
     q = quantise(notes((60, 0, 150), (62, 150, 450), (64, 450, 600)), 150.0)
     h = duration_histogram(q)
     assert sum(h.values()) == pytest.approx(1.0)
-    assert h[1] == pytest.approx(2 / 3)
+    assert h[1.0] == pytest.approx(2 / 3)

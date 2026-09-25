@@ -26,33 +26,91 @@ SHARP_ORDER = ["F", "C", "G", "D", "A", "E", "B"]
 FLAT_ORDER = ["B", "E", "A", "D", "G", "C", "F"]
 
 
-def quantise(notes, period_ms, phase_ms=0.0, max_eighths=8, min_gap_eighths=1):
-    """Notes onto the eighth grid -> [{pc, eighths, start, rest}].
+TICKS_PER_EIGHTH = 2          # the grid notes are placed on: sixteenths
 
-    A note becomes a start position and a length, both in whole eighths. Rests
-    are emitted for gaps of a whole eighth or more, because a phrase boundary
-    is part of the shape and an n-gram should not span one.
+# Lengths a single note head can actually be, in sixteenths: the powers of two
+# and their dotted forms. A note of five sixteenths is not a note, it is a
+# quarter tied to a sixteenth, and asking an engraver to draw one gets
+# "Duration not representable" and a hole in the stave.
+REPRESENTABLE = (1, 2, 3, 4, 6, 8, 12, 16)
 
-    `phase_ms` only shifts which grid line counts as zero. It cannot change
-    any note's LENGTH, which is why this works without knowing the phase.
-    """
+
+def _drawable(ticks):
+    """The longest drawable length that is no longer than `ticks`."""
+    best = REPRESENTABLE[0]
+    for value in REPRESENTABLE:
+        if value <= ticks:
+            best = value
+    return best
+
+
+def _split_rest(ticks):
+    """A gap as one or more drawable rests, longest first."""
     out = []
+    while ticks > 0:
+        take = _drawable(ticks)
+        out.append(take)
+        ticks -= take
+    return out
+
+
+def quantise(notes, period_ms, phase_ms=0.0, max_eighths=8,
+             ticks_per_eighth=TICKS_PER_EIGHTH, min_gap_ticks=2):
+    """Notes onto the grid -> [{pc, ticks, start, rest}], start in ticks.
+
+    Positions are placed on SIXTEENTHS and durations written in eighths. That
+    sounds like a contradiction and is the whole point: this music is a stream
+    of eighth notes, so eighths are what should be read, but the notes arrive
+    slightly faster than the eighth grid can hold. Rounding every note to the
+    nearest eighth put a fifth of them in a slot that was already taken, and
+    dropping those turned `C B A C B A G B` into `C A C B G B`, which is not
+    the tune. Half an eighth of resolution keeps them.
+
+    `phase_ms` only shifts which grid line counts as zero. Moving it cannot
+    stretch or shrink the music, though at exactly half a grid step it can
+    round two neighbours into one slot.
+
+    Every note keeps the slot its own timestamp puts it in. An earlier version
+    pushed a note forward when it collided, and the pushes accumulated: a
+    hundred seconds of music came out nearly eight seconds long, so the note
+    highlighted during playback was about fourteen notes from the one being
+    heard. A note's place in time is a fact and its length is an estimate, so
+    it is the length that gives way.
+    """
     if period_ms <= 0 or not notes:
-        return out
-    prev_end = None
+        return []
+    tick_ms = period_ms / float(ticks_per_eighth)
+    max_ticks = int(max_eighths * ticks_per_eighth)
+    slots = {}
     for n in sorted(notes, key=lambda n: n["t0_ms"]):
-        start = int(round((n["t0_ms"] - phase_ms) / period_ms))
-        end = int(round((n["t1_ms"] - phase_ms) / period_ms))
-        length = max(1, min(int(max_eighths), end - start))
-        if prev_end is not None:
-            if start < prev_end:
-                start = prev_end          # overlaps: the later note wins its slot
-            gap = start - prev_end
-            if gap >= min_gap_eighths:
-                out.append({"pc": None, "eighths": gap, "start": prev_end, "rest": True})
-        out.append({"pc": int(n["midi"]) % 12, "eighths": length, "start": start,
-                    "rest": False})
-        prev_end = start + length
+        start = int(round((n["t0_ms"] - phase_ms) / tick_ms))
+        end = int(round((n["t1_ms"] - phase_ms) / tick_ms))
+        ticks = max(1, end - start)
+        held = slots.get(start)
+        # two notes inside one sixteenth is an ornament, and the longer of them
+        # is the one the tune is made of
+        if held is None or ticks > held[0]:
+            slots[start] = (ticks, int(n["midi"]) % 12)
+
+    out = []
+    starts = sorted(slots)
+    prev_end = None
+    for i, start in enumerate(starts):
+        ticks, pc = slots[start]
+        following = starts[i + 1] if i + 1 < len(starts) else None
+        if following is not None:
+            ticks = min(ticks, following - start)
+        ticks = max(1, min(max_ticks, ticks))
+        if prev_end is not None and start - prev_end >= min_gap_ticks:
+            at = prev_end
+            for chunk in _split_rest(start - prev_end):
+                out.append({"pc": None, "ticks": chunk, "start": at, "rest": True})
+                at += chunk
+        # A note's length is an estimate, so it gives way to what can be
+        # drawn; its start is a fact and never moves.
+        ticks = _drawable(ticks)
+        out.append({"pc": pc, "ticks": ticks, "start": start, "rest": False})
+        prev_end = start + ticks
     return out
 
 
@@ -114,11 +172,22 @@ def staff_step(pc, sharps):
     return LETTERS.index(letter)
 
 
-def _abc_length(eighths):
-    return "" if eighths == 1 else str(int(eighths))
+def _abc_length(ticks, ticks_per_eighth=TICKS_PER_EIGHTH):
+    """Length in ticks -> an ABC length marker, with L:1/8 as the unit.
+
+    Whole eighths stay bare or numbered, which is how this music reads. A
+    sixteenth becomes "/", which is ABC for half the unit, so the exceptions
+    look like exceptions.
+    """
+    if ticks % ticks_per_eighth == 0:
+        eighths = ticks // ticks_per_eighth
+        return "" if eighths == 1 else str(int(eighths))
+    if ticks_per_eighth == 2:
+        return "/" if ticks == 1 else f"{ticks}/2"
+    return f"{ticks}/{ticks_per_eighth}"
 
 
-def to_abc(quantised, sharps=2, key_name=None, per_line=32):
+def to_abc(quantised, sharps=2, key_name=None, per_line=0):
     """The quantised stream as ABC, with no bar lines.
 
     Deliberately no bar lines: the lab does not know where they go, and
@@ -126,17 +195,19 @@ def to_abc(quantised, sharps=2, key_name=None, per_line=32):
     allows a body without them.
     """
     key = key_name or KEY_NAMES.get(sharps, "C")
+    # per_line = 0 means one unbroken line, which is what the viewer wants:
+    # a stave that runs alongside the piano roll rather than a page of music.
     body, line, used = [], [], 0
     for item in quantised:
         if item["rest"]:
-            token = "z" + _abc_length(item["eighths"])
+            token = "z" + _abc_length(item["ticks"])
         else:
             letter, alteration = spell(item["pc"], sharps)
             token = (abc_accidental(letter, alteration, sharps) + letter
-                     + _abc_length(item["eighths"]))
+                     + _abc_length(item["ticks"]))
         line.append(token)
-        used += item["eighths"]
-        if used >= per_line:
+        used += item["ticks"] / float(TICKS_PER_EIGHTH)
+        if per_line and used >= per_line:
             body.append(" ".join(line))
             line, used = [], 0
     if line:
@@ -156,12 +227,13 @@ def notate(notes, period_ms, phase_ms=0.0, sharps=None, max_eighths=8):
             "quantised": q, "abc": to_abc(q, sharps=int(sharps)),
             "n_notes": sum(1 for i in q if not i["rest"]),
             "n_rests": sum(1 for i in q if i["rest"]),
-            "eighths": int(sum(i["eighths"] for i in q))}
+            "ticks_per_eighth": TICKS_PER_EIGHTH,
+            "eighths": sum(i["ticks"] for i in q) / float(TICKS_PER_EIGHTH)}
 
 
 def duration_histogram(quantised):
     """How long the heard notes are, in eighths. A sanity check on the grid."""
-    lens = [i["eighths"] for i in quantised if not i["rest"]]
+    lens = [i["ticks"] / float(TICKS_PER_EIGHTH) for i in quantised if not i["rest"]]
     if not lens:
         return {}
     counts = {}
