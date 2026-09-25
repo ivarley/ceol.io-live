@@ -98,9 +98,13 @@ describe('session date editor (spec 046)', () => {
     expect(payload).toMatchObject({
       date: '2026-01-31', start_time: '19:00', end_time: '22:00', confirm: false,
     })
-    // The server's display string lands on the header, and the sheet closes.
+    // The server's display string lands on the Date row, and the editor closes. Not
+    // the header summary: the drawer is still open behind the editor, and the summary
+    // hides while it is (spec 052 §B15) — the drawer is already saying the date.
     await waitFor(() => expect(document.querySelector('.dt-input')).toBeNull())
-    expect(container.querySelector('.session-date').textContent).toContain('Sat · Jan 31, 2026')
+    const dateRow = [...document.querySelectorAll('.kit-field')]
+      .find((r) => r.querySelector('.kit-field-label')?.textContent.trim() === 'Date')
+    expect(dateRow.querySelector('.kit-field-value').textContent).toContain('Sat · Jan 31, 2026')
   })
 
   it('re-dates from someone else\'s set_date arriving over SSE', async () => {

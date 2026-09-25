@@ -1,6 +1,6 @@
 <script>
   import { onMount, onDestroy, untrack, tick } from 'svelte'
-  import { fly } from 'svelte/transition'
+  import { fly, slide } from 'svelte/transition'
   import { flip } from 'svelte/animate'
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
   import { bootstrap, vocabulary, sendOp, sendTyping, liveMatch, livePeople, deepSearch, fetchIncipit, openStream, probeServers, tuneDetail, myTunesList, myTunesOp, instanceAudio } from './client.js'
@@ -332,6 +332,16 @@
   let notesDraft = $state('') // editable buffer in the expanded header
   let logComplete = $state(false) // session marked "completely logged" — hides editing (§024)
   let expanded = $state(false)
+  // The drawer hangs off the bottom of the session band, which is not a fixed height
+  // — a festival log carries its own name on an extra line. Measured on open rather
+  // than guessed.
+  let topbarEl = $state(null)
+  let topbarBottom = $state(0)
+  // Keeps it right if the band reflows while the drawer is open — renaming the log
+  // adds a line. The first frame is toggleExpand's job, not this.
+  $effect(() => {
+    if (expanded && topbarEl) topbarBottom = Math.round(topbarEl.getBoundingClientRect().bottom)
+  })
   let results = $state([]) // type-ahead search results shown above the composer (§D)
   let resultsQuery = '' // the query `results` correspond to (guards the debounce race)
   let noMatch = $state(false) // a completed search returned nothing (show the empty + deeper prompt)
@@ -1258,6 +1268,11 @@
 
   // --- session notes (header §F) ---
   function toggleExpand() {
+    // Measure BEFORE opening. The drawer is positioned from the band's bottom edge,
+    // and if that is read after `expanded` flips, its first frame paints at top:0 —
+    // covering the very band it hangs from, and swallowing the tap that closes it
+    // again. One frame, but it is the frame the transition starts from.
+    if (!expanded && topbarEl) topbarBottom = Math.round(topbarEl.getBoundingClientRect().bottom)
     expanded = !expanded
     if (expanded) notesDraft = notesText // sync the editable buffer on open
   }
@@ -3805,7 +3820,7 @@
       obvious home — and so the date has somewhere to hang its editor (spec 046). The
       whole band sits on its own lighter surface so it never reads as part of the list.
     -->
-    <header class="topbar">
+    <header class="topbar" bind:this={topbarEl}>
       <div class="topbar-row" role="button" tabindex="0" onclick={toggleExpand} onkeydown={(e) => activate(e, toggleExpand)}>
         <div class="topbar-main">
           <div class="session-name">{sessionName || 'Session'}</div>
@@ -3816,8 +3831,12 @@
           {#if instanceName}
             <div class="session-instance-name">{instanceName}</div>
           {/if}
-          <div class="session-date">{sessionDate}{#if ordered.length}{sessionDate ? ' · ' : ''}{tuneSummary}{/if}</div>
-          {#if notesText && logComplete}
+          <!-- Hidden while the drawer is open: it says the date and the tune count,
+               and the drawer directly below is already saying both. -->
+          {#if !expanded}
+            <div class="session-date">{sessionDate}{#if ordered.length}{sessionDate ? ' · ' : ''}{tuneSummary}{/if}</div>
+          {/if}
+          {#if notesText && !expanded && logComplete}
             <div class="session-notes">{notesText}</div>
           {/if}
         </div>
@@ -3837,7 +3856,7 @@
               <line x1="12" y1="17" x2="12.01" y2="17"></line>
             </svg>
           </a>
-          <span class="header-chevron" aria-hidden="true">›</span>
+          <span class="header-chevron" class:open={expanded} aria-hidden="true">›</span>
         </span>
       </div>
       <!-- The details moved out of this header and into a Sheet (spec 052 §B15).
@@ -4622,8 +4641,20 @@
   two levels under the Sessions tab, so the tab alone lands you on the list; this row
   is the missing level, and it replaces a ⮐ that hung off the end of the title.
 -->
-<Sheet bind:open={expanded} title="Log details" cancelLabel="Done">
-  <div class="hx-sheet">
+{#if expanded}
+  <!-- A drawer, not a modal sheet (spec 052 §B15). It slides down from under the
+       session band and leaves the whole header — the ceol bar AND the session name —
+       exactly where it was, so you never lose your place. Fixed rather than in flow
+       so it overlays the log instead of shoving it down, and its top is measured
+       from the band's own bottom edge, which changes with the session's name and
+       whether this log has one of its own.
+
+       It is also NOT modal, which is what fixes the buttons inside it: Mark complete
+       opens a Dialog at the modal tier (1910) and the Sheet sat at the sheet tier
+       (2040), so the confirmation rendered BEHIND the panel and the button looked
+       broken. A plain drawer at z-35 lets every dialog land on top of it. -->
+  <div class="hx-drawer" style:--hx-top="{topbarBottom}px" transition:slide={{ duration: 180 }}>
+  <div class="hx-drawer-body">
     <div class="kit-group">
       <!-- Stacked because the value is a date AND a time range — "Fri · Sep 25, 2026 ·
            8:00pm-11pm" does not fit a value column next to an action, and the year is
@@ -4757,8 +4788,9 @@
         <span class="kit-chev" aria-hidden="true">›</span>
       </a>
     </div>
+    </div>
   </div>
-</Sheet>
+{/if}
 
 <!--
   Re-date this log (spec 046). The motivating case is a session logged past midnight,

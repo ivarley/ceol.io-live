@@ -202,16 +202,41 @@ main {
 /* one right-hand cluster: presence, help, expand chevron */
 .topbar-tools { display: flex; align-items: center; gap: 8px; flex: none; }
 .topbar-presence { display: flex; gap: 4px; }
-/* Points the way the tray arrives, and does not rotate: it opens a sheet now, it
-   does not expand in place. */
-.header-chevron { color: var(--muted); font-size: 18px; line-height: 1; }
+/* Points right when closed, down when open — the drawer expands in place under the
+   band, so the chevron says which way it went. */
+.header-chevron {
+  color: var(--muted); font-size: 18px; line-height: 1;
+  transition: transform 0.18s ease;
+}
+.header-chevron.open { transform: rotate(90deg); }
+
+/* The log-details drawer (spec 052 §B15). Fixed, starting at the measured bottom of
+   the session band, so the header above it never moves and the log below is covered
+   rather than pushed. z-35 puts it over the log (unlayered) and under the appbar
+   (40) — and well under the dialog tier, so "Mark complete" and the date editor land
+   on top of it instead of behind it. */
+.hx-drawer {
+  position: fixed;
+  top: var(--hx-top, 110px);
+  left: 0; right: 0; bottom: 0;
+  z-index: 35;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+
+.hx-drawer .hx-drawer-body {
+  padding: 16px 12px calc(16px + env(safe-area-inset-bottom, 0px));
+}
 
 /* The detail rows themselves are lib/grouped.css — the same ones /me and the
    add-a-session sheet use. What is left here is what only this tray has. */
-.hx-sheet .hx-strong { font-weight: 700; }
+.hx-drawer-body .hx-strong { font-weight: 700; }
 /* The count sits beside the label rather than inside it: "Attended" is the label,
    "5" is a fact about the row, and a test reads the label expecting a label. */
-.hx-sheet .hx-count { flex: 0 0 auto; font-weight: 700; }
+.hx-drawer-body .hx-count { flex: 0 0 auto; font-weight: 700; }
 .hx-away { color: var(--muted); opacity: 0.75; }
 /* Text, not a bordered button. The button cost ~90px of a 390px row and the value
    was what got truncated for it — "Still log…", "none uploade…". The row is the

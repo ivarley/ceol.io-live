@@ -119,4 +119,11 @@
   body.has-tab-bar:not(.logging-edit) main {
     padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
   }
+
+  /* The log-details drawer is fixed to the bottom of the screen, so it needs the
+     same reservation — otherwise its last field scrolls under the bar and looks
+     truncated rather than scrollable. */
+  body.has-tab-bar:not(.logging-edit) .hx-drawer {
+    bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+  }
 }

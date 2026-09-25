@@ -720,10 +720,19 @@ the band was a control — it looks like a title — so the panel was a drawer n
 could be expected to find, holding the date, the name, attendance, recordings, the
 roster, notes and the complete/re-open switch.
 
-It is a Sheet now, titled **Log details**, dismissed with Done. Everything in it
+It is a **drawer** now, sliding down from under the session band. Everything in it
 already had the shape of a grouped table — label, value, an action on the right — so
 it becomes one: the same `lib/grouped.css` rows as `/me` (§B12) and the
 add-a-session sheet (§B9). Third consumer, no new row CSS.
+
+A drawer rather than a modal Sheet, for two reasons. The header stays put — the ceol
+bar and the session name both — so you never lose your place on the screen you are
+standing on. And the Sheet version had a bug that made its own buttons look broken:
+"Mark complete" opens a Dialog at the modal tier (1910) while the Sheet sat at the
+sheet tier (2040), so the confirmation rendered BEHIND the panel. A plain drawer at
+z-35 lets every dialog land on top of it. The chevron turns to point down, and the
+summary line hides while it is open — the drawer is already saying the date and the
+tune count.
 
 **It is also where back-to-the-session finally belongs.** The logger sits two levels
 under the Sessions tab, so the tab alone lands on the list; the last group in the
@@ -731,10 +740,15 @@ tray is the missing level. That replaces the `⮐` hanging off the end of the ti
 0.7em, muted, aligned to nothing. Two taps for a rare action, in a place you can
 find, beats one tap on a glyph you cannot.
 
-**What the modal made unnecessary.** The inline panel had to close itself the moment
-you touched anything else, with exceptions for the date sheet portalling out of the
-header and for an unsaved notes draft. A modal has nothing else to touch, so all of
-that went; only the connection popover still needs the outside-click handler.
+**What went with it.** The old panel had to close itself the moment you touched
+anything else, with exceptions for the date sheet portalling out of the header and
+for an unsaved notes draft. Tapping the band closes it now, so all of that went; only
+the connection popover still needs the outside-click handler.
+
+**The drawer's top edge is measured, not guessed** — the band is taller when a log
+carries its own name. It is measured in `toggleExpand`, BEFORE `expanded` flips: read
+it afterwards and the first frame paints at `top: 0`, covering the very band it hangs
+from and swallowing the tap that closes it again.
 
 **Two layout problems, both found by measuring rather than looking:**
 
@@ -749,7 +763,16 @@ that went; only the connection popover still needs the outside-click handler.
 
 `e2e/mobile/tab-bar-logger.mobile.spec.ts` asserts no row in the tray is clipped at
 phone width, by comparing `scrollWidth` to `clientWidth` across every label and value
-— the check that would have caught both of the above before a screenshot did.
+— the check that would have caught both of the above before a screenshot did. It also
+asserts the drawer's top equals the band's bottom, and that a dialog opened from
+inside it is the element actually under your finger (`elementFromPoint`), because
+"visible" was true of the broken version too.
+
+That describe block runs **serially**. Every test in it drives the same live instance,
+and the logger is genuinely multi-user: one browser entering edit mode joins the
+roster and streams presence to the others, so a parallel sibling can be reading
+"Logging: …" while this one changes it. In parallel they failed about half the time,
+and the failure said nothing about the feature.
 
 The unit tests moved with it: the Sheet portals to `document.body`, so assertions
 that reached into the component's own tree had to reach into the document instead.
