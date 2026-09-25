@@ -30,10 +30,13 @@
     will-change: transform;
 }
 
+/* Full width on desktop, the same as /sessions and /tunes. .docs-content is already
+   the page's content box — 40px in from each edge — so a second 1200px cap centred
+   inside it just made Tunes a visibly narrower page than Sessions, with nothing on
+   screen to explain why. Horizontal padding goes for the same reason: it would inset
+   these rows 20px further than the rows on either of those pages. */
 .my-tunes-container {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 20px;
+    padding: 20px 0;
 }
 
 .btn {
@@ -1643,8 +1646,11 @@
         grid-template-columns: 1fr;
     }
 
+    /* Vertical only, like the base rule — horizontal padding here would put this
+       page's rows 20px further in than /sessions' at exactly these widths, which is
+       the inconsistency the base rule was changed to remove. */
     .my-tunes-container {
-        padding: 20px;
+        padding: 20px 0;
     }
 
     /* Touch-friendly buttons on tablets too */

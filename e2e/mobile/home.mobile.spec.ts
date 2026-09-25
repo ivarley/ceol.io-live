@@ -20,7 +20,9 @@ import { expectNoServerError } from "../support/nav";
 test.use({ storageState: STORAGE.regular });
 
 test.describe("home (mobile)", () => {
-  test("greets the player and shows their learning counts", async ({ page }) => {
+  test("greets the player and shows their learning counts", async ({
+    page,
+  }) => {
     await page.goto("/");
     await expect(page.locator(".home-greeting")).toBeVisible();
     await expect(page.locator("#stat-learning")).toBeVisible();
@@ -43,32 +45,107 @@ test.describe("home (mobile)", () => {
     const body = await res.json();
     expect(body.success).toBeTruthy();
 
-    await expect(page.locator("#stat-learning")).toHaveText(String(body.learning_count));
-    await expect(page.locator("#stat-want-to-learn")).toHaveText(String(body.want_to_learn_count));
+    await expect(page.locator("#stat-learning")).toHaveText(
+      String(body.learning_count),
+    );
+    await expect(page.locator("#stat-want-to-learn")).toHaveText(
+      String(body.want_to_learn_count),
+    );
 
     // ISO dates, never RFC 822 — the JSON provider added in §A4.
     expect(body.today).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
-  test("this week's sessions render, or say plainly that there are none", async ({ page }) => {
+  test("this week's sessions render, or say plainly that there are none", async ({
+    page,
+  }) => {
     await page.goto("/");
     const res = await page.request.get("/api/home");
     const body = await res.json();
 
     if ((body.upcoming_sessions || []).length > 0) {
       await expect(page.locator(".session-item").first()).toBeVisible();
-      await expect(page.locator(".session-item").first().locator(".session-name")).not.toBeEmpty();
+      await expect(
+        page.locator(".session-item").first().locator(".session-name"),
+      ).not.toBeEmpty();
     } else {
       await expect(page.locator(".empty-state").first()).toBeVisible();
     }
     await expectNoServerError(page);
   });
 
-  test("Today: a live session leads the page, with its tally and its room", async ({ page }) => {
+  test("a week row carries two links: the night, and the session it belongs to", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    const body = await (await page.request.get("/api/home")).json();
+    const upcoming = body.upcoming_sessions || [];
+    test.skip(!upcoming.length, "no sessions this week for this user");
+
+    const row = page.locator(".session-item").first();
+    const name = row.locator("a.session-name");
+    const open = row.locator("a.week-open");
+
+    // The name goes to the SESSION; everything else goes to that night's log.
+    await expect(name).toHaveAttribute(
+      "href",
+      new RegExp(`^/sessions/${upcoming[0].path}$`),
+    );
+    await expect(open).toHaveAttribute(
+      "href",
+      `/sessions/${upcoming[0].path}/${upcoming[0].date}`,
+    );
+
+    // Both are real anchors, and neither is inside the other — an <a> within an <a>
+    // is invalid, and browsers disagree about which one a click means.
+    expect(
+      await row.evaluate(
+        (el) => !!el.closest("a") || !!el.querySelector("a a"),
+      ),
+    ).toBe(false);
+
+    // The row-wide link has to sit ABOVE the subtitle and the badge, which are later
+    // siblings: underneath them, a press on the right-hand half of the row hit
+    // nothing at all. The name in turn sits above it, or it would never get a click.
+    const z = await row.evaluate((el) => ({
+      open: getComputedStyle(el.querySelector("a.week-open")!).zIndex,
+      name: getComputedStyle(el.querySelector("a.session-name")!).zIndex,
+    }));
+    expect(Number(z.name)).toBeGreaterThan(Number(z.open));
+    expect(Number(z.open)).toBeGreaterThan(0);
+  });
+
+  test("pressing the row opens the night, pressing the name opens the session", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    const body = await (await page.request.get("/api/home")).json();
+    const upcoming = body.upcoming_sessions || [];
+    test.skip(!upcoming.length, "no sessions this week for this user");
+
+    // Press the far right of the row, past every piece of its content.
+    const box = (await page.locator(".session-item").first().boundingBox())!;
+    await page.mouse.click(box.x + box.width - 8, box.y + box.height / 2);
+    await expect(page).not.toHaveURL(/\/$/);
+    const afterRow = page.url();
+    expect(afterRow).not.toMatch(new RegExp(`/sessions/${upcoming[0].path}$`));
+
+    await page.goto("/");
+    await page.locator("a.session-name").first().click();
+    await expect(page).toHaveURL(
+      new RegExp(`/sessions/${upcoming[0].path}(/|$)`),
+    );
+  });
+
+  test("Today: a live session leads the page, with its tally and its room", async ({
+    page,
+  }) => {
     await page.goto("/");
     const res = await page.request.get("/api/home");
     const body = await res.json();
-    const todays = (body.upcoming_sessions || []).filter((s) => s.date === body.today);
+    const todays = (body.upcoming_sessions || []).filter(
+      (s) => s.date === body.today,
+    );
 
     if (!todays.length) {
       // No session today, so there must be no card — the whole rule of this block.
@@ -86,30 +163,42 @@ test.describe("home (mobile)", () => {
       await expect(card).toContainText(live.name);
       // The tally is the payload's number, not a second count made in the client.
       await expect(card).toContainText(`${live.tunes_logged} tune`);
-      if (live.people_here > 0) await expect(card).toContainText(`${live.people_here} `);
+      if (live.people_here > 0)
+        await expect(card).toContainText(`${live.people_here} `);
     }
     await expectNoServerError(page);
   });
 
-  test("Today: the card and its View button go to that night's log", async ({ page }) => {
+  test("Today: the card and its View button go to that night's log", async ({
+    page,
+  }) => {
     await page.goto("/");
     const res = await page.request.get("/api/home");
     const body = await res.json();
-    const todays = (body.upcoming_sessions || []).filter((s) => s.date === body.today);
+    const todays = (body.upcoming_sessions || []).filter(
+      (s) => s.date === body.today,
+    );
     test.skip(!todays.length, "no session on today's date in this database");
 
     const first = todays[0];
     const view = page.locator(".today-card .today-view").first();
-    await expect(view).toHaveAttribute("href", `/sessions/${first.path}/${first.date}`);
+    await expect(view).toHaveAttribute(
+      "href",
+      `/sessions/${first.path}/${first.date}`,
+    );
   });
 
-  test("Today: two sessions on one day are a strip you can page through", async ({ page }) => {
+  test("Today: two sessions on one day are a strip you can page through", async ({
+    page,
+  }) => {
     // The festival case. A stack would hide the fact that there are two, which is
     // the one thing you need to know when there are.
     await page.goto("/");
     const res = await page.request.get("/api/home");
     const body = await res.json();
-    const todays = (body.upcoming_sessions || []).filter((s) => s.date === body.today);
+    const todays = (body.upcoming_sessions || []).filter(
+      (s) => s.date === body.today,
+    );
     test.skip(todays.length < 2, "needs two sessions on today's date");
 
     await expect(page.locator(".today-dots span")).toHaveCount(todays.length);
@@ -121,7 +210,9 @@ test.describe("home (mobile)", () => {
     expect(overflow).toBeGreaterThan(0);
   });
 
-  test("the page renders from the embedded payload, with no extra fetch", async ({ page }) => {
+  test("the page renders from the embedded payload, with no extra fetch", async ({
+    page,
+  }) => {
     // The thin-shell invariant (spec 035 §1d). If the bundle had to call /api/home to
     // paint, the page and the API could not drift — but every load would cost a round
     // trip, and a native client reading the same payload would be doing it differently.
@@ -135,23 +226,31 @@ test.describe("home (mobile)", () => {
     expect(calls).toHaveLength(0);
   });
 
-  test("the greeting comes from the payload, not from a template variable", async ({ page }) => {
+  test("the greeting comes from the payload, not from a template variable", async ({
+    page,
+  }) => {
     await page.goto("/");
     const res = await page.request.get("/api/home");
     const body = await res.json();
-    await expect(page.locator(".home-greeting")).toContainText(body.viewer.first_name);
+    await expect(page.locator(".home-greeting")).toContainText(
+      body.viewer.first_name,
+    );
   });
 
   test("does not scroll sideways at phone width", async ({ page }) => {
     await page.goto("/");
     await expect(page.locator(".home-greeting")).toBeVisible();
     const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      () =>
+        document.documentElement.scrollWidth -
+        document.documentElement.clientWidth,
     );
     expect(overflow).toBeLessThanOrEqual(1);
   });
 
-  test("every hamburger destination survived the move to the tab bar", async ({ page }) => {
+  test("every hamburger destination survived the move to the tab bar", async ({
+    page,
+  }) => {
     // The hamburger had nine items for a signed-in user and the tab bar has four
     // slots, so five things had to go somewhere. This walks to each of them the way
     // a person on a phone now would. It is the whole safety argument for deleting a
@@ -170,7 +269,9 @@ test.describe("home (mobile)", () => {
       ["tunes", "/my-tunes"],
       ["me", "/me"],
     ] as const) {
-      await expect(bar.locator(`.tab-bar-item[data-tab="${tab}"]`)).toHaveAttribute("href", href);
+      await expect(
+        bar.locator(`.tab-bar-item[data-tab="${tab}"]`),
+      ).toHaveAttribute("href", href);
     }
 
     // Add A Session: the "+" on the Sessions tab, not a menu item. It opens a
@@ -196,8 +297,14 @@ test.describe("home (mobile)", () => {
     await page.goto("/me");
     const account = page.locator("#account-section");
     await expect(account).toBeVisible();
-    await expect(page.locator("#account-help")).toHaveAttribute("href", "/help");
-    await expect(page.locator("#account-logout")).toHaveAttribute("href", "/logout");
+    await expect(page.locator("#account-help")).toHaveAttribute(
+      "href",
+      "/help",
+    );
+    await expect(page.locator("#account-logout")).toHaveAttribute(
+      "href",
+      "/logout",
+    );
   });
 
   test("the tab bar marks where you are", async ({ page }) => {

@@ -70,11 +70,20 @@
   text-align: left;
   color: inherit;
   text-decoration: none;
+  /* The anchor covering this row is positioned against it. */
+  position: relative;
 }
 
-a.session-item:hover {
-  text-decoration: none;
-  color: inherit;
+/* The row-wide link to the night's log. No text of its own — it is the row's
+   surface, so anywhere you press that is not the session name opens the log. */
+.week-open {
+  position: absolute;
+  inset: 0;
+  /* Above the row's other content, not below it. At z-index 0 this sat behind the
+     subtitle and the trailing badge — both are later siblings, so they painted on
+     top — and a press on the right-hand half of the row hit nothing at all. Only
+     the name, which is lifted higher still, is meant to escape this. */
+  z-index: 1;
 }
 
 .session-item + .session-item {
@@ -105,12 +114,26 @@ a.session-item:hover {
   color: var(--primary);
 }
 
-/* The name used to be a nested <a> inside a static row. The whole row is the link
-   now, so this is the accent the anchor used to provide. */
+/* The name is its own link, to the SESSION rather than to this one night, and it
+   has to sit above .week-open or the row would swallow its clicks. */
 .session-name {
+  position: relative;
+  z-index: 2;
   font-weight: 500;
   font-size: 0.95rem;
   color: var(--primary);
+  text-decoration: none;
+}
+
+/* Two links in one row need something to tell them apart, and on a pointer the
+   cheapest honest signal is the underline appearing under the one you are on.
+   `hover: hover` rather than a width: a phone has no hover state to show it in,
+   and a touch device at desktop width would get an underline that never appears. */
+@media (hover: hover) {
+  .session-name:hover,
+  .session-name:focus-visible {
+    text-decoration: underline;
+  }
 }
 
 .session-item .kit-row-sub {

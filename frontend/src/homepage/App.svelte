@@ -94,19 +94,35 @@
   {#if upcoming.length}
     <div class="home-list">
       {#each upcoming as session (session.session_instance_id)}
+        <!-- Two destinations in one row: the night (this instance's log) and the
+             session it belongs to. So the row cannot be an <a> — an anchor inside an
+             anchor is invalid, and browsers disagree about which one a click means.
+             `as="div"` is Row's escape hatch for exactly that, and both destinations
+             stay REAL links: focusable, middle-clickable, with a URL in the status
+             bar. A span with a click handler would be none of those. -->
         <Row
+          as="div"
           styled={false}
           rowClass="session-item"
-          href={`/sessions/${session.path}/${session.date}`}
           subtitle={weekSubtitle(session, todayStr)}>
           {#snippet lead()}
+            <!-- Covers the whole row (it is absolutely positioned against
+                 .session-item), sitting UNDER the name so the name wins its own
+                 clicks. Rendered here only because Row has no slot of its own for
+                 it; it is not part of the date block. It carries a label because a
+                 link with no text is a link screen readers cannot announce. -->
+            <a
+              class="week-open"
+              href={`/sessions/${session.path}/${session.date}`}
+              aria-label={`Log for ${session.name}, ${weekSubtitle(session, todayStr)}`}
+            ></a>
             <div class="session-date">
               <div class="session-date-day">{dowOf(session.date)}</div>
               <div class="session-date-num">{domOf(session.date)}</div>
             </div>
           {/snippet}
           {#snippet titleContent()}
-            <span class="session-name">{session.name}</span>
+            <a class="session-name" href={`/sessions/${session.path}`}>{session.name}</a>
           {/snippet}
           {#snippet trailing()}
             {#if session.date === todayStr}

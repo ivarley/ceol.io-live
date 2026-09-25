@@ -14,12 +14,13 @@
   border-radius: var(--r-sm, 4px);
   color: var(--text-color);
   cursor: pointer;
-  opacity: 0.75;
 }
 
+/* No resting dimming. It sits directly beside the hamburger, which is drawn in this
+   same colour at full strength, so 0.75 made one of two adjacent header controls
+   look disabled. */
 .share-btn:hover,
 .share-btn:focus-visible {
-  opacity: 1;
   color: var(--primary);
 }
 
