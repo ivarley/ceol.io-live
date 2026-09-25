@@ -531,7 +531,7 @@
   .people-empty-add {
     margin-top: 16px;
     padding: 10px 20px;
-    background-color: var(--primary);
+    background-color: var(--primary-fill);
     color: white;
     border: none;
     border-radius: 4px;

@@ -148,7 +148,7 @@
     padding: 0.5rem 0.9rem;
     border: 1px solid var(--border-color);
     border-radius: 6px;
-    background: var(--primary);
+    background: var(--primary-fill);
     color: #fff;
     font: inherit;
     cursor: pointer;

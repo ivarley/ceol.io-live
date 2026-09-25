@@ -256,7 +256,7 @@
 
 /* Regular Badge */
 .badge-primary {
-    background-color: var(--primary, #65b464);
+    background-color: var(--primary-fill, #4a8049);
 }
 
 .badge-sm {

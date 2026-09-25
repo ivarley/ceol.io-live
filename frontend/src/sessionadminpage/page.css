@@ -223,15 +223,15 @@
 }
 
 .weekday-btn:hover {
-    background-color: var(--primary);
+    background-color: var(--primary-fill);
     color: white;
-    border-color: var(--primary);
+    border-color: var(--primary-fill);
 }
 
 .weekday-btn.active {
-    background-color: var(--primary);
+    background-color: var(--primary-fill);
     color: white;
-    border-color: var(--primary);
+    border-color: var(--primary-fill);
 }
 
 .nth-occurrence-checkboxes {
@@ -502,13 +502,13 @@
 }
 
 .instance-action-btn-primary {
-    background-color: var(--primary);
+    background-color: var(--primary-fill);
     color: white !important;
     text-decoration: none;
 }
 
 .instance-action-btn-primary:hover {
-    background-color: var(--modal-primary-dark, #3d863c);
+    background-color: var(--primary-fill-hover, #437342);
     color: white !important;
 }
 
@@ -519,7 +519,7 @@
 }
 
 .instance-action-btn-secondary:hover {
-    background-color: var(--primary);
+    background-color: var(--primary-fill);
     color: white;
 }
 

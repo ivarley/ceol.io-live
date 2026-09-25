@@ -13,19 +13,22 @@ shadow (`--shadow-sm/-md/-lg`), scrim (`--scrim`), spacing (`--sp-1`…`--sp-8`)
 motion (`--dur-quick/--dur/--ease`), and z-index (`--z-*`) scales, and the one
 global `@keyframes spin`.
 
-**Palette** (excerpt):
+**Palette** (excerpt). The `:root` block is GENERATED from `design/tokens.json` by
+`scripts/build_tokens.py` (spec 052 §B6) — edit the JSON, not the CSS:
 ```css
 :root {
   --bg-color: #1a1a1a;
   --text-color: #e0e0e0;
-  --primary: #4da6ff;
+  --primary: #65b464;            /* accent TEXT, links, icons */
+  --primary-fill: #4a8049;       /* accent surfaces behind white text */
+  --primary-fill-hover: #437342;
   --secondary-text: #888;
   --text-muted: #888;
   --border-color: #444;
   --input-bg: #2d2d2d;
   --hover-bg: #3d3d3d;
-  --link-color: #4da6ff;
-  --link-hover-color: #80c0ff;
+  --link-color: #65b464;
+  --link-hover-color: #92ca91;
   --table-header-bg: #3d3d3d;
   --header-bg: #2d2d2d;
   --dropdown-bg: #2d2d2d;
@@ -33,6 +36,24 @@ global `@keyframes spin`.
   --dropdown-shadow: rgba(0,0,0,0.3);
 }
 ```
+
+### The accent is two colours, not one (spec 052 §B10)
+
+`--primary` is the accent as TEXT. `--primary-fill` is the accent as a SURFACE —
+a selected filter, a tune-type chip, a primary button, a checked box's
+`accent-color`. They are not interchangeable, and the reason is contrast: a green
+light enough to read as text on the dark page (6.85:1) is too light to sit behind
+white text (2.54:1, under AA), and the logo green that carries white text properly
+(4.69:1) is too dark to read as text (3.71:1).
+
+The rule: **`color:` takes `--primary`; `background`, `accent-color`, and a border
+that outlines one of those backgrounds take `--primary-fill`.** It is enforced by
+`tests/unit/test_design_tokens_052.py`, which greps the stylesheets for an accent
+background on the text token.
+
+`--primary-fill` is the logo green exactly — `static/images/logo3-1.png` is one
+flat `#4a8049`. `--primary-dark` is NOT the fill's hover: it is lighter than the
+fill, so it would brighten on hover. Use `--primary-fill-hover`.
 
 Note: `--primary-color` was removed in spec 035 — `--primary` is the one name.
 

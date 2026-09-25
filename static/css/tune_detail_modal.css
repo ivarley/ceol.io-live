@@ -141,7 +141,7 @@
     display: inline-block;
     font-size: 11px;
     padding: 3px 8px;
-    background-color: var(--primary);
+    background-color: var(--primary-fill);
     color: white;
     border-radius: 3px;
     text-transform: capitalize;
@@ -574,12 +574,12 @@
     font-size: 14px;
     font-weight: 500;
     transition: background-color 0.2s;
-    background-color: var(--primary);
+    background-color: var(--primary-fill);
     color: white;
 }
 
 .btn-primary:hover:not(:disabled) {
-    background-color: var(--modal-primary-dark);
+    background-color: var(--primary-fill-hover);
 }
 
 .btn-primary:disabled {
@@ -762,8 +762,8 @@
 }
 
 .history-scope-btn.active {
-    background-color: var(--primary);
-    border-color: var(--primary);
+    background-color: var(--primary-fill);
+    border-color: var(--primary-fill);
     color: #fff;
 }
 
@@ -1111,7 +1111,7 @@
 
 .fetch-setting-btn {
     padding: 8px 16px;
-    background-color: var(--primary);
+    background-color: var(--primary-fill);
     color: white;
     border: none;
     border-radius: 4px;
@@ -1122,7 +1122,7 @@
 }
 
 .fetch-setting-btn:hover:not(:disabled) {
-    background-color: var(--modal-primary-dark);
+    background-color: var(--primary-fill-hover);
 }
 
 .fetch-setting-btn:disabled {
@@ -1366,7 +1366,7 @@
     cursor: pointer;
     white-space: nowrap;
 }
-.hist-filter input { accent-color: var(--primary, #65b464); cursor: pointer; }
+.hist-filter input { accent-color: var(--primary-fill, #4a8049); cursor: pointer; }
 .hist-filter:hover { color: var(--text-color, #e0e0e0); }
 
 /* Were you there? A quiet mark on the row, not a label competing with it. */

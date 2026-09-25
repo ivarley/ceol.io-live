@@ -844,8 +844,8 @@
   }
 
   :global(.weekday-btn.active) {
-    background: var(--primary, #65b464);
-    border-color: var(--primary, #65b464);
+    background: var(--primary-fill, #4a8049);
+    border-color: var(--primary-fill, #4a8049);
     color: #fff;
   }
 
@@ -975,7 +975,7 @@
     height: 17px;
     margin: 0;
     flex: 0 0 auto;
-    accent-color: var(--primary, #65b464);
+    accent-color: var(--primary-fill, #4a8049);
     cursor: pointer;
   }
 
@@ -1022,7 +1022,7 @@
     font: inherit;
     font-weight: 600;
     color: #fff;
-    background: var(--primary, #65b464);
+    background: var(--primary-fill, #4a8049);
     border: none;
     border-radius: var(--r, 8px);
     cursor: pointer;

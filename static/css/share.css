@@ -117,8 +117,8 @@
 }
 
 .share-action.primary {
-  background: var(--primary);
-  border-color: var(--primary);
+  background: var(--primary-fill);
+  border-color: var(--primary-fill);
   color: #fff;
 }
 

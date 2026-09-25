@@ -31,9 +31,16 @@
     /* The logo hue at the legibility the old grey had (4.9:1, same as #888): resting
        tab-bar labels and anywhere else that wants the brand colour without shouting. */
     --logo-green-soft: #569654;
-    /* Accent. The logo hue at 6.9:1 on --bg-color, which is where the blue it replaced sat
-       (6.8:1) — the swap changes the colour, not the legibility. */
+    /* Accent TEXT, links, icons and thin borders. The logo hue at 6.9:1 on --bg-color,
+       which is where the blue it replaced sat (6.8:1). It is too light to sit BEHIND white
+       text — that is --primary-fill's job. */
     --primary: #65b464;
+    /* Accent FILL: every surface that carries white text — a selected filter, a tune-type
+       chip, a primary button. The logo green itself, sampled from logo3-1.png, which is
+       one flat #4a8049. White on it is 4.69:1; white on the lighter --primary was 2.54:1,
+       under AA, and read as the washed-out green a phone uses for the messages it does not
+       want you to like. */
+    --primary-fill: #4a8049;
     --secondary: #8a95a8;
     --success: #4daf5a;
     --info: #5b99ea;
@@ -84,6 +91,10 @@
     --text-muted: #888;
     /* Hover-state darks (formerly phantom vars; values match the fallbacks in use) */
     --primary-dark: #3d863c;
+    /* --primary-fill hovered: 10% darker. White text 5.57:1, and still 3.12:1 against the
+       page, so a hovered chip does not sink into the background. --primary-dark is NOT
+       this — it is lighter than --primary-fill, so using it here would brighten on hover. */
+    --primary-fill-hover: #437342;
     --secondary-dark: #5a6268;
     /* Already-added rows in tune search */
     --already-added-bg: #3a3a3a;
@@ -2356,33 +2367,33 @@
   }
   .btn-primary {
     color: #fff;
-    background-color: var(--primary);
-    border-color: var(--primary);
+    background-color: var(--primary-fill);
+    border-color: var(--primary-fill);
   }
   .btn-primary:hover {
     color: #fff;
-    background-color: var(--primary-dark);
-    border-color: var(--primary-dark);
+    background-color: var(--primary-fill-hover);
+    border-color: var(--primary-fill-hover);
   }
   .btn-primary:focus,
   .btn-primary.focus {
     color: #fff;
-    background-color: var(--primary-dark);
-    border-color: var(--primary-dark);
+    background-color: var(--primary-fill-hover);
+    border-color: var(--primary-fill-hover);
     box-shadow: 0 0 0 0.2rem rgba(72, 194, 129, 0.5);
   }
   .btn-primary.disabled,
   .btn-primary:disabled {
     color: #fff;
-    background-color: var(--primary);
-    border-color: var(--primary);
+    background-color: var(--primary-fill);
+    border-color: var(--primary-fill);
   }
   .btn-primary:not(:disabled):not(.disabled):active,
   .btn-primary.active:not(:disabled):not(.disabled),
   .show > .btn-primary.dropdown-toggle {
     color: #fff;
-    background-color: var(--primary-dark);
-    border-color: var(--primary-dark);
+    background-color: var(--primary-fill-hover);
+    border-color: var(--primary-fill-hover);
   }
   .btn-primary:not(:disabled):not(.disabled):active:focus,
   .btn-primary.active:not(:disabled):not(.disabled):focus,
@@ -2640,8 +2651,8 @@
   }
   .btn-outline-primary:hover {
     color: #fff;
-    background-color: var(--primary);
-    border-color: var(--primary);
+    background-color: var(--primary-fill);
+    border-color: var(--primary-fill);
   }
   .btn-outline-primary:focus,
   .btn-outline-primary.focus {
@@ -2656,8 +2667,8 @@
   .btn-outline-primary.active:not(:disabled):not(.disabled),
   .show > .btn-outline-primary.dropdown-toggle {
     color: #fff;
-    background-color: var(--primary);
-    border-color: var(--primary);
+    background-color: var(--primary-fill);
+    border-color: var(--primary-fill);
   }
   .btn-outline-primary:not(:disabled):not(.disabled):active:focus,
   .btn-outline-primary.active:not(:disabled):not(.disabled):focus,
@@ -3140,7 +3151,7 @@
   .dropdown-item:active {
     color: #fff;
     text-decoration: none;
-    background-color: var(--primary);
+    background-color: var(--primary-fill);
   }
   .dropdown-item.disabled,
   .dropdown-item:disabled {
@@ -3455,8 +3466,8 @@
   }
   .custom-control-input:checked ~ .custom-control-label::before {
     color: #fff;
-    border-color: var(--primary);
-    background-color: var(--primary);
+    border-color: var(--primary-fill);
+    background-color: var(--primary-fill);
   }
   .custom-control-input:focus ~ .custom-control-label::before {
     box-shadow: 0 0 0 0.2rem rgba(40, 183, 107, 0.25);
@@ -3513,8 +3524,8 @@
   .custom-checkbox
     .custom-control-input:indeterminate
     ~ .custom-control-label::before {
-    border-color: var(--primary);
-    background-color: var(--primary);
+    border-color: var(--primary-fill);
+    background-color: var(--primary-fill);
   }
   .custom-checkbox
     .custom-control-input:indeterminate
@@ -3722,7 +3733,7 @@
     width: 1rem;
     height: 1rem;
     margin-top: -0.25rem;
-    background-color: var(--primary);
+    background-color: var(--primary-fill);
     border: 0;
     border-radius: 1rem;
     -webkit-transition: background-color 0.15s ease-in-out,
@@ -3753,7 +3764,7 @@
   .custom-range::-moz-range-thumb {
     width: 1rem;
     height: 1rem;
-    background-color: var(--primary);
+    background-color: var(--primary-fill);
     border: 0;
     border-radius: 1rem;
     -moz-transition: background-color 0.15s ease-in-out,
@@ -3787,7 +3798,7 @@
     margin-top: 0;
     margin-right: 0.2rem;
     margin-left: 0.2rem;
-    background-color: var(--primary);
+    background-color: var(--primary-fill);
     border: 0;
     border-radius: 1rem;
     -ms-transition: background-color 0.15s ease-in-out,
@@ -3908,7 +3919,7 @@
   .nav-pills .nav-link.active,
   .nav-pills .show > .nav-link {
     color: #fff;
-    background-color: var(--primary);
+    background-color: var(--primary-fill);
   }
   .nav-fill > .nav-link,
   .nav-fill .nav-item {
@@ -4563,8 +4574,8 @@
   .page-item.active .page-link {
     z-index: 3;
     color: #fff;
-    background-color: var(--primary);
-    border-color: var(--primary);
+    background-color: var(--primary-fill);
+    border-color: var(--primary-fill);
   }
   .page-item.disabled .page-link {
     color: #adb4c0;
@@ -4635,12 +4646,12 @@
   }
   .badge-primary {
     color: #fff;
-    background-color: var(--primary);
+    background-color: var(--primary-fill);
   }
   a.badge-primary:hover,
   a.badge-primary:focus {
     color: #fff;
-    background-color: var(--primary-dark);
+    background-color: var(--primary-fill-hover);
   }
   a.badge-primary:focus,
   a.badge-primary.focus {
@@ -4905,7 +4916,7 @@
     color: #fff;
     text-align: center;
     white-space: nowrap;
-    background-color: var(--primary);
+    background-color: var(--primary-fill);
     transition: width 0.6s ease;
   }
   @media (prefers-reduced-motion: reduce) {
@@ -4990,8 +5001,8 @@
   .list-group-item.active {
     z-index: 2;
     color: #fff;
-    background-color: var(--primary);
-    border-color: var(--primary);
+    background-color: var(--primary-fill);
+    border-color: var(--primary-fill);
   }
   .list-group-item + .list-group-item {
     border-top-width: 0;
@@ -5992,13 +6003,13 @@
     vertical-align: text-top !important;
   }
   .bg-primary {
-    background-color: var(--primary) !important;
+    background-color: var(--primary-fill) !important;
   }
   a.bg-primary:hover,
   a.bg-primary:focus,
   button.bg-primary:hover,
   button.bg-primary:focus {
-    background-color: var(--primary-dark) !important;
+    background-color: var(--primary-fill-hover) !important;
   }
   .bg-secondary {
     background-color: #5d6778 !important;
@@ -9186,7 +9197,7 @@
     box-shadow: none !important;
   }
   .btn-primary {
-    background: var(--primary);
+    background: var(--primary-fill);
   }
   .btn-secondary {
     background: #5d6778;
@@ -9228,7 +9239,7 @@
     background: #f4fcf6;
   }
   .theme-bg-dark {
-    background: var(--primary);
+    background: var(--primary-fill);
   }
   .theme-bg-shapes-right {
     position: absolute;
@@ -9555,11 +9566,11 @@
     color: var(--primary);
   }
   .docs-nav .nav-link.active:before {
-    background-color: var(--primary);
+    background-color: var(--primary-fill);
   }
   .docs-nav .nav-link.active .theme-icon-holder {
     color: #fff;
-    background: var(--primary);
+    background: var(--primary-fill);
   }
   .docs-nav .nav-link:before {
     background-color: #f4fcf6;
@@ -9824,8 +9835,8 @@
   }
 
   :root .btn-outline-primary:hover {
-    background-color: var(--primary);
-    border-color: var(--primary);
+    background-color: var(--primary-fill);
+    border-color: var(--primary-fill);
   }
 
   :root .form-control {

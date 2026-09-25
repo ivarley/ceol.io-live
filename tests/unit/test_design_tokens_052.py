@@ -167,3 +167,97 @@ class TestTheSwiftSideIsHonest:
         ), "a full-screen sheet carries its own chrome and must cover the header"
         assert values["z-sheet-content"] < values["z-search-dropdown"]
         assert max(values.values()) == values["z-toast"], "toasts are the top layer"
+
+
+# ---------------------------------------------------------------------------
+# accent fill vs accent text (spec 052 §B10)
+# ---------------------------------------------------------------------------
+
+CSS_DIRS = ("static/css", "frontend/src", "templates")
+CSS_SUFFIXES = (".css", ".svelte", ".html")
+
+# An accent BACKGROUND comes from a fill token; accent TEXT stays on --primary.
+# They are not interchangeable and the reason is measurable: white on --primary
+# is 2.54:1, which is under AA and is what made the chips look washed out.
+_ACCENT_BG = re.compile(
+    r"(?:background|background-color|accent-color)\s*:\s*[^;{}]*"
+    r"var\(--(?:primary|primary-dark|modal-primary-dark)[,)]"
+)
+
+
+def _stylesheets():
+    for d in CSS_DIRS:
+        for path in (ROOT / d).rglob("*"):
+            if path.suffix in CSS_SUFFIXES and "node_modules" not in str(path):
+                yield path
+
+
+def _token(tokens, name):
+    return next(
+        t["value"]
+        for g in tokens["groups"]
+        for t in g["tokens"]
+        if t.get("name") == name
+    )
+
+
+def _luminance(hex_colour):
+    h = hex_colour.lstrip("#")
+    if len(h) == 3:
+        h = "".join(c * 2 for c in h)
+    parts = [int(h[i : i + 2], 16) / 255 for i in (0, 2, 4)]
+    lin = [v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4 for v in parts]
+    return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2]
+
+
+def _contrast(a, b):
+    la, lb = _luminance(a), _luminance(b)
+    hi, lo = max(la, lb), min(la, lb)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+class TestTheAccentFillIsTheLogoGreen:
+    def test_the_fill_is_the_colour_the_logo_is_drawn_in(self, tokens):
+        # logo3-1.png is one flat colour. The fill is that colour, so a selected
+        # chip and the wordmark in the header are the same green.
+        assert _token(tokens, "primary-fill") == _token(tokens, "logo-green")
+
+    def test_white_on_the_fill_passes_AA(self, tokens):
+        fill = _token(tokens, "primary-fill")
+        ratio = _contrast(fill, "#ffffff")
+        assert ratio >= 4.5, f"white on {fill} is {ratio:.2f}:1"
+
+    def test_the_hover_is_darker_than_the_fill_and_still_visible(self, tokens):
+        fill, hover = _token(tokens, "primary-fill"), _token(tokens, "primary-fill-hover")
+        assert _luminance(hover) < _luminance(fill), (
+            "--primary-fill-hover has to be darker than --primary-fill, or hovering "
+            "a filled control brightens it. This is why --primary-dark is not used "
+            "here: it is lighter than the fill."
+        )
+        bg = _token(tokens, "bg-color")
+        assert _contrast(hover, bg) >= 3.0, "a hovered control must not sink into the page"
+
+    def test_the_accent_text_colour_stays_light_enough_to_read(self, tokens):
+        # The other half of the split. --primary is text, so it is measured against
+        # the page rather than against white, and the fill would fail this badly
+        # (3.71:1) — which is why one token cannot do both jobs.
+        assert _contrast(_token(tokens, "primary"), _token(tokens, "bg-color")) >= 4.5
+
+
+class TestNoAccentBackgroundUsesTheTextToken:
+    """The rule that keeps the two apart, checked where it is actually broken:
+    in the stylesheets, not in the token file."""
+
+    def test_no_stylesheet_paints_a_background_with_the_text_accent(self):
+        offenders = []
+        for path in _stylesheets():
+            for lineno, line in enumerate(path.read_text().splitlines(), 1):
+                if _ACCENT_BG.search(line):
+                    rel = path.relative_to(ROOT)
+                    offenders.append(f"{rel}:{lineno}: {line.strip()}")
+        assert not offenders, (
+            "These paint a surface with --primary (or its hover darks), which is the "
+            "accent TEXT colour — white on it is 2.54:1, under AA. Use --primary-fill "
+            "/ --primary-fill-hover for anything that sits behind white text:\n  "
+            + "\n  ".join(offenders)
+        )

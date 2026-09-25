@@ -510,6 +510,40 @@ Every field id is unchanged. The layout is a rewrite; the behaviour is not, and 
 generated web address, the refused unusable paths and the refused tune URL are pinned
 by the same assertions as before.
 
+### B10. One accent was doing two jobs — **DONE 2026-09-24**
+
+The green behind a selected filter or a tune-type chip was `--primary` (#65b464),
+the same token used for link and icon text. White on it measures **2.54:1**, well
+under AA, and it read exactly like the washed-out green a phone uses for the
+messages it does not want you to like.
+
+One token could not do both jobs, and the numbers say why:
+
+| | white text on it | as text on `--bg-color` |
+|---|---|---|
+| `--primary` #65b464 | **2.54:1** ✗ | 6.85:1 ✓ |
+| `--primary-fill` #4a8049 | **4.69:1** ✓ | 3.71:1 ✗ |
+
+A colour light enough to read *as* text on a dark page is too light to sit *behind*
+white text. So the accent splits:
+
+- **`--primary`** — accent TEXT, links, icons, thin borders that stand alone.
+- **`--primary-fill` #4a8049** — any surface carrying white text. It is the logo
+  green exactly: `logo3-1.png` is one flat `#4a8049`, so a selected chip and the
+  wordmark in the header are now the same colour.
+- **`--primary-fill-hover` #437342** — 10% darker. Note `--primary-dark` (#3d863c)
+  is *lighter* than the fill, so reusing it would have brightened on hover.
+
+143 declarations moved: 105 backgrounds, 38 borders that outline one of those
+backgrounds, and 3 `accent-color` (the browser draws a white tick on that fill, so
+it is the same case). `color:` was left alone throughout — that is the other half
+of the split.
+
+The rule is enforced in `tests/unit/test_design_tokens_052.py`, which greps the
+stylesheets rather than the token file, because the token file is not where this
+gets broken. It was checked by breaking it: reverting one chip to `--primary` fails
+the test and names the file and line.
+
 ### B8. The staged conversion plan
 
 Ordered by **blast radius, not by visibility**. Three things make a stage risky here:

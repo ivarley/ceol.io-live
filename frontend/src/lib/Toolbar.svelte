@@ -232,7 +232,7 @@
     width: 7px;
     height: 7px;
     border-radius: 50%;
-    background: var(--primary, #65b464);
+    background: var(--primary-fill, #4a8049);
     border: 2px solid var(--bg-color, #fff);
   }
 

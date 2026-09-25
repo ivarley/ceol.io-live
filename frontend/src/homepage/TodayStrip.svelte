@@ -200,7 +200,7 @@
   }
   .today-view {
     display: inline-block;
-    background: var(--primary);
+    background: var(--primary-fill);
     color: #fff;
     border-radius: 6px;
     padding: 7px 18px;
@@ -226,6 +226,6 @@
     background: var(--border-color);
   }
   .today-dots span.on {
-    background: var(--primary);
+    background: var(--primary-fill);
   }
 </style>

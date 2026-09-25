@@ -193,7 +193,7 @@
 .tune-type {
     font-size: 11px;
     padding: 3px 6px;
-    background-color: var(--primary);
+    background-color: var(--primary-fill);
     color: white;
     border-radius: 3px;
     text-transform: capitalize;
@@ -861,8 +861,8 @@ a.empty-log {
 }
 
 .tune-select-checkbox:checked {
-    background-color: var(--primary);
-    border-color: var(--primary);
+    background-color: var(--primary-fill);
+    border-color: var(--primary-fill);
 }
 
 .tune-select-checkbox:checked::after {
@@ -908,13 +908,13 @@ a.empty-log {
 }
 
 .selection-btn.primary {
-    background-color: var(--primary);
+    background-color: var(--primary-fill);
     color: white;
-    border-color: var(--primary);
+    border-color: var(--primary-fill);
 }
 
 .selection-btn.primary:hover {
-    background-color: var(--primary-dark, #3d863c);
+    background-color: var(--primary-fill-hover, #437342);
 }
 
 .selection-btn:disabled {
@@ -989,7 +989,7 @@ a.empty-log {
 
 .copy-destination-option input[type="radio"] {
     margin-right: 10px;
-    accent-color: var(--primary);
+    accent-color: var(--primary-fill);
 }
 
 .my-tunes-status-options {
@@ -1292,9 +1292,9 @@ a.empty-log {
 
 .add-person-btn-save {
     padding: 8px 16px;
-    background-color: var(--primary);
+    background-color: var(--primary-fill);
     color: white;
-    border: 1px solid var(--primary);
+    border: 1px solid var(--primary-fill);
     border-radius: 4px;
     cursor: pointer;
     font-size: 14px;

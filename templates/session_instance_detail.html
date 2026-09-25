@@ -377,8 +377,8 @@
                 box-shadow: 0 0 8px rgba(255, 193, 7, 0.6);
             }
             100% {
-                background-color: var(--primary, #65b464) !important;
-                border-color: var(--primary, #65b464) !important;
+                background-color: var(--primary-fill, #4a8049) !important;
+                border-color: var(--primary-fill, #4a8049) !important;
                 box-shadow: none;
             }
         }
@@ -434,7 +434,7 @@
             right: 0;
             top: 50%;
             height: 2px;
-            background-color: var(--primary);
+            background-color: var(--primary-fill);
             border-radius: 1px;
             transform: translateY(-50%);
         }
@@ -443,7 +443,7 @@
             display: inline-block;
             width: 2px;
             height: 21px;
-            background-color: var(--primary, #65b464);
+            background-color: var(--primary-fill, #4a8049);
             animation: blink 1s infinite;
             vertical-align: middle;
             margin: 0 1px;
@@ -496,7 +496,7 @@
             top: -2px;
             width: 3px;
             height: 21px;
-            background-color: var(--primary, #007AFF);
+            background-color: var(--primary-fill, #4a8049);
             border-radius: 1px;
             opacity: 1;
         }
@@ -661,7 +661,7 @@
         }
         
         .modal-footer .btn-primary {
-            background-color: var(--primary);
+            background-color: var(--primary-fill);
             color: white;
         }
         
@@ -985,7 +985,7 @@
         }
 
         .modal-tune-link:hover {
-            background-color: var(--primary);
+            background-color: var(--primary-fill);
             color: white;
             text-decoration: none;
         }
@@ -1500,7 +1500,7 @@
              or when the live editor owns this instance — one-way lock, spec 024). -->
         {% if current_user.is_authenticated and not session_instance.log_complete_date and logging_mode != 'live' %}
         <div id="edit-mode-button-container" style="margin-top: 15px; text-align: center;">
-            <button id="enter-edit-mode-btn" class="btn-primary" style="padding: 10px 30px; background-color: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px;">
+            <button id="enter-edit-mode-btn" class="btn-primary" style="padding: 10px 30px; background-color: var(--primary-fill); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px;">
                 Edit
             </button>
         </div>
@@ -1510,7 +1510,7 @@
     <!-- Save Controls (shown in edit mode) -->
     <div class="save-controls-container" style="display: none; align-items: center; gap: 15px; margin: 20px 0; padding: 15px; background-color: var(--light); border-radius: 4px;">
         <div style="display: flex; align-items: center; gap: 10px;">
-            <button id="save-session-btn" class="btn-primary" style="padding: 10px 20px; background-color: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer; transition: opacity 0.2s ease, background-color 0.2s ease;" disabled>
+            <button id="save-session-btn" class="btn-primary" style="padding: 10px 20px; background-color: var(--primary-fill); color: white; border: none; border-radius: 4px; cursor: pointer; transition: opacity 0.2s ease, background-color 0.2s ease;" disabled>
                 <span class="desktop-text">Save Session</span>
                 <span class="mobile-text">Save</span>
             </button>

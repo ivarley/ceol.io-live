@@ -39,7 +39,7 @@
 
 /* The accent, not a hard-coded Bootstrap green, so it follows the palette. */
 .btn-goto-today {
-    background-color: var(--primary);
+    background-color: var(--primary-fill);
     color: white;
 }
 

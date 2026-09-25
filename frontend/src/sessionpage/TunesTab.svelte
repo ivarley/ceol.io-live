@@ -615,7 +615,7 @@
             <a
               href="/sessions/{sessionPath}/tunes?add=1&q={encodeURIComponent(filters.search)}"
               class="btn btn-primary"
-              style="padding: 12px 24px; background-color: var(--primary); color: white; text-decoration: none; border-radius: 4px; display: inline-block;"
+              style="padding: 12px 24px; background-color: var(--primary-fill); color: white; text-decoration: none; border-radius: 4px; display: inline-block;"
               onclick={handleAddSessionTuneClick}>
               Add Tune
             </a>
