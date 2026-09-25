@@ -83,6 +83,21 @@ def transcribe_segment(frontend, store, audio_sha1, t0_ms, t1_ms, board=None):
     return notes, cost, cached
 
 
+def prior_weight(weights, tune_id, fallback=1e-4):
+    """A tune's prior weight, using the weights' own default for a missing tune.
+
+    `.get(tune_id, 1e-4)` looked equivalent and was not: it bypasses a
+    defaultdict's own default, so a weighting that gives an unseen tune a
+    considered share had that share replaced by 1e-4, quietly, everywhere the
+    prior was read. For the original weights the default IS 1e-4, so nothing
+    measured with them changes.
+    """
+    if tune_id in weights:
+        return weights[tune_id]
+    factory = getattr(weights, "default_factory", None)
+    return factory() if factory is not None else fallback
+
+
 def fuse(rankings, method="rrf", k=20):
     """Combine rankings from several front ends.
 
@@ -208,7 +223,7 @@ def rerank(ranked, weights, beta=1.0, index=None, audio_floor=1e-3, prior_top=50
             }
     out = []
     for tune_id, r in scores.items():
-        w = weights.get(tune_id, 1e-4)
+        w = prior_weight(weights, tune_id)
         audio = max(audio_floor, r["score"])
         out.append({**r, "prior": w,
                     "combined": math.log(audio) + beta * math.log(max(1e-12, w))})
@@ -376,7 +391,7 @@ def decode_set(candidates, sequence, beta=1.0, audio_floor=1e-3, opener_bonus=Tr
     first = candidates[0]
     scores.append({
         c["tune_id"]: math.log(max(audio_floor, c["score"]))
-        + (betas[0] * math.log(max(1e-12, opener.get(c["tune_id"], 1e-4))) if opener else 0.0)
+        + (betas[0] * math.log(max(1e-12, prior_weight(opener, c["tune_id"]))) if opener else 0.0)
         for c in first})
     backs.append({c["tune_id"]: None for c in first})
 
@@ -389,7 +404,7 @@ def decode_set(candidates, sequence, beta=1.0, audio_floor=1e-3, opener_bonus=Tr
             emission = math.log(max(audio_floor, c["score"]))
             best_score, best_prev = None, None
             for prev_id, prev_score in previous.items():
-                w = weights_for(prev_id).get(tune_id, 1e-4)
+                w = prior_weight(weights_for(prev_id), tune_id)
                 total = prev_score + betas[step] * math.log(max(1e-12, w))
                 if best_score is None or total > best_score:
                     best_score, best_prev = total, prev_id

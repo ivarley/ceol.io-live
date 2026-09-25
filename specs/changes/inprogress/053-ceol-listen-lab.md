@@ -361,6 +361,47 @@ and everything long gets cut; at an eighth of a spacing it gains seven. The
 crude control, split every long note, triples the repeated-note rate and is
 much worse than not splitting at all.
 
+**The previous tune pulls in proportion to how predictable its follower
+is**, which came from a player who knows the session: you basically cannot
+play Cooley's without The Wise Maid after it, and plenty of other tunes are
+followed by anything. The session's own history agrees. Cooley's is followed
+by The Wise Maid 83% of seventy times and The Silver Spear by The Earl's
+Chair 68% of ninety-six, and across the 606 tunes followed three or more
+times, half have a commonest follower under 35% of the time while a fifth
+have one over 70%.
+
+The prior had treated every predecessor alike and, where a transition was
+weak, fallen back on how often each tune is played at all, which is a bias
+towards the session's favourites. Now each predecessor's distribution over
+what follows is raised to the power of its strength -- the commonest
+follower's share, shrunk for tunes heard only a few times -- and the
+popularity fallback is gone, for set openers too. Over 502 segments,
+chaining the top answer forward / decoding the whole set:
+
+| | top-1 | pairwise against the old prior |
+|---|---|---|
+| old: popularity fallback | 0.859 / 0.878 | |
+| strength, strict | 0.875 / 0.886 | +17/-9 (p .17), +11/-7 (p .48) |
+| strength, with the followed-before edge | **0.876 / 0.894** | +14/-5 (p .06), +10/-2 (p .04) |
+| the app's rule, all or nothing | 0.863 / 0.876 | |
+
+The strict version says a predecessor whose follower is a coin toss tells you
+nothing. The one that measured better says it still tells you which tunes
+have ever followed it, and those keep a modest edge over tunes that never
+have; only the pull towards the favourite follower scales with
+predictability. A sliding scale beat the app's threshold (more than half the
+time, at least three times), and doubling the prior's weight over-trusted
+the transitions under every variant.
+
+This was nearly reported wrongly. The better version was first measured by
+accident: every reader of the prior used `weights.get(tune, 1e-4)`, which
+bypasses a defaultdict's own default, so the strict design's considered
+share for an unseen tune was silently replaced by 1e-4 on the bench, and the
+board's prior both converted the weights to a plain dict and sent a
+hard-coded default. All three readers now take the model's own default --
+`bench.retrieval.prior_weight` -- and the old prior reproduces its numbers
+exactly through them. Both variants were then measured deliberately.
+
 **Keeping the tracker off a third of the pitch**, worth a point and a half,
 found by labelling eight bars of a solo tin whistle that the recogniser had
 never once identified.

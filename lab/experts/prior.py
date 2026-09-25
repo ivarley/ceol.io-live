@@ -70,7 +70,7 @@ class RepertoirePrior(Expert):
         if self.params["use_sequence"]:
             sequence = self._sequence_model(view)
             previous = confirmed[-1] if confirmed else None
-            weights = dict(sequence.weights(previous))
+            weights = sequence.weights(previous)   # keeps its own default for unlisted tunes
             basis["previous_tune_id"] = previous
             basis["source"] = "sequence"
         else:
@@ -80,8 +80,13 @@ class RepertoirePrior(Expert):
             basis["source"] = "repertoire"
 
         inputs = [o.obs_id for o in (view.new("music_activity") + view.new("hypothesis_update"))][:4]
+        # The weight for a tune not listed. It used to be a fixed 1e-4, which
+        # is right for the original weights and wrong for any that give an
+        # unseen tune a considered share of its own.
+        factory = getattr(weights, "default_factory", None)
+        default_w = factory() if factory is not None else 1e-4
         return [self.obs(
             "tune_prior", window.t_start_ms, window.t_end_ms,
-            {"weights": {str(k): round(v, 6) for k, v in weights.items()},
-             "default_w": 1e-4, "beta": self.params["beta"], "basis": basis},
+            {"weights": {str(k): round(v, 8) for k, v in weights.items()},
+             "default_w": default_w, "beta": self.params["beta"], "basis": basis},
             inputs=inputs)]
