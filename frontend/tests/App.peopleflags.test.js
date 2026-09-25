@@ -59,14 +59,16 @@ const config = (over = {}) => ({
   ...over,
 })
 
-/** Expand the header and read back what the panel offers. */
+/** Open the log-details tray and read back what it offers. It is a Sheet now
+ *  (spec 052 §B15), so it portals to document.body rather than living inside the
+ *  component's own tree — hence document, not container, below. */
 async function panel(container) {
   await waitFor(() => expect(container.querySelectorAll('.tune-row').length).toBe(1))
   container.querySelector('.topbar-row').click()
-  await waitFor(() => expect(container.querySelectorAll('.hx-row').length).toBeGreaterThan(0))
+  await waitFor(() => expect(document.querySelectorAll('.kit-field').length).toBeGreaterThan(0))
   return {
-    labels: [...container.querySelectorAll('.hx-row .hx-label')].map((l) => l.textContent.trim()),
-    actions: [...container.querySelectorAll('.hx-act')].map((b) => b.textContent.trim()),
+    labels: [...document.querySelectorAll('.kit-field .kit-field-label')].map((l) => l.textContent.trim()),
+    actions: [...document.querySelectorAll('.hx-act')].map((b) => b.textContent.trim()),
     starterPills: container.querySelectorAll('.starter-pill').length,
   }
 }
@@ -94,11 +96,15 @@ describe('header honours the per-session people flags (spec 039)', () => {
     expect(p.labels).not.toContain('Attended')
     expect(p.actions).not.toContain('Manage')
     expect(p.starterPills).toBe(0)
-    // ...and the non-people rows are all still there, editable
-    expect(p.labels).toEqual(expect.arrayContaining(['Date', 'Tunes', 'Notes', 'Status']))
+    // ...and the non-people rows are all still there, editable. Notes is a section
+    // heading rather than a row label now (spec 052 §B15) — the textarea wants the
+    // full width of its card — so the textarea itself is what proves it is present.
+    expect(p.labels).toEqual(expect.arrayContaining(['Date', 'Tunes', 'Status']))
     expect(p.actions).toContain('Change')
     expect(p.actions).toContain('Mark complete')
-    expect(container.querySelector('.hn-area')).toBeTruthy()
+    expect(document.querySelector('.hn-area')).toBeTruthy()
+    expect([...document.querySelectorAll('.kit-group-head')].map((h) => h.textContent.trim()))
+      .toContain('Notes')
   })
 
   it('never asks the server for people when both flags are off', async () => {

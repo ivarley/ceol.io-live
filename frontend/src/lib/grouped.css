@@ -93,6 +93,38 @@
   overflow: visible;
 }
 
+/* When the value is a LIST — five names, a roster — label-left/value-right stops
+   working: the value column is what is left over after the label and any action,
+   and a list wrapped into 150px is a ragged ribbon. This stacks instead: the label
+   and its action on the first line, the value across the full width beneath. */
+.kit-field-stack {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  padding-top: var(--sp-2, 8px);
+  padding-bottom: var(--sp-2, 8px);
+}
+
+.kit-field-stack .kit-field-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3, 12px);
+}
+
+.kit-field-stack .kit-field-label {
+  width: auto;
+  max-width: none;
+  flex: 1 1 auto;
+}
+
+.kit-field-stack .kit-field-value {
+  text-align: left;
+  white-space: normal;
+  overflow: visible;
+  color: var(--secondary-text, #888);
+  line-height: 1.4;
+}
+
 .kit-field input[type='text'],
 .kit-field input[type='email'],
 .kit-field input[type='tel'],

@@ -56,8 +56,8 @@ beforeEach(async () => {
 async function nameRow(container) {
   await waitFor(() => expect(container.querySelectorAll('.tune-row').length).toBe(1))
   await fireEvent.click(container.querySelector('.topbar-row'))
-  const row = [...container.querySelectorAll('.hx-row')]
-    .find((r) => r.querySelector('.hx-label').textContent.trim() === 'Name')
+  const row = [...document.querySelectorAll('.kit-field')]
+    .find((r) => r.querySelector('.kit-field-label').textContent.trim() === 'Name')
   expect(row).toBeTruthy()
   return row
 }
@@ -74,7 +74,7 @@ describe('log name editor (spec 047)', () => {
   it('offers to name an unnamed log', async () => {
     const { container } = render(App, { props: { config } })
     const row = await nameRow(container)
-    expect(row.querySelector('.hx-val').textContent.trim()).toBe('The usual')
+    expect(row.querySelector('.kit-field-value').textContent.trim()).toBe('The usual')
     expect(row.querySelector('.hx-act').textContent.trim()).toBe('Name it')
     // Nothing to show in the collapsed header while it's unnamed.
     expect(container.querySelector('.session-instance-name')).toBeNull()
@@ -136,7 +136,7 @@ describe('log name editor (spec 047)', () => {
     const { container } = render(App, { props: { config: { ...config, sessionType: 'festival' } } })
     // Unnamed reads differently: there is no "usual" at a festival.
     const row = await nameRow(container)
-    expect(row.querySelector('.hx-val').textContent.trim()).toBe('Unnamed')
+    expect(row.querySelector('.kit-field-value').textContent.trim()).toBe('Unnamed')
 
     await fireEvent.click(row.querySelector('.hx-act'))
     await waitFor(() => expect(document.querySelector('.dt-input[type="text"]')).toBeTruthy())

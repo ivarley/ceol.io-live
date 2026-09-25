@@ -183,11 +183,6 @@ main {
 .topbar-row { display: flex; align-items: center; gap: 10px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .topbar-main { flex: 1; min-width: 0; }
 .session-name { font-size: 19px; font-weight: 700; letter-spacing: 0.2px; }
-.session-return {
-  color: var(--muted); text-decoration: none; margin-left: 8px;
-  font-size: 0.7em; font-weight: 400; transition: color 0.2s ease;
-}
-.session-return:hover { color: var(--accent); }
 /* This log's own name (session_instance.location_override), when it has one — spec 047.
    Sits between the session name and the date: subordinate to the session, but stronger
    than the date, because at a festival it's the part that identifies the log. Clipped to
@@ -207,37 +202,28 @@ main {
 /* one right-hand cluster: presence, help, expand chevron */
 .topbar-tools { display: flex; align-items: center; gap: 8px; flex: none; }
 .topbar-presence { display: flex; gap: 4px; }
-.header-chevron { color: var(--muted); font-size: 14px; transition: transform 0.18s ease; }
-.header-chevron.up { transform: rotate(180deg); }
+/* Points the way the tray arrives, and does not rotate: it opens a sheet now, it
+   does not expand in place. */
+.header-chevron { color: var(--muted); font-size: 18px; line-height: 1; }
 
-/* Expanded detail: a label/value grid, one fact per row, so the panel scans as a list
-   of properties instead of a stack of sentences. Rows that own an action put it in a
-   third column, right-aligned (Change / Manage / Mark complete). */
-.header-expand {
-  margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border);
-  display: flex; flex-direction: column; gap: 8px;
-}
-.hx-row {
-  display: grid; grid-template-columns: 84px minmax(0, 1fr) auto;
-  align-items: baseline; gap: 4px 10px; font-size: 13px;
-}
-.hx-label {
-  color: var(--muted); font-size: 11px; font-weight: 700;
-  letter-spacing: 0.06em; text-transform: uppercase;
-}
-.hx-val { color: var(--text); min-width: 0; overflow-wrap: anywhere; }
-.hx-strong { font-weight: 700; }
+/* The detail rows themselves are lib/grouped.css — the same ones /me and the
+   add-a-session sheet use. What is left here is what only this tray has. */
+.hx-sheet .hx-strong { font-weight: 700; }
+/* The count sits beside the label rather than inside it: "Attended" is the label,
+   "5" is a fact about the row, and a test reads the label expecting a label. */
+.hx-sheet .hx-count { flex: 0 0 auto; font-weight: 700; }
 .hx-away { color: var(--muted); opacity: 0.75; }
+/* Text, not a bordered button. The button cost ~90px of a 390px row and the value
+   was what got truncated for it — "Still log…", "none uploade…". The row is the
+   subject; this is an aside on it. */
 .hx-act {
-  flex: none; font: inherit; font-size: 12px; font-weight: 600;
-  padding: 3px 10px; border-radius: 6px; cursor: pointer;
-  background: transparent; border: 1px solid var(--border); color: var(--accent);
-  align-self: center;
+  flex: none; font: inherit; font-size: 13px; padding: 0;
+  background: none; border: none; color: var(--accent); cursor: pointer;
+  white-space: nowrap;
 }
-.hx-act:hover { border-color: var(--accent); color: var(--text); }
-/* the notes textarea needs the whole value column, and its own baseline */
-.hx-notes { align-items: start; }
-.hx-notes .hx-label { padding-top: 5px; }
+.hx-act:hover { opacity: 0.85; }
+/* The notes field wants the whole width of its card rather than a value column. */
+.hx-notes { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; }
 .header-notes-edit { display: flex; flex-direction: column; gap: 6px; }
 .hn-area {
   width: 100%; box-sizing: border-box; font: inherit; font-size: 14px; line-height: 1.4;

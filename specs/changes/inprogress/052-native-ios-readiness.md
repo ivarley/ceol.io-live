@@ -713,6 +713,49 @@ skips the session it belongs to. It keeps its `⮐` for now. A proper back contr
 there is the remaining design decision, along with the signed-out case — a signed-out
 visitor has no Me and no Tunes, so they still get the hamburger, on every page.
 
+### B15. The logger's hidden drawer becomes a tray — **DONE 2026-09-25**
+
+Tapping the logger's header band expanded a panel of details in place. Nothing said
+the band was a control — it looks like a title — so the panel was a drawer nobody
+could be expected to find, holding the date, the name, attendance, recordings, the
+roster, notes and the complete/re-open switch.
+
+It is a Sheet now, titled **Log details**, dismissed with Done. Everything in it
+already had the shape of a grouped table — label, value, an action on the right — so
+it becomes one: the same `lib/grouped.css` rows as `/me` (§B12) and the
+add-a-session sheet (§B9). Third consumer, no new row CSS.
+
+**It is also where back-to-the-session finally belongs.** The logger sits two levels
+under the Sessions tab, so the tab alone lands on the list; the last group in the
+tray is the missing level. That replaces the `⮐` hanging off the end of the title —
+0.7em, muted, aligned to nothing. Two taps for a rare action, in a place you can
+find, beats one tap on a glyph you cannot.
+
+**What the modal made unnecessary.** The inline panel had to close itself the moment
+you touched anything else, with exceptions for the date sheet portalling out of the
+header and for an unsaved notes draft. A modal has nothing else to touch, so all of
+that went; only the connection popover still needs the outside-click handler.
+
+**Two layout problems, both found by measuring rather than looking:**
+
+1. Every row carried a bordered action button, which cost ~90px of a 390px line — so
+   the VALUE was what got truncated: "Still log…", "none uploade…". The actions are
+   text now, like the ones on `/me`.
+2. Label-left/value-right stops working when the value is a *list*. A five-name
+   attendance list wrapped into a ragged ribbon in the leftover column. `grouped.css`
+   gained `.kit-field-stack`: label and action on the first line, value across the
+   full width beneath. Date uses it too — "Fri · Sep 25, 2026 · 8:00pm-11pm" does not
+   fit beside an action, and the year is the first thing a truncation eats.
+
+`e2e/mobile/tab-bar-logger.mobile.spec.ts` asserts no row in the tray is clipped at
+phone width, by comparing `scrollWidth` to `clientWidth` across every label and value
+— the check that would have caught both of the above before a screenshot did.
+
+The unit tests moved with it: the Sheet portals to `document.body`, so assertions
+that reached into the component's own tree had to reach into the document instead.
+One of them caught a real slip — I had folded the attendance count into the label
+("Attended 5"), and a test that reads labels expecting labels was right to object.
+
 ### B8. The staged conversion plan
 
 Ordered by **blast radius, not by visibility**. Three things make a stage risky here:
