@@ -100,7 +100,8 @@
 
 .form-control:focus {
     border-color: var(--primary);
-    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    /* the blue that went away when the accent turned green */
+    box-shadow: 0 0 0 0.2rem rgba(101, 180, 100, 0.25);
 }
 
 /* Form select styling */
@@ -132,7 +133,8 @@
 .form-select:focus {
     border-color: var(--primary);
     outline: 0;
-    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    /* the blue that went away when the accent turned green */
+    box-shadow: 0 0 0 0.2rem rgba(101, 180, 100, 0.25);
 }
 
 .people-filter-select {

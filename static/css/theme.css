@@ -351,9 +351,13 @@
   button {
     border-radius: 0;
   }
-  button:focus {
-    outline: 1px dotted;
-    outline: 5px auto -webkit-focus-ring-color;
+  /* Bootstrap's reboot drew the browser's own focus ring here on :focus, which
+     includes mouse clicks — a 4px light-blue halo on every button you pressed.
+     Only the pointer case is suppressed: `button:focus` would out-specify the
+     :focus-visible rule at the end of this file (0,1,1 beats 0,1,0) and take the
+     keyboard ring with it, which is how the first cut of this got it wrong. */
+  button:focus:not(:focus-visible) {
+    outline: none;
   }
   input,
   button,
@@ -9888,3 +9892,70 @@
     color: #d0d0d0; /* Lighter than main text for better readability */
   }
   
+
+/* ===========================================================================
+   Focus rings (spec 052 §B11)
+   ===========================================================================
+
+   A focus ring answers "where will the keyboard type next". A mouse click has
+   already answered that — you are looking at the thing you just hit — so a ring
+   there is noise, and on this dark theme the browser's own ring is a wide pale
+   halo that reads as a rendering fault.
+
+   `:focus-visible` is exactly that distinction, and the browser makes it for us:
+   it matches when focus arrived by keyboard, and for text fields, where you are
+   about to type either way. It does NOT match a button you clicked.
+
+   So: nothing draws on pointer focus, and one ring in the accent colour draws on
+   keyboard focus. Removing the ring outright is not on the table — it would make
+   the app unusable without a mouse.
+
+   These sit at the end of the file so they beat Bootstrap's own :focus rules;
+   page stylesheets that load later carry their own :focus-visible rules. */
+
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Bootstrap draws its ring with a box-shadow on these, and they have no other
+   shadow at rest, so dropping it on pointer focus drops the ring and nothing
+   else. Listed rather than applied globally: a blanket box-shadow reset would
+   also flatten any component that legitimately keeps a shadow while focused. */
+.btn:focus:not(:focus-visible),
+.form-control:focus:not(:focus-visible),
+.custom-select:focus:not(:focus-visible),
+.custom-file-input:focus:not(:focus-visible) ~ .custom-file-label,
+.page-link:focus:not(:focus-visible),
+.dropdown-item:focus:not(:focus-visible) {
+  box-shadow: none;
+}
+
+/* The keyboard ring: one shape, one colour, everywhere. --primary rather than
+   --primary-fill because this is a line on the page, not a surface behind white
+   text (see §B10). */
+:focus-visible {
+  outline: 2px solid var(--primary, #65b464);
+  outline-offset: 2px;
+}
+
+/* A container that takes focus only to receive arrow keys (a listbox, a log
+   pane) should not outline its whole self — the moving selection inside it is
+   the real indicator. */
+[tabindex="-1"]:focus-visible {
+  outline: none;
+}
+
+/* The one case :focus-visible gets "wrong" for our purposes: browsers match it on
+   a CLICKED <select> (and on text fields), because arrow keys and type-ahead work
+   the moment it has focus. Defensible in general, and still a ring that appeared
+   because you tapped something.
+
+   static/js/input_modality.js records how focus last arrived, so this can say
+   "not while the pointer is driving". Tab away and the ring is back, because the
+   keydown flips the attribute before focus moves.
+
+   Without that script the attribute never appears, this rule never matches, and
+   selects simply ring on click as the browser intended. */
+html[data-input-modality='pointer'] :focus-visible {
+  outline: none;
+}

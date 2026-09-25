@@ -53,6 +53,9 @@
     <!-- Share this page: a header control, because it acts on whatever page you are
          on and so cannot live on one particular page (spec 052 §B1). -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/share.css') }}">
+    {# Records pointer-vs-keyboard so the focus-ring rules in theme.css can tell a
+       click from a Tab. Not deferred: it must be listening before the first click. #}
+    <script src="{{ url_for('static', filename='js/input_modality.js') }}"></script>
     <script src="{{ url_for('static', filename='js/share.js') }}" defer></script>
     <script src="{{ url_for('static', filename='js/hamburger_menu.js') }}"></script>
 

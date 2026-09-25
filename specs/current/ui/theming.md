@@ -55,6 +55,21 @@ background on the text token.
 flat `#4a8049`. `--primary-dark` is NOT the fill's hover: it is lighter than the
 fill, so it would brighten on hover. Use `--primary-fill-hover`.
 
+### Focus rings (spec 052 §B11)
+
+One ring, defined once at the end of `theme.css`: `2px solid var(--primary)` on
+`:focus-visible` only. A click draws nothing — `:focus` includes mouse clicks and
+`:focus-visible` does not, which is the whole distinction. Never style a ring on
+plain `:focus`; `e2e/focus/focus-rings.spec.ts` will catch it.
+
+`<select>` is the exception browsers make: they match `:focus-visible` on a clicked
+select, so `static/js/input_modality.js` records pointer-vs-keyboard on `<html>`
+and the stylesheet suppresses the ring while the pointer is driving.
+
+A text field may indicate focus by turning its border `--primary` instead of
+drawing a ring (`.filter-search-input`, the kit `SearchField`). That is a focus
+indicator too — what is not acceptable is a control with neither.
+
 Note: `--primary-color` was removed in spec 035 — `--primary` is the one name.
 
 ## The `:root <selector>` pattern

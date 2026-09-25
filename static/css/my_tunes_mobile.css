@@ -1498,12 +1498,14 @@
    ============================================ */
 
 @media (max-width: 768px) {
-    /* Focus indicators for keyboard navigation */
-    .btn:focus,
-    .filter-input:focus,
-    .filter-select:focus,
-    .tune-action-btn:focus,
-    .increment-heard-btn:focus {
+    /* Focus indicators for keyboard navigation — :focus-visible, not :focus.
+       The comment always said keyboard; the selector said "and also every mouse
+       click", which is where the ring-on-tap came from. */
+    .btn:focus-visible,
+    .filter-input:focus-visible,
+    .filter-select:focus-visible,
+    .tune-action-btn:focus-visible,
+    .increment-heard-btn:focus-visible {
         outline: 3px solid var(--primary);
         outline-offset: 2px;
     }

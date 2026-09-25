@@ -544,6 +544,48 @@ stylesheets rather than the token file, because the token file is not where this
 gets broken. It was checked by breaking it: reverting one chip to `--primary` fails
 the test and names the file and line.
 
+### B11. Focus rings are for the keyboard — **DONE 2026-09-24**
+
+Clicking almost anything drew a wide pale halo: Bootstrap's reboot has
+`button:focus { outline: 5px auto -webkit-focus-ring-color }`, and `:focus`
+includes mouse clicks. Measured on a clicked filter button: the element reports
+`:focus-visible = false` and the ring paints anyway, 4px of `rgb(144,194,226)`.
+
+`:focus-visible` is the distinction the browser already makes — keyboard arrival
+yes, click no — so the ring moves onto it. **Removing rings outright was never an
+option**; it would make the app unusable without a mouse. Both halves are tested.
+
+Three sources, all fixed at origin rather than papered over:
+
+1. Bootstrap's reboot. Now `button:focus:not(:focus-visible)`. The first cut used
+   `button:focus { outline: none }`, which out-specifies a bare `:focus-visible`
+   rule (0,1,1 beats 0,1,0) and silently took the keyboard ring with it.
+2. The app's own "focus indicators for keyboard navigation" in
+   `my_tunes_mobile.css` and `attendance.css` — the comments said keyboard, the
+   selectors said `:focus`. They load after `theme.css` and tie on specificity, so
+   a global override could not have reached them.
+3. Two `rgba(0,123,255,.25)` focus glows left over from the blue accent, still
+   glowing on click in `attendance.css` and `sessionadminpage/page.css`.
+
+Then one ring, defined once at the end of `theme.css`: `2px solid var(--primary)`
+with a 2px offset. `--primary`, not `--primary-fill` — it is a line on the page,
+not a surface behind white text (§B10).
+
+**The `<select>` exception.** Browsers deliberately match `:focus-visible` on a
+*clicked* select, because arrow keys and type-ahead work the moment it has focus.
+Defensible, and still a ring that appeared because you tapped something. CSS
+cannot tell those apart, so `static/js/input_modality.js` records how focus last
+arrived (`data-input-modality` on `<html>`) and the stylesheet defers to it. Keys
+that do not move focus are ignored, or typing into a box you clicked would light
+it up under your cursor. If the script never loads the attribute is absent, the
+rule never matches, and selects ring on click as the browser intended.
+
+`e2e/focus/focus-rings.spec.ts` covers all four: click draws nothing, Tab draws
+the accent, a clicked select draws nothing, and the modality flips back on the
+first Tab — that last one guards the real hazard, a latch that leaves a keyboard
+user with no visible focus at all. Verified by reverting the reboot rule and
+watching the first test fail.
+
 ### B8. The staged conversion plan
 
 Ordered by **blast radius, not by visibility**. Three things make a stage risky here:

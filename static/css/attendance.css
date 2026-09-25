@@ -292,7 +292,9 @@
 
 .modal .form-control:focus {
     border-color: var(--primary, #65b464);
-    box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+    /* Was rgba(0,123,255,.25) — the blue that went away when the accent turned
+       green, still glowing here because nothing reads a hardcoded rgba(). */
+    box-shadow: 0 0 0 0.2rem rgba(101, 180, 100, 0.25);
 }
 
 .modal .form-check-input {
@@ -493,10 +495,10 @@
     }
 }
 
-/* Focus styles for accessibility */
-.attendance-item:focus,
-.search-result-item:focus,
-.attendance-status:focus {
+/* Focus styles for accessibility — keyboard only, hence :focus-visible */
+.attendance-item:focus-visible,
+.search-result-item:focus-visible,
+.attendance-status:focus-visible {
     outline: 2px solid var(--primary, #65b464);
     outline-offset: 2px;
 }
@@ -595,7 +597,7 @@
     text-decoration: underline;
 }
 
-.person-name.person-edit-link:focus {
+.person-name.person-edit-link:focus-visible {
     outline: 2px solid var(--primary, #65b464);
     outline-offset: 2px;
     border-radius: 2px;
