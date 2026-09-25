@@ -358,3 +358,51 @@ def test_a_break_ends_the_chain(lab_data, tmp_path):
     m = SequenceModel(1)
     assert m.follow_totals.get(1, 0) == 0, "a set boundary is not a transition"
     assert m.set_openers[1] == 1 and m.set_openers[2] == 1
+
+
+def test_the_board_reads_eighths_and_fuses_them_as_the_bench_does(lab_data):
+    """The eighth-note reading, end to end on the board.
+
+    Four times already the board has quietly run something other than what
+    the bench measured. This checks that a run with a pulse expert produces
+    the eighth-note reading, and that the matcher combines the two readings
+    with the bench's own `fuse`, not a copy of it.
+    """
+    from lab.bench.retrieval import fuse
+    from lab.board.board import Board
+    from lab.engine.run import execute
+    from lab.experts.matcher import Matcher
+
+    cfg = _config()
+    cfg["experts"].insert(2, {"name": "pulse"})
+    with Board() as board:
+        run_id = execute(cfg, RECORDING_ID, board=board, quiet=True)
+        seqs = board.observations(run_id, types=["interval_sequence"])
+        with_eighths = [s for s in seqs if s.payload.get("intervals_eighths")]
+        assert with_eighths, "no interval sequence carried the eighth-note reading"
+
+    matcher = Matcher(candidate_set="repertoire", top_k=5)
+    payload = with_eighths[-1].payload
+    got = [r["tune_id"] for r in matcher.rank(payload)]
+    plain = matcher._index.lookup(payload["intervals"], top_k=40)
+    eighths = matcher._eighths_index.lookup(payload["intervals_eighths"], top_k=40)
+    want = [r["tune_id"] for r in fuse([plain, eighths], method="sum")[:5]]
+    assert got == want
+
+
+def test_the_assembler_can_average_its_evidence(lab_data):
+    """The moving-average mode runs end to end and still reaches an answer.
+
+    It is off by default -- measured as costing more accuracy than the
+    stability it buys -- but it is kept, so it has to keep working.
+    """
+    from lab.board.board import Board
+    from lab.engine.run import execute
+
+    cfg = _config()
+    for e in cfg["experts"]:
+        if e["name"] == "assembler":
+            e["params"].update({"evidence_mode": "ema", "half_life_s": 6.0})
+    with Board() as board:
+        run_id = execute(cfg, RECORDING_ID, board=board, quiet=True)
+        assert board.hypotheses(run_id), "no hypothesis was ever proposed"

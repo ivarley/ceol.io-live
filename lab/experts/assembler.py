@@ -71,6 +71,19 @@ class Assembler(Expert):
             # the newest match, which is what the bench does with one lookup
             # over the whole span.
             "evidence_mode": "latest",
+            # For "ema": the time for old evidence to count half as much.
+            # Between "latest", which has no memory and so passes every
+            # jitter in the matcher straight to the answer shown, and "sum",
+            # which lets an early wrong guess run away.
+            #
+            # Built to calm the answer when the eighth-note reading made it
+            # flip eleven times a tune, and measured as not worth having once
+            # the cause was fixed upstream. On four nights, with the steadier
+            # reading: "latest" 0.737 top-1, 45% right within a minute, 4.4
+            # flips a tune; "ema" at 10s 0.727, 41%, 3.1 flips; at 20s 0.727,
+            # 41%, 2.9 flips. It buys a flip or so of stability with a point
+            # of accuracy and five points of speed, so it stays off.
+            "half_life_s": 10.0,
             # OFF, and measured. Scoring whole sequences rather than
             # committing to each tune is worth eight points on the bench, so
             # revising earlier claims when a later tune settles looked like
@@ -101,6 +114,7 @@ class Assembler(Expert):
 
     def _reset_span(self):
         self._evidence = {}
+        self._last_match_ms = None
         self._names = {}
         self._types = {}
         self._span_start_ms = None
@@ -192,11 +206,28 @@ class Assembler(Expert):
 
         # 3. accumulate
         for m in matches:
-            if self.params["evidence_mode"] == "latest":
+            mode = self.params["evidence_mode"]
+            weight = 1.0
+            if mode == "latest":
                 self._evidence = {}
+            elif mode == "ema":
+                # Decay what is held by the time since the last match, then
+                # add the new one at the complementary weight, so a steady
+                # answer survives a single odd match and a real change still
+                # takes over within a few half-lives.
+                last = getattr(self, "_last_match_ms", None)
+                dt = 0.0 if last is None else max(0.0, (m.t_end_ms - last) / 1000.0)
+                decay = 0.5 ** (dt / max(1e-6, self.params["half_life_s"]))
+                for t in list(self._evidence):
+                    self._evidence[t] *= decay
+                    if self._evidence[t] < 1e-6:
+                        del self._evidence[t]
+                weight = 1.0 - decay if last is not None else 1.0
+                self._last_match_ms = m.t_end_ms
             for c in m.payload.get("candidates", []):
                 tune_id = c["tune_id"]
-                self._evidence[tune_id] = self._evidence.get(tune_id, 0.0) + float(c["score"])
+                self._evidence[tune_id] = (self._evidence.get(tune_id, 0.0)
+                                           + weight * float(c["score"]))
                 self._names.setdefault(tune_id, c.get("name"))
                 self._types.setdefault(tune_id, c.get("tune_type"))
             if self._span_start_ms is None:

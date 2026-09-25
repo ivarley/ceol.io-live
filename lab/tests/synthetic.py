@@ -169,7 +169,12 @@ def build_index(data_dir, n=6, fold_octaves=True):
                 tune_type=t["type"], meter=t["meter"], mode=t["mode"], abc=t["abc"])
         for t in (TUNE_A, TUNE_B)
     ]
+    os.makedirs(os.path.join(data_dir, "index"), exist_ok=True)
+    # Both readings, as the matcher expects: the plain one and the one that
+    # writes every note as a run of eighths. A fixture with only the first
+    # would let the board's eighth-note path go untested.
+    Index.build(settings, n=n, candidate_set="repertoire", progress_every=0,
+                fold_octaves=fold_octaves, particalized=True).save()
     idx = Index.build(settings, n=n, candidate_set="repertoire", progress_every=0,
                       fold_octaves=fold_octaves)
-    os.makedirs(os.path.join(data_dir, "index"), exist_ok=True)
     return idx.save()

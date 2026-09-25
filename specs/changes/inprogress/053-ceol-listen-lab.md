@@ -411,8 +411,44 @@ reels flat at 0.832 -- and the nights run from 0.826 to 0.960.
 The board, answering live on recording 2 with the same tracker, reads 63.8%
 top-1 and 75.9% top-5 against 86% for the bench on that same night. It has
 neither the eighth-note reading nor whole-set decoding, and it must answer
-while the tune is playing without being told where tunes start. Bringing the
-first two across is now the largest single gap in the project.
+while the tune is playing without being told where tunes start.
+
+**The eighth-note reading on the board.** The interval expert now also reads
+its window as runs of eighths, and the matcher looks that up and fuses it
+with the plain reading using the bench's own `fuse`, so the two loops cannot
+combine them differently. Over all eight nights, 502 segments, live:
+
+| | top-1 | top-5 | right within 60s | never right | flips a tune |
+|---|---|---|---|---|---|
+| without it | 0.697 | 0.811 | 40.4% | 26.9% | 3.7 |
+| first version | 0.745 | 0.857 | 52.2% | 17.1% | 10.5 |
+| as shipped | **0.753** | **0.869** | **47.6%** | **18.9%** | **4.2** |
+
+The first version carried the gain across and made the answer shown flip
+three times as often, which a live display cannot have. Replaying the board's
+own notes found why: the eighth-note reading is roughly twice as jumpy as the
+plain one on its own, and two things in how it was fed made it worse. It took
+the newest tempo estimate, and a single estimate half again too slow
+rewrote the reading for ten seconds; and it numbered its slots from the first
+note in the sliding window, so every note's slot rounded differently each
+time the window moved. The median of the last minute's tempo and a fixed
+origin bring flips back to where the board started and keep the gain. The
+answer is found a little more slowly than with the jumpy version, which was
+sometimes landing on the right tune by flipping onto it.
+
+A moving average of evidence in the assembler was also built and is off. It
+buys about one flip a tune of extra stability for a point of top-1 and five
+points of "right within a minute".
+
+**Whole-set decoding does not come across yet, and that is measured.** The
+board already chains the session's transitions from the last tune it
+confirmed, which is the bench's "chain your own answer forward". Chaining the
+whole previous distribution instead is worth nothing more on the bench (0.859
+both ways). The rest of the bench's gain from whole-set decoding, to 0.878,
+comes from the tunes AFTER the one being decided and from knowing where the
+set begins and ends; the live board has neither, and its earlier attempt to
+let later tunes revise earlier ones was harmful because the spans it decodes
+are not tunes. That part waits on boundary detection.
 
 **A slip jig's bar is not in the onset envelope**, which is a negative worth
 keeping. The estimator only asks whether a beat divides in two or three, and

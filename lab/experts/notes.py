@@ -126,7 +126,7 @@ class Intervals(Expert):
 
     name = "intervals"
     version = "1"
-    consumes = ("note_events", "boundary")
+    consumes = ("note_events", "boundary", "pulse")
     produces = ("interval_sequence",)
     cost = 1.0
 
@@ -150,10 +150,17 @@ class Intervals(Expert):
                 # flips a segment going from about 5 to 14. It belongs with a
                 # boundary source worth trusting, which is why the oracle
                 # config turns it on and the baseline does not.
-                "reset_on_boundary": False}
+                "reset_on_boundary": False,
+                # Also read the window as a run of eighth notes, which the
+                # matcher looks up in an index built the same way and fuses
+                # with the plain reading. Worth six points of top-1 on the
+                # bench, where it was measured; the same code does it here.
+                "eighths": True, "tempo_memory": 6}
 
     def setup(self):
         self._by_source = {}
+        self._periods = []
+        self._last_pulse_id = None
 
     def process(self, view, window):
         out = []
@@ -186,8 +193,41 @@ class Intervals(Expert):
                 buf, clip=self.params["clip"], max_gap_ms=self.params["max_gap_ms"],
                 fold=self.params["fold_octaves"])
             starts = [n["t0_ms"] for n in buf[:-1]]
+            payload = {"source": src, "intervals": intervals, "note_t0_ms": starts,
+                       "n_notes": len(buf)}
+            inputs = [ev.obs_id]
+            pulse = view.latest("pulse") if self.params["eighths"] else None
+            if pulse is not None and pulse.payload.get("period_ms"):
+                from lab.analysis.notation import particalize
+                from lab.corpus.abc_pitch import interval_sequence
+
+                if pulse.obs_id != self._last_pulse_id:
+                    self._periods.append(float(pulse.payload["period_ms"]))
+                    self._periods = self._periods[-int(self.params["tempo_memory"]):]
+                    self._last_pulse_id = pulse.obs_id
+                # The median of the last minute's estimates rather than the
+                # newest one. A tune does not change tempo in ten seconds, and
+                # a single estimate half again too slow, which happens, would
+                # otherwise rewrite the whole reading for the next ten.
+                #
+                # This and the fixed origin below are what made the reading
+                # usable live. The first version took the latest estimate and
+                # counted from the window's first note, and the answer shown
+                # flipped 11.5 times a tune against 3.8 without it; with both
+                # it flips 4.4 times and keeps the whole of the gain, 0.668 to
+                # 0.737 top-1 over four nights.
+                period = sorted(self._periods)[len(self._periods) // 2]
+                # Slots counted from a fixed origin, not from the first note
+                # in the window. The window slides every update, and counting
+                # from whichever note is first made every note's slot round
+                # differently each time, so the phrases shifted under a
+                # reading that had not changed.
+                slots = particalize(buf, period, phase_ms=0.0)
+                payload["intervals_eighths"] = interval_sequence(
+                    slots, fold=self.params["fold_octaves"])
+                payload["eighth_ms"] = period
+                inputs.append(pulse.obs_id)
             out.append(self.obs(
-                "interval_sequence", buf[0]["t0_ms"], buf[-1]["t1_ms"],
-                {"source": src, "intervals": intervals, "note_t0_ms": starts, "n_notes": len(buf)},
-                inputs=[ev.obs_id]))
+                "interval_sequence", buf[0]["t0_ms"], buf[-1]["t1_ms"], payload,
+                inputs=inputs))
         return out
