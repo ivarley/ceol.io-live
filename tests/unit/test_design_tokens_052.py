@@ -261,3 +261,52 @@ class TestNoAccentBackgroundUsesTheTextToken:
             "/ --primary-fill-hover for anything that sits behind white text:\n  "
             + "\n  ".join(offenders)
         )
+
+
+# ---------------------------------------------------------------------------
+# the live logger's own palette (spec 052 §B10)
+# ---------------------------------------------------------------------------
+
+LIVE_CSS = ROOT / "frontend" / "src" / "app.css"
+
+
+class TestTheLoggerAccentsInTheSameColourAsTheApp:
+    """The logger ships its own shell and its own palette, so it does not inherit
+    theme.css. It sat on the pre-green accent for exactly that reason — #4f9dff,
+    months after the rest of the app went green — and the screen people spend a
+    whole session in was the one place still accenting in the old colour.
+
+    Nothing breaks when these drift, which is why it needs a test rather than a
+    convention: both files are valid, both pages render, they just stop matching.
+    """
+
+    def _var(self, css, name):
+        m = re.search(rf"^\s*--{name}:\s*([^;]+);", css, re.M)
+        assert m, f"--{name} is not declared"
+        return m.group(1).strip()
+
+    def test_the_accent_is_the_app_accent(self, tokens):
+        assert self._var(LIVE_CSS.read_text(), "accent") == _token(tokens, "primary")
+
+    def test_its_dark_companion_matches_too(self, tokens):
+        assert self._var(LIVE_CSS.read_text(), "primary-dark") == _token(
+            tokens, "primary-dark"
+        )
+
+    def test_ink_on_a_fill_is_readable_against_the_accent(self, tokens):
+        # The logger fills buttons with the accent and writes on them in a dark ink,
+        # rather than the app's white-on-a-darker-green. That is fine, but only while
+        # the pair is actually legible.
+        ink = self._var(LIVE_CSS.read_text(), "ink-on-fill")
+        ratio = _contrast(ink, _token(tokens, "primary"))
+        assert ratio >= 4.5, f"{ink} on the accent is {ratio:.2f}:1"
+
+    def test_the_two_blues_that_are_not_the_accent_survive(self):
+        # Blue does two other jobs in this file and they are NOT the accent: the
+        # type-ahead results are blue-tinted so a result never reads as a logged tune
+        # (its own comment says so), and "want to learn" is blue wherever learn status
+        # appears. A well-meaning find-and-replace to green would take both.
+        css = LIVE_CSS.read_text()
+        assert "--results-bg" in css and "#1c2634" in css
+        assert "ls-want-to-learn" in css
+        assert "rgba(79, 157, 255" in css, "the results tint is gone"

@@ -267,3 +267,36 @@ test.describe("Sync from TheSession.org", () => {
     );
   });
 });
+
+test.describe("the drawer's disclosure chevron", () => {
+  test.use({ storageState: STORAGE.admin });
+
+  test("sits beside its label, not above it", async ({ page }) => {
+    // lib/Chevron.svelte is `display: inline-block` for this: a block SVG takes a
+    // line of its own, and in a button that is plain inline flow — not a flex row —
+    // that dropped the word underneath the caret. `white-space: nowrap` was already
+    // on this button and could not help, because the break was between two boxes
+    // rather than between two words.
+    await page.goto("/my-tunes");
+    await page.locator(".tune-name").first().click();
+
+    const configure = page
+      .locator(".tsc-action-link", { hasText: "Configure" })
+      .first();
+    await expect(configure).toBeVisible();
+
+    const [btn, svg] = await Promise.all([
+      configure.boundingBox(),
+      configure.locator("svg").boundingBox(),
+    ]);
+
+    // One line: the button is no taller than its own text plus the icon, not twice it.
+    expect(btn!.height).toBeLessThan(26);
+    // The caret is to the LEFT of the label and on the same line as it, which is the
+    // thing that was actually wrong.
+    expect(svg!.x).toBeLessThan(btn!.x + btn!.width / 2);
+    expect(
+      Math.abs(svg!.y + svg!.height / 2 - (btn!.y + btn!.height / 2)),
+    ).toBeLessThan(2);
+  });
+});

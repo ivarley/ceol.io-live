@@ -40,7 +40,14 @@
 <style>
   .kit-chevron {
     flex: 0 0 auto;
-    display: block;
+    /* inline-block, not block. A flex container blockifies its children's `display`
+       anyway, so every flex caller — the grouped rows, Row's trailing slot, the tab
+       bar — is unaffected. What it fixes is the callers that are NOT flex: a button
+       reading `<Chevron /> Previous day`, where a block SVG took a line of its own
+       and dropped the words underneath it. vertical-align is likewise inert in flex
+       and is what centres it on the text line everywhere else. */
+    display: inline-block;
+    vertical-align: middle;
     /* Rotation is the whole mechanism, so it has to animate here rather than at
        each call site. */
     transition: transform 0.18s ease;
