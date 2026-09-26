@@ -156,6 +156,32 @@ class TestSurfaceIsServed:
         allowed = {"/api/sessions/{session_path}/people -> get_session_people_list"}
         assert set(unclassified) <= allowed, unclassified
 
+    def test_every_operation_has_a_stable_unique_operation_id(self, spec):
+        """The Swift client is generated from this file (swift-openapi-generator), and
+        operationId becomes the method name the app calls. So every operation needs
+        one, no two may collide, and each is lowerCamelCase. Renaming one changes no
+        wire behaviour but breaks the app's source — treat them as part of the
+        additive-only contract."""
+        import re
+
+        seen = {}
+        problems = []
+        for path, ops in spec["paths"].items():
+            for method, op in ops.items():
+                if method not in ("get", "post", "put", "patch", "delete"):
+                    continue
+                where = f"{method.upper()} {path}"
+                op_id = op.get("operationId")
+                if not op_id:
+                    problems.append(f"{where}: no operationId")
+                elif not re.fullmatch(r"[a-z][A-Za-z0-9]*", op_id):
+                    problems.append(f"{where}: {op_id!r} is not lowerCamelCase")
+                elif op_id in seen:
+                    problems.append(f"{where}: {op_id!r} already used by {seen[op_id]}")
+                else:
+                    seen[op_id] = where
+        assert not problems, "\n  ".join(problems)
+
 
 class TestResponsesMatchSchemas:
     @pytest.mark.parametrize(
