@@ -134,6 +134,10 @@ package-lock.json
 static/js/dist/
 static/js/shared/
 design/*
+# ...except the design tokens, the one source both clients' tokens are generated
+# from (spec 052 §B6). Ignored along with the rest, they existed on one disk only.
+!design/tokens.json
+!design/Tokens.swift
 
 # Live-logging Svelte/Vite build output (spec 024) -- built during deploy
 static/live/

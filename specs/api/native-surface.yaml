@@ -333,7 +333,8 @@ components:
               active_instances: { type: array }
     SessionDetail:
       type: object
-      required: [success, session, permissions, today_in_session_tz, tunes, total_tunes_count, has_more_tunes, popular_tunes]
+      required: [success, session, permissions, today_in_session_tz, tunes, total_tunes_count, total_logs_count,
+                 total_people_count, has_more_tunes, popular_tunes]
       properties:
         success: { const: true }
         session:
@@ -382,6 +383,11 @@ components:
               tunebook_count: { type: [integer, "null"] }
               setting_id: { type: [integer, "null"] }
         total_tunes_count: { type: integer }
+        # Tab-label counts (spec 052 §B8 Stage 2): the Logs and People tabs load lazily.
+        total_logs_count: { type: integer, description: "Instances not cancelled — what the Logs tab lists." }
+        total_people_count:
+          type: [integer, "null"]
+          description: "Members, not visitors, not archived. null when the viewer may not see the roster (can_view_people false) — distinct from 0."
         has_more_tunes: { type: boolean }
         popular_tunes: { type: array }
     SessionLogs:
