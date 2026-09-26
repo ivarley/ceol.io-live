@@ -14,12 +14,10 @@
     "in logstate.js exists so that a tie never happens within one page load; a native",
     "client that can tie must break it by op_id ascending to match.",
     "",
-    "Match cache key normalizer (normMatchQuery), in this order: fold the smart singles",
-    "U+2018 U+2019 U+201B, the backtick U+0060 and the acute U+00B4 to ASCII ';",
-    "trim (JS trim: Unicode whitespace incl. U+00A0 and U+FEFF); lowercase (JS",
-    "toLowerCase, not locale-aware); drop ONE leading 'the' followed by whitespace.",
-    "It is NOT logstate's normName: no diacritic folding, no smart double quotes, and",
-    "U+02BC / U+2032 are not folded. See the cases marked with a note.",
+    "Match cache key normalizer (normMatchQuery): logstate's normName (its exact rules",
+    "are in logstate.fixtures.json: smart quotes folded, NFD with diacritics stripped,",
+    "JS trim, JS toLowerCase), then stripThe drops ONE leading 'the' followed by",
+    "whitespace. So an offline 'Sligo Maid' finds a cached 'Sligo Maíd'.",
     "",
     "Keys are `${sessionInstanceId}|q|${normalized query}` for a whole verdict and",
     "`${sessionInstanceId}|n|${normalized tune name}` for one linked tune. The instance",
@@ -113,23 +111,10 @@
         { "name": "folds U+201B", "input": { "s": "Cooley‛s" }, "expected": "cooley's" },
         { "name": "folds backtick", "input": { "s": "Cooley`s" }, "expected": "cooley's" },
         { "name": "folds acute accent", "input": { "s": "Cooley´s" }, "expected": "cooley's" },
-        {
-          "name": "does NOT fold U+02BC",
-          "input": { "s": "Cooleyʼs" },
-          "expected": "cooleyʼs",
-          "note": "logstate.normName folds U+02BC; this does not, so the two normalizers disagree on it."
-        },
-        {
-          "name": "does NOT fold smart double quotes",
-          "input": { "s": "“Quoted”" },
-          "expected": "“quoted”"
-        },
-        {
-          "name": "does NOT strip diacritics",
-          "input": { "s": "Sligo Maíd" },
-          "expected": "sligo maíd",
-          "note": "logstate.normName would give 'sligo maid'. An offline query typed without the accent misses a cached name with one."
-        },
+        { "name": "folds U+02BC", "input": { "s": "Cooleyʼs" }, "expected": "cooley's" },
+        { "name": "folds smart double quotes", "input": { "s": "“Quoted”" }, "expected": "\"quoted\"" },
+        { "name": "strips diacritics", "input": { "s": "Sligo Maíd" }, "expected": "sligo maid" },
+        { "name": "unaccents before dropping 'the'", "input": { "s": "Thé Kesh" }, "expected": "kesh" },
         { "name": "empty", "input": { "s": "" }, "expected": "" },
         { "name": "null", "input": { "s": null }, "expected": "" }
       ]

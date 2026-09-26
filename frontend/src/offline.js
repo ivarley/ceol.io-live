@@ -3,7 +3,10 @@
 //   - `snapshots`: a per-instance snapshot of the records so the screen can render
 //                  offline (bootstrap is network-only and fails with no connection)
 //
-// Dependency-free: a thin promise wrapper over the raw IndexedDB API.
+// A thin promise wrapper over the raw IndexedDB API; the only import is logstate's
+// pure name normalizer, so the cache keys fold names the way the matcher does.
+
+import { normName, stripThe } from './logstate.js'
 
 const DB_NAME = 'ceol-live'
 const DB_VERSION = 3
@@ -98,10 +101,13 @@ export const snapshotGet = (sessionInstanceId) => read(SNAPS, sessionInstanceId)
 // so an offline exact-name match works even for a query string not typed verbatim
 // before. Match results are session-specific (aliases/preferences), hence per-instance.
 
-// The cache key's normalizer. NOT logstate's normName: no unaccent, a shorter smart-quote
-// set, and a leading "the " is dropped. Pinned in offline.fixtures.json as it stands.
-export const normMatchQuery = (s) =>
-  (s || '').replace(/[\u2018\u2019\u201b\u0060\u00b4]/g, "'").trim().toLowerCase().replace(/^the\s+/, '')
+// The cache key's normalizer: the logger's own name normalizer (smart quotes folded,
+// diacritics stripped, lowercased — the server matcher's rules), then a leading "the "
+// dropped so "The Silver Spear" and "Silver Spear" share an entry. It used to fold
+// fewer quotes and keep accents, so an offline "Sligo Maid" missed a cached "Sligo Maíd".
+// Entries written under the old keys are simply never hit again; the next online
+// lookup rewrites them.
+export const normMatchQuery = (s) => stripThe(normName(s))
 
 // `${instance}|q|${query}` for a whole verdict, `${instance}|n|${name}` for one tune.
 export const matchCacheKey = (sessionInstanceId, kind, s) => `${sessionInstanceId}|${kind}|${normMatchQuery(s)}`

@@ -453,24 +453,30 @@ The one refactor: `offline.js` split its pure cores out of the IndexedDB functio
 (`queueOrder`, `normMatchQuery`, `matchCacheKey`, `matchCacheRows`) so they could be
 fixtured; behaviour and write order unchanged.
 
-**Pinned, not fixed** — behaviour that looks wrong, recorded in its case as a `note` so a
-port reproduces it until someone decides otherwise:
-- `fracindex`: a neighbour key ending in `'0'` gets a key that sorts AFTER it
-  (`generateBetween(null,'0')` → `'0V'`). The Python does the same, and neither side
-  ever mints such a key, so only hand-written positions can hit it.
-- `fracindex`: `before >= after` falls back to append in JS; `fractional_indexing.py`
-  raises `ValueError`. The two disagree.
-- `mergeStable`: a server row without `in_session_tune` clears the local value (the
-  spread writes `undefined`); duplicate server-only rows are both appended.
-- Two name normalizers disagree: `offline.normMatchQuery` keeps diacritics, folds fewer
-  quote characters and drops a leading "the"; `logstate.normName` does the opposite on
-  each. An offline "Sligo Maid" misses a cached "Sligo Maíd".
-- `computeCursorSlots`: a set whose first tune is temp still gets a `before: temp-…`
-  start slot; an open set ending in a temp tune has no end slot (already pinned).
-- `remapAnchors` does not remap `record_ids` arrays; safe today only because
-  `bulkDelete` filters temp rows out.
-- `formatClock`: tiny negatives read `-0:00`, and JS `Math.round` rounds halves toward
-  +∞ where Swift's `.rounded()` rounds away from zero.
+**What the fixtures turned up, and what was done** (2026-09-26, each now a fixture case):
+- `fracindex`: requests with no answer returned a key on the wrong side of `after` —
+  `before >= after`, and an `after` that is `before` plus only `'0'`s (`(null,'0')` gave
+  `'0V'`). JS fell back to append on the first where the Python raised. **Both now refuse
+  both, in the same cases**; `validate_position` rejects a trailing `'0'`. Client code calls
+  a new `optimisticBetween`, which falls back to append, so the logger never throws
+  mid-gesture over a provisional key. Neither side ever mints a key ending in `'0'`, and
+  none of the local seed's 835 positions does. **Not yet checked against production**:
+  the Render connection was down; `SELECT count(*) FROM session_instance_tune WHERE
+  order_position ~ '0$'` should be 0 there too.
+- `mergeStable`: a server row without `in_session_tune` cleared the local value; it now
+  keeps it (a server `false` still wins). A duplicated server-only tune is appended once.
+- Two name normalizers disagreed: the offline match cache kept accents and folded fewer
+  quotes. It now uses `normName` then `stripThe`, so offline "Sligo Maid" finds a cached
+  "Sligo Maíd". Old cache entries are just never hit again; the next online lookup
+  rewrites them (no IndexedDB version bump, which would also drop the op queue).
+- `computeCursorSlots` / the logger: the open set's end seam vanished while its last
+  tune was optimistic — for the whole time a queued offline tune waited. The end needs
+  no anchor, so it now renders (and is a cursor slot) either way. The start seam keyed on
+  a temp id is deliberate: `remapAnchors` resolves it on send.
+- `remapAnchors` now remaps `record_ids` arrays too, dropping temp ids that never
+  persisted and skipping the op if none are left.
+- `formatClock`: no more `-0:00`, and it rounds the magnitude, so halves round away from
+  zero on both sides, as Swift's `.rounded()` does.
 
 ### B6. Design tokens as data — **DONE 2026-09-23**
 

@@ -23,10 +23,10 @@
     "    repeatOne beats autoContinue. A queue id missing from `resolved` (or an idx past",
     "    the end of the queue) is done, never an error. Absent options take the",
     "    defaults: leadMs 40, contiguousMs 200, repeatOne false, autoContinue true.",
-    "  - formatClock rounds with JS Math.round, which is floor(x + 0.5): halves round UP",
-    "    toward +infinity, so -1499.5 -> -1499. Swift's .rounded() rounds halves AWAY",
-    "    from zero and gets -1500; use (x + 0.5).rounded(.down).",
-    "  - formatClock takes the sign BEFORE rounding, so -0.4 reads '-0:00'.",
+    "  - formatClock rounds the MAGNITUDE (Math.round(Math.abs(ms))), so a half rounds",
+    "    away from zero on either side of it: -1499.5 -> -1500, as Swift's .rounded() does.",
+    "  - formatClock shows a sign only when the value it displays is non-zero: -0.4 reads",
+    "    '0:00', and with millis -40 reads '0:00.0' (the display resolves tenths).",
     "  - The millis suffix is ONE digit, the tenths, truncated not rounded (1999 ms ->",
     "    '.9'). Minutes are unpadded below an hour ('1:05'); hours are unpadded and",
     "    unbounded ('100:00:00').",
@@ -53,7 +53,9 @@
         { "name": "h:mm:ss", "input": { "ms": 3725000 }, "expected": "1:02:05" },
         { "name": "hours are unbounded", "input": { "ms": 360000000 }, "expected": "100:00:00" },
         { "name": "negative", "input": { "ms": -1500 }, "expected": "-0:01" },
-        { "name": "a tiny negative keeps its sign", "input": { "ms": -0.4 }, "expected": "-0:00", "note": "Sign is taken before rounding. Cosmetic; pinned as it stands." },
+        { "name": "a negative that shows as zero has no sign", "input": { "ms": -0.4 }, "expected": "0:00" },
+        { "name": "a negative under a second shows as zero", "input": { "ms": -999 }, "expected": "0:00" },
+        { "name": "millis: a negative under a tenth shows as zero", "input": { "ms": -40, "opts": { "millis": true } }, "expected": "0:00.0" },
         { "name": "half a millisecond rounds up", "input": { "ms": 0.5 }, "expected": "0:00" },
         { "name": "null", "input": { "ms": null }, "expected": "--:--" },
         { "name": "absent", "input": {}, "expected": "--:--" },
@@ -66,12 +68,7 @@
         { "name": "millis: past an hour", "input": { "ms": 3600050, "opts": { "millis": true } }, "expected": "1:00:00.0" },
         { "name": "millis: negative", "input": { "ms": -250, "opts": { "millis": true } }, "expected": "-0:00.2" },
         { "name": "millis: positive half rounds up", "input": { "ms": 1499.5, "opts": { "millis": true } }, "expected": "0:01.5" },
-        {
-          "name": "millis: negative half rounds toward +infinity",
-          "input": { "ms": -1499.5, "opts": { "millis": true } },
-          "expected": "-0:01.4",
-          "note": "JS Math.round(-1499.5) is -1499. Rounding half away from zero gives '-0:01.5'."
-        }
+        { "name": "millis: a negative half rounds away from zero", "input": { "ms": -1499.5, "opts": { "millis": true } }, "expected": "-0:01.5" }
       ]
     },
 
