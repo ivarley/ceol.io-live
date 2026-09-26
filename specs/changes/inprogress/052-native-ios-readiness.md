@@ -58,11 +58,13 @@ sites are conformed at runtime, not rewritten; the web bundles still call the ol
 search trees; the AASA file needs the real Team ID; Universal-Link handling in the app
 itself is app work.
 
-**Section B has a clickable prototype and a staged plan (2026-09-22).**
-`mockups/tabbar/` (served at `/mockups/tabbar/`) is the interaction prototype for the
-reshaping — four tabs, session-centric Home, inline filters, the tune sheet. It settled
-several questions the first draft of §B left open; those answers are folded into B1–B4
-below, and **§B8 is the stage-by-stage conversion plan**. Stages 0-5 of that plan are
+**Section B had a clickable prototype, and has a staged plan (2026-09-22).**
+The prototype (`mockups/tabbar/`, served at `/mockups/tabbar/`) was the interaction
+sketch for the reshaping — four tabs, session-centric Home, inline filters, the tune
+sheet. It settled several questions the first draft of §B left open; those answers are
+folded into B1–B4 below, which is why it has been deleted: the real thing is built and
+a second, diverging answer to the same questions is a liability rather than a
+reference. **§B8 is the stage-by-stage conversion plan.** Stages 0-5 of that plan are
 built: the kit primitives exist, the session page's three tabs are converted, Home is a
 Svelte page rendering the same payload `GET /api/home` returns, and the phone navigation
 is the four-tab bar rather than the hamburger.
