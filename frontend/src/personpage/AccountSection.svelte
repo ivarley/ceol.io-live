@@ -13,10 +13,43 @@
   // looking at, so parking it on one particular page made it mean "share your
   // profile" half the time and something else the rest. It is a header control now
   // (spec 052 §B1), present on every screen.
-  import { Chevron, Row } from '../lib/index.js'
+  //
+  // Delete account (spec 054) is last and on its own, the way iOS puts it: the one
+  // thing here you cannot take back. You confirm by typing your email, which a stray
+  // tap cannot do. System admins do not see it — the server refuses them, because
+  // removing an admin is another admin's decision, not a button.
+  import { Chevron, Dialog, Row, toast } from '../lib/index.js'
 
-  let { isSystemAdmin = false, personName = '' } = $props()
+  let { isSystemAdmin = false, personName = '', userEmail = '' } = $props()
 
+  let confirmOpen = $state(false)
+  let typed = $state('')
+  const matches = $derived(!!userEmail && typed.trim().toLowerCase() === userEmail.trim().toLowerCase())
+
+  function openConfirm() {
+    typed = ''
+    confirmOpen = true
+  }
+
+  async function deleteAccount() {
+    try {
+      const res = await fetch('/api/me/delete-account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ confirm_email: typed }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok || !json.success) {
+        toast(json.error || 'Your account could not be deleted.', 'error')
+        return
+      }
+      // Signed out now; home shows the server's "Your account has been deleted."
+      window.location.href = '/'
+    } catch {
+      toast("Couldn't reach the server, so nothing was deleted.", 'error')
+    }
+  }
 </script>
 
 <section class="account-section" id="account-section">
@@ -38,10 +71,48 @@
       title="Log Out"
       id="account-logout" />
   </div>
+  {#if userEmail && !isSystemAdmin}
+    <div class="account-list account-danger kit-group">
+      <Row
+        styled={false}
+        rowClass="kit-field account-row account-row-out"
+        onclick={openConfirm}
+        title="Delete Account"
+        id="account-delete" />
+    </div>
+  {/if}
   {#if personName}
     <p class="account-who">Signed in as {personName}</p>
   {/if}
 </section>
+
+<Dialog
+  bind:open={confirmOpen}
+  title="Delete your account?"
+  confirmLabel="Delete account"
+  destructive={true}
+  confirmDisabled={!matches}
+  onConfirm={deleteAccount}>
+  <div class="delete-body" id="account-delete-dialog">
+    <p>
+      This deletes your login, your tune list and instruments, and your contact details,
+      straight away. It can't be undone.
+    </p>
+    <p>
+      Your name stays on the sessions you were part of, as it would for anyone a session
+      admin adds, and the tunes logged at those sessions stay in their logs.
+    </p>
+    <label for="account-delete-email">Type <strong>{userEmail}</strong> to confirm</label>
+    <input
+      id="account-delete-email"
+      class="form-control"
+      type="email"
+      autocomplete="off"
+      autocapitalize="off"
+      spellcheck="false"
+      bind:value={typed} />
+  </div>
+</Dialog>
 
 <style>
   .account-section {
@@ -79,6 +150,21 @@
 
   .account-list :global(.account-row-out:hover) {
     opacity: 0.85;
+  }
+
+  .account-danger {
+    margin-top: var(--sp-4, 16px);
+  }
+
+  .delete-body p {
+    margin: 0 0 var(--sp-2, 8px);
+  }
+
+  .delete-body label {
+    display: block;
+    margin: var(--sp-3, 12px) 0 var(--sp-1, 4px);
+    font-size: 0.9rem;
+    overflow-wrap: anywhere;
   }
 
   .account-who {

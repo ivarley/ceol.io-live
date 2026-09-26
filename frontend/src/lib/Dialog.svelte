@@ -11,6 +11,7 @@
     confirmLabel = 'Confirm', // callers should pass an explicit verb
     cancelLabel = 'Cancel',
     destructive = false, // red confirm for irreversible actions
+    confirmDisabled = false, // e.g. until a typed confirmation matches
     onConfirm = () => {},
     onCancel = () => {},
     children,
@@ -42,7 +43,7 @@
       {@render children?.()}
       <div class="kit-dialog-actions">
         <AlertDialog.Cancel class="kit-dialog-cancel">{cancelLabel}</AlertDialog.Cancel>
-        <AlertDialog.Action class="kit-dialog-confirm{destructive ? ' destructive' : ''}" onclick={confirm}>
+        <AlertDialog.Action class="kit-dialog-confirm{destructive ? ' destructive' : ''}" disabled={confirmDisabled} onclick={confirm}>
           {confirmLabel}
         </AlertDialog.Action>
       </div>
@@ -111,5 +112,9 @@
   :global(.kit-dialog-confirm.destructive) {
     background: var(--danger, #dc3545);
     border-color: var(--danger, #dc3545);
+  }
+  :global(.kit-dialog-confirm:disabled) {
+    opacity: 0.45;
+    cursor: not-allowed;
   }
 </style>

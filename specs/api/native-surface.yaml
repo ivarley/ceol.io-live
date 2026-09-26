@@ -659,60 +659,94 @@ paths:
   # --- app shell -------------------------------------------------------------
   /api/app-config:
     get:
+      operationId: getAppConfig
       summary: Server-steered client config (public; send X-Ceol-Client)
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/AppConfig" } } } } }
   /api/auth/check-email:
     post:
+      operationId: checkEmail
       summary: Email-first login step 1 (password prompt / magic link / registration)
       responses: { "200": { description: "{action, email, message}" } }
   /api/auth/login-password:
     post:
+      operationId: loginWithPassword
       summary: Email + password login; native callers receive a Bearer token
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/LoginResponse" } } } } }
   /api/auth/exchange:
     post:
+      operationId: exchangeLoginToken
       summary: Consume a magic-link or verification token (from a Universal Link) for a session
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/LoginResponse" } } } } }
   /api/auth/resend-verification:
     post:
+      operationId: resendVerification
       summary: Re-send the verification email (never reveals whether the address exists)
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Ok" } } } } }
   /api/auth/logout:
     post:
+      operationId: logout
       summary: Revoke the presented Bearer token (or cookie session)
       security: [{ bearer: [] }]
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Ok" } } } } }
   /api/auth/set-password:
     post:
+      operationId: setPassword
       summary: Optional password for a magic-link account
       security: [{ bearer: [] }]
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Ok" } } } } }
   /api/auth/web-session:
     post:
+      operationId: createWebSession
       summary: One-time login link for opening the web signed in (admin, help)
       security: [{ bearer: [] }]
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/WebSession" } } } } }
   /api/me:
     get:
+      operationId: getMe
       summary: Who am I
       security: [{ bearer: [] }]
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Me" } } } } }
   /api/me/profile:
     get:
+      operationId: getProfile
       summary: Profile setup fields
       security: [{ bearer: [] }]
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Profile" } } } } }
     put:
+      operationId: updateProfile
       summary: Update profile (name, location, timezone, instruments)
       security: [{ bearer: [] }]
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Profile" } } } } }
+  /api/me/delete-account:
+    post:
+      operationId: deleteAccount
+      summary: >-
+        Delete the caller's account and private data, immediately (spec 054). The body
+        repeats the account email. Every token of the account stops working. The
+        person's name stays on session rosters as a no-login person.
+      security: [{ bearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirm_email]
+              properties:
+                confirm_email: { type: string, description: "The account's email, case-insensitive" }
+      responses:
+        "200": { description: deleted, content: { application/json: { schema: { $ref: "#/components/schemas/Ok" } } } }
+        "400": { description: "code confirmation_mismatch: the email did not match" }
+        "403": { description: "code admin_account or sent_update_emails: this flow may not delete it" }
   /api/home:
     get:
+      operationId: getHome
       summary: The home screen
       security: [{ bearer: [] }]
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Home" } } } } }
   /api/resolve:
     get:
+      operationId: resolvePath
       summary: URL/path -> ids (for Universal Links)
       parameters: [{ name: path, in: query, required: true, schema: { type: string } }]
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Resolve" } } } } }
@@ -720,17 +754,20 @@ paths:
   # --- my tunes ----------------------------------------------------------------
   /api/my-tunes:
     get:
+      operationId: getMyTunes
       summary: The viewer's tunebook
       security: [{ bearer: [] }]
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/MyTunes" } } } } }
   /api/my-tunes/ops:
     post:
+      operationId: applyMyTunesOp
       summary: Idempotent tunebook write (see MyTunesOp)
       security: [{ bearer: [] }]
       requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/MyTunesOp" } } } }
       responses: { "200": { description: ok } }
   /api/offline/bundle:
     get:
+      operationId: getOfflineBundle
       summary: Whole tunebook + top catalog with incipits — the local-store sync primitive
       security: [{ bearer: [] }]
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/OfflineBundle" } } } } }
@@ -738,110 +775,130 @@ paths:
   # --- tunes ---------------------------------------------------------------------
   /api/tunes/search:
     get:
+      operationId: searchTunes
       summary: Quick name/notation search
       parameters: [{ name: q, in: query, schema: { type: string } }, { name: mode, in: query, schema: { type: string, enum: [name, abc, mixed] } }]
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/TuneSearch" } } } } }
   /api/tunes/deep-search:
     get:
+      operationId: deepSearchTunes
       summary: Rich search cards; scope via ?session=<path> | ?instance=<id>
       security: [{ bearer: [] }]
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/DeepSearch" } } } } }
   /api/tunes/thesession-search:
     get:
+      operationId: searchTheSession
       summary: thesession.org search proxy; scope as deep-search
       security: [{ bearer: [] }]
       responses: { "200": { description: ok } }
   /api/tunes/{tune_id}/detail:
     get:
+      operationId: getTuneDetail
       summary: The tune drawer payload (?session=&instance= scope)
       parameters: [{ name: tune_id, in: path, required: true, schema: { type: integer } }]
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/TuneDetail" } } } } }
   /api/tunes/{tune_id}/preview:
     get:
+      operationId: getTunePreview
       summary: Look-before-you-log preview (?session=&instance= scope)
       security: [{ bearer: [] }]
       parameters: [{ name: tune_id, in: path, required: true, schema: { type: integer } }]
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/TunePreview" } } } } }
   /api/tunes/{tune_id}/incipit-image:
     get:
+      operationId: getTuneIncipitImage
       summary: Incipit PNG (base64), rendered on demand
       security: [{ bearer: [] }]
       parameters: [{ name: tune_id, in: path, required: true, schema: { type: integer } }]
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Image" } } } } }
   /api/tunes/settings/{setting_id}/image:
     get:
+      operationId: getSettingImage
       summary: One setting's notation PNG (?kind=incipit|full)
       security: [{ bearer: [] }]
       parameters: [{ name: setting_id, in: path, required: true, schema: { type: integer } }]
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Image" } } } } }
   /api/tunes/thesession/{thesession_id}/preview:
     get:
+      operationId: getTheSessionTunePreview
       summary: Preview a thesession.org tune not yet imported
       security: [{ bearer: [] }]
       parameters: [{ name: thesession_id, in: path, required: true, schema: { type: integer } }]
       responses: { "200": { description: ok } }
   /api/tunes/render-abc:
     post:
+      operationId: renderAbc
       summary: Ephemeral ABC -> PNG
       security: [{ bearer: [] }]
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Image" } } } } }
   /api/tunes/abc-filter:
     post:
+      operationId: filterTunesByAbc
       summary: Which of these tune_ids match this notation query
       responses: { "200": { description: "{tune_ids}" } }
 
   # --- sessions ------------------------------------------------------------------
   /api/sessions/with-today-status:
     get:
+      operationId: listSessions
       summary: The sessions directory
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/SessionsDirectory" } } } } }
   /api/sessions/{session_path}/detail:
     get:
+      operationId: getSessionDetail
       summary: The session page
       parameters: [{ name: session_path, in: path, required: true, schema: { type: string } }]
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/SessionDetail" } } } } }
   /api/sessions/{session_path}/logs:
     get:
+      operationId: getSessionLogs
       summary: Logged instances by year
       parameters: [{ name: session_path, in: path, required: true, schema: { type: string } }]
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/SessionLogs" } } } } }
   /api/sessions/{session_path}/logged-tunes:
     get:
+      operationId: getSessionLoggedTunes
       summary: Tunes that appear in this session's logs
       parameters: [{ name: session_path, in: path, required: true, schema: { type: string } }]
       responses: { "200": { description: ok } }
   /api/sessions/{session_path}/people:
     get:
+      operationId: getSessionPeople
       summary: The session's people (gated by can_view_people)
       security: [{ bearer: [] }]
       parameters: [{ name: session_path, in: path, required: true, schema: { type: string } }]
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/SessionPeople" } } } } }
   /api/sessions/{session_path}/join:
     post:
+      operationId: joinSession
       summary: Ask to join / join a session
       security: [{ bearer: [] }]
       parameters: [{ name: session_path, in: path, required: true, schema: { type: string } }]
       responses: { "200": { description: ok } }
   /api/sessions/{session_path}/leave:
     delete:
+      operationId: leaveSession
       summary: Leave a session
       security: [{ bearer: [] }]
       parameters: [{ name: session_path, in: path, required: true, schema: { type: string } }]
       responses: { "200": { description: ok } }
   /api/sessions/{session_path}/add_instance:
     post:
+      operationId: addSessionInstance
       summary: Create a session instance (a log for a date)
       security: [{ bearer: [] }]
       parameters: [{ name: session_path, in: path, required: true, schema: { type: string } }]
       responses: { "200": { description: ok } }
   /api/sessions/{session_path}/next_instance_suggestion:
     get:
+      operationId: getNextInstanceSuggestion
       summary: The next date the recurrence suggests
       security: [{ bearer: [] }]
       parameters: [{ name: session_path, in: path, required: true, schema: { type: string } }]
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/NextInstanceSuggestion" } } } } }
   /api/session/{session_id}/active_instance:
     get:
+      operationId: getActiveInstance
       summary: Which instances of a session are live now
       parameters: [{ name: session_id, in: path, required: true, schema: { type: integer } }]
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/ActiveInstance" } } } } }
@@ -849,17 +906,20 @@ paths:
   # --- live logging ------------------------------------------------------------------
   /api/live/instances/{session_instance_id}/bootstrap:
     get:
+      operationId: getLiveBootstrap
       summary: Snapshot + last_event_id; then open the SSE stream from that cursor
       parameters: [{ name: session_instance_id, in: path, required: true, schema: { type: integer } }]
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/LiveBootstrap" } } } } }
   /api/live/instances/{session_instance_id}/vocabulary:
     get:
+      operationId: getLiveVocabulary
       summary: The session's known tunes for local exact-match
       security: [{ bearer: [] }]
       parameters: [{ name: session_instance_id, in: path, required: true, schema: { type: integer } }]
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/LiveVocabulary" } } } } }
   /api/live/instances/{session_instance_id}/ops:
     post:
+      operationId: applyLiveOp
       summary: One refereed op (see LiveOp); business rejections are 200 + rejected
       security: [{ bearer: [] }]
       parameters: [{ name: session_instance_id, in: path, required: true, schema: { type: integer } }]
@@ -867,12 +927,14 @@ paths:
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/LiveOpResult" } } } } }
   /api/live/instances/{session_instance_id}/people:
     get:
+      operationId: getLivePeople
       summary: People at / of this instance's session
       security: [{ bearer: [] }]
       parameters: [{ name: session_instance_id, in: path, required: true, schema: { type: integer } }]
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/SessionPeople" } } } } }
   /api/live/token:
     post:
+      operationId: issueLiveToken
       summary: Mint a Bearer token from a cookie session (web -> sidecar; native clients use login instead)
       security: [{ bearer: [] }]
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Token" } } } } }
@@ -880,12 +942,14 @@ paths:
   # --- recordings ----------------------------------------------------------------------
   /api/session-instances/{session_instance_id}/recordings:
     get:
+      operationId: getInstanceRecordings
       summary: Recordings for an instance
       security: [{ bearer: [] }]
       parameters: [{ name: session_instance_id, in: path, required: true, schema: { type: integer } }]
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Recordings" } } } } }
   /api/session-instances/{session_instance_id}/audio:
     get:
+      operationId: getInstanceAudio
       summary: Presigned audio URL(s) for playback
       security: [{ bearer: [] }]
       parameters: [{ name: session_instance_id, in: path, required: true, schema: { type: integer } }]
@@ -894,22 +958,26 @@ paths:
   # --- person ----------------------------------------------------------------------------
   /api/me/details:
     get:
+      operationId: getMyDetails
       summary: The full /me page payload
       security: [{ bearer: [] }]
       responses: { "200": { description: ok } }
   /api/person/{person_id}/instruments:
     get:
+      operationId: getPersonInstruments
       summary: A person's instruments
       security: [{ bearer: [] }]
       parameters: [{ name: person_id, in: path, required: true, schema: { type: integer } }]
       responses: { "200": { description: ok } }
     put:
+      operationId: updatePersonInstruments
       summary: Replace a person's instruments
       security: [{ bearer: [] }]
       parameters: [{ name: person_id, in: path, required: true, schema: { type: integer } }]
       responses: { "200": { description: ok } }
   /api/person/{person_id}/update:
     put:
+      operationId: updatePersonDetails
       summary: Update person + user details (self or admin)
       security: [{ bearer: [] }]
       parameters: [{ name: person_id, in: path, required: true, schema: { type: integer } }]

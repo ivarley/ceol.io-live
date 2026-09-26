@@ -36,6 +36,14 @@ Login credentials and preferences.
 
 See [Authentication](../logic/auth.md) for details.
 
+#### Account deletion (spec 054)
+`POST /api/me/delete-account` deletes the login and the private data — the account, all its
+sessions/tokens, login history, the tune list, per-instrument statuses, instruments, the
+person's contact details and thesession.org link, and the history-table copies of all of
+it — immediately. The person row stays with its NAME, as a no-login person on the rosters and
+attendance lists admins keep; logged tunes stay. Refused for system admins. Details and the
+reasoning: [spec 054](../../changes/inprogress/054-account-deletion.md).
+
 ### email_message / email_message_recipient
 Admin-sent app update emails (spec 027, sent from `/admin/email-updates`).
 - email_message: subject, body_markdown, sent_by_user_id (FK), sent_date,

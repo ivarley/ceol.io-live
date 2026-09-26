@@ -23,7 +23,7 @@ import re
 from datetime import timedelta
 
 import bcrypt
-from flask import jsonify, request, session, url_for
+from flask import flash, jsonify, request, session, url_for
 from flask_login import current_user, login_user, logout_user
 
 from api_auth import (
@@ -377,6 +377,54 @@ def auth_set_password():
 @api_login_required
 def api_me():
     return jsonify({"success": True, "user": user_payload(current_user)})
+
+
+# ---------------------------------------------------------------------------
+# POST /api/me/delete-account  (spec 054)
+# ---------------------------------------------------------------------------
+
+
+@api_login_required
+def delete_account_api():
+    """Delete the caller's account and private data, immediately. What goes and what
+    stays is in services/account_deletion.py.
+
+    The body must repeat the account's email (`confirm_email`, case-insensitive) —
+    the same thing the web asks you to type — so a stray tap or a replayed request
+    can't do it. On success every session and Bearer token of the account is gone
+    (user_session cascades) and this caller is signed out."""
+    from services.account_deletion import AccountDeletionRefused, delete_account
+
+    data = request.get_json(silent=True) or {}
+    typed = (data.get("confirm_email") or "").strip().lower()
+    expected = (current_user.email or current_user.username or "").strip().lower()
+    if not typed or typed != expected:
+        return api_error(
+            "Type your account's email address to confirm.", 400, code="confirmation_mismatch"
+        )
+
+    user_id = current_user.user_id
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        try:
+            delete_account(cur, user_id)
+        except AccountDeletionRefused as e:
+            conn.rollback()
+            return api_error(e.message, 403, code=e.code)
+        except LookupError:
+            conn.rollback()
+            return api_error("Account not found", 404)
+        conn.commit()
+    finally:
+        conn.close()
+
+    # Signed out everywhere already; this clears the calling browser's cookie session
+    # and Flask-Login's cached user. The notice shows on the next page the web loads.
+    session.clear()
+    logout_user()
+    flash("Your account has been deleted.", "success")
+    return jsonify({"success": True})
 
 
 # ---------------------------------------------------------------------------

@@ -56,6 +56,10 @@ User registration, login, password management, email verification.
   complete the set. `establish_session()` there is the single login-recording
   path; `web_routes.login_password_api` delegates to it. Full table:
   [AJAX Patterns](../ui/ajax.md#the-native-handshake-api_app_routespy-spec-052).
+- **Account deletion (spec 054)**: `POST /api/me/delete-account {confirm_email}`
+  deletes the account and its private data immediately (`services/account_deletion.py`),
+  kills every token, and signs the caller out. The person's name stays on rosters. See
+  [People & Attendance](../data/people-model.md#account-deletion-spec-054).
 - `auth.needs_profile_setup(person_id)` (missing name or no location) drives
   both the web redirect to `/auth/setup-profile` and the API's `next` field.
 - `/api/*` endpoints use the decorators in `api_auth.py`
