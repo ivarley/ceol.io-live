@@ -595,3 +595,67 @@ describe('add-session logic', () => {
     expect(monthly.summary).toBe('1st & last Sunday from 2pm-5pm')
   })
 })
+
+describe('add-session sheet: an imported payload is not type-guaranteed', () => {
+  // Ported from frontend/tests/addsessionpage.app.test.js, which covered the page
+  // this sheet replaced. The fix these pin landed on master while that file still
+  // existed; the 052 rewrite deleted the file, so merging dropped the tests and the
+  // bug came back with the new sheet. They are rewritten against this sheet rather
+  // than carried over, because the flow to reach the fields is different.
+
+  it('saves an IMPORTED session, whose thesession id arrives as a number', async () => {
+    // thesession.org types the id as a number. Every other save test here types into
+    // the field first, which makes it a string — which is exactly how a throw on
+    // `thesessionId.trim()` left the import flow's Save button dead with nothing on
+    // screen to explain why.
+    const navigate = vi.fn()
+    open({ navigate })
+    await search('https://thesession.org/sessions/1247')
+    await waitFor(() => expect(document.querySelector('#sessionDetailsForm')).toBeTruthy())
+    // The id lives under Advanced — an import fills it, you rarely touch it.
+    await openAdvanced()
+    expect(document.querySelector('#thesessionId').value).toBe('1247')
+
+    await fireEvent.click(document.querySelector('#saveSessionBtn'))
+
+    await waitFor(() => expect(created()).toBe(true))
+    expect(createdBody()).toMatchObject({
+      thesession_id: '1247',
+      name: "B.D. Riley's",
+      path: 'austin/bd-rileys',
+    })
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/sessions/austin/bd-rileys'))
+    expect(document.querySelector('.session-sheet-actions .field-error')).toBeNull()
+  })
+
+  it('seeds text fields as text even when the payload types them as numbers', async () => {
+    // /api/fetch-session-data coerces this payload too, but the sheet holds the same
+    // guarantee at the field, for any other seed source. Any non-string here throws
+    // on one of the .trim()s in save().
+    fetchRoutes['/api/fetch-session-data'] = {
+      success: true,
+      session_data: sessionData({
+        location_phone: 5125551234,
+        location_website: null,
+        comments: [{ date: '2020-01-01', content: 42 }],
+      }),
+    }
+    const navigate = vi.fn()
+    open({ navigate })
+    await search('https://thesession.org/sessions/1247')
+    await waitFor(() => expect(document.querySelector('#sessionDetailsForm')).toBeTruthy())
+
+    await openAdvanced()
+    expect(document.querySelector('#locationPhone').value).toBe('5125551234')
+    expect(document.querySelector('#locationWebsite').value).toBe('')
+
+    await fireEvent.click(document.querySelector('#saveSessionBtn'))
+
+    await waitFor(() => expect(created()).toBe(true))
+    expect(createdBody()).toMatchObject({
+      location_phone: '5125551234',
+      location_website: null, // blank after coercion -> omitted, as any blank field is
+    })
+    expect(document.querySelector('.session-sheet-actions .field-error')).toBeNull()
+  })
+})
