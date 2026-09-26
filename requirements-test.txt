@@ -12,3 +12,6 @@ Faker==19.6.2
 flake8==6.0.0
 black==23.7.0
 coverage==7.3.2
+# API contract tests (spec 052 A5): validate native-surface responses against specs/api/native-surface.yaml
+jsonschema>=4.17
+PyYAML>=6.0

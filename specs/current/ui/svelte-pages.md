@@ -29,8 +29,17 @@ First paint needs no fetch — no loading flash.
 | `/sessions/<path>` | `session_detail.html` | `build_session_detail_payload` | `GET /api/sessions/<path>/detail` | `frontend/src/sessionpage/` | `static/sessionpage/` |
 | `/me`, `/admin/people/<id>` | `person_details.html` | `build_person_details_payload` | `GET /api/me/details`, `GET /api/admin/people/<id>/details` | `frontend/src/personpage/` | `static/personpage/` |
 | `/admin/sessions/<path>` (+ tab wrappers) | `session_admin.html` | `build_session_admin_payload` | `GET /api/admin/sessions/<path>/admin-detail` | `frontend/src/sessionadminpage/` | `static/sessionadminpage/` |
-| `/add-session` | `add_session.html` | `build_add_session_payload` | `GET /api/add-session` (PUBLIC — only the create POST is gated) | `frontend/src/addsessionpage/` | `static/addsessionpage/` |
 | `/admin/people` | `admin_people.html` | `build_admin_people_payload` | `GET /api/admin/people` (system-admin) | `frontend/src/peopleadminpage/` | `static/peopleadminpage/` |
+| `/admin/recordings/<id>/segment` | `recording_segmenter.html` | `build_recording_segmenter_payload` | `GET /api/recordings/<id>/segmenter` (system-admin) | `frontend/src/segmenterpage/` | `static/segmenterpage/` |
+
+`/add-session` is no longer in this table. Adding a session is a sheet presented
+over the sessions list (`frontend/src/addsession/`, imported by the `sessionsdir`
+bundle), so it has no shell, no payload embed and no bundle of its own. The URL
+redirects to `/sessions?add=1`, which is what opens the sheet.
+`GET /api/add-session` survives as the sheet's own payload: it is fetched when the
+sheet opens rather than embedded in the sessions-list payload, because 44 timezone
+options on every `/sessions` load would be read on almost none of them. The create
+POST on the same rule stays login-gated.
 
 Plus three non-page bundles:
 

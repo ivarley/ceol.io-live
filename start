@@ -78,7 +78,7 @@ fi
 # until these are built. Rebuild if any one of them is missing; Vite's own
 # caching makes a redundant full build cheap.
 SVELTE_BUNDLES=(live mytunespage tunesheet sessionsdir sessionpage personpage
-                sessionadminpage addsessionpage peopleadminpage)
+                sessionadminpage peopleadminpage)
 missing_bundle=false
 for b in "${SVELTE_BUNDLES[@]}"; do
   [ -d "static/$b" ] || missing_bundle=true

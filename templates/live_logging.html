@@ -25,7 +25,10 @@
       instanceActive: {{ instance_active | tojson }},
       canonicalInstruments: {{ canonical_instruments | tojson }},
       trackAttendance: {{ track_attendance | tojson }},
-      trackSetStarters: {{ track_set_starters | tojson }}
+      trackSetStarters: {{ track_set_starters | tojson }},
+      // Whether to offer the header's Recordings row (schema/053). Purely about
+      // what is shown -- every recording endpoint re-checks the grant itself.
+      canManageRecordings: {{ can_manage_recordings | tojson }}
     };
     // Same app-wide flag base.html sets (this shell doesn't extend it): the tune drawer
     // and "Find a tune" overlay render for logged-out viewers too and have no page
@@ -48,6 +51,13 @@
        top-right over the Svelte header. Theme vars map the shared menu onto the live
        editor's always-dark palette. -->
   <link rel="stylesheet" href="{{ url_for('static', filename='css/hamburger_menu.css') }}">
+  {# The same bottom tab bar the rest of the phone app has (spec 052 §B14). It was
+     left off this screen because a bar pinned to the bottom would sit on the
+     composer — true while you are logging, and not true the rest of the time.
+     The bar is here in VIEW mode and hides itself in EDIT, so reading a log is an
+     ordinary screen of the app and logging one is the full-screen task it is. #}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/grouped.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/tab_bar.css') }}">
   <script src="{{ url_for('static', filename='js/hamburger_menu.js') }}"></script>
   <!-- The app-wide font (base.html loads the same family) — used by the replicated
        header's site title; body text stays the app's system stack. -->
@@ -65,7 +75,7 @@
     }
   </style>
 </head>
-<body>
+<body class="has-tab-bar">
   <div id="app"></div>
   <div class="live-menu">{% include 'hamburger_menu.html' %}</div>
   <script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
@@ -74,5 +84,6 @@
        container and installs window.TuneDetailModal for the logger's drawer. -->
   <script type="module" src="{{ url_for('static', filename='tunesheet/sheet.js') }}"></script>
   <script type="module" src="{{ url_for('static', filename='live/app.js') }}"></script>
+  {% include 'tab_bar.html' %}
 </body>
 </html>

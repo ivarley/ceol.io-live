@@ -5,7 +5,7 @@
   // the session questions instead: alias ("we call this"), and under Advanced a
   // specific setting and the key the session plays it in. Bundled into the
   // sessionpage bundle as a child of its App, driven via bind:this + open().
-  import { Chip } from '../lib/index.js'
+  import { Chevron, Chip } from '../lib/index.js'
   import TuneSearch from '../TuneSearch.svelte'
   import Incipit from '../Incipit.svelte'
   import { createPaneState } from './pane.svelte.js'
@@ -188,7 +188,7 @@
       />
     {:else}
       <div class="deep-head">
-        <button class="mt-back" onclick={backToSearch} aria-label="Back to search">‹</button>
+        <button class="mt-back" onclick={backToSearch} aria-label="Back to search"><Chevron dir="left" size={18} /></button>
         <span class="deep-title">Add to Session</span>
         <button class="deep-done" onclick={close}>Cancel</button>
       </div>
@@ -227,7 +227,7 @@
 
         <div class="mt-section">
           <button class="mt-advanced-toggle" onclick={() => (advancedOpen = !advancedOpen)}>
-            {advancedOpen ? '▾' : '▸'} Advanced
+            <Chevron dir={advancedOpen ? "down" : "right"} size={14} /> Advanced
           </button>
           {#if advancedOpen}
             <div class="mt-advanced">

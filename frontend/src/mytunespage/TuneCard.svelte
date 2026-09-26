@@ -12,6 +12,7 @@
   // 768px breakpoint re-renders the right variant — the legacy render-time
   // innerWidth check couldn't.
   import { Chip } from '../lib/index.js'
+  import { STATUS_LABELS } from '../mylist.js'
 
   let {
     tune,
@@ -36,6 +37,9 @@
   let flashBtn = $state(false)
 
   const statusClass = $derived('status-' + displayStatus.replace(/ /g, '-'))
+  // The badge shows the page's wording ("To Learn"), never the stored value — which
+  // stays 'want to learn' everywhere it's compared, cycled, or sent.
+  const statusText = $derived(STATUS_LABELS[displayStatus] || displayStatus)
   const thesessionUrl = $derived(
     tune.tune_id
       ? tune.setting_id
@@ -134,6 +138,9 @@
 {#snippet cardBody()}
   <div class="tune-card-header">
     <h3 class="tune-name">{tune.tune_name || 'Unknown'}</h3>
+    <!-- This tune is here because its NOTATION matched, not its name — without the mark
+         a notes search reads as a list of unrelated tunes. -->
+    {#if tune._abcOnly}<span class="abc-only-badge" title="Matched the notation, not the name">♪</span>{/if}
     {#if tune.pending_sync}
       <Chip
         label="pending"
@@ -147,7 +154,7 @@
   <div class="tune-meta">
     <div class="tune-meta-item">
       <Chip
-        label={displayStatus}
+        label={statusText}
         styled={false}
         chipClass="status-badge {statusClass}"
         style="cursor:pointer;"

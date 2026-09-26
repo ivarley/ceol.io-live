@@ -5,6 +5,14 @@
 
 {% block extra_css %}
 <style>
+/* The named back link (spec 052 §B17) — replaces `javascript:history.back()`. */
+.ct-back { margin: 0 0 1rem; }
+.ct-back a {
+    display: inline-flex; align-items: center; gap: 4px;
+    color: var(--primary); text-decoration: none; font-size: 0.95rem;
+}
+.ct-back a:hover { text-decoration: underline; }
+
 /* Base container styles */
 .tunes-container {
     max-width: 1200px;
@@ -141,7 +149,7 @@
 .tune-type {
     font-size: 11px;
     padding: 3px 6px;
-    background-color: var(--primary);
+    background-color: var(--primary-fill);
     color: white;
     border-radius: 3px;
     text-transform: capitalize;
@@ -257,7 +265,18 @@
 <div class="landing-page" style="display: block;">
     <h1>Tunes In Common</h1>
     <p class="page-subtitle">{{ current_person_name }} and {{ other_person_name }} have these tunes in common:</p>
-    <p><a href="javascript:history.back()">← Back</a></p>
+    {# A named destination, not history.back() (spec 052 §B17). The app is
+       display:standalone, so an installed visitor has no browser Back to fall back
+       on, and a shared link has no history at all. No origin, no row: the Sessions
+       tab is still there. #}
+    {% if back %}
+    <p class="ct-back">
+      <a href="{{ back.href }}" id="ct-back">
+        <svg class="kit-chevron kit-chevron--left" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 5 16 12 9 19"/></svg>
+        {{ back.label }}
+      </a>
+    </p>
+    {% endif %}
 
     <div class="tunes-container">
         <div class="filters-container">

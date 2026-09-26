@@ -35,7 +35,7 @@
   }
   .kit-pager-btn {
     background: var(--bg-color, #fff);
-    color: var(--primary, #00a1e0);
+    color: var(--primary, #65b464);
     border: 1px solid var(--border-color, #ddd);
     border-radius: var(--r-sm, 4px);
     min-width: 28px;

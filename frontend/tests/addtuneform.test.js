@@ -54,14 +54,32 @@ describe('AddTuneForm', () => {
     expect(container.querySelector('.mt-expand')).toBeNull()
   })
 
-  it('on-list tune renders the hand-off button instead of the form', async () => {
+  it('on-list tune renders the on-list panel instead of the form', async () => {
     const onShowExisting = vi.fn()
-    const { container } = render(AddTuneForm, { onList: true, onSubmit: vi.fn(), onShowExisting })
+    const { container } = render(AddTuneForm, {
+      onList: true,
+      existing: { person_tune_id: 9, on_list: true, learn_status: 'learned', setting_id: 5, heard_count: 0 },
+      onSubmit: vi.fn(),
+      onShowExisting,
+    })
     expect(container.querySelector('.mt-submit')).toBeNull()
-    const btn = container.querySelector('.mt-onlist')
-    expect(btn.textContent).toContain('Already on your list')
-    await fireEvent.click(btn)
+    const head = container.querySelector('.mt-onlist-head')
+    expect(head.textContent).toContain('Already on your list')
+    // The status is part of the answer to "what do I already have on this tune?"
+    expect(container.querySelector('.mt-onlist-status').textContent).toBe('Learned')
+    await fireEvent.click(head)
     expect(onShowExisting).toHaveBeenCalled()
+  })
+
+  it('on-list: no setting was pointed at, so nothing to update', () => {
+    const { container } = render(AddTuneForm, {
+      onList: true,
+      existing: { person_tune_id: 9, on_list: true, learn_status: 'learning', setting_id: 5, heard_count: 2 },
+      onSubmit: vi.fn(),
+    })
+    expect(container.querySelector('.mt-onlist-ask')).toBeNull()
+    const labels = [...container.querySelectorAll('.mt-onlist-actions .pv-action')].map((b) => b.textContent.trim())
+    expect(labels).toEqual(['I Heard It Again (2)', 'Cancel'])
   })
 
   it('a failed submit shows the error and keeps the form usable', async () => {

@@ -1,0 +1,910 @@
+openapi: 3.1.0
+info:
+  title: Ceol native surface
+  version: "1"
+  description: |
+    The subset of the ceol.io JSON API a native client is allowed to depend on
+    (spec 052 A5). Everything under /api/* that is NOT listed here is web-internal
+    and may change without notice; everything here changes ADDITIVELY only —
+    fields are added, never removed or retyped, and a removal waits a deprecation
+    window measured in app-store months.
+
+    tests/contract/test_native_surface.py enforces two things: every path+method
+    here is a registered Flask rule, and the listed GET endpoints' live responses
+    validate against these schemas. Schemas describe the REQUIRED keys and their
+    types; extra keys are always allowed (`additionalProperties` is left open) so
+    additive server changes never break an old client.
+
+    Conventions (see specs/current/ui/ajax.md):
+      * Auth: `Authorization: Bearer <token>` from POST /api/auth/login-password or
+        POST /api/auth/exchange, sent with `X-Ceol-Client: ios/<version>`.
+      * Errors: every 4xx/5xx body is {success:false, error, message, code}.
+      * Dates are ISO 8601 strings (date: YYYY-MM-DD, datetime with offset,
+        time: HH:MM:SS); timezones are IANA names.
+      * Live-op business rejections are HTTP 200 with {success:true, rejected:true, reason}.
+
+servers:
+  - url: https://ceol.io
+
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+  schemas:
+    Error:
+      type: object
+      required: [success, error, message, code]
+      properties:
+        success: { const: false }
+        error: { type: string }
+        message: { type: string }
+        code: { type: string }
+    Ok:
+      type: object
+      required: [success]
+      properties:
+        success: { const: true }
+    User:
+      type: object
+      required: [user_id, person_id, username, email, first_name, last_name,
+                 is_system_admin, timezone, email_verified, has_password, needs_profile_setup]
+      properties:
+        user_id: { type: integer }
+        person_id: { type: integer }
+        username: { type: string }
+        email: { type: [string, "null"] }
+        first_name: { type: string }
+        last_name: { type: string }
+        is_system_admin: { type: boolean }
+        timezone: { type: string }
+        email_verified: { type: boolean }
+        has_password: { type: boolean }
+        needs_profile_setup: { type: boolean }
+    LoginResponse:
+      type: object
+      required: [success, user, next, method]
+      properties:
+        success: { const: true }
+        user: { $ref: "#/components/schemas/User" }
+        next: { type: [string, "null"], enum: [set_password, setup_profile, null] }
+        method: { type: string, enum: [password, magic_link, email_verification] }
+        token: { type: string, description: Present only for native callers. }
+        token_type: { type: string, enum: [Bearer] }
+    Me:
+      type: object
+      required: [success, user]
+      properties:
+        success: { const: true }
+        user: { $ref: "#/components/schemas/User" }
+    Profile:
+      type: object
+      required: [success, profile, needs_profile_setup, canonical_instruments, timezone_options]
+      properties:
+        success: { const: true }
+        profile:
+          type: object
+          required: [first_name, last_name, city, state, country, timezone, instruments]
+          properties:
+            first_name: { type: string }
+            last_name: { type: string }
+            city: { type: string }
+            state: { type: string }
+            country: { type: string }
+            timezone: { type: string }
+            instruments: { type: array, items: { type: string } }
+        needs_profile_setup: { type: boolean }
+        canonical_instruments: { type: array, items: { type: string } }
+        timezone_options: { type: array, items: { $ref: "#/components/schemas/Option" } }
+    Option:
+      type: object
+      required: [value, label]
+      properties:
+        value: { type: string }
+        label: { type: string }
+    AppConfig:
+      type: object
+      required: [success, streaming_base_url, web_base_url, min_client_version, force_upgrade, client, features]
+      properties:
+        success: { const: true }
+        streaming_base_url: { type: string }
+        web_base_url: { type: string }
+        min_client_version: { type: object, additionalProperties: { type: string } }
+        force_upgrade: { type: boolean }
+        client:
+          type: object
+          required: [platform, version]
+          properties:
+            platform: { type: string }
+            version: { type: [string, "null"] }
+        server_version: { type: [string, "null"] }
+        features: { type: object, additionalProperties: { type: boolean } }
+    Home:
+      type: object
+      required: [success, learning_count, want_to_learn_count, suggested_tune,
+                 upcoming_sessions, in_progress_logs, in_progress_recordings, today, week]
+      properties:
+        success: { const: true }
+        learning_count: { type: integer }
+        want_to_learn_count: { type: integer }
+        suggested_tune:
+          type: [object, "null"]
+          required: [tune_id, name, tune_type, play_count]
+          properties:
+            tune_id: { type: integer }
+            name: { type: string }
+            tune_type: { type: [string, "null"] }
+            play_count: { type: integer }
+        viewer:
+          type: object
+          required: [person_id, first_name]
+          properties:
+            person_id: { type: [integer, "null"] }
+            first_name: { type: [string, "null"] }
+        upcoming_sessions:
+          # This week's instances at the viewer's sessions. The Today card is the
+          # subset whose date == `today`; there is no second list for it, so the two
+          # cannot disagree (spec 052 §B2).
+          type: array
+          items:
+            type: object
+            required: [name, path, session_id, session_instance_id, date, start_time, log_complete_date,
+                       end_time, location_name, is_active, tunes_logged, people_here]
+            properties:
+              name: { type: string }
+              path: { type: string }
+              session_id: { type: integer }
+              session_instance_id: { type: integer }
+              date: { $ref: "#/components/schemas/Date" }
+              start_time: { $ref: "#/components/schemas/TimeOrNull" }
+              end_time: { $ref: "#/components/schemas/TimeOrNull" }
+              location_name: { type: [string, "null"] }
+              log_complete_date: { $ref: "#/components/schemas/DateTimeOrNull" }
+              is_active: { type: boolean }
+              tunes_logged: { type: integer }
+              people_here: { type: integer }
+        in_progress_logs:
+          type: array
+          items:
+            type: object
+            required: [name, path, session_id, session_instance_id, date, last_edit]
+            properties:
+              name: { type: string }
+              path: { type: string }
+              session_id: { type: integer }
+              session_instance_id: { type: integer }
+              date: { $ref: "#/components/schemas/Date" }
+              last_edit: { $ref: "#/components/schemas/DateTime" }
+        in_progress_recordings:
+          type: array
+          items:
+            type: object
+            required: [recording_id, label, name, path, session_instance_id, date, last_edit, placed, tune_count]
+            properties:
+              recording_id: { type: integer }
+              label: { type: [string, "null"] }
+              name: { type: string }
+              path: { type: string }
+              session_instance_id: { type: integer }
+              date: { $ref: "#/components/schemas/Date" }
+              last_edit: { $ref: "#/components/schemas/DateTime" }
+              placed: { type: integer }
+              tune_count: { type: integer }
+        today: { $ref: "#/components/schemas/Date" }
+        week:
+          type: object
+          required: [start, end]
+          properties:
+            start: { $ref: "#/components/schemas/Date" }
+            end: { $ref: "#/components/schemas/Date" }
+    Resolve:
+      type: object
+      required: [success, kind, session, instance]
+      properties:
+        success: { const: true }
+        kind: { type: string, enum: [session, instance] }
+        session:
+          type: object
+          required: [session_id, path, name]
+          properties:
+            session_id: { type: integer }
+            path: { type: string }
+            name: { type: string }
+        instance:
+          type: [object, "null"]
+          required: [session_instance_id, date, location_override]
+          properties:
+            session_instance_id: { type: integer }
+            date: { $ref: "#/components/schemas/Date" }
+            location_override: { type: [string, "null"] }
+    WebSession:
+      type: object
+      required: [success, url, expires_at]
+      properties:
+        success: { const: true }
+        url: { type: string }
+        expires_at: { $ref: "#/components/schemas/DateTime" }
+
+    Date:
+      type: string
+      pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+    DateOrNull:
+      type: [string, "null"]
+      pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+    DateTime:
+      type: string
+      pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}"
+    DateTimeOrNull:
+      type: [string, "null"]
+      pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}"
+    Time:
+      type: string
+      pattern: "^\\d{2}:\\d{2}(:\\d{2})?$"
+    TimeOrNull:
+      type: [string, "null"]
+      pattern: "^\\d{2}:\\d{2}(:\\d{2})?$"
+
+    PersonTune:
+      type: object
+      required: [person_tune_id, person_id, tune_id, learn_status, heard_count, learned_date,
+                 notes, setting_id, name_alias, key, tags, created_date, last_modified_date,
+                 tune_name, tune_type, tunebook_count, instrument_status,
+                 member_play_count, attended_play_count, session_play_count]
+      properties:
+        person_tune_id: { type: integer }
+        person_id: { type: integer }
+        tune_id: { type: integer }
+        learn_status: { type: string }
+        heard_count: { type: integer }
+        learned_date: { $ref: "#/components/schemas/DateOrNull" }
+        notes: { type: [string, "null"] }
+        setting_id: { type: [integer, "null"] }
+        name_alias: { type: [string, "null"] }
+        key: { type: [string, "null"] }
+        tags: { type: array, items: { type: string } }
+        created_date: { $ref: "#/components/schemas/DateTime" }
+        last_modified_date: { $ref: "#/components/schemas/DateTime" }
+        tune_name: { type: string }
+        tune_type: { type: [string, "null"] }
+        tunebook_count: { type: [integer, "null"] }
+        tunebook_count_cached_date: { $ref: "#/components/schemas/DateOrNull" }
+        thesession_url: { type: string }
+        instrument_status: { type: object, additionalProperties: { type: string } }
+        member_play_count: { type: integer }
+        attended_play_count: { type: integer }
+        session_play_count: { type: integer }
+    Instrument:
+      type: object
+      required: [instrument, is_auto]
+      properties:
+        instrument: { type: string }
+        is_auto: { type: boolean }
+    MyTunes:
+      type: object
+      required: [success, tunes, instruments, thesession_user_id, pagination]
+      properties:
+        success: { const: true }
+        tunes: { type: array, items: { $ref: "#/components/schemas/PersonTune" } }
+        instruments: { type: array, items: { $ref: "#/components/schemas/Instrument" } }
+        thesession_user_id: { type: [integer, "null"] }
+        pagination:
+          type: object
+          required: [page, per_page, total_count, total_pages, has_next, has_prev]
+          properties:
+            page: { type: integer }
+            per_page: { type: integer }
+            total_count: { type: integer }
+            total_pages: { type: integer }
+            has_next: { type: boolean }
+            has_prev: { type: boolean }
+    MyTunesOp:
+      type: object
+      required: [op_id, type, tune_id]
+      properties:
+        op_id: { type: string, format: uuid }
+        type:
+          type: string
+          enum: [add, set_status, set_heard, set_notes, set_tags, remove, set_instrument_status]
+        tune_id: { type: integer }
+    SessionsDirectory:
+      type: object
+      required: [success, sessions, today]
+      properties:
+        success: { const: true }
+        today: { $ref: "#/components/schemas/Date" }
+        sessions:
+          type: array
+          items:
+            type: object
+            required: [session_id, name, path, city, state, country, termination_date,
+                       recurrence, user_is_member, user_relationship, location_name, active_instances]
+            properties:
+              session_id: { type: integer }
+              name: { type: string }
+              path: { type: string }
+              city: { type: [string, "null"] }
+              state: { type: [string, "null"] }
+              country: { type: [string, "null"] }
+              termination_date: { $ref: "#/components/schemas/DateOrNull" }
+              recurrence: { type: [string, "null"] }
+              user_is_member: { type: boolean }
+              user_relationship: { type: [string, "null"] }
+              location_name: { type: [string, "null"] }
+              active_instances: { type: array }
+    SessionDetail:
+      type: object
+      required: [success, session, permissions, today_in_session_tz, tunes, total_tunes_count, has_more_tunes, popular_tunes]
+      properties:
+        success: { const: true }
+        session:
+          type: object
+          required: [session_id, name, path, city, state, country, recurrence, recurrence_readable,
+                     session_type, timezone, track_attendance, track_set_starters, show_people_list]
+          properties:
+            session_id: { type: integer }
+            thesession_id: { type: [integer, "null"] }
+            name: { type: string }
+            path: { type: string }
+            location_name: { type: [string, "null"] }
+            city: { type: [string, "null"] }
+            state: { type: [string, "null"] }
+            country: { type: [string, "null"] }
+            initiation_date: { $ref: "#/components/schemas/DateOrNull" }
+            termination_date: { $ref: "#/components/schemas/DateOrNull" }
+            recurrence: { type: [string, "null"] }
+            recurrence_readable: { type: [string, "null"] }
+            session_type: { type: string }
+            timezone: { type: string }
+            show_people_list: { type: boolean }
+            track_attendance: { type: boolean }
+            track_set_starters: { type: boolean }
+        permissions:
+          type: object
+          required: [is_logged_in, is_session_admin, is_session_member, relationship, is_confirmed, can_view_people]
+          properties:
+            is_logged_in: { type: boolean }
+            is_session_admin: { type: boolean }
+            is_session_member: { type: boolean }
+            relationship: { type: [string, "null"] }
+            is_confirmed: { type: boolean }
+            can_view_people: { type: boolean }
+        today_in_session_tz: { $ref: "#/components/schemas/Date" }
+        tunes:
+          type: array
+          items:
+            type: object
+            required: [tune_id, tune_name, tune_type, play_count, tunebook_count, setting_id]
+            properties:
+              tune_id: { type: integer }
+              tune_name: { type: string }
+              tune_type: { type: [string, "null"] }
+              play_count: { type: integer }
+              tunebook_count: { type: [integer, "null"] }
+              setting_id: { type: [integer, "null"] }
+        total_tunes_count: { type: integer }
+        has_more_tunes: { type: boolean }
+        popular_tunes: { type: array }
+    SessionLogs:
+      type: object
+      required: [success, instances_by_year, sorted_years, session_type]
+      properties:
+        success: { const: true }
+        session_type: { type: string }
+        sorted_years: { type: array, items: { type: integer } }
+        instances_by_year:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: object
+              required: [date, location_override, start_time, end_time, session_instance_id, tune_count]
+              properties:
+                date: { $ref: "#/components/schemas/Date" }
+                location_override: { type: [string, "null"] }
+                start_time: { $ref: "#/components/schemas/TimeOrNull" }
+                end_time: { $ref: "#/components/schemas/TimeOrNull" }
+                session_instance_id: { type: integer }
+                multiple_on_date: { type: boolean }
+                tune_count: { type: integer }
+    SessionPeople:
+      type: object
+      required: [success, people]
+      properties:
+        success: { const: true }
+        people:
+          type: array
+          items:
+            type: object
+            required: [person_id, first_name, last_name, display_name, instruments, relationship, confirmed, is_admin]
+            properties:
+              person_id: { type: integer }
+              first_name: { type: string }
+              last_name: { type: string }
+              display_name: { type: string }
+              instruments: { type: array, items: { type: string } }
+              relationship: { type: [string, "null"] }
+              confirmed: { type: boolean }
+              archived: { type: boolean }
+              is_admin: { type: boolean }
+              attending: { type: boolean }
+    TuneSearch:
+      type: object
+      required: [success, tunes, count]
+      properties:
+        success: { const: true }
+        count: { type: integer }
+        tunes:
+          type: array
+          items:
+            type: object
+            required: [tune_id, name, tune_type, tunebook_count, abc_only]
+            properties:
+              tune_id: { type: integer }
+              name: { type: string }
+              tune_type: { type: [string, "null"] }
+              tunebook_count: { type: [integer, "null"] }
+              abc_only: { type: boolean }
+    DeepSearch:
+      type: object
+      required: [success, results, scope]
+      properties:
+        success: { const: true }
+        scope: { type: string, enum: [personal, session, instance] }
+        results:
+          type: array
+          items:
+            type: object
+            required: [tune_id, name, tune_type, tunebook_count, on_list, in_session, played_here, abc_only, incipit_image, can_render]
+            properties:
+              tune_id: { type: integer }
+              name: { type: string }
+              tune_type: { type: [string, "null"] }
+              tunebook_count: { type: [integer, "null"] }
+              on_list: { type: boolean }
+              in_session: { type: boolean }
+              played_here: { type: integer }
+              abc_only: { type: boolean }
+              incipit_image: { type: [string, "null"] }
+              can_render: { type: boolean }
+    TunePreview:
+      type: object
+      required: [success, tune_id, name, tune_type, tunebook_count, aliases, played_here, settings]
+      properties:
+        success: { const: true }
+        tune_id: { type: integer }
+        name: { type: string }
+        tune_type: { type: [string, "null"] }
+        tunebook_count: { type: [integer, "null"] }
+        aliases: { type: array }
+        played_here: { type: integer }
+        settings:
+          type: array
+          items:
+            type: object
+            required: [setting_id, key, abc, incipit_abc, incipit_image]
+            properties:
+              setting_id: { type: integer }
+              key: { type: [string, "null"] }
+              abc: { type: string }
+              incipit_abc: { type: [string, "null"] }
+              incipit_image: { type: [string, "null"] }
+    Image:
+      type: object
+      required: [success, image]
+      properties:
+        success: { const: true }
+        image: { type: [string, "null"], description: base64 PNG }
+    TuneDetail:
+      type: object
+      required: [success, viewer, session_tune]
+      properties:
+        success: { const: true }
+        redirected_from: { type: [integer, "null"] }
+        viewer:
+          type: object
+          required: [logged_in, is_admin, is_session_admin, is_session_member]
+          properties:
+            logged_in: { type: boolean }
+            is_admin: { type: boolean }
+            is_session_admin: { type: boolean }
+            is_session_member: { type: boolean }
+        session_tune:
+          type: object
+          required: [tune_id, tune_name, tune_type, setting_id, setting_key, abc, incipit_abc,
+                     tunebook_count, times_played, global_play_count, person_list_count, session_count,
+                     person_tune_status, session_scope]
+          properties:
+            tune_id: { type: integer }
+            tune_name: { type: string }
+            tune_type: { type: [string, "null"] }
+            aliases: { type: array }
+            setting_id: { type: [integer, "null"] }
+            setting_key: { type: [string, "null"] }
+            abc: { type: [string, "null"] }
+            incipit_abc: { type: [string, "null"] }
+            image: { type: [string, "null"] }
+            incipit_image: { type: [string, "null"] }
+            tunebook_count: { type: [integer, "null"] }
+            times_played: { type: integer }
+            global_play_count: { type: integer }
+            person_list_count: { type: integer }
+            session_count: { type: integer }
+            person_tune_status: { type: [object, "null"] }
+            session_scope: { type: [object, "null"] }
+    LiveRecord:
+      type: object
+      required: [session_instance_tune_id, tune_id, name, order_position, record_type, deleted, logged_at]
+      properties:
+        session_instance_tune_id: { type: integer }
+        tune_id: { type: [integer, "null"] }
+        name: { type: [string, "null"] }
+        order_position: { type: string }
+        record_type: { type: string }
+        source: { type: [string, "null"] }
+        confidence: { type: [string, "null"] }
+        deleted: { type: boolean }
+        started_by_person_id: { type: [integer, "null"] }
+        key_override: { type: [string, "null"] }
+        setting_override: { type: [integer, "null"] }
+        tune_type: { type: [string, "null"] }
+        logged_at: { $ref: "#/components/schemas/DateTimeOrNull" }
+        logged_by_person_id: { type: [integer, "null"] }
+    LiveBootstrap:
+      type: object
+      required: [success, session_instance_id, can_edit, current_person, session_timezone, session_id,
+                 session_name, session_path, session_date, instance_date, instance_name, start_time, end_time,
+                 session_type, instance_active, log_complete, records, sets, last_event_id]
+      properties:
+        success: { const: true }
+        session_instance_id: { type: integer }
+        can_edit: { type: boolean }
+        current_person: { type: [object, "null"] }
+        user_timezone: { type: [string, "null"] }
+        session_timezone: { type: string }
+        session_id: { type: integer }
+        notes: { type: [string, "null"] }
+        log_complete: { type: boolean }
+        session_name: { type: string }
+        session_path: { type: string }
+        session_date: { type: string, description: Display string; use instance_date for the raw date. }
+        instance_date: { $ref: "#/components/schemas/DateOrNull" }
+        instance_name: { type: [string, "null"] }
+        start_time: { $ref: "#/components/schemas/TimeOrNull" }
+        end_time: { $ref: "#/components/schemas/TimeOrNull" }
+        session_type: { type: string }
+        instance_active: { type: boolean }
+        records: { type: array, items: { $ref: "#/components/schemas/LiveRecord" } }
+        sets: { type: array, items: { type: array, items: { $ref: "#/components/schemas/LiveRecord" } } }
+        last_event_id: { type: integer }
+    LiveVocabulary:
+      type: object
+      required: [success, known_tunes, known_aliases]
+      properties:
+        success: { const: true }
+        known_tunes:
+          type: array
+          items:
+            type: object
+            required: [tune_id, name, tune_type]
+            properties:
+              tune_id: { type: integer }
+              name: { type: string }
+              alias: { type: [string, "null"] }
+              tune_type: { type: [string, "null"] }
+              abc: { type: [string, "null"] }
+        known_aliases: { type: array }
+    LiveOp:
+      type: object
+      required: [op_id, op_type]
+      properties:
+        op_id: { type: string, format: uuid }
+        op_type:
+          type: string
+          enum: [add_tune, remove_tune, change_tune, set_confidence, set_break, attribute_set_starter,
+                 edit_notes, set_date, set_name, attendance_add, attendance_remove, attendance_create_person,
+                 mark_complete, mark_incomplete, move_tunes, remove_tunes, restore_tunes]
+    LiveOpResult:
+      type: object
+      required: [success]
+      properties:
+        success: { type: boolean }
+        rejected: { type: boolean }
+        reason: { type: string }
+        event_id: { type: integer }
+    Token:
+      type: object
+      required: [success, token, token_type]
+      properties:
+        success: { const: true }
+        token: { type: string }
+        token_type: { type: string, enum: [Bearer] }
+    OfflineBundle:
+      type: object
+      required: [success, tunes, popular]
+      properties:
+        success: { const: true }
+        tunes: { type: array, items: { type: object, required: [person_tune_id, tune_id, tune_name, tune_type, learn_status, incipit_abc] } }
+        popular: { type: array, items: { type: object, required: [tune_id, name, tune_type, incipit_abc] } }
+    Recordings:
+      type: object
+      required: [success, session_instance_id, tune_count, recordings]
+      properties:
+        success: { const: true }
+        session_instance_id: { type: integer }
+        tune_count: { type: integer }
+        recordings: { type: array }
+    ActiveInstance:
+      type: object
+      required: [success, session_id, active_instance_ids]
+      properties:
+        success: { const: true }
+        session_id: { type: integer }
+        active_instance_ids: { type: array, items: { type: integer } }
+    NextInstanceSuggestion:
+      type: object
+      required: [success, date, start_time, end_time]
+      properties:
+        success: { const: true }
+        date: { $ref: "#/components/schemas/Date" }
+        start_time: { $ref: "#/components/schemas/TimeOrNull" }
+        end_time: { $ref: "#/components/schemas/TimeOrNull" }
+
+paths:
+  # --- app shell -------------------------------------------------------------
+  /api/app-config:
+    get:
+      summary: Server-steered client config (public; send X-Ceol-Client)
+      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/AppConfig" } } } } }
+  /api/auth/check-email:
+    post:
+      summary: Email-first login step 1 (password prompt / magic link / registration)
+      responses: { "200": { description: "{action, email, message}" } }
+  /api/auth/login-password:
+    post:
+      summary: Email + password login; native callers receive a Bearer token
+      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/LoginResponse" } } } } }
+  /api/auth/exchange:
+    post:
+      summary: Consume a magic-link or verification token (from a Universal Link) for a session
+      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/LoginResponse" } } } } }
+  /api/auth/resend-verification:
+    post:
+      summary: Re-send the verification email (never reveals whether the address exists)
+      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Ok" } } } } }
+  /api/auth/logout:
+    post:
+      summary: Revoke the presented Bearer token (or cookie session)
+      security: [{ bearer: [] }]
+      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Ok" } } } } }
+  /api/auth/set-password:
+    post:
+      summary: Optional password for a magic-link account
+      security: [{ bearer: [] }]
+      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Ok" } } } } }
+  /api/auth/web-session:
+    post:
+      summary: One-time login link for opening the web signed in (admin, help)
+      security: [{ bearer: [] }]
+      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/WebSession" } } } } }
+  /api/me:
+    get:
+      summary: Who am I
+      security: [{ bearer: [] }]
+      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Me" } } } } }
+  /api/me/profile:
+    get:
+      summary: Profile setup fields
+      security: [{ bearer: [] }]
+      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Profile" } } } } }
+    put:
+      summary: Update profile (name, location, timezone, instruments)
+      security: [{ bearer: [] }]
+      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Profile" } } } } }
+  /api/home:
+    get:
+      summary: The home screen
+      security: [{ bearer: [] }]
+      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Home" } } } } }
+  /api/resolve:
+    get:
+      summary: URL/path -> ids (for Universal Links)
+      parameters: [{ name: path, in: query, required: true, schema: { type: string } }]
+      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Resolve" } } } } }
+
+  # --- my tunes ----------------------------------------------------------------
+  /api/my-tunes:
+    get:
+      summary: The viewer's tunebook
+      security: [{ bearer: [] }]
+      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/MyTunes" } } } } }
+  /api/my-tunes/ops:
+    post:
+      summary: Idempotent tunebook write (see MyTunesOp)
+      security: [{ bearer: [] }]
+      requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/MyTunesOp" } } } }
+      responses: { "200": { description: ok } }
+  /api/offline/bundle:
+    get:
+      summary: Whole tunebook + top catalog with incipits — the local-store sync primitive
+      security: [{ bearer: [] }]
+      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/OfflineBundle" } } } } }
+
+  # --- tunes ---------------------------------------------------------------------
+  /api/tunes/search:
+    get:
+      summary: Quick name/notation search
+      parameters: [{ name: q, in: query, schema: { type: string } }, { name: mode, in: query, schema: { type: string, enum: [name, abc, mixed] } }]
+      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/TuneSearch" } } } } }
+  /api/tunes/deep-search:
+    get:
+      summary: Rich search cards; scope via ?session=<path> | ?instance=<id>
+      security: [{ bearer: [] }]
+      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/DeepSearch" } } } } }
+  /api/tunes/thesession-search:
+    get:
+      summary: thesession.org search proxy; scope as deep-search
+      security: [{ bearer: [] }]
+      responses: { "200": { description: ok } }
+  /api/tunes/{tune_id}/detail:
+    get:
+      summary: The tune drawer payload (?session=&instance= scope)
+      parameters: [{ name: tune_id, in: path, required: true, schema: { type: integer } }]
+      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/TuneDetail" } } } } }
+  /api/tunes/{tune_id}/preview:
+    get:
+      summary: Look-before-you-log preview (?session=&instance= scope)
+      security: [{ bearer: [] }]
+      parameters: [{ name: tune_id, in: path, required: true, schema: { type: integer } }]
+      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/TunePreview" } } } } }
+  /api/tunes/{tune_id}/incipit-image:
+    get:
+      summary: Incipit PNG (base64), rendered on demand
+      security: [{ bearer: [] }]
+      parameters: [{ name: tune_id, in: path, required: true, schema: { type: integer } }]
+      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Image" } } } } }
+  /api/tunes/settings/{setting_id}/image:
+    get:
+      summary: One setting's notation PNG (?kind=incipit|full)
+      security: [{ bearer: [] }]
+      parameters: [{ name: setting_id, in: path, required: true, schema: { type: integer } }]
+      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Image" } } } } }
+  /api/tunes/thesession/{thesession_id}/preview:
+    get:
+      summary: Preview a thesession.org tune not yet imported
+      security: [{ bearer: [] }]
+      parameters: [{ name: thesession_id, in: path, required: true, schema: { type: integer } }]
+      responses: { "200": { description: ok } }
+  /api/tunes/render-abc:
+    post:
+      summary: Ephemeral ABC -> PNG
+      security: [{ bearer: [] }]
+      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Image" } } } } }
+  /api/tunes/abc-filter:
+    post:
+      summary: Which of these tune_ids match this notation query
+      responses: { "200": { description: "{tune_ids}" } }
+
+  # --- sessions ------------------------------------------------------------------
+  /api/sessions/with-today-status:
+    get:
+      summary: The sessions directory
+      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/SessionsDirectory" } } } } }
+  /api/sessions/{session_path}/detail:
+    get:
+      summary: The session page
+      parameters: [{ name: session_path, in: path, required: true, schema: { type: string } }]
+      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/SessionDetail" } } } } }
+  /api/sessions/{session_path}/logs:
+    get:
+      summary: Logged instances by year
+      parameters: [{ name: session_path, in: path, required: true, schema: { type: string } }]
+      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/SessionLogs" } } } } }
+  /api/sessions/{session_path}/logged-tunes:
+    get:
+      summary: Tunes that appear in this session's logs
+      parameters: [{ name: session_path, in: path, required: true, schema: { type: string } }]
+      responses: { "200": { description: ok } }
+  /api/sessions/{session_path}/people:
+    get:
+      summary: The session's people (gated by can_view_people)
+      security: [{ bearer: [] }]
+      parameters: [{ name: session_path, in: path, required: true, schema: { type: string } }]
+      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/SessionPeople" } } } } }
+  /api/sessions/{session_path}/join:
+    post:
+      summary: Ask to join / join a session
+      security: [{ bearer: [] }]
+      parameters: [{ name: session_path, in: path, required: true, schema: { type: string } }]
+      responses: { "200": { description: ok } }
+  /api/sessions/{session_path}/leave:
+    delete:
+      summary: Leave a session
+      security: [{ bearer: [] }]
+      parameters: [{ name: session_path, in: path, required: true, schema: { type: string } }]
+      responses: { "200": { description: ok } }
+  /api/sessions/{session_path}/add_instance:
+    post:
+      summary: Create a session instance (a log for a date)
+      security: [{ bearer: [] }]
+      parameters: [{ name: session_path, in: path, required: true, schema: { type: string } }]
+      responses: { "200": { description: ok } }
+  /api/sessions/{session_path}/next_instance_suggestion:
+    get:
+      summary: The next date the recurrence suggests
+      security: [{ bearer: [] }]
+      parameters: [{ name: session_path, in: path, required: true, schema: { type: string } }]
+      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/NextInstanceSuggestion" } } } } }
+  /api/session/{session_id}/active_instance:
+    get:
+      summary: Which instances of a session are live now
+      parameters: [{ name: session_id, in: path, required: true, schema: { type: integer } }]
+      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/ActiveInstance" } } } } }
+
+  # --- live logging ------------------------------------------------------------------
+  /api/live/instances/{session_instance_id}/bootstrap:
+    get:
+      summary: Snapshot + last_event_id; then open the SSE stream from that cursor
+      parameters: [{ name: session_instance_id, in: path, required: true, schema: { type: integer } }]
+      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/LiveBootstrap" } } } } }
+  /api/live/instances/{session_instance_id}/vocabulary:
+    get:
+      summary: The session's known tunes for local exact-match
+      security: [{ bearer: [] }]
+      parameters: [{ name: session_instance_id, in: path, required: true, schema: { type: integer } }]
+      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/LiveVocabulary" } } } } }
+  /api/live/instances/{session_instance_id}/ops:
+    post:
+      summary: One refereed op (see LiveOp); business rejections are 200 + rejected
+      security: [{ bearer: [] }]
+      parameters: [{ name: session_instance_id, in: path, required: true, schema: { type: integer } }]
+      requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/LiveOp" } } } }
+      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/LiveOpResult" } } } } }
+  /api/live/instances/{session_instance_id}/people:
+    get:
+      summary: People at / of this instance's session
+      security: [{ bearer: [] }]
+      parameters: [{ name: session_instance_id, in: path, required: true, schema: { type: integer } }]
+      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/SessionPeople" } } } } }
+  /api/live/token:
+    post:
+      summary: Mint a Bearer token from a cookie session (web -> sidecar; native clients use login instead)
+      security: [{ bearer: [] }]
+      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Token" } } } } }
+
+  # --- recordings ----------------------------------------------------------------------
+  /api/session-instances/{session_instance_id}/recordings:
+    get:
+      summary: Recordings for an instance
+      security: [{ bearer: [] }]
+      parameters: [{ name: session_instance_id, in: path, required: true, schema: { type: integer } }]
+      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Recordings" } } } } }
+  /api/session-instances/{session_instance_id}/audio:
+    get:
+      summary: Presigned audio URL(s) for playback
+      security: [{ bearer: [] }]
+      parameters: [{ name: session_instance_id, in: path, required: true, schema: { type: integer } }]
+      responses: { "200": { description: ok } }
+
+  # --- person ----------------------------------------------------------------------------
+  /api/me/details:
+    get:
+      summary: The full /me page payload
+      security: [{ bearer: [] }]
+      responses: { "200": { description: ok } }
+  /api/person/{person_id}/instruments:
+    get:
+      summary: A person's instruments
+      security: [{ bearer: [] }]
+      parameters: [{ name: person_id, in: path, required: true, schema: { type: integer } }]
+      responses: { "200": { description: ok } }
+    put:
+      summary: Replace a person's instruments
+      security: [{ bearer: [] }]
+      parameters: [{ name: person_id, in: path, required: true, schema: { type: integer } }]
+      responses: { "200": { description: ok } }
+  /api/person/{person_id}/update:
+    put:
+      summary: Update person + user details (self or admin)
+      security: [{ bearer: [] }]
+      parameters: [{ name: person_id, in: path, required: true, schema: { type: integer } }]
+      responses: { "200": { description: ok } }

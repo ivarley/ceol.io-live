@@ -47,6 +47,23 @@ export const TUNES = {
 } as const;
 
 /**
+ * Fixture for notation (ABC) search — searching by notes rather than by name (feature 051).
+ *
+ * `phrase` is what a player types; it normalizes to `ebbab2eb` and matches exactly ONE
+ * seeded tune, Cooley's. Cooley's is deliberate on three counts: it is on sarah's seed list
+ * (so the My Tunes filter can find it), it is in the Mueller session's repertoire (so the
+ * public Tunes tab can), and the phrase falls inside its *incipit* — which is all the
+ * offline bundle carries, so the offline path finds it too.
+ *
+ * The phrase must NOT appear in any tune NAME, or these tests would pass on a name match
+ * and prove nothing.
+ */
+export const NOTATION = {
+  phrase: "EBBA B2 EB",
+  tune: { id: 1, name: "Cooley's" },
+} as const;
+
+/**
  * Scratch tunes for tests that ADD/REMOVE rows on the regular user's (sarah's)
  * tune list. Every mutating test owns its OWN tune, so parallel workers can
  * never race on the same person_tune row — the old shared pick ("first
@@ -68,4 +85,9 @@ export const SCRATCH_TUNES = {
   drawerStatusSeg: { id: 19, name: "Connaughtman's Rambles, The" },
   drawerOfflineAdd: { id: 75, name: "Miss McLeod's" },
   offlineAddedCard: { id: 248, name: "Tam Lin" },
+  // Stage 0 of spec 052 §B8: the mobile tune-drawer spec's own row. Same contract as
+  // the entries above (seeded, not on sarah's seed list, has incipit notation), minus
+  // the popular-top-100 requirement — that one exists for the offline bundle, and this
+  // tune is never read offline.
+  mobileDrawerStatus: { id: 208, name: "Congress, The" },
 } as const;

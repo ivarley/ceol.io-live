@@ -1,0 +1,320 @@
+{% extends "base.html" %}
+{% set page_title = "Tunes" %}
+
+{% block title %}Tunes{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* Matched to the sessions and My Tunes lists by MEASUREMENT, not by borrowing their
+     stylesheet: my_tunes_mobile.css lays a row out as a three-column grid with a 20px
+     learn-status column and `display: contents` on the meta, which is built for a row
+     this page does not have. Same numbers, none of the assumptions. */
+  .pt-row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 8px; background: var(--bg-color);
+      /* A <button> brings its own border on all four sides; only the divider is wanted. */
+      border: none; border-bottom: 1px solid var(--border-color);
+      cursor: pointer; width: 100%; text-align: left;
+      font: inherit; color: inherit;
+  }
+  .pt-row:first-child { border-top: 1px solid var(--border-color); }
+  .pt-row:hover { background: var(--hover-bg); }
+  .pt-name {
+      flex: 1 1 auto; min-width: 0;
+      font-size: 18px; font-weight: 500; line-height: 1.2; color: var(--text-color);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .pt-meta { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
+  .pt-type {
+      font-size: 12px; padding: 2px 6px; border-radius: 3px;
+      background: var(--primary-fill); color: #fff; white-space: nowrap;
+  }
+
+  .pt-toolbar { padding: 14px 8px 0; }
+  .pt-search {
+      width: 100%; box-sizing: border-box; padding: 8px 10px; font: inherit;
+      color: var(--text-color); background: var(--input-bg);
+      border: 1px solid var(--border-color); border-radius: 4px;
+  }
+  .pt-search:focus { outline: none; border-color: var(--primary); }
+  .pt-count { margin: 0 0 4px; padding: 0 8px; font-size: 12px; color: var(--text-muted); }
+  .pt-empty { padding: 2rem; text-align: center; color: var(--secondary-text); }
+  /* The count is what this list is ordered BY, so it earns a place on the row —
+     quiet, to the left of the type chip. */
+  .pt-books { font-size: 12px; color: var(--secondary-text); white-space: nowrap; }
+  .pt-meta { gap: 10px; }
+  /* The reach past Ceol's own catalogue. A BUTTON, not a keystroke: the endpoint
+     proxies thesession.org, and its own contract is that it runs on explicit user
+     action only. */
+  .pt-deeper { padding: 12px 8px; text-align: center; }
+  .pt-deeper button {
+      font: inherit; font-size: 0.92rem; padding: 8px 14px;
+      color: var(--primary); background: none;
+      border: 1px solid var(--border-color); border-radius: var(--r, 8px);
+      cursor: pointer;
+  }
+  .pt-deeper button:hover { border-color: var(--primary); }
+  .pt-deeper button:disabled { opacity: 0.6; cursor: default; }
+  .pt-section {
+      margin: 18px 0 4px; padding: 0 8px;
+      font-size: 0.75rem; font-weight: 600; letter-spacing: 0.05em;
+      text-transform: uppercase; color: var(--secondary-text);
+  }
+  .pt-note { margin: 0; padding: 0 8px 8px; font-size: 0.78rem; color: var(--secondary-text); }
+  /* A hit Ceol does not have yet leaves the app, so it says so rather than
+     pretending to be another screen of this one. */
+  .pt-row-external .pt-name { color: var(--primary); }
+  .pt-elsewhere { font-size: 12px; color: var(--secondary-text); white-space: nowrap; }
+
+  .pt-foot {
+      margin-top: 1.25rem; padding: 0 16px; text-align: center;
+      font-size: 0.95rem; line-height: 1.5; color: var(--secondary-text);
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+{# Spec 035's thin-shell rule: this payload and GET /api/tunes/top come out of
+   one function (serializers.build_popular_tunes_payload), so they cannot drift. #}
+<script>window.__PAGE_DATA__ = {{ payload | tojson }};</script>
+
+<div class="pt-toolbar">
+  <input id="pt-search" class="pt-search" type="text" autocomplete="off"
+         placeholder="Search every tune by name…" aria-label="Search tunes">
+</div>
+<p class="pt-count" id="pt-count"></p>
+<div id="pt-list"></div>
+<div class="pt-deeper" id="pt-deeper" hidden>
+  <button type="button" id="pt-deeper-btn">Also search thesession.org</button>
+</div>
+<div id="pt-deep-results"></div>
+<p class="pt-foot" id="pt-foot">
+  The {{ payload.tunes | length }} most common tunes, by how many players have them in a
+  tunebook on <a href="https://thesession.org" target="_blank" rel="noopener">thesession.org</a>.
+  Search to reach the rest.
+</p>
+
+<script>
+(function () {
+  'use strict'
+  // No bundle: this is a list and a search box. It deliberately offers nothing that
+  // needs an account — no "add to my tunes", no learn status — because it is what the
+  // Tunes tab points at when you are signed out (spec 052 §B18).
+  var TOP = (window.__PAGE_DATA__ && window.__PAGE_DATA__.tunes) || []
+  var list = document.getElementById('pt-list')
+  var count = document.getElementById('pt-count')
+  var foot = document.getElementById('pt-foot')
+  var input = document.getElementById('pt-search')
+  var deeper = document.getElementById('pt-deeper')
+  var deeperBtn = document.getElementById('pt-deeper-btn')
+  var deepOut = document.getElementById('pt-deep-results')
+
+  // One row builder for both lists, so the two cannot drift apart. `external` means
+  // the tune is not in Ceol: the row leaves for thesession.org rather than opening a
+  // drawer we have no local tune for.
+  function row(t, external) {
+    var el = document.createElement(external ? 'a' : 'button')
+    el.className = 'pt-row' + (external ? ' pt-row-external' : '')
+    if (external) {
+      el.href = t.url || ('https://thesession.org/tunes/' + t.tune_id)
+      el.target = '_blank'
+      el.rel = 'noopener'
+    } else {
+      // A real <button>: the whole row opens the tune, so it is reachable by keyboard
+      // without inventing roles and key handlers.
+      el.type = 'button'
+      el.dataset.tuneId = t.tune_id
+      el.dataset.tuneType = t.tune_type || ''
+    }
+
+    var name = document.createElement('span')
+    name.className = 'pt-name'
+    name.textContent = t.name || 'Unknown'
+
+    var meta = document.createElement('span')
+    meta.className = 'pt-meta'
+    if (t.tunebook_count) {
+      var books = document.createElement('span')
+      books.className = 'pt-books'
+      books.textContent = t.tunebook_count.toLocaleString()
+      books.title = t.tunebook_count.toLocaleString() + ' tunebooks on thesession.org'
+      meta.appendChild(books)
+    }
+    if (external) {
+      var away = document.createElement('span')
+      away.className = 'pt-elsewhere'
+      away.textContent = 'thesession.org'
+      meta.appendChild(away)
+    }
+    if (t.tune_type) {
+      var type = document.createElement('span')
+      type.className = 'pt-type'
+      type.textContent = t.tune_type
+      meta.appendChild(type)
+    }
+    el.appendChild(name)
+    el.appendChild(meta)
+    return el
+  }
+
+  function render(tunes, searching) {
+    list.textContent = ''
+    if (!tunes.length) {
+      var p = document.createElement('p')
+      p.className = 'pt-empty'
+      p.textContent = searching ? 'No tunes match that name.' : 'No tunes yet.'
+      list.appendChild(p)
+    }
+    tunes.forEach(function (t) { list.appendChild(row(t)) })
+    count.textContent = tunes.length + (tunes.length === 1 ? ' tune' : ' tunes')
+    foot.style.display = searching ? 'none' : ''
+    // The offer only makes sense once you have asked for something, and any new
+    // query invalidates the last set of thesession results.
+    deeper.hidden = !searching
+    deeperBtn.disabled = false
+    deeperBtn.textContent = 'Also search thesession.org'
+    deepOut.textContent = ''
+  }
+
+  // The tune drawer is app-wide (base.html loads the tunesheet bundle) and its feed
+  // is public, so a signed-out visitor gets the full tune detail on a tap.
+  // Bound once, to both lists. Not inside showDeep: re-binding on every search
+  // stacked a fresh handler each time.
+  list.addEventListener('click', openFromEvent)
+  deepOut.addEventListener('click', openFromEvent)
+
+  function openFromEvent(e) {
+    var card = e.target.closest ? e.target.closest('.pt-row') : null
+    if (!card) return
+    // An external row is an <a> to thesession.org and carries no tune id — there is
+    // no local tune for the drawer to show. Without this guard the click did BOTH:
+    // followed the link AND opened the drawer on Number(undefined), so coming back
+    // to the app you were met with "Failed to load the tune details".
+    if (!card.dataset.tuneId) return
+    // .show({...}), not .open(id) — the drawer takes a descriptor so it can paint the
+    // name and type immediately and fill the rest in behind. scope:null means the
+    // global view of the tune, which is the only one a visitor has.
+    if (!(window.TuneDetailModal && window.TuneDetailModal.show)) return
+    window.TuneDetailModal.show({
+      tuneId: Number(card.dataset.tuneId),
+      scope: null,
+      tuneName: card.querySelector('.pt-name').textContent,
+      tuneType: card.dataset.tuneType || '',
+    })
+  }
+
+  var timer = null
+  var seq = 0
+  input.addEventListener('input', function () {
+    clearTimeout(timer)
+    timer = setTimeout(search, 300)
+  })
+  input.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); clearTimeout(timer); search() }
+    else if (e.key === 'Escape' && input.value) { input.value = ''; clearTimeout(timer); search() }
+  })
+
+  function search() {
+    var q = input.value.trim()
+    if (!q) { render(TOP, false); return }
+    // Guard against an earlier request landing after a later one and overwriting it.
+    var mine = ++seq
+    fetch('/api/tunes/search?limit=50&q=' + encodeURIComponent(q))
+      .then(function (r) { return r.json() })
+      .then(function (d) {
+        if (mine !== seq) return
+        render((d && d.tunes) || [], true)
+      })
+      .catch(function () {
+        if (mine !== seq) return
+        render([], true)
+      })
+  }
+
+  // --- past Ceol's own catalogue -------------------------------------------------
+  deeperBtn.addEventListener('click', function () {
+    var q = input.value.trim()
+    if (!q) return
+    deeperBtn.disabled = true
+    deeperBtn.textContent = 'Searching thesession.org…'
+    fetch('/api/tunes/thesession-search?limit=20&q=' + encodeURIComponent(q))
+      .then(function (r) { return r.json() })
+      .then(function (d) { showDeep(d && d.success ? d.results || [] : null, q) })
+      .catch(function () { showDeep(null, q) })
+  })
+
+  function showDeep(results, q) {
+    deepOut.textContent = ''
+    deeper.hidden = true
+    var head = document.createElement('p')
+    head.className = 'pt-section'
+    head.textContent = 'On thesession.org'
+    deepOut.appendChild(head)
+
+    if (results === null) {
+      var err = document.createElement('p')
+      err.className = 'pt-note'
+      err.textContent = 'Could not reach thesession.org just now.'
+      deepOut.appendChild(err)
+      return
+    }
+    // Drop the ones already on screen: a hit we hold locally is in the list above,
+    // and repeating it reads as two different tunes with the same name.
+    var shown = {}
+    ;[].forEach.call(list.querySelectorAll('.pt-row'), function (r) { shown[r.dataset.tuneId] = true })
+    var fresh = results.filter(function (t) { return !shown[String(t.tune_id)] })
+
+    if (!fresh.length) {
+      var none = document.createElement('p')
+      none.className = 'pt-note'
+      none.textContent = 'Nothing there that is not already above.'
+      deepOut.appendChild(none)
+      return
+    }
+    var note = document.createElement('p')
+    note.className = 'pt-note'
+    note.textContent = 'Not in Ceol yet — these open on thesession.org.'
+    deepOut.appendChild(note)
+    // A hit we DO hold gets a tune id and opens here, like any other local row; the
+    // rest are links out. The click handler is bound once, above.
+    fresh.forEach(function (t) { deepOut.appendChild(row(t, !t.is_local)) })
+  }
+
+  render(TOP, false)
+
+  // The drawer puts ?tune=<id> in the address bar when it opens, so that is the URL
+  // people copy, bookmark and reload. Nothing here read it back, so every one of
+  // those links landed on the bare top-100 list — the one thing the URL promises it
+  // will not do. Re-open the drawer on load.
+  //
+  // The tune does not have to be in the top 100. The drawer only needs the id; the
+  // name and type come off the row when there is one, purely so it can paint
+  // something before /detail lands.
+  var wanted = Number(new URLSearchParams(window.location.search).get('tune')) || null
+  if (wanted) {
+    whenDrawerReady(function () {
+      var known = list.querySelector('.pt-row[data-tune-id="' + wanted + '"]')
+      window.TuneDetailModal.show({
+        tuneId: wanted,
+        scope: null,
+        tuneName: known ? known.querySelector('.pt-name').textContent : '',
+        tuneType: (known && known.dataset.tuneType) || '',
+      })
+    })
+  }
+
+  // base.html loads the tunesheet bundle as a module, which means it can install
+  // window.TuneDetailModal after this script has already run. Poll for it rather
+  // than depend on a load order neither file states, and give up quietly: a missing
+  // drawer should cost the deep link, not the page.
+  function whenDrawerReady(fn) {
+    var tries = 0
+    ;(function check() {
+      if (window.TuneDetailModal && window.TuneDetailModal.show) return fn()
+      if (++tries > 40) return
+      setTimeout(check, 50)
+    })()
+  }
+})()
+</script>
+{% endblock %}

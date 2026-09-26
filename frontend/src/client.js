@@ -131,6 +131,20 @@ export async function liveMatch(config, q, preferType) {
   }
 }
 
+// Recording playback for this night (spec 050 read side): the recording and one
+// {start_ms, end_ms} per timestamped tune. Fetched in the BACKGROUND after first
+// paint, like the vocabulary — nothing on the page waits for it, and the play
+// buttons simply appear when it lands. Refetched on an audio load error too,
+// since the URL inside is a presigned S3 link that expires.
+export async function instanceAudio(config) {
+  const res = await fetch(`/api/session-instances/${config.sessionInstanceId}/audio`, {
+    headers: { Accept: 'application/json' },
+    credentials: 'same-origin',
+  })
+  if (!res.ok) throw new Error(`instance audio failed: ${res.status}`)
+  return res.json()
+}
+
 // Tune detail for the info drawer (spec 021 §18).
 export async function tuneDetail(config, tuneId) {
   const res = await fetch(`/api/live/instances/${config.sessionInstanceId}/tune/${tuneId}`, {
@@ -182,10 +196,12 @@ export async function deepSearch(config, q, type, preferType, mode) {
 }
 
 // Offline fallback for the deep search, opted into per-surface (the Add-to-My-Tunes
-// pane — the same parity the folded-away legacy add page had): name-search the
-// CeolOffline bundle mirror (your tunebook first, then popular) and reshape the hits
-// into deep-search result cards. Name-only — the type filter and ABC mode need the
-// server. The live logger never opts in (it has its own offline model).
+// pane — the same parity the folded-away legacy add page had): search the CeolOffline
+// bundle mirror (your tunebook first, then popular) and reshape the hits into
+// deep-search result cards. Name AND notation, matching what the server blends online —
+// but the bundle carries only incipits, so offline notation matching reaches the opening
+// bars only (`abc_scope: 'incipit'`). The type filter still needs the server. The live
+// logger never opts in (it has its own offline model).
 async function offlineDeepSearch(config, q) {
   if (!config.offlineSearchFallback || !window.CeolOffline) return []
   try {
@@ -198,6 +214,8 @@ async function offlineDeepSearch(config, q) {
       can_render: false, // rendering needs the server; show the cached incipit only
       tunebook_count: t.tunebook_count ?? null,
       on_list: t.person_tune_id != null || t.learn_status != null,
+      abc_only: !!t.abc_only,
+      abc_scope: t.abc_scope || null,
     }))
   } catch {
     return []

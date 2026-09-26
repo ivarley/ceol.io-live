@@ -94,11 +94,11 @@ describe('live screen, signed out', () => {
     const { container } = render(App, { props: { config: publicConfig() } })
     await waitFor(() => expect(rows(container).length).toBe(2))
     container.querySelector('.topbar-row').click()
-    await waitFor(() => expect(container.querySelector('.header-notes-ro')).toBeTruthy())
-    expect(container.querySelector('.header-notes-ro').textContent).toContain('Great night')
+    await waitFor(() => expect(document.querySelector('.header-notes-ro')).toBeTruthy())
+    expect(document.querySelector('.header-notes-ro').textContent).toContain('Great night')
     // No row action anywhere in the panel: no Change (date), no Manage (attendance),
     // no Mark complete — they're all .hx-act, and a signed-out viewer gets none of them.
-    expect(container.querySelectorAll('.hx-act').length).toBe(0)
+    expect(document.querySelectorAll('.hx-act').length).toBe(0)
   })
 
   it('never asks for people or vocabulary (both are login-gated)', async () => {

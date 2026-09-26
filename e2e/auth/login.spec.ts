@@ -89,7 +89,7 @@ test.describe("access control matrix", () => {
     test("can reach My Tunes", async ({ page }) => {
       await page.goto("/my-tunes");
       await expect(page).toHaveURL(/\/my-tunes/);
-      await expect(page.locator("h1")).toContainText(/My Tunes/i);
+      await expect(page.locator("#search-input")).toBeVisible();
     });
   });
 

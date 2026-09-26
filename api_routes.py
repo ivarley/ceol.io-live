@@ -5,6 +5,7 @@ import re
 import os
 import base64
 import psycopg2
+from rate_limit import rate_limited
 from api_auth import api_login_required, api_admin_or_self_required, public_api
 from database import (
     get_db_connection,
@@ -27,7 +28,6 @@ from io import BytesIO
 from recurrence_utils import validate_recurrence_json, to_human_readable
 from fractional_indexing import generate_append_position, generate_position_between
 from services import person_scope
-from recording import upload_chunk_to_s3, generate_presigned_url, get_recording_timeline, compute_checksum, chunk_audio_file
 
 
 def can_view_session_people(cur, session_id, person_id):
@@ -429,32 +429,6 @@ def get_tune_played_with(tune_id):
         })
     except Exception as e:
         return jsonify({"success": False, "error": f"Error retrieving played-with tunes: {str(e)}"}), 500
-    finally:
-        conn.close()
-
-
-@api_login_required
-def set_beta_logging(user_id):
-    """Set a user's tune-logger preference. enabled=True (the default for every
-    account) means the live logger; False drops them back to the legacy pill editor,
-    which is otherwise unreachable. System admins can set it for anyone; users can set
-    their own. Endpoint/flag names date from the spec 024 beta rollout.
-    POST /api/users/<user_id>/beta-logging  body {enabled: bool}"""
-    is_self = getattr(current_user, "user_id", None) == user_id
-    if not (current_user.is_system_admin or is_self):
-        return jsonify({"success": False, "error": "Not authorized"}), 403
-    enabled = bool((request.get_json(silent=True) or {}).get("enabled"))
-    conn = get_db_connection()
-    try:
-        cur = conn.cursor()
-        cur.execute(
-            "UPDATE user_account SET beta_live_logging = %s WHERE user_id = %s",
-            (enabled, user_id),
-        )
-        if cur.rowcount == 0:
-            return jsonify({"success": False, "error": "User not found"}), 404
-        conn.commit()
-        return jsonify({"success": True, "user_id": user_id, "beta_live_logging": enabled})
     finally:
         conn.close()
 
@@ -1492,13 +1466,33 @@ def refresh_tunebook_count_ajax(session_path, tune_id):
         )
 
 
-@api_login_required
+@public_api  # guarded in the body instead: a signed-in caller, OR a per-tune token
+# minted by this tune's own detail payload (spec 052 §B21). Opening it outright would
+# have made Ceol an anonymous proxy to thesession.org.
+# 12/min: the token already costs a caller one detail fetch per tune, so this is the
+# per-caller half of the same limit. A person generating notation for tune after tune
+# does not approach it.
+@rate_limited(limit=12, per=60, scope="thesession-backfill")
 def cache_tune_setting_ajax(tune_id):
     """
     Fetch and cache a tune setting from thesession.org.
     If setting_id is provided in query params, cache that specific setting.
     If not provided, cache the first setting in the list.
+
+    Auth: signed in, or ?token= from GET /api/tunes/<tune_id>/detail. The token is
+    signed, expires, and is bound to THIS tune id — so it cannot be replayed against
+    another tune, and collecting one per tune costs the caller exactly what calling
+    thesession.org directly would have cost. See notation_token.py.
     """
+    if not current_user.is_authenticated:
+        from notation_token import is_valid_for
+
+        if not is_valid_for(request.args.get("token", ""), tune_id):
+            return jsonify({
+                "success": False,
+                "error": "Authentication required",
+                "code": "unauthenticated",
+            }), 401
     try:
         # Get optional setting_id from query parameters
         setting_id = request.args.get('setting_id', type=int)
@@ -3140,6 +3134,29 @@ def mark_session_log_incomplete_ajax(session_path, date_or_id):
         )
 
 
+@public_api  # the public Tunes tab (spec 052 §B18): a signed-out visitor's first
+# look at the app, so it must not need an account. Read-only aggregate, no personal data.
+def get_top_tunes():
+    """GET /api/tunes/top — the most common tunes by tunebook count.
+
+    NOT /api/tunes/popular, which already exists, requires a login and joins
+    person_tune to say which of them are in YOUR tunebook. This one answers a
+    different question for a different audience and returns no personal data.
+
+    Same dict the /tunes page embeds (serializers.build_popular_tunes_payload)."""
+    from serializers import build_popular_tunes_payload
+
+    try:
+        limit = min(max(int(request.args.get("limit", 100)), 1), 500)
+    except (TypeError, ValueError):
+        limit = 100
+    conn = get_db_connection()
+    try:
+        return jsonify(build_popular_tunes_payload(conn, limit))
+    finally:
+        conn.close()
+
+
 @public_api  # backs the /add-session page, which has no @login_required (only the final POST /api/add-session is gated) — TODO tighten?
 def check_existing_session_ajax():
     if not request.json:
@@ -4290,18 +4307,27 @@ def get_session_person_detail(session_path, person_id):
                        array_agg(DISTINCT pi.instrument ORDER BY pi.instrument) FILTER (WHERE pi.instrument IS NOT NULL),
                        '{}'::text[]
                    ) as instruments,
-                   COALESCE(
-                       json_agg(
-                           json_build_object('date', si.date, 'session_instance_id', si.session_instance_id)
-                           ORDER BY si.date DESC
-                       ) FILTER (WHERE sip.attendance = 'yes' AND si.session_instance_id IS NOT NULL),
-                       '[]'::json
-                   ) as attended_instances
+                   -- Attendance is aggregated in its OWN subquery, not by joining
+                   -- session_instance_person into this one. Joined, it fanned out
+                   -- against person_instrument: every attended night came back once
+                   -- PER INSTRUMENT, so a fiddle-and-mandolin player with 13 nights
+                   -- got 26 rows, every date twice. The sibling array_agg(DISTINCT)
+                   -- collapsed the same fan-out on its own side, which is why the
+                   -- instruments looked right and only attendance was wrong.
+                   COALESCE((
+                       SELECT json_agg(
+                                  json_build_object('date', si.date, 'session_instance_id', si.session_instance_id)
+                                  ORDER BY si.date DESC, si.session_instance_id DESC
+                              )
+                       FROM session_instance_person sip
+                       JOIN session_instance si ON si.session_instance_id = sip.session_instance_id
+                       WHERE sip.person_id = p.person_id
+                         AND si.session_id = %s
+                         AND sip.attendance = 'yes'
+                   ), '[]'::json) as attended_instances
             FROM person p
             LEFT JOIN user_account u ON p.person_id = u.person_id
             LEFT JOIN person_instrument pi ON p.person_id = pi.person_id
-            LEFT JOIN session_instance_person sip ON p.person_id = sip.person_id
-            LEFT JOIN session_instance si ON sip.session_instance_id = si.session_instance_id AND si.session_id = %s
             WHERE p.person_id = %s
             GROUP BY p.person_id, p.first_name, p.last_name, p.city, p.state, p.country, p.thesession_user_id, u.user_id
             """,
@@ -6915,8 +6941,22 @@ def update_session_player_admin_status(session_path, person_id):
         if not user_row or not user_row[0]:
             return jsonify({"success": False, "message": "Insufficient permissions"}), 403
 
-        data = request.get_json()
-        is_admin = data.get("is_admin", False)
+        data = request.get_json() or {}
+
+        # Two independent grants, saved through one endpoint because they are one
+        # decision in the UI ("what may this person do here?") and one history row.
+        # Each is applied ONLY when present in the body, so a caller that knows
+        # about just one of them cannot silently clear the other.
+        updates = {}
+        if "is_admin" in data:
+            updates["is_admin"] = bool(data.get("is_admin"))
+        if "can_manage_recordings" in data:
+            # Meaningless without is_admin (schema/053), and the permission check
+            # requires both -- but it is stored as asked rather than forced, so
+            # revoking and restoring session-admin doesn't silently lose it.
+            updates["can_manage_recordings"] = bool(data.get("can_manage_recordings"))
+        if not updates:
+            return jsonify({"success": False, "message": "Nothing to update"}), 400
 
         # Get session ID first
         cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
@@ -6935,14 +6975,14 @@ def update_session_player_admin_status(session_path, person_id):
             user_id=get_current_user_id(),
         )
 
-        # Update the admin status
+        assignments = ", ".join(f"{column} = %s" for column in updates)
         cur.execute(
-            """
+            f"""
             UPDATE session_person
-            SET is_admin = %s
+            SET {assignments}
             WHERE session_id = %s AND person_id = %s
         """,
-            (is_admin, session_id, person_id),
+            (*updates.values(), session_id, person_id),
         )
 
         if cur.rowcount == 0:
@@ -10627,7 +10667,17 @@ def merge_tune():
         """, (new_tune_id, new_tune_id, old_tune_id))
         instrument_moved_count, instrument_dropped_count = cur.fetchone()
 
-        cur.execute("SELECT COUNT(*) FROM recording_tune_segment WHERE tune_id = %s", (old_tune_id,))
+        # Segments reach their tune through session_instance_tune since schema/049,
+        # so the merge repoints them via that row rather than directly.
+        cur.execute(
+            """
+            SELECT COUNT(*) FROM recording_tune_segment rts
+            JOIN session_instance_tune sit
+              ON sit.session_instance_tune_id = rts.session_instance_tune_id
+            WHERE sit.tune_id = %s
+            """,
+            (old_tune_id,),
+        )
         recording_segments_count = cur.fetchone()[0]
 
         # Name preservation (spec 030): rows that were displaying the old canonical
@@ -11623,6 +11673,12 @@ def get_session_logs(session_path):
         session_id = session_result[0]
         session_type = session_result[1] or "regular"
 
+        # Signed out there is no "you", so nothing is attended and the filter that
+        # reads this flag is not offered.
+        viewer_person_id = (
+            current_user.person_id if current_user.is_authenticated else None
+        )
+
         # Fetch past session instances with instance counts per date
         cur.execute(
             """
@@ -11632,12 +11688,26 @@ def get_session_logs(session_path):
                    (SELECT COUNT(*) FROM session_instance_tune sit
                     WHERE sit.session_instance_id = si.session_instance_id
                       AND sit.record_type = 'tune'
-                      AND sit.deleted = FALSE) as tune_count
+                      AND sit.deleted = FALSE) as tune_count,
+                   -- Did the VIEWER turn up to this one? Drives the Logs tab's
+                   -- "Attended" filter (spec 052 §B1), which is where the profile's
+                   -- Attended section went: a night you were at is a fact about this
+                   -- session, so it belongs on this session's list of nights.
+                   --
+                   -- A scalar subquery, not a join. session_instance_person is
+                   -- one-to-many with the instance, and joining it here would
+                   -- multiply every row by the number of people who came.
+                   (%s IS NOT NULL AND EXISTS (
+                       SELECT 1 FROM session_instance_person sip
+                       WHERE sip.session_instance_id = si.session_instance_id
+                         AND sip.person_id = %s
+                         AND sip.attendance = 'yes'
+                   )) as attended
             FROM session_instance si
             WHERE si.session_id = %s
             ORDER BY si.date DESC, si.session_instance_id ASC
         """,
-            (session_id,),
+            (viewer_person_id, viewer_person_id, session_id),
         )
         past_instances = cur.fetchall()
         cur.close()
@@ -11661,7 +11731,8 @@ def get_session_logs(session_path):
                     'end_time': instance[3].isoformat() if instance[3] else None,
                     'session_instance_id': instance[4],
                     'multiple_on_date': instance[5] > 1,
-                    'tune_count': instance[6]
+                    'tune_count': instance[6],
+                    'attended': bool(instance[7]),
                 })
         else:
             # For regular sessions, group by year and include time info
@@ -11677,7 +11748,8 @@ def get_session_logs(session_path):
                     'end_time': instance[3].isoformat() if instance[3] else None,
                     'session_instance_id': instance[4],
                     'multiple_on_date': instance[5] > 1,
-                    'tune_count': instance[6]
+                    'tune_count': instance[6],
+                    'attended': bool(instance[7]),
                 })
 
         # Sort instances within each group by start_time
@@ -12341,453 +12413,6 @@ def copy_tunes_to_destination():
         return jsonify({"success": False, "error": str(e)}), 500
     finally:
         conn.close()
-
-
-# =============================================================================
-# Recording endpoints (admin only)
-# =============================================================================
-
-def _require_system_admin():
-    """Check if current user is a system admin. Returns error response or None."""
-    if not current_user.is_authenticated:
-        return jsonify({"success": False, "error": "Authentication required"}), 401
-    if not current_user.is_system_admin:
-        return jsonify({"success": False, "error": "Admin access required"}), 403
-    return None
-
-
-def start_recording(session_instance_id):
-    """POST /api/session_instance/<id>/recordings — Start a new recording."""
-    admin_check = _require_system_admin()
-    if admin_check:
-        return admin_check
-
-    conn = get_db_connection()
-    try:
-        data = request.get_json()
-        if not data:
-            return jsonify({"success": False, "error": "No JSON data provided"}), 400
-
-        cur = conn.cursor()
-
-        # Verify session instance exists
-        cur.execute("SELECT session_instance_id FROM session_instance WHERE session_instance_id = %s",
-                     (session_instance_id,))
-        if not cur.fetchone():
-            return jsonify({"success": False, "error": "Session instance not found"}), 404
-
-        person_id = current_user.person_id
-        user_id = get_current_user_id()
-
-        cur.execute(
-            """
-            INSERT INTO recording (session_instance_id, person_id, source, status, device_info,
-                format, sample_rate, channels, bitrate, client_started_at,
-                created_by_user_id, last_modified_user_id)
-            VALUES (%s, %s, 'live', 'started', %s, %s, %s, %s, %s, %s, %s, %s)
-            RETURNING recording_id
-            """,
-            (
-                session_instance_id,
-                person_id,
-                json.dumps(data.get("device_info")) if data.get("device_info") else None,
-                data.get("format"),
-                data.get("sample_rate"),
-                data.get("channels"),
-                data.get("bitrate"),
-                data.get("client_started_at"),
-                user_id,
-                user_id,
-            ),
-        )
-        recording_id = cur.fetchone()[0]
-
-        # Set the s3_prefix
-        s3_prefix = f"recordings/{recording_id}/"
-        cur.execute("UPDATE recording SET s3_prefix = %s WHERE recording_id = %s",
-                     (s3_prefix, recording_id))
-
-        # Log start event
-        cur.execute(
-            """
-            INSERT INTO recording_event (recording_id, event_type, client_timestamp)
-            VALUES (%s, 'start', %s)
-            """,
-            (recording_id, data.get("client_started_at")),
-        )
-
-        # Save to history
-        save_to_history(cur, "recording", "INSERT", recording_id, user_id=user_id)
-
-        conn.commit()
-        return jsonify({
-            "success": True,
-            "recording_id": recording_id,
-            "s3_prefix": s3_prefix,
-        }), 201
-
-    except Exception as e:
-        conn.rollback()
-        return jsonify({"success": False, "error": str(e)}), 500
-    finally:
-        conn.close()
-
-
-def upload_chunk(recording_id):
-    """POST /api/recordings/<id>/chunks — Upload an audio chunk."""
-    admin_check = _require_system_admin()
-    if admin_check:
-        return admin_check
-
-    conn = get_db_connection()
-    try:
-        audio_file = request.files.get("audio")
-        if not audio_file:
-            return jsonify({"success": False, "error": "No audio file provided"}), 400
-
-        sequence_number = request.form.get("sequence_number", type=int)
-        start_timestamp_ms = request.form.get("start_timestamp_ms", type=int)
-        end_timestamp_ms = request.form.get("end_timestamp_ms", type=int)
-        client_checksum = request.form.get("checksum")
-
-        if sequence_number is None or start_timestamp_ms is None or end_timestamp_ms is None:
-            return jsonify({"success": False, "error": "sequence_number, start_timestamp_ms, and end_timestamp_ms are required"}), 400
-
-        cur = conn.cursor()
-
-        # Verify recording exists
-        cur.execute("SELECT person_id, status FROM recording WHERE recording_id = %s", (recording_id,))
-        rec = cur.fetchone()
-        if not rec:
-            return jsonify({"success": False, "error": "Recording not found"}), 404
-
-        audio_data = audio_file.read()
-        file_size = len(audio_data)
-        checksum = compute_checksum(audio_data)
-
-        # Verify checksum if provided
-        if client_checksum and client_checksum != checksum:
-            return jsonify({"success": False, "error": "Checksum mismatch"}), 400
-
-        # Upload to S3
-        s3_key = upload_chunk_to_s3(recording_id, sequence_number, audio_data)
-
-        user_id = get_current_user_id()
-
-        # Insert chunk record (upsert in case of retry)
-        cur.execute(
-            """
-            INSERT INTO recording_chunk (recording_id, sequence_number, start_timestamp_ms, end_timestamp_ms,
-                s3_key, file_size_bytes, upload_status, checksum)
-            VALUES (%s, %s, %s, %s, %s, %s, 'uploaded', %s)
-            ON CONFLICT (recording_id, sequence_number)
-            DO UPDATE SET s3_key = EXCLUDED.s3_key, file_size_bytes = EXCLUDED.file_size_bytes,
-                upload_status = 'uploaded', checksum = EXCLUDED.checksum
-            RETURNING recording_chunk_id
-            """,
-            (recording_id, sequence_number, start_timestamp_ms, end_timestamp_ms,
-             s3_key, file_size, checksum),
-        )
-        chunk_id = cur.fetchone()[0]
-
-        # Update recording aggregates
-        cur.execute(
-            """
-            UPDATE recording SET
-                status = CASE WHEN status = 'started' THEN 'recording' ELSE status END,
-                total_chunks = (SELECT COUNT(*) FROM recording_chunk WHERE recording_id = %s AND upload_status = 'uploaded'),
-                total_duration_ms = COALESCE((SELECT MAX(end_timestamp_ms) FROM recording_chunk WHERE recording_id = %s AND upload_status = 'uploaded'), 0),
-                total_size_bytes = COALESCE((SELECT SUM(file_size_bytes) FROM recording_chunk WHERE recording_id = %s AND upload_status = 'uploaded'), 0),
-                last_modified_user_id = %s
-            WHERE recording_id = %s
-            """,
-            (recording_id, recording_id, recording_id, user_id, recording_id),
-        )
-
-        conn.commit()
-        return jsonify({
-            "success": True,
-            "recording_chunk_id": chunk_id,
-            "s3_key": s3_key,
-        }), 201
-
-    except Exception as e:
-        conn.rollback()
-        return jsonify({"success": False, "error": str(e)}), 500
-    finally:
-        conn.close()
-
-
-def update_recording_status(recording_id):
-    """PUT /api/recordings/<id>/status — Pause/resume/stop a recording."""
-    admin_check = _require_system_admin()
-    if admin_check:
-        return admin_check
-
-    conn = get_db_connection()
-    try:
-        data = request.get_json()
-        if not data:
-            return jsonify({"success": False, "error": "No JSON data provided"}), 400
-
-        new_status = data.get("status")
-        if new_status not in ("recording", "paused", "stopped", "failed"):
-            return jsonify({"success": False, "error": "Invalid status. Must be: recording, paused, stopped, failed"}), 400
-
-        cur = conn.cursor()
-        user_id = get_current_user_id()
-
-        # Verify recording exists
-        cur.execute("SELECT status FROM recording WHERE recording_id = %s", (recording_id,))
-        rec = cur.fetchone()
-        if not rec:
-            return jsonify({"success": False, "error": "Recording not found"}), 404
-
-        old_status = rec[0]
-
-        # Save to history before update
-        save_to_history(cur, "recording", "UPDATE", recording_id, user_id=user_id)
-
-        cur.execute(
-            "UPDATE recording SET status = %s, last_modified_user_id = %s WHERE recording_id = %s",
-            (new_status, user_id, recording_id),
-        )
-
-        # Map status changes to event types
-        event_type_map = {
-            "paused": "pause",
-            "recording": "resume",
-            "stopped": "stop",
-            "failed": "error",
-        }
-        event_type = event_type_map.get(new_status, new_status)
-
-        cur.execute(
-            """
-            INSERT INTO recording_event (recording_id, event_type, event_data, client_timestamp)
-            VALUES (%s, %s, %s, %s)
-            """,
-            (
-                recording_id,
-                event_type,
-                json.dumps(data.get("event_data")) if data.get("event_data") else None,
-                data.get("client_timestamp"),
-            ),
-        )
-
-        conn.commit()
-
-        return jsonify({
-            "success": True,
-            "recording_id": recording_id,
-            "old_status": old_status,
-            "new_status": new_status,
-        })
-
-    except Exception as e:
-        conn.rollback()
-        return jsonify({"success": False, "error": str(e)}), 500
-    finally:
-        conn.close()
-
-
-def list_recordings(session_instance_id):
-    """GET /api/session_instance/<id>/recordings — List recordings for a session instance."""
-    admin_check = _require_system_admin()
-    if admin_check:
-        return admin_check
-
-    conn = get_db_connection()
-    try:
-        cur = conn.cursor()
-
-        # Verify session instance exists
-        cur.execute("SELECT session_instance_id FROM session_instance WHERE session_instance_id = %s",
-                     (session_instance_id,))
-        if not cur.fetchone():
-            return jsonify({"success": False, "error": "Session instance not found"}), 404
-
-        cur.execute(
-            """
-            SELECT r.recording_id, r.person_id, p.first_name, p.last_name, r.source, r.status,
-                   r.total_chunks, r.total_duration_ms, r.total_size_bytes, r.client_started_at,
-                   r.created_date, r.format
-            FROM recording r
-            JOIN person p ON p.person_id = r.person_id
-            WHERE r.session_instance_id = %s
-            ORDER BY r.created_date
-            """,
-            (session_instance_id,),
-        )
-
-        recordings = []
-        for row in cur.fetchall():
-            recordings.append({
-                "recording_id": row[0],
-                "person_id": row[1],
-                "person_name": f"{row[2] or ''} {row[3] or ''}".strip(),
-                "source": row[4],
-                "status": row[5],
-                "total_chunks": row[6],
-                "total_duration_ms": row[7],
-                "total_size_bytes": row[8],
-                "client_started_at": row[9].isoformat() if row[9] else None,
-                "created_date": row[10].isoformat() if row[10] else None,
-                "format": row[11],
-            })
-
-        return jsonify({"success": True, "recordings": recordings})
-
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
-    finally:
-        conn.close()
-
-
-def get_recording_playback(recording_id):
-    """GET /api/recordings/<id>/playback — Get presigned URLs for playback."""
-    admin_check = _require_system_admin()
-    if admin_check:
-        return admin_check
-
-    conn = get_db_connection()
-    try:
-        cur = conn.cursor()
-
-        # Verify recording exists
-        cur.execute("SELECT recording_id, total_duration_ms FROM recording WHERE recording_id = %s",
-                     (recording_id,))
-        rec = cur.fetchone()
-        if not rec:
-            return jsonify({"success": False, "error": "Recording not found"}), 404
-
-        chunks = get_recording_timeline(cur, recording_id)
-
-        return jsonify({
-            "success": True,
-            "recording_id": recording_id,
-            "total_duration_ms": rec[1],
-            "chunks": chunks,
-        })
-
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
-    finally:
-        conn.close()
-
-
-def upload_recording_file(session_instance_id):
-    """POST /api/session_instance/<id>/recordings/upload — Upload a complete audio file."""
-    admin_check = _require_system_admin()
-    if admin_check:
-        return admin_check
-
-    conn = get_db_connection()
-    tmp_path = None
-    try:
-        audio_file = request.files.get("audio")
-        if not audio_file:
-            return jsonify({"success": False, "error": "No audio file provided"}), 400
-
-        client_started_at = request.form.get("client_started_at")
-
-        cur = conn.cursor()
-
-        # Verify session instance exists
-        cur.execute("SELECT session_instance_id FROM session_instance WHERE session_instance_id = %s",
-                     (session_instance_id,))
-        if not cur.fetchone():
-            return jsonify({"success": False, "error": "Session instance not found"}), 404
-
-        person_id = current_user.person_id
-        user_id = get_current_user_id()
-
-        # Save uploaded file to temp location
-        ext = os.path.splitext(audio_file.filename)[1] if audio_file.filename else ".mp3"
-        with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
-            tmp_path = tmp.name
-            audio_file.save(tmp)
-
-        # Create recording row
-        cur.execute(
-            """
-            INSERT INTO recording (session_instance_id, person_id, source, status,
-                format, channels, sample_rate, bitrate, client_started_at,
-                created_by_user_id, last_modified_user_id)
-            VALUES (%s, %s, 'upload', 'started', %s, 1, 48000, 64000, %s, %s, %s)
-            RETURNING recording_id
-            """,
-            (session_instance_id, person_id, "audio/webm;codecs=opus",
-             client_started_at, user_id, user_id),
-        )
-        recording_id = cur.fetchone()[0]
-
-        s3_prefix = f"recordings/{recording_id}/"
-        cur.execute("UPDATE recording SET s3_prefix = %s WHERE recording_id = %s",
-                     (s3_prefix, recording_id))
-
-        # Chunk the file
-        chunks = chunk_audio_file(tmp_path)
-
-        total_size = 0
-        total_duration = 0
-
-        for chunk in chunks:
-            s3_key = upload_chunk_to_s3(recording_id, chunk["sequence_number"], chunk["data"])
-            checksum = compute_checksum(chunk["data"])
-            file_size = len(chunk["data"])
-            total_size += file_size
-            total_duration = max(total_duration, chunk["end_ms"])
-
-            cur.execute(
-                """
-                INSERT INTO recording_chunk (recording_id, sequence_number, start_timestamp_ms, end_timestamp_ms,
-                    s3_key, file_size_bytes, upload_status, checksum)
-                VALUES (%s, %s, %s, %s, %s, %s, 'uploaded', %s)
-                """,
-                (recording_id, chunk["sequence_number"], chunk["start_ms"], chunk["end_ms"],
-                 s3_key, file_size, checksum),
-            )
-
-        # Update recording with final stats
-        cur.execute(
-            """
-            UPDATE recording SET status = 'stopped', total_chunks = %s,
-                total_duration_ms = %s, total_size_bytes = %s, last_modified_user_id = %s
-            WHERE recording_id = %s
-            """,
-            (len(chunks), total_duration, total_size, user_id, recording_id),
-        )
-
-        # Log events
-        cur.execute(
-            "INSERT INTO recording_event (recording_id, event_type) VALUES (%s, 'start')",
-            (recording_id,),
-        )
-        cur.execute(
-            "INSERT INTO recording_event (recording_id, event_type) VALUES (%s, 'stop')",
-            (recording_id,),
-        )
-
-        save_to_history(cur, "recording", "INSERT", recording_id, user_id=user_id)
-
-        conn.commit()
-
-        return jsonify({
-            "success": True,
-            "recording_id": recording_id,
-            "total_chunks": len(chunks),
-            "total_duration_ms": total_duration,
-            "total_size_bytes": total_size,
-        }), 201
-
-    except Exception as e:
-        conn.rollback()
-        return jsonify({"success": False, "error": str(e)}), 500
-    finally:
-        conn.close()
-        if tmp_path and os.path.exists(tmp_path):
-            os.unlink(tmp_path)
 
 
 # ---------------------------------------------------------------------------

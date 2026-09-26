@@ -1,5 +1,5 @@
 <script>
-  import { Chip } from './lib/index.js'
+  import { Chevron, Chip } from './lib/index.js'
   import { untrack } from 'svelte'
   import { fly } from 'svelte/transition'
   import { tunePreview, thesessionPreview, settingImage, renderRemoteAbc } from './client.js'
@@ -247,10 +247,10 @@
      (pane 🔍 → paste) must swap instantly, not stack two flying previews -->
 <div class="pv" in:fly={{ x: 32, duration: 180 }}>
   <div class="pv-head">
-    <button class="pv-back" onclick={onClose}>‹ Results</button>
+    <button class="pv-back" onclick={onClose}><Chevron dir="left" size={14} /> Results</button>
     <span class="pv-count">{idx + 1} of {items.length}</span>
-    <button class="pv-step" disabled={idx === 0} aria-label="Previous result" onclick={() => stepResult(-1)}>‹</button>
-    <button class="pv-step" disabled={idx >= items.length - 1} aria-label="Next result" onclick={() => stepResult(1)}>›</button>
+    <button class="pv-step" disabled={idx === 0} aria-label="Previous result" onclick={() => stepResult(-1)}><Chevron dir="left" size={16} /></button>
+    <button class="pv-step" disabled={idx >= items.length - 1} aria-label="Next result" onclick={() => stepResult(1)}><Chevron size={16} /></button>
   </div>
 
   <div class="pv-body">
@@ -292,14 +292,14 @@
         <!-- ABOVE the notation, so paging settings never shifts this bar around
              (the notation below is the only thing that changes height) -->
         <div class="pv-setnav">
-          <button class="pv-step" disabled={setIdx === 0} aria-label="Previous setting" onclick={() => stepSetting(-1)}>‹</button>
+          <button class="pv-step" disabled={setIdx === 0} aria-label="Previous setting" onclick={() => stepSetting(-1)}><Chevron dir="left" size={16} /></button>
           <span class="pv-setlabel">Setting {setIdx + 1} of {settings.length}{setting?.setting_id != null ? ` · #${setting.setting_id}` : ''}{setting?.key ? ` · ${setting.key}` : ''}{#if setting?.setting_id != null && setting.setting_id === data.session_setting_id}<span class="pv-sesset"> · ★ this session’s</span>{/if}</span>
           <button class="pv-step" disabled={setIdx >= settings.length - 1} aria-label="Next setting" onclick={() => stepSetting(1)}>
             {#if backfilling && setIdx >= settings.length - 1}
               <!-- more settings may be on their way from thesession.org — the arrow
                    (maybe) appears when the backfill lands -->
               <span class="pv-spin" aria-hidden="true"></span>
-            {:else}›{/if}
+            {:else}<Chevron size={16} />{/if}
           </button>
         </div>
       {/if}

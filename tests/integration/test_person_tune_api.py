@@ -366,6 +366,184 @@ class TestPersonTuneAPI:
         assert data["success"] is False
         assert "already exists" in data["error"].lower()
 
+    def test_add_my_tune_duplicate_applies_chosen_setting(self, client, authenticated_user, db_conn, db_cursor):
+        """A tune already on the list: the add is still a 409, but the setting the
+        caller explicitly chose lands on the existing row (and is reported in
+        `applied`). Regression: a pasted thesession.org link can't tell you the tune
+        is already yours, so the whole configured add used to be dropped."""
+        unique_id = str(uuid.uuid4())[:8]
+        tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 60000
+        setting_id = tune_id + 7
+        other_setting_id = tune_id + 8
+        person_id = 2  # Match authenticated_user fixture
+
+        db_cursor.execute("""
+            INSERT INTO person (person_id, first_name, last_name, email)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (person_id) DO NOTHING
+        """, (person_id, "Test", "User", f"test{unique_id}@example.com"))
+        db_cursor.execute("""
+            INSERT INTO tune (tune_id, name, tune_type)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (tune_id) DO NOTHING
+        """, (tune_id, f"Already Mine {unique_id}", "Reel"))
+        # Both settings already cached, so nothing reaches out to thesession.org.
+        db_cursor.execute("""
+            INSERT INTO tune_setting (setting_id, tune_id, key, abc)
+            VALUES (%s, %s, 'Gmajor', 'X'), (%s, %s, 'Dmajor', 'Y')
+            ON CONFLICT (setting_id) DO NOTHING
+        """, (setting_id, tune_id, other_setting_id, tune_id))
+        db_cursor.execute("DELETE FROM person_tune WHERE person_id = %s AND tune_id = %s", (person_id, tune_id))
+        db_cursor.execute("""
+            INSERT INTO person_tune (person_id, tune_id, learn_status, notes, setting_id)
+            VALUES (%s, %s, 'learning', 'my old note', NULL)
+        """, (person_id, tune_id))
+        db_conn.commit()
+
+        with authenticated_user:
+            response = client.post("/api/my-tunes", json={
+                "tune_id": tune_id,
+                "learn_status": "learned",
+                "notes": "notes typed into the add form",
+                "setting_id": setting_id,
+            })
+
+        assert response.status_code == 409
+        data = json.loads(response.data)
+        assert data["success"] is False
+        assert data["applied"] == {"setting_id": setting_id}
+
+        db_cursor.execute(
+            "SELECT setting_id, notes, learn_status FROM person_tune WHERE person_id = %s AND tune_id = %s",
+            (person_id, tune_id),
+        )
+        row = db_cursor.fetchone()
+        assert row[0] == setting_id          # the chosen setting was carried over
+        assert row[1] == 'my old note'       # existing notes are never overwritten
+        assert row[2] == 'learning'          # and an add never restates the status
+
+    def test_add_my_tune_duplicate_fills_empty_notes(self, client, authenticated_user, db_conn, db_cursor):
+        """Notes from the add form fill an EMPTY notes field on the existing row."""
+        unique_id = str(uuid.uuid4())[:8]
+        tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 70000
+        person_id = 2
+
+        db_cursor.execute("""
+            INSERT INTO person (person_id, first_name, last_name, email)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (person_id) DO NOTHING
+        """, (person_id, "Test", "User", f"test{unique_id}@example.com"))
+        db_cursor.execute("""
+            INSERT INTO tune (tune_id, name, tune_type)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (tune_id) DO NOTHING
+        """, (tune_id, f"Note Filler {unique_id}", "Jig"))
+        db_cursor.execute("DELETE FROM person_tune WHERE person_id = %s AND tune_id = %s", (person_id, tune_id))
+        db_cursor.execute("""
+            INSERT INTO person_tune (person_id, tune_id, learn_status)
+            VALUES (%s, %s, 'want to learn')
+        """, (person_id, tune_id))
+        db_conn.commit()
+
+        with authenticated_user:
+            response = client.post("/api/my-tunes", json={
+                "tune_id": tune_id,
+                "notes": "b part is tricky",
+            })
+
+        assert response.status_code == 409
+        assert json.loads(response.data)["applied"] == {"notes": True}
+        db_cursor.execute(
+            "SELECT notes FROM person_tune WHERE person_id = %s AND tune_id = %s",
+            (person_id, tune_id),
+        )
+        assert db_cursor.fetchone()[0] == "b part is tricky"
+
+    def test_update_setting_caches_the_settings_notation(self, client, authenticated_user, db_conn, db_cursor,
+                                                          monkeypatch):
+        """Adopting a setting from the preview's pager (Update Setting) must bring its
+        ABC with it — the pager pages thesession.org's full list, so the setting you
+        picked is usually one the catalog has never imported."""
+        import api_routes
+
+        unique_id = str(uuid.uuid4())[:8]
+        tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 80000
+        setting_id = tune_id + 3
+        person_id = 2
+
+        fetched = {}
+
+        def fake_cache(tid, tune_data, user_id, sync=True, target_setting_id=None):
+            fetched['tune_id'] = tid
+            fetched['setting_id'] = target_setting_id
+            return True, "cached", target_setting_id
+
+        monkeypatch.setattr(api_routes, "cache_default_tune_setting", fake_cache)
+
+        db_cursor.execute("""
+            INSERT INTO person (person_id, first_name, last_name, email)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (person_id) DO NOTHING
+        """, (person_id, "Test", "User", f"test{unique_id}@example.com"))
+        db_cursor.execute("""
+            INSERT INTO tune (tune_id, name, tune_type)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (tune_id) DO NOTHING
+        """, (tune_id, f"Pager Pick {unique_id}", "Reel"))
+        db_cursor.execute("DELETE FROM person_tune WHERE person_id = %s AND tune_id = %s", (person_id, tune_id))
+        db_cursor.execute("""
+            INSERT INTO person_tune (person_id, tune_id, learn_status)
+            VALUES (%s, %s, 'learning') RETURNING person_tune_id
+        """, (person_id, tune_id))
+        ptid = db_cursor.fetchone()[0]
+        db_conn.commit()
+
+        with authenticated_user:
+            response = client.put(f"/api/my-tunes/{ptid}", json={"setting_id": setting_id})
+
+        assert response.status_code == 200
+        # The uncached setting was fetched for THIS tune...
+        assert fetched == {'tune_id': tune_id, 'setting_id': setting_id}
+        # ...and recorded as the person's setting.
+        db_cursor.execute("SELECT setting_id FROM person_tune WHERE person_tune_id = %s", (ptid,))
+        assert db_cursor.fetchone()[0] == setting_id
+
+    def test_new_rows_start_at_one_hearing_on_both_add_paths(self, client, authenticated_user, db_conn,
+                                                             db_cursor):
+        """Adding a tune IS a hearing — you don't put a tune on your list having never
+        heard it — so a new row starts at heard_count 1. Zero is left meaning what it
+        says: on the list, not heard since. Both add paths (the POST and the offline
+        op-queue's `add`) must agree, or a queued add syncs to a different row than the
+        client drew."""
+        unique_id = str(uuid.uuid4())[:8]
+        tune_a = 900000000 + int(unique_id[:6], 16) % 100000 + 90000
+        tune_b = tune_a + 1
+        person_id = 2
+
+        db_cursor.execute("""
+            INSERT INTO person (person_id, first_name, last_name, email)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (person_id) DO NOTHING
+        """, (person_id, "Test", "User", f"test{unique_id}@example.com"))
+        db_cursor.execute("""
+            INSERT INTO tune (tune_id, name, tune_type) VALUES (%s, %s, 'Reel'), (%s, %s, 'Jig')
+            ON CONFLICT (tune_id) DO NOTHING
+        """, (tune_a, f"Heard Once A {unique_id}", tune_b, f"Heard Once B {unique_id}"))
+        db_cursor.execute("DELETE FROM person_tune WHERE person_id = %s AND tune_id = ANY(%s)",
+                          (person_id, [tune_a, tune_b]))
+        db_conn.commit()
+
+        with authenticated_user:
+            assert client.post("/api/my-tunes", json={"tune_id": tune_a}).status_code == 201
+            op = client.post("/api/my-tunes/ops", json={"type": "add", "tune_id": tune_b})
+            assert op.status_code == 200
+
+        db_cursor.execute(
+            "SELECT tune_id, heard_count FROM person_tune WHERE person_id = %s AND tune_id = ANY(%s) ORDER BY tune_id",
+            (person_id, [tune_a, tune_b]),
+        )
+        assert db_cursor.fetchall() == [(tune_a, 1), (tune_b, 1)]
+
     def test_update_tune_status_requires_authentication(self, client):
         """Test that PUT /api/my-tunes/<id>/status requires authentication."""
         response = client.put("/api/my-tunes/1", json={"learn_status": "learning"})

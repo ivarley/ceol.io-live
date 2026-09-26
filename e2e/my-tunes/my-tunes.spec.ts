@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { SCRATCH_TUNES, STORAGE } from "../support/data";
+import { NOTATION, SCRATCH_TUNES, STORAGE } from "../support/data";
 import { expectNoServerError } from "../support/nav";
 
 /** Personal tune collection: list/filter, the add pane, and the sync page. */
@@ -7,21 +7,32 @@ import { expectNoServerError } from "../support/nav";
 test.use({ storageState: STORAGE.regular });
 
 test.describe("My Tunes list", () => {
-  test("renders the collection with filter + sort controls", async ({ page }) => {
+  test("renders the collection with filter + sort controls", async ({
+    page,
+  }) => {
     await page.goto("/my-tunes");
-    await expect(page.locator("h1")).toContainText(/My Tunes/i);
+    // Headed on desktop (spec 052 §B1 took it out because the tab bar named the
+    // screen; there is no tab bar above 768px, so it came back there alone).
+    await expect(page.locator("h1.page-title")).toHaveText("Tunes");
+    await expect(page.locator("#search-input")).toBeVisible();
     await expect(page.locator("#search-input")).toBeVisible();
     await expect(page.locator("#add-tune-btn")).toBeVisible();
     await expectNoServerError(page);
   });
 
-  test("learn-status filters are clickable", async ({ page }) => {
+  test("learn-status filters are clickable without opening the filter panel", async ({
+    page,
+  }) => {
     await page.goto("/my-tunes");
-    // Filter controls live inside the (initially collapsed) filter panel.
-    await page.locator("#filter-panel-toggle").click();
-    await expect(page.locator("#filter-panel")).toBeVisible();
+    // The status filter is the one control that lives OUTSIDE the collapsed panel.
+    // Closed, not absent. Since Stage 3 the panel is a kit Toolbar panel, which
+    // stays mounted and animates via a class — a node that does not exist cannot
+    // animate out. "Not visible" is what this test always meant.
+    await expect(page.locator("#filter-panel")).toBeHidden();
 
-    const learning = page.locator('button[data-status="learning"]');
+    const learning = page.locator(
+      '.filter-status-row button[data-status="learning"]',
+    );
     await learning.click();
     await expect(learning).toHaveClass(/active/);
     await expectNoServerError(page);
@@ -32,6 +43,23 @@ test.describe("My Tunes list", () => {
     await page.locator("#filter-panel-toggle").click();
     await expect(page.locator("#filter-panel")).toBeVisible();
   });
+
+  test("the filter box narrows the list by NOTATION, marking notation-only hits", async ({
+    page,
+  }) => {
+    // The page payload carries no ABC, so this exercises the whole round trip:
+    // POST /api/tunes/abc-filter and the union back into the client-side filter.
+    await page.goto("/my-tunes");
+    await expect(page.locator(".tune-name").first()).toBeVisible();
+
+    await page.locator("#search-input").fill(NOTATION.phrase);
+    const rows = page.locator(".tune-card-header");
+    await expect(rows).toHaveCount(1, { timeout: 8000 });
+    await expect(rows.first()).toContainText(NOTATION.tune.name);
+    // Badged, so it's clear WHY a tune whose name doesn't match is in the results.
+    await expect(rows.first().locator(".abc-only-badge")).toBeVisible();
+    await expectNoServerError(page);
+  });
 });
 
 test.describe("Add a tune", () => {
@@ -41,6 +69,50 @@ test.describe("Add a tune", () => {
   // rail adds INSTANTLY with defaults (want to learn, no notes), and the card
   // body opens the preview whose footer hosts the add form. Each mutating test
   // owns its OWN scratch tune (fullyParallel workers must not race on a row).
+
+  /**
+   * Type into the add pane's deep search and WAIT FOR THAT QUERY'S RESPONSE.
+   *
+   * Without this, a test races its own debounce. Opening the pane fires an empty
+   * deep-search (browse mode, ~30 popular tunes), so a card bearing the tune's name
+   * can already be on screen when `fill()` returns — `toBeVisible()` passes against
+   * a BROWSE result, the test clicks it, and ~150ms later the debounced query search
+   * lands, replaces `deepResults`, and takes the open preview down with it. That is
+   * the "element was detached from the DOM" this spec used to fail with, and it
+   * depended on whether the tune happened to appear in the browse list.
+   *
+   * Waiting for the response whose URL carries the query makes the click land on a
+   * settled list.
+   */
+  async function searchPane(page: any, pane: any, query: string) {
+    const settled = page.waitForResponse(
+      (r: any) =>
+        r.url().includes("/deep-search") &&
+        r.url().includes(`q=${encodeURIComponent(query).replace(/%20/g, "+")}`),
+    );
+    await pane.locator(".deep-field").fill(query);
+    await settled;
+  }
+
+  /**
+   * Stub the thesession.org settings backfill for every test in this block.
+   *
+   * Opening a preview shows the LOCAL settings at once and then asks thesession.org
+   * for the rest in the background (TunePreview.backfillSettings). This is NOT what
+   * caused the detach above — searchPane covers that — but it is a live third-party
+   * call in the middle of an assertion, and a second source of re-render. Stubbing it
+   * with "nothing further to add" is exactly what these tests see when thesession.org
+   * is down, and makes them hermetic.
+   */
+  test.beforeEach(async ({ page }) => {
+    await page.route("**/thesession-preview/**", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ success: true, settings: [], aliases: [] }),
+      }),
+    );
+  });
 
   test("the legacy add URL redirects to My Tunes with the pane open and q searched", async ({
     page,
@@ -53,7 +125,9 @@ test.describe("Add a tune", () => {
     const pane = page.locator(".mt-add-pane");
     await expect(pane).toBeVisible();
     await expect(pane.locator(".deep-field")).toHaveValue(tune.name);
-    await expect(pane.locator(".deep-card", { hasText: tune.name }).first()).toBeVisible();
+    await expect(
+      pane.locator(".deep-card", { hasText: tune.name }).first(),
+    ).toBeVisible();
     // The one-shot params are stripped, so a refresh won't reopen the pane.
     await expect(page).not.toHaveURL(/add=1/);
     await expectNoServerError(page);
@@ -63,40 +137,57 @@ test.describe("Add a tune", () => {
     await page.goto("/my-tunes?add=1");
     const pane = page.locator(".mt-add-pane");
     await expect(pane).toBeVisible();
-    await pane.locator(".deep-field").fill("Cooley");
-    await expect(pane.locator(".deep-card", { hasText: /Cooley/i }).first()).toBeVisible();
+    await searchPane(page, pane, "Cooley");
+    await expect(
+      pane.locator(".deep-card", { hasText: /Cooley/i }).first(),
+    ).toBeVisible();
   });
 
-  test("the ＋ rail adds instantly with defaults and lands on the page", async ({ page }) => {
+  test("the ＋ rail adds instantly with defaults and lands on the page", async ({
+    page,
+  }) => {
     const tune = SCRATCH_TUNES.addPageSearch;
     // Reset to seed state (not on the list) so the ＋ adds, not ?already.
-    await page.request.post("/api/my-tunes/ops", { data: { type: "remove", tune_id: tune.id } });
+    await page.request.post("/api/my-tunes/ops", {
+      data: { type: "remove", tune_id: tune.id },
+    });
     await page.goto("/my-tunes?add=1");
     const pane = page.locator(".mt-add-pane");
     await expect(pane).toBeVisible();
-    await pane.locator(".deep-field").fill(tune.name);
+    await searchPane(page, pane, tune.name);
     const card = pane.locator(".deep-card", { hasText: tune.name }).first();
     await expect(card).toBeVisible();
     await card.locator(".deep-quick").click(); // one-tap add — no configure step
     // Pane closes; the page lands on the added tune with the success toast.
     await expect(pane).toBeHidden();
-    await expect(page.locator("#message-container .message")).toContainText(/Successfully added/i);
+    await expect(page.locator("#message-container .message")).toContainText(
+      /Successfully added/i,
+    );
     await expect(page.locator(`[data-tune-id="${tune.id}"]`)).toBeVisible();
     // Defaults: want to learn, no notes.
     const res = await page.request.get("/api/my-tunes");
-    const added = (await res.json()).tunes.find((t: any) => t.tune_id === tune.id);
+    const added = (await res.json()).tunes.find(
+      (t: any) => t.tune_id === tune.id,
+    );
     expect(added.learn_status).toBe("want to learn");
     expect(added.notes).toBeFalsy();
   });
 
-  test("the card body opens the preview with the add form in its footer", async ({ page }) => {
+  test("the card body opens the preview with the add form in its footer", async ({
+    page,
+  }) => {
     const tune = SCRATCH_TUNES.previewAdd;
-    await page.request.post("/api/my-tunes/ops", { data: { type: "remove", tune_id: tune.id } });
+    await page.request.post("/api/my-tunes/ops", {
+      data: { type: "remove", tune_id: tune.id },
+    });
     await page.goto("/my-tunes?add=1");
     const pane = page.locator(".mt-add-pane");
     await expect(pane).toBeVisible();
-    await pane.locator(".deep-field").fill(tune.name);
-    await pane.locator(".deep-card-body", { hasText: tune.name }).first().click();
+    await searchPane(page, pane, tune.name);
+    await pane
+      .locator(".deep-card-body", { hasText: tune.name })
+      .first()
+      .click();
     // The preview IS the configure screen now: pager + status seg + notes + add.
     await expect(pane.locator(".pv")).toBeVisible();
     const foot = pane.locator(".pv-foot");
@@ -106,39 +197,64 @@ test.describe("Add a tune", () => {
     await foot.locator(".mt-notes").fill("from the e2e suite");
     await foot.locator(".mt-submit").click();
     await expect(pane).toBeHidden();
-    await expect(page.locator("#message-container .message")).toContainText(/Successfully added/i);
+    await expect(page.locator("#message-container .message")).toContainText(
+      /Successfully added/i,
+    );
     const res = await page.request.get("/api/my-tunes");
-    const added = (await res.json()).tunes.find((t: any) => t.tune_id === tune.id);
+    const added = (await res.json()).tunes.find(
+      (t: any) => t.tune_id === tune.id,
+    );
     expect(added.learn_status).toBe("learned");
     expect(added.notes).toBe("from the e2e suite");
   });
 
-  test("previewing an on-list tune offers show-it instead of the form", async ({ page }) => {
+  test("previewing an on-list tune shows what you have, not an add form", async ({
+    page,
+  }) => {
     // Cooley's (tune 1) is on sarah's SEED list — read-only, safe in parallel.
     await page.goto("/my-tunes?add=1");
     const pane = page.locator(".mt-add-pane");
     await expect(pane).toBeVisible();
-    await pane.locator(".deep-field").fill("Cooley");
-    await pane.locator(".deep-card-body", { hasText: /Cooley/i }).first().click();
-    const onlist = pane.locator(".mt-onlist");
+    await searchPane(page, pane, "Cooley");
+    await pane
+      .locator(".deep-card-body", { hasText: /Cooley/i })
+      .first()
+      .click();
+    const onlist = pane.locator(".mt-onlist-panel");
     await expect(onlist).toContainText(/Already on your list/i);
+    // The status answers "what do I already have on this tune?"
+    await expect(onlist.locator(".mt-onlist-status")).toBeVisible();
     await expect(pane.locator(".mt-submit")).toHaveCount(0);
-    await onlist.click();
+    // Nothing was pointed at a setting, so there's nothing to update — just the
+    // heard bump and a way out.
+    await expect(onlist.locator(".mt-onlist-primary")).toHaveCount(0);
+    await expect(onlist.locator(".mt-onlist-secondary")).toContainText(
+      /Heard It Again/i,
+    );
+    await onlist.locator(".mt-onlist-head").click();
     await expect(pane).toBeHidden();
-    await expect(page.locator("#message-container .message")).toContainText(/already on your list/i);
+    await expect(page.locator("#message-container .message")).toContainText(
+      /already on your list/i,
+    );
   });
 });
 
 test.describe("Sync from TheSession.org", () => {
   // The standalone sync page is folded away: /my-tunes/sync redirects to
   // /my-tunes?add=1&sync=1, which opens the add pane straight into its sync view.
-  test("the legacy sync URL lands in the pane's sync view", async ({ page }) => {
+  test("the legacy sync URL lands in the pane's sync view", async ({
+    page,
+  }) => {
     await page.goto("/my-tunes/sync");
     await expect(page).toHaveURL(/\/my-tunes(\?|$)/);
     const pane = page.locator(".mt-add-pane");
     await expect(pane).toBeVisible();
-    await expect(pane.locator(".deep-title")).toContainText(/Sync from TheSession/i);
-    await expect(pane.getByRole("button", { name: /Start Sync/i })).toBeVisible();
+    await expect(pane.locator(".deep-title")).toContainText(
+      /Sync from TheSession/i,
+    );
+    await expect(
+      pane.getByRole("button", { name: /Start Sync/i }),
+    ).toBeVisible();
   });
 
   test("requires a user id before syncing", async ({ page }) => {
@@ -146,6 +262,41 @@ test.describe("Sync from TheSession.org", () => {
     const pane = page.locator(".mt-add-pane");
     await expect(pane).toBeVisible();
     await pane.getByRole("button", { name: /Start Sync/i }).click();
-    await expect(pane.locator(".mt-error")).toContainText(/valid thesession\.org user ID/i);
+    await expect(pane.locator(".mt-error")).toContainText(
+      /valid thesession\.org user ID/i,
+    );
+  });
+});
+
+test.describe("the drawer's disclosure chevron", () => {
+  test.use({ storageState: STORAGE.admin });
+
+  test("sits beside its label, not above it", async ({ page }) => {
+    // lib/Chevron.svelte is `display: inline-block` for this: a block SVG takes a
+    // line of its own, and in a button that is plain inline flow — not a flex row —
+    // that dropped the word underneath the caret. `white-space: nowrap` was already
+    // on this button and could not help, because the break was between two boxes
+    // rather than between two words.
+    await page.goto("/my-tunes");
+    await page.locator(".tune-name").first().click();
+
+    const configure = page
+      .locator(".tsc-action-link", { hasText: "Configure" })
+      .first();
+    await expect(configure).toBeVisible();
+
+    const [btn, svg] = await Promise.all([
+      configure.boundingBox(),
+      configure.locator("svg").boundingBox(),
+    ]);
+
+    // One line: the button is no taller than its own text plus the icon, not twice it.
+    expect(btn!.height).toBeLessThan(26);
+    // The caret is to the LEFT of the label and on the same line as it, which is the
+    // thing that was actually wrong.
+    expect(svg!.x).toBeLessThan(btn!.x + btn!.width / 2);
+    expect(
+      Math.abs(svg!.y + svg!.height / 2 - (btn!.y + btn!.height / 2)),
+    ).toBeLessThan(2);
   });
 });

@@ -93,13 +93,12 @@ padding included), dismissible (the ONE sanctioned × glyph, U+00D7), or plain.
 
 
 ### Tabs — responsive tabs (bits-ui `Tabs`)
-Desktop: horizontal tab buttons. Under 768px the `mobileSelect` knob decides:
-`true` collapses the same panes behind a `<select>`, `false` keeps the visual
-tabs, `'auto'` (default) picks the select only when there are more than 4 tabs
-(few tabs fit a phone fine). Both controls always render; CSS picks one. THE
-tab engine — every tabbed surface (person page, session page, session admin,
-the tune sheet) uses it; the person page and session admin (where the select
-originated, and whose 4-5 tabs overflow a phone) pass `mobileSelect={true}`.
+Desktop: horizontal tab buttons. Under 768px the same strip **scrolls sideways**
+when the tabs do not fit.
+
+It used to collapse into a `<select>` instead, via a `mobileSelect` knob. That is
+retired (spec 052 §B3): no iOS idiom turns a tab bar into a dropdown, so any page
+navigated by one could not be ported, only redesigned.
 
 | Prop | Default | |
 |---|---|---|
@@ -108,10 +107,8 @@ originated, and whose 4-5 tabs overflow a phone) pass `mobileSelect={true}`.
 | `onValueChange` | noop | host hook: URL sync, lazy loads |
 | `navigate` | `false` | tabs are routes: real `<a href>` on desktop, the select navigates |
 | `onNavigate` | `location.href` | navigate-mode seam (tests) |
-| `mobileSelect` | `'auto'` | under 768px: `true` = `<select>`, `false` = visual tabs, `'auto'` = select only when more than 4 tabs |
 | `styled` | `true` | `false` = structural responsive rule only; skin comes from the page via the class props |
-| `listId`/`listClass`/`tabClass`/`selectId`/`selectClass`/`paneClass` | — | legacy skin + e2e/CSS hook passthrough; triggers always carry `data-tab` and an `active` class |
-| `selectLabel` | `'Section'` | aria-label for the mobile select |
+| `listId`/`listClass`/`tabClass`/`paneClass` | — | legacy skin + e2e/CSS hook passthrough; triggers always carry `data-tab` and an `active` class |
 | `children` | — | snippet receiving the active id — branch on it, or keep pane components mounted with an `active` flag when their state must survive switching |
 
 ```svelte
@@ -162,6 +159,68 @@ casing, and what "search" means.
 `bind:this` exposes `focus()`. For instant client-side filters, just
 `bind:value` and derive — the debounce only gates `onSearch`.
 
+
+### Row — the list row (spec 052 §B8)
+Lead / (title + subtitle) / trailing, with the trailing slot hard against the right
+margin. Renders as a real `<button>` when given `onclick`, a real `<a>` when given
+`href`, a `<div>` otherwise.
+
+**Flex, not grid — this is why the component exists.** The first cut was a 3-column
+grid whose empty lead was `display:none`. Hiding a grid child removes it from the
+grid, so a row with no lead put its body in column 1 and its trailing chip in the
+stretchy middle column — the status landed beside the text instead of at the right
+edge. Rows *with* a lead looked perfect, so it read as a styling whim. `min-width:0`
+on the body is the other load-bearing rule: without it a long tune name widens the
+row and the page scrolls sideways.
+
+| Prop | Default | |
+|---|---|---|
+| `title` / `titleContent` | `''` | plain text, or a snippet when the heading needs markup |
+| `subtitle` | `''` | omitted entirely when empty |
+| `onclick` / `href` | `null` | decides the element: button / anchor / div |
+| `as` | `null` | force the element. Needed by any row carrying its OWN control — interactive content inside a `<button>` is invalid HTML and browsers disagree about whether the inner control sees the click, so e.g. the session Tunes row (selection checkbox) passes `as="div"` |
+| `body` | — | snippet replacing title+subtitle, for a body with its own layout (the session People row is inline on desktop, stacked on a phone) |
+| `lead` / `trailing` | — | snippets; neither renders an empty slot when absent |
+| `styled` | `true` | `false` = structure only |
+| `rowClass` / `...rest` | — | legacy skin + id/data-* passthrough |
+
+### Toolbar — search + filter + sort + add (spec 052 §B8)
+One line above a list, with the filter panel expanding **directly beneath it**, a
+notch pointing back at the button that opened it. A control at the top of the screen
+must not open a panel at the bottom of it; a popover is not the escape hatch either,
+since on iPhone one anchored to a control adapts into a bottom sheet by default.
+My Tunes already shipped this pattern — this generalizes it.
+
+Open/close is a class toggle on live nodes, never a re-render, so both directions
+animate. The panel uses `grid-template-rows: 0fr → 1fr`, which animates an unknown
+height without the magic number `max-height` would need. The host owns `open` and the
+filter state; Toolbar owns only the chrome.
+
+| Prop | Default | |
+|---|---|---|
+| `query` | `''` | bindable; drives the embedded `SearchField` |
+| `placeholder` / `debounce` / `onSearch` | | passed through to `SearchField` |
+| `filter` | `null` | snippet → the filter button and panel appear |
+| `open` | `false` | bindable |
+| `activeCount` | `0` | > 0 dots the button and reveals Clear |
+| `onClear` | `null` | set → "Clear filters" in the panel |
+| `onSort` | `null` | set → a sort button; the host opens its own menu from it |
+| `sortActive` | `false` | mark it when sorting is not the default |
+| `onAdd` | `null` | set → a `+` button |
+| `focus()` | — | exported; focuses the search box |
+
+### SectionHeader — a section title (spec 052 §B8)
+Title, optional icon snippet, optional "See all" link. The link is what makes a
+section a *summary*: show the first few rows and hand off to the full list, rather
+than paging a long list in place.
+
+| Prop | Default | |
+|---|---|---|
+| `title` | `''` | |
+| `icon` | — | snippet; the kit carries no icon set |
+| `seeAllHref` / `seeAllLabel` | `null` / `'See all'` | link renders only with an href |
+| `level` | `2` | heading level, so a page keeps one outline |
+| `styled` / `headerClass` / `...rest` | | as the rest of the kit |
 
 ### Seg — segmented control
 THE seg — the status 3-ways (tune sheet + add pane), the sort/status filter

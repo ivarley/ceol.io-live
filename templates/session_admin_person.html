@@ -223,6 +223,27 @@
                                         </label>
                                         <div class="form-text">Grant admin privileges for this session</div>
                                     </div>
+
+                                    {# System admins only: this one hands out a tool that
+                                       writes to object storage and can delete audio, so it
+                                       is not something a session admin can grant onward. #}
+                                    {% if current_user.is_system_admin %}
+                                    <div class="form-check mb-3">
+                                        <input class="form-check-input" type="checkbox" id="can-manage-recordings"
+                                               {{ 'checked' if person.can_manage_recordings }}
+                                               {{ 'disabled' if not person.is_admin }}>
+                                        <label class="form-check-label" for="can-manage-recordings">
+                                            <strong>Manage Recordings</strong>
+                                        </label>
+                                        <div class="form-text">
+                                            Lets them upload this session's audio and add tune timestamps to it,
+                                            from the Recordings section of any of its logs. Also lets them
+                                            <strong>delete</strong> a recording and the timestamps placed on it.
+                                            Only takes effect for a Session Admin, and applies to this session
+                                            alone.
+                                        </div>
+                                    </div>
+                                    {% endif %}
                                 </div>
 
                                 <div class="col-md-6">
@@ -714,45 +735,56 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Handle admin status changes
+    // Handle admin status changes. Both grants post to the same endpoint, which
+    // applies only the field it is sent -- so each checkbox saves itself without
+    // clobbering the other.
     const isAdminCheckbox = document.getElementById('is-admin');
+    const canRecordCheckbox = document.getElementById('can-manage-recordings');
+
+    function saveSessionPersonGrant(field, value, checkbox, successMessage) {
+        const personId = document.getElementById('person-id').value;
+        const sessionPath = document.getElementById('session-path').value;
+
+        saveStatus.style.display = 'block';
+        saveStatus.innerHTML = '<div class="alert alert-info">Saving...</div>';
+
+        fetch(`/api/admin/sessions/${sessionPath}/people/${personId}/admin`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ [field]: value })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (!data.success) { throw new Error(data.error || data.message || 'Failed to save'); }
+            saveStatus.innerHTML = '<div class="alert alert-success">' + successMessage + '</div>';
+            setTimeout(() => { saveStatus.style.display = 'none'; }, 3000);
+        })
+        .catch(error => {
+            console.error('Error saving ' + field + ':', error);
+            saveStatus.innerHTML = '<div class="alert alert-danger">Error: ' + error.message + '</div>';
+            checkbox.checked = !value;
+        });
+    }
+
     if (isAdminCheckbox) {
         isAdminCheckbox.addEventListener('change', function() {
-            const personId = document.getElementById('person-id').value;
-            const sessionPath = document.getElementById('session-path').value;
             const isAdmin = this.checked;
+            // The recordings grant only takes effect for a session admin, so the
+            // checkbox follows the admin bit rather than sitting there enabled and
+            // doing nothing. Its stored value is left alone: revoking and
+            // restoring session-admin shouldn't quietly drop it.
+            if (canRecordCheckbox) { canRecordCheckbox.disabled = !isAdmin; }
+            saveSessionPersonGrant('is_admin', isAdmin, this, 'Admin status updated successfully!');
+        });
+    }
 
-            // Show loading state
-            saveStatus.style.display = 'block';
-            saveStatus.innerHTML = '<div class="alert alert-info">Saving...</div>';
-
-            // Make API call to update admin status
-            fetch(`/api/admin/sessions/${sessionPath}/people/${personId}/admin`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    is_admin: isAdmin
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    saveStatus.innerHTML = '<div class="alert alert-success">Admin status updated successfully!</div>';
-                    setTimeout(() => {
-                        saveStatus.style.display = 'none';
-                    }, 3000);
-                } else {
-                    throw new Error(data.error || 'Failed to update admin status');
-                }
-            })
-            .catch(error => {
-                console.error('Error updating admin status:', error);
-                saveStatus.innerHTML = '<div class="alert alert-danger">Error: ' + error.message + '</div>';
-                // Revert checkbox state
-                this.checked = !isAdmin;
-            });
+    if (canRecordCheckbox) {
+        canRecordCheckbox.addEventListener('change', function() {
+            saveSessionPersonGrant(
+                'can_manage_recordings', this.checked, this,
+                this.checked ? 'They can now manage this session\'s recordings.'
+                             : 'Recording access removed.'
+            );
         });
     }
     

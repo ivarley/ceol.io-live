@@ -10,8 +10,33 @@ from dotenv import load_dotenv
 # Import our custom modules
 from auth import User, SESSION_LIFETIME_WEEKS
 from api_auth import public_api
+from api_app_routes import (
+    auth_exchange, auth_resend_verification, auth_logout, auth_set_password,
+    api_me, me_profile, app_config, api_home, resolve_path, auth_web_session,
+    apple_app_site_association,
+)
 from api_routes import *
 from web_routes import *
+from recording_routes import (
+    get_recording_segmenter,
+    get_recording_peaks,
+    put_recording_segment,
+    delete_recording_segment,
+    log_recording_tune,
+    set_recording_tune,
+    unlog_recording_tune,
+    get_instance_recordings,
+    get_instance_audio,
+    download_recording_segment,
+    export_recording_segments,
+    create_recording_upload_url,
+    create_recording,
+    get_recording_status,
+    reprocess_recording,
+    set_recording_segmenting_complete,
+    delete_recording,
+    get_session_instances_for_admin,
+)
 from api_person_tune_routes import (
     get_my_tunes,
     get_person_tune_detail,
@@ -27,10 +52,11 @@ from api_person_tune_routes import (
     get_my_sessions,
     sync_my_tunes,
     search_tunes,
+    abc_filter_tunes,
     update_my_profile,
     get_common_tunes
 )
-from live_logging_routes import live_bootstrap, live_vocabulary, live_op, live_issue_token, live_tune_detail, live_people, live_deep_search, live_incipit, live_match, live_thesession_search, my_tunes_deep_search, my_tunes_thesession_search, my_tunes_incipit, session_tunes_deep_search, session_tunes_thesession_search, session_tunes_incipit, live_tune_preview, my_tunes_tune_preview, session_tunes_tune_preview, live_setting_image, my_tunes_setting_image, session_tunes_setting_image, live_thesession_preview, my_tunes_thesession_preview, session_tunes_thesession_preview, live_render_abc, my_tunes_render_abc, session_tunes_render_abc
+from live_logging_routes import tunes_deep_search, tunes_thesession_search, tunes_incipit_image, tunes_preview, tunes_setting_image, tunes_thesession_preview, tunes_render_abc, live_bootstrap, live_vocabulary, live_op, live_issue_token, live_tune_detail, live_people, live_deep_search, live_incipit, live_match, live_thesession_search, my_tunes_deep_search, my_tunes_thesession_search, my_tunes_incipit, session_tunes_deep_search, session_tunes_thesession_search, session_tunes_incipit, live_tune_preview, my_tunes_tune_preview, session_tunes_tune_preview, live_setting_image, my_tunes_setting_image, session_tunes_setting_image, live_thesession_preview, my_tunes_thesession_preview, session_tunes_thesession_preview, live_render_abc, my_tunes_render_abc, session_tunes_render_abc
 from timezone_utils import format_datetime_with_timezone, utc_to_local
 from flask_login import current_user
 
@@ -52,6 +78,37 @@ class DateOrIdConverter(BaseConverter):
 
 app = Flask(__name__)
 app.url_map.converters['date_or_id'] = DateOrIdConverter
+
+
+# --- JSON: ISO 8601 dates, always (spec 052 A4) ---------------------------------
+#
+# Flask's stock provider renders date/datetime as RFC 822 ("Sun, 21 Sep 2026
+# 00:00:00 GMT") and cannot render time or Decimal at all. The serializers are
+# careful (~70 .isoformat() calls) but nothing enforced it; one missed field
+# would hand a native client the wrong format. This provider makes the careful
+# path the only path. It applies to jsonify() AND Jinja's |tojson, so the page
+# embed and the API can't disagree either.
+from flask.json.provider import DefaultJSONProvider as _DefaultJSONProvider
+import datetime as _dt
+import decimal as _decimal
+
+
+def _iso_json_default(o):
+    if isinstance(o, (_dt.datetime, _dt.date, _dt.time)):
+        return o.isoformat()
+    if isinstance(o, _decimal.Decimal):
+        return float(o)
+    if isinstance(o, (set, frozenset)):
+        return sorted(o)
+    return _DefaultJSONProvider.default(o)
+
+
+class CeolJSONProvider(_DefaultJSONProvider):
+    default = staticmethod(_iso_json_default)
+    sort_keys = False
+
+
+app.json = CeolJSONProvider(app)
 
 # Secret key required for Flask sessions (used by flash messages to store temporary messages in signed cookies)
 app.secret_key = os.environ.get(
@@ -102,7 +159,23 @@ login_manager.login_message = "Please log in to access this page."
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.get_by_id(int(user_id))
+    """Resolve the signed session cookie's user id.
+
+    Returning None means "not logged in", which is the right answer for a cookie
+    this app did not mint -- and it WILL see some. Cookies are scoped by host and
+    ignore the port, so every other Flask app on localhost shares this jar and
+    the last one to log in wins the `session` cookie. A neighbour that keys users
+    by UUID used to take the whole site down with
+
+        ValueError: invalid literal for int() with base 10: '00000000-...-0001'
+
+    on every request, since this runs before any route. A foreign cookie should
+    log you out, not 500 you, so anything unparseable is simply nobody.
+    """
+    try:
+        return User.get_by_id(int(user_id))
+    except (TypeError, ValueError):
+        return None
 
 @login_manager.request_loader
 def load_user_from_request(req):
@@ -156,6 +229,120 @@ def capture_referrer():
     if referrer:
         # Store in session for later use during registration
         session['referred_by_person_id'] = referrer
+
+
+# --- Request timing -------------------------------------------------------
+#
+# One line per request, so "the site felt slow" is answerable from the logs
+# instead of reconstructed after the fact. The DB counters come from
+# database.get_db_connection(), which records each pool checkout on `g`.
+#
+# Slow requests log at WARNING so they can be isolated in Render's log search;
+# everything else is DEBUG to keep steady-state noise down.
+SLOW_REQUEST_MS = int(os.environ.get("SLOW_REQUEST_MS", 500))
+
+_timing_log = logging.getLogger("ceol.timing")
+
+
+@app.before_request
+def _start_request_timer():
+    from flask import g
+    import time
+
+    g._request_started = time.monotonic()
+
+
+@app.teardown_request
+def _release_db_connections(exc):
+    """Hand back any connection this request borrowed and didn't close.
+
+    Most handlers are plain sequential code rather than try/finally, so an
+    exception between borrowing and closing skips the close entirely.
+    """
+    from database import release_request_connections
+
+    release_request_connections()
+
+
+@app.after_request
+def _log_request_timing(resp):
+    from flask import g
+    import time
+
+    started = getattr(g, "_request_started", None)
+    if started is None:
+        return resp
+    # Static files are served straight off disk and would drown out the signal.
+    if request.path.startswith("/static/"):
+        return resp
+
+    elapsed_ms = (time.monotonic() - started) * 1000
+    conns = getattr(g, "db_connections", 0)
+    db_ms = getattr(g, "db_connect_seconds", 0.0) * 1000
+    _timing_log.log(
+        logging.WARNING if elapsed_ms >= SLOW_REQUEST_MS else logging.INFO,
+        "request method=%s path=%s status=%s elapsed_ms=%.1f db_conns=%d db_connect_ms=%.1f",
+        request.method,
+        request.path,
+        resp.status_code,
+        elapsed_ms,
+        conns,
+        db_ms,
+    )
+    return resp
+
+
+# --- API error envelope + client identification (spec 052 A3 / A8) -------------
+#
+# Every /api/* error response ends up in the one shape api_auth.api_error() builds:
+# {success:false, error, message, code}. New handlers call api_error() directly; this
+# back-fills the legacy sites (four different hand-rolled shapes across ~400 call
+# sites) so a native client can rely on `code` everywhere without a 400-site sweep.
+# Only JSON responses with a 4xx/5xx status are touched, and only when a key is
+# missing — a handler that already returns the full envelope is passed through
+# byte-for-byte.
+@app.after_request
+def _normalize_api_errors(resp):
+    if resp.status_code < 400 or not request.path.startswith("/api/"):
+        return resp
+    if resp.direct_passthrough or not (resp.mimetype or "").endswith("json"):
+        return resp
+    from api_auth import normalize_error_body
+    try:
+        body = resp.get_json(silent=True)
+    except Exception:
+        return resp
+    if isinstance(body, dict) and normalize_error_body(body, resp.status_code):
+        resp.set_data(app.json.dumps(body))
+    return resp
+
+
+def health():
+    """Liveness + database reachability, so an uptime check can tell the
+    difference between 'app is down' and 'database is slow'."""
+    from database import get_db_connection
+    import time
+
+    started = time.monotonic()
+    try:
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT 1")
+            cur.fetchone()
+        finally:
+            conn.close()
+    except Exception as e:
+        app.logger.exception("health check failed")
+        return {"status": "error", "database": str(e)}, 503
+    return {
+        "status": "ok",
+        "database_ms": round((time.monotonic() - started) * 1000, 1),
+    }
+
+
+app.add_url_rule("/health", "health", health)
+
 
 # Template filters for timezone handling
 @app.template_filter("format_datetime_tz")
@@ -259,6 +446,8 @@ app.add_url_rule("/sessions/<path:session_path>/logs", "session_logs", session_l
 app.add_url_rule("/sessions/<path:full_path>", "session_handler", session_handler)
 app.add_url_rule("/sessions/<path:full_path>/players", "session_instance_players", session_instance_players)
 app.add_url_rule("/add-session", "add_session", add_session)
+app.add_url_rule("/tunes", "tunes_page", tunes_page)
+app.add_url_rule("/about", "about_page", about_page)
 app.add_url_rule("/help", "help_page", help_page)
 app.add_url_rule("/help/sessions", "help_sessions", help_sessions)
 app.add_url_rule("/help/offline", "help_offline", help_offline)
@@ -277,6 +466,27 @@ app.add_url_rule("/logout", "logout", logout)
 app.add_url_rule("/api/auth/check-email", "check_email_api", public_api(check_email_api), methods=["POST"])
 app.add_url_rule("/api/auth/login-password", "login_password_api", public_api(login_password_api), methods=["POST"])
 app.add_url_rule("/auth/login/<token>", "login_with_token", login_with_token)
+# The app-shell API (spec 052): auth handshake, identity, config, home, resolve.
+# Handlers carry their own @public_api / @api_login_required markers.
+app.add_url_rule("/api/auth/exchange", "auth_exchange", auth_exchange, methods=["POST"])
+app.add_url_rule("/api/auth/resend-verification", "auth_resend_verification", auth_resend_verification, methods=["POST"])
+app.add_url_rule("/api/auth/logout", "auth_logout", auth_logout, methods=["POST"])
+app.add_url_rule("/api/auth/set-password", "auth_set_password", auth_set_password, methods=["POST"])
+app.add_url_rule("/api/auth/web-session", "auth_web_session", auth_web_session, methods=["POST"])
+app.add_url_rule("/api/me", "api_me", api_me, methods=["GET"])
+app.add_url_rule("/api/me/profile", "me_profile", me_profile, methods=["GET", "PUT"])
+app.add_url_rule("/api/app-config", "app_config", app_config, methods=["GET"])
+app.add_url_rule("/api/home", "api_home", api_home, methods=["GET"])
+app.add_url_rule("/api/resolve", "resolve_path", resolve_path, methods=["GET"])
+app.add_url_rule("/.well-known/apple-app-site-association", "apple_app_site_association", apple_app_site_association)
+# The one tune-search family (spec 052 A6); the per-page trees below stay as aliases.
+app.add_url_rule("/api/tunes/deep-search", "tunes_deep_search", tunes_deep_search, methods=["GET"])
+app.add_url_rule("/api/tunes/thesession-search", "tunes_thesession_search", tunes_thesession_search, methods=["GET"])
+app.add_url_rule("/api/tunes/<int:tune_id>/incipit-image", "tunes_incipit_image", tunes_incipit_image, methods=["GET"])
+app.add_url_rule("/api/tunes/<int:tune_id>/preview", "tunes_preview", tunes_preview, methods=["GET"])
+app.add_url_rule("/api/tunes/settings/<int:setting_id>/image", "tunes_setting_image", tunes_setting_image, methods=["GET"])
+app.add_url_rule("/api/tunes/thesession/<int:thesession_id>/preview", "tunes_thesession_preview", tunes_thesession_preview, methods=["GET"])
+app.add_url_rule("/api/tunes/render-abc", "tunes_render_abc", tunes_render_abc, methods=["POST"])
 app.add_url_rule("/auth/set-password", "set_password_optional", set_password_optional, methods=["GET", "POST"])
 app.add_url_rule("/auth/setup-profile", "setup_profile", setup_profile, methods=["GET", "POST"])
 app.add_url_rule(
@@ -854,12 +1064,6 @@ app.add_url_rule(
     methods=["GET"],
 )
 app.add_url_rule(
-    "/api/users/<int:user_id>/beta-logging",
-    "set_beta_logging",
-    set_beta_logging,
-    methods=["POST"],
-)
-app.add_url_rule(
     "/api/admin/instances/<int:session_instance_id>/logging-mode",
     "admin_reset_logging_mode",
     admin_reset_logging_mode,
@@ -1284,10 +1488,24 @@ app.add_url_rule(
     methods=["GET"],
 )
 app.add_url_rule(
+    "/api/tunes/top",
+    "get_top_tunes",
+    get_top_tunes,
+    methods=["GET"],
+)
+app.add_url_rule(
     "/api/tunes/search",
     "search_tunes",
     search_tunes,
     methods=["GET"],
+)
+# Notation match over a list the client already has on screen (My Tunes, a session's
+# Tunes tab, the admin tunes tab): POST because the caller sends its visible tune ids.
+app.add_url_rule(
+    "/api/tunes/abc-filter",
+    "abc_filter_tunes",
+    abc_filter_tunes,
+    methods=["POST"],
 )
 app.add_url_rule(
     "/api/tunes/popular",
@@ -1423,42 +1641,130 @@ app.add_url_rule(
     methods=["POST"],
 )
 
-# Recording routes
+# Recording segmenter (spec 050): audio -> per-tune timestamps, the data-prep
+# step for the eventual tune-recognition model. All system-admin only.
 app.add_url_rule(
-    "/api/session_instance/<int:session_instance_id>/recordings",
-    "start_recording",
-    start_recording,
+    "/admin/recordings",
+    "admin_recordings",
+    admin_recordings,
+)
+app.add_url_rule(
+    "/admin/recordings/<int:recording_id>/segment",
+    "segment_recording",
+    segment_recording,
+)
+app.add_url_rule(
+    "/api/recordings/<int:recording_id>/segmenter",
+    "get_recording_segmenter",
+    get_recording_segmenter,
+    methods=["GET"],
+)
+# In-app upload: sign, confirm, then poll while the waveform and proxy are built.
+# The audio itself goes browser -> S3 and never touches Flask.
+app.add_url_rule(
+    "/api/recordings/upload-url",
+    "create_recording_upload_url",
+    create_recording_upload_url,
     methods=["POST"],
 )
 app.add_url_rule(
-    "/api/session_instance/<int:session_instance_id>/recordings",
-    "list_recordings",
-    list_recordings,
-    methods=["GET"],
-)
-app.add_url_rule(
-    "/api/recordings/<int:recording_id>/chunks",
-    "upload_chunk",
-    upload_chunk,
+    "/api/recordings",
+    "create_recording",
+    create_recording,
     methods=["POST"],
 )
 app.add_url_rule(
     "/api/recordings/<int:recording_id>/status",
-    "update_recording_status",
-    update_recording_status,
-    methods=["PUT"],
-)
-app.add_url_rule(
-    "/api/recordings/<int:recording_id>/playback",
-    "get_recording_playback",
-    get_recording_playback,
+    "get_recording_status",
+    get_recording_status,
     methods=["GET"],
 )
 app.add_url_rule(
-    "/api/session_instance/<int:session_instance_id>/recordings/upload",
-    "upload_recording_file",
-    upload_recording_file,
+    "/api/recordings/<int:recording_id>/reprocess",
+    "reprocess_recording",
+    reprocess_recording,
     methods=["POST"],
+)
+app.add_url_rule(
+    "/api/recordings/<int:recording_id>/segmenting-complete",
+    "set_recording_segmenting_complete",
+    set_recording_segmenting_complete,
+    methods=["PUT"],
+)
+app.add_url_rule(
+    "/api/recordings/<int:recording_id>",
+    "delete_recording",
+    delete_recording,
+    methods=["DELETE"],
+)
+app.add_url_rule(
+    "/api/admin/sessions/<int:session_id>/instances",
+    "get_session_instances_for_admin",
+    get_session_instances_for_admin,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/recordings/<int:recording_id>/peaks",
+    "get_recording_peaks",
+    get_recording_peaks,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/recordings/<int:recording_id>/segments/<int:session_instance_tune_id>",
+    "put_recording_segment",
+    put_recording_segment,
+    methods=["PUT"],
+)
+app.add_url_rule(
+    "/api/recordings/<int:recording_id>/segments/<int:session_instance_tune_id>",
+    "delete_recording_segment",
+    delete_recording_segment,
+    methods=["DELETE"],
+)
+# Logging while segmenting (spec 050): a night with no log gets one from the audio.
+app.add_url_rule(
+    "/api/recordings/<int:recording_id>/segments",
+    "log_recording_tune",
+    log_recording_tune,
+    methods=["POST"],
+)
+app.add_url_rule(
+    "/api/recordings/<int:recording_id>/segments/<int:session_instance_tune_id>/tune",
+    "set_recording_tune",
+    set_recording_tune,
+    methods=["PUT"],
+)
+app.add_url_rule(
+    "/api/recordings/<int:recording_id>/segments/<int:session_instance_tune_id>/unlog",
+    "unlog_recording_tune",
+    unlog_recording_tune,
+    methods=["POST"],
+)
+app.add_url_rule(
+    "/api/recordings/<int:recording_id>/export",
+    "export_recording_segments",
+    export_recording_segments,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/session-instances/<int:session_instance_id>/recordings",
+    "get_instance_recordings",
+    get_instance_recordings,
+    methods=["GET"],
+)
+# Playback: the read side of the segmenter's work, for the session-instance page.
+app.add_url_rule(
+    "/api/session-instances/<int:session_instance_id>/audio",
+    "get_instance_audio",
+    get_instance_audio,
+    methods=["GET"],
+)
+# One tune, cut out of the master as a file. The only audio that goes through Flask.
+app.add_url_rule(
+    "/api/recordings/<int:recording_id>/segments/<int:session_instance_tune_id>/download",
+    "download_recording_segment",
+    download_recording_segment,
+    methods=["GET"],
 )
 
 # Error handlers

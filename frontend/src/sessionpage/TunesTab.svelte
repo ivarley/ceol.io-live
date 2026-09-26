@@ -27,7 +27,9 @@
   const sessionPath = session.path
   const isLoggedIn = permissions.is_logged_in
 
-  import { toast, SearchField, Chip, Seg, Sheet } from '../lib/index.js'
+  import { Chip, Row, SearchField, Seg, Sheet, Toolbar, toast } from '../lib/index.js'
+  import { createAbcMatcher } from '../shared/abcfilter.svelte.js'
+  import { STATUSES, STATUS_LABELS } from '../mylist.js'
 
   // ---- state ---------------------------------------------------------------
   let allTunes = $state([...initialTunes])
@@ -56,12 +58,25 @@
   const selectedTuneIds = new SvelteSet()
 
   let panelVisible = $state(false)
-  let panelAnim = $state('') // '', 'opening', 'closing'
+
+  // Notation search: the filter takes notes as well as names, but the payload carries no
+  // ABC, so the matching ids come from the server. A query that isn't note-shaped never
+  // leaves the browser. Public endpoint, so this works for logged-out visitors too.
+  const abcMatch = createAbcMatcher()
+  $effect(() => {
+    // Tracked: the query, and the SIZE of the list (which can arrive after mount). The
+    // ids themselves are read untracked, so ordinary row churn costs nothing.
+    abcMatch.update(
+      filters.search,
+      () => untrack(() => allTunes.map((t) => t.tune_id)),
+      allTunes.length
+    )
+  })
 
   // ---- derived ---------------------------------------------------------------
   const filteredTunes = $derived.by(() => {
     void tunebookVersion // re-filter/re-color once the tunebook loads
-    return filterAndSortTunes(allTunes, filters, sort, myStatusInstrument)
+    return filterAndSortTunes(allTunes, filters, sort, myStatusInstrument, abcMatch.ids)
   })
   const tuneTypes = $derived([...new Set(allTunes.map((t) => t.tune_type).filter(Boolean))].sort())
   const hasActiveFilters = $derived(!!(filters.type || filters.mystatus || filters.attended))
@@ -165,19 +180,6 @@
 
   // ---- search / filters -----------------------------------------------------------
 
-  function toggleFilterPanel() {
-    if (!panelVisible) {
-      panelVisible = true
-      panelAnim = 'opening'
-      setTimeout(() => (panelAnim = ''), 300)
-    } else {
-      panelAnim = 'closing'
-      setTimeout(() => {
-        panelVisible = false
-        panelAnim = ''
-      }, 300)
-    }
-  }
 
   function setSortMode(sortType) {
     if (sort.type === sortType) {
@@ -471,58 +473,34 @@
 <div class="tab-content" class:active id="tunes-tab">
   <div class="tunes-container">
     <div class="filters-container">
-      <div class="filter-top-row">
-<SearchField
-          bind:value={rawSearch}
-          id="tune-search"
-          inputClass="filter-search-input"
-          wrapperClass="filter-search-wrap"
-          styled={false}
-          placeholder="Search"
-          autocomplete="off"
-          autocorrect="off"
-          autocapitalize="off"
-          spellcheck="false"
-          debounce={300}
-          onSearch={(q) => (filters.search = q.toLowerCase().trim())} />
-        {#if isLoggedIn}
-          <a
-            href="/sessions/{sessionPath}/tunes?add=1"
-            class="filter-panel-toggle"
-            id="add-session-tune-btn"
-            title="Add tune"
-            style="text-decoration: none; font-size: 24px; font-weight: 300; line-height: 1;"
-            onclick={handleAddSessionTuneClick}>+</a>
-        {/if}
-        <button
-          id="filter-panel-toggle"
-          class="filter-panel-toggle"
-          class:active={panelVisible || hasActiveFilters}
-          title="Show filters"
-          onclick={toggleFilterPanel}>
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="4" y1="21" x2="4" y2="14"></line>
-            <line x1="4" y1="10" x2="4" y2="3"></line>
-            <line x1="12" y1="21" x2="12" y2="12"></line>
-            <line x1="12" y1="8" x2="12" y2="3"></line>
-            <line x1="20" y1="21" x2="20" y2="16"></line>
-            <line x1="20" y1="12" x2="20" y2="3"></line>
-            <line x1="1" y1="14" x2="7" y2="14"></line>
-            <line x1="9" y1="8" x2="15" y2="8"></line>
-            <line x1="17" y1="16" x2="23" y2="16"></line>
-          </svg>
-        </button>
-        <a href="/help/session-tracking/tunes" class="help-icon" title="About session tunes">
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"></circle>
-            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
-            <line x1="12" y1="17" x2="12.01" y2="17"></line>
-          </svg>
-        </a>
-      </div>
-
-      {#if panelVisible}
-        <div id="filter-panel" class="filter-panel {panelAnim}">
+      <Toolbar
+        styled={false}
+        toolbarClass="filter-top-row"
+        buttonClass="filter-panel-toggle"
+        filterId="filter-panel-toggle"
+        panelId="filter-panel"
+        bind:open={panelVisible}
+        activeCount={hasActiveFilters ? 1 : 0}
+        addId={isLoggedIn ? 'add-session-tune-btn' : null}
+        addHref={isLoggedIn ? `/sessions/${sessionPath}/tunes?add=1` : null}
+        addTitle="Add tune"
+        onAdd={isLoggedIn ? handleAddSessionTuneClick : null}>
+        {#snippet search()}
+          <SearchField
+            bind:value={rawSearch}
+            id="tune-search"
+            inputClass="filter-search-input"
+            wrapperClass="filter-search-wrap"
+            styled={false}
+            placeholder="Search"
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="off"
+            spellcheck="false"
+            debounce={300}
+            onSearch={(q) => (filters.search = q.toLowerCase().trim())} />
+        {/snippet}
+        {#snippet filter()}
           <div class="filter-panel-row">
             <select id="type-filter" class="filter-panel-select" title="Tune type" bind:value={filters.type}>
               <option value="">All Tune Types</option>
@@ -577,9 +555,9 @@
                 <option value="">My Tunebook: off</option>
                 <option value="all">Show My Status</option>
                 <option value="not on list">Not On My List</option>
-                <option value="want to learn">Want To Learn</option>
-                <option value="learning">Learning</option>
-                <option value="learned">Learned</option>
+                {#each STATUSES as st (st)}
+                  <option value={st}>{STATUS_LABELS[st]}</option>
+                {/each}
               </select>
               <select
                 id="mystatus-inst"
@@ -607,8 +585,8 @@
               <button id="copy-to-btn" class="selection-btn primary" disabled={selectedTuneIds.size === 0} onclick={showCopyModal}>And Copy To...</button>
             </div>
           {/if}
-        </div>
-      {/if}
+        {/snippet}
+      </Toolbar>
     </div>
 
     <div class="results-count">
@@ -637,7 +615,7 @@
             <a
               href="/sessions/{sessionPath}/tunes?add=1&q={encodeURIComponent(filters.search)}"
               class="btn btn-primary"
-              style="padding: 12px 24px; background-color: var(--primary); color: white; text-decoration: none; border-radius: 4px; display: inline-block;"
+              style="padding: 12px 24px; background-color: var(--primary-fill); color: white; text-decoration: none; border-radius: 4px; display: inline-block;"
               onclick={handleAddSessionTuneClick}>
               Add Tune
             </a>
@@ -646,10 +624,17 @@
       {:else}
         {#each filteredTunes as tune (tune.tune_id)}
           {@const st = rowStatus(tune)}
-          <div
-            class="tune-row{selectionMode ? ' selection-mode' : ''}{st ? ' ' + st.cls : ''}"
+          <!-- The kit Row owns the three-slot layout (spec 052 §B8 Stage 2); every
+               legacy class stays, so page.css and the e2e selectors are untouched.
+               as="div" because this row carries its own checkbox, and interactive
+               content inside a <button> is invalid HTML — see Row's comment. -->
+          <Row
+            as="div"
+            styled={false}
+            rowClass="tune-row{selectionMode ? ' selection-mode' : ''}{st ? ' ' + st.cls : ''}"
             data-tune-id={tune.tune_id}
             onclick={() => handleTuneRowClick(tune)}>
+            {#snippet body()}
             <div class="tune-row-header">
               <input
                 type="checkbox"
@@ -661,7 +646,11 @@
                   toggleTuneSelection(tune.tune_id)
                 }} />
               <h3 class="tune-name">{tune.tune_name || 'Unknown'}</h3>
+              <!-- Here because its NOTATION matched, not its name. -->
+              {#if tune._abcOnly}<span class="abc-only-badge" title="Matched the notation, not the name">♪</span>{/if}
             </div>
+            {/snippet}
+            {#snippet trailing()}
             <div class="tune-meta">
               {#if st}<Chip label={st.status} styled={false} chipClass="ls-chip {st.cls}" />{/if}
               {#if tune.tune_type}<Chip label={tune.tune_type} styled={false} chipClass="tune-type" />{/if}
@@ -685,7 +674,8 @@
                   title="TheSession.org tunebooks" />
               {/if}
             </div>
-          </div>
+            {/snippet}
+          </Row>
         {/each}
       {/if}
     </div>

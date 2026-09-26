@@ -5,6 +5,10 @@
  * Licensed under MIT (https://github.com/twbs/bootstrap/blob/main/LICENSE)
  */
  :root {
+  /* BEGIN generated tokens — see design/tokens.json */
+    /* Generated from design/tokens.json by scripts/build_tokens.py. Do not edit. */
+
+    /* ===== Bootstrap palette, theme surfaces and text ===== */
     /* Dark-only app: render native controls (selects, scrollbars, pickers) dark */
     color-scheme: dark;
     --blue: #007bff;
@@ -20,7 +24,23 @@
     --white: #fff;
     --gray: #adb4c0;
     --gray-dark: #747f94;
-    --primary: #4da6ff;
+    /* The wordmark's own green, sampled from static/images/logo3-1.png. The accent family
+       below is this hue (119deg) lifted for a dark background — at 3.7:1 on --bg-color the
+       mark's own green is fine as a mark and too dark for text. */
+    --logo-green: #4a8049;
+    /* The logo hue at the legibility the old grey had (4.9:1, same as #888): resting
+       tab-bar labels and anywhere else that wants the brand colour without shouting. */
+    --logo-green-soft: #569654;
+    /* Accent TEXT, links, icons and thin borders. The logo hue at 6.9:1 on --bg-color,
+       which is where the blue it replaced sat (6.8:1). It is too light to sit BEHIND white
+       text — that is --primary-fill's job. */
+    --primary: #65b464;
+    /* Accent FILL: every surface that carries white text — a selected filter, a tune-type
+       chip, a primary button. The logo green itself, sampled from logo3-1.png, which is
+       one flat #4a8049. White on it is 4.69:1; white on the lighter --primary was 2.54:1,
+       under AA, and read as the washed-out green a phone uses for the messages it does not
+       want you to like. */
+    --primary-fill: #4a8049;
     --secondary: #8a95a8;
     --success: #4daf5a;
     --info: #5b99ea;
@@ -33,12 +53,12 @@
     --breakpoint-md: 768px;
     --breakpoint-lg: 992px;
     --breakpoint-xl: 1200px;
-    --font-family-sans-serif: -apple-system, BlinkMacSystemFont, "Segoe UI",
-      Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif,
-      "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
-    --font-family-monospace: SFMono-Regular, Menlo, Monaco, Consolas,
-      "Liberation Mono", "Courier New", monospace;
-    
+    --font-family-sans-serif: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    --font-family-monospace: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    /* The site header is position:fixed at this height on every width, so anything that
+       sticks to the top of the viewport has to start BELOW it or it slides underneath and
+       disappears. Named here rather than repeated as a magic 42. */
+    --site-header-h: 42px;
     /* Theme surface/text variables (the app is dark-only) */
     --bg-color: #1a1a1a;
     --text-color: #e0e0e0;
@@ -62,16 +82,19 @@
     --info-bg: #2d4a5a;
     --info-border: #3d5e6e;
     --info-text: #b3e0ff;
-    --link-color: #4da6ff;
-    --link-hover-color: #80c0ff;
+    --link-color: #65b464;
+    --link-hover-color: #92ca91;
     --input-bg: #2d2d2d;
     --secondary-text: #888;
     --table-header-bg: #3d3d3d;
-
     /* Muted text (formerly a phantom var) */
     --text-muted: #888;
     /* Hover-state darks (formerly phantom vars; values match the fallbacks in use) */
-    --primary-dark: #0056b3;
+    --primary-dark: #3d863c;
+    /* --primary-fill hovered: 10% darker. White text 5.57:1, and still 3.12:1 against the
+       page, so a hovered chip does not sink into the background. --primary-dark is NOT
+       this — it is lighter than --primary-fill, so using it here would brighten on hover. */
+    --primary-fill-hover: #437342;
     --secondary-dark: #5a6268;
     /* Already-added rows in tune search */
     --already-added-bg: #3a3a3a;
@@ -79,9 +102,9 @@
     /* Modal surfaces (moved from tune_detail_modal.css so load order doesn't matter) */
     --modal-bg-secondary: #2a2a2a;
     --modal-text-muted: #888;
-    --modal-primary-dark: #3385cc;
+    --modal-primary-dark: #499e47;
 
-    /* ============ Design token scales (spec 035) ============ */
+    /* ===== Design token scales (spec 035) ===== */
     /* Radius */
     --r-sm: 4px;
     --r: 8px;
@@ -107,8 +130,8 @@
     --dur: 0.25s;
     --ease: ease-out;
 
-    /* ============ Z-index layers (folded in from z-index-layers.css) ============
-       Tier 1: component layering (1-10) */
+    /* ===== Z-index layers (folded in from z-index-layers.css) ===== */
+    /* Tier 1: component layering (1-10) */
     --z-background: -1;
     --z-base: 0;
     --z-component-1: 1;
@@ -123,8 +146,8 @@
     --z-bootstrap-modal: 1050;
     --z-bootstrap-popover: 1060;
     --z-bootstrap-tooltip: 1070;
-    /* Tier 3: application UI. Modals sit BELOW the header (2000) on purpose,
-       so the hamburger menu stays accessible while a modal is open. */
+    /* Tier 3: application UI. Modals sit BELOW the header (2000) on purpose, so the
+       hamburger menu stays accessible while a modal is open. */
     --z-modal-overlay: 1900;
     --z-modal-content: 1910;
     --z-modal-sidebar: 1920;
@@ -132,9 +155,9 @@
     --z-header: 2000;
     --z-hamburger-dropdown: 2010;
     --z-in-session-popup: 2020;
-    /* Kit Sheet/Dialog (spec 035): full-screen sheet chrome carries its own
-       header (Cancel/title/Done), so unlike the legacy modals it must cover
-       the fixed header. Search dropdowns (2100) still float above sheets. */
+    /* Kit Sheet/Dialog (spec 035): full-screen sheet chrome carries its own header
+       (Cancel/title/Done), so unlike the legacy modals it must cover the fixed header.
+       Search dropdowns (2100) still float above sheets. */
     --z-sheet-overlay: 2030;
     --z-sheet-content: 2040;
     --z-search-dropdown: 2100;
@@ -143,6 +166,7 @@
     --z-pull-to-refresh: 2850;
     /* Tier 4: top layer — toasts only */
     --z-toast: 9999;
+  /* END generated tokens */
   }
 
   /* The one spinner keyframe. Every spinner animates `spin`; do not redeclare. */
@@ -266,12 +290,12 @@
     top: -0.5em;
   }
   a {
-    color: #00a1e0;
+    color: var(--primary);
     text-decoration: none;
     background-color: transparent;
   }
   a:hover {
-    color: #005b7f;
+    color: var(--primary-dark);
     text-decoration: underline;
   }
   a:not([href]):not([class]) {
@@ -327,9 +351,13 @@
   button {
     border-radius: 0;
   }
-  button:focus {
-    outline: 1px dotted;
-    outline: 5px auto -webkit-focus-ring-color;
+  /* Bootstrap's reboot drew the browser's own focus ring here on :focus, which
+     includes mouse clicks — a 4px light-blue halo on every button you pressed.
+     Only the pointer case is suppressed: `button:focus` would out-specify the
+     :focus-visible rule at the end of this file (0,1,1 beats 0,1,0) and take the
+     keyboard ring with it, which is how the first cut of this got it wrong. */
+  button:focus:not(:focus-visible) {
+    outline: none;
   }
   input,
   button,
@@ -2343,33 +2371,33 @@
   }
   .btn-primary {
     color: #fff;
-    background-color: #00a1e0;
-    border-color: #00a1e0;
+    background-color: var(--primary-fill);
+    border-color: var(--primary-fill);
   }
   .btn-primary:hover {
     color: #fff;
-    background-color: #005b7f;
-    border-color: #005b7f;
+    background-color: var(--primary-fill-hover);
+    border-color: var(--primary-fill-hover);
   }
   .btn-primary:focus,
   .btn-primary.focus {
     color: #fff;
-    background-color: #005b7f;
-    border-color: #005b7f;
+    background-color: var(--primary-fill-hover);
+    border-color: var(--primary-fill-hover);
     box-shadow: 0 0 0 0.2rem rgba(72, 194, 129, 0.5);
   }
   .btn-primary.disabled,
   .btn-primary:disabled {
     color: #fff;
-    background-color: #00a1e0;
-    border-color: #00a1e0;
+    background-color: var(--primary-fill);
+    border-color: var(--primary-fill);
   }
   .btn-primary:not(:disabled):not(.disabled):active,
   .btn-primary.active:not(:disabled):not(.disabled),
   .show > .btn-primary.dropdown-toggle {
     color: #fff;
-    background-color: #005b7f;
-    border-color: #005b7f;
+    background-color: var(--primary-fill-hover);
+    border-color: var(--primary-fill-hover);
   }
   .btn-primary:not(:disabled):not(.disabled):active:focus,
   .btn-primary.active:not(:disabled):not(.disabled):focus,
@@ -2622,13 +2650,13 @@
     box-shadow: 0 0 0 0.2rem rgba(137, 147, 164, 0.5);
   }
   .btn-outline-primary {
-    color: #00a1e0;
-    border-color: #00a1e0;
+    color: var(--primary);
+    border-color: var(--primary);
   }
   .btn-outline-primary:hover {
     color: #fff;
-    background-color: #00a1e0;
-    border-color: #00a1e0;
+    background-color: var(--primary-fill);
+    border-color: var(--primary-fill);
   }
   .btn-outline-primary:focus,
   .btn-outline-primary.focus {
@@ -2636,15 +2664,15 @@
   }
   .btn-outline-primary.disabled,
   .btn-outline-primary:disabled {
-    color: #00a1e0;
+    color: var(--primary);
     background-color: transparent;
   }
   .btn-outline-primary:not(:disabled):not(.disabled):active,
   .btn-outline-primary.active:not(:disabled):not(.disabled),
   .show > .btn-outline-primary.dropdown-toggle {
     color: #fff;
-    background-color: #00a1e0;
-    border-color: #00a1e0;
+    background-color: var(--primary-fill);
+    border-color: var(--primary-fill);
   }
   .btn-outline-primary:not(:disabled):not(.disabled):active:focus,
   .btn-outline-primary.active:not(:disabled):not(.disabled):focus,
@@ -2863,11 +2891,11 @@
   }
   .btn-link {
     font-weight: 400;
-    color: #00a1e0;
+    color: var(--primary);
     text-decoration: none;
   }
   .btn-link:hover {
-    color: #005b7f;
+    color: var(--primary-dark);
     text-decoration: underline;
   }
   .btn-link:focus,
@@ -3127,7 +3155,7 @@
   .dropdown-item:active {
     color: #fff;
     text-decoration: none;
-    background-color: #00a1e0;
+    background-color: var(--primary-fill);
   }
   .dropdown-item.disabled,
   .dropdown-item:disabled {
@@ -3442,8 +3470,8 @@
   }
   .custom-control-input:checked ~ .custom-control-label::before {
     color: #fff;
-    border-color: #00a1e0;
-    background-color: #00a1e0;
+    border-color: var(--primary-fill);
+    background-color: var(--primary-fill);
   }
   .custom-control-input:focus ~ .custom-control-label::before {
     box-shadow: 0 0 0 0.2rem rgba(40, 183, 107, 0.25);
@@ -3500,8 +3528,8 @@
   .custom-checkbox
     .custom-control-input:indeterminate
     ~ .custom-control-label::before {
-    border-color: #00a1e0;
-    background-color: #00a1e0;
+    border-color: var(--primary-fill);
+    background-color: var(--primary-fill);
   }
   .custom-checkbox
     .custom-control-input:indeterminate
@@ -3709,7 +3737,7 @@
     width: 1rem;
     height: 1rem;
     margin-top: -0.25rem;
-    background-color: #00a1e0;
+    background-color: var(--primary-fill);
     border: 0;
     border-radius: 1rem;
     -webkit-transition: background-color 0.15s ease-in-out,
@@ -3740,7 +3768,7 @@
   .custom-range::-moz-range-thumb {
     width: 1rem;
     height: 1rem;
-    background-color: #00a1e0;
+    background-color: var(--primary-fill);
     border: 0;
     border-radius: 1rem;
     -moz-transition: background-color 0.15s ease-in-out,
@@ -3774,7 +3802,7 @@
     margin-top: 0;
     margin-right: 0.2rem;
     margin-left: 0.2rem;
-    background-color: #00a1e0;
+    background-color: var(--primary-fill);
     border: 0;
     border-radius: 1rem;
     -ms-transition: background-color 0.15s ease-in-out,
@@ -3895,7 +3923,7 @@
   .nav-pills .nav-link.active,
   .nav-pills .show > .nav-link {
     color: #fff;
-    background-color: #00a1e0;
+    background-color: var(--primary-fill);
   }
   .nav-fill > .nav-link,
   .nav-fill .nav-item {
@@ -4522,13 +4550,13 @@
     padding: 0.5rem 0.75rem;
     margin-left: -1px;
     line-height: 1.25;
-    color: #00a1e0;
+    color: var(--primary);
     background-color: #fff;
     border: 1px solid #e7e9ed;
   }
   .page-link:hover {
     z-index: 2;
-    color: #005b7f;
+    color: var(--primary-dark);
     text-decoration: none;
     background-color: #f5f6f8;
     border-color: #e7e9ed;
@@ -4550,8 +4578,8 @@
   .page-item.active .page-link {
     z-index: 3;
     color: #fff;
-    background-color: #00a1e0;
-    border-color: #00a1e0;
+    background-color: var(--primary-fill);
+    border-color: var(--primary-fill);
   }
   .page-item.disabled .page-link {
     color: #adb4c0;
@@ -4622,12 +4650,12 @@
   }
   .badge-primary {
     color: #fff;
-    background-color: #00a1e0;
+    background-color: var(--primary-fill);
   }
   a.badge-primary:hover,
   a.badge-primary:focus {
     color: #fff;
-    background-color: #005b7f;
+    background-color: var(--primary-fill-hover);
   }
   a.badge-primary:focus,
   a.badge-primary.focus {
@@ -4892,7 +4920,7 @@
     color: #fff;
     text-align: center;
     white-space: nowrap;
-    background-color: #00a1e0;
+    background-color: var(--primary-fill);
     transition: width 0.6s ease;
   }
   @media (prefers-reduced-motion: reduce) {
@@ -4977,8 +5005,8 @@
   .list-group-item.active {
     z-index: 2;
     color: #fff;
-    background-color: #00a1e0;
-    border-color: #00a1e0;
+    background-color: var(--primary-fill);
+    border-color: var(--primary-fill);
   }
   .list-group-item + .list-group-item {
     border-top-width: 0;
@@ -5979,13 +6007,13 @@
     vertical-align: text-top !important;
   }
   .bg-primary {
-    background-color: #00a1e0 !important;
+    background-color: var(--primary-fill) !important;
   }
   a.bg-primary:hover,
   a.bg-primary:focus,
   button.bg-primary:hover,
   button.bg-primary:focus {
-    background-color: #005b7f !important;
+    background-color: var(--primary-fill-hover) !important;
   }
   .bg-secondary {
     background-color: #5d6778 !important;
@@ -6087,7 +6115,7 @@
     border-left: 0 !important;
   }
   .border-primary {
-    border-color: #00a1e0 !important;
+    border-color: var(--primary) !important;
   }
   .border-secondary {
     border-color: #5d6778 !important;
@@ -8904,11 +8932,11 @@
     color: #fff !important;
   }
   .text-primary {
-    color: #00a1e0 !important;
+    color: var(--primary) !important;
   }
   a.text-primary:hover,
   a.text-primary:focus {
-    color: #005b7f !important;
+    color: var(--primary-dark) !important;
   }
   .text-secondary {
     color: #5d6778 !important;
@@ -9147,7 +9175,7 @@
     text-decoration-color: rgba(37, 41, 48, 0.3);
   }
   a.theme-link:hover {
-    color: #00a1e0;
+    color: var(--primary);
     -webkit-text-decoration-color: rgba(40, 183, 107, 0.8);
     text-decoration-color: rgba(40, 183, 107, 0.8);
   }
@@ -9173,7 +9201,7 @@
     box-shadow: none !important;
   }
   .btn-primary {
-    background: #00a1e0;
+    background: var(--primary-fill);
   }
   .btn-secondary {
     background: #5d6778;
@@ -9181,11 +9209,11 @@
   }
   .btn-light {
     background: #f4fcf6;
-    color: #00a1e0;
+    color: var(--primary);
   }
   .btn-light:hover {
     background: #f4fcf6;
-    color: #00a1e0;
+    color: var(--primary);
   }
   .form-control {
     padding-top: 0.875rem;
@@ -9200,7 +9228,7 @@
   .theme-icon-holder {
     display: inline-block;
     background: #f4fcf6;
-    color: #00a1e0;
+    color: var(--primary);
     width: 32px;
     height: 32px;
     padding-top: 4px;
@@ -9209,13 +9237,13 @@
     border-radius: 50%;
   }
   .theme-icon-holder .svg-inline---fa {
-    color: #00a1e0;
+    color: var(--primary);
   }
   .theme-bg-light {
     background: #f4fcf6;
   }
   .theme-bg-dark {
-    background: #00a1e0;
+    background: var(--primary-fill);
   }
   .theme-bg-shapes-right {
     position: absolute;
@@ -9333,7 +9361,7 @@
     color: #3dd584;
   }
   .social-list li a:hover {
-    color: #00a1e0;
+    color: var(--primary);
   }
   .social-list li:not(:last-child) {
     margin-right: 0.875rem;
@@ -9411,7 +9439,7 @@
   .search-form .search-btn:focus,
   .search-form .search-btn:hover {
     outline: none !important;
-    color: #00a1e0;
+    color: var(--primary);
     box-shadow: none;
   }
   .docs-branding {
@@ -9539,14 +9567,14 @@
     padding-top: 0.375rem;
   }
   .docs-nav .nav-link.active {
-    color: #00a1e0;
+    color: var(--primary);
   }
   .docs-nav .nav-link.active:before {
-    background-color: #00a1e0;
+    background-color: var(--primary-fill);
   }
   .docs-nav .nav-link.active .theme-icon-holder {
     color: #fff;
-    background: #00a1e0;
+    background: var(--primary-fill);
   }
   .docs-nav .nav-link:before {
     background-color: #f4fcf6;
@@ -9811,8 +9839,8 @@
   }
 
   :root .btn-outline-primary:hover {
-    background-color: var(--primary);
-    border-color: var(--primary);
+    background-color: var(--primary-fill);
+    border-color: var(--primary-fill);
   }
 
   :root .form-control {
@@ -9838,18 +9866,25 @@
     color: #c8c8c8; /* Slightly darker than main text for section headings */
   }
 
-  /* Lighter blue hyperlinks for dark mode */
-  :root a {
-    color: #66b3ff; /* Lighter shade of blue */
+  /* Link colour for the dark theme.
+     `a`, NOT `:root a`. The :root prefix was there to out-rank Bootstrap's own `a`
+     rule, but it also bought specificity (0,1,1) that silently beat every
+     single-class component rule on an anchor — so a styled link had to win a
+     contest it did not know it was in. Source order does that job on its own,
+     since this sits ~9,500 lines below the rule it is overriding.
+     It matters more since the accent went green: an anchor with an accent
+     BACKGROUND that loses its own colour here inherits --link-color, which is now
+     the same green, and its text disappears into its own button. */
+  a {
+    color: var(--link-color);
   }
 
-  :root a:hover {
-    color: #80c1ff; /* Even lighter on hover */
+  a:hover {
+    color: var(--link-hover-color);
   }
 
-  /* Ensure visited links are also light blue in dark mode */
-  :root a:visited {
-    color: #66b3ff;
+  a:visited {
+    color: var(--link-color);
   }
 
   /* Make modal headers lighter in dark mode */
@@ -9857,3 +9892,70 @@
     color: #d0d0d0; /* Lighter than main text for better readability */
   }
   
+
+/* ===========================================================================
+   Focus rings (spec 052 §B11)
+   ===========================================================================
+
+   A focus ring answers "where will the keyboard type next". A mouse click has
+   already answered that — you are looking at the thing you just hit — so a ring
+   there is noise, and on this dark theme the browser's own ring is a wide pale
+   halo that reads as a rendering fault.
+
+   `:focus-visible` is exactly that distinction, and the browser makes it for us:
+   it matches when focus arrived by keyboard, and for text fields, where you are
+   about to type either way. It does NOT match a button you clicked.
+
+   So: nothing draws on pointer focus, and one ring in the accent colour draws on
+   keyboard focus. Removing the ring outright is not on the table — it would make
+   the app unusable without a mouse.
+
+   These sit at the end of the file so they beat Bootstrap's own :focus rules;
+   page stylesheets that load later carry their own :focus-visible rules. */
+
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Bootstrap draws its ring with a box-shadow on these, and they have no other
+   shadow at rest, so dropping it on pointer focus drops the ring and nothing
+   else. Listed rather than applied globally: a blanket box-shadow reset would
+   also flatten any component that legitimately keeps a shadow while focused. */
+.btn:focus:not(:focus-visible),
+.form-control:focus:not(:focus-visible),
+.custom-select:focus:not(:focus-visible),
+.custom-file-input:focus:not(:focus-visible) ~ .custom-file-label,
+.page-link:focus:not(:focus-visible),
+.dropdown-item:focus:not(:focus-visible) {
+  box-shadow: none;
+}
+
+/* The keyboard ring: one shape, one colour, everywhere. --primary rather than
+   --primary-fill because this is a line on the page, not a surface behind white
+   text (see §B10). */
+:focus-visible {
+  outline: 2px solid var(--primary, #65b464);
+  outline-offset: 2px;
+}
+
+/* A container that takes focus only to receive arrow keys (a listbox, a log
+   pane) should not outline its whole self — the moving selection inside it is
+   the real indicator. */
+[tabindex="-1"]:focus-visible {
+  outline: none;
+}
+
+/* The one case :focus-visible gets "wrong" for our purposes: browsers match it on
+   a CLICKED <select> (and on text fields), because arrow keys and type-ahead work
+   the moment it has focus. Defensible in general, and still a ring that appeared
+   because you tapped something.
+
+   static/js/input_modality.js records how focus last arrived, so this can say
+   "not while the pointer is driving". Tab away and the ring is back, because the
+   keydown flips the attribute before focus moves.
+
+   Without that script the attribute never appears, this rule never matches, and
+   selects simply ring on click as the browser intended. */
+html[data-input-modality='pointer'] :focus-visible {
+  outline: none;
+}

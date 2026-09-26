@@ -93,6 +93,21 @@ All test accounts use password: `password123`
 | `siobhan_flute` | siobhan.w@example.com | Regular User |
 | `sean_banjo` | sobrien@example.com | Regular User |
 | `maeve_accordion` | maeve.brennan@example.com | Regular User (unverified) |
+| `fiona_fiddle` | fiona.doherty@example.com | Joined Mueller, NOT yet confirmed |
+
+`fiona_fiddle` exists to make the confirmation states reachable without hand-editing
+the database. She has an account and joined the Mueller Session herself, and nobody
+has confirmed her — which is what a self-serve join always produces, since
+people-visibility is granted by the session rather than taken. So:
+
+- Log in as **`ian`** and open Mueller's People tab to see the admin's side: *"1 person
+  has joined and can't see who plays here yet. Open them to confirm."* The nudge only
+  renders for a session admin, so `sarah_fiddle` never sees it.
+- Log in as **`fiona_fiddle`** for the other side: a member who cannot see the roster.
+
+She is distinct from `James Quinn`, the seed's other unconfirmed person at Mueller.
+James is a walk-in with NO account, so nothing is waiting on the admin and he is not
+counted by the nudge, which needs unconfirmed AND unarchived AND has-an-account.
 
 ## Database Connection
 
@@ -177,6 +192,29 @@ For quick schema testing, you can run SQL files directly:
 ```bash
 PGPASSWORD=test_password psql -h localhost -U test_user -d ceol_test -f schema/your_migration.sql
 ```
+
+## Working in a git worktree
+
+A second worktree (`git worktree add ../ceol-<branch> -b <branch>`) starts out
+**unable to run anything**, because everything it needs is gitignored. Two steps:
+
+```bash
+cd ../ceol-<branch>
+M=/path/to/the/main/checkout
+ln -s "$M/venv" venv                                   # same deps, safe to share
+ln -s "$M/node_modules" node_modules
+ln -s "$M/frontend/node_modules" frontend/node_modules
+ln -s "$M/.env" .env                                   # same local DB
+npm run build && (cd frontend && npm run build)        # bundles are NOT shared
+```
+
+The venv, `node_modules` and `.env` can be symlinked — they are the same for every
+branch. **`static/<page>/` cannot.** Those are Vite/webpack output built from the
+branch's own sources, so each worktree needs its own build. Skipping it is quiet and
+confusing rather than loud: Flask serves the pages fine, the Svelte bundles are simply
+absent, and the e2e suite fails in bulk on elements that never mounted.
+
+Both worktrees share one `ceol_test` database, so don't run two test suites at once.
 
 ## Troubleshooting
 

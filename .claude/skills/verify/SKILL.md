@@ -67,7 +67,7 @@ sync) can be driven against a local stand-in without patching app behavior:
 3. Set `THESESSION_SCAN_DELAY_MS=5` in the wrapper (a full sync run then
    finishes in ~6s).
 4. `load_dotenv()` in scripts outside the repo needs the explicit path
-   `load_dotenv("/Users/ianvarley/Code/ceol.io-live/.env")`.
+   `load_dotenv("/Users/ianvarley/Local/code/ceol.io-live/.env")`.
 
 ## Gotchas
 

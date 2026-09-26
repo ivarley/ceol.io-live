@@ -19,6 +19,7 @@
 
 <script>
   import { Dialog as BitsDialog } from 'bits-ui'
+  import Chevron from './Chevron.svelte'
 
   // Sheet (spec 035): holds a task or scrollable detail — never a bare decision
   // (that's Dialog). Full-screen under 768px; on desktop a single prop picks
@@ -27,7 +28,12 @@
     open = $bindable(false),
     title = '',
     desktop = 'center', // 'center' | 'dock' — the ONE responsive knob
-    back = null, // label for a back chevron ("‹ Label") replacing Cancel
+    // A centred card on EVERY width, phones included. For an editor that is one
+    // field and two buttons: taking the whole screen for it overstates what is
+    // happening, and it buries whatever you opened it from. A Sheet is for a task
+    // with enough in it to fill a screen; this is for the ones without.
+    compact = false,
+    back = null, // label for a back chevron ("< Label") replacing Cancel
     cancelLabel = 'Cancel',
     onCancel = () => {}, // abandon: Cancel button, back chevron, scrim tap, Escape
     onDone = null, // commit; the Done button only renders when this is passed
@@ -67,10 +73,10 @@
 <BitsDialog.Root bind:open onOpenChange={handleOpenChange}>
   <BitsDialog.Portal>
     <BitsDialog.Overlay class="kit-sheet-scrim" />
-    <BitsDialog.Content class="kit-sheet kit-sheet-{desktop}" preventScroll={false} aria-describedby={undefined}>
+    <BitsDialog.Content class="kit-sheet kit-sheet-{desktop}{compact ? ' kit-sheet-compact' : ''}" preventScroll={false} aria-describedby={undefined}>
       <header class="kit-sheet-head">
         {#if back != null}
-          <button type="button" class="kit-sheet-back" onclick={cancel}>‹ {back}</button>
+          <button type="button" class="kit-sheet-back" onclick={cancel}><Chevron dir="left" size={15} /> {back}</button>
         {:else}
           <button type="button" class="kit-sheet-cancel" onclick={cancel}>{cancelLabel}</button>
         {/if}
@@ -112,6 +118,26 @@
     background: var(--bg-color, #fff);
     color: var(--text-color, #252930);
   }
+  /* Compact changes the PHONE treatment only — a centred card instead of the
+     full-screen sheet. Above 768px the desktop rules below already give a card
+     (center) or a docked pane, and compact must not override a deliberate dock.
+
+     Two classes, not one: the base .kit-sheet rule sets `inset: 0` and ties on
+     specificity, and a tie is decided by source order — which left the card pinned
+     to the top-left corner and then translated off the screen by its own centring
+     transform. */
+  @media (max-width: 767.98px) {
+    :global(.kit-sheet.kit-sheet-compact) {
+      inset: 50% auto auto 50%;
+      transform: translate(-50%, -50%);
+      width: calc(100vw - 32px);
+      max-height: 80vh;
+      border: 1px solid var(--border-color, #ddd);
+      border-radius: var(--r-lg, 12px);
+      box-shadow: var(--shadow-lg, 0 8px 30px rgba(0, 0, 0, 0.45));
+    }
+  }
+
   @media (min-width: 768px) {
     :global(.kit-sheet-center) {
       inset: auto;
@@ -156,7 +182,7 @@
     border: none;
     padding: 0;
     font-size: 1rem;
-    color: var(--primary, #00a1e0);
+    color: var(--primary, #65b464);
     cursor: pointer;
     white-space: nowrap;
   }

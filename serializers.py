@@ -116,6 +116,44 @@ def timezone_options() -> List[Dict[str, str]]:
 # ---------------------------------------------------------------------------
 
 
+_POPULAR_TUNES_SQL = """
+    SELECT tune_id, name, tune_type, COALESCE(tunebook_count_cached, 0) AS tunebook_count
+    FROM tune
+    WHERE redirect_to_tune_id IS NULL
+      AND COALESCE(tunebook_count_cached, 0) > 0
+    ORDER BY tunebook_count_cached DESC, name ASC
+    LIMIT %s
+"""
+
+
+def build_popular_tunes_payload(conn, limit: int = 100) -> Dict[str, Any]:
+    """The COMPLETE /api/tunes/top response, and what the /tunes page embeds
+    (spec 052 §B18) — one function, so shell and API cannot drift.
+
+    The most-played tunes in the tradition, by thesession.org's tunebook count. It is
+    the public face of the Tunes tab: a signed-out visitor gets something worth
+    looking at rather than a login wall, and searching past the top 100 is the
+    already-public GET /api/tunes/search.
+
+    Merged-away tunes are excluded (spec 030 leaves a redirect row behind), as are
+    tunes nobody has in a tunebook — a "most common tunes" list of zeroes is a list
+    of nothing, ordered by name.
+    """
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(_POPULAR_TUNES_SQL, (limit,))
+    tunes = [
+        {
+            "tune_id": r["tune_id"],
+            "name": r["name"],
+            "tune_type": r["tune_type"],
+            "tunebook_count": r["tunebook_count"],
+        }
+        for r in cur.fetchall()
+    ]
+    cur.close()
+    return {"success": True, "tunes": tunes, "limit": limit}
+
+
 def build_add_session_payload(logged_in: bool = False) -> Dict[str, Any]:
     """The /add-session page payload (spec 035 final migration). The page is
     payload-light — its data comes from thesession.org at interaction time —
@@ -326,7 +364,7 @@ def build_person_details_payload(
         """
         SELECT user_id, username, user_email, email_verified, is_system_admin,
                is_active, created_date, timezone, hashed_password,
-               beta_live_logging, receive_update_emails
+               receive_update_emails
         FROM user_account
         WHERE person_id = %s
         """,
@@ -353,7 +391,6 @@ def build_person_details_payload(
             "timezone": urow["timezone"],
             "timezone_display": get_timezone_display_name(urow["timezone"] or "UTC"),
             "has_password": urow["hashed_password"] is not None and urow["hashed_password"] != "",
-            "beta_live_logging": urow["beta_live_logging"],
             "receive_update_emails": urow["receive_update_emails"],
         }
 
@@ -615,10 +652,21 @@ def build_sessions_directory_payload(conn, person_id, user_timezone="UTC"):
         for r in session_rows
     ]
 
+    # The viewer's own country, so the list can leave it off the rows. "Austin, TX,
+    # USA" carries three pieces of information for somebody abroad and one for
+    # somebody in Austin; the country only earns its place when it differs from yours.
+    viewer_country = None
+    if person_id:
+        cur.execute("SELECT country FROM person WHERE person_id = %s", (person_id,))
+        row = cur.fetchone()
+        if row:
+            viewer_country = row["country"]
+
     return {
         "success": True,
         "sessions": sessions,
         "today": get_today_in_timezone(user_timezone or "UTC").isoformat(),
+        "viewer_country": viewer_country,
     }
 
 
@@ -936,21 +984,44 @@ def build_session_detail_payload(
         today_in_session_tz = datetime.datetime.now(ZoneInfo("UTC")).date()
 
     # Top 20 most-played tunes at this session (includes instance-only tunes).
+    #
+    # Counted in two passes on purpose. The obvious single GROUP BY on
+    # COALESCE(sit.name, st.alias, t.name) makes the grouping key a ~500-byte
+    # text expression, so Postgres sorts every play row in the session's whole
+    # history before aggregating (GroupAggregate). Grouping first on the narrow
+    # (tune_id, sit.name) pair collapses ~16k rows to ~1.3k BEFORE the wide
+    # joins, and both passes then fit in a HashAggregate — no sort at all.
+    #
+    # Equivalent, not approximate: (tune_id, sit.name) is a strictly finer
+    # partition than the display name, since the alias/name fallbacks are
+    # functions of tune_id, so SUM() over the sub-counts recovers the same
+    # groups. Verified against production: identical rows for all 29 sessions,
+    # including the 523 plays that carry a free-text name override.
+    # Measured on the busiest session: 461ms -> 172ms.
     cur.execute(
         f"""
-        WITH tune_counts AS (
-            SELECT
-                COALESCE(sit.name, st.alias, t.name) AS tune_name,
-                sit.tune_id,
-                COUNT(*) AS play_count,
-                COALESCE(t.tunebook_count_cached, 0) AS tunebook_count
+        WITH raw_counts AS (
+            SELECT sit.tune_id, sit.name AS override_name, COUNT(*) AS play_count
             FROM session_instance_tune sit
             JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
-            LEFT JOIN tune t ON sit.tune_id = t.tune_id
-            LEFT JOIN session_tune st ON sit.tune_id = st.tune_id AND st.session_id = %s
-            WHERE si.session_id = %s AND COALESCE(sit.name, st.alias, t.name) IS NOT NULL
-              AND {person_scope.SIT_COUNTABLE}
-            GROUP BY COALESCE(sit.name, st.alias, t.name), sit.tune_id, COALESCE(t.tunebook_count_cached, 0)
+            WHERE si.session_id = %s AND {person_scope.SIT_COUNTABLE}
+            GROUP BY sit.tune_id, sit.name
+        ),
+        tune_counts AS (
+            SELECT
+                COALESCE(rc.override_name, st.alias, t.name) AS tune_name,
+                rc.tune_id,
+                -- ::bigint because SUM(bigint) is numeric, which psycopg2 hands
+                -- back as Decimal — COUNT(*) gave a plain int, and the payload
+                -- (and its JSON encoding) must not change shape here.
+                SUM(rc.play_count)::bigint AS play_count,
+                COALESCE(t.tunebook_count_cached, 0) AS tunebook_count
+            FROM raw_counts rc
+            LEFT JOIN tune t ON rc.tune_id = t.tune_id
+            LEFT JOIN session_tune st ON rc.tune_id = st.tune_id AND st.session_id = %s
+            WHERE COALESCE(rc.override_name, st.alias, t.name) IS NOT NULL
+            GROUP BY COALESCE(rc.override_name, st.alias, t.name), rc.tune_id,
+                     COALESCE(t.tunebook_count_cached, 0)
         )
         SELECT tune_name, tune_id, play_count, tunebook_count
         FROM tune_counts
@@ -972,6 +1043,32 @@ def build_session_detail_payload(
     cur.execute("SELECT COUNT(DISTINCT tune_id) AS n FROM session_tune WHERE session_id = %s", (session_id,))
     total_tunes_count = cur.fetchone()["n"]
 
+    # Counts for the tab labels (spec 052 §B8 Stage 2). The Logs and People tabs load
+    # their own data lazily once you open them, so without these the label could only
+    # say how many there are AFTER you had already gone and looked.
+    #
+    # Each count must match what its tab shows on arrival, or the label is a small lie
+    # you notice immediately: cancelled nights are not listed, and People opens on the
+    # Members filter, which is everyone not a visitor and not archived.
+    cur.execute(
+        "SELECT COUNT(*) AS n FROM session_instance WHERE session_id = %s AND is_cancelled = FALSE",
+        (session_id,),
+    )
+    total_logs_count = cur.fetchone()["n"]
+
+    # Only for someone allowed to see the roster. The size of a group is information
+    # about it, so it travels under the same gate as its contents.
+    total_people_count = None
+    if can_view_people:
+        cur.execute(
+            """
+            SELECT COUNT(*) AS n FROM session_person
+            WHERE session_id = %s AND relationship <> 'visitor' AND archived = FALSE
+            """,
+            (session_id,),
+        )
+        total_people_count = cur.fetchone()["n"]
+
     tunes = load_session_tunes(conn, session_id, limit=first_page, person_id=person_id)
 
     return {
@@ -989,6 +1086,10 @@ def build_session_detail_payload(
         "default_tab": "logs" if session["session_type"] == "festival" else "tunes",
         "tunes": tunes,
         "total_tunes_count": total_tunes_count,
+        "total_logs_count": total_logs_count,
+        # null, not 0, when the viewer may not see the roster — "you can't know" and
+        # "there is nobody" are different, and a 0 would render as a count of none.
+        "total_people_count": total_people_count,
         "has_more_tunes": total_tunes_count > first_page,
         "popular_tunes": popular_tunes,
     }
@@ -1691,6 +1792,25 @@ def build_tune_detail_payload(
         ),
     }
 
+    # A token letting a signed-out viewer pull this ONE tune's notation from
+    # thesession.org (spec 052 §B21).
+    #
+    # Minted for every signed-out viewer, not only for tunes with nothing cached. The
+    # first cut did the latter as a tidiness measure and it removed a real
+    # capability: a tune we hold ONE setting for still has others on thesession.org,
+    # and Refresh re-pulls the current one. Withholding the token hid both controls on
+    # exactly the tunes most worth looking at.
+    #
+    # It costs nothing to widen: the token is still bound to this one tune and still
+    # expires, so what a holder can do is unchanged.
+    #
+    # Logged-in callers get none; their session is already the authority.
+    notation_token = None
+    if not logged_in:
+        from notation_token import mint
+
+        notation_token = mint(tune_id)
+
     return {
         "success": True,
         "redirected_from": redirected_from,
@@ -1701,4 +1821,841 @@ def build_tune_detail_payload(
             "is_session_member": is_session_member,
         },
         "session_tune": session_tune,
+        "notation_token": notation_token,
     }
+
+
+# ---------------------------------------------------------------------------
+# recording segmenter (spec 050) — the audio-to-tune timestamping tool.
+#
+# One payload carries everything the tool needs: the recording (with a presigned
+# audio URL), the instance's tune log flattened into set-aware order, and each
+# tune's segment if it already has one. The operator's whole job is filling in
+# the `segment` field on each of those tunes, so log and segments must arrive
+# together and in the SAME order the tunes were played.
+# ---------------------------------------------------------------------------
+
+
+def _segment_row_to_dict(row) -> Dict[str, Any]:
+    """Pure mapper: a recording_tune_segment row -> wire shape.
+
+    end_ms stays None when implicit. The client, not the server, resolves an
+    implicit end to the next tune's start, because it re-resolves live on every
+    keystroke as marks move; the DB view does the same for the export.
+    """
+    return {
+        "recording_tune_segment_id": row["recording_tune_segment_id"],
+        "session_instance_tune_id": row["session_instance_tune_id"],
+        "start_ms": int(row["start_ms"]),
+        "end_ms": int(row["end_ms"]) if row["end_ms"] is not None else None,
+    }
+
+
+def _load_instance_tune_log(conn, session_instance_id: int, session_id: int) -> List[Dict[str, Any]]:
+    """The instance's played tunes in order, with set numbers.
+
+    Set membership comes from the interleaved record_type='break' marker rows
+    (the live logger's representation), which are consumed here and never
+    surfaced: the segmenter shows tunes, grouped.
+    """
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(
+        """
+        SELECT sit.session_instance_tune_id, sit.tune_id, sit.record_type, sit.order_position,
+               COALESCE(sit.name, st.alias, t.name) AS display_name,
+               t.tune_type, sit.source
+        FROM session_instance_tune sit
+        LEFT JOIN tune t ON t.tune_id = sit.tune_id
+        LEFT JOIN session_tune st ON st.tune_id = sit.tune_id AND st.session_id = %s
+        WHERE sit.session_instance_id = %s AND sit.deleted = FALSE
+        ORDER BY sit.order_position
+        """,
+        (session_id, session_instance_id),
+    )
+
+    tunes: List[Dict[str, Any]] = []
+    set_number = 1
+    position_in_set = 0
+    for row in cur.fetchall():
+        if row["record_type"] == "break":
+            # Only advance on a break that actually closed a set; leading or
+            # doubled break markers would otherwise leave gaps in the numbering.
+            if position_in_set:
+                set_number += 1
+                position_in_set = 0
+            continue
+        position_in_set += 1
+        tunes.append(
+            {
+                "session_instance_tune_id": row["session_instance_tune_id"],
+                "tune_id": row["tune_id"],
+                "name": row["display_name"] or "(unnamed)",
+                "tune_type": row["tune_type"],
+                "order_position": row["order_position"],
+                "set_number": set_number,
+                "position_in_set": position_in_set,
+                # 'segmenter' marks a row the timestamping tool logged itself
+                # (spec 050 "Logging while segmenting"); the tool treats those
+                # differently from a log someone wrote down on the night.
+                "source": row["source"],
+                "segment": None,
+            }
+        )
+
+    # Mark the last tune of each set: those are the ones that need an EXPLICIT
+    # end, because nothing follows them closely enough to imply it.
+    for idx, tune in enumerate(tunes):
+        nxt = tunes[idx + 1] if idx + 1 < len(tunes) else None
+        tune["is_set_end"] = nxt is None or nxt["set_number"] != tune["set_number"]
+
+    return tunes
+
+
+def load_recording_tunes(conn, recording_id: int, session_instance_id: int, session_id: int) -> List[Dict[str, Any]]:
+    """The night's tune log with this recording's placements attached — the
+    segmenter's `tunes` list. Shared by the page payload and by the writes that
+    reshape the log (logging a tune from the tool inserts a row and can renumber
+    every set after it), so a client can always adopt the list wholesale.
+    """
+    tunes = _load_instance_tune_log(conn, session_instance_id, session_id)
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(
+        """
+        SELECT recording_tune_segment_id, session_instance_tune_id, start_ms, end_ms
+        FROM recording_tune_segment
+        WHERE recording_id = %s
+        """,
+        (recording_id,),
+    )
+    by_tune = {r["session_instance_tune_id"]: _segment_row_to_dict(r) for r in cur.fetchall()}
+    for tune in tunes:
+        tune["segment"] = by_tune.get(tune["session_instance_tune_id"])
+    return tunes
+
+
+def build_recording_segmenter_payload(
+    conn, recording_id: int, *, include_audio_url: bool = True
+) -> Optional[Dict[str, Any]]:
+    """Everything the segmenter page needs for recording `recording_id`.
+
+    GET /api/recordings/<id>/segmenter returns exactly this and the page shell
+    embeds exactly this — one function, so they cannot drift.
+    Returns None when the recording doesn't exist.
+    """
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(
+        """
+        SELECT r.recording_id, r.session_instance_id, r.person_id, r.label, r.storage_key, r.mime_type,
+               r.stream_key, r.stream_mime_type, r.stream_size_bytes,
+               r.duration_ms, r.file_size_bytes, r.sample_rate, r.channels,
+               r.is_clock_anchor, r.clock_offset_ms, r.started_at, r.peaks_hz, r.notes,
+               r.status, r.status_detail,
+               (r.peaks IS NOT NULL) AS has_peaks,
+               si.session_instance_id AS si_id, si.date, si.session_id,
+               s.name AS session_name, s.path AS session_path
+        FROM recording r
+        JOIN session_instance si ON si.session_instance_id = r.session_instance_id
+        JOIN session s ON s.session_id = si.session_id
+        WHERE r.recording_id = %s
+        """,
+        (recording_id,),
+    )
+    row = cur.fetchone()
+    if not row:
+        return None
+
+    # BOTH sources go to the client, proxy first, so the operator can switch on
+    # the fly -- the right trade-off depends on the connection they happen to be
+    # on, which is not knowable at import time. Presigning is local HMAC, so a
+    # second URL costs nothing.
+    #
+    # The EXPORT deliberately ignores all of this and keeps naming the master:
+    # the training corpus must never be cut from a lossy mono encode.
+    audio_sources = []
+    audio_error = None
+    if include_audio_url:
+        try:
+            from recording import generate_presigned_url
+
+            if row["stream_key"]:
+                audio_sources.append(
+                    {
+                        "id": "proxy",
+                        "label": "low",
+                        "url": generate_presigned_url(row["stream_key"]),
+                        "mime_type": row["stream_mime_type"] or "audio/mp4",
+                        "size_bytes": int(row["stream_size_bytes"]) if row["stream_size_bytes"] else None,
+                    }
+                )
+            audio_sources.append(
+                {
+                    "id": "master",
+                    "label": "full",
+                    "url": generate_presigned_url(row["storage_key"]),
+                    "mime_type": row["mime_type"],
+                    "size_bytes": int(row["file_size_bytes"]) if row["file_size_bytes"] else None,
+                }
+            )
+        except Exception as exc:  # object store misconfigured — the page says so
+            audio_sources = []
+            audio_error = str(exc)
+
+    tunes = load_recording_tunes(conn, recording_id, row["session_instance_id"], row["session_id"])
+
+    cur.execute(
+        """
+        SELECT recording_id, label, duration_ms, is_clock_anchor, clock_offset_ms
+        FROM recording
+        WHERE session_instance_id = %s AND recording_id <> %s
+        ORDER BY clock_offset_ms, recording_id
+        """,
+        (row["session_instance_id"], recording_id),
+    )
+    others = [
+        {
+            "recording_id": r["recording_id"],
+            "label": r["label"],
+            "duration_ms": int(r["duration_ms"]),
+            "is_clock_anchor": r["is_clock_anchor"],
+            "clock_offset_ms": int(r["clock_offset_ms"]),
+        }
+        for r in cur.fetchall()
+    ]
+
+    from datetime import datetime, timezone
+
+    return {
+        "success": True,
+        # When this payload was built, server clock, ISO-8601 UTC. The segmenter
+        # keeps a local mirror of its marks so it can open offline from a page
+        # snapshot the service worker took earlier; this is how it tells whether
+        # that snapshot or the mirror is the newer picture of the recording. Only
+        # ever compared against itself, so clock skew to the browser is irrelevant.
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "recording": {
+            "recording_id": row["recording_id"],
+            "session_instance_id": row["session_instance_id"],
+            "person_id": row["person_id"],
+            "label": row["label"],
+            "mime_type": row["mime_type"],
+            "duration_ms": int(row["duration_ms"]),
+            "file_size_bytes": int(row["file_size_bytes"]) if row["file_size_bytes"] else None,
+            "sample_rate": row["sample_rate"],
+            "channels": row["channels"],
+            "is_clock_anchor": row["is_clock_anchor"],
+            "clock_offset_ms": int(row["clock_offset_ms"]),
+            "started_at": row["started_at"].isoformat() if row["started_at"] else None,
+            "peaks_hz": float(row["peaks_hz"]) if row["peaks_hz"] is not None else None,
+            "has_peaks": row["has_peaks"],
+            "peaks_url": f"/api/recordings/{row['recording_id']}/peaks",
+            # Ordered: the first entry is the default the page opens on.
+            "audio_sources": audio_sources,
+            "audio_error": audio_error,
+            "has_proxy": bool(row["stream_key"]),
+            "notes": row["notes"],
+            # Ingest state (schema/052). Anything but 'ready' means the waveform
+            # and the real duration are not there yet, so the tool refuses to
+            # open rather than showing a flat line against a guessed length.
+            "status": row["status"],
+            "status_detail": row["status_detail"],
+        },
+        "session_instance": {
+            "session_instance_id": row["si_id"],
+            "date": row["date"].isoformat() if row["date"] else None,
+            "session_id": row["session_id"],
+            "session_name": row["session_name"],
+            "session_path": row["session_path"],
+        },
+        "tunes": tunes,
+        "other_recordings": others,
+    }
+
+
+# The buckets /admin/recordings groups by, in the order they are shown. That
+# page is a WORK QUEUE, not a catalogue: a recording's place in it is decided by
+# whether it is waiting on a person and for what, not by when it was uploaded.
+# Ordered by hand rather than by any property of the rows, because the ordering
+# IS the editorial judgement — a failed ingest is the most urgent thing on the
+# page even though it is usually the rarest.
+RECORDING_WORK_GROUPS: List[Dict[str, str]] = [
+    {
+        "slug": "failed",
+        "heading": "Failed",
+        "note": "Ingest didn't finish. Retry, or delete and upload again.",
+    },
+    {
+        "slug": "todo",
+        "heading": "Needs timestamps",
+        "note": "Audio is ready and the night is logged — this is the work.",
+    },
+    {
+        "slug": "processing",
+        "heading": "Processing",
+        "note": "Being ingested. Nothing to do; the rows update themselves.",
+    },
+    {
+        # Kept apart from "Needs timestamps" because it is a different job: the
+        # log gets written from the audio as it is timestamped (spec 050
+        # "Logging while segmenting"), one mark per tune, named afterwards.
+        "slug": "blocked",
+        "heading": "Needs logging and timestamps",
+        "note": "There is audio but no log for that night. Segmenting writes one: each mark logs a tune, and tapping it names it.",
+    },
+    {
+        "slug": "done",
+        "heading": "Done",
+        "note": "Every tune in the audio is placed.",
+    },
+]
+
+_WORK_GROUP_RANK = {g["slug"]: i for i, g in enumerate(RECORDING_WORK_GROUPS)}
+
+
+def recording_work_state(
+    status: str, segments: int, tunes: int, segmenting_complete: bool
+) -> Dict[str, Any]:
+    """Which bucket of the /admin/recordings queue one recording belongs in.
+
+    Two ways to be finished, and the distinction is the whole point of
+    schema/055. Placing every logged tune is the obvious one. The other is a
+    recording that covers only PART of the night — the phone was started an hour
+    in, or the battery died — where `segments` can never reach `tunes` however
+    much work is done, and the operator says so by hand. Without that, a partial
+    recording advertises work that does not exist, forever.
+
+    `state_label` names the row's state; `group` decides where it sorts and under
+    which heading it appears. They differ inside "Needs timestamps", where "Not
+    started" and "Part placed" are usefully different rows in the same pile.
+    (`state_label`, not `label`, because a recording already has a `label` of its
+    own and these two travel in the same dict.)
+    """
+    if status == "failed":
+        return {"group": "failed", "state_label": "Failed", "complete": False}
+    if status != "ready":
+        return {"group": "processing", "state_label": "Processing", "complete": False}
+    if segmenting_complete:
+        # Said by hand, so it holds even if more tunes are logged later: the
+        # claim is about the audio's contents, not about the night's.
+        return {"group": "done", "state_label": "Marked done", "complete": True}
+    if tunes and segments >= tunes:
+        return {"group": "done", "state_label": "All placed", "complete": True}
+    if not tunes:
+        return {"group": "blocked", "state_label": "No log yet", "complete": False}
+    if segments:
+        return {"group": "todo", "state_label": "Part placed", "complete": False}
+    return {"group": "todo", "state_label": "Not started", "complete": False}
+
+
+def build_admin_recordings_payload(conn) -> Dict[str, Any]:
+    """Every recording in the system, ordered as a work queue (/admin/recordings).
+
+    The rows themselves are much the same as the in-log modal's, but the ordering
+    is the feature: newest-first is the wrong sort for a page whose whole purpose
+    is finding the next thing to timestamp, since it buries one failed ingest
+    from March under thirty finished nights.
+    """
+    from services.recording_ingest import INGEST_STEPS, step_index_for
+
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(
+        """
+        SELECT r.recording_id, r.label, r.duration_ms, r.is_clock_anchor, r.clock_offset_ms,
+               r.status, r.status_detail, r.segmenting_complete,
+               si.session_instance_id, si.date, s.name AS session_name, s.path AS session_path,
+               (SELECT count(*) FROM recording_tune_segment rts
+                 WHERE rts.recording_id = r.recording_id) AS segments,
+               (SELECT count(*) FROM session_instance_tune sit
+                 WHERE sit.session_instance_id = si.session_instance_id
+                   AND sit.deleted = FALSE AND sit.record_type <> 'break') AS tunes
+        FROM recording r
+        JOIN session_instance si ON si.session_instance_id = r.session_instance_id
+        JOIN session s ON s.session_id = si.session_id
+        ORDER BY si.date DESC, r.clock_offset_ms, r.recording_id
+        """
+    )
+
+    recordings = []
+    for row in cur.fetchall():
+        state = recording_work_state(
+            row["status"], row["segments"], row["tunes"], row["segmenting_complete"]
+        )
+        recordings.append(
+            {
+                "recording_id": row["recording_id"],
+                "label": row["label"],
+                "duration_ms": int(row["duration_ms"]),
+                "is_clock_anchor": row["is_clock_anchor"],
+                "clock_offset_ms": int(row["clock_offset_ms"]),
+                "session_instance_id": row["session_instance_id"],
+                "date": row["date"].isoformat(),
+                # Formatted here rather than in the template because the whole
+                # payload stays JSON-safe that way, and the day of the week is
+                # how an operator recognises a night they were at.
+                "date_label": row["date"].strftime("%a %-d %b %Y"),
+                "session_name": row["session_name"],
+                "session_path": row["session_path"],
+                "segments": row["segments"],
+                "tunes": row["tunes"],
+                "status": row["status"],
+                "status_detail": row["status_detail"],
+                "segmenting_complete": row["segmenting_complete"],
+                # Which stage circle to light on first paint. Computed here rather
+                # than left to the first poll, so a reload mid-ingest doesn't show
+                # an empty track for five seconds.
+                "ingest_step": (
+                    (len(INGEST_STEPS) - 1)
+                    if row["status"] == "ready"
+                    else step_index_for(row["status_detail"])
+                ),
+                **state,
+            }
+        )
+
+    # Grouped rather than flat-sorted: the page prints a heading per bucket, and
+    # a heading needs its rows anyway. Python's sort is stable, so the date
+    # ordering the query established survives inside each group.
+    recordings.sort(key=lambda r: _WORK_GROUP_RANK[r["group"]])
+    groups = [
+        dict(g, recordings=[r for r in recordings if r["group"] == g["slug"]])
+        for g in RECORDING_WORK_GROUPS
+    ]
+
+    return {
+        "success": True,
+        "recordings": recordings,
+        "groups": [g for g in groups if g["recordings"]],
+        # What the operator is actually being asked to do, for the summary line.
+        # A night with audio and no log is work too, now that the tool logs.
+        "outstanding": sum(1 for r in recordings if r["group"] in ("failed", "todo", "blocked")),
+    }
+
+
+def build_instance_recordings_payload(conn, session_instance_id: int) -> Dict[str, Any]:
+    """Recordings attached to one session instance, with segmenting progress.
+
+    Backs GET /api/session-instances/<id>/recordings and the admin index —
+    "which nights are done" is the question this answers.
+    """
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(
+        """
+        SELECT r.recording_id, r.label, r.duration_ms, r.is_clock_anchor, r.clock_offset_ms,
+               r.started_at, r.mime_type, r.file_size_bytes, r.status, r.status_detail,
+               r.segmenting_complete,
+               (SELECT count(*) FROM recording_tune_segment rts WHERE rts.recording_id = r.recording_id)
+                   AS segment_count
+        FROM recording r
+        WHERE r.session_instance_id = %s
+        ORDER BY r.clock_offset_ms, r.recording_id
+        """,
+        (session_instance_id,),
+    )
+    recordings = [
+        {
+            "recording_id": r["recording_id"],
+            "label": r["label"],
+            "duration_ms": int(r["duration_ms"]),
+            "is_clock_anchor": r["is_clock_anchor"],
+            "clock_offset_ms": int(r["clock_offset_ms"]),
+            "started_at": r["started_at"].isoformat() if r["started_at"] else None,
+            "mime_type": r["mime_type"],
+            "file_size_bytes": int(r["file_size_bytes"]) if r["file_size_bytes"] else None,
+            "segment_count": r["segment_count"],
+            # Ingest state (schema/052): the in-log Recordings modal shows a
+            # freshly uploaded row while it is still being processed, so it needs
+            # to say so rather than presenting a guessed duration as fact.
+            "status": r["status"],
+            "status_detail": r["status_detail"],
+            # "Nothing left in this audio to place" (schema/055) -- said by hand
+            # for a recording that covers only part of the night, where the
+            # segment count can never reach the night's tune count.
+            "segmenting_complete": r["segmenting_complete"],
+        }
+        for r in cur.fetchall()
+    ]
+
+    cur.execute(
+        """
+        SELECT count(*) AS n FROM session_instance_tune
+        WHERE session_instance_id = %s AND deleted = FALSE AND record_type <> 'break'
+        """,
+        (session_instance_id,),
+    )
+    tune_count = cur.fetchone()["n"]
+
+    return {
+        "success": True,
+        "session_instance_id": session_instance_id,
+        "tune_count": tune_count,
+        "recordings": recordings,
+    }
+
+
+def build_instance_audio_payload(conn, session_instance_id: int) -> Dict[str, Any]:
+    """Playback data for the session-instance page: one recording and its marks.
+
+    The segmenter's payload is the wrong shape for listening — it carries the
+    whole tune log, both audio sources, the waveform, and the other recordings,
+    because its job is EDITING the marks. This one answers a much smaller
+    question: "is there audio for this night, and where does each tune sit in
+    it?" The page already knows the tune log; it only needs the offsets.
+
+    A `recording` of None is the ordinary case (most nights have no audio) and
+    is not an error — the page simply shows no play buttons.
+    """
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+    # Only a recording that is both playable and timestamped is any use here, so
+    # segment_count > 0 is part of the selection rather than something the caller
+    # discovers afterwards. Where a night has several, the most-segmented one is
+    # the one someone actually worked on; the anchor breaks the tie because a
+    # second recording's clock_offset_ms is still unsettable in the UI (spec 050),
+    # so only the anchor's offsets can be trusted against the log.
+    cur.execute(
+        """
+        SELECT r.recording_id, r.label, r.duration_ms, r.storage_key, r.mime_type,
+               r.file_size_bytes, r.stream_key, r.stream_mime_type, r.stream_size_bytes,
+               (SELECT count(*) FROM recording_tune_segment rts
+                 WHERE rts.recording_id = r.recording_id) AS segment_count
+        FROM recording r
+        WHERE r.session_instance_id = %s AND r.status = 'ready'
+        ORDER BY segment_count DESC, r.is_clock_anchor DESC, r.recording_id
+        LIMIT 1
+        """,
+        (session_instance_id,),
+    )
+    row = cur.fetchone()
+    if not row or not row["segment_count"]:
+        return {
+            "success": True,
+            "session_instance_id": session_instance_id,
+            "recording": None,
+            "segments": [],
+        }
+
+    # Both encodes, proxy FIRST -- the page opens on it, because this is listening
+    # rather than corpus work: 32kbps mono is indistinguishable for "what was that
+    # tune?" and at a fraction of the bytes it makes a mid-set seek on a phone
+    # instant instead of a stall. The master rides along as the HD option for
+    # someone on a connection that can take it.
+    #
+    # Both go down in ONE payload rather than the page re-asking when HD is
+    # picked: presigning is local HMAC, so the second URL is free, and having it
+    # in hand is what lets the switch keep the listener's place instead of
+    # stalling on a round trip mid-tune.
+    #
+    # `size_bytes` is not decoration -- it is the only honest basis the listener
+    # has for deciding whether HD is a good idea on the connection they're on.
+    audio_sources = []
+    audio_error = None
+    try:
+        from recording import generate_presigned_url
+
+        if row["stream_key"]:
+            audio_sources.append(
+                {
+                    "id": "proxy",
+                    "url": generate_presigned_url(row["stream_key"]),
+                    "mime_type": row["stream_mime_type"] or "audio/mp4",
+                    "size_bytes": int(row["stream_size_bytes"]) if row["stream_size_bytes"] else None,
+                }
+            )
+        # Always present: the HD option when a proxy exists, and the only thing
+        # there is to play when one doesn't (ingest predating schema/051, or a
+        # transcode that failed).
+        audio_sources.append(
+            {
+                "id": "master",
+                "url": generate_presigned_url(row["storage_key"]),
+                "mime_type": row["mime_type"] or "audio/mp4",
+                "size_bytes": int(row["file_size_bytes"]) if row["file_size_bytes"] else None,
+            }
+        )
+    except Exception as exc:  # object store misconfigured — the page says so
+        audio_sources = []
+        audio_error = str(exc)
+
+    cur.execute(
+        """
+        SELECT rts.session_instance_tune_id, rts.start_ms, rts.end_ms
+        FROM recording_tune_segment rts
+        JOIN session_instance_tune sit
+          ON sit.session_instance_tune_id = rts.session_instance_tune_id
+        WHERE rts.recording_id = %s AND sit.deleted = FALSE
+        ORDER BY rts.start_ms
+        """,
+        (row["recording_id"],),
+    )
+    # end_ms stays None when implicit, exactly as the segmenter sends it: the
+    # client resolves it to the next placed tune's start with the same shared
+    # resolveSegments() both pages use, so a tune's extent can never differ
+    # between the tool that marked it and the page that plays it.
+    segments = [
+        {
+            "session_instance_tune_id": s["session_instance_tune_id"],
+            "start_ms": int(s["start_ms"]),
+            "end_ms": int(s["end_ms"]) if s["end_ms"] is not None else None,
+        }
+        for s in cur.fetchall()
+    ]
+
+    return {
+        "success": True,
+        "session_instance_id": session_instance_id,
+        "recording": {
+            "recording_id": row["recording_id"],
+            "label": row["label"],
+            "duration_ms": int(row["duration_ms"]),
+            # Ordered: the first entry is the one the page opens on.
+            "audio_sources": audio_sources,
+            "audio_error": audio_error,
+        },
+        "segments": segments,
+    }
+
+
+# ---------------------------------------------------------------------------
+# home — the / page and GET /api/home (spec 052 A2). The five blocks the home
+# screen renders, for the signed-in viewer. The Jinja home renders exactly this
+# dict; GET /api/home returns exactly this dict.
+# ---------------------------------------------------------------------------
+
+def _load_home_learning_counts(cur, person_id: int) -> Dict[str, int]:
+    cur.execute(
+        """
+        SELECT learn_status, COUNT(*) AS n
+        FROM person_tune
+        WHERE person_id = %s AND learn_status IN ('learning', 'want to learn')
+        GROUP BY learn_status
+        """,
+        (person_id,),
+    )
+    counts = {row["learn_status"]: row["n"] for row in cur.fetchall()}
+    return {
+        "learning_count": counts.get("learning", 0),
+        "want_to_learn_count": counts.get("want to learn", 0),
+    }
+
+
+def _load_home_suggested_tune(cur, person_id: int) -> Optional[Dict[str, Any]]:
+    # Most played at the viewer's MEMBER sessions (spec 033 R3 — a visited session
+    # isn't "yours"), not already on their list.
+    cur.execute(
+        """
+        SELECT t.tune_id, t.name, t.tune_type, COUNT(sit.session_instance_tune_id) AS play_count
+        FROM session_instance_tune sit
+        JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
+        JOIN session_person sp ON si.session_id = sp.session_id
+            AND sp.person_id = %s AND sp.relationship = 'member'
+        JOIN tune t ON sit.tune_id = t.tune_id
+        WHERE sit.tune_id IS NOT NULL
+          AND sit.deleted = FALSE AND sit.record_type <> 'break'
+          AND t.redirect_to_tune_id IS NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM person_tune pt WHERE pt.person_id = %s AND pt.tune_id = sit.tune_id
+          )
+        GROUP BY t.tune_id, t.name, t.tune_type, t.tunebook_count_cached
+        ORDER BY play_count DESC, t.tunebook_count_cached DESC
+        LIMIT 1
+        """,
+        (person_id, person_id),
+    )
+    row = cur.fetchone()
+    if not row:
+        return None
+    return {
+        "tune_id": row["tune_id"],
+        "name": row["name"],
+        "tune_type": row["tune_type"],
+        "play_count": row["play_count"],
+    }
+
+
+def _load_home_upcoming_sessions(cur, person_id: int, monday, sunday) -> List[Dict[str, Any]]:
+    """This week's instances at the sessions the viewer belongs to.
+
+    Carries what the Today card needs (spec 052 §B2): where it is, whether it is
+    live right now, how many people are there, and how many tunes are on the log.
+    The client picks today's entries out of this list rather than being handed a
+    second copy of them, so the two can never disagree about a night.
+
+    The two counts are SCALAR SUBQUERIES on purpose. Joining `session_instance_tune`
+    and `person` into this query would be two one-to-many joins in one aggregate,
+    which multiplies each side by the other — the exact shape of the bug that made a
+    player's attended nights come back once per instrument they play.
+    """
+    cur.execute(
+        """
+        SELECT s.name, s.path, s.session_id, si.session_instance_id, si.date, si.start_time,
+               si.end_time, si.log_complete_date, si.is_active,
+               COALESCE(si.location_override, s.location_name) AS location_name,
+               (SELECT COUNT(*) FROM session_instance_tune sit
+                 WHERE sit.session_instance_id = si.session_instance_id
+                   AND sit.deleted = FALSE
+                   AND sit.record_type <> 'break') AS tunes_logged,
+               (SELECT COUNT(*) FROM person p
+                 WHERE p.at_active_session_instance_id = si.session_instance_id) AS people_here
+        FROM session_person sp
+        JOIN session s ON sp.session_id = s.session_id
+        JOIN session_instance si ON s.session_id = si.session_id
+        WHERE sp.person_id = %s AND sp.relationship = 'member'
+          AND si.date BETWEEN %s AND %s
+          AND si.is_cancelled = FALSE
+        ORDER BY si.date, si.start_time
+        """,
+        (person_id, monday, sunday),
+    )
+    return [
+        {
+            "name": row["name"],
+            "path": row["path"],
+            "session_id": row["session_id"],
+            "session_instance_id": row["session_instance_id"],
+            "date": row["date"],
+            "start_time": row["start_time"],
+            "end_time": row["end_time"],
+            "location_name": row["location_name"],
+            "log_complete_date": row["log_complete_date"],
+            "is_active": row["is_active"],
+            "tunes_logged": row["tunes_logged"],
+            "people_here": row["people_here"],
+        }
+        for row in cur.fetchall()
+    ]
+
+
+def _load_home_in_progress_logs(cur, user_id: int) -> List[Dict[str, Any]]:
+    # Instances the viewer edited in the last 30 days that aren't marked complete
+    # and still have at least one tune logged.
+    cur.execute(
+        """
+        SELECT s.name, s.path, s.session_id, si.session_instance_id, si.date,
+               MAX(sit.last_modified_date) AS last_edit
+        FROM session_instance_tune sit
+        JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
+        JOIN session s ON si.session_id = s.session_id
+        WHERE sit.last_modified_user_id = %s
+          AND sit.last_modified_date >= (NOW() AT TIME ZONE 'UTC') - INTERVAL '30 days'
+          AND si.log_complete_date IS NULL
+          AND si.is_cancelled = FALSE
+          AND EXISTS (
+            SELECT 1 FROM session_instance_tune sit2
+            WHERE sit2.session_instance_id = si.session_instance_id
+              AND sit2.deleted = FALSE
+              AND sit2.record_type <> 'break'
+          )
+        GROUP BY s.name, s.path, s.session_id, si.session_instance_id, si.date
+        ORDER BY last_edit DESC
+        LIMIT 3
+        """,
+        (user_id,),
+    )
+    return [
+        {
+            "name": row["name"],
+            "path": row["path"],
+            "session_id": row["session_id"],
+            "session_instance_id": row["session_instance_id"],
+            "date": row["date"],
+            "last_edit": row["last_edit"],
+        }
+        for row in cur.fetchall()
+    ]
+
+
+def _load_home_in_progress_recordings(cur, user_id: int, person_id: int, is_admin: bool) -> List[Dict[str, Any]]:
+    # In-progress timestamping (spec 050): recordings this user has placed tunes on
+    # in the last 30 days that still have tunes left to place. Two ways to be
+    # finished: every logged tune placed, or recording.segmenting_complete
+    # (schema/055) for audio covering only part of the night. The permission is
+    # re-checked now (schema/053): a card that links into a refusal is worse than
+    # no card.
+    cur.execute(
+        """
+        WITH mine AS (
+            SELECT rts.recording_id, MAX(rts.last_modified_date) AS last_edit
+            FROM recording_tune_segment rts
+            WHERE rts.last_modified_user_id = %s
+              AND rts.last_modified_date >= (NOW() AT TIME ZONE 'UTC') - INTERVAL '30 days'
+            GROUP BY rts.recording_id
+        )
+        SELECT r.recording_id, r.label, s.name, s.path, si.session_instance_id, si.date, mine.last_edit,
+               (SELECT COUNT(*) FROM recording_tune_segment x
+                 WHERE x.recording_id = r.recording_id) AS placed,
+               (SELECT COUNT(*) FROM session_instance_tune sit
+                 WHERE sit.session_instance_id = r.session_instance_id
+                   AND sit.deleted = FALSE AND sit.record_type <> 'break') AS tune_count
+        FROM mine
+        JOIN recording r ON r.recording_id = mine.recording_id
+        JOIN session_instance si ON si.session_instance_id = r.session_instance_id
+        JOIN session s ON s.session_id = si.session_id
+        WHERE r.status = 'ready'
+          AND r.segmenting_complete = FALSE
+          AND (%s OR EXISTS (
+                SELECT 1 FROM session_person sp
+                WHERE sp.session_id = s.session_id AND sp.person_id = %s
+                  AND sp.is_admin = TRUE AND sp.can_manage_recordings = TRUE
+              ))
+          AND (SELECT COUNT(*) FROM recording_tune_segment x
+                WHERE x.recording_id = r.recording_id)
+              < (SELECT COUNT(*) FROM session_instance_tune sit
+                  WHERE sit.session_instance_id = r.session_instance_id
+                    AND sit.deleted = FALSE AND sit.record_type <> 'break')
+        ORDER BY mine.last_edit DESC
+        LIMIT 3
+        """,
+        (user_id, bool(is_admin), person_id),
+    )
+    return [
+        {
+            "recording_id": row["recording_id"],
+            "label": row["label"],
+            "name": row["name"],
+            "path": row["path"],
+            "session_instance_id": row["session_instance_id"],
+            "date": row["date"],
+            "last_edit": row["last_edit"],
+            "placed": row["placed"],
+            "tune_count": row["tune_count"],
+        }
+        for row in cur.fetchall()
+    ]
+
+
+def build_home_payload(conn, user) -> Dict[str, Any]:
+    """The COMPLETE home payload for a signed-in user. GET /api/home returns exactly
+    this; the / page renders exactly this (web_routes.home). Dates are date/datetime
+    objects: the JSON provider (app.py) emits them as ISO 8601, and the Jinja home
+    still formats them itself."""
+    from datetime import timedelta
+
+    from timezone_utils import get_today_in_timezone
+
+    today = get_today_in_timezone(user.timezone or "UTC")
+    monday = today - timedelta(days=today.weekday())
+    sunday = monday + timedelta(days=6)
+
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    try:
+        payload: Dict[str, Any] = {"success": True}
+        payload.update(_load_home_learning_counts(cur, user.person_id))
+        payload["suggested_tune"] = _load_home_suggested_tune(cur, user.person_id)
+        payload["upcoming_sessions"] = _load_home_upcoming_sessions(cur, user.person_id, monday, sunday)
+        payload["in_progress_logs"] = _load_home_in_progress_logs(cur, user.user_id)
+        payload["in_progress_recordings"] = _load_home_in_progress_recordings(
+            cur, user.user_id, user.person_id, user.is_system_admin
+        )
+        payload["today"] = today
+        payload["week"] = {"start": monday, "end": sunday}
+        payload["current_year"] = today.year
+        # The greeting's name. It lived in the Jinja template as
+        # `current_user.first_name`; now that the page renders from this payload it
+        # has to travel in the payload, and a native Home screen wants it too rather
+        # than having to hold /api/me alongside this.
+        payload["viewer"] = {
+            "person_id": user.person_id,
+            "first_name": user.first_name,
+        }
+        return payload
+    finally:
+        cur.close()

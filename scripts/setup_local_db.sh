@@ -36,6 +36,11 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 # Schema files
 SCHEMA_FILE="$PROJECT_ROOT/schema/full_schema.sql"
 SEED_FILE="$PROJECT_ROOT/schema/seed_data.sql"
+# Spec 050 fixture: one real night + the recording of it, so the segmenter has
+# something to open after a reseed. Separate from seed_data.sql because it is
+# generated (scripts/generate_recording_seed.py) and mostly a ~290KB waveform
+# blob, which has no business in the hand-maintained seed.
+RECORDING_SEED_FILE="$PROJECT_ROOT/schema/seed_recording.sql"
 
 # Parse arguments
 RESET=false
@@ -213,6 +218,9 @@ if [ "$SEED_ONLY" = true ]; then
 
     echo "Loading seed data..."
     PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -f "$SEED_FILE" > /dev/null
+    if [ -f "$RECORDING_SEED_FILE" ]; then
+        PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -q -f "$RECORDING_SEED_FILE" > /dev/null
+    fi
     resync_sequences
     # Seeded settings ship empty incipits; compute them like the app would so
     # the drawer / offline bundle render notation from a fresh seed.
@@ -276,6 +284,9 @@ if [ "$SCHEMA_ONLY" = false ]; then
     echo ""
     echo "Loading seed data..."
     PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -f "$SEED_FILE" > /dev/null 2>&1
+    if [ -f "$RECORDING_SEED_FILE" ]; then
+        PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -q -f "$RECORDING_SEED_FILE" > /dev/null 2>&1
+    fi
     resync_sequences
     # Seeded settings ship empty incipits; compute them like the app would so
     # the drawer / offline bundle render notation from a fresh seed.

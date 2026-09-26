@@ -3,21 +3,23 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { extractTuneId, parseThesessionSessionId } from '../src/shared/parse.js'
 import {
-  resolveTuneInstrumentStatus,
-  buildSortFunction,
-  filterAndSort,
-  noResultsMessage,
-  resultsCountText,
-  typeBadgeLabel,
-  typeBadgeTitle,
-  stateFromParams,
-  paramsFromState,
   applyPendingOps,
-  nextStatus,
+  attendedPlays,
+  buildSortFunction,
+  catalogueExtras,
   cycleInstrumentOverride,
   fetchAllTunes,
+  filterAndSort,
   memberPlays,
-  attendedPlays,
+  nextStatus,
+  noResultsMessage,
+  paramsFromState,
+  resolveTuneInstrumentStatus,
+  resultsCountText,
+  shouldSearchCatalogue,
+  stateFromParams,
+  typeBadgeLabel,
+  typeBadgeTitle,
 } from '../src/mytunespage/logic.js'
 
 const tune = (over = {}) => ({
@@ -126,6 +128,41 @@ describe('filterAndSort', () => {
     const out = filterAndSort(tunes, { search: '', type: '', status: 'learned', instrument: 'Flute' }, sort, insts)
     expect(out).toHaveLength(1)
   })
+
+  // Notation search: `abcIds` is the set of tune ids the server says match a note-shaped
+  // query (the payload carries no ABC, so the browser can't decide this itself).
+  describe('notation (abcIds)', () => {
+    const filters = { search: 'gedbed', type: '', status: '', instrument: '' }
+    const tunes = [
+      tune({ tune_id: 1, tune_name: 'Zorble Reel' }),
+      tune({ tune_id: 2, tune_name: 'Other' }),
+    ]
+
+    it('unions notation matches into a search that would otherwise drop them', () => {
+      const out = filterAndSort(tunes, filters, sort, [], new Set([1]))
+      expect(out.map((t) => t.tune_id)).toEqual([1])
+    })
+
+    it('tags a notation-only match so the card can say why it is here', () => {
+      expect(filterAndSort(tunes, filters, sort, [], new Set([1]))[0]._abcOnly).toBe(true)
+    })
+
+    it('does not tag a row that also matched by name', () => {
+      const out = filterAndSort(tunes, { ...filters, search: 'zorble' }, sort, [], new Set([1]))
+      expect(out[0]._abcOnly).toBeFalsy()
+    })
+
+    it('omitting abcIds filters by name exactly as before', () => {
+      expect(filterAndSort(tunes, filters, sort, [])).toHaveLength(0)
+      expect(filterAndSort(tunes, filters, sort, [], null)).toHaveLength(0)
+    })
+
+    it('is ignored when there is no search term', () => {
+      const out = filterAndSort(tunes, { ...filters, search: '' }, sort, [], new Set([1]))
+      expect(out).toHaveLength(2)
+      expect(out.every((t) => !t._abcOnly)).toBe(true)
+    })
+  })
 })
 
 describe('messages and badges', () => {
@@ -207,8 +244,40 @@ describe('URL state round-trip', () => {
       { type: 'heard', dir: 'desc', type2: 'alpha', dir2: 'asc' }
     )
     const { filters, sort } = stateFromParams(params)
-    expect(filters).toEqual({ search: 'x', type: 'jig', status: 'learned', instrument: 'Fiddle', rel: '' })
+    expect(filters).toEqual({
+      search: 'x',
+      type: 'jig',
+      status: 'learned',
+      instrument: 'Fiddle',
+      rel: '',
+      addedDir: 'after',
+      addedDate: '',
+    })
     expect(sort).toEqual({ type: 'heard', dir: 'desc', type2: 'alpha', dir2: 'asc' })
+    // The added-date filter travels too, so a filtered view is a link you can send.
+    const after = paramsFromState(
+      { search: '', type: '', status: '', instrument: '', addedDir: 'after', addedDate: '2026-01-01' },
+      { type: 'alpha', dir: 'asc', type2: null, dir2: null }
+    )
+    expect(after.get('addedDate')).toBe('2026-01-01')
+    // "after" is the default, so it costs nothing in the URL.
+    expect(after.get('addedDir')).toBeNull()
+    expect(stateFromParams(after).filters.addedDate).toBe('2026-01-01')
+    expect(stateFromParams(after).filters.addedDir).toBe('after')
+
+    const before = paramsFromState(
+      { search: '', type: '', status: '', instrument: '', addedDir: 'before', addedDate: '2026-01-01' },
+      { type: 'alpha', dir: 'asc', type2: null, dir2: null }
+    )
+    expect(before.get('addedDir')).toBe('before')
+
+    // A direction with no date means nothing, so it does not travel alone.
+    const dirOnly = paramsFromState(
+      { search: '', type: '', status: '', instrument: '', addedDir: 'before', addedDate: '' },
+      { type: 'alpha', dir: 'asc', type2: null, dir2: null }
+    )
+    expect(dirOnly.toString()).toBe('')
+
     // alpha-asc default writes nothing
     expect(paramsFromState({ search: '', type: '', status: '', instrument: '' }, { type: 'alpha', dir: 'asc', type2: null, dir2: null }).toString()).toBe('')
   })
@@ -228,6 +297,9 @@ describe('applyPendingOps (offline overlay)', () => {
     const added = out.find((t) => t.tune_id === 50)
     expect(added.person_tune_id).toBe('pending-50')
     expect(added.pending_sync).toBe(true)
+    // The synthesized row has to match what the server will write when the queue
+    // drains — a new person_tune starts at one hearing, not zero.
+    expect(added.heard_count).toBe(1)
     const edited = out.find((t) => t.tune_id === 1)
     expect(edited.heard_count).toBe(4)
     expect(edited.instrument_status.Fiddle).toBe('learned')
@@ -277,5 +349,99 @@ describe('fetchAllTunes', () => {
     expect(fetch.mock.calls[1][0]).toContain('page=2')
     expect(out.tunes.map((t) => t.tune_id)).toEqual([1, 2])
     expect(out.instruments).toEqual([{ instrument: 'Fiddle', is_auto: true }])
+  })
+})
+
+// ---- catalogue search: "Not on your list" (spec 052 §B1) --------------------------
+describe('shouldSearchCatalogue', () => {
+  it('only on the All filter', () => {
+    // On a status filter the question is "which of MY tunes match".
+    expect(shouldSearchCatalogue('', 'cooley', true)).toBe(true)
+    expect(shouldSearchCatalogue('learning', 'cooley', true)).toBe(false)
+    expect(shouldSearchCatalogue('learned', 'cooley', true)).toBe(false)
+  })
+
+  it('waits for the whole list, because "not yours" is decided against it', () => {
+    // Offering to add a tune you already own, because the page had not finished
+    // loading it, is the one wrong answer this section can give.
+    expect(shouldSearchCatalogue('', 'cooley', false)).toBe(false)
+  })
+
+  it('needs two characters', () => {
+    expect(shouldSearchCatalogue('', '', true)).toBe(false)
+    expect(shouldSearchCatalogue('', 'c', true)).toBe(false)
+    expect(shouldSearchCatalogue('', 'co', true)).toBe(true)
+  })
+
+  it('survives a missing query instead of throwing', () => {
+    expect(shouldSearchCatalogue('', null, true)).toBe(false)
+    expect(shouldSearchCatalogue('', undefined, true)).toBe(false)
+  })
+})
+
+describe('catalogueExtras', () => {
+  const hits = [{ tune_id: 1, name: 'Cooley’s' }, { tune_id: 2, name: 'The Banshee' }]
+
+  it('drops the tunes already on the list', () => {
+    expect(catalogueExtras(hits, [{ tune_id: 1 }]).map((t) => t.tune_id)).toEqual([2])
+  })
+
+  it('keeps everything when the list is empty', () => {
+    expect(catalogueExtras(hits, []).map((t) => t.tune_id)).toEqual([1, 2])
+  })
+
+  it('matches on tune_id, not on name', () => {
+    // A tune you own under an alias still must not be offered back to you.
+    expect(catalogueExtras(hits, [{ tune_id: 2, tune_name: 'A Name Of My Own' }])).toHaveLength(1)
+  })
+
+  it('is empty, not undefined, with nothing to work from', () => {
+    expect(catalogueExtras(null, null)).toEqual([])
+    expect(catalogueExtras(undefined, [{ tune_id: 1 }])).toEqual([])
+  })
+})
+
+// ---- added-date filter (spec 052 §B1) --------------------------------------------
+describe('filtering by when a tune was added', () => {
+  const t = (id, created) => ({
+    tune_id: id,
+    person_tune_id: id,
+    tune_name: `Tune ${id}`,
+    learn_status: 'learning',
+    created_date: created,
+  })
+  const NONE = { search: '', type: '', status: '', instrument: '', rel: '' }
+  const SORT = { type: 'alpha', dir: 'asc', type2: null, dir2: null }
+  const ids = (out) => out.map((x) => x.tune_id)
+
+  const list = [t(1, '2026-01-10T09:00:00'), t(2, '2026-06-01T09:00:00'), t(3, '2026-09-01T09:00:00')]
+
+  it('"after" keeps what you added on or after the date', () => {
+    const f = { ...NONE, addedDir: 'after', addedDate: '2026-06-01' }
+    expect(ids(filterAndSort(list, f, SORT, []))).toEqual([2, 3])
+  })
+
+  it('"before" keeps what you already had', () => {
+    const f = { ...NONE, addedDir: 'before', addedDate: '2026-06-01' }
+    // Strictly before, so the boundary day belongs to "after" and to only one side.
+    expect(ids(filterAndSort(list, f, SORT, []))).toEqual([1])
+  })
+
+  it('does nothing at all without a date', () => {
+    const f = { ...NONE, addedDir: 'before', addedDate: '' }
+    expect(ids(filterAndSort(list, f, SORT, []))).toEqual([1, 2, 3])
+  })
+
+  it('drops a tune with no added date rather than guessing which side it is on', () => {
+    const f = { ...NONE, addedDir: 'after', addedDate: '2026-01-01' }
+    expect(ids(filterAndSort([...list, t(4, null)], f, SORT, []))).toEqual([1, 2, 3])
+  })
+
+  it('compares as ISO strings, so a timestamp is judged by its date alone', () => {
+    // 23:59 on the boundary day is still that day, which a Date-with-timezone
+    // comparison is exactly the kind of thing to get wrong.
+    const late = [t(9, '2026-06-01T23:59:59')]
+    const f = { ...NONE, addedDir: 'after', addedDate: '2026-06-01' }
+    expect(ids(filterAndSort(late, f, SORT, []))).toEqual([9])
   })
 })

@@ -12,7 +12,10 @@
 // a fixed-name asset served cache-first could strand users on a stale build.
 // Never our concern (straight to network): /api/*, /live/*, /admin*, non-GET and the
 // logout flow. The legacy word-processor editor is fetched live but never snapshotted
-// (the server marks it X-Offline-Exclude).
+// (the server marks it X-Offline-Exclude). The one admin page that IS snapshotted is
+// the recording segmenter (/admin/recordings/<id>/segment): it is a tool you sit with
+// for an evening, often somewhere with no signal, and its page carries its own data
+// (spec 050 "Offline"). Its marks queue in static/js/segmenter_offline.js.
 //
 // TWO non-obvious correctness rules, both learned from breaking the logout e2e test:
 //   1. handleNav AWAITS a cache handle BEFORE issuing the navigation fetch. That await
@@ -22,15 +25,26 @@
 //   2. Activation must stay INSTANT — precache is done from a post-load 'init' message,
 //      NEVER in install's waitUntil. A slow install delays claim so it lands mid-burst
 //      and corrupts an in-flight navigation the same way.
+// Navigation preload (enabled in activate) is what makes rule 1 cheap: the browser
+// issues the document request itself, in parallel with booting this worker, so the
+// awaits in rule 1 no longer sit in front of the network. It does NOT violate rule 1 —
+// the preload is browser-managed (cookies handled natively), and handleNav still
+// performs those awaits before consuming the response.
 // Data is never stored here.
 
-const VERSION = 'v33'
+const VERSION = 'v35'
 const SHELL = `ceol-io-shell-${VERSION}` // shared, non-personalized assets + public/help pages
 // Page/api caches are VERSION-scoped too, so a VERSION bump (e.g. a deploy) invalidates
 // stale page snapshots + cached API data, not just the shell.
 const pagesCache = (uid) => `ceol-io-pages-${VERSION}-${uid}` // per-user HTML snapshots (no cross-user leak)
 const apiCache = (uid) => `ceol-io-api-${VERSION}-${uid}` // per-user GET /api/* responses (Tier 1)
 const UID_MARKER = '/__ceol_uid__'
+// The recording segmenter: the only /admin page whose navigation is snapshotted.
+const SEGMENTER_PATH = /^\/admin\/recordings\/\d+\/segment\/?$/
+
+function snapshottable(pathname) {
+  return !pathname.startsWith('/admin') || SEGMENTER_PATH.test(pathname)
+}
 
 // Non-personalized shell, precached (from the 'init' message) best-effort.
 const PRECACHE = [
@@ -54,6 +68,7 @@ const PRECACHE = [
   '/static/tunesheet/sheet.js',
   '/static/js/tunebook_status.js',
   '/static/js/mytunes_offline.js',
+  '/static/js/segmenter_offline.js',
   '/static/js/components/TuneSearchComponent.js',
   '/static/manifest.json',
   '/static/images/logo3-1.png',
@@ -86,6 +101,16 @@ self.addEventListener('activate', (event) => {
             .filter((k) => k.startsWith('ceol-io-') && k !== SHELL && !k.includes(`-${VERSION}-`))
             .map((k) => caches.delete(k))
         )
+      )
+      // Navigation preload: let the browser start the document request in
+      // PARALLEL with booting this worker, instead of after it. The worker gets
+      // idle-killed after ~30s, so most clicks were paying a cold start before
+      // handleNav could even call fetch() — dead time where the old page just
+      // sits there. Not supported everywhere; guard it.
+      .then(() =>
+        self.registration.navigationPreload
+          ? self.registration.navigationPreload.enable().catch(() => {})
+          : undefined
       )
       .then(() => self.clients.claim())
   )
@@ -198,7 +223,7 @@ self.addEventListener('fetch', (event) => {
     }
 
     if (req.mode === 'navigate') {
-      event.respondWith(handleNav(req))
+      event.respondWith(handleNav(req, event))
       return
     }
     if (url.pathname.startsWith('/static/')) {
@@ -220,18 +245,23 @@ self.addEventListener('fetch', (event) => {
 // LOad-bearing — they settle SW activation before the fetch (header rule 1). Online:
 // return the live page and snapshot it per-user for offline. Offline: this user's
 // snapshot, then the shared shell, then the offline page.
-async function handleNav(req) {
+async function handleNav(req, event) {
+  // Kick off the preloaded response (started before this worker booted) BEFORE
+  // the two awaits below, so those settle concurrently with the network rather
+  // than in front of it.
+  const preload = event && event.preloadResponse ? event.preloadResponse : null
   const uid = await currentUid()
   const cache = await caches.open(pagesCache(uid))
   try {
-    const res = await fetch(req)
-    // Snapshot for offline — but never cache admin (excluded from offline support) or
-    // pages the server marks X-Offline-Exclude (the legacy editor). They still get the
-    // offline page on failure below; they just aren't stored.
+    const res = (preload && (await preload)) || (await fetch(req))
+    // Snapshot for offline — but never cache admin (excluded from offline support,
+    // bar the segmenter) or pages the server marks X-Offline-Exclude (the legacy
+    // editor). They still get the offline page on failure below; they just aren't
+    // stored.
     if (
       res && res.ok && !res.redirected &&
       res.headers.get('X-Offline-Exclude') == null &&
-      !new URL(req.url).pathname.startsWith('/admin')
+      snapshottable(new URL(req.url).pathname)
     ) {
       cache.put(req, res.clone())
     }

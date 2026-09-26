@@ -66,6 +66,7 @@
   }
 
   function replaceStore(store, items) {
+    abcKeyCache = {} // the incipits just changed
     return tx([store], 'readwrite', function (t) {
       var os = t.objectStore(store)
       os.clear()
@@ -75,6 +76,36 @@
 
   function normalize(s) {
     return (s || '').replace(/[\u2018\u2019\u201B`\u00B4]/g, "'").toLowerCase().trim().replace(/^the\s+/, '')
+  }
+
+  // --- notation (ABC) search ------------------------------------------------
+  //
+  // Hand-copied from frontend/src/shared/abcquery.js: this file loads from base.html,
+  // outside every Vite bundle, so it cannot import. Keep the two in step -- and both in
+  // step with SQL abc_search_key() (schema/055_abc_search_index.sql), or a query that
+  // matches online stops matching offline.
+  var ABC_MIN_QUERY_LEN = 3
+  var ABC_ORNAMENT_RE = /\{[^}]*\}|"[^"]*"/g   // grace notes, chord symbols
+  var ABC_NOISE_RE = /[\s!]/g                  // whitespace, legacy line breaks
+  var ABC_FRIENDLY_RE = /^[A-Ga-gxz0-9|^_=,'/()[\]:<>~-]+$/
+
+  function normAbc(s) {
+    return (s || '').replace(ABC_ORNAMENT_RE, '').replace(ABC_NOISE_RE, '').toLowerCase()
+  }
+
+  // The needle a notation search should use, or '' when this query isn't note-shaped.
+  function abcNeedle(q) {
+    var key = normAbc(q)
+    return key.length >= ABC_MIN_QUERY_LEN && ABC_FRIENDLY_RE.test(key) ? key : ''
+  }
+
+  // Normalizing every incipit on every keystroke is wasteful, and the tunebook only
+  // changes on sync -- so memoize by tune_id and drop the cache when a store is replaced.
+  var abcKeyCache = {}
+  function abcKeyFor(t) {
+    var id = t.tune_id
+    if (abcKeyCache[id] === undefined) abcKeyCache[id] = normAbc(t.incipit_abc)
+    return abcKeyCache[id]
   }
 
   var syncing = false
@@ -108,26 +139,42 @@
 
   function getTunes() { return getAll(TUNES) }
 
-  // Offline name search: the user's tunes first, then popular (deduped), capped.
+  // Offline search: the user's tunes first, then popular (deduped), capped. Names first,
+  // then -- for a note-shaped query -- NOTATION matches appended and flagged, mirroring
+  // how the server blends them online.
+  //
+  // Offline notation matching is INCIPIT-ONLY: the bundle deliberately carries only
+  // `incipit_abc`, never the full setting ABC, to bound the payload. So offline a query
+  // matching bar 20 of a tune finds nothing while online it does -- hence `abc_scope`,
+  // which lets the UI say "opening bars" rather than quietly under-answering.
   function searchTunes(query, limit) {
     var q = normalize(query)
+    var needle = abcNeedle(query)
     limit = limit || 12
     return Promise.all([getAll(TUNES), getAll(POPULAR)]).then(function (res) {
       var mine = res[0], pop = res[1]
       var seen = {}
       var out = []
-      var push = function (list) {
+      var push = function (list, match, tag) {
         list.forEach(function (t) {
           if (out.length >= limit) return
           if (!t || seen[t.tune_id]) return
-          if (normalize(t.name).indexOf(q) === -1) return
+          if (!match(t)) return
           seen[t.tune_id] = true
-          out.push(t)
+          out.push(tag ? Object.assign({}, t, { abc_only: true, abc_scope: 'incipit' }) : t)
         })
       }
       var byPop = function (a, b) { return (b.tunebook_count || 0) - (a.tunebook_count || 0) }
-      push(mine.slice().sort(byPop)) // owned matches first
-      push(pop.slice().sort(byPop)) // then popular
+      var byName = function (t) { return normalize(t.name).indexOf(q) !== -1 }
+      var byAbc = function (t) { return abcKeyFor(t).indexOf(needle) !== -1 }
+      var sortedMine = mine.slice().sort(byPop)
+      var sortedPop = pop.slice().sort(byPop)
+      push(sortedMine, byName) // owned name matches first
+      push(sortedPop, byName) // then popular name matches
+      if (needle) {
+        push(sortedMine, byAbc, true) // then notation, same ordering, deduped by `seen`
+        push(sortedPop, byAbc, true)
+      }
       return out
     })
   }

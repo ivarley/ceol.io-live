@@ -86,10 +86,14 @@
     }
   }
 
-  // target: {tune_id, thesession_id, name, tune_type}. Returns {finalId, already};
+  // target: {tune_id, thesession_id, name, tune_type}. Returns {finalId, already, applied};
   // throws Error(message) on failure — the aftermath (close/land) is the caller's.
   // NOTE: a thesession target carries the thesession id in BOTH tune_id and
   // thesession_id (the server folds them) — keep that shape.
+  // `already` is not a failure: the tune was on the list before this add. The server
+  // still applies the setting (and notes, when the row had none) that the form
+  // collected and reports them as `applied`, so the landing toast can say so — a
+  // pasted link can't tell you up front that the tune is already yours.
   async function performAdd(target, { status, notes, settingId, overrides }) {
     const tuneId = target.tune_id ?? target.thesession_id
     if (target.thesession_id != null || settingId != null) {
@@ -114,7 +118,7 @@
       })
       const j = await res.json().catch(() => ({}))
       const finalId = j.person_tune?.tune_id ?? j.redirect_to_tune_id ?? tuneId
-      if (res.status === 409) return { finalId, already: true }
+      if (res.status === 409) return { finalId, already: true, applied: j.applied || {} }
       if (!res.ok || !j.success) throw new Error(j.error || 'Could not add the tune.')
       await applyOverrides(finalId, overrides)
       return { finalId, already: false }
@@ -130,14 +134,14 @@
   // default action button is replaced by the footer form (which submits itself).
   async function doQuickAdd(target, name) {
     try {
-      const { finalId, already } = await performAdd(target, {
+      const { finalId, already, applied } = await performAdd(target, {
         status: 'want to learn',
         notes: '',
         settingId: null,
         overrides: [],
       })
       close()
-      ;(already ? onAlready : onAdded)(finalId, name)
+      already ? onAlready(finalId, name, applied) : onAdded(finalId, name)
     } catch (e) {
       searchError = e?.message || 'Could not add the tune. Please try again.'
     } finally {
@@ -171,9 +175,61 @@
     const target = isImport
       ? { tune_id: item.r.tune_id, thesession_id: item.r.tune_id, name, tune_type }
       : { tune_id: data?.tune_id ?? item.r.tune_id, thesession_id: null, name, tune_type }
-    const { finalId, already } = await performAdd(target, { ...vals, settingId: chosenSettingId })
+    const { finalId, already, applied } = await performAdd(target, { ...vals, settingId: chosenSettingId })
     close()
-    ;(already ? onAlready : onAdded)(finalId, name)
+    already ? onAlready(finalId, name, applied) : onAdded(finalId, name)
+  }
+
+  // ---- already-on-the-list actions (the panel that replaces the add form) --------
+  // Both act on the viewer's EXISTING row, keyed by the person_tune_id the preview
+  // payload carries, and both land on the page the way an add does.
+  async function putPersonTune(ptid, body) {
+    const res = await fetch(`/api/my-tunes/${ptid}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify(body),
+    })
+    const j = await res.json().catch(() => ({}))
+    if (!res.ok || !j.success) throw new Error(j.error || 'That change could not be saved.')
+    return j
+  }
+
+  // Adopt the setting the pager is on. Online-only: the server imports the setting's
+  // notation when it isn't in our catalog yet (the pager pages thesession.org's list).
+  async function updateSetting(item, data, chosenSettingId) {
+    const pt = data?.person_tune
+    if (!pt?.person_tune_id || chosenSettingId == null) return
+    if (!navigator.onLine) throw new Error('You are offline. A specific setting can only be saved online.')
+    await putPersonTune(pt.person_tune_id, { setting_id: chosenSettingId })
+    const finalId = data?.tune_id ?? item.r.tune_id
+    close()
+    onAlready(finalId, data?.name ?? item.r.name, { setting_id: chosenSettingId })
+  }
+
+  // "I heard it again": bump the count, leave the setting (and everything else) alone.
+  async function heardAgain(item, data) {
+    const pt = data?.person_tune
+    if (!pt?.person_tune_id) return
+    const finalId = data?.tune_id ?? item.r.tune_id
+    const name = data?.name ?? item.r.name
+    if (!navigator.onLine) {
+      // Offline the op-queue owns it — heard_count is an ABSOLUTE set, so a replay
+      // can't double-count (spec 024's op vocabulary).
+      await submitOp({ type: 'set_heard', tune_id: finalId, heard_count: (pt.heard_count ?? 0) + 1 })
+      close()
+      onAlready(finalId, name, { heard_count: (pt.heard_count ?? 0) + 1 })
+      return
+    }
+    const res = await fetch(`/api/my-tunes/${pt.person_tune_id}/heard`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+    })
+    const j = await res.json().catch(() => ({}))
+    if (!res.ok || !j.success) throw new Error(j.error || 'Could not update the heard count.')
+    close()
+    onAlready(finalId, name, { heard_count: j.heard_count ?? j.new_count })
   }
 </script>
 
@@ -214,11 +270,16 @@
           {#key `${item.remote ? 'ts' : 'l'}:${item.r.tune_id}`}
             <AddTuneForm
               {instruments}
-              onList={!!item.r.on_list}
+              {chosenSettingId}
+              onList={!!(data?.person_tune?.on_list ?? item.r.on_list)}
+              existing={data?.person_tune ?? null}
               onShowExisting={() => {
                 close()
                 onAlready(data?.tune_id ?? item.r.tune_id, data?.name ?? item.r.name)
               }}
+              onCancel={close}
+              onUpdateSetting={() => updateSetting(item, data, chosenSettingId)}
+              onHeardAgain={() => heardAgain(item, data)}
               onSubmit={(vals) => previewSubmit(item, data, chosenSettingId, vals)}
             />
           {/key}

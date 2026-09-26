@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}About Ceol{% endblock %}
+
+{% block content %}
+{# The signed-out "Me" (spec 052 §B17). A visitor who followed a shared link to one
+   session needs two things: a way in, and to know what this place is. That was five
+   hamburger items — Log In or Register, Session Logs, Find a tune, Share, Help — of
+   which Sessions is a tab, Share is a header control, and find-a-tune was never a
+   page. What is left is this. Three rows and a sentence: no bundle, just the shared
+   grouped-row stylesheet. #}
+<div class="about-page">
+  <header class="about-head">
+    {# The logo IS the wordmark, so a heading reading "Ceol" underneath says it
+       twice. The image is the heading. #}
+    <h1 class="about-title">
+      <img class="about-mark" src="{{ url_for('static', filename='images/logo3-1.png') }}" alt="Ceol" height="44">
+    </h1>
+    <p class="about-blurb">
+      A companion to thesession.org for players of Irish traditional music. It keeps
+      track of the tunes you know, the sessions you play at, and what was actually
+      played on the night.
+    </p>
+  </header>
+
+  <div class="kit-group">
+    {% if current_user.is_authenticated %}
+    <a class="kit-field" href="/me" id="about-me">
+      <span class="kit-field-label">Your profile</span>
+      <svg class="kit-chevron kit-chevron--right kit-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 5 16 12 9 19"/></svg>
+    </a>
+    {% else %}
+    <a class="kit-field" href="/login" id="about-login">
+      <span class="kit-field-label">Log in or register</span>
+      <svg class="kit-chevron kit-chevron--right kit-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 5 16 12 9 19"/></svg>
+    </a>
+    {% endif %}
+
+    <a class="kit-field" href="/help" id="about-help">
+      <span class="kit-field-label">How Ceol works</span>
+      <svg class="kit-chevron kit-chevron--right kit-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 5 16 12 9 19"/></svg>
+    </a>
+
+    {# kit-field-wrap: the value is a phrase, not a word, and it would otherwise be
+       cut off rather than wrapped. #}
+    <a class="kit-field kit-field-wrap" href="https://thesession.org" target="_blank" rel="noopener" id="about-thesession">
+      <span class="kit-field-label">thesession.org</span>
+      <span class="kit-field-value">where the tunes come from</span>
+    </a>
+  </div>
+</div>
+
+<style>
+  .about-page { padding: 0 12px 20px; }
+
+  /* Centred, because this is the one screen whose job is to introduce the app
+     rather than to list something. */
+  .about-head {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 8px;
+    padding: 24px 8px 28px;
+  }
+
+
+  .about-title { margin: 0; line-height: 0; }
+
+  .about-blurb {
+    margin: 0;
+    max-width: 34em;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    color: var(--secondary-text);
+  }
+
+  /* The last row points off-site, so its value says where rather than a chevron
+     promising another screen of this app. */
+  #about-thesession .kit-field-value { color: var(--secondary-text); }
+</style>
+{% endblock %}

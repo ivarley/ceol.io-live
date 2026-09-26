@@ -46,6 +46,40 @@ describe('FindTune overlay', () => {
     expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/tunes/search?q=kesh'), expect.anything())
   })
 
+  it('marks results that matched the NOTATION rather than the name', async () => {
+    // The server blends notation matches into the same list; without the mark a search
+    // by notes reads as a list of tunes with no visible reason for being there.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        json: async () => ({
+          success: true,
+          tunes: [
+            { tune_id: 27, name: 'Drowsy Maggie', tune_type: 'Reel', abc_only: true },
+            { tune_id: 55, name: 'Kesh, The', tune_type: 'Jig', abc_only: false },
+          ],
+        }),
+      })
+    )
+    const { component } = render(FindTune)
+    await openAndSearch(component, 'gedbed')
+    const items = document.querySelectorAll('.ft-results .ft-item')
+    expect(items[0].querySelector('.ft-abc')).toBeTruthy()
+    expect(items[1].querySelector('.ft-abc')).toBeFalsy()
+  })
+
+  it('says "opening bars" for an offline notation match, which is incipit-only', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
+    window.CeolOffline = {
+      searchTunes: vi.fn().mockResolvedValue([
+        { tune_id: 27, name: 'Drowsy Maggie', tune_type: 'Reel', abc_only: true, abc_scope: 'incipit' },
+      ]),
+    }
+    const { component } = render(FindTune)
+    await openAndSearch(component, 'gedbed')
+    expect(document.querySelector('.ft-results .ft-item .ft-abc').title).toContain('opening bars')
+  })
+
   it('clicking a result closes the sheet and opens the global drawer view', async () => {
     const { component } = render(FindTune)
     await openAndSearch(component, 'kesh')
@@ -109,6 +143,37 @@ describe('FindTune overlay', () => {
     expect(document.querySelector('.ft-empty .ft-import').getAttribute('href')).toBe(
       'https://thesession.org/tunes/8645'
     )
+  })
+
+  it('sends a link that names a SETTING to the add pane, not the drawer', async () => {
+    // Regression: the drawer has nowhere to put a setting, so picking a resolved link
+    // here used to drop it silently. My Tunes is where a setting can be kept.
+    window.CEOL_AUTHED = true
+    const href = 'https://thesession.org/tunes/55?setting=123#setting123'
+    const nav = { href: '' }
+    const { component } = render(FindTune)
+    // jsdom won't navigate; capture the assignment instead.
+    const origLocation = window.location
+    delete window.location
+    window.location = nav
+    try {
+      await openAndSearch(component, href)
+      expect(document.querySelector('.ft-note').textContent).toContain('#123')
+      await fireEvent.click(document.querySelector('.ft-results .ft-item'))
+      expect(nav.href).toBe('/my-tunes?add=1&q=' + encodeURIComponent(href))
+      expect(window.TuneDetailModal.show).not.toHaveBeenCalled()
+    } finally {
+      window.location = origLocation
+    }
+  })
+
+  it('still opens the drawer for a plain link (no setting) and for name results', async () => {
+    window.CEOL_AUTHED = true
+    const { component } = render(FindTune)
+    await openAndSearch(component, 'https://thesession.org/tunes/55')
+    expect(document.querySelector('.ft-note')).toBeFalsy()
+    await fireEvent.click(document.querySelector('.ft-results .ft-item'))
+    expect(window.TuneDetailModal.show).toHaveBeenCalledWith({ tuneId: 55, tuneName: 'Kesh, The' })
   })
 
   it('shows the no-match row and requires 2+ characters', async () => {

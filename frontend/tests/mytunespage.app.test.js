@@ -77,7 +77,8 @@ describe('My Tunes page view', () => {
     await waitFor(() => expect(container.querySelector('.tune-card[data-tune-id="101"]')).toBeTruthy())
     const card = container.querySelector('.tune-card[data-tune-id="101"]')
     expect(card.getAttribute('data-person-tune-id')).toBe('11')
-    expect(card.querySelector('.status-badge').textContent).toBe('want to learn')
+    // The badge shows the page's wording; the stored value stays 'want to learn'.
+    expect(card.querySelector('.status-badge').textContent).toBe('To Learn')
     expect(container.querySelectorAll('#tunes-grid .tune-card')).toHaveLength(2)
   })
 
@@ -86,7 +87,7 @@ describe('My Tunes page view', () => {
     await waitFor(() => expect(container.querySelector('.tune-card[data-tune-id="101"] .status-badge')).toBeTruthy())
     await fireEvent.click(container.querySelector('.tune-card[data-tune-id="101"] .status-badge'))
     await waitFor(() => {
-      expect(container.querySelector('.tune-card[data-tune-id="101"] .status-badge').textContent).toBe('learning')
+      expect(container.querySelector('.tune-card[data-tune-id="101"] .status-badge').textContent).toBe('Learning')
     })
     const opCall = fetch.mock.calls.find(([url]) => String(url).includes('/api/my-tunes/ops'))
     expect(opCall).toBeTruthy()
@@ -102,11 +103,13 @@ describe('My Tunes page view', () => {
     )
   })
 
-  it('heard + shows the N -> N+1 toast and sends an absolute set_heard', async () => {
+  it('heard + updates the card silently and sends an absolute set_heard', async () => {
     const { container } = render(App, { pageData: payload() })
     await waitFor(() => expect(container.querySelector('.tune-card[data-tune-id="101"] .increment-heard-btn')).toBeTruthy())
     await fireEvent.click(container.querySelector('.tune-card[data-tune-id="101"] .increment-heard-btn'))
-    expect(window.showMessage).toHaveBeenCalledWith('Heard count: 2 → 3', 'success')
+    // No toast (spec 052 §B4). It used to say "Heard count: 2 → 3" beside a card
+    // that had just changed from 2 to 3; the number on the card is the feedback.
+    expect(window.showMessage).not.toHaveBeenCalled()
     await waitFor(() => {
       const opCall = fetch.mock.calls.find(
         ([url, init]) => String(url).includes('/api/my-tunes/ops') && init && JSON.parse(init.body).type === 'set_heard'
@@ -137,6 +140,63 @@ describe('My Tunes page view', () => {
   })
 })
 
+// "What am I learning right now?" is the question the page exists to answer, so the
+// status filter sits in the open. Everything else stays behind the filter drawer.
+describe('the status filter lives outside the filter drawer', () => {
+  const statusBtn = (container, id) => container.querySelector(`.filter-status-row [data-status="${id}"]`)
+
+  it('filters from first paint, with the drawer never opened', async () => {
+    const { container } = render(App, { pageData: payload() })
+    await waitFor(() => expect(container.querySelectorAll('.tune-card')).toHaveLength(2))
+    // Shut, not absent: since Stage 3 this is a kit Toolbar panel, which stays
+    // mounted and animates with a class, because a node that does not exist cannot
+    // animate out. `.open` is what "shut" means now.
+    expect(container.querySelector('#filter-panel').classList.contains('open')).toBe(false)
+
+    await fireEvent.click(statusBtn(container, 'learned'))
+    await waitFor(() => expect(container.querySelectorAll('.tune-card')).toHaveLength(1))
+    expect(container.querySelector('.tune-card').dataset.tuneId).toBe('102')
+    expect(statusBtn(container, 'learned').classList.contains('active')).toBe(true)
+    expect(new URL(window.location).searchParams.get('status')).toBe('learned')
+
+    await fireEvent.click(statusBtn(container, ''))
+    await waitFor(() => expect(container.querySelectorAll('.tune-card')).toHaveLength(2))
+  })
+
+  it('is not duplicated inside the drawer, or by a pill', async () => {
+    const { container } = render(App, { pageData: payload() })
+    await waitFor(() => expect(container.querySelectorAll('.tune-card')).toHaveLength(2))
+    await fireEvent.click(statusBtn(container, 'learned'))
+
+    // A pill stands in for a control you can't see; this one is right there.
+    await waitFor(() => expect(container.querySelectorAll('.tune-card')).toHaveLength(1))
+    expect(container.querySelector('#active-filter-pills')).toBeNull()
+    // ...and the drawer button doesn't claim to be hiding something either.
+    expect(container.querySelector('#filter-panel-toggle').classList.contains('active')).toBe(false)
+
+    await fireEvent.click(container.querySelector('#filter-panel-toggle'))
+    await waitFor(() =>
+      expect(container.querySelector('#filter-panel').classList.contains('open')).toBe(true),
+    )
+    // One status control on the page, and it's the one outside the drawer.
+    expect(container.querySelector('#filter-panel [data-status]')).toBeNull()
+    expect(statusBtn(container, 'learned')).toBeTruthy()
+  })
+
+  it('Clear Filters still resets it, wherever it lives', async () => {
+    const { container } = render(App, { pageData: payload() })
+    await waitFor(() => expect(container.querySelectorAll('.tune-card')).toHaveLength(2))
+    await fireEvent.click(statusBtn(container, 'learned'))
+    await waitFor(() => expect(container.querySelectorAll('.tune-card')).toHaveLength(1))
+
+    await fireEvent.click(container.querySelector('#filter-panel-toggle'))
+    await waitFor(() => expect(container.querySelector('#clear-filters-btn')).toBeTruthy())
+    await fireEvent.click(container.querySelector('#clear-filters-btn'))
+    await waitFor(() => expect(container.querySelectorAll('.tune-card')).toHaveLength(2))
+    expect(statusBtn(container, '').classList.contains('active')).toBe(true)
+  })
+})
+
 describe('drawer status-change notifications (chained tunes)', () => {
   it('updates the matching card for a tune already on the page', async () => {
     const { container } = render(App, { pageData: payload() })
@@ -152,7 +212,7 @@ describe('drawer status-change notifications (chained tunes)', () => {
       person_tune_id: 11,
     })
     await waitFor(() =>
-      expect(container.querySelector('.tune-card[data-tune-id="101"] .status-badge').textContent).toBe('learned')
+      expect(container.querySelector('.tune-card[data-tune-id="101"] .status-badge').textContent).toBe('Learned')
     )
   })
 
@@ -200,7 +260,7 @@ describe('drawer status-change notifications (chained tunes)', () => {
     })
     await waitFor(() => expect(container.querySelector('.tune-card[data-tune-id="999"]')).toBeTruthy())
     expect(container.querySelectorAll('#tunes-grid .tune-card')).toHaveLength(3)
-    expect(container.querySelector('.tune-card[data-tune-id="999"] .status-badge').textContent).toBe('want to learn')
+    expect(container.querySelector('.tune-card[data-tune-id="999"] .status-badge').textContent).toBe('To Learn')
   })
 
   it('the add button opens the bundled-in add pane seeded with the current search', async () => {

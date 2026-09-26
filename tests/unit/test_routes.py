@@ -29,36 +29,75 @@ class TestHomeRoute:
         mock_conn.cursor.return_value = mock_cursor
         mock_get_conn.return_value = mock_conn
 
-        # Authed home issues four queries in order: learning counts (fetchall),
-        # suggested tune (fetchone), upcoming sessions (fetchall), then
-        # in-progress logs (fetchall).
+        # Authed home renders serializers.build_home_payload (spec 052 A2), which
+        # issues five queries in order on a RealDictCursor: learning counts
+        # (fetchall), suggested tune (fetchone), upcoming sessions (fetchall),
+        # in-progress logs (fetchall), then in-progress timestamping (fetchall,
+        # spec 050). Rows are read BY NAME.
         mock_cursor.fetchall.side_effect = [
-            [("learning", 3), ("want to learn", 2)],  # learning counts
-            [("Austin Session", "austin/session", 101,
-              datetime(2023, 8, 15).date(), None, None)],  # upcoming sessions
-            [("Mueller Session", "austin/mueller", 102,
-              datetime(2023, 8, 10).date(), datetime(2023, 8, 12))],  # in-progress logs
+            [{"learn_status": "learning", "n": 3}, {"learn_status": "want to learn", "n": 2}],
+            [{"name": "Austin Session", "path": "austin/session", "session_id": 1,
+              "session_instance_id": 101, "date": datetime(2023, 8, 15).date(),
+              "start_time": None, "end_time": None, "location_name": "The Pub",
+              "log_complete_date": None, "is_active": False,
+              "tunes_logged": 0, "people_here": 0}],  # upcoming sessions
+            [{"name": "Mueller Session", "path": "austin/mueller", "session_id": 2,
+              "session_instance_id": 102, "date": datetime(2023, 8, 10).date(),
+              "last_edit": datetime(2023, 8, 12)}],  # in-progress logs
+            [{"recording_id": 77, "label": "Mueller Night", "name": "Mueller Session",
+              "path": "austin/mueller", "session_instance_id": 102,
+              "date": datetime(2023, 8, 10).date(), "last_edit": datetime(2023, 8, 12),
+              "placed": 4, "tune_count": 11}],  # in-progress timestamping
         ]
-        mock_cursor.fetchone.return_value = (1, "Cooley's", "reel", 9)  # suggested tune
+        mock_cursor.fetchone.return_value = {
+            "tune_id": 1, "name": "Cooley's", "tune_type": "reel", "play_count": 9,
+        }  # suggested tune
 
         with authenticated_user:
             response = client.get("/")
 
         assert response.status_code == 200
-        assert b"Austin Session" in response.data
-        assert b"Continue Logging" in response.data
-        assert b"Mueller Session" in response.data
+
+        # Since §B8 Stage 4 the page is a thin shell: the assertions are about the
+        # PAYLOAD it embeds, not about strings Jinja printed. It used to look for
+        # the card headings "Continue Logging" and "Continue Segmenting" and for
+        # "4 of 11 tunes placed" — all of those are the bundle's words now, and one
+        # of the headings no longer exists at all (the two lists became one section).
+        body = response.data.decode()
+        assert "window.__PAGE_DATA__" in body
+        assert '<div id="home-root"' in body
+
+        payload = json.loads(
+            body.split("window.__PAGE_DATA__ = ", 1)[1].split(";\n", 1)[0].strip().rstrip(";")
+        )
+        assert payload["success"] is True
+        assert payload["learning_count"] == 3
+        assert payload["want_to_learn_count"] == 2
+        assert payload["upcoming_sessions"][0]["name"] == "Austin Session"
+        assert payload["in_progress_logs"][0]["name"] == "Mueller Session"
+        assert payload["in_progress_recordings"][0]["placed"] == 4
+        assert payload["in_progress_recordings"][0]["tune_count"] == 11
+        # ISO 8601, via the JSON provider added in §A4 — never RFC 822.
+        assert payload["upcoming_sessions"][0]["date"] == "2023-08-15"
 
     @patch("web_routes.get_db_connection")
     def test_home_database_error(self, mock_get_conn, client, authenticated_user):
-        """Home handles a database failure gracefully instead of 500ing."""
+        """A database failure is a 500 with a generic page, not a 200.
+
+        This used to assert the opposite — 200 with the exception text in the
+        body. That made every failure invisible: uptime checks, Render's status
+        metrics and the request log all saw a success, so a query that timed out
+        was indistinguishable from a page that rendered. It also echoed raw
+        exception text to the browser.
+        """
         mock_get_conn.side_effect = Exception("Database connection failed")
 
         with authenticated_user:
             response = client.get("/")
 
-        assert response.status_code == 200
-        assert b"Database connection failed" in response.data
+        assert response.status_code == 500
+        # The failure is logged server-side, never leaked to the visitor.
+        assert b"Database connection failed" not in response.data
 
 
 class TestMagicRoute:
@@ -372,12 +411,23 @@ class TestAPIRoutes:
         response = client.get("/api/sessions/data")
         assert response.status_code == 404
 
-    def test_add_session_page(self, client):
-        """Test add session page."""
+    def test_add_session_redirects_to_the_list_with_the_sheet_open(self, client):
+        """Adding a session is a sheet over the sessions list, not a page of its
+        own (spec 052 §B9). The URL survives because help, the hamburger and the
+        admin list all link to it, and people have it bookmarked."""
         response = client.get("/add-session")
 
-        assert response.status_code == 200
-        assert b"session" in response.data.lower()
+        assert response.status_code == 302
+        assert response.headers["Location"] == "/sessions?add=1"
+
+    def test_add_session_carries_acu_through(self, client):
+        """The admin sessions list links with ?acu=false to pre-uncheck "Add me
+        as". Dropping it on the redirect would quietly add the admin to every
+        session they create on somebody else's behalf."""
+        response = client.get("/add-session?acu=false")
+
+        assert response.status_code == 302
+        assert response.headers["Location"] == "/sessions?add=1&acu=false"
 
     @patch("api_routes.requests.get")
     def test_fetch_session_data_normalizes_thesession_types(self, mock_get, client):

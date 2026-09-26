@@ -104,9 +104,9 @@
     background: var(--hover-bg, #f8f9fa);
   }
   :global(.kit-dialog-confirm) {
-    background: var(--primary, #00a1e0);
+    background: var(--primary-fill, #4a8049);
     color: #fff;
-    border: 1px solid var(--primary, #00a1e0);
+    border: 1px solid var(--primary-fill, #4a8049);
   }
   :global(.kit-dialog-confirm.destructive) {
     background: var(--danger, #dc3545);

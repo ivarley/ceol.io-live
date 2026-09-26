@@ -28,13 +28,17 @@ export const sortFunctions = {
 export const MYSTATUS_OPTIONS = ['', 'all', 'not on list', 'want to learn', 'learning', 'learned']
 
 // Filter + sort the repertoire. `filters.search` is lowercased/trimmed; the name
-// match is accent-insensitive via the app-wide AccentUtils when present. The
+// match is accent-insensitive via the app-wide AccentUtils when present. `abcIds` is
+// the set of tune ids whose notation matches a note-shaped query, resolved by the server
+// (shared/abcfilter.svelte.js) since the payload carries no ABC; rows that matched ONLY
+// that way come back tagged `_abcOnly`. Omitting it filters by name exactly as before. The
 // my-tunebook filter reads window.TunebookStatus ('all' colors without filtering).
 // filters.attended keeps only tunes played on nights the viewer checked in to
 // (spec 033 R4 — attended_play_count comes from the serializer, logged-in only).
-export function filterAndSortTunes(allTunes, filters, sort, myStatusInstrument) {
+export function filterAndSortTunes(allTunes, filters, sort, myStatusInstrument, abcIds = null) {
   const tb = typeof window !== 'undefined' ? window.TunebookStatus : null
   const accent = typeof window !== 'undefined' ? window.AccentUtils : null
+  const abcOnly = new Set()
   const filtered = allTunes.filter((tune) => {
     if (filters.search) {
       const searchTuneId = extractTuneId(filters.search)
@@ -43,7 +47,9 @@ export function filterAndSortTunes(allTunes, filters, sort, myStatusInstrument) 
         ? accent.includes(tuneName, filters.search)
         : tuneName.toLowerCase().includes(filters.search)
       const tuneIdMatch = searchTuneId && tune.tune_id === searchTuneId
-      if (!nameMatch && !tuneIdMatch) return false
+      const abcMatch = !!abcIds?.has(tune.tune_id)
+      if (!nameMatch && !tuneIdMatch && !abcMatch) return false
+      if (abcMatch && !nameMatch && !tuneIdMatch) abcOnly.add(tune.tune_id)
     }
     if (filters.type && tune.tune_type !== filters.type) return false
     if (filters.attended && !(tune.attended_play_count > 0)) return false
@@ -60,7 +66,11 @@ export function filterAndSortTunes(allTunes, filters, sort, myStatusInstrument) 
   })
   const sortFn = sortFunctions[sort.type]?.[sort.dir]
   if (sortFn) filtered.sort(sortFn)
-  return filtered
+  // Tag the rows that survived on NOTATION alone, so the card can say why it is here.
+  // Spread only those (the common case returns the original objects untouched).
+  return abcOnly.size
+    ? filtered.map((t) => (abcOnly.has(t.tune_id) ? { ...t, _abcOnly: true } : t))
+    : filtered
 }
 
 export function resultsCountLabel(filteredCount, totalCount) {
@@ -152,10 +162,24 @@ export function instanceUrlId(instance) {
 // The Logs tab's view toggle. "logged" is the default: an instance with nothing
 // logged is a placeholder for a night, not a log, and a long-running session
 // accumulates far more of those than real logs.
+//
+// "Attended" is only offered to someone signed in, because signed out there is no
+// "you" for it to mean anything about. It is where the profile's Attended section
+// went (spec 052 §B1): which nights you turned up to is a fact about THIS session,
+// so it belongs among this session's nights rather than on a page about you.
 export const LOG_VIEW_OPTIONS = [
   { id: 'logged', label: 'Logged' },
   { id: 'all', label: 'All' },
 ]
+
+export function logViewOptions(isLoggedIn) {
+  if (!isLoggedIn) return LOG_VIEW_OPTIONS
+  return [
+    { id: 'logged', label: 'Logged' },
+    { id: 'attended', label: 'Attended' },
+    { id: 'all', label: 'All' },
+  ]
+}
 
 // One instance's fate under the two filters. A tune filter SUPERSEDES the
 // all/logged toggle rather than ANDing with it — every instance where a tune was
@@ -163,6 +187,10 @@ export const LOG_VIEW_OPTIONS = [
 export function keepInstance(instance, mode, tuneInstanceIds) {
   if (tuneInstanceIds) return tuneInstanceIds.has(instance.session_instance_id)
   if (mode === 'logged') return !isEmptyLog(instance)
+  // "Attended" is where the profile's Attended section went (spec 052 §B1). The flag
+  // is the SERVER's answer for the signed-in viewer; signed out it is absent, and the
+  // filter that would set this mode is not offered.
+  if (mode === 'attended') return !!instance.attended
   return true
 }
 
@@ -222,6 +250,28 @@ export function matchLoggedTunes(tunes, query, limit = 8) {
 // Festival day header, e.g. "Sunday, June 1, 2025". Parsed as a LOCAL date —
 // the legacy new Date("YYYY-MM-DD") semantics rendered the previous day west
 // of UTC (same bug class as the admin logs tab).
+// A log row's date block: the weekday over the day-of-month, so a list of nights
+// is scannable without reading a single full date. Split in two because they are
+// styled as two lines, and derived here rather than in the component so the
+// timezone handling stays in one place (parseLocalDate, never new Date(str)).
+export function dowOf(dateStr) {
+  return parseLocalDate(dateStr).toLocaleDateString('en-US', { weekday: 'short' })
+}
+
+export function domOf(dateStr) {
+  return parseLocalDate(dateStr).getDate()
+}
+
+// The date as a row TITLE, for a night with no name of its own. Carries the year
+// only when it is not the current one: inside a 2024 group every row saying 2024
+// is noise, but a row lifted out by a tune filter needs it.
+export function rowDateLabel(dateStr, today = new Date()) {
+  const d = parseLocalDate(dateStr)
+  const opts = { weekday: 'long', month: 'short', day: 'numeric' }
+  if (d.getFullYear() !== today.getFullYear()) opts.year = 'numeric'
+  return d.toLocaleDateString('en-US', opts)
+}
+
 export function festivalDayLabel(dateStr) {
   const dateObj = parseLocalDate(dateStr)
   return dateObj.toLocaleDateString('en-US', {

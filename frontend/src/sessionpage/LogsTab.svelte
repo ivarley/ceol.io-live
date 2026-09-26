@@ -17,16 +17,27 @@
     isEmptyLog,
     instanceUrlId,
     festivalDayLabel,
-    LOG_VIEW_OPTIONS,
+    dowOf,
+    domOf,
+    rowDateLabel,
+    logViewOptions,
     filterInstanceGroups,
     matchLoggedTunes,
     tunePlayLinks,
   } from './logic.js'
-  import { SearchField, Seg } from '../lib/index.js'
+  import { publishHeight } from './sticky.js'
+  import { Row, SearchField, Seg, Toolbar } from '../lib/index.js'
 
   let { active, session, isLoggedIn, onAddInstance } = $props()
 
   const sessionPath = session.path
+
+  // A log's own name wins (spec 047 — a festival night needs one, an ordinary
+  // Tuesday does not). Failing that: at a festival the room identifies it, and in
+  // a year list the date does.
+  const titleOf = (instance) =>
+    instance.location_override ||
+    (isFestival ? session.location_name || 'Session' : rowDateLabel(instance.date))
 
   let loaded = $state(false)
   let loading = $state(false)
@@ -114,6 +125,7 @@
   let inputFocused = $state(false)
   let highlight = $state(0)
   let selectToken = 0 // drops stale instance-id responses when picks come fast
+  let filterOpen = $state(false) // the toolbar's filter panel
 
   const totalInstances = $derived.by(() => {
     if (!data) return 0
@@ -260,9 +272,23 @@
 {/snippet}
 
 {#snippet filterHeader()}
-  <div class="logs-filter-header" id="logs-filter-header">
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="logs-tune-filter" onkeydown={onFilterKey}>
+  <!-- One toolbar, same as the Tunes and People tabs (spec 052 §B8 Stage 3):
+       search, a + to add, and a filter button whose panel expands beneath the
+       line. Logged/All lives in that panel now — it is a filter, and it was
+       taking a third of a phone's toolbar to say so. -->
+  <div class="logs-filter-header" id="logs-filter-header" use:publishHeight={'--logs-toolbar-h'}>
+    <Toolbar
+      styled={false}
+      toolbarClass="filter-top-row"
+      buttonClass="filter-panel-toggle"
+      bind:open={filterOpen}
+      activeCount={viewMode === 'logged' ? 0 : 1}
+      addId={isLoggedIn ? 'add-session-btn' : null}
+      addTitle="Add a log"
+      onAdd={isLoggedIn ? addClick : null}>
+      {#snippet search()}
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div class="logs-tune-filter" onkeydown={onFilterKey}>
       <SearchField
         bind:value={tuneQuery}
         id="logs-tune-filter-input"
@@ -301,20 +327,25 @@
             </li>
           {/each}
         </ul>
-      {:else if dropdownStatus}
-        <div class="logs-tune-options logs-tune-status" id="logs-tune-status">{dropdownStatus}</div>
-      {/if}
-    </div>
-    <Seg
-      options={LOG_VIEW_OPTIONS}
-      value={viewMode}
-      onSelect={(id) => (viewMode = id)}
-      idAttr="data-log-view"
-      styled={false}
-      segClass="filter-button-group logs-view-toggle"
-      optClass="filter-sort-btn"
-      role="group"
-      aria-label="Show all logs or only logged ones" />
+          {:else if dropdownStatus}
+            <div class="logs-tune-options logs-tune-status" id="logs-tune-status">{dropdownStatus}</div>
+          {/if}
+        </div>
+      {/snippet}
+
+      {#snippet filter()}
+        <Seg
+          options={logViewOptions(isLoggedIn)}
+          value={viewMode}
+          onSelect={(id) => (viewMode = id)}
+          idAttr="data-log-view"
+          styled={false}
+          segClass="filter-button-group logs-view-toggle"
+          optClass="filter-sort-btn"
+          role="group"
+          aria-label="Which nights to show" />
+      {/snippet}
+    </Toolbar>
   </div>
   {#if selectedTune || tunesError}
     <div class="logs-filter-note" id="logs-filter-note">
@@ -352,14 +383,7 @@
 {/snippet}
 
 <!-- Logs Tab Content -->
-<div class="tab-content" class:active id="logs-tab" style="padding-left: 10px;">
-  <a href="/help/session-tracking/logs" class="help-icon" title="About session logs" style="float: right; margin: 4px 8px 0 0;">
-    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="12" cy="12" r="10"></circle>
-      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
-      <line x1="12" y1="17" x2="12.01" y2="17"></line>
-    </svg>
-  </a>
+<div class="tab-content" class:active id="logs-tab">
   {#if loadError}
     <div style="text-align: center; padding: 40px;">
       <p style="color: var(--danger, #dc3545);">
@@ -382,91 +406,85 @@
         <p><a href="#add" id="add-session-btn" style="color: var(--primary); text-decoration: none;" onclick={addClick}>Add your first log</a></p>
       {/if}
     </div>
-  {:else if isFestival}
-    {@render filterHeader()}
-    {#if view.sortedKeys.length > 0}
-      <div class="past-instances">
-        <table class="instances-table">
-          {#each view.sortedKeys as dayKey, index (dayKey)}
-            <tbody class="year-section">
-              <tr class="year-header-row">
-                <td colspan="2" class="year-header-cell">
-                  <div class="year-header" data-year={dayKey}>
-                    <div class="year-header-left">
-                      <span class="year-toggle" data-year={dayKey} onclick={() => toggleSection(String(dayKey))}>{collapsed.has(String(dayKey)) ? '▶' : '▼'}</span>
-                      <h3 class="year-title">{festivalDayLabel(view.byKey[dayKey][0].date)}</h3>
-                      {#if index === 0 && isLoggedIn}<span class="year-add-link" id="add-session-btn" data-year={dayKey} onclick={addClick}>Add</span>{/if}
-                    </div>
-                  </div>
-                </td>
-              </tr>
-              {#each view.byKey[dayKey] as instance (instance.session_instance_id)}
-                <tr class="year-content-row" data-year={dayKey} style:display={collapsed.has(String(dayKey)) ? 'none' : null}>
-                  <td class="instance-location-cell">
-                    {@render instanceLink(instance, instance.location_override || session.location_name)}
-                    {@render tuneHits(instance)}
-                  </td>
-                  <td class="instance-time-cell">{instanceTimeLabel(instance)}</td>
-                </tr>
-              {/each}
-            </tbody>
-          {/each}
-        </table>
-      </div>
-    {:else}
-      {@render emptyState()}
-    {/if}
   {:else}
+    <!-- ONE list, whatever the grouping (spec 052 §B8 Stage 3). This replaced three
+         near-identical render paths: a multi-year <table>, a compact single-year <ul>,
+         and a day-grouped <table> for festivals. They differed only in what labels a
+         group and what leads a row, both of which are now one ternary — `view` already
+         handed us sortedKeys/byKey regardless of which grouping was in play.
+
+         The group header stays TAPPABLE to collapse. On a weekly session five years
+         deep (~260 logs) a flat list is a long flick with no way to reach 2019, so
+         sticky headers tell you where you are and collapsing is what gets you
+         somewhere. It is still in-memory only, exactly as before: collapse a year,
+         come back tomorrow, and it is open again. -->
     {@render filterHeader()}
     {#if view.sortedKeys.length > 0}
       <div class="past-instances">
-        <!-- Table vs. compact list keys off the session's OWN year count, not the
-             filtered one: a filter must not flip the page's whole layout. -->
-        {#if data.sorted_years.length > 1}
-          <table class="instances-table">
-            {#each view.sortedKeys as year, index (year)}
-              <tbody class="year-section">
-                <tr class="year-header-row">
-                  <td class="year-header-cell">
-                    <div class="year-header" data-year={year}>
-                      <div class="year-header-left">
-                        <span class="year-toggle" data-year={year} onclick={() => toggleSection(String(year))}>{collapsed.has(String(year)) ? '▶' : '▼'}</span>
-                        <h3 class="year-title">{year}</h3>
-                        {#if index === 0 && isLoggedIn}<span class="year-add-link" id="add-session-btn" data-year={year} onclick={addClick}>Add</span>{/if}
-                        <a href="#view" class="year-view-link" data-year={year}>view {view.byKey[year].length} log{view.byKey[year].length !== 1 ? 's' : ''}</a>
-                      </div>
-                    </div>
-                  </td>
-                </tr>
-                {#each view.byKey[year] as instance (instance.session_instance_id)}
-                  <tr class="year-content-row" data-year={year} style:display={collapsed.has(String(year)) ? 'none' : null}>
-                    <td class="instance-date-cell">
-                      {@render instanceLink(instance, instance.date)}{@render tuneCountSuffix(instance)}
+        <div class="logs-list" id="logs-list">
+          {#each view.sortedKeys as groupKey, index (groupKey)}
+            {@const instances = view.byKey[groupKey]}
+            {@const isCollapsed = collapsed.has(String(groupKey))}
+            <div class="logs-group year-section" data-year={groupKey}>
+              <div class="logs-group-header year-header" data-year={groupKey}>
+                <button
+                  type="button"
+                  class="year-toggle logs-group-toggle"
+                  data-year={groupKey}
+                  aria-expanded={!isCollapsed}
+                  onclick={() => toggleSection(String(groupKey))}>{isCollapsed ? '▶' : '▼'}</button>
+                <h3 class="year-title logs-group-title">
+                  {isFestival ? festivalDayLabel(instances[0].date) : groupKey}
+                </h3>
+                <span class="logs-group-count">{instances.length} log{instances.length !== 1 ? 's' : ''}</span>
+              </div>
+
+              {#if !isCollapsed}
+                {#each instances as instance (instance.session_instance_id)}
+                  {@const live = activeInstanceIds.includes(instance.session_instance_id)}
+                  {@const when = instanceTimeLabel(instance)}
+                  {@const count = tuneCountOf(instance)}
+                  <Row
+                    as="div"
+                    styled={false}
+                    rowClass="logs-row year-content-row{isEmptyLog(instance) ? ' empty-log' : ''}"
+                    data-year={groupKey}
+                    data-instance-id={instance.session_instance_id}>
+                    {#snippet lead()}
+                      <!-- A festival day is named by its header, so repeating the date on
+                           every row would say nothing; the time is what tells them apart. -->
+                      {#if !isFestival}
+                        <span class="logs-date-block">
+                          <span class="logs-date-dow">{dowOf(instance.date)}</span>
+                          <span class="logs-date-dom">{domOf(instance.date)}</span>
+                        </span>
+                      {/if}
+                    {/snippet}
+                    {#snippet body()}
+                      <span class="logs-row-body">
+                        <a
+                          href="/sessions/{sessionPath}/{instanceUrlId(instance)}"
+                          data-instance-id={instance.session_instance_id}
+                          class="logs-row-title{isEmptyLog(instance) ? ' empty-log' : ''}">
+                          {#if live}
+                            <span class="session-instance-link"><span>{titleOf(instance)}</span><span class="active-now-badge"></span></span>
+                          {:else}{titleOf(instance)}{/if}
+                        </a>
+                        <span class="logs-row-sub">
+                          <!-- The separator is an expression, not literal whitespace:
+                               Svelte trims text at a block boundary, so " · " written
+                               inline collapses and the two facts run together. -->
+                          {#if when}{when}{/if}{#if when && count}{' · '}{/if}{#if count}<span class="log-tune-count">{count} tune{count !== 1 ? 's' : ''} logged</span>{/if}
+                        </span>
+                      </span>
                       {@render tuneHits(instance)}
-                    </td>
-                  </tr>
+                    {/snippet}
+                  </Row>
                 {/each}
-              </tbody>
-            {/each}
-          </table>
-        {:else}
-          <!-- Single year view (compact) -->
-          {#each view.sortedKeys as year (year)}
-            <div style="padding-left: 10px;">
-              <h3>
-                {year}{#if isLoggedIn}<span class="year-add-link" id="add-session-btn" data-year={year} style="margin-left: 15px; font-size: 0.6em;" onclick={addClick}>Add</span>{/if}
-              </h3>
-              <ul style="list-style: none; padding: 0;">
-                {#each view.byKey[year] as instance (instance.session_instance_id)}
-                  <li style="margin-bottom: 8px;">
-                    {@render instanceLink(instance, instance.date)}{@render tuneCountSuffix(instance)}
-                    {@render tuneHits(instance)}
-                  </li>
-                {/each}
-              </ul>
+              {/if}
             </div>
           {/each}
-        {/if}
+        </div>
       </div>
     {:else}
       {@render emptyState()}

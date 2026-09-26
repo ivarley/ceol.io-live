@@ -9,9 +9,11 @@ from flask import request, jsonify
 from flask_login import current_user
 from typing import Optional, Dict, Any
 from functools import wraps
+from models.person_tune import PersonTune
 from services.person_tune_service import PersonTuneService, UNSET, normalize_tags
 from services.thesession_sync_service import ThesessionSyncService
-from database import get_db_connection, get_current_user_id, normalize_quotes, normalize_quotes_sql
+from database import (get_db_connection, get_current_user_id, normalize_quotes,
+                      normalize_quotes_sql, ABC_MATCH_SQL, abc_search_terms)
 import base64
 
 
@@ -104,6 +106,61 @@ def _person_tune_detail_response(person_tune_id: int) -> Optional[Dict[str, Any]
         return build_person_tune_detail(conn, person_tune_id)
     finally:
         conn.close()
+
+
+def _cache_setting_if_needed(tune_id: int, setting_id, user_id) -> None:
+    """Make sure an explicitly chosen setting is in the local tune_setting cache.
+    The deep-search preview pages settings straight off thesession.org (the backfill),
+    so the one the person picked is often one we've never imported."""
+    if not setting_id:
+        return
+    from api_routes import cache_default_tune_setting
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT setting_id FROM tune_setting WHERE setting_id = %s", (setting_id,))
+        if not cur.fetchone():
+            cache_default_tune_setting(tune_id, None, user_id, sync=True, target_setting_id=setting_id)
+    finally:
+        conn.close()
+
+
+def _apply_to_existing_person_tune(person_id: int, tune_id: int, setting_id, notes, user_id) -> Dict[str, Any]:
+    """Apply the EXPLICIT parts of an add request to a person_tune that already exists,
+    and report what changed as {"setting_id": <id>} / {"notes": true}.
+
+    Only what the caller actually asked for is touched, and the two fields have
+    deliberately different rules:
+      - setting_id: applied even over an existing one. Picking a setting is an explicit,
+        cheap-to-redo choice, and the caller just pointed at this one.
+      - notes: applied only when the existing row has none. Free text is lossy to
+        overwrite, so an existing note wins and the caller keeps theirs on screen.
+    """
+    applied: Dict[str, Any] = {}
+    existing = person_tune_service.get_person_tune_by_person_and_tune(person_id, tune_id)
+    if not existing:
+        return applied
+
+    if setting_id and setting_id != existing.setting_id:
+        _cache_setting_if_needed(tune_id, setting_id, user_id)
+        ok, _msg, _pt = person_tune_service.update_person_tune(
+            person_tune_id=existing.person_tune_id,
+            setting_id=setting_id,
+            user_id=user_id,
+        )
+        if ok:
+            applied["setting_id"] = setting_id
+
+    if notes and not (existing.notes or "").strip():
+        ok, _msg, _pt = person_tune_service.update_person_tune(
+            person_tune_id=existing.person_tune_id,
+            notes=notes,
+            user_id=user_id,
+        )
+        if ok:
+            applied["notes"] = True
+
+    return applied
 
 
 @person_tune_login_required
@@ -442,31 +499,29 @@ def add_my_tune():
 
         if not success:
             if "already exists" in message:
-                return jsonify({
+                # The tune is already on the list, so there is nothing to CREATE — but the
+                # caller still asked for a specific setting (and maybe notes), and the add
+                # surfaces can't always tell you the tune is already there (a pasted
+                # thesession.org link resolves to a synthetic result with no on-list flag).
+                # Dropping the request on the floor loses exactly what the user configured,
+                # so apply it to the existing row and say what was applied.
+                applied = _apply_to_existing_person_tune(person_id, tune_id, setting_id, notes, user_id)
+                existing = person_tune_service.get_person_tune_by_person_and_tune(person_id, tune_id)
+                body = {
                     "success": False,
-                    "error": message
-                }), 409  # Conflict
+                    "error": message,
+                    "applied": applied,
+                }
+                if existing:
+                    body["person_tune"] = _person_tune_detail_response(existing.person_tune_id)
+                return jsonify(body), 409  # Conflict
             else:
                 return jsonify({
                     "success": False,
                     "error": message
                 }), 400
 
-        # If a specific setting_id was provided, ensure it's cached
-        if setting_id:
-            from api_routes import cache_default_tune_setting
-            conn_check = get_db_connection()
-            try:
-                cur_check = conn_check.cursor()
-                cur_check.execute(
-                    "SELECT setting_id FROM tune_setting WHERE setting_id = %s",
-                    (setting_id,)
-                )
-                if not cur_check.fetchone():
-                    # Setting not cached yet - cache it now
-                    cache_default_tune_setting(tune_id, None, user_id, sync=True, target_setting_id=setting_id)
-            finally:
-                conn_check.close()
+        _cache_setting_if_needed(tune_id, setting_id, user_id)
 
         # Build response with tune details via the shared serializer
         response_data = _person_tune_detail_response(person_tune.person_tune_id)
@@ -619,6 +674,12 @@ def update_person_tune(person_tune_id):
                     "success": False,
                     "error": message
                 }), 400
+
+        # A setting picked from the preview's pager is often one we've never imported
+        # (the pager pages thesession.org's full list), so cache its ABC — otherwise the
+        # id saves but the notation that made you pick it can't be drawn.
+        if setting_id is not UNSET and setting_id:
+            _cache_setting_if_needed(person_tune.tune_id, setting_id, user_id)
 
         # Build response with tune details via the shared serializer
         response_data = _person_tune_detail_response(person_tune.person_tune_id)
@@ -805,11 +866,13 @@ def my_tunes_op():
                 learn_status = data.get("learn_status") or "want to learn"
                 if learn_status not in ("want to learn", "learning", "learned"):
                     return jsonify({"success": False, "error": "invalid learn_status"}), 400
+                # Same starting heard_count the POST path gives a new row — an add is
+                # itself a hearing (PersonTune.DEFAULT_HEARD_COUNT).
                 cur.execute(
                     """INSERT INTO person_tune (person_id, tune_id, learn_status, heard_count, created_by_user_id)
-                       VALUES (%s, %s, %s, 0, %s)
+                       VALUES (%s, %s, %s, %s, %s)
                        ON CONFLICT (person_id, tune_id) DO NOTHING""",
-                    (person_id, tune_id, learn_status, user_id),
+                    (person_id, tune_id, learn_status, PersonTune.DEFAULT_HEARD_COUNT, user_id),
                 )
             elif op_type == "set_status":
                 learn_status = data.get("learn_status")
@@ -1130,6 +1193,13 @@ def search_tunes():
         # Soft type preference (the type of the set you're logging into): matching-type
         # tunes sort above other types. None => no effect.
         prefer_type = (request.args.get('prefer_type') or '').strip() or None
+        # Search mode, matching the deep search's vocabulary (live_logging_routes.
+        # _parse_deep_search_args): 'mixed' blends name + notation, 'name'/'abc' narrow to
+        # one. No caller passes it yet -- the overlay relies on the 'mixed' default -- but
+        # the two searches answering the same `mode` is what keeps them interchangeable.
+        mode = (request.args.get('mode') or '').strip().lower()
+        if mode not in ('name', 'abc', 'mixed'):
+            mode = 'mixed'
 
         conn = get_db_connection()
         try:
@@ -1139,7 +1209,8 @@ def search_tunes():
             select_fields = ["t.tune_id", "t.name", "t.tune_type", "t.tunebook_count_cached"]
             joins = []
             order_by_fields = []
-            query_params = []
+            query_params = []   # JOIN params
+            select_params = []  # SELECT-clause params (abc_only, match_priority, type_pref)
 
             # Add person_tune join if person_id provided
             if person_id:
@@ -1161,15 +1232,48 @@ def search_tunes():
                 if not person_id:  # Only add if not already prioritizing by person_tune
                     order_by_fields.append("CASE WHEN st.session_id IS NOT NULL THEN 1 ELSE 0 END")
 
-            # Build match priority case (accent + smart-quote insensitive)
+            # Notation (ABC) blend. Same rules as the deep search and the abc-filter
+            # endpoint -- abc_search_terms owns the decision, so a note-shaped query
+            # behaves the same here as it does in the live logger's deep search. A
+            # pasted thesession.org link is a POINTER, not a query, so it never blends.
+            use_abc, abc_pattern = (False, None) if ref_tune_id is not None \
+                else abc_search_terms(query, mode)
+            use_name = ref_tune_id is not None or mode in ("name", "mixed")
+
             _nm = f"LOWER(unaccent({normalize_quotes_sql('t.name')}))"
-            select_fields.append(f"""CASE
-                           WHEN {_nm} = LOWER(unaccent(%s)) THEN 1
-                           WHEN {_nm} LIKE LOWER(unaccent(%s)) THEN 2
-                           ELSE 3
-                       END AS match_priority""")
+            name_like = f"%{query}%"
+
+            # abc_only: this row matched the notation but NOT the name, so the client can
+            # badge it as a notation hit rather than a puzzling name result.
+            if use_abc and use_name:
+                select_fields.append(f"({ABC_MATCH_SQL} AND NOT ({_nm} LIKE LOWER(unaccent(%s)))) AS abc_only")
+                select_params.extend([abc_pattern, name_like])
+            elif use_abc:
+                select_fields.append("TRUE AS abc_only")
+            else:
+                select_fields.append("FALSE AS abc_only")
+
+            # Build match priority case (accent + smart-quote insensitive). With notation
+            # blended in, rows can qualify WITHOUT a name match, so the "contains" tier
+            # becomes explicit and notation-only rows fall to the bottom tier.
+            if use_abc and use_name:
+                select_fields.append(f"""CASE
+                               WHEN {_nm} = LOWER(unaccent(%s)) THEN 1
+                               WHEN {_nm} LIKE LOWER(unaccent(%s)) THEN 2
+                               WHEN {_nm} LIKE LOWER(unaccent(%s)) THEN 3
+                               ELSE 4
+                           END AS match_priority""")
+                select_params.extend([query, f"{query}%", name_like])
+            else:
+                select_fields.append(f"""CASE
+                               WHEN {_nm} = LOWER(unaccent(%s)) THEN 1
+                               WHEN {_nm} LIKE LOWER(unaccent(%s)) THEN 2
+                               ELSE 3
+                           END AS match_priority""")
+                select_params.extend([query, f"{query}%"])
             # Soft type preference (matching the set's type sorts first)
             select_fields.append("CASE WHEN t.tune_type = %s THEN 0 ELSE 1 END AS type_pref")
+            select_params.append(prefer_type)
 
             # Build final query
             join_clause = " ".join(joins) if joins else ""
@@ -1182,15 +1286,28 @@ def search_tunes():
 
             # An id/URL query matches exactly one tune (its merge target if it was merged
             # away — a pasted permalink for a merged tune should land on the survivor);
-            # everything else is the name LIKE.
+            # everything else is the name LIKE, optionally OR'd with the notation match.
+            where_params = []
             if ref_tune_id is not None:
                 from api_routes import follow_tune_redirect
                 ref_tune_id, _redirected_from = follow_tune_redirect(cur, ref_tune_id)
                 where_sql = "t.tune_id = %s"
-                where_param = ref_tune_id
+                where_params.append(ref_tune_id)
             else:
-                where_sql = f"LOWER(unaccent({normalize_quotes_sql('t.name')})) LIKE LOWER(unaccent(%s))"
-                where_param = f"%{query}%"
+                where_clauses = []
+                if use_name:
+                    where_clauses.append(f"{_nm} LIKE LOWER(unaccent(%s))")
+                    where_params.append(name_like)
+                if use_abc:
+                    where_clauses.append(ABC_MATCH_SQL)
+                    where_params.append(abc_pattern)
+                if not where_clauses:
+                    # mode='abc' on something that normalizes to nothing (e.g. a query
+                    # that is only a chord symbol): no notation to match, and name search
+                    # was excluded by the mode. Answer honestly rather than emit `WHERE ()`.
+                    return jsonify({"success": True, "tunes": [], "count": 0,
+                                    "query_tune_id": None}), 200
+                where_sql = "(" + " OR ".join(where_clauses) + ")"
 
             sql = f"""
                 SELECT {select_clause}
@@ -1202,35 +1319,33 @@ def search_tunes():
                 LIMIT %s
             """
 
-            # Build final parameter list in order of appearance in SQL:
-            # 1. query params for CASE statement (in SELECT)
-            # 2. query_params for JOINs (person_id, session_id)
-            # 3. query param for WHERE clause
-            # 4. limit param
-            final_params = [query, f"{query}%", prefer_type] + query_params + [where_param, limit]
-            cur.execute(sql, final_params)
+            # Parameter order follows the SQL text: SELECT clause, then the JOINs, then
+            # the WHERE, then LIMIT.
+            cur.execute(sql, select_params + query_params + where_params + [limit])
 
-            rows = cur.fetchall()
-
+            # Read results by COLUMN NAME, not position: the SELECT list is assembled
+            # conditionally, and the old positional mapping ("session_idx = 6 if person_id
+            # else 4") silently mis-maps the moment another optional column is added.
+            cols = [d[0] for d in cur.description]
             tunes = []
-            for row in rows:
+            for row in cur.fetchall():
+                r = dict(zip(cols, row))
                 tune_data = {
-                    'tune_id': row[0],
-                    'name': row[1],
-                    'tune_type': row[2],
-                    'tunebook_count': row[3]
+                    'tune_id': r['tune_id'],
+                    'name': r['name'],
+                    'tune_type': r['tune_type'],
+                    'tunebook_count': r['tunebook_count_cached'],
+                    'abc_only': bool(r['abc_only']),
                 }
 
                 # Add person_tune fields if requested
                 if person_id:
-                    tune_data['in_person_tune'] = bool(row[4])
-                    tune_data['learn_status'] = row[5] if row[4] else None
+                    tune_data['in_person_tune'] = bool(r['in_person_tune'])
+                    tune_data['learn_status'] = r['learn_status'] if r['in_person_tune'] else None
 
                 # Add session_tune field if requested
                 if session_id:
-                    # Index depends on whether person_id was included
-                    session_idx = 6 if person_id else 4
-                    tune_data['in_session_tune'] = bool(row[session_idx])
+                    tune_data['in_session_tune'] = bool(r['in_session_tune'])
 
                 tunes.append(tune_data)
 
@@ -1252,6 +1367,66 @@ def search_tunes():
             "success": False,
             "error": f"Error searching tunes: {str(e)}"
         }), 500
+
+
+@public_api  # session pages are publicly viewable, so their Tunes tab must filter logged out
+def abc_filter_tunes():
+    """
+    POST /api/tunes/abc-filter  ->  {"q": "...", "tune_ids": [...]}
+
+    Which of THESE tunes match this notation query? Returns {"tune_ids": [...]}.
+
+    Three screens filter a list they have already loaded -- My Tunes, a session's Tunes
+    tab, the admin session-tunes tab. Name matching happens in the browser against data
+    it already holds; notation matching cannot, because the full ABC is far too large to
+    ship with the page (a 300-tune list would gain 150-250KB). So the client sends the
+    ids it is showing and gets back the subset whose notation matches, then unions that
+    into the same filter pass. One endpoint for all three: the caller already knows its
+    own list, so there is no scope to model, and no per-surface auth story.
+
+    Unauthenticated by design. It reveals only which PUBLIC catalog tunes match public
+    catalog notation, and only among ids the caller supplied -- nothing it could not
+    learn from the tune pages themselves.
+    """
+    try:
+        data = request.get_json(silent=True) or {}
+        q = (data.get("q") or "").strip()
+        if len(q) > 200:
+            return jsonify({"success": False, "error": "Query too long"}), 400
+
+        tune_ids = data.get("tune_ids") or []
+        if not isinstance(tune_ids, list):
+            return jsonify({"success": False, "error": "tune_ids must be a list"}), 400
+        if len(tune_ids) > 2000:
+            return jsonify({"success": False, "error": "Too many tune_ids (max 2000)"}), 400
+        try:
+            tune_ids = [int(t) for t in tune_ids]
+        except (TypeError, ValueError):
+            return jsonify({"success": False, "error": "tune_ids must be integers"}), 400
+
+        # Ordinary name typing costs nothing: if the query is not note-shaped (or is too
+        # short to discriminate), say "no notation matches" without touching the database.
+        use_abc, pattern = abc_search_terms(q)
+        if not use_abc or not tune_ids:
+            return jsonify({"success": True, "tune_ids": []}), 200
+
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT DISTINCT ts.tune_id
+                FROM tune_setting ts
+                WHERE ts.tune_id = ANY(%s)
+                  AND abc_search_key(ts.abc) LIKE %s
+                """,
+                (tune_ids, pattern),
+            )
+            return jsonify({"success": True, "tune_ids": [r[0] for r in cur.fetchall()]}), 200
+        finally:
+            conn.close()
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Error matching notation: {str(e)}"}), 500
 
 
 @person_tune_login_required

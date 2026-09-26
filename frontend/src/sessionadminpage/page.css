@@ -100,7 +100,8 @@
 
 .form-control:focus {
     border-color: var(--primary);
-    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    /* the blue that went away when the accent turned green */
+    box-shadow: 0 0 0 0.2rem rgba(101, 180, 100, 0.25);
 }
 
 /* Form select styling */
@@ -132,7 +133,8 @@
 .form-select:focus {
     border-color: var(--primary);
     outline: 0;
-    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    /* the blue that went away when the accent turned green */
+    box-shadow: 0 0 0 0.2rem rgba(101, 180, 100, 0.25);
 }
 
 .people-filter-select {
@@ -223,15 +225,15 @@
 }
 
 .weekday-btn:hover {
-    background-color: var(--primary);
+    background-color: var(--primary-fill);
     color: white;
-    border-color: var(--primary);
+    border-color: var(--primary-fill);
 }
 
 .weekday-btn.active {
-    background-color: var(--primary);
+    background-color: var(--primary-fill);
     color: white;
-    border-color: var(--primary);
+    border-color: var(--primary-fill);
 }
 
 .nth-occurrence-checkboxes {
@@ -285,6 +287,13 @@
 .tune-link:hover {
     color: var(--primary);
     text-decoration: underline;
+}
+
+/* This row is in the results because its NOTATION matched the search, not its name.
+   Without the mark, a search by notes reads as a list of unrelated tunes. */
+.abc-only-badge {
+    color: #e8d28a;
+    margin-left: 4px;
 }
 @media (max-width: 768px) {
     #tunes-table {
@@ -495,13 +504,13 @@
 }
 
 .instance-action-btn-primary {
-    background-color: var(--primary);
+    background-color: var(--primary-fill);
     color: white !important;
     text-decoration: none;
 }
 
 .instance-action-btn-primary:hover {
-    background-color: var(--modal-primary-dark, #0056b3);
+    background-color: var(--primary-fill-hover, #437342);
     color: white !important;
 }
 
@@ -512,7 +521,7 @@
 }
 
 .instance-action-btn-secondary:hover {
-    background-color: var(--primary);
+    background-color: var(--primary-fill);
     color: white;
 }
 

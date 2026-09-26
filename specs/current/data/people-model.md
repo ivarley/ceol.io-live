@@ -64,6 +64,14 @@ A person's relationship to a session (spec 034). Four orthogonal fields, each wi
   inferred; check-in does not un-archive. One-sided: the person still sees the session as
   theirs.
 - `is_admin` - Session admin (can edit session, manage attendance, confirm/archive people)
+- `can_manage_recordings` - May upload, delete and timestamp **this session's** audio
+  (spec 050, schema/053). Default false, and **only takes effect together with `is_admin`** —
+  the check is `is_admin AND can_manage_recordings` everywhere, so "who can do this here" stays
+  answerable from the session's admin list rather than from every row. Granted by a **system
+  admin only**, one person and one session at a time: it hands out a tool that writes to object
+  storage and can delete audio along with the hand-placed tune timestamps on it, so it is not
+  something a session admin can pass onward. Grants nothing on any other session's recordings,
+  and nothing on the site-wide `/admin/recordings` index.
 
 There is no stored "regular" flag. **Regular-ness is computed** from actual attendance
 (distinct `attendance='yes'` instances in a trailing 6-month window, then lifetime, then
@@ -97,6 +105,12 @@ Personal tune learning tracking (the instrument-agnostic / "auto instruments" st
 - person_tune_id, person_id, tune_id
 - `learn_status` VARCHAR(20) - "want to learn" / "learning" / "learned" (spaces, CHECK-constrained)
 - `heard_count`, `learned_date` (auto-set by trigger when status crosses to/from 'learned')
+  - `heard_count` starts at **1** on a new row (`PersonTune.DEFAULT_HEARD_COUNT`, mirrored
+    by the ops endpoint's `add` and by the client's optimistic offline rows in
+    `frontend/src/shared/persontune.js`): adding a tune is itself a hearing, so 0 keeps
+    its real meaning — on the list, never heard since. The thesession.org tunebook sync
+    is the deliberate exception: it MIRRORS an external tunebook rather than recording a
+    hearing, so its bulk insert leaves the column at the schema default of 0.
 - notes - Personal notes
 - UNIQUE(person_id, tune_id)
 

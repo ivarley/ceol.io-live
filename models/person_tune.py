@@ -20,6 +20,12 @@ class PersonTune:
     # Valid learning status values
     VALID_LEARN_STATUSES = {'want to learn', 'learning', 'learned'}
     DEFAULT_LEARN_STATUS = 'want to learn'
+    # Putting a tune on your list is itself evidence you heard it — nobody adds a tune
+    # they have never heard — so a new row starts at one, not zero. Zero is reserved
+    # for what it actually means: on the list, but not heard since (the "never heard"
+    # stat, and the bottom of the heard sort). The row loaders always pass an explicit
+    # heard_count, so this default only ever applies to a brand-new row.
+    DEFAULT_HEARD_COUNT = 1
     
     def __init__(
         self,
@@ -27,7 +33,7 @@ class PersonTune:
         person_id: Optional[int] = None,
         tune_id: Optional[int] = None,
         learn_status: str = DEFAULT_LEARN_STATUS,
-        heard_count: int = 0,
+        heard_count: int = DEFAULT_HEARD_COUNT,
         learned_date: Optional[datetime] = None,
         notes: Optional[str] = None,
         setting_id: Optional[int] = None,

@@ -65,7 +65,9 @@
       .then((response) => response.json())
       .then((data) => {
         if (data.success) {
-          toast(data.message, 'success')
+          // No toast (spec 052 §B4): the next line navigates to the instance that was
+          // just created, so the confirmation was a banner shown for one frame over a
+          // page on its way out.
           close()
           // Redirect to the new session instance in edit mode; the id-based URL
           // is unambiguous when several instances share a date.

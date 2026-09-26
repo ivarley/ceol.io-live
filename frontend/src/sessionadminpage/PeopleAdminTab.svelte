@@ -307,8 +307,8 @@
     color: var(--primary);
   }
   .people-select-btn.active {
-    background: var(--primary);
-    border-color: var(--primary);
+    background: var(--primary-fill);
+    border-color: var(--primary-fill);
     color: #fff;
   }
   .people-actions {
@@ -339,8 +339,8 @@
   .pa-btn:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
   .pa-btn:disabled { opacity: 0.45; cursor: default; }
   .pa-btn-primary:not(:disabled) {
-    background: var(--primary);
-    border-color: var(--primary);
+    background: var(--primary-fill);
+    border-color: var(--primary-fill);
     color: #fff;
   }
   .pa-btn-primary:hover:not(:disabled) { color: #fff; opacity: 0.9; }

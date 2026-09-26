@@ -7,6 +7,7 @@ from flask import (
     session,
     jsonify,
     make_response,
+    current_app,
 )
 import random
 import bcrypt
@@ -14,6 +15,7 @@ from flask_login import login_user, logout_user, login_required, current_user
 import datetime
 from datetime import timedelta
 import re
+from urllib.parse import urlencode
 
 # Import from local modules
 from database import get_db_connection, save_to_history, get_current_user_id
@@ -42,145 +44,43 @@ from email_utils import (
 from recurrence_utils import to_human_readable
 
 
+def _page_error():
+    """Log an unexpected page-render failure and return a 500 error page.
+
+    These handlers used to `return f"Database connection failed: {e}"`, which
+    sent the raw exception text to the browser with a 200 status. That made
+    every failure look like a success to the request log, to uptime checks and
+    to Render's metrics — a query that timed out was indistinguishable from a
+    page that rendered. Log it and return a real 500.
+
+    render_error_page is imported here rather than at module scope because app
+    imports this module.
+    """
+    from app import render_error_page
+
+    current_app.logger.exception("page render failed")
+    return render_error_page("Something went wrong loading this page.", 500)
+
+
 def home():
+    """The home page. Signed in, it renders serializers.build_home_payload — the
+    same dict GET /api/home returns (spec 052 A2) — so the two can't drift."""
     try:
-        if current_user.is_authenticated:
-            from timezone_utils import get_today_in_timezone
-
-            conn = get_db_connection()
-            cur = conn.cursor()
-            person_id = current_user.person_id
-
-            # Learning counts
-            cur.execute(
-                """
-                SELECT learn_status, COUNT(*)
-                FROM person_tune
-                WHERE person_id = %s AND learn_status IN ('learning', 'want to learn')
-                GROUP BY learn_status
-                """,
-                (person_id,),
-            )
-            learning_counts = dict(cur.fetchall())
-            learning_count = learning_counts.get("learning", 0)
-            want_to_learn_count = learning_counts.get("want to learn", 0)
-
-            # Suggested tune: most played at user's sessions (spec 033 R3 — member
-            # sessions only, a visited session isn't "yours"), not already on their list
-            cur.execute(
-                """
-                SELECT t.tune_id, t.name, t.tune_type, COUNT(sit.session_instance_tune_id) AS play_count
-                FROM session_instance_tune sit
-                JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
-                JOIN session_person sp ON si.session_id = sp.session_id
-                    AND sp.person_id = %s AND sp.relationship = 'member'
-                JOIN tune t ON sit.tune_id = t.tune_id
-                WHERE sit.tune_id IS NOT NULL
-                  AND sit.deleted = FALSE AND sit.record_type <> 'break'
-                  AND t.redirect_to_tune_id IS NULL
-                  AND NOT EXISTS (
-                    SELECT 1 FROM person_tune pt WHERE pt.person_id = %s AND pt.tune_id = sit.tune_id
-                  )
-                GROUP BY t.tune_id, t.name, t.tune_type, t.tunebook_count_cached
-                ORDER BY play_count DESC, t.tunebook_count_cached DESC
-                LIMIT 1
-                """,
-                (person_id, person_id),
-            )
-            suggested_tune_row = cur.fetchone()
-            suggested_tune = None
-            if suggested_tune_row:
-                suggested_tune = {
-                    "tune_id": suggested_tune_row[0],
-                    "name": suggested_tune_row[1],
-                    "tune_type": suggested_tune_row[2],
-                }
-
-            # Upcoming sessions this week (Monday-Sunday in user's timezone)
-            today = get_today_in_timezone(current_user.timezone or "UTC")
-            monday = today - timedelta(days=today.weekday())
-            sunday = monday + timedelta(days=6)
-
-            cur.execute(
-                """
-                SELECT s.name, s.path, si.session_instance_id, si.date, si.start_time,
-                       si.log_complete_date
-                FROM session_person sp
-                JOIN session s ON sp.session_id = s.session_id
-                JOIN session_instance si ON s.session_id = si.session_id
-                WHERE sp.person_id = %s AND sp.relationship = 'member'
-                  AND si.date BETWEEN %s AND %s
-                  AND si.is_cancelled = FALSE
-                ORDER BY si.date, si.start_time
-                """,
-                (person_id, monday, sunday),
-            )
-            upcoming_rows = cur.fetchall()
-            upcoming_sessions = [
-                {
-                    "name": row[0],
-                    "path": row[1],
-                    "session_instance_id": row[2],
-                    "date": row[3],
-                    "start_time": row[4],
-                    "log_complete_date": row[5],
-                }
-                for row in upcoming_rows
-            ]
-
-            # In-progress logs: instances the user edited in the last 30 days
-            # that aren't marked complete and still have at least one tune logged
-            cur.execute(
-                """
-                SELECT s.name, s.path, si.session_instance_id, si.date,
-                       MAX(sit.last_modified_date) AS last_edit
-                FROM session_instance_tune sit
-                JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
-                JOIN session s ON si.session_id = s.session_id
-                WHERE sit.last_modified_user_id = %s
-                  AND sit.last_modified_date >= (NOW() AT TIME ZONE 'UTC') - INTERVAL '30 days'
-                  AND si.log_complete_date IS NULL
-                  AND si.is_cancelled = FALSE
-                  AND EXISTS (
-                    SELECT 1 FROM session_instance_tune sit2
-                    WHERE sit2.session_instance_id = si.session_instance_id
-                      AND sit2.deleted = FALSE
-                      AND sit2.record_type <> 'break'
-                  )
-                GROUP BY s.name, s.path, si.session_instance_id, si.date
-                ORDER BY last_edit DESC
-                LIMIT 3
-                """,
-                (current_user.user_id,),
-            )
-            in_progress_logs = [
-                {
-                    "name": row[0],
-                    "path": row[1],
-                    "session_instance_id": row[2],
-                    "date": row[3],
-                    "last_edit": row[4],
-                }
-                for row in cur.fetchall()
-            ]
-
-            cur.close()
-            conn.close()
-
-            return render_template(
-                "home.html",
-                learning_count=learning_count,
-                want_to_learn_count=want_to_learn_count,
-                suggested_tune=suggested_tune,
-                upcoming_sessions=upcoming_sessions,
-                in_progress_logs=in_progress_logs,
-                current_year=today.year,
-            )
-        else:
+        if not current_user.is_authenticated:
             return render_template("home.html")
+        from serializers import build_home_payload
 
-    except Exception as e:
-        return f"Database connection failed: {str(e)}"
+        conn = get_db_connection()
+        try:
+            payload = build_home_payload(conn, current_user)
+        finally:
+            conn.close()
+        # One `payload` rather than **payload: the shell embeds it whole as
+        # __PAGE_DATA__ for the Svelte bundle (spec 052 §B8 Stage 4) instead of
+        # picking the keys apart in Jinja.
+        return render_template("home.html", payload=payload)
+    except Exception:
+        return _page_error()
 
 
 def magic():
@@ -240,8 +140,8 @@ def magic():
             current_type=tune_type,
         )
 
-    except Exception as e:
-        return f"Database connection failed: {str(e)}"
+    except Exception:
+        return _page_error()
 
 
 def db_test():
@@ -253,8 +153,8 @@ def db_test():
         cur.close()
         conn.close()
         return render_template("db_test.html", records=records)
-    except Exception as e:
-        return f"Database connection failed: {str(e)}"
+    except Exception:
+        return _page_error()
 
 
 def sessions():
@@ -277,8 +177,8 @@ def sessions():
             conn.close()
 
         return render_template("sessions.html", payload=payload, is_logged_in=current_user.is_authenticated)
-    except Exception as e:
-        return f"Database connection failed: {str(e)}"
+    except Exception:
+        return _page_error()
 
 
 def session_tunes(session_path):
@@ -354,8 +254,8 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
                 # The full path IS a session (e.g., "oflahertys/2025")
                 # Treat as session overview, not instance
                 is_session_overview = True
-        except Exception as e:
-            return f"Database connection failed: {str(e)}"
+        except Exception:
+            return _page_error()
 
     # Check if this is a session instance request (by date or ID)
     if looks_like_instance and not is_session_overview:
@@ -401,19 +301,20 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
             session_instance = cur.fetchone()
 
             if session_instance:
-                # Logger routing (spec 024): the live logger is THE session-instance page.
-                # EVERYONE lands on it — signed out too, where it renders read-only. The
-                # only way to the legacy pill editor is a signed-in user turning the live
-                # logger off in their profile preferences; there is no other route to it.
-                if not current_user.is_authenticated or getattr(current_user, "beta_live_logging", True):
-                    cur.close(); conn.close()
-                    # Forward a play-history deep-link (?highlight=<record>) so the live
-                    # screen can scroll to it. Deliberately NOT ?tune= — on the live
-                    # screen that means "append this tune".
-                    live_kwargs = {"session_instance_id": session_instance[3]}
-                    if request.args.get("highlight"):
-                        live_kwargs["highlight"] = request.args["highlight"]
-                    return redirect(url_for("live_logging_screen", **live_kwargs))
+                # The live logger is THE session-instance page (spec 024, §B13).
+                # EVERYONE lands on it — signed out too, where it renders read-only.
+                # There used to be a per-user opt-out that routed to the legacy pill
+                # editor; the live logger is the only logger now, so there is no
+                # branch here any more.
+                cur.close()
+                conn.close()
+                # Forward a play-history deep-link (?highlight=<record>) so the live
+                # screen can scroll to it. Deliberately NOT ?tune= — on the live
+                # screen that means "append this tune".
+                live_kwargs = {"session_instance_id": session_instance[3]}
+                if request.args.get("highlight"):
+                    live_kwargs["highlight"] = request.args["highlight"]
+                return redirect(url_for("live_logging_screen", **live_kwargs))
                 logging_mode = session_instance[13]
                 # Use s.path from database (index 11) for consistency
                 session_path_from_db = session_instance[11]
@@ -564,8 +465,8 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
                 else:
                     error_msg = f"Session instance not found: ID {last_part} for session {session_path}"
                 return render_error_page(error_msg, 404)
-        except Exception as e:
-            return f"Database connection failed: {str(e)}"
+        except Exception:
+            return _page_error()
 
     else:
         # This is a session detail request (spec 035 Step 4b): a thin shell around
@@ -611,8 +512,8 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
                 tune_id=tune_id,
                 person_id=person_id,
             )
-        except Exception as e:
-            return f"Database connection failed: {str(e)}"
+        except Exception:
+            return _page_error()
 
 
 def session_instance_players(full_path):
@@ -741,19 +642,61 @@ def session_instance_players(full_path):
             else:
                 error_msg = f"Session instance not found: ID {last_part} for session {session_path}"
             return render_error_page(error_msg, 404)
-    except Exception as e:
-        return f"Database connection failed: {str(e)}"
+    except Exception:
+        return _page_error()
 
 
 def add_session():
-    """Add-session wizard (spec 035 final migration): a thin shell embedding the
-    SAME payload GET /api/add-session returns (one serializer — they can't
-    drift). Deliberately public — anyone can browse the wizard; only the final
-    POST /api/add-session requires login."""
-    from serializers import build_add_session_payload
+    """/add-session is no longer a page (spec 052 §B9).
 
-    payload = build_add_session_payload(current_user.is_authenticated)
-    return render_template("add_session.html", payload=payload)
+    Adding a session is a sheet presented over the sessions list: you are adding a
+    row to that list, so that is where you should be standing when you do it, and
+    where Cancel should leave you. The page it replaced opened with a heading and
+    an intro that pushed its only text field 538px down a 664px phone screen.
+
+    The URL stays, because it is linked from help, from the admin sessions list and
+    from the hamburger, and because people have it bookmarked. It redirects to the
+    list with ?add=1, which is what opens the sheet. ?acu=false rides along — the
+    admin list uses it to pre-uncheck "Add me as".
+
+    Still public: anyone may look, and only POST /api/add-session is gated.
+    """
+    params = {"add": "1"}
+    if request.args.get("acu") == "false":
+        params["acu"] = "false"
+    return redirect(url_for("sessions") + "?" + urlencode(params))
+
+
+def tunes_page():
+    """The public Tunes list (spec 052 §B18).
+
+    /my-tunes is your own tunebook and needs an account. This is the tradition's:
+    the most common tunes by tunebook count, with search over everything past them.
+    It is what the Tunes tab points at when you are signed out, so it can offer
+    nothing that needs a login — no "add to my tunes", no learn status.
+
+    Thin shell on spec 035's rule: the embed and GET /api/tunes/top are one
+    function.
+    """
+    from serializers import build_popular_tunes_payload
+
+    conn = get_db_connection()
+    try:
+        payload = build_popular_tunes_payload(conn, 100)
+    finally:
+        conn.close()
+    return render_template("tunes.html", payload=payload)
+
+
+def about_page():
+    """The signed-out "Me" (spec 052 §B17).
+
+    A visitor who followed a shared link to one session needs a way in and some idea
+    what this place is; that is what the hamburger's signed-out list was for, and the
+    tab bar had nowhere to put it. Public, and it works signed in too — the first row
+    becomes a link to your profile rather than to the login page.
+    """
+    return render_template("about.html")
 
 
 def help_page():
@@ -1445,48 +1388,16 @@ def login_password_api():
             "action": "resend_verification"
         }), 403
 
-    # Successful login
-    login_user(user, remember=True)
+    # Successful login. establish_session (api_app_routes) records the session the
+    # way every login path does; a native caller (X-Ceol-Client: ios/...) gets a
+    # Bearer token in the body and no cookie, the web gets the cookie and its
+    # redirect (spec 052 A1).
+    from api_app_routes import establish_session
 
-    # Create session record
-    session_id = create_session(user.user_id, ip_address, user_agent)
-
-    log_login_event(
-        user.user_id,
-        email,
-        "LOGIN_SUCCESS",
-        ip_address,
-        user_agent,
-        session_id=session_id,
-    )
-
-    session.permanent = True
-    session["db_session_id"] = session_id
-
-    # Cache admin session IDs
-    conn = get_db_connection()
-    try:
-        cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT s.session_id
-            FROM session_person sp
-            JOIN session s ON sp.session_id = s.session_id
-            WHERE sp.person_id = %s AND sp.is_admin = TRUE
-        """,
-            (user.person_id,),
-        )
-        admin_session_ids = [row[0] for row in cur.fetchall()]
-        session["admin_session_ids"] = admin_session_ids
-    finally:
-        conn.close()
-
-    cleanup_expired_sessions()
-
-    return jsonify({
-        "success": True,
-        "redirect": url_for("home")
-    })
+    body = establish_session(user, "password", email)
+    if "token" not in body:
+        body["redirect"] = url_for("home")
+    return jsonify(body)
 
 
 def login_with_token(token):
@@ -1571,6 +1482,12 @@ def login_with_token(token):
 
     cleanup_expired_sessions()
 
+    # App -> web handoff (spec 052 A7): a link minted by POST /api/auth/web-session
+    # carries ?next=<site path>; the person is already set up, so go straight there.
+    next_path = (request.args.get("next") or "").strip()
+    if next_path.startswith("/") and not next_path.startswith("//"):
+        return redirect(next_path)
+
     # Redirect to password setup (optional) for users without password
     if not user.has_password():
         return redirect(url_for("set_password_optional"))
@@ -1580,37 +1497,10 @@ def login_with_token(token):
 
 
 def _needs_profile_setup(person_id):
-    """Check if a person needs to complete their profile (missing name or location)"""
-    conn = get_db_connection()
-    try:
-        cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT first_name, last_name, city, state, country
-            FROM person WHERE person_id = %s
-        """,
-            (person_id,),
-        )
-        row = cur.fetchone()
-        if not row:
-            return True
+    """Shared with the API (spec 052): see auth.needs_profile_setup."""
+    from auth import needs_profile_setup
 
-        first_name, last_name, city, state, country = row
-
-        # Need setup if first name or last name is missing/empty
-        if not first_name or not first_name.strip():
-            return True
-        if not last_name or not last_name.strip():
-            return True
-
-        # Need setup if all location fields are empty
-        has_location = (city and city.strip()) or (state and state.strip()) or (country and country.strip())
-        if not has_location:
-            return True
-
-        return False
-    finally:
-        conn.close()
+    return needs_profile_setup(person_id)
 
 
 @login_required
@@ -2950,6 +2840,7 @@ def session_admin_person(session_path, person_id):
                 sp.gets_email_followup,
                 sp.confirmed,
                 sp.archived,
+                sp.can_manage_recordings,
                 u.username,
                 u.is_system_admin
             FROM person p
@@ -2984,8 +2875,10 @@ def session_admin_person(session_path, person_id):
             # they land here and push username/is_system_admin down two.
             "confirmed": person_row[13],
             "archived": person_row[14],
-            "username": person_row[15],
-            "is_system_admin": person_row[16],
+            # schema/053 -- appended before username/is_system_admin, which shift down one.
+            "can_manage_recordings": person_row[15],
+            "username": person_row[16],
+            "is_system_admin": person_row[17],
         }
 
         # Get instruments for this person
@@ -3163,6 +3056,22 @@ def common_tunes(person_id):
         current_person = cur.fetchone()
         current_person_name = f"{current_person[0]} {current_person[1]}" if current_person else "You"
 
+        # Where you came from, so the page can offer a real way back (spec 052 §B17).
+        # It used to be `javascript:history.back()`, which has nothing to go back to
+        # when the URL was opened from a link — and the app is display:standalone, so
+        # an installed visitor has no browser Back either.
+        #
+        # A session PATH, not a URL: the only thing that can come out of this is
+        # /sessions/<something that is really a session>, so there is no redirect to
+        # validate. An unknown path simply yields no row.
+        back = None
+        from_path = (request.args.get("from") or "").strip().strip("/")
+        if from_path and re.fullmatch(r"[a-z0-9-]+/[a-z0-9-]+", from_path):
+            cur.execute("SELECT name FROM session WHERE path = %s", (from_path,))
+            row = cur.fetchone()
+            if row:
+                back = {"href": f"/sessions/{from_path}", "label": row[0]}
+
         cur.close()
         conn.close()
 
@@ -3170,7 +3079,8 @@ def common_tunes(person_id):
             "common_tunes.html",
             current_person_name=current_person_name,
             other_person_name=other_person_name,
-            other_person_id=person_id
+            other_person_id=person_id,
+            back=back,
         )
 
     except Exception as e:
@@ -3456,6 +3366,17 @@ def live_logging_screen(session_instance_id):
         (session_path, session_id, instance_date, track_attendance,
          track_set_starters, instance_active, instance_name,
          instance_start, instance_end, session_type) = row
+
+        # Who may upload/timestamp this session's audio (schema/053). Resolved here so
+        # the header can decide whether the Recordings row exists at first paint; every
+        # endpoint behind it re-checks, so this only controls what is offered.
+        #
+        # Shares the connection above rather than opening a second one: for anonymous
+        # visitors and system admins this short-circuits without touching the cursor
+        # at all, so the extra connection was a round trip to compute a constant.
+        from recording_routes import can_manage_recordings
+
+        manages_recordings = can_manage_recordings(cur, session_id)
     finally:
         conn.close()
 
@@ -3489,6 +3410,7 @@ def live_logging_screen(session_instance_id):
         # gated by these — that's attribution of who's actively logging.
         track_attendance=bool(track_attendance),
         track_set_starters=bool(track_set_starters),
+        can_manage_recordings=bool(manages_recordings),
         # The template has always referenced this, but the route never passed it -- so the
         # create-person form's instrument checkboxes rendered empty.
         canonical_instruments=CANONICAL_INSTRUMENTS,
@@ -3505,3 +3427,113 @@ def live_logging_screen(session_instance_id):
             "last_name": current_user.last_name,
         } if can_edit else None,
     )
+
+
+@login_required
+def admin_recordings():
+    """Index of session-audio recordings (spec 050): what's uploaded and how far
+    each one has been segmented. A plain Jinja page — non-interactive, so it
+    stays out of Svelte per spec 035 decision 2.
+
+    Ordered as a work queue rather than by date; see
+    serializers.build_admin_recordings_payload for why.
+    """
+    if not current_user.is_system_admin:
+        flash("You must be authorized to view this page.", "error")
+        return redirect(url_for("home"))
+
+    from recording import check_configured
+    from serializers import build_admin_recordings_payload
+    from services.recording_ingest import INGEST_STEPS
+
+    conn = get_db_connection()
+    try:
+        payload = build_admin_recordings_payload(conn)
+
+        # The upload form's session picker. Small enough to embed rather than
+        # fetch — the instance dates behind it are the part that needs an API.
+        # Terminated sessions are included: an old recording of a session that
+        # has since stopped running is exactly the sort of thing being backfilled.
+        cur = conn.cursor()
+        cur.execute("SELECT session_id, name, path FROM session ORDER BY name")
+        sessions = [{"session_id": r[0], "name": r[1], "path": r[2]} for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+    # Say up front when uploading cannot work, rather than letting the operator
+    # pick a file and discover it at the signing step.
+    return render_template(
+        "admin_recordings.html",
+        groups=payload["groups"],
+        recordings=payload["recordings"],
+        outstanding=payload["outstanding"],
+        sessions=sessions,
+        ingest_steps=INGEST_STEPS,
+        storage_problem=check_configured(),
+    )
+
+
+@login_required
+def segment_recording(recording_id):
+    """The audio segmenter (spec 050): a thin shell embedding the SAME payload
+    GET /api/recordings/<id>/segmenter returns, mounting the Svelte tool.
+
+    Open to whoever may manage this recording's session (schema/053), not just
+    system admins — the whole point of the grant is that a session admin can do
+    the timestamping for their own night. Same rule as the API behind it, so the
+    page and its data can't disagree about who is allowed in.
+    """
+    from recording_routes import can_manage_recordings
+    from serializers import build_recording_segmenter_payload
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT si.session_id FROM recording r "
+            "JOIN session_instance si ON si.session_instance_id = r.session_instance_id "
+            "WHERE r.recording_id = %s",
+            (recording_id,),
+        )
+        found = cur.fetchone()
+        if found and not can_manage_recordings(cur, found[0]):
+            flash("You must be authorized to view this page.", "error")
+            return redirect(url_for("home"))
+
+        payload = build_recording_segmenter_payload(conn, recording_id) if found else None
+    finally:
+        conn.close()
+
+    # Where to send someone who can't be shown the tool. A system admin belongs on
+    # the site-wide index; a session admin can't see that page at all, so bounce
+    # them to the night they came from rather than into a second refusal.
+    def _back():
+        if current_user.is_system_admin:
+            return redirect(url_for("admin_recordings"))
+        instance_id = payload["session_instance"]["session_instance_id"] if payload else None
+        if instance_id:
+            return redirect(url_for("live_logging_screen", session_instance_id=instance_id))
+        return redirect(url_for("home"))
+
+    if payload is None:
+        flash("That recording doesn't exist.", "error")
+        return _back()
+
+    # Ingest fills in the waveform and the true duration minutes after the row
+    # appears (schema/052). Opening the tool before that finishes would show a
+    # flat line against a guessed length and let marks be saved against it, so
+    # it says what is happening and sends the operator back to the list, where
+    # the row polls itself.
+    status = payload["recording"].get("status")
+    if status and status != "ready":
+        if status == "failed":
+            flash(
+                f"That recording could not be processed ({payload['recording'].get('status_detail') or 'no detail recorded'}). "
+                "Retry it from the list.",
+                "error",
+            )
+        else:
+            flash("That recording is still being processed — its waveform isn't ready yet.", "error")
+        return redirect(url_for("admin_recordings"))
+
+    return render_template("recording_segmenter.html", payload=payload)

@@ -8,25 +8,31 @@
   import AddTuneApp from '../mytunes/AddTuneApp.svelte'
   import TuneCard from './TuneCard.svelte'
   import { extractTuneId } from '../shared/parse.js'
+  import { createAbcMatcher } from '../shared/abcfilter.svelte.js'
   import {
-    resolveTuneInstrumentStatus,
-    filterAndSort,
-    noResultsMessage,
-    resultsCountText,
-    typeBadgeLabel,
-    typeBadgeTitle,
-    stateFromParams,
-    paramsFromState,
-    overlayPendingOps,
-    submitOp,
-    nextStatus,
+    SORT_MODES,
+    catalogueExtras,
     cycleInstrumentOverride,
     fetchAllTunes,
+    filterAndSort,
+    nextStatus,
+    noResultsMessage,
+    overlayPendingOps,
+    paramsFromState,
+    resolveTuneInstrumentStatus,
+    resultsCountText,
+    shouldSearchCatalogue,
+    sortModeLabel,
+    stateFromParams,
+    submitOp,
+    typeBadgeLabel,
+    typeBadgeTitle,
   } from './logic.js'
+  import { STATUS_LABELS } from '../mylist.js'
 
   let { pageData = null } = $props()
-
-  import { toast, SearchField, Chip, Seg } from '../lib/index.js'
+  import { Chevron, Chip, SearchField, Seg, Toolbar, toast } from '../lib/index.js'
+  import NotOnYourList from './NotOnYourList.svelte'
 
   // ---- state -----------------------------------------------------------------
   const initial = stateFromParams(new URLSearchParams(window.location.search))
@@ -58,16 +64,44 @@
   let isMobile = $state(mq.matches)
   mq.addEventListener('change', (e) => (isMobile = e.matches))
 
+  // Notation search: the filter box takes notes as well as names, but the page payload
+  // deliberately carries no ABC, so the matching tune ids come from the server. A query
+  // that isn't note-shaped never leaves the browser. See shared/abcfilter.svelte.js.
+  const abcMatch = createAbcMatcher()
+  $effect(() => {
+    // Tracked: the query, and the SIZE of the list (which arrives after mount, so a
+    // deep-linked ?search= must be retried once there is something to match against).
+    // The ids themselves are read untracked, so ordinary row churn costs nothing.
+    abcMatch.update(
+      filters.search,
+      () => untrack(() => allTunes.map((t) => t.tune_id)),
+      allTunes.length
+    )
+  })
+
   // ---- derived ----------------------------------------------------------------
-  const visible = $derived(filterAndSort(allTunes, filters, sort, instruments))
+  const visible = $derived(filterAndSort(allTunes, filters, sort, instruments, abcMatch.ids))
   const tuneTypes = $derived([...new Set(allTunes.map((t) => t.tune_type).filter(Boolean))].sort())
-  const hasActiveFilters = $derived(!!(filters.type || filters.status || filters.instrument || filters.rel))
+  const hasActiveFilters = $derived(
+    !!(
+      filters.type ||
+      filters.status ||
+      filters.instrument ||
+      filters.rel ||
+      filters.addedDate
+    )
+  )
+  // What's set INSIDE the collapsed drawer. Status is excluded: it has its own always-
+  // visible control, so lighting the drawer button for it would point at nothing.
+  const hasDrawerFilters = $derived(
+    !!(filters.type || filters.instrument || filters.rel || filters.addedDate)
+  )
 
   // Relationship chips (spec 033) — single-select, click the active one to clear.
   // (R2 "in my sessions' repertoire" was deliberately dropped: plays auto-enroll
   // into session_tune, so it only differed for on-list-but-never-played tunes.)
   const REL_CHIPS = [
-    { id: 'member', label: 'Played at my sessions' },
+    { id: 'member', label: 'At my sessions' },
     { id: 'attended', label: 'While I was there' },
   ]
   const relLabel = (id) => REL_CHIPS.find((c) => c.id === id)?.label || id
@@ -139,34 +173,21 @@
 
 
   // ---- filter panel / dropdowns ---------------------------------------------------
-  let panelOpen = $state(false)
-  let panelAnim = $state('') // '', 'opening', 'closing'
+  // Just the open flag now: Toolbar owns the animation. The three variables and the
+  // 300ms timers that used to live here existed because the panel was inside an
+  // `{#if}` — a node that does not exist cannot animate out, so closing had to keep
+  // it mounted for the length of the transition and then remove it. Toolbar toggles
+  // a class on live nodes instead, so both directions animate for free.
   let panelVisible = $state(false)
-  function toggleFilterPanel() {
-    if (!panelVisible) {
-      panelVisible = true
-      panelOpen = true
-      panelAnim = 'opening'
-      setTimeout(() => (panelAnim = ''), 300)
-    } else {
-      panelAnim = 'closing'
-      panelOpen = false
-      setTimeout(() => {
-        panelVisible = false
-        panelAnim = ''
-      }, 300)
-    }
-  }
 
-  let typeMenuOpen = $state(false)
-  let instMenuOpen = $state(false)
+  // Which droplist is open: 'sort' | 'type' | 'inst' | 'added' | null. One variable
+  // rather than a boolean each, because they are mutually exclusive — with four
+  // booleans, "close the others" is a line every opener has to remember.
+  let openMenu = $state(null)
   $effect(() => {
-    if (!typeMenuOpen && !instMenuOpen) return
+    if (!openMenu) return
     const handler = (e) => {
-      if (!e.target.closest('.inst-select')) {
-        typeMenuOpen = false
-        instMenuOpen = false
-      }
+      if (!e.target.closest('.inst-select')) openMenu = null
     }
     document.addEventListener('click', handler)
     return () => document.removeEventListener('click', handler)
@@ -190,19 +211,18 @@
     return 'All My Instruments'
   })
 
-  // Active-filter pills, shown only while the panel is collapsed.
+  // Active-filter pills, shown only while the panel is collapsed. They stand in for
+  // controls you can't see, so status — visible at all times now — has no pill.
   const pills = $derived.by(() => {
     if (panelVisible) return []
     const out = []
-    if (filters.status) out.push({ key: 'status', label: cap(filters.status) })
     if (filters.type) out.push({ key: 'type', label: cap(filters.type) })
     if (filters.instrument) out.push({ key: 'instrument', label: filters.instrument })
     if (filters.rel) out.push({ key: 'rel', label: relLabel(filters.rel) })
     return out
   })
   function removeFilterPill(key) {
-    if (key === 'status') filters.status = ''
-    else if (key === 'type') filters.type = ''
+    if (key === 'type') filters.type = ''
     else if (key === 'instrument') filters.instrument = ''
     else if (key === 'rel') filters.rel = ''
   }
@@ -213,6 +233,8 @@
     filters.status = ''
     filters.instrument = ''
     filters.rel = ''
+    filters.addedDate = ''
+    filters.addedDir = 'after'
     sort.type2 = null
     sort.dir2 = null
   }
@@ -276,12 +298,15 @@
     }
   }
 
-  // Heard +: optimistic with a "N -> N+1" toast; sent as an ABSOLUTE set_heard so
-  // a queued replay can't double-count. Reverts only on a server rejection.
+  // Heard +: optimistic, sent as an ABSOLUTE set_heard so a queued replay can't
+  // double-count. Reverts only on a server rejection.
+  //
+  // No toast (spec 052 §B4). It used to announce "Heard count: 3 → 4" next to a card
+  // that had just changed from 3 to 4 — the number is the feedback, and a banner
+  // repeating it is the kind of chatter iOS does not do.
   function incrementHeard(tune) {
     const oldCount = tune.heard_count || 0
     const newCount = oldCount + 1
-    toast(`Heard count: ${oldCount} → ${newCount}`, 'success')
     replaceTune(tune.tune_id, { heard_count: newCount })
     submitOp({ type: 'set_heard', tune_id: tune.tune_id, heard_count: newCount })
       .then((res) => {
@@ -357,7 +382,7 @@
       instruments,
       thesessionUserId,
       onAdded: (tuneId, name) => afterPaneAdd(tuneId, name, false),
-      onAlready: (tuneId, name) => afterPaneAdd(tuneId, name, true),
+      onAlready: (tuneId, name, applied) => afterPaneAdd(tuneId, name, true, applied),
       // Tunebook sync (the pane's sync view): refresh the list — and the saved
       // thesession ID a first sync may have just stored — while results show.
       onSynced: () => loadTunes(),
@@ -376,16 +401,68 @@
     rawSearch.trim() ? `/my-tunes?add=1&q=${encodeURIComponent(rawSearch.trim())}` : '/my-tunes?add=1'
   )
 
+  // ---- catalogue search: "Not on your list" (spec 052 §B1) ------------------------
+  //
+  // Only on the All filter. On Learning / To Learn / Learned the question is "which of
+  // MY tunes match", and catalogue results would be answering a question nobody asked.
+  // `filters.search` is already debounced by the SearchField, so this fires once per
+  // settled query rather than once per keystroke.
+  let catalogue = $state([])
+  let catalogueLoading = $state(false)
+  let catalogueQuery = $state('')
+  let catalogueSeq = 0
+
+  $effect(() => {
+    const q = filters.search
+    if (!shouldSearchCatalogue(filters.status, q, fullTunesLoaded)) {
+      catalogue = []
+      catalogueLoading = false
+      catalogueQuery = ''
+      return
+    }
+    const seq = ++catalogueSeq
+    catalogueQuery = q
+    catalogueLoading = true
+    fetch(`/api/tunes/search?q=${encodeURIComponent(q)}&limit=10`)
+      .then((r) => (r.ok ? r.json() : { tunes: [] }))
+      .catch(() => ({ tunes: [] }))
+      .then((d) => {
+        // A late reply for an older query must not overwrite a newer one's results.
+        if (seq !== catalogueSeq) return
+        // "Not on your list" is decided HERE, against the list this page already
+        // holds in full, rather than by passing person_id to the search endpoint.
+        // The endpoint would happily answer for any person_id it is given, and
+        // asking it "does person N have this tune?" is not a question this page
+        // needs to ask about anybody but its own viewer.
+        catalogue = catalogueExtras(d.tunes, allTunes)
+        catalogueLoading = false
+      })
+  })
+
+  function addFromCatalogue(tune) {
+    // The add pane resolves a name the same way it resolves a pasted link, so handing
+    // it the name reuses one flow instead of inventing a second way to add a tune.
+    openAddPane(tune.name || '')
+  }
+
   // After the pane adds (or finds we already have) a tune: reuse the existing
   // ?show/?added/?already landing flow — same toast, scroll + highlight, cleanup.
-  function afterPaneAdd(tuneId, name, already) {
+  // `applied` says what the pane changed on a tune that was ALREADY on the list —
+  // {setting_id} / {heard_count} — so the toast can name it. Without that, a setting
+  // you just adopted looks like it vanished.
+  function afterPaneAdd(tuneId, name, already, applied) {
     const params = new URLSearchParams(window.location.search)
     params.delete('show')
     params.delete('added')
     params.delete('already')
+    params.delete('applied')
+    params.delete('heard')
     params.set('show', tuneId)
-    if (already) params.set('already', '1')
-    else params.set('added', name || '')
+    if (already) {
+      params.set('already', '1')
+      if (applied && applied.setting_id) params.set('applied', String(applied.setting_id))
+      if (applied && applied.heard_count != null) params.set('heard', String(applied.heard_count))
+    } else params.set('added', name || '')
     window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`)
     loadTunes()
     checkForSuccessMessage()
@@ -396,7 +473,14 @@
   function checkForSuccessMessage() {
     const params = new URLSearchParams(window.location.search)
     if (params.has('added')) toast(`Successfully added "${params.get('added')}" to your collection!`, 'success')
-    else if (params.has('already')) toast('This tune is already on your list', 'info')
+    else if (params.has('already')) {
+      const applied = params.get('applied')
+      const heard = params.get('heard')
+      let msg = 'This tune is already on your list'
+      if (applied) msg = `Already on your list — set your setting to #${applied}`
+      else if (heard) msg = `Heard it again — ${heard} time${heard === '1' ? '' : 's'} now`
+      toast(msg, 'info')
+    }
   }
 
   function stripLandingParams() {
@@ -404,6 +488,8 @@
     params.delete('show')
     params.delete('added')
     params.delete('already')
+    params.delete('applied')
+    params.delete('heard')
     const q = params.toString()
     window.history.replaceState({}, '', q ? `${window.location.pathname}?${q}` : window.location.pathname)
   }
@@ -546,21 +632,31 @@
 
 <div class="my-tunes-container">
   <div class="my-tunes-header-section">
-    <div class="page-header">
-      <h1>
-        My Tunes
-        <a href="/help/my-tunes" class="help-icon" title="How to use My Tunes">
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"></circle>
-            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
-            <line x1="12" y1="17" x2="12.01" y2="17"></line>
-          </svg>
-        </a>
-      </h1>
-    </div>
-
+    <!-- No page heading (spec 052 §B1), matching the sessions list. The tab bar
+         already says where you are, and "My Tunes" over your tunes was a line of
+         chrome between you and the list. The "How to use My Tunes" link went with
+         it; the help sidebar carries it. -->
     <div class="filters-container">
-      <div class="filter-top-row">
+      <!-- One Toolbar, the same component the session page's three tabs use
+           (spec 052 §B8 Stage 3). It wears this page's legacy classes and ids so the
+           skin in my_tunes_mobile.css and the e2e selectors keep working — that skin
+           is now shared by all four surfaces rather than belonging to this one.
+           Toolbar owns opening and closing, so panelAnim/toggleFilterPanel are gone;
+           its panel is a class toggle on live nodes, which is why both directions
+           animate where the old `{#if}` could only animate one. -->
+      <Toolbar
+        styled={false}
+        toolbarClass="filter-top-row"
+        buttonClass="filter-panel-toggle"
+        filterId="filter-panel-toggle"
+        panelId="filter-panel"
+        bind:open={panelVisible}
+        activeCount={hasDrawerFilters ? 1 : 0}
+        addId="add-tune-btn"
+        addHref={addTuneHref}
+        addTitle="Add tune"
+        onAdd={handleAddTuneClick}>
+        {#snippet search()}
         <SearchField
           bind:value={rawSearch}
           id="search-input"
@@ -575,147 +671,191 @@
           spellcheck="false"
           debounce={300}
           onSearch={(q) => (filters.search = q.toLowerCase().trim())} />
-        <a
-          href={addTuneHref}
-          class="filter-panel-toggle"
-          id="add-tune-btn"
-          title="Add tune"
-          style="text-decoration: none; font-size: 24px; font-weight: 300; line-height: 1;"
-          onclick={handleAddTuneClick}>+</a>
-        <button
-          id="filter-panel-toggle"
-          class="filter-panel-toggle"
-          class:active={panelVisible || hasActiveFilters}
-          title="Show filters"
-          onclick={toggleFilterPanel}>
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="4" y1="21" x2="4" y2="14"></line>
-            <line x1="4" y1="10" x2="4" y2="3"></line>
-            <line x1="12" y1="21" x2="12" y2="12"></line>
-            <line x1="12" y1="8" x2="12" y2="3"></line>
-            <line x1="20" y1="21" x2="20" y2="16"></line>
-            <line x1="20" y1="12" x2="20" y2="3"></line>
-            <line x1="1" y1="14" x2="7" y2="14"></line>
-            <line x1="9" y1="8" x2="15" y2="8"></line>
-            <line x1="17" y1="16" x2="23" y2="16"></line>
-          </svg>
-        </button>
-      </div>
+        {/snippet}
 
-      {#if panelVisible}
-        <div id="filter-panel" class="filter-panel {panelAnim}">
-          <div class="filter-panel-row">
-            <Seg
-              options={[
-                { id: '', label: 'All' },
-                { id: 'learned', label: 'Learned' },
-                { id: 'learning', label: 'Learning' },
-                { id: 'want to learn', label: 'Want To Learn' },
-              ]}
-              value={filters.status}
-              idAttr="data-status"
-              styled={false}
-              segClass="filter-button-group"
-              optClass="filter-status-btn"
-              onSelect={(v) => (filters.status = v)} />
-          </div>
-          <div class="filter-panel-row">
+        {#snippet aside()}
+        <!-- Status is the filter people actually live in — "what am I learning right
+             now?" is the question the page exists to answer — so it sits in the open,
+             one tap away, while the drawer keeps the filters you set once and forget.
+             In Toolbar's `aside` slot, so it stays put directly under the search line
+             and the drawer opens BELOW it rather than shoving it down the page. -->
+        <div class="filter-status-row">
+          <Seg
+            options={[
+              { id: 'want to learn', label: STATUS_LABELS['want to learn'] },
+              { id: 'learning', label: STATUS_LABELS.learning },
+              { id: 'learned', label: STATUS_LABELS.learned },
+              { id: '', label: 'All' },
+            ]}
+            value={filters.status}
+            idAttr="data-status"
+            styled={false}
+            segClass="filter-button-group"
+            optClass="filter-status-btn"
+            onSelect={(v) => (filters.status = v)} />
+        </div>
+        {/snippet}
+
+        {#snippet filter()}
+    <!-- Panel order (spec 052 §B1): how it is sorted, then what is in it, then when
+         you added it, then where it was played. Sorting first because it is the one
+         you change most; the rest narrow the list rather than reorder it. -->
+
+    <!-- Sort: a droplist plus a direction button, on one line. Five modes in a
+         segmented control took the full width and still truncated ("popularity",
+         "attended"), and sorting is a pick-one. Direction is its own control because
+         it is orthogonal to the field. -->
+    <div class="filter-panel-row filter-sort-row">
+      <span class="filter-row-label">Sort</span>
+      <div class="inst-select sort-select" class:open={openMenu === 'sort'} id="sort-filter">
+        <button
+          type="button"
+          class="inst-select-trigger"
+          onclick={(e) => {
+            e.stopPropagation()
+            openMenu = openMenu === 'sort' ? null : 'sort'
+          }}>
+          <span id="sort-filter-label">{sortModeLabel(sort.type)}</span>
+          <Chevron class="inst-select-caret" dir="down" size={14} />
+        </button>
+        <div class="inst-select-menu" id="sort-filter-menu">
+          {#each SORT_MODES as mode (mode.id)}
             <button
-              id="sort-direction-toggle"
-              class="filter-sort-direction-btn"
-              title="Toggle sort direction"
-              onclick={() => (sort.dir = sort.dir === 'asc' ? 'desc' : 'asc')}>
-              <span id="sort-direction-icon">{sort.dir === 'desc' ? '↓' : '↑'}</span>
-            </button>
-            <Seg
-              options={[
-                { id: 'alpha', label: 'a-z' },
-                { id: 'popularity', label: 'popularity' },
-                { id: 'plays', label: 'my plays' },
-                { id: 'attended', label: 'attended' },
-                { id: 'heard', label: 'heard' },
-              ]}
-              value={sort.type}
-              secondary={sort.type2}
-              idAttr="data-sort"
-              styled={false}
-              segClass="filter-button-group"
-              optClass="filter-sort-btn"
-              onSelect={setSortMode} />
-          </div>
-          <div class="filter-panel-row" id="rel-filter-row">
-            {#each REL_CHIPS as chip (chip.id)}
-              <Chip
-                label={chip.label}
-                active={filters.rel === chip.id}
-                styled={false}
-                chipClass="filter-rel-chip{filters.rel === chip.id ? ' active' : ''}"
-                onclick={() => (filters.rel = filters.rel === chip.id ? '' : chip.id)} />
-            {/each}
-          </div>
-          <div class="filter-panel-row">
-            <div class="inst-select" class:open={typeMenuOpen} id="type-filter">
+              type="button"
+              class="inst-select-option"
+              class:active={mode.id === sort.type}
+              data-sort={mode.id}
+              onclick={() => {
+                openMenu = null
+                setSortMode(mode.id)
+              }}>{mode.label}</button>
+          {/each}
+        </div>
+      </div>
+      <button
+        id="sort-direction-toggle"
+        class="filter-sort-direction-btn"
+        title={sort.dir === 'desc' ? 'Sorting downward — click for upward' : 'Sorting upward — click for downward'}
+        aria-label="Toggle sort direction"
+        onclick={() => (sort.dir = sort.dir === 'asc' ? 'desc' : 'asc')}>
+        <span id="sort-direction-icon">{sort.dir === 'desc' ? '↓' : '↑'}</span>
+      </button>
+    </div>
+
+    <div class="filter-panel-row">
+      <div class="inst-select" class:open={openMenu === 'type'} id="type-filter">
+        <button
+          type="button"
+          class="inst-select-trigger"
+          onclick={(e) => {
+            e.stopPropagation()
+            openMenu = openMenu === 'type' ? null : 'type'
+          }}>
+          <span id="type-filter-label">{typeLabelText}</span>
+          <Chevron class="inst-select-caret" dir="down" size={14} />
+        </button>
+        <div class="inst-select-menu" id="type-filter-menu">
+          {#each [{ value: '', label: 'All Tune Types' }, ...tuneTypes.map((t) => ({ value: t, label: cap(t) }))] as opt (opt.value)}
+            <button
+              type="button"
+              class="inst-select-option"
+              class:active={opt.value === filters.type}
+              onclick={() => {
+                openMenu = null
+                filters.type = opt.value
+              }}>{opt.label}</button>
+          {/each}
+        </div>
+      </div>
+    </div>
+
+    {#if instruments.length >= 2}
+      <div class="filter-panel-row" id="instrument-filter-row">
+        <div class="inst-select" class:open={openMenu === 'inst'} id="instrument-filter">
+          <button
+            type="button"
+            class="inst-select-trigger"
+            onclick={(e) => {
+              e.stopPropagation()
+              openMenu = openMenu === 'inst' ? null : 'inst'
+            }}>
+            <span id="instrument-filter-label">{instLabelText}</span>
+            <Chevron class="inst-select-caret" dir="down" size={14} />
+          </button>
+          <div class="inst-select-menu" id="instrument-filter-menu">
+            {#each [{ value: '', label: 'All My Instruments' }, ...instruments.map((i) => ({ value: i.instrument, label: i.instrument }))] as opt (opt.value)}
               <button
                 type="button"
-                class="inst-select-trigger"
-                onclick={(e) => {
-                  e.stopPropagation()
-                  instMenuOpen = false
-                  typeMenuOpen = !typeMenuOpen
-                }}>
-                <span id="type-filter-label">{typeLabelText}</span>
-                <span class="inst-select-caret">▾</span>
-              </button>
-              <div class="inst-select-menu" id="type-filter-menu">
-                {#each [{ value: '', label: 'All Tune Types' }, ...tuneTypes.map((t) => ({ value: t, label: cap(t) }))] as opt (opt.value)}
-                  <button
-                    type="button"
-                    class="inst-select-option"
-                    class:active={opt.value === filters.type}
-                    onclick={() => {
-                      typeMenuOpen = false
-                      filters.type = opt.value
-                    }}>{opt.label}</button>
-                {/each}
-              </div>
-            </div>
-          </div>
-          {#if instruments.length >= 2}
-            <div class="filter-panel-row" id="instrument-filter-row">
-              <div class="inst-select" class:open={instMenuOpen} id="instrument-filter">
-                <button
-                  type="button"
-                  class="inst-select-trigger"
-                  onclick={(e) => {
-                    e.stopPropagation()
-                    typeMenuOpen = false
-                    instMenuOpen = !instMenuOpen
-                  }}>
-                  <span id="instrument-filter-label">{instLabelText}</span>
-                  <span class="inst-select-caret">▾</span>
-                </button>
-                <div class="inst-select-menu" id="instrument-filter-menu">
-                  {#each [{ value: '', label: 'All My Instruments' }, ...instruments.map((i) => ({ value: i.instrument, label: i.instrument }))] as opt (opt.value)}
-                    <button
-                      type="button"
-                      class="inst-select-option"
-                      class:active={opt.value === filters.instrument}
-                      onclick={() => {
-                        instMenuOpen = false
-                        filters.instrument = opt.value
-                      }}>{opt.label}</button>
-                  {/each}
-                </div>
-              </div>
-            </div>
-          {/if}
-          <div class="filter-panel-actions">
-            {#if hasActiveFilters}
-              <button id="clear-filters-btn" class="filter-panel-clear-btn" onclick={clearFilters}>Clear Filters</button>
-            {/if}
+                class="inst-select-option"
+                class:active={opt.value === filters.instrument}
+                onclick={() => {
+                  openMenu = null
+                  filters.instrument = opt.value
+                }}>{opt.label}</button>
+            {/each}
           </div>
         </div>
+      </div>
+    {/if}
+
+    <!-- Added: one date and a direction, not a range. Two pickers implied a span
+         nobody asks for — the question is "what have I added since X" or "what did
+         I have before X". -->
+    <div class="filter-panel-row filter-date-row" id="added-date-row">
+      <span class="filter-row-label">Added</span>
+      <div class="inst-select added-dir-select" class:open={openMenu === 'added'} id="added-dir">
+        <button
+          type="button"
+          class="inst-select-trigger"
+          onclick={(e) => {
+            e.stopPropagation()
+            openMenu = openMenu === 'added' ? null : 'added'
+          }}>
+          <span id="added-dir-label">{filters.addedDir === 'before' ? 'Before' : 'After'}</span>
+          <Chevron class="inst-select-caret" dir="down" size={14} />
+        </button>
+        <div class="inst-select-menu" id="added-dir-menu">
+          {#each [{ value: 'after', label: 'After' }, { value: 'before', label: 'Before' }] as opt (opt.value)}
+            <button
+              type="button"
+              class="inst-select-option"
+              class:active={opt.value === filters.addedDir}
+              data-added-dir={opt.value}
+              onclick={() => {
+                openMenu = null
+                filters.addedDir = opt.value
+              }}>{opt.label}</button>
+          {/each}
+        </div>
+      </div>
+      <input
+        type="date"
+        id="added-date"
+        class="filter-date-input"
+        aria-label="Added date"
+        bind:value={filters.addedDate} />
+    </div>
+
+    <div class="filter-panel-row filter-played-row" id="rel-filter-row">
+      <span class="filter-row-label">Played</span>
+      {#each REL_CHIPS as chip (chip.id)}
+        <Chip
+          label={chip.label}
+          active={filters.rel === chip.id}
+          styled={false}
+          chipClass="filter-rel-chip{filters.rel === chip.id ? ' active' : ''}"
+          onclick={() => (filters.rel = filters.rel === chip.id ? '' : chip.id)} />
+      {/each}
+    </div>
+
+    <div class="filter-panel-actions">
+      {#if hasActiveFilters}
+        <button id="clear-filters-btn" class="filter-panel-clear-btn" onclick={clearFilters}>Clear Filters</button>
       {/if}
+    </div>
+        {/snippet}
+      </Toolbar>
+
     </div>
 
     {#if pills.length > 0}
@@ -759,14 +899,20 @@
   {:else if visible.length === 0}
     {#if fullTunesLoaded}
       <div id="no-results" class="no-results">
-        <h3>No tunes found</h3>
+        <!-- "No tunes found" stops being true the moment the catalogue section below
+             is showing tunes. They were found; they are just not yours yet. -->
+        <h3>{catalogue.length ? 'None of your tunes match' : 'No tunes found'}</h3>
         <p id="no-results-message">
           {allTunes.length === 0 && !filters.search && !hasActiveFilters
             ? 'Try adjusting your filters or add your first tune to get started!'
             : noResultsMessage(filters)}
         </p>
         <div id="no-results-action" style="margin-top: 15px;">
-          {#if searchTuneRef != null}
+          {#if catalogue.length}
+            <!-- Nothing here: the rows below already name the tunes and adding one is
+                 a tap on the row it belongs to, which beats a button that reopens the
+                 same search in a pane. -->
+          {:else if searchTuneRef != null}
             <!-- A pasted link/id that isn't on your list yet: adding it is the point, and
                  the pane resolves the same link (setting included). Clear Filters still
                  rides along when other filters could be what's hiding it. -->
@@ -843,6 +989,15 @@
       {/if}
     </div>
   {/if}
+
+  <!-- Catalogue matches, under a divider (spec 052 §B1). Outside the {#if} above so
+       it shows whether or not your own list had hits — "no tunes found" and "here is
+       one you could add" belong together. -->
+  <NotOnYourList
+    results={catalogue}
+    loading={catalogueLoading}
+    query={catalogueQuery}
+    onPick={addFromCatalogue} />
 
   <div id="loading-more" class="loading-more" class:visible={fetchingMore && !fullTunesLoaded}>
     <span class="loading-spinner"></span>

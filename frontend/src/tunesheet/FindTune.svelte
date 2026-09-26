@@ -54,6 +54,11 @@
   // The kit SearchField owns the debounce (200ms) + Enter flush + Escape-clears;
   // this handler owns the min-2-chars rule, the stale-response guard, and the
   // server-with-offline-fallback search.
+  //
+  // Notation search needs no branch here: /api/tunes/search blends notation matches in
+  // itself for note-shaped queries, and flags the ones that matched the notation rather
+  // than the name as `abc_only` so the row can carry a musical note. Offline the bundle
+  // answers the same shape, but only over incipits (`abc_scope: 'incipit'`).
   async function runSearch(raw) {
     const q = (raw || '').trim()
     const refId = parseThesessionId(q)
@@ -92,6 +97,16 @@
   }
 
   function pick(tune) {
+    // A link that named a SETTING is a statement about which version you play, and the
+    // drawer can't take one — it would be dropped on the floor here (the setting only
+    // survived the "not in the library yet" branch below). Hand the raw link to the My
+    // Tunes add pane, which lands the pager on that setting and, for a tune already on
+    // your list, offers to update your setting.
+    if (linkRef && linkRef.settingId != null && loggedIn) {
+      close()
+      window.location.href = importHref
+      return
+    }
     close()
     // The drawer derives everything from its payload (viewer flags, on-list
     // state) and defaults its scope from the URL — so a pick on a session page
@@ -113,7 +128,7 @@
     inputClass="ft-input"
     wrapperClass="ft-search-wrap"
     styled={false}
-    placeholder="Search tunes, or paste a thesession.org link…"
+    placeholder="Search by name or notes, or paste a link…"
     autocomplete="off"
     autocorrect="off"
     autocapitalize="off"
@@ -122,6 +137,9 @@
     onSearch={runSearch} />
   {#if linkRef && results === null}
     <p class="ft-note">Looking up tune #{linkRef.id} from thesession.org…</p>
+  {:else if linkRef && linkRef.settingId != null && loggedIn && results && results.length}
+    <!-- Say where the tap goes: this sheet can't hold on to a setting, My Tunes can. -->
+    <p class="ft-note">That link names setting #{linkRef.settingId} — opening it in My Tunes, where it can be saved.</p>
   {/if}
   <ul class="ft-results">
     {#if results !== null}
@@ -134,7 +152,7 @@
             onkeydown={(e) => e.key === 'Enter' && pick(tune)}
             role="option"
             aria-selected="false"
-            tabindex="0">{tune.name}<span class="ft-type">{tune.tune_type || ''}</span></li>
+            tabindex="0">{tune.name}{#if tune.abc_only}<span class="ft-abc" title={tune.abc_scope === 'incipit' ? 'Matched the opening bars (offline)' : 'Matched the notation, not the name'}>♪</span>{/if}<span class="ft-type">{tune.tune_type || ''}</span></li>
         {/each}
       {:else if linkRef}
         <!-- The link resolved, the catalog just doesn't have that tune yet. Importing is

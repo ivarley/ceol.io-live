@@ -4,9 +4,12 @@
 
 export const STATUS_ORDER = ['want to learn', 'learning', 'learned']
 
+
 // extractTuneId (thesession URL / plain number -> id) now comes from the
 // shared helpers module (src/shared/) — one tested copy for every page bundle.
 import { extractTuneId } from '../shared/parse.js'
+import { STATUS_LABELS } from '../mylist.js'
+import { DEFAULT_HEARD_COUNT } from '../shared/persontune.js'
 
 // Resolve a tune's status on one instrument (by name): an explicit override wins;
 // else an auto instrument follows learn_status, and a manual instrument is
@@ -72,18 +75,40 @@ function accentIncludes(haystack, needle) {
 
 // Filter + sort the list. Returns a NEW array of the visible tunes; each carries
 // `_instDimmed` when an instrument filter is active and the tune isn't on that
-// instrument (kept but dimmed and sorted below the matches, never dropped).
-export function filterAndSort(allTunes, filters, sort, instruments) {
+// instrument (kept but dimmed and sorted below the matches, never dropped), and
+// `_abcOnly` when it survived on NOTATION alone (see below).
+//
+// `abcIds` is the set of tune ids whose ABC matches a note-shaped query, resolved by the
+// server (shared/abcfilter.svelte.js) because the page payload deliberately carries no
+// notation. Omitting it — or passing null — reproduces name-only filtering exactly.
+export function filterAndSort(allTunes, filters, sort, instruments, abcIds = null) {
   const out = []
   for (const tune of allTunes) {
+    let abcOnly = false
     if (filters.search) {
       const tuneId = extractTuneId(filters.search)
       const nameMatch = accentIncludes(tune.tune_name || '', filters.search)
       const notesMatch = accentIncludes(tune.notes || '', filters.search)
       const tuneIdMatch = tuneId && tune.tune_id === tuneId
-      if (!tuneIdMatch && !nameMatch && !notesMatch) continue
+      const abcMatch = !!abcIds?.has(tune.tune_id)
+      if (!tuneIdMatch && !nameMatch && !notesMatch && !abcMatch) continue
+      abcOnly = abcMatch && !tuneIdMatch && !nameMatch && !notesMatch
     }
     if (filters.type && tune.tune_type !== filters.type) continue
+
+    // When you added it to your list. This is where the profile's Tunebook section
+    // went (spec 052 §B1): that page filtered the same collection by the same field.
+    //
+    // ONE date and a direction, not a from/to pair. Two date pickers implied a range
+    // nobody was asking for — the question is almost always "what have I added since
+    // X" or "what did I have before X". Compared as ISO date strings, which sort
+    // lexicographically, so there is no Date object and no timezone to get wrong.
+    if (filters.addedDate) {
+      const added = (tune.created_date || '').slice(0, 10)
+      if (!added) continue
+      if (filters.addedDir === 'before' ? added >= filters.addedDate : added < filters.addedDate)
+        continue
+    }
 
     // Relationship chips (spec 033): member = played at my sessions (R3),
     // attended = played while I was there (R4).
@@ -95,10 +120,10 @@ export function filterAndSort(allTunes, filters, sort, instruments) {
       const dimmed = instStatus === null
       const effectiveStatus = dimmed ? tune.learn_status : instStatus
       if (filters.status && effectiveStatus !== filters.status) continue
-      out.push({ ...tune, _instDimmed: dimmed })
+      out.push({ ...tune, _instDimmed: dimmed, _abcOnly: abcOnly })
     } else {
       if (filters.status && tune.learn_status !== filters.status) continue
-      out.push(tune)
+      out.push(abcOnly ? { ...tune, _abcOnly: true } : tune)
     }
   }
 
@@ -126,8 +151,7 @@ export function noResultsMessage(filters) {
   }
   if (filters.search) parts.push(`containing '${filters.search}'`)
   if (filters.status) {
-    const statusLabels = { learned: 'Learned', learning: 'Learning', 'want to learn': 'Want To Learn' }
-    parts.push(`in '${statusLabels[filters.status] || filters.status}' status`)
+    parts.push(`in '${STATUS_LABELS[filters.status] || filters.status}' status`)
   }
   let message = 'No ' + parts[0]
   if (parts.length > 1) message += ' ' + parts.slice(1).join(' ')
@@ -165,6 +189,22 @@ export function typeBadgeTitle(sortType) {
   return ''
 }
 
+// The sort modes, as a droplist rather than a row of toggles: five options in a
+// segmented control ate the panel's whole width and still truncated, and sorting is
+// a pick-one, which is what a droplist is for. Direction is a separate control
+// beside it, because it is orthogonal to which field you sort on.
+export const SORT_MODES = [
+  { id: 'alpha', label: 'Name (a-z)' },
+  { id: 'popularity', label: 'Popularity' },
+  { id: 'plays', label: 'My plays' },
+  { id: 'attended', label: 'Plays I attended' },
+  { id: 'heard', label: 'Times heard' },
+]
+
+export function sortModeLabel(id) {
+  return SORT_MODES.find((m) => m.id === id)?.label || SORT_MODES[0].label
+}
+
 // --- URL state (filters + sort mirrored via replaceState) --------------------
 
 export function stateFromParams(params) {
@@ -174,6 +214,8 @@ export function stateFromParams(params) {
     status: params.get('status') || '',
     instrument: params.get('instrument') || '',
     rel: params.get('rel') || '',
+    addedDir: params.get('addedDir') === 'before' ? 'before' : 'after',
+    addedDate: params.get('addedDate') || '',
   }
   const sort = {
     type: params.get('sortType') || 'alpha',
@@ -191,6 +233,11 @@ export function paramsFromState(filters, sort) {
   if (filters.status) params.set('status', filters.status)
   if (filters.instrument) params.set('instrument', filters.instrument)
   if (filters.rel) params.set('rel', filters.rel)
+  // The direction only means anything alongside a date, so it only travels with one.
+  if (filters.addedDate) {
+    params.set('addedDate', filters.addedDate)
+    if (filters.addedDir === 'before') params.set('addedDir', 'before')
+  }
   if (sort.type !== 'alpha' || sort.dir !== 'asc') {
     params.set('sortType', sort.type)
     params.set('sortDir', sort.dir)
@@ -233,7 +280,9 @@ export function applyPendingOps(serverTunes, ops) {
             tune_name: op.name || 'Tune #' + op.tune_id,
             tune_type: op.tune_type || null,
             learn_status: op.learn_status || 'want to learn',
-            heard_count: 0,
+            // What the server will write when the queued add syncs — predict it, or the
+            // row shows 0 heard until it lands and then silently becomes 1.
+            heard_count: DEFAULT_HEARD_COUNT,
             notes: null,
             person_tune_id: 'pending-' + op.tune_id,
             tunebook_count: op.tunebook_count || 0,
@@ -330,4 +379,34 @@ export async function fetchAllTunes(sortParam) {
     if (!j.pagination || !j.pagination.has_next) break
   }
   return { tunes, instruments, thesession_user_id: thesessionUserId }
+}
+
+// ---- catalogue search: "Not on your list" (spec 052 §B1) --------------------------
+//
+// Search on this page reaches the whole catalogue, which is what lets the tab bar drop
+// the hamburger's "Find a tune" without spending a tab on it. These two rules decide
+// when that happens and what comes back; they are here rather than inline in the
+// component because they are the part a native Tunes screen has to agree with.
+
+/**
+ * Should the catalogue be searched at all?
+ *
+ * Only on the All filter: on Learning / To Learn / Learned the question is "which of
+ * MY tunes match", and catalogue results would answer one nobody asked.
+ *
+ * Only once the viewer's list is fully loaded, because `catalogueExtras` decides
+ * "not yours" against that list — offering to add a tune you already own, because the
+ * page had not finished loading it, is the one wrong answer this section can give.
+ *
+ * Only from two characters: one letter matches a sizeable fraction of the catalogue,
+ * so the request is expensive and the answer is useless.
+ */
+export function shouldSearchCatalogue(status, query, fullyLoaded) {
+  return status === '' && !!fullyLoaded && typeof query === 'string' && query.length >= 2
+}
+
+/** Catalogue hits minus the tunes already on the viewer's list. */
+export function catalogueExtras(results, myTunes) {
+  const mine = new Set((myTunes || []).map((t) => t.tune_id))
+  return (results || []).filter((t) => t && !mine.has(t.tune_id))
 }

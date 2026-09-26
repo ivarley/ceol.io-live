@@ -755,3 +755,95 @@ def test_merge_confirm_failed_import_rolls_back_everything(client, admin_user, m
     assert cur.fetchone()[0] is None
     cur.close()
     conn.close()
+
+
+# --------------------------------------------------------------------------- #
+# 5. the weekly schedule gate
+# --------------------------------------------------------------------------- #
+# There is no ceol-io-thesession-merge-sync cron service. One was declared in
+# render.yaml and never created, so this never ran. It now rides on the
+# active-sessions cron, which fires at 14,29,44,59 past every hour -- so the gate
+# has to do two things: pick the weekly window, and stop all four invocations
+# inside that window from each kicking off a run.
+
+import importlib.util  # noqa: E402
+import os  # noqa: E402
+from datetime import datetime, timezone  # noqa: E402
+
+
+def _job_module():
+    path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        "jobs",
+        "sync_thesession_merges.py",
+    )
+    spec = importlib.util.spec_from_file_location("sync_thesession_merges_under_test", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+MONDAY_0614 = datetime(2026, 8, 24, 6, 14, tzinfo=timezone.utc)
+
+
+@pytest.mark.parametrize(
+    "label,now,last_run,expected",
+    [
+        ("first ever run", MONDAY_0614, None, True),
+        ("a week since the last", MONDAY_0614, datetime(2026, 8, 17, 6, 14, tzinfo=timezone.utc), True),
+        ("later that same hour", MONDAY_0614.replace(minute=29),
+         datetime(2026, 8, 24, 6, 14, tzinfo=timezone.utc), False),
+        ("wrong hour", MONDAY_0614.replace(hour=7), None, False),
+        ("wrong day", MONDAY_0614.replace(day=25), None, False),
+        ("a missed week is picked up", MONDAY_0614,
+         datetime(2026, 8, 3, 6, 14, tzinfo=timezone.utc), True),
+        # started_at comes back naive from some drivers; UTC is what it means.
+        ("naive timestamp from the DB", MONDAY_0614, datetime(2026, 8, 10, 6, 14), True),
+    ],
+)
+def test_is_due(label, now, last_run, expected, monkeypatch):
+    job = _job_module()
+    monkeypatch.setattr(job, "_last_run_started_at", lambda: last_run)
+    assert job.is_due(now) is expected, label
+
+
+def test_run_weekly_if_due_does_not_run_outside_the_window(monkeypatch):
+    job = _job_module()
+    ran = []
+    monkeypatch.setattr(job, "_last_run_started_at", lambda: None)
+    monkeypatch.setattr(job, "run_sync_job", lambda: ran.append(1))
+
+    assert job.run_weekly_if_due(MONDAY_0614.replace(hour=7)) is False
+    assert ran == []
+
+
+def test_run_weekly_if_due_runs_inside_the_window(monkeypatch):
+    job = _job_module()
+    ran = []
+    monkeypatch.setattr(job, "_last_run_started_at", lambda: None)
+    monkeypatch.setattr(job, "run_sync_job", lambda: ran.append(1))
+
+    assert job.run_weekly_if_due(MONDAY_0614) is True
+    assert ran == [1]
+
+
+def test_the_gate_reads_the_real_scan_table(merge_env):
+    """is_due's DB half, against a real tune_merge_scan row.
+
+    The window is faked; what is exercised is that a run recorded moments ago
+    makes the next invocation say no.
+    """
+    job = _job_module()
+    assert job.is_due(MONDAY_0614) is True
+
+    scan_id = scan_svc.create_run(started_by_user_id=None)
+    assert scan_id is not None
+    try:
+        assert job.is_due(MONDAY_0614) is False, "a run that just started means not due"
+    finally:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("DELETE FROM tune_merge_scan_result WHERE scan_id = %s", (scan_id,))
+        cur.execute("DELETE FROM tune_merge_scan WHERE scan_id = %s", (scan_id,))
+        conn.commit()
+        conn.close()

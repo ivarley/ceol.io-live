@@ -1,0 +1,248 @@
+"""The home page's "Continue Segmenting" card (spec 050).
+
+The companion to "Continue Logging": a three-hour recording is not timestamped
+in one sitting, and before this the only way back to a half-tagged one was to
+remember it existed.
+
+Four decisions are pinned here, because each of them is a way the card could
+quietly become wrong:
+
+1. **Half-done shows, with its counts.** Placed and total both come off the
+   instance's own log, so the number in the card is the number in the tool.
+2. **Finished drops off, both ways.** Placing every tune is one way, and the
+   card empties itself rather than needing to be dismissed. The other is
+   `recording.segmenting_complete` (schema/055), for audio covering only part
+   of a night, where the count can never reach the total however much work is
+   done — those would otherwise sit here forever, which is exactly the
+   complaint /admin/recordings was reshaped to answer.
+3. **Somebody else's work is not mine.** The list is keyed on who placed the
+   marks, exactly as the logging list is keyed on who edited the log.
+4. **The permission is re-checked now.** Having placed marks once is not the
+   same as still being allowed to open the tool, and a card that links into a
+   refusal is worse than no card.
+"""
+
+import json
+from unittest.mock import patch
+
+import pytest
+
+from auth import User
+
+CT_SESSION = 95600
+CT_INSTANCE = 95601
+CT_PERSON = 95602
+CT_USER = 95603
+CT_OTHER_USER = 95604
+CT_RECORDING = 95605
+CT_TUNE_BASE = 95610
+TUNE_COUNT = 4
+
+
+@pytest.fixture
+def tagging_world(db_setup):
+    """One night with four logged tunes and one ready recording, nothing placed.
+
+    Each test places what it needs, so "half done" and "all done" are the same
+    fixture seen at two moments rather than two fixtures that can drift.
+    """
+    from database import get_db_connection
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO session (session_id, name, path) VALUES (%s, 'Tagging050', 'tagging050-test')",
+        (CT_SESSION,),
+    )
+    cur.execute(
+        "INSERT INTO session_instance (session_instance_id, session_id, date) VALUES (%s, %s, '2026-07-08')",
+        (CT_INSTANCE, CT_SESSION),
+    )
+    cur.execute(
+        "INSERT INTO person (person_id, first_name, last_name) VALUES (%s, 'Tag', 'Ger')",
+        (CT_PERSON,),
+    )
+    cur.execute(
+        "INSERT INTO user_account (user_id, person_id, username, user_email, hashed_password, "
+        "is_system_admin, is_active, email_verified) "
+        "VALUES (%s, %s, 'tagging050', 'tagging050@example.com', 'x', FALSE, TRUE, TRUE)",
+        (CT_USER, CT_PERSON),
+    )
+    cur.execute(
+        "INSERT INTO session_person (session_id, person_id, is_admin, can_manage_recordings) "
+        "VALUES (%s, %s, TRUE, TRUE)",
+        (CT_SESSION, CT_PERSON),
+    )
+    for i in range(TUNE_COUNT):
+        cur.execute(
+            "INSERT INTO session_instance_tune (session_instance_tune_id, session_instance_id, name, "
+            "order_position, record_type) VALUES (%s, %s, %s, %s, 'tune')",
+            (CT_TUNE_BASE + i, CT_INSTANCE, f"Tagging Tune {i}", f"a{i}"),
+        )
+    cur.execute(
+        "INSERT INTO recording (recording_id, session_instance_id, label, storage_key, duration_ms, "
+        "is_clock_anchor, status) VALUES (%s, %s, 'Tagging Night', 'recordings/ct/master.m4a', "
+        "600000, TRUE, 'ready')",
+        (CT_RECORDING, CT_INSTANCE),
+    )
+    conn.commit()
+    yield conn, cur
+    cur.execute("DELETE FROM recording_tune_segment WHERE recording_id = %s", (CT_RECORDING,))
+    cur.execute("DELETE FROM recording_tune_segment_history WHERE recording_id = %s", (CT_RECORDING,))
+    cur.execute("DELETE FROM recording_history WHERE recording_id = %s", (CT_RECORDING,))
+    cur.execute("DELETE FROM recording WHERE recording_id = %s", (CT_RECORDING,))
+    cur.execute("DELETE FROM session_instance_tune WHERE session_instance_id = %s", (CT_INSTANCE,))
+    cur.execute("DELETE FROM session_person_history WHERE person_id = %s", (CT_PERSON,))
+    cur.execute("DELETE FROM session_person WHERE person_id = %s", (CT_PERSON,))
+    cur.execute("DELETE FROM user_account WHERE user_id = %s", (CT_USER,))
+    cur.execute("DELETE FROM person WHERE person_id = %s", (CT_PERSON,))
+    cur.execute("DELETE FROM session_instance WHERE session_id = %s", (CT_SESSION,))
+    cur.execute("DELETE FROM session WHERE session_id = %s", (CT_SESSION,))
+    conn.commit()
+    conn.close()
+
+
+def _place(cur, conn, count, user_id=CT_USER):
+    """Place the first `count` tunes, attributed to `user_id`."""
+    for i in range(count):
+        cur.execute(
+            "INSERT INTO recording_tune_segment (recording_id, session_instance_tune_id, start_ms, "
+            "created_by_user_id, last_modified_user_id) VALUES (%s, %s, %s, %s, %s)",
+            (CT_RECORDING, CT_TUNE_BASE + i, 10000 * (i + 1), user_id, user_id),
+        )
+    conn.commit()
+
+
+class as_the_tagger:
+    """Sign in as the session admin who holds the recordings grant."""
+
+    def __init__(self, client):
+        self.client = client
+
+    def __enter__(self):
+        self.patcher = patch("auth.User.get_by_id")
+        self.patcher.start().return_value = User(
+            user_id=CT_USER, person_id=CT_PERSON, username="tagging050",
+            email="tagging050@example.com", is_system_admin=False,
+            first_name="Tag", last_name="Ger",
+        )
+        with self.client.session_transaction() as sess:
+            sess["_user_id"] = str(CT_USER)
+            sess["_fresh"] = True
+            sess["is_system_admin"] = False
+        return self
+
+    def __exit__(self, *exc):
+        self.patcher.stop()
+        with self.client.session_transaction() as sess:
+            sess.clear()
+
+
+def _home(client):
+    """The home payload, as the page embeds it.
+
+    These tests used to read the rendered HTML for the card's heading and its
+    link. Since spec 052 §B8 Stage 4 the page is a thin shell around
+    build_home_payload and the Svelte bundle draws the card, so the heading is
+    no longer a server-rendered string and the link is built in the client from
+    `recording_id`. The RULES being tested did not change at all — which
+    recordings are offered back to you, and with what counts — so they are
+    asserted one layer down, against the payload the page and GET /api/home
+    share. Reading the HTML would now be testing Jinja's ability to print JSON.
+    """
+    with as_the_tagger(client):
+        res = client.get("/")
+    assert res.status_code == 200
+    body = res.get_data(as_text=True)
+    assert "window.__PAGE_DATA__" in body, "home is a thin shell; it must embed its payload"
+    raw = body.split("window.__PAGE_DATA__ = ", 1)[1].split(";\n", 1)[0].strip().rstrip(";")
+    return json.loads(raw)
+
+
+def _offered(payload):
+    """The recording ids the "pick up where you left off" section would show."""
+    return {r["recording_id"] for r in payload["in_progress_recordings"]}
+
+
+def test_half_tagged_recording_appears_with_its_counts(client, tagging_world):
+    conn, cur = tagging_world
+    _place(cur, conn, 2)
+
+    payload = _home(client)
+
+    assert CT_RECORDING in _offered(payload)
+    row = next(r for r in payload["in_progress_recordings"] if r["recording_id"] == CT_RECORDING)
+    assert (row["placed"], row["tune_count"]) == (2, TUNE_COUNT)
+
+
+def test_fully_tagged_recording_drops_off(client, tagging_world):
+    conn, cur = tagging_world
+    _place(cur, conn, TUNE_COUNT)
+
+    assert CT_RECORDING not in _offered(_home(client))
+
+
+def test_a_recording_marked_segmenting_complete_drops_off(client, tagging_world):
+    """The partial-recording case (schema/055). Half the tunes are placed and
+    the rest never will be, because they are not in the audio; the operator has
+    said so on /admin/recordings. Counting alone can't reach the total here, so
+    without the flag being read this card would offer the work forever."""
+    conn, cur = tagging_world
+    _place(cur, conn, 2)
+    cur.execute(
+        "UPDATE recording SET segmenting_complete = TRUE, "
+        "segmenting_complete_at = (NOW() AT TIME ZONE 'UTC') WHERE recording_id = %s",
+        (CT_RECORDING,),
+    )
+    conn.commit()
+
+    assert CT_RECORDING not in _offered(_home(client))
+
+
+def test_reopening_it_brings_the_card_back(client, tagging_world):
+    """Taking the decision back is what makes it safe to make -- the card is
+    the only way most of this work gets found again."""
+    conn, cur = tagging_world
+    _place(cur, conn, 2)
+    cur.execute(
+        "UPDATE recording SET segmenting_complete = TRUE WHERE recording_id = %s",
+        (CT_RECORDING,),
+    )
+    conn.commit()
+    assert CT_RECORDING not in _offered(_home(client))
+
+    cur.execute(
+        "UPDATE recording SET segmenting_complete = FALSE, segmenting_complete_at = NULL "
+        "WHERE recording_id = %s",
+        (CT_RECORDING,),
+    )
+    conn.commit()
+
+    assert CT_RECORDING in _offered(_home(client))
+
+
+def test_untouched_recording_never_appears(client, tagging_world):
+    """The card continues work; it does not advertise work never started —
+    same rule as the logging list, which needs an edit of yours to show."""
+    assert CT_RECORDING not in _offered(_home(client))
+
+
+def test_someone_elses_marks_are_not_my_unfinished_work(client, tagging_world):
+    conn, cur = tagging_world
+    _place(cur, conn, 2, user_id=CT_OTHER_USER)
+
+    assert CT_RECORDING not in _offered(_home(client))
+
+
+def test_revoked_grant_removes_the_card(client, tagging_world):
+    """Placed marks are not a standing permission — the card links into the
+    tool, and the tool would refuse."""
+    conn, cur = tagging_world
+    _place(cur, conn, 2)
+    cur.execute(
+        "UPDATE session_person SET can_manage_recordings = FALSE WHERE session_id = %s AND person_id = %s",
+        (CT_SESSION, CT_PERSON),
+    )
+    conn.commit()
+
+    assert CT_RECORDING not in _offered(_home(client))

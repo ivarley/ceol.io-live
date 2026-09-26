@@ -13,6 +13,7 @@
         {% elif active_tab == 'test_links' %}Test Links
         {% elif active_tab == 'cache_settings' %}Cache Settings
         {% elif active_tab == 'email_updates' %}Email Updates
+        {% elif active_tab == 'recordings' %}Recordings
         {% endif %}
     </span>
     {% endif %}
@@ -67,6 +68,11 @@
            role="tab">
             Email Updates
         </a>
+        <a class="nav-link {{ 'active' if active_tab == 'recordings' else '' }}"
+           href="{{ url_for('admin_recordings') }}"
+           role="tab">
+            Recordings
+        </a>
     </div>
 
     <!-- Mobile Dropdown Navigation -->
@@ -96,6 +102,9 @@
             <option value="{{ url_for('admin_email_updates') }}" {{ 'selected' if active_tab == 'email_updates' else '' }}>
                 Email Updates
             </option>
+            <option value="{{ url_for('admin_recordings') }}" {{ 'selected' if active_tab == 'recordings' else '' }}>
+                Recordings
+            </option>
         </select>
     </div>
 </nav>
@@ -119,7 +128,7 @@
     border: none;
     border-bottom: 3px solid transparent;
     background: none;
-    color: var(--primary, #007bff);
+    color: var(--primary, #65b464);
     font-weight: 500;
     padding: 1rem 1.5rem;
     text-decoration: none;
@@ -128,19 +137,19 @@
 
 /* Override visited state to keep consistent color */
 .nav-tabs .nav-link:visited {
-    color: var(--primary, #007bff);
+    color: var(--primary, #65b464);
 }
 
 .nav-tabs .nav-link:hover {
-    border-bottom-color: var(--primary, #007bff);
-    color: var(--primary, #007bff);
+    border-bottom-color: var(--primary, #65b464);
+    color: var(--primary, #65b464);
     background: none;
 }
 
 .nav-tabs .nav-link.active,
 .nav-tabs .nav-link.active:visited {
     color: var(--text-color);
-    border-bottom-color: var(--primary, #007bff);
+    border-bottom-color: var(--primary, #65b464);
     background: none;
     font-weight: 600;
 }

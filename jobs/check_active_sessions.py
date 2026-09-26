@@ -8,6 +8,14 @@ and buffer windows.
 
 It uses a 1-minute lookahead to ensure sessions scheduled for round times become
 active right at that time (e.g., sessions at 7:00pm become active when this runs at 6:59pm).
+
+It is also the only cron service Ceol has, so the weekly thesession.org merge
+sync (spec 031) rides along at the end rather than paying for a second one. That
+sync gates itself on the clock and on when it last ran, so calling it here every
+fifteen minutes costs one MAX() and does nothing 671 times out of 672. It goes
+LAST, and deliberately: it takes minutes when it does fire, and Render will not
+start the next run of a cron while this one is still going. Session activation
+is the time-sensitive half and has already finished by then.
 """
 
 import sys
@@ -24,6 +32,7 @@ load_dotenv()
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from active_session_manager import update_active_sessions, auto_create_scheduled_instances
+from jobs.sync_thesession_merges import run_weekly_if_due
 
 # Configure logging
 logging.basicConfig(
@@ -88,12 +97,21 @@ def main():
 
         logger.info("=" * 80)
 
-        # Exit with error code if there were errors
-        if has_errors:
-            sys.exit(1)
-
     except Exception as e:
         logger.error(f"Fatal error during active session check: {e}", exc_info=True)
+        sys.exit(1)
+
+    # The piggybacked weekly sync. Outside the try above on purpose: it has its
+    # own error handling, and a failure in it is not a failure of the session
+    # check that just succeeded.
+    try:
+        run_weekly_if_due()
+    except Exception as e:
+        logger.error(f"Fatal error during piggybacked merge sync: {e}", exc_info=True)
+        has_errors = True
+
+    # Exit with error code if there were errors
+    if has_errors:
         sys.exit(1)
 
 

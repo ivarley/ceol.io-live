@@ -73,7 +73,7 @@
     background: var(--hover-bg, #f8f9fa);
   }
   .kit-seg--styled :global(.kit-seg-opt.active) {
-    background: var(--primary, #00a1e0);
+    background: var(--primary-fill, #4a8049);
     color: #fff;
   }
 </style>

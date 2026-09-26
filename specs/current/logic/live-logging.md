@@ -202,13 +202,17 @@ The live screen is **the** session-instance page, for everyone.
 `/live/instances/<id>` (forwarding `?highlight=`, never `?tune=` — on the live screen that
 means "append this tune").
 
-- `user_account.beta_live_logging` is now an **opt-OUT**, not an opt-in: column default
-  `TRUE` (migration `043`), every existing row backfilled to `TRUE`. Only a user who sets
-  it `FALSE` from **Account Information → Tune logger** on their profile
-  (`POST /api/users/<id>/beta-logging`, admin-or-self) lands on the legacy pill editor.
-  There is no other route to it, and signed-out visitors can't reach it at all.
-- Names (`beta_live_logging`, `/beta-logging`) are kept from the beta rollout to avoid a
-  rename migration; they no longer mean "beta".
+There is **no branch and no preference** (spec 052 §B13). `beta_live_logging` used to
+let a signed-in user opt back to the legacy pill editor; the live logger is the only
+logger now, so the flag, its endpoint (`POST /api/users/<id>/beta-logging`), its
+`User` attribute and the profile row that set it are all gone.
+
+- The `user_account.beta_live_logging` **column still exists** and is no longer read or
+  written. Dropping it is a separate migration, deliberately not bundled here: stop
+  reading a column first, drop it once nothing deployed can still want it.
+- **The legacy pill editor is now unreachable.** `templates/session_instance_detail.html`
+  (~1,970 lines) and the branch of `session_instance_detail` that rendered it have no
+  route in. Deleting them is spec 035 Step 6, still outstanding.
 
 ### The public (signed-out) view
 
@@ -332,6 +336,17 @@ opens a confirm dialog ("Switch to editing?") that flips to edit mode, logs the 
 clears the pane search (same end state as a direct edit-mode add); cancelling keeps the
 search. Reading never mutates silently (complete logs get a notice instead — un-complete
 from the header first).
+
+**Deep-search ranking.** With a session in scope (the live screen's modal and pane,
+the segmenter's "which tune was this?" pane) `_deep_search_core` orders results the way
+the composer's quick type-ahead does: the set's type first, an exact hit next, then the
+tunes **this session plays most**, then how the name matched (prefix before substring),
+then global popularity. Session aliases (`session_tune.alias`) match and rank alongside
+the catalog name. It used to sort by match kind and popularity alone, which put the
+world's favourite "Maggie" above the one the session plays every week; nobody noticed
+because the composer resolves the common tunes before the panel is ever opened. Without
+a session (My Tunes, session-tunes add pane) there are no plays to rank on and the order
+is unchanged.
 
 **Deep-search preview (spec 032).** Tapping a result card no longer adds immediately — it
 opens **`TunePreview.svelte`** in the same real estate (TuneSearch swaps its content; search

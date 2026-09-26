@@ -36,13 +36,9 @@ INLINE_AUTH = {
     "add_person_to_session_people_tab": "inline 401 + can_view_session_people()",
     # user preference toggle
     "update_auto_save_preference": "inline 401",
-    # Recording endpoints (feature 022): all call _require_system_admin()
-    "start_recording": "_require_system_admin()",
-    "upload_chunk": "_require_system_admin()",
-    "update_recording_status": "_require_system_admin()",
-    "list_recordings": "_require_system_admin()",
-    "get_recording_playback": "_require_system_admin()",
-    "upload_recording_file": "_require_system_admin()",
+    # The feature-022 recording endpoints lived here. Spec 050 replaced them; the
+    # segmenter endpoints carry @api_login_required (so they are covered by the
+    # decorator check) and gate on admin inside, and need no allowlist entry.
 }
 
 

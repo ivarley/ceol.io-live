@@ -5,7 +5,7 @@
   // #addPersonModal, #person-input — the e2e suite selects on these). First
   // paint comes from the embedded payload; search/sort are client-side; the
   // 2-step add-person wizard is a pair of kit Sheets (the PeopleTab pattern).
-  import { toast, SearchField, Chip, Sheet } from '../lib/index.js'
+  import { SearchField, Chip, Sheet } from '../lib/index.js'
   import { normalizeQuotes } from '../shared/parse.js'
 
   let { pageData = null } = $props()
@@ -246,7 +246,8 @@
         saving = false
         if (data.success) {
           step2Open = false
-          toast(data.message, 'success')
+          // No toast (spec 052 §B4): refetchPeople() below updates the row in the
+          // table you are looking at.
           // The legacy page reloaded; refetching the same payload endpoint
           // updates the table in place.
           refetchPeople()

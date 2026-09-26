@@ -139,6 +139,64 @@ def test_tune_preview_personal_settings_and_no_session_fields(client, authentica
     assert body["session_setting_id"] is None  # personal scope: no session preference
 
 
+def test_tune_preview_reports_the_viewers_own_row(client, authenticated_user, preview_rows):
+    """`person_tune` tells the add surfaces what the VIEWER already has, so a pasted
+    thesession.org link (a synthetic result with no on_list flag) can't offer to "add"
+    a tune that's been on the list for years."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        with authenticated_user:
+            body = client.get(f"/api/my-tunes/tune-preview/{TUNE}").get_json()
+        assert body["person_tune"] is None  # not on the list yet
+
+        cur.execute(
+            """INSERT INTO person_tune (person_id, tune_id, learn_status, setting_id, heard_count)
+               VALUES (2, %s, 'learning', %s, 3)""",
+            (TUNE, SETTING_A),
+        )
+        conn.commit()
+
+        with authenticated_user:
+            body = client.get(f"/api/my-tunes/tune-preview/{TUNE}").get_json()
+        pt = body["person_tune"]
+        assert pt["on_list"] is True
+        assert pt["learn_status"] == "learning"
+        assert pt["setting_id"] == SETTING_A
+        assert pt["heard_count"] == 3
+        assert pt["person_tune_id"] is not None  # the on-list actions are keyed by it
+    finally:
+        cur.execute("DELETE FROM person_tune_history WHERE tune_id = %s", (TUNE,))
+        cur.execute("DELETE FROM person_tune WHERE tune_id = %s", (TUNE,))
+        conn.commit()
+        cur.close()
+        conn.close()
+
+
+def test_tune_preview_merged_tune_reports_the_canonical_row(client, authenticated_user, preview_rows):
+    """A merged-away id resolves to the canonical tune, so the on-list facts must be
+    the canonical tune's — not "not on your list" because the old id has no row."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "INSERT INTO person_tune (person_id, tune_id, learn_status) VALUES (2, %s, 'learned')",
+            (TUNE,),
+        )
+        conn.commit()
+        with authenticated_user:
+            body = client.get(f"/api/my-tunes/tune-preview/{TUNE_MERGED}").get_json()
+        assert body["tune_id"] == TUNE
+        assert body["person_tune"]["on_list"] is True
+        assert body["person_tune"]["learn_status"] == "learned"
+    finally:
+        cur.execute("DELETE FROM person_tune_history WHERE tune_id = %s", (TUNE,))
+        cur.execute("DELETE FROM person_tune WHERE tune_id = %s", (TUNE,))
+        conn.commit()
+        cur.close()
+        conn.close()
+
+
 def test_tune_preview_session_scope_aliases_and_stats(client, authenticated_user, preview_rows):
     """Session-path home: session_tune.alias + session_tune_alias surface as
     aliases; played-here count and dates are scoped to the session."""

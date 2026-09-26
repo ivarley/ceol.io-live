@@ -1,45 +1,47 @@
 <script>
   import { Tabs as BitsTabs } from 'bits-ui'
 
-  // Tabs (spec 035): THE tab engine — horizontal tab buttons on desktop, and a
-  // design-time knob (mobileSelect) deciding whether the SAME sections collapse
-  // behind a <select> under 768px (promoted from person_details.html /
-  // admin_tabs.html). Both controls always render; CSS media queries pick which
-  // one shows. Few tabs fit a phone fine, so 'auto' (the default) only switches
-  // to the select when the tab count genuinely overflows a phone width.
+  // Tabs (spec 035): THE tab engine — one horizontal strip of tabs at every width.
+  //
+  // It used to carry a second control: under 768px, pages with more than four tabs
+  // collapsed the same sections behind a <select> (promoted from person_details.html
+  // / admin_tabs.html). That is retired (spec 052 §B3). It had no iOS counterpart —
+  // nothing in the platform turns a tab bar into a dropdown — so every page using it
+  // was a page whose navigation could not be ported, only redesigned. Too many tabs
+  // for a phone width now SCROLL, which is an idiom both platforms have.
   //
   // Two modes:
   //  * value mode (default): bits-ui Tabs — client-side switching, bind:value.
-  //  * navigate mode: each tab is a real <a href> (middle-click works) and the
-  //    mobile select performs the navigation — for pages whose tabs are routes.
+  //  * navigate mode: each tab is a real <a href> (middle-click works) — for
+  //    pages whose tabs are routes.
   //
   // Panes: one children snippet receiving the active tab id. Callers either
   //  branch on it ({#if active === 'x'}) or keep every pane component mounted
   //  with an `active` flag when pane state must survive switching.
   //
   // Skinning: pages keep their existing look by passing their legacy classes
-  //  (listClass/tabClass/selectClass) and styled={false} to drop the kit's
+  //  (listClass/tabClass) and styled={false} to drop the kit's
   //  decorative skin; the structural responsive rule always applies. Triggers
   //  carry data-tab={id} and an `active` class so legacy CSS and e2e selectors
   //  keep working.
   let {
-    tabs = [], // [{ id, label, href?, domId? }] — href per tab in navigate mode; domId = DOM id for the trigger (aria-labelledby targets)
+    // [{ id, label, count?, href?, domId? }] — href per tab in navigate mode; domId =
+    // DOM id for the trigger (aria-labelledby targets). `count` renders muted after the
+    // label (spec 052 §B8 Stage 2): how many are in there is worth knowing before you
+    // open it, but it is not the name of the tab, so it must not compete with it.
+    // Omit it (or pass null) where the number is unknown or the viewer may not see it —
+    // 0 is a real count and renders as one.
+    tabs = [],
     value = $bindable(), // active tab id; defaults to the first tab
     onValueChange = () => {},
     navigate = false,
     // navigate-mode seam: replace to intercept (tests) — default is a real navigation
     onNavigate = (href) => (window.location.href = href),
-    // Mobile behavior under 768px: true = always the <select>, false = keep the
-    // visual tabs, 'auto' = select only when there are more than 4 tabs.
-    mobileSelect = 'auto',
     styled = true, // false: structural behavior only, skin comes from the page
     listId = undefined,
     listClass = '',
     tabClass = '',
-    selectId = undefined,
-    selectClass = '',
     paneClass = '',
-    selectLabel = 'Section',
     children, // snippet(activeId)
   } = $props()
 
@@ -49,21 +51,7 @@
     onValueChange(v)
   }
 
-  function onSelectChange(e) {
-    const v = e.currentTarget.value
-    if (navigate) {
-      const t = tabs.find((x) => x.id === v)
-      if (t?.href) onNavigate(t.href)
-      return
-    }
-    value = v
-    handleChange(v)
-  }
-
-  const useMobileSelect = $derived(mobileSelect === true || (mobileSelect === 'auto' && tabs.length > 4))
-  const rootClass = $derived(
-    'kit-tabs' + (styled ? ' kit-tabs--styled' : '') + (useMobileSelect ? ' kit-tabs--mselect' : '')
-  )
+  const rootClass = $derived('kit-tabs' + (styled ? ' kit-tabs--styled' : ''))
 </script>
 
 {#if navigate}
@@ -77,14 +65,10 @@
           class:active={value === t.id}
           data-tab={t.id}
           data-state={value === t.id ? 'active' : 'inactive'}
-          aria-current={value === t.id ? 'page' : undefined}>{t.label}</a>
+          aria-current={value === t.id ? 'page' : undefined}
+          >{t.label}{#if t.count != null}{' '}<span class="kit-tab-count">{t.count}</span>{/if}</a>
       {/each}
     </nav>
-    <select id={selectId} class="kit-tabs-select {selectClass}" aria-label={selectLabel} {value} onchange={onSelectChange}>
-      {#each tabs as t (t.id)}
-        <option value={t.id}>{t.label}</option>
-      {/each}
-    </select>
     <div class="kit-tabs-pane {paneClass}">
       {@render children?.(value)}
     </div>
@@ -97,14 +81,11 @@
           value={t.id}
           id={t.domId}
           class="kit-tab {tabClass}{value === t.id ? ' active' : ''}"
-          data-tab={t.id}>{t.label}</BitsTabs.Trigger>
+          data-tab={t.id}
+          >{t.label}{#if t.count != null}{' '}<span class="kit-tab-count">{t.count}</span
+            >{/if}</BitsTabs.Trigger>
       {/each}
     </BitsTabs.List>
-    <select id={selectId} class="kit-tabs-select {selectClass}" aria-label={selectLabel} {value} onchange={onSelectChange}>
-      {#each tabs as t (t.id)}
-        <option value={t.id}>{t.label}</option>
-      {/each}
-    </select>
     <div class="kit-tabs-pane {paneClass}">
       {@render children?.(value)}
     </div>
@@ -114,11 +95,22 @@
 <style>
   /* A clicked tab shouldn't wear the browser's focus ring — that's for
      keyboard navigation (:focus-visible) only. Applies to every skin. */
+  /* Muted and a size down: present, secondary to the tab's name. */
+  :global(.kit-tab-count) {
+    /* A real space already separates it (see the markup — the accessible name is
+       the concatenated text), so this is the rest of the gap, not all of it. */
+    margin-left: 0.15em;
+    opacity: 0.55;
+    font-weight: 400;
+    font-size: 0.85em;
+    font-variant-numeric: tabular-nums;
+  }
+
   :global(.kit-tab:focus) {
     outline: none;
   }
   :global(.kit-tab:focus-visible) {
-    outline: 2px solid var(--primary, #00a1e0);
+    outline: 2px solid var(--primary, #65b464);
     outline-offset: -2px;
   }
 
@@ -137,7 +129,7 @@
     padding: var(--sp-2, 8px) var(--sp-4, 16px);
     margin-bottom: -1px;
     font: inherit;
-    color: var(--primary, #00a1e0);
+    color: var(--primary, #65b464);
     cursor: pointer;
     text-decoration: none;
   }
@@ -150,31 +142,41 @@
     border-bottom: 1px solid var(--bg-color, #fff);
     color: var(--text-color, #252930);
   }
-  :global(.kit-tabs--styled .kit-tabs-select) {
-    width: 100%;
-    padding: var(--sp-2, 8px);
-    font: inherit;
-    background: var(--input-bg, #fff);
-    color: var(--text-color, #252930);
-    border: 1px solid var(--border-color, #ddd);
-    border-radius: var(--r-sm, 4px);
-  }
   :global(.kit-tabs--styled .kit-tabs-pane) {
     padding-top: var(--sp-4, 16px);
   }
 
-  /* Structural responsive rule — applies skinned or not, but only for hosts
-     whose mobileSelect knob resolved to the select (.kit-tabs--mselect). */
-  :global(.kit-tabs .kit-tabs-select) {
-    display: none;
-  }
+  /* Too many tabs for the width SCROLL — they do not collapse into a control of a
+     different kind (spec 052 §B3). Six tabs on a phone is a strip you push sideways
+     on both platforms; a <select> is a thing only the web has, and a page navigated
+     by one cannot be ported, only redesigned.
+
+     Structural, so it applies skinned or not. */
   @media (max-width: 767.98px) {
-    :global(.kit-tabs--mselect .kit-tabs-list) {
+    :global(.kit-tabs .kit-tabs-list) {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      overflow-y: hidden;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      /* The active tab's underline sits on the bottom edge; without this the
+         scroll container clips it. */
+      padding-bottom: 1px;
+    }
+    :global(.kit-tabs .kit-tabs-list::-webkit-scrollbar) {
       display: none;
     }
-    :global(.kit-tabs--mselect .kit-tabs-select) {
-      display: block;
-      width: 100%;
+    /* Only SHRINKING is disabled, not the whole flex shorthand. A tab that can
+       shrink will squeeze to fit rather than overflow, and six squeezed tabs are
+       six unreadable slivers — but writing `flex: 0 0 auto` here would also cancel
+       any grow a page has set, and this selector outranks a page's own `.tab-button`.
+       That is not hypothetical: it flattened the session page's three tabs, which
+       divide the width evenly via `flex: 1 1 0`. Killing shrink alone leaves that
+       working (1 0 0 still fills) and still lets six tabs overflow and scroll. */
+    :global(.kit-tabs .kit-tab) {
+      flex-shrink: 0;
+      white-space: nowrap;
     }
   }
+
 </style>

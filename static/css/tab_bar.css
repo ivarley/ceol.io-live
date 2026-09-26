@@ -1,0 +1,129 @@
+/* Bottom tab bar (spec 052 §B8 Stage 5). Phone only: above 768px the layout has
+   room for the hamburger and the tab bar would be a strip of chrome across a very
+   wide screen for no gain.
+
+   Markup: templates/tab_bar.html, included by base.html for signed-in users. */
+
+.tab-bar {
+  display: none;
+}
+
+@media (max-width: 767.98px) {
+  .tab-bar {
+    display: flex;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1040; /* over page content, under the tune drawer / sheets (1050+) */
+    background: var(--bg-color, #fff);
+    border-top: 1px solid var(--border-color, #ddd);
+    /* The home-indicator strip on a notched iPhone. Without this the labels sit
+       under it and the whole bar reads as cut off. */
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .tab-bar .tab-bar-item {
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    /* 50px + the label keeps every tab over the 44px minimum touch target. */
+    min-height: 50px;
+    padding: 6px 2px 5px;
+    /* The bar wears the logo's green rather than a neutral grey. --logo-green-soft
+       is that hue at the legibility the grey had (4.9:1, the same as #888), because
+       the mark's own #4a8049 is 3.7:1 — right for a logo, too dark for a 0.68rem
+       label. The active tab then steps up to the full accent. */
+    color: var(--logo-green-soft, #569654);
+    text-decoration: none;
+    font-size: 0.68rem;
+    letter-spacing: 0.01em;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .tab-bar .tab-bar-item:hover,
+  .tab-bar .tab-bar-item:focus {
+    color: var(--logo-green-soft, #569654);
+    text-decoration: none;
+  }
+
+  .tab-bar .tab-bar-item.active,
+  .tab-bar .tab-bar-item.active:hover {
+    color: var(--primary, #65b464);
+  }
+
+  /* The C is a mask taking currentColor, so it greens with its label for free —
+     which is the reason it is a mask and not an <img> (see .tab-bar-c below). */
+
+  .tab-bar-glyph {
+    display: block;
+    width: 22px;
+    height: 22px;
+    line-height: 0;
+  }
+
+  .tab-bar-glyph svg {
+    width: 22px;
+    height: 22px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  /* Home wears the C from the wordmark rather than a house. It is a MASK, not an
+     <img>: the same file then takes currentColor, so it greys with its neighbours
+     at rest and turns the accent colour when active, instead of needing a second
+     asset and a swap. */
+  .tab-bar-c {
+    background-color: currentColor;
+    -webkit-mask: url('/static/images/android-chrome-192x192.png') center / contain no-repeat;
+    mask: url('/static/images/android-chrome-192x192.png') center / contain no-repeat;
+  }
+
+  .tab-bar-label {
+    line-height: 1;
+  }
+
+  /* Room for the bar at the end of every page, or the last row of any list sits
+     under it and looks like the page ends early. Set on the wrapper rather than
+     body so pages that manage their own scrolling still get it. */
+  body.has-tab-bar .docs-wrapper {
+    padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* The hamburger is the tab bar's predecessor, not its companion: showing both
+     would offer two navigations with different contents. It stays in the DOM and
+     stays rendered above 768px, where there is no tab bar. */
+  body.has-tab-bar .hamburger-menu {
+    display: none;
+  }
+
+  /* Logging is a task, not navigation (spec 052 §B14). While you are writing a log
+     the bar goes away — it would otherwise sit on the composer, which is why this
+     screen had no bar at all — and comes back the moment you are done. The class is
+     set by the logger; nothing else uses it. */
+  body.logging-edit .tab-bar {
+    display: none;
+  }
+
+  /* The logger owns its own scrolling, so it does not get the wrapper padding above.
+     The reservation goes on its flex COLUMN, not on the scroller: the scroller is
+     only the middle of that column, and below it sits the dock holding "✎ Edit log".
+     Padding the scroller left the dock exactly where it was — under the bar, with
+     the bar swallowing its taps. Shortening the column moves both. */
+  body.has-tab-bar:not(.logging-edit) main {
+    padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* The log-details drawer is fixed to the bottom of the screen, so it needs the
+     same reservation — otherwise its last field scrolls under the bar and looks
+     truncated rather than scrollable. */
+  body.has-tab-bar:not(.logging-edit) .hx-drawer {
+    bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+  }
+}

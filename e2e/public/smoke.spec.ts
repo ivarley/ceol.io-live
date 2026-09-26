@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { SESSIONS } from "../support/data";
+import { NOTATION, SESSIONS } from "../support/data";
 
 /**
  * Logged-out smoke tests: every public page returns 200 and renders its shell.
@@ -28,6 +28,34 @@ test.describe("public pages load", () => {
       await expect(page.locator("body")).not.toContainText(/Internal Server Error|Traceback/i);
     });
   }
+});
+
+/**
+ * Notation search on a PUBLIC page. The session Tunes tab filters a list the page already
+ * holds, and notation matching for it is a server round trip — so POST /api/tunes/abc-filter
+ * is @public_api on purpose. If it ever gains an auth decorator, the filter silently stops
+ * matching notes for logged-out visitors, which is exactly the kind of failure nobody
+ * reports. This pins it.
+ */
+test.describe("notation search (logged out)", () => {
+  test("a session's Tunes tab narrows by notation for an anonymous visitor", async ({ page }) => {
+    await page.goto(`/sessions/${SESSIONS.mueller.path}/tunes`);
+    const search = page.locator("#tune-search");
+    await expect(search).toBeVisible();
+
+    await search.fill(NOTATION.phrase);
+    const rows = page.locator(".tune-name");
+    await expect(rows).toHaveCount(1, { timeout: 8000 });
+    await expect(rows.first()).toContainText(NOTATION.tune.name);
+  });
+
+  test("the notation filter endpoint answers an anonymous caller", async ({ request }) => {
+    const res = await request.post("/api/tunes/abc-filter", {
+      data: { q: NOTATION.phrase, tune_ids: [NOTATION.tune.id, 27, 55] },
+    });
+    expect(res.status()).toBe(200);
+    expect((await res.json()).tune_ids).toEqual([NOTATION.tune.id]);
+  });
 });
 
 test.describe("auth gating", () => {

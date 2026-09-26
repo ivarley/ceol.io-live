@@ -43,9 +43,24 @@
     
     <!-- Theme CSS -->
     <link id="theme-style" rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+    {# Grouped-table rows (spec 052 §B12/§B16): the app's one label-left/value-right
+       list shape. A stylesheet rather than a bundle import, so a plain Jinja page can
+       use it too — /about is three rows and does not want a Svelte bundle. #}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/grouped.css') }}">
 
     <!-- Shared hamburger menu (also used by the live editor) -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/hamburger_menu.css') }}">
+    <!-- Bottom tab bar (spec 052 §B8 Stage 5): the phone navigation that replaces
+         the hamburger below 768px. Loaded after it so the rule that hides the
+         hamburger on a phone wins without !important. -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tab_bar.css') }}">
+    <!-- Share this page: a header control, because it acts on whatever page you are
+         on and so cannot live on one particular page (spec 052 §B1). -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/share.css') }}">
+    {# Records pointer-vs-keyboard so the focus-ring rules in theme.css can tell a
+       click from a Tab. Not deferred: it must be listening before the first click. #}
+    <script src="{{ url_for('static', filename='js/input_modality.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/share.js') }}" defer></script>
     <script src="{{ url_for('static', filename='js/hamburger_menu.js') }}"></script>
 
     <!-- Unified tune-detail modal, available app-wide (the hamburger "Find a tune" opens it
@@ -55,8 +70,11 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tune_detail_modal.css') }}">
     {% endblock %}
 
-    <!-- App-wide My-Tunes offline op-queue + connection / offline-sync indicator -->
+    <!-- App-wide offline op-queues (My Tunes; the recording segmenter's marks) +
+         connection / offline-sync indicator. The queues load BEFORE the indicator so
+         it can count and drain them. -->
     <script src="{{ url_for('static', filename='js/mytunes_offline.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='js/segmenter_offline.js') }}" defer></script>
     <script src="{{ url_for('static', filename='js/connection_status.js') }}" defer></script>
     {% if current_user.is_authenticated %}
     <!-- Offline data mirror (tunebook + notation + popular) and page warm-up -->
@@ -67,7 +85,10 @@
     <style>
         /* Header customization for new logo */
         body {
-            padding-top: 40px !important;
+            /* Clears the fixed header. From the same token the header's height comes
+               from, so the two cannot disagree — it was hard-coded 40px against a
+               42px bar, which left content sitting 2px under it. */
+            padding-top: var(--site-header-h, 42px) !important;
         }
 
         /* Ensure header is above modal overlay so hamburger menu remains clickable and not dimmed */
@@ -76,8 +97,43 @@
             z-index: 2000 !important;
         }
 
+        /* The header is exactly --site-header-h tall, whatever is inside it.
+           Everything that sticks below it offsets by that variable, and the logo is
+           position:absolute so it adds no height of its own — which meant the bar's
+           height came entirely from the tallest thing in the utilities row. When the
+           phone tab bar hid the hamburger, that was nothing: the header collapsed to
+           10px and the logo hung out of the bottom of it, with the page scrolling
+           through behind. Stated here instead of emerging from the contents. */
+        /* EXACTLY --site-header-h, not "at least". Everything that sticks below the
+           header offsets by that variable, so a bar that can grow is a bar that
+           quietly stops matching the offsets — and it grows from the most trivial
+           edit, which is how adding a 34px share button turned it into 44px. Fixed
+           height, contents centred inside it. */
+        .header.fixed-top {
+            height: var(--site-header-h, 42px);
+        }
+
         .docs-branding {
-            min-height: auto !important;
+            height: var(--site-header-h, 42px) !important;
+            min-height: 0 !important;
+        }
+
+        /* The bar's inner row, given the full height rather than inheriting it from
+           whatever happens to be inside. .docs-logo-wrapper is position:absolute
+           against THIS box, so a short row drags the logo down with it — centring the
+           row was what left the logo hanging below the header. Flex here keeps the
+           badges vertically centred now that the hamburger is not setting the height. */
+        .docs-branding > .container-fluid {
+            height: var(--site-header-h, 42px);
+            display: flex;
+            align-items: center;
+            /* The 3px the inline style adds would make 42 into 48. */
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+        }
+
+        .docs-top-utilities {
+            flex: 1;
         }
 
         .docs-logo-wrapper {
@@ -96,6 +152,38 @@
 
         .docs-content {
             padding-top: 10px !important;
+        }
+
+        /* The page's name — desktop only. See the note beside the markup below: a
+           phone names the current screen in the tab bar, so a heading repeating it
+           cost a line at the top of the smallest screen for nothing. Above 768px
+           there is no tab bar, so this is the only thing that says where you are.
+           Hidden by `display` rather than not rendered, so one served page is
+           correct at both sizes. */
+        .page-title {
+            display: none;
+        }
+
+        @media (min-width: 768px) {
+            /* The same type and spacing as the home page's "Welcome back" line
+               (.home-greeting in frontend/src/homepage/page.css) — the one heading
+               the app already had in this position, so these read as the same thing
+               on every page rather than a second, heavier style. Kept in step by
+               hand: it lives in a Svelte bundle's stylesheet, which this file cannot
+               import. The margin is stated in full because an <h1> would otherwise
+               bring a top margin the greeting (a <div>) does not have. */
+            .page-title {
+                display: block;
+                font-family: 'Poppins', sans-serif;
+                font-weight: 300;
+                font-size: 1.6rem;
+                color: var(--text-color);
+                /* 1.2rem above is what puts this on the same line as the home
+                   greeting: home-root carries `margin-top: 1.2rem` inline, and
+                   .docs-content's 10px padding is common to both. 1.5rem below is
+                   the greeting's own margin-bottom. */
+                margin: 1.2rem 0 1.5rem;
+            }
         }
 
         /* Connection / offline-sync status (see connection_status.js) */
@@ -270,7 +358,12 @@
 
 </head> 
 
-<body class="docs-page">
+{# has-tab-bar drives the phone-layout rules in css/tab_bar.css: reserve room at
+   the foot of the page, and hide the hamburger the bar replaces. Set here from the
+   same condition tab_bar.html renders under, rather than inferred in CSS with
+   :has(.tab-bar) — if :has() were ever unsupported that would fail OPEN, showing
+   both navigations at once. #}
+<body class="docs-page has-tab-bar">
 <header class="header fixed-top">	    
     <div class="branding docs-branding">
         <div class="container-fluid position-relative" style="padding-top: 3px; padding-bottom: 3px;">
@@ -307,6 +400,17 @@
                 </div>
                 {% endif %}
 
+                <!-- Share this page (spec 052 §B1). Sits where it is reachable from
+                     every screen, which is the whole point of it: the URL and QR it
+                     offers are for the page you are looking at now. -->
+                <button type="button" class="share-btn" id="share-btn"
+                        title="Share this page" aria-label="Share this page">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+                        <line x1="8.6" y1="10.5" x2="15.4" y2="6.5"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/>
+                    </svg>
+                </button>
+
                 <!-- Hamburger Menu -->
                 {% include 'hamburger_menu.html' %}
                 
@@ -320,9 +424,38 @@
 
     <div class="docs-wrapper">
 	    <div class="docs-content">
+            {# The page's name, on desktop only. A phone gets the tab bar, which names
+               the screen you are on at the bottom of it — a heading saying the same
+               word again was just a line of chrome eating the top of a small screen,
+               which is why these came out (spec 052 §B1). There is no tab bar above
+               768px, so nothing up there says where you are.
+
+               Opt in with `{% raw %}{% set page_title = "Sessions" %}{% endraw %}` at the top of a page. Pages
+               that name themselves some other way (a session's own name, a person's
+               name) simply do not set it. #}
+            {% if page_title %}<h1 class="page-title">{{ page_title }}</h1>{% endif %}
             {% block content %}{% endblock %}
         </div>
     </div>
+
+{# Bottom tab bar -- phone only, signed-in only. See templates/tab_bar.html. #}
+{% include 'tab_bar.html' %}
+
+{# Share sheet. Hidden until the header button opens it; the QR's src is set at that
+   point rather than on page load, so carrying this on every page costs nothing. #}
+<div class="share-dialog" id="share-dialog" role="dialog" aria-modal="true"
+     aria-labelledby="share-title" hidden>
+  <div class="share-panel">
+    <h2 class="share-title" id="share-title">Share this page</h2>
+    <img class="share-qr" id="share-qr" alt="">
+    <code class="share-url" id="share-url"></code>
+    <div class="share-actions">
+      <button type="button" class="share-action primary" id="share-copy">Copy link</button>
+      <button type="button" class="share-action" id="share-native" hidden>Share&hellip;</button>
+      <button type="button" class="share-action" data-share-close>Close</button>
+    </div>
+  </div>
+</div>
 
 <script>
 // Hamburger menu + dark mode + share + 'Find a tune' moved to

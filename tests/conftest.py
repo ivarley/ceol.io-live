@@ -653,3 +653,18 @@ def different_session_instance():
         "date": "2023-09-01",
         "comments": "Different session for isolation testing"
     }
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limits():
+    """Counters must not leak between tests.
+
+    rate_limit.py holds its state in module globals, so without this a test that
+    happens to run after enough others would get a 429 from a limit it never meant
+    to exercise — and which test that is would depend on ordering.
+    """
+    import rate_limit
+
+    rate_limit.reset()
+    yield
+    rate_limit.reset()

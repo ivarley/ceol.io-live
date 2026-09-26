@@ -62,8 +62,8 @@ beforeEach(async () => {
 async function openDateSheet(container) {
   await waitFor(() => expect(container.querySelectorAll('.tune-row').length).toBe(1))
   await fireEvent.click(container.querySelector('.topbar-row'))
-  const rows = [...container.querySelectorAll('.hx-row')]
-  const dateRow = rows.find((r) => r.querySelector('.hx-label').textContent.trim() === 'Date')
+  const rows = [...document.querySelectorAll('.kit-field')]
+  const dateRow = rows.find((r) => r.querySelector('.kit-field-label').textContent.trim() === 'Date')
   expect(dateRow).toBeTruthy()
   await fireEvent.click(dateRow.querySelector('.hx-act'))
   // The Sheet portals to the body, not into the component's container.
@@ -76,10 +76,10 @@ describe('session date editor (spec 046)', () => {
     const { container } = render(App, { props: { config } })
     await waitFor(() => expect(container.querySelectorAll('.tune-row').length).toBe(1))
     await fireEvent.click(container.querySelector('.topbar-row'))
-    const dateRow = [...container.querySelectorAll('.hx-row')]
-      .find((r) => r.querySelector('.hx-label').textContent.trim() === 'Date')
+    const dateRow = [...document.querySelectorAll('.kit-field')]
+      .find((r) => r.querySelector('.kit-field-label').textContent.trim() === 'Date')
     // The same string the session's Logs tab shows, from the shared formatter.
-    expect(dateRow.querySelector('.hx-val').textContent.replace(/\s+/g, ' ').trim())
+    expect(dateRow.querySelector('.kit-field-value').textContent.replace(/\s+/g, ' ').trim())
       .toBe('Sun · Feb 1, 2026 · 7:00pm-10:00pm')
     expect(dateRow.querySelector('.hx-act').textContent.trim()).toBe('Change')
   })
@@ -98,9 +98,13 @@ describe('session date editor (spec 046)', () => {
     expect(payload).toMatchObject({
       date: '2026-01-31', start_time: '19:00', end_time: '22:00', confirm: false,
     })
-    // The server's display string lands on the header, and the sheet closes.
+    // The server's display string lands on the Date row, and the editor closes. Not
+    // the header summary: the drawer is still open behind the editor, and the summary
+    // hides while it is (spec 052 §B15) — the drawer is already saying the date.
     await waitFor(() => expect(document.querySelector('.dt-input')).toBeNull())
-    expect(container.querySelector('.session-date').textContent).toContain('Sat · Jan 31, 2026')
+    const dateRow = [...document.querySelectorAll('.kit-field')]
+      .find((r) => r.querySelector('.kit-field-label')?.textContent.trim() === 'Date')
+    expect(dateRow.querySelector('.kit-field-value').textContent).toContain('Sat · Jan 31, 2026')
   })
 
   it('re-dates from someone else\'s set_date arriving over SSE', async () => {
@@ -169,9 +173,9 @@ describe('session time editor (spec 048)', () => {
     })
     // The header's Date row picks up the new range.
     await waitFor(() => {
-      const row = [...container.querySelectorAll('.hx-row')]
-        .find((r) => r.querySelector('.hx-label').textContent.trim() === 'Date')
-      expect(row.querySelector('.hx-val').textContent).toContain('7:00pm-11:30pm')
+      const row = [...document.querySelectorAll('.kit-field')]
+        .find((r) => r.querySelector('.kit-field-label').textContent.trim() === 'Date')
+      expect(row.querySelector('.kit-field-value').textContent).toContain('7:00pm-11:30pm')
     })
   })
 
@@ -190,9 +194,9 @@ describe('session time editor (spec 048)', () => {
     await waitFor(() => expect(sendOp).toHaveBeenCalledTimes(1))
     expect(vi.mocked(sendOp).mock.calls[0][2]).toMatchObject({ end_time: '' })
     await waitFor(() => {
-      const row = [...container.querySelectorAll('.hx-row')]
-        .find((r) => r.querySelector('.hx-label').textContent.trim() === 'Date')
-      expect(row.querySelector('.hx-val').textContent).toContain('7:00pm - ?')
+      const row = [...document.querySelectorAll('.kit-field')]
+        .find((r) => r.querySelector('.kit-field-label').textContent.trim() === 'Date')
+      expect(row.querySelector('.kit-field-value').textContent).toContain('7:00pm - ?')
     })
   })
 

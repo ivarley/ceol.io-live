@@ -5,6 +5,7 @@
 // come from mylist.js (the single tested ES copy; static/js/tunebook_status.js is
 // its vanilla twin for the remaining non-Svelte pages).
 import { listStatus, NOT_ON_LIST } from '../mylist.js'
+import { DEFAULT_HEARD_COUNT } from '../shared/persontune.js'
 import { pickAka } from './namematch.js'
 
 // Musical keys list (same order as the legacy modal's key selects)
@@ -485,7 +486,11 @@ export function overlayOfflineOps(tune, ops, tuneId) {
       else if (o.type === 'set_heard') t.heard_count = o.heard_count
       else if (o.type === 'set_notes') t.notes = o.notes
       else if (o.type === 'set_tags') t.tags = normalizeTags(o.tags)
-      else if (o.type === 'add' && !t.learn_status) t.learn_status = o.learn_status || 'want to learn'
+      else if (o.type === 'add' && !t.learn_status) {
+        t.learn_status = o.learn_status || 'want to learn'
+        // A queued add hasn't reached the server, so mirror the row it will create.
+        if (t.heard_count == null) t.heard_count = DEFAULT_HEARD_COUNT
+      }
     })
   return t
 }

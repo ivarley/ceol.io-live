@@ -1,5 +1,11 @@
 import { test, expect } from "@playwright/test";
 import { STORAGE, SESSIONS } from "../support/data";
+import {
+  createInstance,
+  deleteInstance,
+  seedLog,
+  uniqueDate,
+} from "../support/live";
 
 /**
  * Live-logging screen (Feature 024, /live/*) — end-to-end smoke.
@@ -10,10 +16,15 @@ import { STORAGE, SESSIONS } from "../support/data";
  *
  * Deliberately READ-ONLY: the seeded instance 90 is shared across the suite and
  * e2e has no per-test DB isolation, so adding/removing tunes here would pollute
- * it for other specs and re-runs. A mutating smoke (add via composer, offline →
- * reconnect) needs a throwaway instance created + torn down in setup — tracked
- * as a follow-up (see tests/integration/test_live_logging_ops.py for the
- * commit-and-cleanup pattern to mirror).
+ * it for other specs and re-runs.
+ *
+ * Instance 90 also carries `log_complete_date` FROM THE SEED — it is a finished
+ * log, and the logger renders a finished log read-only for everyone: App.svelte's
+ * viewbar shows "✓ This session has been fully logged" where the edit affordance
+ * would be, and completion actively locks edit mode. So instance 90 has no
+ * "✎ Edit log" button at all. The four tests that need edit mode live in the
+ * second describe block below, each on a THROWAWAY instance of its own
+ * (e2e/support/live.ts).
  */
 
 const LIVE_URL = `/live/instances/${SESSIONS.mueller.instanceId}`;
@@ -24,20 +35,28 @@ test.describe("live logger (read-only smoke)", () => {
   test("renders the seeded session's sets and tunes", async ({ page }) => {
     await page.goto(LIVE_URL);
     // The Svelte app hydrates from the bootstrap API; wait for real tune rows.
-    await expect(page.locator(".tune-row").first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator(".tune-row").first()).toBeVisible({
+      timeout: 15_000,
+    });
     expect(await page.locator(".set").count()).toBeGreaterThan(0);
     expect(await page.locator(".tune-row").count()).toBeGreaterThan(1);
     // every set carries a type label pill (Reels/Jigs/Mixed/Unknown)
     expect(await page.locator(".set-label").count()).toBeGreaterThan(0);
   });
 
-  test("records persist across a reload (server round-trip)", async ({ page }) => {
+  test("records persist across a reload (server round-trip)", async ({
+    page,
+  }) => {
     await page.goto(LIVE_URL);
-    await expect(page.locator(".tune-row").first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator(".tune-row").first()).toBeVisible({
+      timeout: 15_000,
+    });
     const before = await page.locator(".tune-row").count();
 
     await page.reload();
-    await expect(page.locator(".tune-row").first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator(".tune-row").first()).toBeVisible({
+      timeout: 15_000,
+    });
     expect(await page.locator(".tune-row").count()).toBe(before);
   });
 
@@ -46,15 +65,140 @@ test.describe("live logger (read-only smoke)", () => {
   test("desktop width shows the persistent search pane", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto(LIVE_URL);
-    await expect(page.locator(".tune-row").first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator(".tune-row").first()).toBeVisible({
+      timeout: 15_000,
+    });
     await expect(page.locator(".sidepane")).toBeVisible();
     await expect(page.locator(".sidepane .deep-field")).toBeVisible();
   });
 
-  test("view-mode pane pick asks before switching to edit", async ({ page }) => {
+  // spec 028 keyboard nav: arrow keys walk the pane results and Enter would pick the
+  // highlighted card; Escape blurs the field. All read-only (no pick → no mutation).
+  test("pane search: arrows highlight a result, Escape blurs", async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto(LIVE_URL);
-    await expect(page.locator(".tune-row").first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator(".tune-row").first()).toBeVisible({
+      timeout: 15_000,
+    });
+    const field = page.locator(".sidepane .deep-field");
+    await field.fill("reel");
+    await expect(page.locator(".sidepane .deep-card").first()).toBeVisible();
+    // no highlight until an arrow key is pressed
+    await expect(page.locator(".sidepane .deep-card.hl")).toHaveCount(0);
+    await field.press("ArrowDown");
+    await expect(page.locator(".sidepane .deep-card.hl")).toHaveCount(1);
+    // the field (a combobox) advertises the active card via aria-activedescendant
+    await expect(field).toHaveAttribute("aria-activedescendant", "dres-0");
+    await field.press("ArrowDown");
+    await expect(field).toHaveAttribute("aria-activedescendant", "dres-1");
+    // Escape removes focus from the field (spec 028 global Escape)
+    await field.press("Escape");
+    await expect(field).not.toBeFocused();
+  });
+
+  // Regression (spec 028): clearing the filter with "✕" must also drop search mode, not just the
+  // text — otherwise the "Done Searching" dock lingers with the filter gone.
+  test("clearing the filter with ✕ also exits search mode", async ({
+    page,
+  }) => {
+    await page.goto(LIVE_URL);
+    await expect(page.locator(".tune-row").first()).toBeVisible({
+      timeout: 15_000,
+    });
+    const filter = page.locator(".searchbar-input");
+    await filter.fill("maggie");
+    await expect(page.locator(".searchbar-dock")).toBeVisible(); // "Done Searching" dock is up
+    await page.locator(".searchbar-clear").click();
+    await expect(page.locator(".searchbar-dock")).toHaveCount(0); // search mode fully dropped
+    await expect(filter).toHaveValue("");
+  });
+
+  // Regression: while the pull-down filter is active, tapping a tune row must still open
+  // the tune detail modal (same as view mode) — rowClick used to swallow the tap entirely.
+  test("tapping a tune while filtering opens the detail modal", async ({
+    page,
+  }) => {
+    await page.goto(LIVE_URL);
+    await expect(page.locator(".tune-row").first()).toBeVisible({
+      timeout: 15_000,
+    });
+    const filter = page.locator(".searchbar-input");
+    await filter.fill("maggie");
+    await expect(page.locator(".searchbar-dock")).toBeVisible(); // filter mode is on
+    // click a matched, catalog-linked tune (unlinked rows show a notice, not the modal)
+    const row = page
+      .locator(".tune-row:not(.unlinked)", { has: page.locator(".search-hit") })
+      .first();
+    await expect(row).toBeVisible();
+    await row.click();
+    await expect(page.locator("#tune-detail-modal")).toBeVisible({
+      timeout: 10_000,
+    });
+  });
+
+  test("mobile width has no side pane", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(LIVE_URL);
+    await expect(page.locator(".tune-row").first()).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.locator(".sidepane")).toHaveCount(0);
+  });
+
+  test("defaults to read-only View with a view footer", async ({ page }) => {
+    await page.goto(LIVE_URL);
+    await expect(page.locator(".tune-row").first()).toBeVisible({
+      timeout: 15_000,
+    });
+    // spec 021: the logger opens in read-only View mode (main.view-mode) with a footer
+    // that is EITHER an "Edit log" button or, if the log is complete, a "fully logged"
+    // marker — assert the view footer regardless of that completion state.
+    await expect(page.locator("main.view-mode")).toBeVisible();
+    await expect(page.locator(".viewbar")).toBeVisible();
+  });
+});
+
+/**
+ * The smoke tests that need EDIT mode.
+ *
+ * They cannot run on instance 90: its log is complete in the seed, and a complete
+ * log has no "✎ Edit log" button. Each test gets a throwaway instance on a unique
+ * far-future date, seeded through the live ops endpoint and deleted in teardown —
+ * the pattern live-logger-bulk.spec.ts established, now shared in support/live.ts.
+ *
+ * These are still read-only in spirit: they move the cursor and focus, filter, and
+ * search, committing no tune ops. Having their own instance is what makes that safe
+ * to assert without touching the shared seed.
+ */
+test.describe("live logger (edit mode)", () => {
+  test.use({ storageState: STORAGE.admin });
+
+  // Two sets, so the log has rows to walk and a seam between them.
+  const SEED_SETS = [["Cooley's", "The Kesh"], ["Drowsy Maggie"]];
+
+  let date: string;
+  let inst: number;
+
+  test.beforeEach(async ({ request }, testInfo) => {
+    date = uniqueDate(testInfo.workerIndex);
+    inst = await createInstance(request, date);
+  });
+  test.afterEach(async ({ request }) => {
+    await deleteInstance(request, date);
+  });
+
+  test("view-mode pane pick asks before switching to edit", async ({
+    page,
+    request,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await seedLog(request, inst, SEED_SETS);
+    await page.goto(`/live/instances/${inst}`);
+    await expect(page.locator(".tune-row").first()).toBeVisible({
+      timeout: 15_000,
+    });
     await expect(page.locator("main.view-mode")).toBeVisible();
     await page.locator(".sidepane .deep-field").fill("maggie");
     // spec 032: a card click opens the preview pane first; "＋ Log This Tune" is the pick
@@ -73,34 +217,18 @@ test.describe("live logger (read-only smoke)", () => {
     await expect(page.locator(".sidepane .deep-card").first()).toBeVisible();
   });
 
-  // spec 028 keyboard nav: arrow keys walk the pane results and Enter would pick the
-  // highlighted card; Escape blurs the field. All read-only (no pick → no mutation).
-  test("pane search: arrows highlight a result, Escape blurs", async ({ page }) => {
-    await page.setViewportSize({ width: 1280, height: 800 });
-    await page.goto(LIVE_URL);
-    await expect(page.locator(".tune-row").first()).toBeVisible({ timeout: 15_000 });
-    const field = page.locator(".sidepane .deep-field");
-    await field.fill("reel");
-    await expect(page.locator(".sidepane .deep-card").first()).toBeVisible();
-    // no highlight until an arrow key is pressed
-    await expect(page.locator(".sidepane .deep-card.hl")).toHaveCount(0);
-    await field.press("ArrowDown");
-    await expect(page.locator(".sidepane .deep-card.hl")).toHaveCount(1);
-    // the field (a combobox) advertises the active card via aria-activedescendant
-    await expect(field).toHaveAttribute("aria-activedescendant", "dres-0");
-    await field.press("ArrowDown");
-    await expect(field).toHaveAttribute("aria-activedescendant", "dres-1");
-    // Escape removes focus from the field (spec 028 global Escape)
-    await field.press("Escape");
-    await expect(field).not.toBeFocused();
-  });
-
   // spec 028 keyboard shortcuts. Enters edit mode but only moves the cursor/focus (no
-  // add/remove/break ops), so instance 90's data is untouched — safe on the shared seed.
-  test('keyboard: "/" jumps to search, empty composer Up drops to cursor mode', async ({ page }) => {
+  // add/remove/break ops),
+  test('keyboard: "/" jumps to search, empty composer Up drops to cursor mode', async ({
+    page,
+    request,
+  }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
-    await page.goto(LIVE_URL);
-    await expect(page.locator(".tune-row").first()).toBeVisible({ timeout: 15_000 });
+    await seedLog(request, inst, SEED_SETS);
+    await page.goto(`/live/instances/${inst}`);
+    await expect(page.locator(".tune-row").first()).toBeVisible({
+      timeout: 15_000,
+    });
     await page.locator(".editbtn", { hasText: /edit log/i }).click();
     const composer = page.locator(".composer input");
     await expect(composer).toBeVisible();
@@ -132,11 +260,17 @@ test.describe("live logger (read-only smoke)", () => {
   });
 
   // spec 028: page-local recall history for the filter and search boxes, plus the filter's
-  // ArrowDown-to-top-seam. Read-only (filtering/searching sends no ops).
-  test("filter + search boxes recall history; filter Down exits to the top seam", async ({ page }) => {
+  // ArrowDown-to-top-seam. Filtering/searching sends no ops.
+  test("filter + search boxes recall history; filter Down exits to the top seam", async ({
+    page,
+    request,
+  }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
-    await page.goto(LIVE_URL);
-    await expect(page.locator(".tune-row").first()).toBeVisible({ timeout: 15_000 });
+    await seedLog(request, inst, SEED_SETS);
+    await page.goto(`/live/instances/${inst}`);
+    await expect(page.locator(".tune-row").first()).toBeVisible({
+      timeout: 15_000,
+    });
     await page.locator(".editbtn", { hasText: /edit log/i }).click();
 
     // --- filter box recall (800ms idle-debounce remembers each dwelled-on term) ---
@@ -171,62 +305,75 @@ test.describe("live logger (read-only smoke)", () => {
     await expect(page.locator(".sidepane .deep-card").first()).toBeVisible();
   });
 
-  // Regression (spec 028): clearing the filter with "✕" must also drop search mode, not just the
-  // text — otherwise the "Done Searching" dock lingers with the filter gone.
-  test("clearing the filter with ✕ also exits search mode", async ({ page }) => {
-    await page.goto(LIVE_URL);
-    await expect(page.locator(".tune-row").first()).toBeVisible({ timeout: 15_000 });
-    const filter = page.locator(".searchbar-input");
-    await filter.fill("maggie");
-    await expect(page.locator(".searchbar-dock")).toBeVisible(); // "Done Searching" dock is up
-    await page.locator(".searchbar-clear").click();
-    await expect(page.locator(".searchbar-dock")).toHaveCount(0); // search mode fully dropped
-    await expect(filter).toHaveValue("");
-  });
-
-  // Regression: while the pull-down filter is active, tapping a tune row must still open
-  // the tune detail modal (same as view mode) — rowClick used to swallow the tap entirely.
-  test("tapping a tune while filtering opens the detail modal", async ({ page }) => {
-    await page.goto(LIVE_URL);
-    await expect(page.locator(".tune-row").first()).toBeVisible({ timeout: 15_000 });
-    const filter = page.locator(".searchbar-input");
-    await filter.fill("maggie");
-    await expect(page.locator(".searchbar-dock")).toBeVisible(); // filter mode is on
-    // click a matched, catalog-linked tune (unlinked rows show a notice, not the modal)
-    const row = page.locator(".tune-row:not(.unlinked)", { has: page.locator(".search-hit") }).first();
-    await expect(row).toBeVisible();
-    await row.click();
-    await expect(page.locator("#tune-detail-modal")).toBeVisible({ timeout: 10_000 });
-  });
-
-  // spec 028: the Log button is disabled while the composer is empty. Read-only (never commits).
-  test("Log button is disabled while the composer is empty", async ({ page }) => {
-    await page.goto(LIVE_URL);
-    await expect(page.locator(".tune-row").first()).toBeVisible({ timeout: 15_000 });
+  // spec 028: the Log button is disabled while the composer is empty. Never commits.
+  test("Log button is disabled while the composer is empty", async ({
+    page,
+    request,
+  }) => {
+    await seedLog(request, inst, SEED_SETS);
+    await page.goto(`/live/instances/${inst}`);
+    await expect(page.locator(".tune-row").first()).toBeVisible({
+      timeout: 15_000,
+    });
     await page.locator(".editbtn", { hasText: /edit log/i }).click();
     const composer = page.locator(".composer input");
-    const logBtn = page.locator(".composer > button").filter({ hasText: /^Log$/ });
+    const logBtn = page
+      .locator(".composer > button")
+      .filter({ hasText: /^Log$/ });
     await expect(logBtn).toBeDisabled();
     await composer.fill("reel");
     await expect(logBtn).toBeEnabled();
     await composer.fill("");
     await expect(logBtn).toBeDisabled();
   });
+});
 
-  test("mobile width has no side pane", async ({ page }) => {
-    await page.setViewportSize({ width: 390, height: 844 });
+test.describe("the session-details drawer, on a desktop viewport", () => {
+  test.use({ storageState: STORAGE.admin });
+
+  test("is as wide as the two panes, not as wide as the window", async ({
+    page,
+  }) => {
+    // The logger is a 1200px centred grid above 900px (main.wide: log column left,
+    // suggestion/search pane right). A drawer pinned to the viewport overhung both
+    // panes by the width of the gutters and read as a page-level overlay dropped on
+    // the logger rather than part of it.
+    await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(LIVE_URL);
-    await expect(page.locator(".tune-row").first()).toBeVisible({ timeout: 15_000 });
-    await expect(page.locator(".sidepane")).toHaveCount(0);
+
+    const main = page.locator("main");
+    await expect(main).toHaveClass(/\bwide\b/);
+
+    await page.locator(".topbar-row").click();
+    const drawer = page.locator(".hx-drawer");
+    await expect(drawer).toBeVisible();
+
+    const [m, d] = await Promise.all([
+      main.evaluate((e) => e.getBoundingClientRect()),
+      drawer.evaluate((e) => e.getBoundingClientRect()),
+    ]);
+    expect(Math.round(d.x)).toBe(Math.round(m.x));
+    expect(Math.round(d.width)).toBe(Math.round(m.width));
+    // ...and that is genuinely narrower than the window, or this asserts nothing.
+    expect(d.width).toBeLessThan(1440);
   });
 
-  test("defaults to read-only View with a view footer", async ({ page }) => {
+  test("still fills the width when there is only one pane", async ({
+    page,
+  }) => {
+    // Below the two-pane breakpoint the side pane never mounts and the tray is the
+    // whole screen again, which is what it is on a phone.
+    await page.setViewportSize({ width: 700, height: 900 });
     await page.goto(LIVE_URL);
-    await expect(page.locator(".tune-row").first()).toBeVisible({ timeout: 15_000 });
-    // spec 021: the logger opens in read-only View mode (main.view-mode) with a footer
-    // that is EITHER an "Edit log" button or, if the log is complete, a "fully logged"
-    // marker — assert the view footer regardless of that completion state.
-    await expect(page.locator("main.view-mode")).toBeVisible();
-    await expect(page.locator(".viewbar")).toBeVisible();
+
+    const main = page.locator("main");
+    await expect(main).not.toHaveClass(/\bwide\b/);
+
+    await page.locator(".topbar-row").click();
+    const d = await page
+      .locator(".hx-drawer")
+      .evaluate((e) => e.getBoundingClientRect());
+    expect(Math.round(d.x)).toBe(0);
+    expect(Math.round(d.width)).toBe(700);
   });
 });

@@ -3,20 +3,23 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { extractTuneId, normalizeQuotes, parseLocalDate } from '../src/shared/parse.js'
 import { formatTime } from '../src/shared/format.js'
 import {
-  sortFunctions,
-  filterAndSortTunes,
-  resultsCountLabel,
-  stateFromParams,
   applyStateToParams,
   basePathOf,
-  instanceTimeLabel,
-  isEmptyLog,
-  instanceUrlId,
-  parseTheSessionId,
-  filterPeople,
-  keepInstance,
+  domOf,
+  dowOf,
+  filterAndSortTunes,
   filterInstanceGroups,
+  filterPeople,
+  instanceTimeLabel,
+  instanceUrlId,
+  isEmptyLog,
+  keepInstance,
   matchLoggedTunes,
+  parseTheSessionId,
+  resultsCountLabel,
+  rowDateLabel,
+  sortFunctions,
+  stateFromParams,
   tunePlayLinks,
 } from '../src/sessionpage/logic.js'
 
@@ -72,6 +75,40 @@ describe('filterAndSortTunes', () => {
     expect(
       filterAndSortTunes(tunes, { ...noFilters, search: '101' }, sessionDesc, 'all').map((t) => t.tune_id)
     ).toEqual([101])
+  })
+
+  // Notation search: `abcIds` is the set of tune ids the server says match a note-shaped
+  // query (the payload carries no ABC, so the browser can't decide this itself).
+  describe('notation (abcIds)', () => {
+    const noteSearch = { ...noFilters, search: 'gedbed' }
+
+    it('unions notation matches into a search that would otherwise drop them', () => {
+      expect(
+        filterAndSortTunes(tunes, noteSearch, sessionDesc, 'all', new Set([102])).map((t) => t.tune_id)
+      ).toEqual([102])
+    })
+
+    it('tags a notation-only match so the card can say why it is here', () => {
+      const out = filterAndSortTunes(tunes, noteSearch, sessionDesc, 'all', new Set([102]))
+      expect(out[0]._abcOnly).toBe(true)
+    })
+
+    it('does not tag a row that also matched by name', () => {
+      const out = filterAndSortTunes(
+        tunes, { ...noFilters, search: 'banish' }, sessionDesc, 'all', new Set([102])
+      )
+      expect(out[0]._abcOnly).toBeFalsy()
+    })
+
+    it('omitting abcIds filters by name exactly as before', () => {
+      expect(filterAndSortTunes(tunes, noteSearch, sessionDesc, 'all')).toHaveLength(0)
+    })
+
+    it('returns the original objects untouched when nothing matched by notation', () => {
+      const out = filterAndSortTunes(tunes, noFilters, sessionDesc, 'all', new Set([102]))
+      expect(out).toHaveLength(3)
+      expect(out.every((t) => !t._abcOnly)).toBe(true)
+    })
   })
 
   it('type filter narrows to one tune type', () => {
@@ -354,5 +391,36 @@ describe('tunePlayLinks', () => {
   it('is empty for an instance with no plays, and with no map at all', () => {
     expect(tunePlayLinks(plays, { session_instance_id: 11 }, 'p', 1)).toEqual([])
     expect(tunePlayLinks(null, { session_instance_id: 10 }, 'p', 1)).toEqual([])
+  })
+})
+
+describe('log row date helpers (spec 052 §B8 Stage 3)', () => {
+  // Every one of these goes through parseLocalDate, never new Date(str): a bare
+  // "2026-01-27" is parsed as UTC midnight by the Date constructor, which is the
+  // previous evening anywhere west of Greenwich — so the row would show the wrong
+  // weekday and day-of-month for every user in the Americas.
+  it('splits a date into the weekday and day-of-month the block renders', () => {
+    expect(dowOf('2026-01-27')).toBe('Tue')
+    expect(domOf('2026-01-27')).toBe(27)
+  })
+
+  it('does not drift across a timezone boundary', () => {
+    expect(domOf('2026-01-01')).toBe(1)
+    expect(dowOf('2026-01-01')).toBe('Thu')
+    expect(domOf('2026-12-31')).toBe(31)
+  })
+
+  describe('rowDateLabel', () => {
+    const today = new Date(2026, 0, 15)
+
+    it('omits the year inside the current one — the group header already said it', () => {
+      expect(rowDateLabel('2026-01-27', today)).toBe('Tuesday, Jan 27')
+    })
+
+    it('keeps the year for any other, so a filtered row still stands alone', () => {
+      // A tune filter lifts rows out of their groups, and then the year is the
+      // only thing telling 2024 from 2025.
+      expect(rowDateLabel('2024-11-19', today)).toBe('Tuesday, Nov 19, 2024')
+    })
   })
 })

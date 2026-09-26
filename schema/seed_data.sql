@@ -249,7 +249,13 @@ INSERT INTO person (person_id, first_name, last_name, email, city, state, countr
 -- person the next time she's back for a night.
 (21, 'Maura', 'Gone', 'maura.gone@example.com', 'Doolin', 'Clare', 'Ireland'),
 -- James walked in once and got checked in. Visitor, unconfirmed: he can't see the roster.
-(22, 'James', 'Quinn', 'james.quinn@example.com', 'Galway', 'Galway', 'Ireland');
+(22, 'James', 'Quinn', 'james.quinn@example.com', 'Galway', 'Galway', 'Ireland'),
+-- Fiona made an ACCOUNT and joined Mueller herself, and nobody has confirmed her yet.
+-- The difference from James matters: he has no account, so nothing is waiting on the
+-- admin. She does, so the People tab nudges an admin to confirm her ("1 person has
+-- joined and can't see who plays here yet"). That nudge counts people who are
+-- unconfirmed AND unarchived AND have an account, so it needs all three to appear.
+(23, 'Fiona', 'Doherty', 'fiona.doherty@example.com', 'Austin', 'TX', 'USA');
 
 -- =============================================================================
 -- USER ACCOUNTS
@@ -265,7 +271,10 @@ INSERT INTO user_account (user_id, person_id, username, user_email, hashed_passw
 (2, 2, 'sarah_fiddle', 'sarah.oconnor@example.com', '$2b$12$/YvbW.M2JbUhytoG1so4be2RgUcFEHghuIWGeOGaSIx1Rt7zdl1im', 'America/Chicago', TRUE, FALSE, TRUE, TRUE),
 (3, 6, 'siobhan_flute', 'siobhan.w@example.com', '$2b$12$/YvbW.M2JbUhytoG1so4be2RgUcFEHghuIWGeOGaSIx1Rt7zdl1im', 'America/New_York', TRUE, FALSE, TRUE, TRUE),
 (4, 9, 'sean_banjo', 'sobrien@example.com', '$2b$12$/YvbW.M2JbUhytoG1so4be2RgUcFEHghuIWGeOGaSIx1Rt7zdl1im', 'America/Chicago', TRUE, FALSE, TRUE, TRUE),
-(5, 12, 'maeve_accordion', 'maeve.brennan@example.com', '$2b$12$/YvbW.M2JbUhytoG1so4be2RgUcFEHghuIWGeOGaSIx1Rt7zdl1im', 'America/Los_Angeles', TRUE, FALSE, FALSE, FALSE);
+(5, 12, 'maeve_accordion', 'maeve.brennan@example.com', '$2b$12$/YvbW.M2JbUhytoG1so4be2RgUcFEHghuIWGeOGaSIx1Rt7zdl1im', 'America/Los_Angeles', TRUE, FALSE, FALSE, FALSE),
+-- Fiona: verified and able to log in, so the OTHER side of unconfirmed is reachable
+-- too -- what a joined-but-unconfirmed member sees when she opens the People tab.
+(6, 23, 'fiona_fiddle', 'fiona.doherty@example.com', '$2b$12$/YvbW.M2JbUhytoG1so4be2RgUcFEHghuIWGeOGaSIx1Rt7zdl1im', 'America/Chicago', TRUE, FALSE, TRUE, TRUE);
 
 -- =============================================================================
 -- PERSON INSTRUMENTS
@@ -274,6 +283,7 @@ INSERT INTO user_account (user_id, person_id, username, user_email, hashed_passw
 INSERT INTO person_instrument (person_id, instrument) VALUES
 (1, 'fiddle'), (1, 'mandolin'),
 (2, 'fiddle'),
+(23, 'fiddle'),
 (3, 'tin whistle'), (3, 'flute'),
 (4, 'concertina'),
 (5, 'guitar'), (5, 'bouzouki'),
@@ -321,7 +331,11 @@ INSERT INTO session_person (session_id, person_id, relationship, confirmed, arch
 (1, 21, 'member', TRUE, TRUE, FALSE),
 -- James: a walk-in. Exactly what check-in creates -- visitor, unconfirmed, so he cannot see
 -- the session's people list even though he has a session_person row.
-(1, 22, 'visitor', FALSE, FALSE, FALSE);
+(1, 22, 'visitor', FALSE, FALSE, FALSE),
+-- Fiona: exactly what POST /api/sessions/<path>/join writes. Self-serve joining always
+-- lands confirmed = FALSE, because people-visibility is granted BY the session, never
+-- taken. She is the one an admin is nudged to confirm.
+(1, 23, 'member', FALSE, FALSE, FALSE);
 
 -- =============================================================================
 -- SESSION INSTANCES (past 3 months)
@@ -2808,6 +2822,49 @@ INSERT INTO session_instance_person (session_instance_id, person_id, attendance)
 (104, 1, 'yes'), (104, 2, 'yes'), (104, 6, 'yes'), (104, 7, 'yes'), (104, 9, 'yes'),
 (105, 6, 'yes'), (105, 12, 'yes'), (105, 13, 'yes'),
 (106, 1, 'yes'), (106, 4, 'yes'), (106, 13, 'yes'), (106, 9, 'no'), (106, 12, 'no');
+
+-- =============================================================================
+-- TONIGHT (spec 052 §B8 Stage 4)
+-- =============================================================================
+-- Home's Today card only exists when a session is on TODAY, so with only fixed
+-- historical dates in this file it was unreachable: you could not see it locally,
+-- and an e2e test could only assert its absence. These two instances are dated
+-- CURRENT_DATE, which is the one thing in the seed that has to move with the clock.
+--
+-- Two of them, because sarah_fiddle belongs to both Downtown and Mueller, and two
+-- sessions on one day is the festival case the card is a horizontal strip for.
+--
+-- The LIVE one, with the log and the people, is Downtown — deliberately not Mueller.
+-- Mueller is the session thirteen e2e files exercise, and the live logger's composer
+-- suggests the next tune from the SESSION's history of what follows what. Adding a
+-- set to Mueller here gave the composer a suggestion it did not have before, which
+-- opened its dropdown on an empty input, which turned ArrowUp into "move the
+-- highlight" instead of "leave the box" — and failed a keyboard test on an entirely
+-- different instance. Tonight's data belongs where nothing else is measuring.
+INSERT INTO session_instance (session_instance_id, session_id, date, start_time, end_time, is_active, logging_mode, comments) VALUES
+(120, 2, CURRENT_DATE, '20:00', '23:00', TRUE, 'legacy', 'Tonight, in progress.'),
+(121, 1, CURRENT_DATE, '19:00', '22:00', FALSE, 'legacy', NULL);
+
+-- A part-finished log on the live one: a tally to show ("so far", because it is
+-- live) and, since sarah last touched it, a "Pick up where you left off" row.
+INSERT INTO session_instance_tune (session_instance_id, tune_id, order_position, record_type, started_by_person_id, last_modified_user_id, last_modified_date) VALUES
+(120, 27, 'V', 'tune', 2, 2, (NOW() AT TIME ZONE 'UTC') - INTERVAL '20 minutes'),
+(120, 1, 'W', 'tune', NULL, 2, (NOW() AT TIME ZONE 'UTC') - INTERVAL '18 minutes'),
+(120, 74, 'X', 'tune', NULL, 2, (NOW() AT TIME ZONE 'UTC') - INTERVAL '15 minutes'),
+(120, NULL, 'Y', 'break', NULL, 2, (NOW() AT TIME ZONE 'UTC') - INTERVAL '14 minutes'),
+(120, 55, 'Z', 'tune', 2, 2, (NOW() AT TIME ZONE 'UTC') - INTERVAL '10 minutes');
+
+-- Who is in the room. The Today card prints this only while the session is live,
+-- so it is deliberately set on instance 120 alone.
+--
+-- Persons 3, 4 and 5, NOT 1 or 2. `at_active_session_instance_id` is global state:
+-- it says where a person is right now, and the live logger reads it. Putting ian
+-- (1) or sarah_fiddle (2) in this room would change what the two accounts every
+-- other test signs in as see everywhere else.
+UPDATE person SET at_active_session_instance_id = 120 WHERE person_id IN (3, 4, 5);
+
+INSERT INTO session_instance_person (session_instance_id, person_id, attendance) VALUES
+(120, 1, 'yes'), (120, 2, 'yes'), (120, 3, 'yes'), (120, 4, 'yes'), (120, 5, 'yes');
 
 -- =============================================================================
 -- Reset sequences to avoid conflicts with future inserts

@@ -54,9 +54,12 @@ class TestCriticalPageLoads:
         assert response.status_code == 200
         assert b"password" in response.data.lower()
 
-    def test_add_session_page_loads(self, client):
-        """Test that add session page loads successfully."""
-        response = client.get("/add-session")
+    def test_add_session_lands_on_the_sessions_list(self, client):
+        """Adding a session is a sheet over the sessions list, so /add-session
+        redirects there with the flag that opens it (spec 052 §B9). Following the
+        redirect has to reach a working page, which is what this smoke test is
+        for."""
+        response = client.get("/add-session", follow_redirects=True)
         assert response.status_code == 200
         assert b"session" in response.data.lower()
 

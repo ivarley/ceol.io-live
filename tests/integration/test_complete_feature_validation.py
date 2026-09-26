@@ -557,5 +557,6 @@ class TestCompleteWorkflows:
             """, (person_tune_id,))
             row = db_cursor.fetchone()
             assert row[0] == 'learned'
-            assert row[1] == 3
+            # The add itself counts as the first hearing, so 1 + the 3 above.
+            assert row[1] == 4
             assert row[2] is not None  # learned_date should be set

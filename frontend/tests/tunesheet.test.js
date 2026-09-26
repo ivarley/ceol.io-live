@@ -320,6 +320,73 @@ describe('notation display resolution', () => {
   })
 })
 
+// A tune imported from thesession.org lands with ABC only — its PNGs are rendered on
+// demand, and until the drawer did that itself, every tune added through the My Tunes
+// pane showed abc text and waited for someone to press Generate Notation.
+describe('lazy notation render (imported tunes arrive as ABC only)', () => {
+  const noImages = {
+    tune: { setting_id: 5150, abc: 'EBBA!B2 EB!full body', incipit_abc: 'EBBA!B2 EB', image: null, incipit_image: null },
+  }
+  const settingImageCalls = () =>
+    fetchMock.mock.calls.map(([url]) => String(url)).filter((u) => u.includes('/setting-image/'))
+
+  it('renders and shows the missing dots, incipit first then the full staff', async () => {
+    stubFetch([
+      ['/api/tunes/101/detail', detailPayload(noImages)],
+      ['/setting-image/5150?kind=incipit', { success: true, image: 'INCIPIT-PNG' }],
+      ['/setting-image/5150?kind=full', { success: true, image: 'FULL-PNG' }],
+    ])
+    const { container, component } = render(TuneSheet)
+    component.show({ tuneId: 101, ptid: 11, scope: null })
+
+    // The abc text is what's on screen until the render lands...
+    await waitFor(() => expect(container.querySelector('.abc-notation-text')).toBeTruthy())
+    // ...then the dots replace it, without anyone pressing Generate Notation.
+    await waitFor(() => {
+      const img = container.querySelector('.abc-notation-image')
+      expect(img).toBeTruthy()
+      expect(img.getAttribute('src')).toBe('data:image/png;base64,INCIPIT-PNG')
+    })
+    // Both sizes get rendered, so the incipit/full toggle isn't a dead control.
+    await waitFor(() => expect(settingImageCalls()).toHaveLength(2))
+    expect(settingImageCalls()[0]).toContain('kind=incipit')
+    expect(settingImageCalls()[1]).toContain('kind=full')
+  })
+
+  it('asks once per setting, however often the drawer re-renders', async () => {
+    stubFetch([
+      ['/api/tunes/101/detail', detailPayload(noImages)],
+      ['/setting-image/', { success: true, image: 'PNG' }],
+    ])
+    const { component } = render(TuneSheet)
+    component.show({ tuneId: 101, ptid: 11, scope: null })
+    await waitFor(() => expect(settingImageCalls().length).toBe(2))
+    component.close()
+    component.show({ tuneId: 101, ptid: 11, scope: null })
+    await new Promise((r) => setTimeout(r, 50))
+    expect(settingImageCalls()).toHaveLength(2) // the cached PNGs are already in the payload's future
+  })
+
+  it('never renders for a tune that already has its notation, or for a logged-out viewer', async () => {
+    stubFetch([['/api/tunes/101/detail', detailPayload({ tune: { setting_id: 5150, incipit_image: 'ALREADY' } })]])
+    const { component } = render(TuneSheet)
+    component.show({ tuneId: 101, ptid: 11, scope: null })
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+    await new Promise((r) => setTimeout(r, 50))
+    expect(settingImageCalls()).toHaveLength(0)
+
+    cleanup()
+    stubFetch([['/api/tunes/101/detail', detailPayload({ ...noImages, viewer: { logged_in: false } })]])
+    const second = render(TuneSheet)
+    second.component.show({ tuneId: 101, scope: null })
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+    await new Promise((r) => setTimeout(r, 50))
+    // Rendering writes to the catalog — it needs a signed-in viewer (same gate as
+    // the Generate Notation affordance).
+    expect(settingImageCalls()).toHaveLength(0)
+  })
+})
+
 describe('offline op overlay', () => {
   it('applies queued ops in ts order and aliases name -> tune_name', () => {
     const t = overlayOfflineOps(
@@ -335,6 +402,21 @@ describe('offline op overlay', () => {
     expect(t.tune_name).toBe('The Butterfly')
     expect(t.learn_status).toBe('learning')
     expect(t.heard_count).toBe(5)
+  })
+
+  it('a queued add starts the row at one hearing, like the server will', () => {
+    const t = overlayOfflineOps({ name: 'The Butterfly', tune_id: 9 }, [{ tune_id: 9, ts: 1, type: 'add' }], 9)
+    expect(t.learn_status).toBe('want to learn')
+    expect(t.heard_count).toBe(1)
+  })
+
+  it('never overwrites a heard count the row already carries', () => {
+    const t = overlayOfflineOps(
+      { name: 'The Butterfly', tune_id: 9, heard_count: 0 },
+      [{ tune_id: 9, ts: 1, type: 'add' }],
+      9
+    )
+    expect(t.heard_count).toBe(0)
   })
 })
 
@@ -644,7 +726,7 @@ describe('TuneSheet component', () => {
     expect(container.querySelector('#tune-name-input').value).toBe('The Sligo Maid')
     expect(container.querySelector('.tunebook-status-section')).toBeFalsy()
     expect(container.querySelector('.heard-count-section')).toBeFalsy()
-    expect(container.querySelector('#stats-tab').textContent).toContain('In the repertoire of')
+    expect(container.querySelector('#details-tab').textContent).toContain('In the repertoire of')
     // dirty-check enables save
     const saveBtn = container.querySelector('#configure-section .btn-primary')
     expect(saveBtn.disabled).toBe(true)
@@ -683,13 +765,14 @@ describe('TuneSheet component', () => {
     expect(fetchMock.mock.calls[0][0]).toBe('/api/tunes/202/detail?session=austin%2Fmueller')
     expect(window.location.pathname).toBe('/sessions/austin/mueller/tunes/202')
 
-    // My List is leftmost and the drawer opens on it; the session's History is the next
-    // tab. Its droplist IS that tab's heading — it names the session, and the rest of the
-    // list continues the sentence downward.
+    // My List is leftmost and the drawer opens on it; Details (the old Stats tab, which
+    // also carries the session's own name/setting/key) is next, then History, whose
+    // droplist IS that tab's heading — it names the session, and the rest of the list
+    // continues the sentence downward.
     expect([...container.querySelectorAll('.modal-tab')].map((t) => t.dataset.tab)).toEqual([
       'my-list',
+      'details',
       'history',
-      'stats',
       'played-with',
     ])
     expect(container.querySelector('#my-list-tab.active')).toBeTruthy()
@@ -721,7 +804,8 @@ describe('TuneSheet component', () => {
     await fireEvent.click(container.querySelector('.sess-edit-link'))
     expect(container.querySelector('#history-tab').textContent).toContain('We call this:') // present tense
 
-    const save = () => container.querySelector('.sess-form .btn-primary')
+    // Scoped to the tab: Details carries its own .sess-form for the session's own row.
+    const save = () => container.querySelector('#history-tab .sess-form .btn-primary')
     expect(save().disabled).toBe(true)
     await fireEvent.input(container.querySelector('#sess-alias-input'), { target: { value: 'The Banish' } })
     expect(save().disabled).toBe(false)
@@ -730,6 +814,119 @@ describe('TuneSheet component', () => {
     const put = fetchMock.mock.calls.find(([, opts]) => opts && opts.method === 'PUT')
     expect(put[0]).toBe('/api/sessions/austin/mueller/tunes/202')
     expect(JSON.parse(put[1].body)).toEqual({ alias: 'The Banish' })
+  })
+
+  it('Details holds the session layer: open, not hidden, PUTs only changed fields, and owns the remove', async () => {
+    // 037 put this form under the History droplist and accepted that "History" doesn't
+    // advertise being where you edit a session's alias/key/setting. In practice nobody
+    // found it, so it also lives here, on a tab that names it — open, since a tab whose
+    // whole purpose is the form has nothing to gain from hiding it behind a link.
+    const onSave = vi.fn()
+    const payload = (over = {}) =>
+      detailPayload({
+        tune: {
+          tune_id: 202,
+          tune_name: 'Banish Misfortune',
+          alias: 'The Banish',
+          setting_id: 5,
+          key: 'Dmixolydian',
+          setting_key: 'Dmajor',
+          session_scope: sessScope({ can_edit_session: true, can_remove_from_session: true, ...over }),
+        },
+        pts: fullPts({ person_tune_id: 55 }),
+        viewer: { is_session_admin: true },
+      })
+    stubFetch([
+      [
+        '/api/sessions/austin/mueller/tunes/202',
+        (url, opts) => (opts.method === 'PUT' ? { success: true } : { success: false }),
+      ],
+      ['/api/tunes/202/detail', payload()],
+    ])
+    const { container, component } = render(TuneSheet)
+    component.show({ tuneId: 202, scope: { session: 'austin/mueller' }, onSave })
+    await waitFor(() => expect(container.querySelector('#details-tab')).toBeTruthy())
+
+    const details = container.querySelector('#details-tab')
+    expect(details.textContent).toContain('At Mueller Session')
+    expect(container.querySelector('#dc-alias-input').value).toBe('The Banish')
+    expect(container.querySelector('#dc-setting-input').value).toBe('5')
+    expect(container.querySelector('#dc-key-select').value).toBe('Dmixolydian')
+    // The inherit option names the SETTING's key — "as usual" is an instance's fallback,
+    // and this form is never an instance.
+    expect([...container.querySelectorAll('#dc-key-select option')][0].text).toBe(
+      "(the setting's key — Dmajor)"
+    )
+    // Un-enrolling is a fact about the repertoire, so it sits with the repertoire fields.
+    expect(details.textContent).toContain('Remove From Session')
+    expect(container.querySelector('#history-tab').textContent).not.toContain('Remove From Session')
+
+    const save = () => container.querySelector('#details-tab .btn-primary')
+    expect(save().disabled).toBe(true)
+    await fireEvent.change(container.querySelector('#dc-key-select'), { target: { value: 'Gmajor' } })
+    expect(save().disabled).toBe(false)
+    await fireEvent.click(save())
+    await waitFor(() => expect(onSave).toHaveBeenCalled())
+    const put = fetchMock.mock.calls.find(([, opts]) => opts && opts.method === 'PUT')
+    expect(put[0]).toBe('/api/sessions/austin/mueller/tunes/202')
+    expect(JSON.parse(put[1].body)).toEqual({ key: 'Gmajor' })
+
+    // Someone who can't edit sees the values instead — nobody loses information.
+    cleanup()
+    stubFetch([['/api/tunes/202/detail', payload({ can_edit_session: false })]])
+    const ro = render(TuneSheet)
+    ro.component.show({ tuneId: 202, scope: { session: 'austin/mueller' } })
+    await waitFor(() => expect(ro.container.querySelector('#details-tab')).toBeTruthy())
+    expect(ro.container.querySelector('#dc-alias-input')).toBeFalsy()
+    expect(ro.container.querySelector('#details-tab .sess-form-readonly').textContent).toContain(
+      'The Banish'
+    )
+  })
+
+  it("Details stays on the session's own row even while History is showing one night", async () => {
+    // The two forms write different tables. History's follows its droplist; Details has no
+    // droplist, so it is pinned — otherwise picking a date would silently repoint fields
+    // sitting on another tab.
+    stubFetch([
+      [
+        '/api/tunes/202/detail',
+        detailPayload({
+          tune: {
+            tune_id: 202,
+            tune_name: 'Banish Misfortune',
+            alias: 'The Banish',
+            setting_id: 5,
+            key: 'Dmixolydian',
+            name: 'That Night',
+            setting_override: 77,
+            key_override: 'Gmajor',
+            session_scope: sessScope({
+              can_edit_session: true,
+              can_edit_instance: true,
+              instance: 9,
+              played_instances: [
+                { session_instance_id: 9, date: '2026-01-01', location_override: null, positions: [] },
+              ],
+            }),
+          },
+          pts: fullPts({ person_tune_id: 55 }),
+          viewer: { is_session_admin: true },
+        }),
+      ],
+    ])
+    const { container, component } = render(TuneSheet)
+    component.show({ tuneId: 202, scope: { session: 'austin/mueller' } })
+    await waitFor(() => expect(container.querySelector('#details-tab')).toBeTruthy())
+
+    // History opened on the instance...
+    expect(container.querySelector('#sess-scope-select').value).toBe('9')
+    await fireEvent.click(container.querySelector('.sess-edit-link'))
+    expect(container.querySelector('#sess-alias-input').value).toBe('That Night')
+    expect(container.querySelector('#sess-key-select').value).toBe('Gmajor')
+    // ...and Details is unmoved: still the session's own row.
+    expect(container.querySelector('#dc-alias-input').value).toBe('The Banish')
+    expect(container.querySelector('#dc-setting-input').value).toBe('5')
+    expect(container.querySelector('#dc-key-select').value).toBe('Dmixolydian')
   })
 
   it('the list loads for the selected scope; "while I was there" filters it and marks the nights', async () => {
@@ -1414,7 +1611,7 @@ describe('DRIFT GUARD: offline bundle parity with the API detail payload', () =>
     removeLink: /Remove From My Tunes/.test(c.querySelector('.tsc-action-danger')?.textContent || ''),
     // The whole Stats tab: tunebook count row (incl. "Last Updated"), list count,
     // my-sessions and all-sessions play counts, and the canonical-name line.
-    statsTab: norm(c.querySelector('#stats-tab')?.textContent),
+    statsTab: norm(c.querySelector('#details-tab')?.textContent),
   })
 
   it('renders the same load-bearing UI online and offline', async () => {

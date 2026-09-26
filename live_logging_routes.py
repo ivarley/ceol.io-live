@@ -48,12 +48,15 @@ from database import (
     remove_person_attendance as db_remove_person_attendance,
     create_person_with_instruments as db_create_person_with_instruments,
     extract_abc_incipit,
+    ABC_MATCH_SQL,
+    abc_search_terms,
 )
 from auth import create_session
 from api_routes import (
     api_login_required, segment_records_into_sets, render_abc_to_png, bytea_to_base64,
     match_tune_core, _fetch_thesession_tune, TuneImportError, default_setting_id,
 )
+from rate_limit import rate_limited
 from api_auth import public_api
 from fractional_indexing import generate_append_position, generate_position_between
 
@@ -630,8 +633,11 @@ def _handle_add_tune(cur, session_instance_id, data, user_id):
     # Name -> tune matching takes priority for typed text. Tapping a typeahead result sends a
     # tune_id directly; hitting Enter sends just the text, which we resolve here via the same
     # matching the rest of the app uses. An ambiguous/unknown name stays unlinked (raw name,
-    # tune_id NULL). Skipped when a thesession_id was supplied (already resolved above).
-    if ts_id is None and tune_id is None and name and session_id is not None:
+    # tune_id NULL). Skipped when a thesession_id was supplied (already resolved above), or
+    # when the caller says the name is a placeholder (no_match): the segmenter logs a
+    # tune it hasn't identified yet as "Gan Ainm", and thesession.org has real tunes by
+    # that name, so matching would link the placeholder to one of them.
+    if ts_id is None and tune_id is None and name and session_id is not None and not data.get("no_match"):
         matched_id, final_name, err = find_matching_tune(cur, session_id, name)
         if matched_id and not err:
             tune_id, name = matched_id, final_name
@@ -1438,14 +1444,68 @@ def _people_ops_blocked(cur, session_instance_id):
     return blocked
 
 
+def apply_live_op(cur, session_instance_id, op_type, data, user_id, op_id=None):
+    """Run one op against an OPEN transaction: mutate, append its session_event row,
+    NOTIFY. Returns (event_id, event_op_type, payload); raises OpRejected.
+
+    This is the body of `live_op` without the HTTP: the recording segmenter calls it
+    (spec 050 "Logging while segmenting") to log a tune and place its segment in ONE
+    transaction, so the live screens see the new row and the log and the audio can't
+    disagree. The caller owns BEGIN/COMMIT/ROLLBACK and any idempotency check;
+    `op_id` may be None, which the event row allows.
+    """
+    handler = HANDLERS.get(op_type)
+    if handler is None:
+        raise OpRejected("invalid", f"unknown op_type '{op_type}'")
+    payload = handler(cur, session_instance_id, data, user_id)
+
+    # Stamp the actor (person, per §D) so observers can render "Sarah added …"
+    # notices and, later, attribution colors. user_id is the audit fact; the
+    # person is what the UI shows.
+    payload["actor"] = {
+        "person_id": getattr(current_user, "person_id", None),
+        "name": _display_name(getattr(current_user, "first_name", None), getattr(current_user, "last_name", None)) or "",
+    }
+
+    # A handler may emit a different event type than the client requested
+    # (e.g. add_tune that collapsed into a server-generated `corroborate`, §H30).
+    event_op_type = payload.pop("_op_type", op_type)
+
+    # Carry op_id in the event payload (not just the column) so the SSE echo lets the
+    # ORIGINATING client reconcile this op against its optimistic row and replace it
+    # immediately — instead of leaving a duplicate until the (possibly slow) POST ack
+    # lands. Other clients simply don't have this op_id pending, so they just apply it.
+    payload["op_id"] = op_id
+
+    # Feed write (same txn) + NOTIFY. Truth and feed cannot diverge (§B). A
+    # UniqueViolation on op_id propagates to the caller (live_op turns it into
+    # "the concurrent retry won").
+    cur.execute(
+        """
+        INSERT INTO session_event (session_instance_id, op_type, payload, op_id, created_by_user_id)
+        VALUES (%s, %s, %s, %s, %s) RETURNING event_id
+        """,
+        (session_instance_id, event_op_type, json.dumps(payload), op_id, user_id),
+    )
+    event_id = cur.fetchone()[0]
+    # Claim this instance for the live editor (one-way lock): once a live op lands,
+    # the legacy editor is read-only for it (spec 024 beta rollout). No-op after the
+    # first claim; an admin can reset logging_mode back to 'legacy'.
+    cur.execute(
+        "UPDATE session_instance SET logging_mode = 'live' WHERE session_instance_id = %s AND logging_mode <> 'live'",
+        (session_instance_id,),
+    )
+    cur.execute("SELECT pg_notify(%s, %s)", (LIVE_EVENT_CHANNEL, f"{session_instance_id}:{event_id}"))
+    return event_id, event_op_type, payload
+
+
 @api_login_required
 def live_op(session_instance_id):
     """Generic op endpoint: dispatch by op_type, one atomic txn, idempotent by op_id."""
     data = request.get_json(silent=True) or {}
     op_type = data.get("op_type")
     op_id = data.get("op_id")
-    handler = HANDLERS.get(op_type)
-    if handler is None:
+    if op_type not in HANDLERS:
         return jsonify({"success": False, "error": f"unknown op_type '{op_type}'"}), 400
     if op_id is not None:
         try:
@@ -1485,39 +1545,11 @@ def live_op(session_instance_id):
                                 "op_id": op_id, "op_type": existing[1], **existing[2]})
 
         try:
-            payload = handler(cur, session_instance_id, data, user_id)
+            event_id, event_op_type, payload = apply_live_op(cur, session_instance_id, op_type, data, user_id, op_id)
         except OpRejected as r:
             cur.execute("ROLLBACK")
             return jsonify({"success": False, "rejected": True, "reason": r.reason,
                             "message": r.message, "op_id": op_id, "op_type": op_type})
-
-        # Stamp the actor (person, per §D) so observers can render "Sarah added …"
-        # notices and, later, attribution colors. user_id is the audit fact; the
-        # person is what the UI shows.
-        payload["actor"] = {
-            "person_id": getattr(current_user, "person_id", None),
-            "name": _display_name(getattr(current_user, "first_name", None), getattr(current_user, "last_name", None)) or "",
-        }
-
-        # A handler may emit a different event type than the client requested
-        # (e.g. add_tune that collapsed into a server-generated `corroborate`, §H30).
-        event_op_type = payload.pop("_op_type", op_type)
-
-        # Carry op_id in the event payload (not just the column) so the SSE echo lets the
-        # ORIGINATING client reconcile this op against its optimistic row and replace it
-        # immediately — instead of leaving a duplicate until the (possibly slow) POST ack
-        # lands. Other clients simply don't have this op_id pending, so they just apply it.
-        payload["op_id"] = op_id
-
-        # Feed write (same txn) + NOTIFY. Truth and feed cannot diverge (§B).
-        try:
-            cur.execute(
-                """
-                INSERT INTO session_event (session_instance_id, op_type, payload, op_id, created_by_user_id)
-                VALUES (%s, %s, %s, %s, %s) RETURNING event_id
-                """,
-                (session_instance_id, event_op_type, json.dumps(payload), op_id, user_id),
-            )
         except psycopg2.errors.UniqueViolation:
             # Concurrent retry of the same op_id won the race; discard ours, return theirs.
             cur.execute("ROLLBACK")
@@ -1527,15 +1559,6 @@ def live_op(session_instance_id):
                 return jsonify({"success": True, "duplicate": True, "event_id": row[0],
                                 "op_id": op_id, "op_type": row[1], **row[2]})
             raise
-        event_id = cur.fetchone()[0]
-        # Claim this instance for the live editor (one-way lock): once a live op lands,
-        # the legacy editor is read-only for it (spec 024 beta rollout). No-op after the
-        # first claim; an admin can reset logging_mode back to 'legacy'.
-        cur.execute(
-            "UPDATE session_instance SET logging_mode = 'live' WHERE session_instance_id = %s AND logging_mode <> 'live'",
-            (session_instance_id,),
-        )
-        cur.execute("SELECT pg_notify(%s, %s)", (LIVE_EVENT_CHANNEL, f"{session_instance_id}:{event_id}"))
         cur.execute("COMMIT")
 
         return jsonify({"success": True, "event_id": event_id, "op_id": op_id,
@@ -1790,75 +1813,115 @@ def _deep_search_core(cur, q, tune_type, prefer_type, mode, limit, person_id,
     type/popularity.
 
     session_id scopes the "in this session" / "played here" card fields; without a
-    session (My Tunes) they are constant FALSE/0. on_list_last pushes tunes already
+    session (My Tunes) they are constant FALSE/0. With a session, the ranking is the
+    composer's: after the set's type and an exact hit, the tunes THIS session plays
+    most come first, then how the name matched (prefix before substring), then global
+    popularity -- "maggie" is Drowsy Maggie at a session that plays it every week,
+    not whichever Maggie the world likes best. Session aliases match too, so a tune
+    the session calls by its own name is found by that name. on_list_last pushes tunes already
     on the person's list to the bottom of the ranking (the My Tunes add pane dims
     them — they're addable-again noise there, not targets); in_session_last does the
     same for tunes already in the session's repertoire (the session-tunes add pane).
     Either must be part of the SQL ORDER BY so fresh tunes fill the LIMIT window first.
     """
-    # Which sub-searches apply. Whitespace is meaningless in ABC, so strip it from the
-    # query before matching/detecting. ABC joins the blend only for ABC-friendly queries
-    # (note letters, accidentals, bar/octave marks, etc.) — except the explicit `abc`
-    # filter tab, which forces notation search on whatever was typed.
-    q_abc = re.sub(r"\s", "", q)
-    abc_friendly = bool(q_abc) and re.fullmatch(r"[A-Ga-gxz0-9|^_=,'/()\[\]:<>~-]+", q_abc) is not None
+    # Which sub-searches apply. `abc_search_terms` owns the whole "is this notation, and
+    # what does it match?" decision (database.py) -- the same rules the plain tune search,
+    # the abc-filter endpoint and the browser all use, so a query behaves identically
+    # wherever it is typed. The explicit `abc` filter tab forces notation search on
+    # whatever was typed; `mixed` blends it in only for note-shaped queries.
     use_name = bool(q) and mode in ("name", "mixed")
-    use_abc = bool(q_abc) and (mode == "abc" or (mode == "mixed" and abc_friendly))
+    use_abc, abc_pattern = abc_search_terms(q, mode)
 
     _nm = f"LOWER(unaccent({normalize_quotes_sql('t.name')}))"
-    # match the notation text with all whitespace ignored, so "fdd cAA | B" finds a
-    # tune whose body contains "fdd cAA|BAG..." ("My Darling Asleep").
-    _abc_exists = "EXISTS(SELECT 1 FROM tune_setting ts WHERE ts.tune_id = t.tune_id AND REGEXP_REPLACE(ts.abc, '\\s', '', 'g') ILIKE %s)"
+    # Notation matches through the indexed abc_search_key (grace notes, chord symbols and
+    # whitespace dropped on both sides), so "fdd cAA | B" finds a tune whose body contains
+    # "fdd cAA|BAG..." ("My Darling Asleep").
+    _abc_exists = ABC_MATCH_SQL
 
     # SELECT-clause params first (subqueries + type_pref), then abc_only, then rank,
     # then WHERE, then LIMIT — matching the textual order of %s placeholders below.
+    # The session's own name for the tune (session_tune.alias) is a second name to
+    # match and rank on. Joined once; the alias is NULL without a session.
+    _al = f"LOWER(unaccent({normalize_quotes_sql('st.alias')}))"
+    join_sql = ""
+    join_params = []
     params = [person_id]
     if session_id is not None:
-        in_session_sql = "EXISTS(SELECT 1 FROM session_tune st WHERE st.tune_id = t.tune_id AND st.session_id = %s)"
+        join_sql = "LEFT JOIN session_tune st ON st.session_id = %s AND st.tune_id = t.tune_id"
+        join_params = [session_id]
+        in_session_sql = "(st.session_id IS NOT NULL)"
         played_here_sql = """(SELECT COUNT(*) FROM session_instance_tune sit
                       JOIN session_instance si ON si.session_instance_id = sit.session_instance_id
                       WHERE si.session_id = %s AND sit.tune_id = t.tune_id
                         AND sit.record_type = 'tune' AND sit.deleted = FALSE)"""
-        params += [session_id, session_id]
+        params += [session_id]
     else:
         in_session_sql = "FALSE"
         played_here_sql = "0"
     params.append(prefer_type)
 
+    # A name test that also accepts the session alias (when there is one).
+    def name_like(pattern_placeholder="%s"):
+        if session_id is None:
+            return f"{_nm} LIKE LOWER(unaccent({pattern_placeholder}))"
+        return f"({_nm} LIKE LOWER(unaccent({pattern_placeholder})) OR {_al} LIKE LOWER(unaccent({pattern_placeholder})))"
+
+    def name_eq():
+        if session_id is None:
+            return f"{_nm} = LOWER(unaccent(%s))"
+        return f"({_nm} = LOWER(unaccent(%s)) OR {_al} = LOWER(unaccent(%s)))"
+
+    # How many %s each of the two helpers consumes.
+    n_like = 1 if session_id is None else 2
+
     # abc_only flag: row matched notation but NOT name (so the card can badge it).
     if use_abc and use_name:
-        abc_only_sql = f"({_abc_exists} AND NOT ({_nm} LIKE LOWER(unaccent(%s))))"
-        params += [f"%{q_abc}%", f"%{q}%"]
+        abc_only_sql = f"({_abc_exists} AND NOT {name_like()})"
+        params += [abc_pattern] + [f"%{q}%"] * n_like
     elif use_abc:  # abc-only mode: every match is a notation match
         abc_only_sql = "TRUE"
     else:
         abc_only_sql = "FALSE"
 
-    # rank: name matches sort above ABC-only (ELSE 4 = notation-only rows).
+    # rank: how the NAME matched -- exact, prefix, substring; ELSE 4 = notation-only
+    # rows, which always sort after every name hit.
+    #
+    # The order is the composer's quick type-ahead, not a dictionary's: the set's
+    # type first, an exact hit next, then the tunes this session actually plays
+    # (most-played first), then prefix before substring, then the world's
+    # popularity, then the name. Without a session played_here is 0 everywhere and
+    # this collapses to type, rank, popularity -- the My Tunes ordering as before.
     order_prefix = ("on_list, " if on_list_last else "") + ("in_session, " if in_session_last else "")
+    # Ordered OUTSIDE the select (see the subquery below) so the computed columns
+    # can be used in expressions; Postgres only allows bare aliases in ORDER BY.
+    ranked_order = (f"{order_prefix}type_pref, (rank = 4), (rank <> 1), played_here DESC, rank, "
+                    "tunebook_count_cached DESC NULLS LAST, name")
     if use_name and use_abc:
-        rank = f"""CASE WHEN {_nm} = LOWER(unaccent(%s)) THEN 1
-                       WHEN {_nm} LIKE LOWER(unaccent(%s)) THEN 2
-                       WHEN {_nm} LIKE LOWER(unaccent(%s)) THEN 3 ELSE 4 END"""
-        params += [q, f"{q}%", f"%{q}%"]
-        order = f"{order_prefix}type_pref, rank, t.tunebook_count_cached DESC NULLS LAST, t.name"
+        rank = f"""CASE WHEN {name_eq()} THEN 1
+                       WHEN {name_like()} THEN 2
+                       WHEN {name_like()} THEN 3 ELSE 4 END"""
+        params += [q] * n_like + [f"{q}%"] * n_like + [f"%{q}%"] * n_like
+        order = ranked_order
     elif use_name:
-        rank = f"""CASE WHEN {_nm} = LOWER(unaccent(%s)) THEN 1
-                       WHEN {_nm} LIKE LOWER(unaccent(%s)) THEN 2 ELSE 3 END"""
-        params += [q, f"{q}%"]
-        order = f"{order_prefix}type_pref, rank, t.tunebook_count_cached DESC NULLS LAST, t.name"
+        rank = f"""CASE WHEN {name_eq()} THEN 1
+                       WHEN {name_like()} THEN 2 ELSE 3 END"""
+        params += [q] * n_like + [f"{q}%"] * n_like
+        order = ranked_order
     else:
         rank = "0"
-        order = f"{order_prefix}type_pref, t.tunebook_count_cached DESC NULLS LAST, t.name"
+        order = f"{order_prefix}type_pref, played_here DESC, tunebook_count_cached DESC NULLS LAST, name"
+
+    # Textual order of placeholders: SELECT clause (above), then the JOIN, then WHERE.
+    params += join_params
 
     where = ["t.redirect_to_tune_id IS NULL"]
     clauses = []
     if use_name:
-        clauses.append(f"{_nm} LIKE LOWER(unaccent(%s))")
-        params.append(f"%{q}%")
+        clauses.append(name_like())
+        params += [f"%{q}%"] * n_like
     if use_abc:
         clauses.append(_abc_exists)
-        params.append(f"%{q_abc}%")
+        params.append(abc_pattern)
     if clauses:
         where.append("(" + " OR ".join(clauses) + ")")
     if tune_type:
@@ -1867,15 +1930,18 @@ def _deep_search_core(cur, q, tune_type, prefer_type, mode, limit, person_id,
     params.append(limit)
 
     sql = f"""
-        SELECT t.tune_id, t.name, t.tune_type, t.tunebook_count_cached,
-               EXISTS(SELECT 1 FROM person_tune pt WHERE pt.tune_id = t.tune_id AND pt.person_id = %s) AS on_list,
-               {in_session_sql} AS in_session,
-               {played_here_sql} AS played_here,
-               CASE WHEN t.tune_type = %s THEN 0 ELSE 1 END AS type_pref,
-               {abc_only_sql} AS abc_only,
-               {rank} AS rank
-        FROM tune t
-        WHERE {' AND '.join(where)}
+        SELECT * FROM (
+            SELECT t.tune_id, t.name, t.tune_type, t.tunebook_count_cached,
+                   EXISTS(SELECT 1 FROM person_tune pt WHERE pt.tune_id = t.tune_id AND pt.person_id = %s) AS on_list,
+                   {in_session_sql} AS in_session,
+                   {played_here_sql} AS played_here,
+                   CASE WHEN t.tune_type = %s THEN 0 ELSE 1 END AS type_pref,
+                   {abc_only_sql} AS abc_only,
+                   {rank} AS rank
+            FROM tune t
+            {join_sql}
+            WHERE {' AND '.join(where)}
+        ) ranked
         ORDER BY {order}
         LIMIT %s
     """
@@ -2242,6 +2308,29 @@ def _tune_preview_core(tune_id, session_id=None):
             for r in cur.fetchall()
         ]
 
+        # What the VIEWER already has for this tune. Every add surface needs it: the
+        # deep search flags on-list results, but a pasted thesession.org link resolves to
+        # a synthetic result with no such flag — without this the pane offers to "add" a
+        # tune that has been on your list for years (and the add is a no-op 409).
+        person_tune = None
+        if current_user.is_authenticated and getattr(current_user, "person_id", None):
+            cur.execute(
+                """
+                SELECT person_tune_id, learn_status, setting_id, heard_count
+                FROM person_tune WHERE person_id = %s AND tune_id = %s
+                """,
+                (current_user.person_id, tune_id),
+            )
+            ptrow = cur.fetchone()
+            if ptrow:
+                person_tune = {
+                    "person_tune_id": ptrow[0],
+                    "on_list": True,
+                    "learn_status": ptrow[1],
+                    "setting_id": ptrow[2],
+                    "heard_count": ptrow[3] or 0,
+                }
+
         aliases, played_here, dates = [], 0, []
         session_setting_id = None
         if session_id is not None:
@@ -2289,6 +2378,7 @@ def _tune_preview_core(tune_id, session_id=None):
             "played_here": played_here,
             "dates": dates,
             "session_setting_id": session_setting_id,
+            "person_tune": person_tune,
             "settings": settings,
         })
     finally:
@@ -2815,3 +2905,128 @@ def live_vocabulary(session_instance_id):
         return jsonify({"success": True, "known_tunes": known_tunes, "known_aliases": known_aliases})
     finally:
         conn.close()
+
+
+# ---------------------------------------------------------------------------
+# The ONE search family: /api/tunes/* with an optional scope (spec 052 A6).
+#
+# The seven search endpoints above exist three times — under the live instance,
+# the session path, and /api/my-tunes — because each page grew its own tree. The
+# native client gets one tree. Scope rides in the query string, the way
+# /api/tunes/<id>/detail already does it:
+#     (none)               personal — on-list tunes sort last (add pane)
+#     ?session=<path>      session repertoire — in-session tunes sort last
+#     ?instance=<id>       live screen — flags only, no re-sort
+# The old trees stay registered for the web bundles until they move over.
+# ---------------------------------------------------------------------------
+
+def _resolve_search_scope(cur):
+    """-> (session_id | None, kind) for the current request's ?session= / ?instance=.
+    Raises LookupError with a message when the named scope doesn't exist."""
+    instance = (request.args.get("instance") or "").strip()
+    path = (request.args.get("session") or "").strip().strip("/")
+    if instance:
+        if not instance.isdigit():
+            raise LookupError("instance must be an id")
+        cur.execute("SELECT session_id FROM session_instance WHERE session_instance_id = %s", (int(instance),))
+        row = cur.fetchone()
+        if not row:
+            raise LookupError("Session instance not found")
+        return row[0], "instance"
+    if path:
+        session_id = _session_id_by_path(cur, path)
+        if session_id is None:
+            raise LookupError("Session not found")
+        return session_id, "session"
+    return None, "personal"
+
+
+def _scope_or_404():
+    """Resolve the scope on its own connection; (session_id, kind, error_response)."""
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        try:
+            session_id, kind = _resolve_search_scope(cur)
+        except LookupError as e:
+            return None, None, (jsonify({"success": False, "error": str(e), "code": "not_found"}), 404)
+        return session_id, kind, None
+    finally:
+        conn.close()
+
+
+@api_login_required
+def tunes_deep_search():
+    """GET /api/tunes/deep-search?q=&type=&prefer_type=&mode=&limit=[&session=|&instance=]"""
+    q, tune_type, prefer_type, mode, limit = _parse_deep_search_args()
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        try:
+            session_id, kind = _resolve_search_scope(cur)
+        except LookupError as e:
+            return jsonify({"success": False, "error": str(e), "code": "not_found"}), 404
+        person_id = getattr(current_user, "person_id", None)
+        results = _deep_search_core(
+            cur, q, tune_type, prefer_type, mode, limit, person_id,
+            session_id=session_id,
+            on_list_last=(kind == "personal"),
+            in_session_last=(kind == "session"),
+        )
+        return jsonify({"success": True, "results": results, "scope": kind})
+    finally:
+        conn.close()
+
+
+@public_api  # the tune catalogue is thesession.org's and it is public there; this
+# only proxies a search of it. Offered signed-out so the public /tunes tab can reach
+# past Ceol's own catalogue (spec 052 §B20). current_user is used for personalisation
+# ONLY — without it the hits simply carry no on_list flag.
+# 30/min, because this is the one genuinely open door to thesession.org: it takes a
+# query and no token. A person types a name and presses the button; 30 is well past
+# that and well short of useful to a scraper.
+@rate_limited(limit=30, per=60, scope="thesession-search")
+def tunes_thesession_search():
+    """GET /api/tunes/thesession-search?q=&type=[&session=|&instance=]
+
+    Unscoped and signed-out is a supported call: _resolve_search_scope returns
+    (None, "personal") when no ?session=/?instance= is given, and the core takes
+    session_id=None, person_id=None."""
+    session_id, kind, err = _scope_or_404()
+    if err:
+        return err
+    return _thesession_search_core(session_id=session_id,
+                                   person_id=getattr(current_user, "person_id", None))
+
+
+@api_login_required
+def tunes_incipit_image(tune_id):
+    """GET /api/tunes/<id>/incipit-image?kind=incipit|both — scope-free."""
+    return _incipit_response(tune_id)
+
+
+@api_login_required
+def tunes_preview(tune_id):
+    """GET /api/tunes/<id>/preview[?session=|?instance=]"""
+    session_id, kind, err = _scope_or_404()
+    if err:
+        return err
+    return _tune_preview_core(tune_id, session_id=session_id)
+
+
+@api_login_required
+def tunes_setting_image(setting_id):
+    """GET /api/tunes/settings/<id>/image?kind=incipit|full — scope-free."""
+    return _setting_image_response(setting_id)
+
+
+@api_login_required
+def tunes_thesession_preview(thesession_id):
+    """GET /api/tunes/thesession/<id>/preview[?full=1] — scope-free."""
+    return _thesession_preview_core(thesession_id)
+
+
+@api_login_required
+def tunes_render_abc():
+    """POST /api/tunes/render-abc {abc, key, tune_type, kind} — scope-free."""
+    return _render_abc_core()

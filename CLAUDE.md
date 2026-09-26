@@ -13,9 +13,10 @@ The high level view of the system is documented in the /specs directory. Before 
 ## Quick Reference
 
 **Stack**: Flask 3.1 + PostgreSQL + Svelte 5 (interactive pages) + Jinja2 shells + Bootstrap 4.5 (legacy pages)
-**Entry**: `app.py` | **Routes**: `web_routes.py` (HTML), `api_routes.py` + `api_person_tune_routes.py` (JSON), `live_logging_routes.py` (live-logging ops)
+**Entry**: `app.py` | **Routes**: `web_routes.py` (HTML), `api_routes.py` + `api_person_tune_routes.py` (JSON), `api_app_routes.py` (native auth handshake, `/api/me`, `/api/app-config`, `/api/home`, `/api/resolve`), `live_logging_routes.py` (live-logging ops + the `/api/tunes/*` search family), `recording_routes.py` (audio segmenter)
 **Payloads**: `serializers.py` — one function per payload; the page shell's embedded `__PAGE_DATA__` and the API return the same dict (spec 035)
-**API auth**: `api_auth.py` — `@api_login_required` / `@api_admin_or_self_required` / `@public_api`; Bearer tokens via `app.py` request_loader
+**API auth**: `api_auth.py` — `@api_login_required` / `@api_admin_or_self_required` / `@public_api`; `api_error()` is THE error envelope (`{success:false, error, message, code}`); Bearer tokens via `app.py` request_loader, minted by the native login (`X-Ceol-Client` header)
+**Native surface**: `specs/api/native-surface.yaml` (OpenAPI) + `tests/contract/test_native_surface.py` — the endpoints a native client may depend on; additive changes only (spec 052)
 **Frontend**: `frontend/src/<page>/` + shared kit `frontend/src/lib/` → Vite builds to `static/<page>/` (gitignored, rebuilt on deploy); how-to: [Svelte Pages](specs/current/ui/svelte-pages.md)
 **Deploy**: Render.com (Gunicorn) | **DB**: `database.py` | **Auth**: `auth.py` (Flask-Login)
 
@@ -25,7 +26,7 @@ The high level view of the system is documented in the /specs directory. Before 
 Frontend, templates, interactions, theming
 - [Svelte Pages](specs/current/ui/svelte-pages.md) - Thin shell + `__PAGE_DATA__` + page bundle; how to add/change a page; the component kit
 - [Templates & Pages](specs/current/ui/templates.md) - HTML structure, base layouts, shells vs. Jinja pages
-- [Session Logging UI](specs/current/ui/session-logging.md) - QUARANTINED legacy pill editor (spec 035 Step 6 deletes it)
+- [Session Logging UI](specs/current/ui/session-logging.md) - Legacy pill editor, now UNREACHABLE (spec 035 Step 6 deletes it)
 - [Theming](specs/current/ui/theming.md) - CSS variables (dark-only palette)
 - [AJAX Patterns](specs/current/ui/ajax.md) - Serializer layer, API auth decorators, Bearer tokens
 
@@ -52,7 +53,7 @@ Business logic, services, external integrations
 Internal services, microservices, background jobs
 - [ABC Renderer](specs/current/services/abc-renderer.md) - Node.js microservice for ABC → PNG
 - [Active Sessions Cron](specs/current/services/active-sessions-cron.md) - 15-min job tracking live sessions
-- [thesession.org Merge Sync](specs/current/services/thesession-merge-sync.md) - Weekly job auto-applying upstream tune merges (Feature 031)
+- [thesession.org Merge Sync](specs/current/services/thesession-merge-sync.md) - Weekly job auto-applying upstream tune merges (Feature 031); piggybacks the active-sessions cron
 - [Streaming Service](specs/current/logic/live-logging.md) - Async SSE sidecar for live logging (Feature 024)
 
 ## Feature Index
@@ -62,9 +63,10 @@ Internal services, microservices, background jobs
 - **Tune Management**: [Data](specs/current/data/tune-model.md) | [Logic](specs/current/logic/tune-logic.md)
 - **Per-Instrument Tune Status**: [Data + UI](specs/current/data/people-model.md) (`person_tune_instrument` overrides, `person_instrument.is_auto`, canonical instruments in `instruments.py`)
 - **User System**: [Data](specs/current/data/people-model.md) | [Logic](specs/current/logic/auth.md)
-- **Audio Recording (Feature 022)**: [Spec](specs/changes/022-session-audio-recording.md)
+- **Recording Segmenter (Feature 050)**: [Spec](specs/changes/inprogress/050-recording-segmenter.md) — audio → per-tune timestamps at `/admin/recordings`, the training corpus for tune recognition. Supersedes the abandoned Feature 022 audio recording.
 - **Live Logging (Feature 024)**: [Logic](specs/current/logic/live-logging.md) | [Spec](specs/changes/024-live-logging-architecture.md)
 - **Offline Support**: [Logic](specs/current/logic/offline.md)
+- **Native iOS readiness (Feature 052)**: [Spec](specs/changes/inprogress/052-native-ios-readiness.md) | [API conventions](specs/current/ui/ajax.md) | [Native surface](specs/api/native-surface.yaml) — section A (API/auth) BUILT; section B (web UI reshaping) has a clickable prototype and a 7-stage plan (spec §B8), stages 0-5 BUILT (kit Row/Toolbar/SectionHeader; the three session tabs; Home; the phone tab bar)
 - **Svelte UI Consolidation (Feature 035)**: [UI](specs/current/ui/svelte-pages.md) | [Spec](specs/changes/inprogress/035-svelte-ui-consolidation.md) — `/my-tunes`, `/sessions`, `/sessions/<path>`, `/me`, `/admin/people/<id>`, `/admin/sessions/<path>` migrated to Svelte shells
 
 ## Development
@@ -105,9 +107,11 @@ See [scripts/LOCAL_DEVELOPMENT.md](scripts/LOCAL_DEVELOPMENT.md) for detailed se
 - [`web_routes.py`](web_routes.py) - every HTML page route; migrated pages are thin shells that call a serializer
 - [`api_routes.py`](api_routes.py) - the bulk of the JSON API
 - [`api_person_tune_routes.py`](api_person_tune_routes.py) - my-tunes / person-tune JSON API
+- [`api_app_routes.py`](api_app_routes.py) - the app-shell API: token login / exchange / logout, `/api/me`, `/api/me/profile`, `/api/app-config`, `/api/home`, `/api/resolve`, the app→web handoff, the AASA file (spec 052)
 - [`live_logging_routes.py`](live_logging_routes.py) - the live-logging referee: the server-authoritative op endpoint and its op vocabulary (spec 024)
+- [`recording_routes.py`](recording_routes.py) - the recording segmenter's API (spec 050)
 - [`serializers.py`](serializers.py) - page/API payload builders; one function per wire shape, shared by the page shell's `__PAGE_DATA__` and the API (spec 035)
-- [`api_auth.py`](api_auth.py) - API auth decorators and the `@public_api` marker
+- [`api_auth.py`](api_auth.py) - API auth decorators, the `@public_api` marker, `api_error()` + the error envelope, `X-Ceol-Client` parsing
 
 **Data and auth**
 - [`database.py`](database.py) - connection handling, the history/audit writer, and shared query helpers
@@ -122,7 +126,7 @@ See [scripts/LOCAL_DEVELOPMENT.md](scripts/LOCAL_DEVELOPMENT.md) for detailed se
 - [`session_path.py`](session_path.py) / [`session_fields.py`](session_fields.py) - validation shared by both session write paths
 - [`instruments.py`](instruments.py) - the canonical instrument vocabulary
 - [`fractional_indexing.py`](fractional_indexing.py) - CRDT-compatible list ordering for tune sets
-- [`recording.py`](recording.py) - session audio: S3 upload/download and chunking
+- [`recording.py`](recording.py) - session audio: S3 storage and waveform-envelope extraction (spec 050)
 - [`email_utils.py`](email_utils.py) - SendGrid delivery
 
 **Frontend and out-of-process**

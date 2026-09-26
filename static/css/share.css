@@ -1,0 +1,133 @@
+/* Share control + sheet (spec 052 §B1). Markup: the header block in base.html,
+   behaviour: static/js/share.js. */
+
+.share-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  margin-right: 2px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: var(--r-sm, 4px);
+  color: var(--text-color);
+  cursor: pointer;
+}
+
+/* No resting dimming. It sits directly beside the hamburger, which is drawn in this
+   same colour at full strength, so 0.75 made one of two adjacent header controls
+   look disabled. */
+.share-btn:hover,
+.share-btn:focus-visible {
+  color: var(--primary);
+}
+
+.share-btn svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ---- the sheet ---------------------------------------------------------------- */
+
+.share-dialog {
+  position: fixed;
+  inset: 0;
+  /* Above the header (2000) and the hamburger (2010): this is a modal and the
+     things behind it must not be reachable. Below toasts. */
+  z-index: var(--z-sheet-content, 2040);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-4, 16px);
+  background: var(--scrim, rgba(0, 0, 0, 0.5));
+}
+
+.share-dialog[hidden] {
+  display: none;
+}
+
+.share-panel {
+  width: 100%;
+  max-width: 360px;
+  max-height: 90vh;
+  overflow-y: auto;
+  background: var(--dropdown-bg, #2d2d2d);
+  border: 1px solid var(--border-color, #444);
+  border-radius: var(--r, 8px);
+  box-shadow: var(--shadow-lg, 0 8px 30px rgba(0, 0, 0, 0.55));
+  padding: var(--sp-4, 16px);
+  text-align: center;
+}
+
+.share-title {
+  font-family: 'Poppins', sans-serif;
+  font-weight: 600;
+  font-size: 1.05rem;
+  margin: 0 0 var(--sp-3, 12px);
+  color: var(--text-color);
+}
+
+/* White plate behind the code: a QR has to be dark-on-light to scan, and the app
+   is dark-only. */
+.share-qr {
+  display: block;
+  width: 220px;
+  max-width: 100%;
+  margin: 0 auto var(--sp-3, 12px);
+  background: #fff;
+  padding: 10px;
+  border-radius: var(--r-sm, 4px);
+}
+
+.share-url {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--secondary-text, #888);
+  word-break: break-all;
+  margin-bottom: var(--sp-4, 16px);
+  /* Selectable, because "copy" is not the only way people get a URL out. */
+  user-select: all;
+}
+
+.share-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2, 8px);
+}
+
+.share-action {
+  font: inherit;
+  padding: 9px 14px;
+  border-radius: var(--r-sm, 4px);
+  border: 1px solid var(--border-color, #444);
+  background: var(--bg-color, #1a1a1a);
+  color: var(--text-color);
+  cursor: pointer;
+}
+
+.share-action:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.share-action.primary {
+  background: var(--primary-fill);
+  border-color: var(--primary-fill);
+  color: #fff;
+}
+
+.share-action.primary:hover {
+  color: #fff;
+  opacity: 0.92;
+}
+
+.share-action[hidden] {
+  display: none;
+}

@@ -1,6 +1,13 @@
-import { test, expect, type APIRequestContext, type Page } from "@playwright/test";
-import { randomUUID } from "node:crypto";
-import { STORAGE, SESSIONS } from "../support/data";
+import { test, expect, type Page } from "@playwright/test";
+import { STORAGE } from "../support/data";
+import {
+  createInstance,
+  deleteInstance,
+  op,
+  openLogger,
+  seedLog,
+  uniqueDate,
+} from "../support/live";
 
 /**
  * Selection mode / bulk actions (spec 029): select, copy/paste, bulk delete +
@@ -8,62 +15,11 @@ import { STORAGE, SESSIONS } from "../support/data";
  * test creates a THROWAWAY session instance over the API (unique far-future
  * date), seeds tunes through the live ops endpoint, and deletes the instance
  * in teardown. The shared seeded instance 90 is never touched.
+ *
+ * The instance helpers live in e2e/support/live.ts — live-logger.spec.ts needs
+ * the same pattern for its edit-mode tests (instance 90's log is complete in the
+ * seed, so it has no "Edit log" button).
  */
-
-const SESSION_PATH = SESSIONS.mueller.path;
-
-// Unique date per test: far-future base + time/worker/counter offset in days.
-let seq = 0;
-function uniqueDate(workerIndex: number): string {
-  const base = Date.UTC(2032, 0, 1);
-  const offset = ((Date.now() % 100_000) + workerIndex * 100_000 + seq++ * 7) % 300_000;
-  return new Date(base + offset * 86_400_000).toISOString().slice(0, 10);
-}
-
-async function createInstance(request: APIRequestContext, date: string): Promise<number> {
-  const res = await request.post(`/api/sessions/${SESSION_PATH}/add_instance`, { data: { date } });
-  const body = await res.json();
-  expect(body.success, `create instance: ${body.message}`).toBe(true);
-  return body.session_instance_id;
-}
-
-async function deleteInstance(request: APIRequestContext, date: string) {
-  await request.delete(`/api/sessions/${SESSION_PATH}/${date}/delete`);
-}
-
-async function op(request: APIRequestContext, inst: number, data: Record<string, unknown>) {
-  const res = await request.post(`/api/live/instances/${inst}/ops`, {
-    data: { op_id: randomUUID(), ...data },
-  });
-  return res.json();
-}
-
-/** Seed sets of (unlinked) tunes; returns name -> record id. */
-async function seedLog(request: APIRequestContext, inst: number, sets: string[][]) {
-  const ids: Record<string, number> = {};
-  for (let si = 0; si < sets.length; si++) {
-    for (const name of sets[si]) {
-      const j = await op(request, inst, { op_type: "add_tune", name, no_merge: true });
-      ids[name] = j.record.session_instance_tune_id;
-    }
-    if (si < sets.length - 1) {
-      await op(request, inst, {
-        op_type: "set_break", action: "insert",
-        after_record_id: ids[sets[si][sets[si].length - 1]],
-      });
-    }
-  }
-  return ids;
-}
-
-async function openLogger(page: Page, inst: number, { edit = true } = {}) {
-  await page.goto(`/live/instances/${inst}`);
-  await expect(page.locator(".tune-row").first()).toBeVisible({ timeout: 15_000 });
-  if (edit) {
-    await page.locator(".editbtn", { hasText: /edit log/i }).click();
-    await expect(page.locator(".composer input")).toBeVisible();
-  }
-}
 
 /** Reveal the pull-down filter bar (it hides above the fold) and enter selection mode. */
 async function enterSelectMode(page: Page) {

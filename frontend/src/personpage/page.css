@@ -19,18 +19,14 @@
     background: none; border: none; color: var(--text-color, inherit); cursor: pointer; font-size: 14px;
 }
 .typeahead-option:hover, .typeahead-option.active { background: var(--hover-bg, rgba(255,255,255,0.08)); }
-#instrument-rows { display: flex; flex-direction: column; gap: 6px; }
-.instrument-row {
-    display: flex; align-items: center; justify-content: space-between; gap: 10px;
-    padding: 9px 12px; border: 1px solid var(--border-color, #333); border-radius: 6px;
-    cursor: pointer; background: var(--bg-color, transparent);
-}
-.instrument-row:hover { background: var(--hover-bg, rgba(255,255,255,0.05)); }
+/* Each instrument is a row in the Instruments group now, not a bordered box of
+   its own — the group draws the card, the rows only divide it. */
+.instrument-row .instrument-row-badge { margin-left: auto; }
 .instrument-row-badge {
     font-size: 11px; font-weight: 600; padding: 2px 10px; border-radius: 999px;
     border: 1px solid var(--border-color, #555); white-space: nowrap;
 }
-.instrument-row-badge.auto { background: var(--primary, #4f9dff); color: #fff; border-color: var(--primary, #4f9dff); }
+.instrument-row-badge.auto { background: var(--primary-fill, #4a8049); color: #fff; border-color: var(--primary-fill, #4a8049); }
 /* Instrument config sheet / removal Dialog body styles (the pd-modal chrome —
    overlay, dialog, header, close × — is the kit Sheet/Dialog's now). */
 .inst-config-body .form-check + .form-check { margin-top: 10px; }
@@ -180,12 +176,11 @@
     border-color: var(--border-color) var(--border-color) var(--bg-color);
 }
 
+/* The tab strip went in spec 052 §B1 and this is the panel that used to hang off
+   it — a three-sided rounded box, open at the top, drawn around the whole page
+   with nothing above it to attach to. The groups inside draw their own cards. */
 .tab-content {
-    border: 1px solid var(--border-color);
-    border-top: none;
-    border-radius: 0 0 8px 8px;
     background-color: var(--bg-color);
-    padding: 1rem;
 }
 
 /* Tune statistics styles */
@@ -373,14 +368,14 @@
 }
 
 .btn-primary {
-    background-color: var(--primary);
-    border-color: var(--primary);
+    background-color: var(--primary-fill);
+    border-color: var(--primary-fill);
     color: white;
 }
 
 .btn-primary:hover {
-    background-color: #0056b3;
-    border-color: #0056b3;
+    background-color: #3d863c;
+    border-color: #3d863c;
 }
 
 .btn-success {
@@ -452,8 +447,8 @@
 }
 
 .form-check-input:checked {
-    background-color: var(--primary);
-    border-color: var(--primary);
+    background-color: var(--primary-fill);
+    border-color: var(--primary-fill);
 }
 
 .form-check-label {
@@ -559,8 +554,8 @@
 
 .btn-outline-primary:hover {
     color: white;
-    background-color: var(--primary);
-    border-color: var(--primary);
+    background-color: var(--primary-fill);
+    border-color: var(--primary-fill);
 }
 
 .btn-sm {
@@ -634,10 +629,6 @@
         padding: 0.75rem;
     }
 
-    /* The tab panel box hugs the (already minimal) page gutter */
-    .tab-content {
-        padding: 0.5rem;
-    }
 
     /* Bootstrap grid gutters serve nothing at stacked-column widths, and the
        rows' -15px margins would overflow the reduced card-body padding */
@@ -670,3 +661,129 @@
         font-size: 1.5rem;
     }
 }
+
+/* ---- sectioned profile (spec 052 §B3) ------------------------------------------
+   The page is a vertical list now rather than a tab strip over a vertical list.
+   These two belong to the drill-down screens: the way back, and the title of the
+   section you opened. */
+
+.section-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin: 0.5rem 0 0.75rem;
+    padding: 0;
+    background: none;
+    border: none;
+    font: inherit;
+    font-size: 0.95rem;
+    color: var(--primary);
+    cursor: pointer;
+}
+
+.section-back:hover {
+    text-decoration: underline;
+}
+
+.section-heading {
+    font-family: 'Poppins', sans-serif;
+    font-weight: 600;
+    font-size: 1.3rem;
+    margin: 0 0 1rem;
+    color: var(--text-color);
+}
+
+/* ===========================================================================
+   The profile screen (spec 052 §B12)
+   ===========================================================================
+   The grouped-table rows themselves come from lib/grouped.css, shared with the
+   add-a-session sheet. What is here is the page around them, and the few rows
+   that carry more than a label and a value. */
+
+.pd-body {
+    /* No bottom padding: the last group's own 20px margin is the gap, and adding
+       to it stacked 60px of nothing before the account rows. */
+    padding: 0 var(--sp-3, 12px);
+}
+
+/* A group head that follows a group needs air above it, or the title looks like
+   it belongs to the card it is sitting under rather than the one below. */
+.pd-body .kit-group + .kit-group-head,
+.pd-body div + .kit-group-head {
+    margin-top: var(--sp-5, 20px);
+}
+
+.pd-link {
+    color: var(--primary, #65b464);
+    text-decoration: none;
+}
+
+.pd-link:hover {
+    text-decoration: underline;
+}
+
+.pd-warn {
+    color: var(--warning-text, #ffd700);
+}
+
+/* A small control at the trailing edge of a row: "Verify", "Use classic". Text,
+   not a filled button — the row is the thing, this is an aside on it. */
+.pd-row-action {
+    flex: 0 0 auto;
+    margin-left: var(--sp-3, 12px);
+    padding: 0;
+    font: inherit;
+    font-size: 0.82rem;
+    color: var(--primary, #65b464);
+    background: none;
+    border: none;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.pd-row-action:hover { opacity: 0.85; }
+.pd-row-action:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.pd-inst-note {
+    margin-top: calc(var(--sp-5, 20px) * -1 + 2px);
+    margin-bottom: var(--sp-5, 20px);
+    padding-left: var(--sp-3, 12px);
+}
+
+.pd-no-account {
+    text-align: left;
+    white-space: normal;
+}
+
+/* The typeahead's menu hangs off the row, so the row is its positioning context. */
+.kit-field .instrument-typeahead-wrap {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+}
+
+.kit-field .instrument-typeahead-wrap input {
+    width: 100%;
+}
+
+/* Admin-only, and destructive, so it says so before you read a word of it. */
+.pd-danger-head { color: var(--danger, #dc3545); }
+.pd-danger { border: 1px solid var(--danger, #dc3545); }
+.pd-reactivate { color: var(--success-text, #90ee90); }
+
+/* A switch that belongs to the sentence explaining it, rather than a third thing
+   crammed into a row that already has a label and a value. */
+.pd-inline-action {
+    padding: 0;
+    font: inherit;
+    color: var(--primary, #65b464);
+    background: none;
+    border: none;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.pd-inline-action:hover { opacity: 0.85; }
+.pd-inline-action:disabled { opacity: 0.5; cursor: not-allowed; }
+

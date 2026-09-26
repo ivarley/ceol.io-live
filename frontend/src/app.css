@@ -3,7 +3,16 @@
   --panel: #18181b;
   --text: #ececef;
   --muted: #9a9aa3;
-  --accent: #4f9dff;
+  /* The app's accent (theme.css --primary). This shell predates the move to green
+     and kept the original blue, so the logger — the screen people are in all night —
+     was the one place still accenting in the old colour. Blue is still doing two
+     OTHER jobs below, and those stay: the type-ahead results are blue-tinted on
+     purpose so a result never reads as a logged tune, and "want to learn" is blue
+     wherever learn status appears. */
+  --accent: #65b464;
+  /* Dark ink for text sitting ON a saturated fill: the accent, an avatar chip, an
+     activity toast. 7.3:1 on the accent. */
+  --ink-on-fill: #0e1a0e;
   --insert: #f5c518;
   --border: #2a2a30;
   --attention: #e0b341; /* amber: unlinked / needs-attention */
@@ -30,7 +39,7 @@
   --hover-bg: var(--set-bg);
   --disabled-text: var(--muted);
   --primary: var(--accent);
-  --primary-dark: #2f7fe0;
+  --primary-dark: #3d863c;
   --danger: #e5534b;
   --scrim: rgba(0, 0, 0, 0.6);
   --success-bg: #1d3524;
@@ -183,11 +192,6 @@ main {
 .topbar-row { display: flex; align-items: center; gap: 10px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .topbar-main { flex: 1; min-width: 0; }
 .session-name { font-size: 19px; font-weight: 700; letter-spacing: 0.2px; }
-.session-return {
-  color: var(--muted); text-decoration: none; margin-left: 8px;
-  font-size: 0.7em; font-weight: 400; transition: color 0.2s ease;
-}
-.session-return:hover { color: var(--accent); }
 /* This log's own name (session_instance.location_override), when it has one — spec 047.
    Sits between the session name and the date: subordinate to the session, but stronger
    than the date, because at a festival it's the part that identifies the log. Clipped to
@@ -207,37 +211,77 @@ main {
 /* one right-hand cluster: presence, help, expand chevron */
 .topbar-tools { display: flex; align-items: center; gap: 8px; flex: none; }
 .topbar-presence { display: flex; gap: 4px; }
-.header-chevron { color: var(--muted); font-size: 14px; transition: transform 0.18s ease; }
-.header-chevron.up { transform: rotate(180deg); }
+/* Points right when closed, down when open — the drawer expands in place under the
+   band, so the chevron says which way it went. */
+/* Drawn, so the box is square by construction and rotating it cannot change the
+   size of its own rect or nudge the icons beside it. */
+.header-chevron { color: var(--muted); }
 
-/* Expanded detail: a label/value grid, one fact per row, so the panel scans as a list
-   of properties instead of a stack of sentences. Rows that own an action put it in a
-   third column, right-aligned (Change / Manage / Mark complete). */
-.header-expand {
-  margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border);
-  display: flex; flex-direction: column; gap: 8px;
+/* The log-details drawer (spec 052 §B15). Fixed, starting at the measured bottom of
+   the session band, so the header above it never moves and the log below is covered
+   rather than pushed.
+
+   z-25 is the whole trick to sliding out from BEHIND the header. .topnav wraps the
+   ceol bar and the session band in a stacking context at z-30, so anything above 30
+   paints over the entire header no matter what z-index the band itself carries —
+   raising .topbar did nothing, because its z-index is scoped INSIDE .topnav. Under
+   30, the drawer emerges from behind the band, which is what a drawer does.
+
+   It still covers the log, which is unlayered, and stays far below the recordings
+   panel (91) and the dialog tier (1910+). */
+.hx-drawer {
+  position: fixed;
+  top: var(--hx-top, 110px);
+  left: 0; right: 0; bottom: 0;
+  z-index: 25;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
 }
-.hx-row {
-  display: grid; grid-template-columns: 84px minmax(0, 1fr) auto;
-  align-items: baseline; gap: 4px 10px; font-size: 13px;
+
+/* Desktop: the drawer belongs to this screen's layout, not to the window. main.wide
+   is a 1200px centred grid, so a full-viewport drawer overhung both panes by the
+   width of the gutters and read as a page-level overlay dropped on top of the logger
+   rather than part of it.
+   
+   Hung off main.wide rather than a @media, because `wide` is set from the viewport in
+   App.svelte — a breakpoint repeated here could disagree with the one that actually
+   builds the grid.
+   
+   Auto margins, not a transform: the slide-in sets `transform` inline for the length
+   of the animation, and a centring transform here would be overwritten by it — the
+   drawer would slide down against the left edge and only jump into place at the end. */
+main.wide .hx-drawer {
+  width: min(1200px, 100%);
+  margin-inline: auto;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
 }
-.hx-label {
-  color: var(--muted); font-size: 11px; font-weight: 700;
-  letter-spacing: 0.06em; text-transform: uppercase;
+
+.hx-drawer .hx-drawer-body {
+  padding: 16px 12px calc(16px + env(safe-area-inset-bottom, 0px));
 }
-.hx-val { color: var(--text); min-width: 0; overflow-wrap: anywhere; }
-.hx-strong { font-weight: 700; }
+
+/* The detail rows themselves are lib/grouped.css — the same ones /me and the
+   add-a-session sheet use. What is left here is what only this tray has. */
+.hx-drawer-body .hx-strong { font-weight: 700; }
+/* The count sits beside the label rather than inside it: "Attended" is the label,
+   "5" is a fact about the row, and a test reads the label expecting a label. */
+.hx-drawer-body .hx-count { flex: 0 0 auto; font-weight: 700; }
 .hx-away { color: var(--muted); opacity: 0.75; }
+/* Text, not a bordered button. The button cost ~90px of a 390px row and the value
+   was what got truncated for it — "Still log…", "none uploade…". The row is the
+   subject; this is an aside on it. */
 .hx-act {
-  flex: none; font: inherit; font-size: 12px; font-weight: 600;
-  padding: 3px 10px; border-radius: 6px; cursor: pointer;
-  background: transparent; border: 1px solid var(--border); color: var(--accent);
-  align-self: center;
+  flex: none; font: inherit; font-size: 13px; padding: 0;
+  background: none; border: none; color: var(--accent); cursor: pointer;
+  white-space: nowrap;
 }
-.hx-act:hover { border-color: var(--accent); color: var(--text); }
-/* the notes textarea needs the whole value column, and its own baseline */
-.hx-notes { align-items: start; }
-.hx-notes .hx-label { padding-top: 5px; }
+.hx-act:hover { opacity: 0.85; }
+/* The notes field wants the whole width of its card rather than a value column. */
+.hx-notes { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; }
 .header-notes-edit { display: flex; flex-direction: column; gap: 6px; }
 .hn-area {
   width: 100%; box-sizing: border-box; font: inherit; font-size: 14px; line-height: 1.4;
@@ -247,7 +291,7 @@ main {
 .hn-actions { display: flex; gap: 6px; }
 .hn-save {
   font: inherit; font-size: 13px; font-weight: 600; padding: 5px 14px; border-radius: 6px; cursor: pointer;
-  background: var(--accent); border: none; color: #04122b;
+  background: var(--accent); border: none; color: var(--ink-on-fill);
 }
 .hn-cancel {
   font: inherit; font-size: 13px; padding: 5px 12px; border-radius: 6px; cursor: pointer;
@@ -270,7 +314,7 @@ main {
   border-radius: 12px;
   font-size: 11px;
   font-weight: 700;
-  color: #04122b;
+  color: var(--ink-on-fill);
 }
 .avatar sup { font-size: 8px; margin-left: 1px; }
 /* recently-disconnected person: dimmed + hollow until the 1h away-TTL drops them */
@@ -322,7 +366,7 @@ main {
 .dt-actions { display: flex; justify-content: flex-end; }
 .dt-save {
   font: inherit; font-size: 14px; font-weight: 600; padding: 8px 18px; border-radius: 8px; cursor: pointer;
-  background: var(--accent); border: none; color: #04122b;
+  background: var(--accent); border: none; color: var(--ink-on-fill);
 }
 .dt-save:disabled { opacity: 0.45; cursor: default; }
 .deep-empty-help {
@@ -444,18 +488,28 @@ main {
 .starter-value:hover { border-color: var(--accent); color: var(--text); }
 .starter-value.open { border-color: var(--accent); color: var(--text); }
 /* right-aligned "started by" pill on the set card (mirrors the type label) */
-.starter-pill {
+/* The set card's top-right corner, shared. Both children used to be absolute at the
+   same top/right and simply drew on top of each other; the row positions them once
+   and they lay out side by side. max-width here (not on the pill) so a long starter
+   name is what gives way, never the ▶. */
+.set-topright {
   position: absolute; top: -10px; right: 12px;
+  display: flex; align-items: center; gap: 6px;
+  max-width: 70%;
+}
+.set-topright:empty { display: none; }
+.starter-pill {
+  min-width: 0; /* lets the flex row shrink it instead of overflowing the card */
   font: inherit; font-size: 11px; font-weight: 700;
-  max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   background: var(--bg); color: var(--accent);
   border: 1px solid var(--border); border-radius: 10px; padding: 1px 9px; cursor: pointer;
 }
 .starter-pill:hover { color: var(--text); }
 .starter-pill.flash { animation: starter-flash 0.8s ease-out; }
 @keyframes starter-flash {
-  0% { background: var(--accent); color: #04122b; box-shadow: 0 0 0 3px rgba(79, 157, 255, 0.45); }
-  100% { background: var(--bg); color: var(--accent); box-shadow: 0 0 0 0 rgba(79, 157, 255, 0); }
+  0% { background: var(--accent); color: var(--ink-on-fill); box-shadow: 0 0 0 3px rgba(101, 180, 100, 0.45); }
+  100% { background: var(--bg); color: var(--accent); box-shadow: 0 0 0 0 rgba(101, 180, 100, 0); }
 }
 /* the player picker inside the tray */
 .starter-picker { margin: 4px 0 6px; }
@@ -528,6 +582,131 @@ main {
 }
 .info-btn:hover { color: var(--accent); }
 
+/* ---------- recording playback (spec 050 read side) ---------- */
+/* ▶ on a tune that was timestamped in the segmenter. Muted at rest so a night with
+   audio doesn't read as a row of controls — it's an offer, not the point of the row. */
+.play-btn {
+  flex: none;
+  background: none; border: none; cursor: pointer;
+  color: var(--muted); font-size: 12px; line-height: 1; padding: 3px 5px;
+  border-radius: 5px;
+}
+.play-btn:hover { color: var(--accent); background: rgba(255, 255, 255, 0.06); }
+.play-btn.on { color: var(--accent); }
+/* download this one tune — quieter than ▶ until hovered, since it's the rarer of
+   the two things you'd want from a row */
+.dl-btn {
+  flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--muted); line-height: 0;
+  padding: 3px 5px; border-radius: 5px;
+  text-decoration: none;
+}
+.dl-btn:hover { color: var(--accent); background: rgba(255, 255, 255, 0.06); }
+.dl-btn.busy { color: var(--accent); cursor: progress; }
+/* the icon is drawn on a symmetric 24x24 ring, so `display:block` (killing the
+   inline baseline gap) is all it takes to sit level with the ▶ next to it */
+.dl-icon { display: block; }
+.dl-arc { transform-origin: 50% 50%; animation: dl-spin 0.75s linear infinite; }
+@keyframes dl-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  /* no spin; the arc still reads as "not the resting icon" */
+  .dl-arc { animation: none; }
+}
+/* the tune being heard right now, tinted with the accent rather than the yellow
+   used for the insertion point — playing and editing are different states and can
+   be true of two different rows at once */
+.tune-row.audio-playing {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+/* set-level ▶: a pill straddling the card's top border like .set-label, but at the
+   RIGHT end — positioned by .set-topright, which it may share with the starter pill.
+   Mirroring the type label across the card reads as a pair: type left, play right. */
+.setplay-btn {
+  flex: none;
+  font: inherit;
+  font-size: 10px;
+  line-height: 1;
+  color: var(--muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 2px 9px;
+  cursor: pointer;
+}
+.setplay-btn:hover { color: var(--accent); border-color: var(--accent); }
+.setplay-btn.on { color: var(--accent); border-color: var(--accent); }
+
+/* now-playing player: first thing in the dock, so it pushes the composer up
+   rather than floating over it. Collapsed it's the one-line .playbar; tapping
+   the name expands .pp-body ABOVE that line, so the bar itself never moves. */
+.player {
+  margin-bottom: 8px;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 10px; font-size: 13px;
+}
+.playbar { display: flex; align-items: center; gap: 6px; padding: 7px 10px; }
+/* the standalone error strip keeps the old flat look */
+.playbar.err {
+  color: var(--attention); justify-content: center; margin-bottom: 8px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+}
+.pb-toggle, .pb-stop {
+  flex: none; font: inherit; cursor: pointer; line-height: 1;
+  background: none; border: none; color: var(--text); padding: 4px 6px; border-radius: 6px;
+}
+.pb-toggle { color: var(--accent); font-size: 13px; }
+.pb-stop { color: var(--muted); font-size: 17px; }
+.pb-toggle:hover, .pb-stop:hover { background: rgba(255, 255, 255, 0.07); }
+/* the expand target: everything between the two end buttons is one big tap
+   area, so reaching the controls on a phone doesn't need a precise hit */
+.pb-open {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px;
+  font: inherit; text-align: left; cursor: pointer;
+  background: none; border: none; color: var(--text);
+  padding: 4px 2px; border-radius: 6px;
+}
+.pb-open:hover { background: rgba(255, 255, 255, 0.04); }
+.pb-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pb-time { flex: none; color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; }
+.pb-chev { flex: none; color: var(--muted); font-size: 11px; }
+
+/* ---- expanded transport ---- */
+.pp-body { padding: 12px 12px 4px; border-bottom: 1px solid var(--border); }
+.pp-scrub {
+  display: block; width: 100%; margin: 0; cursor: pointer;
+  accent-color: var(--accent); /* one line gets the thumb + fill in both engines */
+  background: transparent;
+}
+.pp-times {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-top: 2px; color: var(--muted); font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.pp-pos { letter-spacing: 0.04em; text-transform: uppercase; }
+.pp-transport { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 10px; }
+.pp-btn {
+  font: inherit; font-size: 15px; line-height: 1; cursor: pointer;
+  background: none; border: 1px solid transparent; color: var(--text);
+  padding: 8px 14px; border-radius: 8px;
+}
+.pp-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.07); }
+.pp-btn:disabled { color: var(--muted); opacity: 0.4; cursor: default; }
+.pp-btn.big { color: var(--accent); font-size: 17px; border-color: var(--border); padding: 8px 22px; }
+.pp-modes { display: flex; gap: 8px; justify-content: center; margin-top: 10px; }
+/* Session-only toggles, so they read as pressed state rather than saved settings. */
+.pp-mode {
+  font: inherit; font-size: 12px; line-height: 1; cursor: pointer;
+  background: none; border: 1px solid var(--border); color: var(--muted);
+  padding: 6px 12px; border-radius: 14px;
+}
+.pp-mode:hover { color: var(--text); }
+.pp-mode.on { color: var(--accent); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+/* the download size on the HD button: quieter than the label, because it's the
+   caveat rather than the offer */
+.pp-mode-sub { margin-left: 5px; opacity: 0.65; font-size: 10px; font-weight: 400; }
+
 .row-actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 2px 8px; }
 .row-actions button {
   font: inherit; font-size: 13px; line-height: 1;
@@ -567,7 +746,7 @@ main {
 .reconcile-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 .reconcile-actions .rc-ok {
   font: inherit; font-weight: 600; padding: 9px 18px; border: none; border-radius: 8px;
-  background: var(--accent); color: #04122b; cursor: pointer;
+  background: var(--accent); color: var(--ink-on-fill); cursor: pointer;
 }
 
 /* ---------- tune-detail drawer (slide-out from right, §18) ---------- */
@@ -622,12 +801,12 @@ main {
   font: inherit; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
   background: var(--panel); color: var(--text); cursor: pointer; text-align: left;
 }
-.att-result:hover:not(:disabled) { border-color: var(--accent); background: rgba(79, 157, 255, 0.08); }
+.att-result:hover:not(:disabled) { border-color: var(--accent); background: rgba(101, 180, 100, 0.08); }
 .att-result:disabled { opacity: 0.45; cursor: default; }
 .att-result:disabled .att-name { color: var(--muted); }
 .att-add {
   flex: none; font: inherit; font-size: 13px; font-weight: 600; padding: 5px 12px;
-  background: var(--accent); border: none; border-radius: 6px; color: #04122b; cursor: pointer;
+  background: var(--accent); border: none; border-radius: 6px; color: var(--ink-on-fill); cursor: pointer;
 }
 .att-add:disabled { opacity: 0.4; cursor: default; }
 .att-search, .att-create input {
@@ -680,7 +859,7 @@ main {
 /* settle-flash, personalized by who changed the row (§39/§E) */
 .tune-row.flash-mine { animation: flash-mine 0.7s ease-out; }
 @keyframes flash-mine {
-  0% { background: rgba(79, 157, 255, 0.30); }
+  0% { background: rgba(101, 180, 100, 0.30); }
   100% { background: transparent; }
 }
 .tune-row.flash-remote { animation: flash-remote 1.4s ease-out; }
@@ -793,7 +972,7 @@ main {
 .error { color: #e0594b; font-size: 14px; }
 
 /* activity = the whole pill in the actor's color (dark text, matching avatars) */
-.toast.activity { border: none; color: #04122b; }
+.toast.activity { border: none; color: var(--ink-on-fill); }
 .toast.sync-msg { background: #16291c; border-color: #46d27a; color: #8fe3ab; }
 
 .offline-banner {
@@ -960,13 +1139,13 @@ main {
 .merge-nudge {
   display: flex; align-items: center; gap: 8px;
   padding: 8px 12px; margin-bottom: 6px;
-  background: rgba(79, 157, 255, 0.1); border: 1px solid var(--accent);
+  background: rgba(101, 180, 100, 0.1); border: 1px solid var(--accent);
   border-radius: 8px; font-size: 13px; color: var(--text);
 }
 .merge-nudge .mn-text { flex: 1; min-width: 0; }
 .merge-nudge .mn-keep {
   flex: none; font: inherit; font-size: 12px; font-weight: 600; padding: 5px 12px;
-  border-radius: 6px; cursor: pointer; background: var(--accent); border: none; color: #04122b;
+  border-radius: 6px; cursor: pointer; background: var(--accent); border: none; color: var(--ink-on-fill);
 }
 .merge-nudge .mn-ok {
   flex: none; font: inherit; padding: 4px 8px; border-radius: 6px; cursor: pointer;
@@ -1023,7 +1202,7 @@ main {
   background: var(--accent);
   border: none;
   border-radius: 8px;
-  color: #04122b;
+  color: var(--ink-on-fill);
   font-weight: 600;
   cursor: pointer;
 }
@@ -1108,7 +1287,7 @@ main {
   font: inherit; font-size: 13px; font-weight: 600; padding: 7px 14px; border-radius: 8px; cursor: pointer;
   background: var(--panel); border: 1px solid var(--border); color: var(--muted);
 }
-.deep-tab.active { background: var(--accent); border-color: var(--accent); color: #04122b; }
+.deep-tab.active { background: var(--accent); border-color: var(--accent); color: var(--ink-on-fill); }
 /* the filters toggle sits to the input's right, sized to match it */
 .deep-filter-tab {
   flex: none; display: inline-flex; align-items: center; justify-content: center;
@@ -1132,7 +1311,7 @@ main {
 }
 .deep-filters .filter-pill {
   font: inherit; font-size: 13px; font-weight: 600; padding: 5px 10px; border-radius: 14px; cursor: pointer;
-  background: var(--accent); border: none; color: #04122b;
+  background: var(--accent); border: none; color: var(--ink-on-fill);
 }
 .deep-filters .filter-pill .kit-x { margin-left: 4px; opacity: 0.7; color: inherit; }
 .deep-asis {
@@ -1288,7 +1467,7 @@ button.nb-pend { cursor: pointer; } /* mid-render it's still a working incipit�
 .pv-foot { flex: none; padding: 10px 14px calc(14px + env(safe-area-inset-bottom)); border-top: 1px solid var(--border); background: var(--bg); }
 .pv-action {
   width: 100%; font: inherit; font-size: 16px; font-weight: 700; padding: 13px; cursor: pointer;
-  background: var(--accent); border: none; border-radius: 10px; color: #04122b;
+  background: var(--accent); border: none; border-radius: 10px; color: var(--ink-on-fill);
 }
 .pv-action:hover { filter: brightness(1.08); }
 
@@ -1311,7 +1490,7 @@ button.nb-pend { cursor: pointer; } /* mid-render it's still a working incipit�
 }
 .deep-paste-btn {
   flex: none; font: inherit; font-size: 14px; font-weight: 600; padding: 9px 16px; cursor: pointer;
-  background: var(--accent); border: none; border-radius: 8px; color: #04122b;
+  background: var(--accent); border: none; border-radius: 8px; color: var(--ink-on-fill);
 }
 .deep-paste-btn:disabled { opacity: 0.5; cursor: default; }
 .deep-paste-error { color: var(--danger, #e06b6b); font-size: 13px; margin: 2px 0 0; }
@@ -1327,14 +1506,14 @@ button.nb-pend { cursor: pointer; } /* mid-render it's still a working incipit�
   --text-color: #e0e0e0;
   --border-color: #444;
   --hover-bg: #3d3d3d;
-  --primary: #4da6ff;
+  --primary: #65b464;
   --secondary-text: #9a9aa3;
-  --link-color: #4da6ff;
+  --link-color: #65b464;
   --input-bg: #2a2a2a;
   --modal-bg: #1a1a1a;
   --modal-bg-secondary: #2a2a2a;
   --modal-text-muted: #9a9aa3;
-  --modal-primary-dark: #3385cc;
+  --modal-primary-dark: #499e47;
 }
 /* The legacy modal is already a full-width right-slide drawer at <=768px; force
    that at all widths on the live screen (this stylesheet loads after the modal's),
@@ -1460,7 +1639,7 @@ main.wide .sidepane { grid-area: pane; overflow-y: auto; min-height: 0; }
   display: flex;
   flex-direction: column;
   gap: 6px;
-  background: rgba(79, 157, 255, 0.09);
+  background: rgba(101, 180, 100, 0.09);
   border: 1px solid var(--accent);
   border-radius: 10px;
 }
@@ -1480,7 +1659,7 @@ main.wide .sidepane { grid-area: pane; overflow-y: auto; min-height: 0; }
 .pane-suggest .ps-add {
   font: inherit; font-size: 13px; font-weight: 600; padding: 6px 14px;
   border: none; border-radius: 7px; cursor: pointer;
-  background: var(--accent); color: #04122b;
+  background: var(--accent); color: var(--ink-on-fill);
 }
 
 /* pane pick while viewing: the "switch to editing?" confirm (reuses the reconcile dialog shell) */
@@ -1506,7 +1685,7 @@ main.wide .sidepane { grid-area: pane; overflow-y: auto; min-height: 0; }
   color: var(--muted);
   cursor: pointer;
 }
-.selmode-btn.on { background: var(--accent); border-color: var(--accent); color: #04122b; }
+.selmode-btn.on { background: var(--accent); border-color: var(--accent); color: var(--ink-on-fill); }
 
 /* "Select all · None" quiet row pinned under the filter bar */
 .selrow {
@@ -1530,7 +1709,7 @@ main.wide .sidepane { grid-area: pane; overflow-y: auto; min-height: 0; }
 
 /* selected rows: translucent accent wash + inset ring (player tint stays legible) */
 .tune-row.bulk-selected {
-  background: rgba(79, 157, 255, 0.18);
+  background: rgba(101, 180, 100, 0.18);
   box-shadow: inset 0 0 0 1.5px var(--accent);
 }
 .sel-badge {
@@ -1542,7 +1721,7 @@ main.wide .sidepane { grid-area: pane; overflow-y: auto; min-height: 0; }
   align-items: center;
   justify-content: center;
   background: var(--accent);
-  color: #04122b;
+  color: var(--ink-on-fill);
   font-size: 12px;
   font-weight: 700;
 }
@@ -1669,7 +1848,7 @@ main.wide .sidepane { grid-area: pane; overflow-y: auto; min-height: 0; }
   border-radius: 8px;
   border: none;
   background: var(--accent);
-  color: #04122b;
+  color: var(--ink-on-fill);
   cursor: pointer;
 }
 
@@ -1734,7 +1913,7 @@ main.wide .sidepane { grid-area: pane; overflow-y: auto; min-height: 0; }
   color: var(--muted);
   cursor: pointer;
 }
-.listmode-btn.on { background: var(--accent); border-color: var(--accent); color: #04122b; }
+.listmode-btn.on { background: var(--accent); border-color: var(--accent); color: var(--ink-on-fill); }
 
 /* instrument scope: a droplist (2+ instruments) or a read-only label, in the
    filter box's slot */
@@ -1817,6 +1996,6 @@ main.wide .sidepane { grid-area: pane; overflow-y: auto; min-height: 0; }
   --text-color: #e0e0e0;
   --border-color: #444;
   --hover-bg: #3d3d3d;
-  --primary: #4da6ff;
+  --primary: #65b464;
   --text-muted: #9a9aa3;
 }

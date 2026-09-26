@@ -20,8 +20,16 @@ npm run test:e2e:report   # open the last HTML report
 ```
 
 The suite expects the seeded **`ceol_test`** database to be up (`make
-setup-test-db` / `./start`). `playwright.config.ts` starts the dev server on
-port 3232 (override with `E2E_PORT`) and reuses an already-running one locally.
+setup-test-db` / `./start`). `playwright.config.ts` starts **both** processes the
+app needs and reuses already-running ones locally: the Flask dev server on port
+3232 (override with `E2E_PORT`) and the **live-logging streaming sidecar** on
+8080 (`STREAMING_PORT`). The sidecar matters for any spec where a change must
+reach a second client: without it the ops still commit and catch-up fills the
+gap, so the screen eventually looks right, but nothing arrives live. It reads
+`.env` itself, which is what keeps its session secret in step with Flask's — if
+they diverge it cannot authenticate the SSE connection, serves it anonymously,
+and anonymous payloads have their people stripped, so changes arrive with no
+`actor` and only the attribution toast goes missing.
 
 The run **reseeds the database when it ends** (`global.teardown.ts` — the
 specs commit real rows through the app's API, and without this they pile up
@@ -67,5 +75,11 @@ duplicate-key flakes can't carry over between runs.
 ## Out of scope (intentionally)
 
 - The legacy word-processor session-logging UX (being deprecated).
-- The real-time live-logging screen (Feature 024, served under `/live/*`) — it
-  is a multi-user/SSE surface tracked as its own testing effort.
+- Nothing under `/live/*` any more: the live-logging screen (Feature 024) is
+  covered by `e2e/live/` — read-only smoke, selection mode and bulk actions
+  (spec 029), paste, and the signed-out view.
+
+  Note for anything there that needs EDIT mode: the shared seeded instance 90
+  carries `log_complete_date` **from the seed**, and a complete log is read-only
+  for everyone (no "✎ Edit log" button at all). Use a throwaway instance —
+  `e2e/support/live.ts` has the helpers.

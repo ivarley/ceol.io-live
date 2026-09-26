@@ -18,7 +18,7 @@
    */
   import { untrack } from 'svelte'
   import { SvelteSet } from 'svelte/reactivity'
-  import { toast, SearchField, Chip, Sheet, Seg, PersonPicker } from '../lib/index.js'
+  import { Chip, PersonPicker, Row, SearchField, Seg, Sheet, Toolbar, toast } from '../lib/index.js'
   import { normalizeQuotes } from '../shared/parse.js'
   import { filterPeople } from './logic.js'
 
@@ -42,6 +42,7 @@
   let peopleError = $state('')
   let currentPeopleFilter = $state('members') // 'members' | 'visitors' | 'archived'
   let searchText = $state('')
+  let filterOpen = $state(false) // the toolbar's filter panel
 
   const searchQuery = $derived(normalizeQuotes(searchText.toLowerCase().trim()))
   const filteredPeople = $derived(filterPeople(peopleData, currentPeopleFilter, searchQuery))
@@ -109,7 +110,8 @@
       })
       const data = await res.json()
       if (!res.ok || !data.success) throw new Error(data.message || 'Could not add person')
-      toast(`${first_name} ${last_name} added to session`, 'success')
+      // No success toast (spec 052 §B4): fetchPeople() puts them in the list you
+      // are looking at, and a banner saying so says it twice.
       pickerOpen = false
       fetchPeople()
     } catch (e) {
@@ -210,9 +212,10 @@
   async function toggleArchived() {
     if (!detailRow) return
     const next = !detailRow.archived
-    if (await setField(detailRow.person_id, 'archived', next)) {
-      toast(next ? `${nameOf(detailRow)} archived.` : `${nameOf(detailRow)} restored.`, 'success')
-    }
+    // Silent (spec 052 §B4): the row leaves the filter you are on, or comes back to
+    // it. Unlike the confirmed toggle above, which changes what somebody can SEE and
+    // shows nothing here, this one's effect is the list in front of you.
+    await setField(detailRow.person_id, 'archived', next)
   }
 
   async function setRelationship(value) {
@@ -238,30 +241,39 @@
 <!-- People Tab Content -->
 <div class="tab-content" class:active id="people-tab">
   <div class="people-container">
+    <!-- One toolbar, same as Tunes and Logs (spec 052 §B8 Stage 3). -->
     <div class="people-controls">
-      <SearchField
-        bind:value={searchText}
-        id="people-search-box"
-        inputClass="people-search-box"
-        wrapperClass="people-search-wrap"
+      <Toolbar
         styled={false}
-        placeholder="Search people..." />
-      <button class="people-add-btn" onclick={openAddPerson}>Add</button>
-      <a href="/help/session-tracking/members" class="help-icon" title="About session people">
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="10"></circle>
-          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
-          <line x1="12" y1="17" x2="12.01" y2="17"></line>
-        </svg>
-      </a>
+        toolbarClass="filter-top-row"
+        buttonClass="filter-panel-toggle"
+        bind:open={filterOpen}
+        activeCount={currentPeopleFilter === FILTERS[0].id ? 0 : 1}
+        addId="add-person-btn"
+        addTitle="Add someone to this session"
+        onAdd={openAddPerson}>
+        {#snippet search()}
+          <SearchField
+            bind:value={searchText}
+            id="people-search-box"
+            inputClass="filter-search-input"
+            wrapperClass="people-search-wrap filter-search-wrap"
+            styled={false}
+            placeholder="Search people..." />
+        {/snippet}
+        {#snippet filter()}
+          <Seg
+            options={FILTERS}
+            value={currentPeopleFilter}
+            onSelect={(id) => (currentPeopleFilter = id)}
+            idAttr="data-people-filter"
+            styled={false}
+            segClass="filter-button-group"
+            optClass="filter-sort-btn"
+            aria-label="Filter people" />
+        {/snippet}
+      </Toolbar>
     </div>
-
-    <Seg
-      options={FILTERS}
-      value={currentPeopleFilter}
-      onSelect={(id) => (currentPeopleFilter = id)}
-      idAttr="data-people-filter"
-      aria-label="Filter people" />
 
     {#if isSessionAdmin && awaitingConfirmation.length > 0}
       <!-- Confirming is the ONLY way people-visibility is granted, so an admin needs to know
@@ -303,37 +315,51 @@
         </div>
       {:else}
         {#each filteredPeople as person (person.person_id)}
-          <div class="person-row" class:archived={person.archived} onclick={() => showPersonDetail(person.person_id)}>
-            <div class="person-icon {person.has_user_account ? 'has-account' : 'no-account'}">
-              <i class="fa fa-user-circle"></i>
-            </div>
-            <div class="person-info">
-              <!-- Badges are SIBLINGS of .person-name, not children: the name element's text
-                   content should be the name, nothing else. -->
-              <div class="person-name">{person.first_name} {person.last_name}</div>
-              {#if person.relationship === 'visitor' || person.archived || (!person.confirmed && person.has_user_account)}
-                <div class="person-badges">
-                  {#if person.relationship === 'visitor'}
-                    <Chip label="Visitor" variant="warning" />
-                  {/if}
-                  {#if person.archived}
-                    <Chip label="Archived" />
-                  {/if}
-                  {#if !person.confirmed && person.has_user_account}
-                    <Chip label="Unconfirmed" variant="warning" title="Can't see this session's people yet" />
-                  {/if}
+          <!-- The kit Row owns the three-slot layout (spec 052 §B8 Stage 2); this
+               file keeps every legacy class, so page.css and the e2e selectors are
+               untouched. `body` carries .person-info unchanged, because it lays name/
+               badges/instruments out INLINE on desktop and stacked on a phone — a
+               shape Row's title+subtitle cannot express. -->
+          <Row
+            styled={false}
+            rowClass="person-row{person.archived ? ' archived' : ''}"
+            onclick={() => showPersonDetail(person.person_id)}>
+            {#snippet lead()}
+              <div class="person-icon {person.has_user_account ? 'has-account' : 'no-account'}">
+                <i class="fa fa-user-circle"></i>
+              </div>
+            {/snippet}
+            {#snippet body()}
+              <div class="person-info">
+                <!-- Badges are SIBLINGS of .person-name, not children: the name element's text
+                     content should be the name, nothing else. -->
+                <div class="person-name">{person.first_name} {person.last_name}</div>
+                {#if person.relationship === 'visitor' || person.archived || (!person.confirmed && person.has_user_account)}
+                  <div class="person-badges">
+                    {#if person.relationship === 'visitor'}
+                      <Chip label="Visitor" variant="warning" />
+                    {/if}
+                    {#if person.archived}
+                      <Chip label="Archived" />
+                    {/if}
+                    {#if !person.confirmed && person.has_user_account}
+                      <Chip label="Unconfirmed" variant="warning" title="Can't see this session's people yet" />
+                    {/if}
+                  </div>
+                {/if}
+                <div class="person-instruments">
+                  {person.instruments && person.instruments.length > 0 ? person.instruments.join(', ') : 'No instruments listed'}
+                </div>
+              </div>
+            {/snippet}
+            {#snippet trailing()}
+              {#if trackAttendance}
+                <div class="person-meta">
+                  <Chip label={String(person.attendance_count || 0)} styled={false} chipClass="person-attendance-badge" title="Nights attended" />
                 </div>
               {/if}
-              <div class="person-instruments">
-                {person.instruments && person.instruments.length > 0 ? person.instruments.join(', ') : 'No instruments listed'}
-              </div>
-            </div>
-            {#if trackAttendance}
-              <div class="person-meta">
-                <Chip label={String(person.attendance_count || 0)} styled={false} chipClass="person-attendance-badge" title="Nights attended" />
-              </div>
-            {/if}
-          </div>
+            {/snippet}
+          </Row>
         {/each}
       {/if}
     </div>
@@ -355,7 +381,7 @@
           <div style="margin-bottom: 16px;"><a href="/me" class="person-detail-link">View my profile</a></div>
         {/if}
         {#if detailPerson.has_user_account && detailPerson.person_id !== currentUserId}
-          <div style="margin-bottom: 16px;"><a href="/me/and/{detailPerson.person_id}" class="person-detail-link">Common Tunes?</a></div>
+          <div style="margin-bottom: 16px;"><a href="/me/and/{detailPerson.person_id}?from={sessionPath}" class="person-detail-link">Common Tunes?</a></div>
         {/if}
 
         {#if detailRow && (isSessionAdmin || detailPerson.person_id === currentUserId)}
@@ -433,10 +459,15 @@
                 <tr><th>Date</th></tr>
               </thead>
               <tbody>
-                {#each detailPerson.attended_instances as instance (instance.date)}
+                <!-- Keyed by instance id, not date: a session may legitimately run
+                     twice in one day (a festival, spec 047), so a date is not a
+                     unique key — and a duplicate key is a hard render error, not a
+                     cosmetic one. The link goes to the id for the same reason: a
+                     date URL resolves to whichever instance is first (spec 046). -->
+                {#each detailPerson.attended_instances as instance (instance.session_instance_id)}
                   <tr>
                     <td>
-                      <a href="/sessions/{sessionPath}/{instance.date}" class="person-detail-link">{instance.date}</a>
+                      <a href="/sessions/{sessionPath}/{instance.session_instance_id}" class="person-detail-link">{instance.date}</a>
                     </td>
                   </tr>
                 {/each}
@@ -500,7 +531,7 @@
   .people-empty-add {
     margin-top: 16px;
     padding: 10px 20px;
-    background-color: var(--primary);
+    background-color: var(--primary-fill);
     color: white;
     border: none;
     border-radius: 4px;

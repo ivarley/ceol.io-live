@@ -42,6 +42,7 @@ Verified: pytest 796, vitest 316, 7 bundles, e2e 88/88 desktop+mobile, browser-c
 **Final page migrations DONE (2026-07-12):** `/add-session`
 (build_add_session_payload, GET /api/add-session @public_api on the same rule as the
 gated create POST, `frontend/src/addsessionpage/` — thesession.org import + search,
+(that page was retired by spec 052 §B9; the flow is a sheet in `frontend/src/addsession/`)
 review Sheet with the ported recurrence editor, existing-session Dialog, empty-session
 flow) and `/admin/people` (build_admin_people_payload, GET /api/admin/people
 system-admin, `frontend/src/peopleadminpage/` — client-side search/sort table, 2-step

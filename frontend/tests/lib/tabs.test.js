@@ -1,6 +1,10 @@
-// Tabs: ONE responsive component — bits tablist for desktop plus a <select>
-// for mobile, both always in the DOM (CSS media queries pick one; jsdom can't
-// exercise those, so we assert both exist and drive the switching logic).
+// Tabs: ONE control at every width — a bits tablist that scrolls sideways on a
+// phone when the tabs do not fit.
+//
+// It used to render a second control alongside it, a <select> that took over under
+// 768px. That is retired (spec 052 §B3): no iOS idiom turns a tab bar into a
+// dropdown, so a page navigated by one could not be ported, only redesigned. The
+// tests that drove the select are gone with it; what is left drives the tabs.
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/svelte'
 import { fireEvent } from '@testing-library/dom'
@@ -14,15 +18,13 @@ const tabs = [
 ]
 
 describe('Tabs', () => {
-  it('renders BOTH the tablist and the mobile select with matching entries', () => {
+  it('renders one tab per entry, and no second control beside them', () => {
     render(TabsFixture, { props: { tabs } })
     const list = document.querySelector('.kit-tabs-list')
-    const select = document.querySelector('select.kit-tabs-select')
     expect(list).toBeTruthy()
-    expect(select).toBeTruthy()
     expect(list.querySelectorAll('.kit-tab')).toHaveLength(3)
-    expect(select.querySelectorAll('option')).toHaveLength(3)
-    expect(select.querySelector('option[value="stats"]')).toHaveTextContent('Stats')
+    // The mobile <select> is retired; nothing should render one.
+    expect(document.querySelector('select.kit-tabs-select')).toBeNull()
   })
 
   it('defaults to the first tab', () => {
@@ -30,24 +32,14 @@ describe('Tabs', () => {
     expect(screen.getByTestId('pane')).toHaveTextContent('pane:tunes')
   })
 
-  it('select change switches the SAME pane (mobile path)', async () => {
+  it('a tab click switches the pane and reports the change', async () => {
     const onValueChange = vi.fn()
     render(TabsFixture, { props: { tabs, onValueChange } })
-    const select = document.querySelector('select.kit-tabs-select')
-    await fireEvent.change(select, { target: { value: 'people' } })
+    await fireEvent.click(screen.getByRole('tab', { name: 'People' }))
     await tick()
     expect(screen.getByTestId('pane')).toHaveTextContent('pane:people')
     expect(onValueChange).toHaveBeenCalledWith('people')
-    // the desktop control follows: bits stamps the active trigger
     expect(screen.getByRole('tab', { name: 'People' })).toHaveAttribute('data-state', 'active')
-  })
-
-  it('tab button click switches the pane (desktop path) and the select follows', async () => {
-    render(TabsFixture, { props: { tabs } })
-    await fireEvent.click(screen.getByRole('tab', { name: 'Stats' }))
-    await tick()
-    expect(screen.getByTestId('pane')).toHaveTextContent('pane:stats')
-    expect(document.querySelector('select.kit-tabs-select').value).toBe('stats')
   })
 
   it('honors an initial bound value', () => {
@@ -56,37 +48,20 @@ describe('Tabs', () => {
   })
 })
 
-describe('Tabs — mobileSelect knob (visual tabs vs <select> under 768px)', () => {
-  // jsdom can't run the media query, so we assert the class that scopes the
-  // mobile-select CSS rule (.kit-tabs--mselect) is present exactly when the
-  // knob resolves to the select.
-  const sixTabs = [
-    { id: 'a', label: 'A' },
-    { id: 'b', label: 'B' },
-    { id: 'c', label: 'C' },
-    { id: 'd', label: 'D' },
-    { id: 'e', label: 'E' },
-    { id: 'f', label: 'F' },
-  ]
+describe('Tabs — many tabs still render as tabs', () => {
+  // The case the <select> existed for. Six tabs do not fit a phone; they scroll,
+  // which is a thing both platforms do, rather than turning into another control.
+  const sixTabs = ['a', 'b', 'c', 'd', 'e', 'f'].map((id) => ({ id, label: id.toUpperCase() }))
 
-  it("'auto' (default) keeps visual tabs when 4 or fewer tabs", () => {
-    render(TabsFixture, { props: { tabs } }) // 3 tabs
-    expect(document.querySelector('.kit-tabs').className).not.toContain('kit-tabs--mselect')
-  })
-
-  it("'auto' switches to the select when the tab count overflows a phone (>4)", () => {
+  it('renders six tabs and no dropdown', () => {
     render(TabsFixture, { props: { tabs: sixTabs } })
-    expect(document.querySelector('.kit-tabs').className).toContain('kit-tabs--mselect')
+    expect(document.querySelectorAll('.kit-tab')).toHaveLength(6)
+    expect(document.querySelector('select')).toBeNull()
   })
 
-  it('true forces the select rule regardless of tab count', () => {
-    render(TabsFixture, { props: { tabs, mobileSelect: true } })
-    expect(document.querySelector('.kit-tabs').className).toContain('kit-tabs--mselect')
-  })
-
-  it('false keeps visual tabs regardless of tab count', () => {
-    render(TabsFixture, { props: { tabs: sixTabs, mobileSelect: false } })
-    expect(document.querySelector('.kit-tabs').className).not.toContain('kit-tabs--mselect')
+  it('has no mobile-select class left to scope a rule with', () => {
+    render(TabsFixture, { props: { tabs: sixTabs } })
+    expect(document.querySelector('.kit-tabs').className).not.toContain('mselect')
   })
 })
 
@@ -108,10 +83,10 @@ describe('Tabs — skin passthrough + navigate mode (spec 035 tabs unification)'
     render(TabsFixture, { props: { tabs, styled: false } })
     const root = document.querySelector('.kit-tabs')
     expect(root.className).not.toContain('kit-tabs--styled')
-    expect(document.querySelector('select.kit-tabs-select')).toBeTruthy()
+    expect(document.querySelector('.kit-tabs-list')).toBeTruthy()
   })
 
-  it('navigate mode renders real links and the select navigates', async () => {
+  it('navigate mode renders real links', async () => {
     const hrefTabs = [
       { id: 'details', label: 'Details', href: '/admin/sessions/x' },
       { id: 'tunes', label: 'Tunes', href: '/admin/sessions/x/tunes' },
@@ -123,9 +98,8 @@ describe('Tabs — skin passthrough + navigate mode (spec 035 tabs unification)'
     expect(links[1]).toHaveAttribute('href', '/admin/sessions/x/tunes')
     expect(links[0]).toHaveAttribute('aria-current', 'page')
     expect(links[0].className).toContain('active')
-
-    const select = document.querySelector('select.kit-tabs-select')
-    await fireEvent.change(select, { target: { value: 'tunes' } })
-    expect(onNavigate).toHaveBeenCalledWith('/admin/sessions/x/tunes')
+    // Navigation is the browser following the href; there is no longer a second
+    // control that has to be taught to navigate on its behalf.
+    expect(onNavigate).not.toHaveBeenCalled()
   })
 })

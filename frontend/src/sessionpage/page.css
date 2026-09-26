@@ -81,6 +81,18 @@
     font-weight: 500;
 }
 
+/* On a phone the three tabs split the width evenly. With padding-sized tabs the
+   row ends wherever the longest label happens to end, which leaves a ragged gap
+   on the right and gives "People" a bigger tap target than "Logs" for no reason.
+   Equal thirds also means the underline reads as a position indicator. */
+@media (max-width: 768px) {
+    .tab-button {
+        flex: 1 1 0;
+        padding: 10px 4px;
+        text-align: center;
+    }
+}
+
 .tab-content {
     display: none;
 }
@@ -90,10 +102,13 @@
 }
 
 /* Tunes tab styles */
+/* No padding: the Logs pane has none, and a tab that shifts its content 20px
+   when you switch to it looks like a bug. The toolbar and the list rows set
+   their own gutters. */
 .tunes-container {
     width: 100%;
     margin: 0;
-    padding: 20px;
+    padding: 0;
 }
 
 /* Mobile: zero padding for tunes container and parent docs-content */
@@ -112,11 +127,6 @@
     }
 }
 
-.filters-container {
-    padding: 6px;
-    margin-bottom: 10px;
-}
-
 .results-count {
     margin-bottom: 15px;
     color: var(--text-muted, #6c757d);
@@ -132,16 +142,14 @@
     margin-bottom: 30px;
 }
 
+/* Layout (flex, 12px gap, centred, the meta chips hard right) comes from the kit
+   Row this renders through now — spec 052 §B8 Stage 2. What stays here is the skin. */
 .tune-row {
     background-color: var(--bg-color);
     border-bottom: 1px solid var(--border-color);
     padding: 12px 8px;
     transition: background-color 0.1s;
     cursor: pointer;
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 12px;
-    align-items: center;
 }
 
 .tune-row:first-child {
@@ -157,7 +165,6 @@
     align-items: center;
     gap: 12px;
     margin-bottom: 0;
-    grid-column: 1;
     min-width: 0;
 }
 
@@ -173,10 +180,20 @@
     white-space: nowrap;
 }
 
+/* This row is in the results because its NOTATION matched the search, not its name.
+   Without the mark, a search by notes reads as a list of unrelated tunes. */
+.abc-only-badge {
+    font-size: 15px;
+    line-height: 1;
+    color: #e8d28a;
+    flex: 0 0 auto;
+    margin-left: 4px;
+}
+
 .tune-type {
     font-size: 11px;
     padding: 3px 6px;
-    background-color: var(--primary);
+    background-color: var(--primary-fill);
     color: white;
     border-radius: 3px;
     text-transform: capitalize;
@@ -184,6 +201,10 @@
     margin-left: 0;
 }
 
+/* No grid-column and no justify-content: Row's trailing slot already sits hard
+   against the right margin, and it does so whether or not this div has anything
+   in it — which the grid column only managed because both children always
+   rendered. */
 .tune-meta {
     display: flex;
     flex-direction: row;
@@ -191,8 +212,6 @@
     margin-bottom: 0;
     font-size: 13px;
     align-items: center;
-    grid-column: 2;
-    justify-content: flex-end;
 }
 
 .tune-count-badge {
@@ -288,10 +307,6 @@
         padding: 0;
         max-width: 100%;
         margin: 0;
-    }
-
-    .filters-container {
-        padding: 8px;
     }
 
     .results-count {
@@ -422,21 +437,6 @@
     color: var(--text-color);
 }
 
-/* Logs tab filter header: the All/Logged toggle + the tune autocomplete.
-   Skins come from my_tunes_mobile.css (.filter-button-group / .filter-sort-btn /
-   .filter-search-input), the same ones the Tunes tab's filter row wears. */
-.logs-filter-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin: 0 8px 12px 0;
-    /* 12px = .instance-date-cell's own padding, so the search box's left edge
-       lines up with the column of dates below it. */
-    padding-left: 12px;
-    /* clear the floated help icon so the row doesn't run under it */
-    padding-right: 24px;
-}
-
 .logs-view-toggle {
     flex: 0 0 auto;
 }
@@ -461,11 +461,20 @@
     font-weight: 500;
 }
 
+/* The toolbar's search slot. .filter-top-row .kit-search flexes the field
+   itself, but on Logs the field is wrapped one deeper (the combobox positions
+   its dropdown against this element), so the flex has to be declared here. */
 .logs-tune-filter {
     position: relative;
     flex: 1;
     min-width: 0;
-    max-width: 320px;
+    /* Centre like .kit-search does. The toolbar stretches its children to the
+       row's full height, and on the other two tabs the stretched child IS
+       .kit-search, which centres the field inside itself. Here there is this
+       wrapper in between, so without these the field sat 1px higher than on
+       Tunes and People. */
+    display: flex;
+    align-items: center;
 }
 
 /* Autocomplete list — overlays the grid below it. */
@@ -586,17 +595,10 @@
 }
 
 @media (max-width: 768px) {
-    .logs-tune-filter {
-        max-width: none;
-    }
     /* my_tunes_mobile.css gives .filter-button-group width:100% on phones (it owns a
-       whole filter-panel row there). Here it shares the row with the tune box. */
+       whole filter-panel row there). Here it shares the filter panel with nothing. */
     .logs-view-toggle {
         width: auto;
-    }
-    .logs-filter-header {
-        gap: 6px;
-        padding-right: 20px;
     }
 }
 
@@ -642,106 +644,180 @@
     color: var(--text-color);
 }
 
-.year-view-link {
-    font-size: 0.9rem;
-    color: var(--primary);
-    text-decoration: none;
-    opacity: 0;
-    transition: opacity 0.2s ease;
-    pointer-events: none;
-    margin-left: 0.5rem;
+/* ---- Pinned chrome (spec 052 §B8 Stage 3) ---------------------------------
+   Three sticky layers under the fixed site header: the tab strip, then the active
+   tab's toolbar, then (on Logs) the year headers. The session's own title, address
+   and schedule deliberately scroll away — pinning those too costs 291px, which on
+   an 800px phone is nearly half the list, in exchange for information you read
+   once.
+
+   The offsets are measured, not hard-coded: sticky.js publishes each layer's
+   height as a custom property, because a toolbar wraps at narrow widths and the
+   Tunes filter panel grows every time it opens. The fallbacks are only for the
+   first frame, before the ResizeObserver has reported.
+
+   Only Logs publishes its toolbar height, because only Logs has a third layer
+   under it. All three tabs stay MOUNTED across switches (their state survives),
+   so three writers to one variable meant whichever hidden pane reported last
+   won — and a hidden pane measures 0.
+
+   Stacking order matters: tabs above toolbar above year headers, so a layer
+   scrolling up slides UNDER the one that outranks it. */
+
+.tab-buttons {
+    position: -webkit-sticky;
+    position: sticky;
+    top: var(--site-header-h, 42px);
+    z-index: 3;
+    background: var(--bg-color);
 }
 
-.year-view-link.visible {
-    opacity: 1;
-    pointer-events: auto;
+/* The three tabs' toolbar containers. Each holds exactly ONE child now — the
+   kit Toolbar, which owns the row layout — so all that is left for them is to
+   stick and to set the gutter. They share one rule because the three toolbars
+   have to line up: switching tabs should move the list underneath, not shift the
+   search box sideways. Nothing below may re-add display/padding/margin here. */
+.filters-container,
+.logs-filter-header,
+.people-controls {
+    position: -webkit-sticky;
+    position: sticky;
+    top: calc(var(--site-header-h, 42px) + var(--session-tabs-h, 50px));
+    z-index: 2;
+    background: var(--bg-color);
+    display: block;
+    padding: 6px;
+    margin: 0 0 10px;
 }
 
-.year-add-link {
-    font-size: 0.9rem;
-    color: var(--primary);
-    text-decoration: none;
-    opacity: 1;
-    transition: opacity 0.2s ease;
-    pointer-events: auto;
-    margin-left: 0.5rem;
-    cursor: pointer;
+@media (max-width: 768px) {
+    .filters-container,
+    .logs-filter-header,
+    .people-controls {
+        padding: 8px;
+    }
 }
 
-.year-add-link.hidden {
-    display: none;
+
+/* ---- Logs list (spec 052 §B8 Stage 3) -------------------------------------
+   One list, not three tables. What was here: .instances-table, its header/content
+   rows and date/location/time cells, plus .year-view-link — an anchor to #view
+   that had no handler anywhere and whose CSS set opacity:0 and
+   pointer-events:none, revealed by a .visible class nothing ever added. It had
+   been invisible and inert; it is gone rather than ported. */
+
+.logs-list {
+    display: flex;
+    flex-direction: column;
 }
 
-.year-view-link:hover {
-    text-decoration: underline;
-}
-
-/* Instances Table Styles */
-.instances-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-bottom: 1.5rem;
-}
-
-.year-header-row {
-    border: none;
-}
-
-.year-header-cell {
-    border: none;
-    padding: 0;
-    background: transparent;
-}
-
-.year-content-row {
-    transition: max-height 0.3s ease, opacity 0.3s ease;
+/* Sticky, so on a session years deep you always know which year you are in.
+   The header is also the collapse control (see .year-header above). */
+.logs-group-header {
+    position: sticky;
+    /* NOT top:0 — the site header is fixed at the top of the viewport, so a group
+       header stuck at 0 slides underneath it and is never seen. That looks exactly
+       like sticky not working at all. */
+    position: -webkit-sticky;
+    position: sticky;
+    top: calc(
+        var(--site-header-h, 42px) + var(--session-tabs-h, 50px) +
+            var(--logs-toolbar-h, 40px)
+    );
+    z-index: 1;
+    gap: 8px;
+    padding: 6px 8px;
+    background: var(--bg-color);
     border-bottom: 1px solid var(--border-color);
 }
 
-.year-content-row.collapsed {
-    display: none;
+.logs-group-toggle {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
 }
 
-.instance-date-cell,
-.instance-location-cell {
-    padding: 8px 12px;
-    vertical-align: middle;
+.logs-group-count {
+    color: var(--text-muted, #6c757d);
+    font-size: 0.85rem;
+    font-variant-numeric: tabular-nums;
 }
 
-.instance-date-cell a,
-.instance-location-cell a {
+.logs-group-add {
+    margin-left: auto;
+    background: none;
+    border: none;
+    cursor: pointer;
+}
+
+.logs-row {
+    padding: 10px 8px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.logs-row:hover {
+    background-color: var(--hover-bg);
+}
+
+/* The weekday over the day-of-month: a column of dates you can scan without
+   reading any of them in full. Absent at a festival, where the day is the
+   group header and the time is what tells the rows apart. */
+.logs-date-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 38px;
+    line-height: 1.1;
+}
+
+.logs-date-dow {
+    font-size: 0.7rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted, #6c757d);
+}
+
+.logs-date-dom {
+    font-size: 1.15rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.logs-row-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.logs-row-title {
     color: var(--primary);
     text-decoration: none;
+    font-size: 1rem;
 }
 
-.instance-date-cell a:hover,
-.instance-location-cell a:hover {
+.logs-row-title:hover {
     text-decoration: underline;
 }
 
-/* Faint parenthetical count of tunes logged for an instance */
-.log-tune-count {
-    color: var(--text-muted, #6c757d);
-    font-size: 0.85em;
-    margin-left: 6px;
-}
-
-/* An instance with no tunes logged is just an empty placeholder,
-   so render its link as a fainter blue tint (still the link color,
-   just dimmer) to signal it isn't a real log yet. */
-.instance-date-cell a.empty-log,
-.instance-location-cell a.empty-log,
+/* An instance with no tunes logged is an empty placeholder, not a log: same
+   link colour, dimmer. */
+.logs-row-title.empty-log,
 a.empty-log {
     color: var(--primary);
     opacity: 0.5;
 }
 
-.instance-time-cell {
-    padding: 8px 12px;
-    vertical-align: middle;
-    text-align: right;
-    white-space: nowrap;
-    color: var(--text-color);
+.logs-row-sub {
+    font-size: 0.85rem;
+    color: var(--text-muted, #6c757d);
+}
+
+/* Faint count of tunes logged for an instance */
+.log-tune-count {
+    color: var(--text-muted, #6c757d);
+    font-size: 0.85em;
 }
 
 /* Active Session Instance Highlighting */
@@ -785,8 +861,8 @@ a.empty-log {
 }
 
 .tune-select-checkbox:checked {
-    background-color: var(--primary);
-    border-color: var(--primary);
+    background-color: var(--primary-fill);
+    border-color: var(--primary-fill);
 }
 
 .tune-select-checkbox:checked::after {
@@ -832,13 +908,13 @@ a.empty-log {
 }
 
 .selection-btn.primary {
-    background-color: var(--primary);
+    background-color: var(--primary-fill);
     color: white;
-    border-color: var(--primary);
+    border-color: var(--primary-fill);
 }
 
 .selection-btn.primary:hover {
-    background-color: var(--primary-dark, #0056b3);
+    background-color: var(--primary-fill-hover, #437342);
 }
 
 .selection-btn:disabled {
@@ -913,7 +989,7 @@ a.empty-log {
 
 .copy-destination-option input[type="radio"] {
     margin-right: 10px;
-    accent-color: var(--primary);
+    accent-color: var(--primary-fill);
 }
 
 .my-tunes-status-options {
@@ -954,10 +1030,11 @@ a.empty-log {
 }
 
 /* People tab styles */
+/* See .tunes-container: flush, like the Logs pane. */
 .people-container {
     width: 100%;
     margin: 0;
-    padding: 20px;
+    padding: 0;
 }
 
 /* Mobile: zero padding for people container */
@@ -969,89 +1046,22 @@ a.empty-log {
     }
 }
 
-.people-controls {
-    display: flex;
-    gap: 12px;
-    margin-bottom: 16px;
-    padding: 0 8px;
-    align-items: center;
-}
-
-@media (max-width: 768px) {
-    .people-controls {
-        padding: 8px;
-    }
-}
-
-/* The kit SearchField wrapper takes the input's old flex slot in the row */
-.people-controls .kit-search {
-    flex: 1;
-    min-width: 0;
-}
-
-.people-search-box {
-    flex: 1;
-    padding: 8px 12px;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    font-size: 14px;
-    background-color: var(--bg-color);
-    color: var(--text-color);
-}
-
-.people-search-box:focus {
-    outline: none;
-    border-color: var(--primary);
-}
-
-.people-filter-btn {
-    padding: 8px 16px;
-    background-color: var(--bg-color);
-    color: var(--text-color);
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 14px;
-    transition: background-color 0.2s;
-    white-space: nowrap;
-    min-width: 100px;
-}
-
-.people-filter-btn:hover {
-    background-color: var(--hover-bg);
-}
-
-.people-add-btn {
-    padding: 8px 16px;
-    background-color: var(--primary);
-    color: white;
-    border: 1px solid var(--primary);
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 14px;
-    transition: background-color 0.2s, opacity 0.2s;
-    white-space: nowrap;
-}
-
-.people-add-btn:hover {
-    opacity: 0.9;
-}
-
 .people-list {
     display: block;
     margin-bottom: 30px;
 }
 
+/* Layout (flex, 12px gap, centred, the trailing slot hard right) comes from the
+   kit Row this renders through now — spec 052 §B8 Stage 2. What stays here is the
+   skin. The grid this used to declare was `auto 1fr auto`, the same shape that put
+   a trailing chip in the stretchy middle column whenever a row lacked its leading
+   one; harmless here (the person icon always renders) but not worth keeping. */
 .person-row {
     background-color: var(--bg-color);
     border-bottom: 1px solid var(--border-color);
     padding: 12px 8px;
     transition: background-color 0.1s;
     cursor: pointer;
-    display: grid;
-    grid-template-columns: auto 1fr auto;
-    gap: 12px;
-    align-items: center;
 }
 
 .person-row:first-child {
@@ -1282,9 +1292,9 @@ a.empty-log {
 
 .add-person-btn-save {
     padding: 8px 16px;
-    background-color: var(--primary);
+    background-color: var(--primary-fill);
     color: white;
-    border: 1px solid var(--primary);
+    border: 1px solid var(--primary-fill);
     border-radius: 4px;
     cursor: pointer;
     font-size: 14px;

@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { SCRATCH_TUNES, STORAGE } from "../support/data";
+import { NOTATION, SCRATCH_TUNES, STORAGE } from "../support/data";
 
 /**
  * Reset one scratch tune to its seed state (not on the regular user's list).
@@ -79,21 +79,21 @@ test.describe("offline data (Tier 1)", () => {
     await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 8000 });
     // Online + controlled: caches both the page snapshot and the GET /api/my-tunes response.
     await page.goto("/my-tunes");
-    await expect(page.locator("h1")).toContainText(/My Tunes/i);
+    await expect(page.locator("#search-input")).toBeVisible();
     await expect(page.getByText(/Cooley's/i).first()).toBeVisible();
     await page.waitForTimeout(500); // let the snapshot + api cache writes land
 
     await context.setOffline(true);
     try {
       await page.goto("/my-tunes"); // page + /api/my-tunes both served from cache
-      await expect(page.locator("h1")).toContainText(/My Tunes/i);
+      await expect(page.locator("#search-input")).toBeVisible();
       await expect(page.getByText(/Cooley's/i).first()).toBeVisible();
 
       // A never-visited filter/sort URL must also work offline: the route ignores the
       // query and the list is filtered client-side, so the SW shares one cached entry
       // across query variants (ignoreSearch).
       await page.goto("/my-tunes?status=want+to+learn&sortType=heard&sortDir=desc");
-      await expect(page.locator("h1")).toContainText(/My Tunes/i);
+      await expect(page.locator("#search-input")).toBeVisible();
       await expect(page.locator("body")).not.toContainText(/You're offline/i);
       await expect(page.getByText(/Cooley's/i).first()).toBeVisible(); // a "want to learn" tune
     } finally {
@@ -286,7 +286,7 @@ test.describe("offline status change (Tier 2)", () => {
     try {
       await page.goto("/my-tunes"); // reload so the new tune is in the list
       const badge = page.locator(`[data-tune-id="${tid}"] .status-badge`).first();
-      await expect(badge).toHaveText(/want to learn/i, { timeout: 8000 });
+      await expect(badge).toHaveText(/to learn/i, { timeout: 8000 });
 
       await context.setOffline(true);
       await badge.click(); // want to learn -> learning (optimistic, queued)
@@ -401,7 +401,7 @@ test.describe("background prefetch", () => {
       const cssStatus = await page.evaluate(async () => (await fetch("/static/css/my_tunes_mobile.css")).status);
       expect(cssStatus).toBe(200);
       await page.goto("/my-tunes");
-      await expect(page.locator("h1")).toContainText(/My Tunes/i);
+      await expect(page.locator("#search-input")).toBeVisible();
       await expect(page.locator("body")).not.toContainText(/You're offline/i);
     } finally {
       await context.setOffline(false);
@@ -469,6 +469,25 @@ test.describe("offline bundle model", () => {
       await expect(title).not.toHaveText(/Unknown|Loading/i);
       await expect(page.locator("#tune-detail-content")).not.toContainText(/Failed to load/i);
       await expect(page.locator("#tune-detail-content .abc-notation-section")).toBeVisible({ timeout: 8000 });
+    } finally {
+      await context.setOffline(false);
+    }
+  });
+
+  test("global Find-a-tune matches NOTATION offline, from the bundled incipits", async ({ page, context }) => {
+    // The bundle carries `incipit_abc` only, never the full setting ABC, so offline
+    // notation search reaches the OPENING BARS. The ♪ mark's tooltip says so, rather
+    // than under-answering quietly. NOTATION.phrase is inside Cooley's incipit.
+    await warmAndSync(page);
+
+    await context.setOffline(true);
+    try {
+      await page.evaluate(() => (window as any).findTune());
+      await page.locator(".ft-input").fill(NOTATION.phrase);
+      const hit = page.locator(".ft-results .ft-item").first();
+      await expect(hit).toBeVisible({ timeout: 8000 });
+      await expect(hit).toContainText(NOTATION.tune.name);
+      await expect(hit.locator(".ft-abc")).toHaveAttribute("title", /opening bars/i);
     } finally {
       await context.setOffline(false);
     }
@@ -590,5 +609,64 @@ test.describe("offline bundle model", () => {
         data: { op_id: `cleanup-${tid}`, ts: Date.now(), type: "remove", tune_id: tid },
       });
     }
+  });
+});
+
+/**
+ * The recording segmenter (spec 050 "Offline"): the one admin page that is
+ * snapshotted. Opened online once, it reopens with the network cut; a mark
+ * placed offline stays on screen (orange, counted in the header), survives a
+ * reload from the local mirror + queue, and reaches the server once the queue
+ * is flushed after reconnecting.
+ */
+test.describe("offline segmenter (spec 050)", () => {
+  test.use({ storageState: STORAGE.admin });
+
+  test("reopens offline, queues a mark, and syncs it on reconnect", async ({ page, context }) => {
+    // The seeded recording (schema/seed_recording.sql) is id 1. Start from a
+    // known state: its first logged tune unplaced.
+    const before = await (await page.request.get("/api/recordings/1/segmenter")).json();
+    expect(before.success).toBe(true);
+    const tune = before.tunes[0];
+    await page.request.delete(`/api/recordings/1/segments/${tune.session_instance_tune_id}`); // 404 is fine
+    const row = page.locator(`.tl-row[data-tune-id="${tune.session_instance_tune_id}"]`);
+
+    await page.goto("/");
+    await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 8000 });
+    await page.goto("/admin/recordings/1/segment"); // online + controlled -> snapshotted
+    await expect(row).toBeVisible();
+    await expect(row).not.toHaveClass(/is-placed/);
+    // Let the tool finish its mirror write before the network goes.
+    await page.waitForTimeout(500);
+
+    await context.setOffline(true);
+    try {
+      await page.reload(); // served from the snapshot
+      await expect(row).toBeVisible();
+      await page.keyboard.press("m");
+      await expect(page.locator(".sg-saving")).toHaveText(/1 queued/);
+      await expect(row).toHaveClass(/is-pending/);
+
+      // Still offline, reload again: the mark comes back from the mirror.
+      await page.reload();
+      await expect(row).toHaveClass(/is-pending/);
+      await expect(page.locator(".sg-saving")).toHaveText(/1 queued/);
+    } finally {
+      await context.setOffline(false);
+    }
+
+    // Reconnected: drain the queue (the probe would do this within seconds;
+    // call it directly so the test doesn't wait on the poll interval).
+    await page.evaluate(() => (window as any).SegmenterOffline.flush());
+    await expect(page.locator(".sg-saving")).not.toHaveClass(/is-queued/);
+    await expect(row).toHaveClass(/is-placed/);
+    await expect(row).not.toHaveClass(/is-pending/);
+
+    const after = await (await page.request.get("/api/recordings/1/segmenter")).json();
+    const placed = after.tunes.find((t: any) => t.session_instance_tune_id === tune.session_instance_tune_id);
+    expect(placed.segment).not.toBeNull();
+
+    // Leave the seed as it was found.
+    await page.request.delete(`/api/recordings/1/segments/${tune.session_instance_tune_id}`);
   });
 });

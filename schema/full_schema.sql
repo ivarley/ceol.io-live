@@ -354,6 +354,27 @@ CREATE TABLE tune_setting (
 CREATE INDEX idx_tune_setting_tune_id ON tune_setting (tune_id);
 CREATE INDEX idx_tune_setting_cache_date ON tune_setting (cache_updated_date);
 
+-- Index-backed ABC (notation) search (see migration 055). Same shape as tune_search_key
+-- above: ONE IMMUTABLE normalization -- drop grace notes {...}, chord symbols "...",
+-- whitespace and legacy '!' line breaks, then lowercase -- shared by the index expression
+-- and every notation query (database.abc_query_key / ABC_MATCH_SQL), so the planner uses
+-- the index. frontend/src/shared/abcquery.js normAbc() is the browser-side twin.
+CREATE OR REPLACE FUNCTION abc_search_key(text)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE STRICT PARALLEL SAFE
+AS $$
+    SELECT lower(
+        regexp_replace(
+            regexp_replace($1, '\{[^}]*\}|"[^"]*"', '', 'g'),
+            '[[:space:]!]', '', 'g'
+        )
+    )
+$$;
+
+CREATE INDEX idx_tune_setting_abc_trgm
+    ON tune_setting USING gin (abc_search_key(abc) gin_trgm_ops);
+
 -- -----------------------------------------------------------------------------
 -- Session Tune table (depends on session, tune)
 -- -----------------------------------------------------------------------------
@@ -549,6 +570,10 @@ CREATE TABLE session_person (
     confirmed BOOLEAN NOT NULL DEFAULT FALSE,
     archived BOOLEAN NOT NULL DEFAULT FALSE,
     is_admin BOOLEAN DEFAULT FALSE,
+    -- May upload, delete and timestamp this session's recordings (schema/053).
+    -- Only takes effect together with is_admin, and grants nothing on any other
+    -- session's audio or on the site-wide recordings index.
+    can_manage_recordings BOOLEAN NOT NULL DEFAULT FALSE,
     gets_email_reminder BOOLEAN DEFAULT FALSE,
     gets_email_followup BOOLEAN DEFAULT FALSE,
     created_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
@@ -558,6 +583,8 @@ CREATE TABLE session_person (
 );
 
 ALTER TABLE session_person ADD CONSTRAINT uk_session_person UNIQUE (session_id, person_id);
+CREATE INDEX idx_session_person_manages_recordings ON session_person(session_id, person_id)
+    WHERE can_manage_recordings;
 CREATE INDEX idx_session_person_session_id ON session_person (session_id);
 CREATE INDEX idx_session_person_person_id ON session_person (person_id);
 CREATE INDEX idx_session_person_relationship ON session_person (session_id, relationship)
@@ -736,99 +763,153 @@ CREATE INDEX idx_login_history_user_event_time ON login_history(user_id, event_t
 CREATE INDEX idx_login_history_ip_event_time ON login_history(ip_address, event_type, timestamp);
 
 -- -----------------------------------------------------------------------------
--- Recording table - one continuous recording from one device at one session
+-- recording -- one audio file covering some or all of one session instance.
+--
+-- Many recordings per instance (several phones on the table, or one phone that
+-- stopped and restarted), so they are placed on a SHARED instance timeline:
+--   * exactly one recording per instance carries is_clock_anchor -- its t=0 IS
+--     the instance's zero point, enforced by a partial unique index;
+--   * every other recording states clock_offset_ms, how far after that zero
+--     point its own t=0 falls (negative if it started first -- then you would
+--     normally move the anchor instead).
+-- Instance-relative time for any recording is therefore
+--   clock_offset_ms + <ms into that file>,
+-- and absolute wall-clock time is started_at + <ms into that file> whenever
+-- started_at is known.
+--
+-- Only the single-recording case matters today; the offset column is what keeps
+-- the multi-recording case from needing a migration later.
 -- -----------------------------------------------------------------------------
 CREATE TABLE recording (
     recording_id SERIAL PRIMARY KEY,
     session_instance_id INTEGER NOT NULL REFERENCES session_instance(session_instance_id) ON DELETE CASCADE,
-    person_id INTEGER NOT NULL REFERENCES person(person_id) ON DELETE CASCADE,
-    source VARCHAR(10) NOT NULL DEFAULT 'live' CHECK (source IN ('live', 'upload')),
-    status VARCHAR(20) NOT NULL DEFAULT 'started' CHECK (status IN ('started', 'recording', 'paused', 'stopped', 'failed')),
-    device_info JSONB,
-    format VARCHAR(50),
+    -- Who made the recording. Nullable: an uploaded file often has no known
+    -- recordist, and the segmenter never needs one. Kept because with several
+    -- phones on the table "whose recording is this" is how you tell them apart --
+    -- and because person merging already repoints it (services/person_merge_service).
+    person_id INTEGER REFERENCES person(person_id) ON DELETE SET NULL,
+    label VARCHAR(200),
+    storage_key VARCHAR(500) NOT NULL,
+    mime_type VARCHAR(100) NOT NULL DEFAULT 'audio/mp4',
+    duration_ms BIGINT NOT NULL CHECK (duration_ms > 0),
+    file_size_bytes BIGINT,
     sample_rate INTEGER,
-    channels INTEGER,
-    bitrate INTEGER,
-    s3_prefix VARCHAR(500),
-    total_chunks INTEGER DEFAULT 0,
-    total_duration_ms BIGINT DEFAULT 0,
-    total_size_bytes BIGINT DEFAULT 0,
-    client_started_at TIMESTAMPTZ,
-    created_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
-    last_modified_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
+    channels SMALLINT,
+    is_clock_anchor BOOLEAN NOT NULL DEFAULT FALSE,
+    clock_offset_ms BIGINT NOT NULL DEFAULT 0,
+    started_at TIMESTAMPTZ,
+    -- Precomputed waveform: base64 of a Uint8Array, one 0-255 amplitude per
+    -- bucket at peaks_hz buckets/second. Precomputed because the alternative --
+    -- decoding a 3-hour file in the browser -- is a non-starter on a phone.
+    peaks TEXT,
+    peaks_hz NUMERIC(6, 2),
+    -- Playback proxy (schema/051): a small mono encode used ONLY for streaming
+    -- in the segmenter. The training corpus is always cut from storage_key.
+    stream_key VARCHAR(500),
+    stream_mime_type VARCHAR(100),
+    stream_size_bytes BIGINT,
+    -- Ingest state (schema/052). An in-app upload creates the row the moment the
+    -- audio lands in S3, minutes before the waveform and the proxy exist, so the
+    -- half-built state is written down rather than guessed at from peaks IS NULL.
+    -- While 'processing', duration_ms is the browser's provisional guess.
+    status VARCHAR(20) NOT NULL DEFAULT 'ready'
+        CONSTRAINT ck_recording_status CHECK (status IN ('queued', 'processing', 'ready', 'failed')),
+    status_detail TEXT,
+    -- Ingest liveness and retry budget (schema/054). The heartbeat is written
+    -- every 30s by whoever is running the ingest; older than 90s means that run
+    -- died and the row can be claimed again. Same mechanism as
+    -- tune_merge_scan.heartbeat_at (spec 031).
+    ingest_heartbeat_at TIMESTAMPTZ,
+    ingest_attempts SMALLINT NOT NULL DEFAULT 0,
+    -- "There is nothing else in this audio to place" (schema/055). Progress is
+    -- otherwise read as placements against the night's logged tunes, which can
+    -- never reach its denominator when the recording covers only part of the
+    -- night -- a phone started late, a battery that died. Only the person who
+    -- listened knows which it is, so it is recorded rather than inferred, and it
+    -- is kept apart from `status`: that is the ingest pipeline's state, written
+    -- by machines, and a re-ingest does not make this judgement untrue.
+    segmenting_complete BOOLEAN NOT NULL DEFAULT FALSE,
+    segmenting_complete_at TIMESTAMPTZ,
+    notes TEXT,
+    created_date TIMESTAMPTZ NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
+    last_modified_date TIMESTAMPTZ NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
     created_by_user_id INTEGER,
     last_modified_user_id INTEGER
 );
 
 CREATE INDEX idx_recording_session_instance_id ON recording(session_instance_id);
-CREATE INDEX idx_recording_person_id ON recording(person_id);
-CREATE INDEX idx_recording_status ON recording(status);
+CREATE INDEX idx_recording_person_id ON recording(person_id) WHERE person_id IS NOT NULL;
+CREATE INDEX idx_recording_pending_ingest ON recording(status, ingest_heartbeat_at)
+    WHERE status IN ('queued', 'processing');
 
-CREATE OR REPLACE FUNCTION update_recording_last_modified_date()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.last_modified_date = NOW() AT TIME ZONE 'UTC';
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER trigger_recording_last_modified_date
-    BEFORE UPDATE ON recording
-    FOR EACH ROW
-    EXECUTE FUNCTION update_recording_last_modified_date();
+-- At most one clock anchor per instance.
+CREATE UNIQUE INDEX uk_recording_clock_anchor
+    ON recording(session_instance_id)
+    WHERE is_clock_anchor;
 
 -- -----------------------------------------------------------------------------
--- Recording chunk table - individual 30-second audio chunks
--- -----------------------------------------------------------------------------
-CREATE TABLE recording_chunk (
-    recording_chunk_id SERIAL PRIMARY KEY,
-    recording_id INTEGER NOT NULL REFERENCES recording(recording_id) ON DELETE CASCADE,
-    sequence_number INTEGER NOT NULL,
-    start_timestamp_ms BIGINT NOT NULL,
-    end_timestamp_ms BIGINT NOT NULL,
-    s3_key VARCHAR(500) NOT NULL,
-    file_size_bytes INTEGER,
-    upload_status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (upload_status IN ('pending', 'uploading', 'uploaded', 'failed')),
-    checksum VARCHAR(64),
-    created_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC')
-);
-
-ALTER TABLE recording_chunk ADD CONSTRAINT uk_recording_chunk_seq UNIQUE (recording_id, sequence_number);
-CREATE INDEX idx_recording_chunk_recording_id ON recording_chunk(recording_id);
-CREATE INDEX idx_recording_chunk_upload_status ON recording_chunk(upload_status);
-
--- -----------------------------------------------------------------------------
--- Recording event table - lifecycle events for debugging
--- -----------------------------------------------------------------------------
-CREATE TABLE recording_event (
-    recording_event_id SERIAL PRIMARY KEY,
-    recording_id INTEGER NOT NULL REFERENCES recording(recording_id) ON DELETE CASCADE,
-    event_type VARCHAR(30) NOT NULL CHECK (event_type IN ('start', 'pause', 'resume', 'stop', 'error', 'chunk_gap')),
-    event_data JSONB,
-    client_timestamp TIMESTAMPTZ,
-    created_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC')
-);
-
-CREATE INDEX idx_recording_event_recording_id ON recording_event(recording_id);
-CREATE INDEX idx_recording_event_event_type ON recording_event(event_type);
-
--- -----------------------------------------------------------------------------
--- Recording tune segment table (future - define schema only)
+-- recording_tune_segment -- "this logged tune occupies this time range in this
+-- audio file". The junction between session_instance_tune and recording.
+--
+-- end_ms is NULLABLE on purpose and that nullability is the whole ergonomic
+-- point of the segmenter: marking the next tune's start implies the previous
+-- tune's end, so an operator only types an explicit end at the END OF A SET,
+-- where the following start is minutes of chatter away. NULL therefore means
+-- "runs until the next segment starts", resolved by the view below -- never
+-- "unknown".
 -- -----------------------------------------------------------------------------
 CREATE TABLE recording_tune_segment (
     recording_tune_segment_id SERIAL PRIMARY KEY,
     recording_id INTEGER NOT NULL REFERENCES recording(recording_id) ON DELETE CASCADE,
-    tune_id INTEGER REFERENCES tune(tune_id),
-    start_timestamp_ms BIGINT NOT NULL,
-    end_timestamp_ms BIGINT NOT NULL,
-    confidence DECIMAL(5,4),
-    detection_method VARCHAR(50),
-    detection_metadata JSONB,
-    created_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC')
+    session_instance_tune_id INTEGER NOT NULL REFERENCES session_instance_tune(session_instance_tune_id) ON DELETE CASCADE,
+    start_ms BIGINT NOT NULL CHECK (start_ms >= 0),
+    end_ms BIGINT CHECK (end_ms IS NULL OR end_ms > start_ms),
+    created_date TIMESTAMPTZ NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
+    last_modified_date TIMESTAMPTZ NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
+    created_by_user_id INTEGER,
+    last_modified_user_id INTEGER
 );
 
-CREATE INDEX idx_recording_tune_segment_recording_id ON recording_tune_segment(recording_id);
-CREATE INDEX idx_recording_tune_segment_tune_id ON recording_tune_segment(tune_id);
+-- One tune is placed at most once per recording. (The same tune played twice in
+-- a night is two session_instance_tune rows, so this does not get in the way.)
+ALTER TABLE recording_tune_segment
+    ADD CONSTRAINT uk_recording_tune_segment UNIQUE (recording_id, session_instance_tune_id);
+
+CREATE INDEX idx_recording_tune_segment_recording ON recording_tune_segment(recording_id, start_ms);
+CREATE INDEX idx_recording_tune_segment_sit ON recording_tune_segment(session_instance_tune_id);
+
+-- -----------------------------------------------------------------------------
+-- The training-corpus view: every segment with its end resolved and its tune
+-- identified. An implicit end (end_ms IS NULL) becomes the next segment's start;
+-- the last segment in a recording, if left implicit, falls back to the end of
+-- the file.
+-- -----------------------------------------------------------------------------
+CREATE VIEW recording_tune_segment_resolved AS
+SELECT
+    rts.recording_tune_segment_id,
+    rts.recording_id,
+    r.session_instance_id,
+    r.storage_key,
+    rts.session_instance_tune_id,
+    sit.tune_id,
+    COALESCE(sit.name, st.alias, t.name) AS display_name,
+    t.tune_type,
+    rts.start_ms,
+    COALESCE(
+        rts.end_ms,
+        LEAD(rts.start_ms) OVER (PARTITION BY rts.recording_id ORDER BY rts.start_ms),
+        r.duration_ms
+    ) AS resolved_end_ms,
+    rts.end_ms IS NOT NULL AS end_is_explicit,
+    r.clock_offset_ms + rts.start_ms AS instance_start_ms,
+    r.started_at + (rts.start_ms || ' milliseconds')::INTERVAL AS absolute_start
+FROM recording_tune_segment rts
+JOIN recording r ON r.recording_id = rts.recording_id
+JOIN session_instance_tune sit ON sit.session_instance_tune_id = rts.session_instance_tune_id
+JOIN session_instance si ON si.session_instance_id = r.session_instance_id
+LEFT JOIN tune t ON t.tune_id = sit.tune_id
+LEFT JOIN session_tune st ON st.tune_id = sit.tune_id AND st.session_id = si.session_id;
+
 
 -- =============================================================================
 -- HISTORY/AUDIT TABLES
@@ -1007,6 +1088,7 @@ CREATE TABLE session_person_history (
     confirmed BOOLEAN,
     archived BOOLEAN,
     is_admin BOOLEAN,
+    can_manage_recordings BOOLEAN,
     gets_email_reminder BOOLEAN,
     gets_email_followup BOOLEAN,
     created_date TIMESTAMPTZ,
@@ -1189,76 +1271,81 @@ CREATE INDEX idx_tune_setting_history_setting_id ON tune_setting_history (settin
 CREATE INDEX idx_tune_setting_history_changed_at ON tune_setting_history (changed_at);
 CREATE INDEX idx_tune_setting_history_operation ON tune_setting_history (operation);
 
--- Recording history
+-- Recording + segment history
 CREATE TABLE recording_history (
     history_id SERIAL PRIMARY KEY,
     recording_id INTEGER NOT NULL,
     operation VARCHAR(10) NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
     changed_by_user_id INTEGER,
-    changed_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
+    changed_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
     session_instance_id INTEGER,
     person_id INTEGER,
-    source VARCHAR(10),
-    status VARCHAR(20),
-    device_info JSONB,
-    format VARCHAR(50),
+    label VARCHAR(200),
+    storage_key VARCHAR(500),
+    mime_type VARCHAR(100),
+    duration_ms BIGINT,
+    file_size_bytes BIGINT,
     sample_rate INTEGER,
-    channels INTEGER,
-    bitrate INTEGER,
-    s3_prefix VARCHAR(500),
-    total_chunks INTEGER,
-    total_duration_ms BIGINT,
-    total_size_bytes BIGINT,
-    client_started_at TIMESTAMPTZ,
+    channels SMALLINT,
+    is_clock_anchor BOOLEAN,
+    clock_offset_ms BIGINT,
+    started_at TIMESTAMPTZ,
+    peaks_hz NUMERIC(6, 2),
+    stream_key VARCHAR(500),
+    stream_mime_type VARCHAR(100),
+    stream_size_bytes BIGINT,
+    segmenting_complete BOOLEAN,
+    segmenting_complete_at TIMESTAMPTZ,
+    notes TEXT,
+    created_date TIMESTAMPTZ,
+    last_modified_date TIMESTAMPTZ,
+    created_by_user_id INTEGER,
+    last_modified_user_id INTEGER
+);
+-- NB: `peaks` is deliberately NOT copied into history -- it is a large derived
+-- blob recomputable from the audio, and versioning it would bloat the table.
+
+CREATE INDEX idx_recording_history_recording_id ON recording_history(recording_id);
+CREATE INDEX idx_recording_history_changed_at ON recording_history(changed_at);
+
+CREATE TABLE recording_tune_segment_history (
+    history_id SERIAL PRIMARY KEY,
+    recording_tune_segment_id INTEGER NOT NULL,
+    operation VARCHAR(10) NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
+    changed_by_user_id INTEGER,
+    changed_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
+    recording_id INTEGER,
+    session_instance_tune_id INTEGER,
+    start_ms BIGINT,
+    end_ms BIGINT,
     created_date TIMESTAMPTZ,
     last_modified_date TIMESTAMPTZ,
     created_by_user_id INTEGER,
     last_modified_user_id INTEGER
 );
 
-CREATE INDEX idx_recording_history_recording_id ON recording_history(recording_id);
-CREATE INDEX idx_recording_history_changed_at ON recording_history(changed_at);
-CREATE INDEX idx_recording_history_operation ON recording_history(operation);
+CREATE INDEX idx_rts_history_segment_id ON recording_tune_segment_history(recording_tune_segment_id);
+CREATE INDEX idx_rts_history_changed_at ON recording_tune_segment_history(changed_at);
 
--- Recording chunk history
-CREATE TABLE recording_chunk_history (
-    history_id SERIAL PRIMARY KEY,
-    recording_chunk_id INTEGER NOT NULL,
-    operation VARCHAR(10) NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
-    changed_by_user_id INTEGER,
-    changed_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
-    recording_id INTEGER,
-    sequence_number INTEGER,
-    start_timestamp_ms BIGINT,
-    end_timestamp_ms BIGINT,
-    s3_key VARCHAR(500),
-    file_size_bytes INTEGER,
-    upload_status VARCHAR(20),
-    checksum VARCHAR(64),
-    created_date TIMESTAMPTZ
-);
+-- -----------------------------------------------------------------------------
+-- last_modified_date triggers
+-- -----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION touch_last_modified_date()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.last_modified_date = NOW() AT TIME ZONE 'UTC';
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
-CREATE INDEX idx_recording_chunk_history_recording_chunk_id ON recording_chunk_history(recording_chunk_id);
-CREATE INDEX idx_recording_chunk_history_changed_at ON recording_chunk_history(changed_at);
-CREATE INDEX idx_recording_chunk_history_operation ON recording_chunk_history(operation);
+CREATE TRIGGER trigger_recording_touch
+    BEFORE UPDATE ON recording
+    FOR EACH ROW EXECUTE FUNCTION touch_last_modified_date();
 
--- Recording event history
-CREATE TABLE recording_event_history (
-    history_id SERIAL PRIMARY KEY,
-    recording_event_id INTEGER NOT NULL,
-    operation VARCHAR(10) NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
-    changed_by_user_id INTEGER,
-    changed_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
-    recording_id INTEGER,
-    event_type VARCHAR(30),
-    event_data JSONB,
-    client_timestamp TIMESTAMPTZ,
-    created_date TIMESTAMPTZ
-);
+CREATE TRIGGER trigger_recording_tune_segment_touch
+    BEFORE UPDATE ON recording_tune_segment
+    FOR EACH ROW EXECUTE FUNCTION touch_last_modified_date();
 
-CREATE INDEX idx_recording_event_history_recording_event_id ON recording_event_history(recording_event_id);
-CREATE INDEX idx_recording_event_history_changed_at ON recording_event_history(changed_at);
-CREATE INDEX idx_recording_event_history_operation ON recording_event_history(operation);
 
 -- =============================================================================
 -- STORED PROCEDURES AND FUNCTIONS
@@ -1312,7 +1399,8 @@ END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
 -- Stored procedure to merge one tune_id into another across all relevant tables
--- (spec 030 version: covers person_tune_instrument + recording_tune_segment, preserves
+-- (spec 030 version, reshaped by 049: covers person_tune_instrument; recording_tune_segment
+-- now follows session_instance_tune rather than being moved directly. Preserves
 -- the old display name as per-context aliases, and writes app-convention history rows)
 CREATE OR REPLACE FUNCTION merge_tune_ids(
     old_tune_id INTEGER,
@@ -1396,6 +1484,18 @@ BEGIN
         last_modified_user_id = changed_by_user_id
     WHERE tune_id = old_tune_id;
     GET DIAGNOSTICS tune_setting_updated = ROW_COUNT;
+
+    -- recording_tune_segment (reshaped by schema/049) hangs off
+    -- session_instance_tune, not tune, so step 2 below carries the segments across
+    -- on its own and there is nothing to move. Counted HERE, before that remap,
+    -- because afterwards these rows are indistinguishable from segments that were
+    -- already on the surviving tune -- reported only so the merge summary still
+    -- says how much placed audio changed hands.
+    SELECT count(*) INTO recording_tune_segment_updated
+    FROM recording_tune_segment rts
+    JOIN session_instance_tune sit
+      ON sit.session_instance_tune_id = rts.session_instance_tune_id
+    WHERE sit.tune_id = old_tune_id;
 
     -- 2. session_instance_tune: move, preserving the displayed name. Rows with no
     -- per-row name were showing the OLD canonical name; freeze it into sit.name so
@@ -1597,11 +1697,7 @@ BEGIN
     WHERE tune_id = old_tune_id;
     GET DIAGNOSTICS person_tune_deleted = ROW_COUNT;
 
-    -- 6. recording_tune_segment: plain move (no unique constraints, no history table).
-    UPDATE recording_tune_segment
-    SET tune_id = new_tune_id
-    WHERE tune_id = old_tune_id;
-    GET DIAGNOSTICS recording_tune_segment_updated = ROW_COUNT;
+    -- 6. recording_tune_segment: nothing to do -- see the count before step 2.
 
     -- 7. Old name stays searchable per session that knew the old tune: add it as a
     -- session_tune_alias on the new tune. UNIQUE (session_id, alias) skips dupes.

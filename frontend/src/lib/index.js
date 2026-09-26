@@ -12,6 +12,16 @@ export { default as List } from './List.svelte'
 export { default as Pager } from './Pager.svelte'
 export { default as SearchField } from './SearchField.svelte'
 export { default as Seg } from './Seg.svelte'
+// Chevron (spec 052 §B16): the one arrow in the app. Everything that used to be a
+// `›`, `‹`, `▸` or `▾` is this, drawn, at one stroke weight.
+export { default as Chevron } from './Chevron.svelte'
+// Row / Toolbar / SectionHeader (spec 052 §B8 Stage 1): the three primitives the
+// phone-shaped pages are built from — a list row whose trailing slot stays at the
+// right margin, one search+filter+sort+add line whose filter panel expands beneath
+// it, and a section title that can hand off to a full list.
+export { default as Row } from './Row.svelte'
+export { default as Toolbar } from './Toolbar.svelte'
+export { default as SectionHeader } from './SectionHeader.svelte'
 // PersonPicker (spec 034): the one find-or-add-a-person flow. Composed from the kit above
 // rather than being a primitive, but shared by the logger and the session page alike.
 export { default as PersonPicker } from './PersonPicker.svelte'

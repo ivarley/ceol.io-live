@@ -5,8 +5,10 @@
   // this bundle's page.css select on these). First paint comes from the embedded
   // payload; a background refetch of the same API keeps it fresh.
   import { untrack } from 'svelte'
-  import { SearchField } from '../lib/index.js'
+  import { SearchField, Seg, Toolbar } from '../lib/index.js'
   import { parseLocalDate } from '../shared/parse.js'
+  import { locationLabel } from './logic.js'
+  import AddSessionSheet from '../addsession/AddSessionSheet.svelte'
 
   let { pageData = null, isLoggedIn = false } = $props()
 
@@ -116,7 +118,11 @@
     return endTime ? `${start}-${formatTime(endTime)}` : start + ' - ?'
   }
 
-  const locationOf = (s) => [s.city, s.state, s.country].filter(Boolean).join(', ') || 'Unknown'
+  // The rule itself is in ./logic.js, where both of its branches can be tested:
+  // every seeded session is in the USA, so a browser test can only ever see the
+  // "drop my own country" half.
+  const viewerCountry = pageData?.viewer_country || ''
+  const locationOf = (s) => locationLabel(s, viewerCountry)
 
   function instanceLabel(session, instance) {
     const timeStr = formatTimeRange(instance.start_time, instance.end_time)
@@ -126,7 +132,33 @@
 
   const goto = (url) => (window.location.href = url)
 
+  // Adding a session is a sheet over this list, not a page you navigate to
+  // (spec 052 §B9). /add-session still exists and still works — it redirects
+  // here with ?add=1, which is what opens this.
+  let addOpen = $state(untrack(() => new URLSearchParams(window.location.search).get('add') === '1'))
+
+  // ?acu=false pre-unchecks "Add me as" (the admin sessions list links this way).
+  const addMeDefault = untrack(
+    () => new URLSearchParams(window.location.search).get('acu') !== 'false'
+  )
+
+  function openAdd(e) {
+    e?.preventDefault()
+    addOpen = true
+  }
+
+  // Arriving with ?add=1 should not leave it in the URL: reloading after you
+  // cancelled would reopen the sheet you just dismissed.
+  function clearAddParam() {
+    const url = new URL(window.location.href)
+    if (!url.searchParams.has('add')) return
+    url.searchParams.delete('add')
+    url.searchParams.delete('acu')
+    window.history.replaceState({}, '', url.pathname + url.search + url.hash)
+  }
+
   let searchField = $state(null)
+  let panelVisible = $state(false)
 
   // "My Sessions" only shows memberships, so a missing session usually just
   // needs a wider filter — jump to "All" and put the cursor in the search box.
@@ -137,42 +169,54 @@
   }
 </script>
 
-<h1>
-  Sessions
-  <a
-    href="/help/sessions"
-    title="What's a session?"
-    style="display: inline-flex; vertical-align: middle; color: var(--text-muted, #6c757d); opacity: 0.5; text-decoration: none;">
-    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="12" cy="12" r="10"></circle>
-      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
-      <line x1="12" y1="17" x2="12.01" y2="17"></line>
-    </svg>
-  </a>
-</h1>
+<!-- No page heading (spec 052 §B1). The tab bar already says where you are, and the
+     word "Sessions" over a list of sessions was a line of chrome between you and the
+     list. The "What's a session?" link went with it; the help sidebar carries it. -->
 
-<div class="sessions-controls">
-  <div class="search-and-toggle">
-    <SearchField
-      bind:this={searchField}
-      bind:value={rawSearch}
-      id="search-bar"
-      inputClass="search-bar"
-      wrapperClass="search-bar-wrap"
-      styled={false}
-      placeholder="Search by name or location..." />
-    <button
-      class="filter-toggle-button"
-      id="filter-toggle-button"
-      onclick={() => (filterIndex = (filterIndex + 1) % filterStates.length)}>
-      {filterButtonLabels[currentFilter]}
-    </button>
-  </div>
+<!-- The same toolbar as My Tunes and the session tabs: search, a filter panel, and
+     "+" — one control shape for "a list you can narrow", wherever you meet it. -->
+<div class="filters-container">
+  <Toolbar
+    styled={false}
+    toolbarClass="filter-top-row"
+    buttonClass="filter-panel-toggle"
+    filterId="filter-panel-toggle"
+    panelId="filter-panel"
+    bind:open={panelVisible}
+    activeCount={currentFilter === filterStates[0] ? 0 : 1}
+    addId={isLoggedIn ? 'add-session-link' : null}
+    onAdd={isLoggedIn ? openAdd : null}
+    addTitle="Add a session">
+    {#snippet search()}
+      <SearchField
+        bind:this={searchField}
+        bind:value={rawSearch}
+        id="search-bar"
+        inputClass="filter-search-input"
+        wrapperClass="filter-search-wrap"
+        styled={false}
+        placeholder="Search by name or location..." />
+    {/snippet}
 
-  <div class="session-count" id="session-count">
-    Showing <span id="count-number">{filtered.length}</span>
-    <span id="count-filter-type">{countLabels[currentFilter] || 'sessions'}</span>.
-  </div>
+    {#snippet filter()}
+      <Seg
+        options={filterStates.map((id) => ({ id, label: filterButtonLabels[id] }))}
+        value={currentFilter}
+        onSelect={(id) => (filterIndex = filterStates.indexOf(id))}
+        idAttr="data-session-filter"
+        styled={false}
+        segClass="filter-button-group"
+        optClass="filter-sort-btn"
+        aria-label="Which sessions to show" />
+    {/snippet}
+  </Toolbar>
+</div>
+
+<!-- "3 sessions in your list", not "Showing 3 sessions in your list." — My Tunes
+     says "10 tunes" in the same spot, and the extra words were the difference. -->
+<div class="session-count" id="session-count">
+  <span id="count-number">{filtered.length}</span>
+  <span id="count-filter-type">{countLabels[currentFilter] || 'sessions'}</span>
 </div>
 
 {#if !loaded}
@@ -182,52 +226,54 @@
 {:else if filtered.length === 0}
   <div id="no-results" class="no-sessions">No sessions found.</div>
 {:else}
-  <table class="sessions-grid" id="sessions-table">
-    <thead>
-      <tr>
-        <th>Name</th>
-        <th>Location</th>
-        <th></th>
-      </tr>
-    </thead>
-    <tbody id="sessions-tbody">
-      {#each filtered as session (session.session_id)}
-        <tr>
-          <td><a href="/sessions/{session.path}">{session.name}</a></td>
-          <td>{locationOf(session)}</td>
-          <td class="action-cell">
-            {#if session.active_instances && session.active_instances.length === 1}
-              <button
-                class="today-action-btn btn-goto-today"
-                onclick={() => goto(`/sessions/${session.path}/${session.active_instances[0].date}`)}>
-                On Now
-              </button>
-            {:else if session.active_instances && session.active_instances.length > 1}
-              <select
-                class="today-action-btn btn-goto-today"
-                id="dropdown-{session.session_id}"
-                onchange={(e) => e.target.value && goto(`/sessions/${session.path}/${e.target.value}`)}>
-                <option value="">On Now ...</option>
-                {#each session.active_instances as instance (instance.session_instance_id)}
-                  <option value={instance.date}>{instanceLabel(session, instance)}</option>
-                {/each}
-              </select>
-            {/if}
-          </td>
-        </tr>
-      {/each}
-    </tbody>
-  </table>
+  <!-- One line per session, like the tune lists: the name in full-strength text on
+       the left, where the eye starts, and the place quiet and right-aligned. It was a
+       three-column table with a header row, which is a lot of furniture for two
+       fields. -->
+  <div class="sessions-list" id="sessions-list">
+    {#each filtered as session (session.session_id)}
+      <a class="session-row" href="/sessions/{session.path}" data-session-path={session.path}>
+        <span class="session-row-name">{session.name}</span>
+        <span class="session-row-meta">
+          {#if session.active_instances && session.active_instances.length === 1}
+            <button
+              class="today-action-btn btn-goto-today"
+              onclick={(e) => {
+                e.preventDefault()
+                goto(`/sessions/${session.path}/${session.active_instances[0].date}`)
+              }}>On Now</button>
+          {:else if session.active_instances && session.active_instances.length > 1}
+            <!-- A festival can have several rooms going at once; the select is the
+                 only control here that has to stop the row's own navigation. -->
+            <select
+              class="today-action-btn btn-goto-today"
+              id="dropdown-{session.session_id}"
+              onclick={(e) => e.preventDefault()}
+              onchange={(e) => e.target.value && goto(`/sessions/${session.path}/${e.target.value}`)}>
+              <option value="">On Now ...</option>
+              {#each session.active_instances as instance (instance.session_instance_id)}
+                <option value={instance.date}>{instanceLabel(session, instance)}</option>
+              {/each}
+            </select>
+          {/if}
+          <span class="session-row-where">{locationOf(session)}</span>
+        </span>
+      </a>
+    {/each}
+  </div>
 {/if}
 
-<p style="font-size: 0.85rem; color: var(--secondary-text);">
+<!-- The one thing worth saying after the list, so it is centred under it rather
+     than left-aligned like a caption. "Back to home" went with the page heading:
+     the tab bar has a Home tab, and a link that repeats a tab is furniture. -->
+<p class="sessions-footnote">
   Don't see your session?
   {#if currentFilter === 'my'}
     <a href="/sessions" onclick={searchAllSessions}>Search all sessions</a> or
-    <a href="/add-session">add it!</a>
+    <a href="/add-session" onclick={openAdd}>add it!</a>
   {:else}
-    <a href="/add-session">Add it!</a>
+    <a href="/add-session" onclick={openAdd}>Add it!</a>
   {/if}
 </p>
 
-<p><a href="/">← Back to home</a></p>
+<AddSessionSheet bind:open={addOpen} {addMeDefault} onCancel={clearAddParam} />

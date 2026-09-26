@@ -1,14 +1,29 @@
 <script>
-  // Profile tab: person + account cards with a display/edit mode toggle, the live
-  // per-instrument profile editor (saves immediately, decoupled from the profile
-  // Save button), admin-only verify-email / danger-zone controls, and the
-  // beta live-editor toggle (admin or self).
+  // The profile screen: grouped rows for the person and their account, with a
+  // display/edit toggle that keeps the same rows either way, the live
+  // per-instrument editor (saves immediately, decoupled from the profile Save
+  // button), and the admin-only verify-email / danger-zone controls.
   let { person, user, isUserProfile, personId, timezoneOptions = [], canonicalInstruments = [] } = $props()
 
-  import { Dialog, Sheet, toast } from '../lib/index.js'
+  import { Chevron, Dialog, Sheet, toast } from '../lib/index.js'
   import MergeSection from './MergeSection.svelte'
+  import IdentityHeader from './IdentityHeader.svelte'
 
   let editMode = $state(false)
+
+  // Created / Last login / Active are evidence on somebody else's profile and
+  // noise on your own — nobody checks when they signed up. So an admin gets them
+  // outright and you get them behind a row.
+  let detailsOpen = $state(!isUserProfile)
+
+  // The line under the name: the account handle and where you play, which is the
+  // context a profile is actually for.
+  const placeLine = $derived(
+    [person.city, person.state, person.country].filter(Boolean).join(', ')
+  )
+  const subtitle = $derived(
+    [user && user.username ? '@' + user.username : null, placeLine].filter(Boolean).join('  ·  ')
+  )
 
   // --- Person / user form fields (edit mode) --------------------------------
   let firstName = $state(person.first_name || '')
@@ -153,35 +168,6 @@
         toast('Error verifying email: ' + error.message, 'error')
         verifyingEmail = false
         verifyBtnLabel = 'Verify Email'
-      })
-  }
-
-  // --- Session logger preference (admin or self) -------------------------------
-  // The live logger is the default; this flips back to the legacy pill editor, which
-  // is otherwise unreachable. Endpoint/flag names date from the beta rollout.
-  let betaBusy = $state(false)
-
-  function toggleBetaLogging() {
-    const enable = !user.beta_live_logging
-    betaBusy = true
-    fetch(`/api/users/${user.user_id}/beta-logging`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ enabled: enable }),
-    })
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.success) {
-          toast('Now using the ' + (enable ? 'live logger' : 'classic editor') + '.', 'success')
-          setTimeout(() => window.location.reload(), 800)
-        } else {
-          toast('Error: ' + (data.error || 'failed'), 'error')
-          betaBusy = false
-        }
-      })
-      .catch((err) => {
-        toast('Error: ' + err.message, 'error')
-        betaBusy = false
       })
   }
 
@@ -348,7 +334,8 @@
       .then((response) => response.json())
       .then((data) => {
         if (data.success) {
-          toast(data.message, 'success')
+          // No toast (spec 052 §B4): the reload below is the confirmation, and it
+          // destroys the toast a second after showing it.
           // Reload page to reflect new state
           setTimeout(() => {
             window.location.reload()
@@ -366,340 +353,295 @@
 
 <svelte:document onclick={onDocumentClick} />
 
-<div class="mt-3">
-  <div class="edit-controls mb-3">
-    <button id="edit-btn" class="btn btn-primary" style:display={editMode ? 'none' : ''} onclick={() => toggleEditMode(true)}>Edit</button>
-    <div id="edit-buttons" style:display={editMode ? 'block' : 'none'}>
-      <button id="save-btn" class="btn btn-success" onclick={saveChanges}>Save</button>
-      <button id="cancel-btn" class="btn btn-secondary" onclick={() => toggleEditMode(false)}>Cancel</button>
+<IdentityHeader
+  name={person.name}
+  {subtitle}
+  isAdmin={!!(user && user.is_system_admin)}
+  {editMode}
+  onEdit={() => toggleEditMode(true)}
+  onSave={saveChanges}
+  onCancel={() => toggleEditMode(false)} />
+
+<div class="pd-body">
+  <!-- Who you are. Grouped rows, label left and value right, so each line reads
+       as a sentence — "Location  Austin, TX" — instead of a bold grey caption
+       stacked over a dimmer value, which had the hierarchy upside down. -->
+  <div id="person-display" style:display={editMode ? 'none' : ''}>
+    <div class="kit-group">
+      <div class="kit-field kit-field-wrap">
+        <span class="kit-field-label">Instruments</span>
+        {#if person.instruments && person.instruments.length}
+          <span class="kit-field-value" id="instruments-display">{person.instruments.join(', ')}</span>
+        {:else}
+          <span class="kit-field-value is-empty" id="instruments-display">None listed</span>
+        {/if}
+      </div>
+
+      <!-- City, state and country were three rows saying one thing. -->
+      <div class="kit-field">
+        <span class="kit-field-label">Location</span>
+        <span class="kit-field-value" class:is-empty={!placeLine}>{placeLine || 'Not provided'}</span>
+      </div>
+
+      <div class="kit-field">
+        <span class="kit-field-label">SMS</span>
+        <span class="kit-field-value" class:is-empty={!person.sms_number}>{person.sms_number || 'Not provided'}</span>
+      </div>
+
+      <!-- Person-level email only exists for people with no account; once
+           connected, the account's email (below) is the address. -->
+      {#if !user}
+        <div class="kit-field">
+          <span class="kit-field-label">Email</span>
+          <span class="kit-field-value" class:is-empty={!person.email}>{person.email || 'Not provided'}</span>
+        </div>
+      {/if}
+
+      <div class="kit-field">
+        <span class="kit-field-label">thesession.org</span>
+        {#if person.thesession_user_id}
+          <a class="kit-field-value pd-link" href="https://thesession.org/members/{person.thesession_user_id}" target="_blank" rel="noopener noreferrer">
+            {person.thesession_user_id}
+          </a>
+        {:else}
+          <span class="kit-field-value is-empty">Not a member</span>
+        {/if}
+      </div>
     </div>
   </div>
 
-  <!-- Person Information -->
-  <div class="card mb-3">
-    <div class="card-header">
-      <h5 class="mb-0">Personal Information</h5>
-    </div>
-    <div class="card-body">
-      <!-- Display Mode -->
-      <div id="person-display" class="row" style:display={editMode ? 'none' : ''}>
-        <div class="col-md-6">
-          <dl class="row mb-0">
-            <dt class="col-sm-4">Name:</dt>
-            <dd class="col-sm-8">{person.name}</dd>
+  <!-- Same rows, same order, inputs instead of text: editing does not rearrange
+       the screen you were just reading. -->
+  <div id="person-edit" style:display={editMode ? 'block' : 'none'}>
+    <form id="person-form" onsubmit={(e) => e.preventDefault()}>
+      <div class="kit-group">
+        <div class="kit-field">
+          <label class="kit-field-label" for="first_name">First name</label>
+          <input type="text" id="first_name" name="first_name" bind:value={firstName} required />
+        </div>
+        <div class="kit-field">
+          <label class="kit-field-label" for="last_name">Last name</label>
+          <input type="text" id="last_name" name="last_name" bind:value={lastName} required />
+        </div>
+        {#if !user}
+          <div class="kit-field">
+            <label class="kit-field-label" for="email">Email</label>
+            <input type="email" id="email" name="email" bind:value={email} />
+          </div>
+        {/if}
+        <div class="kit-field">
+          <label class="kit-field-label" for="sms_number">SMS</label>
+          <input type="text" id="sms_number" name="sms_number" bind:value={smsNumber} />
+        </div>
+      </div>
 
-            <!-- Person-level email only exists for people with no account; once
-                 connected, the account's User Email (below) is the address. -->
-            {#if !user}
-              <dt class="col-sm-4">Email:</dt>
-              <dd class="col-sm-8">{person.email || 'Not provided'}</dd>
+      <h3 class="kit-group-head">Where you play</h3>
+      <div class="kit-group">
+        <div class="kit-field">
+          <label class="kit-field-label" for="city">City</label>
+          <input type="text" id="city" name="city" bind:value={city} />
+        </div>
+        <div class="kit-field">
+          <label class="kit-field-label" for="state">State / area</label>
+          <input type="text" id="state" name="state" bind:value={stateField} />
+        </div>
+        <div class="kit-field">
+          <label class="kit-field-label" for="country">Country</label>
+          <input type="text" id="country" name="country" bind:value={country} />
+        </div>
+        <div class="kit-field">
+          <label class="kit-field-label" for="thesession_user_id">thesession.org</label>
+          <input type="number" id="thesession_user_id" name="thesession_user_id" bind:value={thesessionUserId} placeholder="Member ID" />
+        </div>
+      </div>
+
+      <h3 class="kit-group-head">Instruments</h3>
+      <div class="kit-group">
+        <div class="kit-field">
+          <label class="kit-field-label" for="instrument-typeahead">Add</label>
+          <span class="instrument-typeahead-wrap" bind:this={typeaheadWrap}>
+            <input
+              type="text"
+              id="instrument-typeahead"
+              placeholder="Fiddle, whistle…"
+              autocomplete="off"
+              bind:value={typeaheadValue}
+              oninput={updateTypeahead}
+              onfocus={updateTypeahead}
+              onkeydown={onTypeaheadKeydown} />
+            <span id="instrument-typeahead-menu" class="typeahead-menu" style:display={typeaheadOpen && typeaheadOptions.length ? 'block' : 'none'}>
+              {#each typeaheadOptions as opt (opt.value)}
+                <button type="button" class="typeahead-option" onmousedown={(e) => e.preventDefault()} onclick={() => addInstrumentToProfile(opt.value)}>{opt.label}</button>
+              {/each}
+            </span>
+          </span>
+        </div>
+        <div id="instrument-rows">
+          {#if !profileInstruments.length}
+            <p class="kit-field-help">No instruments yet — add one above.</p>
+          {:else}
+            {#each profileInstruments as inst (inst.instrument)}
+              <button type="button" class="kit-field instrument-row" onclick={() => openInstrumentConfig(inst.instrument)}>
+                <span class="kit-field-label">{inst.instrument}</span>
+                <span class="instrument-row-badge{inst.is_auto ? ' auto' : ''}">{inst.is_auto ? 'Auto' : 'Manual'}</span>
+                <Chevron class="kit-chev" />
+              </button>
+            {/each}
+          {/if}
+        </div>
+      </div>
+      <p class="kit-field-help pd-inst-note">Instruments save as you change them. Tap one to set it auto or manual, or to remove it.</p>
+    </form>
+  </div>
+
+  {#if user}
+    <h3 class="kit-group-head">Account</h3>
+
+    <div id="user-display" style:display={editMode ? 'none' : ''}>
+      <div class="kit-group">
+        <div class="kit-field">
+          <span class="kit-field-label">Username</span>
+          <span class="kit-field-value">{user.username}</span>
+        </div>
+        <div class="kit-field">
+          <span class="kit-field-label">Email</span>
+          <span class="kit-field-value">{user.user_email || 'Not provided'}</span>
+        </div>
+        {#if !user.email_verified}
+          <!-- Only worth a row when it is a problem: "verified" is the state every
+               working account is in, so saying so on every visit says nothing. -->
+          <div class="kit-field">
+            <span class="kit-field-label">Email status</span>
+            <span class="kit-field-value pd-warn">Not verified</span>
+            {#if !isUserProfile}
+              <button type="button" id="verify-email-btn" class="pd-row-action" disabled={verifyingEmail} onclick={(e) => { e.preventDefault(); verifyConfirmOpen = true }}>{verifyBtnLabel}</button>
             {/if}
-
-            <dt class="col-sm-4">SMS Number:</dt>
-            <dd class="col-sm-8">{person.sms_number || 'Not provided'}</dd>
-          </dl>
+          </div>
+        {/if}
+        <div class="kit-field">
+          <span class="kit-field-label">Time zone</span>
+          <span class="kit-field-value">{user.timezone_display || 'UTC'}</span>
         </div>
-        <div class="col-md-6">
-          <dl class="row mb-0">
-            <dt class="col-sm-4">City:</dt>
-            <dd class="col-sm-8">{person.city || 'Not provided'}</dd>
-
-            <dt class="col-sm-4">State:</dt>
-            <dd class="col-sm-8">{person.state || 'Not provided'}</dd>
-
-            <dt class="col-sm-4">Country:</dt>
-            <dd class="col-sm-8">{person.country || 'Not provided'}</dd>
-
-            <dt class="col-sm-4">TheSession.org:</dt>
-            <dd class="col-sm-8">
-              {#if person.thesession_user_id}
-                <a href="https://thesession.org/members/{person.thesession_user_id}" target="_blank" rel="noopener noreferrer">
-                  {person.thesession_user_id}
-                </a>
-              {:else}
-                <span class="text-muted">Not a member</span>
-              {/if}
-            </dd>
-          </dl>
-        </div>
-        <div class="col-12 mt-2">
-          <dl class="row mb-0">
-            <dt class="col-sm-2">Instruments:</dt>
-            <dd class="col-sm-10">
-              {#if person.instruments && person.instruments.length}
-                <span id="instruments-display">{person.instruments.join(', ')}</span>
-              {:else}
-                <span id="instruments-display" class="text-muted">No instruments listed</span>
-              {/if}
-            </dd>
-          </dl>
+        <div class="kit-field">
+          <span class="kit-field-label">Update emails</span>
+          <span class="kit-field-value" class:is-empty={!user.receive_update_emails}>
+            {user.receive_update_emails ? 'Subscribed' : 'Not subscribed'}
+          </span>
         </div>
       </div>
 
-      <!-- Edit Mode -->
-      <div id="person-edit" class="row" style:display={editMode ? 'block' : 'none'}>
-        <form id="person-form" onsubmit={(e) => e.preventDefault()}>
-          <div class="row">
-            <div class="col-md-6">
-              <div class="mb-3">
-                <label for="first_name" class="form-label">First Name</label>
-                <input type="text" class="form-control" id="first_name" name="first_name" bind:value={firstName} required />
-              </div>
-              <div class="mb-3">
-                <label for="last_name" class="form-label">Last Name</label>
-                <input type="text" class="form-control" id="last_name" name="last_name" bind:value={lastName} required />
-              </div>
-              {#if !user}
-                <div class="mb-3">
-                  <label for="email" class="form-label">Email</label>
-                  <input type="email" class="form-control" id="email" name="email" bind:value={email} />
-                </div>
-              {/if}
+      <!-- The card, not just the row, is conditional: the tune-logger row used to
+           keep it company, and without that an admin looking at somebody else
+           would get an empty card. -->
+      {#if isUserProfile}
+        <div class="kit-group">
+          <a class="kit-field" href="/change-password">
+            <span class="kit-field-label">{user.has_password ? 'Change my password' : 'Create a password'}</span>
+            <Chevron class="kit-chev" />
+          </a>
+        </div>
+      {/if}
+
+      <!-- When you signed up and when you last logged in: evidence on somebody
+           else's profile, noise on your own. -->
+      <div class="kit-group">
+        <button type="button" id="account-details-toggle" class="kit-field kit-disclosure" aria-expanded={detailsOpen} aria-controls="account-details" onclick={() => (detailsOpen = !detailsOpen)}>
+          <span class="kit-field-label">Details</span>
+          <Chevron class="kit-chev" dir={detailsOpen ? "down" : "right"} />
+        </button>
+        {#if detailsOpen}
+          <div id="account-details">
+            <div class="kit-field">
+              <span class="kit-field-label">Status</span>
+              <span class="kit-field-value" class:pd-warn={!user.is_active}>{user.is_active ? 'Active' : 'Inactive'}</span>
             </div>
-            <div class="col-md-6">
-              <div class="mb-3">
-                <label for="sms_number" class="form-label">SMS Number</label>
-                <input type="text" class="form-control" id="sms_number" name="sms_number" bind:value={smsNumber} />
-              </div>
-              <div class="mb-3">
-                <label for="city" class="form-label">City</label>
-                <input type="text" class="form-control" id="city" name="city" bind:value={city} />
-              </div>
-              <div class="mb-3">
-                <label for="state" class="form-label">State</label>
-                <input type="text" class="form-control" id="state" name="state" bind:value={stateField} />
-              </div>
-              <div class="mb-3">
-                <label for="country" class="form-label">Country</label>
-                <input type="text" class="form-control" id="country" name="country" bind:value={country} />
-              </div>
-              <div class="mb-3">
-                <label for="thesession_user_id" class="form-label">TheSession User ID</label>
-                <input type="number" class="form-control" id="thesession_user_id" name="thesession_user_id" bind:value={thesessionUserId} />
-              </div>
+            <div class="kit-field">
+              <span class="kit-field-label">Created</span>
+              <span class="kit-field-value">{fmtDateTime(user.created_at) || 'Unknown'}</span>
+            </div>
+            <div class="kit-field">
+              <span class="kit-field-label">Last login</span>
+              <span class="kit-field-value" class:is-empty={!user.last_login}>{fmtDateTime(user.last_login) || 'Never'}</span>
             </div>
           </div>
-          <div class="row">
-            <div class="col-12">
-              <div class="mb-3">
-                <label class="form-label" for="instrument-typeahead">Instruments</label>
-                <div class="text-muted small mb-2">Changes save immediately. Click an instrument to set it auto/manual or remove it.</div>
-                <div class="instrument-typeahead-wrap" bind:this={typeaheadWrap}>
-                  <input
-                    type="text"
-                    id="instrument-typeahead"
-                    class="form-control"
-                    placeholder="Add an instrument…"
-                    autocomplete="off"
-                    bind:value={typeaheadValue}
-                    oninput={updateTypeahead}
-                    onfocus={updateTypeahead}
-                    onkeydown={onTypeaheadKeydown} />
-                  <div id="instrument-typeahead-menu" class="typeahead-menu" style:display={typeaheadOpen && typeaheadOptions.length ? 'block' : 'none'}>
-                    {#each typeaheadOptions as opt (opt.value)}
-                      <button type="button" class="typeahead-option" onmousedown={(e) => e.preventDefault()} onclick={() => addInstrumentToProfile(opt.value)}>{opt.label}</button>
-                    {/each}
-                  </div>
-                </div>
-                <div id="instrument-rows" class="mt-2">
-                  {#if !profileInstruments.length}
-                    <div class="text-muted small">No instruments yet — add one above.</div>
-                  {:else}
-                    {#each profileInstruments as inst (inst.instrument)}
-                      <div
-                        class="instrument-row"
-                        role="button"
-                        tabindex="0"
-                        onclick={() => openInstrumentConfig(inst.instrument)}
-                        onkeydown={(e) => {
-                          if (e.key === 'Enter') openInstrumentConfig(inst.instrument)
-                        }}>
-                        <span>{inst.instrument}</span>
-                        <span class="instrument-row-badge{inst.is_auto ? ' auto' : ''}">{inst.is_auto ? 'Auto' : 'Manual'}</span>
-                      </div>
-                    {/each}
-                  {/if}
-                </div>
-              </div>
-            </div>
-          </div>
-        </form>
+        {/if}
       </div>
     </div>
-  </div>
 
-  <!-- User Account Information -->
-  <div class="card">
-    <div class="card-header">
-      <h5 class="mb-0">Account Information</h5>
-    </div>
-    <div class="card-body">
-      {#if user}
-        <!-- Display Mode -->
-        <div id="user-display" class="row" style:display={editMode ? 'none' : ''}>
-          <div class="col-md-6">
-            <dl class="row mb-0">
-              <dt class="col-sm-4">Username:</dt>
-              <dd class="col-sm-8">
-                <strong>{user.username}</strong>
-                {#if user.is_system_admin}
-                  <span class="admin-indicator">(admin)</span>
-                {/if}
-              </dd>
-
-              <dt class="col-sm-4">User Email:</dt>
-              <dd class="col-sm-8">{user.user_email || 'Not provided'}</dd>
-
-              <dt class="col-sm-4">Email Verified:</dt>
-              <dd class="col-sm-8">
-                {#if user.email_verified}
-                  <span class="text-success">✓ Verified</span>
-                {:else}
-                  <span class="text-warning">✗ Not verified</span>
-                  {#if !isUserProfile}
-                    <button id="verify-email-btn" class="btn btn-sm btn-success ms-2" disabled={verifyingEmail} onclick={(e) => { e.preventDefault(); verifyConfirmOpen = true }}>{verifyBtnLabel}</button>
-                  {/if}
-                {/if}
-              </dd>
-
-              <dt class="col-sm-4">Tune logger:</dt>
-              <dd class="col-sm-8">
-                <span id="beta-logging-status">
-                  {#if user.beta_live_logging}<span class="text-success">Live logger</span>{:else}<span class="text-muted">Classic editor</span>{/if}
-                </span>
-                <button id="beta-logging-btn" class="btn btn-sm btn-outline-primary ms-2" disabled={betaBusy} onclick={(e) => { e.preventDefault(); toggleBetaLogging() }}>
-                  {user.beta_live_logging ? 'Use classic editor' : 'Use live logger'}
-                </button>
-                {#if !user.beta_live_logging}
-                  <div class="text-muted small mt-1">The classic editor is being retired; the live logger is the default.</div>
-                {/if}
-              </dd>
-            </dl>
+    <div id="user-edit" style:display={editMode ? 'block' : 'none'}>
+      <form id="user-form" onsubmit={(e) => e.preventDefault()}>
+        <div class="kit-group">
+          <div class="kit-field">
+            <label class="kit-field-label" for="username">Username</label>
+            <input type="text" id="username" name="username" bind:value={username} onblur={onUsernameBlur} required />
           </div>
-          <div class="col-md-6">
-            <dl class="row mb-0">
-              <dt class="col-sm-4">Active:</dt>
-              <dd class="col-sm-8">
-                {#if user.is_active}
-                  <span class="text-success">✓ Active</span>
-                {:else}
-                  <span class="text-danger">✗ Inactive</span>
-                {/if}
-              </dd>
-
-              <dt class="col-sm-4">Created:</dt>
-              <dd class="col-sm-8">{fmtDateTime(user.created_at) || 'Unknown'}</dd>
-
-              <dt class="col-sm-4">Last Login:</dt>
-              <dd class="col-sm-8">{fmtDateTime(user.last_login) || 'Never'}</dd>
-
-              <dt class="col-sm-4">Timezone:</dt>
-              <dd class="col-sm-8">{user.timezone_display || 'UTC'}</dd>
-
-              <dt class="col-sm-4">Update Emails:</dt>
-              <dd class="col-sm-8">
-                {#if user.receive_update_emails}<span class="text-success">✓ Subscribed</span>{:else}<span class="text-muted">Not subscribed</span>{/if}
-              </dd>
-            </dl>
+          {#if usernameWarning}
+            <p id="username-warning" class="kit-field-help pd-warn">{usernameWarning}</p>
+          {/if}
+          <div class="kit-field">
+            <label class="kit-field-label" for="user_email">Email</label>
+            <input type="email" id="user_email" name="user_email" bind:value={userEmail} />
+          </div>
+          <div class="kit-field">
+            <label class="kit-field-label" for="timezone">Time zone</label>
+            <select id="timezone" name="timezone" bind:value={timezone}>
+              {#each timezoneOptions as tz (tz.value)}
+                <option value={tz.value}>{tz.label}</option>
+              {/each}
+            </select>
           </div>
         </div>
 
         {#if isUserProfile}
-          <!-- Change/Create Password Button for User Profile -->
-          <div class="mt-3">
-            <a href="/change-password" class="btn btn-outline-primary">{user.has_password ? 'Change My Password' : 'Create A Password'}</a>
+          <div class="kit-group">
+            <div class="kit-check-field">
+              <label class="kit-check-label" for="receive_update_emails">
+                <input type="checkbox" id="receive_update_emails" name="receive_update_emails" bind:checked={receiveUpdateEmails} />
+                Email me about updates to this app
+              </label>
+            </div>
           </div>
         {/if}
-
-        <!-- Edit Mode -->
-        <div id="user-edit" class="row" style:display={editMode ? 'block' : 'none'}>
-          <form id="user-form" onsubmit={(e) => e.preventDefault()}>
-            <div class="row">
-              <div class="col-md-6">
-                <div class="mb-3">
-                  <label for="username" class="form-label">Username</label>
-                  <input type="text" class="form-control" id="username" name="username" bind:value={username} onblur={onUsernameBlur} required />
-                  <div id="username-warning" class="text-warning" style:display={usernameWarning ? 'block' : 'none'}>{usernameWarning}</div>
-                </div>
-                <div class="mb-3">
-                  <label for="user_email" class="form-label">Email</label>
-                  <input type="email" class="form-control" id="user_email" name="user_email" bind:value={userEmail} />
-                </div>
-                <div class="mb-3">
-                  <label for="timezone" class="form-label">Timezone</label>
-                  <select class="form-select" id="timezone" name="timezone" bind:value={timezone}>
-                    {#each timezoneOptions as tz (tz.value)}
-                      <option value={tz.value}>{tz.label}</option>
-                    {/each}
-                  </select>
-                </div>
-              </div>
-              <div class="col-md-6">
-                {#if isUserProfile}
-                  <div class="mb-3">
-                    <div class="form-check">
-                      <input class="form-check-input" type="checkbox" id="receive_update_emails" name="receive_update_emails" bind:checked={receiveUpdateEmails} />
-                      <label class="form-check-label" for="receive_update_emails">
-                        Get regular updates about this app via email
-                      </label>
-                    </div>
-                  </div>
-                {/if}
-              </div>
-            </div>
-          </form>
-        </div>
-      {:else}
-        <div class="alert alert-info mb-0" role="alert">
-          <p class="mb-0">This person is not connected with a user account.</p>
-        </div>
-      {/if}
+      </form>
     </div>
-  </div>
-
-  <!-- Bottom Edit Buttons -->
-  <div id="bottom-edit-buttons" class="mt-3" style:display={editMode ? 'block' : 'none'}>
-    <button id="bottom-save-btn" class="btn btn-success" onclick={saveChanges}>Save</button>
-    <button id="bottom-cancel-btn" class="btn btn-secondary" onclick={() => toggleEditMode(false)}>Cancel</button>
-  </div>
+  {:else}
+    <h3 class="kit-group-head">Account</h3>
+    <div class="kit-group">
+      <div class="kit-field">
+        <span class="kit-field-value is-empty pd-no-account">Not connected to a user account.</span>
+      </div>
+    </div>
+  {/if}
 
   <!-- Danger Zone - Admin Only -->
   {#if !isUserProfile}
-    <div class="card mt-4 border-danger" id="danger-zone">
-      <div class="card-header bg-danger text-white">
-        <h5 class="mb-0">Danger Zone</h5>
-      </div>
-      <div class="card-body">
-        {#if person.active}
-          <h6 class="text-danger">Deactivate Person</h6>
-          <p class="text-muted">
-            Deactivating {person.name} will prevent them from being added to any sessions, session instances, or tune sets.
-            Existing associations will not be affected.{#if user}{' '}This also disables their login and stops all emails to their account.{/if}
-          </p>
-          <button type="button" class="btn btn-outline-danger" id="deactivate-person-btn" onclick={() => askTogglePersonActive(false)}>
-            Deactivate {person.first_name}
-          </button>
-        {:else}
-          <div class="alert alert-warning mb-3">
-            <strong>This person is deactivated.</strong> They cannot be added to sessions, session instances, or tune sets.{#if user}{' '}Their login is disabled.{/if}
-          </div>
-          <h6 class="text-success">Reactivate Person</h6>
-          <p class="text-muted">
-            Reactivating {person.name} will allow them to be added to sessions, session instances, and tune sets again.{#if user}{' '}It also re-enables their login.{/if}
-          </p>
-          <button type="button" class="btn btn-success" id="reactivate-person-btn" onclick={() => askTogglePersonActive(true)}>
-            Reactivate {person.first_name}
-          </button>
+    <h3 class="kit-group-head pd-danger-head" id="danger-zone-head">Danger zone</h3>
+    <div class="kit-group pd-danger" id="danger-zone">
+      {#if person.active}
+        <p class="kit-field-help">
+          Deactivating {person.name} will prevent them from being added to any sessions, session instances, or tune sets.
+          Existing associations will not be affected.{#if user}{' '}This also disables their login and stops all emails to their account.{/if}
+        </p>
+        <button type="button" class="kit-field kit-field-danger" id="deactivate-person-btn" onclick={() => askTogglePersonActive(false)}>
+          <span class="kit-field-label">Deactivate {person.first_name}</span>
+        </button>
+      {:else}
+        <p class="kit-field-help">
+          <strong>This person is deactivated.</strong> They cannot be added to sessions, session instances, or tune sets.{#if user}{' '}Their login is disabled.{/if}
+          Reactivating allows all of that again.
+        </p>
+        <button type="button" class="kit-field" id="reactivate-person-btn" onclick={() => askTogglePersonActive(true)}>
+          <span class="kit-field-label pd-reactivate">Reactivate {person.first_name}</span>
+        </button>
+      {/if}
+      <div id="toggle-active-status" style:display={toggleActiveStatusHtml ? 'block' : 'none'}>
+        {#if toggleActiveStatusHtml}
+          <p class="kit-field-help" class:pd-warn={toggleActiveStatusHtml.kind === 'danger'}>{toggleActiveStatusHtml.text}</p>
         {/if}
-        <div id="toggle-active-status" class="mt-3" style:display={toggleActiveStatusHtml ? 'block' : 'none'}>
-          {#if toggleActiveStatusHtml}
-            <div class="alert alert-{toggleActiveStatusHtml.kind}">{toggleActiveStatusHtml.text}</div>
-          {/if}
-        </div>
-
-        <MergeSection {person} {personId} />
       </div>
     </div>
+
+    <MergeSection {person} {personId} />
   {/if}
 </div>
 
