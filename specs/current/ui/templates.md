@@ -129,6 +129,18 @@ The app is dark-only — no toggle, no `data-theme` attribute.
 
 **Z-Index**: `--z-*` variables in `static/css/theme.css` (folded in from the former `z-index-layers.css`)
 
+**Page transitions** (spec 052 §B8 Stage 6): below 768px, going DOWN the URL hierarchy
+(`/sessions` → `/sessions/<path>` → a night) slides the new page in from the right and
+going back UP slides it out; every other navigation, a tab switch above all, is instant.
+Cross-document View Transitions — `static/css/page_transitions.css` opts every
+`base.html` page in, `static/js/page_transitions.js` picks the direction in `pagereveal`
+(or skips). No router: each page is still a server round trip. The header and tab bar
+carry their own `view-transition-name` so they hold still. Off under reduced motion,
+absent in Firefox, skipped where the Navigation API is missing (Safari before 26). The
+live logger (`live_logging.html`) is not a `base.html` page, so opening a log never slides.
+Playwright's bundled Chromium hangs on these transitions, so the mobile e2e project runs
+with reduced motion and `e2e/mobile/page-transitions.mobile.spec.ts` runs in Google Chrome.
+
 ## PWA
 
 **Service Worker**: `static/service-worker.js`, served as `/sw.js` (see [Offline Support](../logic/offline.md))

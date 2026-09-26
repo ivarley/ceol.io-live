@@ -6,7 +6,7 @@
 // for a given block) and the optimistic fractional keys, which must mirror the
 // server's exclude-the-block rule or the settle visibly reorders rows.
 
-import { generateBetween } from './fracindex.js'
+import { optimisticBetween } from './fracindex.js'
 import { normName } from './logstate.js'
 
 const rid = (r) => r.session_instance_tune_id
@@ -163,16 +163,16 @@ export function optimisticMove(ordered, allRecords, blockRecordIds, target) {
   const tempBreakKeys = { before: null, after: null }
   let prev = predPos
   if (needBefore) {
-    prev = generateBetween(prev, succPos)
+    prev = optimisticBetween(prev, succPos)
     tempBreakKeys.before = prev
   }
   // moving records keep their internal order — feed them in current order
   for (const r of ordered) {
     if (!block.has(rid(r))) continue
-    prev = generateBetween(prev, succPos)
+    prev = optimisticBetween(prev, succPos)
     positions.set(rid(r), prev)
   }
-  if (needAfter) tempBreakKeys.after = generateBetween(prev, succPos)
+  if (needAfter) tempBreakKeys.after = optimisticBetween(prev, succPos)
   return { positions, tempBreakKeys }
 }
 

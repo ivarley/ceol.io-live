@@ -168,21 +168,33 @@ export async function livePeople(config) {
   return json.people || []
 }
 
-// Catalog-search API base: session-scoped on the live screen, personal
-// (/api/my-tunes) on the Add-to-My-Tunes pane. Only the search family
-// (deep-search / thesession-search / incipit) is dual-homed this way.
-const searchBase = (config) =>
-  config.searchApiBase || `/api/live/instances/${config.sessionInstanceId}`
+// The one tune-search family, /api/tunes/* (spec 052 A6). Scope rides in the query
+// string: `?instance=<id>` on the live screen, `?session=<path>` on the add-to-session
+// pane, nothing on the Add-to-My-Tunes pane (personal). Only deep-search,
+// thesession-search and preview read it; the image and render endpoints are scope-free.
+function searchScope(config) {
+  const scope = config.searchScope || (config.sessionInstanceId ? { instance: config.sessionInstanceId } : {})
+  const params = new URLSearchParams()
+  if (scope.instance) params.set('instance', String(scope.instance))
+  else if (scope.session) params.set('session', scope.session)
+  return params
+}
+
+function scoped(config, path) {
+  const q = searchScope(config).toString()
+  return q ? `${path}?${q}` : path
+}
 
 // Deep catalog search (§D "search deeper"): rich cards + incipit ABC, optional type filter.
 export async function deepSearch(config, q, type, preferType, mode) {
-  const params = new URLSearchParams({ limit: '30' })
+  const params = searchScope(config)
+  params.set('limit', '30')
   if (q) params.set('q', q)
   if (type) params.set('type', type)
   if (preferType) params.set('prefer_type', preferType)
   if (mode) params.set('mode', mode)
   try {
-    const res = await fetch(`${searchBase(config)}/deep-search?${params}`, {
+    const res = await fetch(`/api/tunes/deep-search?${params}`, {
       headers: { Accept: 'application/json' },
       credentials: 'same-origin',
     })
@@ -227,10 +239,11 @@ async function offlineDeepSearch(config, q) {
 // flagged is_local / in_session so the UI can dedup against the local list. thesession's single
 // `q=` handles name and ABC queries; `type` filters by tune type. Returns [] on any failure.
 export async function thesessionSearch(config, q, type) {
-  const params = new URLSearchParams({ q })
+  const params = searchScope(config)
+  params.set('q', q)
   if (type) params.set('type', type)
   try {
-    const res = await fetch(`${searchBase(config)}/thesession-search?${params}`, {
+    const res = await fetch(`/api/tunes/thesession-search?${params}`, {
       headers: { Accept: 'application/json' },
       credentials: 'same-origin',
     })
@@ -247,7 +260,7 @@ export async function thesessionSearch(config, q, type) {
 export async function fetchIncipit(config, tuneId, kind) {
   const q = kind ? `?kind=${kind}` : ''
   try {
-    const res = await fetch(`${searchBase(config)}/incipit/${tuneId}${q}`, {
+    const res = await fetch(`/api/tunes/${tuneId}/incipit-image${q}`, {
       headers: { Accept: 'application/json' },
       credentials: 'same-origin',
     })
@@ -286,7 +299,7 @@ function _sharedImage(key, fetcher) {
 // Full preview data for a LOCAL catalog tune: settings (abc + incipit abc + any
 // cached incipit image), session aliases, stats. Throws on failure.
 export async function tunePreview(config, tuneId) {
-  const res = await fetch(`${searchBase(config)}/tune-preview/${tuneId}`, {
+  const res = await fetch(scoped(config, `/api/tunes/${tuneId}/preview`), {
     headers: { Accept: 'application/json' },
     credentials: 'same-origin',
   })
@@ -298,7 +311,7 @@ export async function tunePreview(config, tuneId) {
 // One setting's incipit/full notation image, rendered+cached server-side on demand.
 export function settingImage(config, settingId, kind) {
   return _sharedImage(`s:${settingId}:${kind}`, async () => {
-    const res = await fetch(`${searchBase(config)}/setting-image/${settingId}?kind=${kind}`, {
+    const res = await fetch(`/api/tunes/settings/${settingId}/image?kind=${kind}`, {
       headers: { Accept: 'application/json' },
       credentials: 'same-origin',
     })
@@ -317,7 +330,7 @@ const _tsPreviewCache = new Map()
 export async function thesessionPreview(config, thesessionId, full = false) {
   const key = `${thesessionId}:${full ? 1 : 0}`
   if (_tsPreviewCache.has(key)) return _tsPreviewCache.get(key)
-  const res = await fetch(`${searchBase(config)}/thesession-preview/${thesessionId}${full ? '?full=1' : ''}`, {
+  const res = await fetch(`/api/tunes/thesession/${thesessionId}/preview${full ? '?full=1' : ''}`, {
     headers: { Accept: 'application/json' },
     credentials: 'same-origin',
   })
@@ -331,7 +344,7 @@ export async function thesessionPreview(config, thesessionId, full = false) {
 // server-side; cacheKey dedups client-side like settingImage).
 export function renderRemoteAbc(config, cacheKey, body) {
   return _sharedImage(cacheKey, async () => {
-    const res = await fetch(`${searchBase(config)}/render-abc`, {
+    const res = await fetch('/api/tunes/render-abc', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'same-origin',

@@ -1501,7 +1501,7 @@
   // thesession.org round trip) and caches the PNG, so this happens once per setting ever.
   const renderTried = new Set() // setting_ids this drawer has already asked about
   async function settingImagePng(settingId, kind) {
-    const res = await fetch(`/api/my-tunes/setting-image/${settingId}?kind=${kind}`, {
+    const res = await fetch(`/api/tunes/settings/${settingId}/image?kind=${kind}`, {
       credentials: 'same-origin',
     })
     if (!res.ok) return null

@@ -219,8 +219,8 @@ class TestValidatePosition:
         assert validate_position("V") is True
         assert validate_position("abc123") is True
         assert validate_position("ABC123") is True
-        assert validate_position("z0z0z0") is True
-        assert validate_position("0") is True
+        assert validate_position("z0z0zV") is True
+        assert validate_position("0V") is True  # a '0' inside a key is fine
         assert validate_position("ABCxyz") is True  # Mixed case is valid
 
     def test_invalid_positions(self):
@@ -231,6 +231,35 @@ class TestValidatePosition:
         assert validate_position("V-W") is False  # Hyphen
         assert validate_position("V_W") is False  # Underscore
         assert validate_position("V!W") is False  # Special char
+        # A trailing '0' leaves no room before it: nothing sorts between 'A' and 'A0'.
+        assert validate_position("0") is False
+        assert validate_position("z0z0z0") is False
+
+
+class TestImpossibleRequestsRaise:
+    """Requests with no answer raise, rather than return a key in the wrong place.
+
+    Before, each of these returned a key that sorted AFTER `after`. The JS port
+    (frontend/src/fracindex.js) throws in exactly the same cases."""
+
+    def test_nothing_below_a_key_of_only_zeros(self):
+        for after in ("0", "00"):
+            with pytest.raises(ValueError):
+                generate_position_between(None, after)
+
+    def test_nothing_between_a_key_and_itself_plus_zeros(self):
+        for before, after in (("A", "A0"), ("A", "A00"), ("zV", "zV0")):
+            with pytest.raises(ValueError):
+                generate_position_between(before, after)
+
+    def test_a_zero_inside_the_key_still_has_room(self):
+        assert generate_position_between(None, "05") == "02"
+        assert "A" < generate_position_between("A", "A05") < "A05"
+
+    def test_before_not_less_than_after(self):
+        for before, after in (("W", "V"), ("V", "V")):
+            with pytest.raises(ValueError):
+                generate_position_between(before, after)
 
 
 class TestOrderingConsistency:

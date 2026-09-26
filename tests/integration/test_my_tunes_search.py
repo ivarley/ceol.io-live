@@ -1,10 +1,10 @@
 """
 Integration tests for the add-pane search endpoints — the live logger's deep search
-re-homed for the two pane flavors:
+in its two pane flavors, told apart by scope (spec 052 A6):
 
-    GET /api/my-tunes/deep-search                       (personal: on_list sorts last)
-    GET /api/my-tunes/incipit/<tune_id>
-    GET /api/sessions/<path>/tunes/deep-search          (session: in_session sorts last)
+    GET /api/tunes/deep-search                          (personal: on_list sorts last)
+    GET /api/tunes/<tune_id>/incipit-image
+    GET /api/tunes/deep-search?session=<path>           (session: in_session sorts last)
 
 Same name/ABC matching and ranking as the live screen (_deep_search_core). The
 thesession-search proxies are exercised with a mocked outbound request only
@@ -68,13 +68,13 @@ def search_tunes():
 
 
 def test_deep_search_requires_login(client):
-    resp = client.get("/api/my-tunes/deep-search?q=glorp")
+    resp = client.get("/api/tunes/deep-search?q=glorp")
     assert resp.status_code == 401
 
 
 def test_deep_search_finds_and_flags_on_list(client, authenticated_user, search_tunes):
     with authenticated_user:
-        resp = client.get("/api/my-tunes/deep-search?q=glorp fandango")
+        resp = client.get("/api/tunes/deep-search?q=glorp fandango")
     assert resp.status_code == 200
     body = resp.get_json()
     assert body["success"] is True
@@ -91,7 +91,7 @@ def test_deep_search_sorts_on_list_last(client, authenticated_user, search_tunes
     """The on-list tune is far more popular, but on_list is the FIRST sort key —
     the pane treats already-added tunes as dimmed noise, not add targets."""
     with authenticated_user:
-        resp = client.get("/api/my-tunes/deep-search?q=glorp fandango")
+        resp = client.get("/api/tunes/deep-search?q=glorp fandango")
     results = resp.get_json()["results"]
     ids = [r["tune_id"] for r in results]
     assert ids.index(search_tunes["offlist"]) < ids.index(search_tunes["onlist"])
@@ -99,7 +99,7 @@ def test_deep_search_sorts_on_list_last(client, authenticated_user, search_tunes
 
 def test_deep_search_type_filter(client, authenticated_user, search_tunes):
     with authenticated_user:
-        resp = client.get("/api/my-tunes/deep-search?q=glorp fandango&type=Jig")
+        resp = client.get("/api/tunes/deep-search?q=glorp fandango&type=Jig")
     ids = [r["tune_id"] for r in resp.get_json()["results"]]
     assert search_tunes["onlist"] not in ids and search_tunes["offlist"] not in ids
 
@@ -107,7 +107,7 @@ def test_deep_search_type_filter(client, authenticated_user, search_tunes):
 def test_incipit_endpoint_no_notation(client, authenticated_user, search_tunes):
     """A tune with no tune_setting rows: success with a null image (nothing to render)."""
     with authenticated_user:
-        resp = client.get(f"/api/my-tunes/incipit/{search_tunes['offlist']}")
+        resp = client.get(f"/api/tunes/{search_tunes['offlist']}/incipit-image")
     assert resp.status_code == 200
     body = resp.get_json()
     assert body["success"] is True
@@ -118,7 +118,7 @@ def test_session_deep_search_flags_and_sorts_in_session_last(client, authenticat
     """Session flavor: in_session flagged, and the in-session tune sorts LAST even
     though it is far more popular (the add-to-session pane dims it)."""
     with authenticated_user:
-        resp = client.get(f"/api/sessions/{search_tunes['session_path']}/tunes/deep-search?q=glorp fandango")
+        resp = client.get(f"/api/tunes/deep-search?session={search_tunes['session_path']}&q=glorp fandango")
     assert resp.status_code == 200
     results = resp.get_json()["results"]
     by_id = {r["tune_id"]: r for r in results}
@@ -130,7 +130,7 @@ def test_session_deep_search_flags_and_sorts_in_session_last(client, authenticat
 
 def test_session_deep_search_unknown_session_404(client, authenticated_user, search_tunes):
     with authenticated_user:
-        resp = client.get("/api/sessions/no-such-session-xyz/tunes/deep-search?q=glorp")
+        resp = client.get("/api/tunes/deep-search?session=no-such-session-xyz&q=glorp")
     assert resp.status_code == 404
 
 
@@ -159,7 +159,7 @@ def test_thesession_search_dedupes_repeated_hits(client, authenticated_user, mon
         types.SimpleNamespace(get=fake_get, exceptions=real_requests.exceptions),
     )
     with authenticated_user:
-        resp = client.get("/api/my-tunes/thesession-search?q=A3ABc&type=Slide")
+        resp = client.get("/api/tunes/thesession-search?q=A3ABc&type=Slide")
     assert resp.status_code == 200
     body = resp.get_json()
     assert body["success"] is True
@@ -284,7 +284,7 @@ def ranking_world():
 def _live_ids(client, q, **extra):
     from urllib.parse import urlencode
 
-    resp = client.get(f"/api/live/instances/{RANK_INSTANCE}/deep-search?" + urlencode({"q": q, **extra}))
+    resp = client.get(f"/api/tunes/deep-search?instance={RANK_INSTANCE}&" + urlencode({"q": q, **extra}))
     assert resp.status_code == 200, resp.get_data(as_text=True)
     return [r["tune_id"] for r in resp.get_json()["results"] if r["tune_id"] in (RANK_POPULAR, RANK_LOCAL, RANK_PREFIX)]
 
@@ -319,7 +319,7 @@ def test_live_deep_search_matches_the_sessions_own_name_for_a_tune(client, authe
 def test_my_tunes_deep_search_ranking_is_unchanged_without_a_session(client, authenticated_user, ranking_world):
     """No session: no plays to rank on, so it stays type, name match, popularity."""
     with authenticated_user:
-        resp = client.get("/api/my-tunes/deep-search?q=glorp")
+        resp = client.get("/api/tunes/deep-search?q=glorp")
     ids = [r["tune_id"] for r in resp.get_json()["results"] if r["tune_id"] in (RANK_POPULAR, RANK_LOCAL, RANK_PREFIX)]
     # Two prefix hits by popularity, then the substring hit.
     assert ids == [RANK_POPULAR, RANK_LOCAL, RANK_PREFIX]

@@ -19,7 +19,7 @@
 
   const pane = createPaneState()
   let sessionPath = $state('')
-  let config = $state({ searchApiBase: '' })
+  let config = $state({ searchScope: {} })
   let picked = $state(null) // null = search phase; else {tune_id?, thesession_id?, name, tune_type, ...}
   let initialQuery = $state('')
   let history = $state([]) // search recall (MRU), kept across open/close for the page's lifetime
@@ -40,7 +40,7 @@
 
   export function open(opts = {}) {
     sessionPath = opts.sessionPath || ''
-    config = { searchApiBase: `/api/sessions/${sessionPath}/tunes` }
+    config = { searchScope: { session: sessionPath } }
     initialQuery = opts.query || ''
     onAdded = opts.onAdded || (() => {})
     onAlready = opts.onAlready || (() => {})

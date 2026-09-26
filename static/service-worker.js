@@ -208,6 +208,8 @@ self.addEventListener('fetch', (event) => {
   if (url.origin === self.location.origin) {
     // The live logger owns its own data + worker — never touch it.
     if (url.pathname.startsWith('/api/live/')) return
+    // ...including its searches, which moved to /api/tunes/* scoped by ?instance=.
+    if (url.pathname.startsWith('/api/tunes/') && url.searchParams.has('instance')) return
     if (url.pathname.startsWith('/live/')) return
     if (url.pathname === '/logout') return
     // NOTE: /admin is intentionally NOT bypassed — admin navigations still go through

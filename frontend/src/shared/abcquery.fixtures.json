@@ -1,0 +1,106 @@
+{
+  "_readme": [
+    "Notation (ABC) search: is a typed query notes rather than a name, and what key does",
+    "it search with? The same rules live in SQL (abc_search_key, schema/055), Python",
+    "(database.py) and here; a Swift port is a fourth copy. If they drift, notation search",
+    "silently stops matching — no error, just no results.",
+    "",
+    "normAbc, in this order: (1) delete ornaments — grace notes {...} and quoted chord",
+    "symbols \"...\" — with ONE left-to-right regex /\\{[^}]*\\}|\"[^\"]*\"/g, so whichever",
+    "opener comes first wins and braces do not nest ('{a{b}c}' -> 'c}'); an unclosed",
+    "opener is left in place; (2) delete whitespace and '!' (thesession's legacy line",
+    "break); (3) lowercase. null/absent input is ''.",
+    "",
+    "What a port must match exactly:",
+    "  - 'whitespace' is the JavaScript \\s set, which is Unicode-aware: tab, LF, VT, FF,",
+    "    CR, space, U+00A0, U+1680, U+2000-U+200A, U+2028, U+2029, U+202F, U+205F, U+3000,",
+    "    U+FEFF. A NBSP pasted from a web page is stripped.",
+    "  - Lowercasing is JS toLowerCase (Unicode default case mapping, not locale-aware).",
+    "    No diacritic folding: 'À' becomes 'à', which then fails the notation test.",
+    "  - The notation test runs on the NORMALIZED key, and allows only",
+    "    [A-Ga-gxz0-9|^_=,'/()[\\]:<>~-]. Since the key is lowercase, in practice that is",
+    "    a-g, x, z, digits and the punctuation. It is deliberately permissive: 'cabbage'",
+    "    passes, and that is fine because notation hits are blended below name hits.",
+    "  - Lengths are counted in UTF-16 code units (JS .length). Every string that can pass",
+    "    the notation test is ASCII, so this only matters for a port that measures a",
+    "    failing key before testing it.",
+    "  - abcNeedle's min is inclusive (length >= min) and defaults to ABC_MIN_QUERY_LEN."
+  ],
+
+  "constants": {
+    "ABC_MIN_QUERY_LEN": 3
+  },
+
+  "functions": {
+    "normAbc": {
+      "params": ["s"],
+      "cases": [
+        { "name": "drops spaces and lowercases", "input": { "s": "fdd cAA | B2A" }, "expected": "fddcaa|b2a" },
+        { "name": "octave case is ignored", "input": { "s": "GED" }, "expected": "ged" },
+        { "name": "drops grace notes and chord symbols", "input": { "s": "{g}A{d}A{e}A \"Am\"{g}ABc" }, "expected": "aaaabc" },
+        { "name": "drops legacy ! line breaks", "input": { "s": "GED!BED" }, "expected": "gedbed" },
+        { "name": "drops tab and newline", "input": { "s": "fdd\tcAA\ncAA" }, "expected": "fddcaacaa" },
+        { "name": "drops a non-breaking space (JS \\s is Unicode-aware)", "input": { "s": "fdd cAA" }, "expected": "fddcaa" },
+        { "name": "empty string", "input": { "s": "" }, "expected": "" },
+        { "name": "null", "input": { "s": null }, "expected": "" },
+        { "name": "absent", "input": {}, "expected": "" },
+        { "name": "a lone chord symbol normalizes to nothing", "input": { "s": "\"Am\"" }, "expected": "" },
+        { "name": "empty braces and quotes vanish", "input": { "s": "{}\"\"" }, "expected": "" },
+        { "name": "braces do not nest: the first } closes", "input": { "s": "{a{b}c}" }, "expected": "c}" },
+        { "name": "a quote opened first swallows a brace", "input": { "s": "\"a{b\"c}" }, "expected": "c}" },
+        { "name": "a brace opened first swallows a quote", "input": { "s": "{a\"b}c\"" }, "expected": "c\"" },
+        { "name": "an unclosed quote is kept", "input": { "s": "\"Am" }, "expected": "\"am" },
+        { "name": "no diacritic folding", "input": { "s": "ÀBC" }, "expected": "àbc" },
+        { "name": "only noise", "input": { "s": " !!! " }, "expected": "" }
+      ]
+    },
+
+    "looksLikeAbc": {
+      "params": ["q"],
+      "cases": [
+        { "name": "spaced notes with a bar", "input": { "q": "fdd cAA | B" }, "expected": true },
+        { "name": "capital notes", "input": { "q": "GED" }, "expected": true },
+        { "name": "repeat marks and durations", "input": { "q": "|:E2BE dEBE:|" }, "expected": true },
+        { "name": "accidental", "input": { "q": "^c3d" }, "expected": true },
+        { "name": "tuplet", "input": { "q": "(3EEE" }, "expected": true },
+        { "name": "rests x and z (X lowercases to x)", "input": { "q": "X2z" }, "expected": true },
+        { "name": "octave comma", "input": { "q": "A,B" }, "expected": true },
+        { "name": "octave apostrophe", "input": { "q": "a'b" }, "expected": true },
+        { "name": "roll ~", "input": { "q": "abc~" }, "expected": true },
+        { "name": "chord brackets", "input": { "q": "[CEG]" }, "expected": true },
+        { "name": "broken rhythm < >", "input": { "q": "a<b>c" }, "expected": true },
+        { "name": "tie/hyphen", "input": { "q": "a-b" }, "expected": true },
+        { "name": "short is fine here (no length rule)", "input": { "q": "ab" }, "expected": true },
+        { "name": "a name made only of note letters passes, by design", "input": { "q": "cabbage" }, "expected": true },
+        { "name": "a name", "input": { "q": "Drowsy Maggie" }, "expected": false },
+        { "name": "another name", "input": { "q": "The Kesh" }, "expected": false },
+        { "name": "a type word", "input": { "q": "reel" }, "expected": false },
+        { "name": "h is not a note", "input": { "q": "h" }, "expected": false },
+        { "name": "accented letter fails", "input": { "q": "ÀBC" }, "expected": false },
+        { "name": "normalizes to nothing", "input": { "q": "\"Am\"" }, "expected": false },
+        { "name": "unclosed ornament leaves a disallowed char", "input": { "q": "{a{b}c}" }, "expected": false },
+        { "name": "empty", "input": { "q": "" }, "expected": false },
+        { "name": "null", "input": { "q": null }, "expected": false },
+        { "name": "whitespace only", "input": { "q": " " }, "expected": false }
+      ]
+    },
+
+    "abcNeedle": {
+      "params": ["q", "min"],
+      "cases": [
+        { "name": "qualifying query returns its key", "input": { "q": "fdd cAA | B" }, "expected": "fddcaa|b" },
+        { "name": "ornaments stripped before measuring", "input": { "q": "{g}A{d}A{e}A \"Am\"{g}ABc" }, "expected": "aaaabc" },
+        { "name": "a name returns empty", "input": { "q": "Drowsy Maggie" }, "expected": "" },
+        { "name": "below the default minimum", "input": { "q": "ab" }, "expected": "" },
+        { "name": "exactly the default minimum (inclusive)", "input": { "q": "abc" }, "expected": "abc" },
+        { "name": "minimum counts the NORMALIZED key", "input": { "q": "AB C" }, "expected": "abc" },
+        { "name": "grace notes do not count toward the minimum", "input": { "q": "{g}AB" }, "expected": "" },
+        { "name": "explicit lower minimum", "input": { "q": "ab", "min": 1 }, "expected": "ab" },
+        { "name": "explicit lower minimum, grace notes", "input": { "q": "{g}AB", "min": 1 }, "expected": "ab" },
+        { "name": "min 0 still needs a non-empty key", "input": { "q": "\"Am\"", "min": 0 }, "expected": "" },
+        { "name": "explicit higher minimum", "input": { "q": "abc", "min": 4 }, "expected": "" },
+        { "name": "null", "input": { "q": null }, "expected": "" }
+      ]
+    }
+  }
+}

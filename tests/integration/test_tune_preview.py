@@ -1,10 +1,10 @@
 """
 Integration tests for the deep-search tune-preview endpoints (look before you log):
 
-    GET  /api/my-tunes/tune-preview/<tune_id>                  (+ live / session-path homes)
-    GET  /api/my-tunes/setting-image/<setting_id>?kind=
-    GET  /api/my-tunes/thesession-preview/<thesession_id>
-    POST /api/my-tunes/render-abc
+    GET  /api/tunes/<tune_id>/preview                  (+ ?session=<path> / ?instance=<id>)
+    GET  /api/tunes/settings/<setting_id>/image?kind=
+    GET  /api/tunes/thesession/<thesession_id>/preview
+    POST /api/tunes/render-abc
 
 The preview returns the tune's settings (abc + incipit abc + any cached incipit
 image), session aliases where a session scope exists, and stats. The thesession
@@ -116,7 +116,7 @@ def preview_rows():
 
 
 def test_tune_preview_requires_login(client, preview_rows):
-    resp = client.get(f"/api/my-tunes/tune-preview/{TUNE}")
+    resp = client.get(f"/api/tunes/{TUNE}/preview")
     assert resp.status_code == 401
 
 
@@ -124,7 +124,7 @@ def test_tune_preview_personal_settings_and_no_session_fields(client, authentica
     """My Tunes home: all settings in setting_id order (abc + incipit abc, cached
     incipit inline), no session aliases/stats."""
     with authenticated_user:
-        resp = client.get(f"/api/my-tunes/tune-preview/{TUNE}")
+        resp = client.get(f"/api/tunes/{TUNE}/preview")
     assert resp.status_code == 200
     body = resp.get_json()
     assert body["success"] is True
@@ -147,7 +147,7 @@ def test_tune_preview_reports_the_viewers_own_row(client, authenticated_user, pr
     cur = conn.cursor()
     try:
         with authenticated_user:
-            body = client.get(f"/api/my-tunes/tune-preview/{TUNE}").get_json()
+            body = client.get(f"/api/tunes/{TUNE}/preview").get_json()
         assert body["person_tune"] is None  # not on the list yet
 
         cur.execute(
@@ -158,7 +158,7 @@ def test_tune_preview_reports_the_viewers_own_row(client, authenticated_user, pr
         conn.commit()
 
         with authenticated_user:
-            body = client.get(f"/api/my-tunes/tune-preview/{TUNE}").get_json()
+            body = client.get(f"/api/tunes/{TUNE}/preview").get_json()
         pt = body["person_tune"]
         assert pt["on_list"] is True
         assert pt["learn_status"] == "learning"
@@ -185,7 +185,7 @@ def test_tune_preview_merged_tune_reports_the_canonical_row(client, authenticate
         )
         conn.commit()
         with authenticated_user:
-            body = client.get(f"/api/my-tunes/tune-preview/{TUNE_MERGED}").get_json()
+            body = client.get(f"/api/tunes/{TUNE_MERGED}/preview").get_json()
         assert body["tune_id"] == TUNE
         assert body["person_tune"]["on_list"] is True
         assert body["person_tune"]["learn_status"] == "learned"
@@ -201,7 +201,7 @@ def test_tune_preview_session_scope_aliases_and_stats(client, authenticated_user
     """Session-path home: session_tune.alias + session_tune_alias surface as
     aliases; played-here count and dates are scoped to the session."""
     with authenticated_user:
-        resp = client.get(f"/api/sessions/{SPATH}/tunes/tune-preview/{TUNE}")
+        resp = client.get(f"/api/tunes/{TUNE}/preview?session={SPATH}")
     body = resp.get_json()
     assert body["success"] is True
     assert body["aliases"] == ["The Glorp", "Glorpy McGlorp"]
@@ -212,7 +212,7 @@ def test_tune_preview_session_scope_aliases_and_stats(client, authenticated_user
 
 def test_tune_preview_follows_merge_redirect(client, authenticated_user, preview_rows):
     with authenticated_user:
-        resp = client.get(f"/api/my-tunes/tune-preview/{TUNE_MERGED}")
+        resp = client.get(f"/api/tunes/{TUNE_MERGED}/preview")
     body = resp.get_json()
     assert body["success"] is True
     assert body["tune_id"] == TUNE
@@ -221,8 +221,8 @@ def test_tune_preview_follows_merge_redirect(client, authenticated_user, preview
 
 def test_tune_preview_no_settings_and_unknown(client, authenticated_user, preview_rows):
     with authenticated_user:
-        resp = client.get(f"/api/my-tunes/tune-preview/{TUNE_BARE}")
-        missing = client.get("/api/my-tunes/tune-preview/98765432")
+        resp = client.get(f"/api/tunes/{TUNE_BARE}/preview")
+        missing = client.get("/api/tunes/98765432/preview")
     assert resp.get_json()["settings"] == []
     assert missing.status_code == 404
 
@@ -231,9 +231,9 @@ def test_deep_search_card_prefers_session_setting_incipit(client, authenticated_
     """With a session scope, the card's incipit is the SESSION'S preferred setting
     (among cached images); without one, the lowest cached setting wins as before."""
     with authenticated_user:
-        personal = client.get("/api/my-tunes/deep-search?q=glorp preview reel")
-        scoped = client.get(f"/api/sessions/{SPATH}/tunes/deep-search?q=glorp preview reel")
-        pv = client.get(f"/api/sessions/{SPATH}/tunes/tune-preview/{TUNE}")
+        personal = client.get("/api/tunes/deep-search?q=glorp preview reel")
+        scoped = client.get(f"/api/tunes/deep-search?session={SPATH}&q=glorp preview reel")
+        pv = client.get(f"/api/tunes/{TUNE}/preview?session={SPATH}")
     settings = {s["setting_id"]: s for s in pv.get_json()["settings"]}
     assert settings[SETTING_A]["incipit_image"] != settings[SETTING_B]["incipit_image"]
     personal_card = {r["tune_id"]: r for r in personal.get_json()["results"]}[TUNE]
@@ -248,9 +248,9 @@ def test_setting_image_cached_full_and_missing(client, authenticated_user, previ
     degrades to a null image when it isn't — success either way. An unknown
     setting is a graceful null."""
     with authenticated_user:
-        cached = client.get(f"/api/my-tunes/setting-image/{SETTING_A}?kind=incipit")
-        full = client.get(f"/api/my-tunes/setting-image/{SETTING_B}?kind=full")
-        missing = client.get("/api/my-tunes/setting-image/87654321")
+        cached = client.get(f"/api/tunes/settings/{SETTING_A}/image?kind=incipit")
+        full = client.get(f"/api/tunes/settings/{SETTING_B}/image?kind=full")
+        missing = client.get("/api/tunes/settings/87654321/image")
     assert cached.get_json()["image"] is not None
     body = full.get_json()
     assert body["success"] is True
@@ -275,8 +275,8 @@ def test_thesession_preview_local_id_shortcuts(client, authenticated_user, previ
 
     monkeypatch.setattr(live_logging_routes, "_fetch_thesession_tune", _boom)
     with authenticated_user:
-        local = client.get(f"/api/my-tunes/thesession-preview/{TUNE}")
-        merged = client.get(f"/api/my-tunes/thesession-preview/{TUNE_MERGED}")
+        local = client.get(f"/api/tunes/thesession/{TUNE}/preview")
+        merged = client.get(f"/api/tunes/thesession/{TUNE_MERGED}/preview")
     assert local.get_json() == {"success": True, "is_local": True, "tune_id": TUNE}
     assert merged.get_json() == {"success": True, "is_local": True, "tune_id": TUNE}
 
@@ -287,7 +287,7 @@ def test_thesession_preview_remote_fetches_and_shapes(client, authenticated_user
     import live_logging_routes
     monkeypatch.setattr(live_logging_routes, "_fetch_thesession_tune", lambda tid: dict(FAKE_TS_TUNE))
     with authenticated_user:
-        resp = client.get(f"/api/my-tunes/thesession-preview/{REMOTE_ID}")
+        resp = client.get(f"/api/tunes/thesession/{REMOTE_ID}/preview")
     body = resp.get_json()
     assert body["success"] is True and body["is_local"] is False
     assert body["name"] == "The Remote Preview"
@@ -309,7 +309,7 @@ def test_thesession_preview_full_fetches_for_local_id(client, authenticated_user
     monkeypatch.setattr(live_logging_routes, "_fetch_thesession_tune",
                         lambda tid: {**FAKE_TS_TUNE, "id": tid})
     with authenticated_user:
-        resp = client.get(f"/api/my-tunes/thesession-preview/{TUNE}?full=1")
+        resp = client.get(f"/api/tunes/thesession/{TUNE}/preview?full=1")
     body = resp.get_json()
     assert body["success"] is True and body["is_local"] is True
     assert body["tune_id"] == TUNE
@@ -325,7 +325,7 @@ def test_thesession_preview_fetch_error_passthrough(client, authenticated_user, 
 
     monkeypatch.setattr(live_logging_routes, "_fetch_thesession_tune", _gone)
     with authenticated_user:
-        resp = client.get(f"/api/my-tunes/thesession-preview/{REMOTE_ID}")
+        resp = client.get(f"/api/tunes/thesession/{REMOTE_ID}/preview")
     assert resp.status_code == 404
     assert resp.get_json()["success"] is False
 
@@ -333,8 +333,8 @@ def test_thesession_preview_fetch_error_passthrough(client, authenticated_user, 
 def test_render_abc_validates_and_degrades(client, authenticated_user, preview_rows):
     """No abc -> 400; with abc but no renderer configured -> success, null image."""
     with authenticated_user:
-        empty = client.post("/api/my-tunes/render-abc", json={})
-        ok = client.post("/api/my-tunes/render-abc",
+        empty = client.post("/api/tunes/render-abc", json={})
+        ok = client.post("/api/tunes/render-abc",
                          json={"abc": "GE~E2 GEDE|", "key": "Gmaj", "tune_type": "Reel", "kind": "incipit"})
     assert empty.status_code == 400
     assert ok.status_code == 200
@@ -344,7 +344,7 @@ def test_render_abc_validates_and_degrades(client, authenticated_user, preview_r
 def test_live_home_registered(client, authenticated_user, preview_rows):
     """The live-instance home resolves its session scope from the instance."""
     with authenticated_user:
-        resp = client.get(f"/api/live/instances/{SI}/tune-preview/{TUNE}")
+        resp = client.get(f"/api/tunes/{TUNE}/preview?instance={SI}")
     body = resp.get_json()
     assert body["success"] is True
     assert body["played_here"] == 1

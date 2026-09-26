@@ -259,9 +259,9 @@ screen shell in `web_routes.py:live_logging_screen`):
 | GET  | `/api/live/instances/<id>/vocabulary` | Local-cache vocabulary (N + M) |
 | POST | `/api/live/instances/<id>/ops` | Referee op endpoint (all writes) |
 | POST | `/api/live/token` | Issue bearer token (`user_session` id) |
-| GET  | `/api/live/instances/<id>/people` `…/people/search` | Attendee lookups |
-| GET  | `/api/live/instances/<id>/tune/<tune_id>` `…/match` `…/deep-search` `…/incipit/<tune_id>` | Tune detail / linking / search / ABC |
-| GET  | `/api/live/instances/<id>/tune-preview/<tune_id>` `…/setting-image/<setting_id>` `…/thesession-preview/<id>` + POST `…/render-abc` | Deep-search preview (spec 032): settings + aliases + stats, per-setting render-on-demand, remote preview, ephemeral render. Same four also under `/api/my-tunes/…` and `/api/sessions/<path>/tunes/…` |
+| GET  | `/api/live/instances/<id>/people` | The session roster, whole — the picker filters it locally (spec 034 removed `…/people/search`) |
+| GET  | `/api/live/instances/<id>/tune/<tune_id>` `…/match` | Tune detail / linking |
+| GET  | `/api/tunes/deep-search?instance=<id>` `/api/tunes/<tune_id>/incipit-image` `/api/tunes/<tune_id>/preview?instance=<id>` `/api/tunes/settings/<setting_id>/image` `/api/tunes/thesession/<id>/preview` + POST `/api/tunes/render-abc` | Catalog search and the deep-search preview (spec 032). One `/api/tunes/*` family shared with the My Tunes and session-tunes add panes, told apart by `?instance=` / `?session=<path>` / no scope (spec 052 A6) |
 
 **Streaming sidecar** (`streaming/service.py`):
 

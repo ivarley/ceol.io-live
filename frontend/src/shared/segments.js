@@ -7,8 +7,12 @@
 /** mm:ss (h:mm:ss past an hour) for a millisecond offset. `--:--` for nothing. */
 export function formatClock(ms, { millis = false } = {}) {
   if (ms == null || !isFinite(ms)) return '--:--'
-  const sign = ms < 0 ? '-' : ''
-  let t = Math.abs(Math.round(ms))
+  // Round the magnitude, so a half rounds away from zero on both sides of it (as
+  // Swift's .rounded() does); Math.round alone rounds -1499.5 toward +infinity.
+  let t = Math.round(Math.abs(ms))
+  // A sign only on a value that shows as non-zero: -40ms is 0:00, not -0:00.
+  const shown = millis ? Math.floor(t / 100) : Math.floor(t / 1000)
+  const sign = ms < 0 && shown > 0 ? '-' : ''
   const msPart = t % 1000
   t = Math.floor(t / 1000)
   const s = t % 60

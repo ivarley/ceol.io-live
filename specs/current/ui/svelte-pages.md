@@ -152,6 +152,22 @@ port didn't change behavior. Vitest tests pin the contract explicitly (e.g.
 `frontend/tests/mytunespage.app.test.js` "legacy DOM contract"). Change the
 DOM only deliberately, updating e2e + CSS in the same commit.
 
+## Fixture files for pure client logic (spec 052 §B5)
+
+Client rules that a native client must reproduce exactly — `logstate.js`,
+`fracindex.js`, `offline.js`, `shared/abcquery.js`, `shared/segments.js`,
+`tunesheet/namematch.js` — each have a `<module>.fixtures.json` beside them:
+a `_readme` saying what the module decides and what a port must match exactly
+(string order, sort stability, rounding), then `functions.<name>` with
+`params` and `{name, input, expected, note?}` cases in plain JSON, plus
+`constants` and a `_not_fixtured` map (export → reason). One generic runner,
+`frontend/tests/fixtures.test.js`, executes every file and fails if an export is
+neither fixtured nor listed in `_not_fixtured`. The Swift package runs the same
+files, so a change to one of these modules updates its fixtures in the same
+commit; expected values are whatever the current code produces, with anything
+odd flagged in a case `note` rather than fixed silently. The hand-written
+`<module>.test.js` files stay for the narrative and I/O cases.
+
 ## The component kit — `frontend/src/lib/`
 
 The shared kit (spec 035 Step 1b): Sheet, Dialog, Popover, Card, Chip, Tabs,

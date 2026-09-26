@@ -1,0 +1,360 @@
+{
+  "_readme": [
+    "Recording segments (spec 050): where each placed tune ends, how a clock reads, and",
+    "what queue playback does on each frame. The segmenter (which places marks) and the",
+    "session-instance page (which plays them) both use this; a native player is a third",
+    "consumer. A tune whose extent differs between the tool that marked it and the page",
+    "that plays it is a bug nobody would think to look for.",
+    "",
+    "Maps: resolveSegments RETURNS a Map and playbackStep TAKES one. In this file both",
+    "are written as [[session_instance_tune_id, value], ...]. The order is meaningful for",
+    "resolveSegments: it is insertion order, which is placed tunes by start_ms.",
+    "",
+    "What a port must match exactly:",
+    "  - resolveSegments sorts placed tunes by start_ms with a STABLE sort: equal starts",
+    "    keep input order. A tune is placed when `segment` is present and not null.",
+    "  - end_ms is explicit whenever it is not null — 0 counts, and nothing checks that",
+    "    it is after start_ms. An implicit end is the NEXT PLACED tune's start, and the",
+    "    last placed tune's implicit end is durationMs (null stays null).",
+    "  - gapAfterMs is next.start - this.end only after an explicit end with a next tune;",
+    "    it goes NEGATIVE when marks overlap. It is 0 otherwise.",
+    "  - playbackStep: 'still inside' is nowMs < endMs - leadMs (strict). A seek happens",
+    "    only when |next.startMs - nowMs| > contiguousMs (strict), in either direction.",
+    "    repeatOne beats autoContinue. A queue id missing from `resolved` (or an idx past",
+    "    the end of the queue) is done, never an error. Absent options take the",
+    "    defaults: leadMs 40, contiguousMs 200, repeatOne false, autoContinue true.",
+    "  - formatClock rounds the MAGNITUDE (Math.round(Math.abs(ms))), so a half rounds",
+    "    away from zero on either side of it: -1499.5 -> -1500, as Swift's .rounded() does.",
+    "  - formatClock shows a sign only when the value it displays is non-zero: -0.4 reads",
+    "    '0:00', and with millis -40 reads '0:00.0' (the display resolves tenths).",
+    "  - The millis suffix is ONE digit, the tenths, truncated not rounded (1999 ms ->",
+    "    '.9'). Minutes are unpadded below an hour ('1:05'); hours are unpadded and",
+    "    unbounded ('100:00:00').",
+    "  - formatClock returns '--:--' for null, undefined, NaN and +/-Infinity. Only null",
+    "    and absent are expressible in JSON; a port must treat non-finite the same way."
+  ],
+
+  "constants": {
+    "HANDOVER_LEAD_MS": 40,
+    "CONTIGUOUS_MS": 200
+  },
+
+  "functions": {
+    "formatClock": {
+      "params": ["ms", "opts"],
+      "cases": [
+        { "name": "zero", "input": { "ms": 0 }, "expected": "0:00" },
+        { "name": "just under a second", "input": { "ms": 999 }, "expected": "0:00" },
+        { "name": "one second", "input": { "ms": 1000 }, "expected": "0:01" },
+        { "name": "seconds truncate, not round", "input": { "ms": 59999 }, "expected": "0:59" },
+        { "name": "minutes are unpadded", "input": { "ms": 65000 }, "expected": "1:05" },
+        { "name": "just under an hour", "input": { "ms": 3599999 }, "expected": "59:59" },
+        { "name": "an hour switches to h:mm:ss", "input": { "ms": 3600000 }, "expected": "1:00:00" },
+        { "name": "h:mm:ss", "input": { "ms": 3725000 }, "expected": "1:02:05" },
+        { "name": "hours are unbounded", "input": { "ms": 360000000 }, "expected": "100:00:00" },
+        { "name": "negative", "input": { "ms": -1500 }, "expected": "-0:01" },
+        { "name": "a negative that shows as zero has no sign", "input": { "ms": -0.4 }, "expected": "0:00" },
+        { "name": "a negative under a second shows as zero", "input": { "ms": -999 }, "expected": "0:00" },
+        { "name": "millis: a negative under a tenth shows as zero", "input": { "ms": -40, "opts": { "millis": true } }, "expected": "0:00.0" },
+        { "name": "half a millisecond rounds up", "input": { "ms": 0.5 }, "expected": "0:00" },
+        { "name": "null", "input": { "ms": null }, "expected": "--:--" },
+        { "name": "absent", "input": {}, "expected": "--:--" },
+        { "name": "null with millis", "input": { "ms": null, "opts": { "millis": true } }, "expected": "--:--" },
+        { "name": "millis off explicitly", "input": { "ms": 5, "opts": { "millis": false } }, "expected": "0:00" },
+        { "name": "millis: tenths, truncated", "input": { "ms": 1999, "opts": { "millis": true } }, "expected": "0:01.9" },
+        { "name": "millis: .95 stays .9", "input": { "ms": 1950, "opts": { "millis": true } }, "expected": "0:01.9" },
+        { "name": "millis: rounding to whole ms happens first", "input": { "ms": 1949.6, "opts": { "millis": true } }, "expected": "0:01.9" },
+        { "name": "millis: zero", "input": { "ms": 0, "opts": { "millis": true } }, "expected": "0:00.0" },
+        { "name": "millis: past an hour", "input": { "ms": 3600050, "opts": { "millis": true } }, "expected": "1:00:00.0" },
+        { "name": "millis: negative", "input": { "ms": -250, "opts": { "millis": true } }, "expected": "-0:00.2" },
+        { "name": "millis: positive half rounds up", "input": { "ms": 1499.5, "opts": { "millis": true } }, "expected": "0:01.5" },
+        { "name": "millis: a negative half rounds away from zero", "input": { "ms": -1499.5, "opts": { "millis": true } }, "expected": "-0:01.5" }
+      ]
+    },
+
+    "resolveSegments": {
+      "params": ["tunes", "durationMs"],
+      "returns": "map",
+      "cases": [
+        { "name": "no tunes", "input": { "tunes": [], "durationMs": 1000 }, "expected": [] },
+        {
+          "name": "unplaced tunes (no segment, null segment) are skipped",
+          "input": { "tunes": [{ "session_instance_tune_id": 1 }, { "session_instance_tune_id": 2, "segment": null }], "durationMs": 1000 },
+          "expected": []
+        },
+        {
+          "name": "implicit ends chain to the next placed start; last runs to the duration; sorted by start",
+          "input": {
+            "tunes": [
+              { "session_instance_tune_id": 3, "segment": { "start_ms": 250000, "end_ms": null } },
+              { "session_instance_tune_id": 1, "segment": { "start_ms": 10000, "end_ms": null } },
+              { "session_instance_tune_id": 9 },
+              { "session_instance_tune_id": 2, "segment": { "start_ms": 130000, "end_ms": null } }
+            ],
+            "durationMs": 600000
+          },
+          "expected": [
+            [1, { "startMs": 10000, "endMs": 130000, "explicitEnd": false, "gapAfterMs": 0 }],
+            [2, { "startMs": 130000, "endMs": 250000, "explicitEnd": false, "gapAfterMs": 0 }],
+            [3, { "startMs": 250000, "endMs": 600000, "explicitEnd": false, "gapAfterMs": 0 }]
+          ]
+        },
+        {
+          "name": "an explicit end leaves a gap before the next start",
+          "input": {
+            "tunes": [
+              { "session_instance_tune_id": 1, "segment": { "start_ms": 10000, "end_ms": 130000 } },
+              { "session_instance_tune_id": 2, "segment": { "start_ms": 180000, "end_ms": null } }
+            ],
+            "durationMs": 600000
+          },
+          "expected": [
+            [1, { "startMs": 10000, "endMs": 130000, "explicitEnd": true, "gapAfterMs": 50000 }],
+            [2, { "startMs": 180000, "endMs": 600000, "explicitEnd": false, "gapAfterMs": 0 }]
+          ]
+        },
+        {
+          "name": "overlapping marks give a negative gap",
+          "input": {
+            "tunes": [
+              { "session_instance_tune_id": 1, "segment": { "start_ms": 10000, "end_ms": 140000 } },
+              { "session_instance_tune_id": 2, "segment": { "start_ms": 130000, "end_ms": 200000 } }
+            ],
+            "durationMs": 600000
+          },
+          "expected": [
+            [1, { "startMs": 10000, "endMs": 140000, "explicitEnd": true, "gapAfterMs": -10000 }],
+            [2, { "startMs": 130000, "endMs": 200000, "explicitEnd": true, "gapAfterMs": 0 }]
+          ]
+        },
+        {
+          "name": "end_ms 0 is explicit, and is not checked against the start",
+          "input": { "tunes": [{ "session_instance_tune_id": 1, "segment": { "start_ms": 5000, "end_ms": 0 } }], "durationMs": 600000 },
+          "expected": [[1, { "startMs": 5000, "endMs": 0, "explicitEnd": true, "gapAfterMs": 0 }]]
+        },
+        {
+          "name": "an absent end_ms is implicit, same as null",
+          "input": { "tunes": [{ "session_instance_tune_id": 1, "segment": { "start_ms": 5000 } }], "durationMs": 9000 },
+          "expected": [[1, { "startMs": 5000, "endMs": 9000, "explicitEnd": false, "gapAfterMs": 0 }]]
+        },
+        {
+          "name": "equal starts keep input order (stable sort); null duration stays null",
+          "input": {
+            "tunes": [
+              { "session_instance_tune_id": 2, "segment": { "start_ms": 5000 } },
+              { "session_instance_tune_id": 1, "segment": { "start_ms": 5000 } },
+              { "session_instance_tune_id": 3, "segment": { "start_ms": 5000 } }
+            ],
+            "durationMs": null
+          },
+          "expected": [
+            [2, { "startMs": 5000, "endMs": 5000, "explicitEnd": false, "gapAfterMs": 0 }],
+            [1, { "startMs": 5000, "endMs": 5000, "explicitEnd": false, "gapAfterMs": 0 }],
+            [3, { "startMs": 5000, "endMs": null, "explicitEnd": false, "gapAfterMs": 0 }]
+          ]
+        },
+        {
+          "name": "string (temp) ids are keys like any other",
+          "input": { "tunes": [{ "session_instance_tune_id": "temp-a", "segment": { "start_ms": 5000, "end_ms": 9000 } }], "durationMs": 600000 },
+          "expected": [["temp-a", { "startMs": 5000, "endMs": 9000, "explicitEnd": true, "gapAfterMs": 0 }]]
+        }
+      ]
+    },
+
+    "playbackStep": {
+      "params": ["queue", "idx", "nowMs", "resolved", "opts"],
+      "mapParams": ["resolved"],
+      "cases": [
+        {
+          "name": "mid-tune: leave the playhead alone",
+          "input": {
+            "queue": [1, 2, 3], "idx": 0, "nowMs": 60000,
+            "resolved": [[1, { "startMs": 10000, "endMs": 130000, "explicitEnd": false, "gapAfterMs": 0 }], [2, { "startMs": 130000, "endMs": 250000, "explicitEnd": false, "gapAfterMs": 0 }], [3, { "startMs": 250000, "endMs": 600000, "explicitEnd": false, "gapAfterMs": 0 }]]
+          },
+          "expected": { "idx": 0, "seekMs": null, "done": false }
+        },
+        {
+          "name": "contiguous boundary: advance without seeking",
+          "input": {
+            "queue": [1, 2, 3], "idx": 0, "nowMs": 129990,
+            "resolved": [[1, { "startMs": 10000, "endMs": 130000, "explicitEnd": false, "gapAfterMs": 0 }], [2, { "startMs": 130000, "endMs": 250000, "explicitEnd": false, "gapAfterMs": 0 }], [3, { "startMs": 250000, "endMs": 600000, "explicitEnd": false, "gapAfterMs": 0 }]]
+          },
+          "expected": { "idx": 1, "seekMs": null, "done": false }
+        },
+        {
+          "name": "exactly endMs - lead has already handed over",
+          "input": {
+            "queue": [1, 2, 3], "idx": 0, "nowMs": 129960,
+            "resolved": [[1, { "startMs": 10000, "endMs": 130000, "explicitEnd": false, "gapAfterMs": 0 }], [2, { "startMs": 130000, "endMs": 250000, "explicitEnd": false, "gapAfterMs": 0 }], [3, { "startMs": 250000, "endMs": 600000, "explicitEnd": false, "gapAfterMs": 0 }]]
+          },
+          "expected": { "idx": 1, "seekMs": null, "done": false }
+        },
+        {
+          "name": "one ms before endMs - lead is still inside",
+          "input": {
+            "queue": [1, 2, 3], "idx": 0, "nowMs": 129959,
+            "resolved": [[1, { "startMs": 10000, "endMs": 130000, "explicitEnd": false, "gapAfterMs": 0 }], [2, { "startMs": 130000, "endMs": 250000, "explicitEnd": false, "gapAfterMs": 0 }], [3, { "startMs": 250000, "endMs": 600000, "explicitEnd": false, "gapAfterMs": 0 }]]
+          },
+          "expected": { "idx": 0, "seekMs": null, "done": false }
+        },
+        {
+          "name": "last tune in the queue ends the queue",
+          "input": {
+            "queue": [1, 2, 3], "idx": 2, "nowMs": 600000,
+            "resolved": [[1, { "startMs": 10000, "endMs": 130000, "explicitEnd": false, "gapAfterMs": 0 }], [2, { "startMs": 130000, "endMs": 250000, "explicitEnd": false, "gapAfterMs": 0 }], [3, { "startMs": 250000, "endMs": 600000, "explicitEnd": false, "gapAfterMs": 0 }]]
+          },
+          "expected": { "idx": 2, "seekMs": null, "done": true }
+        },
+        {
+          "name": "skip the dead air after an explicit end",
+          "input": {
+            "queue": [1, 2], "idx": 0, "nowMs": 130000,
+            "resolved": [[1, { "startMs": 10000, "endMs": 130000, "explicitEnd": true, "gapAfterMs": 50000 }], [2, { "startMs": 180000, "endMs": 600000, "explicitEnd": false, "gapAfterMs": 0 }]]
+          },
+          "expected": { "idx": 1, "seekMs": 180000, "done": false }
+        },
+        {
+          "name": "a jump of exactly contiguousMs is not a seek",
+          "input": {
+            "queue": [1, 2], "idx": 0, "nowMs": 130000,
+            "resolved": [[1, { "startMs": 10000, "endMs": 130000, "explicitEnd": true, "gapAfterMs": 200 }], [2, { "startMs": 130200, "endMs": 600000, "explicitEnd": false, "gapAfterMs": 0 }]]
+          },
+          "expected": { "idx": 1, "seekMs": null, "done": false }
+        },
+        {
+          "name": "one ms past contiguousMs is a seek",
+          "input": {
+            "queue": [1, 2], "idx": 0, "nowMs": 130000,
+            "resolved": [[1, { "startMs": 10000, "endMs": 130000, "explicitEnd": true, "gapAfterMs": 201 }], [2, { "startMs": 130201, "endMs": 600000, "explicitEnd": false, "gapAfterMs": 0 }]]
+          },
+          "expected": { "idx": 1, "seekMs": 130201, "done": false }
+        },
+        {
+          "name": "an overlapping next tune seeks BACKWARDS",
+          "input": {
+            "queue": [1, 2], "idx": 0, "nowMs": 129960,
+            "resolved": [[1, { "startMs": 10000, "endMs": 130000, "explicitEnd": true, "gapAfterMs": -30000 }], [2, { "startMs": 100000, "endMs": 600000, "explicitEnd": false, "gapAfterMs": 0 }]]
+          },
+          "expected": { "idx": 1, "seekMs": 100000, "done": false }
+        },
+        {
+          "name": "the queue ends even when the recording continues",
+          "input": {
+            "queue": [1, 2], "idx": 1, "nowMs": 250000,
+            "resolved": [[1, { "startMs": 10000, "endMs": 130000, "explicitEnd": false, "gapAfterMs": 0 }], [2, { "startMs": 130000, "endMs": 250000, "explicitEnd": true, "gapAfterMs": 650000 }], [3, { "startMs": 900000, "endMs": 1200000, "explicitEnd": false, "gapAfterMs": 0 }]]
+          },
+          "expected": { "idx": 1, "seekMs": null, "done": true }
+        },
+        {
+          "name": "the current tune vanished: done",
+          "input": {
+            "queue": [1, 99], "idx": 1, "nowMs": 5000,
+            "resolved": [[1, { "startMs": 10000, "endMs": 130000, "explicitEnd": false, "gapAfterMs": 0 }]]
+          },
+          "expected": { "idx": 1, "seekMs": null, "done": true }
+        },
+        {
+          "name": "the next tune vanished: done",
+          "input": {
+            "queue": [1, 99], "idx": 0, "nowMs": 129990,
+            "resolved": [[1, { "startMs": 10000, "endMs": 130000, "explicitEnd": false, "gapAfterMs": 0 }]]
+          },
+          "expected": { "idx": 0, "seekMs": null, "done": true }
+        },
+        {
+          "name": "idx past the end of the queue: done",
+          "input": {
+            "queue": [1, 2, 3], "idx": 5, "nowMs": 0,
+            "resolved": [[1, { "startMs": 10000, "endMs": 130000, "explicitEnd": false, "gapAfterMs": 0 }]]
+          },
+          "expected": { "idx": 5, "seekMs": null, "done": true }
+        },
+        {
+          "name": "empty queue: done",
+          "input": { "queue": [], "idx": 0, "nowMs": 0, "resolved": [] },
+          "expected": { "idx": 0, "seekMs": null, "done": true }
+        },
+        {
+          "name": "a scrub backwards is still inside this tune",
+          "input": {
+            "queue": [1, 2, 3], "idx": 1, "nowMs": 5000,
+            "resolved": [[1, { "startMs": 10000, "endMs": 130000, "explicitEnd": false, "gapAfterMs": 0 }], [2, { "startMs": 130000, "endMs": 250000, "explicitEnd": false, "gapAfterMs": 0 }], [3, { "startMs": 250000, "endMs": 600000, "explicitEnd": false, "gapAfterMs": 0 }]]
+          },
+          "expected": { "idx": 1, "seekMs": null, "done": false }
+        },
+        {
+          "name": "repeatOne loops to this tune's start",
+          "input": {
+            "queue": [1, 2, 3], "idx": 0, "nowMs": 129990, "opts": { "repeatOne": true },
+            "resolved": [[1, { "startMs": 10000, "endMs": 130000, "explicitEnd": false, "gapAfterMs": 0 }], [2, { "startMs": 130000, "endMs": 250000, "explicitEnd": false, "gapAfterMs": 0 }], [3, { "startMs": 250000, "endMs": 600000, "explicitEnd": false, "gapAfterMs": 0 }]]
+          },
+          "expected": { "idx": 0, "seekMs": 10000, "done": false }
+        },
+        {
+          "name": "repeatOne loops the last tune instead of ending",
+          "input": {
+            "queue": [1, 2, 3], "idx": 2, "nowMs": 600000, "opts": { "repeatOne": true },
+            "resolved": [[1, { "startMs": 10000, "endMs": 130000, "explicitEnd": false, "gapAfterMs": 0 }], [2, { "startMs": 130000, "endMs": 250000, "explicitEnd": false, "gapAfterMs": 0 }], [3, { "startMs": 250000, "endMs": 600000, "explicitEnd": false, "gapAfterMs": 0 }]]
+          },
+          "expected": { "idx": 2, "seekMs": 250000, "done": false }
+        },
+        {
+          "name": "repeatOne does nothing mid-tune",
+          "input": {
+            "queue": [1, 2, 3], "idx": 0, "nowMs": 60000, "opts": { "repeatOne": true },
+            "resolved": [[1, { "startMs": 10000, "endMs": 130000, "explicitEnd": false, "gapAfterMs": 0 }], [2, { "startMs": 130000, "endMs": 250000, "explicitEnd": false, "gapAfterMs": 0 }], [3, { "startMs": 250000, "endMs": 600000, "explicitEnd": false, "gapAfterMs": 0 }]]
+          },
+          "expected": { "idx": 0, "seekMs": null, "done": false }
+        },
+        {
+          "name": "repeatOne wins over autoContinue",
+          "input": {
+            "queue": [1, 2, 3], "idx": 0, "nowMs": 129990, "opts": { "repeatOne": true, "autoContinue": true },
+            "resolved": [[1, { "startMs": 10000, "endMs": 130000, "explicitEnd": false, "gapAfterMs": 0 }], [2, { "startMs": 130000, "endMs": 250000, "explicitEnd": false, "gapAfterMs": 0 }], [3, { "startMs": 250000, "endMs": 600000, "explicitEnd": false, "gapAfterMs": 0 }]]
+          },
+          "expected": { "idx": 0, "seekMs": 10000, "done": false }
+        },
+        {
+          "name": "autoContinue off stops at the end of the tune",
+          "input": {
+            "queue": [1, 2, 3], "idx": 0, "nowMs": 129990, "opts": { "autoContinue": false },
+            "resolved": [[1, { "startMs": 10000, "endMs": 130000, "explicitEnd": false, "gapAfterMs": 0 }], [2, { "startMs": 130000, "endMs": 250000, "explicitEnd": false, "gapAfterMs": 0 }], [3, { "startMs": 250000, "endMs": 600000, "explicitEnd": false, "gapAfterMs": 0 }]]
+          },
+          "expected": { "idx": 0, "seekMs": null, "done": true }
+        },
+        {
+          "name": "autoContinue off leaves the tune alone until it ends",
+          "input": {
+            "queue": [1, 2, 3], "idx": 0, "nowMs": 60000, "opts": { "autoContinue": false },
+            "resolved": [[1, { "startMs": 10000, "endMs": 130000, "explicitEnd": false, "gapAfterMs": 0 }], [2, { "startMs": 130000, "endMs": 250000, "explicitEnd": false, "gapAfterMs": 0 }], [3, { "startMs": 250000, "endMs": 600000, "explicitEnd": false, "gapAfterMs": 0 }]]
+          },
+          "expected": { "idx": 0, "seekMs": null, "done": false }
+        },
+        {
+          "name": "leadMs 0: the exact end hands over",
+          "input": {
+            "queue": [1, 2, 3], "idx": 0, "nowMs": 130000, "opts": { "leadMs": 0 },
+            "resolved": [[1, { "startMs": 10000, "endMs": 130000, "explicitEnd": false, "gapAfterMs": 0 }], [2, { "startMs": 130000, "endMs": 250000, "explicitEnd": false, "gapAfterMs": 0 }], [3, { "startMs": 250000, "endMs": 600000, "explicitEnd": false, "gapAfterMs": 0 }]]
+          },
+          "expected": { "idx": 1, "seekMs": null, "done": false }
+        },
+        {
+          "name": "leadMs 0: one ms before the end is inside",
+          "input": {
+            "queue": [1, 2, 3], "idx": 0, "nowMs": 129999, "opts": { "leadMs": 0 },
+            "resolved": [[1, { "startMs": 10000, "endMs": 130000, "explicitEnd": false, "gapAfterMs": 0 }], [2, { "startMs": 130000, "endMs": 250000, "explicitEnd": false, "gapAfterMs": 0 }], [3, { "startMs": 250000, "endMs": 600000, "explicitEnd": false, "gapAfterMs": 0 }]]
+          },
+          "expected": { "idx": 0, "seekMs": null, "done": false }
+        },
+        {
+          "name": "contiguousMs 0: any jump seeks",
+          "input": {
+            "queue": [1, 2], "idx": 0, "nowMs": 129960, "opts": { "contiguousMs": 0 },
+            "resolved": [[1, { "startMs": 10000, "endMs": 130000, "explicitEnd": true, "gapAfterMs": 1 }], [2, { "startMs": 130001, "endMs": 600000, "explicitEnd": false, "gapAfterMs": 0 }]]
+          },
+          "expected": { "idx": 1, "seekMs": 130001, "done": false }
+        }
+      ]
+    }
+  }
+}

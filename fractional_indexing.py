@@ -92,9 +92,11 @@ def generate_position_between(
                 # first_val is 1, extend: '0' + midpoint
                 return "0" + _int_to_char(MIDPOINT)
         else:
-            # First char is '0', go deeper
+            # First char is '0', go deeper. A key of only '0's has nothing below it:
+            # '00' < '0', so the old answer here ('0V') sorted AFTER the key it was
+            # meant to precede.
             if len(after) == 1:
-                return "0" + _int_to_char(MIDPOINT)
+                raise ValueError("No position below a key of only 0s")
             else:
                 return "0" + generate_position_between(None, after[1:])
 
@@ -118,8 +120,9 @@ def _generate_before(after: str) -> str:
     Examples:
         _generate_before('5') -> '2'  (midpoint of 0-5)
         _generate_before('1') -> '0V'  (can't go below 0, so extend)
-        _generate_before('0') -> '0V'  (can't go below 0, so extend)
         _generate_before('0V') -> '0A'  (midpoint of 0-V at second level)
+        _generate_before('0') -> ValueError  (nothing sorts below '0': for a prefix
+                                              'A', no key lies between 'A' and 'A0')
     """
     if not after:
         return _int_to_char(MIDPOINT)
@@ -137,8 +140,8 @@ def _generate_before(after: str) -> str:
         if len(after) > 1:
             return ALPHABET[0] + _generate_before(after[1:])
         else:
-            # Just '0' - extend with midpoint
-            return ALPHABET[0] + _int_to_char(MIDPOINT)
+            # Just '0': nothing sorts below it. Extending ('0V') would sort AFTER it.
+            raise ValueError("No position below a key of only 0s")
 
 
 def _midpoint(before: str, after: str) -> str:
@@ -150,7 +153,7 @@ def _midpoint(before: str, after: str) -> str:
         suffix = after[len(before):]
         # Recursively find midpoint between empty and suffix
         # This handles cases like before='A', after='A5' -> 'A2'
-        # Or before='A', after='A0' -> 'A0V' (extend because we can't go below '0')
+        # before='A', after='A0' has no answer and raises (see _generate_before)
         inner_mid = _generate_before(suffix)
         return before + inner_mid
 
@@ -191,7 +194,12 @@ def _midpoint(before: str, after: str) -> str:
 
 
 def validate_position(position: str) -> bool:
-    """Check if a position string is valid."""
+    """Check if a position string is valid.
+
+    A trailing '0' is invalid: no key could ever be placed immediately before one
+    ('A' < 'A0' with nothing between). Nothing here generates such a key."""
     if not position or not isinstance(position, str):
+        return False
+    if position.endswith("0"):
         return False
     return all(c in ALPHABET for c in position)

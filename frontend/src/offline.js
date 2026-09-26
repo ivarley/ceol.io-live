@@ -3,7 +3,10 @@
 //   - `snapshots`: a per-instance snapshot of the records so the screen can render
 //                  offline (bootstrap is network-only and fails with no connection)
 //
-// Dependency-free: a thin promise wrapper over the raw IndexedDB API.
+// A thin promise wrapper over the raw IndexedDB API; the only import is logstate's
+// pure name normalizer, so the cache keys fold names the way the matcher does.
+
+import { normName, stripThe } from './logstate.js'
 
 const DB_NAME = 'ceol-live'
 const DB_VERSION = 3
@@ -75,9 +78,14 @@ export const queueDelete = (op_id) => del(OPS, op_id)
 // Queued ops for ONE instance, oldest first. Scoping by instance is essential: an
 // op must only ever replay to the instance it was made for.
 export function queueAll(sessionInstanceId) {
-  return read(OPS).then((all) =>
-    (all || []).filter((e) => e.session_instance_id === sessionInstanceId).sort((a, b) => a.ts - b.ts)
-  )
+  return read(OPS).then((all) => queueOrder(all, sessionInstanceId))
+}
+
+// The pure core of queueAll, split out so offline.fixtures.json can pin it. `all` is
+// the store's getAll(), which IndexedDB returns in op_id order — so a ts tie replays in
+// op_id order (the sort is stable). nextTs() exists so that tie never happens.
+export function queueOrder(all, sessionInstanceId) {
+  return (all || []).filter((e) => e.session_instance_id === sessionInstanceId).sort((a, b) => a.ts - b.ts)
 }
 
 // --- Instance snapshot (for offline render) --------------------------------
@@ -93,30 +101,45 @@ export const snapshotGet = (sessionInstanceId) => read(SNAPS, sessionInstanceId)
 // so an offline exact-name match works even for a query string not typed verbatim
 // before. Match results are session-specific (aliases/preferences), hence per-instance.
 
-const _normq = (s) => (s || '').replace(/[‘’‛`´]/g, "'").trim().toLowerCase().replace(/^the\s+/, '')
+// The cache key's normalizer: the logger's own name normalizer (smart quotes folded,
+// diacritics stripped, lowercased — the server matcher's rules), then a leading "the "
+// dropped so "The Silver Spear" and "Silver Spear" share an entry. It used to fold
+// fewer quotes and keep accents, so an offline "Sligo Maid" missed a cached "Sligo Maíd".
+// Entries written under the old keys are simply never hit again; the next online
+// lookup rewrites them.
+export const normMatchQuery = (s) => stripThe(normName(s))
+
+// `${instance}|q|${query}` for a whole verdict, `${instance}|n|${name}` for one tune.
+export const matchCacheKey = (sessionInstanceId, kind, s) => `${sessionInstanceId}|${kind}|${normMatchQuery(s)}`
+
+// The rows matchCachePut writes for one verdict: the verdict under its query, plus each
+// linked result tune under its own normalized name. Pure (the caller passes `now`).
+export function matchCacheRows(sessionInstanceId, q, verdict, now) {
+  const rows = [{ key: matchCacheKey(sessionInstanceId, 'q', q), verdict, ts: now }]
+  for (const t of verdict.results || []) {
+    if (t.tune_id && t.name) {
+      rows.push({
+        key: matchCacheKey(sessionInstanceId, 'n', t.name),
+        tune: { tune_id: t.tune_id, name: t.name, tune_type: t.tune_type ?? null }, ts: now,
+      })
+    }
+  }
+  return rows
+}
 
 // Cache a verdict ({exact_match, results:[{tune_id,name,tune_type,...}]}) for a query,
 // plus each linked result tune by its normalized name. Best-effort (never throws).
 export function matchCachePut(sessionInstanceId, q, verdict) {
-  const now = Date.now()
-  const writes = [write(MATCH, { key: `${sessionInstanceId}|q|${_normq(q)}`, verdict, ts: now })]
-  for (const t of verdict.results || []) {
-    if (t.tune_id && t.name) {
-      writes.push(write(MATCH, {
-        key: `${sessionInstanceId}|n|${_normq(t.name)}`,
-        tune: { tune_id: t.tune_id, name: t.name, tune_type: t.tune_type ?? null }, ts: now,
-      }))
-    }
-  }
+  const writes = matchCacheRows(sessionInstanceId, q, verdict, Date.now()).map((row) => write(MATCH, row))
   return Promise.all(writes).catch(() => {})
 }
 
 // Look up a query offline: exact query-string hit returns the stored verdict; else an
 // exact normalized-name hit returns a single exact match. null if nothing cached.
 export async function matchCacheGet(sessionInstanceId, q) {
-  const byQ = await read(MATCH, `${sessionInstanceId}|q|${_normq(q)}`).catch(() => null)
+  const byQ = await read(MATCH, matchCacheKey(sessionInstanceId, 'q', q)).catch(() => null)
   if (byQ && byQ.verdict && (byQ.verdict.results || []).length) return byQ.verdict
-  const byN = await read(MATCH, `${sessionInstanceId}|n|${_normq(q)}`).catch(() => null)
+  const byN = await read(MATCH, matchCacheKey(sessionInstanceId, 'n', q)).catch(() => null)
   if (byN && byN.tune) return { exact_match: true, results: [byN.tune], fromCache: true }
   return null
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { generateAppend, generateBetween } from '../src/fracindex.js'
+import { generateAppend, generateBetween, optimisticBetween } from '../src/fracindex.js'
 
 // order_position is compared byte-wise (COLLATE "C") on the server; for the ASCII
 // base-62 alphabet, JS string `<` matches that byte order, so we assert with `<`.
@@ -52,10 +52,17 @@ describe('generateBetween', () => {
     expect(mid < 'V').toBe(true)
   })
 
-  it('defensively appends (never throws) when before >= after', () => {
-    // The exported API guards the degenerate case rather than throwing.
-    expect(generateBetween('V', 'V')).toBe(generateAppend('V'))
-    expect(generateBetween('W', 'V')).toBe(generateAppend('W'))
+  it('refuses when no key lies between, as the Python does', () => {
+    expect(() => generateBetween('V', 'V')).toThrow()
+    expect(() => generateBetween('W', 'V')).toThrow()
+    expect(() => generateBetween('A', 'A0')).toThrow()
+    expect(() => generateBetween(null, '0')).toThrow()
+  })
+
+  it('optimisticBetween falls back to append instead of throwing', () => {
+    expect(optimisticBetween('V', 'V')).toBe(generateAppend('V'))
+    expect(optimisticBetween('W', 'V')).toBe(generateAppend('W'))
+    expect(optimisticBetween('V', 'X')).toBe(generateBetween('V', 'X'))
   })
 
   it('stays strictly ordered under repeated midpoint insertion', () => {
