@@ -105,7 +105,7 @@ test.describe("Add a tune", () => {
    * is down, and makes them hermetic.
    */
   test.beforeEach(async ({ page }) => {
-    await page.route("**/thesession-preview/**", (route) =>
+    await page.route("**/api/tunes/thesession/*/preview**", (route) =>
       route.fulfill({
         status: 200,
         contentType: "application/json",

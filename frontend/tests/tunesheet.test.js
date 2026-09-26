@@ -328,13 +328,13 @@ describe('lazy notation render (imported tunes arrive as ABC only)', () => {
     tune: { setting_id: 5150, abc: 'EBBA!B2 EB!full body', incipit_abc: 'EBBA!B2 EB', image: null, incipit_image: null },
   }
   const settingImageCalls = () =>
-    fetchMock.mock.calls.map(([url]) => String(url)).filter((u) => u.includes('/setting-image/'))
+    fetchMock.mock.calls.map(([url]) => String(url)).filter((u) => u.includes('/api/tunes/settings/'))
 
   it('renders and shows the missing dots, incipit first then the full staff', async () => {
     stubFetch([
       ['/api/tunes/101/detail', detailPayload(noImages)],
-      ['/setting-image/5150?kind=incipit', { success: true, image: 'INCIPIT-PNG' }],
-      ['/setting-image/5150?kind=full', { success: true, image: 'FULL-PNG' }],
+      ['/api/tunes/settings/5150/image?kind=incipit', { success: true, image: 'INCIPIT-PNG' }],
+      ['/api/tunes/settings/5150/image?kind=full', { success: true, image: 'FULL-PNG' }],
     ])
     const { container, component } = render(TuneSheet)
     component.show({ tuneId: 101, ptid: 11, scope: null })
@@ -356,7 +356,7 @@ describe('lazy notation render (imported tunes arrive as ABC only)', () => {
   it('asks once per setting, however often the drawer re-renders', async () => {
     stubFetch([
       ['/api/tunes/101/detail', detailPayload(noImages)],
-      ['/setting-image/', { success: true, image: 'PNG' }],
+      ['/api/tunes/settings/', { success: true, image: 'PNG' }],
     ])
     const { component } = render(TuneSheet)
     component.show({ tuneId: 101, ptid: 11, scope: null })

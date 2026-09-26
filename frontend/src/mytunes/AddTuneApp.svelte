@@ -14,7 +14,7 @@
   // Personal flavor of the live search API (same request/response shapes).
   // offlineSearchFallback: offline, the deep search falls back to the CeolOffline
   // bundle mirror (tunebook + popular) — the parity the legacy add page had.
-  const config = { searchApiBase: '/api/my-tunes', offlineSearchFallback: true }
+  const config = { searchScope: {}, offlineSearchFallback: true }
 
   const pane = createPaneState()
   let syncMode = $state(false) // tunebook-sync view (the folded-away /my-tunes/sync page)

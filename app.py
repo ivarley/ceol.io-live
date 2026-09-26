@@ -56,7 +56,7 @@ from api_person_tune_routes import (
     update_my_profile,
     get_common_tunes
 )
-from live_logging_routes import tunes_deep_search, tunes_thesession_search, tunes_incipit_image, tunes_preview, tunes_setting_image, tunes_thesession_preview, tunes_render_abc, live_bootstrap, live_vocabulary, live_op, live_issue_token, live_tune_detail, live_people, live_deep_search, live_incipit, live_match, live_thesession_search, my_tunes_deep_search, my_tunes_thesession_search, my_tunes_incipit, session_tunes_deep_search, session_tunes_thesession_search, session_tunes_incipit, live_tune_preview, my_tunes_tune_preview, session_tunes_tune_preview, live_setting_image, my_tunes_setting_image, session_tunes_setting_image, live_thesession_preview, my_tunes_thesession_preview, session_tunes_thesession_preview, live_render_abc, my_tunes_render_abc, session_tunes_render_abc
+from live_logging_routes import tunes_deep_search, tunes_thesession_search, tunes_incipit_image, tunes_preview, tunes_setting_image, tunes_thesession_preview, tunes_render_abc, live_bootstrap, live_vocabulary, live_op, live_issue_token, live_tune_detail, live_people, live_match
 from timezone_utils import format_datetime_with_timezone, utc_to_local
 from flask_login import current_user
 
@@ -479,7 +479,7 @@ app.add_url_rule("/api/app-config", "app_config", app_config, methods=["GET"])
 app.add_url_rule("/api/home", "api_home", api_home, methods=["GET"])
 app.add_url_rule("/api/resolve", "resolve_path", resolve_path, methods=["GET"])
 app.add_url_rule("/.well-known/apple-app-site-association", "apple_app_site_association", apple_app_site_association)
-# The one tune-search family (spec 052 A6); the per-page trees below stay as aliases.
+# The one tune-search family (spec 052 A6), scoped by ?session= / ?instance=.
 app.add_url_rule("/api/tunes/deep-search", "tunes_deep_search", tunes_deep_search, methods=["GET"])
 app.add_url_rule("/api/tunes/thesession-search", "tunes_thesession_search", tunes_thesession_search, methods=["GET"])
 app.add_url_rule("/api/tunes/<int:tune_id>/incipit-image", "tunes_incipit_image", tunes_incipit_image, methods=["GET"])
@@ -641,52 +641,10 @@ app.add_url_rule(
 # so anyone could enumerate people from sessions they had nothing to do with. The picker's
 # universe is now this session's roster (returned whole by /people) and it filters locally.
 app.add_url_rule(
-    "/api/live/instances/<int:session_instance_id>/deep-search",
-    "live_deep_search",
-    live_deep_search,
-    methods=["GET"],
-)
-app.add_url_rule(
-    "/api/live/instances/<int:session_instance_id>/incipit/<int:tune_id>",
-    "live_incipit",
-    live_incipit,
-    methods=["GET"],
-)
-app.add_url_rule(
     "/api/live/instances/<int:session_instance_id>/match",
     "live_match",
     live_match,
     methods=["GET"],
-)
-app.add_url_rule(
-    "/api/live/instances/<int:session_instance_id>/thesession-search",
-    "live_thesession_search",
-    live_thesession_search,
-    methods=["GET"],
-)
-app.add_url_rule(
-    "/api/live/instances/<int:session_instance_id>/tune-preview/<int:tune_id>",
-    "live_tune_preview",
-    live_tune_preview,
-    methods=["GET"],
-)
-app.add_url_rule(
-    "/api/live/instances/<int:session_instance_id>/setting-image/<int:setting_id>",
-    "live_setting_image",
-    live_setting_image,
-    methods=["GET"],
-)
-app.add_url_rule(
-    "/api/live/instances/<int:session_instance_id>/thesession-preview/<int:thesession_id>",
-    "live_thesession_preview",
-    live_thesession_preview,
-    methods=["GET"],
-)
-app.add_url_rule(
-    "/api/live/instances/<int:session_instance_id>/render-abc",
-    "live_render_abc",
-    live_render_abc,
-    methods=["POST"],
 )
 app.add_url_rule(
     "/live/instances/<int:session_instance_id>",
@@ -854,49 +812,6 @@ app.add_url_rule(
     "/api/sessions/<path:session_path>/tunes",
     "add_session_tune",
     add_session_tune,
-    methods=["POST"],
-)
-# Add-to-session-tunes pane: the live screen's deep search, session-path flavor.
-app.add_url_rule(
-    "/api/sessions/<path:session_path>/tunes/deep-search",
-    "session_tunes_deep_search",
-    session_tunes_deep_search,
-    methods=["GET"],
-)
-app.add_url_rule(
-    "/api/sessions/<path:session_path>/tunes/thesession-search",
-    "session_tunes_thesession_search",
-    session_tunes_thesession_search,
-    methods=["GET"],
-)
-app.add_url_rule(
-    "/api/sessions/<path:session_path>/tunes/incipit/<int:tune_id>",
-    "session_tunes_incipit",
-    session_tunes_incipit,
-    methods=["GET"],
-)
-app.add_url_rule(
-    "/api/sessions/<path:session_path>/tunes/tune-preview/<int:tune_id>",
-    "session_tunes_tune_preview",
-    session_tunes_tune_preview,
-    methods=["GET"],
-)
-app.add_url_rule(
-    "/api/sessions/<path:session_path>/tunes/setting-image/<int:setting_id>",
-    "session_tunes_setting_image",
-    session_tunes_setting_image,
-    methods=["GET"],
-)
-app.add_url_rule(
-    "/api/sessions/<path:session_path>/tunes/thesession-preview/<int:thesession_id>",
-    "session_tunes_thesession_preview",
-    session_tunes_thesession_preview,
-    methods=["GET"],
-)
-app.add_url_rule(
-    "/api/sessions/<path:session_path>/tunes/render-abc",
-    "session_tunes_render_abc",
-    session_tunes_render_abc,
     methods=["POST"],
 )
 app.add_url_rule(
@@ -1436,49 +1351,6 @@ app.add_url_rule(
     "/api/my-tunes/sync",
     "sync_my_tunes",
     sync_my_tunes,
-    methods=["POST"],
-)
-# Add-to-My-Tunes pane: the live screen's deep search, personal (session-less) flavor.
-app.add_url_rule(
-    "/api/my-tunes/deep-search",
-    "my_tunes_deep_search",
-    my_tunes_deep_search,
-    methods=["GET"],
-)
-app.add_url_rule(
-    "/api/my-tunes/thesession-search",
-    "my_tunes_thesession_search",
-    my_tunes_thesession_search,
-    methods=["GET"],
-)
-app.add_url_rule(
-    "/api/my-tunes/incipit/<int:tune_id>",
-    "my_tunes_incipit",
-    my_tunes_incipit,
-    methods=["GET"],
-)
-app.add_url_rule(
-    "/api/my-tunes/tune-preview/<int:tune_id>",
-    "my_tunes_tune_preview",
-    my_tunes_tune_preview,
-    methods=["GET"],
-)
-app.add_url_rule(
-    "/api/my-tunes/setting-image/<int:setting_id>",
-    "my_tunes_setting_image",
-    my_tunes_setting_image,
-    methods=["GET"],
-)
-app.add_url_rule(
-    "/api/my-tunes/thesession-preview/<int:thesession_id>",
-    "my_tunes_thesession_preview",
-    my_tunes_thesession_preview,
-    methods=["GET"],
-)
-app.add_url_rule(
-    "/api/my-tunes/render-abc",
-    "my_tunes_render_abc",
-    my_tunes_render_abc,
     methods=["POST"],
 )
 app.add_url_rule(

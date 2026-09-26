@@ -1994,101 +1994,10 @@ def _deep_search_core(cur, q, tune_type, prefer_type, mode, limit, person_id,
     return results
 
 
-@api_login_required
-def live_deep_search(session_instance_id):
-    """Deep catalog search for the live screen (spec 021 §D "search deeper").
-
-    Returns rich cards: popularity, "on your list" / "in this session" flags, plays
-    at this session, and a cached/renderable incipit. See _deep_search_core for the
-    mode/type/ranking semantics.
-    """
-    q, tune_type, prefer_type, mode, limit = _parse_deep_search_args()
-
-    conn = get_db_connection()
-    try:
-        cur = conn.cursor()
-        cur.execute("SELECT session_id FROM session_instance WHERE session_instance_id = %s", (session_instance_id,))
-        srow = cur.fetchone()
-        if not srow:
-            return jsonify({"success": False, "error": "Session instance not found"}), 404
-        session_id = srow[0]
-        person_id = getattr(current_user, "person_id", None)
-
-        results = _deep_search_core(cur, q, tune_type, prefer_type, mode, limit,
-                                    person_id, session_id=session_id)
-        return jsonify({"success": True, "results": results})
-    finally:
-        conn.close()
-
-
-@api_login_required
-def my_tunes_deep_search():
-    """Personal deep catalog search for the Add-to-My-Tunes pane: the SAME search the
-    live screen uses (name + ABC blend, type filter, incipit cards), just without a
-    session scope. Tunes already on the caller's list sort to the bottom (the pane
-    dims them — they're not add targets)."""
-    q, tune_type, prefer_type, mode, limit = _parse_deep_search_args()
-
-    conn = get_db_connection()
-    try:
-        cur = conn.cursor()
-        person_id = getattr(current_user, "person_id", None)
-        results = _deep_search_core(cur, q, tune_type, prefer_type, mode, limit,
-                                    person_id, session_id=None, on_list_last=True)
-        return jsonify({"success": True, "results": results})
-    finally:
-        conn.close()
-
-
 def _session_id_by_path(cur, session_path):
     cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
     row = cur.fetchone()
     return row[0] if row else None
-
-
-@api_login_required
-def session_tunes_deep_search(session_path):
-    """Deep catalog search for the add-to-session-tunes pane: same search as the live
-    screen (and My Tunes), scoped to the session by PATH. Tunes already in this
-    session's repertoire sort to the bottom (the pane dims them — they're not add
-    targets there)."""
-    q, tune_type, prefer_type, mode, limit = _parse_deep_search_args()
-
-    conn = get_db_connection()
-    try:
-        cur = conn.cursor()
-        session_id = _session_id_by_path(cur, session_path)
-        if session_id is None:
-            return jsonify({"success": False, "error": "Session not found"}), 404
-        person_id = getattr(current_user, "person_id", None)
-        results = _deep_search_core(cur, q, tune_type, prefer_type, mode, limit,
-                                    person_id, session_id=session_id, in_session_last=True)
-        return jsonify({"success": True, "results": results})
-    finally:
-        conn.close()
-
-
-@api_login_required
-def session_tunes_thesession_search(session_path):
-    """thesession.org remote search for the add-to-session-tunes pane: same proxy,
-    flags in_session (dimmed) and on_list (badge)."""
-    conn = get_db_connection()
-    try:
-        cur = conn.cursor()
-        session_id = _session_id_by_path(cur, session_path)
-        if session_id is None:
-            return jsonify({"success": False, "error": "Session not found"}), 404
-    finally:
-        conn.close()
-    return _thesession_search_core(session_id=session_id,
-                                   person_id=getattr(current_user, "person_id", None))
-
-
-@api_login_required
-def session_tunes_incipit(session_path, tune_id):
-    """Incipit image for the add-to-session-tunes pane's search cards — rendering
-    depends only on the tune."""
-    return _incipit_response(tune_id)
 
 
 @api_login_required
@@ -2197,41 +2106,9 @@ def _thesession_search_core(session_id=None, person_id=None):
     return jsonify({"success": True, "results": results})
 
 
-@api_login_required
-def live_thesession_search(session_instance_id):
-    """thesession.org remote search for the live screen (spec 026)."""
-    session_id = None
-    conn = get_db_connection()
-    try:
-        cur = conn.cursor()
-        cur.execute("SELECT session_id FROM session_instance WHERE session_instance_id = %s", (session_instance_id,))
-        srow = cur.fetchone()
-        if srow:
-            session_id = srow[0]
-    finally:
-        conn.close()
-    return _thesession_search_core(session_id=session_id)
-
-
-@api_login_required
-def my_tunes_thesession_search():
-    """thesession.org remote search for the Add-to-My-Tunes pane: same proxy, no
-    session scope, plus an on_list flag so already-added tunes dim."""
-    return _thesession_search_core(person_id=getattr(current_user, "person_id", None))
-
-
-@api_login_required
-def live_incipit(session_instance_id, tune_id):
-    """Incipit image (base64) for a tune, rendered+cached on demand via the renderer
-    service if missing. `?kind=both` also renders the full image (drawer toggle).
-    Used by the deep-search cards (lazy, background) so notation is always service-
-    rendered, never client-side."""
-    return _incipit_response(tune_id)
-
-
 def _incipit_response(tune_id):
-    """Render/cache-and-return an incipit image. Depends only on the tune, so both
-    the session-scoped live route and the My Tunes route share it."""
+    """Render/cache-and-return an incipit image. `?kind=both` also renders the full
+    image (drawer toggle). Depends only on the tune, so it takes no scope."""
     kind = (request.args.get("kind") or "").strip().lower()
     conn = get_db_connection()
     try:
@@ -2248,13 +2125,6 @@ def _incipit_response(tune_id):
         return jsonify({"success": True, "image": img})
     finally:
         conn.close()
-
-
-@api_login_required
-def my_tunes_incipit(tune_id):
-    """Incipit image for the Add-to-My-Tunes pane's search cards — identical to
-    live_incipit, just not session-scoped."""
-    return _incipit_response(tune_id)
 
 
 # ---------------------------------------------------------------------------
@@ -2517,87 +2387,6 @@ def _render_abc_core():
         abc = extract_abc_incipit(abc, tune_type) or abc
     png = render_abc_to_png(_wrap_abc(abc, key, tune_type), is_incipit=(kind == "incipit"))
     return jsonify({"success": True, "image": base64.b64encode(png).decode() if png else None})
-
-
-@api_login_required
-def live_tune_preview(session_instance_id, tune_id):
-    """Tune preview for the live screen's deep search (session-scoped stats/aliases)."""
-    conn = get_db_connection()
-    try:
-        cur = conn.cursor()
-        cur.execute("SELECT session_id FROM session_instance WHERE session_instance_id = %s", (session_instance_id,))
-        srow = cur.fetchone()
-        if not srow:
-            return jsonify({"success": False, "error": "Session instance not found"}), 404
-        session_id = srow[0]
-    finally:
-        conn.close()
-    return _tune_preview_core(tune_id, session_id=session_id)
-
-
-@api_login_required
-def my_tunes_tune_preview(tune_id):
-    """Tune preview for the Add-to-My-Tunes pane (no session scope)."""
-    return _tune_preview_core(tune_id)
-
-
-@api_login_required
-def session_tunes_tune_preview(session_path, tune_id):
-    """Tune preview for the add-to-session-tunes pane (session-scoped by path)."""
-    conn = get_db_connection()
-    try:
-        cur = conn.cursor()
-        session_id = _session_id_by_path(cur, session_path)
-    finally:
-        conn.close()
-    if session_id is None:
-        return jsonify({"success": False, "error": "Session not found"}), 404
-    return _tune_preview_core(tune_id, session_id=session_id)
-
-
-@api_login_required
-def live_setting_image(session_instance_id, setting_id):
-    return _setting_image_response(setting_id)
-
-
-@api_login_required
-def my_tunes_setting_image(setting_id):
-    return _setting_image_response(setting_id)
-
-
-@api_login_required
-def session_tunes_setting_image(session_path, setting_id):
-    return _setting_image_response(setting_id)
-
-
-@api_login_required
-def live_thesession_preview(session_instance_id, thesession_id):
-    return _thesession_preview_core(thesession_id)
-
-
-@api_login_required
-def my_tunes_thesession_preview(thesession_id):
-    return _thesession_preview_core(thesession_id)
-
-
-@api_login_required
-def session_tunes_thesession_preview(session_path, thesession_id):
-    return _thesession_preview_core(thesession_id)
-
-
-@api_login_required
-def live_render_abc(session_instance_id):
-    return _render_abc_core()
-
-
-@api_login_required
-def my_tunes_render_abc():
-    return _render_abc_core()
-
-
-@api_login_required
-def session_tunes_render_abc(session_path):
-    return _render_abc_core()
 
 
 @api_login_required
@@ -2910,14 +2699,13 @@ def live_vocabulary(session_instance_id):
 # ---------------------------------------------------------------------------
 # The ONE search family: /api/tunes/* with an optional scope (spec 052 A6).
 #
-# The seven search endpoints above exist three times — under the live instance,
-# the session path, and /api/my-tunes — because each page grew its own tree. The
-# native client gets one tree. Scope rides in the query string, the way
-# /api/tunes/<id>/detail already does it:
+# These seven endpoints used to exist three times — under the live instance, the
+# session path, and /api/my-tunes — because each page grew its own tree. There is
+# now one tree, for the web and the native client alike. Scope rides in the query
+# string, the way /api/tunes/<id>/detail already does it:
 #     (none)               personal — on-list tunes sort last (add pane)
 #     ?session=<path>      session repertoire — in-session tunes sort last
 #     ?instance=<id>       live screen — flags only, no re-sort
-# The old trees stay registered for the web bundles until they move over.
 # ---------------------------------------------------------------------------
 
 def _resolve_search_scope(cur):
