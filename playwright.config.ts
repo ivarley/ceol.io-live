@@ -68,7 +68,12 @@ export default defineConfig({
     {
       name: "mobile",
       testMatch: /\.mobile\.spec\.ts/,
-      use: { ...devices["Pixel 5"] },
+      // Reduced motion, because at phone width every page-to-page navigation is a
+      // cross-document view transition (spec 052 §B8 Stage 6), and Playwright's
+      // bundled Chromium never paints the page on the far side of one — the whole
+      // suite would hang on its first link. Real Chrome is fine; the one spec that
+      // tests the transition runs there (page-transitions.mobile.spec.ts).
+      use: { ...devices["Pixel 5"], contextOptions: { reducedMotion: "reduce" } },
       dependencies: ["setup"],
     },
   ],

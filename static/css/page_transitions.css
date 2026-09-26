@@ -1,0 +1,72 @@
+/* Push/pop slide between pages on a phone (spec 052 §B8 Stage 6). Which navigations
+   slide, and which way, is decided in js/page_transitions.js; everything else it
+   skips, so a tab switch stays instant.
+
+   Phone only, like the tab bar: on a wide screen a whole-page slide is motion for its
+   own sake. Off under reduced motion. Firefox ignores all of this and navigates as
+   before. */
+
+@media (max-width: 767.98px) and (prefers-reduced-motion: no-preference) {
+  @view-transition {
+    navigation: auto;
+  }
+
+  /* The header and the tab bar hold still while the page moves under them. Named,
+     they leave the root snapshot and get transition groups of their own, which sit
+     where they are and cross-fade whatever changed inside them. */
+  .header.fixed-top {
+    view-transition-name: app-header;
+  }
+  .tab-bar {
+    view-transition-name: tab-bar;
+  }
+}
+
+::view-transition-group(app-header),
+::view-transition-group(tab-bar) {
+  z-index: 1;
+}
+
+html[data-slide]::view-transition-old(root),
+html[data-slide]::view-transition-new(root) {
+  animation-duration: 0.35s;
+  animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation-fill-mode: both;
+  /* The default cross-fade blends the two snapshots; a slide wants them opaque. */
+  mix-blend-mode: normal;
+}
+
+/* Push: the new screen comes in from the right, over the old one, which drifts a
+   little way left — the parallax iOS uses so the two do not read as one strip. */
+html[data-slide='push']::view-transition-old(root) {
+  animation-name: ceol-slide-to-left;
+}
+html[data-slide='push']::view-transition-new(root) {
+  animation-name: ceol-slide-from-right;
+}
+
+/* Pop: the reverse, with the leaving screen on top. */
+html[data-slide='pop']::view-transition-old(root) {
+  animation-name: ceol-slide-to-right;
+  z-index: 1;
+}
+html[data-slide='pop']::view-transition-new(root) {
+  animation-name: ceol-slide-from-left;
+}
+
+@keyframes ceol-slide-from-right {
+  from { transform: translateX(100%); }
+  to { transform: none; }
+}
+@keyframes ceol-slide-to-left {
+  from { transform: none; }
+  to { transform: translateX(-30%); }
+}
+@keyframes ceol-slide-to-right {
+  from { transform: none; }
+  to { transform: translateX(100%); }
+}
+@keyframes ceol-slide-from-left {
+  from { transform: translateX(-30%); }
+  to { transform: none; }
+}
