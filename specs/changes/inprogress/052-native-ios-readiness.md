@@ -1,9 +1,13 @@
 # 052: Native iOS Readiness — first-pass assessment
 
 **Date:** 2026-09-21
-**Status:** Section A (API / auth) **BUILT 2026-09-21** — pytest 1359 passed (54 new,
-3 existing tests updated). Section B (web UI reshaping) is pending the user's read.
-Section C/D unchanged.
+**Status (2026-09-26):** the web side is ready for a first native version cut.
+Section A (API / auth) **BUILT 2026-09-21**, and A6 finished 2026-09-26 when the web
+bundles moved onto `/api/tunes/*` and the 21 alias rules were deleted. Section B (web UI
+reshaping) **BUILT**: stages 0-6 of §B8, B3-B21, and the §B5 fixture files. What is left
+is app work or waits for the app: the AASA Team ID and Universal-Link handling (A7),
+push (A9), and the legacy error-envelope rewrite below. Section C unchanged; §D is
+annotated with what is done.
 
 **What section A built** (all web-repo work, no frontend change; the web login page
 and the Jinja home behave exactly as before):
@@ -54,9 +58,9 @@ and the Jinja home behave exactly as before):
 - **A9 push** — not built, as planned.
 
 **Not done / follow-ups:** the ~400 legacy `jsonify({"success": False, "message"…})`
-sites are conformed at runtime, not rewritten; the web bundles still call the old
-search trees; the AASA file needs the real Team ID; Universal-Link handling in the app
-itself is app work.
+sites are conformed at runtime, not rewritten; the AASA file needs the real Team ID;
+Universal-Link handling in the app itself is app work. (The web bundles calling the old
+search trees was on this list until 2026-09-26 — see A6.)
 
 **Section B had a clickable prototype, and has a staged plan (2026-09-22).**
 The prototype (`mockups/tabbar/`, served at `/mockups/tabbar/`) was the interaction
@@ -224,6 +228,18 @@ under each of `/api/live/instances/<id>/`, `/api/sessions/<path>/tunes/`, and
 page. The tune-detail endpoint already solved this the right way (`/api/tunes/<id>/detail`
 with `?session=`/`&instance=` scope). Do the same: one `/api/tunes/*` family with optional
 scope params; keep the old trees as aliases for the web until the bundles move over.
+
+**DONE 2026-09-26: the aliases are gone.** `client.js` builds `/api/tunes/*` URLs from a
+`searchScope` (`{instance}` on the live screen, `{session: path}` on the add-to-session
+pane, `{}` on the Add-to-My-Tunes pane) in place of `searchBase`; `TuneSheet` reads
+setting images from `/api/tunes/settings/<id>/image`; the 21 rules and their handlers are
+deleted, and the tests that called them call the one family. Two small behaviour changes
+for the live screen, both on thesession-search: results now carry `on_list` (the alias
+passed no person), and it shares the family's 30/min limit, which is per user once signed
+in. The main service worker bypasses `/api/tunes/*?instance=` the way it already bypassed
+`/api/live/*`, so the logger's searches still never land in the page-data cache. A web
+page left open across the deploy calls a removed URL until it reloads — search fails
+quietly (empty results), nothing is lost.
 
 ### A7. Deep links and the web↔app seam
 
@@ -406,7 +422,7 @@ feedback at all, which reads as broken rather than as quiet. On iOS these would 
 by popping the view; until the web does something equivalent, the toast is doing real
 work. Two component imports became dead and went with the calls.
 
-### B5. The live logger is the real port cost — prepare its logic, not its controls
+### B5. The live logger is the real port cost — prepare its logic, not its controls — **DONE 2026-09-26**
 
 `frontend/src/App.svelte` is 4,830 lines of bespoke, mobile-first interaction (seams,
 action pills, stay-hot search, presence, typing reservations, corroboration merge, undo,
@@ -420,6 +436,41 @@ Prep: **fixture-driven tests** — JSON cases in / expected JSON out — for eac
 modules, in the pattern `namematch.fixtures.json` already uses. Vitest runs them today;
 the Swift package runs the same files. That is the single highest-leverage piece of prep
 work in this document.
+
+**Built.** A `<module>.fixtures.json` beside each of `logstate.js`, `fracindex.js`,
+`offline.js`, `shared/abcquery.js`, `shared/segments.js`, and `tunesheet/namematch.js`
+(which gained cases for its exported functions beside its calibration sets): 433 cases
+over 41 functions, plus pinned constants. One deliberately dumb runner,
+`frontend/tests/fixtures.test.js`, maps each case's named `input` onto the function's
+`params` and compares the result as JSON — the same thing the Swift runner will do. A
+guard test fails if an export has no cases and is not listed under `_not_fixtured` with
+a reason, so a new export cannot skip the net. Convention written up in
+`specs/current/ui/svelte-pages.md`. Each file's `_readme` lists what a port must match
+exactly: UTF-16 code-unit string comparison, stable sorts, JS's whitespace set, NFD (not
+NFKD), dice scores as exact doubles, absent-vs-null keys, ids that are int or `temp-…`.
+
+The one refactor: `offline.js` split its pure cores out of the IndexedDB functions
+(`queueOrder`, `normMatchQuery`, `matchCacheKey`, `matchCacheRows`) so they could be
+fixtured; behaviour and write order unchanged.
+
+**Pinned, not fixed** — behaviour that looks wrong, recorded in its case as a `note` so a
+port reproduces it until someone decides otherwise:
+- `fracindex`: a neighbour key ending in `'0'` gets a key that sorts AFTER it
+  (`generateBetween(null,'0')` → `'0V'`). The Python does the same, and neither side
+  ever mints such a key, so only hand-written positions can hit it.
+- `fracindex`: `before >= after` falls back to append in JS; `fractional_indexing.py`
+  raises `ValueError`. The two disagree.
+- `mergeStable`: a server row without `in_session_tune` clears the local value (the
+  spread writes `undefined`); duplicate server-only rows are both appended.
+- Two name normalizers disagree: `offline.normMatchQuery` keeps diacritics, folds fewer
+  quote characters and drops a leading "the"; `logstate.normName` does the opposite on
+  each. An offline "Sligo Maid" misses a cached "Sligo Maíd".
+- `computeCursorSlots`: a set whose first tune is temp still gets a `before: temp-…`
+  start slot; an open set ending in a temp tune has no end slot (already pinned).
+- `remapAnchors` does not remap `record_ids` arrays; safe today only because
+  `bulkDelete` filters temp rows out.
+- `formatClock`: tiny negatives read `-0:00`, and JS `Math.round` rounds halves toward
+  +∞ where Swift's `.rounded()` rounds away from zero.
 
 ### B6. Design tokens as data — **DONE 2026-09-23**
 
@@ -447,6 +498,10 @@ useful Swift form, and CSS breakpoints describe the web's responsive layout wher
 has size classes — `--breakpoint-xs` is also literally `0`, which the first cut read as
 a z-order and emitted as one. They are listed by name in the Swift file rather than
 dropped silently, so nobody hunts for a token the generator quietly declined to emit.
+
+**Committed 2026-09-26.** A 2025 `.gitignore` line (`design/*`) had kept both files out
+of git, so the source existed on one disk only and a fresh checkout failed 17 of this
+section's tests. `design/tokens.json` and `design/Tokens.swift` are now excepted from it.
 
 ### B7. Things that need no change
 
@@ -1305,7 +1360,9 @@ timers are dead), `.logs-add-btn`, and the `.help-icon` rules.
 the DOM and collapses, where the old Tunes panel was conditionally rendered. That is
 what lets CLOSING animate rather than just vanishing.
 
-Remaining on this page: **tab counts**. Counts are NOT
+Remaining on this page: **tab counts** — since built (`1f4b882`; the payload carries
+`total_logs_count` and `total_people_count`, the latter null for a viewer who may not see
+the roster, and both are in `native-surface.yaml`). Counts are NOT
 free — `total_tunes_count` is in the payload but the logs and people counts load
 lazily inside their own tabs, so a count on Tunes alone would be worse than none.
 That needs `build_session_detail_payload` to carry all three, which is server work
@@ -1474,7 +1531,31 @@ that test changes meaning here, which is exactly why Stage 0 exists.
 **Done when.** Flag on: four tabs, no hamburger, every hamburger destination reachable.
 Flag off: today's behaviour, byte-identical. Both paths green in e2e.
 
-#### Stage 6 — Push/pop slide transitions
+#### Stage 6 — Push/pop slide transitions — **DONE 2026-09-26**
+
+**Built as proposed, with a direction rule.** `static/css/page_transitions.css` opts
+every `base.html` page into cross-document View Transitions below 768px when motion is
+allowed; `static/js/page_transitions.js` decides in `pagereveal`. Direction comes from
+the URL hierarchy, not history: a destination UNDER the current screen is a push (slides
+in from the right), one ABOVE it is a pop, anything else is skipped — which makes a
+tab-bar switch instant, as on iOS. The session page's tab suffix (`/tunes`, `/logs`,
+`/people`) is stripped first, so a night opened from the Logs tab is still "under" its
+session; Home (`/`) is a tab, not everyone's parent. The header and tab bar carry their
+own `view-transition-name`, so only the page slides. Needs `navigation.activation` to
+know where it came from (Chrome, Safari 26); without it the transition is skipped.
+Verified in Google Chrome at phone width: push on entering a session, pop on Back, no
+transition on a tab switch.
+
+**Test caveat.** Playwright's bundled Chromium never paints the page on the far side of
+a cross-document view transition — even two static pages with nothing but
+`@view-transition` hang, while installed Chrome does not. So the mobile e2e project runs
+with `reducedMotion: 'reduce'` (which turns the transitions off), and
+`e2e/mobile/page-transitions.mobile.spec.ts` runs in the installed Google Chrome and
+skips where there is none. The direction rule itself is unit-tested in
+`frontend/tests/pagetransitions.test.js`.
+
+The original plan:
+
 
 **What.** `/sessions` → `/sessions/<path>` slides in from the right; Back slides it out.
 **The honest caveat.** The prototype fakes this with a hash router and absolutely
@@ -1535,11 +1616,8 @@ Everything in A and B is web-repo work and can ship incrementally behind the web
 1. ~~**Auth handshake + `me` + `app-config`** (A1, A8)~~ — **DONE 2026-09-21.**
 2. ~~**ISO JSON provider + envelope + raw-beside-display audit** (A3, A4)~~ — **DONE.**
 3. ~~**Native surface + OpenAPI + contract test** (A5), with A6 folded in~~ — **DONE.**
-4. **The web reshaping (§B)** — now has its own stage-by-stage plan: **see §B8**. Its
-   Stage 4 (Home) and Stage 5 (tab bar) are what item 4 of this list used to be.
-5. **Fixture tests for the pure client logic** (B5) — can start any time, independent of
-   §B8; must be done before the Swift logger. **This is the highest-leverage prep work
-   in this document** and nothing blocks it.
+4. ~~**The web reshaping (§B)** — stage-by-stage plan in §B8~~ — **DONE**, stages 0-6.
+5. ~~**Fixture tests for the pure client logic** (B5)~~ — **DONE 2026-09-26.**
 6. **Universal Links + web handoff** (A7) when the app exists; **push** (A9) after.
 
 Explicitly **not** recommended now: a global REST URL rename (035's call stands), rewriting
