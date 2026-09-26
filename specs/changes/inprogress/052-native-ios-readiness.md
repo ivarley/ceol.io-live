@@ -460,9 +460,8 @@ fixtured; behaviour and write order unchanged.
   both, in the same cases**; `validate_position` rejects a trailing `'0'`. Client code calls
   a new `optimisticBetween`, which falls back to append, so the logger never throws
   mid-gesture over a provisional key. Neither side ever mints a key ending in `'0'`, and
-  none of the local seed's 835 positions does. **Not yet checked against production**:
-  the Render connection was down; `SELECT count(*) FROM session_instance_tune WHERE
-  order_position ~ '0$'` should be 0 there too.
+  none of the local seed's 835 positions does — and none in production either
+  (`order_position ~ '0$'` returned 0 rows, checked 2026-09-26).
 - `mergeStable`: a server row without `in_session_tune` cleared the local value; it now
   keeps it (a server `false` still wins). A duplicated server-only tune is appended once.
 - Two name normalizers disagreed: the offline match cache kept accents and folded fewer
