@@ -12,7 +12,9 @@
 //   functions.<name>.returns    "map": the result is a Map, compared as [[key, value], ...]
 //                               in insertion order
 //   functions.<name>.harness    "clock": stateful on the wall clock — see nextTs
-//   functions.<name>.cases      [{ name, input, expected, note? }]
+//   functions.<name>.cases      [{ name, input, expected, note? }], or
+//                               [{ name, input, throws: true }] for a call that must
+//                               refuse (throw in JS; a Swift port throws too)
 //   constants                   exported values, compared exactly
 //   _not_fixtured               export name -> why it has no cases
 
@@ -77,6 +79,10 @@ for (const { name, mod, fx, load } of MODULES) {
       describe(fnName, () => {
         for (const c of spec.cases) {
           it(c.name, async () => {
+            if (c.throws) {
+              expect(() => mod[fnName](...argsFor(spec, c.input))).toThrow()
+              return
+            }
             const actual =
               spec.harness === 'clock'
                 ? await runClockCase(load, fnName, c)

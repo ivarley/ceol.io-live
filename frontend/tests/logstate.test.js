@@ -259,14 +259,15 @@ describe('computeCursorSlots', () => {
     ])
   })
 
-  it('skips optimistic (temp) rows — they render no seam', () => {
+  it('skips optimistic (temp) rows, but not the end seam after one', () => {
     const withTemp = [
       { tunes: [{ session_instance_tune_id: 1 }, { session_instance_tune_id: 't-2', _temp: true }], breakAfter: null },
     ]
     const slots = computeCursorSlots(withTemp, true, true)
-    // start seam + after tune 1; the temp row contributes no slot, and the (temp) open-last
-    // tune isn't the end slot, so no `null` appears
-    expect(slots).toEqual([{ before: 1 }, 1])
+    // start seam + after tune 1; the temp row gets no after-seam of its own, but as the
+    // open set's last tune its seam is the end, which needs no anchor — so `null` stays
+    // reachable while a queued offline tune waits to send
+    expect(slots).toEqual([{ before: 1 }, 1, null])
   })
 
   it('returns nothing for an empty log', () => {

@@ -6,7 +6,7 @@
 // Silent-bug territory lives here: record ordering, set segmentation, cursor→position
 // computation, and temp→real anchor remapping (the offline replay path). Guard it well.
 
-import { generateAppend, generateBetween } from './fracindex.js'
+import { generateAppend, optimisticBetween } from './fracindex.js'
 
 // --- Op timestamps ---------------------------------------------------------- //
 
@@ -93,20 +93,22 @@ export function cursorPos(insertAfterId, ordered, allRecords) {
     if (idx === -1) return append()
     const x = ordered[idx].order_position
     const prev = idx > 0 ? ordered[idx - 1].order_position : null
-    return { afterId: null, beforeId: c.before, position: generateBetween(prev, x) }
+    return { afterId: null, beforeId: c.before, position: optimisticBetween(prev, x) }
   }
   const idx = ordered.findIndex((r) => r.session_instance_tune_id === c)
   if (idx === -1) return append()
   const before = ordered[idx].order_position
   const after = idx + 1 < ordered.length ? ordered[idx + 1].order_position : null
-  return { afterId: c, beforeId: null, position: generateBetween(before, after) }
+  return { afterId: c, beforeId: null, position: optimisticBetween(before, after) }
 }
 
 // --- Anchor remapping (offline replay, #5b) ------------------------------- //
 
 // Replace temp anchor/target ids in an op payload with their real server ids.
 // Unresolved anchors (after/before) fall back to null (append) rather than erroring;
-// an unresolved record_id target means the row never persisted → skip the op.
+// an unresolved record_id target means the row never persisted → skip the op. A
+// record_ids list (move, bulk delete) keeps the ids that resolve and drops the temp
+// rows that never persisted; if none are left, the op is skipped too.
 // Returns a COPY (the caller keeps entry.payload for temp-keyed local lookups).
 export function remapAnchors(payload, tempToReal) {
   const p = { ...payload }
@@ -118,6 +120,15 @@ export function remapAnchors(payload, tempToReal) {
     const real = tempToReal.get(p.record_id)
     if (real == null) return { payload: p, skip: true }
     p.record_id = real
+  }
+  if (Array.isArray(p.record_ids)) {
+    const ids = []
+    for (const id of p.record_ids) {
+      if (!isTemp(id)) ids.push(id)
+      else if (tempToReal.get(id) != null) ids.push(tempToReal.get(id))
+    }
+    if (p.record_ids.length && !ids.length) return { payload: { ...p, record_ids: ids }, skip: true }
+    p.record_ids = ids
   }
   return { payload: p, skip: false }
 }
@@ -166,15 +177,21 @@ export function openSetMergeTarget(payload, ordered) {
 
 // Stable-append merge: keep every already-shown LOCAL result pinned in place (so
 // nothing the user is about to tap moves), enrich it with the server's richer fields
-// (in-session badge / notation), and append only the server-ONLY tunes below.
+// (in-session badge / notation) where the server actually sent them, and append only
+// the server-ONLY tunes below, each once.
 export function mergeStable(localList, serverList) {
   const sById = new Map(serverList.filter((r) => r.tune_id != null).map((r) => [r.tune_id, r]))
   const seen = new Set(localList.map((r) => r.tune_id))
   const merged = localList.map((r) => {
     const s = sById.get(r.tune_id)
-    return s ? { ...r, in_session_tune: s.in_session_tune, abc: s.abc ?? r.abc } : r
+    return s ? { ...r, in_session_tune: s.in_session_tune ?? r.in_session_tune, abc: s.abc ?? r.abc } : r
   })
-  const extra = serverList.filter((r) => r.tune_id != null && !seen.has(r.tune_id))
+  const extra = []
+  for (const r of serverList) {
+    if (r.tune_id == null || seen.has(r.tune_id)) continue
+    seen.add(r.tune_id)
+    extra.push(r)
+  }
   return [...merged, ...extra].slice(0, 8)
 }
 
@@ -191,7 +208,8 @@ export { parseThesessionId, parseThesessionSettingId } from './shared/parse.js'
 // actually renders. Values mirror `insertAfterId`: `{ before: id }` = a set's start seam,
 // `<tuneId>` = the seam after that tune, `null` = the open-set end OR the closed-end
 // new-set seam, `{ newSet: nextFirstId }` = a new set in a between-sets gap. Temp
-// (optimistic) rows render no seam, so they're skipped. Arrow keys step through this list.
+// (optimistic) rows render no after-seam, so they're skipped — except the open set's
+// last tune, whose seam is the end and needs no anchor. Arrow keys step through this list.
 export function computeCursorSlots(segments, endIsOpen, hasOrdered) {
   const slots = []
   for (let si = 0; si < segments.length; si++) {
@@ -199,9 +217,9 @@ export function computeCursorSlots(segments, endIsOpen, hasOrdered) {
     slots.push({ before: seg.tunes[0].session_instance_tune_id }) // start-of-set seam
     for (let ti = 0; ti < seg.tunes.length; ti++) {
       const r = seg.tunes[ti]
-      if (r._temp) continue
       const openLast = endIsOpen && si === segments.length - 1 && ti === seg.tunes.length - 1
-      slots.push(openLast ? null : r.session_instance_tune_id)
+      if (openLast) slots.push(null)
+      else if (!r._temp) slots.push(r.session_instance_tune_id)
     }
     if (si < segments.length - 1 && seg.breakAfter != null) {
       slots.push({ newSet: segments[si + 1].tunes[0].session_instance_tune_id }) // new set in the gap

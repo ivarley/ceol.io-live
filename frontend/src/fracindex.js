@@ -2,6 +2,13 @@
 // optimistic order_position keys client-side (so a mid-list insert renders in the
 // right place before the server's authoritative position arrives). Base-62, COLLATE
 // "C" byte order: 0-9 < A-Z < a-z. The server remains authoritative on settle.
+//
+// Some requests have no answer, and both sides refuse them rather than return a key
+// in the wrong place: `before >= after`, and an `after` that is `before` followed only
+// by '0's (nothing sorts between 'A' and 'A0', or below '0'). Neither side ever mints
+// a key ending in '0', so the second can only come from a hand-written position.
+// generateBetween throws on both, exactly where the Python raises; client code, which
+// only ever needs a provisional key, calls optimisticBetween instead.
 
 const ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
 const BASE = ALPHABET.length // 62
@@ -25,7 +32,7 @@ function generateBefore(after) {
   if (first > 1) return ic(Math.floor(first / 2))
   if (first === 1) return ALPHABET[0] + generateBefore(after.length > 1 ? after.slice(1) : '')
   if (after.length > 1) return ALPHABET[0] + generateBefore(after.slice(1))
-  return ALPHABET[0] + ic(MIDPOINT)
+  throw new Error('no position below a key of only 0s')
 }
 
 function midpoint(before, after) {
@@ -56,10 +63,22 @@ export function generateBetween(before, after) {
       if (mid > 0) return ic(mid)
       return '0' + ic(MIDPOINT)
     }
-    if (after.length === 1) return '0' + ic(MIDPOINT)
+    if (after.length === 1) throw new Error('no position below a key of only 0s')
     return '0' + generateBetween(null, after.slice(1))
   }
   if (!after) return generateAppend(before)
-  if (before >= after) return generateAppend(before) // defensive; shouldn't happen
+  if (before >= after) throw new Error(`invalid ordering: ${before} >= ${after}`)
   return midpoint(before, after)
+}
+
+// generateBetween for a provisional client key: where there is no key between the
+// neighbours, fall back to appending after `before`. The row may render out of place
+// until the server's authoritative position arrives — which is also where the server
+// will refuse the same request — but the logger never throws mid-gesture over it.
+export function optimisticBetween(before, after) {
+  try {
+    return generateBetween(before, after)
+  } catch {
+    return generateAppend(before)
+  }
 }

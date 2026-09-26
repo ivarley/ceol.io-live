@@ -10,7 +10,7 @@
   import SidePane from './SidePane.svelte'
   import RecordingsModal from './RecordingsModal.svelte'
   import { queuePut, queueAll, queueDelete, snapshotPut, snapshotGet, matchCachePut, matchCacheGet } from './offline.js'
-  import { generateAppend, generateBetween } from './fracindex.js'
+  import { generateAppend, optimisticBetween } from './fracindex.js'
   // The "is this notation?" rules are shared with every other search box in the app
   // (and with the server) — see shared/abcquery.js.
   import { looksLikeAbc, abcNeedle } from './shared/abcquery.js'
@@ -746,7 +746,7 @@
     const nextId = idx >= 0 ? ordered[idx + 1]?.session_instance_tune_id : null
     byId.set(tempId, {
       session_instance_tune_id: tempId, record_type: 'break',
-      order_position: generateBetween(before, after), deleted: false, _temp: true,
+      order_position: optimisticBetween(before, after), deleted: false, _temp: true,
     })
     trySend({ op_id, op_type: 'set_break', payload: { action: 'insert', after_record_id: afterTuneId }, status: 'sending', ts: nextTs(), tempId })
     holdCursor(nextId != null ? { newSet: nextId } : null)
@@ -1753,7 +1753,7 @@
         // break between pasted sets, anchored after the previous set's last tune
         const bop = crypto.randomUUID()
         const btmp = `temp-${bop}`
-        const bkey = generateBetween(prevPos, succPos)
+        const bkey = optimisticBetween(prevPos, succPos)
         byId.set(btmp, { session_instance_tune_id: btmp, record_type: 'break', order_position: bkey, deleted: false, _temp: true })
         await trySend({ op_id: bop, op_type: 'set_break', payload: { action: 'insert', after_record_id: prevTempId }, status: 'sending', ts: nextTs(), tempId: btmp })
         prevPos = bkey
@@ -1762,7 +1762,7 @@
       for (const t of sets[si]) {
         const op_id = crypto.randomUUID()
         const tempId = `temp-${op_id}`
-        const key = generateBetween(prevPos, succPos)
+        const key = optimisticBetween(prevPos, succPos)
         byId.set(tempId, {
           session_instance_tune_id: tempId, name: t.name, tune_id: t.tune_id ?? null, tune_type: t.tune_type ?? null,
           record_type: 'tune', order_position: key, deleted: false, _temp: true, _status: 'sending',
@@ -1784,7 +1784,7 @@
       // close the pasted block off from the following set (mirrors addNewSetTune)
       const bop = crypto.randomUUID()
       const btmp = `temp-${bop}`
-      const bkey = generateBetween(prevPos, succPos)
+      const bkey = optimisticBetween(prevPos, succPos)
       byId.set(btmp, { session_instance_tune_id: btmp, record_type: 'break', order_position: bkey, deleted: false, _temp: true })
       await trySend({ op_id: bop, op_type: 'set_break', payload: { action: 'insert', before_record_id: newSetTarget }, status: 'sending', ts: nextTs(), tempId: btmp })
     }
@@ -2620,8 +2620,8 @@
     if (idx === -1) { setCursor(null); addOptimistic(payload, name); return }
     const nextPos = ordered[idx].order_position
     const predPos = idx > 0 ? ordered[idx - 1].order_position : null
-    const tunePos = generateBetween(predPos, nextPos)
-    const breakPos = generateBetween(tunePos, nextPos)
+    const tunePos = optimisticBetween(predPos, nextPos)
+    const breakPos = optimisticBetween(tunePos, nextPos)
 
     const op_id = crypto.randomUUID()
     const tempId = `temp-${op_id}`
@@ -2789,8 +2789,8 @@
     if (nsIdx !== -1) {
       const nextPos = ordered[nsIdx].order_position
       const predPos = nsIdx > 0 ? ordered[nsIdx - 1].order_position : null
-      position = generateBetween(predPos, nextPos)
-      const breakPos = generateBetween(position, nextPos)
+      position = optimisticBetween(predPos, nextPos)
+      const breakPos = optimisticBetween(position, nextPos)
       breakTempId = `temp-${crypto.randomUUID()}`
       byId.set(breakTempId, { session_instance_tune_id: breakTempId, record_type: 'break', order_position: breakPos, deleted: false, _temp: true })
       addAnchors = { before_record_id: nextFirstId }
@@ -4174,9 +4174,10 @@
             </div>
             {/if}
           {/if}
-          {#if !r._temp && canEdit}
-            {#if endIsOpen && si === displaySegments.length - 1 && ti === seg.tunes.length - 1}
-              <!-- last tune of the open set: this seam IS the end (append) point -->
+          {#if canEdit && endIsOpen && si === displaySegments.length - 1 && ti === seg.tunes.length - 1}
+              <!-- last tune of the open set: this seam IS the end (append) point. Drawn even
+                   while that tune is optimistic — the end needs no anchor, and a queued
+                   offline tune can stay optimistic for as long as the connection is down. -->
               <div class="seam end-seam" role="button" tabindex="0" data-seam="end" class:drop-eligible={dragKeys?.has('end')} class:drop-active={drag?.started && drag.activeKey === 'end'} class:active={visibleSeam === 'end'} onclick={() => setCursor(null)} onkeydown={(e) => activate(e, () => setCursor(null))}>
                 {#if visibleSeam === 'end'}<span class="seam-line"></span>{:else}<span class="seam-plus">＋</span>{/if}
               </div>
@@ -4184,7 +4185,7 @@
                 <!-- drag-only drop zone: land as own set(s) below the open end (spec 029 §F) -->
                 <div class="drop-extreme" data-seam="end-new" class:drop-active={drag.activeKey === 'end-new'}>new set</div>
               {/if}
-            {:else}
+          {:else if canEdit && !r._temp}
               <div class="seam" role="button" tabindex="0" data-seam={`after:${r.session_instance_tune_id}`} class:drop-eligible={dragKeys?.has(`after:${r.session_instance_tune_id}`)} class:drop-active={drag?.started && drag.activeKey === `after:${r.session_instance_tune_id}`} class:active={visibleSeam === `after:${r.session_instance_tune_id}`} onclick={() => setCursor(r.session_instance_tune_id)} onkeydown={(e) => activate(e, () => setCursor(r.session_instance_tune_id))}>
                 {#if visibleSeam === `after:${r.session_instance_tune_id}`}
                   <span class="seam-line"></span>
@@ -4193,7 +4194,6 @@
                   {/if}
                 {:else}<span class="seam-plus">＋</span>{/if}
               </div>
-            {/if}
           {/if}
         {/each}
       </div>

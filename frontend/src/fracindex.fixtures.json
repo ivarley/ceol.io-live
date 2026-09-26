@@ -12,15 +12,14 @@
     "  - A shorter key that is a prefix of a longer one sorts FIRST ('V' < 'V0').",
     "  - null and '' mean the same thing: no neighbour on that side.",
     "  - Integer halving is floor division.",
-    "  - generateBetween with before >= after does NOT throw here: it falls back to",
-    "    generateAppend(before). The Python raises ValueError instead. The client",
-    "    behaviour is the one to copy.",
-    "",
-    "Known quirk, shared with the Python: a neighbour key ending in '0' has no key",
-    "strictly below it with the same prefix, so generateBetween(null, '0') returns '0V',",
-    "which sorts AFTER '0'. Neither implementation ever mints a key ending in '0', so",
-    "this only bites on hand-written positions. The cases below pin it (see their notes)",
-    "so a port reproduces it rather than 'fixing' one side."
+    "  - generateBetween REFUSES (throws; the Python raises ValueError) when no key lies",
+    "    strictly between the neighbours: before >= after, or an `after` that is `before`",
+    "    followed only by '0's (null/'0', 'A'/'A0' — nothing sorts below '0'). Those cases",
+    "    carry `throws: true`. A port must refuse them too, never return a key that sorts",
+    "    on the wrong side. Neither side ever mints a key ending in '0', so the second",
+    "    kind only comes from hand-written positions.",
+    "  - optimisticBetween is the client's provisional key: generateBetween, or on a",
+    "    refusal generateAppend(before). The server stays authoritative on settle."
   ],
 
   "functions": {
@@ -55,18 +54,9 @@
         { "name": "no before, 1 -> 0V (no room at this level)", "input": { "before": null, "after": "1" }, "expected": "0V" },
         { "name": "no before, 0V -> recurse into the tail", "input": { "before": null, "after": "0V" }, "expected": "0F" },
         { "name": "no before, 01", "input": { "before": null, "after": "01" }, "expected": "00V" },
-        {
-          "name": "no before, 0 -> 0V",
-          "input": { "before": null, "after": "0" },
-          "expected": "0V",
-          "note": "Quirk shared with the Python: '0V' sorts AFTER '0'. There is no key below '0'; unreachable from minted keys."
-        },
-        {
-          "name": "no before, 00 -> 00V",
-          "input": { "before": null, "after": "00" },
-          "expected": "00V",
-          "note": "Same trailing-'0' quirk: the result sorts after 'after'."
-        },
+        { "name": "no before, 0 refuses: nothing sorts below '0'", "input": { "before": null, "after": "0" }, "throws": true },
+        { "name": "no before, 00 refuses", "input": { "before": null, "after": "00" }, "throws": true },
+        { "name": "no before, a 0 inside the key still has room", "input": { "before": null, "after": "05" }, "expected": "02" },
         { "name": "wide gap takes the floor midpoint", "input": { "before": "V", "after": "X" }, "expected": "W" },
         { "name": "wide gap V..z", "input": { "before": "V", "after": "z" }, "expected": "k" },
         { "name": "wide gap 0..z", "input": { "before": "0", "after": "z" }, "expected": "U" },
@@ -84,21 +74,26 @@
         { "name": "prefix, suffix 5 -> 2", "input": { "before": "V", "after": "V5" }, "expected": "V2" },
         { "name": "prefix, suffix 1 -> 0V", "input": { "before": "V", "after": "V1" }, "expected": "V0V" },
         { "name": "prefix, suffix 0i -> 0M", "input": { "before": "a", "after": "a0i" }, "expected": "a0M" },
+        { "name": "prefix, suffix 0 refuses: nothing between 'A' and 'A0'", "input": { "before": "A", "after": "A0" }, "throws": true },
+        { "name": "prefix, suffix 00 refuses", "input": { "before": "A", "after": "A00" }, "throws": true },
+        { "name": "before == after refuses", "input": { "before": "V", "after": "V" }, "throws": true },
+        { "name": "before > after refuses", "input": { "before": "W", "after": "V" }, "throws": true }
+      ]
+    },
+
+    "optimisticBetween": {
+      "params": ["before", "after"],
+      "cases": [
+        { "name": "a gap: the same key generateBetween gives", "input": { "before": "V", "after": "X" }, "expected": "W" },
+        { "name": "no after: append", "input": { "before": "V", "after": null }, "expected": "W" },
+        { "name": "before == after: falls back to append", "input": { "before": "V", "after": "V" }, "expected": "W" },
+        { "name": "before > after: falls back to append", "input": { "before": "W", "after": "V" }, "expected": "X" },
+        { "name": "nothing between 'A' and 'A0': falls back to append", "input": { "before": "A", "after": "A0" }, "expected": "B" },
         {
-          "name": "prefix, suffix 0 -> 0V",
-          "input": { "before": "A", "after": "A0" },
-          "expected": "A0V",
-          "note": "Trailing-'0' quirk: 'A0V' sorts after 'A0'. Nothing exists strictly between 'A' and 'A0'."
-        },
-        {
-          "name": "before == after falls back to append (the Python raises)",
-          "input": { "before": "V", "after": "V" },
-          "expected": "W"
-        },
-        {
-          "name": "before > after falls back to append (the Python raises)",
-          "input": { "before": "W", "after": "V" },
-          "expected": "X"
+          "name": "nothing below '0' and no before: the start key",
+          "input": { "before": null, "after": "0" },
+          "expected": "V",
+          "note": "Sorts after '0', deliberately: it is provisional, and the server refuses the same request."
         }
       ]
     }

@@ -21,8 +21,9 @@
     "  - maxPos scans every record, deleted and temp included, and ignores missing or null",
     "    positions. Its empty answer is '' (not null).",
     "  - Missing keys and null keys are different in remapAnchors: an anchor key that is",
-    "    absent stays absent. record_ids arrays are NOT remapped — the callers keep temp",
-    "    ids out of them (bulkDelete filters temps), and a port must keep that invariant.",
+    "    absent stays absent. A record_ids array keeps its non-temp ids, maps each temp id",
+    "    that resolves, and drops the ones that do not; if that leaves it empty (and it",
+    "    was not empty to start with), the op is skipped.",
     "  - normName: fold smart single quotes (U+2018 U+2019 U+201B U+02BC U+2032 ` U+00B4)",
     "    to ', smart doubles (U+201C U+201D U+201E U+2033 U+00AB U+00BB) to \", then NFD",
     "    and delete U+0300-U+036F, then JS trim (Unicode whitespace incl. U+00A0), then",
@@ -32,10 +33,10 @@
     "    does not know about already-plural input ('Slides' -> 'Slideses').",
     "  - setLabel compares tune types case-sensitively ('Reel' and 'reel' are Mixed) and",
     "    ignores null and ''.",
-    "  - mergeStable caps at 8 rows. An enriched row takes the server's in_session_tune",
-    "    EVEN WHEN the server row has none (the key then disappears), and the server's abc",
-    "    unless that is null/absent. Server rows with a null tune_id are dropped. See the",
-    "    notes on the cases that pin the odd parts.",
+    "  - mergeStable caps at 8 rows. An enriched row takes the server's in_session_tune and",
+    "    abc only when they are not null/absent, else keeps its own (a server false still",
+    "    wins). Server rows with a null tune_id are dropped. The last duplicate server row",
+    "    wins for enrichment; a server-only tune is appended once, as its first row.",
     "  - Cursor values: null = the end, <id> = after that tune, {\"before\": id} = the start",
     "    of that tune's set, {\"newSet\": id} = a new set in the gap before that tune.",
     "  - nextTs is fixtured with a scripted clock (harness 'clock'): each case starts from a",
@@ -431,10 +432,24 @@
           "expected": { "payload": { "record_id": null }, "skip": false }
         },
         {
-          "name": "record_ids arrays are not remapped",
+          "name": "record_ids: temp ids are remapped, in place",
           "input": { "payload": { "record_ids": ["temp-a", 5] }, "tempToReal": [["temp-a", 100]] },
-          "expected": { "payload": { "record_ids": ["temp-a", 5] }, "skip": false },
-          "note": "Callers keep temp ids out of record_ids (bulkDelete filters _temp rows), so this is unreachable today. A port must keep that invariant or remap here."
+          "expected": { "payload": { "record_ids": [100, 5] }, "skip": false }
+        },
+        {
+          "name": "record_ids: a temp id that never persisted is dropped",
+          "input": { "payload": { "record_ids": ["temp-a", 5, "temp-b"] }, "tempToReal": [["temp-a", 100]] },
+          "expected": { "payload": { "record_ids": [100, 5] }, "skip": false }
+        },
+        {
+          "name": "record_ids: nothing left to act on -> skip",
+          "input": { "payload": { "record_ids": ["temp-a"] }, "tempToReal": [] },
+          "expected": { "payload": { "record_ids": [] }, "skip": true }
+        },
+        {
+          "name": "record_ids: an empty list stays empty and is not skipped",
+          "input": { "payload": { "record_ids": [] }, "tempToReal": [] },
+          "expected": { "payload": { "record_ids": [] }, "skip": false }
         }
       ]
     },
@@ -617,13 +632,20 @@
           "expected": [{ "tune_id": 1, "name": "A", "abc": "loc", "in_session_tune": false }]
         },
         {
-          "name": "a server row with no in_session_tune CLEARS the local one",
+          "name": "a server row with no in_session_tune keeps the local one",
           "input": {
             "localList": [{ "tune_id": 1, "name": "A", "in_session_tune": true, "abc": "loc" }],
             "serverList": [{ "tune_id": 1, "name": "A" }]
           },
-          "expected": [{ "tune_id": 1, "name": "A", "abc": "loc" }],
-          "note": "Looks unintended: the spread sets in_session_tune to undefined. Harmless while the server always sends the field."
+          "expected": [{ "tune_id": 1, "name": "A", "in_session_tune": true, "abc": "loc" }]
+        },
+        {
+          "name": "a server false still overrides a local true",
+          "input": {
+            "localList": [{ "tune_id": 1, "in_session_tune": true }],
+            "serverList": [{ "tune_id": 1, "in_session_tune": false }]
+          },
+          "expected": [{ "tune_id": 1, "in_session_tune": false }]
         },
         {
           "name": "server rows with a null tune_id are dropped",
@@ -634,13 +656,12 @@
           "expected": [{ "tune_id": null, "name": "unlinked" }]
         },
         {
-          "name": "duplicate server-only rows are both appended",
+          "name": "a duplicated server-only tune is appended once, as its first row",
           "input": {
             "localList": [],
             "serverList": [{ "tune_id": 3 }, { "tune_id": 3, "name": "dup" }]
           },
-          "expected": [{ "tune_id": 3 }, { "tune_id": 3, "name": "dup" }],
-          "note": "Not deduplicated. The server does not send duplicates, so this is unreachable today."
+          "expected": [{ "tune_id": 3 }]
         },
         {
           "name": "duplicate server rows: the LAST one enriches a local row",
@@ -734,13 +755,22 @@
           "expected": [{ "before": 1 }, 1, 2, { "newSet": 3 }, { "before": 3 }, 3, null]
         },
         {
-          "name": "temp rows contribute no after-seam; a temp last tune leaves no end slot",
+          "name": "a temp open-set last tune still gives the end slot",
           "input": {
             "segments": [{ "tunes": [{ "session_instance_tune_id": 1 }, { "session_instance_tune_id": "temp-2", "_temp": true }], "breakAfter": null }],
             "endIsOpen": true,
             "hasOrdered": true
           },
-          "expected": [{ "before": 1 }, 1]
+          "expected": [{ "before": 1 }, 1, null]
+        },
+        {
+          "name": "a temp tune mid-set contributes no after-seam",
+          "input": {
+            "segments": [{ "tunes": [{ "session_instance_tune_id": "temp-1", "_temp": true }, { "session_instance_tune_id": 2 }], "breakAfter": null }],
+            "endIsOpen": true,
+            "hasOrdered": true
+          },
+          "expected": [{ "before": "temp-1" }, null]
         },
         {
           "name": "a set whose FIRST tune is temp still gets a start seam keyed on the temp id",
@@ -750,7 +780,7 @@
             "hasOrdered": true
           },
           "expected": [{ "before": "temp-1" }, 2, null],
-          "note": "The start seam ignores _temp, unlike the after-tune seams. Pinned as it stands."
+          "note": "Deliberate: a temp anchor is resolved by remapAnchors on send (its real id, or append if it never persisted)."
         },
         {
           "name": "no between-set seam when the segment has no closing break",
