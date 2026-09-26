@@ -56,6 +56,7 @@ from api_routes import (
     api_login_required, segment_records_into_sets, render_abc_to_png, bytea_to_base64,
     match_tune_core, _fetch_thesession_tune, TuneImportError, default_setting_id,
 )
+from rate_limit import rate_limited
 from api_auth import public_api
 from fractional_indexing import generate_append_position, generate_position_between
 
@@ -2981,6 +2982,10 @@ def tunes_deep_search():
 # only proxies a search of it. Offered signed-out so the public /tunes tab can reach
 # past Ceol's own catalogue (spec 052 §B20). current_user is used for personalisation
 # ONLY — without it the hits simply carry no on_list flag.
+# 30/min, because this is the one genuinely open door to thesession.org: it takes a
+# query and no token. A person types a name and presses the button; 30 is well past
+# that and well short of useful to a scraper.
+@rate_limited(limit=30, per=60, scope="thesession-search")
 def tunes_thesession_search():
     """GET /api/tunes/thesession-search?q=&type=[&session=|&instance=]
 

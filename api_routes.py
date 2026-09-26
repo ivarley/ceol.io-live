@@ -5,6 +5,7 @@ import re
 import os
 import base64
 import psycopg2
+from rate_limit import rate_limited
 from api_auth import api_login_required, api_admin_or_self_required, public_api
 from database import (
     get_db_connection,
@@ -1468,6 +1469,10 @@ def refresh_tunebook_count_ajax(session_path, tune_id):
 @public_api  # guarded in the body instead: a signed-in caller, OR a per-tune token
 # minted by this tune's own detail payload (spec 052 §B21). Opening it outright would
 # have made Ceol an anonymous proxy to thesession.org.
+# 12/min: the token already costs a caller one detail fetch per tune, so this is the
+# per-caller half of the same limit. A person generating notation for tune after tune
+# does not approach it.
+@rate_limited(limit=12, per=60, scope="thesession-backfill")
 def cache_tune_setting_ajax(tune_id):
     """
     Fetch and cache a tune setting from thesession.org.

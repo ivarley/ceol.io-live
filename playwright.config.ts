@@ -91,6 +91,12 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       stdout: "ignore",
       stderr: "pipe",
+      // The thesession.org proxies are rate limited per caller (rate_limit.py). This
+      // suite drives them from one address far harder than a person would, so the
+      // limiter would trip partway through a run and fail whichever spec happened to
+      // be next — a flake whose cause is nowhere near the failure. The limiter has
+      // its own tests; here it is switched off.
+      env: { RATE_LIMIT_DISABLED: "1" },
     },
     {
       command: "./venv/bin/python -m streaming.service",
