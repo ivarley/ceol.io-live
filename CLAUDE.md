@@ -67,6 +67,7 @@ Internal services, microservices, background jobs
 - **Live Logging (Feature 024)**: [Logic](specs/current/logic/live-logging.md) | [Spec](specs/changes/024-live-logging-architecture.md)
 - **Offline Support**: [Logic](specs/current/logic/offline.md)
 - **Native iOS readiness (Feature 052)**: [Spec](specs/changes/inprogress/052-native-ios-readiness.md) | [API conventions](specs/current/ui/ajax.md) | [Native surface](specs/api/native-surface.yaml) — section A (API/auth) BUILT; section B (web UI reshaping) has a clickable prototype and a 7-stage plan (spec §B8), stages 0-5 BUILT (kit Row/Toolbar/SectionHeader; the three session tabs; Home; the phone tab bar)
+- **Account Deletion (Feature 054)**: [Spec](specs/changes/inprogress/054-account-deletion.md) | [Data](specs/current/data/people-model.md) — `POST /api/me/delete-account`: the login and private data go at once, the name stays on rosters
 - **Svelte UI Consolidation (Feature 035)**: [UI](specs/current/ui/svelte-pages.md) | [Spec](specs/changes/inprogress/035-svelte-ui-consolidation.md) — `/my-tunes`, `/sessions`, `/sessions/<path>`, `/me`, `/admin/people/<id>`, `/admin/sessions/<path>` migrated to Svelte shells
 
 ## Development

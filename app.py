@@ -13,7 +13,7 @@ from api_auth import public_api
 from api_app_routes import (
     auth_exchange, auth_resend_verification, auth_logout, auth_set_password,
     api_me, me_profile, app_config, api_home, resolve_path, auth_web_session,
-    apple_app_site_association,
+    apple_app_site_association, delete_account_api,
 )
 from api_routes import *
 from web_routes import *
@@ -475,6 +475,7 @@ app.add_url_rule("/api/auth/set-password", "auth_set_password", auth_set_passwor
 app.add_url_rule("/api/auth/web-session", "auth_web_session", auth_web_session, methods=["POST"])
 app.add_url_rule("/api/me", "api_me", api_me, methods=["GET"])
 app.add_url_rule("/api/me/profile", "me_profile", me_profile, methods=["GET", "PUT"])
+app.add_url_rule("/api/me/delete-account", "delete_account_api", delete_account_api, methods=["POST"])
 app.add_url_rule("/api/app-config", "app_config", app_config, methods=["GET"])
 app.add_url_rule("/api/home", "api_home", api_home, methods=["GET"])
 app.add_url_rule("/api/resolve", "resolve_path", resolve_path, methods=["GET"])

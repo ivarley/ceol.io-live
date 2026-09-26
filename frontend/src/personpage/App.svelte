@@ -86,5 +86,5 @@
 </div>
 
 {#if isUserProfile}
-  <AccountSection isSystemAdmin={pageData.is_system_admin} personName={person.name} />
+  <AccountSection isSystemAdmin={pageData.is_system_admin} personName={person.name} userEmail={user?.user_email || ''} />
 {/if}

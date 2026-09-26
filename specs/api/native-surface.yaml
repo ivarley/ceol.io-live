@@ -717,6 +717,27 @@ paths:
       summary: Update profile (name, location, timezone, instruments)
       security: [{ bearer: [] }]
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Profile" } } } } }
+  /api/me/delete-account:
+    post:
+      operationId: deleteAccount
+      summary: >-
+        Delete the caller's account and private data, immediately (spec 054). The body
+        repeats the account email. Every token of the account stops working. The
+        person's name stays on session rosters as a no-login person.
+      security: [{ bearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirm_email]
+              properties:
+                confirm_email: { type: string, description: "The account's email, case-insensitive" }
+      responses:
+        "200": { description: deleted, content: { application/json: { schema: { $ref: "#/components/schemas/Ok" } } } }
+        "400": { description: "code confirmation_mismatch: the email did not match" }
+        "403": { description: "code admin_account or sent_update_emails: this flow may not delete it" }
   /api/home:
     get:
       operationId: getHome

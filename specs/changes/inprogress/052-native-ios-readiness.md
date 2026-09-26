@@ -196,6 +196,12 @@ app switches on codes, not English.
 
 ### A5. Declare the native surface, then freeze it
 
+**Update 2026-09-26:** every operation now has a hand-picked `operationId` (the Swift
+method name `swift-openapi-generator` emits), required by the contract test — present,
+unique, lowerCamelCase — and as fixed as the wire format once a build ships. The surface
+also gained `deleteAccount` ([spec 054](054-account-deletion.md)), which App Store review
+requires.
+
 182 rules include legacy and duplicate families a native client must never see:
 the quarantined pill logger's `save_tunes`, `*_grid_ajax`, `/api/sessions/list` +
 `/api/my-sessions` + `/api/user/admin-sessions` (035 noted the collapse), the person
