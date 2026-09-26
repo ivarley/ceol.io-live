@@ -1,0 +1,106 @@
+{
+  "_readme": [
+    "Fractional-index keys for order_position (spec 024). A client mints one optimistically",
+    "for a mid-list insert so the row renders in the right place before the server's",
+    "authoritative position arrives. This is a port of fractional_indexing.py and must",
+    "produce the SAME key for the same neighbours, or the optimistic row jumps on settle.",
+    "",
+    "What a port must match exactly:",
+    "  - Alphabet is base-62 '0-9A-Z a-z' (no space), ordered by byte value. Keys are",
+    "    ASCII, so byte order, UTF-16 code-unit order and code-point order all agree.",
+    "    Compare with plain byte/lexicographic order, never a locale-aware compare.",
+    "  - A shorter key that is a prefix of a longer one sorts FIRST ('V' < 'V0').",
+    "  - null and '' mean the same thing: no neighbour on that side.",
+    "  - Integer halving is floor division.",
+    "  - generateBetween with before >= after does NOT throw here: it falls back to",
+    "    generateAppend(before). The Python raises ValueError instead. The client",
+    "    behaviour is the one to copy.",
+    "",
+    "Known quirk, shared with the Python: a neighbour key ending in '0' has no key",
+    "strictly below it with the same prefix, so generateBetween(null, '0') returns '0V',",
+    "which sorts AFTER '0'. Neither implementation ever mints a key ending in '0', so",
+    "this only bites on hand-written positions. The cases below pin it (see their notes)",
+    "so a port reproduces it rather than 'fixing' one side."
+  ],
+
+  "functions": {
+    "generateAppend": {
+      "params": ["last"],
+      "cases": [
+        { "name": "null starts at V", "input": { "last": null }, "expected": "V" },
+        { "name": "empty string starts at V", "input": { "last": "" }, "expected": "V" },
+        { "name": "absent starts at V", "input": {}, "expected": "V" },
+        { "name": "increments the last char", "input": { "last": "V" }, "expected": "W" },
+        { "name": "digit increments", "input": { "last": "0" }, "expected": "1" },
+        { "name": "9 rolls into the uppercase block", "input": { "last": "9" }, "expected": "A" },
+        { "name": "Z rolls into the lowercase block", "input": { "last": "ZZ" }, "expected": "Za" },
+        { "name": "y becomes z", "input": { "last": "y" }, "expected": "z" },
+        { "name": "z extends with the midpoint char", "input": { "last": "z" }, "expected": "zV" },
+        { "name": "trailing z extends a longer key", "input": { "last": "Vz" }, "expected": "VzV" },
+        { "name": "zz extends", "input": { "last": "zz" }, "expected": "zzV" },
+        { "name": "only the last char moves", "input": { "last": "a0" }, "expected": "a1" }
+      ]
+    },
+
+    "generateBetween": {
+      "params": ["before", "after"],
+      "cases": [
+        { "name": "both empty -> START", "input": { "before": null, "after": null }, "expected": "V" },
+        { "name": "both empty strings -> START", "input": { "before": "", "after": "" }, "expected": "V" },
+        { "name": "no after -> append", "input": { "before": "V", "after": null }, "expected": "W" },
+        { "name": "no after, z -> append extends", "input": { "before": "z", "after": null }, "expected": "zV" },
+        { "name": "no before, V -> halfway to 0", "input": { "before": null, "after": "V" }, "expected": "F" },
+        { "name": "no before, z", "input": { "before": null, "after": "z" }, "expected": "U" },
+        { "name": "no before, 2 -> 1", "input": { "before": null, "after": "2" }, "expected": "1" },
+        { "name": "no before, 1 -> 0V (no room at this level)", "input": { "before": null, "after": "1" }, "expected": "0V" },
+        { "name": "no before, 0V -> recurse into the tail", "input": { "before": null, "after": "0V" }, "expected": "0F" },
+        { "name": "no before, 01", "input": { "before": null, "after": "01" }, "expected": "00V" },
+        {
+          "name": "no before, 0 -> 0V",
+          "input": { "before": null, "after": "0" },
+          "expected": "0V",
+          "note": "Quirk shared with the Python: '0V' sorts AFTER '0'. There is no key below '0'; unreachable from minted keys."
+        },
+        {
+          "name": "no before, 00 -> 00V",
+          "input": { "before": null, "after": "00" },
+          "expected": "00V",
+          "note": "Same trailing-'0' quirk: the result sorts after 'after'."
+        },
+        { "name": "wide gap takes the floor midpoint", "input": { "before": "V", "after": "X" }, "expected": "W" },
+        { "name": "wide gap V..z", "input": { "before": "V", "after": "z" }, "expected": "k" },
+        { "name": "wide gap 0..z", "input": { "before": "0", "after": "z" }, "expected": "U" },
+        { "name": "adjacent chars extend before with V", "input": { "before": "V", "after": "W" }, "expected": "VV" },
+        { "name": "adjacent A..B", "input": { "before": "A", "after": "B" }, "expected": "AV" },
+        { "name": "adjacent across the digit/upper boundary", "input": { "before": "9", "after": "A" }, "expected": "9V" },
+        { "name": "adjacent across the upper/lower boundary", "input": { "before": "Z", "after": "a" }, "expected": "ZV" },
+        { "name": "longer before, adjacent at first diff", "input": { "before": "VV", "after": "W" }, "expected": "VVV" },
+        { "name": "before ends in z", "input": { "before": "Vz", "after": "W" }, "expected": "VzV" },
+        { "name": "before ends in zV", "input": { "before": "VzV", "after": "W" }, "expected": "VzVV" },
+        { "name": "adjacent at the second char", "input": { "before": "A1", "after": "A2" }, "expected": "A1V" },
+        { "name": "longer before, adjacent (ni..o)", "input": { "before": "ni", "after": "o" }, "expected": "niV" },
+        { "name": "after is longer, not a prefix", "input": { "before": "A", "after": "B0" }, "expected": "AV" },
+        { "name": "before is a prefix of after: halve the suffix", "input": { "before": "V", "after": "VV" }, "expected": "VF" },
+        { "name": "prefix, suffix 5 -> 2", "input": { "before": "V", "after": "V5" }, "expected": "V2" },
+        { "name": "prefix, suffix 1 -> 0V", "input": { "before": "V", "after": "V1" }, "expected": "V0V" },
+        { "name": "prefix, suffix 0i -> 0M", "input": { "before": "a", "after": "a0i" }, "expected": "a0M" },
+        {
+          "name": "prefix, suffix 0 -> 0V",
+          "input": { "before": "A", "after": "A0" },
+          "expected": "A0V",
+          "note": "Trailing-'0' quirk: 'A0V' sorts after 'A0'. Nothing exists strictly between 'A' and 'A0'."
+        },
+        {
+          "name": "before == after falls back to append (the Python raises)",
+          "input": { "before": "V", "after": "V" },
+          "expected": "W"
+        },
+        {
+          "name": "before > after falls back to append (the Python raises)",
+          "input": { "before": "W", "after": "V" },
+          "expected": "X"
+        }
+      ]
+    }
+  }
+}

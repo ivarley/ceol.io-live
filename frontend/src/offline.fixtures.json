@@ -1,0 +1,208 @@
+{
+  "_readme": [
+    "Offline storage for the live logger (spec 024 §G): the op queue, the per-instance",
+    "snapshot, and the match cache that lets offline typing still LINK a tune. The module",
+    "is mostly IndexedDB plumbing, which a native client replaces with its own store; what",
+    "has to agree is the pure logic in the middle, which is what these cases pin.",
+    "(queueOrder, normMatchQuery, matchCacheKey and matchCacheRows were split out of",
+    "queueAll/matchCachePut for this file; the I/O functions call them unchanged.)",
+    "",
+    "Queue replay order (queueOrder): only the ops whose session_instance_id is",
+    "STRICTLY equal to the instance (1 and '1' differ), sorted by ts ascending with a",
+    "STABLE sort. The input is the store's getAll(), which IndexedDB returns in op_id",
+    "key order, so a ts tie replays in op_id order (code-unit string compare). nextTs()",
+    "in logstate.js exists so that a tie never happens within one page load; a native",
+    "client that can tie must break it by op_id ascending to match.",
+    "",
+    "Match cache key normalizer (normMatchQuery), in this order: fold the smart singles",
+    "U+2018 U+2019 U+201B, the backtick U+0060 and the acute U+00B4 to ASCII ';",
+    "trim (JS trim: Unicode whitespace incl. U+00A0 and U+FEFF); lowercase (JS",
+    "toLowerCase, not locale-aware); drop ONE leading 'the' followed by whitespace.",
+    "It is NOT logstate's normName: no diacritic folding, no smart double quotes, and",
+    "U+02BC / U+2032 are not folded. See the cases marked with a note.",
+    "",
+    "Keys are `${sessionInstanceId}|q|${normalized query}` for a whole verdict and",
+    "`${sessionInstanceId}|n|${normalized tune name}` for one linked tune. The instance",
+    "id is stringified as-is (12 and '12' give the same key).",
+    "",
+    "matchCacheRows: the verdict row first, then one row per result with a truthy",
+    "tune_id AND a non-empty name (tune_id 0 is skipped), in result order; tune_type",
+    "missing becomes null. `now` is the caller's Date.now().",
+    "",
+    "matchCacheGet (I/O, not fixtured) then reads: the q-row wins if its verdict has at",
+    "least one result; otherwise the n-row for the QUERY's normalized form, returned as",
+    "{exact_match: true, results: [tune], fromCache: true}; otherwise null."
+  ],
+
+  "_not_fixtured": {
+    "queuePut": "IndexedDB write; covered by tests/offline.test.js",
+    "queueDelete": "IndexedDB delete; covered by tests/offline.test.js",
+    "queueAll": "IndexedDB read + queueOrder; the ordering is fixtured as queueOrder",
+    "snapshotPut": "IndexedDB write; covered by tests/offline.test.js",
+    "snapshotGet": "IndexedDB read; covered by tests/offline.test.js",
+    "matchCachePut": "IndexedDB writes of matchCacheRows(..., Date.now()); the rows are fixtured",
+    "matchCacheGet": "IndexedDB reads keyed by matchCacheKey; the lookup order is described in _readme and covered by tests/offline.test.js"
+  },
+
+  "functions": {
+    "queueOrder": {
+      "params": ["all", "sessionInstanceId"],
+      "cases": [
+        {
+          "name": "one instance, oldest first; ts ties keep input (op_id) order",
+          "input": {
+            "all": [
+              { "op_id": "a", "session_instance_id": 1, "ts": 10 },
+              { "op_id": "b", "session_instance_id": 2, "ts": 5 },
+              { "op_id": "c", "session_instance_id": 1, "ts": 30 },
+              { "op_id": "d", "session_instance_id": "1", "ts": 1 },
+              { "op_id": "e", "session_instance_id": 1, "ts": 10 }
+            ],
+            "sessionInstanceId": 1
+          },
+          "expected": [
+            { "op_id": "a", "session_instance_id": 1, "ts": 10 },
+            { "op_id": "e", "session_instance_id": 1, "ts": 10 },
+            { "op_id": "c", "session_instance_id": 1, "ts": 30 }
+          ]
+        },
+        {
+          "name": "instance match is strict: '1' is not 1",
+          "input": {
+            "all": [
+              { "op_id": "a", "session_instance_id": 1, "ts": 10 },
+              { "op_id": "d", "session_instance_id": "1", "ts": 1 }
+            ],
+            "sessionInstanceId": "1"
+          },
+          "expected": [{ "op_id": "d", "session_instance_id": "1", "ts": 1 }]
+        },
+        {
+          "name": "the whole entry comes back untouched",
+          "input": {
+            "all": [
+              { "op_id": "x", "session_instance_id": 7, "ts": 2, "op_type": "set_break", "payload": { "action": "insert", "after_record_id": "temp-y" } },
+              { "op_id": "y", "session_instance_id": 7, "ts": 1, "op_type": "add_tune", "name": "The Kesh", "payload": { "tune_id": 55, "after_record_id": null, "before_record_id": null } }
+            ],
+            "sessionInstanceId": 7
+          },
+          "expected": [
+            { "op_id": "y", "session_instance_id": 7, "ts": 1, "op_type": "add_tune", "name": "The Kesh", "payload": { "tune_id": 55, "after_record_id": null, "before_record_id": null } },
+            { "op_id": "x", "session_instance_id": 7, "ts": 2, "op_type": "set_break", "payload": { "action": "insert", "after_record_id": "temp-y" } }
+          ]
+        },
+        { "name": "no match", "input": { "all": [{ "op_id": "a", "session_instance_id": 2, "ts": 1 }], "sessionInstanceId": 1 }, "expected": [] },
+        { "name": "empty store", "input": { "all": [], "sessionInstanceId": 1 }, "expected": [] },
+        { "name": "null store (getAll returned nothing)", "input": { "all": null, "sessionInstanceId": 1 }, "expected": [] }
+      ]
+    },
+
+    "normMatchQuery": {
+      "params": ["s"],
+      "cases": [
+        { "name": "drops a leading the and lowercases", "input": { "s": "The Silver Spear" }, "expected": "silver spear" },
+        { "name": "trims first, then drops the (with any whitespace after it)", "input": { "s": "  the  silver spear " }, "expected": "silver spear" },
+        { "name": "leading space before The", "input": { "s": " The Kesh" }, "expected": "kesh" },
+        { "name": "uppercase THE", "input": { "s": "THE KESH" }, "expected": "kesh" },
+        { "name": "only one the", "input": { "s": "the the kesh" }, "expected": "the kesh" },
+        { "name": "tab after the", "input": { "s": "the\tkesh" }, "expected": "kesh" },
+        { "name": "the must be a whole word", "input": { "s": "theatre" }, "expected": "theatre" },
+        { "name": "bare the is kept", "input": { "s": "the" }, "expected": "the" },
+        { "name": "folds U+2019", "input": { "s": "Cooley’s" }, "expected": "cooley's" },
+        { "name": "folds U+2018", "input": { "s": "‘Cooley" }, "expected": "'cooley" },
+        { "name": "folds U+201B", "input": { "s": "Cooley‛s" }, "expected": "cooley's" },
+        { "name": "folds backtick", "input": { "s": "Cooley`s" }, "expected": "cooley's" },
+        { "name": "folds acute accent", "input": { "s": "Cooley´s" }, "expected": "cooley's" },
+        {
+          "name": "does NOT fold U+02BC",
+          "input": { "s": "Cooleyʼs" },
+          "expected": "cooleyʼs",
+          "note": "logstate.normName folds U+02BC; this does not, so the two normalizers disagree on it."
+        },
+        {
+          "name": "does NOT fold smart double quotes",
+          "input": { "s": "“Quoted”" },
+          "expected": "“quoted”"
+        },
+        {
+          "name": "does NOT strip diacritics",
+          "input": { "s": "Sligo Maíd" },
+          "expected": "sligo maíd",
+          "note": "logstate.normName would give 'sligo maid'. An offline query typed without the accent misses a cached name with one."
+        },
+        { "name": "empty", "input": { "s": "" }, "expected": "" },
+        { "name": "null", "input": { "s": null }, "expected": "" }
+      ]
+    },
+
+    "matchCacheKey": {
+      "params": ["sessionInstanceId", "kind", "s"],
+      "cases": [
+        { "name": "query key", "input": { "sessionInstanceId": 12, "kind": "q", "s": "The Kesh" }, "expected": "12|q|kesh" },
+        { "name": "name key", "input": { "sessionInstanceId": 12, "kind": "n", "s": "Cooley’s" }, "expected": "12|n|cooley's" },
+        { "name": "string instance id gives the same key", "input": { "sessionInstanceId": "12", "kind": "q", "s": "The Kesh" }, "expected": "12|q|kesh" },
+        { "name": "null text", "input": { "sessionInstanceId": 12, "kind": "n", "s": null }, "expected": "12|n|" }
+      ]
+    },
+
+    "matchCacheRows": {
+      "params": ["sessionInstanceId", "q", "verdict", "now"],
+      "cases": [
+        {
+          "name": "verdict row, then one row per linked, named result",
+          "input": {
+            "sessionInstanceId": 12,
+            "q": "kesh",
+            "verdict": {
+              "exact_match": true,
+              "results": [
+                { "tune_id": 7, "name": "The Kesh", "tune_type": "Jig" },
+                { "tune_id": null, "name": "Unlinked" },
+                { "tune_id": 0, "name": "Zero" },
+                { "tune_id": 8, "name": "" },
+                { "tune_id": 9, "name": "Cooley’s" }
+              ]
+            },
+            "now": 1700000000000
+          },
+          "expected": [
+            {
+              "key": "12|q|kesh",
+              "verdict": {
+                "exact_match": true,
+                "results": [
+                  { "tune_id": 7, "name": "The Kesh", "tune_type": "Jig" },
+                  { "tune_id": null, "name": "Unlinked" },
+                  { "tune_id": 0, "name": "Zero" },
+                  { "tune_id": 8, "name": "" },
+                  { "tune_id": 9, "name": "Cooley’s" }
+                ]
+              },
+              "ts": 1700000000000
+            },
+            { "key": "12|n|kesh", "tune": { "tune_id": 7, "name": "The Kesh", "tune_type": "Jig" }, "ts": 1700000000000 },
+            { "key": "12|n|cooley's", "tune": { "tune_id": 9, "name": "Cooley’s", "tune_type": null }, "ts": 1700000000000 }
+          ]
+        },
+        {
+          "name": "a verdict with no results key writes only the verdict row",
+          "input": { "sessionInstanceId": 12, "q": "The X", "verdict": { "exact_match": false }, "now": 5 },
+          "expected": [{ "key": "12|q|x", "verdict": { "exact_match": false }, "ts": 5 }]
+        },
+        {
+          "name": "extra result fields are not copied into the tune row",
+          "input": {
+            "sessionInstanceId": 3,
+            "q": "silver",
+            "verdict": { "exact_match": false, "results": [{ "tune_id": 1, "name": "The Silver Spear", "tune_type": "Reel", "abc": "fdd cAA", "in_session_tune": true }] },
+            "now": 9
+          },
+          "expected": [
+            { "key": "3|q|silver", "verdict": { "exact_match": false, "results": [{ "tune_id": 1, "name": "The Silver Spear", "tune_type": "Reel", "abc": "fdd cAA", "in_session_tune": true }] }, "ts": 9 },
+            { "key": "3|n|silver spear", "tune": { "tune_id": 1, "name": "The Silver Spear", "tune_type": "Reel" }, "ts": 9 }
+          ]
+        }
+      ]
+    }
+  }
+}

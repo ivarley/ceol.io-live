@@ -1,0 +1,941 @@
+{
+  "_readme": [
+    "The live logger's pure state rules (spec 024, 028): how records order, how they split",
+    "into sets, where the insertion cursor can stand and what position a new row gets,",
+    "how offline ops re-anchor on replay, when an add collapses into an existing row, and",
+    "how local and server search results merge. Two clients that disagree on any of this",
+    "show two different logs for the same session.",
+    "",
+    "Records are plain objects: session_instance_tune_id, order_position, record_type",
+    "('tune' | 'break'), deleted, tune_id, name, tune_type, and _temp on optimistic rows.",
+    "IDs are integers for server rows and 'temp-<op_id>' strings for optimistic ones, so a",
+    "port needs an id type that can be either. Several functions branch on which it is",
+    "(seamActionFor only acts on integer ids; remapAnchors only rewrites 'temp-' strings).",
+    "",
+    "What a port must match exactly:",
+    "  - order_position compares as plain JS strings: UTF-16 code-unit order. Positions",
+    "    are ASCII base-62 (see fracindex.fixtures.json), so byte order agrees; never use",
+    "    a locale-aware compare. A prefix sorts first ('a' < 'aV').",
+    "  - computeOrdered's sort is STABLE: equal positions keep input order. In the app the",
+    "    input is the record map's insertion order.",
+    "  - maxPos scans every record, deleted and temp included, and ignores missing or null",
+    "    positions. Its empty answer is '' (not null).",
+    "  - Missing keys and null keys are different in remapAnchors: an anchor key that is",
+    "    absent stays absent. record_ids arrays are NOT remapped — the callers keep temp",
+    "    ids out of them (bulkDelete filters temps), and a port must keep that invariant.",
+    "  - normName: fold smart single quotes (U+2018 U+2019 U+201B U+02BC U+2032 ` U+00B4)",
+    "    to ', smart doubles (U+201C U+201D U+201E U+2033 U+00AB U+00BB) to \", then NFD",
+    "    and delete U+0300-U+036F, then JS trim (Unicode whitespace incl. U+00A0), then",
+    "    JS toLowerCase. NFD, not NFKD: ligatures like U+FB01 survive. It does NOT drop",
+    "    'the'; stripThe does, and only a lowercase 'the' followed by whitespace.",
+    "  - pluralType adds 'es' after s, z, ch, sh or x (case-insensitive), else 's'. It",
+    "    does not know about already-plural input ('Slides' -> 'Slideses').",
+    "  - setLabel compares tune types case-sensitively ('Reel' and 'reel' are Mixed) and",
+    "    ignores null and ''.",
+    "  - mergeStable caps at 8 rows. An enriched row takes the server's in_session_tune",
+    "    EVEN WHEN the server row has none (the key then disappears), and the server's abc",
+    "    unless that is null/absent. Server rows with a null tune_id are dropped. See the",
+    "    notes on the cases that pin the odd parts.",
+    "  - Cursor values: null = the end, <id> = after that tune, {\"before\": id} = the start",
+    "    of that tune's set, {\"newSet\": id} = a new set in the gap before that tune.",
+    "  - nextTs is fixtured with a scripted clock (harness 'clock'): each case starts from a",
+    "    fresh counter at 0; input.clock[i] is Date.now() at call i and expected[i] is what",
+    "    call i returns. The rule is max(clock, last + 1).",
+    "",
+    "parseThesessionId / parseThesessionSettingId are re-exports of shared/parse.js,",
+    "fixtured here because the logger's paste detection depends on them. The domain match",
+    "is case-sensitive, and parseInt drops leading zeros."
+  ],
+
+  "_not_fixtured": {
+    "normAbc": "re-export of shared/abcquery.js normAbc; fixtured in shared/abcquery.fixtures.json"
+  },
+
+  "functions": {
+    "nextTs": {
+      "params": [],
+      "harness": "clock",
+      "cases": [
+        { "name": "follows the wall clock when it is ahead", "input": { "clock": [3000000] }, "expected": [3000000] },
+        { "name": "strictly increasing within a frozen millisecond", "input": { "clock": [1000000, 1000000, 1000000] }, "expected": [1000000, 1000001, 1000002] },
+        { "name": "monotonic when the clock steps backwards", "input": { "clock": [2000000, 1500000] }, "expected": [2000000, 2000001] },
+        { "name": "catches back up to the clock", "input": { "clock": [100, 100, 101, 200] }, "expected": [100, 101, 102, 200] },
+        { "name": "a zero clock still starts at 1", "input": { "clock": [0, 0] }, "expected": [1, 2] }
+      ]
+    },
+
+    "computeOrdered": {
+      "params": ["records"],
+      "cases": [
+        {
+          "name": "drops deleted rows and sorts by position",
+          "input": {
+            "records": [
+              { "session_instance_tune_id": 3, "order_position": "C", "record_type": "tune", "deleted": false },
+              { "session_instance_tune_id": 1, "order_position": "A", "record_type": "tune", "deleted": false },
+              { "session_instance_tune_id": 2, "order_position": "B", "record_type": "tune", "deleted": true },
+              { "session_instance_tune_id": 4, "order_position": "D", "record_type": "break", "deleted": false }
+            ]
+          },
+          "expected": [
+            { "session_instance_tune_id": 1, "order_position": "A", "record_type": "tune", "deleted": false },
+            { "session_instance_tune_id": 3, "order_position": "C", "record_type": "tune", "deleted": false },
+            { "session_instance_tune_id": 4, "order_position": "D", "record_type": "break", "deleted": false }
+          ]
+        },
+        {
+          "name": "byte order: digits < upper < lower, and a prefix sorts first",
+          "input": {
+            "records": [
+              { "session_instance_tune_id": 1, "order_position": "aV" },
+              { "session_instance_tune_id": 2, "order_position": "a" },
+              { "session_instance_tune_id": 3, "order_position": "Z" },
+              { "session_instance_tune_id": 4, "order_position": "9" },
+              { "session_instance_tune_id": 5, "order_position": "VV" },
+              { "session_instance_tune_id": 6, "order_position": "V" }
+            ]
+          },
+          "expected": [
+            { "session_instance_tune_id": 4, "order_position": "9" },
+            { "session_instance_tune_id": 6, "order_position": "V" },
+            { "session_instance_tune_id": 5, "order_position": "VV" },
+            { "session_instance_tune_id": 3, "order_position": "Z" },
+            { "session_instance_tune_id": 2, "order_position": "a" },
+            { "session_instance_tune_id": 1, "order_position": "aV" }
+          ]
+        },
+        {
+          "name": "equal positions keep input order (stable sort)",
+          "input": {
+            "records": [
+              { "session_instance_tune_id": 9, "order_position": "V" },
+              { "session_instance_tune_id": "temp-x", "order_position": "V", "_temp": true },
+              { "session_instance_tune_id": 2, "order_position": "V" },
+              { "session_instance_tune_id": 1, "order_position": "F" }
+            ]
+          },
+          "expected": [
+            { "session_instance_tune_id": 1, "order_position": "F" },
+            { "session_instance_tune_id": 9, "order_position": "V" },
+            { "session_instance_tune_id": "temp-x", "order_position": "V", "_temp": true },
+            { "session_instance_tune_id": 2, "order_position": "V" }
+          ]
+        },
+        { "name": "empty", "input": { "records": [] }, "expected": [] }
+      ]
+    },
+
+    "segmentByBreaks": {
+      "params": ["ordered"],
+      "cases": [
+        {
+          "name": "splits on breaks; each set remembers the break that ends it; the open set has null",
+          "input": {
+            "ordered": [
+              { "session_instance_tune_id": 1, "record_type": "tune" },
+              { "session_instance_tune_id": 2, "record_type": "tune" },
+              { "session_instance_tune_id": 3, "record_type": "break" },
+              { "session_instance_tune_id": 4, "record_type": "tune" }
+            ]
+          },
+          "expected": [
+            { "tunes": [{ "session_instance_tune_id": 1, "record_type": "tune" }, { "session_instance_tune_id": 2, "record_type": "tune" }], "breakAfter": 3 },
+            { "tunes": [{ "session_instance_tune_id": 4, "record_type": "tune" }], "breakAfter": null }
+          ]
+        },
+        {
+          "name": "a leading break is ignored; a trailing break closes the last set",
+          "input": {
+            "ordered": [
+              { "session_instance_tune_id": 1, "record_type": "break" },
+              { "session_instance_tune_id": 2, "record_type": "tune" },
+              { "session_instance_tune_id": 3, "record_type": "break" }
+            ]
+          },
+          "expected": [{ "tunes": [{ "session_instance_tune_id": 2, "record_type": "tune" }], "breakAfter": 3 }]
+        },
+        {
+          "name": "consecutive breaks: only the first one closes the set",
+          "input": {
+            "ordered": [
+              { "session_instance_tune_id": 1, "record_type": "tune" },
+              { "session_instance_tune_id": 2, "record_type": "break" },
+              { "session_instance_tune_id": 3, "record_type": "break" },
+              { "session_instance_tune_id": 4, "record_type": "tune" }
+            ]
+          },
+          "expected": [
+            { "tunes": [{ "session_instance_tune_id": 1, "record_type": "tune" }], "breakAfter": 2 },
+            { "tunes": [{ "session_instance_tune_id": 4, "record_type": "tune" }], "breakAfter": null }
+          ]
+        },
+        {
+          "name": "anything that is not a break counts as a tune",
+          "input": { "ordered": [{ "session_instance_tune_id": 1 }] },
+          "expected": [{ "tunes": [{ "session_instance_tune_id": 1 }], "breakAfter": null }]
+        },
+        {
+          "name": "only breaks: no sets",
+          "input": { "ordered": [{ "session_instance_tune_id": 1, "record_type": "break" }] },
+          "expected": []
+        },
+        { "name": "empty", "input": { "ordered": [] }, "expected": [] }
+      ]
+    },
+
+    "setsOf": {
+      "params": ["segments"],
+      "cases": [
+        {
+          "name": "the tune lists of each segment",
+          "input": {
+            "segments": [
+              { "tunes": [{ "session_instance_tune_id": 1 }], "breakAfter": 2 },
+              { "tunes": [{ "session_instance_tune_id": 3 }], "breakAfter": null }
+            ]
+          },
+          "expected": [[{ "session_instance_tune_id": 1 }], [{ "session_instance_tune_id": 3 }]]
+        },
+        { "name": "empty", "input": { "segments": [] }, "expected": [] }
+      ]
+    },
+
+    "tunesOf": {
+      "params": ["ordered"],
+      "cases": [
+        {
+          "name": "drops breaks, keeps order",
+          "input": {
+            "ordered": [
+              { "session_instance_tune_id": 1, "record_type": "tune" },
+              { "session_instance_tune_id": 2, "record_type": "break" },
+              { "session_instance_tune_id": 3 }
+            ]
+          },
+          "expected": [{ "session_instance_tune_id": 1, "record_type": "tune" }, { "session_instance_tune_id": 3 }]
+        }
+      ]
+    },
+
+    "pluralType": {
+      "params": ["ty"],
+      "cases": [
+        { "name": "Reel", "input": { "ty": "Reel" }, "expected": "Reels" },
+        { "name": "lowercase reel", "input": { "ty": "reel" }, "expected": "reels" },
+        { "name": "Slip Jig", "input": { "ty": "Slip Jig" }, "expected": "Slip Jigs" },
+        { "name": "Hornpipe", "input": { "ty": "Hornpipe" }, "expected": "Hornpipes" },
+        { "name": "Barndance", "input": { "ty": "Barndance" }, "expected": "Barndances" },
+        { "name": "Strathspey", "input": { "ty": "Strathspey" }, "expected": "Strathspeys" },
+        { "name": "Three-Two", "input": { "ty": "Three-Two" }, "expected": "Three-Twos" },
+        { "name": "z takes es", "input": { "ty": "Waltz" }, "expected": "Waltzes" },
+        { "name": "ch takes es", "input": { "ty": "March" }, "expected": "Marches" },
+        { "name": "sh takes es", "input": { "ty": "Flash" }, "expected": "Flashes" },
+        { "name": "x takes es", "input": { "ty": "Box" }, "expected": "Boxes" },
+        { "name": "case-insensitive ending", "input": { "ty": "MARCH" }, "expected": "MARCHes" },
+        { "name": "already plural is not detected", "input": { "ty": "Slides" }, "expected": "Slideses", "note": "Only reachable if a tune_type were stored plural; thesession types are singular." },
+        { "name": "empty string passes through", "input": { "ty": "" }, "expected": "" },
+        { "name": "null passes through", "input": { "ty": null }, "expected": null }
+      ]
+    },
+
+    "setLabel": {
+      "params": ["setTunes"],
+      "cases": [
+        { "name": "shared type, pluralized", "input": { "setTunes": [{ "tune_type": "Reel" }, { "tune_type": "Reel" }] }, "expected": "Reels" },
+        { "name": "two types are Mixed", "input": { "setTunes": [{ "tune_type": "Reel" }, { "tune_type": "Jig" }] }, "expected": "Mixed" },
+        { "name": "case differs: Mixed", "input": { "setTunes": [{ "tune_type": "Reel" }, { "tune_type": "reel" }] }, "expected": "Mixed" },
+        { "name": "unmatched tunes do not make it Mixed", "input": { "setTunes": [{ "tune_type": null }, { "tune_type": "" }, { "tune_type": "Jig" }, {}] }, "expected": "Jigs" },
+        { "name": "no matched tune: Unknown", "input": { "setTunes": [{ "tune_type": null }] }, "expected": "Unknown" },
+        { "name": "empty set: Unknown", "input": { "setTunes": [] }, "expected": "Unknown" }
+      ]
+    },
+
+    "maxPos": {
+      "params": ["records"],
+      "cases": [
+        {
+          "name": "scans deleted and temp rows too",
+          "input": {
+            "records": [
+              { "order_position": "A" },
+              { "order_position": "Z", "deleted": true },
+              { "order_position": "M", "_temp": true }
+            ]
+          },
+          "expected": "Z"
+        },
+        { "name": "lowercase beats uppercase; missing and null are skipped", "input": { "records": [{ "order_position": null }, { "order_position": "a" }, { "order_position": "Z" }, {}] }, "expected": "a" },
+        { "name": "a longer key with the same prefix wins", "input": { "records": [{ "order_position": "z" }, { "order_position": "zV" }] }, "expected": "zV" },
+        { "name": "empty is the empty string", "input": { "records": [] }, "expected": "" }
+      ]
+    },
+
+    "cursorPos": {
+      "params": ["insertAfterId", "ordered", "allRecords"],
+      "cases": [
+        {
+          "name": "null cursor appends past the high-water mark",
+          "input": {
+            "insertAfterId": null,
+            "ordered": [{ "session_instance_tune_id": 1, "order_position": "A" }, { "session_instance_tune_id": 2, "order_position": "C" }],
+            "allRecords": [{ "session_instance_tune_id": 1, "order_position": "A" }, { "session_instance_tune_id": 2, "order_position": "C" }]
+          },
+          "expected": { "afterId": null, "beforeId": null, "position": "D" }
+        },
+        {
+          "name": "append uses ALL records, including deleted ones",
+          "input": {
+            "insertAfterId": null,
+            "ordered": [{ "session_instance_tune_id": 1, "order_position": "A" }, { "session_instance_tune_id": 2, "order_position": "C" }],
+            "allRecords": [{ "session_instance_tune_id": 1, "order_position": "A" }, { "session_instance_tune_id": 2, "order_position": "C" }, { "session_instance_tune_id": 3, "order_position": "z", "deleted": true }]
+          },
+          "expected": { "afterId": null, "beforeId": null, "position": "zV" }
+        },
+        {
+          "name": "append to an empty log starts at V",
+          "input": { "insertAfterId": null, "ordered": [], "allRecords": [] },
+          "expected": { "afterId": null, "beforeId": null, "position": "V" }
+        },
+        {
+          "name": "after a tune: between it and the next",
+          "input": {
+            "insertAfterId": 1,
+            "ordered": [{ "session_instance_tune_id": 1, "order_position": "A" }, { "session_instance_tune_id": 2, "order_position": "C" }],
+            "allRecords": [{ "session_instance_tune_id": 1, "order_position": "A" }, { "session_instance_tune_id": 2, "order_position": "C" }]
+          },
+          "expected": { "afterId": 1, "beforeId": null, "position": "B" }
+        },
+        {
+          "name": "after the last tune: append past it, anchored",
+          "input": {
+            "insertAfterId": 2,
+            "ordered": [{ "session_instance_tune_id": 1, "order_position": "A" }, { "session_instance_tune_id": 2, "order_position": "C" }],
+            "allRecords": [{ "session_instance_tune_id": 1, "order_position": "A" }, { "session_instance_tune_id": 2, "order_position": "C" }]
+          },
+          "expected": { "afterId": 2, "beforeId": null, "position": "D" }
+        },
+        {
+          "name": "before the first tune",
+          "input": {
+            "insertAfterId": { "before": 1 },
+            "ordered": [{ "session_instance_tune_id": 1, "order_position": "A" }, { "session_instance_tune_id": 2, "order_position": "C" }],
+            "allRecords": [{ "session_instance_tune_id": 1, "order_position": "A" }, { "session_instance_tune_id": 2, "order_position": "C" }]
+          },
+          "expected": { "afterId": null, "beforeId": 1, "position": "5" }
+        },
+        {
+          "name": "before a later tune: between it and its predecessor",
+          "input": {
+            "insertAfterId": { "before": 2 },
+            "ordered": [{ "session_instance_tune_id": 1, "order_position": "A" }, { "session_instance_tune_id": 2, "order_position": "C" }],
+            "allRecords": [{ "session_instance_tune_id": 1, "order_position": "A" }, { "session_instance_tune_id": 2, "order_position": "C" }]
+          },
+          "expected": { "afterId": null, "beforeId": 2, "position": "B" }
+        },
+        {
+          "name": "adjacent neighbours extend the key",
+          "input": {
+            "insertAfterId": 1,
+            "ordered": [{ "session_instance_tune_id": 1, "order_position": "V" }, { "session_instance_tune_id": 2, "order_position": "W" }],
+            "allRecords": [{ "session_instance_tune_id": 1, "order_position": "V" }, { "session_instance_tune_id": 2, "order_position": "W" }]
+          },
+          "expected": { "afterId": 1, "beforeId": null, "position": "VV" }
+        },
+        {
+          "name": "a temp id anchor works like any other",
+          "input": {
+            "insertAfterId": "temp-a",
+            "ordered": [{ "session_instance_tune_id": "temp-a", "order_position": "V", "_temp": true }, { "session_instance_tune_id": 2, "order_position": "X" }],
+            "allRecords": [{ "session_instance_tune_id": "temp-a", "order_position": "V", "_temp": true }, { "session_instance_tune_id": 2, "order_position": "X" }]
+          },
+          "expected": { "afterId": "temp-a", "beforeId": null, "position": "W" }
+        },
+        {
+          "name": "a vanished after-anchor degrades to append",
+          "input": {
+            "insertAfterId": 999,
+            "ordered": [{ "session_instance_tune_id": 1, "order_position": "A" }, { "session_instance_tune_id": 2, "order_position": "C" }],
+            "allRecords": [{ "session_instance_tune_id": 1, "order_position": "A" }, { "session_instance_tune_id": 2, "order_position": "C" }]
+          },
+          "expected": { "afterId": null, "beforeId": null, "position": "D" }
+        },
+        {
+          "name": "a vanished before-anchor degrades to append",
+          "input": {
+            "insertAfterId": { "before": 999 },
+            "ordered": [{ "session_instance_tune_id": 1, "order_position": "A" }, { "session_instance_tune_id": 2, "order_position": "C" }],
+            "allRecords": [{ "session_instance_tune_id": 1, "order_position": "A" }, { "session_instance_tune_id": 2, "order_position": "C" }]
+          },
+          "expected": { "afterId": null, "beforeId": null, "position": "D" }
+        },
+        {
+          "name": "a newSet cursor is not a position: append",
+          "input": {
+            "insertAfterId": { "newSet": 2 },
+            "ordered": [{ "session_instance_tune_id": 1, "order_position": "A" }, { "session_instance_tune_id": 2, "order_position": "C" }],
+            "allRecords": [{ "session_instance_tune_id": 1, "order_position": "A" }, { "session_instance_tune_id": 2, "order_position": "C" }]
+          },
+          "expected": { "afterId": null, "beforeId": null, "position": "D" },
+          "note": "The App handles {newSet} itself (add + set_break before the next set) and never passes it here. Pinned so a port does not invent a meaning for it."
+        }
+      ]
+    },
+
+    "remapAnchors": {
+      "params": ["payload", "tempToReal"],
+      "mapParams": ["tempToReal"],
+      "cases": [
+        {
+          "name": "rewrites temp after/before anchors",
+          "input": { "payload": { "after_record_id": "temp-a", "before_record_id": "temp-b", "tune_id": 5 }, "tempToReal": [["temp-a", 100], ["temp-b", 200]] },
+          "expected": { "payload": { "after_record_id": 100, "before_record_id": 200, "tune_id": 5 }, "skip": false }
+        },
+        {
+          "name": "an unresolved anchor falls back to null (append)",
+          "input": { "payload": { "after_record_id": "temp-unknown" }, "tempToReal": [["temp-a", 100]] },
+          "expected": { "payload": { "after_record_id": null }, "skip": false }
+        },
+        {
+          "name": "real anchors and null anchors are untouched",
+          "input": { "payload": { "after_record_id": 55, "before_record_id": null }, "tempToReal": [["temp-a", 100]] },
+          "expected": { "payload": { "after_record_id": 55, "before_record_id": null }, "skip": false }
+        },
+        {
+          "name": "absent anchor keys stay absent",
+          "input": { "payload": { "action": "insert" }, "tempToReal": [] },
+          "expected": { "payload": { "action": "insert" }, "skip": false }
+        },
+        {
+          "name": "only the 'temp-' prefix marks a temp id",
+          "input": { "payload": { "after_record_id": "tempo" }, "tempToReal": [["tempo", 1]] },
+          "expected": { "payload": { "after_record_id": "tempo" }, "skip": false }
+        },
+        {
+          "name": "a temp record_id target resolves",
+          "input": { "payload": { "record_id": "temp-a", "confidence": 100 }, "tempToReal": [["temp-a", 100]] },
+          "expected": { "payload": { "record_id": 100, "confidence": 100 }, "skip": false }
+        },
+        {
+          "name": "a temp record_id that resolves to 0 is still resolved",
+          "input": { "payload": { "record_id": "temp-a" }, "tempToReal": [["temp-a", 0]] },
+          "expected": { "payload": { "record_id": 0 }, "skip": false }
+        },
+        {
+          "name": "an unresolved temp record_id skips the op (anchors still remapped)",
+          "input": { "payload": { "record_id": "temp-orphan", "after_record_id": "temp-a" }, "tempToReal": [["temp-a", 100]] },
+          "expected": { "payload": { "record_id": "temp-orphan", "after_record_id": 100 }, "skip": true }
+        },
+        {
+          "name": "a null record_id is not a skip",
+          "input": { "payload": { "record_id": null }, "tempToReal": [] },
+          "expected": { "payload": { "record_id": null }, "skip": false }
+        },
+        {
+          "name": "record_ids arrays are not remapped",
+          "input": { "payload": { "record_ids": ["temp-a", 5] }, "tempToReal": [["temp-a", 100]] },
+          "expected": { "payload": { "record_ids": ["temp-a", 5] }, "skip": false },
+          "note": "Callers keep temp ids out of record_ids (bulkDelete filters _temp rows), so this is unreachable today. A port must keep that invariant or remap here."
+        }
+      ]
+    },
+
+    "stripThe": {
+      "params": ["s"],
+      "cases": [
+        { "name": "drops a leading lowercase the", "input": { "s": "the silver spear" }, "expected": "silver spear" },
+        { "name": "any whitespace run after it", "input": { "s": "the  kesh" }, "expected": "kesh" },
+        { "name": "case-sensitive: The is kept", "input": { "s": "The Kesh" }, "expected": "The Kesh" },
+        { "name": "whole word only", "input": { "s": "theatre" }, "expected": "theatre" },
+        { "name": "bare the is kept", "input": { "s": "the" }, "expected": "the" },
+        { "name": "no the", "input": { "s": "silver spear" }, "expected": "silver spear" }
+      ]
+    },
+
+    "normName": {
+      "params": ["s"],
+      "cases": [
+        { "name": "folds U+2019, trims, lowercases", "input": { "s": "  Cooley’s  " }, "expected": "cooley's" },
+        { "name": "folds U+02BC", "input": { "s": "Cooleyʼs" }, "expected": "cooley's" },
+        { "name": "folds U+2032 prime", "input": { "s": "Cooley′s" }, "expected": "cooley's" },
+        { "name": "folds smart doubles", "input": { "s": "“X” «Y»" }, "expected": "\"x\" \"y\"" },
+        { "name": "strips diacritics", "input": { "s": "Sligo Maíd" }, "expected": "sligo maid" },
+        { "name": "strips diacritics from capitals", "input": { "s": "ÉIRINN" }, "expected": "eirinn" },
+        { "name": "keeps the article", "input": { "s": "The Silver Spear" }, "expected": "the silver spear" },
+        { "name": "trims non-breaking spaces", "input": { "s": " The Kesh " }, "expected": "the kesh" },
+        { "name": "NFD, not NFKD: a ligature survives", "input": { "s": "ﬁddle" }, "expected": "ﬁddle" },
+        { "name": "eszett is not expanded", "input": { "s": "Straße" }, "expected": "straße" },
+        { "name": "null", "input": { "s": null }, "expected": "" },
+        { "name": "empty", "input": { "s": "" }, "expected": "" }
+      ]
+    },
+
+    "openSetMergeTarget": {
+      "params": ["payload", "ordered"],
+      "cases": [
+        {
+          "name": "linked: same tune_id in the open set",
+          "input": {
+            "payload": { "tune_id": 9 },
+            "ordered": [
+              { "session_instance_tune_id": 1, "record_type": "tune", "tune_id": 7 },
+              { "session_instance_tune_id": 2, "record_type": "tune", "tune_id": 9 }
+            ]
+          },
+          "expected": { "session_instance_tune_id": 2, "record_type": "tune", "tune_id": 9 }
+        },
+        {
+          "name": "linked: the first match wins",
+          "input": {
+            "payload": { "tune_id": 5 },
+            "ordered": [
+              { "session_instance_tune_id": 1, "record_type": "tune", "tune_id": 5, "name": "Kesh" },
+              { "session_instance_tune_id": 2, "record_type": "tune", "tune_id": 5 }
+            ]
+          },
+          "expected": { "session_instance_tune_id": 1, "record_type": "tune", "tune_id": 5, "name": "Kesh" }
+        },
+        {
+          "name": "unlinked: identical normalized name on an unlinked row",
+          "input": {
+            "payload": { "name": "cooley's" },
+            "ordered": [{ "session_instance_tune_id": 1, "record_type": "tune", "tune_id": null, "name": "Cooley’s" }]
+          },
+          "expected": { "session_instance_tune_id": 1, "record_type": "tune", "tune_id": null, "name": "Cooley’s" }
+        },
+        {
+          "name": "unlinked add never merges into a LINKED row, even by name",
+          "input": {
+            "payload": { "name": "kesh" },
+            "ordered": [{ "session_instance_tune_id": 1, "record_type": "tune", "tune_id": 5, "name": "Kesh" }]
+          },
+          "expected": null
+        },
+        {
+          "name": "unlinked: names must match exactly after normName (the article counts)",
+          "input": {
+            "payload": { "name": "the kesh" },
+            "ordered": [{ "session_instance_tune_id": 1, "record_type": "tune", "tune_id": null, "name": "Kesh" }]
+          },
+          "expected": null
+        },
+        {
+          "name": "unlinked with an empty name matches nothing",
+          "input": {
+            "payload": { "tune_id": null, "name": "" },
+            "ordered": [{ "session_instance_tune_id": 1, "record_type": "tune", "tune_id": null, "name": "" }]
+          },
+          "expected": null
+        },
+        {
+          "name": "a duplicate in a CLOSED set does not count",
+          "input": {
+            "payload": { "tune_id": 7 },
+            "ordered": [
+              { "session_instance_tune_id": 1, "record_type": "tune", "tune_id": 7 },
+              { "session_instance_tune_id": 2, "record_type": "break" },
+              { "session_instance_tune_id": 3, "record_type": "tune", "tune_id": 9 }
+            ]
+          },
+          "expected": null
+        },
+        {
+          "name": "a trailing break leaves an empty open set",
+          "input": {
+            "payload": { "tune_id": 7 },
+            "ordered": [
+              { "session_instance_tune_id": 1, "record_type": "tune", "tune_id": 7 },
+              { "session_instance_tune_id": 2, "record_type": "break" }
+            ]
+          },
+          "expected": null
+        },
+        {
+          "name": "only the LAST break opens the set",
+          "input": {
+            "payload": { "tune_id": 7 },
+            "ordered": [
+              { "session_instance_tune_id": 1, "record_type": "break" },
+              { "session_instance_tune_id": 2, "record_type": "tune", "tune_id": 7 },
+              { "session_instance_tune_id": 3, "record_type": "break" },
+              { "session_instance_tune_id": 4, "record_type": "tune", "tune_id": 7 }
+            ]
+          },
+          "expected": { "session_instance_tune_id": 4, "record_type": "tune", "tune_id": 7 }
+        },
+        {
+          "name": "temp and deleted rows are skipped",
+          "input": {
+            "payload": { "tune_id": 7 },
+            "ordered": [
+              { "session_instance_tune_id": "temp-a", "record_type": "tune", "tune_id": 7, "_temp": true },
+              { "session_instance_tune_id": 2, "record_type": "tune", "tune_id": 7, "deleted": true }
+            ]
+          },
+          "expected": null
+        },
+        {
+          "name": "a row without record_type 'tune' is skipped",
+          "input": {
+            "payload": { "tune_id": 7 },
+            "ordered": [{ "session_instance_tune_id": 1, "tune_id": 7 }]
+          },
+          "expected": null
+        },
+        { "name": "empty log", "input": { "payload": { "tune_id": 7 }, "ordered": [] }, "expected": null }
+      ]
+    },
+
+    "mergeStable": {
+      "params": ["localList", "serverList"],
+      "cases": [
+        {
+          "name": "local rows stay pinned and are enriched; server-only rows append",
+          "input": {
+            "localList": [{ "tune_id": 1, "name": "A" }, { "tune_id": 2, "name": "B" }],
+            "serverList": [{ "tune_id": 2, "name": "B", "in_session_tune": true, "abc": "xyz" }, { "tune_id": 3, "name": "C" }]
+          },
+          "expected": [
+            { "tune_id": 1, "name": "A" },
+            { "tune_id": 2, "name": "B", "in_session_tune": true, "abc": "xyz" },
+            { "tune_id": 3, "name": "C" }
+          ]
+        },
+        {
+          "name": "enrichment copies only in_session_tune and abc, not the server's name",
+          "input": {
+            "localList": [{ "tune_id": 1, "name": "Local Name" }],
+            "serverList": [{ "tune_id": 1, "name": "Server Name", "tune_type": "Reel", "in_session_tune": false }]
+          },
+          "expected": [{ "tune_id": 1, "name": "Local Name", "in_session_tune": false }]
+        },
+        {
+          "name": "a null server abc keeps the local abc",
+          "input": {
+            "localList": [{ "tune_id": 1, "name": "A", "abc": "loc" }],
+            "serverList": [{ "tune_id": 1, "name": "A", "abc": null, "in_session_tune": false }]
+          },
+          "expected": [{ "tune_id": 1, "name": "A", "abc": "loc", "in_session_tune": false }]
+        },
+        {
+          "name": "a server row with no in_session_tune CLEARS the local one",
+          "input": {
+            "localList": [{ "tune_id": 1, "name": "A", "in_session_tune": true, "abc": "loc" }],
+            "serverList": [{ "tune_id": 1, "name": "A" }]
+          },
+          "expected": [{ "tune_id": 1, "name": "A", "abc": "loc" }],
+          "note": "Looks unintended: the spread sets in_session_tune to undefined. Harmless while the server always sends the field."
+        },
+        {
+          "name": "server rows with a null tune_id are dropped",
+          "input": {
+            "localList": [{ "tune_id": null, "name": "unlinked" }],
+            "serverList": [{ "tune_id": null, "name": "v" }]
+          },
+          "expected": [{ "tune_id": null, "name": "unlinked" }]
+        },
+        {
+          "name": "duplicate server-only rows are both appended",
+          "input": {
+            "localList": [],
+            "serverList": [{ "tune_id": 3 }, { "tune_id": 3, "name": "dup" }]
+          },
+          "expected": [{ "tune_id": 3 }, { "tune_id": 3, "name": "dup" }],
+          "note": "Not deduplicated. The server does not send duplicates, so this is unreachable today."
+        },
+        {
+          "name": "duplicate server rows: the LAST one enriches a local row",
+          "input": {
+            "localList": [{ "tune_id": 3, "name": "L" }],
+            "serverList": [{ "tune_id": 3, "in_session_tune": true }, { "tune_id": 3, "in_session_tune": false }]
+          },
+          "expected": [{ "tune_id": 3, "name": "L", "in_session_tune": false }]
+        },
+        {
+          "name": "never more than 8 rows; local rows first",
+          "input": {
+            "localList": [{ "tune_id": 1 }, { "tune_id": 2 }, { "tune_id": 3 }, { "tune_id": 4 }, { "tune_id": 5 }, { "tune_id": 6 }],
+            "serverList": [{ "tune_id": 100 }, { "tune_id": 101 }, { "tune_id": 102 }, { "tune_id": 103 }]
+          },
+          "expected": [{ "tune_id": 1 }, { "tune_id": 2 }, { "tune_id": 3 }, { "tune_id": 4 }, { "tune_id": 5 }, { "tune_id": 6 }, { "tune_id": 100 }, { "tune_id": 101 }]
+        },
+        {
+          "name": "more than 8 local rows are cut too",
+          "input": {
+            "localList": [{ "tune_id": 1 }, { "tune_id": 2 }, { "tune_id": 3 }, { "tune_id": 4 }, { "tune_id": 5 }, { "tune_id": 6 }, { "tune_id": 7 }, { "tune_id": 8 }, { "tune_id": 9 }],
+            "serverList": []
+          },
+          "expected": [{ "tune_id": 1 }, { "tune_id": 2 }, { "tune_id": 3 }, { "tune_id": 4 }, { "tune_id": 5 }, { "tune_id": 6 }, { "tune_id": 7 }, { "tune_id": 8 }]
+        },
+        { "name": "both empty", "input": { "localList": [], "serverList": [] }, "expected": [] }
+      ]
+    },
+
+    "parseThesessionId": {
+      "params": ["raw"],
+      "cases": [
+        { "name": "tune URL", "input": { "raw": "https://thesession.org/tunes/182" }, "expected": 182 },
+        { "name": "bare id", "input": { "raw": "182" }, "expected": 182 },
+        { "name": "a number", "input": { "raw": 182 }, "expected": 182 },
+        { "name": "URL with a fragment, padded", "input": { "raw": "  https://thesession.org/tunes/7#setting42 " }, "expected": 7 },
+        { "name": "domain without scheme", "input": { "raw": "thesession.org/tunes/5?setting=9" }, "expected": 5 },
+        { "name": "leading zeros are dropped", "input": { "raw": "007" }, "expected": 7 },
+        { "name": "domain match is case-sensitive", "input": { "raw": "https://THESESSION.org/tunes/5" }, "expected": null },
+        { "name": "a session URL is not a tune", "input": { "raw": "https://thesession.org/sessions/9" }, "expected": null },
+        { "name": "non-numeric tune path", "input": { "raw": "thesession.org/tunes/abc" }, "expected": null },
+        { "name": "a decimal is not an id", "input": { "raw": "1.5" }, "expected": null },
+        { "name": "a name", "input": { "raw": "Cooley’s" }, "expected": null },
+        { "name": "empty", "input": { "raw": "" }, "expected": null },
+        { "name": "null", "input": { "raw": null }, "expected": null }
+      ]
+    },
+
+    "parseThesessionSettingId": {
+      "params": ["raw"],
+      "cases": [
+        { "name": "#setting fragment", "input": { "raw": "https://thesession.org/tunes/1716#setting15143" }, "expected": 15143 },
+        { "name": "?setting= query", "input": { "raw": "https://thesession.org/tunes/1716?setting=15143" }, "expected": 15143 },
+        { "name": "both forms", "input": { "raw": "https://thesession.org/tunes/1716?setting=15143#setting15143" }, "expected": 15143 },
+        { "name": "the query wins over the fragment", "input": { "raw": "https://thesession.org/tunes/1?setting=5#setting6" }, "expected": 5 },
+        { "name": "&setting= also counts", "input": { "raw": "https://thesession.org/tunes/1716&setting=3" }, "expected": 3 },
+        { "name": "setting 0", "input": { "raw": "thesession.org/tunes/1#setting0" }, "expected": 0 },
+        { "name": "no setting", "input": { "raw": "https://thesession.org/tunes/1716" }, "expected": null },
+        { "name": "needs the domain", "input": { "raw": "?setting=12" }, "expected": null },
+        { "name": "a bare id carries no setting", "input": { "raw": "1716" }, "expected": null },
+        { "name": "null", "input": { "raw": null }, "expected": null }
+      ]
+    },
+
+    "computeCursorSlots": {
+      "params": ["segments", "endIsOpen", "hasOrdered"],
+      "cases": [
+        {
+          "name": "start seams, after-tune seams and between-set seams; the open set's last seam IS the end",
+          "input": {
+            "segments": [
+              { "tunes": [{ "session_instance_tune_id": 1 }, { "session_instance_tune_id": 2 }], "breakAfter": 100 },
+              { "tunes": [{ "session_instance_tune_id": 3 }], "breakAfter": 101 },
+              { "tunes": [{ "session_instance_tune_id": 4 }], "breakAfter": null }
+            ],
+            "endIsOpen": true,
+            "hasOrdered": true
+          },
+          "expected": [{ "before": 1 }, 1, 2, { "newSet": 3 }, { "before": 3 }, 3, { "newSet": 4 }, { "before": 4 }, null]
+        },
+        {
+          "name": "log ends on a break: one trailing closed-end null",
+          "input": {
+            "segments": [
+              { "tunes": [{ "session_instance_tune_id": 1 }, { "session_instance_tune_id": 2 }], "breakAfter": 100 },
+              { "tunes": [{ "session_instance_tune_id": 3 }], "breakAfter": 101 }
+            ],
+            "endIsOpen": false,
+            "hasOrdered": true
+          },
+          "expected": [{ "before": 1 }, 1, 2, { "newSet": 3 }, { "before": 3 }, 3, null]
+        },
+        {
+          "name": "temp rows contribute no after-seam; a temp last tune leaves no end slot",
+          "input": {
+            "segments": [{ "tunes": [{ "session_instance_tune_id": 1 }, { "session_instance_tune_id": "temp-2", "_temp": true }], "breakAfter": null }],
+            "endIsOpen": true,
+            "hasOrdered": true
+          },
+          "expected": [{ "before": 1 }, 1]
+        },
+        {
+          "name": "a set whose FIRST tune is temp still gets a start seam keyed on the temp id",
+          "input": {
+            "segments": [{ "tunes": [{ "session_instance_tune_id": "temp-1", "_temp": true }, { "session_instance_tune_id": 2 }], "breakAfter": 9 }],
+            "endIsOpen": false,
+            "hasOrdered": true
+          },
+          "expected": [{ "before": "temp-1" }, 2, null],
+          "note": "The start seam ignores _temp, unlike the after-tune seams. Pinned as it stands."
+        },
+        {
+          "name": "no between-set seam when the segment has no closing break",
+          "input": {
+            "segments": [
+              { "tunes": [{ "session_instance_tune_id": 1 }], "breakAfter": null },
+              { "tunes": [{ "session_instance_tune_id": 2 }], "breakAfter": null }
+            ],
+            "endIsOpen": true,
+            "hasOrdered": true
+          },
+          "expected": [{ "before": 1 }, 1, { "before": 2 }, null]
+        },
+        {
+          "name": "only breaks in the log: just the closed-end seam",
+          "input": { "segments": [], "endIsOpen": false, "hasOrdered": true },
+          "expected": [null]
+        },
+        { "name": "empty log", "input": { "segments": [], "endIsOpen": false, "hasOrdered": false }, "expected": [] }
+      ]
+    },
+
+    "seamKeyFor": {
+      "params": ["s"],
+      "cases": [
+        { "name": "null is the end", "input": { "s": null }, "expected": "end" },
+        { "name": "absent is the end", "input": {}, "expected": "end" },
+        { "name": "a tune id", "input": { "s": 42 }, "expected": "after:42" },
+        { "name": "id 0 is an id, not the end", "input": { "s": 0 }, "expected": "after:0" },
+        { "name": "a temp id", "input": { "s": "temp-x" }, "expected": "after:temp-x" },
+        { "name": "start seam", "input": { "s": { "before": 7 } }, "expected": "start:7" },
+        { "name": "between-set seam", "input": { "s": { "newSet": 9 } }, "expected": "inter:9" },
+        { "name": "newSet is checked before before", "input": { "s": { "newSet": 9, "before": 7 } }, "expected": "inter:9" }
+      ]
+    },
+
+    "seamActionFor": {
+      "params": ["insertAfterId", "segments"],
+      "cases": [
+        {
+          "name": "split at an intra-set after-tune seam",
+          "input": {
+            "insertAfterId": 1,
+            "segments": [
+              { "tunes": [{ "session_instance_tune_id": 1 }, { "session_instance_tune_id": 2 }], "breakAfter": 100 },
+              { "tunes": [{ "session_instance_tune_id": 3 }], "breakAfter": 101 },
+              { "tunes": [{ "session_instance_tune_id": 4 }], "breakAfter": null }
+            ]
+          },
+          "expected": { "type": "split", "tuneId": 1 }
+        },
+        {
+          "name": "no split after a set's last tune",
+          "input": {
+            "insertAfterId": 2,
+            "segments": [
+              { "tunes": [{ "session_instance_tune_id": 1 }, { "session_instance_tune_id": 2 }], "breakAfter": 100 },
+              { "tunes": [{ "session_instance_tune_id": 3 }], "breakAfter": 101 },
+              { "tunes": [{ "session_instance_tune_id": 4 }], "breakAfter": null }
+            ]
+          },
+          "expected": null
+        },
+        {
+          "name": "no split after a set's only tune",
+          "input": {
+            "insertAfterId": 3,
+            "segments": [
+              { "tunes": [{ "session_instance_tune_id": 1 }, { "session_instance_tune_id": 2 }], "breakAfter": 100 },
+              { "tunes": [{ "session_instance_tune_id": 3 }], "breakAfter": 101 },
+              { "tunes": [{ "session_instance_tune_id": 4 }], "breakAfter": null }
+            ]
+          },
+          "expected": null
+        },
+        {
+          "name": "join on the break before a newSet seam",
+          "input": {
+            "insertAfterId": { "newSet": 3 },
+            "segments": [
+              { "tunes": [{ "session_instance_tune_id": 1 }, { "session_instance_tune_id": 2 }], "breakAfter": 100 },
+              { "tunes": [{ "session_instance_tune_id": 3 }], "breakAfter": 101 },
+              { "tunes": [{ "session_instance_tune_id": 4 }], "breakAfter": null }
+            ]
+          },
+          "expected": { "type": "join", "breakId": 100 }
+        },
+        {
+          "name": "join into the open set",
+          "input": {
+            "insertAfterId": { "newSet": 4 },
+            "segments": [
+              { "tunes": [{ "session_instance_tune_id": 1 }, { "session_instance_tune_id": 2 }], "breakAfter": 100 },
+              { "tunes": [{ "session_instance_tune_id": 3 }], "breakAfter": 101 },
+              { "tunes": [{ "session_instance_tune_id": 4 }], "breakAfter": null }
+            ]
+          },
+          "expected": { "type": "join", "breakId": 101 }
+        },
+        {
+          "name": "newSet before the FIRST set has nothing to join",
+          "input": {
+            "insertAfterId": { "newSet": 1 },
+            "segments": [
+              { "tunes": [{ "session_instance_tune_id": 1 }], "breakAfter": 100 },
+              { "tunes": [{ "session_instance_tune_id": 3 }], "breakAfter": null }
+            ]
+          },
+          "expected": null
+        },
+        {
+          "name": "newSet with no break between the sets: no join",
+          "input": {
+            "insertAfterId": { "newSet": 3 },
+            "segments": [
+              { "tunes": [{ "session_instance_tune_id": 1 }], "breakAfter": null },
+              { "tunes": [{ "session_instance_tune_id": 3 }], "breakAfter": null }
+            ]
+          },
+          "expected": null
+        },
+        {
+          "name": "start seams have no action",
+          "input": {
+            "insertAfterId": { "before": 1 },
+            "segments": [{ "tunes": [{ "session_instance_tune_id": 1 }, { "session_instance_tune_id": 2 }], "breakAfter": null }]
+          },
+          "expected": null
+        },
+        {
+          "name": "the end has no action",
+          "input": {
+            "insertAfterId": null,
+            "segments": [{ "tunes": [{ "session_instance_tune_id": 1 }, { "session_instance_tune_id": 2 }], "breakAfter": null }]
+          },
+          "expected": null
+        },
+        {
+          "name": "a temp (string) id never splits",
+          "input": {
+            "insertAfterId": "temp-1",
+            "segments": [{ "tunes": [{ "session_instance_tune_id": "temp-1", "_temp": true }, { "session_instance_tune_id": 2 }], "breakAfter": null }]
+          },
+          "expected": null
+        },
+        {
+          "name": "an id not in any set",
+          "input": {
+            "insertAfterId": 99,
+            "segments": [{ "tunes": [{ "session_instance_tune_id": 1 }, { "session_instance_tune_id": 2 }], "breakAfter": null }]
+          },
+          "expected": null
+        }
+      ]
+    },
+
+    "rememberInHistory": {
+      "params": ["hist", "q"],
+      "cases": [
+        { "name": "appends a trimmed query as newest", "input": { "hist": ["reel"], "q": "  jig  " }, "expected": ["reel", "jig"] },
+        { "name": "re-use moves an entry to newest", "input": { "hist": ["reel", "jig", "polka"], "q": "jig" }, "expected": ["reel", "polka", "jig"] },
+        { "name": "already newest: unchanged", "input": { "hist": ["reel", "jig"], "q": "jig" }, "expected": ["reel", "jig"] },
+        { "name": "matching is case-sensitive", "input": { "hist": ["Reel"], "q": "reel" }, "expected": ["Reel", "reel"] },
+        { "name": "blank is ignored", "input": { "hist": ["reel"], "q": "   " }, "expected": ["reel"] },
+        { "name": "empty is ignored", "input": { "hist": ["reel"], "q": "" }, "expected": ["reel"] },
+        { "name": "null is ignored", "input": { "hist": ["reel"], "q": null }, "expected": ["reel"] },
+        { "name": "into an empty history", "input": { "hist": [], "q": "reel" }, "expected": ["reel"] }
+      ]
+    },
+
+    "historyStep": {
+      "params": ["hist", "pos", "dir"],
+      "cases": [
+        { "name": "Up from the draft lands on the newest", "input": { "hist": ["reel", "jig", "polka"], "pos": null, "dir": -1 }, "expected": { "pos": 2, "value": "polka" } },
+        { "name": "Up walks older", "input": { "hist": ["reel", "jig", "polka"], "pos": 2, "dir": -1 }, "expected": { "pos": 1, "value": "jig" } },
+        { "name": "Up clamps at the oldest", "input": { "hist": ["reel", "jig", "polka"], "pos": 0, "dir": -1 }, "expected": { "pos": 0, "value": "reel" } },
+        { "name": "Down walks newer", "input": { "hist": ["reel", "jig", "polka"], "pos": 0, "dir": 1 }, "expected": { "pos": 1, "value": "jig" } },
+        { "name": "Down past the newest returns to an empty draft", "input": { "hist": ["reel", "jig", "polka"], "pos": 2, "dir": 1 }, "expected": { "pos": null, "value": "" } },
+        { "name": "Down from the draft is not possible", "input": { "hist": ["reel", "jig", "polka"], "pos": null, "dir": 1 }, "expected": null },
+        { "name": "only the sign of dir matters", "input": { "hist": ["reel", "jig", "polka"], "pos": null, "dir": -5 }, "expected": { "pos": 2, "value": "polka" } },
+        { "name": "dir 0 behaves as Down (from a position)", "input": { "hist": ["reel", "jig"], "pos": 0, "dir": 0 }, "expected": { "pos": 1, "value": "jig" } },
+        { "name": "dir 0 behaves as Down (from the draft)", "input": { "hist": ["reel", "jig"], "pos": null, "dir": 0 }, "expected": null },
+        { "name": "empty history never steps (Up)", "input": { "hist": [], "pos": null, "dir": -1 }, "expected": null },
+        { "name": "empty history never steps (Down)", "input": { "hist": [], "pos": null, "dir": 1 }, "expected": null }
+      ]
+    }
+  }
+}

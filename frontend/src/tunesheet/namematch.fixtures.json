@@ -22,8 +22,161 @@
     "tunes. The same name legitimately belongs to several tunes (\"O'Keefe's\"), so a",
     "cross-tune identical pair is not a failure — 'same name' is the right answer",
     "there. In the product this never arises anyway: the drawer only ever compares",
-    "names belonging to one tune_id."
+    "names belonging to one tune_id.",
+    "",
+    "`functions` and `constants` (spec 052 §B5) pin each export exactly, in the shape",
+    "every *.fixtures.json uses; tests/fixtures.test.js runs them, and the Swift package",
+    "runs the same file. The calibration sets above are scored separately, by bar, in",
+    "tests/namematch.test.js. What a port must match exactly:",
+    "  - Normalization order: lowercase (JS toLowerCase); NFD then delete U+0300-U+036F;",
+    "    delete apostrophes ' U+2019 U+02BC ` U+00B4; every run of non-[a-z0-9] becomes",
+    "    one space; trim; drop a leading 'the ' and a trailing ' the'; peel trailing type",
+    "    and noise words in list order until none peels (never down to nothing); then per",
+    "    token: drop a final 's' and turn a final -ey/-ie/-y into 'i' (tokens longer than",
+    "    2 only), then the SUBSTITUTIONS in order.",
+    "  - normalizeName sorts tokens with JS default sort (UTF-16 code-unit order; tokens",
+    "    are ASCII by then, so byte order agrees). parentheticals sorts the same way.",
+    "  - diceCoefficient counts bigrams of UTF-16 code units, with multiplicity, and is",
+    "    compared as an IEEE double (0.7951807228915663 is the exact expected value,",
+    "    not a rounded one). Identical strings are 1 even when shorter than 2.",
+    "  - digitRuns parses each run with parseInt, so leading zeros drop ('007' -> '7').",
+    "  - sameName compares trimmed raw strings case-SENSITIVELY for the identity shortcut,",
+    "    and falls back to a case-insensitive raw compare when either name normalizes to",
+    "    nothing ('!!!')."
   ],
+
+  "constants": {
+    "DICE_THRESHOLD": 0.8
+  },
+
+  "functions": {
+    "digitRuns": {
+      "params": ["name"],
+      "cases": [
+        { "name": "one number", "input": { "name": "Paddy Fahey's No. 3" }, "expected": ["3"] },
+        { "name": "hash number", "input": { "name": "Brosna #2, The" }, "expected": ["2"] },
+        { "name": "none", "input": { "name": "The Kesh" }, "expected": [] },
+        { "name": "leading zeros drop; order kept", "input": { "name": "No. 007 and 12" }, "expected": ["7", "12"] },
+        { "name": "a decimal is two runs", "input": { "name": "1.5" }, "expected": ["1", "5"] },
+        { "name": "empty", "input": { "name": "" }, "expected": [] },
+        { "name": "null", "input": { "name": null }, "expected": [] }
+      ]
+    },
+
+    "parentheticals": {
+      "params": ["name"],
+      "cases": [
+        { "name": "one aside, punctuation stripped, lowercased", "input": { "name": "The Silver Spear (Kevin's)" }, "expected": ["kevins"] },
+        { "name": "square brackets count; result is sorted", "input": { "name": "The Kesh (slow) [B]" }, "expected": ["b", "slow"] },
+        { "name": "braces count", "input": { "name": "{x} (y)" }, "expected": ["x", "y"] },
+        { "name": "an empty aside is dropped", "input": { "name": "Tune ()" }, "expected": [] },
+        { "name": "inner punctuation is removed", "input": { "name": "Tune (A-B)" }, "expected": ["ab"] },
+        { "name": "an unclosed aside is ignored", "input": { "name": "(a)(b" }, "expected": ["a"] },
+        { "name": "unclosed only", "input": { "name": "Tune (unclosed" }, "expected": [] },
+        { "name": "null", "input": { "name": null }, "expected": [] }
+      ]
+    },
+
+    "normalizeName": {
+      "params": ["name"],
+      "cases": [
+        { "name": "leading article", "input": { "name": "The Silver Spear" }, "expected": "silverspear" },
+        { "name": "no article", "input": { "name": "Silver Spear" }, "expected": "silverspear" },
+        { "name": "trailing type word and possessive", "input": { "name": "Cooley's Reel" }, "expected": "cooli" },
+        { "name": "trailing ', The' and a doubled consonant", "input": { "name": "Butterfly, The" }, "expected": "buterfli" },
+        { "name": "word order does not matter", "input": { "name": "Maggie Drowsy" }, "expected": "drowsimagi" },
+        { "name": "stacked trailing noise and type", "input": { "name": "Paddy Fahey's Favourite Reel" }, "expected": "fahipadi" },
+        { "name": "multi-word type peels first", "input": { "name": "Slip Jig" }, "expected": "slip" },
+        { "name": "a bare type word is never peeled to nothing", "input": { "name": "Reel" }, "expected": "reel" },
+        { "name": "a bare article is kept", "input": { "name": "The" }, "expected": "the" },
+        { "name": "article then type", "input": { "name": "The Hornpipe" }, "expected": "hornpipe" },
+        { "name": "spelling table and smart apostrophe", "input": { "name": "The Connaught Man’s Rambles" }, "expected": "conachtmanramble" },
+        { "name": "diacritics fold", "input": { "name": "Laridé" }, "expected": "laride" },
+        { "name": "sorted tokens (Irish title)", "input": { "name": "Is Ar Éirinn Ní Neosfainn Cé Hí" }, "expected": "arceeirinhiisneosfainni" },
+        { "name": "-our- becomes -or-", "input": { "name": "The Humours Of Ballyloughlin" }, "expected": "balyloughlinhumorof" },
+        { "name": "doubled vowels are not collapsed", "input": { "name": "Mrs. McLeod Of Raasay" }, "expected": "mcleodmrofraasai" },
+        { "name": "plural", "input": { "name": "Kerrigans" }, "expected": "kerigan" },
+        { "name": "empty", "input": { "name": "" }, "expected": "" },
+        { "name": "null", "input": { "name": null }, "expected": "" }
+      ]
+    },
+
+    "normalizeNameOrdered": {
+      "params": ["name"],
+      "cases": [
+        { "name": "word order is kept", "input": { "name": "Maggie Drowsy" }, "expected": "magidrowsi" },
+        { "name": "the other order", "input": { "name": "Drowsy Maggie" }, "expected": "drowsimagi" },
+        { "name": "a compound split collapses", "input": { "name": "Rolling In The Rye Grass" }, "expected": "rolingintheryegras" },
+        { "name": "stacked trailing noise and type", "input": { "name": "Paddy Fahey's Favourite Reel" }, "expected": "padifahi" },
+        { "name": "Irish title", "input": { "name": "Is Ar Éirinn Ní Neosfainn Cé Hí" }, "expected": "isareirinnineosfaincehi" },
+        { "name": "null", "input": { "name": null }, "expected": "" }
+      ]
+    },
+
+    "diceCoefficient": {
+      "params": ["a", "b"],
+      "cases": [
+        { "name": "identical", "input": { "a": "abcd", "b": "abcd" }, "expected": 1 },
+        { "name": "disjoint", "input": { "a": "abcd", "b": "wxyz" }, "expected": 0 },
+        { "name": "identical empty strings are 1", "input": { "a": "", "b": "" }, "expected": 1 },
+        { "name": "a string shorter than 2 is 0", "input": { "a": "a", "b": "ab" }, "expected": 0 },
+        { "name": "bigrams are ordered", "input": { "a": "ab", "b": "ba" }, "expected": 0 },
+        { "name": "bigram multiplicity counts", "input": { "a": "aaaa", "b": "aaa" }, "expected": 0.8 },
+        { "name": "night / nacht", "input": { "a": "night", "b": "nacht" }, "expected": 0.25 },
+        { "name": "numbered variants score above the threshold", "input": { "a": "2fahinopadi", "b": "3fahinopadi" }, "expected": 0.9 },
+        {
+          "name": "mirror-image titles, just under the threshold",
+          "input": { "a": "abretoncapefidlershetlandsymphonithetowelcome", "b": "bretoncapefidlerisleshetlandthetowelcome" },
+          "expected": 0.7951807228915663
+        }
+      ]
+    },
+
+    "sameName": {
+      "params": ["a", "b"],
+      "cases": [
+        { "name": "leading article", "input": { "a": "The Silver Spear", "b": "Silver Spear" }, "expected": true },
+        { "name": "identical", "input": { "a": "O'Keefe's", "b": "O'Keefe's" }, "expected": true },
+        { "name": "identical after trim", "input": { "a": "  The Kesh ", "b": "The Kesh" }, "expected": true },
+        { "name": "case only", "input": { "a": "Reel", "b": "reel" }, "expected": true },
+        { "name": "empty is never the same", "input": { "a": "", "b": "The Kesh" }, "expected": false },
+        { "name": "null and absent", "input": { "a": null }, "expected": false },
+        { "name": "normalizes to nothing: raw case-insensitive compare", "input": { "a": "!!!", "b": "???" }, "expected": false },
+        { "name": "normalizes to nothing, identical", "input": { "a": "!!!", "b": "!!!" }, "expected": true },
+        { "name": "digit guard beats the prefix rule", "input": { "a": "Paddy Fahey's", "b": "Paddy Fahey's No. 3" }, "expected": false },
+        { "name": "different name", "input": { "a": "The Kesh", "b": "The Castle" }, "expected": false },
+        { "name": "parenthetical guard", "input": { "a": "The Silver Spear (Kevin's)", "b": "The Silver Spear" }, "expected": false },
+        { "name": "same parenthetical on both", "input": { "a": "Silver Spear (Kevin's)", "b": "The Silver Spear (Kevin's)" }, "expected": true },
+        { "name": "prefix rule", "input": { "a": "Moll Roe", "b": "Moll Roe In The Morning" }, "expected": true },
+        { "name": "trailing type word", "input": { "a": "Kesh", "b": "Kesh Jig" }, "expected": true },
+        { "name": "prefix shorter than 5 does not count", "input": { "a": "Abcd", "b": "Abcd Efgh" }, "expected": false }
+      ]
+    },
+
+    "meaningfullyDiffers": {
+      "params": ["a", "b"],
+      "cases": [
+        { "name": "different name", "input": { "a": "The Kesh", "b": "The Castle" }, "expected": true },
+        { "name": "spelling variant", "input": { "a": "The Kesh", "b": "Kesh" }, "expected": false },
+        { "name": "empty differs", "input": { "a": "", "b": "The Kesh" }, "expected": true }
+      ]
+    },
+
+    "pickAka": {
+      "params": ["chain"],
+      "cases": [
+        { "name": "first name below the title that differs", "input": { "chain": ["The Burren", null, "Michael Creamer's", "Michael Creamer's Favourite"] }, "expected": "Michael Creamer's" },
+        { "name": "walks past spelling variants", "input": { "chain": ["The Burren", null, "Burren", "Michael Creamer's"] }, "expected": "Michael Creamer's" },
+        { "name": "nothing differs", "input": { "chain": ["The Silver Spear", null, "Silver Spear", "The Silver Spear"] }, "expected": null },
+        { "name": "title is the first non-empty layer", "input": { "chain": [null, "Silver Spear (fast one)", null, "The Silver Spear"] }, "expected": "The Silver Spear" },
+        { "name": "blank layers are skipped and the result is trimmed", "input": { "chain": ["  ", "The Kesh", "  The Castle  "] }, "expected": "The Castle" },
+        { "name": "only a title", "input": { "chain": ["The Kesh"] }, "expected": null },
+        { "name": "all null", "input": { "chain": [null, null] }, "expected": null },
+        { "name": "empty chain", "input": { "chain": [] }, "expected": null },
+        { "name": "null chain", "input": { "chain": null }, "expected": null }
+      ]
+    }
+  },
 
   "variants": [
     { "a": "The Connacht Man's Rambles", "b": "The Connachtman's Rambles", "why": "compound split" },
