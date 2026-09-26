@@ -154,6 +154,38 @@
             padding-top: 10px !important;
         }
 
+        /* The page's name — desktop only. See the note beside the markup below: a
+           phone names the current screen in the tab bar, so a heading repeating it
+           cost a line at the top of the smallest screen for nothing. Above 768px
+           there is no tab bar, so this is the only thing that says where you are.
+           Hidden by `display` rather than not rendered, so one served page is
+           correct at both sizes. */
+        .page-title {
+            display: none;
+        }
+
+        @media (min-width: 768px) {
+            /* The same type and spacing as the home page's "Welcome back" line
+               (.home-greeting in frontend/src/homepage/page.css) — the one heading
+               the app already had in this position, so these read as the same thing
+               on every page rather than a second, heavier style. Kept in step by
+               hand: it lives in a Svelte bundle's stylesheet, which this file cannot
+               import. The margin is stated in full because an <h1> would otherwise
+               bring a top margin the greeting (a <div>) does not have. */
+            .page-title {
+                display: block;
+                font-family: 'Poppins', sans-serif;
+                font-weight: 300;
+                font-size: 1.6rem;
+                color: var(--text-color);
+                /* 1.2rem above is what puts this on the same line as the home
+                   greeting: home-root carries `margin-top: 1.2rem` inline, and
+                   .docs-content's 10px padding is common to both. 1.5rem below is
+                   the greeting's own margin-bottom. */
+                margin: 1.2rem 0 1.5rem;
+            }
+        }
+
         /* Connection / offline-sync status (see connection_status.js) */
         .conn-status { position: relative; display: inline-flex; align-items: center; }
         .conn-status-btn {
@@ -392,6 +424,16 @@
 
     <div class="docs-wrapper">
 	    <div class="docs-content">
+            {# The page's name, on desktop only. A phone gets the tab bar, which names
+               the screen you are on at the bottom of it — a heading saying the same
+               word again was just a line of chrome eating the top of a small screen,
+               which is why these came out (spec 052 §B1). There is no tab bar above
+               768px, so nothing up there says where you are.
+
+               Opt in with `{% raw %}{% set page_title = "Sessions" %}{% endraw %}` at the top of a page. Pages
+               that name themselves some other way (a session's own name, a person's
+               name) simply do not set it. #}
+            {% if page_title %}<h1 class="page-title">{{ page_title }}</h1>{% endif %}
             {% block content %}{% endblock %}
         </div>
     </div>

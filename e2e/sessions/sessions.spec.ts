@@ -11,12 +11,15 @@ import { expectToolbarsIdentical } from "../support/toolbars";
  */
 
 test.describe("sessions directory", () => {
-  test("lists sessions as rows, with no page heading", async ({ page }) => {
+  test("lists sessions as rows, headed on desktop only", async ({ page }) => {
     // Spec 052 §B1: the three-column table became one line per session, the same
-    // shape as the tune lists. The "Sessions" heading went with it — the tab bar
-    // already says where you are.
+    // shape as the tune lists. The "Sessions" heading went with it, because the tab
+    // bar already says where you are — but the tab bar is a phone's, and above 768px
+    // it is not there, so the heading came back for desktop alone. Its two halves
+    // are checked in e2e/app/navigation.spec.ts; here it just must not displace the
+    // rows, which are the page.
     await page.goto("/sessions");
-    await expect(page.locator("h1")).toHaveCount(0);
+    await expect(page.locator("h1.page-title")).toHaveText("Sessions");
 
     const rows = page.locator("#sessions-list .session-row");
     await expect(rows.first()).toBeVisible();
@@ -24,7 +27,9 @@ test.describe("sessions directory", () => {
 
     // Name on the left, place quiet on the right.
     const row = rows.filter({ hasText: SESSIONS.mueller.name }).first();
-    await expect(row.locator(".session-row-name")).toHaveText(SESSIONS.mueller.name);
+    await expect(row.locator(".session-row-name")).toHaveText(
+      SESSIONS.mueller.name,
+    );
     await expect(row.locator(".session-row-where")).not.toBeEmpty();
   });
 
@@ -42,7 +47,9 @@ test.describe("sessions directory", () => {
       // so this database cannot produce a foreign row. The other half is covered in
       // frontend/tests/sessionsdir.logic.test.js.
       await page.goto("/sessions");
-      await expect(page.locator("#sessions-list .session-row").first()).toBeVisible();
+      await expect(
+        page.locator("#sessions-list .session-row").first(),
+      ).toBeVisible();
 
       const res = await page.request.get("/api/sessions/with-today-status");
       const body = await res.json();
@@ -51,30 +58,44 @@ test.describe("sessions directory", () => {
 
       let checked = 0;
       for (const s of body.sessions || []) {
-        const row = page.locator(`.session-row[data-session-path="${s.path}"] .session-row-where`);
+        const row = page.locator(
+          `.session-row[data-session-path="${s.path}"] .session-row-where`,
+        );
         if (!(await row.count())) continue;
         const shown = await row.innerText();
         if ((s.country || "").trim().toLowerCase() === mine) {
-          expect(shown, `${s.name} should not repeat your own country`).not.toContain(s.country);
+          expect(
+            shown,
+            `${s.name} should not repeat your own country`,
+          ).not.toContain(s.country);
           checked += 1;
         } else if (s.country) {
-          expect(shown, `${s.name} is abroad, so its country matters`).toContain(s.country);
+          expect(
+            shown,
+            `${s.name} is abroad, so its country matters`,
+          ).toContain(s.country);
           checked += 1;
         }
       }
       // Without this, a loop that visited no rows at all would pass.
-      expect(checked, "no session rows were actually compared").toBeGreaterThan(0);
+      expect(checked, "no session rows were actually compared").toBeGreaterThan(
+        0,
+      );
     });
   });
 
   test("search filters the directory", async ({ page }) => {
     await page.goto("/sessions");
-    await expect(page.locator("#sessions-list .session-row").first()).toBeVisible();
+    await expect(
+      page.locator("#sessions-list .session-row").first(),
+    ).toBeVisible();
 
     await page.fill("#search-bar", "Mueller");
     await expect(page.locator("#sessions-list")).toContainText(/Mueller/i);
     await expect
-      .poll(async () => page.locator("#sessions-list .session-row:visible").count())
+      .poll(async () =>
+        page.locator("#sessions-list .session-row:visible").count(),
+      )
       .toBeGreaterThan(0);
 
     // A query that matches nothing surfaces the empty state.
@@ -92,7 +113,10 @@ test.describe("session detail", () => {
     // Tunes load asynchronously into the list.
     await expect(page.locator("#tunes-list")).toBeVisible();
     await expect
-      .poll(async () => (await page.locator("#tunes-list").innerText()).trim().length)
+      .poll(
+        async () =>
+          (await page.locator("#tunes-list").innerText()).trim().length,
+      )
       .toBeGreaterThan(0);
   });
 
@@ -102,7 +126,10 @@ test.describe("session detail", () => {
     await expect(search).toBeVisible();
     // Wait for tunes to populate first.
     await expect
-      .poll(async () => (await page.locator("#tunes-list").innerText()).trim().length)
+      .poll(
+        async () =>
+          (await page.locator("#tunes-list").innerText()).trim().length,
+      )
       .toBeGreaterThan(0);
 
     await search.fill("zzzznotatune");
@@ -140,7 +167,9 @@ test.describe("session detail (admin)", () => {
     await expectNoServerError(page);
   });
 
-  test("leaving a session is offered on the session, behind a confirm", async ({ page }) => {
+  test("leaving a session is offered on the session, behind a confirm", async ({
+    page,
+  }) => {
     // It used to live on /me, in a list of every session you belong to. That list
     // duplicated the Sessions tab, so it is gone and this is where its one unique
     // control landed (spec 052 §B1) — on the session you would be leaving, which is
@@ -163,7 +192,9 @@ test.describe("session detail (admin)", () => {
     await expect(page.locator("#session-role-root .kit-chip")).toBeVisible();
   });
 
-  test("the three tabs' toolbars are identical on a wide screen too", async ({ page }) => {
+  test("the three tabs' toolbars are identical on a wide screen too", async ({
+    page,
+  }) => {
     // The desktop half of the same rule. The panes disagreed here longer than
     // they did on a phone: Tunes and People were inset 20px, Logs was not, so
     // the search box jumped sideways AND upwards when you switched to Logs.

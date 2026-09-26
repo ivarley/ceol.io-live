@@ -79,3 +79,73 @@ test.describe("authenticated home dashboard", () => {
     await expect(page.locator("button.hamburger-btn")).toBeVisible();
   });
 });
+
+test.describe("desktop pages say which one you are on", () => {
+  // Both halves, together, because they are one rule. A phone names the current
+  // screen in the tab bar along the bottom, so a heading repeating that word cost a
+  // line at the top of the smallest screen — which is why these came out. Above
+  // 768px there is no tab bar and nothing else says where you are.
+  test.use({ storageState: STORAGE.regular });
+
+  const PAGES: [string, string][] = [
+    ["/sessions", "Sessions"],
+    ["/my-tunes", "Tunes"],
+  ];
+
+  test("the title is there on a desktop viewport", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    for (const [url, title] of PAGES) {
+      await page.goto(url);
+      const h = page.locator(".page-title");
+      await expect(h, `${url} should be titled`).toBeVisible();
+      await expect(h).toHaveText(title);
+    }
+  });
+
+  test("...and not on a phone, where the tab bar already says it", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    for (const [url, title] of PAGES) {
+      await page.goto(url);
+      // Served either way and hidden by CSS, so one response is right at both sizes.
+      await expect(page.locator(".page-title")).toHaveCount(1);
+      await expect(page.locator(".page-title")).toBeHidden();
+      // The tab bar is carrying the name instead.
+      await expect(
+        page.locator(`.tab-bar-item.active .tab-bar-label`),
+      ).toHaveText(title);
+    }
+  });
+
+  test("it matches the home page's greeting, which is the same thing one page over", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+
+    const shape = (sel: string) =>
+      page.evaluate((s) => {
+        const e = document.querySelector(s)!;
+        const cs = getComputedStyle(e);
+        const b = e.getBoundingClientRect();
+        return {
+          x: Math.round(b.x),
+          y: Math.round(b.y),
+          font: cs.fontFamily.split(",")[0].replace(/["']/g, ""),
+          weight: cs.fontWeight,
+          size: cs.fontSize,
+        };
+      }, sel);
+
+    await page.goto("/");
+    const greeting = await shape(".home-greeting");
+
+    await page.goto("/sessions");
+    const title = await shape(".page-title");
+
+    // Same position on the page, not just the same type: the greeting sits below an
+    // inline 1.2rem margin on #home-root, and the heading has to clear the same gap
+    // or the two pages start one line apart.
+    expect(title).toEqual(greeting);
+  });
+});

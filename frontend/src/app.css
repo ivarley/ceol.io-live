@@ -232,6 +232,25 @@ main {
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
 }
 
+/* Desktop: the drawer belongs to this screen's layout, not to the window. main.wide
+   is a 1200px centred grid, so a full-viewport drawer overhung both panes by the
+   width of the gutters and read as a page-level overlay dropped on top of the logger
+   rather than part of it.
+   
+   Hung off main.wide rather than a @media, because `wide` is set from the viewport in
+   App.svelte — a breakpoint repeated here could disagree with the one that actually
+   builds the grid.
+   
+   Auto margins, not a transform: the slide-in sets `transform` inline for the length
+   of the animation, and a centring transform here would be overwritten by it — the
+   drawer would slide down against the left edge and only jump into place at the end. */
+main.wide .hx-drawer {
+  width: min(1200px, 100%);
+  margin-inline: auto;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+}
+
 .hx-drawer .hx-drawer-body {
   padding: 16px 12px calc(16px + env(safe-area-inset-bottom, 0px));
 }

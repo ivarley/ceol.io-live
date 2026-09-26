@@ -9,7 +9,9 @@ import { SESSIONS, STORAGE } from "../support/data";
 
 test.use({ storageState: STORAGE.regular });
 
-test("home: the tab bar is the phone navigation, and the hamburger is gone", async ({ page }) => {
+test("home: the tab bar is the phone navigation, and the hamburger is gone", async ({
+  page,
+}) => {
   // This test used to open the hamburger and look for "My Tunes" in it. Spec 052
   // §B8 Stage 5 replaced that menu with a four-tab bar below 768px, so the
   // assertion is now the replacement rather than the thing replaced. The menu
@@ -22,7 +24,9 @@ test("home: the tab bar is the phone navigation, and the hamburger is gone", asy
   await expect(page.locator(".hamburger-menu")).toBeHidden();
 });
 
-test("the fixed header keeps its full height with the hamburger hidden", async ({ page }) => {
+test("the fixed header keeps its full height with the hamburger hidden", async ({
+  page,
+}) => {
   // It did not. The logo is position:absolute and contributes no height, so the bar's
   // height came entirely from the tallest thing in the utilities row — which was the
   // hamburger button. Hiding that for the tab bar collapsed the header to 10px: the
@@ -34,8 +38,12 @@ test("the fixed header keeps its full height with the hamburger hidden", async (
   await expect(page.locator(".hamburger-menu")).toBeHidden();
 
   const box = await page.evaluate(() => {
-    const css = getComputedStyle(document.documentElement).getPropertyValue("--site-header-h");
-    const header = document.querySelector("header.header")!.getBoundingClientRect();
+    const css = getComputedStyle(document.documentElement).getPropertyValue(
+      "--site-header-h",
+    );
+    const header = document
+      .querySelector("header.header")!
+      .getBoundingClientRect();
     const logo = document.querySelector(".site-logo")!.getBoundingClientRect();
     return {
       declared: parseFloat(css),
@@ -56,9 +64,12 @@ test("the fixed header keeps its full height with the hamburger hidden", async (
 
 test("sessions directory is usable on mobile", async ({ page }) => {
   await page.goto("/sessions");
-  // No heading since spec 052 §B1; the list itself is the page.
-  await expect(page.locator("h1")).toHaveCount(0);
-  await expect(page.locator("#sessions-list .session-row").first()).toBeVisible();
+  // The list itself is the page. The heading is served (one response is right at
+  // both sizes) but hidden here, because the tab bar already names this screen.
+  await expect(page.locator("h1.page-title")).toBeHidden();
+  await expect(
+    page.locator("#sessions-list .session-row").first(),
+  ).toBeVisible();
 });
 
 test("session detail renders on mobile", async ({ page }) => {
@@ -69,6 +80,6 @@ test("session detail renders on mobile", async ({ page }) => {
 
 test("my tunes renders on mobile", async ({ page }) => {
   await page.goto("/my-tunes");
-  await expect(page.locator("h1")).toHaveCount(0);
+  await expect(page.locator("h1.page-title")).toBeHidden();
   await expect(page.locator("#search-input")).toBeVisible();
 });
