@@ -30,7 +30,30 @@ class RepertoirePrior(Expert):
     @classmethod
     def defaults(cls):
         return {"repertoire_weight": 20.0, "played_tonight_weight": 0.2,
-                "refresh_ms": 30000, "use_sequence": True, "beta": 0.15}
+                "refresh_ms": 30000, "use_sequence": True, "beta": 0.15,
+                # Where the previous tune comes from. "confirmed" waits for a
+                # confirmation, which, measured, never happens (confidence
+                # tops out near 0.75 against a 0.9 bar), so the transitions
+                # were never used on the board at all. "closed" takes the
+                # answer of the last finished span if it was at least
+                # `chain_min_conf` sure.
+                #
+                # Measured on four nights, 290 tunes, top-1 / top-5 / flips:
+                #   confirmed (never fires)        0.766 / 0.872 / 4.2
+                #   closed, any confidence         0.769 / 0.883 / 3.7
+                #   closed, at least 0.3 sure      0.772 / 0.883 / 4.0  <- chosen
+                #   closed, at least 0.5 sure      0.766 / 0.883 / 4.2
+                #   closed, any, no guard below    0.766 / 0.879 / 4.4
+                # All within noise. Chaining now finds a previous tune for 99%
+                # of mid-set tunes and the true one for 64%, yet it moves the
+                # answer little, because the assembler sharpens towards the
+                # audio as a span goes on and a fixed-size prior only counts
+                # early. The same prior is worth 1.7 points on the bench.
+                "chain_from": "closed", "chain_min_conf": 0.3,
+                # A detected boundary is right about a quarter of the time, so
+                # the "previous" span is often the tune still playing. Never
+                # penalise that tune for following itself.
+                "protect_continuation": True}
 
     def setup(self):
         self._repertoire = None
@@ -58,7 +81,12 @@ class RepertoirePrior(Expert):
         if self._repertoire is None:
             self._repertoire = {int(r["tune_id"]) for r in (view.manifest.get("repertoire") or [])
                                 if r.get("tune_id")}
-        confirmed = tuple(view.confirmed_tune_ids())
+        if self.params["chain_from"] == "closed":
+            last = view.last_closed_answer()
+            confirmed = ((last[0],) if last and last[1] >= self.params["chain_min_conf"]
+                         else ())
+        else:
+            confirmed = tuple(view.confirmed_tune_ids())
         stale = (self._last_emit_ms is None
                  or window.clock_ms - self._last_emit_ms >= self.params["refresh_ms"])
         if not stale and confirmed == self._last_confirmed:
@@ -71,6 +99,8 @@ class RepertoirePrior(Expert):
             sequence = self._sequence_model(view)
             previous = confirmed[-1] if confirmed else None
             weights = sequence.weights(previous)   # keeps its own default for unlisted tunes
+            if previous is not None and self.params["protect_continuation"]:
+                weights[previous] = max(weights.values()) if weights else 1.0
             basis["previous_tune_id"] = previous
             basis["source"] = "sequence"
         else:

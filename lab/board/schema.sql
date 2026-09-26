@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS hypothesis (
     superseded_by   TEXT
 );
 CREATE INDEX IF NOT EXISTS ix_hyp_run_t ON hypothesis (run_id, t_start_ms);
+CREATE INDEX IF NOT EXISTS ix_hyp_run_closed ON hypothesis (run_id, status, closed_clock_ms);
 
 CREATE TABLE IF NOT EXISTS hypothesis_event (
     event_id        INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -68,6 +69,9 @@ CREATE TABLE IF NOT EXISTS hypothesis_event (
     obs_id          INTEGER NOT NULL        -- the hypothesis_update carrying provenance
 );
 CREATE INDEX IF NOT EXISTS ix_hev_run_clock ON hypothesis_event (run_id, clock_ms);
+-- a hypothesis's own events, newest first: without this every "what did this
+-- span finally say" read scanned the events of every run ever stored
+CREATE INDEX IF NOT EXISTS ix_hev_hyp ON hypothesis_event (hyp_id, event_id);
 
 CREATE TABLE IF NOT EXISTS eval_segment (
     run_id          TEXT NOT NULL,

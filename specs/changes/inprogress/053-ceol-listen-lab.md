@@ -402,6 +402,31 @@ hard-coded default. All three readers now take the model's own default --
 `bench.retrieval.prior_weight` -- and the old prior reproduces its numbers
 exactly through them. Both variants were then measured deliberately.
 
+**The board had never used the transitions at all.** Its prior chained
+from the last CONFIRMED tune, and nothing is ever confirmed: the assembler
+holds back mass for "another tune" and for "due to change", so its confidence
+tops out near 0.75 against a 0.9 bar, and across every run measured there
+was not one confirmation. The spec said the board chained its own answer
+forward; it did not, and the scheduler's "skip once confident" rule is dead
+for the same reason. The prior now chains from the last finished span that
+was at least 0.3 sure, and never penalises the previous span's own tune,
+because a detected boundary is right about a quarter of the time and the
+"previous" span is often the tune still playing. It now has a previous tune
+for 99% of mid-set tunes, the right one 64% of the time, the current tune
+split by a false boundary 17%.
+
+It moves the live answer very little: 0.766 to 0.772 top-1 over four nights,
+within noise, with every variant tried landing in the same place. The likely
+reason, not yet tested, is that the assembler sharpens towards the audio as a
+span goes on, so a fixed-size prior counts early in a tune and hardly at all
+by its end. That is the lever if the bench's gain is to reach the board.
+
+A first version of the new lookup made board runs quadratic -- every finished
+span of the night, a query each, on every update -- and nothing indexed
+hypothesis events by hypothesis, so each query scanned every run ever stored.
+It now fetches only the latest finished span, the two indexes exist, and the
+old confirmation lookup is faster for them too.
+
 **Keeping the tracker off a third of the pitch**, worth a point and a half,
 found by labelling eight bars of a solo tin whistle that the recogniser had
 never once identified.

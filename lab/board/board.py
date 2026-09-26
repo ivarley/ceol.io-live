@@ -338,6 +338,31 @@ class BoardView:
         rows = [h for h in self._board.hypotheses(self._run_id) if h["t_end_ms"] is None]
         return rows[-1] if rows else None
 
+    def last_closed_answer(self):
+        """(tune_id, confidence) of the most recently finished span, or None.
+
+        Finished means closed -- confirmed or withdrawn -- rather than
+        superseded by a flip. Distinct from `confirmed_tune_ids` because,
+        measured, nothing is ever confirmed: the assembler's confidence tops
+        out around 0.75 against a 0.9 bar, so a prior that waited for a
+        confirmation never had a previous tune to chain from.
+
+        Only the latest, and in two indexed queries, because the prior asks
+        on every update. A first version returned every finished span of the
+        night with a query each and made a board run quadratic.
+        """
+        row = self._board.conn.execute(
+            "SELECT hyp_id FROM hypothesis WHERE run_id=? AND status IN ('confirmed','withdrawn') "
+            "ORDER BY closed_clock_ms DESC LIMIT 1", (self._run_id,)).fetchone()
+        if not row:
+            return None
+        ev = self._board.conn.execute(
+            "SELECT top1_tune_id, top1_conf FROM hypothesis_event WHERE hyp_id=? AND "
+            "top1_tune_id IS NOT NULL ORDER BY event_id DESC LIMIT 1", (row["hyp_id"],)).fetchone()
+        if not ev or ev["top1_tune_id"] is None:
+            return None
+        return int(ev["top1_tune_id"]), float(ev["top1_conf"] or 0.0)
+
     def confirmed_tune_ids(self):
         """Tunes this run has settled on so far. The only 'played tonight' an
         expert may see — the night's logged order is ground truth, not input."""

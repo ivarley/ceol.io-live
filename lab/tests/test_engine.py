@@ -406,3 +406,29 @@ def test_the_assembler_can_average_its_evidence(lab_data):
     with Board() as board:
         run_id = execute(cfg, RECORDING_ID, board=board, quiet=True)
         assert board.hypotheses(run_id), "no hypothesis was ever proposed"
+
+
+def test_the_prior_chains_from_the_last_finished_span(lab_data):
+    """The board's transitions were never used: it waited for a confirmation
+    that the assembler's confidence cannot reach. Chaining from the last
+    finished span has to produce a previous tune, and the guard for a span
+    split by a false boundary has to leave that tune unpenalised."""
+    from lab.board.board import Board
+    from lab.engine.run import execute
+
+    cfg = _config()
+    # the two synthetic tunes run straight into each other, so a span only
+    # closes between them if something says where the second one starts
+    cfg["experts"].insert(1, {"name": "oracle_boundary"})
+    for e in cfg["experts"]:
+        if e["name"] == "prior":
+            e["params"] = {"chain_from": "closed", "chain_min_conf": 0.0,
+                           "protect_continuation": True, "refresh_ms": 2000}
+    with Board() as board:
+        run_id = execute(cfg, RECORDING_ID, board=board, quiet=True)
+        priors = board.observations(run_id, types=["tune_prior"])
+    chained = [p for p in priors if p.payload["basis"].get("previous_tune_id") is not None]
+    assert chained, "the prior never had a previous tune to chain from"
+    p = chained[-1].payload
+    prev = str(p["basis"]["previous_tune_id"])
+    assert p["weights"][prev] == max(p["weights"].values())
