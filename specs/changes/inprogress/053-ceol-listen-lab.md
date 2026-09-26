@@ -228,6 +228,17 @@ detector, a logistic regression on mel deltas — so the bench's first output is
 a ranking with rules and models on the same axis. Placeholders exist for an
 audio-embedding probe and for "the matcher stopped matching".
 
+Three benches were added later and are where most of the work happens:
+
+- **`lab bench retrieval`** asks whether the tune comes back from the index
+  for each segment. It uses a front end, an index lookup and an optional
+  transition prior or whole-set decoding, and scores top-1, top-5 and mrr.
+  It is the main instrument; the "Where it stands" table is its output.
+- **`lab bench pitch`** scores a front end frame by frame against pitch
+  labels drawn in the viewer.
+- **`lab bench pulse`** scores the grid estimator's period, meter, beat
+  phase and bar phase against beats and bar lines drawn in the viewer.
+
 **Graduation** is a wrapper: `CandidateExpert` runs a bench candidate over its
 declared window on live features and emits `music_activity` or `boundary`. Its
 params record the bench result it came from.
@@ -269,6 +280,11 @@ The tools exist so a human can look at one part and judge it:
   and note experts alone over one segment, printed as ABC-ish text a player can
   compare with the tune, and the matcher's top ten for that window.
 - `lab bench leaderboard --task T` — candidates ranked with per-night spread.
+- `lab compare A B --nights 1,2,3,4` — board configs pooled over nights (runs
+  named `<config>-r<recording>`), each paired against the first with a sign
+  test; `--record` adds the final record after revisions.
+- `lab view` — the audio, piano roll, stave and beat grid for one segment,
+  and where hand labels are made (see `lab/README.md`).
 
 ## Runs and re-execution
 
@@ -304,6 +320,91 @@ full of heterophony and the matcher is five-gram voting with no rhythm. The
 claim is narrower: every concept above is exercised end to end, every part can
 be inspected on its own, and the next idea has somewhere to be scored.
 
+## How the lab is worked
+
+The design above says where an idea gets scored. This is how the work has
+actually gone, and the rules that fell out of it, most of them learned by
+getting a number wrong first.
+
+**The cycle.**
+
+1. A hypothesis. The best ones have come from a player looking at the
+   output and saying what is wrong with it musically: octaves carry no
+   information, a transcriber hears pitch and not articulation, rests are
+   rare, Cooley's is always followed by The Wise Maid. The harness finds
+   whether an idea works; it has rarely suggested the idea.
+2. The cheapest test that can refute it. One segment in the viewer, then the
+   component against hand labels (`lab bench pitch`, `lab bench pulse`), then
+   the retrieval bench over the whole corpus. Only an idea that survives the
+   bench goes to the board.
+3. A paired comparison against what it replaces, on the same segments.
+4. The same change on the board, over several nights, judged on speed and
+   stability as well as the final answer.
+5. The result written down, whichever way it went: in this spec, in the
+   docstring or comment next to the parameter it chose, and in a long-form
+   commit message with the numbers.
+
+**Rules.**
+
+- **Every number has its scope.** "0.894 top-1" means 502 segments, eight
+  nights, first 120 seconds, set decoding. A board number says which nights.
+  Numbers on different scopes are never compared.
+- **Paired, not pooled.** For each comparison, count the segments that became
+  right and those that became wrong, and run a two-sided sign test on the
+  two counts (`lab compare` does this for board runs; `sign_test` there is
+  the one to reuse). On 500 segments a pooled difference under about a point
+  is noise, and a pair like +2/-0 says so plainly.
+- **A bug in the measurement voids the numbers taken through it.** Fix it,
+  re-run the OLD configuration and check it reproduces its previous number
+  exactly, then measure the new one on purpose. This caught a result that had
+  been measured by accident (the prior's default weight) and two scoring bugs
+  that made the grid estimator look better than it was.
+- **The two loops share code, and are tested for agreeing.** Note splitting
+  (`frontends.grid.regrid_notes`), fusing two readings
+  (`bench.retrieval.fuse`), the transition model (`corpus.sequence`) and how
+  a prior's default is read (`bench.retrieval.prior_weight`) each have one
+  implementation both loops call. `test_engine.py` checks the board against
+  the bench. Compare the two loops' CONFIGURATIONS too, not only their code:
+  the board once read pitch from 130Hz while the bench was measured at 160.
+- **Hand labels are ground truth for components.** Pitch, drawn beats and
+  marked bar lines, made in `lab view`, saved to `lab/annotations/`, checked
+  in. A component is scored against them directly, not only through whether
+  the tune came back. One labelled segment has more than once overturned an
+  assumption the whole corpus had been measured under (the eighth note is
+  absent from the onset envelope; the tracker lands a twelfth low on a
+  whistle).
+- **Work from the worst case.** "The next wrong-est identification problem"
+  is the unit of work: the segment ranked worst, opened in the viewer and
+  listened to. Two of those turned out to be labelling problems, not
+  recognition problems.
+- **The eval set is judged by the audio, not by the recogniser.** A wrong
+  label is fixed in the production segmenter and re-pulled. A segment is
+  excluded (`lab/exclusions.json`) only for what the audio is -- one player
+  starting and stopping -- never because it is hard.
+- **What helps the reader is kept apart from what helps the matcher.** A
+  tempo map and held gaps make the stave right and measured nothing or worse
+  for identification, so they live in the viewer only.
+- **Oracles size a lever before it is built.** The true previous tune, the
+  true tune type, the true tune starts: each was fed in first to find what the
+  real thing could be worth at most.
+- **On the board, top-1 is not the only number.** The answer shown also has
+  to settle. The first eighth-note version gained six points and tripled the
+  flips, which a live display cannot have, and was not shipped.
+- **Negatives are results.** Each is written down with its number, so the
+  idea is not re-tried blind and the reasoning that made it harmless is
+  visible if a later change breaks it (the tritone paragraph below is the
+  example).
+- **Anything fitted is scored on nights it never saw.** The corpus is an
+  evaluation set; see the design decisions.
+
+**Where results live.** Bench results in `bench_result` on the board
+database (unless `--no-save`). Board runs are named `<config>-r<recording>`
+so `lab compare` can pool them. Experiment configs that are not the baseline
+and throwaway analysis scripts go in a scratch directory outside the repo;
+`lab/data/` is not scratch, because `make lint` walks it. The corpus and
+board are in `lab/data/` (gitignored); the annotations, exclusions and
+configs are checked in.
+
 ## Status
 
 Both loops run against the corpus, the recogniser works, and the largest
@@ -312,7 +413,10 @@ anything the harness could have discovered on its own.
 
 ### Where it stands
 
-On the retrieval bench, all 503 segments, two minutes of audio each:
+As of 2026-09-25, on branch `053-ceol-listen-lab`.
+
+On the retrieval bench, 502 segments over eight nights (recordings 1, 2, 3,
+4, 5, 138, 139, 140), the first two minutes of each:
 
 | Configuration | top-1 | top-5 |
 |---|---|---|
@@ -322,11 +426,29 @@ On the retrieval bench, all 503 segments, two minutes of audio each:
 | and fused repeats split back apart | 0.775 | 0.880 |
 | and read again as runs of eighths, fused | 0.833 | 0.912 |
 | and each set decoded as a whole | 0.861 | 0.922 |
-| and the tracker kept off a third of the pitch | **0.878** | **0.930** |
+| and the tracker kept off a third of the pitch | 0.878 | 0.930 |
+| and the previous tune pulling by how predictable its follower is | **0.894** | **0.930** |
 | the session's transitions alone, no audio | 0.245 | 0.368 |
 
-A whole night through the board scores top-1 60.3%, top-5 75.9%, median time
-to first correct 52 seconds, at 56x realtime.
+The command that produces the headline row is in `lab/README.md`.
+
+On the live board, all eight nights, the same 502 segments, answering while
+the tune plays and finding its own boundaries:
+
+| | top-1 at end | top-5 | right within 30s | right within 60s | never right | flips a tune |
+|---|---|---|---|---|---|---|
+| before the eighth-note reading | 0.697 | 0.811 | 12.5% | 40.4% | 26.9% | 3.7 |
+| with it | **0.753** | **0.869** | **13.3%** | **47.6%** | **18.9%** | **4.2** |
+
+Paired, the eighth-note reading made 41 segments newly right and 13 newly
+wrong (sign test p < 0.001). `lab/configs/baseline.json` is that second row
+plus chaining from finished spans, which measured within noise of it on four
+nights (below). Told the true start of every tune, on four nights (1, 2, 4,
+5), the board goes from 0.737 to 0.763 top-1 and from 12.8% to 49.7% right
+within thirty seconds.
+
+The gap between the two loops is mostly that they answer different
+questions; see "The board against the bench" below.
 
 Against the full 23,307-tune corpus rather than the session's 1,279-tune
 repertoire, set decoding scores the same to within a point. The transition
@@ -415,8 +537,9 @@ because a detected boundary is right about a quarter of the time and the
 for 99% of mid-set tunes, the right one 64% of the time, the current tune
 split by a false boundary 17%.
 
-It moves the live answer very little: 0.766 to 0.772 top-1 over four nights,
-within noise, with every variant tried landing in the same place. The likely
+It moves the live answer very little: 0.766 to 0.772 top-1 over four nights
+(recordings 1-4, 290 segments), two segments newly right and none newly
+wrong, within noise, with every variant tried landing in the same place. The likely
 reason, not yet tested, is that the assembler sharpens towards the audio as a
 span goes on, so a fixed-size prior counts early in a tune and hardly at all
 by its end. That is the lever if the bench's gain is to reach the board.
@@ -507,8 +630,10 @@ buys about one flip a tune of extra stability for a point of top-1 and five
 points of "right within a minute".
 
 **Whole-set decoding does not come across yet, and that is measured.** The
-board already chains the session's transitions from the last tune it
-confirmed, which is the bench's "chain your own answer forward". Chaining the
+board was believed to chain the session's transitions from the last tune it
+confirmed, which is the bench's "chain your own answer forward". (It did not:
+nothing is ever confirmed. See "The board had never used the transitions at
+all" above, which corrects this paragraph.) Chaining the
 whole previous distribution instead is worth nothing more on the bench (0.859
 both ways). The rest of the bench's gain from whole-set decoding, to 0.878,
 comes from the tunes AFTER the one being decided and from knowing where the
@@ -858,8 +983,31 @@ next thing to build rather than a side quest.
 
 ### Still open
 
-Boundary detection is the weak part, f1 0.09 on the board against the bench's
-0.46 for the best detector, because the graduated one is the novelty curve
-and the lab cannot yet persist a fitted model. Front-end fusion is a bench
-finding not yet on the board. Set boundaries in the decoder still come from
-the log. Per-night variation is wide and unexplained. And nothing runs live.
+In rough order of what they are worth, as of 2026-09-25:
+
+- **Where tunes stop, as well as where they start.** Told the true starts,
+  the board is right within thirty seconds four times as often, but starts
+  alone leave each span running on through the chat after its tune, so the
+  record is contaminated and set decoding with hindsight stays out of reach.
+  The graduated detector is the novelty curve at f1 0.09 on the board against
+  0.46 for the best bench detector, because the lab cannot yet persist a
+  fitted model. The player has said this comes next.
+- **How the prior enters the assembler.** The transitions are worth 1.7
+  points on the bench and nothing measurable live. Untested explanation: the
+  assembler sharpens its temperature towards the audio as a span goes on, so
+  a fixed-size prior only counts early.
+- **The 0.9 confirmation bar is unreachable.** Confidence tops out near 0.75,
+  so nothing is ever confirmed and the scheduler's "skip once confident" rule
+  never fires. Either calibrate confidence so 0.9 means something or change
+  the bar; the calibration table in `lab eval` is the place to start.
+- **Beat phase on reels,** and so where bar lines fall. Onset energy gives
+  the period and not the phase. Candidates: transcribed note starts, phrase
+  starts, the tune's eight-bar repetition. A slip jig's or slide's bar is not
+  in the onset envelope at all.
+- **The tin whistle.** After the tracker fix nearly half the labelled frames
+  still sit below anything a D whistle can play.
+- **Duration in the matcher.** The eighth-note reading carries duration only
+  as repeated symbols; nothing scores rhythm directly.
+- Front-end fusion (several trackers) is a bench finding not on the board;
+  per-night variation (0.841 to 0.960 top-1 at the headline configuration) is wide and unexplained;
+  nothing runs live.

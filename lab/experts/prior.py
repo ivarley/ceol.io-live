@@ -3,8 +3,11 @@
 Ceol's advantage over an app that listens in isolation, and a producer on the
 board like any other. Two sources, both legitimate:
 
-- the session's repertoire, which is a standing fact about the venue;
-- the tunes THIS RUN has already confirmed, which is the board's own history.
+- the session's repertoire and its logged transitions on every OTHER night,
+  which are standing facts about the venue;
+- the answer of the last span this run finished, which is the board's own
+  history. (It used to wait for a confirmed tune, and nothing is ever
+  confirmed; see `chain_from` below.)
 
 What it deliberately does not read is the night's logged order. That sits in
 the manifest and it is the ground truth's sibling; an expert that saw it would
