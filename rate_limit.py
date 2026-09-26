@@ -41,15 +41,29 @@ _MAX_KEYS = 10_000
 
 
 def _client_ip() -> str:
-    """The caller's address, as well as it can be known behind Render's proxy.
+    """The caller's address, as well as it can be known behind this proxy chain.
 
-    The LAST X-Forwarded-For entry, not the first. Each proxy appends, so with one
-    trusted proxy in front the rightmost value is the one Render observed and the
-    leftmost is whatever the client claimed. web_routes.py's login logging takes
-    the first, which is right for a log line — it records what was asserted — and
-    wrong here, where taking a client-supplied value would let anyone mint a fresh
-    allowance per request by varying a header.
+    CF-Connecting-IP first. Production is client -> Cloudflare -> Render -> gunicorn,
+    and Cloudflare sets this header to the true client, overwriting anything the
+    client sent under that name.
+
+    The first cut read the LAST X-Forwarded-For entry instead, reasoning that each
+    proxy appends and so the rightmost is the one our own proxy observed. That is
+    correct with ONE proxy in front and wrong with two: Render appends the address
+    that connected to IT, which is a Cloudflare edge, and those rotate per request.
+    Every request therefore got its own bucket and the limiter never fired. It
+    looked right in every test, because the tests send one X-Forwarded-For hop; it
+    was caught by watching production refuse to refuse anything.
+
+    A caller reaching the Render origin directly, bypassing Cloudflare, could forge
+    CF-Connecting-IP and get a fresh allowance. That is worth knowing and is not
+    worth more machinery: this is a throttle, not an access control (see the module
+    docstring), and forging it costs the same as what an unlimited endpoint gave
+    away anyway. The fallbacks below keep it working if Cloudflare is ever removed.
     """
+    cf = request.headers.get("CF-Connecting-IP", "").strip()
+    if cf:
+        return cf
     fwd = request.headers.get("X-Forwarded-For", "")
     if fwd:
         parts = [p.strip() for p in fwd.split(",") if p.strip()]

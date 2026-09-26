@@ -98,27 +98,68 @@ def flask_app():
 
 
 class TestWhoGetsCounted:
-    def test_an_anonymous_caller_is_counted_by_the_address_the_proxy_saw(
+    def test_cloudflare_names_the_caller_and_that_is_what_counts(self, flask_app):
+        # Production is client -> Cloudflare -> Render -> gunicorn. Cloudflare sets
+        # CF-Connecting-IP to the true client and overwrites any client-sent copy.
+        with flask_app.test_request_context(
+            "/",
+            headers={
+                "CF-Connecting-IP": "203.0.113.7",
+                # Render appended a Cloudflare EDGE address here, not the client's.
+                "X-Forwarded-For": "203.0.113.7, 172.71.0.9",
+            },
+        ):
+            assert rate_limit._client_ip() == "203.0.113.7"
+            assert rate_limit._caller_key() == "ip:203.0.113.7"
+
+    def test_a_rotating_cloudflare_edge_does_not_hand_out_fresh_allowances(
         self, flask_app
     ):
-        # The LAST X-Forwarded-For entry. Each proxy appends, so the rightmost is what
-        # Render observed and everything left of it is what the client claimed. Taking
-        # the leftmost — which the login logging does, correctly, because a log records
-        # an assertion — would let anyone mint a fresh allowance per request.
+        # THE BUG THIS EXISTS FOR. Reading the last X-Forwarded-For entry is right
+        # with one proxy in front and wrong with two: the rightmost is then the
+        # Cloudflare edge that reached Render, and those rotate per request. Every
+        # request got its own bucket, so the limiter never fired in production while
+        # passing every test — the tests all sent a single hop.
+        keys = set()
+        for edge in ("172.71.0.9", "172.68.4.21", "104.23.198.3"):
+            with flask_app.test_request_context(
+                "/",
+                headers={
+                    "CF-Connecting-IP": "203.0.113.7",
+                    "X-Forwarded-For": f"203.0.113.7, {edge}",
+                },
+            ):
+                keys.add(rate_limit._caller_key())
+        assert keys == {"ip:203.0.113.7"}, "the edge must not change the bucket"
+
+    def test_without_cloudflare_it_falls_back_to_the_last_forwarded_hop(
+        self, flask_app
+    ):
+        # If Cloudflare is ever removed, one proxy remains and the rightmost entry is
+        # the address it observed.
         with flask_app.test_request_context(
             "/", headers={"X-Forwarded-For": "1.1.1.1, 2.2.2.2, 9.9.9.9"}
         ):
             assert rate_limit._client_ip() == "9.9.9.9"
-            assert rate_limit._caller_key() == "ip:9.9.9.9"
 
-    def test_a_forged_header_cannot_buy_a_fresh_allowance(self, flask_app):
+    def test_a_client_supplied_forwarded_header_cannot_buy_a_fresh_allowance(
+        self, flask_app
+    ):
+        # Cloudflare overwrites CF-Connecting-IP, so whatever the client puts in
+        # X-Forwarded-For is ignored. (A caller reaching the Render origin directly,
+        # around Cloudflare, could forge CF-Connecting-IP instead; the module
+        # docstring says why that is accepted rather than defended.)
         keys = set()
         for forged in ("10.0.0.1", "10.0.0.2", "10.0.0.3"):
             with flask_app.test_request_context(
-                "/", headers={"X-Forwarded-For": f"{forged}, 9.9.9.9"}
+                "/",
+                headers={
+                    "CF-Connecting-IP": "203.0.113.7",
+                    "X-Forwarded-For": f"{forged}, 172.71.0.9",
+                },
             ):
                 keys.add(rate_limit._caller_key())
-        assert keys == {"ip:9.9.9.9"}, "the claimed address must not change the bucket"
+        assert keys == {"ip:203.0.113.7"}, "the claimed address must not change it"
 
     def test_a_signed_in_caller_is_counted_as_themselves(self, client, flask_app):
         # Ceol's users are often in one room on one pub wifi — a whole session's worth
