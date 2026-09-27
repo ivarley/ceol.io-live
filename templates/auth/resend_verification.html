@@ -27,13 +27,13 @@
 
                         <p class="text-muted mb-4">Enter your email address and we'll send you a new verification link.</p>
 
-                        <form method="POST">
+                        <form method="POST" data-busy-form>
                             <div class="mb-3">
                                 <label for="email" class="form-label">Email Address</label>
                                 <input type="email" class="form-control" id="email" name="email" required>
                             </div>
                             <div class="d-grid">
-                                <button type="submit" class="btn btn-primary">Send Verification Email</button>
+                                <button type="submit" class="btn btn-primary" data-busy-label="Sending...">Send Verification Email</button>
                             </div>
                         </form>
 
@@ -46,4 +46,5 @@
         </div>
     </div>
 </div>
+{% include "auth/_busy_submit.html" %}
 {% endblock %}

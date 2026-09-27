@@ -36,6 +36,16 @@ Login credentials and preferences.
 
 See [Authentication](../logic/auth.md) for details.
 
+### pending_registration (migration 056)
+An address typed on the email-first login page that has no account and whose
+emailed link has not been clicked yet. No person or user_account exists for it:
+both are created (the account already verified) when the link is clicked, and
+the row is deleted. One row per address, case-insensitive (unique index on
+`LOWER(email)`); entering the address again refreshes it.
+- email, verification_token (unique), verification_token_expires (24 hours)
+- referred_by_person_id - copied to user_account on completion
+- created_date, last_sent_date
+
 #### Account deletion (spec 054)
 `POST /api/me/delete-account` deletes the login and the private data — the account, all its
 sessions/tokens, login history, the tune list, per-instrument statuses, instruments, the

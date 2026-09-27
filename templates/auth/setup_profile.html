@@ -27,7 +27,7 @@
 
                         <p class="text-muted mb-4">Help other musicians find you by completing your profile. All fields are optional.</p>
 
-                        <form method="POST" id="profile-form">
+                        <form method="POST" id="profile-form" data-busy-form>
                             <!-- Name -->
                             <div class="row mb-3">
                                 <div class="col-6">
@@ -101,7 +101,7 @@
                             </div>
 
                             <div class="d-grid gap-2">
-                                <button type="submit" class="btn btn-primary">Save Profile</button>
+                                <button type="submit" class="btn btn-primary" data-busy-label="Saving...">Save Profile</button>
                                 <a href="{{ url_for('home') }}" class="btn btn-outline-secondary">Skip for now</a>
                             </div>
                         </form>
@@ -222,4 +222,5 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
+{% include "auth/_busy_submit.html" %}
 {% endblock %}

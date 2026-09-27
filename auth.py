@@ -3,7 +3,8 @@ import bcrypt
 import json
 from datetime import timedelta
 from flask_login import UserMixin
-from database import get_db_connection
+import psycopg2
+from database import get_db_connection, save_to_history
 from timezone_utils import now_utc
 
 # Session configuration
@@ -271,51 +272,6 @@ class User(UserMixin):
         finally:
             conn.close()
 
-    @staticmethod
-    def create_user_passwordless(email, person_id, timezone="UTC", referred_by_person_id=None):
-        """
-        Create user without password (for magic link users).
-        Username is auto-generated from email (part before @, with suffix if needed for uniqueness).
-        """
-        # Generate username from email
-        base_username = email.split('@')[0].lower()
-        username = base_username
-
-        conn = get_db_connection()
-        try:
-            cur = conn.cursor()
-
-            # Find unique username
-            suffix = 0
-            while True:
-                cur.execute(
-                    "SELECT 1 FROM user_account WHERE LOWER(username) = LOWER(%s)",
-                    (username,)
-                )
-                if not cur.fetchone():
-                    break
-                suffix += 1
-                username = f"{base_username}{suffix}"
-
-            cur.execute(
-                """
-                INSERT INTO user_account (person_id, username, user_email, hashed_password, timezone, referred_by_person_id, created_by_user_id)
-                VALUES (%s, %s, %s, NULL, %s, %s, NULL)
-                RETURNING user_id
-            """,
-                (person_id, username, email, timezone, referred_by_person_id),
-            )
-            result = cur.fetchone()
-            if not result:
-                return None
-            user_id = result[0]
-            # Connected now: user_email (just set) is authoritative — retire person.email.
-            cur.execute("UPDATE person SET email = NULL WHERE person_id = %s", (person_id,))
-            conn.commit()
-            return user_id
-        finally:
-            conn.close()
-
 
 def create_session(user_id, ip_address=None, user_agent=None):
     session_id = secrets.token_urlsafe(32)
@@ -569,5 +525,215 @@ def is_session_admin(person_id, session_id):
             (person_id, session_id)
         )
         return cur.fetchone() is not None
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Pending registrations (migration 056)
+#
+# Typing an unknown address on the login page records a pending_registration
+# row and emails a link. No person or user_account exists until that link is
+# clicked, so a mistyped address leaves nothing behind but this one row.
+# ---------------------------------------------------------------------------
+
+PENDING_REGISTRATION_HOURS = 24
+
+
+def _referrer_person_id(value):
+    """The ?referrer=<person_id> kept in the Flask session is untrusted text."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def start_pending_registration(email, referred_by_person_id=None):
+    """Record (or refresh) a pending registration for `email` and return the token
+    to email. One row per address: entering the same address again extends the
+    expiry and keeps the existing token while it is still valid, so a link from an
+    earlier email keeps working; an expired token is replaced."""
+    now = now_utc()
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO pending_registration
+                (email, verification_token, verification_token_expires,
+                 referred_by_person_id, created_date, last_sent_date)
+            VALUES (%s, %s, %s, (SELECT person_id FROM person WHERE person_id = %s), %s, %s)
+            ON CONFLICT ((LOWER(email))) DO UPDATE SET
+                verification_token = CASE
+                    WHEN pending_registration.verification_token_expires > %s
+                    THEN pending_registration.verification_token
+                    ELSE EXCLUDED.verification_token
+                END,
+                verification_token_expires = EXCLUDED.verification_token_expires,
+                referred_by_person_id = COALESCE(
+                    EXCLUDED.referred_by_person_id, pending_registration.referred_by_person_id
+                ),
+                last_sent_date = EXCLUDED.last_sent_date
+            RETURNING verification_token
+            """,
+            (
+                email,
+                generate_verification_token(),
+                now + timedelta(hours=PENDING_REGISTRATION_HOURS),
+                _referrer_person_id(referred_by_person_id),
+                now,
+                now,
+                now,
+            ),
+        )
+        token = cur.fetchone()[0]
+        conn.commit()
+        return token
+    finally:
+        conn.close()
+
+
+def has_pending_registration(email):
+    """True when `email` has a pending registration (expired or not)."""
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT 1 FROM pending_registration WHERE LOWER(email) = LOWER(%s)",
+            (email,),
+        )
+        return cur.fetchone() is not None
+    finally:
+        conn.close()
+
+
+def _unique_username(cur, email):
+    """Username from the part of the address before @, with a numeric suffix if
+    taken. Passwordless people never type it; it only has to be unique."""
+    base_username = email.split("@")[0].lower()
+    username = base_username
+    suffix = 0
+    while True:
+        cur.execute(
+            "SELECT 1 FROM user_account WHERE LOWER(username) = LOWER(%s)", (username,)
+        )
+        if not cur.fetchone():
+            return username
+        suffix += 1
+        username = f"{base_username}{suffix}"
+
+
+def complete_pending_registration(token):
+    """Turn a clicked registration link into a person + verified, passwordless
+    user_account, and delete the pending row.
+
+    Returns (status, user_id):
+      ("created", user_id)         - the account now exists; log them in.
+      ("account_exists", user_id)  - an account for this address was created some
+                                     other way since the link was sent; nothing is
+                                     created and the pending row is dropped.
+      ("invalid", None)            - no such token, or it has expired.
+    """
+    conn = get_db_connection()
+    email = None
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT pending_registration_id, email, referred_by_person_id
+            FROM pending_registration
+            WHERE verification_token = %s AND verification_token_expires > %s
+            FOR UPDATE
+            """,
+            (token, now_utc()),
+        )
+        row = cur.fetchone()
+        if not row:
+            conn.rollback()
+            return "invalid", None
+        pending_id, email, referred_by_person_id = row
+
+        cur.execute(
+            "SELECT user_id FROM user_account WHERE LOWER(user_email) = LOWER(%s)",
+            (email,),
+        )
+        existing = cur.fetchone()
+        if existing:
+            cur.execute(
+                "DELETE FROM pending_registration WHERE pending_registration_id = %s",
+                (pending_id,),
+            )
+            conn.commit()
+            return "account_exists", existing[0]
+
+        # An admin may already have added this person to a roster by email: take
+        # over that person rather than make a second one.
+        cur.execute(
+            """
+            SELECT p.person_id FROM person p
+            WHERE LOWER(p.email) = LOWER(%s)
+              AND NOT EXISTS (SELECT 1 FROM user_account ua WHERE ua.person_id = p.person_id)
+            ORDER BY p.person_id
+            LIMIT 1
+            """,
+            (email,),
+        )
+        person_row = cur.fetchone()
+        now = now_utc()
+        if person_row:
+            person_id = person_row[0]
+            save_to_history(cur, "person", "UPDATE", person_id, user_id=None)
+        else:
+            # Name and location are collected by profile setup after login.
+            cur.execute(
+                """
+                INSERT INTO person (first_name, last_name, created_date, last_modified_date)
+                VALUES ('', '', %s, %s)
+                RETURNING person_id
+                """,
+                (now, now),
+            )
+            person_id = cur.fetchone()[0]
+
+        cur.execute(
+            """
+            INSERT INTO user_account
+                (person_id, username, user_email, hashed_password, timezone,
+                 email_verified, referred_by_person_id, created_date,
+                 last_modified_date, created_by_user_id)
+            VALUES (%s, %s, %s, NULL, 'UTC', TRUE, %s, %s, %s, NULL)
+            RETURNING user_id
+            """,
+            (
+                person_id,
+                _unique_username(cur, email),
+                email,
+                referred_by_person_id,
+                now,
+                now,
+            ),
+        )
+        user_id = cur.fetchone()[0]
+        save_to_history(cur, "user_account", "INSERT", user_id, user_id=None)
+        # Connected now: user_account.user_email is authoritative; retire person.email.
+        cur.execute("UPDATE person SET email = NULL WHERE person_id = %s", (person_id,))
+        cur.execute(
+            "DELETE FROM pending_registration WHERE pending_registration_id = %s",
+            (pending_id,),
+        )
+        conn.commit()
+        return "created", user_id
+    except psycopg2.IntegrityError:
+        # Lost a race: the address got an account between our check and insert.
+        conn.rollback()
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT user_id FROM user_account WHERE LOWER(user_email) = LOWER(%s)",
+            (email,),
+        )
+        existing = cur.fetchone()
+        if not existing:
+            raise
+        return "account_exists", existing[0]
     finally:
         conn.close()

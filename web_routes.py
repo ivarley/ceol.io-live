@@ -34,10 +34,14 @@ from auth import (
     generate_verification_token,
     generate_login_token,
     log_login_event,
+    start_pending_registration,
+    has_pending_registration,
+    complete_pending_registration,
 )
 from email_utils import (
     send_password_reset_email,
     send_verification_email,
+    send_registration_email,
     send_login_link_email,
     verify_unsubscribe_token,
 )
@@ -1171,7 +1175,9 @@ def check_email_api():
     Check if email exists and return appropriate action:
     - password_login: User exists with password, show password field
     - magic_link_sent: User exists without password, magic link emailed
-    - registration_started: New user created, verification email sent
+    - registration_started: No account for this address. A pending registration
+      is recorded (auth.start_pending_registration) and a link emailed; the person
+      and account are only created when that link is clicked (verify_email).
     """
     if not request.is_json:
         return jsonify({"error": "JSON request required"}), 400
@@ -1245,67 +1251,15 @@ def check_email_api():
                 "message": "Check your email for a login link"
             })
     else:
-        # New user - create account and send verification email
-        conn = get_db_connection()
-        try:
-            cur = conn.cursor()
-
-            # Check if person exists with this email
-            cur.execute(
-                "SELECT person_id FROM person WHERE LOWER(email) = LOWER(%s)",
-                (email,)
-            )
-            person_row = cur.fetchone()
-
-            if person_row:
-                person_id = person_row[0]
-            else:
-                # Create minimal person record (name will be collected in profile setup)
-                cur.execute(
-                    """
-                    INSERT INTO person (first_name, last_name, email, created_date, last_modified_date)
-                    VALUES ('', '', %s, %s, %s)
-                    RETURNING person_id
-                """,
-                    (email, now_utc(), now_utc()),
-                )
-                person_id = cur.fetchone()[0]
-
-            conn.commit()
-        finally:
-            conn.close()
-
-        # Create passwordless user
-        user_id = User.create_user_passwordless(email, person_id)
-
-        if not user_id:
-            return jsonify({"error": "Failed to create account. Please try again."}), 500
-
-        # Generate verification token
-        token = generate_verification_token()
-        expires = now_utc() + timedelta(hours=24)
-
-        conn = get_db_connection()
-        try:
-            cur = conn.cursor()
-            cur.execute(
-                """
-                UPDATE user_account
-                SET verification_token = %s, verification_token_expires = %s
-                WHERE user_id = %s
-            """,
-                (token, expires, user_id),
-            )
-            conn.commit()
-        finally:
-            conn.close()
-
-        # Get user object for email
-        user = User.get_by_id(user_id)
-        send_verification_email(user, token)
+        # No account. Nothing is created until the emailed link is clicked, so a
+        # mistyped address leaves only a pending row behind (migration 056).
+        token = start_pending_registration(
+            email, referred_by_person_id=session.get("referred_by_person_id")
+        )
+        send_registration_email(email, token)
 
         log_login_event(
-            user_id,
+            None,
             email,
             "REGISTRATION",
             ip_address,
@@ -1315,7 +1269,7 @@ def check_email_api():
         return jsonify({
             "action": "registration_started",
             "email": email,
-            "message": "Check your email to verify your account"
+            "message": "We don't have an account for this email yet. We've sent a link to create one."
         })
 
 
@@ -1428,14 +1382,16 @@ def login_with_token(token):
         flash("This account has been deactivated.", "error")
         return redirect(url_for("login"))
 
-    # Clear the login token
+    # Clear the login token. Clicking an emailed link proves the address, so an
+    # account left unverified (made before migration 056) is verified here too.
     conn = get_db_connection()
     try:
         cur = conn.cursor()
         cur.execute(
             """
             UPDATE user_account
-            SET login_token = NULL, login_token_expires = NULL, last_modified_date = %s
+            SET login_token = NULL, login_token_expires = NULL, email_verified = TRUE,
+                last_modified_date = %s
             WHERE user_id = %s
         """,
             (now_utc(), user.user_id),
@@ -1512,11 +1468,17 @@ def set_password_optional():
 
         if password:
             if len(password) < 8:
-                flash("Password must be at least 8 characters.", "error")
+                flash(
+                    "Your password needs at least 8 characters. Make it longer, or choose Skip for now.",
+                    "error",
+                )
                 return render_template("auth/set_password.html")
 
             if password != confirm_password:
-                flash("Passwords do not match.", "error")
+                flash(
+                    "The two passwords don't match. Type the same password in both boxes.",
+                    "error",
+                )
                 return render_template("auth/set_password.html")
 
             # Hash and save password
@@ -1958,8 +1920,63 @@ def change_password():
     return render_template("auth/change_password.html", has_password=user_has_password)
 
 
+def _login_after_verification(user, ip_address, user_agent):
+    """Start a web session for someone who just proved their address by clicking
+    a verification link, and send them on to the post-verification steps."""
+    login_user(user, remember=True)
+
+    session_id = create_session(user.user_id, ip_address, user_agent)
+
+    log_login_event(
+        user.user_id,
+        user.email,
+        "LOGIN_SUCCESS",
+        ip_address,
+        user_agent,
+        session_id=session_id,
+        additional_data={"method": "email_verification"},
+    )
+
+    session.permanent = True
+    session["db_session_id"] = session_id
+
+    # Cache admin session IDs
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT s.session_id
+            FROM session_person sp
+            JOIN session s ON sp.session_id = s.session_id
+            WHERE sp.person_id = %s AND sp.is_admin = TRUE
+        """,
+            (user.person_id,),
+        )
+        session["admin_session_ids"] = [row[0] for row in cur.fetchall()]
+    finally:
+        conn.close()
+
+    cleanup_expired_sessions()
+
+    flash("Email verified! Welcome to Irish Music Sessions.", "success")
+
+    # Passwordless: offer a password next (then profile setup, see
+    # set_password_optional).
+    if not user.has_password():
+        return redirect(url_for("set_password_optional"))
+    return redirect(url_for("home"))
+
+
 def verify_email(token):
-    """Verify email and auto-login the user"""
+    """Verify email and auto-login the user.
+
+    Two kinds of token arrive here:
+    - a pending registration (migration 056): the login page's unknown-address
+      path. The person and account are created now, already verified.
+    - an unverified user_account's token: accounts made by /register, and links
+      emailed before migration 056.
+    """
     # Get client info for logging
     ip_address = request.environ.get(
         "HTTP_X_FORWARDED_FOR", request.environ.get("REMOTE_ADDR")
@@ -1967,6 +1984,21 @@ def verify_email(token):
     if ip_address and "," in ip_address:
         ip_address = ip_address.split(",")[0].strip()
     user_agent = request.headers.get("User-Agent")
+
+    status, user_id = complete_pending_registration(token)
+    if status == "created":
+        user = User.get_by_id(user_id)
+        if user:
+            return _login_after_verification(user, ip_address, user_agent)
+    elif status == "account_exists":
+        # The address got an account some other way after this link was sent.
+        # Nothing new is created; send them to log in with the account they have.
+        flash(
+            "There's already an account for this email address. "
+            "Enter the address below to log in.",
+            "info",
+        )
+        return redirect(url_for("login"))
 
     conn = get_db_connection()
     try:
@@ -2004,61 +2036,22 @@ def verify_email(token):
                 (now_utc(), user_id),
             )
             conn.commit()
-
-            # Auto-login the user
-            user = User.get_by_id(user_id)
-            if user and user.is_active:
-                login_user(user, remember=True)
-
-                session_id = create_session(user.user_id, ip_address, user_agent)
-
-                log_login_event(
-                    user.user_id,
-                    user.email,
-                    "LOGIN_SUCCESS",
-                    ip_address,
-                    user_agent,
-                    session_id=session_id,
-                    additional_data={"method": "email_verification"},
-                )
-
-                session.permanent = True
-                session["db_session_id"] = session_id
-
-                # Cache admin session IDs
-                cur.execute(
-                    """
-                    SELECT s.session_id
-                    FROM session_person sp
-                    JOIN session s ON sp.session_id = s.session_id
-                    WHERE sp.person_id = %s AND sp.is_admin = TRUE
-                """,
-                    (user.person_id,),
-                )
-                admin_session_ids = [row[0] for row in cur.fetchall()]
-                session["admin_session_ids"] = admin_session_ids
-
-                cleanup_expired_sessions()
-
-                flash("Email verified! Welcome to Irish Music Sessions.", "success")
-
-                # Redirect to password setup if user has no password
-                if not user.has_password():
-                    return redirect(url_for("set_password_optional"))
-
-                return redirect(url_for("home"))
-
-            flash("Email verified successfully! You can now log in.", "success")
-            return redirect(url_for("login"))
         else:
             flash(
-                "Invalid or expired verification link. Please request a new verification email.",
+                "This link is invalid or has expired. Enter your email below and we'll send a new one.",
                 "error",
             )
             return redirect(url_for("resend_verification"))
-
     finally:
         conn.close()
+
+    # Auto-login the user
+    user = User.get_by_id(user_id)
+    if user and user.is_active:
+        return _login_after_verification(user, ip_address, user_agent)
+
+    flash("Email verified successfully! You can now log in.", "success")
+    return redirect(url_for("login"))
 
 
 def resend_verification():
@@ -2125,6 +2118,19 @@ def resend_verification():
                 else:
                     flash(
                         "Failed to send verification email. Please try again later.",
+                        "error",
+                    )
+            elif has_pending_registration(email):
+                # Typed on the login page but the link was never clicked (or has
+                # expired): refresh it and send it again. Still no account.
+                if send_registration_email(email, start_pending_registration(email)):
+                    flash(
+                        "We've sent a new link. Check your email to create your account.",
+                        "success",
+                    )
+                else:
+                    flash(
+                        "Failed to send the email. Please try again in a few minutes.",
                         "error",
                     )
             else:

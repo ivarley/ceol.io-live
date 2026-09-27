@@ -81,18 +81,19 @@
                             </div>
                         </div>
 
-                        <!-- Step 2c: Registration started (verification email sent) -->
+                        <!-- Step 2c: No account for this address. Nothing is created
+                             yet: a link to create one has been emailed. Not a success
+                             state, so no tick; it's a "did you mean that address?" check. -->
                         <div id="registration-step" class="d-none">
                             <div class="text-center">
                                 <div class="mb-3">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="currentColor" class="text-success" viewBox="0 0 16 16">
-                                        <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zm-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-.01-1.05z"/>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" fill="currentColor" class="text-muted" viewBox="0 0 16 16" aria-hidden="true">
+                                        <path d="M0 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V4Zm2-1a1 1 0 0 0-1 1v.217l7 4.2 7-4.2V4a1 1 0 0 0-1-1H2Zm13 2.383-4.708 2.825L15 11.105V5.383Zm-.034 6.876-5.64-3.471L8 9.583l-1.326-.795-5.64 3.47A1 1 0 0 0 2 13h12a1 1 0 0 0 .966-.741ZM1 11.105l4.708-2.897L1 5.383v5.722Z"/>
                                     </svg>
                                 </div>
-                                <h5>Check your email to verify</h5>
-                                <p class="text-muted">We've sent a verification link to <strong id="registration-email"></strong></p>
-                                <p class="text-muted small">Click the link in the email to complete your registration and log in.</p>
-                                <button type="button" class="btn btn-link" onclick="resetForm()">Use a different email</button>
+                                <p>We don't have an account for <strong id="registration-email"></strong> yet. We've sent a link to create one.</p>
+                                <p class="text-muted small">The link expires in 24 hours.</p>
+                                <p class="mb-0">Already have an account? <button type="button" class="btn btn-link p-0 align-baseline" onclick="resetForm()">Try a different email</button></p>
                             </div>
                         </div>
 

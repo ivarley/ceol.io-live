@@ -11,6 +11,7 @@ exists, so the audit rows those endpoints write are the ones deletion must find.
 """
 
 import uuid
+from unittest.mock import patch
 
 import bcrypt
 import pytest
@@ -214,22 +215,18 @@ class TestWhatGoes:
     def test_the_email_is_free_to_register_again(self, client, deleted):
         user, _ = deleted
         try:
-            r = client.post("/api/auth/check-email", json={"email": user["email"]})
+            with patch("web_routes.send_registration_email", return_value=True):
+                r = client.post("/api/auth/check-email", json={"email": user["email"]})
             assert r.status_code == 200
-            assert r.get_json().get("action") != "password"
+            assert r.get_json().get("action") == "registration_started"
         finally:
-            # check-email on an unknown address starts a registration: a fresh account
-            # and a blank person. Not ours to keep.
+            # check-email on an unknown address records a pending registration
+            # (migration 056); no account or person until its link is clicked.
+            # Not ours to keep.
             conn = get_db_connection()
             try:
                 cur = conn.cursor()
-                cur.execute("SELECT user_id, person_id FROM user_account WHERE LOWER(user_email) = LOWER(%s)", (user["email"],))
-                for uid, pid in cur.fetchall():
-                    cur.execute("DELETE FROM user_account_history WHERE user_id = %s", (uid,))
-                    cur.execute("DELETE FROM user_account WHERE user_id = %s", (uid,))
-                    if pid != user["person_id"]:
-                        cur.execute("DELETE FROM person_history WHERE person_id = %s", (pid,))
-                        cur.execute("DELETE FROM person WHERE person_id = %s", (pid,))
+                cur.execute("DELETE FROM pending_registration WHERE LOWER(email) = LOWER(%s)", (user["email"],))
                 conn.commit()
             finally:
                 conn.close()

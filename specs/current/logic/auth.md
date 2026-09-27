@@ -18,10 +18,52 @@ User registration, login, password management, email verification.
 
 ## Authentication Flow
 
-**Registration** (`web_routes.py:790-983`):
+**Email-first login** (`templates/auth/login.html`, `POST /api/auth/check-email`
+→ `web_routes.check_email_api`). The person types an address; the answer is one of:
+- `password_login` — an account with a password: show the password field.
+- `magic_link_sent` — a passwordless account: a 15-minute login link is emailed.
+  Clicking it also sets `email_verified` (the click proves the address).
+- `registration_started` — no account for this address. **Nothing is created
+  yet** (migration 056): `auth.start_pending_registration` records a
+  `pending_registration` row (email, token, 24-hour expiry, the session's
+  `referred_by_person_id`) and `email_utils.send_registration_email` sends a
+  "create your account" link to `/verify-email/<token>`. The page says "We don't
+  have an account for <email> yet. We've sent a link to create one." with a "Try a
+  different email" link, so a mistyped address is noticed rather than turned into
+  a phantom account. Entering the same address again (any case) refreshes the
+  same row: the expiry is extended and the token kept while still valid, so an
+  earlier email's link keeps working; an expired token is replaced.
+
+**Clicking the registration link** (`verify_email`, or `POST /api/auth/exchange`
+for the app) calls `auth.complete_pending_registration(token)`, in one transaction:
+- If an account for that address now exists (made some other way since the link
+  was sent), nothing is created, the pending row is deleted, and the person is
+  sent to log in (web: redirect to `/login` with a note; API: 409 `account_exists`).
+- Otherwise it takes over an accountless `person` whose `email` matches (someone
+  an admin added to a roster), or creates a blank person (name and location come
+  from profile setup), creates a passwordless `user_account` with
+  `email_verified = TRUE`, retires `person.email`, and deletes the pending row.
+  The unique index on `LOWER(user_account.user_email)` backs this up if two
+  clicks race.
+- The person is logged in and continues as before: `/auth/set-password`
+  (optional) → `/auth/setup-profile` while the name or location is missing
+  (`needs_profile_setup`) → home.
+
+**Resend verification** (`/resend-verification`, `POST /api/auth/resend-verification`):
+an unverified `user_account` gets a new verification token; otherwise, if the
+address has a pending registration, it is refreshed and its link resent. Unknown
+addresses get the generic "if an unverified account exists" answer and nothing is
+created.
+
+**Legacy form registration** (`/register`, `web_routes.register`): username,
+password and name up front. It still creates the person and an unverified
+`user_account` immediately, and the account's own `verification_token` is
+consumed by the same `/verify-email/<token>` route. Password login refuses these
+accounts until verified. Links emailed by the login page before migration 056
+(when it still created the account up front) also take this path.
 - Links to existing person if email matches, creates new person otherwise
-- Email verification required (24-hour tokens)
-- Referrer tracking via `?referrer=<person_id>` URL parameter
+- Referrer tracking via `?referrer=<person_id>` URL parameter (stored in the Flask
+  session by `app.py`, copied to the pending registration or the new account)
 
 **Login** (`web_routes.py:986-1104`):
 - Blocks login if email not verified
@@ -83,6 +125,7 @@ User registration, login, password management, email verification.
 ## Database Tables
 
 - `user_account` - Login credentials, preferences, tokens
+- `pending_registration` - An address that asked to register on the login page but has not clicked its link; no person or account exists for it yet (migration 056)
 - `user_session` - Active sessions with expiry
 - `login_history` - Audit trail (LOGIN_SUCCESS, LOGIN_FAILURE, LOGOUT, PASSWORD_RESET)
 

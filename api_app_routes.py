@@ -37,14 +37,17 @@ from api_auth import (
 from auth import (
     User,
     cleanup_expired_sessions,
+    complete_pending_registration,
     create_session,
     generate_login_token,
     generate_verification_token,
+    has_pending_registration,
     log_login_event,
     needs_profile_setup,
+    start_pending_registration,
 )
 from database import get_db_connection, save_to_history
-from email_utils import send_verification_email
+from email_utils import send_registration_email, send_verification_email
 from instruments import CANONICAL_INSTRUMENTS, normalize_instruments
 from timezone_utils import now_utc
 
@@ -165,6 +168,21 @@ def auth_exchange():
         return api_error("token is required", 400, "missing_token")
 
     ip_address, user_agent = request_client_info()
+
+    # A registration link for an address with no account yet (migration 056):
+    # the person and account are created now, already verified.
+    status, user_id = complete_pending_registration(token)
+    if status == "account_exists":
+        return api_error(
+            "There's already an account for this email address. Log in with it instead.",
+            409,
+            "account_exists",
+        )
+    if status == "created":
+        user = User.get_by_id(user_id)
+        if user:
+            return jsonify(establish_session(user, "email_verification"))
+
     conn = get_db_connection()
     try:
         cur = conn.cursor()
@@ -179,7 +197,8 @@ def auth_exchange():
         row = cur.fetchone()
         method = "magic_link"
         if not row:
-            # Email-verification token (24-hour expiry, set at registration / resend).
+            # An unverified account's verification token (24-hour expiry): accounts
+            # made by /register, and links emailed before migration 056.
             cur.execute(
                 """
                 SELECT user_id FROM user_account
@@ -210,7 +229,8 @@ def auth_exchange():
             cur.execute(
                 """
                 UPDATE user_account
-                SET login_token = NULL, login_token_expires = NULL, last_modified_date = %s
+                SET login_token = NULL, login_token_expires = NULL, email_verified = TRUE,
+                    last_modified_date = %s
                 WHERE user_id = %s
                 """,
                 (now_utc(), user_id),
@@ -267,6 +287,10 @@ def auth_resend_verification():
         )
         row = cur.fetchone()
         if not row:
+            # No account, but maybe a registration whose link was never clicked
+            # (migration 056): refresh it and send it again.
+            if has_pending_registration(email):
+                send_registration_email(email, start_pending_registration(email))
             return jsonify(generic)
         token = generate_verification_token()
         expires = now_utc() + timedelta(hours=24)

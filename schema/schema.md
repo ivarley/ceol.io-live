@@ -95,3 +95,12 @@ The database will be a Postgres database. The basic entities in my model will be
     - created_date - timestamp
     - last_modified_date - timestamp
 
+
+- **pending_registration** - An email address that was typed on the email-first login page, has no account, and has not yet clicked the link emailed to it (migration 056). No person or user_account exists for it; both are created (the account already verified) when the link is clicked, and this row is then deleted. Entering the same address again refreshes this row rather than adding another. Attributes:
+    - pending_registration_id - Unique ID, auto-generated, primary key
+    - email - string, required, unique case-insensitively (index on LOWER(email))
+    - verification_token - string, required, unique; the token in the emailed /verify-email/<token> link
+    - verification_token_expires - timestamp, 24 hours after the last entry of the address; a still-valid token is kept on re-entry so an earlier email keeps working
+    - referred_by_person_id - foreign key to person, optional (ON DELETE SET NULL); the ?referrer= in effect when the address was entered, copied to user_account on completion
+    - created_date - timestamp
+    - last_sent_date - timestamp, when the link was last emailed

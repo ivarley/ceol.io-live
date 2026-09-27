@@ -145,6 +145,45 @@ This link will expire in 24 hours.
     return result
 
 
+def send_registration_email(email, token):
+    """The link that creates an account for an address typed on the login page
+    (migration 056). No account exists yet, so it goes to a bare address, and the
+    wording has to make sense to someone who never asked for it."""
+    logger.info(f"Initiating registration email - Email: {email}")
+
+    verification_url = url_for("verify_email", token=token, _external=True)
+
+    subject = "Create your account - Irish Music Sessions"
+    body_text = f"""Someone, hopefully you, asked to create an Irish Music Sessions account with this email address.
+
+Click this link to create your account and log in:
+{verification_url}
+
+If this wasn't you, ignore this email. No account is created unless the link is clicked.
+
+This link will expire in 24 hours.
+"""
+
+    body_html = f"""
+    <h2>Create your Irish Music Sessions account</h2>
+    <p>Someone, hopefully you, asked to create an account with this email address.</p>
+    <p><a href="{verification_url}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Create my account</a></p>
+    <p>If the button doesn't work, copy and paste this link into your browser:</p>
+    <p>{verification_url}</p>
+    <p>If this wasn't you, ignore this email. No account is created unless the link is clicked.</p>
+    <p><strong>This link will expire in 24 hours.</strong></p>
+    """
+
+    result = send_email_via_sendgrid(email, subject, body_text, body_html)
+
+    if result:
+        logger.info(f"Registration email sent successfully - Email: {email}")
+    else:
+        logger.error(f"Registration email failed - Email: {email}")
+
+    return result
+
+
 def send_login_link_email(user, token):
     """Send magic link for passwordless login (15 min expiry)"""
     logger.info(f"Initiating login link email - User: {user.username}, Email: {user.email}")
