@@ -542,6 +542,8 @@ class TestLongRunningWorkflows:
                 [
                     {"tune_id": 1001, "tune_name": "The Butterfly", "tune_type": "slip jig", "play_count": 15, "tunebook_count": 156, "setting_id": None},
                 ],
+                # Nights on right now (the "Open Today's Session Log" banner): none
+                [],
             ]
 
             response = client.get("/sessions/evolving-session")

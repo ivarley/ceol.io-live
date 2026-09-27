@@ -103,6 +103,16 @@ select.today-action-btn {
     transition: background-color 0.1s;
 }
 
+/* Desktop: My Tunes' rows open up to 15px padding around a 28px status chip, 58px
+   in all. Match that here, with a floor rather than padding alone, so the row with
+   an "On Now" pill isn't taller than the rows without one. */
+@media (min-width: 769px) {
+    .session-row {
+        padding: 15px 8px;
+        min-height: 58px;
+    }
+}
+
 .session-row:first-child {
     border-top: 1px solid var(--border-color);
 }

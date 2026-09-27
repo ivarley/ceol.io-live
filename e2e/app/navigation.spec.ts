@@ -2,17 +2,17 @@ import { test, expect } from "@playwright/test";
 import { STORAGE } from "../support/data";
 import { openMenu, expectNoServerError } from "../support/nav";
 
-/** Primary navigation: the hamburger menu and find-a-tune. */
+/** Primary navigation on desktop: the header links and the menu. */
 
 test.describe("authenticated navigation", () => {
   test.use({ storageState: STORAGE.regular });
 
-  test("the menu mirrors the tab bar, then what /me's Account section holds", async ({
+  test("the header links mirror the tab bar; the menu holds the Account section", async ({
     page,
   }) => {
-    // The tab bar is the phone's navigation and this is the desktop form of it. Both
-    // are in the DOM on every page — CSS decides which one you see — so the two can be
-    // compared without resizing, which is the point: they are one IA rendered twice.
+    // The tab bar is the phone's navigation and the header links are the desktop form
+    // of it. Both are in the DOM on every page — CSS decides which one you see — so the
+    // two can be compared without resizing, which is the point: one IA rendered twice.
     await page.goto("/");
     const tabs = await page
       .locator(".tab-bar-item .tab-bar-label")
@@ -20,16 +20,21 @@ test.describe("authenticated navigation", () => {
       .then((t) => t.map((s) => s.trim()));
     expect(tabs).toEqual(["Home", "Sessions", "Tunes", "Me"]);
 
+    const links = await page
+      .locator(".header-nav .header-nav-item")
+      .allInnerTexts()
+      .then((t) => t.map((s) => s.trim()));
+    // Home is the logo, so it is the one tab with no header link.
+    expect(links).toEqual(tabs.slice(1));
+
+    // With the destinations in the header, the menu keeps only what /me's Account
+    // section holds. No Admin: this is the regular user.
     const menu = await openMenu(page);
     const items = await menu
       .locator(".hamburger-item")
       .allInnerTexts()
       .then((t) => t.map((s) => s.trim()));
-
-    // Home is the logo beside the menu button, so it is the one tab with no row here.
-    expect(items.slice(0, 3)).toEqual(tabs.slice(1));
-    // ...then the Account section from /me. No Admin: this is the regular user.
-    expect(items.slice(3)).toEqual(["Share", "Help", "Log Out"]);
+    expect(items).toEqual(["Share", "Help", "Log Out"]);
   });
 
   test("the menu says whose account you are in", async ({ page }) => {
@@ -42,13 +47,11 @@ test.describe("authenticated navigation", () => {
     );
   });
 
-  test("menu navigates to your tunes", async ({ page }) => {
+  test("the header's Tunes link goes to your tunes", async ({ page }) => {
     await page.goto("/");
-    const menu = await openMenu(page);
-    // "Tunes", as the tab bar calls it — it was "My Tunes" when the menu was its own
-    // vocabulary.
-    await menu.getByRole("link", { name: /^Tunes$/i }).click();
+    await page.locator(".header-nav").getByRole("link", { name: /^Tunes$/i }).click();
     await expect(page).toHaveURL(/\/my-tunes/);
+    await expect(page.locator(".header-nav .header-nav-item.active")).toHaveText(/Tunes/);
     // The page has no heading (spec 052 §B1); its search box is the landmark.
     await expect(page.locator("#search-input")).toBeVisible();
   });

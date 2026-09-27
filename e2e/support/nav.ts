@@ -3,10 +3,10 @@ import { Page, expect } from "@playwright/test";
 /**
  * Shared navigation helpers.
  *
- * Primary navigation is the hamburger menu (toggled by `button.hamburger-btn`) on a
- * desktop viewport, and the bottom tab bar under 768px, where CSS hides the menu.
- * Both are rendered into every page; these helpers drive the desktop one, so a test
- * using them needs a desktop viewport.
+ * Primary navigation is the header links (.header-nav) on a desktop viewport, and the
+ * bottom tab bar under 768px. The hamburger menu (toggled by `button.hamburger-btn`)
+ * holds the Account items on desktop and is hidden on phones. These helpers drive the
+ * desktop menu, so a test using them needs a desktop viewport.
  */
 
 export async function openMenu(page: Page) {

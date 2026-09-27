@@ -376,6 +376,10 @@
             </div><!--//docs-logo-wrapper-->
             <div class="docs-top-utilities d-flex justify-content-end align-items-center">
 
+                {# Desktop links to the tab bar's destinations (hidden on phones, where
+                   the tab bar itself is the navigation). #}
+                {% include 'header_nav.html' %}
+
                 <ul class="list-inline mx-md-3 mb-0 d-none d-lg-flex">
                     <!-- <li class="list-inline-item"><a href="#"><i class="fab fa-product-hunt fa-fw"></i></a></li> -->
                 </ul><!--//social-list-->
@@ -415,7 +419,9 @@
                     </svg>
                 </button>
 
-                <!-- Hamburger Menu -->
+                <!-- Hamburger Menu: the header links above carry the destinations, so
+                     the menu holds only the account items (see header_nav.html). -->
+                {% set header_nav = true %}
                 {% include 'hamburger_menu.html' %}
                 
             </div><!--//docs-top-utilities-->

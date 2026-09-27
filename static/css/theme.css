@@ -9799,12 +9799,15 @@
     background-color: rgba(255, 255, 255, 0.075);
   }
 
-  /* Fix nav-tabs active background for dark mode */
+  /* Tabs are underlined everywhere; the session page's tabs are the model. The
+     active tab is marked by colour and a bottom rule, never by a box. (This rule
+     used to box the active tab and paint its bottom border the page colour, which
+     erased the underline from every .nav-tabs strip.) */
   :root .nav-tabs .nav-link.active,
   :root .nav-tabs .nav-item.show .nav-link {
-    background-color: var(--bg-color);
-    color: var(--text-color);
-    border-color: var(--border-color) var(--border-color) var(--bg-color);
+    background-color: transparent;
+    color: var(--primary);
+    border-color: transparent transparent var(--primary);
   }
 
   /* Fix heading visibility in dark mode */

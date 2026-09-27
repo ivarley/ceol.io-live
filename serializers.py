@@ -1071,6 +1071,29 @@ def build_session_detail_payload(
 
     tunes = load_session_tunes(conn, session_id, limit=first_page, person_id=person_id)
 
+    # Nights on right now (is_active, kept by the active-sessions job), in the same
+    # shape as the directory's active_instances. The page leads with a banner that
+    # opens tonight's log, the one thing you came to a session page for mid-session.
+    cur.execute(
+        """
+        SELECT session_instance_id, date, start_time, end_time, location_override
+        FROM session_instance
+        WHERE session_id = %s AND is_active = TRUE
+        ORDER BY date, start_time
+        """,
+        (session_id,),
+    )
+    active_instances = [
+        {
+            "session_instance_id": r["session_instance_id"],
+            "date": r["date"].isoformat(),
+            "start_time": r["start_time"].isoformat() if r["start_time"] else None,
+            "end_time": r["end_time"].isoformat() if r["end_time"] else None,
+            "location_override": r["location_override"],
+        }
+        for r in cur.fetchall()
+    ]
+
     return {
         "success": True,
         "session": session,
@@ -1083,6 +1106,7 @@ def build_session_detail_payload(
             "can_view_people": can_view_people,  # (is_admin OR confirmed) AND show_people_list
         },
         "today_in_session_tz": today_in_session_tz.isoformat(),
+        "active_instances": active_instances,
         "default_tab": "logs" if session["session_type"] == "festival" else "tunes",
         "tunes": tunes,
         "total_tunes_count": total_tunes_count,

@@ -127,8 +127,9 @@
 .nav-tabs .nav-link {
     border: none;
     border-bottom: 3px solid transparent;
+    margin-bottom: -2px; /* the underline sits on the strip's rule, not below it */
     background: none;
-    color: var(--primary, #65b464);
+    color: var(--secondary-text);
     font-weight: 500;
     padding: 1rem 1.5rem;
     text-decoration: none;
@@ -137,7 +138,7 @@
 
 /* Override visited state to keep consistent color */
 .nav-tabs .nav-link:visited {
-    color: var(--primary, #65b464);
+    color: var(--secondary-text);
 }
 
 .nav-tabs .nav-link:hover {
@@ -148,7 +149,7 @@
 
 .nav-tabs .nav-link.active,
 .nav-tabs .nav-link.active:visited {
-    color: var(--text-color);
+    color: var(--primary, #65b464);
     border-bottom-color: var(--primary, #65b464);
     background: none;
     font-weight: 600;

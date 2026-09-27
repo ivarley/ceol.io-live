@@ -22,6 +22,7 @@
    (live_logging.html has its own shell) — right, because a bar pinned to the bottom of
    that screen would sit on the composer.
 #}
+{% from 'partials/nav_icons.html' import nav_icon %}
 {% set p = request.path %}
 <nav class="tab-bar" id="tab-bar" aria-label="Main">
   <a href="/" class="tab-bar-item{% if p == '/' %} active{% endif %}"
@@ -35,7 +36,7 @@
   <a href="/sessions" class="tab-bar-item{% if p.startswith('/sessions') %} active{% endif %}"
      {% if p.startswith('/sessions') %}aria-current="page"{% endif %} data-tab="sessions">
     <span class="tab-bar-glyph" aria-hidden="true">
-      <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/></svg>
+      {{ nav_icon('sessions') }}
     </span>
     <span class="tab-bar-label">Sessions</span>
   </a>
@@ -44,7 +45,7 @@
   <a href="/my-tunes" class="tab-bar-item{% if p.startswith('/my-tunes') %} active{% endif %}"
      {% if p.startswith('/my-tunes') %}aria-current="page"{% endif %} data-tab="tunes">
     <span class="tab-bar-glyph" aria-hidden="true">
-      <svg viewBox="0 0 24 24"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg>
+      {{ nav_icon('tunes') }}
     </span>
     <span class="tab-bar-label">Tunes</span>
   </a>
@@ -52,7 +53,7 @@
   <a href="/me" class="tab-bar-item{% if p == '/me' or p.startswith('/me/') %} active{% endif %}"
      {% if p == '/me' or p.startswith('/me/') %}aria-current="page"{% endif %} data-tab="me">
     <span class="tab-bar-glyph" aria-hidden="true">
-      <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a8 8 0 0 1 16 0v1"/></svg>
+      {{ nav_icon('me') }}
     </span>
     <span class="tab-bar-label">Me</span>
   </a>
@@ -63,7 +64,7 @@
   <a href="/tunes" class="tab-bar-item{% if p.startswith('/tunes') %} active{% endif %}"
      {% if p.startswith('/tunes') %}aria-current="page"{% endif %} data-tab="tunes">
     <span class="tab-bar-glyph" aria-hidden="true">
-      <svg viewBox="0 0 24 24"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg>
+      {{ nav_icon('tunes') }}
     </span>
     <span class="tab-bar-label">Tunes</span>
   </a>
@@ -75,7 +76,7 @@
   <a href="/about" class="tab-bar-item{% if p.startswith('/about') or p.startswith('/help') or p.startswith('/login') or p.startswith('/register') %} active{% endif %}"
      {% if p.startswith('/about') %}aria-current="page"{% endif %} data-tab="about">
     <span class="tab-bar-glyph" aria-hidden="true">
-      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+      {{ nav_icon('about') }}
     </span>
     <span class="tab-bar-label">About</span>
   </a>

@@ -83,7 +83,10 @@ links to it under the pane header).
 
 **In Session Badge**: `#inSessionBadge` (`base.html:327`) - "Live" indicator when a session is on, popup on hover/click
 
-**Hamburger Menu**: `static/js/hamburger_menu.js` + `templates/hamburger_menu.html` - Profile, Admin, My Tunes, Find a tune, Log Out (authenticated) | Log In, Session Logs (unauthenticated)
+**Navigation** (one IA, one visible form per width):
+- **Phone (<768px)**: `templates/tab_bar.html` + `static/css/tab_bar.css` - bottom tab bar: Home, Sessions, Tunes, Me (signed out: Home, Sessions, Tunes, About). The menu is hidden.
+- **Desktop (≥768px)**: `templates/header_nav.html` - the same destinations as icon + label links in the site header (the logo is Home), styled in `tab_bar.css`. Icons for both come from `templates/partials/nav_icons.html`.
+- **Menu**: `static/js/hamburger_menu.js` + `templates/hamburger_menu.html` - on `base.html` pages (which set `header_nav`) only the Account items: Admin (system admins), Share, Help, Log Out (signed out: Share, Help, Log In or Register). The live logger's shell has no header links, so its menu also lists the destinations.
 
 ## Theme
 

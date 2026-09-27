@@ -1,0 +1,36 @@
+{# Desktop header links: the tab bar's destinations, in the tab bar's order, with the
+   tab bar's icons (partials/nav_icons.html). Shown from 768px up, exactly where the
+   bottom tab bar hands over (css/tab_bar.css), so every width has one visible
+   navigation and never two. Home is the logo, as on the tab bar's desktop form.
+
+   With these on screen the menu no longer repeats them: it keeps what /me's Account
+   section holds (Admin, Share, Help, Log Out). base.html sets `header_nav` before
+   including the menu so it knows. The live logger has its own header and keeps the
+   full menu. #}
+{% from 'partials/nav_icons.html' import nav_icon %}
+{% set p = request.path %}
+<nav class="header-nav" aria-label="Main">
+  <a href="/sessions" class="header-nav-item{% if p.startswith('/sessions') %} active{% endif %}"
+     {% if p.startswith('/sessions') %}aria-current="page"{% endif %}>
+    <span class="header-nav-glyph" aria-hidden="true">{{ nav_icon('sessions') }}</span>Sessions
+  </a>
+  {% if current_user.is_authenticated %}
+  <a href="/my-tunes" class="header-nav-item{% if p.startswith('/my-tunes') %} active{% endif %}"
+     {% if p.startswith('/my-tunes') %}aria-current="page"{% endif %}>
+    <span class="header-nav-glyph" aria-hidden="true">{{ nav_icon('tunes') }}</span>Tunes
+  </a>
+  <a href="/me" class="header-nav-item{% if p == '/me' or p.startswith('/me/') %} active{% endif %}"
+     {% if p == '/me' or p.startswith('/me/') %}aria-current="page"{% endif %}>
+    <span class="header-nav-glyph" aria-hidden="true">{{ nav_icon('me') }}</span>Me
+  </a>
+  {% else %}
+  <a href="/tunes" class="header-nav-item{% if p.startswith('/tunes') %} active{% endif %}"
+     {% if p.startswith('/tunes') %}aria-current="page"{% endif %}>
+    <span class="header-nav-glyph" aria-hidden="true">{{ nav_icon('tunes') }}</span>Tunes
+  </a>
+  <a href="/about" class="header-nav-item{% if p.startswith('/about') %} active{% endif %}"
+     {% if p.startswith('/about') %}aria-current="page"{% endif %}>
+    <span class="header-nav-glyph" aria-hidden="true">{{ nav_icon('about') }}</span>About
+  </a>
+  {% endif %}
+</nav>

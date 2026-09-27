@@ -66,8 +66,9 @@
 .nav-tabs .nav-link:visited {
     border: none;
     border-bottom: 3px solid transparent;
+    margin-bottom: -2px; /* the underline sits on the strip's rule, not below it */
     background: none;
-    color: var(--disabled-text);
+    color: var(--secondary-text);
     font-weight: 500;
     padding: 1rem 1.5rem;
     text-decoration: none;

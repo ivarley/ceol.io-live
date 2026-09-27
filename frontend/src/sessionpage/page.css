@@ -1406,3 +1406,66 @@ a.empty-log {
     gap: 8px;
     justify-content: flex-end;
 }
+
+/* "Open Today's Session Log" (templates/session_detail.html): shown only while a
+   night is on. Full width and filled, so it is the first thing the eye lands on
+   under the session's name; the pulsing dot is the same "live" signal the logger
+   and the Today card use. */
+.live-log-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 6px 0 10px;
+    padding: 12px 14px;
+    border-radius: 8px;
+    background: var(--primary-fill);
+    color: #fff;
+    font-size: 17px;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.live-log-banner:hover,
+.live-log-banner:visited {
+    color: #fff;
+    text-decoration: none;
+}
+
+.live-log-banner:hover {
+    filter: brightness(1.08);
+}
+
+.live-log-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #fff;
+    flex: 0 0 auto;
+    animation: live-log-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes live-log-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .live-log-dot {
+        animation: none;
+    }
+}
+
+.live-log-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.live-log-time {
+    font-weight: 400;
+    opacity: 0.85;
+}
+
+.live-log-chevron {
+    font-size: 22px;
+    line-height: 1;
+}

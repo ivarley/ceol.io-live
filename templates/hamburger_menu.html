@@ -25,20 +25,24 @@
     </button>
     <div class="hamburger-dropdown" id="hamburgerDropdown">
         {% if current_user.is_authenticated %}
-            {# --- the tab bar's destinations, in the tab bar's order ------------- #}
+            {# --- the tab bar's destinations, in the tab bar's order. Left out where
+                   the header already shows them as links (base.html sets header_nav);
+                   the live logger's shell has no header links, so it keeps them. --- #}
+            {% if not header_nav %}
             <a href="/sessions" class="hamburger-item"
                {% if p.startswith('/sessions') %}aria-current="page"{% endif %}>Sessions</a>
             <a href="/my-tunes" class="hamburger-item"
                {% if p.startswith('/my-tunes') %}aria-current="page"{% endif %}>Tunes</a>
             <a href="/me" class="hamburger-item"
                {% if p == '/me' or p.startswith('/me/') %}aria-current="page"{% endif %}>Me</a>
+            {% endif %}
             {% if current_user.is_system_admin %}
             <a href="/admin" class="hamburger-item"
                {% if p.startswith('/admin') %}aria-current="page"{% endif %}>Admin</a>
             {% endif %}
 
             {# --- and what /me's Account section holds --------------------------- #}
-            <a href="#" class="hamburger-item share-link hamburger-group-break"
+            <a href="#" class="hamburger-item share-link{% if not header_nav %} hamburger-group-break{% endif %}"
                onclick="shareCurrentPage(); return false;">Share</a>
             <a href="/help" class="hamburger-item"
                {% if p.startswith('/help') %}aria-current="page"{% endif %}>Help</a>
@@ -50,14 +54,16 @@
         {% else %}
             {# The signed-out tab bar is Home / Sessions / Tunes / About, and /tunes is
                the tradition's tunes rather than yours — the one that needs no account. #}
+            {% if not header_nav %}
             <a href="/sessions" class="hamburger-item"
                {% if p.startswith('/sessions') %}aria-current="page"{% endif %}>Sessions</a>
             <a href="/tunes" class="hamburger-item"
                {% if p.startswith('/tunes') %}aria-current="page"{% endif %}>Tunes</a>
             <a href="/about" class="hamburger-item"
                {% if p.startswith('/about') %}aria-current="page"{% endif %}>About</a>
+            {% endif %}
 
-            <a href="#" class="hamburger-item share-link hamburger-group-break"
+            <a href="#" class="hamburger-item share-link{% if not header_nav %} hamburger-group-break{% endif %}"
                onclick="shareCurrentPage(); return false;">Share</a>
             <a href="/help" class="hamburger-item"
                {% if p.startswith('/help') %}aria-current="page"{% endif %}>Help</a>

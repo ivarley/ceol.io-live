@@ -21,6 +21,20 @@
            to anything and too small to hit. #}
         <h1 class="session-title-heading">{{ session.name }}{% if is_session_admin %}<a href="/admin/sessions/{{ session.path }}" class="add-link">Admin</a>{% endif %}</h1>
 
+        {# On now: the one thing you came to this page for mid-session, so it leads.
+           Opens the log in view mode (the logger's default), since most people at a
+           session are reading the log, not writing it. A festival can have several
+           nights live at once, so there is one banner per night, told apart by time. #}
+        {% set live = payload.active_instances or [] %}
+        {% for inst in live %}
+        <a class="live-log-banner" href="/sessions/{{ session.path }}/{{ inst.session_instance_id }}"
+           data-instance-id="{{ inst.session_instance_id }}">
+            <span class="live-log-dot" aria-hidden="true"></span>
+            <span class="live-log-text">Open Today's Session Log{% if live|length > 1 and inst.start_time %} <span class="live-log-time">· {{ inst.start_time[:5] }}</span>{% endif %}</span>
+            <span class="live-log-chevron" aria-hidden="true">›</span>
+        </a>
+        {% endfor %}
+
         <div class="session-details">
             {# Role badge (Admin / Member / Visitor) -- mounted by the Svelte bundle. #}
             <div id="session-role-root"></div>

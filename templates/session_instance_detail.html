@@ -774,24 +774,27 @@
         }
         
         /* Tab navigation theming (overrides Bootstrap defaults) */
+        /* Underlined like every other tab strip in the app, not boxed. */
         :root .nav-tabs .nav-link.active {
-            background-color: var(--bg-color) !important;
-            color: var(--text-color) !important;
-            border-color: var(--border-color) var(--border-color) var(--bg-color) !important;
+            background-color: transparent !important;
+            color: var(--primary) !important;
+            border-color: transparent transparent var(--primary) !important;
         }
 
         :root .nav-tabs .nav-link {
-            color: var(--text-color);
-            border-color: transparent;
+            color: var(--secondary-text);
+            border: none;
+            border-bottom: 3px solid transparent;
+            margin-bottom: -2px;
         }
 
         :root .nav-tabs .nav-link:hover {
-            border-color: var(--border-color) var(--border-color) var(--bg-color);
-            color: var(--text-color);
+            border-color: transparent transparent var(--primary);
+            color: var(--primary);
         }
 
         :root .nav-tabs {
-            border-bottom: 1px solid var(--border-color);
+            border-bottom: 2px solid var(--border-color);
         }
 
         /* Mobile folder tab styling for tune type labels */
