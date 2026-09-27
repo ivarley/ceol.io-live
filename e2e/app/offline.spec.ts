@@ -266,20 +266,21 @@ test.describe("offline writes (Tier 2)", () => {
 });
 
 /**
- * Inline status change on the My Tunes list: tapping the status badge cycles the learn
- * status, queued offline via the op-queue and synced on reconnect.
+ * Status changes on My Tunes happen only in the tune drawer: tapping the list's status
+ * badge just opens the drawer (like the rest of the row). The drawer's change is queued
+ * offline via the op-queue and synced on reconnect.
  */
 test.describe("offline status change (Tier 2)", () => {
   test.use({ storageState: STORAGE.regular });
 
-  test("cycling a tune's status on the list queues offline and syncs", async ({ page, context }) => {
+  test("tapping the status badge opens the drawer; a status change there queues offline and syncs", async ({ page, context }) => {
     await page.goto("/my-tunes");
     await page.waitForFunction(() => !!(window as any).MyTunesOffline, null, { timeout: 8000 });
     await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 8000 });
 
     // Add a throwaway catalog tune (want-to-learn) so we never mutate the asserted
     // seed tunes — this test's OWN scratch tune, so parallel specs can't race on it.
-    const tid = SCRATCH_TUNES.listStatusCycle.id;
+    const tid = SCRATCH_TUNES.statusOffline.id;
     await resetScratchTune(page, tid);
     await page.request.post("/api/my-tunes/ops", { data: { type: "add", tune_id: tid, learn_status: "want to learn" } });
 
@@ -288,9 +289,14 @@ test.describe("offline status change (Tier 2)", () => {
       const badge = page.locator(`[data-tune-id="${tid}"] .status-badge`).first();
       await expect(badge).toHaveText(/to learn/i, { timeout: 8000 });
 
+      // The badge is display-only: a tap opens the drawer and leaves the status alone.
+      await badge.click();
+      await expect(page.locator(".tunebook-status-seg")).toBeVisible({ timeout: 8000 });
+      await expect(badge).toHaveText(/to learn/i);
+
       await context.setOffline(true);
-      await badge.click(); // want to learn -> learning (optimistic, queued)
-      await expect(badge).toHaveText(/learning/i);
+      await page.locator('.tunebook-status-opt[data-status="learning"]').click();
+      await expect(page.locator(".tunebook-status-opt.active")).toHaveAttribute("data-status", "learning");
       // The op is queued asynchronously (IndexedDB write) — poll rather than check once.
       await expect
         .poll(

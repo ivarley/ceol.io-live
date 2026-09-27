@@ -12,10 +12,8 @@
   import {
     SORT_MODES,
     catalogueExtras,
-    cycleInstrumentOverride,
     fetchAllTunes,
     filterAndSort,
-    nextStatus,
     noResultsMessage,
     overlayPendingOps,
     paramsFromState,
@@ -130,10 +128,10 @@
         return adopt(d.tunes, d.instruments, true)
       })
       .catch(() => {
-        if (allTunes.length === 0) {
-          loadFailed = true
-          toast('Server error. Please try again.', 'error')
-        }
+        // First load: the error state below says so, with a Retry. A refresh of a list
+        // already on screen keeps it, but says it may be stale.
+        if (allTunes.length === 0) loadFailed = true
+        else toast("Couldn't refresh your tunes, so the list may be out of date. Reload the page to try again.", 'error')
       })
       .finally(() => {
         fetchingMore = false
@@ -257,47 +255,6 @@
     allTunes = allTunes.map((t) => (t.tune_id === tuneId ? { ...t, ...patch } : t))
   }
 
-  // Tap the status badge: cycle want to learn -> learning -> learned. Optimistic,
-  // offline-queued, reverted only on a server rejection.
-  function cycleStatus(tune, displayStatus, isInstrument) {
-    if (isInstrument) {
-      const inst = instruments.find(
-        (i) => i.instrument.toLowerCase() === filters.instrument.toLowerCase()
-      )
-      if (!inst) return
-      const next = nextStatus(displayStatus)
-      const prev = { ...(tune.instrument_status || {}) }
-      replaceTune(tune.tune_id, {
-        instrument_status: cycleInstrumentOverride(tune, inst, next),
-      })
-      submitOp({
-        type: 'set_instrument_status',
-        tune_id: tune.tune_id,
-        instrument: inst.instrument,
-        status: next,
-      })
-        .then((res) => {
-          if (res && res.queued) replaceTune(tune.tune_id, { pending_sync: true })
-        })
-        .catch(() => {
-          replaceTune(tune.tune_id, { instrument_status: prev })
-          toast('Could not change status. Please try again.', 'error')
-        })
-    } else {
-      const next = nextStatus(tune.learn_status)
-      const prev = tune.learn_status
-      replaceTune(tune.tune_id, { learn_status: next })
-      submitOp({ type: 'set_status', tune_id: tune.tune_id, learn_status: next })
-        .then((res) => {
-          if (res && res.queued) replaceTune(tune.tune_id, { pending_sync: true })
-        })
-        .catch(() => {
-          replaceTune(tune.tune_id, { learn_status: prev })
-          toast('Could not change status. Please try again.', 'error')
-        })
-    }
-  }
-
   // Heard +: optimistic, sent as an ABSOLUTE set_heard so a queued replay can't
   // double-count. Reverts only on a server rejection.
   //
@@ -317,7 +274,7 @@
       })
       .catch(() => {
         replaceTune(tune.tune_id, { heard_count: oldCount })
-        toast('An error occurred. Please try again.', 'error')
+        toast("Couldn't update the heard count. Check your connection and try again.", 'error')
       })
   }
 
@@ -367,7 +324,9 @@
               if (allTunes.some((x) => x.tune_id === change.tune_id)) return
               allTunes = [...allTunes, d.person_tune]
             })
-            .catch(() => {})
+            // Couldn't fetch the one row: a full reload brings it in (and says so if
+            // that fails too).
+            .catch(() => loadTunes())
         }
       },
     })
@@ -410,6 +369,9 @@
   let catalogue = $state([])
   let catalogueLoading = $state(false)
   let catalogueQuery = $state('')
+  // A failed catalogue search must not read as "nothing matched".
+  let catalogueFailed = $state(false)
+  let catalogueRetry = $state(0)
   let catalogueSeq = 0
 
   $effect(() => {
@@ -420,12 +382,20 @@
       catalogueQuery = ''
       return
     }
+    catalogueRetry // re-run when Retry is pressed
     const seq = ++catalogueSeq
     catalogueQuery = q
     catalogueLoading = true
+    catalogueFailed = false
     fetch(`/api/tunes/search?q=${encodeURIComponent(q)}&limit=10`)
-      .then((r) => (r.ok ? r.json() : { tunes: [] }))
-      .catch(() => ({ tunes: [] }))
+      .then((r) => {
+        if (!r.ok) throw new Error('search failed: ' + r.status)
+        return r.json()
+      })
+      .catch(() => {
+        if (seq === catalogueSeq) catalogueFailed = true
+        return { tunes: [] }
+      })
       .then((d) => {
         // A late reply for an older query must not overwrite a newer one's results.
         if (seq !== catalogueSeq) return
@@ -886,12 +856,12 @@
     <div class="tunes-grid" id="tunes-grid" style="display: grid;">
       <div class="error-state">
         <div class="error-state-icon">⚠️</div>
-        <div class="error-state-title">Failed to Load Tunes</div>
-        <div class="error-state-message">There was a problem loading your tune collection.</div>
+        <div class="error-state-title">Couldn't load your tunes</div>
+        <div class="error-state-message">Check your connection, then try again.</div>
         <div class="error-state-action">
-          <button class="retry-btn" onclick={() => loadTunes()}>
+          <button class="retry-btn" disabled={fetchingMore} onclick={() => loadTunes()}>
             <span class="retry-icon">↻</span>
-            Retry
+            {fetchingMore ? 'Retrying…' : 'Retry'}
           </button>
         </div>
       </div>
@@ -951,11 +921,9 @@
             {tune}
             {isMobile}
             displayStatus={d.status}
-            cycleIsInstrument={d.isInstrument}
             typeLabel={typeBadgeLabel(tune, sort.type)}
             typeTitle={typeBadgeTitle(sort.type)}
             onshow={(t) => showTuneDetail(t.person_tune_id)}
-            oncycle={cycleStatus}
             onincrement={incrementHeard} />
         {/each}
         <div class="tune-group-heading">Tunes on other instruments</div>
@@ -965,11 +933,9 @@
             {tune}
             {isMobile}
             displayStatus={d.status}
-            cycleIsInstrument={d.isInstrument}
             typeLabel={typeBadgeLabel(tune, sort.type)}
             typeTitle={typeBadgeTitle(sort.type)}
             onshow={(t) => showTuneDetail(t.person_tune_id)}
-            oncycle={cycleStatus}
             onincrement={incrementHeard} />
         {/each}
       {:else}
@@ -979,11 +945,9 @@
             {tune}
             {isMobile}
             displayStatus={d.status}
-            cycleIsInstrument={d.isInstrument}
             typeLabel={typeBadgeLabel(tune, sort.type)}
             typeTitle={typeBadgeTitle(sort.type)}
             onshow={(t) => showTuneDetail(t.person_tune_id)}
-            oncycle={cycleStatus}
             onincrement={incrementHeard} />
         {/each}
       {/if}
@@ -996,7 +960,9 @@
   <NotOnYourList
     results={catalogue}
     loading={catalogueLoading}
+    failed={catalogueFailed}
     query={catalogueQuery}
+    onRetry={() => catalogueRetry++}
     onPick={addFromCatalogue} />
 
   <div id="loading-more" class="loading-more" class:visible={fetchingMore && !fullTunesLoaded}>

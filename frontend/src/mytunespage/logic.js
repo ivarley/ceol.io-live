@@ -2,7 +2,6 @@
 // data-in/data-out so it unit-tests without a DOM. Ported behavior-for-behavior
 // from the legacy templates/my_tunes.html inline script.
 
-export const STATUS_ORDER = ['want to learn', 'learning', 'learned']
 
 
 // extractTuneId (thesession URL / plain number -> id) now comes from the
@@ -341,21 +340,6 @@ export function submitOp(op) {
       if (!d.success) throw new Error(d.error || 'op failed')
       return { online: true, data: d }
     })
-}
-
-// Next status in the tap-to-cycle order.
-export function nextStatus(current) {
-  return STATUS_ORDER[(STATUS_ORDER.indexOf(current) + 1) % STATUS_ORDER.length]
-}
-
-// Per-instrument cycle result: what the overrides map and the op status become.
-// An auto instrument set back to the tune's overall status stores NO override
-// (snap-back) — matches the modal's semantics.
-export function cycleInstrumentOverride(tune, inst, next) {
-  const updated = { ...(tune.instrument_status || {}) }
-  if (inst.is_auto && next === tune.learn_status) delete updated[inst.instrument]
-  else updated[inst.instrument] = next
-  return updated
 }
 
 // Fetch the full list from the API, following pagination past the 2000-row page

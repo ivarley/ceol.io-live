@@ -81,7 +81,7 @@ export const SCRATCH_TUNES = {
   previewAdd: { id: 15, name: "Calliope House" }, // my-tunes.spec.ts preview-form add test (2 seeded settings)
   paneOfflineAdd: { id: 21, name: "Castle Kelly" }, // offline.spec.ts add-pane offline search/add
   homeDashboard: { id: 108, name: "Out On The Ocean" },
-  listStatusCycle: { id: 4195, name: "Bear Dance, The" },
+  statusOffline: { id: 4195, name: "Bear Dance, The" },
   drawerStatusSeg: { id: 19, name: "Connaughtman's Rambles, The" },
   drawerOfflineAdd: { id: 75, name: "Miss McLeod's" },
   offlineAddedCard: { id: 248, name: "Tam Lin" },

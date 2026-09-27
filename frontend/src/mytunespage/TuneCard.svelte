@@ -18,11 +18,9 @@
     tune,
     isMobile,
     displayStatus,
-    cycleIsInstrument,
     typeLabel,
     typeTitle = '',
     onshow,
-    oncycle,
     onincrement,
   } = $props()
 
@@ -38,7 +36,7 @@
 
   const statusClass = $derived('status-' + displayStatus.replace(/ /g, '-'))
   // The badge shows the page's wording ("To Learn"), never the stored value — which
-  // stays 'want to learn' everywhere it's compared, cycled, or sent.
+  // stays 'want to learn' everywhere it's compared or sent.
   const statusText = $derived(STATUS_LABELS[displayStatus] || displayStatus)
   const thesessionUrl = $derived(
     tune.tune_id
@@ -136,6 +134,10 @@
 </script>
 
 {#snippet cardBody()}
+  <!-- Fixed-width type column left of the name, so every name starts at the same x. -->
+  <div class="tune-type-cell">
+    {#if typeLabel}<Chip label={typeLabel} styled={false} chipClass="tune-type" title={typeTitle || typeLabel} />{/if}
+  </div>
   <div class="tune-card-header">
     <h3 class="tune-name">{tune.tune_name || 'Unknown'}</h3>
     <!-- This tune is here because its NOTATION matched, not its name — without the mark
@@ -149,20 +151,12 @@
         title="Queued - will sync when you are back online"
         style="flex:0 0 auto;white-space:nowrap;font-size:11px;font-weight:600;color:#b58900;" />
     {/if}
-    {#if typeLabel}<Chip label={typeLabel} styled={false} chipClass="tune-type" title={typeTitle || undefined} />{/if}
   </div>
   <div class="tune-meta">
     <div class="tune-meta-item">
-      <Chip
-        label={statusText}
-        styled={false}
-        chipClass="status-badge {statusClass}"
-        style="cursor:pointer;"
-        title="Tap to change status"
-        onclick={(e) => {
-          e.stopPropagation()
-          oncycle(tune, displayStatus, cycleIsInstrument)
-        }} />
+      <!-- Display only: a tap falls through to the card and opens the detail sheet,
+           the one place a status changes. -->
+      <Chip label={statusText} styled={false} chipClass="status-badge {statusClass}" />
     </div>
   </div>
   {#if displayStatus === 'want to learn'}

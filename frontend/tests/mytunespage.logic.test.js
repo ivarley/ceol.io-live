@@ -7,11 +7,9 @@ import {
   attendedPlays,
   buildSortFunction,
   catalogueExtras,
-  cycleInstrumentOverride,
   fetchAllTunes,
   filterAndSort,
   memberPlays,
-  nextStatus,
   noResultsMessage,
   paramsFromState,
   resolveTuneInstrumentStatus,
@@ -313,22 +311,6 @@ describe('applyPendingOps (offline overlay)', () => {
       { type: 'set_instrument_status', tune_id: 1, instrument: 'Fiddle', status: null, ts: 1 },
     ])
     expect(out[0].instrument_status).toEqual({})
-  })
-})
-
-describe('status cycling', () => {
-  it('cycles want to learn -> learning -> learned -> want to learn', () => {
-    expect(nextStatus('want to learn')).toBe('learning')
-    expect(nextStatus('learning')).toBe('learned')
-    expect(nextStatus('learned')).toBe('want to learn')
-  })
-  it('auto instrument set back to the base status stores NO override (snap-back)', () => {
-    const t = tune({ learn_status: 'learning', instrument_status: { Fiddle: 'learned' } })
-    const auto = { instrument: 'Fiddle', is_auto: true }
-    expect(cycleInstrumentOverride(t, auto, 'learning')).toEqual({})
-    expect(cycleInstrumentOverride(t, auto, 'learned')).toEqual({ Fiddle: 'learned' })
-    const manual = { instrument: 'Flute', is_auto: false }
-    expect(cycleInstrumentOverride(tune(), manual, 'learning')).toEqual({ Flute: 'learning' })
   })
 })
 

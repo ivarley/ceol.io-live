@@ -82,16 +82,13 @@ describe('My Tunes page view', () => {
     expect(container.querySelectorAll('#tunes-grid .tune-card')).toHaveLength(2)
   })
 
-  it('tapping the status badge cycles optimistically and posts the op', async () => {
+  it('tapping the status badge opens the drawer and leaves the status alone', async () => {
     const { container } = render(App, { pageData: payload() })
     await waitFor(() => expect(container.querySelector('.tune-card[data-tune-id="101"] .status-badge')).toBeTruthy())
     await fireEvent.click(container.querySelector('.tune-card[data-tune-id="101"] .status-badge'))
-    await waitFor(() => {
-      expect(container.querySelector('.tune-card[data-tune-id="101"] .status-badge').textContent).toBe('Learning')
-    })
-    const opCall = fetch.mock.calls.find(([url]) => String(url).includes('/api/my-tunes/ops'))
-    expect(opCall).toBeTruthy()
-    expect(JSON.parse(opCall[1].body)).toMatchObject({ type: 'set_status', tune_id: 101, learn_status: 'learning' })
+    expect(window.TuneDetailModal.show).toHaveBeenCalledWith(expect.objectContaining({ tuneId: 101 }))
+    expect(container.querySelector('.tune-card[data-tune-id="101"] .status-badge').textContent).toBe('To Learn')
+    expect(fetch.mock.calls.some(([url]) => String(url).includes('/api/my-tunes/ops'))).toBe(false)
   })
 
   it('clicking a card opens the shared drawer with the tune identity (+ ptid deep-link key)', async () => {

@@ -11,10 +11,17 @@
   // you were expecting, and a mixed list would make that a surprise every time.
   import { Row } from '../lib/index.js'
 
-  let { results = [], loading = false, query = '', onPick = () => {} } = $props()
+  let {
+    results = [],
+    loading = false,
+    failed = false, // the search itself failed: say so, rather than show no matches
+    query = '',
+    onPick = () => {},
+    onRetry = () => {},
+  } = $props()
 </script>
 
-{#if loading || results.length}
+{#if loading || failed || results.length}
   <div class="notlist" id="not-on-your-list">
     <div class="notlist-divider">
       <span class="notlist-label">Not on your list</span>
@@ -22,6 +29,11 @@
 
     {#if loading && !results.length}
       <div class="notlist-empty">Searching the catalogue for “{query}”…</div>
+    {:else if failed}
+      <div class="notlist-empty notlist-failed">
+        Couldn't search the catalogue. Check your connection, then
+        <button type="button" class="notlist-retry" onclick={onRetry}>try again</button>.
+      </div>
     {:else}
       <div class="notlist-rows">
         {#each results as tune (tune.tune_id)}
@@ -110,5 +122,18 @@
     color: var(--primary);
     font-size: 1.25rem;
     line-height: 1;
+  }
+  /* A failure is news, not an empty state: full-strength text, not the muted grey. */
+  .notlist-failed {
+    color: var(--text-color);
+  }
+  .notlist-retry {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--primary, #65b464);
+    font: inherit;
+    text-decoration: underline;
+    cursor: pointer;
   }
 </style>
