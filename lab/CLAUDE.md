@@ -5,6 +5,15 @@ Read `lab/README.md` (how to run things) and the spec
 worked", and every result so far) before changing anything here. The spec's
 "Where it stands" and "Still open" sections are the current state.
 
+## Where the lab lives
+
+In its own worktree, `~/Local/code/ceol.io-053` on branch
+`053-ceol-listen-lab`, with its own `venv` (`requirements.txt`,
+`requirements-test.txt` and `lab/requirements.txt`), so the lab's audio stack
+never touches the app's environment and app work never lands on this branch.
+`lab/data` (about 40GB) and `lab/.env` are untracked and live only here. App
+work happens in the other worktrees, never in this one.
+
 ## Hard rules
 
 - Production is read-only. Never write to it, and never commit `lab/.env`

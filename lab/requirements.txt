@@ -16,8 +16,9 @@ scikit-learn
 numba<0.61
 
 # The neural front end (lab/frontends/basicpitch.py). On macOS it runs the
-# CoreML model, so no TensorFlow. basic-pitch 0.4.0 pins resampy<0.4.3, but
-# resampy 0.4.2 imports pkg_resources, which setuptools 81+ removed; 0.4.3
-# works with basic-pitch and is what is installed.
-basic-pitch
-resampy>=0.4.3
+# CoreML model, so no TensorFlow. Pinned to the version measured: 0.4.0 pins
+# resampy<0.4.3, and resampy 0.4.2 imports pkg_resources, which setuptools
+# 81+ removed, so setuptools is held below 81. Asking for a newer resampy
+# instead made pip quietly choose basic-pitch 0.2.6.
+basic-pitch==0.4.0
+setuptools<81
