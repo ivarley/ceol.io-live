@@ -330,11 +330,23 @@ components:
               user_is_member: { type: boolean }
               user_relationship: { type: [string, "null"] }
               location_name: { type: [string, "null"] }
-              active_instances: { type: array }
+              active_instances: { type: array, items: { $ref: "#/components/schemas/ActiveInstanceSummary" } }
+    ActiveInstanceSummary:
+      description: >-
+        A night of a session that is on right now (session_instance.is_active, kept by the
+        active-sessions job). The same shape in the sessions list and in a session's detail.
+      type: object
+      required: [session_instance_id, date, start_time, end_time, location_override]
+      properties:
+        session_instance_id: { type: integer }
+        date: { $ref: "#/components/schemas/Date" }
+        start_time: { $ref: "#/components/schemas/TimeOrNull" }
+        end_time: { $ref: "#/components/schemas/TimeOrNull" }
+        location_override: { type: [string, "null"] }
     SessionDetail:
       type: object
-      required: [success, session, permissions, today_in_session_tz, tunes, total_tunes_count, total_logs_count,
-                 total_people_count, has_more_tunes, popular_tunes]
+      required: [success, session, permissions, today_in_session_tz, active_instances, tunes, total_tunes_count,
+                 total_logs_count, total_people_count, has_more_tunes, popular_tunes]
       properties:
         success: { const: true }
         session:
@@ -370,6 +382,8 @@ components:
             is_confirmed: { type: boolean }
             can_view_people: { type: boolean }
         today_in_session_tz: { $ref: "#/components/schemas/Date" }
+        # Nights on right now; the session screen leads with a banner into tonight's log.
+        active_instances: { type: array, items: { $ref: "#/components/schemas/ActiveInstanceSummary" } }
         tunes:
           type: array
           items:
@@ -675,8 +689,16 @@ paths:
   /api/auth/exchange:
     post:
       operationId: exchangeLoginToken
-      summary: Consume a magic-link or verification token (from a Universal Link) for a session
-      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/LoginResponse" } } } } }
+      summary: >-
+        Consume a token from a Universal Link for a session: a magic-link login, an unverified
+        account's verification link, or a registration link (migration 056), which creates the
+        person and account, already verified, at this moment.
+      responses:
+        "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/LoginResponse" } } } }
+        "400": { description: "code missing_token: no token in the body" }
+        "401": { description: "code invalid_token: unknown, used or expired" }
+        "403": { description: "code account_inactive: the account has been deactivated" }
+        "409": { description: "code account_exists: a registration link for an address that has since got an account; log in instead" }
   /api/auth/resend-verification:
     post:
       operationId: resendVerification

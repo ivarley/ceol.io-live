@@ -156,6 +156,24 @@ class TestSurfaceIsServed:
         allowed = {"/api/sessions/{session_path}/people -> get_session_people_list"}
         assert set(unclassified) <= allowed, unclassified
 
+    def test_no_schema_name_is_defined_twice(self):
+        """A YAML mapping silently keeps the LAST of two equal keys, so a second
+        `components.schemas.X` replaces the first without a word — and every $ref to
+        it quietly changes meaning. Parse with a loader that refuses duplicates."""
+
+        class Strict(yaml.SafeLoader):
+            pass
+
+        def no_dupes(loader, node, deep=False):
+            keys = [loader.construct_object(k, deep=deep) for k, _ in node.value]
+            dupes = {k for k in keys if keys.count(k) > 1}
+            assert not dupes, f"duplicate keys at line {node.start_mark.line + 1}: {dupes}"
+            return yaml.SafeLoader.construct_mapping(loader, node, deep)
+
+        Strict.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, no_dupes)
+        with open(SPEC_PATH) as f:
+            yaml.load(f, Loader=Strict)
+
     def test_every_operation_has_a_stable_unique_operation_id(self, spec):
         """The Swift client is generated from this file (swift-openapi-generator), and
         operationId becomes the method name the app calls. So every operation needs
@@ -211,6 +229,67 @@ class TestResponsesMatchSchemas:
             f"{'/'.join(str(p) for p in e.path) or '<root>'}: {e.message}"
             for e in errors
         )
+
+    @pytest.fixture
+    def a_night_on_now(self):
+        """Mark one of Mueller's nights active (the active-sessions job's flag), so the
+        ActiveInstanceSummary items are really checked: the seed has no night on, and an
+        empty array validates against any item schema."""
+        from database import get_db_connection
+
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT si.session_instance_id, si.is_active
+                FROM session_instance si JOIN session s ON s.session_id = si.session_id
+                WHERE s.path = 'austin/mueller' ORDER BY si.date DESC LIMIT 1
+                """
+            )
+            siid, was_active = cur.fetchone()
+            cur.execute("UPDATE session_instance SET is_active = TRUE WHERE session_instance_id = %s", (siid,))
+            conn.commit()
+            yield siid
+        finally:
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE session_instance SET is_active = %s WHERE session_instance_id = %s",
+                (was_active, siid),
+            )
+            conn.commit()
+            conn.close()
+
+    @pytest.mark.parametrize(
+        "template,url,pick",
+        [
+            (
+                "/api/sessions/{session_path}/detail",
+                "/api/sessions/austin/mueller/detail",
+                lambda body: body["active_instances"],
+            ),
+            (
+                "/api/sessions/with-today-status",
+                "/api/sessions/with-today-status",
+                lambda body: [
+                    i for s in body["sessions"] if s["path"] == "austin/mueller" for i in s["active_instances"]
+                ],
+            ),
+        ],
+        ids=["detail", "directory"],
+    )
+    def test_active_instances_validate(self, spec, native_client, a_night_on_now, template, url, pick):
+        """The same ActiveInstanceSummary, in both places a native session screen reads it."""
+        r = native_client.get(url)
+        assert r.status_code == 200, r.get_json()
+        items = pick(r.get_json())
+        assert [i["session_instance_id"] for i in items] == [a_night_on_now]
+        validator = Draft202012Validator(
+            spec["components"]["schemas"]["ActiveInstanceSummary"], resolver=RefResolver.from_schema(spec)
+        )
+        for item in items:
+            errors = list(validator.iter_errors(item))
+            assert not errors, [e.message for e in errors]
 
     def test_error_envelope(self, native_client):
         r = native_client.get("/api/resolve?path=/sessions/no/such/2020-01-01")
