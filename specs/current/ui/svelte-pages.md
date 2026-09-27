@@ -162,8 +162,10 @@ a `_readme` saying what the module decides and what a port must match exactly
 `params` and `{name, input, expected, note?}` cases in plain JSON, plus
 `constants` and a `_not_fixtured` map (export → reason). One generic runner,
 `frontend/tests/fixtures.test.js`, executes every file and fails if an export is
-neither fixtured nor listed in `_not_fixtured`. The Swift package runs the same
-files, so a change to one of these modules updates its fixtures in the same
+neither fixtured nor listed in `_not_fixtured`. The iOS app runs the same
+files, in place, through its Swift port (`ios/CeolKit/Sources/CeolLogic`, runner in
+`ios/CeolKit/Tests/CeolLogicTests/FixtureRunner.swift`, `make ios-test`), so a change
+to one of these modules updates its fixtures AND the Swift port in the same
 commit; expected values are whatever the current code produces, with anything
 odd flagged in a case `note` rather than fixed silently. The hand-written
 `<module>.test.js` files stay for the narrative and I/O cases.

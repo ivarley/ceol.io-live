@@ -7,10 +7,12 @@
 //               swift-openapi-generator. Method names are the spec's operationIds.
 //   CeolDesign  the design tokens, design/Tokens.swift (symlinked), which
 //               scripts/build_tokens.py generates from the same source as the web's CSS.
+//   CeolLogic   the live logger's client rules (logstate, fracindex, ...), ported from
+//               the web and held to the web's own fixture files (spec 052 §B5).
 //
 // Both inputs live in the web repo and are symlinked rather than copied, so the app
-// cannot quietly build against a stale copy of either. The logic ports (logstate,
-// fracindex, ...) join as further targets, tested against the web's fixture files.
+// cannot quietly build against a stale copy of either — nor CeolLogicTests against a
+// stale copy of the fixtures.
 //
 // `swift test` runs the package's tests on the Mac, with no simulator.
 
@@ -22,6 +24,7 @@ let package = Package(
     products: [
         .library(name: "CeolAPI", targets: ["CeolAPI"]),
         .library(name: "CeolDesign", targets: ["CeolDesign"]),
+        .library(name: "CeolLogic", targets: ["CeolLogic"]),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-openapi-generator", from: "1.6.0"),
@@ -40,6 +43,11 @@ let package = Package(
             plugins: [.plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")]
         ),
         .target(name: "CeolDesign"),
+        // The live logger's client rules, ported from the web (spec 052 §B5).
+        .target(name: "CeolLogic"),
+        // Reads the web's own frontend/src/**/*.fixtures.json in place (see
+        // FixtureRunner.swift): one set of cases, run by Vitest there and here.
+        .testTarget(name: "CeolLogicTests", dependencies: ["CeolLogic"]),
         .testTarget(
             name: "CeolAPITests",
             dependencies: [

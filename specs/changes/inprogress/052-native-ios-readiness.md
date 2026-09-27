@@ -1651,4 +1651,15 @@ The plan (Phases 0-6) runs from here in `ios/`; see `ios/README.md` for the layo
   Found on the way, fixed in the spec: `OfflineBundle` item fields listed as required but
   never typed (the generator dropped them — the contract test now forbids it), and every
   `success: {const: true}` typed as boolean so Swift gets a `Bool`.
-- **Phase 1 — logic ports against the §B5 fixtures:** next.
+- **Phase 1 — logic ports against the §B5 fixtures: DONE 2026-09-27.** `CeolLogic` in
+  CeolKit ports all six fixtured modules (fracindex, logstate + the thesession id parsers,
+  offline's pure rules, abcquery, segments, namematch). `CeolLogicTests` reads the web's
+  fixture files in place, with a runner on the web runner's rules (absent input = default,
+  `throws: true`, results compared as JSON, every function in a file must have a port):
+  449 cases, plus namematch's calibration bars (no variant missed, no distinct pair
+  collapsed). Records and op payloads stay JSON (`JSONValue`) so nothing the server sent is
+  dropped; cursors (`Cursor`), ids (`RecordID`) and the op clock (`OpClock`, a value instead
+  of the JS module state) are typed. One recorded difference: a thesession id too long for
+  `Int` parses to nil where JS parseInt returns an imprecise number.
+- **Phase 2 — sign-in and the app shell:** next. Needs `IOS_APP_IDS` on Render and the
+  Associated Domains entitlement.

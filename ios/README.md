@@ -11,6 +11,8 @@ open the web in a Safari view. Plan and phases: `specs/changes/inprogress/052-na
 | `CeolKit/` | A local Swift package with everything that is not a screen. The app links its products. |
 | `CeolKit/Sources/CeolAPI` | The API client. **Generated at build time** by `swift-openapi-generator` from `openapi.yaml`, a symlink to `specs/api/native-surface.yaml`. Each operation is a method named by its `operationId` (`getSessionDetail`, `applyLiveOp`, …); schemas are `Components.Schemas.<Name>`. `CeolClient.swift` adds what the spec can't say: `Client.ceol(clientID:token:)` sends `X-Ceol-Client` and, when signed in, `Authorization: Bearer`. |
 | `CeolKit/Sources/CeolDesign` | `CeolTokens`: `Tokens.swift` is a symlink to `design/Tokens.swift`, which `make tokens` generates from the same source as the web's CSS. |
+| `CeolKit/Sources/CeolLogic` | The live logger's client rules, ported from the web: `FracIndex`, `LogState` (ordering, sets, cursor, anchors, merge), `OfflineRules`, `ABCQuery`, `Segments`, `NameMatch`, `TheSession` (id parsing). Records and op payloads stay `JSONValue`, so a row passes through with every field it arrived with. |
+| `CeolKit/Tests/CeolLogicTests` | Holds that port to the web's OWN fixture files (`frontend/src/**/*.fixtures.json`), read in place: every function in a file needs a Swift port, and every case must give the web's answer, including the name matcher's calibration bars. |
 | `CeolKit/Tests/CeolAPITests` | The client's headers, and decoding: `Fixtures/` holds **real** responses captured from the seeded server (`make ios-fixtures`), and each must decode into its generated type. |
 
 The two symlinks are the point: the app cannot build against a stale copy of the API
