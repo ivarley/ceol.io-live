@@ -155,7 +155,11 @@ class Intervals(Expert):
                 # matcher looks up in an index built the same way and fuses
                 # with the plain reading. Worth six points of top-1 on the
                 # bench, where it was measured; the same code does it here.
-                "eighths": True, "tempo_memory": 6}
+                "eighths": True, "tempo_memory": 6,
+                # Drop heard notes outside the key and its modal neighbour,
+                # estimated over this window. The same function the front
+                # ends call; see `analysis.key.drop_out_of_key`.
+                "out_of_key_drop": "pair"}
 
     def setup(self):
         self._by_source = {}
@@ -189,12 +193,15 @@ class Intervals(Expert):
                 continue
             from lab.frontends.segmentation import intervals_from_notes
 
+            # The buffer keeps every note so the key is judged on all of them;
+            # what is read is the notes in key.
+            heard = self._in_key(buf)
             intervals = intervals_from_notes(
-                buf, clip=self.params["clip"], max_gap_ms=self.params["max_gap_ms"],
+                heard, clip=self.params["clip"], max_gap_ms=self.params["max_gap_ms"],
                 fold=self.params["fold_octaves"])
-            starts = [n["t0_ms"] for n in buf[:-1]]
+            starts = [n["t0_ms"] for n in heard[:-1]]
             payload = {"source": src, "intervals": intervals, "note_t0_ms": starts,
-                       "n_notes": len(buf)}
+                       "n_notes": len(heard)}
             inputs = [ev.obs_id]
             pulse = view.latest("pulse") if self.params["eighths"] else None
             if pulse is not None and pulse.payload.get("period_ms"):
@@ -222,7 +229,7 @@ class Intervals(Expert):
                 # from whichever note is first made every note's slot round
                 # differently each time, so the phrases shifted under a
                 # reading that had not changed.
-                slots = particalize(buf, period, phase_ms=0.0)
+                slots = particalize(heard, period, phase_ms=0.0)
                 payload["intervals_eighths"] = interval_sequence(
                     slots, fold=self.params["fold_octaves"])
                 payload["eighth_ms"] = period
@@ -231,3 +238,8 @@ class Intervals(Expert):
                 "interval_sequence", buf[0]["t0_ms"], buf[-1]["t1_ms"], payload,
                 inputs=inputs))
         return out
+
+    def _in_key(self, notes):
+        from lab.analysis.key import drop_out_of_key
+
+        return drop_out_of_key(notes, self.params["out_of_key_drop"])

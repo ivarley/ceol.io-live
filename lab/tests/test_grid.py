@@ -94,3 +94,14 @@ def test_a_cut_on_the_note_start_does_not_make_a_zero_length_note():
                               require_attack=False)
     assert all(n["t1_ms"] > n["t0_ms"] for n in out)
     assert [(n["t0_ms"], n["t1_ms"]) for n in out] == [(114, 334), (334, 554), (554, 774)]
+
+
+def test_the_short_note_floor_follows_the_tempo():
+    """A third of an eighth goes at a polka's tempo; the same 80ms at a
+    reel's tempo is more than half an eighth and stays."""
+    from lab.frontends.grid import drop_short_notes
+
+    note = {"t0_ms": 0, "t1_ms": 80, "midi": 62}
+    assert drop_short_notes([note], 205.0, 0.4) == []          # polka eighth
+    assert drop_short_notes([note], 140.0, 0.4) == [note]      # reel eighth
+    assert drop_short_notes([note], 205.0, 0.0) == [note]      # off

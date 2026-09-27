@@ -61,7 +61,20 @@ class FrontEnd:
                 # cut. Swept: 0.04/0.06/0.09/0.12/0.16 -> 0.569/0.569/0.569/
                 # 0.586/0.569 top-1 on one night.
                 "split_repeats": "attack", "split_min_slots": 1.6,
-                "split_tolerance": 0.12}
+                "split_tolerance": 0.12,
+                # Drop heard notes outside the key and its modal neighbour (D
+                # major with mixolydian, so C and C# both stay). ON: audio
+                # alone over 502 segments, 0.657 -> 0.687 top-1 at 30 seconds
+                # (+22/-7, p 0.008) and 0.799 -> 0.821 at 60 (+18/-7, p 0.04);
+                # within noise at 120. 1 drops anything outside one signature
+                # and 2 only notes two steps out; both measured the same as
+                # the pair, which is kept because it is what "in key" means
+                # to a player. The board's interval expert calls the same
+                # function.
+                "out_of_key_drop": "pair",
+                # A minimum note as a fraction of an eighth at the tune's
+                # tempo. Off: +5/-2 at 120 seconds, +4/-9 at 30.
+                "min_note_eighths": 0.0}
 
     def fresh(self):
         return type(self)(**self.params)
@@ -80,22 +93,25 @@ class FrontEnd:
         span of audio that produced it.
         """
         mode = self.params.get("split_repeats")
-        if not mode or not notes:
+        min_eighths = self.params.get("min_note_eighths")
+        if not notes or not (mode or min_eighths or self.params.get("out_of_key_drop")):
             return notes
+        from lab.analysis.key import drop_out_of_key
         from lab.analysis.pulse import attack_times_ms, estimate_pulse
         from lab.frontends.grid import regrid_notes
 
-        pulse = estimate_pulse(y, sr)
-        if not pulse:
-            return notes
-        attacks = None
-        if mode == "attack":
-            attacks = [t + t_offset_ms for t in attack_times_ms(y, sr)]
-        return regrid_notes(
-            notes, pulse["period_ms"], pulse["phase_ms"] + t_offset_ms,
-            attacks_ms=attacks, mode=mode,
-            min_slots=self.params["split_min_slots"],
-            tolerance=self.params["split_tolerance"])
+        if mode or min_eighths:
+            pulse = estimate_pulse(y, sr)
+            if pulse:
+                attacks = None
+                if mode == "attack":
+                    attacks = [t + t_offset_ms for t in attack_times_ms(y, sr)]
+                notes = regrid_notes(
+                    notes, pulse["period_ms"], pulse["phase_ms"] + t_offset_ms,
+                    attacks_ms=attacks, mode=mode,
+                    min_slots=self.params["split_min_slots"],
+                    tolerance=self.params["split_tolerance"], min_eighths=min_eighths)
+        return drop_out_of_key(notes, self.params.get("out_of_key_drop"))
 
     def notes_from_track(self, times_ms, f0_hz, voiced_prob, t_offset_ms=0):
         notes = notes_from_pitch(times_ms, f0_hz, voiced_prob, **self.note_params())

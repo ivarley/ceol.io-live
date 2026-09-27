@@ -87,3 +87,38 @@ def test_chromatic_noise_has_a_low_fraction():
     key = estimate_key(notes_for(list(range(12)) * 4))
     assert key["diatonic_fraction"] == pytest.approx(7 / 12, abs=0.02)
     assert key["margin"] == pytest.approx(0.0, abs=1e-9)
+
+
+def _held(pcs_ms):
+    """[(midi, ms)] -> back-to-back notes."""
+    out, t = [], 0
+    for midi, ms in pcs_ms:
+        out.append({"midi": midi, "t0_ms": t, "t1_ms": t + ms})
+        t += ms
+    return out
+
+
+def test_a_d_tune_keeps_both_its_cs():
+    """Major and mixolydian are one key to a player: C and C# both belong."""
+    from lab.analysis.key import drop_out_of_key, modal_pair
+
+    d_tune = _held([(62, 150), (66, 150), (69, 150), (72, 150), (73, 150), (71, 150),
+                    (64, 150), (67, 150)] * 5 + [(63, 60), (68, 60)])   # D# and G# heard
+    pair = modal_pair(d_tune)
+    assert pair["sharps"] == (1, 2)
+    kept = drop_out_of_key(d_tune, "pair")
+    assert {n["midi"] % 12 for n in kept} == {2, 6, 9, 0, 1, 11, 4, 7}
+    assert len(kept) == len(d_tune) - 2
+
+
+def test_steps_round_the_circle_from_two_sharps():
+    from lab.analysis.key import steps_outside
+
+    assert [steps_outside(pc, 2) for pc in (2, 1, 0, 8, 5, 3, 10)] == [0, 0, 1, 1, 2, 2, 3]
+
+
+def test_too_few_notes_to_judge_a_key_changes_nothing():
+    from lab.analysis.key import drop_out_of_key
+
+    few = _held([(62, 150), (63, 150)])
+    assert drop_out_of_key(few, "pair") == few and drop_out_of_key(few, 1) == few

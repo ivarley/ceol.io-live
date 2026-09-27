@@ -432,3 +432,20 @@ def test_the_prior_chains_from_the_last_finished_span(lab_data):
     p = chained[-1].payload
     prev = str(p["basis"]["previous_tune_id"])
     assert p["weights"][prev] == max(p["weights"].values())
+
+
+def test_the_board_and_the_bench_drop_the_same_out_of_key_notes():
+    """The key filter is one function called from both loops: the bench's
+    front end after regridding, the board's interval expert over its window."""
+    from lab.experts.notes import Intervals
+    from lab.frontends import get_frontend
+
+    notes, t = [], 0
+    for midi in [62, 66, 69, 72, 73, 71, 64, 67] * 5 + [63, 68]:
+        notes.append({"t0_ms": t, "t1_ms": t + 150, "midi": midi, "conf": 0.9})
+        t += 150
+    fe = get_frontend("yin", split_repeats=None)
+    bench = fe.regrid([dict(n) for n in notes], None, 22050)
+    board = Intervals()._in_key([dict(n) for n in notes])
+    assert [n["midi"] for n in bench] == [n["midi"] for n in board]
+    assert len(board) == len(notes) - 2, "D# and G# go, C and C# stay"

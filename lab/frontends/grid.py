@@ -80,8 +80,22 @@ def split_fused_repeats(notes, period_ms, phase_ms, attacks_ms=None,
     return out
 
 
+def drop_short_notes(notes, period_ms, min_eighths):
+    """Notes shorter than a fraction of an eighth at this tune's tempo.
+
+    The fixed minimum (`min_note_ms`) cannot do this job: on a polka the
+    tracker's extra notes are about a third of an eighth, while a reel's real
+    notes can be 80ms, and a millisecond cut that removes the first removes
+    the second (100ms took reels from 0.845 to 0.769).
+    """
+    if not min_eighths or not period_ms:
+        return notes
+    floor = min_eighths * period_ms
+    return [n for n in notes if n["t1_ms"] - n["t0_ms"] >= floor]
+
+
 def regrid_notes(notes, period_ms, phase_ms, attacks_ms=None, mode="attack",
-                 min_slots=1.6, tolerance=0.35):
+                 min_slots=1.6, tolerance=0.35, min_eighths=0.0):
     """The one entry point both loops call, so neither can drift from the other.
 
     The bench's front end and the board's note expert reach this from opposite
@@ -91,6 +105,7 @@ def regrid_notes(notes, period_ms, phase_ms, attacks_ms=None, mode="attack",
     front end honoured the crude "grid" mode and the expert silently ignored
     it.
     """
+    notes = drop_short_notes(notes, period_ms, min_eighths)
     if not mode or not notes or not period_ms:
         return notes
     return split_fused_repeats(

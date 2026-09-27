@@ -427,10 +427,17 @@ On the retrieval bench, 502 segments over eight nights (recordings 1, 2, 3,
 | and read again as runs of eighths, fused | 0.833 | 0.912 |
 | and each set decoded as a whole | 0.861 | 0.922 |
 | and the tracker kept off a third of the pitch | 0.878 | 0.930 |
-| and the previous tune pulling by how predictable its follower is | **0.894** | **0.930** |
+| and the previous tune pulling by how predictable its follower is | 0.894 | 0.930 |
+| and 2/4 read in eighths, tuplets applied, one placement for both sides | 0.890 | 0.932 |
+| and heard notes outside the key and its modal neighbour dropped | **0.896** | **0.932** |
 | the session's transitions alone, no audio | 0.245 | 0.368 |
 
-The command that produces the headline row is in `lab/README.md`.
+The last two rows are from 2026-09-26, below. The parser correction is +3/-5
+against the row above it (p 0.73) and stands because the older row was reading
+every polka at half length. The key filter is +5/-2 at two minutes (p 0.45);
+it is on because it is worth three to four points at thirty seconds, which is
+where the live board answers.
+The command that produces it is in `lab/README.md`.
 
 On the live board, all eight nights, the same 502 segments, answering while
 the tune plays and finding its own boundaries:
@@ -897,6 +904,239 @@ does not contain never votes and costs nothing by existing. That reasoning
 stops holding the moment scoring is normalised by query length, which is why
 it is written down.
 
+### Drafting labels from the notation, and why it was taken out
+
+Hand labels are slow, so the notation was tried as a source of draft labels
+for the player to confirm: the transcription's four-interval phrases that a
+setting also contains were chained where their spacing in time agreed with
+their spacing in the notation, and the notation was laid over the audio along
+those chains. Never as an oracle, because the session does not play exactly
+what thesession.org has written, and those departures are where a tracker is
+being judged.
+
+On Castle Kelly the player found barely a note of about two hundred right, and
+drawing from scratch faster than correcting. The check made before showing it
+said every draft under an existing label had the right pitch, 7 of 7, which
+was worthless: the labels sat in the one well-anchored stretch, and the three
+parameters it tuned (anchor length, gap bridging, extrapolation tempo) were
+tuned on those same labels. The likely cause, untested, is that three or four
+short phrases are a weak anchor in a tune that repeats itself bar to bar: a
+chain can lock onto the wrong bar and still pass the timing check. The code
+was removed rather than kept switched off.
+
+The lesson for any aid to labelling: check it on stretches its own tuning
+never saw, and let the player judge a few seconds of it before building more.
+
+### Forty bars drawn by hand, and a parser that read polkas at half length
+
+The player drew Tom Sullivan's (recording 4, segment 272), a polka the
+recogniser gets right, as 159 eighths on hand-drawn beats: 32.6 seconds
+unbroken, more than all the pitch labels before it together. Drawn eighths
+cannot say held from struck, so notes are compared as pitch changes, and the
+tracker's notes are aligned to them by edit distance allowing a match only
+between notes that overlap in time.
+
+| | right | wrong pitch | missed | extra | intervals recovered |
+|---|---|---|---|---|---|
+| yin | 113 | 7 | 3 | 33 | 84 of 122 |
+| salience_viterbi | 105 | 4 | 14 | 5 | 86 of 122 |
+
+yin hears nearly every note and adds a third as many again; salience_viterbi
+adds almost none and drops more. They fail in opposite directions, which is
+why the second scores better per frame on labels and worse on retrieval: a
+missing note and an extra one cost different amounts once they are intervals.
+At about 70% of intervals right, only around one six-note phrase in six
+survives whole, which is the bottleneck this spec has named from the start.
+
+Inside notes, the frames that are wrong in a note's first 60ms are mostly the
+previous note carried over (200 frames for yin), not the attack harmonic the
+player heard (17). Carryover moves where a note starts, not which notes there
+are, so it costs the matcher little. Part of it is the labels: drawn eighths
+start on grid lines, and attacks scatter about 30ms around them.
+
+**The short extras are not the lever they looked like.** Twelve of yin's 33
+are 69-70ms, just over the 60ms minimum note. On the labels a minimum of 70
+or 80ms (identical, since frames are 11.6ms) takes extras from 33 to 19 and
+intervals from 84 to 90. On the bench, audio alone, it is +14/-14 (0.861 both
+ways); with set decoding +13/-6 (0.890 to 0.904, p 0.17), which is the same
+churn happening to net positive. At 100ms reels fall 0.845 to 0.769 (-35/+10):
+real reel notes live in that range. Merging interlopers moved the labels by
+one interval. Not adopted; one labelled polka is not the corpus.
+
+**The parser read every 2/4 tune at half length.** Asked whether the notation
+held sixteenths, the corpus answered: 88% of polka notes were shorter than an
+eighth, against 2% for reels. thesession.org writes everything with an eighth
+as the unit, the dump carries no `L:` line, and the parser followed the ABC
+standard's default of a sixteenth for meters under 3/4. The plain reading
+only uses pitch and never noticed; the eighth-note reading made every polka
+quarter note one eighth while the audio made it two, which is why that
+reading alone had taken polkas DOWN, 0.731 to 0.615. The parser also skipped
+tuplet marks, so each note of `(3efe` counted a whole eighth (5.8 triplets per
+hornpipe setting, 1.5 per reel).
+
+Parser version 2 reads an eighth as the unit, applies tuplets, and places the
+notation's eighths with the same `particalize` that reads the audio. Where
+several written notes start inside one eighth -- a pair of sixteenths, a
+triplet -- the eighth keeps the first (`max_lag=0`, with the placement's phase
+set so it rounds to the eighth a note starts in). Measured over 502 segments,
+each paired against the old parser on today's corpus (which reproduces 0.894
+exactly):
+
+| | top-1 | top-5 | paired | p |
+|---|---|---|---|---|
+| audio alone | 0.849 to 0.861 | 0.904 to 0.912 | +10/-4 | 0.18 |
+| with set decoding | 0.894 to 0.890 | 0.930 to 0.932 | +3/-5 | 0.73 |
+
+Audio alone, the gain is where the bug was: polkas 0.769 to 0.846, hornpipes
+0.786 to 0.857. Set decoding was already covering for it. Kept, because it
+corrects a misreading rather than tuning a number.
+
+**Two filters from the player, both within noise.** A minimum note as a
+fraction of an eighth at the tune's tempo, rather than in milliseconds, so a
+polka's extras go without a reel's real short notes; and dropping heard notes
+outside the key, since flat seconds and fifths are nearly absent from this
+music. The notation has 1.3% of its notes outside the key signature and a yin
+transcription 8.9%, each kind seven to twelve times as common, so most heard
+out-of-key notes are the tracker's. "In key" is the player's: a key and its
+modal neighbour (D major with mixolydian, so C and C# both; A dorian with
+minor), which is two neighbouring signatures, chosen as the pair holding the
+most note time (`analysis.key.modal_pair`). Against parser version 2 with no
+filter, 502 segments, first 120 seconds:
+
+| | audio alone | paired | set decoding | paired |
+|---|---|---|---|---|
+| min note 0.4 of an eighth | 0.861 to 0.867 | +5/-2 | 0.890 to 0.894 | +4/-2 |
+| drop two or more steps out of the signature | 0.861 to 0.857 | +8/-10 | 0.890 to 0.894 | +5/-3 |
+| drop anything outside the signature | 0.861 to 0.871 | +14/-9 | 0.890 to 0.896 | +9/-6 |
+| drop anything outside the modal pair | 0.861 to 0.867 | +13/-10 | 0.890 to 0.896 | +5/-2 |
+
+Every p is above 0.4. The tempo-relative minimum behaves as intended where
+the millisecond one did not -- seven segments change instead of twenty-eight,
+reels are untouched -- but is small. The key filters are small for the same
+reason breaking at a tritone did nothing: a phrase containing a wrong note
+matches nothing and never votes, so dropping the note helps only when both
+its neighbours were right. The stricter signature filter scoring highest while
+wrongly removing C natural from D tunes is the size of the noise, not a
+finding. All four are settings on the front end (`min_note_eighths`,
+`out_of_key_drop`), off by default. At 0.89 the 120-second bench cannot
+resolve half a point, so they were measured again with less audio.
+
+**With less to listen to, the key filter is real.** Audio alone, same 502
+segments:
+
+| | 30 seconds | paired | 60 seconds | paired |
+|---|---|---|---|---|
+| no filter | 0.657 | | 0.799 | |
+| drop two or more steps out | **0.697** | +25/-5, p < 0.001 | | |
+| drop anything outside the signature | **0.697** | +31/-11, p 0.003 | | |
+| drop anything outside the modal pair | **0.687** | +22/-7, p 0.008 | **0.821** | +18/-7, p 0.04 |
+| min note 0.4 of an eighth | 0.647 | +4/-9, p 0.27 | | |
+| modal pair and min note together | 0.673 | +25/-17, p 0.28 | | |
+
+About four points at thirty seconds, two at sixty, within noise at two
+minutes: with little audio every phrase counts, and a wrong note breaks the
+phrases it sits in. Gains are in reels (0.618 to 0.655), jigs and hornpipes.
+Which version does not measurably matter: the modal pair against the single
+signature is +13/-18 (p 0.47). The player's definition is musically right and
+the data cannot yet see the difference. The tempo-relative minimum note is
+slightly worse at thirty seconds and drags the key filter down with it.
+
+**A drawn reel says the same, louder.** The player drew The Bird in the Bush
+(recording 2, segment 131) once through: 221 eighths, 36.6 seconds. The reel
+is much harder for the tracker than the polka:
+
+| | right | wrong pitch | missed | extra | intervals recovered |
+|---|---|---|---|---|---|
+| yin, polka | 113 of 123 | 7 | 3 | 33 | 84 of 122 (69%) |
+| yin, reel | 132 of 173 | 26 | 15 | 60 | 84 of 172 (49%) |
+| yin, reel, modal-pair key filter | 132 | 15 | 26 | 46 | 86 of 172 |
+| yin, reel, 80ms minimum | 128 | 21 | 24 | 48 | 78 of 172 |
+| salience_viterbi, reel | 114 | 10 | 49 | 24 | 73 of 172 |
+
+The key filter keeps every right note and removes eleven wrong ones and
+fourteen extras; nine of yin's wrong notes were a semitone sharp. Intervals
+move only by two, because a removed wrong note leaves a gap and the intervals
+across it need both neighbours right. The 80ms minimum costs the reel real
+notes, the same thing the bench showed for reels. Half the intervals of an
+ordinary reel are still wrong: the tracker, not the matcher, is where the
+room is.
+
+**Basic Pitch, the first neural front end: better on both drawn tunes, much
+worse on the bench.** Spotify's note transcriber (`frontends/basicpitch.py`,
+CoreML on macOS) hears every instrument and reports notes with onsets; the
+melody is taken as the loudest note in the 160-1400Hz band at each 10ms, with
+a silent frame between repeated notes so they stay two. On the player's two
+drawn tunes it beat yin on every measure, including the one that mirrors the
+matcher -- how many of the drawn tune's six-note phrases appear anywhere in
+what was heard: 108 against 93 of 118 on the polka, 58 against 40 of 168 on the
+reel. On 502 segments, audio alone, key filter on for both:
+
+| | yin | basic_pitch | paired |
+|---|---|---|---|
+| 120 seconds | 0.867 | 0.775 | +18/-64 |
+| 30 seconds | 0.687 | 0.596 | +37/-83 |
+| fused with yin, 120 seconds | 0.867 | 0.867 | +15/-15 (top-5 +12/-5, p 0.14) |
+
+It does not go quiet -- both trackers produce about five notes a second where
+it wins and where it loses -- but it follows something other than the tune:
+on the segments it loses it recovers a median 21 of the tune's phrases
+against yin's 46, and even where both are right, 56 against 68. The two drawn
+tunes were two where it does well. A tracker is judged on the bench, and a
+drawn segment says why, not whether. What it follows instead is not known
+yet; the loudest-note melody is the first suspect, since accompaniment and
+harmonics are loud. Kept as a front end, not used.
+
+Two corrections, 2026-09-27. The player listened to one it lost (The Scholar)
+and heard it reporting too few notes, mostly at the right pitch. Lowering its
+thresholds (onset 0.2, frame 0.15) improved every label measure on all three
+drawn tunes and collapsed the bench to 0.285, because it then re-strikes held
+notes: over a third of its intervals repeated a pitch, against 8% in the
+notation. The label scoring compared pitch changes only, merging repeats, and
+could not see it; it must count repeated notes from now on. The first
+version's own choice to keep the model's same-pitch notes apart was the same
+fault in smaller measure (25% repeats). Merged:
+
+| audio alone, 120 seconds | top-1 | top-5 | against yin |
+|---|---|---|---|
+| yin | 0.867 | 0.914 | |
+| Basic Pitch, repeats kept apart | 0.775 | 0.861 | +18/-64 |
+| Basic Pitch, repeats merged | 0.831 | 0.900 | +19/-37, p 0.02 |
+| the same, lower thresholds | 0.833 | 0.912 | +18/-35, p 0.03 |
+
+Merging is +37/-9 against keeping them apart and is now the front end's
+behaviour (version 2), which merges inside the melody line rather than after
+the notes are cut; measured as built it reads 0.835 top-1, 0.896 top-5
+(+6/-4 against the merge above, +20/-36 against yin, p 0.04). It is still behind yin, and right on 19 segments yin
+gets wrong: choosing per segment the better of the two would give 0.904.
+
+The same first-note rule on the audio side is worse, +8/-13 (p 0.38), and is
+not used. Written notes sit exactly on the grid; heard ones wander around it,
+and a note rounding into the eighth before is usually a real note played a
+little early, which the audio side's one-eighth push (`max_lag=1`) keeps.
+
+### Where a note starts, and why sung labels sounded late
+
+Drawing eighths on Tom Sullivan's, the player heard every sung label behind
+the beat and asked whether the tracker's notes start late. They do not. Against
+peaks of a fine onset-strength curve (64-sample hop), the tracker's note starts
+sit at a median of -1ms (middle half -29 to +27ms), the drawn beats at -5ms
+(-27 to +18), and the two agree with each other to +1ms. On synthetic tones
+with known onsets the tracker is +4ms. The lateness was the viewer's: it
+started each tone when a screen refresh noticed the label had begun, up to a
+frame late plus the browser's output delay. Scheduling the tones ahead on the
+audio clock was not enough; the player still heard them late. The clip is not
+shifted (the browser's decode of it lines up with the recording to the
+millisecond), so what remains is the `<audio>` element's own path to the
+speakers, which its reported position does not account for. At 1x the music
+is now played from the decoded clip through the same audio context as the
+tones, each tone started at its exact sample; slower speeds still use the
+element, which keeps the pitch. An offset slider remains for adjusting by ear.
+
+The same session turned up something to measure once there are enough labels:
+the fiddle's and accordion's attack carries a harmonic that the tracker
+reports as the note's first pitch, so a note can begin with a short wrong
+note. The drawn eighths are the ground truth that can say how often.
+
 ### The tools that found all of it
 
 `lab timeline` reads a run segment by segment. `lab trace-set` shows one set
@@ -983,7 +1223,40 @@ next thing to build rather than a side quest.
 
 ### Still open
 
-In rough order of what they are worth, as of 2026-09-25:
+In rough order of what they are worth, as of 2026-09-25 (items added
+2026-09-26 are marked):
+
+- **(2026-09-26) Extra notes against missed ones.** On forty hand-drawn bars
+  yin adds 33 notes to 123 and salience_viterbi drops 14; a length threshold
+  removes yin's extras only by also removing real reel notes. Something that
+  tells an ornament from a melody note other than its length is the open
+  question, and more drawn bars -- a reel next, since reels are where a
+  threshold hurts -- are what can score it.
+- **(2026-09-27) Trusting a tracker according to the passage.** The
+  player's idea: a quiet solo passage might be read better by one pitch
+  expert and a full session by another, so the fusion could weight experts
+  by a description of the passage that another expert posts. The board
+  supports it without change (experts post side by side; `fuse` is the one
+  place to weight them). The oracle sizes it: choosing per segment whichever
+  of yin and Basic Pitch is right gives 0.902 top-1 at 120 seconds (0.904
+  with repeats merged) and 0.761 at 30, against 0.867 and 0.687 for yin alone and 0.867 for
+  today's sum fusion. The choice has to be predicted from the audio (pulse
+  strength, in-key fraction, loudness, how many notes Basic Pitch hears at
+  once) and scored on nights it was not fitted on.
+- **(2026-09-26) The key filter on the board does nothing yet.** The same
+  function runs in the board's interval expert over its trailing window
+  (agreement test in `test_engine.py`). Over all eight nights with parser
+  version 2, without and with it: top-1 at end 0.771 / 0.769 (+15/-16), top-5
+  0.878 / 0.876, right within 30s 12.9% / 12.0%, within 60s 48.4% / 49.8%,
+  never right 18.5% / 17.7%, flips 4.03 / 4.14. Untested explanation: the
+  bench judges the key from thirty seconds of one tune, the board from a
+  two-minute window that early in a tune is mostly the previous one, so when
+  a set changes key the filter drops the new tune's notes just when the
+  board is naming it. Next: judge the key from the last fifteen to twenty
+  seconds.
+- **(2026-09-26) The board has not been re-run with parser version 2.** The
+  bench measured it; the board reads the same eighth-note index, so its
+  numbers above are for version 1.
 
 - **Where tunes stop, as well as where they start.** Told the true starts,
   the board is right within thirty seconds four times as often, but starts

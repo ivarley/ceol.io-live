@@ -63,3 +63,21 @@ def test_the_old_cached_tracks_keep_their_key_and_the_new_default_does_not_reuse
     assert "trough_threshold" not in legacy.track_params()
     assert default.track_params().get("trough_threshold") == 0.5
     assert legacy.cache_key("sha", 0, 1000) != default.cache_key("sha", 0, 1000)
+
+
+def test_basic_pitch_melody_is_the_loudest_note_and_merges_repeats():
+    """The skyline takes the loudest note in each frame, so a quiet guitar
+    chord under the tune is ignored. Two back-to-back notes of one pitch are
+    one note: keeping the model's repeats apart cost 5.6 points of top-1."""
+    import numpy as np
+
+    from lab.frontends.basicpitch import skyline
+    from lab.frontends.segmentation import notes_from_pitch
+
+    events = [(0.00, 0.20, 74, 0.9), (0.20, 0.40, 74, 0.8),     # two Ds, struck
+              (0.40, 0.60, 76, 0.9), (0.00, 0.60, 55, 0.3)]     # an E; a quiet chord tone
+    times, f0, voiced = skyline(events, 600.0)
+    notes = notes_from_pitch(times, f0, voiced, min_note_ms=30, median_frames=1,
+                             min_voiced=0.5, fold_pitch_classes=True)
+    assert [n["midi"] % 12 for n in notes] == [2, 4]
+    assert not np.isnan(f0[20]) and voiced[20] == 1

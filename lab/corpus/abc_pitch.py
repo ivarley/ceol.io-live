@@ -3,10 +3,17 @@
 The symbolic route needs one thing from a tune's ABC: the sequence of pitches,
 so that an interval sequence transcribed from audio can be matched against it.
 This parser produces exactly that and nothing cleverer — durations are kept
-(cheaply, in eighth notes) because a rhythm-aware matcher will want them, but
+(cheaply, in eighth notes) because the eighth-note reading needs them, but
 repeats are NOT expanded, broken rhythms are NOT applied, and ornaments,
 grace notes, chord symbols and decorations are stripped, because none of them
-survive a transcription of a pub session anyway.
+survive a transcription of a pub session anyway. Tuplets ARE applied, because
+reading `(3efe` as three whole eighths put every note after it an eighth late.
+
+The unit note length is an eighth unless the ABC says otherwise. The ABC
+standard makes it a sixteenth for a meter under 3/4, but thesession.org
+writes everything in eighths and the dump carries no `L:` line, so following
+the standard read every polka and every other 2/4 tune at half its length:
+88% of polka notes came out shorter than an eighth, against 2% for reels.
 
 What it does get right, because the matcher cannot work without it:
 
@@ -31,7 +38,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import List, Optional
 
-PARSER_VERSION = "1"
+PARSER_VERSION = "2"   # 2: eighth-note unit for 2/4, tuplets applied
 
 # semitone above C for each letter
 _LETTER_SEMITONE = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
@@ -134,16 +141,9 @@ def key_signature(key_text: str) -> dict:
     return sig
 
 
-def _unit_length_from_meter(meter_text: str) -> Fraction:
-    """ABC's rule: L: defaults to 1/16 when the meter is under 0.75, else 1/8."""
-    text = (meter_text or "").strip()
-    if text == "C" or text == "C|":
-        return Fraction(1, 8)
-    m = re.match(r"^(\d+)\s*/\s*(\d+)", text)
-    if not m:
-        return Fraction(1, 8)
-    value = Fraction(int(m.group(1)), int(m.group(2)))
-    return Fraction(1, 16) if value < Fraction(3, 4) else Fraction(1, 8)
+# How many notes a tuplet's p notes take the time of, when the ABC does not
+# say: the standard's defaults for the ones that occur in this music.
+_TUPLET_Q = {2: 3, 3: 2, 4: 3, 6: 2, 8: 3}
 
 
 def _parse_length(text: str) -> Fraction:
@@ -174,8 +174,10 @@ def parse_abc(abc: str, key: Optional[str] = None, meter: Optional[str] = None,
               unit_length: Optional[str] = None) -> List[Optional[Note]]:
     """Parse an ABC body (header lines allowed) into notes and rests.
 
-    `key`/`meter`/`unit_length` are defaults from outside the text (the dump's
-    `mode`/`meter` columns); `K:`, `M:` and `L:` inside the text override them.
+    `key`/`unit_length` are defaults from outside the text (the dump's
+    `mode` column); `K:` and `L:` inside the text override them. `meter` is
+    accepted for the callers that pass the dump's column, and no longer
+    decides the unit: see the module docstring.
     """
     sig = key_signature(key) if key else {}
     unit = Fraction(1, 8)
@@ -183,12 +185,17 @@ def parse_abc(abc: str, key: Optional[str] = None, meter: Optional[str] = None,
         m = re.match(r"^\s*(\d+)\s*/\s*(\d+)", unit_length)
         if m:
             unit = Fraction(int(m.group(1)), int(m.group(2)))
-    elif meter:
-        unit = _unit_length_from_meter(meter)
-    saw_L = bool(unit_length)
 
     out: List[Optional[Note]] = []
     bar_accidentals = {}  # (letter, octave) -> semitone offset
+    tuplet = [Fraction(1), 0]   # length multiplier, notes it still applies to
+
+    def emit(note):
+        if tuplet[1] > 0:
+            tuplet[1] -= 1
+            if note is not None:
+                note = Note(midi=note.midi, eighths=note.eighths * tuplet[0])
+        out.append(note)
 
     for raw_line in (abc or "").replace("\r", "").split("\n"):
         line = raw_line.split("%", 1)[0]
@@ -204,9 +211,6 @@ def parse_abc(abc: str, key: Optional[str] = None, meter: Optional[str] = None,
                 m = re.match(r"^(\d+)\s*/\s*(\d+)", value)
                 if m:
                     unit = Fraction(int(m.group(1)), int(m.group(2)))
-                    saw_L = True
-            elif field == "M" and not saw_L:
-                unit = _unit_length_from_meter(value)
             continue  # every other header line (T:, R:, w:, ...) is ignored
 
         i, n = 0, len(line)
@@ -225,7 +229,6 @@ def parse_abc(abc: str, key: Optional[str] = None, meter: Optional[str] = None,
                         m = re.match(r"^\s*(\d+)\s*/\s*(\d+)", f.group(2))
                         if m:
                             unit = Fraction(int(m.group(1)), int(m.group(2)))
-                            saw_L = True
                     i = f.end()
                     continue
                 b = _BAR.match(line, i)
@@ -241,7 +244,7 @@ def parse_abc(abc: str, key: Optional[str] = None, meter: Optional[str] = None,
                 nm = _NOTE.search(inner)
                 if nm:
                     # chord duration may follow the bracket; ignore, use the note's
-                    out.append(_make_note(nm, sig, bar_accidentals, unit))
+                    emit(_make_note(nm, sig, bar_accidentals, unit))
                 i = close + 1
                 continue
             b = _BAR.match(line, i)
@@ -264,19 +267,27 @@ def parse_abc(abc: str, key: Optional[str] = None, meter: Optional[str] = None,
                 continue
             if c == "(":
                 t = _TUPLET.match(line, i)
-                i = t.end() if t else i + 1
+                if t:
+                    p = int(t.group(1))
+                    if p > 1:
+                        q = int(t.group(2)) if t.group(2) else _TUPLET_Q.get(p, 2)
+                        r = int(t.group(3)) if t.group(3) else p
+                        tuplet[0], tuplet[1] = Fraction(q, p), r
+                    i = t.end()
+                else:
+                    i += 1       # a slur
                 continue
             if c in ")-<>~.":
                 i += 1
                 continue
             r = _REST.match(line, i)
             if r:
-                out.append(None)
+                emit(None)
                 i = r.end()
                 continue
             nm = _NOTE.match(line, i)
             if nm:
-                out.append(_make_note(nm, sig, bar_accidentals, unit))
+                emit(_make_note(nm, sig, bar_accidentals, unit))
                 i = nm.end()
                 continue
             # anything else: a decoration letter (H, L, M, O, P, S, T, u, v),
@@ -314,22 +325,34 @@ def _make_note(m, sig, bar_accidentals, unit) -> Note:
 def particalized_pitches(notes, max_eighths: int = 8) -> List[Optional[int]]:
     """Notes -> one entry per eighth note, repeating a held pitch.
 
-    The same reduction `analysis.notation.particalize` performs on a
-    transcription, so that the two can be compared without either side having
-    to guess at articulation. A quarter note and two tongued eighths of the
-    same pitch are one entry and two entries in the notation, and are
-    indistinguishable in a pitch track; here they are two entries in both.
+    Placed by `analysis.notation.particalize`, the same function that reads a
+    transcription, so the two readings cannot disagree about what an eighth
+    is. A quarter note and two tongued eighths of the same pitch are one entry
+    and two entries in the notation, and are indistinguishable in a pitch
+    track; here they are two entries in both.
 
-    Rests stay as None so an n-gram never spans one, as everywhere else.
+    A note that starts inside an eighth rather than on one -- the second of a
+    pair of sixteenths, the later notes of a triplet -- counts in the eighth
+    it starts in, and that eighth already has its first note, so it is
+    dropped. That is `max_lag=0`, and the phase of 0.49 of an eighth turns
+    the placement's rounding into "the eighth this note starts in".
+
+    Rests leave their eighths empty so an n-gram never spans one, as everywhere
+    else. Output is pitch classes.
     """
-    out: List[Optional[int]] = []
+    from lab.analysis.notation import particalize
+
+    placed = []
+    pos = Fraction(0)
     for n in notes:
         if n is None:
-            out.append(None)
+            pos += 1          # a rest's length is not kept; one eighth of silence
             continue
-        count = int(round(float(n.eighths))) or 1
-        out.extend([n.midi] * min(count, max_eighths))
-    return out
+        length = min(Fraction(n.eighths), max_eighths) if n.eighths else Fraction(1)
+        placed.append({"t0_ms": float(pos) * 1000.0, "t1_ms": float(pos + length) * 1000.0,
+                       "midi": n.midi})
+        pos += n.eighths if n.eighths else 1
+    return particalize(placed, 1000.0, phase_ms=490.0, max_lag=0)
 
 
 def pitch_sequence(notes) -> List[Optional[int]]:

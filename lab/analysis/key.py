@@ -84,6 +84,62 @@ def estimate_key(notes, min_notes=30):
     }
 
 
+def steps_outside(pc, sharps):
+    """How far a pitch class is from a key signature, round the circle of
+    fifths: 0 for the signature's seven notes, 1 for one step sharper or
+    flatter (G# or C natural in two sharps, the usual modal alterations), 2
+    for two, 3 for the tritone away from the middle of the signature."""
+    r = ((int(pc) * 7) - (int(sharps) - 1)) % 12
+    return {7: 1, 11: 1, 8: 2, 10: 2, 9: 3}.get(r, 0)
+
+
+def modal_pair(notes, min_notes=30):
+    """The eight pitch classes of two neighbouring key signatures that hold the
+    most of this note time, or None with too few notes.
+
+    What a player means by "in key" in this music is wider than one
+    signature: a D tune moves between major and mixolydian, so C and C# are
+    both at home in it, and an A tune between dorian and minor, F# and F.
+    Two neighbouring signatures differ by exactly that one note. Choosing the
+    pair from the notes, rather than widening one estimated signature both
+    ways, keeps the direction right and still excludes the sharp fourth and
+    the flat second and fifth, which this music does not use."""
+    if len(notes) < min_notes:
+        return None
+    mass = pitch_class_mass(notes)
+    best = None
+    for sharps in SHARPS_RANGE:
+        pcs = ({(root_for_sharps(sharps) + d) % 12 for d in MAJOR}
+               | {(root_for_sharps(sharps + 1) + d) % 12 for d in MAJOR})
+        held = float(sum(mass[pc] for pc in pcs))
+        if best is None or held > best[0]:
+            best = (held, sharps, pcs)
+    return {"sharps": (best[1], best[1] + 1), "pcs": best[2]}
+
+
+def drop_out_of_key(notes, min_steps, min_notes=30):
+    """Notes at least `min_steps` outside the key estimated from them.
+
+    The notation has 1.3% of its notes outside the signature; a yin
+    transcription has 8.9%, every kind of them seven to twelve times as
+    common as in the notation. So in a transcription most of them are the
+    tracker's, and dropping one joins its neighbours into the interval the
+    tune more likely has. Too few notes to estimate a key: unchanged.
+    `min_steps="pair"` keeps the eight notes of `modal_pair` instead.
+    """
+    if not min_steps or not notes:
+        return notes
+    if min_steps == "pair":
+        pair = modal_pair(notes, min_notes=min_notes)
+        if pair is None:
+            return notes
+        return [n for n in notes if int(n["midi"]) % 12 in pair["pcs"]]
+    key = estimate_key(notes, min_notes=min_notes)
+    if key is None:
+        return notes
+    return [n for n in notes if steps_outside(int(n["midi"]) % 12, key["sharps"]) < min_steps]
+
+
 def diatonic_fraction(notes, min_notes=30):
     """The share of note time inside the best seven-note set, or None.
 

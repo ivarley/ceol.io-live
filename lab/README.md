@@ -65,7 +65,7 @@ segment, looks the notes up, optionally applies the session's transitions,
 and scores top-1, top-5 and mean reciprocal rank. Pitch tracks are cached,
 so a full pass over 502 segments takes minutes.
 
-The headline configuration (0.894 top-1, 0.930 top-5 on 2026-09-25, about four minutes with pitch tracks cached):
+The headline configuration (0.896 top-1, 0.932 top-5 on 2026-09-26 with parser version 2 and the key filter, which is on by default, about four minutes with pitch tracks cached; indexes rebuild with `lab index --candidate-set repertoire -n 6 --fold-octaves [--particalized]`):
 
 ```bash
 lab bench retrieval --frontend yin --fold-octaves --particalized --fusion sum \
@@ -162,7 +162,7 @@ Modes:
 | `1` | listen |
 | `2` | edit |
 | `3` | accept (box-drag over notes that are right) |
-| `4` | draw (paint the pitch it missed) |
+| `4` | draw (click an eighth between two grid lines at the pitch you hear; again to remove) |
 | `5` | erase |
 | `6` | beats (click to draw a beat; shift-click marks a bar line) |
 
@@ -170,12 +170,13 @@ Other keys:
 
 | Key | Action |
 |---|---|
+| Tab | switch between draw and beats |
 | space | play / pause |
 | `,` / `.` | back / forward three seconds |
 | `r` | replay the view |
 | `Home` | go to the start |
 | `l` | loop on / off |
-| `s` | sing the labels |
+| `s` | sing the labels (the offset slider shifts them against the music, by ear) |
 | `g` | show / hide the eighth-note grid |
 | `+` / `-` | zoom |
 | arrows | pan, or move the selected label |

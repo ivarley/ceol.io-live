@@ -217,3 +217,39 @@ def test_particalize_follows_a_tempo_map():
     ramp = {"t_ms": [0.0, t], "period_ms": [140.0, 160.0]}
     mapped = particalize(n, 150.0, tmap=ramp, max_fill=0)
     assert len(mapped) == 80 and None not in mapped
+
+
+def test_a_polka_is_read_in_eighths_not_sixteenths():
+    """thesession.org writes 2/4 in eighths and the dump has no L: line. Read
+    by the ABC standard's rule, this bar of Tom Sullivan's was half its length
+    and its quarter note one eighth long, while the audio made it two."""
+    from lab.corpus.abc_pitch import parse_abc, particalized_pitches
+
+    bar = parse_abc("cA AG|d3e|", key="Dmixolydian", meter="2/4")
+    assert [float(n.eighths) for n in bar if n] == [1, 1, 1, 1, 3, 1]
+    assert particalized_pitches(bar) == [0, 9, 9, 7, 2, 2, 2, 4]
+
+
+def test_sixteenths_keep_the_first_note_of_each_eighth():
+    """Both readings agree on eighths: two sixteenths in one eighth are that
+    eighth's first note, as the audio side's placement already had it."""
+    from lab.corpus.abc_pitch import parse_abc, particalized_pitches
+
+    written = particalized_pitches(parse_abc("D/E/F/G/ AB", key="Dmixolydian", meter="2/4"))
+    assert written == [2, 6, 9, 11]      # D mixolydian: the F is sharp
+
+
+def test_a_triplet_takes_two_eighths_and_keeps_its_first_note_in_each():
+    from lab.corpus.abc_pitch import parse_abc, particalized_pitches
+
+    parsed = [n for n in parse_abc("(3efe d2", key="Dmajor") if n]
+    assert sum(float(n.eighths) for n in parsed[:3]) == 2
+    # e at 0, f at 2/3 (inside the first eighth, dropped), e at 4/3 (starts
+    # inside the second eighth, which has nothing yet, so it keeps it)
+    assert particalized_pitches(parse_abc("(3efe d2", key="Dmajor")) == [4, 4, 2, 2]
+
+
+def test_a_slur_is_not_a_tuplet():
+    from lab.corpus.abc_pitch import parse_abc
+
+    assert [float(n.eighths) for n in parse_abc("(AB) c") if n] == [1, 1, 1]

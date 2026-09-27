@@ -60,8 +60,10 @@ def test_durations_in_eighths():
     notes = parse_abc("A A2 A/ A/2 A3/2 A//", unit_length="1/8")
     assert [n.eighths for n in notes] == [
         Fraction(1), Fraction(2), Fraction(1, 2), Fraction(1, 2), Fraction(3, 2), Fraction(1, 4)]
-    notes = parse_abc("A A2", meter="2/4")   # meter < 3/4 -> L:1/16
-    assert [n.eighths for n in notes] == [Fraction(1, 2), Fraction(1)]
+    # Not the ABC standard's L:1/16 for a meter under 3/4: thesession.org
+    # writes 2/4 in eighths and the dump carries no L: line.
+    notes = parse_abc("A A2", meter="2/4")
+    assert [n.eighths for n in notes] == [Fraction(1), Fraction(2)]
     notes = parse_abc("L:1/16\nA")
     assert notes[0].eighths == Fraction(1, 2)
 

@@ -89,8 +89,11 @@ def save_annotation(payload):
     # tune this is, so a label that recorded it would be recording noise, and
     # two labels an octave apart would look like disagreement.
     labels = sorted(
+        # `grid`: drawn as one eighth between two grid lines, and kept apart
+        # from its neighbours so two eighths of one pitch stay two notes
         ({"t0": round(float(v["t0"]), 3), "t1": round(float(v["t1"]), 3),
-          "midi": fold_pitch(v["midi"]), "from": v.get("from", "drawn")}
+          "midi": fold_pitch(v["midi"]), "from": v.get("from", "drawn"),
+          **({"grid": True} if v.get("grid") else {})}
          for v in payload.get("labels", [])),
         key=lambda v: (v["t0"], v["midi"]))
     pulse = payload.get("pulse")

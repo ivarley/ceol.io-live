@@ -1,17 +1,17 @@
 """The front-end registry."""
 
 from lab.frontends.base import FrontEnd  # noqa: F401
+from lab.frontends.basicpitch import BasicPitchFrontEnd
 from lab.frontends.salience import SalienceCleaned, SalienceMelody, SalienceViterbi
 from lab.frontends.trackers import PyinCleaned, PyinFrontEnd, YinCleaned, YinFrontEnd
 
 REGISTRY = {c.name: c for c in (
     PyinFrontEnd, YinFrontEnd, PyinCleaned, YinCleaned,
-    SalienceMelody, SalienceCleaned, SalienceViterbi,
+    SalienceMelody, SalienceCleaned, SalienceViterbi, BasicPitchFrontEnd,
 )}
 
 # Named here so the gap is visible on the leaderboard rather than in a plan.
 UNBUILT = {
-    "basic_pitch": "polyphonic neural note transcription; emits note events directly",
     "crepe": "neural but monophonic, so likely the same failure as pyin, more robustly",
 }
 

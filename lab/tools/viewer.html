@@ -96,6 +96,10 @@
     <span class="sep"></span>
     <button id="sing" title="sound your labels as the music plays">♪ sing labels</button>
     <label>tone <input type="range" id="vol" min="0" max="100" value="45"></label>
+    <label title="shift the sung labels against the music, by ear; changes nothing that is saved"
+      >offset <input type="range" id="toneoffset" min="-150" max="150" step="5" value="0">
+      <span class="time" id="toneoffsetv">0ms</span></label>
+    <span class="time" id="syncmode" title="in sync: the music and the sung labels share one audio clock"></span>
     <button id="pulsebtn" class="on" title="the eighth-note grid the music is on">grid</button>
     <button class="mode" data-mode="beats">draw beats</button>
     <label title="what one beat you draw is, and how many of them make a bar"
@@ -142,7 +146,8 @@
     <b>listen</b> click anywhere to seek, click a note to hear it ·
     <b>edit</b> drag a label to move it, drag its right edge to lengthen it, and it sounds as you go ·
     <b>accept</b> drag a box over notes that are right ·
-    <b>draw</b> paint the pitch you hear ·
+    <b>draw</b> click an eighth (between two grid lines) at the pitch you hear; click it again to remove it,
+    or at another pitch to change it; drag to paint a run. Draw the beats first, so the eighths are in the right place ·
     <b>erase</b> drag a box to remove labels ·
     <b>draw beats</b> click where each quarter note lands; drag one to move it,
     backspace to remove it. The eighths are the spaces between them, and your
@@ -151,7 +156,7 @@
     estimates that from the audio, so one marked bar start is worth a great
     deal more than more beats
     <br>
-    <kbd>space</kbd> play · <kbd>1-6</kbd> modes · <kbd>+</kbd><kbd>−</kbd> zoom ·
+    <kbd>space</kbd> play · <kbd>1-6</kbd> modes · <kbd>Tab</kbd> draw ⇄ draw beats · <kbd>+</kbd><kbd>−</kbd> zoom ·
     <kbd>,</kbd><kbd>.</kbd> back/forward 3s · <kbd>r</kbd> replay this view · <kbd>Home</kbd> start ·
     <kbd>l</kbd> loop on/off (drag the strip above the ruler to draw one) ·
     <kbd>←</kbd><kbd>→</kbd> pan · <kbd>↑</kbd><kbd>↓</kbd> nudge a semitone · <kbd>⌫</kbd> delete · <kbd>s</kbd> sing · <kbd>g</kbd> grid ·
@@ -227,11 +232,11 @@ function audioCtx() {
   return actx;
 }
 const hz = m => 440 * Math.pow(2, (m - 69) / 12);
-function tone(midi, seconds) {
+function tone(midi, seconds, delay) {
   const gainValue = document.getElementById('vol').value / 100;
-  if (gainValue <= 0) return;
+  if (gainValue <= 0) return null;
   const ctx = audioCtx();
-  const t = ctx.currentTime;
+  const t = ctx.currentTime + Math.max(0, delay || 0);
   const dur = clamp(seconds || 0.25, 0.06, 2.0);
   const osc = ctx.createOscillator(), g = ctx.createGain();
   osc.type = 'sine';
@@ -244,6 +249,7 @@ function tone(midi, seconds) {
   g.gain.linearRampToValueAtTime(0, t + dur);
   osc.connect(g).connect(ctx.destination);
   osc.start(t); osc.stop(t + dur + 0.02);
+  return osc;
 }
 
 // ---- header --------------------------------------------------------------
@@ -394,7 +400,7 @@ function loopTick() {
   // times a second and would overshoot the end of a short loop by enough to
   // hear. Only the END is enforced: yanking the playhead forward when it sits
   // before the loop would make it impossible to scrub back and listen in.
-  if (audio.currentTime >= loop.t1) {
+  if (musicPos() >= loop.t1) {
     try { audio.currentTime = loop.t0; } catch (_) {}
     resetSung();
   }
@@ -595,6 +601,7 @@ function fitTaps() {
              level: 'beat', beats: sorted.slice(),
              downbeats: downbeats.slice().sort((a, b) => a - b),
              bar_anchored: downbeats.length > 0, grid };
+  resnapEighths();
   dirty = true;
   document.getElementById('save').disabled = false;
   refreshBeatReadout();
@@ -796,7 +803,10 @@ function mergeLabels() {
   const out = [];
   for (const l of labels) {
     const prev = out[out.length - 1];
-    if (prev && prev.midi === l.midi && l.t0 - prev.t1 < 0.06 && prev !== selected && l !== selected)
+    // eighths drawn on the grid stay eighths: two of the same pitch are what
+    // a repeated note looks like, and fusing them would erase it
+    if (prev && prev.midi === l.midi && l.t0 - prev.t1 < 0.06 && prev !== selected && l !== selected
+        && !prev.grid && !l.grid)
       prev.t1 = Math.max(prev.t1, l.t1);
     else out.push(l);
   }
@@ -885,7 +895,7 @@ roll.addEventListener('pointerdown', e => {
     return;
   }
 
-  if (mode === 'draw') { pushUndo(); drag = { mode: 'draw' }; paint(p); return; }
+  if (mode === 'draw') { pushUndo(); drag = { mode: 'draw', lastSlot: null }; paint(p, true); return; }
   drag = { mode: 'box', box: true, x0: p.x, y0: p.y, x: p.x, y: p.y };
 });
 
@@ -905,7 +915,7 @@ roll.addEventListener('pointermove', e => {
     return;
   }
   if (drag.mode === 'scrub') { seek(tOf(p.x)); return; }
-  if (drag.mode === 'draw') { paint(p); return; }
+  if (drag.mode === 'draw') { paint(p, false); return; }
   if (drag.mode === 'beat') {
     const was = beats[drag.index];
     const now = clamp(tOf(p.x), 0, D.duration_s);
@@ -962,7 +972,64 @@ roll.addEventListener('pointerup', () => {
   refresh();
 });
 
-function paint(p) {
+// The eighth a time falls in: the space between two grid lines, from your
+// drawn beats if there are any and the estimate otherwise. Draw the beats
+// first: the estimate has the period right but has been half a beat out on
+// reels, and a note snapped to a wrong grid is a wrong label.
+function slotAt(t) {
+  const g = tapped ? tapped.grid : (D.pulse_grid || []);
+  if (g.length < 2 || t < g[0].t || t >= g[g.length - 1].t) return null;
+  let lo = 0, hi = g.length - 1;
+  while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (g[mid].t <= t) lo = mid; else hi = mid; }
+  return { t0: g[lo].t, t1: g[hi].t };
+}
+
+// Eighths drawn on the grid follow it when the beats move, each to the
+// eighth its middle now falls in. Without this, moving a beat after drawing
+// left notes overlapping their neighbours (three pairs on Tom Sullivan's).
+// Two landing in one eighth keep the one that sat closer to it.
+function resnapEighths() {
+  const bySlot = new Map();
+  for (const l of labels) {
+    if (!l.grid) continue;
+    const mid = (l.t0 + l.t1) / 2, s = slotAt(mid);
+    if (!s) continue;
+    const off = Math.abs(mid - (s.t0 + s.t1) / 2);
+    const key = s.t0.toFixed(4), held = bySlot.get(key);
+    if (!held || off < held.off) bySlot.set(key, { l, s, off });
+  }
+  const keep = new Set([...bySlot.values()].map(v => v.l));
+  labels = labels.filter(l => !l.grid || keep.has(l) || !slotAt((l.t0 + l.t1) / 2));
+  for (const { l, s } of bySlot.values()) { l.t0 = s.t0; l.t1 = s.t1; }
+}
+
+// One click, one eighth. Exact onsets and lengths inside an eighth are not
+// worth the labeller's time for pitch scoring, and a held note is drawn as
+// eighths of the same pitch, which is how the matcher reads the notation too.
+// Clicking a drawn eighth at another pitch re-pitches it; at its own pitch,
+// removes it. Dragging paints each eighth it crosses.
+function paintSlot(p, first) {
+  const t = clamp(tOf(p.x), 0, D.duration_s);
+  const s = slotAt(t);
+  if (!s) return false;
+  if (drag.lastSlot === s.t0) return true;
+  drag.lastSlot = s.t0;
+  const m = pc(Math.round(clamp(mOf(p.y), LO, HI)));
+  const i = labels.findIndex(l => l.grid && Math.abs(l.t0 - s.t0) < 1e-3);
+  if (i >= 0) {
+    if (labels[i].midi !== m) { labels[i].midi = m; tone(m, s.t1 - s.t0); }
+    else if (first) labels.splice(i, 1);
+  } else {
+    labels.push({ t0: s.t0, t1: s.t1, midi: m, from: 'drawn', grid: true });
+    tone(m, s.t1 - s.t0);
+  }
+  draw();
+  return true;
+}
+
+function paint(p, first) {
+  if (paintSlot(p, first)) return;
+  // no grid at this point in the clip: paint freely, as before
   const t = clamp(tOf(p.x), 0, D.duration_s);
   const m = Math.round(clamp(mOf(p.y), LO, HI));
   const w = Math.max(0.03, (view.t1 - view.t0) / 400);
@@ -977,8 +1044,34 @@ function paint(p) {
 }
 
 // ---- singing the labels over the music -----------------------------------
+// Tones are scheduled ahead on the audio clock rather than started when a
+// frame notices a label has begun. Polling started every tone up to a frame
+// late, plus the browser's own output delay, and sung labels sounded behind
+// the beat even though the tracker's note starts and the drawn beats both sit
+// within a few ms of the attacks (measured on Tom Sullivan's). The offset
+// slider takes up whatever difference between the two output paths is left.
+const LOOKAHEAD_S = 0.15;
 let sungUpTo = -1;
-function resetSung() { sungUpTo = audio.currentTime - 0.001; }
+let queued = [];
+function resetSung() {
+  sungUpTo = audio.currentTime - 0.001;
+  // a seek or a pause must not leave the next few notes sounding
+  for (const osc of queued) { try { osc.stop(); } catch (_) {} }
+  queued = [];
+}
+let toneOffsetS = 0;
+try { toneOffsetS = (parseFloat(localStorage.getItem('toneOffsetMs')) || 0) / 1000; } catch (_) {}
+function showToneOffset() {
+  document.getElementById('toneoffset').value = Math.round(toneOffsetS * 1000);
+  document.getElementById('toneoffsetv').textContent =
+    (toneOffsetS > 0 ? '+' : '') + Math.round(toneOffsetS * 1000) + 'ms';
+}
+document.getElementById('toneoffset').oninput = e => {
+  toneOffsetS = parseFloat(e.target.value) / 1000;
+  try { localStorage.setItem('toneOffsetMs', String(Math.round(toneOffsetS * 1000))); } catch (_) {}
+  showToneOffset(); resetSung();
+};
+showToneOffset();
 document.getElementById('tapclear').onclick = () => {
   beats = []; selectedBeat = null; tapped = null;
   refreshBeatReadout(); draw();
@@ -995,13 +1088,93 @@ document.getElementById('sing').onclick = () => {
   resetSung();
   if (singing) audioCtx();
 };
+// ---- the music on the tones' own clock ----------------------------------
+// Scheduling the tones ahead was not enough: they still sounded late. The
+// <audio> element and Web Audio reach the speakers by separate paths, and
+// the element's currentTime says nothing about how long its own path takes.
+// So at 1x the music is played from the decoded clip through the same
+// AudioContext as the tones, and each tone is started at the exact sample of
+// the music it belongs to. (The browser's decode of the clip lines up with
+// the original recording to the millisecond; measured.) The element keeps
+// running, muted, for the playhead and the controls. At a slower speed it
+// plays aloud again, because it slows without dropping the pitch and a
+// buffer does not.
+let clipBuffer = null, clipSource = null, clipStart = null;   // clipStart: {ctx, pos}
+try {
+  fetch(D.audio_url).then(r => r.arrayBuffer())
+    .then(b => audioCtx().decodeAudioData(b))
+    .then(buf => { clipBuffer = buf; if (!audio.paused) startClip(); })
+    .catch(() => {});
+} catch (_) {}
+function stopClip() {
+  if (clipSource) { try { clipSource.stop(); } catch (_) {} }
+  clipSource = null; clipStart = null;
+}
+function startClip() {
+  stopClip();
+  const ctx = audioCtx();
+  if (!clipBuffer || audio.paused || (audio.playbackRate || 1) !== 1 || ctx.state !== 'running') {
+    audio.muted = false;
+    if (clipBuffer && !audio.paused && ctx.state !== 'running') {
+      ctx.resume().then(() => { if (!audio.paused) startClip(); });
+    }
+    return;
+  }
+  const src = ctx.createBufferSource();
+  src.buffer = clipBuffer;
+  src.connect(ctx.destination);
+  const lead = 0.03;             // time to get the source going
+  const pos = Math.max(0, audio.currentTime + lead);
+  src.start(ctx.currentTime + lead, pos);
+  clipSource = src;
+  clipStart = { ctx: ctx.currentTime + lead, pos };
+  audio.muted = true;
+  resetSung();
+  sungUpTo = pos - 0.001;
+}
+// A missed 'playing' event must not leave the music on the old path for the
+// rest of the take, so every frame checks.
+function clipTick() {
+  const want = clipBuffer && !audio.paused && (audio.playbackRate || 1) === 1;
+  if (want && !clipStart && actx && actx.state === 'running' && audio.readyState >= 3) startClip();
+  const el = document.getElementById('syncmode');
+  const text = clipStart ? 'in sync' : (audio.paused ? '' : 'not in sync');
+  if (el.textContent !== text) el.textContent = text;
+}
+
+// Where the music you are hearing is, in the clip.
+function musicPos() {
+  if (!clipStart) return audio.currentTime;
+  return clipStart.pos + Math.max(0, actx.currentTime - clipStart.ctx);
+}
+
 function singTick() {
   if (!singing || audio.paused) { if (audio.paused) resetSung(); return; }
-  const t = audio.currentTime;
+  if (clipStart) { singOnClip(); return; }
+  const t = audio.currentTime, rate = audio.playbackRate || 1;
+  // everything that should sound within the lookahead, at its own moment
+  const horizon = t + (LOOKAHEAD_S - toneOffsetS) * rate;
+  const ctx = audioCtx();
+  queued = queued.filter(o => o._end > ctx.currentTime);
   for (const l of labels) {
-    if (l.t0 > sungUpTo && l.t0 <= t) tone(l.midi, (l.t1 - l.t0) / (audio.playbackRate || 1));
+    if (l.t0 <= sungUpTo || l.t0 > horizon) continue;
+    const osc = tone(l.midi, (l.t1 - l.t0) / rate, (l.t0 - t) / rate + toneOffsetS);
+    if (osc) { osc._end = ctx.currentTime + LOOKAHEAD_S + 2.5; queued.push(osc); }
   }
-  sungUpTo = t;
+  sungUpTo = Math.max(sungUpTo, horizon);
+}
+function singOnClip() {
+  const ctx = audioCtx(), now = ctx.currentTime;
+  const p = clipStart.pos + (now - clipStart.ctx);
+  const horizon = p + LOOKAHEAD_S - toneOffsetS;
+  queued = queued.filter(o => o._end > now);
+  for (const l of labels) {
+    if (l.t0 <= sungUpTo || l.t0 > horizon) continue;
+    const when = clipStart.ctx + (l.t0 - clipStart.pos) + toneOffsetS;
+    const osc = tone(l.midi, l.t1 - l.t0, when - now);
+    if (osc) { osc._end = now + LOOKAHEAD_S + 2.5; queued.push(osc); }
+  }
+  sungUpTo = Math.max(sungUpTo, horizon);
 }
 
 // ---- zoom and pan --------------------------------------------------------
@@ -1055,8 +1228,10 @@ document.querySelectorAll('.mode').forEach(b => b.onclick = () => setMode(b.data
 const playBtn = document.getElementById('play');
 playBtn.onclick = () => { audioCtx(); audio.paused ? audio.play() : audio.pause(); };
 audio.addEventListener('play', () => { playBtn.textContent = '❚❚ Pause'; resetSung(); });
-audio.addEventListener('pause', () => playBtn.textContent = '▶ Play');
-audio.addEventListener('seeked', resetSung);
+audio.addEventListener('playing', startClip);
+audio.addEventListener('pause', () => { playBtn.textContent = '▶ Play'; stopClip(); audio.muted = false; });
+audio.addEventListener('ended', () => { stopClip(); audio.muted = false; });
+audio.addEventListener('seeked', () => { resetSung(); if (!audio.paused) startClip(); });
 audio.addEventListener('timeupdate', () => {
   document.getElementById('cur').textContent = fmt(audio.currentTime);
   const t = audio.currentTime, span = view.t1 - view.t0;
@@ -1066,7 +1241,7 @@ audio.addEventListener('timeupdate', () => {
   }
 });
 audio.addEventListener('loadedmetadata', () => document.getElementById('dur').textContent = fmt(audio.duration));
-document.getElementById('rate').onchange = e => audio.playbackRate = parseFloat(e.target.value);
+document.getElementById('rate').onchange = e => { audio.playbackRate = parseFloat(e.target.value); startClip(); };
 
 async function save() {
   const body = {
@@ -1102,6 +1277,9 @@ document.addEventListener('keydown', e => {
   const modes = { '1': 'listen', '2': 'edit', '3': 'accept', '4': 'draw', '5': 'erase',
                   '6': 'beats' };
   if (modes[e.key]) { setMode(modes[e.key]); return; }
+  // Drawing notes needs the grid right, and fixing the grid is done while
+  // drawing notes, so the two are one key apart.
+  if (e.key === 'Tab') { e.preventDefault(); setMode(mode === 'draw' ? 'beats' : 'draw'); return; }
   if (e.code === 'Space') { e.preventDefault(); audioCtx(); audio.paused ? audio.play() : audio.pause(); return; }
   if (e.key === 's') { document.getElementById('sing').click(); return; }
   if (e.key === 'g') { document.getElementById('pulsebtn').click(); return; }
@@ -1152,7 +1330,7 @@ function resize() {
 window.addEventListener('resize', resize);
 let staffLastT0 = null, staffLastT1 = null;
 (function tick() {
-  loopTick(); singTick(); draw(); followStaff();
+  loopTick(); clipTick(); singTick(); draw(); followStaff();
   if (view.t0 !== staffLastT0 || view.t1 !== staffLastT1) {
     staffLastT0 = view.t0; staffLastT1 = view.t1;
     syncStaff(false);

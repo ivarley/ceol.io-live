@@ -200,7 +200,7 @@ def test_pitch_labels_round_trip_and_score(lab_data, tmp_path, monkeypatch):
         "tune_id": synthetic.TUNE_A["tune_id"], "tune_name": synthetic.TUNE_A["name"],
         "frontend": "yin v1",
         "labels": [{"t0": 1.0, "t1": 1.4, "midi": 62, "from": "accepted"},
-                   {"t0": 0.2, "t1": 0.6, "midi": 74, "from": "drawn"}],
+                   {"t0": 0.2, "t1": 0.6, "midi": 74, "from": "drawn", "grid": True}],
     })
     assert count == 2
     back = viewer.load_annotation(RECORDING_ID, 1, 4000)
@@ -208,6 +208,9 @@ def test_pitch_labels_round_trip_and_score(lab_data, tmp_path, monkeypatch):
     # stored as pitch classes: 74 is a D two octaves up, and octave says
     # nothing about which tune is playing
     assert back[0]["midi"] == 62 and back[1]["midi"] == 62
+    # an eighth drawn on the grid says so, so reloading does not fuse it
+    # with a neighbour of the same pitch
+    assert back[0].get("grid") is True and "grid" not in back[1]
 
     # the grid is what scoring compares, one question per 10ms
     grid = pitch_mod._to_grid(back, 6.0)

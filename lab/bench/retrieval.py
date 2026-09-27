@@ -75,7 +75,8 @@ def transcribe_segment(frontend, store, audio_sha1, t0_ms, t1_ms, board=None):
     notes = frontend.notes_from_track(
         np.asarray(track["times_ms"], dtype=float), f0,
         np.asarray(track["voiced_prob"], dtype=float), t_offset_ms=t0_ms)
-    if frontend.params.get("split_repeats"):
+    if (frontend.params.get("split_repeats") or frontend.params.get("min_note_eighths")
+            or frontend.params.get("out_of_key_drop")):
         # The only thing here that needs the audio again. Cheap next to
         # tracking, and read only when it is asked for.
         notes = frontend.regrid(notes, store.read(t0_ms, t1_ms), store.sr,
