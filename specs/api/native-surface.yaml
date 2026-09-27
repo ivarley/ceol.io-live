@@ -24,7 +24,8 @@ info:
       * Live-op business rejections are HTTP 200 with {success:true, rejected:true, reason}.
 
 servers:
-  - url: https://ceol.io
+  # www: the bare domain redirects every request here (301 GET, 307 POST).
+  - url: https://www.ceol.io
 
 components:
   securitySchemes:
