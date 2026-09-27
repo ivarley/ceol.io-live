@@ -7,12 +7,15 @@
   // e2e-selected by offline.spec.ts) and the same behavior: 200ms debounce,
   // min 2 chars, server search with offline-bundle fallback, stale-response
   // guard, click a result -> the shared tune-detail sheet.
-  import { SearchField, Sheet } from '../lib/index.js'
+  import { LoadError, SearchField, Sheet } from '../lib/index.js'
   import { parseThesessionId, parseThesessionSettingId } from '../shared/parse.js'
 
   let open = $state(false)
   let query = $state('')
   let results = $state(null) // null = nothing to show; [] = "No tunes match"
+  // The search itself failed (and the offline bundle couldn't stand in): say so
+  // rather than showing stale results or a false "No tunes match".
+  let searchFailed = $state(false)
   let searchField = $state(null)
   // A pasted thesession.org URL / tune id resolves to that one tune (the server does the
   // lookup, following merge redirects). When the catalog doesn't have it yet, the empty
@@ -29,6 +32,7 @@
   export function show() {
     query = ''
     results = null
+    searchFailed = false
     linkRef = null
     open = true
     setTimeout(() => searchField && searchField.focus(), 50)
@@ -68,9 +72,16 @@
       return
     }
     const mine = ++seq
+    searchFailed = false
     const render = (tunes) => {
       if (mine !== seq) return
+      searchFailed = false
       results = tunes || []
+    }
+    const fail = () => {
+      if (mine !== seq) return
+      results = null
+      searchFailed = true
     }
     try {
       const res = await fetch('/api/tunes/search?q=' + encodeURIComponent(q) + '&limit=10', {
@@ -78,6 +89,7 @@
       })
       const json = await res.json()
       if (mine !== seq) return
+      if (res.ok === false || !json || !json.success) throw new Error(`search failed (${res.status})`)
       if (json && json.success && (json.tunes || []).length) {
         render(json.tunes)
         return
@@ -91,8 +103,10 @@
       const off = await offlineSearch(q)
       render(off !== null ? off : json.tunes || [])
     } catch (e) {
+      console.error('Tune search failed:', e)
       const off = await offlineSearch(q)
       if (off !== null) render(off)
+      else fail()
     }
   }
 
@@ -140,6 +154,9 @@
   {:else if linkRef && linkRef.settingId != null && loggedIn && results && results.length}
     <!-- Say where the tap goes: this sheet can't hold on to a setting, My Tunes can. -->
     <p class="ft-note">That link names setting #{linkRef.settingId} — opening it in My Tunes, where it can be saved.</p>
+  {/if}
+  {#if searchFailed}
+    <LoadError message="Couldn't search for tunes." onRetry={() => runSearch(query)} />
   {/if}
   <ul class="ft-results">
     {#if results !== null}

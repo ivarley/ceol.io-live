@@ -3,7 +3,7 @@
 Shared Svelte 5 components for every migrated page. Import from `src/lib`:
 
 ```js
-import { Sheet, Dialog, Popover, Card, Chip, Tabs, List, Pager, SearchField, toast } from '../lib/index.js'
+import { Sheet, Dialog, Popover, Card, Chip, Tabs, List, Pager, SearchField, LoadError, toast } from '../lib/index.js'
 ```
 
 ## Conventions
@@ -55,7 +55,14 @@ Never scrolls; outside clicks are ignored, Escape = Cancel.
 | `confirmLabel` | `'Confirm'` | pass an explicit verb, never "OK" |
 | `cancelLabel` | `'Cancel'` | |
 | `destructive` | `false` | red confirm button |
+| `busyLabel` | `''` | confirm label while an async `onConfirm` is in flight (default `confirmLabel…`) |
 | `onConfirm` / `onCancel` | noop | |
+
+When `onConfirm` returns a **promise** (the confirm is a request), the Dialog stays
+open with both buttons disabled and the confirm reading `busyLabel` until it
+settles: resolved → closes; resolved `false` or rejected → stays open (the host
+toasts what failed) so the user can retry or cancel. A sync `onConfirm` closes
+immediately, as before.
 
 ### Popover — anchored panel (bits-ui `Popover`)
 | Prop | Default | |
@@ -70,6 +77,41 @@ Never scrolls; outside clicks are ignored, Escape = Cancel.
 `type: 'success' | 'error' | 'info'`. Delegates to the site-wide
 `window.showMessage` when present (base.html pages); otherwise renders its own
 top-center stack (`--z-toast`), auto-dismissing after 3s.
+
+### LoadError — a failed load, in place of the content
+THE failed-load state. A fetch that fills content and fails must never look like
+real data (an empty list, "no stats", a filter silently reset): render this where
+the content would have been. "Couldn't load <what>." plus a Retry that re-runs
+the fetch.
+
+| Prop | Default | |
+|---|---|---|
+| `what` | `'this'` | noun phrase: `'the logs'`, `'your tunes'` |
+| `message` | `''` | full override of the sentence |
+| `onRetry` | `null` | re-runs the fetch; no button when omitted |
+| `retrying` | `false` | host's in-flight flag → "Retrying…", disabled |
+| `inline` | `false` | one compact left-aligned line (filter notes, small panes) |
+| `...rest` | — | `id`, `class`, `data-*` pass through |
+
+**Failures and waits (the rules every page follows):**
+- A failed **load** → `LoadError` where the content goes. A filter that can't get
+  its data says so (inline `LoadError`) instead of resetting.
+- A failed **action** → `toast(…, 'error')` saying what failed and what to do next
+  ("Couldn't save the session. Check your connection and try again."). Never raw
+  `error.message`/JSON-parse text — log that to the console. A server-supplied
+  `error`/`message` string is fine to show.
+- A button that sends a request disables itself while in flight with a busy label
+  ("Saving…", "Adding…"). A confirm Dialog whose action is a request stays open,
+  its confirm button busy, until the request resolves.
+
+### toastFailure(what, error) / ServerError — `toast.js`
+The failed-ACTION toast. `what` completes "Couldn't …":
+`toastFailure('remove the tune from your list', e)`. Inside the request's `try`,
+throw `new ServerError(data.message || data.error)` when the server answered with
+a failure — that message is shown as-is (or "Couldn't … Try again." when empty).
+Anything else in the catch (network down, a non-JSON 500) becomes "Couldn't ….
+Check your connection and try again." The raw error always goes to the console,
+never the screen.
 
 ### Card
 Surface with border + `--r` radius. Props: `hover` (shadow on hover),

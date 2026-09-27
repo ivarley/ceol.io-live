@@ -52,3 +52,29 @@ describe('toast', () => {
     expect(remaining[0]).toHaveTextContent('second')
   })
 })
+
+describe('toastFailure', () => {
+  it('network/parse failures get a human message with a next step, not raw text', async () => {
+    const { toastFailure } = await import('../../src/lib/toast.js')
+    window.showMessage = vi.fn()
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    toastFailure('remove the tune', new SyntaxError('Unexpected token < in JSON'))
+    expect(window.showMessage).toHaveBeenCalledWith(
+      "Couldn't remove the tune. Check your connection and try again.",
+      'error'
+    )
+    expect(spy).toHaveBeenCalled()
+    spy.mockRestore()
+  })
+
+  it("a ServerError's own message is shown; empty falls back", async () => {
+    const { toastFailure, ServerError } = await import('../../src/lib/toast.js')
+    window.showMessage = vi.fn()
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    toastFailure('save', new ServerError('Name is required'))
+    expect(window.showMessage).toHaveBeenLastCalledWith('Name is required', 'error')
+    toastFailure('save', new ServerError())
+    expect(window.showMessage).toHaveBeenLastCalledWith("Couldn't save. Try again.", 'error')
+    spy.mockRestore()
+  })
+})

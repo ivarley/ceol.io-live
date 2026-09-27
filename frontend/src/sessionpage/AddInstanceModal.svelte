@@ -14,8 +14,11 @@
   let endTime = $state('')
   let location = $state('')
   let comments = $state('')
+  let adding = $state(false)
+  let suggesting = $state(false)
+  let suggestError = $state(false)
 
-  import { Sheet, toast } from '../lib/index.js'
+  import { Sheet, toast, LoadError } from '../lib/index.js'
 
   export async function open() {
     // Defaults while we fetch the suggestion.
@@ -24,19 +27,28 @@
     endTime = ''
     location = ''
     comments = ''
+    adding = false
     visible = true
+    await suggest()
+  }
 
+  // Prefill the next usual date/times. A failure keeps today's date but says so,
+  // so a default isn't mistaken for the session's next night.
+  async function suggest() {
+    suggesting = true
+    suggestError = false
     try {
       const response = await fetch(`/api/sessions/${sessionPath}/next_instance_suggestion`)
       const data = await response.json()
-      if (data.success) {
-        date = data.date || date
-        startTime = data.start_time || ''
-        endTime = data.end_time || ''
-      }
+      if (!data.success) throw new Error(data.message || 'next_instance_suggestion failed')
+      date = data.date || date
+      startTime = data.start_time || ''
+      endTime = data.end_time || ''
     } catch (error) {
       console.error('Failed to get next session suggestion:', error)
-      // Keep the default values if the API call fails.
+      suggestError = true
+    } finally {
+      suggesting = false
     }
   }
 
@@ -45,6 +57,7 @@
   }
 
   function addSessionInstance() {
+    if (adding) return
     const dateVal = date.trim()
     if (!dateVal) {
       toast('Please enter a session date', 'error')
@@ -57,6 +70,7 @@
     if (location.trim()) requestData.location = location.trim()
     if (comments.trim()) requestData.comments = comments.trim()
 
+    adding = true
     fetch(`/api/sessions/${sessionPath}/add_instance`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -68,18 +82,21 @@
           // No toast (spec 052 §B4): the next line navigates to the instance that was
           // just created, so the confirmation was a banner shown for one frame over a
           // page on its way out.
+          // Stays "Adding…" through the redirect — the page is about to change.
           close()
           // Redirect to the new session instance in edit mode; the id-based URL
           // is unambiguous when several instances share a date.
           const instanceId = data.session_instance_id || dateVal
           window.location.href = `/sessions/${sessionPath}/${instanceId}?edit=true`
         } else {
-          toast(data.message, 'error')
+          adding = false
+          toast(data.message || "Couldn't add the session. Try again.", 'error')
         }
       })
       .catch((error) => {
-        toast('Failed to add session instance', 'error')
-        console.error('Error:', error)
+        adding = false
+        console.error('Error adding session instance:', error)
+        toast("Couldn't add the session. Check your connection and try again.", 'error')
       })
   }
 </script>
@@ -87,6 +104,14 @@
 <Sheet bind:open={visible} title="Add Session Instance">
   <!-- .modal-body keeps the page's label/input styling; the chrome is the Sheet's -->
   <div class="modal-body">
+    {#if suggestError}
+      <LoadError
+        inline
+        id="add-instance-suggest-error"
+        message="Couldn't look up the next usual date, so this is today. Check it before adding."
+        onRetry={suggest}
+        retrying={suggesting} />
+    {/if}
     <label for="session-date-input">Session Date:</label>
     <input
       type="date"
@@ -131,7 +156,7 @@
   </div>
   {#snippet footer()}
     <div style="text-align: right;">
-      <button type="button" class="selection-btn primary" id="add-session-confirm-btn" onclick={addSessionInstance}>Add Session</button>
+      <button type="button" class="selection-btn primary" id="add-session-confirm-btn" onclick={addSessionInstance} disabled={adding}>{adding ? 'Adding…' : 'Add Session'}</button>
     </div>
   {/snippet}
 </Sheet>

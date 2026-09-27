@@ -297,6 +297,60 @@ describe('session admin page view', () => {
     })
   })
 
+  it('reactivate: the Dialog stays open and busy while the PUT runs; a failure toasts and keeps it open', async () => {
+    const p = payload()
+    p.session.termination_date = '2025-12-31'
+    let reject
+    fetchRoutes['/reactivate'] = () => new Promise((_, rj) => (reject = rj))
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { container } = renderApp(p)
+    await fireEvent.click(container.querySelector('#reactivate-session-link'))
+    await fireEvent.click(document.querySelector('.kit-dialog-confirm'))
+    await waitFor(() => {
+      expect(document.querySelector('.kit-dialog-confirm').textContent.trim()).toBe('Reactivating…')
+    })
+    expect(document.querySelector('.kit-dialog-confirm')).toBeDisabled()
+    reject(new SyntaxError('Unexpected token <'))
+    await waitFor(() => {
+      expect(window.showMessage).toHaveBeenCalledWith(
+        "Couldn't reactivate the session. Check your connection and try again.",
+        'error'
+      )
+    })
+    await waitFor(() => {
+      expect(document.querySelector('.kit-dialog-confirm').textContent.trim()).toBe('Reactivate session')
+    })
+    expect(document.querySelector('.kit-dialog-title').textContent).toBe('Reactivate this session?')
+  })
+
+  it('Save Changes reads "Saving…" and is disabled while the PUT is in flight', async () => {
+    let resolve
+    fetchRoutes['/admin-update'] = () => new Promise((r) => (resolve = r))
+    const { container } = renderApp()
+    await fireEvent.submit(container.querySelector('#session-details-form'))
+    const btn = container.querySelector('#session-details-form button[type="submit"]')
+    await waitFor(() => expect(btn.textContent).toBe('Saving…'))
+    expect(btn).toBeDisabled()
+    resolve({ success: true, message: 'Saved' })
+    await waitFor(() => expect(btn.textContent).toBe('Save Changes'))
+    expect(btn).not.toBeDisabled()
+  })
+
+  it('tunes tab: a failed load shows LoadError with a Retry that loads the grid', async () => {
+    const good = fetchRoutes['/tunes']
+    fetchRoutes['/tunes'] = { error: 'Database error' }
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { container } = renderApp(payload(), ctx({ activeTab: 'tunes' }))
+    await waitFor(() => {
+      expect(container.querySelector('#tunes-load-error')).toHaveTextContent("Couldn't load this session's tunes.")
+    })
+    fetchRoutes['/tunes'] = good
+    await fireEvent.click(container.querySelector('#tunes-load-error button'))
+    await waitFor(() => {
+      expect(container.querySelectorAll('#tunes-table tbody tr')).toHaveLength(2)
+    })
+  })
+
   it('recurrence edit mode loads the existing schedule and Save PUTs the rebuilt JSON', async () => {
     const { container } = renderApp()
     expect(container.querySelector('.recurrence-text').textContent).toBe('Tuesdays from 7:00pm to 10:00pm')

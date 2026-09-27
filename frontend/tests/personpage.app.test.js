@@ -236,6 +236,46 @@ describe('person details page view (user profile flavor)', () => {
     })
   })
 
+  it('a failed instrument load says so with a Retry, never "No instruments yet"', async () => {
+    const good = fetchRoutes['/instruments']
+    fetchRoutes['/instruments'] = () => {
+      throw new SyntaxError('Unexpected token <')
+    }
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { container } = renderApp()
+    await fireEvent.click(container.querySelector('#edit-btn'))
+    await waitFor(() => expect(container.querySelector('#instrument-rows [role="alert"]')).toBeTruthy())
+    expect(container.querySelector('#instrument-rows').textContent).toContain("Couldn't load the instruments.")
+    expect(container.querySelector('#instrument-rows').textContent).not.toContain('No instruments yet')
+    fetchRoutes['/instruments'] = good
+    await fireEvent.click(container.querySelector('#instrument-rows .kit-load-retry'))
+    await waitFor(() => expect(container.querySelector('#instrument-rows .instrument-row')).toBeTruthy())
+  })
+
+  it('Save shows Saving… while in flight and toasts a human message on failure', async () => {
+    let fail
+    fetchRoutes['/api/person/5/update'] = () =>
+      new Promise((_, reject) => {
+        fail = () => reject(new SyntaxError('Unexpected token < in JSON'))
+      })
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { container } = renderApp()
+    await fireEvent.click(container.querySelector('#edit-btn'))
+    await fireEvent.click(container.querySelector('#save-btn'))
+    await waitFor(() => expect(container.querySelector('#save-btn').textContent).toBe('Saving…'))
+    expect(container.querySelector('#save-btn')).toBeDisabled()
+    await waitFor(() => expect(fail).toBeTypeOf('function'))
+    fail()
+    await waitFor(() =>
+      expect(window.showMessage).toHaveBeenCalledWith(
+        "Couldn't save the profile. Check your connection and try again.",
+        'error'
+      )
+    )
+    expect(container.querySelector('#save-btn').textContent).toBe('Save')
+    expect(container.querySelector('#save-btn')).not.toBeDisabled()
+  })
+
   it('no user account: the "not connected" alert shows and the Logins tab is absent', () => {
     const { container } = renderApp(payload({ user: null }))
     expect(container.textContent).toContain('Not connected to a user account.')

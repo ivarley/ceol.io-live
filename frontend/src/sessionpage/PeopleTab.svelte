@@ -18,7 +18,7 @@
    */
   import { untrack } from 'svelte'
   import { SvelteSet } from 'svelte/reactivity'
-  import { Chip, PersonPicker, Row, SearchField, Seg, Sheet, Toolbar, toast } from '../lib/index.js'
+  import { Chip, LoadError, PersonPicker, Row, SearchField, Seg, Sheet, Toolbar, toast, toastFailure, ServerError } from '../lib/index.js'
   import { normalizeQuotes } from '../shared/parse.js'
   import { filterPeople } from './logic.js'
 
@@ -66,23 +66,25 @@
     }
   })
 
+  let peopleRetrying = $state(false)
+
+  // A failure renders LoadError in place of the list (with Retry), never an empty roster.
   function fetchPeople() {
-    fetch(`/api/sessions/${sessionPath}/people`)
+    peopleRetrying = !!peopleError
+    return fetch(`/api/sessions/${sessionPath}/people`)
       .then((response) => response.json())
       .then((data) => {
-        if (data.success) {
-          peopleData = data.people
-          peopleLoaded = true
-          peopleError = ''
-        } else {
-          peopleError = `Failed to load people: ${data.message || 'Unknown error'}`
-          peopleLoaded = true
-        }
+        if (!data.success) throw new Error(data.message || 'people load failed')
+        peopleData = data.people
+        peopleError = ''
       })
       .catch((error) => {
         console.error('Error loading people:', error)
-        peopleError = 'Error loading people'
+        peopleError = 'failed'
+      })
+      .finally(() => {
         peopleLoaded = true
+        peopleRetrying = false
       })
   }
 
@@ -109,13 +111,13 @@
         }),
       })
       const data = await res.json()
-      if (!res.ok || !data.success) throw new Error(data.message || 'Could not add person')
+      if (!res.ok || !data.success) throw new ServerError(data.message || data.error)
       // No success toast (spec 052 §B4): fetchPeople() puts them in the list you
       // are looking at, and a banner saying so says it twice.
       pickerOpen = false
       fetchPeople()
     } catch (e) {
-      toast(e.message, 'error')
+      toastFailure('add that person', e)
     } finally {
       saving = false
     }
@@ -127,6 +129,8 @@
   let detailFailed = $state(false)
   let detailPerson = $state(null)
   let detailBusy = $state(false)
+  let detailBusyField = $state('') // which control is saving, so it can say "Saving…"
+  let detailPersonId = $state(null)
 
   // The roster row for the person in the sheet — carries relationship/confirmed/archived,
   // which the /people/<id> detail endpoint doesn't return.
@@ -139,20 +143,27 @@
     basePath = basePath.replace(/\/people\/\d+$/, '').replace(/\/(tunes|logs|people)$/, '')
     window.history.pushState({}, '', `${basePath}/people/${personId}`)
 
-    detailLoading = true
-    detailFailed = false
     detailPerson = null
     detailOpen = true
+    loadPersonDetail(personId)
+  }
+
+  function loadPersonDetail(personId) {
+    detailPersonId = personId
+    detailLoading = true
+    detailFailed = false
 
     fetch(`/api/sessions/${sessionPath}/people/${personId}`)
       .then((response) => response.json())
       .then((data) => {
+        if (personId !== detailPersonId) return
         detailLoading = false
         if (data.success) detailPerson = data.person
         else detailFailed = true
       })
       .catch((error) => {
         console.error('Error loading person details:', error)
+        if (personId !== detailPersonId) return
         detailLoading = false
         detailFailed = true
       })
@@ -173,8 +184,16 @@
 
   const nameOf = (p) => `${p.first_name} ${p.last_name}`.trim()
 
+  const FIELD_WHAT = {
+    confirmed: 'change whether they are confirmed',
+    archived: 'change whether they are archived',
+    relationship: 'change their relationship to this session',
+  }
+
   async function setField(personId, field, value) {
+    if (detailBusy) return false
     detailBusy = true
+    detailBusyField = field
     try {
       const res = await fetch(`/api/sessions/${sessionPath}/people/${personId}/${field}`, {
         method: 'PUT',
@@ -182,17 +201,18 @@
         body: JSON.stringify({ [field]: value }),
       })
       const data = await res.json()
-      if (!res.ok || !data.success) throw new Error(data.message || 'Could not save')
+      if (!res.ok || !data.success) throw new ServerError(data.message || data.error)
       // Patch the roster row in place so the list and the sheet agree without a refetch.
       peopleData = peopleData.map((p) =>
         p.person_id === personId ? { ...p, [field]: value } : p
       )
       return true
     } catch (e) {
-      toast(e.message, 'error')
+      toastFailure(FIELD_WHAT[field] || 'save that change', e)
       return false
     } finally {
       detailBusy = false
+      detailBusyField = ''
     }
   }
 
@@ -291,9 +311,7 @@
           <i class="loading-dots">Loading people...</i>
         </div>
       {:else if peopleError}
-        <div style="padding: 40px 20px; text-align: center; color: var(--text-muted, #6c757d);">
-          <p>{peopleError}</p>
-        </div>
+        <LoadError id="people-load-error" what="this session's people" onRetry={fetchPeople} retrying={peopleRetrying} />
       {:else if filteredPeople.length === 0}
         <div style="padding: 40px 20px; text-align: center; color: var(--text-muted, #6c757d);">
           <p>
@@ -373,9 +391,11 @@
           <i class="loading-dots">Loading...</i>
         </div>
       {:else if detailFailed || !detailPerson}
-        <div style="padding: 40px 20px; text-align: center; color: var(--text-muted);">
-          <p>Failed to load person details</p>
-        </div>
+        <LoadError
+          id="person-detail-load-error"
+          what="this person's details"
+          onRetry={detailPersonId ? () => loadPersonDetail(detailPersonId) : null}
+          retrying={detailLoading} />
       {:else}
         {#if detailPerson.person_id === currentUserId}
           <div style="margin-bottom: 16px;"><a href="/me" class="person-detail-link">View my profile</a></div>
@@ -393,7 +413,9 @@
               onSelect={setRelationship}
               idAttr="data-relationship" />
             <p class="pd-hint">
-              {#if detailRow.relationship === 'visitor'}
+              {#if detailBusyField === 'relationship'}
+                Saving…
+              {:else if detailRow.relationship === 'visitor'}
                 Came here, but this isn't one of their sessions.
               {:else}
                 This is one of their sessions — its tunes count towards their stats.
@@ -409,7 +431,9 @@
                  "Confirmed" toggle would be an admin handing over the roster without
                  realising it. -->
             <button class="pd-action" disabled={detailBusy} onclick={toggleConfirmed}>
-              {#if detailRow.confirmed}
+              {#if detailBusyField === 'confirmed'}
+                Saving…
+              {:else if detailRow.confirmed}
                 Un-confirm {nameOf(detailPerson)} — they'll no longer see this session's
                 people list and attendance records
               {:else}
@@ -418,7 +442,9 @@
               {/if}
             </button>
             <button class="pd-action" disabled={detailBusy} onclick={toggleArchived}>
-              {#if detailRow.archived}
+              {#if detailBusyField === 'archived'}
+                Saving…
+              {:else if detailRow.archived}
                 Restore {nameOf(detailPerson)} to the roster
               {:else}
                 Archive {nameOf(detailPerson)} — hide them from lists (still findable by name)

@@ -17,6 +17,7 @@
     canEdit = true,
     onEdit = () => {},
     onSave = () => {},
+    saving = false, // the save request is in flight
     onCancel = () => {},
   } = $props()
 
@@ -43,8 +44,8 @@
   {#if canEdit}
     <span class="pd-identity-actions edit-controls">
       {#if editMode}
-        <button type="button" id="cancel-btn" class="pd-action" onclick={onCancel}>Cancel</button>
-        <button type="button" id="save-btn" class="pd-action pd-action-strong" onclick={onSave}>Save</button>
+        <button type="button" id="cancel-btn" class="pd-action" disabled={saving} onclick={onCancel}>Cancel</button>
+        <button type="button" id="save-btn" class="pd-action pd-action-strong" disabled={saving} onclick={onSave}>{saving ? 'Saving…' : 'Save'}</button>
       {:else}
         <button type="button" id="edit-btn" class="pd-action" onclick={onEdit}>Edit</button>
       {/if}
@@ -141,6 +142,10 @@
     font-weight: 600;
   }
 
+  .pd-action:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
   .pd-action:hover {
     opacity: 0.85;
   }

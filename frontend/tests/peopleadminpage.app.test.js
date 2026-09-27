@@ -290,4 +290,32 @@ describe('admin people table', () => {
     )
     expect(document.querySelector('#add-person-form')).toBeNull()
   })
+
+  it('a payload that failed to load says so with a Retry, not "No People Found"', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { container } = render(App, { pageData: { success: false, error: 'boom' } })
+    expect(container.querySelector('[role="alert"]').textContent).toContain("Couldn't load the people list.")
+    expect(container.textContent).not.toContain('No People Found')
+    await fireEvent.click(container.querySelector('.kit-load-retry'))
+    await waitFor(() => expect(rowNames(container).length).toBeGreaterThan(0))
+  })
+
+  it('a network failure in step 1 shows a human message, not the raw error', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    fetchRoutes['/api/parse-person-name'] = () => {
+      throw new SyntaxError('Unexpected token < in JSON')
+    }
+    const { container } = render(App, { pageData: payload() })
+    await fireEvent.click(container.querySelector('#add-person-btn'))
+    await waitFor(() => expect(document.querySelector('#person-input')).toBeTruthy())
+    const input = document.querySelector('#person-input')
+    input.value = 'x'
+    await fireEvent.input(input)
+    await fireEvent.click(document.querySelector('#step1-next'))
+    await waitFor(() =>
+      expect(document.querySelector('#step1-error').textContent).toBe(
+        "Couldn't look that up. Check your connection and try again."
+      )
+    )
+  })
 })

@@ -5,7 +5,7 @@
   // this bundle's page.css select on these). First paint comes from the embedded
   // payload; a background refetch of the same API keeps it fresh.
   import { untrack } from 'svelte'
-  import { SearchField, Seg, Toolbar } from '../lib/index.js'
+  import { SearchField, Seg, Toolbar, LoadError } from '../lib/index.js'
   import { parseLocalDate } from '../shared/parse.js'
   import { locationLabel } from './logic.js'
   import AddSessionSheet from '../addsession/AddSessionSheet.svelte'
@@ -59,19 +59,30 @@
 
   if (pageData && pageData.success) adopt(pageData.sessions)
 
+  let retrying = $state(false)
+
+  // Mount-once background refresh; a failure never blanks an already-shown list
+  // (it stays silent then — the embedded list is real data). With nothing shown
+  // yet, a failure says so with a Retry.
+  function refresh() {
+    retrying = loadError
+    return fetch('/api/sessions/with-today-status', { credentials: 'same-origin' })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.success) adopt(d.sessions)
+        else throw new Error(d.error || d.message || 'sessions load failed')
+      })
+      .catch((e) => {
+        console.error('Error loading sessions:', e)
+        if (!loaded) loadError = true
+      })
+      .finally(() => {
+        retrying = false
+      })
+  }
+
   $effect(() => {
-    // Mount-once background refresh; a failure never blanks an already-shown list.
-    untrack(() => {
-      fetch('/api/sessions/with-today-status', { credentials: 'same-origin' })
-        .then((r) => r.json())
-        .then((d) => {
-          if (d.success) adopt(d.sessions)
-          else if (!loaded) loadError = true
-        })
-        .catch(() => {
-          if (!loaded) loadError = true
-        })
-    })
+    untrack(() => refresh())
   })
 
   const filtered = $derived.by(() => {
@@ -214,14 +225,18 @@
 
 <!-- "3 sessions in your list", not "Showing 3 sessions in your list." — My Tunes
      says "10 tunes" in the same spot, and the extra words were the difference. -->
+<!-- No count until the list has loaded: "0 sessions" over a failed or pending load
+     would read as a real answer. -->
+{#if loaded}
 <div class="session-count" id="session-count">
   <span id="count-number">{filtered.length}</span>
   <span id="count-filter-type">{countLabels[currentFilter] || 'sessions'}</span>
 </div>
+{/if}
 
 {#if !loaded}
   <div id="loading-message" class="loading-message">
-    {#if loadError}Error loading sessions{:else}Loading<span class="loading-dots">...</span>{/if}
+    {#if loadError}<LoadError what="sessions" onRetry={refresh} {retrying} />{:else}Loading<span class="loading-dots">...</span>{/if}
   </div>
 {:else if filtered.length === 0}
   <div id="no-results" class="no-sessions">No sessions found.</div>

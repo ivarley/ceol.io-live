@@ -73,7 +73,11 @@ export async function sendOp(config, op_type, payload = {}, op_id = crypto.rando
     clearTimeout(timer)
   }
   const json = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error(json.error || `${op_type} failed: ${res.status}`)
+  // The server's own explanation when it gave one; never the bare status line.
+  if (!res.ok) {
+    console.error(`${op_type} failed: ${res.status}`, json)
+    throw new Error(json.error || json.message || "The server couldn't make that change. Try again.")
+  }
   return json // {success, rejected?, reason?, event_id?, record?, ...}
 }
 
@@ -185,6 +189,14 @@ function scoped(config, path) {
   return q ? `${path}?${q}` : path
 }
 
+// A search that FAILED, as opposed to one that found nothing: still an array (callers
+// iterate it), flagged so the UI can say "Couldn't search" instead of "No tunes match".
+function failedList() {
+  const r = []
+  r.failed = true
+  return r
+}
+
 // Deep catalog search (§D "search deeper"): rich cards + incipit ABC, optional type filter.
 export async function deepSearch(config, q, type, preferType, mode) {
   const params = searchScope(config)
@@ -199,7 +211,7 @@ export async function deepSearch(config, q, type, preferType, mode) {
       credentials: 'same-origin',
     })
     // 503 is the main-app service worker's offline cache-miss response.
-    if (!res.ok) return res.status === 503 ? offlineDeepSearch(config, q) : []
+    if (!res.ok) return res.status === 503 ? offlineDeepSearch(config, q) : failedList()
     const json = await res.json()
     return json.results || []
   } catch {
@@ -215,7 +227,7 @@ export async function deepSearch(config, q, type, preferType, mode) {
 // bars only (`abc_scope: 'incipit'`). The type filter still needs the server. The live
 // logger never opts in (it has its own offline model).
 async function offlineDeepSearch(config, q) {
-  if (!config.offlineSearchFallback || !window.CeolOffline) return []
+  if (!config.offlineSearchFallback || !window.CeolOffline) return failedList()
   try {
     const hits = await window.CeolOffline.searchTunes(q || '', 30)
     return (hits || []).map((t) => ({
@@ -230,14 +242,15 @@ async function offlineDeepSearch(config, q) {
       abc_scope: t.abc_scope || null,
     }))
   } catch {
-    return []
+    return failedList()
   }
 }
 
 // Remote tune search on thesession.org (spec 026 "Search on thesession.org"). Online-only,
 // run ONLY on explicit user action (never per keystroke). Proxied server-side; each result is
 // flagged is_local / in_session so the UI can dedup against the local list. thesession's single
-// `q=` handles name and ABC queries; `type` filters by tune type. Returns [] on any failure.
+// `q=` handles name and ABC queries; `type` filters by tune type. On any failure returns an
+// empty list flagged `failed` (see failedList).
 export async function thesessionSearch(config, q, type) {
   const params = searchScope(config)
   params.set('q', q)
@@ -247,11 +260,11 @@ export async function thesessionSearch(config, q, type) {
       headers: { Accept: 'application/json' },
       credentials: 'same-origin',
     })
-    if (!res.ok) return []
+    if (!res.ok) return failedList()
     const json = await res.json()
-    return json.success ? (json.results || []) : []
+    return json.success ? (json.results || []) : failedList()
   } catch {
-    return []
+    return failedList()
   }
 }
 

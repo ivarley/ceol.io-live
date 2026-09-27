@@ -13,7 +13,7 @@
    * You can't grant yourself Admin, obviously. You CAN set your own member/visitor: it says
    * whose session this is, and that's a claim about your own life.
    */
-  import { Sheet, Seg, Chip, Dialog, toast } from '../lib/index.js'
+  import { Sheet, Seg, Chip, Dialog, toast, toastFailure, ServerError } from '../lib/index.js'
 
   let { sessionPath, permissions } = $props()
 
@@ -27,24 +27,24 @@
   // carried that had no other home moved here — to the session you would be leaving,
   // which is where you are when you decide to.
   let leaveOpen = $state(false)
-  let leaving = $state(false)
-
+  // The Dialog stays open and busy while this runs (it returns a promise); a
+  // failure returns false so it stays open for a retry, with a toast saying why.
   async function leaveSession() {
-    leaving = true
     try {
       const res = await fetch(`/api/sessions/${sessionPath}/leave`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
       })
       const data = await res.json()
-      if (!res.ok || !data.success) throw new Error(data.message || 'Could not leave')
+      if (!res.ok || !data.success) throw new ServerError(data.message || data.error)
       // A full reload, not a local tidy-up: leaving changes the People tab, the role
-      // badge and whether the tunes count as yours — most of the page.
+      // badge and whether the tunes count as yours — most of the page. The Dialog
+      // stays busy until the page goes.
       window.location.reload()
+      return new Promise(() => {})
     } catch (e) {
-      leaving = false
-      leaveOpen = false
-      toast(e.message || 'Could not leave this session', 'error')
+      toastFailure('leave this session', e)
+      return false
     }
   }
 
@@ -75,7 +75,7 @@
         }
       )
       const data = await res.json()
-      if (!res.ok || !data.success) throw new Error(data.message || 'Could not save')
+      if (!res.ok || !data.success) throw new ServerError(data.message || data.error)
       relationship = draft
       open = false
       toast(
@@ -85,7 +85,7 @@
         'success'
       )
     } catch (e) {
-      toast(e.message, 'error')
+      toastFailure('save your relationship to this session', e)
     } finally {
       saving = false
     }
@@ -122,7 +122,7 @@
   </button>
 
   {#snippet footer()}
-    <button class="sr-save" onclick={save} disabled={saving}>Save</button>
+    <button class="sr-save" onclick={save} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
   {/snippet}
 </Sheet>
 
@@ -131,7 +131,8 @@
 <Dialog
   bind:open={leaveOpen}
   title="Leave this session?"
-  confirmLabel={leaving ? 'Leaving…' : 'Leave'}
+  confirmLabel="Leave"
+  busyLabel="Leaving…"
   onConfirm={leaveSession}>
   <p>
     You'll stop seeing it on your home page and its tunes will no longer count as

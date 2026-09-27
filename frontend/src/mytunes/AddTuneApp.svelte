@@ -10,6 +10,7 @@
   import AddTuneForm from './AddTuneForm.svelte'
   import SyncPane from './SyncPane.svelte'
   import { createPaneState } from './pane.svelte.js'
+  import { ServerError } from '../lib/index.js'
 
   // Personal flavor of the live search API (same request/response shapes).
   // offlineSearchFallback: offline, the deep search falls back to the CeolOffline
@@ -24,6 +25,15 @@
   let history = $state([]) // search recall (MRU), kept across open/close for the page's lifetime
   let searchError = $state('') // quick-add failure banner (shown in the search phase)
   let quickAddBusy = false // in-flight guard: a ＋ double-tap must not double-enqueue
+  let quickAdding = $state('') // name of the tune a quick add is sending, for the busy note
+
+  // What to show when a request fails: the server's (or our own) explanation when
+  // there is one, else a human sentence. Raw network/parse text only reaches the console.
+  function failText(e, what) {
+    console.error(`Couldn't ${what}:`, e)
+    if (e instanceof ServerError && e.message) return e.message
+    return `Couldn't ${what}. Check your connection and try again.`
+  }
 
   // Page callbacks (set via open()).
   let onAdded = () => {}
@@ -75,7 +85,7 @@
       body: JSON.stringify(op),
     }).then(async (res) => {
       const j = await res.json().catch(() => ({}))
-      if (!res.ok || j.success === false) throw new Error(j.error || `op failed: ${res.status}`)
+      if (!res.ok || j.success === false) throw new ServerError(j.error || j.message)
       return j
     })
   }
@@ -98,7 +108,7 @@
     const tuneId = target.tune_id ?? target.thesession_id
     if (target.thesession_id != null || settingId != null) {
       if (!navigator.onLine) {
-        throw new Error(
+        throw new ServerError(
           target.thesession_id != null
             ? 'You are offline. Tunes from thesession.org can only be added online.'
             : 'You are offline. A specific setting can only be saved online.'
@@ -119,7 +129,7 @@
       const j = await res.json().catch(() => ({}))
       const finalId = j.person_tune?.tune_id ?? j.redirect_to_tune_id ?? tuneId
       if (res.status === 409) return { finalId, already: true, applied: j.applied || {} }
-      if (!res.ok || !j.success) throw new Error(j.error || 'Could not add the tune.')
+      if (!res.ok || !j.success) throw new ServerError(j.error || j.message)
       await applyOverrides(finalId, overrides)
       return { finalId, already: false }
     }
@@ -143,9 +153,10 @@
       close()
       already ? onAlready(finalId, name, applied) : onAdded(finalId, name)
     } catch (e) {
-      searchError = e?.message || 'Could not add the tune. Please try again.'
+      searchError = failText(e, `add ${name || 'the tune'}`)
     } finally {
       quickAddBusy = false
+      quickAdding = ''
     }
   }
   function quickAdd(payload, name, result) {
@@ -157,6 +168,7 @@
     }
     if (quickAddBusy) return false
     quickAddBusy = true
+    quickAdding = name || 'the tune'
     searchError = ''
     doQuickAdd(
       { tune_id: payload.tune_id, thesession_id: payload.thesession_id ?? null, name, tune_type: payload.tune_type },
@@ -191,7 +203,7 @@
       body: JSON.stringify(body),
     })
     const j = await res.json().catch(() => ({}))
-    if (!res.ok || !j.success) throw new Error(j.error || 'That change could not be saved.')
+    if (!res.ok || !j.success) throw new ServerError(j.error || j.message)
     return j
   }
 
@@ -200,7 +212,7 @@
   async function updateSetting(item, data, chosenSettingId) {
     const pt = data?.person_tune
     if (!pt?.person_tune_id || chosenSettingId == null) return
-    if (!navigator.onLine) throw new Error('You are offline. A specific setting can only be saved online.')
+    if (!navigator.onLine) throw new ServerError('You are offline. A specific setting can only be saved online.')
     await putPersonTune(pt.person_tune_id, { setting_id: chosenSettingId })
     const finalId = data?.tune_id ?? item.r.tune_id
     close()
@@ -227,7 +239,7 @@
       credentials: 'same-origin',
     })
     const j = await res.json().catch(() => ({}))
-    if (!res.ok || !j.success) throw new Error(j.error || 'Could not update the heard count.')
+    if (!res.ok || !j.success) throw new ServerError(j.error || j.message)
     close()
     onAlready(finalId, name, { heard_count: j.heard_count ?? j.new_count })
   }
@@ -257,6 +269,7 @@
         onClose={close}
       >
         {#snippet notice()}
+          {#if quickAdding}<p class="mt-search-busy" aria-live="polite">Adding {quickAdding}…</p>{/if}
           {#if searchError}<p class="mt-error mt-search-error">{searchError}</p>{/if}
           <!-- The folded-away sync page's new home: quiet one-liner, search stays primary. -->
           <button class="mt-sync-link" onclick={() => (syncMode = true)}>

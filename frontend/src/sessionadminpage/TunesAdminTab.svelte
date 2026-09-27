@@ -2,7 +2,7 @@
   // Tunes tab: grid of all tunes played at this session — search (free text or
   // tune id/URL) + sortable columns, fetched once when the tab is active.
   import { untrack } from 'svelte'
-  import { SearchField } from '../lib/index.js'
+  import { LoadError, SearchField } from '../lib/index.js'
   import { createAbcMatcher } from '../shared/abcfilter.svelte.js'
   import { compareValues, filterTuneList, tuneSortValue } from './logic.js'
 
@@ -15,21 +15,31 @@
   let sortDirection = $state('asc')
   let started = false
 
+  let loading = $state(false)
+
+  // A failure renders LoadError (with Retry) in place of the table.
+  function loadTunes() {
+    loading = true
+    fetch(`/api/admin/sessions/${sessionPath}/tunes`)
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.error || !data.tunes) throw new Error(data.error || 'tunes load failed')
+        loadError = null
+        allTunes = data.tunes
+      })
+      .catch((error) => {
+        console.error('Error loading session tunes:', error)
+        loadError = 'failed'
+      })
+      .finally(() => {
+        loading = false
+      })
+  }
+
   $effect(() => {
     if (load && !started) {
       started = true
-      fetch(`/api/admin/sessions/${sessionPath}/tunes`)
-        .then((response) => response.json())
-        .then((data) => {
-          if (data.error) {
-            loadError = data.error
-            return
-          }
-          allTunes = data.tunes
-        })
-        .catch((error) => {
-          loadError = `Failed to load tunes: ${error}`
-        })
+      loadTunes()
     }
   })
 
@@ -88,7 +98,7 @@
 
   <div id="tunes-content">
     {#if loadError}
-      <div class="alert alert-danger">{loadError}</div>
+      <LoadError id="tunes-load-error" what="this session's tunes" onRetry={loadTunes} retrying={loading} />
     {:else if !allTunes}
       <p class="text-muted">Loading tunes...</p>
     {:else if allTunes.length === 0}

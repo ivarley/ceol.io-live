@@ -32,7 +32,19 @@
   // e2e suite all select on it. For the same reason this component has NO
   // <style> block: Svelte scoping would detach it from the shared stylesheet.
   import { onMount, untrack } from 'svelte'
-  import { Chevron, Chip, Dialog, Seg, SessionPicker, Tabs, TagInput, toast } from '../lib/index.js'
+  import {
+    Chevron,
+    Chip,
+    Dialog,
+    LoadError,
+    Seg,
+    ServerError,
+    SessionPicker,
+    Tabs,
+    TagInput,
+    toast,
+    toastFailure,
+  } from '../lib/index.js'
   import {
     MUSICAL_KEYS,
     OTHER_SESSION,
@@ -74,6 +86,13 @@
   let showCls = $state(false)
   let phase = $state('loading') // 'loading' | 'error' | 'ready'
   let errorMsg = $state('')
+  // A failed load that another try might fix gets a Retry (re-runs the last show());
+  // a definitive answer (a merged-away tunebook entry) doesn't.
+  let errorRetry = $state(null)
+  let adding = $state(false) // the not-on-list Add button, while its op is in flight
+  let myVersionLoading = $state(false)
+  let mySessionsState = $state('idle') // idle | loading — the "different session" list
+  let overridesError = $state(false) // the instance form's overrides failed to load
   let config = $state(null) // normalized show() config {tuneId, ptid, scope, callbacks, hints}
   let viewer = $state(null) // payload viewer block {logged_in, is_admin, is_session_admin}
   // Per-tune permission to pull this tune's notation from thesession.org, minted by
@@ -83,6 +102,9 @@
   let notationToken = $state(null)
   let tune = $state(null) // payload session_tune block (mutated optimistically)
   let mergedFrom = $state(null) // healed merged-tune permalink (spec 030)
+  // The live load failed and the drawer is showing the offline cache's copy:
+  // say so, so a stale copy never passes for what the server holds.
+  let savedCopy = $state(false)
   let modalShowTime = 0 // scrim-click guard (500ms)
   let hideTimer = null
 
@@ -536,6 +558,7 @@
     notationToken = data.notation_token || null
     tune = data.session_tune
     mergedFrom = null
+    savedCopy = false
 
     learnStatusOriginal = (tune.person_tune_status && tune.person_tune_status.learn_status) || ''
     // Where the droplist lands: the instance the drawer was opened in (the live logger),
@@ -592,17 +615,20 @@
     updateUrlWithTune(config.ptid, 'my_tunes')
   }
 
-  function showErr(message) {
+  function showErr(message, retry = null) {
     errorMsg = message
+    errorRetry = retry
     phase = 'error'
   }
+
 
   // Offline fallback: derive the payload from the locally-cached bundle +
   // not-yet-synced ops (offlinePayload synthesizes the viewer/on-list facts) so
   // the drawer works without a connection.
   function renderTuneFromOffline(cfg, errMsg) {
+    const fail = () => showErr(errMsg || "Couldn't load this tune.", () => show(cfg))
     if (!window.CeolOffline || !cfg.tuneId) {
-      showErr(errMsg || 'Failed to load tune details')
+      fail()
       return
     }
     const pending =
@@ -612,12 +638,13 @@
     Promise.all([window.CeolOffline.getTune(cfg.tuneId), pending])
       .then(([cached, ops]) => {
         if (!cached) {
-          showErr(errMsg || 'Failed to load tune details')
+          fail()
           return
         }
         applyPayload(offlinePayload(cached, ops, cfg.tuneId))
+        savedCopy = true
       })
-      .catch(() => showErr(errMsg || 'Failed to load tune details'))
+      .catch(fail)
   }
 
   // ---- public API (wired to window.TuneDetailModal by main.js) ------------------
@@ -625,6 +652,10 @@
   export function show(rawCfg) {
     const cfg = normalizeShowConfig(rawCfg)
     config = cfg
+    errorRetry = null
+    adding = false
+    mySessionsState = 'idle'
+    overridesError = false
     historyCache = {}
     playedWithCache = {}
     playedWithScope = null
@@ -686,7 +717,7 @@
       })
       .catch((error) => {
         console.error('Error loading tune details:', error)
-        renderTuneFromOffline(cfg, 'Failed to load tune details')
+        renderTuneFromOffline(cfg)
       })
   }
 
@@ -705,7 +736,7 @@
           config.tuneId = d.person_tune.tune_id
           applyPayload(personTunePayload(d.person_tune))
         } else {
-          showErr('Failed to load tune details')
+          showErr("Couldn't load this tune.", () => show(cfg))
         }
       })
       .catch((error) => {
@@ -718,7 +749,7 @@
           )
           return
         }
-        renderTuneFromOffline(cfg, 'Failed to load tune details')
+        renderTuneFromOffline(cfg)
       })
   }
 
@@ -821,9 +852,10 @@
       .then(() => {
         statusSaving = false // success OR queued offline
       })
-      .catch(() => {
+      .catch((error) => {
         statusSaving = false
         applyUi(prevStatus, prevOverrides) // revert
+        toastFailure('change the status', error)
       })
   }
 
@@ -851,9 +883,10 @@
     setInstrumentOverrides(tune, updated)
     notifyStatusChange()
     submitMyTunesOp({ type: 'set_instrument_status', tune_id: tuneId, instrument: inst.instrument, status: target }).catch(
-      () => {
+      (error) => {
         setInstrumentOverrides(tune, prev)
         notifyStatusChange()
+        toastFailure(`change the status for ${inst.instrument}`, error)
       }
     )
   }
@@ -871,9 +904,10 @@
     setInstrumentOverrides(tune, updated)
     notifyStatusChange()
     submitMyTunesOp({ type: 'set_instrument_status', tune_id: tuneId, instrument: inst.instrument, status: null }).catch(
-      () => {
+      (error) => {
         setInstrumentOverrides(tune, prev)
         notifyStatusChange()
+        toastFailure(`remove the tune from your ${inst.instrument} list`, error)
       }
     )
   }
@@ -882,8 +916,10 @@
   // payload's on_list flips the derived mode, so a my-tunes-origin drawer
   // upgrades to the full variant naturally — no special re-show plumbing.
   export function addToTunebook() {
+    if (adding) return
     const tuneId = tune.tune_id
     const keepTab = activeTab // survives the refetch's per-render tab reset
+    adding = true
     // name/tune_type ride along so an offline add shows in the My Tunes list while queued.
     submitMyTunesOp({
       type: 'add',
@@ -906,18 +942,24 @@
         // Online: reload the payload; the new person_tune identity notifies the
         // host (chained adds live-update the underlying list) exactly once —
         // the derived-mode upgrade is just this re-apply, it never re-notifies.
-        fetch(detailUrl(tuneId, scope))
+        // The add has landed; if this reload fails, reload the whole drawer so it can't
+        // go on claiming the tune is not on the list (its failure state has a Retry).
+        return fetch(detailUrl(tuneId, scope))
           .then((response) => response.json())
           .then((data) => {
-            if (data.success) {
-              applyPayload(data, { keepTab })
-              notifyStatusChange()
-            }
+            if (!data.success) throw new Error(data.error || data.message || 'reload failed')
+            applyPayload(data, { keepTab })
+            notifyStatusChange()
+          })
+          .catch((error) => {
+            console.error('Added, but reloading the tune failed:', error)
+            toast('Added to your list.', 'success')
+            show({ ...config, initialTab: keepTab })
           })
       })
-      .catch((error) => {
-        console.error('Error adding to tunebook:', error)
-        toast('Failed to add tune to your list', 'error')
+      .catch((error) => toastFailure('add the tune to your list', error))
+      .finally(() => {
+        adding = false
       })
   }
 
@@ -949,9 +991,9 @@
         pendingHeard = Math.max(0, pendingHeard - 1) // success OR queued offline: keep optimistic UI
       })
       .catch((error) => {
-        console.error('Error setting heard count:', error)
         setLocal(currentCount)
         pendingHeard = Math.max(0, pendingHeard - 1)
+        toastFailure('update the heard count', error)
       })
   }
 
@@ -1003,6 +1045,8 @@
       showingMyVersion = true
       return
     }
+    if (myVersionLoading) return
+    myVersionLoading = true
     // The unscoped detail payload resolves notation from MY setting.
     fetch(detailUrl(tune.tune_id, null))
       .then((r) => r.json())
@@ -1022,7 +1066,10 @@
         notationMode = info.initialMode
         notationSize = 'incipit'
       })
-      .catch(() => toast('Could not load your version of this tune', 'error'))
+      .catch((error) => toastFailure('load your version of this tune', error))
+      .finally(() => {
+        myVersionLoading = false
+      })
   }
 
   // The Session form's PUT target follows the droplist: 'general' writes the session's
@@ -1064,7 +1111,7 @@
     })
       .then((r) => r.json())
       .then((data) => {
-        if (!data.success) throw new Error(data.error || data.message)
+        if (!data.success) throw new ServerError(data.error || data.message)
         pcSaveState = 'saved'
         if (tune.person_tune_status) Object.assign(tune.person_tune_status, updates)
         // Reseed ONLY the config originals — leaving notes/tags in pcFields untouched so
@@ -1076,7 +1123,7 @@
         setTimeout(() => (pcSaveState = 'idle'), 1200)
       })
       .catch((error) => {
-        console.error('Error saving personal config:', error)
+        toastFailure('save your changes', error)
         flashSaveState((s) => (pcSaveState = s), 'error')
       })
   }
@@ -1118,7 +1165,10 @@
         if (autoSaveState === 'saved') autoSaveState = 'idle'
       }, 1200)
     }
-    const onErr = () => flashSaveState((s) => (autoSaveState = s), 'error')
+    const onErr = (error) => {
+      toastFailure(field === 'notes' ? 'save your notes' : 'save your tags', error)
+      flashSaveState((s) => (autoSaveState = s), 'error')
+    }
 
     if (isOffline) {
       const op =
@@ -1135,7 +1185,7 @@
     })
       .then((r) => r.json())
       .then((data) => {
-        if (!data.success) throw new Error(data.error || data.message)
+        if (!data.success) throw new ServerError(data.error || data.message)
         onDone()
         // Deliberately NOT calling config.onSave here: notes & tags don't appear in
         // the list behind the drawer, so a full loadTunes() refresh on every blur is
@@ -1173,7 +1223,7 @@
     })
       .then((r) => r.json())
       .then((data) => {
-        if (!data.success) throw new Error(data.message || data.error)
+        if (!data.success) throw new ServerError(data.message || data.error)
         sessSaveState = 'saved'
         // Mirror onto the payload so the form's originals rebuild from what we wrote,
         // and the title/aka recompute against the new session alias.
@@ -1194,8 +1244,7 @@
         setTimeout(() => (sessSaveState = 'idle'), 1200)
       })
       .catch((error) => {
-        console.error('Error saving session config:', error)
-        toast(String(error.message || 'Could not save'), 'error')
+        toastFailure('save your changes', error)
         flashSaveState((s) => (sessSaveState = s), 'error')
       })
   }
@@ -1222,7 +1271,7 @@
     })
       .then((r) => r.json())
       .then((data) => {
-        if (!data.success) throw new Error(data.message || data.error)
+        if (!data.success) throw new ServerError(data.message || data.error)
         // Mirror onto the payload so both session forms rebuild from what we wrote, and
         // the title/aka recompute against the new session alias. Saving the session layer
         // for a tune with no session_tune row silently creates it (spec 037).
@@ -1235,23 +1284,34 @@
         setTimeout(() => (dcSaveState = 'idle'), 1200)
       })
       .catch((error) => {
-        console.error('Error saving session details:', error)
-        toast(String(error.message || 'Could not save'), 'error')
+        toastFailure('save your changes', error)
         flashSaveState((s) => (dcSaveState = s), 'error')
       })
   }
 
   // ---- "At a different session ..." -------------------------------------------------
 
+  // The picker only opens once the list is in hand: an empty picker would read as
+  // "you have no other sessions". While it loads, the droplist row says so.
   function openSessionPicker() {
-    sessionPickerOpen = true
-    if (mySessions.length) return
+    if (mySessions.length) {
+      sessionPickerOpen = true
+      return
+    }
+    if (mySessionsState === 'loading') return
+    mySessionsState = 'loading'
     fetch('/api/my-sessions?limit=100')
       .then((r) => r.json())
       .then((d) => {
-        if (d.success) mySessions = d.sessions || []
+        if (!d.success) throw new ServerError(d.error || d.message)
+        mySessions = d.sessions || []
+        mySessionsState = 'idle'
+        sessionPickerOpen = true
       })
-      .catch(() => toast('Could not load your sessions', 'error'))
+      .catch((error) => {
+        mySessionsState = 'idle'
+        toastFailure('load your sessions', error)
+      })
   }
 
   /**
@@ -1273,12 +1333,13 @@
     fetch(detailUrl(tune.tune_id, cfg.scope))
       .then((r) => r.json())
       .then((data) => {
-        if (!data.success) throw new Error(data.message || 'Could not load that session')
+        if (!data.success) throw new ServerError(data.message || data.error)
         applyPayload(data, { keepTab: 'history' })
       })
       .catch((error) => {
         console.error('Error re-scoping to session:', error)
-        showErr(String(error.message || 'Could not load that session'))
+        const msg = error instanceof ServerError && error.message ? error.message : ''
+        showErr(msg || `Couldn't load this tune at ${session.name || 'that session'}.`, () => scopeToSession(session))
       })
   }
 
@@ -1317,12 +1378,21 @@
       seedSessionForm()
       return
     }
+    loadInstanceOverrides()
+  }
+
+  // An instance's own name/setting/key, for the form. Until they arrive the form must
+  // not pass blanks off as "no overrides", so a failure hides it behind a Retry.
+  function loadInstanceOverrides() {
+    const requested = scopeId
     sessFields = { alias: '', setting: '', key: '' }
     sessOriginals = { alias: '', setting_id: '', key: '' }
-    fetch(detailUrl(tune.tune_id, { session: sessionScope.path, instance: scopeId }))
+    overridesError = false
+    fetch(detailUrl(tune.tune_id, { session: sessionScope.path, instance: requested }))
       .then((r) => r.json())
       .then((data) => {
-        if (!data.success) return
+        if (scopeId !== requested) return
+        if (!data.success) throw new ServerError(data.message || data.error)
         const st = data.session_tune
         sessOriginals = {
           alias: st.name || '',
@@ -1335,7 +1405,10 @@
           key: sessOriginals.key,
         }
       })
-      .catch((error) => console.error('Error loading instance overrides:', error))
+      .catch((error) => {
+        console.error('Error loading instance overrides:', error)
+        if (scopeId === requested) overridesError = true
+      })
   }
 
   // ---- admin (canonical tune name) — untouched by 037; see spec 036 ---------------------
@@ -1355,7 +1428,7 @@
     })
       .then((r) => r.json())
       .then((data) => {
-        if (!data.success) throw new Error(data.error || data.message)
+        if (!data.success) throw new ServerError(data.error || data.message)
         adminSaveState = 'saved'
         tune.tune_name = name
         seedAdminForm()
@@ -1364,7 +1437,7 @@
         setTimeout(() => (adminSaveState = 'idle'), 1200)
       })
       .catch((error) => {
-        console.error('Error saving tune name:', error)
+        toastFailure('save the tune name', error)
         flashSaveState((s) => (adminSaveState = s), 'error')
       })
   }
@@ -1433,7 +1506,7 @@
       .then((response) => response.json())
       .then((data) => {
         if (!data.success) {
-          console.error('Error fetching setting:', data.message)
+          toastFailure('get the notation from thesession.org', new ServerError(data.message || data.error))
           feedback('err')
           return false
         }
@@ -1474,18 +1547,20 @@
               feedback('ok')
             } else {
               console.error('Error saving setting_id:', saveData.error || saveData.message)
+              toast("Got the notation, but couldn't save the setting. Try again.", 'error')
               feedback('warn')
             }
             return true
           })
           .catch((error) => {
             console.error('Error saving setting_id:', error)
+            toast("Got the notation, but couldn't save the setting. Check your connection and try again.", 'error')
             feedback('warn')
             return true
           })
       })
       .catch((error) => {
-        console.error('Error:', error)
+        toastFailure('get the notation from thesession.org', error)
         feedback('err')
         return false
       })
@@ -1543,11 +1618,9 @@
   // action as a form's Fetch/Refresh button. It saves the setting to my list when I
   // have one, and otherwise just caches the notation.
   export function generateNotation() {
+    // fetchSetting has already said what went wrong when it resolves false.
     fetchSetting(onList ? 'personal' : 'none').then((ok) => {
-      if (!ok) {
-        toast('Could not fetch notation for this tune', 'error')
-        return
-      }
+      if (!ok) return
       // If the fetch produced a rendered image, show the dots the user asked
       // for instead of leaving them on the abc text view.
       if (tune?.incipit_image || tune?.image) notationMode = 'dots'
@@ -1571,21 +1644,18 @@
       toast('Unable to remove tune', 'error')
       return
     }
-    fetch(`/api/my-tunes/${personTuneId}`, { method: 'DELETE' })
+    // Returned so the Dialog stays open, its confirm busy, until the server answers.
+    return fetch(`/api/my-tunes/${personTuneId}`, { method: 'DELETE' })
       .then((response) => response.json())
       .then((data) => {
-        if (data.success) {
-          removeUrlTuneParam(mode)
-          if (config.onSave && typeof config.onSave === 'function') config.onSave()
-          close()
-        } else {
-          console.error('Error removing tune:', data.error)
-          toast('Failed to remove tune from your list', 'error')
-        }
+        if (!data.success) throw new ServerError(data.error || data.message)
+        removeUrlTuneParam(mode)
+        if (config.onSave && typeof config.onSave === 'function') config.onSave()
+        close()
       })
       .catch((error) => {
-        console.error('Error:', error)
-        toast('Failed to remove tune from your list', 'error')
+        toastFailure('remove the tune from your list', error)
+        return false
       })
   }
 
@@ -1600,21 +1670,17 @@
       toast('Unable to remove tune from session', 'error')
       return
     }
-    fetch(`/api/sessions/${sessionPath}/tunes/${tuneId}`, { method: 'DELETE' })
+    return fetch(`/api/sessions/${sessionPath}/tunes/${tuneId}`, { method: 'DELETE' })
       .then((response) => response.json())
       .then((data) => {
-        if (data.success) {
-          removeUrlTuneParam(mode)
-          if (config.onSave && typeof config.onSave === 'function') config.onSave()
-          close()
-        } else {
-          console.error('Error removing tune from session:', data.message)
-          toast(data.message || 'Failed to remove tune from session', 'error')
-        }
+        if (!data.success) throw new ServerError(data.message || data.error)
+        removeUrlTuneParam(mode)
+        if (config.onSave && typeof config.onSave === 'function') config.onSave()
+        close()
       })
       .catch((error) => {
-        console.error('Error:', error)
-        toast('Failed to remove tune from session', 'error')
+        toastFailure('remove the tune from the session', error)
+        return false
       })
   }
 
@@ -1640,12 +1706,12 @@
           refreshState = 'ok'
         } else {
           refreshState = 'err'
-          console.error('Error refreshing tunebook count:', data.error)
+          toastFailure('refresh the count', new ServerError(data.error || data.message))
         }
       })
       .catch((error) => {
-        console.error('Error:', error)
         refreshState = 'err'
+        toastFailure('refresh the count', error)
       })
       .finally(() => {
         setTimeout(() => {
@@ -1845,9 +1911,20 @@
           </tbody>
         </table>
         <div class="modal-error">
-          <p>{errorMsg}</p>
+          {#if errorRetry}
+            <LoadError message={errorMsg} onRetry={errorRetry} />
+          {:else}
+            <p>{errorMsg}</p>
+          {/if}
         </div>
       {:else if phase === 'ready' && tune}
+        {#if savedCopy}
+          <LoadError
+            class="tune-saved-copy"
+            inline
+            message={isOffline ? "You're offline, so this is your saved copy of the tune." : "Couldn't load the latest for this tune, so this is your saved copy."}
+            onRetry={isOffline ? null : () => show(config)} />
+        {/if}
         {#if mergedFrom != null}
           <!-- Banner for a healed merged-tune permalink (spec 030) -->
           <div
@@ -1993,8 +2070,8 @@
                   > plays a different one.
                 {:else}
                   This is the version {sessionLabel} plays.
-                  <button type="button" class="notation-mismatch-link" onclick={toggleMyVersion}
-                    >Your personal version</button
+                  <button type="button" class="notation-mismatch-link" onclick={toggleMyVersion} disabled={myVersionLoading}
+                    >{myVersionLoading ? 'Loading your version…' : 'Your personal version'}</button
                   > differs.
                 {/if}
               </div>
@@ -2022,7 +2099,9 @@
             <div class="tunebook-status-section tunebook-status-not-on-list">
               <div class="tunebook-status-seg tsc-notlist-seg" role="group" aria-label="Status">
                 <span class="tunebook-status-opt tsc-notlist-label">This tune is not on your list</span>
-                <button type="button" class="tunebook-status-opt tsc-notlist-add" onclick={addToTunebook}>Add</button>
+                <button type="button" class="tunebook-status-opt tsc-notlist-add" onclick={addToTunebook} disabled={adding}
+                  >{adding ? 'Adding…' : 'Add'}</button
+                >
               </div>
             </div>
           {:else}
@@ -2515,6 +2594,9 @@
                     <option value={opt.id}>{opt.label}</option>
                   {/each}
                 </select>
+                {#if mySessionsState === 'loading'}
+                  <span class="history-loading" aria-live="polite">Loading your sessions…</span>
+                {/if}
               </div>
 
               <!-- Editing lives here because an instance's name/key/setting IS a fact of
@@ -2528,7 +2610,9 @@
                 </button>
               {/if}
 
-              {#if canEditSessionLayer && sessFormOpen}
+              {#if canEditSessionLayer && sessFormOpen && overridesError}
+                <LoadError what="this date's name, setting and key" inline onRetry={loadInstanceOverrides} />
+              {:else if canEditSessionLayer && sessFormOpen}
                 <div class="configure-section sess-form">
                   <div class="configure-field-group-inline">
                     <label class="configure-label" for="sess-alias-input">
@@ -2730,7 +2814,7 @@
                   {:else if historyState.status === 'offline'}
                     <div class="no-history">Play history isn't available offline.</div>
                   {:else if historyState.status === 'error'}
-                    <div class="no-history">Could not load play history.</div>
+                    <LoadError what="play history" onRetry={loadHistory} />
                   {:else if historyState.status === 'none'}
                     <div class="no-history">No play history recorded yet.</div>
                   {:else}
@@ -2771,7 +2855,7 @@
                     </div>
                   {/if}
                 {:else if playedWithState.status === 'error'}
-                  <div class="no-history">Could not load played-with tunes.</div>
+                  <LoadError what="played-with tunes" onRetry={loadPlayedWith} />
                 {:else if playedWithState.status === 'none'}
                   <div class="no-history">No set history recorded yet.</div>
                 {:else}
@@ -2790,6 +2874,7 @@
   bind:open={removeMyTunesOpen}
   title="Remove this tune from your list?"
   confirmLabel="Remove tune"
+  busyLabel="Removing…"
   destructive={true}
   onConfirm={doRemoveFromMyTunes} />
 
@@ -2797,6 +2882,7 @@
   bind:open={removeSessionOpen}
   title="Remove this tune from the session tune list?"
   confirmLabel="Remove tune"
+  busyLabel="Removing…"
   destructive={true}
   onConfirm={doRemoveFromSession} />
 

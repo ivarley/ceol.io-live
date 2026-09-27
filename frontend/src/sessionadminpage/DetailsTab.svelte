@@ -46,7 +46,12 @@
     if (!trackAttendance) trackSetStarters = false
   })
 
+  let savingDetails = $state(false)
+  let savingRecurrence = $state(false)
+  let terminating = $state(false)
+
   function saveSessionDetails() {
+    if (savingDetails) return
     // Collect form data
     const formData = {
       name: name.trim(),
@@ -104,6 +109,7 @@
       }
     }
 
+    savingDetails = true
     fetch(`/api/sessions/${sessionPath}/admin-update`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -115,16 +121,20 @@
           toast(data.message || 'Session details saved successfully', 'success')
           // Every route on this page is keyed on the path we just changed, so the
           // page's own sessionPath is now stale and a second save would 404.
+          // Stays "Saving…" until the page moves.
           if (formData.path !== sessionPath) {
             setTimeout(() => window.location.assign(`/admin/sessions/${formData.path}`), 800)
+            return
           }
         } else {
-          toast(data.error || 'Failed to save session details', 'error')
+          toast(data.error || "Couldn't save the session details. Try again.", 'error')
         }
+        savingDetails = false
       })
       .catch((error) => {
+        savingDetails = false
         console.error('Error saving session details:', error)
-        toast('An error occurred while saving session details', 'error')
+        toast("Couldn't save the session details. Check your connection and try again.", 'error')
       })
   }
 
@@ -139,10 +149,6 @@
     terminationModalOpen = true
   }
 
-  function hideModal() {
-    terminationModalOpen = false
-  }
-
   function saveTerminationDate() {
     if (!modalTerminationDate) {
       modalError = 'Please select a date.'
@@ -152,6 +158,9 @@
   }
 
   function setTerminationDate(value) {
+    if (terminating) return
+    terminating = true
+    modalError = ''
     fetch(`/api/admin/sessions/${sessionPath}/terminate`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -160,39 +169,44 @@
       .then((response) => response.json())
       .then((data) => {
         if (data.success) {
-          hideModal()
-          // Reload page to show updated state
+          // Stays "Terminating…" through the reload that shows the updated state.
           window.location.reload()
         } else {
-          modalError = data.error || 'Failed to set termination date'
+          terminating = false
+          modalError = data.error || "Couldn't set the termination date. Try again."
         }
       })
       .catch((error) => {
+        terminating = false
         console.error('Error setting termination date:', error)
-        modalError = 'An error occurred while setting the termination date'
+        modalError = "Couldn't set the termination date. Check your connection and try again."
       })
   }
 
   // Reactivate is a decision -> kit Dialog (spec 035: never a native confirm).
   let reactivateConfirmOpen = $state(false)
 
+  // Returns a promise, so the Dialog stays open with its confirm busy until this
+  // settles; false (a failure, toasted) keeps it open for a retry.
   function reactivateSession() {
-    fetch(`/api/admin/sessions/${sessionPath}/reactivate`, {
+    return fetch(`/api/admin/sessions/${sessionPath}/reactivate`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
     })
       .then((response) => response.json())
       .then((data) => {
         if (data.success) {
-          // Reload page to show updated state
+          // Reload page to show updated state; the Dialog stays busy until it goes.
           window.location.reload()
-        } else {
-          toast('Error: ' + (data.error || 'Failed to reactivate session'), 'error')
+          return new Promise(() => {})
         }
+        toast(data.error || "Couldn't reactivate the session. Try again.", 'error')
+        return false
       })
       .catch((error) => {
         console.error('Error reactivating session:', error)
-        toast('An error occurred while reactivating the session', 'error')
+        toast("Couldn't reactivate the session. Check your connection and try again.", 'error')
+        return false
       })
   }
 
@@ -341,6 +355,8 @@
       }
     }
 
+    if (savingRecurrence) return
+    savingRecurrence = true
     // Make API call to save just the recurrence field
     fetch(`/api/sessions/${sessionPath}/admin-update`, {
       method: 'PUT',
@@ -351,15 +367,17 @@
       .then((data) => {
         if (data.success) {
           toast('Recurrence schedule updated successfully', 'success')
-          // Reload page to show updated human-readable format
+          // Reload page to show updated human-readable format (stays "Saving…" till then)
           setTimeout(() => window.location.reload(), 1000)
         } else {
-          toast(data.error || 'Failed to update recurrence schedule', 'error')
+          savingRecurrence = false
+          toast(data.error || "Couldn't save the recurrence schedule. Try again.", 'error')
         }
       })
       .catch((error) => {
+        savingRecurrence = false
         console.error('Error saving recurrence:', error)
-        toast('An error occurred while saving the recurrence schedule', 'error')
+        toast("Couldn't save the recurrence schedule. Check your connection and try again.", 'error')
       })
   }
 
@@ -675,7 +693,7 @@
 
         <div class="mt-3">
           <button type="button" class="btn btn-sm btn-secondary" onclick={hideRecurrenceEditMode}>Cancel</button>
-          <button type="button" class="btn btn-sm btn-primary" onclick={saveRecurrenceFromForm}>Save</button>
+          <button type="button" class="btn btn-sm btn-primary" onclick={saveRecurrenceFromForm} disabled={savingRecurrence}>{savingRecurrence ? 'Saving…' : 'Save'}</button>
         </div>
       </div>
     </div>
@@ -771,7 +789,7 @@
       <textarea class="form-control" id="comments" rows="4" bind:value={comments}></textarea>
     </div>
 
-    <button type="submit" class="btn btn-primary">Save Changes</button>
+    <button type="submit" class="btn btn-primary" disabled={savingDetails}>{savingDetails ? 'Saving…' : 'Save Changes'}</button>
   </form>
 </section>
 
@@ -787,7 +805,7 @@
   <div id="modal-error-message" class="alert alert-danger" style:display={modalError ? 'block' : 'none'}>{modalError}</div>
   {#snippet footer()}
     <div style="text-align: right;">
-      <button type="button" class="btn btn-danger" id="save-termination-date" onclick={saveTerminationDate}>Terminate session</button>
+      <button type="button" class="btn btn-danger" id="save-termination-date" onclick={saveTerminationDate} disabled={terminating}>{terminating ? 'Terminating…' : 'Terminate session'}</button>
     </div>
   {/snippet}
 </Sheet>
@@ -797,4 +815,5 @@
   title="Reactivate this session?"
   description="This will remove the termination date."
   confirmLabel="Reactivate session"
+  busyLabel="Reactivating…"
   onConfirm={reactivateSession} />

@@ -26,7 +26,7 @@
     tunePlayLinks,
   } from './logic.js'
   import { publishHeight } from './sticky.js'
-  import { Row, SearchField, Seg, Toolbar } from '../lib/index.js'
+  import { LoadError, Row, SearchField, Seg, Toolbar } from '../lib/index.js'
 
   let { active, session, isLoggedIn, onAddInstance } = $props()
 
@@ -47,26 +47,37 @@
 
   // Instances currently "on now" (green dot). Fetched once, like the legacy
   // highlightActiveInstances, but applied whenever the logs render.
+  // A failed check is said out loud: no dots would otherwise read as "nothing's on".
   let activeInstanceIds = $state([])
+  let activeError = $state(false)
+  let activeLoading = $state(false)
+
+  function loadActiveInstances() {
+    activeLoading = true
+    activeError = false
+    fetch(`/api/session/${session.session_id}/active_instance`)
+      .then((response) => response.json())
+      .then((d) => {
+        if (!d.success) throw new Error(d.message || 'active_instance failed')
+        activeInstanceIds = d.active_instance_ids || []
+      })
+      .catch((error) => {
+        console.error('Error fetching active instances:', error)
+        activeError = true
+      })
+      .finally(() => {
+        activeLoading = false
+      })
+  }
 
   $effect(() => {
-    untrack(() => {
-      fetch(`/api/session/${session.session_id}/active_instance`)
-        .then((response) => response.json())
-        .then((d) => {
-          if (d.success && d.active_instance_ids && d.active_instance_ids.length > 0) {
-            activeInstanceIds = d.active_instance_ids
-          }
-        })
-        .catch((error) => {
-          console.error('Error fetching active instances:', error)
-        })
-    })
+    untrack(loadActiveInstances)
   })
 
-  // Lazy load on first view (or immediately when logs is the landing tab).
+  // Lazy load on first view (or immediately when logs is the landing tab). A failure
+  // waits for Retry rather than refetching in a loop.
   $effect(() => {
-    if (active && !loaded && !loading) loadLogs()
+    if (active && !loaded && !loading && !loadError) loadLogs()
   })
 
   function loadLogs() {
@@ -122,6 +133,7 @@
   let tuneInstanceIds = $state(null)
   let tunePlays = $state(null) // Map<session_instance_id, positions[]>
   let instancesLoading = $state(false)
+  let instancesError = $state(false) // the chosen tune's nights didn't load: say so, don't drop the filter
   let inputFocused = $state(false)
   let highlight = $state(0)
   let selectToken = 0 // drops stale instance-id responses when picks come fast
@@ -185,11 +197,17 @@
       })
   }
 
+  function retryTunes() {
+    tunesError = false
+    ensureTunesLoaded()
+  }
+
   function clearTuneFilter() {
     selectedTune = null
     tuneInstanceIds = null
     tunePlays = null
     instancesLoading = false
+    instancesError = false
     selectToken += 1
   }
 
@@ -198,6 +216,7 @@
     selectedTune = tune
     tuneQuery = tune.name
     instancesLoading = true
+    instancesError = false
     // NOT inputFocused = false: the dropdown closes on its own (a selection empties
     // the options), and dropping focus would leave editing the box unable to reopen it.
     fetch(`/api/sessions/${sessionPath}/logged-tunes/${tune.tune_id}/instances`)
@@ -213,7 +232,11 @@
       .catch((error) => {
         if (token !== selectToken) return
         console.error('Error loading tune instances:', error)
-        clearTuneFilter()
+        // Keep the tune in the box and say the filter didn't apply — silently
+        // dropping it would pass the full list off as the filtered one.
+        tuneInstanceIds = null
+        tunePlays = null
+        instancesError = true
       })
       .finally(() => {
         if (token === selectToken) instancesLoading = false
@@ -350,7 +373,14 @@
   {#if selectedTune || tunesError}
     <div class="logs-filter-note" id="logs-filter-note">
       {#if tunesError}
-        Couldn't load the tune list.
+        <LoadError inline id="logs-tunes-error" what="the tune list" onRetry={retryTunes} retrying={tunesLoading} />
+      {:else if instancesError}
+        <LoadError
+          inline
+          id="logs-filter-error"
+          message="Couldn't filter to {selectedTune.name}."
+          onRetry={() => selectTune(selectedTune)}
+          retrying={instancesLoading} />
       {:else if instancesLoading}
         Filtering to {selectedTune.name}…
       {:else}
@@ -384,18 +414,11 @@
 
 <!-- Logs Tab Content -->
 <div class="tab-content" class:active id="logs-tab">
+  {#if activeError && loaded}
+    <LoadError inline id="logs-active-error" message="Couldn't check which sessions are on now." onRetry={loadActiveInstances} retrying={activeLoading} />
+  {/if}
   {#if loadError}
-    <div style="text-align: center; padding: 40px;">
-      <p style="color: var(--danger, #dc3545);">
-        Error loading logs. Please <a
-          href="#reload"
-          style="color: var(--primary);"
-          onclick={(e) => {
-            e.preventDefault()
-            window.location.reload()
-          }}>refresh the page</a>.
-      </p>
-    </div>
+    <LoadError id="logs-load-error" what="the logs" onRetry={loadLogs} retrying={loading} />
   {:else if !loaded}
     <div style="text-align: center; padding: 40px; color: var(--disabled-text);"><p>Loading logs...</p></div>
   {:else if totalInstances === 0}
@@ -419,7 +442,9 @@
          somewhere. It is still in-memory only, exactly as before: collapse a year,
          come back tomorrow, and it is open again. -->
     {@render filterHeader()}
-    {#if view.sortedKeys.length > 0}
+    {#if instancesError}
+      <!-- the note above says the filter failed; an unfiltered list here would pass for filtered -->
+    {:else if view.sortedKeys.length > 0}
       <div class="past-instances">
         <div class="logs-list" id="logs-list">
           {#each view.sortedKeys as groupKey, index (groupKey)}

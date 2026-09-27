@@ -7,7 +7,7 @@
 // declared by call sites.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { flushSync } from 'svelte'
-import { render, waitFor, cleanup } from '@testing-library/svelte'
+import { render, waitFor, cleanup, screen } from '@testing-library/svelte'
 import { fireEvent } from '@testing-library/dom'
 import TuneSheet from '../src/tunesheet/TuneSheet.svelte'
 import {
@@ -1532,10 +1532,78 @@ describe('TuneSheet — chaining, host notification, roll-up reset, generate not
     await waitFor(() => expect(container.querySelector('.generate-notation-link')).toBeTruthy())
     await fireEvent.click(container.querySelector('.generate-notation-link'))
     await waitFor(() =>
-      expect(window.showMessage).toHaveBeenCalledWith('Could not fetch notation for this tune', 'error')
+      // the server's own explanation is shown as-is
+      expect(window.showMessage).toHaveBeenCalledWith('nope', 'error')
     )
     // the affordance stays for a retry
     expect(container.querySelector('.generate-notation-link')).toBeTruthy()
+    delete window.showMessage
+  })
+})
+
+describe('TuneSheet — failures and waits say what is going on', () => {
+  it('a failed load shows "Couldn\'t load" with a Retry that re-runs it', async () => {
+    let fail = true
+    fetchMock = vi.fn().mockImplementation((url) => {
+      if (String(url).includes('/api/tunes/101/detail')) {
+        if (fail) return Promise.reject(new TypeError('Failed to fetch'))
+        return Promise.resolve({ ok: true, status: 200, json: async () => detailPayload() })
+      }
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({ success: true, instances: [] }) })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const { container, component } = render(TuneSheet)
+    component.show({ tuneId: 101, ptid: 11, scope: null })
+    await waitFor(() => expect(container.querySelector('.kit-load-error')).toBeTruthy())
+    expect(container.querySelector('.kit-load-error').textContent).toContain("Couldn't load this tune.")
+    expect(container.textContent).not.toContain('Failed to fetch')
+    fail = false
+    await fireEvent.click(container.querySelector('.kit-load-retry'))
+    await waitFor(() => expect(container.querySelector('.modal-tune-title').textContent).not.toBe('Error'))
+    expect(container.querySelector('.kit-load-error')).toBeFalsy()
+  })
+
+  it('a failed history load offers a Retry instead of a dead end', async () => {
+    let fail = true
+    stubFetch([
+      ['/api/tunes/101/history', () => (fail ? { success: false } : { success: true, instances: [] })],
+      ['/api/tunes/101/detail', detailPayload()],
+    ])
+    const { container, component } = render(TuneSheet)
+    component.show({ tuneId: 101, ptid: 11, scope: null, initialTab: 'history' })
+    await waitFor(() => expect(container.querySelector('#history-tab .kit-load-error')).toBeTruthy())
+    expect(container.querySelector('#history-tab .kit-load-error').textContent).toContain(
+      "Couldn't load play history."
+    )
+    fail = false
+    await fireEvent.click(container.querySelector('#history-tab .kit-load-retry'))
+    await waitFor(() => expect(container.querySelector('#history-tab .kit-load-error')).toBeFalsy())
+  })
+
+  it('remove-from-list keeps the Dialog busy until the server answers, and stays open on failure', async () => {
+    window.showMessage = vi.fn()
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    let answer
+    stubFetch([
+      [
+        '/api/my-tunes/11',
+        (url, opts) =>
+          opts.method === 'DELETE' ? new Promise((r) => (answer = r)) : { success: true, person_tune: fullPts() },
+      ],
+      ['/api/tunes/101/detail', detailPayload()],
+    ])
+    const { container, component } = render(TuneSheet)
+    component.show({ tuneId: 101, ptid: 11, scope: null })
+    await waitFor(() => expect(container.querySelector('.tsc-action-danger')).toBeTruthy())
+    await fireEvent.click(container.querySelector('.tsc-action-danger'))
+    const confirm = await waitFor(() => screen.getByText('Remove tune'))
+    await fireEvent.click(confirm)
+    const busy = await waitFor(() => screen.getByText('Removing…'))
+    expect(busy).toBeDisabled()
+    answer({ success: false, error: 'That tune is locked' })
+    await waitFor(() => expect(window.showMessage).toHaveBeenCalledWith('That tune is locked', 'error'))
+    // still open, ready for another try
+    await waitFor(() => expect(screen.getByText('Remove tune')).not.toBeDisabled())
     delete window.showMessage
   })
 })

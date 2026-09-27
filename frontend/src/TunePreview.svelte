@@ -1,5 +1,5 @@
 <script>
-  import { Chevron, Chip } from './lib/index.js'
+  import { Chevron, Chip, LoadError } from './lib/index.js'
   import { untrack } from 'svelte'
   import { fly } from 'svelte/transition'
   import { tunePreview, thesessionPreview, settingImage, renderRemoteAbc } from './client.js'
@@ -261,7 +261,7 @@
       <div class="pv-skel" style="height:96px"></div>
       <div class="pv-skel" style="width:40%"></div>
     {:else if failed}
-      <p class="pv-fail">Couldn’t load tune details{item?.remote ? ' from thesession.org' : ''}. Check your connection and try again.</p>
+      <LoadError message={`Couldn’t load tune details${item?.remote ? ' from thesession.org' : ''}.`} onRetry={() => show(idx)} />
     {:else}
       <!-- The two facts that decide "is this the right tune?": our history with it
            (gold — session identity) and how common it is (accent). "in this session"

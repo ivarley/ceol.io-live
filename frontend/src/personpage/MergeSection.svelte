@@ -8,11 +8,12 @@
   // direction without leaving the sheet.
   let { person, personId } = $props()
 
-  import { Chevron, Dialog, Sheet, SearchField, List, Chip, toast } from '../lib/index.js'
+  import { Chevron, Dialog, Sheet, SearchField, List, Chip, LoadError, toast, toastFailure, ServerError } from '../lib/index.js'
 
   let open = $state(false)
   let step = $state('pick') // 'pick' | 'preview'
   let people = $state(null) // null = loading
+  let peopleFailed = $state(false)
   let query = $state('')
   let active = $state(-1)
 
@@ -32,18 +33,21 @@
     otherId = null
     preview = null
     open = true
-    if (!people) {
-      fetch('/api/admin/people')
-        .then((r) => r.json())
-        .then((data) => {
-          if (!data.success) throw new Error(data.error || 'Failed to load people')
-          people = data.people.filter((p) => p.person_id !== personId)
-        })
-        .catch((e) => {
-          toast('Error loading people: ' + e.message, 'error')
-          open = false
-        })
-    }
+    if (!people) loadPeople()
+  }
+
+  function loadPeople() {
+    peopleFailed = false
+    fetch('/api/admin/people')
+      .then((r) => r.json())
+      .then((data) => {
+        if (!data.success) throw new Error(data.error || 'Failed to load people')
+        people = data.people.filter((p) => p.person_id !== personId)
+      })
+      .catch((e) => {
+        console.error('Error loading people:', e)
+        peopleFailed = true
+      })
   }
 
   const q = $derived(query.trim().toLowerCase())
@@ -82,7 +86,7 @@
     })
       .then((r) => r.json())
       .then((data) => {
-        if (!data.success) throw new Error(data.error || 'Preview failed')
+        if (!data.success) throw new ServerError(data.error || '')
         preview = data
         // pre-select the survivor's account when only one needs no choice
         if (!data.accounts.needs_choice) {
@@ -90,13 +94,17 @@
         }
       })
       .catch((e) => {
-        previewError = e.message
+        console.error('Merge preview failed:', e)
+        // a server explanation is worth showing; a network/parse failure is not
+        previewError = (e instanceof ServerError && e.message) || "Couldn't build the merge preview."
       })
   }
 
+  // Returns the request so the confirm Dialog stays open and busy until it
+  // settles; false keeps it open after a failure (toasted) for a retry.
   function executeMerge() {
     busy = true
-    fetch('/api/admin/people/merge', {
+    return fetch('/api/admin/people/merge', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -108,17 +116,19 @@
     })
       .then((r) => r.json())
       .then((data) => {
-        if (!data.success) throw new Error(data.error || 'Merge failed')
+        if (!data.success) throw new ServerError(data.error || '')
         toast('People merged', 'success')
         // land on the survivor — a reload if they're this page, else navigate
         setTimeout(() => {
           if (winnerId === personId) window.location.reload()
           else window.location.href = `/admin/people/${winnerId}`
         }, 600)
+        return true
       })
       .catch((e) => {
         busy = false
-        toast('Merge failed: ' + e.message, 'error')
+        toastFailure('merge these people', e)
+        return false
       })
   }
 
@@ -184,7 +194,9 @@
 <Sheet bind:open title={step === 'pick' ? 'Merge with which person?' : 'Review merge'}>
   {#if step === 'pick'}
     <SearchField bind:value={query} placeholder="Search name, email or username…" debounce={0} />
-    {#if !people}
+    {#if peopleFailed}
+      <LoadError what="the people list" onRetry={loadPeople} />
+    {:else if !people}
       <p class="ms-empty">Loading people…</p>
     {:else}
       <List items={matches.slice(0, 50)} bind:active onSelect={pick}>
@@ -208,7 +220,7 @@
     {/if}
   {:else if previewError}
     <button type="button" class="ms-back" onclick={() => (step = 'pick')}><Chevron dir="left" size={14} /> Back to list</button>
-    <div class="alert alert-danger">{previewError}</div>
+    <LoadError message={previewError} onRetry={loadPreview} />
   {:else if !preview}
     <p class="ms-empty">Building preview…</p>
   {:else}
@@ -365,6 +377,7 @@
     ? `${preview.loser.name} will be deleted and everything they're linked to re-attributed to ${preview.winner.name}. This cannot be undone.`
     : ''}
   confirmLabel="Merge people"
+  busyLabel="Merging…"
   destructive={true}
   onConfirm={executeMerge}
 />

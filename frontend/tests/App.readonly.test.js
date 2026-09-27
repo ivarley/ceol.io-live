@@ -26,12 +26,16 @@ const publicSnapshot = (over = {}) => ({
 })
 
 let snapshot = publicSnapshot()
+let bootstrapFail = false
 const openStream = vi.fn(() => ({ close: () => {} }))
 const livePeople = vi.fn(async () => [])
 const vocabulary = vi.fn(async () => ({ known_tunes: [], known_aliases: [] }))
 
 vi.mock('../src/client.js', () => ({
-  bootstrap: vi.fn(async () => snapshot),
+  bootstrap: vi.fn(async () => {
+    if (bootstrapFail) throw new Error('bootstrap failed: 500')
+    return snapshot
+  }),
   vocabulary: (...a) => vocabulary(...a),
   openStream: (...a) => openStream(...a),
   livePeople: (...a) => livePeople(...a),
@@ -64,6 +68,7 @@ let App
 beforeEach(async () => {
   document.body.innerHTML = ''
   snapshot = publicSnapshot()
+  bootstrapFail = false
   openStream.mockClear()
   livePeople.mockClear()
   vocabulary.mockClear()
@@ -131,5 +136,21 @@ describe('live screen, signed out', () => {
     render(App, { props: { config: publicConfig({ instanceActive: true }) } })
     await waitFor(() => expect(document.querySelectorAll('.tune-row').length).toBe(2))
     expect(openStream).not.toHaveBeenCalled()
+  })
+})
+
+describe('live screen, first load fails', () => {
+  it('says the log could not be loaded (never "No tunes yet"), and Retry loads it', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    bootstrapFail = true
+    const { container } = render(App, { props: { config: publicConfig() } })
+    await waitFor(() => expect(container.querySelector('.kit-load-error')).toBeTruthy())
+    expect(container.querySelector('.kit-load-error').textContent).toContain("Couldn't load this session's log.")
+    expect(container.textContent).not.toContain('No tunes yet')
+    expect(container.textContent).not.toContain('bootstrap failed')
+    bootstrapFail = false
+    container.querySelector('.kit-load-retry').click()
+    await waitFor(() => expect(rows(container).length).toBe(2))
+    expect(container.querySelector('.kit-load-error')).toBeNull()
   })
 })

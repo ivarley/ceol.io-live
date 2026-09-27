@@ -11,6 +11,7 @@ const COMPONENTS = {
   Popover: {},
   Card: {},
   Chip: { label: 'x' },
+  LoadError: { what: 'x' },
   TagInput: { tags: [] },
   Tabs: { tabs: [{ id: 'a', label: 'A' }] },
   List: { items: [] },
@@ -30,7 +31,7 @@ const COMPONENTS = {
 
 describe('kit exports', () => {
   it('exports exactly the documented surface', () => {
-    expect(Object.keys(kit).sort()).toEqual([...Object.keys(COMPONENTS), 'toast'].sort())
+    expect(Object.keys(kit).sort()).toEqual([...Object.keys(COMPONENTS), 'toast', 'toastFailure', 'ServerError'].sort())
   })
 
   for (const [name, props] of Object.entries(COMPONENTS)) {

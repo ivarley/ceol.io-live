@@ -2,7 +2,7 @@
   // Tunebook sync view inside the add pane (folded-away /my-tunes/sync page):
   // fetch the person's thesession.org tunebook and add everything not already on
   // the list. Three sub-phases: form -> progress (indeterminate) -> results.
-  import { Chevron, Seg } from '../lib/index.js'
+  import { Chevron, Seg, ServerError } from '../lib/index.js'
   import { STATUS_LABELS } from '../mylist.js'
 
   let {
@@ -26,6 +26,14 @@
   function clearSavedId() {
     savedId = null
     inputId = ''
+  }
+
+  // What to show when a request fails: the server's (or our own) explanation when
+  // there is one, else a human sentence. Raw network/parse text only reaches the console.
+  function failText(e, what) {
+    console.error(`Couldn't ${what}:`, e)
+    if (e instanceof ServerError && e.message) return e.message
+    return `Couldn't ${what}. Check your connection and try again.`
   }
 
   async function startSync() {
@@ -58,14 +66,14 @@
       })
       const j = await res.json().catch(() => ({}))
       if (!res.ok || j.success === false) {
-        throw new Error(j.error || j.message || 'An error occurred during sync.')
+        throw new ServerError(j.error || j.message)
       }
       results = j.results || {}
       if (savedId == null && saveToProfile) savedId = id
       phase = 'results'
       onSynced(results)
     } catch (e) {
-      errorMsg = e?.message || 'An error occurred during sync.'
+      errorMsg = failText(e, 'sync your tunebook')
       phase = 'form'
     }
   }

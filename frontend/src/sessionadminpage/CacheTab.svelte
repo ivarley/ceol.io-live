@@ -3,14 +3,16 @@
   // debounced live preview of what each device would download, plus save.
   let { sessionPath, sessionLimit, globalLimit, load } = $props()
 
-  import { toast } from '../lib/index.js'
+  import { LoadError, toast } from '../lib/index.js'
 
   let n = $state(String(sessionLimit))
   let m = $state(String(globalLimit))
   let summaryHtmlParts = $state(null) // {session_count, global_count, total, kb}
   let summaryText = $state('Loading preview…')
   let previewTunes = $state(null)
-  let previewError = $state(null)
+  let previewError = $state(null) // null | '' (connection) | the server's own message
+  let previewLoading = $state(false)
+  let saving = $state(false)
   let cachePreviewTimer = null
   let started = false
 
@@ -22,6 +24,7 @@
   function loadCachePreview() {
     summaryText = 'Computing preview…'
     summaryHtmlParts = null
+    previewLoading = true
 
     fetch(`/api/admin/sessions/${sessionPath}/tune-cache?n=${encodeURIComponent(n)}&m=${encodeURIComponent(m)}`)
       .then((response) => response.json())
@@ -29,13 +32,20 @@
         if (!data.success) {
           summaryText = ''
           previewTunes = null
-          previewError = data.error || 'Failed to load preview'
+          previewError = data.error || ''
           return
         }
         renderCachePreview(data)
       })
       .catch((error) => {
-        previewError = `Failed to load preview: ${error}`
+        // Never leave the previous preview standing in for these settings.
+        console.error('Error loading cache preview:', error)
+        summaryText = ''
+        previewTunes = null
+        previewError = ''
+      })
+      .finally(() => {
+        previewLoading = false
       })
   }
 
@@ -57,6 +67,8 @@
   }
 
   function saveCacheLimits() {
+    if (saving) return
+    saving = true
     const payload = {
       live_cache_session_limit: parseInt(n) || 0,
       live_cache_global_limit: parseInt(m) || 0,
@@ -68,16 +80,18 @@
     })
       .then((response) => response.json())
       .then((data) => {
+        saving = false
         if (data.success) {
           toast('Local cache settings saved', 'success')
           loadCachePreview() // reflect the now-saved values
         } else {
-          toast(data.error || 'Failed to save cache settings', 'error')
+          toast(data.error || "Couldn't save the cache settings. Try again.", 'error')
         }
       })
       .catch((error) => {
+        saving = false
         console.error('Error saving cache settings:', error)
-        toast('An error occurred while saving cache settings', 'error')
+        toast("Couldn't save the cache settings. Check your connection and try again.", 'error')
       })
   }
 
@@ -130,7 +144,7 @@
         max="1000"
         style="width: 120px;" />
     </div>
-    <button type="button" class="btn btn-primary" id="cache-save-btn" onclick={saveCacheLimits}>Save</button>
+    <button type="button" class="btn btn-primary" id="cache-save-btn" onclick={saveCacheLimits} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
   </div>
 
   <div id="cache-summary" class="mb-3 text-muted">
@@ -141,8 +155,13 @@
     {:else if summaryText}{summaryText}{/if}
   </div>
   <div id="cache-content">
-    {#if previewError}
-      <div class="alert alert-danger">{previewError}</div>
+    {#if previewError !== null}
+      <LoadError
+        id="cache-preview-error"
+        what="the cache preview"
+        message={previewError ? `Couldn't load the cache preview: ${previewError}` : ''}
+        onRetry={loadCachePreview}
+        retrying={previewLoading} />
     {:else if previewTunes && previewTunes.length === 0}
       <div class="alert alert-info">No tunes would be cached with these settings.</div>
     {:else if previewTunes}

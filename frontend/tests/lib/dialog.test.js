@@ -59,4 +59,33 @@ describe('Dialog', () => {
     render(Dialog, { props: { open: true, title: 'Save?', confirmLabel: 'Save changes' } })
     expect(screen.getByText('Save changes')).not.toHaveClass('destructive')
   })
+
+  it('async confirm stays open and busy until the request resolves, then closes', async () => {
+    let resolve
+    const onConfirm = vi.fn(() => new Promise((r) => (resolve = r)))
+    render(Dialog, {
+      props: { open: true, title: 'Remove?', confirmLabel: 'Remove', busyLabel: 'Removing…', onConfirm },
+    })
+    await fireEvent.click(screen.getByText('Remove'))
+    await tick()
+    const busy = screen.getByText('Removing…')
+    expect(busy).toBeDisabled()
+    expect(screen.getByText('Cancel')).toBeDisabled()
+    resolve()
+    await new Promise((r) => setTimeout(r, 0))
+    await tick()
+    expect(screen.queryByText('Remove?')).not.toBeInTheDocument()
+  })
+
+  it('async confirm that fails (false or rejects) stays open for a retry', async () => {
+    const onConfirm = vi.fn(() => Promise.resolve(false))
+    const onCancel = vi.fn()
+    render(Dialog, { props: { open: true, title: 'Remove?', confirmLabel: 'Remove', onConfirm, onCancel } })
+    await fireEvent.click(screen.getByText('Remove'))
+    await new Promise((r) => setTimeout(r, 0))
+    await tick()
+    expect(screen.getByText('Remove?')).toBeInTheDocument()
+    expect(screen.getByText('Remove')).not.toBeDisabled()
+    expect(onCancel).not.toHaveBeenCalled()
+  })
 })

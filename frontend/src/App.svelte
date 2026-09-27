@@ -6,7 +6,7 @@
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
   import { bootstrap, vocabulary, sendOp, sendTyping, liveMatch, livePeople, deepSearch, fetchIncipit, openStream, probeServers, tuneDetail, myTunesList, myTunesOp, instanceAudio } from './client.js'
   import TuneSearch from './TuneSearch.svelte'
-  import { Chevron, Dialog, PersonPicker, Sheet } from './lib/index.js'
+  import { Chevron, Dialog, LoadError, PersonPicker, Sheet } from './lib/index.js'
   import SidePane from './SidePane.svelte'
   import RecordingsModal from './RecordingsModal.svelte'
   import { queuePut, queueAll, queueDelete, snapshotPut, snapshotGet, matchCachePut, matchCacheGet } from './offline.js'
@@ -64,6 +64,15 @@
   const dismissedNext = new SvelteSet()
   const nextAssocKey = (anchorId, nextId) => `${anchorId}->${nextId}`
   let sseStatus = $state('connecting') // raw SSE state: connecting | live | reconnecting | error
+  // The first load failed and there's no cached copy to show: the list says so (with a
+  // Retry) instead of "No tunes yet", which would be a lie.
+  let logUnavailable = $state(false)
+  let retryingLog = $state(false)
+  let painted = false // real records (server or cache) have been applied at least once
+  async function retryLog() {
+    retryingLog = true
+    try { await connect() } finally { retryingLog = false }
+  }
   let loaded = $state(false) // first bootstrap has populated records — gates the loading skeleton vs "no tunes yet"
   let online = $state(typeof navigator === 'undefined' ? true : navigator.onLine)
   let reachable = $state(true) // have we reached the server recently? (navigator.onLine lies)
@@ -805,6 +814,7 @@
   let pickerSet = $state(null)          // starter mode: the set (first-tune id) being attributed
   let attendees = $state([])            // the whole session roster + tonight's flags
   let attendeesLoaded = $state(false)
+  let attendeesFailed = $state(false) // the roster fetch failed — the picker says so rather than "Loading…" forever
   const canonicalInstruments = $derived(config.canonicalInstruments || [])
 
   // Per-session people-tracking flags (spec 039). Default true when the config predates
@@ -1038,7 +1048,9 @@
       })
       if (!res.ok) {
         const detail = await res.json().catch(() => null)
-        throw new Error(detail?.error || `Download failed (${res.status})`)
+        const err = new Error(detail?.error || "Couldn't download that tune. Try again.")
+        err.explained = true
+        throw err
       }
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
@@ -1052,7 +1064,8 @@
       // cancels the save it just started.
       setTimeout(() => URL.revokeObjectURL(url), 30000)
     } catch (e) {
-      audioErr = String(e?.message || e)
+      console.error('Download failed:', e)
+      audioErr = e?.explained ? e.message : "Couldn't download that tune. Check your connection and try again."
     } finally {
       downloading.delete(id)
     }
@@ -1173,7 +1186,14 @@
     // (spec 039) nothing consumes it, so we don't fetch it — and the endpoint would be
     // pointless work besides.
     if (!trackAttendance && !trackStarters) return
-    try { attendees = await livePeople(config); attendeesLoaded = true } catch { /* keep current */ }
+    try {
+      attendees = await livePeople(config)
+      attendeesLoaded = true
+      attendeesFailed = false
+    } catch (e) {
+      console.error('Loading the roster failed:', e)
+      if (!attendeesLoaded) attendeesFailed = true // a refresh failure keeps the roster we have
+    }
   }
   async function ensureAttendees() {
     if (!attendeesLoaded) await refreshAttendees()
@@ -1455,16 +1475,17 @@
     markCompleteOpen = true
   }
 
+  // Returns false on failure so the Dialog (busy until this settles) stays open.
   async function doMarkComplete() {
-    logComplete = true // optimistic footer/header feedback; the SSE echo reconciles
     try {
       const res = await sendOp(config, 'mark_complete', {})
-      if (res.rejected) { logComplete = false; notice = res.message || res.reason; return }
+      if (res.rejected) { notice = res.message || res.reason; return false }
+      logComplete = true // the SSE echo reconciles everyone else
       if (mode === 'edit') setMode('view') // leave editing; re-bootstrap now sees it complete
     } catch (e) {
-      logComplete = false
       if (e.networkError) notice = "You're offline — marking complete needs a connection."
       else error = e.message
+      return false
     }
   }
   // Re-open a completed log for editing. After it sticks, connect() rewires the full live
@@ -1479,12 +1500,13 @@
   async function doMarkIncomplete() {
     try {
       const res = await sendOp(config, 'mark_incomplete', {})
-      if (res.rejected) { notice = res.message || res.reason; return }
+      if (res.rejected) { notice = res.message || res.reason; return false }
       logComplete = false
       connect() // rewire live editing (stream + vocabulary)
     } catch (e) {
       if (e.networkError) notice = "You're offline — this needs a connection."
       else error = e.message
+      return false
     }
   }
 
@@ -3302,6 +3324,8 @@
   })
   // Apply a bootstrap-shaped snapshot (server truth or cached copy) to the screen.
   function applySnap(snap, fromCache) {
+    if (snap.unavailable) logUnavailable = true
+    else { logUnavailable = false; painted = true }
     byId.clear()
     for (const r of snap.records || []) put(r)
     // Local fast-match vocabulary: rendering from the OFFLINE cache rebuilds the index
@@ -3387,7 +3411,8 @@
         reachable = false // couldn't reach the server -> offline (not just "reconnecting")
         // Offline: fall back to the cached snapshot so the screen still renders (§G).
         const cached = await snapshotGet(config.sessionInstanceId).catch(() => null)
-        snap = cached ? snapFromCache(cached) : { records: [], last_event_id: 0 }
+        // No cache and nothing real painted yet: an empty list here would claim "no tunes".
+        snap = cached ? snapFromCache(cached) : { records: [], last_event_id: 0, unavailable: !painted }
         fromCache = true
       } finally {
         bootstrapInFlight = false
@@ -3502,7 +3527,11 @@
       }
       everConnected = true
     } catch (e) {
-      error = e.message
+      console.error('Connecting to the live log failed:', e)
+      // Nothing painted yet: the list shows a LoadError. Otherwise the rows on screen
+      // stand, and this says why they may be stale.
+      if (!painted) logUnavailable = true
+      else error = "Couldn't reach the live log. Retrying…"
       sseStatus = 'error'
       scheduleReconnect() // never leave a failed connect with no retry pending
     } finally {
@@ -4206,7 +4235,9 @@
         </div>
       {/if}
     {:else}
-      {#if loaded}
+      {#if logUnavailable}
+        <LoadError what="this session's log" onRetry={retryLog} retrying={retryingLog} />
+      {:else if loaded}
         <p class="empty">No tunes yet — log one below.</p>
       {:else}
         <!-- first-load skeleton: tune-sized rows with a shimmer sweeping across them -->
@@ -4519,7 +4550,7 @@
         {#each assignAttendees as p (p.person_id)}
           <button class="starter-item" onclick={() => assignTo(p)}>{p.display_name}</button>
         {:else}
-          {#if attendeesLoaded}<p class="starter-empty">No one checked in yet.</p>{:else}<p class="starter-empty">Loading…</p>{/if}
+          {#if attendeesLoaded}<p class="starter-empty">No one checked in yet.</p>{:else if attendeesFailed}<LoadError what="who's checked in" inline onRetry={refreshAttendees} />{:else}<p class="starter-empty">Loading…</p>{/if}
         {/each}
         <button class="starter-item add-player" onclick={() => { assignOpen = false; openAttendance() }}>＋ Add a player</button>
       </div>
@@ -4773,12 +4804,14 @@
   title="Mark this session log as completely logged?"
   description="This hides the editing controls."
   confirmLabel="Mark complete"
+  busyLabel="Marking complete…"
   onConfirm={doMarkComplete} />
 
 <Dialog
   bind:open={markIncompleteOpen}
   title="Re-open this session log for editing?"
   confirmLabel="Re-open log"
+  busyLabel="Re-opening…"
   onConfirm={doMarkIncomplete} />
 
 <!--

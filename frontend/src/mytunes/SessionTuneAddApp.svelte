@@ -5,7 +5,7 @@
   // the session questions instead: alias ("we call this"), and under Advanced a
   // specific setting and the key the session plays it in. Bundled into the
   // sessionpage bundle as a child of its App, driven via bind:this + open().
-  import { Chevron, Chip } from '../lib/index.js'
+  import { Chevron, Chip, ServerError } from '../lib/index.js'
   import TuneSearch from '../TuneSearch.svelte'
   import Incipit from '../Incipit.svelte'
   import { createPaneState } from './pane.svelte.js'
@@ -123,6 +123,14 @@
     return { ok: false, id: null }
   }
 
+  // What to show when a request fails: the server's (or our own) explanation when
+  // there is one, else a human sentence. Raw network/parse text only reaches the console.
+  function failText(e, what) {
+    console.error(`Couldn't ${what}:`, e)
+    if (e instanceof ServerError && e.message) return e.message
+    return `Couldn't ${what}. Check your connection and try again.`
+  }
+
   async function submit() {
     if (submitting) return
     errorMsg = ''
@@ -159,11 +167,11 @@
         onAlready(finalId, picked.name)
         return
       }
-      if (!res.ok || !j.success) throw new Error(j.error || 'Could not add the tune.')
+      if (!res.ok || !j.success) throw new ServerError(j.error || j.message)
       close()
       onAdded(finalId, picked.name)
     } catch (e) {
-      errorMsg = e?.message || 'Could not add the tune. Please try again.'
+      errorMsg = failText(e, 'add the tune to the session')
       submitting = false
     }
   }

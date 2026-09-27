@@ -6,7 +6,7 @@
   // behavior-for-behavior: details come from the same admin logs endpoint,
   // delete calls the same DELETE route; failures surface inline in the sheet.
   import { parseLocalDate } from '../shared/parse.js'
-  import { Sheet } from '../lib/index.js'
+  import { LoadError, Sheet, toastFailure, ServerError } from '../lib/index.js'
 
   let { onDeleted = () => {} } = $props()
 
@@ -19,6 +19,7 @@
 
   let sessionPath = $state('')
   let currentDate = $state('')
+  let currentId = null
 
   export function show(sessionInstanceId, path, date) {
     sessionPath = path
@@ -27,8 +28,17 @@
     error = ''
     deleteConfirmShown = false
     deleting = false
-    loading = true
+    currentId = sessionInstanceId
     open = true
+    loadInstance()
+  }
+
+  // A failed load renders LoadError (with Retry) in place of the details.
+  function loadInstance() {
+    const path = sessionPath
+    const sessionInstanceId = currentId
+    error = ''
+    loading = true
 
     // Same source as the legacy modal: the admin logs list, filtered client-side.
     fetch(`/api/admin/sessions/${path}/logs`)
@@ -39,13 +49,18 @@
       .then((data) => {
         if (data.error) throw new Error(data.error)
         const found = data.logs.find((log) => log.session_instance_id === sessionInstanceId)
-        if (!found) throw new Error('Session instance not found')
+        if (!found) {
+          // Not a connection problem: the instance is gone. Say that, no Retry.
+          error = 'missing'
+          loading = false
+          return
+        }
         instance = found
         loading = false
       })
       .catch((e) => {
         console.error('Error fetching instance details:', e)
-        error = e.message
+        error = 'failed'
         loading = false
       })
   }
@@ -82,20 +97,18 @@
     deleting = true
     fetch(`/api/sessions/${sessionPath}/${currentDate}/delete`, { method: 'DELETE' })
       .then((response) => {
-        if (!response.ok) throw new Error('Failed to delete session instance')
         return response.json()
       })
       .then((data) => {
-        if (!data.success) throw new Error(data.message || 'Failed to delete session instance')
+        if (!data.success) throw new ServerError(data.message || data.error)
         // Silent (spec 052 §B4): you confirmed the delete and the row is gone.
         open = false
         onDeleted() // refresh the logs table
       })
       .catch((e) => {
-        console.error('Error deleting instance:', e)
+        // Back to the details with the confirmation still open, so it can be retried.
         deleting = false
-        deleteConfirmShown = false
-        error = e.message
+        toastFailure('delete this session instance', e)
       })
   }
 </script>
@@ -106,12 +119,10 @@
       <div class="instance-loading-spinner"></div>
       <p>{deleting ? 'Deleting instance...' : 'Loading instance details...'}</p>
     </div>
+  {:else if error === 'missing'}
+    <LoadError id="instance-load-error" message="This session instance no longer exists." />
   {:else if error}
-    <div class="modal-error">
-      <h3>Error</h3>
-      <p>{error}</p>
-      <button class="instance-action-btn instance-action-btn-primary" onclick={() => (open = false)}>Close</button>
-    </div>
+    <LoadError id="instance-load-error" what="this session instance" onRetry={loadInstance} retrying={loading} />
   {:else if instance}
     <div class="instance-modal-subtitle">{sessionPath}</div>
 

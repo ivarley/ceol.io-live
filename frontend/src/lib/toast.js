@@ -80,3 +80,27 @@ export function toast(message, type = 'info') {
     if (!host.childElementCount) host.remove()
   }, DISMISS_MS)
 }
+
+/**
+ * A failure the SERVER explained: its message is fit to show the user. Throw it
+ * with the response's `message`/`error` string (or nothing, when the server gave
+ * none) from inside a request's try; anything else that lands in the catch
+ * (network down, a non-JSON 500) is not fit to show.
+ */
+export class ServerError extends Error {}
+
+/**
+ * Toast a failed ACTION: what failed and what to do next, never raw error text.
+ * `what` completes "Couldn't …" ("remove the tune from your list"). A
+ * ServerError's own message wins; the raw error always goes to the console.
+ */
+export function toastFailure(what, error) {
+  if (error) console.error(`Couldn't ${what}:`, error)
+  let message
+  if (error instanceof ServerError) {
+    message = error.message || `Couldn't ${what}. Try again.`
+  } else {
+    message = `Couldn't ${what}. Check your connection and try again.`
+  }
+  toast(message, 'error')
+}

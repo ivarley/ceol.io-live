@@ -14,6 +14,8 @@ export { default as SearchField } from './SearchField.svelte'
 export { default as Seg } from './Seg.svelte'
 // Chevron (spec 052 §B16): the one arrow in the app. Everything that used to be a
 // `›`, `‹`, `▸` or `▾` is this, drawn, at one stroke weight.
+// LoadError: the one failed-load state — "Couldn't load X." + Retry, where the content would be.
+export { default as LoadError } from './LoadError.svelte'
 export { default as Chevron } from './Chevron.svelte'
 // Row / Toolbar / SectionHeader (spec 052 §B8 Stage 1): the three primitives the
 // phone-shaped pages are built from — a list row whose trailing slot stays at the
@@ -28,4 +30,4 @@ export { default as PersonPicker } from './PersonPicker.svelte'
 // SessionPicker (spec 037): pick one of MY sessions, to re-scope the tune drawer's
 // Session tab. Same composed-from-the-kit shape as PersonPicker.
 export { default as SessionPicker } from './SessionPicker.svelte'
-export { toast } from './toast.js'
+export { toast, toastFailure, ServerError } from './toast.js'

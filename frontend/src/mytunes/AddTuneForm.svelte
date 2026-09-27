@@ -3,7 +3,7 @@
   // per-instrument roll-up + collapsed notes + the add button. Owns ALL per-tune
   // form state — the parent keys this component on the previewed tune's identity,
   // so stepping ‹ › to another tune remounts it fresh (no notes leaking across).
-  import { Chip, Seg } from '../lib/index.js'
+  import { Chip, Seg, ServerError } from '../lib/index.js'
   import { STATUS_LABELS } from '../mylist.js'
 
   let {
@@ -32,6 +32,14 @@
   let onListBusy = $state('') // '' | 'setting' | 'heard' — which on-list action is in flight
   let onListError = $state('')
 
+  // What to show when a request fails: the server's (or our own) explanation when
+  // there is one, else a human sentence. Raw network/parse text only reaches the console.
+  function failText(e, what) {
+    console.error(`Couldn't ${what}:`, e)
+    if (e instanceof ServerError && e.message) return e.message
+    return `Couldn't ${what}. Check your connection and try again.`
+  }
+
   async function runOnListAction(kind, fn) {
     if (onListBusy) return
     onListError = ''
@@ -40,7 +48,7 @@
       await fn()
       // success closes the pane; this component unmounts with it
     } catch (e) {
-      onListError = e?.message || 'That didn\u2019t work. Please try again.'
+      onListError = failText(e, kind === 'heard' ? 'update the heard count' : 'update your setting')
       onListBusy = ''
     }
   }
@@ -95,7 +103,7 @@
       await onSubmit({ status: baseStatus, notes: notes.trim(), overrides: instrumentOverrides() })
       // success closes the pane; this component unmounts with it
     } catch (e) {
-      errorMsg = e?.message || 'Could not add the tune. Please try again.'
+      errorMsg = failText(e, 'add the tune')
       submitting = false
     }
   }

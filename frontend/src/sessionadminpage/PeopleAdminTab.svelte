@@ -3,7 +3,7 @@
   // is_regular is gone -- the meaningful split is member vs visitor)
   // filter, name/email search (smart-quote normalized), and sortable columns.
   import { SvelteSet } from 'svelte/reactivity'
-  import { SearchField, Dialog, toast } from '../lib/index.js'
+  import { LoadError, SearchField, Dialog, toast } from '../lib/index.js'
   import PersonFlags from './PersonFlags.svelte'
   import { normalizeQuotes, parseLocalDate } from '../shared/parse.js'
   import { compareValues, personSortValue } from './logic.js'
@@ -20,21 +20,31 @@
   let sortDirection = $state('asc')
   let started = false
 
+  let loading = $state(false)
+
+  // A failure renders LoadError (with Retry) in place of the table.
+  function loadPeople() {
+    loading = true
+    fetch(`/api/admin/sessions/${sessionPath}/people`)
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.error || !data.players) throw new Error(data.error || 'people load failed')
+        loadError = null
+        allPeople = data.players
+      })
+      .catch((error) => {
+        console.error('Error loading session members:', error)
+        loadError = 'failed'
+      })
+      .finally(() => {
+        loading = false
+      })
+  }
+
   $effect(() => {
     if (load && !started) {
       started = true
-      fetch(`/api/admin/sessions/${sessionPath}/people`)
-        .then((response) => response.json())
-        .then((data) => {
-          if (data.error) {
-            loadError = data.error
-            return
-          }
-          allPeople = data.players
-        })
-        .catch((error) => {
-          loadError = `Failed to load members: ${error}`
-        })
+      loadPeople()
     }
   })
 
@@ -79,7 +89,7 @@
   // of chore nobody does, which is how rosters rot in the first place.
   let selectMode = $state(false)
   let selected = $state(new SvelteSet()) // plain Sets aren't reactive in $state
-  let busy = $state(false)
+  let busy = $state(false) // a bulk write in flight: every action disabled, the count reads "Saving…"
   let confirmOpen = $state(false)
 
   const selectedPeople = $derived(filteredPeople.filter((p) => selected.has(p.person_id)))
@@ -125,7 +135,15 @@
       if (ok.length === ids.length) {
         toast(`${label}: ${ok.length} ${ok.length === 1 ? 'person' : 'people'}.`, 'success')
       } else {
-        toast(`${label}: ${ok.length} of ${ids.length} saved — ${ids.length - ok.length} failed.`, 'error')
+        // Keep the failed ones selected, so trying again is one click.
+        toast(
+          ok.length
+            ? `${label}: ${ok.length} of ${ids.length} saved — ${ids.length - ok.length} failed. They're still selected; try again.`
+            : `Couldn't save that change. Check your connection and try again.`,
+          'error'
+        )
+        ok.forEach((id) => selected.delete(id))
+        return
       }
       selected.clear()
     } finally {
@@ -183,7 +201,7 @@
   {#if selectMode}
     <div class="people-actions mb-3" id="people-actions">
       <span class="people-actions-count">
-        {selected.size} selected
+        {busy ? 'Saving…' : `${selected.size} selected`}
       </span>
       <div class="people-actions-btns">
         <button class="pa-btn pa-btn-primary" disabled={!selected.size || busy} onclick={askConfirm}>
@@ -217,7 +235,7 @@
 
   <div id="people-content">
     {#if loadError}
-      <div class="alert alert-danger">{loadError}</div>
+      <LoadError id="people-load-error" what="this session's members" onRetry={loadPeople} retrying={loading} />
     {:else if !allPeople}
       <p class="text-muted">Loading members...</p>
     {:else if allPeople.length === 0}
@@ -289,6 +307,7 @@
   title={`Confirm ${selected.size} ${selected.size === 1 ? 'person' : 'people'}?`}
   description="They will be able to see this session's people list and attendance records."
   confirmLabel="Confirm them"
+  busyLabel="Confirming…"
   onConfirm={() => applyToSelected('confirmed', true, 'Confirmed')} />
 
 <style>

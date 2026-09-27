@@ -259,6 +259,61 @@ describe('session detail page view', () => {
     expect(container.querySelector('.year-content-row[data-year="2025"]')).toBeNull()
   })
 
+  it('a failed logs load says so with a Retry (no refetch loop), and Retry loads them', async () => {
+    const good = fetchRoutes['/logs']
+    fetchRoutes['/logs'] = () => {
+      throw new SyntaxError('Unexpected token < in JSON')
+    }
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { container } = renderApp(payload(), { activeTab: 'logs' })
+    await waitFor(() => {
+      expect(container.querySelector('#logs-load-error')).toHaveTextContent("Couldn't load the logs.")
+    })
+    const logCalls = () => fetch.mock.calls.filter(([u]) => String(u).endsWith('/logs')).length
+    await new Promise((r) => setTimeout(r, 20))
+    expect(logCalls()).toBe(1)
+    fetchRoutes['/logs'] = good
+    await fireEvent.click(container.querySelector('#logs-load-error button'))
+    await waitFor(() => {
+      expect(container.querySelectorAll('#logs-tab .year-section')).toHaveLength(1)
+    })
+    expect(container.querySelector('#logs-load-error')).toBeNull()
+  })
+
+  it('a failed people load shows LoadError, not an empty roster; Retry fills it', async () => {
+    fetchRoutes['/people'] = { success: false, message: 'boom' }
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { container } = renderApp()
+    await fireEvent.click(container.querySelector('.tab-button[data-tab="people"]'))
+    await waitFor(() => {
+      expect(container.querySelector('#people-load-error')).toHaveTextContent("Couldn't load this session's people.")
+    })
+    fetchRoutes['/people'] = {
+      success: true,
+      people: [
+        { person_id: 1, first_name: 'Ann', last_name: 'Malone', instruments: [], relationship: 'member', confirmed: true, archived: false, has_user_account: true, attendance_count: 1 },
+      ],
+    }
+    await fireEvent.click(container.querySelector('#people-load-error button'))
+    await waitFor(() => {
+      expect(container.querySelector('#people-list .person-row .person-name').textContent).toBe('Ann Malone')
+    })
+  })
+
+  it('a failed /tunes/remaining says the list is partial instead of passing it off as complete', async () => {
+    fetchRoutes['/tunes/remaining'] = () => {
+      throw new TypeError('Failed to fetch')
+    }
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { container } = renderApp(payload({ has_more_tunes: true, total_tunes_count: 5 }))
+    await waitFor(() => {
+      expect(container.querySelector('#tunes-remaining-error')).toHaveTextContent(
+        "Couldn't load the rest of this session's tunes."
+      )
+    })
+    expect(container.querySelector('#results-count-text').textContent).toContain('of 5')
+  })
+
   it('the logged/all toggle defaults to logged and hides sections with nothing logged', async () => {
     const { container } = renderApp(payload(), { activeTab: 'logs' })
     await waitFor(() => {

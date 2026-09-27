@@ -5,12 +5,15 @@
   // #addPersonModal, #person-input — the e2e suite selects on these). First
   // paint comes from the embedded payload; search/sort are client-side; the
   // 2-step add-person wizard is a pair of kit Sheets (the PeopleTab pattern).
-  import { SearchField, Chip, Sheet } from '../lib/index.js'
+  import { SearchField, Chip, Sheet, LoadError, toast } from '../lib/index.js'
   import { normalizeQuotes } from '../shared/parse.js'
 
   let { pageData = null } = $props()
 
   let people = $state(pageData?.success ? pageData.people : [])
+  // A payload that didn't arrive must not read as "No People Found".
+  let peopleFailed = $state(!pageData?.success)
+  let peopleLoading = $state(false)
   let searchText = $state('')
   const searchTerm = $derived(normalizeQuotes(searchText.toLowerCase().trim()))
 
@@ -125,13 +128,30 @@
     })
   })
 
+  // Resolves true when the table now holds fresh data.
   function refetchPeople() {
-    fetch('/api/admin/people')
+    peopleLoading = true
+    return fetch('/api/admin/people')
       .then((r) => r.json())
       .then((data) => {
-        if (data.success) people = data.people
+        if (!data.success) throw new Error(data.error || data.message || 'people load failed')
+        people = data.people
+        peopleFailed = false
+        return true
       })
-      .catch((error) => console.error('Error refreshing people:', error))
+      .catch((error) => {
+        console.error('Error refreshing people:', error)
+        return false
+      })
+      .finally(() => {
+        peopleLoading = false
+      })
+  }
+
+  function retryPeople() {
+    refetchPeople().then((ok) => {
+      if (!ok) toast("Still couldn't load the people list. Check your connection and try again.", 'error')
+    })
   }
 
   // ---- add-person wizard (2 kit Sheets, the PeopleTab pattern) --------------------
@@ -154,6 +174,7 @@
   let thesessionUserId = $state('')
   let sessionId = $state('')
   let sessions = $state([])
+  let sessionsFailed = $state(false)
 
   function openAddPerson() {
     personInput = ''
@@ -163,12 +184,18 @@
   }
 
   function loadSessions() {
+    sessionsFailed = false
     fetch('/api/sessions/list')
       .then((r) => r.json())
       .then((data) => {
-        if (data.success) sessions = data.sessions
+        if (!data.success) throw new Error(data.error || data.message || 'sessions load failed')
+        sessions = data.sessions
       })
-      .catch((error) => console.error('Error loading sessions:', error))
+      .catch((error) => {
+        // Say so beside the picker, rather than offering only "Do not add".
+        console.error('Error loading sessions:', error)
+        sessionsFailed = true
+      })
   }
 
   function processStep1() {
@@ -211,7 +238,8 @@
       })
       .catch((error) => {
         step1Busy = false
-        step1Error = 'Error looking up person: ' + error.message
+        console.error('Error looking up person:', error)
+        step1Error = "Couldn't look that up. Check your connection and try again."
       })
   }
 
@@ -250,14 +278,17 @@
           // table you are looking at.
           // The legacy page reloaded; refetching the same payload endpoint
           // updates the table in place.
-          refetchPeople()
+          refetchPeople().then((ok) => {
+            if (!ok) toast("Person added, but the list couldn't refresh. Reload the page to see them.", 'error')
+          })
         } else {
           step2Error = data.message
         }
       })
       .catch((error) => {
         saving = false
-        step2Error = 'Error creating person: ' + error.message
+        console.error('Error creating person:', error)
+        step2Error = "Couldn't add the person. Check your connection and try again."
       })
   }
 </script>
@@ -293,7 +324,9 @@
   </div>
 
   <div id="people-content">
-    {#if people.length === 0}
+    {#if peopleFailed}
+      <LoadError what="the people list" onRetry={retryPeople} retrying={peopleLoading} />
+    {:else if people.length === 0}
       <div class="alert alert-info" role="alert">
         <h4 class="alert-heading">No People Found</h4>
         <p>There are currently no people records in the system.</p>
@@ -513,6 +546,9 @@
           <option value={session.session_id}>{session.display_name}</option>
         {/each}
       </select>
+      {#if sessionsFailed}
+        <LoadError what="the session list" inline onRetry={loadSessions} />
+      {/if}
     </div>
     {#if step2Error}
       <div id="step2-error" class="step-error" role="alert">{step2Error}</div>

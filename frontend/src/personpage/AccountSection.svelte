@@ -42,12 +42,14 @@
       const json = await res.json().catch(() => ({}))
       if (!res.ok || !json.success) {
         toast(json.error || 'Your account could not be deleted.', 'error')
-        return
+        return false // keep the dialog open for a retry
       }
       // Signed out now; home shows the server's "Your account has been deleted."
       window.location.href = '/'
-    } catch {
-      toast("Couldn't reach the server, so nothing was deleted.", 'error')
+    } catch (e) {
+      console.error('Delete account failed:', e)
+      toast("Couldn't reach the server, so nothing was deleted. Check your connection and try again.", 'error')
+      return false
     }
   }
 </script>
@@ -90,6 +92,7 @@
   bind:open={confirmOpen}
   title="Delete your account?"
   confirmLabel="Delete account"
+  busyLabel="Deleting…"
   destructive={true}
   confirmDisabled={!matches}
   onConfirm={deleteAccount}>

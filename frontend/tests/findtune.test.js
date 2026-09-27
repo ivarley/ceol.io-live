@@ -103,6 +103,24 @@ describe('FindTune overlay', () => {
     expect(window.CeolOffline.searchTunes).toHaveBeenCalledWith('drowsy', 10)
   })
 
+  it('a failed search with no offline fallback says so, with a Retry — never "No tunes match"', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    fetch.mockResolvedValue({ ok: false, status: 500, json: async () => ({ success: false }) })
+    const { component } = render(FindTune)
+    component.show()
+    await waitFor(() => expect(document.querySelector('.ft-input')).toBeTruthy())
+    const input = document.querySelector('.ft-input')
+    input.value = 'kesh'
+    await fireEvent.input(input)
+    await waitFor(() => expect(document.querySelector('.kit-load-error')).toBeTruthy(), { timeout: 2000 })
+    expect(document.querySelector('.kit-load-error').textContent).toContain("Couldn't search for tunes.")
+    expect(document.querySelector('.ft-empty')).toBeFalsy()
+    fetch.mockResolvedValue({ ok: true, json: async () => ({ success: true, tunes: TUNES }) })
+    await fireEvent.click(document.querySelector('.kit-load-retry'))
+    await waitFor(() => expect(document.querySelectorAll('.ft-results .ft-item')).toHaveLength(2))
+    expect(document.querySelector('.kit-load-error')).toBeFalsy()
+  })
+
   // Paste-a-link: the server resolves an id/URL query to that one tune, so the overlay
   // just passes it through — but the "nothing found" case means "not imported yet", not
   // "no such name", and hands off to the add pane carrying the link (setting included).

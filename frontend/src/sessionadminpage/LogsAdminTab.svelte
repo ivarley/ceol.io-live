@@ -5,7 +5,7 @@
   // (suggestion-prefilled).
   let { sessionPath, locationName, load } = $props()
 
-  import { Sheet, toast, Chip } from '../lib/index.js'
+  import { Sheet, toast, Chip, LoadError } from '../lib/index.js'
   import InstanceSheet from './InstanceSheet.svelte'
   import { parseLocalDate } from '../shared/parse.js'
 
@@ -15,14 +15,16 @@
   let loadError = $state(null)
   let started = false
 
+  let reloading = $state(false)
+
+  // A failure renders LoadError (with Retry) in place of the table.
   function loadLogsContent() {
-    fetch(`/api/admin/sessions/${sessionPath}/logs`)
+    reloading = true
+    return fetch(`/api/admin/sessions/${sessionPath}/logs`)
       .then((response) => response.json())
       .then((data) => {
-        if (data.error) {
-          loadError = data.error
-          return
-        }
+        if (data.error || !data.logs) throw new Error(data.error || 'logs load failed')
+        loadError = null
         logs = data.logs
 
         // Check if we should auto-open a specific instance sheet
@@ -39,7 +41,11 @@
         }
       })
       .catch((error) => {
-        loadError = `Failed to load session logs: ${error}`
+        console.error('Error loading session logs:', error)
+        loadError = 'failed'
+      })
+      .finally(() => {
+        reloading = false
       })
   }
 
@@ -69,6 +75,9 @@
   let endTimeValue = $state('')
   let locationValue = $state('')
   let commentsValue = $state('')
+  let adding = $state(false)
+  let suggesting = $state(false)
+  let suggestError = $state(false)
 
   async function showAddSessionModal() {
     // Set defaults while we fetch the suggestion
@@ -78,21 +87,28 @@
     locationValue = ''
     commentsValue = ''
 
+    adding = false
     addModalOpen = true
+    await suggest()
+  }
 
-    // Fetch the next suggested session instance from the API
+  // Prefill the next usual date/times. A failure keeps today's date but says so,
+  // so a default isn't mistaken for the session's next night.
+  async function suggest() {
+    suggesting = true
+    suggestError = false
     try {
       const response = await fetch(`/api/sessions/${sessionPath}/next_instance_suggestion`)
       const data = await response.json()
-      if (data.success) {
-        // Update form with suggested values
-        dateValue = data.date || dateValue
-        startTimeValue = data.start_time || ''
-        endTimeValue = data.end_time || ''
-      }
+      if (!data.success) throw new Error(data.message || 'next_instance_suggestion failed')
+      dateValue = data.date || dateValue
+      startTimeValue = data.start_time || ''
+      endTimeValue = data.end_time || ''
     } catch (error) {
       console.error('Failed to get next session suggestion:', error)
-      // Keep the default values if API call fails
+      suggestError = true
+    } finally {
+      suggesting = false
     }
   }
 
@@ -101,6 +117,7 @@
   }
 
   function addSessionInstance() {
+    if (adding) return
     const date = dateValue.trim()
     const startTime = startTimeValue.trim()
     const endTime = endTimeValue.trim()
@@ -119,6 +136,7 @@
     if (location) requestData.location = location
     if (comments) requestData.comments = comments
 
+    adding = true
     fetch(`/api/sessions/${sessionPath}/add_instance`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -126,18 +144,20 @@
     })
       .then((response) => response.json())
       .then((data) => {
+        adding = false
         if (data.success) {
           toast(data.message, 'success')
           hideAddSessionModal()
           // Reload the logs content to show the new instance
           loadLogsContent()
         } else {
-          toast(data.message, 'error')
+          toast(data.message || "Couldn't add the session instance. Try again.", 'error')
         }
       })
       .catch((error) => {
-        toast('Failed to add session instance', 'error')
-        console.error('Error:', error)
+        adding = false
+        console.error('Error adding session instance:', error)
+        toast("Couldn't add the session instance. Check your connection and try again.", 'error')
       })
   }
 </script>
@@ -151,7 +171,7 @@
   </div>
   <div id="logs-content">
     {#if loadError}
-      <div class="alert alert-danger">{loadError}</div>
+      <LoadError id="logs-load-error" what="the session history" onRetry={loadLogsContent} retrying={reloading} />
     {:else if !logs}
       <p class="text-muted">Loading session history...</p>
     {:else if logs.length === 0}
@@ -197,6 +217,14 @@
 <!-- Add Session Instance Sheet (commit lives in the footer so a failed POST
      keeps the form open, like the legacy modal) -->
 <Sheet bind:open={addModalOpen} title="Add Session Instance">
+  {#if suggestError}
+    <LoadError
+      inline
+      id="add-instance-suggest-error"
+      message="Couldn't look up the next usual date, so this is today. Check it before adding."
+      onRetry={suggest}
+      retrying={suggesting} />
+  {/if}
   <div class="mb-3">
     <label for="session-date-input" class="form-label">Session Date:</label>
     <input type="date" id="session-date-input" class="form-control" bind:value={dateValue} required />
@@ -224,7 +252,7 @@
   </div>
   {#snippet footer()}
     <div style="text-align: right;">
-      <button type="button" class="btn btn-primary" id="add-session-confirm-btn" onclick={addSessionInstance}>Add Session</button>
+      <button type="button" class="btn btn-primary" id="add-session-confirm-btn" onclick={addSessionInstance} disabled={adding}>{adding ? 'Adding…' : 'Add Session'}</button>
     </div>
   {/snippet}
 </Sheet>

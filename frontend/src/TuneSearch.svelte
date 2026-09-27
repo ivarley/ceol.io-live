@@ -1,5 +1,5 @@
 <script>
-  import { Chip } from './lib/index.js'
+  import { Chip, LoadError } from './lib/index.js'
   import { onDestroy, untrack, tick } from 'svelte'
   import { deepSearch, thesessionSearch, thesessionPreview, tunePreview } from './client.js'
   import Incipit from './Incipit.svelte'
@@ -47,6 +47,9 @@
   // ONLY on explicit tap. Deduped against the local list by tune_id (suppress-in-place).
   let tsResults = $state([]) // remote hits for the current query, already deduped
   let tsSearching = $state(false)
+  // A search that failed (client.js flags it) is not "no matches": say so, with a Retry.
+  let deepFailed = $state(false)
+  let tsFailed = $state(false)
   let tsSearched = $state(false) // has the user run a remote search for this query yet?
   let tsPasteUrl = $state('') // the "paste a URL / tune ID" field inside the remote section
   let tsPasteError = $state('')
@@ -125,6 +128,7 @@
   function runSearch() {
     if (deepTimer) clearTimeout(deepTimer)
     hl = -1 // a new query invalidates the keyboard highlight
+    deepFailed = false
     // The remote (thesession.org) results were for the previous query — drop them; the user
     // must tap "Search on thesession.org" again for the new query.
     resetThesession()
@@ -141,7 +145,7 @@
     deepTimer = setTimeout(async () => {
       const seq = ++deepSeq
       const r = await deepSearch(config, deepQuery.trim(), deepType, preferType, deepMode)
-      if (seq === deepSeq) { deepResults = r; deepLoading = false }
+      if (seq === deepSeq) { deepResults = r; deepFailed = !!r.failed; deepLoading = false }
     }, 160)
   }
   // Keyboard nav of the local result cards (spec 028). The pane list is a normal top-to-bottom
@@ -190,7 +194,7 @@
     histPos = step.pos
     setQuery(step.value)
     if (step.value.trim()) runSearch() // fire the recalled search
-    else { deepResults = []; deepLoading = false; deepSeq++ } // back to the empty draft
+    else { deepResults = []; deepFailed = false; deepLoading = false; deepSeq++ } // back to the empty draft
     return true
   }
   const rememberQuery = () => onRemember(deepQuery)
@@ -287,7 +291,7 @@
 
   // --- thesession.org remote search & import (spec 026) -----------------------------
   function resetThesession() {
-    tsResults = []; tsSearching = false; tsSearched = false; tsPasteUrl = ''; tsPasteError = ''
+    tsResults = []; tsSearching = false; tsSearched = false; tsFailed = false; tsPasteUrl = ''; tsPasteError = ''
   }
   // Extend the search to thesession.org for the CURRENT query (explicit action only). Remote
   // hits already shown in the local list are suppressed (they stay up top).
@@ -301,6 +305,7 @@
     const seen = new Set(deepResults.map((r) => r.tune_id))
     const r = await thesessionSearch(config, q, deepType)
     tsResults = r.filter((t) => !seen.has(t.tune_id) && (seen.add(t.tune_id), true))
+    tsFailed = !!r.failed
     tsSearching = false
   }
   // Add a remote result -> import (server-side, folded into the add op) + log linked at
@@ -518,6 +523,8 @@
 <div class="deep-results" id="deep-results-list" role="listbox" bind:this={resultsEl} ontouchstart={onResultsTouchStart} ontouchmove={onResultsTouchMove}>
   {#if deepLoading && !deepResults.length}
     <p class="deep-empty">Searching…</p>
+  {:else if deepFailed && !deepResults.length}
+    <LoadError message="Couldn't search the tune catalog." onRetry={runSearch} />
   {:else if !deepResults.length}
     {#if variant === 'pane' && !deepQuery.trim()}
       <p class="deep-empty">
@@ -569,6 +576,8 @@
     <div class="deep-remote-head">From thesession.org</div>
     {#if tsSearching}
       <p class="deep-empty">Searching thesession.org…</p>
+    {:else if tsFailed}
+      <LoadError message="Couldn't search thesession.org." onRetry={runThesessionSearch} />
     {:else if !tsResults.length}
       <p class="deep-empty">No new tunes on thesession.org for “{deepQuery.trim()}”.</p>
     {:else}

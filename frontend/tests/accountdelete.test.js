@@ -74,6 +74,17 @@ describe('Delete Account', () => {
     await fireEvent.input(emailInput(), { target: { value: EMAIL } })
     await fireEvent.click(confirmButton())
     await waitFor(() => expect(window.showMessage).toHaveBeenCalledWith('Nope', 'error'))
+    // the dialog stays open for a retry or a cancel
+    await waitFor(() => expect(confirmButton()).not.toBeDisabled())
+    expect(emailInput()).toBeInTheDocument()
+  })
+
+  it('keeps the confirm busy while the request is in flight', async () => {
+    fetchMock.mockReturnValue(new Promise(() => {}))
+    await openDialog()
+    await fireEvent.input(emailInput(), { target: { value: EMAIL } })
+    await fireEvent.click(confirmButton())
+    await waitFor(() => { expect(confirmButton()).toHaveTextContent('Deleting…'); expect(confirmButton()).toBeDisabled() })
   })
 
   it('says nothing was deleted when the server cannot be reached', async () => {
@@ -82,7 +93,10 @@ describe('Delete Account', () => {
     await fireEvent.input(emailInput(), { target: { value: EMAIL } })
     await fireEvent.click(confirmButton())
     await waitFor(() =>
-      expect(window.showMessage).toHaveBeenCalledWith("Couldn't reach the server, so nothing was deleted.", 'error')
+      expect(window.showMessage).toHaveBeenCalledWith(
+        "Couldn't reach the server, so nothing was deleted. Check your connection and try again.",
+        'error'
+      )
     )
   })
 })

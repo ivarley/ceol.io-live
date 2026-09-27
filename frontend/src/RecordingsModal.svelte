@@ -15,13 +15,24 @@
    * stage while it fills itself in.
    */
   import { onDestroy } from 'svelte'
+  import { LoadError, ServerError } from './lib/index.js'
 
   let { sessionInstanceId, onclose } = $props()
 
   let recordings = $state([])
   let tuneCount = $state(0)
   let loading = $state(true)
+  let loadFailed = $state(false) // the list couldn't be fetched — never shown as "no audio"
+  let busy = $state(null) // {id, kind: 'delete'|'retry'} while a row's action is in flight
   let error = $state('')
+
+  // What to show for a failure: our own or the server's explanation (ServerError),
+  // else a human sentence. A JSON-parse or network error only reaches the console.
+  function explain(e, what) {
+    console.error(`Couldn't ${what}:`, e)
+    if (e instanceof ServerError && e.message) return e.message
+    return `Couldn't ${what}. Check your connection and try again.`
+  }
 
   // Upload form
   let file = $state(null)
@@ -60,15 +71,18 @@
     try {
       const res = await fetch(`/api/session-instances/${sessionInstanceId}/recordings`)
       const data = await res.json()
-      if (!data.success) throw new Error(data.error || 'Could not load recordings')
+      if (!data.success) throw new ServerError(data.error)
       recordings = data.recordings || []
+      loadFailed = false
       tuneCount = data.tune_count || 0
       // Anything mid-ingest keeps the list honest without a manual refresh.
       if (recordings.some((r) => r.status && r.status !== 'ready')) {
         pollTimer = setTimeout(load, 4000)
       }
     } catch (e) {
-      error = e.message
+      console.error('Loading recordings failed:', e)
+      // A background refresh failing leaves the rows we have; only an empty list says so.
+      if (!recordings.length) loadFailed = true
     } finally {
       loading = false
     }
@@ -93,10 +107,10 @@
       xhr.onload = () =>
         (xhr.status >= 200 && xhr.status < 300)
           ? resolve()
-          : reject(new Error(`Object storage rejected the upload (HTTP ${xhr.status})`))
+          : reject(new ServerError(`Object storage rejected the upload (HTTP ${xhr.status})`))
       // status 0 with no body is a blocked CORS preflight, which the browser
       // refuses to describe. Name the likely cause rather than "failed".
-      xhr.onerror = () => reject(new Error(
+      xhr.onerror = () => reject(new ServerError(
         'The upload could not reach object storage. The bucket may be missing its CORS rule.'
       ))
       xhr.send(blob)
@@ -124,7 +138,7 @@
   }
 
   function fail(e) {
-    error = e.message
+    error = explain(e, 'upload the recording')
     uploading = false
     stage = ''
   }
@@ -145,7 +159,7 @@
         body: JSON.stringify({ session_instance_id: sessionInstanceId, filename: file.name })
       })
       const signed = await signRes.json()
-      if (!signRes.ok || !signed.success) throw new Error(signed.error || 'Could not prepare the upload')
+      if (!signRes.ok || !signed.success) throw new ServerError(signed.error || 'Could not prepare the upload')
 
       stage = 'Uploading…'
       await putToS3(signed.upload_url, signed.content_type, file)
@@ -180,7 +194,7 @@
         })
       })
       const created = await createRes.json()
-      if (!createRes.ok || !created.success) throw new Error(created.error || 'Could not register the recording')
+      if (!createRes.ok || !created.success) throw new ServerError(created.error || 'Could not register the recording')
 
       // Handed off. Everything after this point happens on the server whether or
       // not this tab exists, so give the form back rather than holding someone
@@ -208,26 +222,32 @@
     if (!window.confirm(warning)) return
 
     error = ''
+    busy = { id: recording.recording_id, kind: 'delete' }
     try {
       const res = await fetch(`/api/recordings/${recording.recording_id}`, { method: 'DELETE' })
       const data = await res.json()
-      if (!data.success) throw new Error(data.error || 'Could not delete that recording')
+      if (!data.success) throw new ServerError(data.error)
       if (data.storage_warning) error = data.storage_warning
       await load()
     } catch (e) {
-      error = e.message
+      error = explain(e, 'delete that recording')
+    } finally {
+      busy = null
     }
   }
 
   async function retry(recording) {
     error = ''
+    busy = { id: recording.recording_id, kind: 'retry' }
     try {
       const res = await fetch(`/api/recordings/${recording.recording_id}/reprocess`, { method: 'POST' })
       const data = await res.json()
-      if (!data.success) throw new Error(data.error || 'Could not restart processing')
+      if (!data.success) throw new ServerError(data.error)
       await load()
     } catch (e) {
-      error = e.message
+      error = explain(e, 'restart processing')
+    } finally {
+      busy = null
     }
   }
 </script>
@@ -241,6 +261,8 @@
   <div class="rec-body">
     {#if loading && !recordings.length}
       <p class="rec-empty">Loading…</p>
+    {:else if loadFailed && !recordings.length}
+      <LoadError what="the recordings" onRetry={load} />
     {:else if !recordings.length}
       <p class="rec-empty">No audio uploaded for this night yet.</p>
     {/if}
@@ -279,9 +301,11 @@
           {#if r.status === 'ready'}
             <a class="hx-act" href={`/admin/recordings/${r.recording_id}/segment`}>Add timestamps</a>
           {:else if r.status === 'failed'}
-            <button class="hx-act" onclick={() => retry(r)}>Retry</button>
+            <button class="hx-act" disabled={busy?.id === r.recording_id} onclick={() => retry(r)}
+              >{busy?.id === r.recording_id && busy.kind === 'retry' ? 'Restarting…' : 'Retry'}</button>
           {/if}
-          <button class="hx-act rec-danger" onclick={() => remove(r)}>Delete</button>
+          <button class="hx-act rec-danger" disabled={busy?.id === r.recording_id} onclick={() => remove(r)}
+            >{busy?.id === r.recording_id && busy.kind === 'delete' ? 'Deleting…' : 'Delete'}</button>
         </div>
       </div>
     {/each}

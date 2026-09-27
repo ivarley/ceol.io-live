@@ -4,6 +4,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, fireEvent, waitFor } from '@testing-library/svelte'
 import AddTuneForm from '../src/mytunes/AddTuneForm.svelte'
+import { ServerError } from '../src/lib/index.js'
 
 const INSTRUMENTS = [
   { instrument: 'Fiddle', is_auto: true },
@@ -83,7 +84,7 @@ describe('AddTuneForm', () => {
   })
 
   it('a failed submit shows the error and keeps the form usable', async () => {
-    const onSubmit = vi.fn().mockRejectedValue(new Error('You are offline.'))
+    const onSubmit = vi.fn().mockRejectedValue(new ServerError('You are offline.'))
     const { container } = render(AddTuneForm, { instruments: [], onSubmit })
     await fireEvent.click(container.querySelector('.mt-submit'))
     await waitFor(() => {
@@ -91,5 +92,17 @@ describe('AddTuneForm', () => {
     })
     const submit = container.querySelector('.mt-submit')
     expect(submit.disabled).toBe(false)
+  })
+
+  it('a network failure shows a human sentence, never the raw error text', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const onSubmit = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'))
+    const { container } = render(AddTuneForm, { instruments: [], onSubmit })
+    await fireEvent.click(container.querySelector('.mt-submit'))
+    await waitFor(() => {
+      expect(container.querySelector('.mt-error').textContent).toBe(
+        "Couldn't add the tune. Check your connection and try again."
+      )
+    })
   })
 })

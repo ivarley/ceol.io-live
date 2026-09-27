@@ -91,3 +91,22 @@ describe('TuneSearch paste-a-link', () => {
     expect(previewShowing()).toBe(false)
   })
 })
+
+describe('TuneSearch failed search', () => {
+  it('a failed catalog search says so with a Retry, never "No tunes match"', async () => {
+    // result cards lazy-load their incipits
+    vi.stubGlobal('IntersectionObserver', class { observe() {} unobserve() {} disconnect() {} })
+    const failed = Object.assign([], { failed: true })
+    deepSearch.mockImplementationOnce(async () => failed)
+    render(TuneSearch, { props: { config, onAdd: vi.fn() } })
+    const input = document.querySelector('.deep-field')
+    await typeInto(input, 'kesh', 'insertText')
+    await waitFor(() => expect(document.querySelector('.kit-load-error')).toBeTruthy())
+    expect(document.querySelector('.kit-load-error').textContent).toContain("Couldn't search the tune catalog.")
+    expect(document.body.textContent).not.toContain('tunes match')
+    deepSearch.mockImplementationOnce(async () => [{ tune_id: 5, name: 'The Kesh', tune_type: 'Jig' }])
+    await fireEvent.click(document.querySelector('.kit-load-retry'))
+    await waitFor(() => expect(document.querySelector('.kit-load-error')).toBeFalsy())
+    await waitFor(() => expect(document.body.textContent).toContain('The Kesh'))
+  })
+})

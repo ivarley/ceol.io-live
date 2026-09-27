@@ -5,7 +5,7 @@
   // button), and the admin-only verify-email / danger-zone controls.
   let { person, user, isUserProfile, personId, timezoneOptions = [], canonicalInstruments = [] } = $props()
 
-  import { Chevron, Dialog, Sheet, toast } from '../lib/index.js'
+  import { Chevron, Dialog, Sheet, LoadError, toast, toastFailure, ServerError } from '../lib/index.js'
   import MergeSection from './MergeSection.svelte'
   import IdentityHeader from './IdentityHeader.svelte'
 
@@ -79,7 +79,10 @@
     }
   }
 
+  let saving = $state(false)
+
   function saveChanges() {
+    if (saving) return
     const currentUsername = user ? username.trim() : originalUsername
     if (usernameWarning && currentUsername !== originalUsername) {
       toast('Please fix the username issue before saving.', 'error')
@@ -117,6 +120,7 @@
       }
     }
 
+    saving = true
     fetch(`/api/person/${personId}/update`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -125,15 +129,15 @@
       .then((response) => response.json())
       .then((data) => {
         if (!data.success) {
-          throw new Error(data.message || 'Failed to update person data')
+          throw new ServerError(data.message || '')
         }
         // Instruments already saved live; just reload to show updated profile.
         sessionStorage.setItem('personSavedMessage', 'Profile updated successfully')
         window.location.reload()
       })
       .catch((error) => {
-        console.error('Error saving changes:', error)
-        toast('Error saving changes. Please try again.', 'error')
+        saving = false
+        toastFailure('save the profile', error)
       })
   }
 
@@ -144,10 +148,11 @@
   // Verifying is a decision -> kit Dialog with an explicit verb (spec 035).
   let verifyConfirmOpen = $state(false)
 
+  // Returns the request so the confirm Dialog stays busy until it settles.
   function verifyEmail() {
     verifyingEmail = true
-    verifyBtnLabel = 'Verifying...'
-    fetch(`/api/admin/user/${user.user_id}/verify-email`, {
+    verifyBtnLabel = 'Verifying…'
+    return fetch(`/api/admin/user/${user.user_id}/verify-email`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
     })
@@ -159,20 +164,21 @@
             window.location.reload()
           }, 1000)
         } else {
-          toast('Error: ' + data.message, 'error')
-          verifyingEmail = false
-          verifyBtnLabel = 'Verify Email'
+          throw new ServerError(data.message || '')
         }
       })
       .catch((error) => {
-        toast('Error verifying email: ' + error.message, 'error')
+        toastFailure('verify the email', error)
         verifyingEmail = false
         verifyBtnLabel = 'Verify Email'
+        return false
       })
   }
 
   // --- Live instrument editor (changes save immediately) ----------------------
   let profileInstruments = $state([]) // [{instrument, is_auto, removal_loss_count}]
+  let instrumentsLoaded = $state(false) // false until the first load lands
+  let instrumentsFailed = $state(false)
   let configOpen = $state(false) // the per-instrument config sheet
   let configInstrument = $state(null) // instrument name open in the config sheet
   let removeConfirmOpen = $state(false) // the data-loss removal Dialog
@@ -183,13 +189,18 @@
   let typeaheadWrap = $state(null)
 
   function loadProfileInstruments() {
-    fetch(`/api/person/${personId}/instruments`)
+    instrumentsFailed = false
+    return fetch(`/api/person/${personId}/instruments`)
       .then((r) => r.json())
       .then((d) => {
-        profileInstruments = d && d.instruments ? d.instruments : []
+        if (!d || !Array.isArray(d.instruments)) throw new Error('No instruments in response')
+        profileInstruments = d.instruments
+        instrumentsLoaded = true
       })
-      .catch(() => {
-        profileInstruments = []
+      .catch((e) => {
+        // Never show a failed load as "No instruments yet" — that reads as data.
+        console.error('Error loading instruments:', e)
+        instrumentsFailed = true
       })
   }
 
@@ -200,7 +211,19 @@
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ instruments: profileInstruments.map((i) => i.instrument) }),
-    }).then((r) => r.json())
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        if (!d || !d.success) throw new ServerError((d && d.message) || '')
+        return d
+      })
+  }
+
+  // An instrument change failed: say so, and reload so the list shows the truth
+  // again rather than the optimistic edit.
+  function instrumentChangeFailed(what, e) {
+    toastFailure(what, e)
+    loadProfileInstruments()
   }
 
   function addInstrumentToProfile(name) {
@@ -215,7 +238,9 @@
     )
     typeaheadValue = ''
     typeaheadOpen = false
-    saveInstrumentList().then(loadProfileInstruments) // reload to get canonical casing
+    saveInstrumentList()
+      .then(loadProfileInstruments) // reload to get canonical casing
+      .catch((e) => instrumentChangeFailed(`add ${name}`, e))
   }
 
   // Type-ahead against the canonical list, with an "other" (free-text) escape hatch.
@@ -271,7 +296,11 @@
       // instrument's removal_loss_count (auto vs manual changes what a removal loses).
     })
       .then((r) => r.json())
-      .then(() => loadProfileInstruments())
+      .then((d) => {
+        if (!d || !d.success) throw new ServerError((d && d.message) || '')
+        return loadProfileInstruments()
+      })
+      .catch((e) => instrumentChangeFailed('change that instrument setting', e))
   }
 
   function removeInstrumentFromProfile() {
@@ -296,12 +325,21 @@
 
   function doRemoveInstrument(name) {
     profileInstruments = profileInstruments.filter((i) => i.instrument !== name)
-    saveInstrumentList().then(loadProfileInstruments)
+    return saveInstrumentList()
+      .then(loadProfileInstruments)
+      .catch((e) => {
+        instrumentChangeFailed(`remove ${name}`, e)
+        return false
+      })
   }
 
+  // Returns the request so the data-loss Dialog stays busy until it settles.
   function confirmRemoveInstrument() {
-    if (pendingRemoveInstrument) doRemoveInstrument(pendingRemoveInstrument)
-    cancelRemoveInstrument()
+    if (!pendingRemoveInstrument) return
+    return doRemoveInstrument(pendingRemoveInstrument).then((ok) => {
+      if (ok === false) return false
+      cancelRemoveInstrument()
+    })
   }
 
   function cancelRemoveInstrument() {
@@ -323,10 +361,10 @@
     toggleActiveOpen = true
   }
 
+  // Returns the request so the confirm Dialog stays busy until it settles.
   function togglePersonActive(active) {
-    toggleActiveStatusHtml = { kind: 'info', text: 'Processing...' }
-
-    fetch(`/api/admin/person/${personId}/active`, {
+    toggleActiveStatusHtml = null
+    return fetch(`/api/admin/person/${personId}/active`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ active: active }),
@@ -334,6 +372,7 @@
       .then((response) => response.json())
       .then((data) => {
         if (data.success) {
+          toggleActiveStatusHtml = { kind: 'info', text: 'Updated — reloading…' }
           // No toast (spec 052 §B4): the reload below is the confirmation, and it
           // destroys the toast a second after showing it.
           // Reload page to reflect new state
@@ -341,12 +380,12 @@
             window.location.reload()
           }, 1000)
         } else {
-          toggleActiveStatusHtml = { kind: 'danger', text: data.message }
+          throw new ServerError(data.message || '')
         }
       })
       .catch((error) => {
-        console.error('Error toggling person active status:', error)
-        toggleActiveStatusHtml = { kind: 'danger', text: 'Error: ' + error.message }
+        toastFailure(active ? 'reactivate this person' : 'deactivate this person', error)
+        return false
       })
   }
 </script>
@@ -360,6 +399,7 @@
   {editMode}
   onEdit={() => toggleEditMode(true)}
   onSave={saveChanges}
+  {saving}
   onCancel={() => toggleEditMode(false)} />
 
 <div class="pd-body">
@@ -477,7 +517,11 @@
           </span>
         </div>
         <div id="instrument-rows">
-          {#if !profileInstruments.length}
+          {#if instrumentsFailed}
+            <LoadError what="the instruments" inline onRetry={loadProfileInstruments} />
+          {:else if !instrumentsLoaded}
+            <p class="kit-field-help">Loading instruments…</p>
+          {:else if !profileInstruments.length}
             <p class="kit-field-help">No instruments yet — add one above.</p>
           {:else}
             {#each profileInstruments as inst (inst.instrument)}
@@ -682,6 +726,7 @@
   bind:open={removeConfirmOpen}
   title="Remove instrument?"
   confirmLabel="Remove anyway"
+  busyLabel="Removing…"
   destructive={true}
   onConfirm={confirmRemoveInstrument}
   onCancel={cancelRemoveInstrument}>
@@ -697,11 +742,13 @@
   title="Verify this email address?"
   description="This manually marks the email address as verified."
   confirmLabel="Verify email"
+  busyLabel="Verifying…"
   onConfirm={verifyEmail} />
 
 <Dialog
   bind:open={toggleActiveOpen}
   title={`${toggleActiveTarget ? 'Reactivate' : 'Deactivate'} ${person.name}?`}
   confirmLabel={toggleActiveTarget ? 'Reactivate person' : 'Deactivate person'}
+  busyLabel={toggleActiveTarget ? 'Reactivating…' : 'Deactivating…'}
   destructive={!toggleActiveTarget}
   onConfirm={() => togglePersonActive(toggleActiveTarget)} />

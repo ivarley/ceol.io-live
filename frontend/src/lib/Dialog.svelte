@@ -12,21 +12,49 @@
     cancelLabel = 'Cancel',
     destructive = false, // red confirm for irreversible actions
     confirmDisabled = false, // e.g. until a typed confirmation matches
+    busyLabel = '', // shown on the confirm while an async onConfirm is in flight ("Removing…")
     onConfirm = () => {},
     onCancel = () => {},
     children,
   } = $props()
 
+  // An onConfirm that returns a promise (the confirm IS a request) keeps the
+  // Dialog open, both buttons disabled and the confirm reading `busyLabel`,
+  // until it settles: resolved → close; resolved `false` or rejected → stay
+  // open (the host has toasted what went wrong) so the user can retry or cancel.
+  let busy = $state(false)
+
   // bits-ui AlertDialog.Action does NOT auto-close (v2 behavior) — we close.
   let suppressCancel = false
   function confirm() {
-    suppressCancel = true
-    open = false
-    onConfirm()
+    if (busy) return
+    const result = onConfirm()
+    if (!result || typeof result.then !== 'function') {
+      suppressCancel = true
+      open = false
+      return
+    }
+    busy = true
+    Promise.resolve(result).then(
+      (ok) => {
+        busy = false
+        if (ok !== false) {
+          suppressCancel = true
+          open = false
+        }
+      },
+      () => {
+        busy = false
+      }
+    )
   }
   // AlertDialog.Cancel auto-closes on click; Escape closes via bits. Both land
   // in onOpenChange(false) — report Cancel there unless we just confirmed.
   function handleOpenChange(v) {
+    if (!v && busy) {
+      open = true // a request in flight can't be walked away from mid-air
+      return
+    }
     if (!v && !suppressCancel) onCancel()
     suppressCancel = false
   }
@@ -35,16 +63,27 @@
 <AlertDialog.Root bind:open onOpenChange={handleOpenChange}>
   <AlertDialog.Portal>
     <AlertDialog.Overlay class="kit-dialog-scrim" />
-    <AlertDialog.Content class="kit-dialog" preventScroll={false} aria-describedby={undefined}>
+    <AlertDialog.Content
+      class="kit-dialog"
+      preventScroll={false}
+      aria-describedby={undefined}
+      aria-busy={busy}
+      escapeKeydownBehavior={busy ? 'ignore' : 'close'}>
       <AlertDialog.Title class="kit-dialog-title" level={2}>{title}</AlertDialog.Title>
       {#if description}
         <AlertDialog.Description class="kit-dialog-desc">{description}</AlertDialog.Description>
       {/if}
       {@render children?.()}
       <div class="kit-dialog-actions">
-        <AlertDialog.Cancel class="kit-dialog-cancel">{cancelLabel}</AlertDialog.Cancel>
-        <AlertDialog.Action class="kit-dialog-confirm{destructive ? ' destructive' : ''}" disabled={confirmDisabled} onclick={confirm}>
-          {confirmLabel}
+        <!-- bits' Cancel goes inert when disabled but drops the attribute; the
+             child snippet puts a real `disabled` on the button. -->
+        <AlertDialog.Cancel disabled={busy}>
+          {#snippet child({ props })}
+            <button {...props} class="kit-dialog-cancel" disabled={busy}>{cancelLabel}</button>
+          {/snippet}
+        </AlertDialog.Cancel>
+        <AlertDialog.Action class="kit-dialog-confirm{destructive ? ' destructive' : ''}" disabled={confirmDisabled || busy} onclick={confirm}>
+          {busy ? busyLabel || `${confirmLabel}…` : confirmLabel}
         </AlertDialog.Action>
       </div>
     </AlertDialog.Content>
@@ -113,6 +152,7 @@
     background: var(--danger, #dc3545);
     border-color: var(--danger, #dc3545);
   }
+  :global(.kit-dialog-cancel:disabled),
   :global(.kit-dialog-confirm:disabled) {
     opacity: 0.45;
     cursor: not-allowed;

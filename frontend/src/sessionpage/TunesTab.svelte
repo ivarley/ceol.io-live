@@ -27,7 +27,7 @@
   const sessionPath = session.path
   const isLoggedIn = permissions.is_logged_in
 
-  import { Chip, Row, SearchField, Seg, Sheet, Toolbar, toast } from '../lib/index.js'
+  import { Chip, LoadError, Row, SearchField, Seg, Sheet, Toolbar, toast } from '../lib/index.js'
   import { createAbcMatcher } from '../shared/abcfilter.svelte.js'
   import { STATUSES, STATUS_LABELS } from '../mylist.js'
 
@@ -35,6 +35,7 @@
   let allTunes = $state([...initialTunes])
   let allTunesLoaded = $state(!hasMoreTunes)
   let loadingTunes = $state(false)
+  let remainingError = $state(false) // the rest of the list didn't arrive — never pass the first page off as all of it
   let pendingTuneId = null // deep-linked tune to open once the full list arrives
 
   const initial = stateFromParams(new URLSearchParams(window.location.search), isLoggedIn)
@@ -52,6 +53,9 @@
   // Bumped when TunebookStatus finishes loading so derived filtering re-runs.
   let tunebookVersion = $state(0)
   let tunebookLoading = $state(false)
+  // The my-status filter the user picked, when the tunebook it needs failed to load
+  // (the filter is switched off and a note says why, with a Retry that re-applies it).
+  let tunebookFailedStatus = $state('')
   let statusInstruments = $state([]) // shown only for 2+ instrument players
 
   let selectionMode = $state(false)
@@ -86,6 +90,7 @@
   const countText = $derived.by(() => {
     if (tunebookLoading) return 'Loading your tunebook…'
     if (loadingTunes) return `Loading all tunes... (${allTunes.length}/${totalTunesCount})`
+    if (remainingError) return `Showing ${filteredTunes.length} of the first ${allTunes.length} of ${totalTunesCount} tunes`
     return resultsCountLabel(filteredTunes.length, allTunes.length)
   })
   const showInstScope = $derived(!!filters.mystatus && statusInstruments.length > 0)
@@ -121,6 +126,7 @@
   function loadRemainingTunes() {
     if (allTunesLoaded || loadingTunes) return
     loadingTunes = true
+    remainingError = false
     fetch(`/api/sessions/${sessionPath}/tunes/remaining`)
       .then((r) => r.json())
       .then((data) => {
@@ -139,9 +145,9 @@
       })
       .catch((error) => {
         console.error('Error loading remaining tunes:', error)
-        // Mark as loaded to prevent infinite retry (legacy behavior).
-        allTunesLoaded = true
-        pendingTuneId = null
+        // NOT marked loaded: the list is partial and says so, with a Retry
+        // (which also opens a deep-linked tune still waiting on it).
+        remainingError = true
       })
       .finally(() => {
         loadingTunes = false
@@ -200,9 +206,10 @@
   }
 
   // Engage the my-tunebook status view: lazy-load the list on first use, then
-  // color/filter. A load failure resets the control rather than filtering on
-  // an empty list.
+  // color/filter. A load failure switches the control off rather than filtering
+  // on an empty list — and says so, with a Retry that re-applies the pick.
   function activateMyStatus() {
+    tunebookFailedStatus = ''
     if (!filters.mystatus) return
     const tb = window.TunebookStatus
     if (tb && tb.isLoaded()) {
@@ -218,10 +225,17 @@
         populateMyStatusInstruments()
         tunebookVersion++
       })
-      .catch(() => {
+      .catch((error) => {
+        console.error('Error loading tunebook status:', error)
         tunebookLoading = false
+        tunebookFailedStatus = filters.mystatus
         filters.mystatus = ''
       })
+  }
+
+  function retryMyStatus() {
+    filters.mystatus = tunebookFailedStatus
+    activateMyStatus()
   }
 
   // Instrument scope droplist: only meaningful for 2+ instrument players.
@@ -308,19 +322,23 @@
     confirmOpen = false
     selectedDestination = null
     copyOpen = true
-    if (adminSessions === null && !destLoading) {
-      destLoading = true
-      destError = false
-      try {
-        const response = await fetch('/api/user/admin-sessions')
-        const data = await response.json()
-        // Filter out the current session.
-        adminSessions = data.success ? data.sessions.filter((s) => s.path !== sessionPath) : []
-      } catch {
-        destError = true
-      }
-      destLoading = false
+    if (adminSessions === null && !destLoading) loadDestinations()
+  }
+
+  async function loadDestinations() {
+    destLoading = true
+    destError = false
+    try {
+      const response = await fetch('/api/user/admin-sessions')
+      const data = await response.json()
+      if (!data.success) throw new Error(data.error || data.message || 'admin-sessions failed')
+      // Filter out the current session.
+      adminSessions = data.sessions.filter((s) => s.path !== sessionPath)
+    } catch (error) {
+      console.error('Error loading copy destinations:', error)
+      destError = true
     }
+    destLoading = false
   }
 
   const copyConfirmMessage = $derived.by(() => {
@@ -370,11 +388,12 @@
         sessionStorage.setItem('copyTunesMessage', data.message)
         window.location.href = data.redirect_url
       } else {
-        toast(data.error || 'Failed to copy tunes', 'error')
+        toast(data.error || "Couldn't copy the tunes. Try again.", 'error')
         copying = false
       }
-    } catch {
-      toast('An error occurred while copying tunes', 'error')
+    } catch (error) {
+      console.error('Error copying tunes:', error)
+      toast("Couldn't copy the tunes. Check your connection and try again.", 'error')
       copying = false
     }
   }
@@ -589,6 +608,22 @@
       </Toolbar>
     </div>
 
+    {#if remainingError}
+      <LoadError
+        inline
+        id="tunes-remaining-error"
+        message="Couldn't load the rest of this session's tunes."
+        onRetry={loadRemainingTunes}
+        retrying={loadingTunes} />
+    {/if}
+    {#if tunebookFailedStatus}
+      <LoadError
+        inline
+        id="tunebook-status-error"
+        message="Couldn't load your tunebook, so the My Tunebook filter is off."
+        onRetry={retryMyStatus}
+        retrying={tunebookLoading} />
+    {/if}
     <div class="results-count">
       <span id="results-count-text">{countText}</span>
       <div class="select-all-row" id="select-all-row" class:visible={selectionMode}>
@@ -694,7 +729,7 @@
         {#if destLoading}
           <p style="color: var(--text-muted);">Loading destinations...</p>
         {:else if destError}
-          <p style="color: #dc3545;">Failed to load destinations. Please try again.</p>
+          <LoadError id="copy-destinations-error" what="your sessions" onRetry={loadDestinations} retrying={destLoading} />
         {:else}
           <div
             class="copy-destination-option"

@@ -11,7 +11,7 @@
    * point: people-visibility is granted by the session, never claimed by joining it. We say
    * so plainly rather than letting the missing tab be a mystery.
    */
-  import { Sheet, toast } from '../lib/index.js'
+  import { Sheet, toast, toastFailure, ServerError } from '../lib/index.js'
 
   let { sessionPath } = $props()
 
@@ -28,14 +28,14 @@
         body: JSON.stringify({ relationship }),
       })
       const data = await res.json()
-      if (!res.ok || !data.success) throw new Error(data.message || 'Could not join')
+      if (!res.ok || !data.success) throw new ServerError(data.message || data.error)
       toast('Added. A session admin can confirm you to show you who else plays here.', 'success')
       // Membership is part of the server-rendered permissions block, so repaint from the
       // server. (We deliberately do NOT bounce to /people any more: a new joiner is
       // unconfirmed and can't see it, so that redirect would land on a 403.)
       setTimeout(() => window.location.reload(), 900)
     } catch (e) {
-      toast(e.message, 'error')
+      toastFailure('add you to this session', e)
       joining = false
       open = false
     }

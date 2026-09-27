@@ -98,9 +98,11 @@ describe('lenient search helpers', () => {
     expect(await liveMatch(config, 'cooleys')).toEqual({ exact_match: false, results: [] })
   })
 
-  it('deepSearch returns [] on error', async () => {
+  it('deepSearch returns an empty list flagged failed on error (not "no matches")', async () => {
     mockFetchOnce({ ok: false, status: 500 })
-    expect(await deepSearch(config, 'q')).toEqual([])
+    const r = await deepSearch(config, 'q')
+    expect(r.length).toBe(0)
+    expect(r.failed).toBe(true)
   })
 })
 
