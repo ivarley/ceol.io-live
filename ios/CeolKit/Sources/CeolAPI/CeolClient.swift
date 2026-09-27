@@ -14,10 +14,8 @@ import OpenAPIRuntime
 import OpenAPIURLSession
 
 public enum CeolServer {
-    /// www, not the bare domain: https://ceol.io redirects every request to www.ceol.io
-    /// (301 for a GET, 307 for a POST). Calling www directly saves that round trip on every
-    /// call, and doesn't depend on how a redirect treats the Authorization header.
-    public static let production = URL(string: "https://www.ceol.io")!
+    /// The canonical host. www.ceol.io redirects here.
+    public static let production = URL(string: "https://ceol.io")!
 }
 
 /// Where the token comes from. Called once per request, so a sign-in or sign-out

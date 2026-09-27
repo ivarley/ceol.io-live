@@ -78,6 +78,11 @@ services:
         value: "5432"
       - key: FLASK_SESSION_SECRET_KEY
         sync: false
+      # Pages allowed to open the live feed with the login cookie (streaming/service.py).
+      # Must include the canonical https://ceol.io; https://www.ceol.io too while old
+      # tabs on www are still around.
+      - key: STREAMING_ALLOWED_ORIGINS
+        sync: false
 
   # The only cron job Ceol has, and the reason it stays that way: the weekly
   # thesession.org merge sync (spec 031) rides along at the end of this script
