@@ -6,6 +6,11 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		6E33AA042FF3613700BE9904 /* CeolAPI in Frameworks */ = {isa = PBXBuildFile; productRef = 6E33AA022FF3613700BE9904 /* CeolAPI */; };
+		6E33AA052FF3613700BE9904 /* CeolDesign in Frameworks */ = {isa = PBXBuildFile; productRef = 6E33AA032FF3613700BE9904 /* CeolDesign */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		6E33A9D42FF3613600BE9904 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -52,6 +57,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6E33AA042FF3613700BE9904 /* CeolAPI in Frameworks */,
+				6E33AA052FF3613700BE9904 /* CeolDesign in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -112,6 +119,8 @@
 			);
 			name = Ceol;
 			packageProductDependencies = (
+				6E33AA022FF3613700BE9904 /* CeolAPI */,
+				6E33AA032FF3613700BE9904 /* CeolDesign */,
 			);
 			productName = Ceol;
 			productReference = 6E33A9C62FF3613500BE9904 /* Ceol.app */;
@@ -195,6 +204,9 @@
 			);
 			mainGroup = 6E33A9BD2FF3613400BE9904;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				6E33AA012FF3613700BE9904 /* XCLocalSwiftPackageReference "../CeolKit" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 6E33A9C72FF3613500BE9904 /* Products */;
 			projectDirPath = "";
@@ -322,7 +334,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
@@ -380,7 +392,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
@@ -417,7 +429,7 @@
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
@@ -449,7 +461,7 @@
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
@@ -462,7 +474,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = G2NCTV4C27;
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = io.ceol.CeolTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -470,7 +482,7 @@
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Ceol.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Ceol";
 			};
@@ -484,7 +496,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = G2NCTV4C27;
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = io.ceol.CeolTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -492,7 +504,7 @@
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Ceol.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Ceol";
 			};
@@ -512,7 +524,7 @@
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = Ceol;
 			};
@@ -532,7 +544,7 @@
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = Ceol;
 			};
@@ -578,6 +590,24 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		6E33AA012FF3613700BE9904 /* XCLocalSwiftPackageReference "../CeolKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../CeolKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		6E33AA022FF3613700BE9904 /* CeolAPI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = CeolAPI;
+		};
+		6E33AA032FF3613700BE9904 /* CeolDesign */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = CeolDesign;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 6E33A9BE2FF3613400BE9904 /* Project object */;
 }

@@ -1634,3 +1634,21 @@ Everything in A and B is web-repo work and can ship incrementally behind the web
 Explicitly **not** recommended now: a global REST URL rename (035's call stands), rewriting
 existing Svelte pages, or promoting/deleting the pill logger as a prerequisite (035 Step 6
 is independent — the native client never sees it either way).
+
+---
+
+## E. The iOS app — build log
+
+The plan (Phases 0-6) runs from here in `ios/`; see `ios/README.md` for the layout.
+
+- **Phase 0 — foundations: DONE 2026-09-27.** `ios/CeolKit`, a local Swift package: `CeolAPI`
+  (client generated at build time by `swift-openapi-generator` from `native-surface.yaml`,
+  symlinked in; `Client.ceol(clientID:token:)` adds `X-Ceol-Client` and the Bearer token)
+  and `CeolDesign` (`design/Tokens.swift`, symlinked; the generator now emits `public`
+  members). Tests decode 20 real server responses (`make ios-fixtures`) into their
+  generated types, and check the headers end to end. The app target is iOS 26.0 / Swift 6,
+  links both products, and opens into the four-tab shell. `make ios-test`, `make ios-build`.
+  Found on the way, fixed in the spec: `OfflineBundle` item fields listed as required but
+  never typed (the generator dropped them — the contract test now forbids it), and every
+  `success: {const: true}` typed as boolean so Swift gets a `Bool`.
+- **Phase 1 — logic ports against the §B5 fixtures:** next.

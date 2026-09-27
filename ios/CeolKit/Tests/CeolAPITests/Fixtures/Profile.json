@@ -1,0 +1,127 @@
+{
+  "canonical_instruments": [
+    "Banjo",
+    "Bodhrán",
+    "Bouzouki",
+    "Button Accordion",
+    "Concertina",
+    "Fiddle",
+    "Flute",
+    "Guitar",
+    "Harp",
+    "Low Whistle",
+    "Mandolin",
+    "Piano",
+    "Piano Accordion",
+    "Uilleann Pipes",
+    "Whistle"
+  ],
+  "needs_profile_setup": false,
+  "profile": {
+    "city": "Austin",
+    "country": "USA",
+    "first_name": "Ian",
+    "instruments": [
+      "fiddle",
+      "mandolin"
+    ],
+    "last_name": "Varley",
+    "state": "TX",
+    "timezone": "America/Chicago"
+  },
+  "success": true,
+  "timezone_options": [
+    {
+      "label": "UTC (UTC+00:00)",
+      "value": "UTC"
+    },
+    {
+      "label": "US Eastern (UTC-04:00)",
+      "value": "America/New_York"
+    },
+    {
+      "label": "US Central (UTC-05:00)",
+      "value": "America/Chicago"
+    },
+    {
+      "label": "US Mountain (UTC-06:00)",
+      "value": "America/Denver"
+    },
+    {
+      "label": "US Pacific (UTC-07:00)",
+      "value": "America/Los_Angeles"
+    },
+    {
+      "label": "US Alaska (UTC-08:00)",
+      "value": "America/Anchorage"
+    },
+    {
+      "label": "US Hawaii (UTC-10:00)",
+      "value": "Pacific/Honolulu"
+    },
+    {
+      "label": "Canada Eastern (UTC-04:00)",
+      "value": "America/Toronto"
+    },
+    {
+      "label": "Canada Pacific (UTC-07:00)",
+      "value": "America/Vancouver"
+    },
+    {
+      "label": "America/Phoenix (UTC-07:00)",
+      "value": "America/Phoenix"
+    },
+    {
+      "label": "UK/London (UTC+01:00)",
+      "value": "Europe/London"
+    },
+    {
+      "label": "Ireland/Dublin (UTC+01:00)",
+      "value": "Europe/Dublin"
+    },
+    {
+      "label": "France/Paris (UTC+02:00)",
+      "value": "Europe/Paris"
+    },
+    {
+      "label": "Germany/Berlin (UTC+02:00)",
+      "value": "Europe/Berlin"
+    },
+    {
+      "label": "Italy/Rome (UTC+02:00)",
+      "value": "Europe/Rome"
+    },
+    {
+      "label": "Spain/Madrid (UTC+02:00)",
+      "value": "Europe/Madrid"
+    },
+    {
+      "label": "Netherlands (UTC+02:00)",
+      "value": "Europe/Amsterdam"
+    },
+    {
+      "label": "Australia/Sydney (UTC+10:00)",
+      "value": "Australia/Sydney"
+    },
+    {
+      "label": "Australia/Melbourne (UTC+10:00)",
+      "value": "Australia/Melbourne"
+    },
+    {
+      "label": "Australia/Perth (UTC+08:00)",
+      "value": "Australia/Perth"
+    },
+    {
+      "label": "New Zealand (UTC+13:00)",
+      "value": "Pacific/Auckland"
+    },
+    {
+      "label": "Japan/Tokyo (UTC+09:00)",
+      "value": "Asia/Tokyo"
+    },
+    {
+      "label": "Singapore (UTC+08:00)",
+      "value": "Asia/Singapore"
+    }
+  ]
+}

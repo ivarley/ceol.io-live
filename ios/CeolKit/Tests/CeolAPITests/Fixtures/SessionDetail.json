@@ -1,0 +1,318 @@
+{
+  "active_instances": [
+    {
+      "date": "2026-09-27",
+      "end_time": "22:00:00",
+      "location_override": null,
+      "session_instance_id": 121,
+      "start_time": "19:00:00"
+    }
+  ],
+  "default_tab": "tunes",
+  "has_more_tunes": false,
+  "permissions": {
+    "can_view_people": true,
+    "is_confirmed": true,
+    "is_logged_in": true,
+    "is_session_admin": true,
+    "is_session_member": true,
+    "relationship": "member"
+  },
+  "popular_tunes": [
+    {
+      "play_count": 4,
+      "tune_id": 27,
+      "tune_name": "Drowsy Maggie",
+      "tunebook_count": 1800
+    },
+    {
+      "play_count": 4,
+      "tune_id": 70,
+      "tune_name": "Merrily Kiss The Quaker",
+      "tunebook_count": 1000
+    },
+    {
+      "play_count": 4,
+      "tune_id": 182,
+      "tune_name": "Silver Spear, The",
+      "tunebook_count": 950
+    },
+    {
+      "play_count": 3,
+      "tune_id": 74,
+      "tune_name": "Mason's Apron, The",
+      "tunebook_count": 1750
+    },
+    {
+      "play_count": 3,
+      "tune_id": 138,
+      "tune_name": "Toss The Feathers",
+      "tunebook_count": 1550
+    },
+    {
+      "play_count": 3,
+      "tune_id": 116,
+      "tune_name": "Wind That Shakes The Barley, The",
+      "tunebook_count": 1500
+    },
+    {
+      "play_count": 3,
+      "tune_id": 1,
+      "tune_name": "Cooley's",
+      "tunebook_count": 1350
+    },
+    {
+      "play_count": 3,
+      "tune_id": 8,
+      "tune_name": "Banshee, The",
+      "tunebook_count": 1200
+    },
+    {
+      "play_count": 3,
+      "tune_id": 238,
+      "tune_name": "Ballydesmond, The",
+      "tunebook_count": 1000
+    },
+    {
+      "play_count": 3,
+      "tune_id": 441,
+      "tune_name": "John Ryan's",
+      "tunebook_count": 1000
+    },
+    {
+      "play_count": 2,
+      "tune_id": 55,
+      "tune_name": "Kesh, The",
+      "tunebook_count": 1800
+    },
+    {
+      "play_count": 2,
+      "tune_id": 4195,
+      "tune_name": "Bear Dance, The",
+      "tunebook_count": 1600
+    },
+    {
+      "play_count": 2,
+      "tune_id": 21,
+      "tune_name": "Castle Kelly",
+      "tunebook_count": 1450
+    },
+    {
+      "play_count": 2,
+      "tune_id": 62,
+      "tune_name": "Lark In The Morning, The",
+      "tunebook_count": 1400
+    },
+    {
+      "play_count": 2,
+      "tune_id": 418,
+      "tune_name": "Ievan Polkka",
+      "tunebook_count": 1350
+    },
+    {
+      "play_count": 2,
+      "tune_id": 86,
+      "tune_name": "Rakish Paddy",
+      "tunebook_count": 1350
+    },
+    {
+      "play_count": 2,
+      "tune_id": 71,
+      "tune_name": "Morrison's",
+      "tunebook_count": 1300
+    },
+    {
+      "play_count": 2,
+      "tune_id": 73,
+      "tune_name": "Musical Priest, The",
+      "tunebook_count": 1250
+    },
+    {
+      "play_count": 2,
+      "tune_id": 6170,
+      "tune_name": "Ray's Classic",
+      "tunebook_count": 1150
+    },
+    {
+      "play_count": 2,
+      "tune_id": 1076,
+      "tune_name": "Black Rogue, The",
+      "tunebook_count": 1100
+    }
+  ],
+  "session": {
+    "city": "Austin",
+    "comments": "Weekly Irish session, all levels welcome. Slow session from 7-8pm, faster tunes after.",
+    "country": "USA",
+    "initiation_date": "2015-03-15",
+    "location_name": "BD Riley's Irish Pub",
+    "location_phone": null,
+    "location_street": "2000 Manor Rd",
+    "location_website": "https://bdrileys.com",
+    "name": "Mueller Session",
+    "path": "austin/mueller",
+    "recurrence": "{\"schedules\": [{\"type\": \"weekly\", \"weekday\": \"tuesday\", \"start_time\": \"19:00\", \"end_time\": \"22:00\", \"every_n_weeks\": 1}]}",
+    "recurrence_readable": "Tuesdays from 7:00pm-10:00pm",
+    "session_id": 1,
+    "session_type": "regular",
+    "show_people_list": true,
+    "state": "TX",
+    "termination_date": null,
+    "thesession_id": null,
+    "timezone": "America/Chicago",
+    "track_attendance": true,
+    "track_set_starters": true,
+    "unlisted_address": false
+  },
+  "success": true,
+  "today_in_session_tz": "2026-09-27",
+  "total_logs_count": 15,
+  "total_people_count": 9,
+  "total_tunes_count": 16,
+  "tunes": [
+    {
+      "attended_play_count": 4,
+      "play_count": 4,
+      "setting_id": null,
+      "tune_id": 27,
+      "tune_name": "Drowsy Maggie",
+      "tune_type": "Reel",
+      "tunebook_count": 1800
+    },
+    {
+      "attended_play_count": 2,
+      "play_count": 4,
+      "setting_id": null,
+      "tune_id": 182,
+      "tune_name": "Silver Spear, The",
+      "tune_type": "Reel",
+      "tunebook_count": 950
+    },
+    {
+      "attended_play_count": 3,
+      "play_count": 3,
+      "setting_id": null,
+      "tune_id": 74,
+      "tune_name": "Mason's Apron, The",
+      "tune_type": "Reel",
+      "tunebook_count": 1750
+    },
+    {
+      "attended_play_count": 3,
+      "play_count": 3,
+      "setting_id": null,
+      "tune_id": 138,
+      "tune_name": "Toss The Feathers",
+      "tune_type": "Reel",
+      "tunebook_count": 1550
+    },
+    {
+      "attended_play_count": 3,
+      "play_count": 3,
+      "setting_id": null,
+      "tune_id": 116,
+      "tune_name": "Wind That Shakes The Barley, The",
+      "tune_type": "Reel",
+      "tunebook_count": 1500
+    },
+    {
+      "attended_play_count": 3,
+      "play_count": 3,
+      "setting_id": null,
+      "tune_id": 1,
+      "tune_name": "Cooley's",
+      "tune_type": "Reel",
+      "tunebook_count": 1350
+    },
+    {
+      "attended_play_count": 2,
+      "play_count": 3,
+      "setting_id": null,
+      "tune_id": 8,
+      "tune_name": "Banshee, The",
+      "tune_type": "Reel",
+      "tunebook_count": 1200
+    },
+    {
+      "attended_play_count": 3,
+      "play_count": 3,
+      "setting_id": null,
+      "tune_id": 441,
+      "tune_name": "John Ryan's",
+      "tune_type": "Polka",
+      "tunebook_count": 1000
+    },
+    {
+      "attended_play_count": 2,
+      "play_count": 2,
+      "setting_id": null,
+      "tune_id": 55,
+      "tune_name": "Kesh, The",
+      "tune_type": "Jig",
+      "tunebook_count": 1800
+    },
+    {
+      "attended_play_count": 2,
+      "play_count": 2,
+      "setting_id": null,
+      "tune_id": 71,
+      "tune_name": "Morrison's",
+      "tune_type": "Jig",
+      "tunebook_count": 1300
+    },
+    {
+      "attended_play_count": 1,
+      "play_count": 2,
+      "setting_id": null,
+      "tune_id": 83,
+      "tune_name": "Rights Of Man, The",
+      "tune_type": "Hornpipe",
+      "tunebook_count": 1100
+    },
+    {
+      "attended_play_count": 2,
+      "play_count": 2,
+      "setting_id": null,
+      "tune_id": 64,
+      "tune_name": "Maid Behind The Bar, The",
+      "tune_type": "Reel",
+      "tunebook_count": 1050
+    },
+    {
+      "attended_play_count": 1,
+      "play_count": 1,
+      "setting_id": null,
+      "tune_id": 108,
+      "tune_name": "Out On The Ocean",
+      "tune_type": "Jig",
+      "tunebook_count": 1750
+    },
+    {
+      "attended_play_count": 1,
+      "play_count": 1,
+      "setting_id": null,
+      "tune_id": 103,
+      "tune_name": "Saint Anne's",
+      "tune_type": "Reel",
+      "tunebook_count": 1400
+    },
+    {
+      "attended_play_count": 1,
+      "play_count": 1,
+      "setting_id": null,
+      "tune_id": 10,
+      "tune_name": "Butterfly, The",
+      "tune_type": "Slip Jig",
+      "tunebook_count": 1050
+    },
+    {
+      "attended_play_count": 0,
+      "play_count": 1,
+      "setting_id": null,
+      "tune_id": 679,
+      "tune_name": "Galway Belle",
+      "tune_type": "Polka",
+      "tunebook_count": 0
+    }
+  ]
+}

@@ -136,4 +136,5 @@ See [scripts/LOCAL_DEVELOPMENT.md](scripts/LOCAL_DEVELOPMENT.md) for detailed se
 - [`streaming/`](streaming) - async SSE sidecar for live logging (Starlette + asyncpg), deployed separately
 - [`jobs/`](jobs) - Render cron jobs: active-session tracking, thesession.org merge sync
 - [`abc-renderer/`](abc-renderer) - Node.js microservice, ABC notation → PNG
+- [`ios/`](ios/README.md) - the native iOS app (spec 052): `Ceol/` (Xcode, screens) and `CeolKit/` (Swift package: the API client generated from `native-surface.yaml`, the design tokens); `make ios-test`
 - [`e2e/`](e2e) - Playwright specs; [`spike/`](spike) - standalone exploration scripts, deliberately excluded from pytest collection

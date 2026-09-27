@@ -161,3 +161,13 @@ static/homepage/
 
 # ./start writes the streaming sidecar's output here
 logs/
+
+# iOS (spec 052): per-user Xcode state and SwiftPM build output. The package
+# lockfiles (ios/CeolKit/Package.resolved, and Xcode's copy under xcshareddata) ARE
+# committed, so everyone builds against the same generator and runtime.
+ios/**/xcuserdata/
+ios/CeolKit/.build/
+ios/CeolKit/.swiftpm/
+
+# iOS build output from `make ios-test` / `make ios-build`
+ios/.derived/

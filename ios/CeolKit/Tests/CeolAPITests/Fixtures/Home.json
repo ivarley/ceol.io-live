@@ -1,0 +1,53 @@
+{
+  "current_year": 2026,
+  "in_progress_logs": [],
+  "in_progress_recordings": [],
+  "learning_count": 2,
+  "success": true,
+  "suggested_tune": {
+    "name": "Wind That Shakes The Barley, The",
+    "play_count": 6,
+    "tune_id": 116,
+    "tune_type": "Reel"
+  },
+  "today": "2026-09-27",
+  "upcoming_sessions": [
+    {
+      "date": "2026-09-27",
+      "end_time": "22:00:00",
+      "is_active": true,
+      "location_name": "BD Riley's Irish Pub",
+      "log_complete_date": null,
+      "name": "Mueller Session",
+      "path": "austin/mueller",
+      "people_here": 0,
+      "session_id": 1,
+      "session_instance_id": 121,
+      "start_time": "19:00:00",
+      "tunes_logged": 0
+    },
+    {
+      "date": "2026-09-27",
+      "end_time": "23:00:00",
+      "is_active": true,
+      "location_name": "The Driskill Hotel Bar",
+      "log_complete_date": null,
+      "name": "Downtown Session",
+      "path": "austin/downtown",
+      "people_here": 3,
+      "session_id": 2,
+      "session_instance_id": 120,
+      "start_time": "20:00:00",
+      "tunes_logged": 4
+    }
+  ],
+  "viewer": {
+    "first_name": "Ian",
+    "person_id": 1
+  },
+  "want_to_learn_count": 1,
+  "week": {
+    "end": "2026-09-27",
+    "start": "2026-09-21"
+  }
+}

@@ -1,0 +1,72 @@
+{
+  "notation_token": null,
+  "redirected_from": null,
+  "session_tune": {
+    "abc": "|:D2|EBBA B2 EB|B2 AB dBAG|FDAD BDAD|FDAD dAFD|\nEBBA B2 EB|B2 AB defg|afec dBAF|DEFD E2:|\n|:gf|eB B2 efge|eB B2 gedB|A2 FA DAFA|A2 FA defg|\neB B2 eBgB|eB B2 defg|afec dBAF|DEFD E2:|",
+    "alias": null,
+    "aliases": [],
+    "attended_play_count": 7,
+    "global_play_count": 10,
+    "image": null,
+    "incipit_abc": "|:D2|EBBA B2 EB|B2 AB dBAG|",
+    "incipit_image": null,
+    "key": null,
+    "key_override": null,
+    "member_play_count": 7,
+    "name": null,
+    "person_list_count": 2,
+    "person_tune_status": {
+      "attended_play_count": 7,
+      "created_date": "2026-09-28T04:08:56.688442+00:00",
+      "heard_count": 45,
+      "instrument_status": {},
+      "instruments": [
+        {
+          "instrument": "fiddle",
+          "is_auto": true
+        },
+        {
+          "instrument": "mandolin",
+          "is_auto": true
+        }
+      ],
+      "key": null,
+      "last_modified_date": "2026-09-28T04:08:56.688442+00:00",
+      "learn_status": "learned",
+      "learned_date": null,
+      "member_play_count": 7,
+      "name_alias": null,
+      "notes": "Cooley's Reel - classic",
+      "on_list": true,
+      "person_id": 1,
+      "person_tune_id": 2,
+      "session_play_count": 7,
+      "setting_id": null,
+      "tags": [],
+      "thesession_url": "https://thesession.org/tunes/1",
+      "tune_id": 1,
+      "tune_name": "Cooley's",
+      "tune_type": "Reel",
+      "tunebook_count": 1350,
+      "tunebook_count_cached_date": "2024-01-15"
+    },
+    "session_count": 5,
+    "session_scope": null,
+    "setting_id": 1,
+    "setting_key": "Edor",
+    "setting_override": null,
+    "times_played": 0,
+    "tune_id": 1,
+    "tune_name": "Cooley's",
+    "tune_type": "Reel",
+    "tunebook_count": 1350,
+    "tunebook_count_cached_date": "2024-01-15"
+  },
+  "success": true,
+  "viewer": {
+    "is_admin": true,
+    "is_session_admin": true,
+    "is_session_member": true,
+    "logged_in": true
+  }
+}

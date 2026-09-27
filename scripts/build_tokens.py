@@ -145,7 +145,7 @@ def render_swift(data) -> str:
             kind, literal = got
             if tok.get("comment"):
                 buckets[kind].append(f"    /// {tok['comment']}")
-            buckets[kind].append(f"    static let {_camel(tok['name'])} = {literal}")
+            buckets[kind].append(f"    public static let {_camel(tok['name'])} = {literal}")
 
     lines = [
         "// " + BANNER,

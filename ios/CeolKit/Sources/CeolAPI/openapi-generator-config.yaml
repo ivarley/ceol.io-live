@@ -1,0 +1,6 @@
+generate:
+  - types
+  - client
+accessModifier: public
+# Swift-style names: getSessionDetail(...), Components.Schemas.SessionDetail.
+namingStrategy: idiomatic

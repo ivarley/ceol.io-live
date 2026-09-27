@@ -1,0 +1,169 @@
+{
+  "instances_by_day": {},
+  "instances_by_year": {
+    "2024": [
+      {
+        "attended": true,
+        "date": "2024-11-19",
+        "end_time": "22:00:00",
+        "location_override": null,
+        "multiple_on_date": false,
+        "session_instance_id": 12,
+        "start_time": "19:00:00",
+        "tune_count": 12
+      },
+      {
+        "attended": true,
+        "date": "2024-11-12",
+        "end_time": "22:00:00",
+        "location_override": null,
+        "multiple_on_date": false,
+        "session_instance_id": 11,
+        "start_time": "19:00:00",
+        "tune_count": 12
+      },
+      {
+        "attended": true,
+        "date": "2024-11-05",
+        "end_time": "22:00:00",
+        "location_override": null,
+        "multiple_on_date": false,
+        "session_instance_id": 10,
+        "start_time": "19:00:00",
+        "tune_count": 12
+      },
+      {
+        "attended": true,
+        "date": "2024-10-29",
+        "end_time": "22:00:00",
+        "location_override": null,
+        "multiple_on_date": false,
+        "session_instance_id": 9,
+        "start_time": "19:00:00",
+        "tune_count": 12
+      },
+      {
+        "attended": true,
+        "date": "2024-10-22",
+        "end_time": "22:00:00",
+        "location_override": null,
+        "multiple_on_date": false,
+        "session_instance_id": 8,
+        "start_time": "19:00:00",
+        "tune_count": 12
+      },
+      {
+        "attended": true,
+        "date": "2024-10-15",
+        "end_time": "22:00:00",
+        "location_override": null,
+        "multiple_on_date": false,
+        "session_instance_id": 7,
+        "start_time": "19:00:00",
+        "tune_count": 13
+      },
+      {
+        "attended": true,
+        "date": "2024-10-08",
+        "end_time": "22:00:00",
+        "location_override": null,
+        "multiple_on_date": false,
+        "session_instance_id": 6,
+        "start_time": "19:00:00",
+        "tune_count": 12
+      },
+      {
+        "attended": true,
+        "date": "2024-10-01",
+        "end_time": "22:00:00",
+        "location_override": null,
+        "multiple_on_date": false,
+        "session_instance_id": 5,
+        "start_time": "19:00:00",
+        "tune_count": 12
+      },
+      {
+        "attended": true,
+        "date": "2024-09-24",
+        "end_time": "22:00:00",
+        "location_override": null,
+        "multiple_on_date": false,
+        "session_instance_id": 4,
+        "start_time": "19:00:00",
+        "tune_count": 12
+      },
+      {
+        "attended": true,
+        "date": "2024-09-17",
+        "end_time": "22:00:00",
+        "location_override": null,
+        "multiple_on_date": false,
+        "session_instance_id": 3,
+        "start_time": "19:00:00",
+        "tune_count": 13
+      },
+      {
+        "attended": true,
+        "date": "2024-09-10",
+        "end_time": "22:00:00",
+        "location_override": null,
+        "multiple_on_date": false,
+        "session_instance_id": 2,
+        "start_time": "19:00:00",
+        "tune_count": 12
+      },
+      {
+        "attended": true,
+        "date": "2024-09-03",
+        "end_time": "22:00:00",
+        "location_override": null,
+        "multiple_on_date": false,
+        "session_instance_id": 1,
+        "start_time": "19:00:00",
+        "tune_count": 15
+      }
+    ],
+    "2025": [
+      {
+        "attended": false,
+        "date": "2025-03-27",
+        "end_time": "22:30:00",
+        "location_override": null,
+        "multiple_on_date": false,
+        "session_instance_id": 449,
+        "start_time": "19:00:00",
+        "tune_count": 83
+      }
+    ],
+    "2026": [
+      {
+        "attended": false,
+        "date": "2026-09-27",
+        "end_time": "22:00:00",
+        "location_override": null,
+        "multiple_on_date": false,
+        "session_instance_id": 121,
+        "start_time": "19:00:00",
+        "tune_count": 0
+      },
+      {
+        "attended": true,
+        "date": "2026-01-27",
+        "end_time": "22:00:00",
+        "location_override": null,
+        "multiple_on_date": false,
+        "session_instance_id": 90,
+        "start_time": "19:00:00",
+        "tune_count": 10
+      }
+    ]
+  },
+  "session_type": "regular",
+  "sorted_days": [],
+  "sorted_years": [
+    2026,
+    2025,
+    2024
+  ],
+  "success": true
+}

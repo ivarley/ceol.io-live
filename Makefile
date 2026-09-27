@@ -27,6 +27,11 @@ help:
 	@echo "  lint             Run code linting"
 	@echo "  format           Format code"
 	@echo "  clean            Clean up test artifacts"
+	@echo ""
+	@echo "iOS (ios/, spec 052):"
+	@echo "  ios-test         CeolKit tests on the Mac, then the app's tests in the simulator"
+	@echo "  ios-build        Build the app for the simulator"
+	@echo "  ios-fixtures     Re-capture the API responses CeolKit's decoding tests read"
 
 # Installation
 install:
@@ -96,6 +101,24 @@ tokens: ## Regenerate the design tokens (CSS + Swift) from design/tokens.json
 
 tokens-check: ## Fail if the generated tokens have drifted from design/tokens.json
 	python3 scripts/build_tokens.py --check
+
+# --- iOS (spec 052) ----------------------------------------------------------
+# The app lives in ios/Ceol; everything that is not a screen is the CeolKit package
+# in ios/CeolKit, whose API client is generated from specs/api/native-surface.yaml.
+IOS_SIM ?= platform=iOS Simulator,name=iPhone 17 Pro
+IOS_DERIVED ?= ios/.derived
+
+ios-test: ## iOS: CeolKit tests on the Mac (no simulator), then the app's tests in the simulator
+	cd ios/CeolKit && swift test
+	xcodebuild -project ios/Ceol/Ceol.xcodeproj -scheme Ceol -destination '$(IOS_SIM)' \
+		-derivedDataPath $(IOS_DERIVED) -skipPackagePluginValidation -only-testing:CeolTests test
+
+ios-build: ## iOS: build the app for the simulator
+	xcodebuild -project ios/Ceol/Ceol.xcodeproj -scheme Ceol -destination 'generic/platform=iOS Simulator' \
+		-derivedDataPath $(IOS_DERIVED) -skipPackagePluginValidation build
+
+ios-fixtures: ## iOS: re-capture the real API responses CeolKit's decoding tests read (seeded local DB)
+	./venv/bin/python scripts/capture_native_fixtures.py
 
 
 format:

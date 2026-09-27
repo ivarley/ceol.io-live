@@ -1,0 +1,107 @@
+{
+  "sessions": [
+    {
+      "active_instances": [],
+      "city": "Boston",
+      "country": "USA",
+      "location_name": "The Burren",
+      "name": "Boston Celtic Session",
+      "path": "boston/celtic",
+      "recurrence": "{\"schedules\": [{\"type\": \"weekly\", \"weekday\": \"sunday\", \"start_time\": \"17:00\", \"end_time\": \"20:00\", \"every_n_weeks\": 1}]}",
+      "session_id": 3,
+      "state": "MA",
+      "termination_date": null,
+      "user_is_member": false,
+      "user_relationship": null
+    },
+    {
+      "active_instances": [],
+      "city": "Chicago",
+      "country": "USA",
+      "location_name": "Chief O'Neill's Pub",
+      "name": "Chicago Traditional",
+      "path": "chicago/trad",
+      "recurrence": "{\"schedules\": [{\"type\": \"weekly\", \"weekday\": \"wednesday\", \"start_time\": \"19:30\", \"end_time\": \"22:30\", \"every_n_weeks\": 1}]}",
+      "session_id": 4,
+      "state": "IL",
+      "termination_date": null,
+      "user_is_member": false,
+      "user_relationship": null
+    },
+    {
+      "active_instances": [
+        {
+          "date": "2026-09-27",
+          "end_time": "23:00:00",
+          "location_override": null,
+          "session_instance_id": 120,
+          "start_time": "20:00:00"
+        }
+      ],
+      "city": "Austin",
+      "country": "USA",
+      "location_name": "The Driskill Hotel Bar",
+      "name": "Downtown Session",
+      "path": "austin/downtown",
+      "recurrence": "{\"schedules\": [{\"type\": \"weekly\", \"weekday\": \"thursday\", \"start_time\": \"20:00\", \"end_time\": \"23:00\", \"every_n_weeks\": 2}]}",
+      "session_id": 2,
+      "state": "TX",
+      "termination_date": null,
+      "user_is_member": true,
+      "user_relationship": "member"
+    },
+    {
+      "active_instances": [],
+      "city": "Austin",
+      "country": "USA",
+      "location_name": "Scholz Garten",
+      "name": "Hill Country Trad Fest",
+      "path": "austin/hill-country-fest",
+      "recurrence": null,
+      "session_id": 6,
+      "state": "TX",
+      "termination_date": "2026-06-07",
+      "user_is_member": true,
+      "user_relationship": "member"
+    },
+    {
+      "active_instances": [
+        {
+          "date": "2026-09-27",
+          "end_time": "22:00:00",
+          "location_override": null,
+          "session_instance_id": 121,
+          "start_time": "19:00:00"
+        }
+      ],
+      "city": "Austin",
+      "country": "USA",
+      "location_name": "BD Riley's Irish Pub",
+      "name": "Mueller Session",
+      "path": "austin/mueller",
+      "recurrence": "{\"schedules\": [{\"type\": \"weekly\", \"weekday\": \"tuesday\", \"start_time\": \"19:00\", \"end_time\": \"22:00\", \"every_n_weeks\": 1}]}",
+      "session_id": 1,
+      "state": "TX",
+      "termination_date": null,
+      "user_is_member": true,
+      "user_relationship": "member"
+    },
+    {
+      "active_instances": [],
+      "city": "San Francisco",
+      "country": "USA",
+      "location_name": "The Plough and Stars",
+      "name": "San Francisco Session",
+      "path": "sf/sunset",
+      "recurrence": "{\"schedules\": [{\"type\": \"weekly\", \"weekday\": \"monday\", \"start_time\": \"21:00\", \"end_time\": \"00:00\", \"every_n_weeks\": 1}]}",
+      "session_id": 5,
+      "state": "CA",
+      "termination_date": null,
+      "user_is_member": false,
+      "user_relationship": null
+    }
+  ],
+  "success": true,
+  "today": "2026-09-27",
+  "viewer_country": "USA"
+}

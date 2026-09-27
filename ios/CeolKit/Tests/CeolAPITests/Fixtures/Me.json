@@ -1,0 +1,16 @@
+{
+  "success": true,
+  "user": {
+    "email": "ian@ceol.io",
+    "email_verified": true,
+    "first_name": "Ian",
+    "has_password": true,
+    "is_system_admin": true,
+    "last_name": "Varley",
+    "needs_profile_setup": false,
+    "person_id": 1,
+    "timezone": "America/Chicago",
+    "user_id": 1,
+    "username": "ian"
+  }
+}

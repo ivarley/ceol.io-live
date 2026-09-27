@@ -1,0 +1,17 @@
+{
+  "client": {
+    "platform": "ios",
+    "version": "0.0.0"
+  },
+  "features": {
+    "live_logging": true,
+    "push_notifications": false,
+    "recordings": true
+  },
+  "force_upgrade": false,
+  "min_client_version": {},
+  "server_version": null,
+  "streaming_base_url": "http://localhost:8080",
+  "success": true,
+  "web_base_url": "http://localhost"
+}

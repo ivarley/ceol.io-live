@@ -1,0 +1,18 @@
+{
+  "results": [
+    {
+      "abc_only": false,
+      "can_render": true,
+      "in_session": true,
+      "incipit_image": null,
+      "name": "Cooley's",
+      "on_list": true,
+      "played_here": 3,
+      "tune_id": 1,
+      "tune_type": "Reel",
+      "tunebook_count": 1350
+    }
+  ],
+  "scope": "session",
+  "success": true
+}

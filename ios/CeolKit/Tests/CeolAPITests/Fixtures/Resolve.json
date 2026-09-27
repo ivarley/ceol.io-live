@@ -1,0 +1,14 @@
+{
+  "instance": {
+    "date": "2024-09-03",
+    "location_override": null,
+    "session_instance_id": 1
+  },
+  "kind": "instance",
+  "session": {
+    "name": "Mueller Session",
+    "path": "austin/mueller",
+    "session_id": 1
+  },
+  "success": true
+}

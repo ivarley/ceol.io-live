@@ -1,0 +1,34 @@
+{
+  "aliases": [],
+  "dates": [],
+  "name": "Cooley's",
+  "person_tune": {
+    "heard_count": 45,
+    "learn_status": "learned",
+    "on_list": true,
+    "person_tune_id": 2,
+    "setting_id": null
+  },
+  "played_here": 0,
+  "session_setting_id": null,
+  "settings": [
+    {
+      "abc": "|:D2|EBBA B2 EB|B2 AB dBAG|FDAD BDAD|FDAD dAFD|\nEBBA B2 EB|B2 AB defg|afec dBAF|DEFD E2:|\n|:gf|eB B2 efge|eB B2 gedB|A2 FA DAFA|A2 FA defg|\neB B2 eBgB|eB B2 defg|afec dBAF|DEFD E2:|",
+      "incipit_abc": "|:D2|EBBA B2 EB|B2 AB dBAG|",
+      "incipit_image": null,
+      "key": "Edor",
+      "setting_id": 1
+    },
+    {
+      "abc": "|:F|CGGC G2 CG|G2 FG BGFE|(3DCB, FB, GB,FB,|DB,DF BFDB,|\nCGGC G2 CG|G2 FG Bcde|fdcd BGFB|B,CDF C3:|\n|:d|cG ~G2 cede|cG ~G2 ecBG|(3FGF DF B,FDF|GFDF Bcde|\ncG ~G2 cede|cG ~G2 Bcde|fdcd BGFB|B,CDF C3:|",
+      "incipit_abc": "|:F|CGGC G2 CG|G2 FG BGFE|",
+      "incipit_image": null,
+      "key": "Emin",
+      "setting_id": 12342
+    }
+  ],
+  "success": true,
+  "tune_id": 1,
+  "tune_type": "Reel",
+  "tunebook_count": 1350
+}
