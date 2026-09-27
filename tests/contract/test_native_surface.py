@@ -174,6 +174,28 @@ class TestSurfaceIsServed:
         with open(SPEC_PATH) as f:
             yaml.load(f, Loader=Strict)
 
+    def test_every_required_property_is_declared(self, spec):
+        """`required: [x]` with no `properties.x` still validates in jsonschema, but
+        swift-openapi-generator SKIPS x, so the Swift type silently lacks a field
+        the server always sends. Every required name must have a declared type."""
+        problems = []
+
+        def walk(node, where):
+            if isinstance(node, dict):
+                if node.get("type") == "object" or "properties" in node:
+                    declared = set(node.get("properties", {}))
+                    for name in node.get("required", []):
+                        if name not in declared:
+                            problems.append(f"{where}: required '{name}' has no properties entry")
+                for k, v in node.items():
+                    walk(v, f"{where}/{k}")
+            elif isinstance(node, list):
+                for i, v in enumerate(node):
+                    walk(v, f"{where}/{i}")
+
+        walk(spec, "#")
+        assert not problems, "\n  ".join(problems)
+
     def test_every_operation_has_a_stable_unique_operation_id(self, spec):
         """The Swift client is generated from this file (swift-openapi-generator), and
         operationId becomes the method name the app calls. So every operation needs

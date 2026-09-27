@@ -36,7 +36,7 @@ components:
       type: object
       required: [success, error, message, code]
       properties:
-        success: { const: false }
+        success: { type: boolean, const: false }
         error: { type: string }
         message: { type: string }
         code: { type: string }
@@ -44,7 +44,7 @@ components:
       type: object
       required: [success]
       properties:
-        success: { const: true }
+        success: { type: boolean, const: true }
     User:
       type: object
       required: [user_id, person_id, username, email, first_name, last_name,
@@ -65,7 +65,7 @@ components:
       type: object
       required: [success, user, next, method]
       properties:
-        success: { const: true }
+        success: { type: boolean, const: true }
         user: { $ref: "#/components/schemas/User" }
         next: { type: [string, "null"], enum: [set_password, setup_profile, null] }
         method: { type: string, enum: [password, magic_link, email_verification] }
@@ -75,13 +75,13 @@ components:
       type: object
       required: [success, user]
       properties:
-        success: { const: true }
+        success: { type: boolean, const: true }
         user: { $ref: "#/components/schemas/User" }
     Profile:
       type: object
       required: [success, profile, needs_profile_setup, canonical_instruments, timezone_options]
       properties:
-        success: { const: true }
+        success: { type: boolean, const: true }
         profile:
           type: object
           required: [first_name, last_name, city, state, country, timezone, instruments]
@@ -106,7 +106,7 @@ components:
       type: object
       required: [success, streaming_base_url, web_base_url, min_client_version, force_upgrade, client, features]
       properties:
-        success: { const: true }
+        success: { type: boolean, const: true }
         streaming_base_url: { type: string }
         web_base_url: { type: string }
         min_client_version: { type: object, additionalProperties: { type: string } }
@@ -124,7 +124,7 @@ components:
       required: [success, learning_count, want_to_learn_count, suggested_tune,
                  upcoming_sessions, in_progress_logs, in_progress_recordings, today, week]
       properties:
-        success: { const: true }
+        success: { type: boolean, const: true }
         learning_count: { type: integer }
         want_to_learn_count: { type: integer }
         suggested_tune:
@@ -201,7 +201,7 @@ components:
       type: object
       required: [success, kind, session, instance]
       properties:
-        success: { const: true }
+        success: { type: boolean, const: true }
         kind: { type: string, enum: [session, instance] }
         session:
           type: object
@@ -221,7 +221,7 @@ components:
       type: object
       required: [success, url, expires_at]
       properties:
-        success: { const: true }
+        success: { type: boolean, const: true }
         url: { type: string }
         expires_at: { $ref: "#/components/schemas/DateTime" }
 
@@ -283,7 +283,7 @@ components:
       type: object
       required: [success, tunes, instruments, thesession_user_id, pagination]
       properties:
-        success: { const: true }
+        success: { type: boolean, const: true }
         tunes: { type: array, items: { $ref: "#/components/schemas/PersonTune" } }
         instruments: { type: array, items: { $ref: "#/components/schemas/Instrument" } }
         thesession_user_id: { type: [integer, "null"] }
@@ -310,7 +310,7 @@ components:
       type: object
       required: [success, sessions, today]
       properties:
-        success: { const: true }
+        success: { type: boolean, const: true }
         today: { $ref: "#/components/schemas/Date" }
         sessions:
           type: array
@@ -348,7 +348,7 @@ components:
       required: [success, session, permissions, today_in_session_tz, active_instances, tunes, total_tunes_count,
                  total_logs_count, total_people_count, has_more_tunes, popular_tunes]
       properties:
-        success: { const: true }
+        success: { type: boolean, const: true }
         session:
           type: object
           required: [session_id, name, path, city, state, country, recurrence, recurrence_readable,
@@ -408,7 +408,7 @@ components:
       type: object
       required: [success, instances_by_year, sorted_years, session_type]
       properties:
-        success: { const: true }
+        success: { type: boolean, const: true }
         session_type: { type: string }
         sorted_years: { type: array, items: { type: integer } }
         instances_by_year:
@@ -430,7 +430,7 @@ components:
       type: object
       required: [success, people]
       properties:
-        success: { const: true }
+        success: { type: boolean, const: true }
         people:
           type: array
           items:
@@ -451,7 +451,7 @@ components:
       type: object
       required: [success, tunes, count]
       properties:
-        success: { const: true }
+        success: { type: boolean, const: true }
         count: { type: integer }
         tunes:
           type: array
@@ -468,7 +468,7 @@ components:
       type: object
       required: [success, results, scope]
       properties:
-        success: { const: true }
+        success: { type: boolean, const: true }
         scope: { type: string, enum: [personal, session, instance] }
         results:
           type: array
@@ -490,7 +490,7 @@ components:
       type: object
       required: [success, tune_id, name, tune_type, tunebook_count, aliases, played_here, settings]
       properties:
-        success: { const: true }
+        success: { type: boolean, const: true }
         tune_id: { type: integer }
         name: { type: string }
         tune_type: { type: [string, "null"] }
@@ -512,13 +512,13 @@ components:
       type: object
       required: [success, image]
       properties:
-        success: { const: true }
+        success: { type: boolean, const: true }
         image: { type: [string, "null"], description: base64 PNG }
     TuneDetail:
       type: object
       required: [success, viewer, session_tune]
       properties:
-        success: { const: true }
+        success: { type: boolean, const: true }
         redirected_from: { type: [integer, "null"] }
         viewer:
           type: object
@@ -575,7 +575,7 @@ components:
                  session_name, session_path, session_date, instance_date, instance_name, start_time, end_time,
                  session_type, instance_active, log_complete, records, sets, last_event_id]
       properties:
-        success: { const: true }
+        success: { type: boolean, const: true }
         session_instance_id: { type: integer }
         can_edit: { type: boolean }
         current_person: { type: [object, "null"] }
@@ -600,7 +600,7 @@ components:
       type: object
       required: [success, known_tunes, known_aliases]
       properties:
-        success: { const: true }
+        success: { type: boolean, const: true }
         known_tunes:
           type: array
           items:
@@ -635,21 +635,41 @@ components:
       type: object
       required: [success, token, token_type]
       properties:
-        success: { const: true }
+        success: { type: boolean, const: true }
         token: { type: string }
         token_type: { type: string, enum: [Bearer] }
     OfflineBundle:
       type: object
       required: [success, tunes, popular]
       properties:
-        success: { const: true }
-        tunes: { type: array, items: { type: object, required: [person_tune_id, tune_id, tune_name, tune_type, learn_status, incipit_abc] } }
-        popular: { type: array, items: { type: object, required: [tune_id, name, tune_type, incipit_abc] } }
+        success: { type: boolean, const: true }
+        tunes:
+          type: array
+          items:
+            type: object
+            required: [person_tune_id, tune_id, tune_name, tune_type, learn_status, incipit_abc]
+            properties:
+              person_tune_id: { type: integer }
+              tune_id: { type: integer }
+              tune_name: { type: string }
+              tune_type: { type: [string, "null"] }
+              learn_status: { type: string }
+              incipit_abc: { type: [string, "null"] }
+        popular:
+          type: array
+          items:
+            type: object
+            required: [tune_id, name, tune_type, incipit_abc]
+            properties:
+              tune_id: { type: integer }
+              name: { type: string }
+              tune_type: { type: [string, "null"] }
+              incipit_abc: { type: [string, "null"] }
     Recordings:
       type: object
       required: [success, session_instance_id, tune_count, recordings]
       properties:
-        success: { const: true }
+        success: { type: boolean, const: true }
         session_instance_id: { type: integer }
         tune_count: { type: integer }
         recordings: { type: array }
@@ -657,14 +677,14 @@ components:
       type: object
       required: [success, session_id, active_instance_ids]
       properties:
-        success: { const: true }
+        success: { type: boolean, const: true }
         session_id: { type: integer }
         active_instance_ids: { type: array, items: { type: integer } }
     NextInstanceSuggestion:
       type: object
       required: [success, date, start_time, end_time]
       properties:
-        success: { const: true }
+        success: { type: boolean, const: true }
         date: { $ref: "#/components/schemas/Date" }
         start_time: { $ref: "#/components/schemas/TimeOrNull" }
         end_time: { $ref: "#/components/schemas/TimeOrNull" }
