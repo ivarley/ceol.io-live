@@ -396,6 +396,15 @@ getting a number wrong first.
   example).
 - **Anything fitted is scored on nights it never saw.** The corpus is an
   evaluation set; see the design decisions.
+- **Drawn tunes say why, the bench says whether.** Three drawn tunes favoured
+  Basic Pitch over yin on every label measure while the bench put it nine
+  points behind, and lower thresholds improved all three and collapsed the
+  bench. Score a component on labels to understand it; decide on the bench.
+- **Label scoring must count repeated notes.** Drawn eighths cannot say held
+  from struck, so the first scoring compared pitch changes only, merging
+  repeats, and a tracker that re-struck held notes (a third of its intervals
+  repeats, against 8% in the notation) looked better, not worse. Compare the
+  heard repeat rate against the notation's before trusting a label score.
 
 **Where results live.** Bench results in `bench_result` on the board
 database (unless `--no-save`). Board runs are named `<config>-r<recording>`
@@ -1254,9 +1263,27 @@ In rough order of what they are worth, as of 2026-09-25 (items added
   a set changes key the filter drops the new tune's notes just when the
   board is naming it. Next: judge the key from the last fifteen to twenty
   seconds.
-- **(2026-09-26) The board has not been re-run with parser version 2.** The
-  bench measured it; the board reads the same eighth-note index, so its
-  numbers above are for version 1.
+- **(2026-09-27) Pitch trackers, in the order planned with the player.**
+  1. Pretrained models. Basic Pitch is built and behind yin (above); what it
+  follows when it is wrong is not settled, and the loudest-note melody is the
+  first suspect, so a melody that prefers continuity is the next variant.
+  CREPE, RMVPE (built for a melody over accompaniment) and PESTO are untried.
+  2. Whole-segment notation alignment: the player segments many more
+  sessions, each segment one tune, so the whole performance can be aligned
+  to the notation with its repeats written out -- much stronger than the
+  short-phrase anchoring that failed -- and checked against the drawn tunes
+  before it is trusted. 3. Only if both work, fine-tuning a pretrained model
+  on those alignments with the player's light corrections, scored on nights
+  and players it never trained on.
+- **(2026-09-27) The bench saves no per-segment ranks.** Every paired number
+  in the 2026-09-26/27 results came from scratch scripts that call
+  `run_retrieval` and save each segment's rank, kept with their result files
+  in `~/Local/code/ceol-lab-scratch/` (see its README). The label scorer is
+  there too. Both belong in the lab proper: per-segment rows in the saved
+  bench result, and a `lab bench notes` that counts repeated notes.
+- **(2026-09-27) Drawn tunes so far:** Tom Sullivan's (polka, r4 s272),
+  The Bird in the Bush (reel, r2 s131), The Scholar (reel, r5 s336), each on
+  drawn beats. Jigs, hornpipes and slides have none; a jig is next.
 
 - **Where tunes stop, as well as where they start.** Told the true starts,
   the board is right within thirty seconds four times as often, but starts
