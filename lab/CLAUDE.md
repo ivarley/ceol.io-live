@@ -7,7 +7,7 @@ worked", and every result so far) before changing anything here. The spec's
 
 ## Where the lab lives
 
-In its own worktree, `~/Local/code/ceol.io-053` on branch
+In its own worktree, `~/Local/code/ceol.io-053-listen` on branch
 `053-ceol-listen-lab`, with its own `venv` (`requirements.txt`,
 `requirements-test.txt` and `lab/requirements.txt`), so the lab's audio stack
 never touches the app's environment and app work never lands on this branch.
