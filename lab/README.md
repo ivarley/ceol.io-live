@@ -82,11 +82,21 @@ lab bench retrieval --frontend yin --fold-octaves --particalized --fusion sum \
 - `--param K=V` passes front-end parameters, for example
   `--param trough_threshold=0.5`.
 
+Each saved result keeps every segment's rank, so two of them pair:
+
+```bash
+lab bench pair lab/data/bench/tune_retrieval/A.json lab/data/bench/tune_retrieval/B.json [--list]
+```
+
+prints top-1 and top-5 before and after, newly right / newly wrong with the
+sign test, and top-1 by tune type; `--list` names the segments that changed.
+Results saved before 2026-09-27 have no rows; re-run them.
+
 Variants that are not flags, such as the transition model's modes
 (`SequenceModel.MODE`, `UNSEEN`, `GATE`), are swept from a short script that
 sets the class attributes and calls `lab.bench.retrieval.run_retrieval`,
 which returns `(result, rows)`. Its per-segment `rows` give the paired
-comparison. Use `lab.tools.compare.sign_test(won, lost)` for the p value.
+comparison; `lab.bench.retrieval.pair_results` does the pairing.
 
 Component benches against the hand labels:
 
@@ -129,6 +139,17 @@ A whole night takes a few minutes to tens of minutes. The engine commits
 each observation so parallel runs do not block each other on SQLite's write
 lock. Other heavy processes on the machine, such as simulators and builds,
 slow it noticeably.
+
+What a player would have seen, replayed from runs already made (seconds, not
+a new board run): a new top guess shown at once from `--show-conf`, otherwise
+once it has been top for `--hold-s`, and a short list of candidates from
+`--list-floor` while nothing is sure:
+
+```bash
+lab display keyw20 --hold-s 2 --show-conf 1.1 --list-floor 0.05
+lab display keyw20 --sweep          # show-conf x hold, each paired against the control
+lab display keyw20 --calibrate      # category thresholds fitted leave-one-night-out
+```
 
 Board metrics per segment:
 

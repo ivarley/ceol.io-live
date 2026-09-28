@@ -65,6 +65,12 @@ def add_parser(sub):
     ret.add_argument("--no-save", action="store_true")
     ret.set_defaults(func=cmd_retrieval)
 
+    pr = inner.add_parser("pair", help="pair two saved retrieval results: newly right, newly wrong, sign test")
+    pr.add_argument("before", help="saved result (the path `bench retrieval` prints)")
+    pr.add_argument("after")
+    pr.add_argument("--list", action="store_true", help="also name the segments that changed")
+    pr.set_defaults(func=cmd_pair)
+
     tt = inner.add_parser("tunetype", help="classify a segment's tune type from its rhythm")
     tt.add_argument("--recordings")
     tt.add_argument("--seconds", type=float, default=30.0)
@@ -143,6 +149,39 @@ def cmd_retrieval(args):
     print(format_retrieval(result, rows))
     if not args.no_save:
         print(f"  saved {result.save()}")
+    return 0
+
+
+def cmd_pair(args):
+    from lab.bench.retrieval import pair_results
+
+    loaded = []
+    for path in (args.before, args.after):
+        with open(path) as f:
+            d = json.load(f)
+        if not d.get("rows"):
+            raise SystemExit(f"{path} has no per-segment rows (saved before they were kept); re-run it")
+        loaded.append(d)
+    a, b = loaded
+    for d, label in ((a, "before"), (b, "after")):
+        print(f"  {label}: {d['candidate']}  {json.dumps(d['params'], sort_keys=True)}")
+    out = pair_results(a["rows"], b["rows"])
+    if not out["n"]:
+        print("  no segments in common")
+        return 1
+    print(f"  {out['n']} segments in common")
+    for k in ("top1", "top5"):
+        ra, rb, won, lost, p = out[k]
+        print(f"  {k}: {ra:.3f} -> {rb:.3f}   +{won} / -{lost}   sign test p {p:.3f}")
+    print("  top1 by type: " + ", ".join(
+        f"{t} {ra / n:.3f}->{rb / n:.3f} ({n})"
+        for t, (n, ra, rb) in sorted(out["by_type"].items(), key=lambda kv: -kv[1][0])))
+    if args.list:
+        names = {r["segment_id"]: r for r in b["rows"]}
+        for label, ids in (("newly right", out["won"]), ("newly wrong", out["lost"])):
+            for s in ids:
+                r = names[s]
+                print(f"  {label:<12} seg {s:>5}  {r['name']}  (now shows {r['top1_name']})")
     return 0
 
 

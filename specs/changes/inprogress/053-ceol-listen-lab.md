@@ -1123,6 +1123,36 @@ not used. Written notes sit exactly on the grid; heard ones wander around it,
 and a note rounding into the eighth before is usually a real note played a
 little early, which the audio side's one-eighth push (`max_lag=1`) keeps.
 
+**The loudest note is not what Basic Pitch gets wrong (2026-09-27).** The
+suspect above was the melody rule: a guitar chord tone or a drum's pitched
+thump that is louder for a moment takes the skyline and costs two wrong
+intervals. Two alternatives, taken from the same cached model output
+(`melody` in `frontends/basicpitch.py`; the model's notes are now cached on
+disk apart from the melody, so a melody variant costs no model run). Audio
+alone, 120 seconds, 502 segments, paired against the loudest note (0.835 top-1,
+0.896 top-5, reproducing the version-2 number exactly):
+
+| melody | top-1 | top-5 | top-1 paired |
+|---|---|---|---|
+| loudest note (as built) | 0.835 | 0.896 | |
+| highest note sounding | 0.811 | 0.890 | +16/-28, p 0.10 |
+| continuity: switch 0.1, leap 0.01 a semitone | 0.807 | 0.892 | +3/-17, p 0.003 |
+| continuity: switch 0.3, leap 0.02 | 0.815 | 0.882 | +8/-18, p 0.08 |
+| continuity: switch 0.5, no leap cost | 0.793 | 0.880 | +5/-26 |
+| continuity: switch 1.0, leap 0.05 | 0.709 | 0.823 | +5/-68 |
+| continuity with no costs (control) | 0.835 | 0.896 | +0/-0 |
+
+Continuity is a Viterbi path over pitches that pays to change note and more
+for a bigger leap, against amplitude summed over 10ms frames. With no costs it
+is the loudest note exactly, so the decoder is sound, and every cost tried
+loses, monotonically in the cost; taking away its rest state changes nothing
+(0.813 and 0.803 at the first two settings). The top note loses too. What a
+moment of louder note costs the loudest-note line is less than what holding
+the line through it costs, so whatever Basic Pitch follows when it is wrong,
+it is not a brief loud interloper. The next suspects are the model's own
+notes (what it hears at all, against yin, on the segments it loses) rather
+than the choice among them.
+
 ### Where a note starts, and why sung labels sounded late
 
 Drawing eighths on Tom Sullivan's, the player heard every sung label behind
@@ -1230,6 +1260,91 @@ Two things that follow from that, both measured and both off:
 Both become worth turning on when boundary detection is, which makes it the
 next thing to build rather than a side quest.
 
+### The key on the board, and what a player would see (2026-09-27)
+
+**Judging the key from the recent notes makes the board faster and jumpier,
+and the two cannot be pulled apart by the key filter alone.** The key filter
+did nothing on the board (0.771 / 0.769 top-1 without and with it, +15/-16).
+The explanation written down for it was that the board judged the key over a
+two-minute window that early in a tune is mostly the previous one. The
+interval expert now takes `key_window_ms` (judge from the last this-many ms,
+apply to the whole window), `key_block_ms` (judge per fixed block on the
+absolute clock, from the block and the one before) and `key_hysteresis` (keep
+the modal pair in use until a new one holds this much more of the recent note
+time). All off by default. All eight nights, 502 segments, against the key
+judged over the whole window (`v2key`, which reproduced its night-2 run
+exactly):
+
+| key judged from | top-1 | <30s | <60s | never | flips |
+|---|---|---|---|---|---|
+| the whole window (today) | 0.769 | 12.0% | 49.8% | 17.7% | 4.14 |
+| the last 20 s | 0.777 | 14.3% | 53.2% | 16.3% | 5.60 |
+| the last 40 s | 0.777 | 12.7% | 51.0% | 17.3% | 4.94 |
+| fixed 20 s blocks | 0.773 | 12.5% | 47.0% | 17.5% | 4.34 |
+| the last 20 s, pair held to a 5-point margin | 0.769 | 12.4% | 50.6% | 17.9% | 4.33 |
+| the last 20 s, pair held to a 10-point margin | 0.757 | 12.7% | 48.0% | 19.1% | 4.23 |
+
+The last 20 seconds, paired: within 30s +19/-7 (p 0.03), within 60s +27/-10
+(p 0.008), ever right +12/-5, top-1 +9/-5; and more flips on 253 segments,
+fewer on 72. So the explanation was right. Where the gain comes from is shown
+by the blocks: a recent key applied to the whole window drops the previous
+tune's notes when the new tune is in another key, cleaning the window, and
+blocks that leave a passed block's notes alone lose the speed entirely
+(within 60s +9/-23 against today, p 0.02) while bringing flips back (4.34).
+Holding the pair until a new one wins clearly does the same. Every variant
+that removed the flips removed the gain with them.
+
+**The display can take the flips instead.** `lab display` replays the stored
+hypothesis events of finished runs through a display rule and scores what
+would have been on screen, in seconds per rule. A new top guess replaces the
+one shown at once if its confidence reaches `show_conf`, otherwise once it has
+been top for `hold_ms`; with both zero it is the control, and it reproduces
+`lab compare` (flips 4.13 against 4.14, because a withdrawal is not a change
+of answer). The first version cleared the screen at every withdrawal, and the
+boundary detector closes a span and the assembler reopens one on the same tune
+every few seconds, so a hold restarted each time and a 10 s hold showed
+almost nothing; a withdrawal now clears the screen only when nothing replaces
+it at the same instant.
+
+| on screen, 8 nights | top-1 at end | <30s | <60s | flips |
+|---|---|---|---|---|
+| today's key, every change shown | 0.769 | 12.0% | 49.8% | 4.13 |
+| today's key, 2 s hold | 0.765 | 10.0% | 44.6% | 2.50 |
+| 20 s key, 2 s hold | 0.777 | 11.0% | 47.4% | 2.98 |
+| today's key, 4 s hold | 0.763 | 6.6% | 40.6% | 1.86 |
+| 20 s key, 4 s hold | 0.769 | 7.6% | 43.8% | 2.11 |
+
+With the same hold on both, the 20 s key is faster: within 60s +22/-8 (p
+0.016) at 2 s and +23/-7 (p 0.005) at 4 s. Against today's screen, the 20 s
+key with a 2 s hold has fewer flips on 222 segments and more on 91, top-1
++10/-6, and gives back speed within noise (within 30s +8/-13, within 60s
++18/-30, p 0.11). Showing a confident guess at once changed nothing at any
+threshold from 0.4 up, because a new top guess almost never arrives confident.
+Not in `baseline.json` yet: the display rule is not part of the board, and
+the speed it gives back should be won back upstream first.
+
+**A short list is worth more than any of it.** The player's idea: while no
+answer is sure, offer the candidates with reasonable confidence to pick from.
+With the 20 s key and 2 s hold, offering every candidate at confidence 0.05 or
+above (at most five) has the right tune on screen within 60 s for 70.9% of
+tunes against 47.4% for the single answer, and within 30 s for 25.7% against
+11.0%, with a list 2.1 tunes long on average. Floors of 0.1, 0.15 and 0.2
+give 63.5%, 59.6% and 55.8% within 60 s with lists of 1.4, 1.2 and 1.1.
+
+**Confidence is ordered but never high.** An earlier reading from one night,
+that confidence is underconfident (0.5 right nine times in ten), was the end
+of each tune only. Over every moment of every tune on all eight nights, each
+segment weighted equally: 0.1-0.2 is right 12% of the time, 0.3-0.4 31%,
+0.5-0.6 52%, 0.6-0.7 65%, 0.7-0.8 76% (six segments' worth). Nothing reaches
+80%, so no category fitted on seven nights keeps an 80% promise on the
+eighth (`lab display --calibrate`). What confidence mostly tracks is time: the
+top guess is right 6% of the time in a tune's first 30 s, 30% at 30-60 s, 63%
+at 60-90 s and 79% at 90-120 s. The player wants a calibrated confidence shown
+as categories (maybe / probably / certainly, each a promise checked on
+held-out nights) rather than a number; a calibrator using the margin between
+the top two, how many recent updates agree and elapsed time is the way, and is
+deferred until accuracy is higher.
+
 ### Still open
 
 In rough order of what they are worth, as of 2026-09-25 (items added
@@ -1252,21 +1367,15 @@ In rough order of what they are worth, as of 2026-09-25 (items added
   today's sum fusion. The choice has to be predicted from the audio (pulse
   strength, in-key fraction, loudness, how many notes Basic Pitch hears at
   once) and scored on nights it was not fitted on.
-- **(2026-09-26) The key filter on the board does nothing yet.** The same
-  function runs in the board's interval expert over its trailing window
-  (agreement test in `test_engine.py`). Over all eight nights with parser
-  version 2, without and with it: top-1 at end 0.771 / 0.769 (+15/-16), top-5
-  0.878 / 0.876, right within 30s 12.9% / 12.0%, within 60s 48.4% / 49.8%,
-  never right 18.5% / 17.7%, flips 4.03 / 4.14. Untested explanation: the
-  bench judges the key from thirty seconds of one tune, the board from a
-  two-minute window that early in a tune is mostly the previous one, so when
-  a set changes key the filter drops the new tune's notes just when the
-  board is naming it. Next: judge the key from the last fifteen to twenty
-  seconds.
+- **(2026-09-27) The key on the board: faster or steadier, not yet both.**
+  See the section above. The 20 s key is the faster board; the display's
+  hold and short list are how a player would use it; a calibrated confidence
+  is deferred until accuracy is higher.
 - **(2026-09-27) Pitch trackers, in the order planned with the player.**
   1. Pretrained models. Basic Pitch is built and behind yin (above); what it
   follows when it is wrong is not settled, and the loudest-note melody is the
-  first suspect, so a melody that prefers continuity is the next variant.
+  first suspect, and it is ruled out: continuity and highest-note melodies
+  both lose to it (above).
   CREPE, RMVPE (built for a melody over accompaniment) and PESTO are untried.
   2. Whole-segment notation alignment: the player segments many more
   sessions, each segment one tune, so the whole performance can be aligned
@@ -1275,12 +1384,11 @@ In rough order of what they are worth, as of 2026-09-25 (items added
   before it is trusted. 3. Only if both work, fine-tuning a pretrained model
   on those alignments with the player's light corrections, scored on nights
   and players it never trained on.
-- **(2026-09-27) The bench saves no per-segment ranks.** Every paired number
-  in the 2026-09-26/27 results came from scratch scripts that call
-  `run_retrieval` and save each segment's rank, kept with their result files
-  in `~/Local/code/ceol-lab-scratch/` (see its README). The label scorer is
-  there too. Both belong in the lab proper: per-segment rows in the saved
-  bench result, and a `lab bench notes` that counts repeated notes.
+- **(2026-09-27) A label scorer that counts repeated notes.** Saved bench
+  results now keep each segment's rank and `lab bench pair` pairs two of them;
+  the label scorer is still the scratch `align.py` in
+  `~/Local/code/ceol-lab-scratch/`, and belongs in the lab as a `lab bench
+  notes` that counts repeated notes.
 - **(2026-09-27) Drawn tunes so far:** Tom Sullivan's (polka, r4 s272),
   The Bird in the Bush (reel, r2 s131), The Scholar (reel, r5 s336), each on
   drawn beats. Jigs, hornpipes and slides have none; a jig is next.

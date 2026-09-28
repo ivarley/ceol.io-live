@@ -20,6 +20,7 @@ COMMANDS = {
     "run": "lab.engine.run",
     "eval": "lab.eval.report",
     "diff": "lab.eval.diff",
+    "display": "lab.eval.display",
     "runs": "lab.tools.runs",
     "board": "lab.tools.dump",
     "transcribe": "lab.tools.transcribe",

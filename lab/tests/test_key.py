@@ -122,3 +122,40 @@ def test_too_few_notes_to_judge_a_key_changes_nothing():
 
     few = _held([(62, 150), (63, 150)])
     assert drop_out_of_key(few, "pair") == few and drop_out_of_key(few, 1) == few
+
+
+def test_a_key_judged_on_the_recent_notes_keeps_the_new_tunes_notes():
+    """A set that moves from a G tune to an E-flat one: judged over the whole
+    window the G tune's key wins and the new tune loses its flats; judged on
+    the recent notes the new tune is kept whole."""
+    from lab.analysis.key import drop_out_of_key
+
+    g_tune = _held([(p, 150) for p in (67, 71, 74, 72, 69, 66, 64, 62)] * 12)
+    eb_tune = _held([(p, 150) for p in (63, 67, 70, 68, 65, 62, 60, 58)] * 5)
+    for n in eb_tune:
+        n["t0_ms"] += g_tune[-1]["t1_ms"]
+        n["t1_ms"] += g_tune[-1]["t1_ms"]
+    window = g_tune + eb_tune
+    whole = drop_out_of_key(window, "pair")
+    recent = drop_out_of_key(window, "pair", judged_on=eb_tune)
+    assert len([n for n in whole if n in eb_tune]) < len(eb_tune)
+    assert all(n in recent for n in eb_tune)
+
+
+def test_a_passed_blocks_notes_are_not_re_decided_by_what_comes_after():
+    """With the key judged per fixed block, a new tune in another key drops
+    none of the old tune's notes, and the old tune's reading is what it was."""
+    from lab.experts.notes import Intervals
+
+    g_tune = _held([(p, 150) for p in (67, 71, 74, 72, 69, 66, 64, 62)] * 34)   # ~41s
+    eb_tune = _held([(p, 150) for p in (63, 67, 70, 68, 65, 62, 60, 58)] * 40)
+    for n in eb_tune:
+        n["t0_ms"] += 60000
+        n["t1_ms"] += 60000
+    expert = Intervals(key_block_ms=20000)
+    before = expert._in_key(g_tune)
+    after = expert._in_key(g_tune + eb_tune)
+    assert [n for n in after if n["t0_ms"] < 60000] == before
+    # and the new tune, past its first block, keeps its flats
+    late = [n for n in eb_tune if n["t0_ms"] >= 80000]
+    assert all(n in after for n in late)

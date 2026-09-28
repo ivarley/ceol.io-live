@@ -590,8 +590,48 @@ def run_retrieval(frontends, recording_ids=None, candidate_set="repertoire", n=5
                 "adaptive": adaptive},
         features_version="audio", split="per-night",
         nights=nights, pooled=pooled, warnings=[],
-        created_at=time.strftime("%Y-%m-%dT%H:%M:%S"), git_sha=git_sha())
+        created_at=time.strftime("%Y-%m-%dT%H:%M:%S"), git_sha=git_sha(),
+        rows=[{k: r[k] for k in PAIRED_ROW_KEYS} for r in all_rows])
     return result, all_rows
+
+
+# what a saved result keeps of each segment: enough to pair two results
+PAIRED_ROW_KEYS = ("segment_id", "tune_id", "name", "tune_type", "rank", "top1_name", "n_notes")
+
+
+def pair_results(a_rows, b_rows):
+    """Pair two results' per-segment rows: pooled rates, newly right, newly wrong.
+
+    Returns {"n", "top1": (a, b, won, lost, p), "top5": ..., "by_type": {type: (n, a, b)},
+    "won", "lost"} where won/lost are the top-1 segment ids that changed.
+    """
+    from lab.tools.compare import sign_test
+
+    a = {r["segment_id"]: r for r in a_rows}
+    b = {r["segment_id"]: r for r in b_rows}
+    common = sorted(set(a) & set(b))
+    out = {"n": len(common)}
+    if not common:
+        return out
+
+    def top(r, k):
+        return r["rank"] is not None and r["rank"] <= k
+
+    for k in (1, 5):
+        won = [s for s in common if top(b[s], k) and not top(a[s], k)]
+        lost = [s for s in common if top(a[s], k) and not top(b[s], k)]
+        out[f"top{k}"] = (sum(top(a[s], k) for s in common) / len(common),
+                          sum(top(b[s], k) for s in common) / len(common),
+                          len(won), len(lost), sign_test(len(won), len(lost)))
+        if k == 1:
+            out["won"], out["lost"] = won, lost
+    by = {}
+    for s in common:
+        t = (a[s].get("tune_type") or "?").lower()
+        n, ra, rb = by.get(t, (0, 0, 0))
+        by[t] = (n + 1, ra + top(a[s], 1), rb + top(b[s], 1))
+    out["by_type"] = by
+    return out
 
 
 def format_retrieval(result, rows=None):

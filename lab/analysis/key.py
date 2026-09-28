@@ -117,8 +117,17 @@ def modal_pair(notes, min_notes=30):
     return {"sharps": (best[1], best[1] + 1), "pcs": best[2]}
 
 
-def drop_out_of_key(notes, min_steps, min_notes=30):
-    """Notes at least `min_steps` outside the key estimated from them.
+def held_fraction(notes, pcs):
+    """The share of these notes' time spent on the pitch classes `pcs`."""
+    mass = pitch_class_mass(notes)
+    total = float(mass.sum())
+    return float(sum(mass[pc] for pc in pcs)) / total if total > 0 else 0.0
+
+
+def drop_out_of_key(notes, min_steps, min_notes=30, judged_on=None, pair=None):
+    """Notes at least `min_steps` outside the key estimated from them, or from
+    `judged_on` when given (the board judges from its most recent notes, so a
+    window that is still mostly the previous tune does not set the key).
 
     The notation has 1.3% of its notes outside the signature; a yin
     transcription has 8.9%, every kind of them seven to twelve times as
@@ -130,11 +139,12 @@ def drop_out_of_key(notes, min_steps, min_notes=30):
     if not min_steps or not notes:
         return notes
     if min_steps == "pair":
-        pair = modal_pair(notes, min_notes=min_notes)
+        # `pair`: one already chosen by the caller (the board holds on to it)
+        pair = pair or modal_pair(notes if judged_on is None else judged_on, min_notes=min_notes)
         if pair is None:
             return notes
         return [n for n in notes if int(n["midi"]) % 12 in pair["pcs"]]
-    key = estimate_key(notes, min_notes=min_notes)
+    key = estimate_key(notes if judged_on is None else judged_on, min_notes=min_notes)
     if key is None:
         return notes
     return [n for n in notes if steps_outside(int(n["midi"]) % 12, key["sharps"]) < min_steps]

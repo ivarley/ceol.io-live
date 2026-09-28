@@ -48,6 +48,17 @@ def _answer_at(events, spans, t_ms):
     return current
 
 
+def segment_events(events, spans, s, e):
+    """The hypothesis events a reader saw while this segment played: stamped
+    inside it, on a span that overlaps it. One definition, shared by the
+    scorer and the display replay (`lab.eval.display`)."""
+    return [ev for ev in events if s <= ev["clock_ms"] < e
+            and ev["hyp_id"] in spans
+            and spans[ev["hyp_id"]]["t_start_ms"] <= e
+            and (spans[ev["hyp_id"]]["t_end_ms"] is None
+                 or spans[ev["hyp_id"]]["t_end_ms"] >= s)]
+
+
 def score_identification(board, run_id, gt, replay_range=None):
     """Per-segment identification results for one run.
 
@@ -73,11 +84,7 @@ def score_identification(board, run_id, gt, replay_range=None):
             rows.append((seg, None, detail))
             continue
         s, e = seg.start_ms, seg.end_ms
-        inside = [ev for ev in events if s <= ev["clock_ms"] < e
-                  and ev["hyp_id"] in spans
-                  and spans[ev["hyp_id"]]["t_start_ms"] <= e
-                  and (spans[ev["hyp_id"]]["t_end_ms"] is None
-                       or spans[ev["hyp_id"]]["t_end_ms"] >= s)]
+        inside = segment_events(events, spans, s, e)
         tops = [ev["top1_tune_id"] for ev in inside]
 
         ttfc = next((ev["clock_ms"] - s for ev in inside if ev["top1_tune_id"] == seg.tune_id), None)

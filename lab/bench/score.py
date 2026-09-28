@@ -164,6 +164,9 @@ class BenchResult:
     warnings: List[str] = field(default_factory=list)
     created_at: str = ""
     git_sha: str = ""
+    # per-segment outcomes, where the task has them, so two saved results can
+    # be paired (newly right, newly wrong) rather than only pooled
+    rows: List[Dict] = field(default_factory=list)
 
     def to_json(self):
         d = asdict(self)

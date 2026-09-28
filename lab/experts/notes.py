@@ -159,12 +159,31 @@ class Intervals(Expert):
                 # Drop heard notes outside the key and its modal neighbour,
                 # estimated over this window. The same function the front
                 # ends call; see `analysis.key.drop_out_of_key`.
-                "out_of_key_drop": "pair"}
+                "out_of_key_drop": "pair",
+                # Judge that key from only the last this-many ms of the window
+                # (None: the whole window, as the bench does). See _in_key.
+                # OFF, and measured over eight nights against None: at 20000,
+                # within 60s 49.8% -> 53.2% (+27/-10, p 0.008) and within 30s
+                # +19/-7, top-1 0.769 -> 0.777, but flips 4.14 -> 5.60; at
+                # 40000 half the speed and still 4.94 flips. A display hold
+                # takes the flips (lab display; spec, "The key on the board").
+                "key_window_ms": None,
+                # Or judge it per fixed block of this many ms on the absolute
+                # clock, from the block and the one before it, so a note's
+                # fate is settled once its block has passed. OFF: at 20000
+                # flips 4.34 but within 60s 47.0% (+9/-23 against None).
+                "key_block_ms": None,
+                # With key_window_ms: keep the modal pair in use until a new
+                # one holds this much more of the recent note time. OFF: at
+                # 0.05, 4.33 flips and the speed gone (50.6% within 60s); at
+                # 0.10, top-1 0.757.
+                "key_hysteresis": 0.0}
 
     def setup(self):
         self._by_source = {}
         self._periods = []
         self._last_pulse_id = None
+        self._key_pair = {}   # source -> the modal pair in use
 
     def process(self, view, window):
         out = []
@@ -195,7 +214,7 @@ class Intervals(Expert):
 
             # The buffer keeps every note so the key is judged on all of them;
             # what is read is the notes in key.
-            heard = self._in_key(buf)
+            heard = self._in_key(buf, src)
             intervals = intervals_from_notes(
                 heard, clip=self.params["clip"], max_gap_ms=self.params["max_gap_ms"],
                 fold=self.params["fold_octaves"])
@@ -239,7 +258,43 @@ class Intervals(Expert):
                 inputs=inputs))
         return out
 
-    def _in_key(self, notes):
+    def _in_key(self, notes, src=None):
         from lab.analysis.key import drop_out_of_key
 
-        return drop_out_of_key(notes, self.params["out_of_key_drop"])
+        # Early in a tune the two-minute window is mostly the tune before it,
+        # and when a set changes key, a key judged over the whole window drops
+        # the new tune's notes just when it is being named.
+        block = self.params["key_block_ms"]
+        if block and notes:
+            # A key judged over the recent notes and applied to the whole
+            # window re-decides every older note whenever it moves, and the
+            # reading changes under the matcher; blocks on a fixed origin
+            # leave a passed block alone (the eighths' fixed origin, again).
+            by_block = {}
+            for n in notes:
+                by_block.setdefault(int(n["t0_ms"] // block), []).append(n)
+            kept = []
+            for b in sorted(by_block):
+                kept.extend(drop_out_of_key(by_block[b], self.params["out_of_key_drop"],
+                                            judged_on=by_block.get(b - 1, []) + by_block[b]))
+            return kept
+        span = self.params["key_window_ms"]
+        judged_on = None
+        if span and notes:
+            since = notes[-1]["t1_ms"] - int(span)
+            judged_on = [n for n in notes if n["t0_ms"] >= since]
+        margin = self.params["key_hysteresis"]
+        if margin and judged_on and self.params["out_of_key_drop"] == "pair":
+            # Within a tune the recent pair can wobble between neighbours (a
+            # D tune's major and mixolydian), and every wobble re-reads the
+            # whole window. A real change of key wins by far more.
+            from lab.analysis.key import held_fraction, modal_pair
+
+            new, held = modal_pair(judged_on), self._key_pair.get(src)
+            if new is not None and (
+                    held is None
+                    or held_fraction(judged_on, new["pcs"])
+                    > held_fraction(judged_on, held["pcs"]) + margin):
+                self._key_pair[src] = held = new
+            return drop_out_of_key(notes, "pair", judged_on=judged_on, pair=held)
+        return drop_out_of_key(notes, self.params["out_of_key_drop"], judged_on=judged_on)
