@@ -7,6 +7,7 @@
 //               swift-openapi-generator. Method names are the spec's operationIds.
 //   CeolDesign  the design tokens, design/Tokens.swift (symlinked), which
 //               scripts/build_tokens.py generates from the same source as the web's CSS.
+//   CeolSession sign-in: the Keychain token store, the emailed links, the auth calls.
 //   CeolLogic   the live logger's client rules (logstate, fracindex, ...), ported from
 //               the web and held to the web's own fixture files (spec 052 §B5).
 //
@@ -25,6 +26,7 @@ let package = Package(
         .library(name: "CeolAPI", targets: ["CeolAPI"]),
         .library(name: "CeolDesign", targets: ["CeolDesign"]),
         .library(name: "CeolLogic", targets: ["CeolLogic"]),
+        .library(name: "CeolSession", targets: ["CeolSession"]),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-openapi-generator", from: "1.6.0"),
@@ -43,6 +45,19 @@ let package = Package(
             plugins: [.plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")]
         ),
         .target(name: "CeolDesign"),
+        // Sign-in: the token store, the emailed links, and the auth calls (spec 052 A1).
+        .target(
+            name: "CeolSession",
+            dependencies: ["CeolAPI", .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime")]
+        ),
+        .testTarget(
+            name: "CeolSessionTests",
+            dependencies: [
+                "CeolSession", "CeolAPI",
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+                .product(name: "HTTPTypes", package: "swift-http-types"),
+            ]
+        ),
         // The live logger's client rules, ported from the web (spec 052 §B5).
         .target(name: "CeolLogic"),
         // Reads the web's own frontend/src/**/*.fixtures.json in place (see

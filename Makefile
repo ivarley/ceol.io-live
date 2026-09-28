@@ -31,6 +31,7 @@ help:
 	@echo "iOS (ios/, spec 052):"
 	@echo "  ios-test         CeolKit tests on the Mac, then the app's tests in the simulator"
 	@echo "  ios-build        Build the app for the simulator"
+	@echo "  ios-ui-test      Sign-in UI tests in the simulator, against a local server"
 	@echo "  ios-fixtures     Re-capture the API responses CeolKit's decoding tests read"
 
 # Installation
@@ -116,6 +117,19 @@ ios-test: ## iOS: CeolKit tests on the Mac (no simulator), then the app's tests 
 ios-build: ## iOS: build the app for the simulator
 	xcodebuild -project ios/Ceol/Ceol.xcodeproj -scheme Ceol -destination 'generic/platform=iOS Simulator' \
 		-derivedDataPath $(IOS_DERIVED) -skipPackagePluginValidation build
+
+# Sign-in UI tests, driven through the app in the simulator. They need the app running
+# on a LOCAL server first (./start, or flask on IOS_TEST_SERVER's port), and use the
+# seeded accounts only: a password login, and a magic-link token minted straight into
+# the local database, so nothing is emailed.
+IOS_TEST_SERVER ?= http://127.0.0.1:5031
+
+ios-ui-test: ## iOS: sign-in UI tests in the simulator, against a local server (IOS_TEST_SERVER)
+	@case "$(IOS_TEST_SERVER)" in http://127.0.0.1:*|http://localhost:*) ;; *) echo "IOS_TEST_SERVER must be local"; exit 1;; esac
+	TOKEN=$$(./venv/bin/python scripts/mint_login_token.py) && \
+	TEST_RUNNER_CEOL_TEST_SERVER=$(IOS_TEST_SERVER) TEST_RUNNER_CEOL_TEST_LOGIN_TOKEN=$$TOKEN \
+	xcodebuild -project ios/Ceol/Ceol.xcodeproj -scheme Ceol -destination '$(IOS_SIM)' \
+		-derivedDataPath $(IOS_DERIVED) -skipPackagePluginValidation -only-testing:CeolUITests test
 
 ios-fixtures: ## iOS: re-capture the real API responses CeolKit's decoding tests read (seeded local DB)
 	./venv/bin/python scripts/capture_native_fixtures.py

@@ -5,19 +5,18 @@
 //  Created by Ian Varley on 6/29/26.
 //
 
-import CeolAPI
 import SwiftUI
 
 @main
 struct CeolApp: App {
-    /// The one API client (spec 052). Signed out until sign-in lands (Phase 2), when
-    /// the token provider reads the Keychain.
-    private let api = Client.ceol(clientID: ClientID.current, token: { nil })
+    @State private var model = AppModel()
 
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .environment(\.api, api)
+                .environment(model)
+                // Universal Links (applinks:ceol.io) and any URL the app is opened with.
+                .onOpenURL { url in Task { await model.open(url) } }
         }
     }
 }
@@ -32,8 +31,4 @@ nonisolated enum ClientID {
         let build = info["CFBundleVersion"] as? String ?? "0"
         return "ios/\(version) (build \(build))"
     }
-}
-
-extension EnvironmentValues {
-    @Entry var api: Client? = nil
 }

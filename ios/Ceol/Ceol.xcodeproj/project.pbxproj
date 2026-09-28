@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		6E33AA042FF3613700BE9904 /* CeolAPI in Frameworks */ = {isa = PBXBuildFile; productRef = 6E33AA022FF3613700BE9904 /* CeolAPI */; };
 		6E33AA052FF3613700BE9904 /* CeolDesign in Frameworks */ = {isa = PBXBuildFile; productRef = 6E33AA032FF3613700BE9904 /* CeolDesign */; };
+		6E33AA072FF3613700BE9904 /* CeolSession in Frameworks */ = {isa = PBXBuildFile; productRef = 6E33AA062FF3613700BE9904 /* CeolSession */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -59,6 +60,7 @@
 			files = (
 				6E33AA042FF3613700BE9904 /* CeolAPI in Frameworks */,
 				6E33AA052FF3613700BE9904 /* CeolDesign in Frameworks */,
+				6E33AA072FF3613700BE9904 /* CeolSession in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -121,6 +123,7 @@
 			packageProductDependencies = (
 				6E33AA022FF3613700BE9904 /* CeolAPI */,
 				6E33AA032FF3613700BE9904 /* CeolDesign */,
+				6E33AA062FF3613700BE9904 /* CeolSession */,
 			);
 			productName = Ceol;
 			productReference = 6E33A9C62FF3613500BE9904 /* Ceol.app */;
@@ -608,6 +611,10 @@
 		6E33AA032FF3613700BE9904 /* CeolDesign */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = CeolDesign;
+		};
+		6E33AA062FF3613700BE9904 /* CeolSession */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = CeolSession;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

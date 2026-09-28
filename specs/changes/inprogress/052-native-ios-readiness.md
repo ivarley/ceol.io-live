@@ -1661,5 +1661,21 @@ The plan (Phases 0-6) runs from here in `ios/`; see `ios/README.md` for the layo
   dropped; cursors (`Cursor`), ids (`RecordID`) and the op clock (`OpClock`, a value instead
   of the JS module state) are typed. One recorded difference: a thesession id too long for
   `Int` parses to nil where JS parseInt returns an imprecise number.
-- **Phase 2 — sign-in and the app shell:** next. Needs `IOS_APP_IDS` on Render and the
-  Associated Domains entitlement.
+- **Phase 2 — sign-in and the app shell: DONE 2026-09-28.** Prerequisites: Associated
+  Domains (`applinks:ceol.io`, plus `www.ceol.io` for links sent before ceol.io became
+  canonical) and `IOS_APP_IDS` on Render. The contract gained the auth operations' request
+  bodies, a typed `CheckEmail`, and the Error response as every auth operation's default;
+  login-password and check-email now send `account_inactive` / `email_not_verified`
+  codes, since both are 403. `CeolSession`: `AuthService`, `KeychainTokenStore`, `AuthLink`.
+  The app: launch checks app-config (force_upgrade -> an update screen; unreachable ->
+  launch anyway) and the stored token (dead -> forgotten); email-first sign-in with the
+  server's own wording; password; "check your email" for a login or registration link,
+  with resend; emailed links opened in the app are exchanged for a token (expired and
+  account_exists explained); profile setup when name or location is missing; Me shows
+  the account and signs out. Tested: 13 CeolSession tests (including the real Keychain)
+  and four UI tests driven through the simulator against a local server
+  (`make ios-ui-test`: password sign-in and sign-out, a wrong password, a dead link, an
+  emailed link). Not yet: the optional set-password step after a magic link (the server's
+  `next: set_password` is ignored for now), and delete-account in the app (the endpoint
+  exists; App Store review will want it on Me).
+- **Phase 3 — the read-only screens:** next.

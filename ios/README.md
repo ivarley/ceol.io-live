@@ -11,6 +11,7 @@ open the web in a Safari view. Plan and phases: `specs/changes/inprogress/052-na
 | `CeolKit/` | A local Swift package with everything that is not a screen. The app links its products. |
 | `CeolKit/Sources/CeolAPI` | The API client. **Generated at build time** by `swift-openapi-generator` from `openapi.yaml`, a symlink to `specs/api/native-surface.yaml`. Each operation is a method named by its `operationId` (`getSessionDetail`, `applyLiveOp`, …); schemas are `Components.Schemas.<Name>`. `CeolClient.swift` adds what the spec can't say: `Client.ceol(clientID:token:)` sends `X-Ceol-Client` and, when signed in, `Authorization: Bearer`. |
 | `CeolKit/Sources/CeolDesign` | `CeolTokens`: `Tokens.swift` is a symlink to `design/Tokens.swift`, which `make tokens` generates from the same source as the web's CSS. |
+| `CeolKit/Sources/CeolSession` | Sign-in: `AuthService` (check-email, password login, link exchange, logout, app-config, profile), `KeychainTokenStore` (the Bearer token, this device only), `AuthLink` (the emailed `/auth/login/<token>` and `/verify-email/<token>` links). |
 | `CeolKit/Sources/CeolLogic` | The live logger's client rules, ported from the web: `FracIndex`, `LogState` (ordering, sets, cursor, anchors, merge), `OfflineRules`, `ABCQuery`, `Segments`, `NameMatch`, `TheSession` (id parsing). Records and op payloads stay `JSONValue`, so a row passes through with every field it arrived with. |
 | `CeolKit/Tests/CeolLogicTests` | Holds that port to the web's OWN fixture files (`frontend/src/**/*.fixtures.json`), read in place: every function in a file needs a Swift port, and every case must give the web's answer, including the name matcher's calibration bars. |
 | `CeolKit/Tests/CeolAPITests` | The client's headers, and decoding: `Fixtures/` holds **real** responses captured from the seeded server (`make ios-fixtures`), and each must decode into its generated type. |
@@ -22,6 +23,7 @@ contract or the palette. A change to either is picked up on the next build.
 
 ```bash
 make ios-test       # swift test in CeolKit (Mac, no simulator), then the app's tests in the simulator
+make ios-ui-test    # sign-in UI tests in the simulator, against a LOCAL server (see below)
 make ios-build      # build the app for the simulator
 make ios-fixtures   # re-capture the response fixtures from the seeded local DB
 ```
@@ -29,6 +31,22 @@ make ios-fixtures   # re-capture the response fixtures from the seeded local DB
 Or open `Ceol/Ceol.xcodeproj` in Xcode. The first build asks you to **trust the
 OpenAPIGenerator plugin** — it is Apple's, and it is what writes the API client. (The
 `make` targets pass `-skipPackagePluginValidation` for the same reason.)
+
+## Running against a local server
+
+Debug builds read three launch arguments (Xcode: Scheme > Run > Arguments):
+
+| Argument | Does |
+|---|---|
+| `-CeolServerURL http://127.0.0.1:5031` | Talk to a development server instead of https://ceol.io (plain HTTP to 127.0.0.1 needs no ATS exception). Sign-in links on that host are accepted too. |
+| `-CeolResetSession YES` | Start signed out. Keychain items survive a reinstall on the simulator. |
+| `-CeolOpenURL <url>` | Open a URL at launch, as if a link were tapped: how the UI tests open an emailed link. |
+
+`make ios-ui-test` expects the app on `IOS_TEST_SERVER` (default `http://127.0.0.1:5031`)
+and refuses anything but a local address. It signs in with the seeded password account,
+and mints a magic-link token straight into the local database
+(`scripts/mint_login_token.py`), so it never sends email. Local runs of the web app DO
+send real email, so don't type a real address into a locally-pointed app.
 
 ## Rules
 

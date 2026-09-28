@@ -5,31 +5,56 @@
 //  Created by Ian Varley on 6/29/26.
 //
 
+import CeolAPI
 import CeolDesign
+import CeolSession
 import SwiftUI
 
+/// The screen for where the app is: splash while launching, then sign-in, profile setup
+/// or the tabs (AppModel.Phase).
 struct ContentView: View {
-    @State private var showSplash = true
+    @Environment(AppModel.self) private var model
+    @State private var minimumSplashDone = false
 
     var body: some View {
         ZStack {
-            if showSplash {
-                SplashView()
-                    .transition(.opacity)
+            if model.phase == .launching || !minimumSplashDone {
+                SplashView().transition(.opacity)
             } else {
-                MainTabView()
-                    .transition(.opacity)
+                switch model.phase {
+                case .upgradeRequired: UpgradeRequiredView().transition(.opacity)
+                case .signedOut: SignInView().transition(.opacity)
+                case .profileSetup: ProfileSetupView().transition(.opacity)
+                case .signedIn, .launching: MainTabView().transition(.opacity)
+                }
             }
         }
+        .animation(.easeInOut(duration: 0.4), value: model.phase)
+        .animation(.easeInOut(duration: 0.4), value: minimumSplashDone)
         // The web is dark-only (static/css/theme.css), and the tokens are its palette.
         .preferredColorScheme(.dark)
+        .task { await model.start() }
         .task {
-            // Show the splash briefly, then fade into the app.
-            try? await Task.sleep(for: .seconds(2))
-            withAnimation(.easeInOut(duration: 0.5)) {
-                showSplash = false
-            }
+            // Long enough to read as a splash, not a flicker, when launch is instant.
+            try? await Task.sleep(for: .seconds(1))
+            minimumSplashDone = true
         }
+    }
+}
+
+/// The server says this build is too old to talk to it (app-config force_upgrade).
+struct UpgradeRequiredView: View {
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "arrow.down.app").font(.system(size: 56)).foregroundStyle(CeolTokens.primary)
+            Text("Time to update").font(.title2.bold())
+            Text("This version of Ceol is too old to talk to the server. Update it from the App Store to carry on.")
+                .multilineTextAlignment(.center)
+                .foregroundStyle(CeolTokens.secondary)
+        }
+        .padding(32)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(CeolTokens.bgColor)
     }
 }
 
@@ -54,10 +79,41 @@ struct MainTabView: View {
                 PlaceholderScreen(title: "Tunes", detail: "Your list, and the whole catalogue from the search field.")
             }
             Tab("Me", systemImage: "person.crop.circle", value: AppTab.me) {
-                PlaceholderScreen(title: "Me", detail: "Your profile, your instruments, and your account.")
+                MeView()
             }
         }
         .tint(CeolTokens.primary)
+    }
+}
+
+/// The account, for now: who you are signed in as, and signing out. The profile and
+/// the rest of /me arrive with the other screens (plan Phase 3).
+struct MeView: View {
+    @Environment(AppModel.self) private var model
+    @State private var confirmSignOut = false
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if let user = model.user {
+                    Section {
+                        LabeledContent("Name", value: "\(user.firstName) \(user.lastName)")
+                            .accessibilityIdentifier("me.name")
+                        if let email = user.email { LabeledContent("Email", value: email) }
+                    }
+                }
+                Section {
+                    Button("Sign out", role: .destructive) { confirmSignOut = true }
+                        .accessibilityIdentifier("me.signout")
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(CeolTokens.bgColor)
+            .navigationTitle("Me")
+            .confirmationDialog("Sign out of Ceol on this iPhone?", isPresented: $confirmSignOut, titleVisibility: .visible) {
+                Button("Sign out", role: .destructive) { Task { await model.signOut() } }
+            }
+        }
     }
 }
 
@@ -124,5 +180,12 @@ struct SplashView: View {
 
 #Preview("Tabs") {
     MainTabView()
+        .environment(AppModel(store: MemoryTokenStore("preview")))
+        .preferredColorScheme(.dark)
+}
+
+#Preview("Sign in") {
+    SignInView()
+        .environment(AppModel(store: MemoryTokenStore()))
         .preferredColorScheme(.dark)
 }
