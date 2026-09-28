@@ -32,6 +32,12 @@ components:
     bearer:
       type: http
       scheme: bearer
+  responses:
+    Error:
+      description: >-
+        Any 4xx/5xx. `code` says which (the operation's summary lists the ones it can
+        return); `message` is the server's own sentence, fit to show as is.
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
   schemas:
     Error:
       type: object
@@ -72,6 +78,18 @@ components:
         method: { type: string, enum: [password, magic_link, email_verification] }
         token: { type: string, description: Present only for native callers. }
         token_type: { type: string, enum: [Bearer] }
+    CheckEmail:
+      description: >-
+        Email-first login, step 1. password_login: ask for the password. magic_link_sent:
+        the account has no password, and a one-time login link was emailed. registration_started:
+        there is no account for the address; a link that creates one was emailed, and nothing
+        exists until it is opened (migration 056). `message` is the server's own wording.
+      type: object
+      required: [action, email, message]
+      properties:
+        action: { type: string, enum: [password_login, magic_link_sent, registration_started] }
+        email: { type: string, description: The address as the server normalized it (trimmed, lowercased). }
+        message: { type: string }
     Me:
       type: object
       required: [success, user]
@@ -700,43 +718,103 @@ paths:
   /api/auth/check-email:
     post:
       operationId: checkEmail
-      summary: Email-first login step 1 (password prompt / magic link / registration)
-      responses: { "200": { description: "{action, email, message}" } }
+      summary: >-
+        Email-first login step 1 (password prompt / magic link / registration). Errors: 400 (no
+        or malformed email), 403 (account deactivated).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string }
+      responses:
+        "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/CheckEmail" } } } }
+        default: { $ref: "#/components/responses/Error" }
   /api/auth/login-password:
     post:
       operationId: loginWithPassword
-      summary: Email + password login; native callers receive a Bearer token
-      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/LoginResponse" } } } } }
+      summary: >-
+        Email + password login; native callers receive a Bearer token. Errors: 401 (wrong email
+        or password), 403 (deactivated; or an unverified address, with `action:
+        resend_verification` in the body).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string }
+                password: { type: string }
+      responses:
+        "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/LoginResponse" } } } }
+        default: { $ref: "#/components/responses/Error" }
   /api/auth/exchange:
     post:
       operationId: exchangeLoginToken
       summary: >-
         Consume a token from a Universal Link for a session: a magic-link login, an unverified
         account's verification link, or a registration link (migration 056), which creates the
-        person and account, already verified, at this moment.
+        person and account, already verified, at this moment. Error codes: missing_token (400),
+        invalid_token (401: unknown, used or expired), account_inactive (403), account_exists
+        (409: a registration link for an address that has since got an account; log in instead).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string, description: "The last path segment of the /auth/login/<token> or /verify-email/<token> link." }
       responses:
         "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/LoginResponse" } } } }
-        "400": { description: "code missing_token: no token in the body" }
-        "401": { description: "code invalid_token: unknown, used or expired" }
-        "403": { description: "code account_inactive: the account has been deactivated" }
-        "409": { description: "code account_exists: a registration link for an address that has since got an account; log in instead" }
+        default: { $ref: "#/components/responses/Error" }
   /api/auth/resend-verification:
     post:
       operationId: resendVerification
       summary: Re-send the verification email (never reveals whether the address exists)
-      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Ok" } } } } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string }
+      responses:
+        "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Ok" } } } }
+        default: { $ref: "#/components/responses/Error" }
   /api/auth/logout:
     post:
       operationId: logout
       summary: Revoke the presented Bearer token (or cookie session)
       security: [{ bearer: [] }]
-      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Ok" } } } } }
+      responses:
+        "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Ok" } } } }
+        default: { $ref: "#/components/responses/Error" }
   /api/auth/set-password:
     post:
       operationId: setPassword
-      summary: Optional password for a magic-link account
+      summary: Optional password for a magic-link account. Error code password_too_short (400, under 8 characters).
       security: [{ bearer: [] }]
-      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Ok" } } } } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password: { type: string, minLength: 8 }
+      responses:
+        "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Ok" } } } }
+        default: { $ref: "#/components/responses/Error" }
   /api/auth/web-session:
     post:
       operationId: createWebSession
@@ -746,9 +824,11 @@ paths:
   /api/me:
     get:
       operationId: getMe
-      summary: Who am I
+      summary: Who am I (401 when the token is no longer valid)
       security: [{ bearer: [] }]
-      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Me" } } } } }
+      responses:
+        "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Me" } } } }
+        default: { $ref: "#/components/responses/Error" }
   /api/me/profile:
     get:
       operationId: getProfile
@@ -757,9 +837,27 @@ paths:
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Profile" } } } } }
     put:
       operationId: updateProfile
-      summary: Update profile (name, location, timezone, instruments)
+      summary: >-
+        Update profile (name, location, timezone, instruments). Every field is optional: an
+        absent name or location keeps its value, an empty location clears it.
       security: [{ bearer: [] }]
-      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Profile" } } } } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                first_name: { type: string }
+                last_name: { type: string }
+                city: { type: string }
+                state: { type: string }
+                country: { type: string }
+                timezone: { type: string }
+                instruments: { type: array, items: { type: string } }
+      responses:
+        "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Profile" } } } }
+        default: { $ref: "#/components/responses/Error" }
   /api/me/delete-account:
     post:
       operationId: deleteAccount

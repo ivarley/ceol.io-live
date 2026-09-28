@@ -313,6 +313,40 @@ class TestResponsesMatchSchemas:
             errors = list(validator.iter_errors(item))
             assert not errors, [e.message for e in errors]
 
+    def _validate(self, spec, schema, body):
+        validator = Draft202012Validator(schema, resolver=RefResolver.from_schema(spec))
+        errors = sorted(validator.iter_errors(body), key=lambda e: list(e.path))
+        assert not errors, "\n  ".join(
+            f"{'/'.join(str(p) for p in e.path) or '<root>'}: {e.message}" for e in errors
+        )
+
+    def test_check_email_validates(self, spec, client):
+        """Step 1 of the app's sign-in. An existing password account, so nothing is
+        emailed and nothing is written."""
+        r = client.post(
+            "/api/auth/check-email", json={"email": "IAN@ceol.io "}, headers={"X-Ceol-Client": "ios/0.0.0"}
+        )
+        assert r.status_code == 200, r.get_json()
+        body = r.get_json()
+        self._validate(spec, spec["components"]["schemas"]["CheckEmail"], body)
+        assert body["action"] == "password_login"
+        assert body["email"] == "ian@ceol.io"
+
+    def test_auth_errors_validate_as_the_error_response(self, spec, client):
+        """What the app reads when sign-in fails: the Error response every auth
+        operation declares as its default."""
+        schema = spec["components"]["responses"]["Error"]["content"]["application/json"]["schema"]
+        headers = {"X-Ceol-Client": "ios/0.0.0"}
+        wrong = client.post(
+            "/api/auth/login-password", json={"email": "ian@ceol.io", "password": "not-it"}, headers=headers
+        )
+        assert wrong.status_code == 401
+        self._validate(spec, schema, wrong.get_json())
+        bad_token = client.post("/api/auth/exchange", json={"token": "no-such-token"}, headers=headers)
+        assert bad_token.status_code == 401
+        self._validate(spec, schema, bad_token.get_json())
+        assert bad_token.get_json()["code"] == "invalid_token"
+
     def test_error_envelope(self, native_client):
         r = native_client.get("/api/resolve?path=/sessions/no/such/2020-01-01")
         assert r.status_code == 404
