@@ -368,3 +368,60 @@ class TestResponsesMatchSchemas:
         r = client.get("/api/me")
         assert r.status_code == 401
         assert r.get_json()["code"] == "unauthenticated"
+
+
+class TestLoginRefusalsHaveTheirOwnCodes:
+    """Both of these are 403, so the app can only tell them apart by `code`: one
+    wants "check your email", the other "this account is deactivated"."""
+
+    @pytest.fixture
+    def accounts(self):
+        import uuid
+
+        import bcrypt
+
+        from database import get_db_connection
+
+        tag = uuid.uuid4().hex[:8]
+        hashed = bcrypt.hashpw(b"pw-contract-1", bcrypt.gensalt()).decode()
+        conn = get_db_connection()
+        made = []
+        try:
+            cur = conn.cursor()
+            for kind, verified, active in (("unverified", False, True), ("inactive", True, False)):
+                email = f"{kind}{tag}@example.com"
+                cur.execute(
+                    "INSERT INTO person (first_name, last_name, created_date, last_modified_date) "
+                    "VALUES ('Code', 'Check', NOW(), NOW()) RETURNING person_id"
+                )
+                pid = cur.fetchone()[0]
+                cur.execute(
+                    "INSERT INTO user_account (person_id, username, user_email, hashed_password, timezone, "
+                    "email_verified, is_active, created_date, last_modified_date) "
+                    "VALUES (%s, %s, %s, %s, 'UTC', %s, %s, NOW(), NOW()) RETURNING user_id",
+                    (pid, f"{kind}{tag}", email, hashed, verified, active),
+                )
+                made.append((kind, email, cur.fetchone()[0], pid))
+            conn.commit()
+            yield {kind: email for kind, email, _, _ in made}
+        finally:
+            cur = conn.cursor()
+            for _, _, uid, pid in made:
+                cur.execute("DELETE FROM login_history WHERE user_id = %s", (uid,))
+                cur.execute("DELETE FROM user_account WHERE user_id = %s", (uid,))
+                cur.execute("DELETE FROM person WHERE person_id = %s", (pid,))
+            conn.commit()
+            conn.close()
+
+    def test_unverified_and_deactivated_differ(self, client, accounts):
+        headers = {"X-Ceol-Client": "ios/0.0.0"}
+        unverified = client.post(
+            "/api/auth/login-password", json={"email": accounts["unverified"], "password": "pw-contract-1"}, headers=headers
+        )
+        assert unverified.status_code == 403
+        assert unverified.get_json()["code"] == "email_not_verified"
+        inactive = client.post(
+            "/api/auth/login-password", json={"email": accounts["inactive"], "password": "pw-contract-1"}, headers=headers
+        )
+        assert inactive.status_code == 403
+        assert inactive.get_json()["code"] == "account_inactive"

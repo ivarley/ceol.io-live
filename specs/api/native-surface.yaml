@@ -720,7 +720,7 @@ paths:
       operationId: checkEmail
       summary: >-
         Email-first login step 1 (password prompt / magic link / registration). Errors: 400 (no
-        or malformed email), 403 (account deactivated).
+        or malformed email), account_inactive (403).
       requestBody:
         required: true
         content:
@@ -737,8 +737,8 @@ paths:
     post:
       operationId: loginWithPassword
       summary: >-
-        Email + password login; native callers receive a Bearer token. Errors: 401 (wrong email
-        or password), 403 (deactivated; or an unverified address, with `action:
+        Email + password login; native callers receive a Bearer token. Error codes: 401 (wrong
+        email or password), account_inactive (403), email_not_verified (403, with `action:
         resend_verification` in the body).
       requestBody:
         required: true

@@ -1206,7 +1206,8 @@ def check_email_api():
     if user:
         # User exists
         if not user.is_active:
-            return jsonify({"error": "This account has been deactivated. Please contact support."}), 403
+            return jsonify({"error": "This account has been deactivated. Please contact support.",
+                            "code": "account_inactive"}), 403
 
         if user.has_password():
             # User has password - prompt for password login
@@ -1315,7 +1316,7 @@ def login_password_api():
             user_agent,
             failure_reason="ACCOUNT_INACTIVE",
         )
-        return jsonify({"error": "This account has been deactivated"}), 403
+        return jsonify({"error": "This account has been deactivated", "code": "account_inactive"}), 403
 
     if not user.check_password(password):
         log_login_event(
@@ -1337,9 +1338,11 @@ def login_password_api():
             user_agent,
             failure_reason="EMAIL_NOT_VERIFIED",
         )
+        # A code of its own, so the app can tell this from a deactivated account (also 403).
         return jsonify({
             "error": "Please verify your email address first",
-            "action": "resend_verification"
+            "action": "resend_verification",
+            "code": "email_not_verified",
         }), 403
 
     # Successful login. establish_session (api_app_routes) records the session the
