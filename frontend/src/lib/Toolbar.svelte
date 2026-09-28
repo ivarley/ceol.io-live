@@ -73,6 +73,21 @@
   // that come AFTER it. Kept here rather than in CSS because only this
   // component knows which buttons were asked for.
   const notchRight = $derived(21 + ((onSort ? 1 : 0) + (onAdd ? 1 : 0)) * 50)
+
+  // The panel clips its contents only while it animates. Once it has finished
+  // opening it stops, so a droplist inside it (My Tunes' sort, type and instrument
+  // menus) can hang past the panel's bottom edge instead of being cut off there.
+  // Closing clips again at once, so the collapse animates cleanly. The timer covers
+  // reduced motion, where there is no transition to end.
+  let settled = $state(false)
+  $effect(() => {
+    if (!open) {
+      settled = false
+      return
+    }
+    const t = setTimeout(() => (settled = true), 300)
+    return () => clearTimeout(t)
+  })
 </script>
 
 <div class="kit-toolbar-wrap">
@@ -158,7 +173,15 @@
   {/if}
 
   {#if filter}
-    <div id={panelId} class="kit-filter-panel" class:open style="--kit-notch-right: {notchRight}px">
+    <div
+      id={panelId}
+      class="kit-filter-panel"
+      class:open
+      class:settled={open && settled}
+      style="--kit-notch-right: {notchRight}px"
+      ontransitionend={(e) => {
+        if (open && e.target === e.currentTarget && e.propertyName === 'grid-template-rows') settled = true
+      }}>
       <div class="kit-filter-inner">
         {@render filter()}
         {#if onClear && activeCount > 0}
@@ -256,6 +279,9 @@
   .kit-filter-panel.open {
     grid-template-rows: 1fr;
     opacity: 1;
+  }
+  .kit-filter-panel.settled .kit-filter-inner {
+    overflow: visible;
   }
   .kit-filter-panel.open .kit-filter-inner {
     margin-top: var(--sp-2, 8px);

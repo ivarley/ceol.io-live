@@ -914,6 +914,16 @@
     {/if}
   {:else}
     <div class="tunes-grid" id="tunes-grid" style="display: grid;">
+      {#if !isMobile}
+        <!-- Desktop column headings, on the rows' own grid: badge, name, then the type
+             and the three counts a phone can only show one of. -->
+        <div class="tune-list-columns" aria-hidden="true">
+          <span class="tune-list-col-type">Type</span>
+          <span class="tune-list-col-num" class:sorted={sort.type === 'popularity'}>Tunebooks</span>
+          <span class="tune-list-col-num" class:sorted={sort.type === 'plays'}>My plays</span>
+          <span class="tune-list-col-num" class:sorted={sort.type === 'heard'}>Heard</span>
+        </div>
+      {/if}
       {#if filters.instrument && dimmedTunes.length > 0}
         {#each matches as tune (tune.person_tune_id)}
           {@const d = displayStatusFor(tune)}
@@ -923,6 +933,7 @@
             displayStatus={d.status}
             typeLabel={typeBadgeLabel(tune, sort.type)}
             typeTitle={typeBadgeTitle(sort.type)}
+            sortType={sort.type}
             onshow={(t) => showTuneDetail(t.person_tune_id)}
             onincrement={incrementHeard} />
         {/each}
@@ -935,6 +946,7 @@
             displayStatus={d.status}
             typeLabel={typeBadgeLabel(tune, sort.type)}
             typeTitle={typeBadgeTitle(sort.type)}
+            sortType={sort.type}
             onshow={(t) => showTuneDetail(t.person_tune_id)}
             onincrement={incrementHeard} />
         {/each}
@@ -947,6 +959,7 @@
             displayStatus={d.status}
             typeLabel={typeBadgeLabel(tune, sort.type)}
             typeTitle={typeBadgeTitle(sort.type)}
+            sortType={sort.type}
             onshow={(t) => showTuneDetail(t.person_tune_id)}
             onincrement={incrementHeard} />
         {/each}

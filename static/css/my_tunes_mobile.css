@@ -376,11 +376,62 @@
     transition: background-color 0.1s;
     cursor: pointer;
     display: grid;
-    /* type | name | status. The type column is fixed-width (wide enough for
-       "Strathspey") so every tune name starts at the same x. */
-    grid-template-columns: 5.75rem minmax(0, 1fr) auto;
+    grid-template-columns: var(--tune-row-columns);
     gap: 12px;
     align-items: center;
+}
+
+/* The desktop row: learn status | name | type | tunebooks | my plays | heard. The
+   status column fits "Learning"; the type column is wide enough for "Strathspey";
+   the counts are fixed-width so they line up under their headings. The phone
+   layout (below, max-width 768px) replaces this with its own three columns. */
+.tunes-grid {
+    --tune-row-columns: 5.75rem minmax(0, 1fr) 6.25rem repeat(3, 4.75rem);
+}
+
+/* Desktop column headings, on the rows' own grid (App.svelte renders them only
+   above 768px). They name the three counts, which are otherwise bare numbers. */
+.tune-list-columns {
+    display: grid;
+    grid-template-columns: var(--tune-row-columns);
+    gap: 12px;
+    padding: 0 8px 6px;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted, #6c757d);
+}
+
+.tune-list-col-type {
+    grid-column: 3;
+}
+
+.tune-list-col-num {
+    text-align: right;
+}
+
+.tune-list-col-num.sorted {
+    color: var(--text-color);
+}
+
+.tune-count {
+    grid-row: 1;
+    text-align: right;
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-muted, #6c757d);
+}
+
+.tune-count-tunebooks { grid-column: 4; }
+.tune-count-plays { grid-column: 5; }
+.tune-count-heard { grid-column: 6; }
+
+/* The count the list is sorted by, so the order reads at a glance. */
+.tune-count.sorted {
+    color: var(--text-color);
+    font-weight: 600;
 }
 
 .tune-card:first-child {
@@ -408,9 +459,10 @@
 }
 
 .tune-type-cell {
-    grid-column: 1;
+    grid-column: 3;
+    grid-row: 1;
     display: flex;
-    justify-content: flex-end; /* the chip sits against the name */
+    justify-content: flex-start;
     min-width: 0;
 }
 
@@ -420,6 +472,7 @@
     gap: 12px;
     margin-bottom: 0;
     grid-column: 2;
+    grid-row: 1;
     min-width: 0;
 }
 
@@ -463,7 +516,8 @@
     font-size: 13px;
     color: var(--text-muted, #6c757d);
     align-items: center;
-    grid-column: 3;
+    grid-column: 1;
+    grid-row: 1;
 }
 
 .tune-meta-item {
@@ -1199,6 +1253,8 @@
 
     .tune-type-cell {
         grid-column: 2;
+        /* The chip sits against the name. */
+        justify-content: flex-end;
     }
 
     .tune-card-header {
@@ -1756,7 +1812,7 @@
 }
 
 .filter-date-input {
-    flex: 1;
+    flex: 0 1 auto;
     min-width: 0;
     padding: 6px 8px;
     font: inherit;
@@ -1803,7 +1859,9 @@
 }
 
 .filter-date-row .filter-date-input {
-    flex: 1;
+    /* A date is a date's width, not the panel's. */
+    flex: 0 1 auto;
+    width: 11rem;
     min-width: 0;
 }
 
