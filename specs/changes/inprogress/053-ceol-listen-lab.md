@@ -438,10 +438,13 @@ On the retrieval bench, 502 segments over eight nights (recordings 1, 2, 3,
 | and the tracker kept off a third of the pitch | 0.878 | 0.930 |
 | and the previous tune pulling by how predictable its follower is | 0.894 | 0.930 |
 | and 2/4 read in eighths, tuplets applied, one placement for both sides | 0.890 | 0.932 |
-| and heard notes outside the key and its modal neighbour dropped | **0.896** | **0.932** |
+| and heard notes outside the key and its modal neighbour dropped | 0.896 | 0.932 |
+| and yin fused with Basic Pitch and PESTO | **0.918** | **0.944** |
 | the session's transitions alone, no audio | 0.245 | 0.368 |
 
-The last two rows are from 2026-09-26, below. The parser correction is +3/-5
+The last row is from 2026-09-28 (+16/-5 against the row above, p 0.03; at
+thirty seconds, audio alone, 0.687 to 0.763, +51/-13), below. The two before
+it are from 2026-09-26. The parser correction is +3/-5
 against the row above it (p 0.73) and stands because the older row was reading
 every polka at half length. The key filter is +5/-2 at two minutes (p 0.45);
 it is on because it is worth three to four points at thirty seconds, which is
@@ -1153,6 +1156,46 @@ it is not a brief loud interloper. The next suspects are the model's own
 notes (what it hears at all, against yin, on the segments it loses) rather
 than the choice among them.
 
+**Three trackers that each lose to yin, fused, beat it by eight points at
+thirty seconds (2026-09-28).** Two more pretrained trackers, both monophonic
+like yin, both on the Mac's GPU. PESTO (`frontends/pestotrack.py`, a small
+self-supervised model, weights trained on singing) and CREPE through
+torchcrepe (`frontends/crepetrack.py`, supervised; the tiny model, since the
+full one takes 94s per two minutes of audio against 11s and scored 52.5%
+against 50.6% on the labels). On the hand labels, share of labelled time
+right with the voicing gate open: yin 56.8%, CREPE full 52.5%, CREPE tiny
+50.6%, PESTO 47.1%. Neither model's confidence is a usable gate: PESTO falls
+from 0.827 top-1 open to 0.805 at 0.05, 0.502 at 0.1 and 0.169 at 0.2.
+
+Audio alone, 502 segments, paired against yin:
+
+| front ends | 30 s top-1 | 30 s top-5 | 30 s paired | 120 s top-1 | 120 s paired |
+|---|---|---|---|---|---|
+| yin | 0.687 | 0.779 | | 0.867 | |
+| PESTO | 0.641 | 0.747 | +39/-62 | 0.827 | +19/-39 |
+| Basic Pitch | 0.641 | 0.763 | +45/-68 | 0.835 | +20/-36 |
+| CREPE tiny | 0.478 | 0.610 | +28/-133 | | |
+| yin + CREPE tiny | 0.683 | 0.821 | +23/-25 | | |
+| yin + PESTO | 0.727 | 0.829 | +38/-18, p 0.01 | 0.882 | +17/-9 |
+| yin + Basic Pitch | 0.743 | 0.851 | +41/-13, p < 0.001 | | |
+| yin + Basic Pitch + PESTO | **0.763** | **0.859** | **+51/-13, p < 0.001** | 0.890 | +20/-8, p 0.04 |
+| the same + CREPE tiny | 0.759 | 0.859 | +5/-7 against the three | | |
+
+With set decoding at 120 s, against the headline 0.896 / 0.932: yin + PESTO
+0.914 / 0.940 (+13/-4, p 0.049), yin + Basic Pitch 0.916 / 0.944 (+14/-4, p
+0.03), all three **0.918 / 0.944** (+16/-5, p 0.03). PESTO on top of yin and
+Basic Pitch is +23/-13 at 30 s (p 0.13) and +4/-3 at 120 s: it is kept in the
+fusion, but its share of the gain is not yet separable from noise.
+
+Each tracker alone is behind yin, and each is right where yin is not: choosing
+per segment the better of yin and PESTO would give 0.904 at 120 s, of yin and
+Basic Pitch 0.906, of all three 0.922, and the sum fusion recovers most of
+that without choosing. The earlier fused number (0.867 against 0.867) was
+Basic Pitch version 1, audio alone, at 120 s, where fusion has least room;
+the gain lives at thirty seconds, which is where the live board answers.
+CREPE tiny is too weak to add anything and is not used. Fusing on the board
+needs a pitch expert for each tracker; none is there yet.
+
 ### Where a note starts, and why sung labels sounded late
 
 Drawing eighths on Tom Sullivan's, the player heard every sung label behind
@@ -1376,7 +1419,9 @@ In rough order of what they are worth, as of 2026-09-25 (items added
   follows when it is wrong is not settled, and the loudest-note melody is the
   first suspect, and it is ruled out: continuity and highest-note melodies
   both lose to it (above).
-  CREPE, RMVPE (built for a melody over accompaniment) and PESTO are untried.
+  PESTO and CREPE are now built: PESTO fused with yin and Basic Pitch is the
+  new headline, CREPE tiny adds nothing (above). RMVPE (built for a melody
+  over accompaniment) is untried.
   2. Whole-segment notation alignment: the player segments many more
   sessions, each segment one tune, so the whole performance can be aligned
   to the notation with its repeats written out -- much stronger than the
@@ -1416,6 +1461,7 @@ In rough order of what they are worth, as of 2026-09-25 (items added
   still sit below anything a D whistle can play.
 - **Duration in the matcher.** The eighth-note reading carries duration only
   as repeated symbols; nothing scores rhythm directly.
-- Front-end fusion (several trackers) is a bench finding not on the board;
+- Front-end fusion (several trackers) is a bench finding not on the board,
+  and since 2026-09-28 the largest one at thirty seconds (0.687 to 0.763);
   per-night variation (0.841 to 0.960 top-1 at the headline configuration) is wide and unexplained;
   nothing runs live.

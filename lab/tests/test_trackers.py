@@ -81,3 +81,18 @@ def test_basic_pitch_melody_is_the_loudest_note_and_merges_repeats():
                              min_voiced=0.5, fold_pitch_classes=True)
     assert [n["midi"] % 12 for n in notes] == [2, 4]
     assert not np.isnan(f0[20]) and voiced[20] == 1
+
+
+def test_pesto_band_is_applied_at_the_note_step():
+    """PESTO has no search range; frames outside yin's band are unvoiced
+    afterwards, so a bass note under the tune never becomes a melody note."""
+    import numpy as np
+
+    from lab.frontends.pestotrack import PestoFrontEnd
+
+    fe = PestoFrontEnd(min_voiced=0.0, split_repeats=None, out_of_key_drop=None)
+    times = np.arange(60) * 10.0
+    f0 = np.array([110.0] * 30 + [587.33] * 30)    # A2 under the band, then D5
+    notes = fe.notes_from_track(times, f0, np.ones(60))
+    assert [n["midi"] % 12 for n in notes] == [2]
+    assert "fmin" not in fe.note_params() and "fmin" not in fe.track_params()

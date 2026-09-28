@@ -65,12 +65,20 @@ segment, looks the notes up, optionally applies the session's transitions,
 and scores top-1, top-5 and mean reciprocal rank. Pitch tracks are cached,
 so a full pass over 502 segments takes minutes.
 
-The headline configuration (0.896 top-1, 0.932 top-5 on 2026-09-26 with parser version 2 and the key filter, which is on by default, about four minutes with pitch tracks cached; indexes rebuild with `lab index --candidate-set repertoire -n 6 --fold-octaves [--particalized]`):
+The headline configuration (0.918 top-1, 0.944 top-5 on 2026-09-28: yin,
+Basic Pitch and PESTO fused, parser version 2, the key filter on by default;
+a few minutes with pitch tracks cached, and PESTO and Basic Pitch need the
+Mac's GPU or much longer; indexes rebuild with `lab index --candidate-set
+repertoire -n 6 --fold-octaves [--particalized]`):
 
 ```bash
-lab bench retrieval --frontend yin --fold-octaves --particalized --fusion sum \
+lab bench retrieval --frontend yin,basic_pitch,pesto --fold-octaves --particalized --fusion sum \
     -n 6 --seconds 120 --prior set_viterbi --beta 0.15 --candidate-set repertoire
 ```
+
+yin alone at the same settings is 0.896 / 0.932. `--param` applies to every
+fused front end, and one that does not have the parameter refuses it, so
+per-tracker settings live in each front end's defaults.
 
 - `--prior none` is the audio alone.
 - `sequence` is an oracle, handed the true previous tune.
