@@ -1705,3 +1705,14 @@ The plan (Phases 0-6) runs from here in `ios/`; see `ios/README.md` for the layo
     declared only `op_id`, `type`, `tune_id`, so a generated client could not send a
     status) and a typed `MyTunesOpResult`, with the Error response as its default. A
     contract test sends every op type the app uses.
+  - **4b DONE 2026-09-28.** Admin and Help open the web in a Safari view, signed in
+    through `POST /api/auth/web-session` (Help falls back to the plain page, being
+    public). The handoff link moved from `/auth/login/<token>` to `/auth/web/<token>`
+    (the same login view): the app claims `/auth/login/*` as a Universal Link, so the
+    old link could open the app instead of the page. A login through the handoff sets
+    `session.in_app`, and the web then leaves out its tab bar, since that browser is the
+    app's own Safari view (its cookies are separate from Safari's). `next` also refuses
+    backslashes (`/\evil.example` reads as `//evil.example` in a browser); the check is
+    `auth.is_site_path`, shared by the API and the login redirect. Share: a session and
+    a night have the system share sheet with their web address. A tune has none: the
+    web has no page for a tune outside a session.

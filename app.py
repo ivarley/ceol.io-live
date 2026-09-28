@@ -466,6 +466,10 @@ app.add_url_rule("/logout", "logout", logout)
 app.add_url_rule("/api/auth/check-email", "check_email_api", public_api(check_email_api), methods=["POST"])
 app.add_url_rule("/api/auth/login-password", "login_password_api", public_api(login_password_api), methods=["POST"])
 app.add_url_rule("/auth/login/<token>", "login_with_token", login_with_token)
+# The app -> web handoff (POST /api/auth/web-session): the same one-time login on a
+# path the iOS app does NOT claim as a Universal Link, so the link loads in the app's
+# browser view instead of bouncing back into the app.
+app.add_url_rule("/auth/web/<token>", "web_handoff_login", login_with_token)
 # The app-shell API (spec 052): auth handshake, identity, config, home, resolve.
 # Handlers carry their own @public_api / @api_login_required markers.
 app.add_url_rule("/api/auth/exchange", "auth_exchange", auth_exchange, methods=["POST"])

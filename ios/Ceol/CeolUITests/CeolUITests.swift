@@ -47,7 +47,7 @@ final class CeolUITests: XCTestCase {
         password.tap()
         password.typeText("password123")
         app.buttons["signin.submit"].tap()
-        XCTAssertTrue(app.tabBars.buttons["Me"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.tabBars.buttons["Me"].firstMatch.waitForExistence(timeout: 10))
     }
 
     private func snapshot(_ name: String) {
@@ -65,7 +65,7 @@ final class CeolUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Welcome back, Ian"].waitForExistence(timeout: 10))
         snapshot("home")
 
-        app.tabBars.buttons["Sessions"].tap()
+        app.tabBars.buttons["Sessions"].firstMatch.tap()
         let mueller = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Mueller Session'")).firstMatch
         XCTAssertTrue(mueller.waitForExistence(timeout: 10))
         snapshot("sessions")
@@ -88,7 +88,7 @@ final class CeolUITests: XCTestCase {
     func testBrowsingTunes() throws {
         let app = launch()
         signIn(app)
-        app.tabBars.buttons["Tunes"].tap()
+        app.tabBars.buttons["Tunes"].firstMatch.tap()
         let cooleys = app.buttons.containing(NSPredicate(format: "label CONTAINS \"Cooley's\"")).firstMatch
         XCTAssertTrue(cooleys.waitForExistence(timeout: 10))
         snapshot("tunes")
@@ -113,7 +113,7 @@ final class CeolUITests: XCTestCase {
     func testEditingATune() throws {
         let app = launch()
         signIn(app)
-        app.tabBars.buttons["Tunes"].tap()
+        app.tabBars.buttons["Tunes"].firstMatch.tap()
         let search = app.searchFields.firstMatch
         XCTAssertTrue(search.waitForExistence(timeout: 10))
         search.tap()
@@ -159,12 +159,34 @@ final class CeolUITests: XCTestCase {
                 .waitForExistence(timeout: 10))
     }
 
+    /// Phase 4b: Admin opens the web in a Safari view, already signed in.
+    @MainActor
+    func testAdminOpensTheWebSignedIn() throws {
+        let app = launch()
+        signIn(app)
+        app.tabBars.buttons["Me"].firstMatch.tap()
+        let admin = app.buttons["me.admin"]
+        XCTAssertTrue(admin.waitForExistence(timeout: 10))
+        admin.tap()
+        // The web's own page, not its login form.
+        let web = app.webViews.firstMatch
+        XCTAssertTrue(web.waitForExistence(timeout: 20))
+        let people = web.links.containing(NSPredicate(format: "label CONTAINS 'People'")).firstMatch
+        XCTAssertTrue(people.waitForExistence(timeout: 20), app.debugDescription)
+        XCTAssertFalse(web.secureTextFields.firstMatch.exists, "landed on the login form")
+        // The app's tab bar is the navigation; the web leaves its own out here.
+        XCTAssertFalse(web.links["Sessions"].exists && web.links["Me"].exists, "the web's tab bar is showing")
+        snapshot("admin")
+        app.buttons["Done"].firstMatch.tap()
+        XCTAssertTrue(admin.waitForExistence(timeout: 10))
+    }
+
     /// Phase 3d: Me shows the profile and opens it to edit (cancelled: seed data stays put).
     @MainActor
     func testMeShowsTheProfile() throws {
         let app = launch()
         signIn(app)
-        app.tabBars.buttons["Me"].tap()
+        app.tabBars.buttons["Me"].firstMatch.tap()
         XCTAssertTrue(app.staticTexts["Ian Varley"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS '@ian' AND label CONTAINS 'Austin'")).firstMatch.exists)
         XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS 'Fiddle'")).firstMatch.exists)
@@ -195,7 +217,7 @@ final class CeolUITests: XCTestCase {
         app.buttons["signin.submit"].tap()
 
         // Signed in: the tabs, and Me knows who we are.
-        let me = app.tabBars.buttons["Me"]
+        let me = app.tabBars.buttons["Me"].firstMatch
         XCTAssertTrue(me.waitForExistence(timeout: 10))
         me.tap()
         XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS 'Ian'")).firstMatch.waitForExistence(timeout: 5))
@@ -222,7 +244,7 @@ final class CeolUITests: XCTestCase {
         password.typeText("not-the-password")
         app.buttons["signin.submit"].tap()
         XCTAssertTrue(app.staticTexts["signin.error"].waitForExistence(timeout: 10))
-        XCTAssertFalse(app.tabBars.buttons["Me"].exists)
+        XCTAssertFalse(app.tabBars.buttons["Me"].firstMatch.exists)
     }
 
     @MainActor
@@ -240,7 +262,7 @@ final class CeolUITests: XCTestCase {
             throw XCTSkip("No throwaway account (make ios-ui-test creates one).")
         }
         let app = launch(openURL: "\(server!)/auth/login/\(token)")
-        let me = app.tabBars.buttons["Me"]
+        let me = app.tabBars.buttons["Me"].firstMatch
         XCTAssertTrue(me.waitForExistence(timeout: 15))
         me.tap()
         app.buttons["me.delete"].tap()
@@ -265,6 +287,6 @@ final class CeolUITests: XCTestCase {
             throw XCTSkip("No CEOL_TEST_LOGIN_TOKEN (make ios-ui-test mints one).")
         }
         let app = launch(openURL: "\(server!)/auth/login/\(token)")
-        XCTAssertTrue(app.tabBars.buttons["Me"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.tabBars.buttons["Me"].firstMatch.waitForExistence(timeout: 15))
     }
 }

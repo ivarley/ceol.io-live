@@ -36,6 +36,7 @@ from api_auth import (
 )
 from auth import (
     User,
+    is_site_path,
     cleanup_expired_sessions,
     complete_pending_registration,
     create_session,
@@ -832,7 +833,7 @@ def auth_web_session():
     /auth/login/<token>?next=<path>. Short-lived, single use, same user."""
     data = request.get_json(silent=True) or {}
     next_path = (data.get("next") or "/").strip()
-    if not next_path.startswith("/") or next_path.startswith("//"):
+    if not is_site_path(next_path):
         return api_error("next must be a site-relative path", 400, "invalid_next")
 
     token = generate_login_token()
@@ -851,7 +852,7 @@ def auth_web_session():
         conn.commit()
     finally:
         conn.close()
-    url = url_for("login_with_token", token=token, next=next_path, _external=True)
+    url = url_for("web_handoff_login", token=token, next=next_path, _external=True)
     return jsonify({"success": True, "url": url, "expires_at": expires})
 
 

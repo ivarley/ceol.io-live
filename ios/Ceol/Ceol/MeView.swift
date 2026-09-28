@@ -1,5 +1,5 @@
 // The Me tab (plan Phase 3d), the app's twin of /me: your profile, then the account
-// rows (Admin for system admins, Help), then Sign out, and Delete Account last and on
+// rows (Admin for system admins, Help — the web, in a Safari view), then Sign out, and Delete Account last and on
 // its own. Created / last login stay on the web; nobody checks when they signed up.
 //
 // Edit opens the profile form from first sign-in (ProfileSetupView, editing).
@@ -16,6 +16,9 @@ struct MeView: View {
     @State private var editing = false
     @State private var confirmSignOut = false
     @State private var deleting = false
+    @State private var page: WebPage?
+    @State private var opening: String?
+    @State private var webFailure: String?
 
     var body: some View {
         NavigationStack {
@@ -32,6 +35,12 @@ struct MeView: View {
                 .sheet(isPresented: $editing) {
                     ProfileSetupView(editing: true) { Task { await load() } }
                 }
+                .sheet(item: $page) { SafariView(url: $0.url).ignoresSafeArea() }
+                .alert("Couldn't open that page", isPresented: Binding(get: { webFailure != nil }, set: { if !$0 { webFailure = nil } })) {
+                    Button("OK") {}
+                } message: {
+                    Text(webFailure ?? "")
+                }
                 .confirmationDialog("Sign out of Ceol on this iPhone?", isPresented: $confirmSignOut, titleVisibility: .visible) {
                     Button("Sign out", role: .destructive) { Task { await model.signOut() } }
                 }
@@ -47,7 +56,22 @@ struct MeView: View {
         }
     }
 
-    private func web(_ path: String) -> URL { model.server.appending(path: path) }
+    /// A web page, signed in: mint the one-time link, then open it. The handoff also
+    /// tells the web it is inside the app, so it leaves out its own tab bar. A public
+    /// page (Help) still opens, plainly, when the handoff can't be made.
+    private func openWeb(_ path: String, needsSignIn: Bool) async {
+        opening = path
+        defer { opening = nil }
+        do {
+            page = WebPage(url: try await model.auth.webSession(next: path))
+        } catch where !needsSignIn {
+            page = WebPage(url: model.webURL(path))
+        } catch let f as AuthFailure {
+            webFailure = f.message
+        } catch {
+            webFailure = "Couldn't reach Ceol. Check your connection and try again."
+        }
+    }
 
     @ViewBuilder private func list(_ p: Profile) -> some View {
         let profile = p.profile
@@ -74,11 +98,19 @@ struct MeView: View {
             }
             Section {
                 if user?.isSystemAdmin == true {
-                    Link(destination: web("admin")) { WebRow(title: "Admin") }
+                    Button { Task { await openWeb("/admin", needsSignIn: true) } } label: {
+                        WebRow(title: "Admin", busy: opening == "/admin")
+                    }
+                    .disabled(opening != nil)
+                    .accessibilityIdentifier("me.admin")
                 }
-                Link(destination: web("help")) { WebRow(title: "Help") }
+                Button { Task { await openWeb("/help", needsSignIn: false) } } label: {
+                    WebRow(title: "Help", busy: opening == "/help")
+                }
+                .disabled(opening != nil)
+                .accessibilityIdentifier("me.help")
             } footer: {
-                if user?.isSystemAdmin == true { Text("Admin opens on the web.") }
+                if user?.isSystemAdmin == true { Text("Admin opens the web, signed in.") }
             }
             Section {
                 Button("Sign out", role: .destructive) { confirmSignOut = true }
@@ -101,12 +133,18 @@ struct MeView: View {
 /// A row that leaves the app for a page on the web.
 private struct WebRow: View {
     let title: String
+    var busy = false
 
     var body: some View {
         HStack {
             Text(title).foregroundStyle(CeolTokens.textColor)
             Spacer()
-            Image(systemName: "arrow.up.right.square").foregroundStyle(CeolTokens.secondary)
+            if busy {
+                ProgressView()
+            } else {
+                Image(systemName: "safari").foregroundStyle(CeolTokens.secondary)
+            }
         }
+        .contentShape(Rectangle())
     }
 }

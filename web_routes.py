@@ -28,6 +28,7 @@ from timezone_utils import (
 )
 from auth import (
     User,
+    is_site_path,
     create_session,
     cleanup_expired_sessions,
     generate_password_reset_token,
@@ -1420,6 +1421,11 @@ def login_with_token(token):
 
     session.permanent = True
     session["db_session_id"] = session_id
+    # Reached through the app's handoff (/auth/web/<token>): this browser is the
+    # app's own Safari view, whose cookies are its own, so the web leaves out its tab
+    # bar there for as long as the session lasts. The app already has one.
+    if request.endpoint == "web_handoff_login":
+        session["in_app"] = True
 
     # Cache admin session IDs
     conn = get_db_connection()
@@ -1444,7 +1450,7 @@ def login_with_token(token):
     # App -> web handoff (spec 052 A7): a link minted by POST /api/auth/web-session
     # carries ?next=<site path>; the person is already set up, so go straight there.
     next_path = (request.args.get("next") or "").strip()
-    if next_path.startswith("/") and not next_path.startswith("//"):
+    if is_site_path(next_path):
         return redirect(next_path)
 
     # Redirect to password setup (optional) for users without password

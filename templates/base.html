@@ -368,8 +368,11 @@
    :has(.tab-bar) — if :has() were ever unsupported that would fail OPEN, showing
    both navigations at once.
    A full-screen tool sets hide_tab_bar (the recording segmenter: its transport and
-   timeline need the whole height, and it is a task, not somewhere you navigate from). #}
-<body class="docs-page{% if not hide_tab_bar %} has-tab-bar{% endif %}">
+   timeline need the whole height, and it is a task, not somewhere you navigate from).
+   Inside the iOS app's Safari view (session.in_app, set by its sign-in handoff) the
+   app's own tab bar is the navigation, so the web's is left out. #}
+{% set show_tab_bar = not hide_tab_bar and not session.get('in_app') %}
+<body class="docs-page{% if show_tab_bar %} has-tab-bar{% endif %}">
 <header class="header fixed-top">	    
     <div class="branding docs-branding">
         <div class="container-fluid position-relative" style="padding-top: 3px; padding-bottom: 3px;">
@@ -451,7 +454,7 @@
     </div>
 
 {# Bottom tab bar -- phone only, signed-in only. See templates/tab_bar.html. #}
-{% if not hide_tab_bar %}{% include 'tab_bar.html' %}{% endif %}
+{% if show_tab_bar %}{% include 'tab_bar.html' %}{% endif %}
 
 {# Share sheet. Hidden until the header button opens it; the QR's src is set at that
    point rather than on page load, so carrying this on every page costs nothing. #}

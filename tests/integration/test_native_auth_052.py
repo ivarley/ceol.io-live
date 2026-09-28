@@ -411,21 +411,42 @@ class TestWebSession:
         )
         assert r.status_code == 200
         url = r.get_json()["url"]
-        assert "/auth/login/" in url and "next=%2Fadmin" in url or "next=/admin" in url
+        # Not /auth/login/: the app claims that path as a Universal Link, so the
+        # handoff would open the app instead of the web.
+        assert "/auth/web/" in url and ("next=%2Fadmin" in url or "next=/admin" in url)
         path = url.split("://", 1)[1]
         path = path[path.index("/") :]  # noqa: E203 (black slice style)
         r2 = client.get(path)
         assert r2.status_code == 302
         assert r2.headers["Location"].endswith("/admin")
 
+    def test_the_app_browser_has_no_tab_bar(self, client):
+        """Signed in through the handoff, the web leaves out its tab bar: that
+        browser is the app's Safari view, and the app has its own."""
+        token = _login_native(client)["token"]
+        url = client.post(
+            "/api/auth/web-session", json={"next": "/help"}, headers=_bearer(token)
+        ).get_json()["url"]
+        path = url.split("://", 1)[1]
+        client.get(path[path.index("/") :])  # noqa: E203
+        page = client.get("/help").get_data(as_text=True)
+        assert 'id="tab-bar"' not in page and "has-tab-bar" not in page
+
     def test_rejects_offsite_next(self, client):
         token = _login_native(client)["token"]
-        r = client.post(
-            "/api/auth/web-session",
-            json={"next": "https://evil.example"},
-            headers=_bearer(token),
-        )
-        assert r.status_code == 400
+        for bad in ("https://evil.example", "//evil.example", "/\\evil.example"):
+            r = client.post(
+                "/api/auth/web-session", json={"next": bad}, headers=_bearer(token)
+            )
+            assert r.status_code == 400, bad
+            assert r.get_json()["code"] == "invalid_next"
+
+    def test_handoff_path_is_not_a_universal_link(self, client, monkeypatch):
+        monkeypatch.setenv("IOS_APP_IDS", "ABCDE12345.io.ceol.app")
+        paths = client.get("/.well-known/apple-app-site-association").get_json()[
+            "applinks"
+        ]["details"][0]["paths"]
+        assert not any(p.startswith("/auth/web") for p in paths)
 
 
 class TestAASA:

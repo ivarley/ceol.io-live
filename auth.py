@@ -343,6 +343,18 @@ def needs_profile_setup(person_id):
     return not has_location
 
 
+def is_site_path(path):
+    """True for a path on this site that is safe to redirect to after a login: it
+    starts with one slash. Not "//host" (a protocol-relative URL), and no
+    backslash, which browsers read as a slash ("/\\evil.example" goes off-site)."""
+    return (
+        isinstance(path, str)
+        and path.startswith("/")
+        and not path.startswith("//")
+        and "\\" not in path
+    )
+
+
 def generate_password_reset_token():
     return secrets.token_urlsafe(32)
 

@@ -134,6 +134,15 @@ struct SessionDetailView: View {
             .ceolBackground()
             .navigationTitle(name)
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                // The web's Share: a link to this page, for someone without the app too.
+                ToolbarItem(placement: .topBarTrailing) {
+                    ShareLink(item: model.webURL("/sessions/\(path)"), subject: Text(name)) {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                    .accessibilityLabel("Share")
+                }
+            }
             .task { if state.value == nil { await load() } }
     }
 
@@ -321,6 +330,20 @@ struct NightView: View {
             .ceolBackground()
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                if let b = state.value {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        // A night's page is its date, or its id when it has none.
+                        ShareLink(
+                            item: model.webURL("/sessions/\(b.sessionPath)/\(b.instanceDate ?? String(sessionInstanceID))"),
+                            subject: Text("\(b.sessionName), \(b.sessionDate)")
+                        ) {
+                            Image(systemName: "square.and.arrow.up")
+                        }
+                        .accessibilityLabel("Share")
+                    }
+                }
+            }
             .task { if state.value == nil { await load() } }
     }
 

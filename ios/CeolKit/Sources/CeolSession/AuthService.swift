@@ -150,6 +150,22 @@ public struct AuthService: Sendable {
         }
     }
 
+    /// A one-time link that opens `next` (a path on the site, e.g. "/admin") in a
+    /// browser already signed in as this account (spec 052 A7). It lasts 5 minutes and
+    /// works once, so mint it just before opening.
+    public func webSession(next: String) async throws -> URL {
+        switch try await client.createWebSession(body: .json(.init(next: next))) {
+        case .ok(let ok):
+            let body = try ok.body.json
+            guard let url = URL(string: body.url) else {
+                throw AuthFailure(status: 200, code: "bad_url", message: "The server sent a link the app couldn't open.")
+            }
+            return url
+        case .default(let status, let error):
+            throw failure(status, try? error.body.json)
+        }
+    }
+
     // MARK: - Profile setup
 
     public func profile() async throws -> Profile {

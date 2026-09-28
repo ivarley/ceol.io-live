@@ -856,9 +856,23 @@ paths:
   /api/auth/web-session:
     post:
       operationId: createWebSession
-      summary: One-time login link for opening the web signed in (admin, help)
+      summary: >-
+        One-time login link for opening the web signed in (admin, help). The link is
+        /auth/web/<token>?next=<path>, a path the app does not claim as a Universal
+        Link; it lasts 5 minutes and works once. Error code invalid_next (400) when
+        next is not a path on this site.
       security: [{ bearer: [] }]
-      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/WebSession" } } } } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                # Where the web should land, e.g. "/admin". Default "/".
+                next: { type: string }
+      responses:
+        "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/WebSession" } } } }
+        default: { $ref: "#/components/responses/Error" }
   /api/me:
     get:
       operationId: getMe
