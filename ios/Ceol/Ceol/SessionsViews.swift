@@ -44,14 +44,21 @@ struct SessionsView: View {
     @State private var filter: SessionsRules.Filter = .mine
     @State private var search = ""
     @State private var decidedDefault = false
+    @State private var navPath: [Route] = []
+    @State private var adding = false
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $navPath) {
             Loaded(state: state, retry: load) { payload in list(payload) }
                 .ceolBackground()
                 .navigationTitle("Sessions")
                 .searchable(text: $search, prompt: "Name or place")
                 .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button { adding = true } label: { Image(systemName: "plus") }
+                            .accessibilityLabel("Add a session")
+                            .accessibilityIdentifier("sessions.add")
+                    }
                     ToolbarItem(placement: .topBarTrailing) {
                         Menu {
                             Picker("Show", selection: $filter) {
@@ -63,6 +70,12 @@ struct SessionsView: View {
                     }
                 }
                 .modifier(SessionDestinations())
+                .sheet(isPresented: $adding) {
+                    AddSessionView { path, name in
+                        navPath.append(.session(path: path, name: name))
+                        Task { await load() }
+                    }
+                }
                 .task { if state.value == nil { await load() } }
         }
     }

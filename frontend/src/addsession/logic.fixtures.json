@@ -1,0 +1,900 @@
+{
+  "_readme": [
+    "Adding a session (spec 052 §B9): what the search box's text means, the URL path made",
+    "from the city and name, the time zone guessed from thesession.org's country and state,",
+    "the schedule read out of thesession.org's free text, and the recurrence editor's summary",
+    "and stored JSON. The web's sheet and the iOS app's both use these; a session added from",
+    "one client must get the same path, zone and schedule as from the other.",
+    "",
+    "What a port must match exactly:",
+    "  - generatePath keeps only ASCII a-z, 0-9, whitespace and hyphens after lowercasing, so",
+    "    accented letters are DROPPED ('Café' -> 'caf'), not folded. Its inputs may be numbers",
+    "    (thesession.org JSON), taken as their decimal text.",
+    "  - parseTheSessionRecurrence: the weekday scan checks DAY_PATTERNS in order, as",
+    "    substrings (so 'Mondays, every second week' finds a monthly 2nd Monday); times read",
+    "    '7pm to 9pm', then '7 to 9pm', then a single time with the end 3 hours later. A",
+    "    comment's details count only when its weekday matches the schedule's (or the",
+    "    schedule has none); later passes take a time, then nth patterns, from ANY comment.",
+    "  - summarizeRecurrence's json is compared as a STRING: key order is type, weekday,",
+    "    start_time, end_time, then every_n_weeks or which, as JSON.stringify writes it."
+  ],
+  "functions": {
+    "parseSessionInput": {
+      "params": [
+        "input"
+      ],
+      "cases": [
+        {
+          "name": "empty",
+          "input": {
+            "input": ""
+          },
+          "expected": {
+            "kind": "search",
+            "query": ""
+          }
+        },
+        {
+          "name": "absent",
+          "input": {},
+          "expected": {
+            "kind": "search",
+            "query": ""
+          }
+        },
+        {
+          "name": "a name, trimmed",
+          "input": {
+            "input": "  Mueller Session  "
+          },
+          "expected": {
+            "kind": "search",
+            "query": "Mueller Session"
+          }
+        },
+        {
+          "name": "a session link",
+          "input": {
+            "input": "https://thesession.org/sessions/1234"
+          },
+          "expected": {
+            "kind": "id",
+            "id": "1234"
+          }
+        },
+        {
+          "name": "a link with more after the id",
+          "input": {
+            "input": "http://thesession.org/sessions/1234/comments#c5"
+          },
+          "expected": {
+            "kind": "id",
+            "id": "1234"
+          }
+        },
+        {
+          "name": "a link in capitals",
+          "input": {
+            "input": "HTTPS://THESESSION.ORG/SESSIONS/99"
+          },
+          "expected": {
+            "kind": "id",
+            "id": "99"
+          }
+        },
+        {
+          "name": "bare digits",
+          "input": {
+            "input": "1234"
+          },
+          "expected": {
+            "kind": "id",
+            "id": "1234"
+          }
+        },
+        {
+          "name": "bare digits, padded",
+          "input": {
+            "input": " 42 "
+          },
+          "expected": {
+            "kind": "id",
+            "id": "42"
+          }
+        },
+        {
+          "name": "a link without the scheme is a search",
+          "input": {
+            "input": "thesession.org/sessions/1234"
+          },
+          "expected": {
+            "kind": "search",
+            "query": "thesession.org/sessions/1234"
+          }
+        },
+        {
+          "name": "a tune link is a search",
+          "input": {
+            "input": "https://thesession.org/tunes/1234"
+          },
+          "expected": {
+            "kind": "search",
+            "query": "https://thesession.org/tunes/1234"
+          }
+        },
+        {
+          "name": "digits and letters",
+          "input": {
+            "input": "12a"
+          },
+          "expected": {
+            "kind": "search",
+            "query": "12a"
+          }
+        }
+      ]
+    },
+    "generatePath": {
+      "params": [
+        "city",
+        "sessionName"
+      ],
+      "cases": [
+        {
+          "name": "city and name",
+          "input": {
+            "city": "Austin",
+            "sessionName": "Mueller Session"
+          },
+          "expected": "austin/mueller-session"
+        },
+        {
+          "name": "no city",
+          "input": {
+            "city": "",
+            "sessionName": "Mueller"
+          },
+          "expected": "mueller"
+        },
+        {
+          "name": "no name",
+          "input": {
+            "city": "Austin",
+            "sessionName": ""
+          },
+          "expected": "austin"
+        },
+        {
+          "name": "neither",
+          "input": {
+            "city": "",
+            "sessionName": ""
+          },
+          "expected": ""
+        },
+        {
+          "name": "null city",
+          "input": {
+            "city": null,
+            "sessionName": "Mueller"
+          },
+          "expected": "mueller"
+        },
+        {
+          "name": "punctuation goes",
+          "input": {
+            "city": "St. Louis",
+            "sessionName": "O'Flaherty's Pub Session"
+          },
+          "expected": "st-louis/oflahertys-pub-session"
+        },
+        {
+          "name": "runs of spaces and hyphens collapse",
+          "input": {
+            "city": "Galway",
+            "sessionName": "Tigh Neachtain  --  Trad "
+          },
+          "expected": "galway/tigh-neachtain-trad"
+        },
+        {
+          "name": "leading and trailing hyphens go",
+          "input": {
+            "city": "-Cork-",
+            "sessionName": "- The Corner House -"
+          },
+          "expected": "cork/the-corner-house"
+        },
+        {
+          "name": "accents are dropped, not folded",
+          "input": {
+            "city": "Zürich",
+            "sessionName": "Café Session"
+          },
+          "expected": "zrich/caf-session"
+        },
+        {
+          "name": "nothing Latin left",
+          "input": {
+            "city": "東京",
+            "sessionName": "セッション"
+          },
+          "expected": ""
+        },
+        {
+          "name": "numbers from thesession.org JSON",
+          "input": {
+            "city": 123,
+            "sessionName": 456
+          },
+          "expected": "123/456"
+        },
+        {
+          "name": "tabs and newlines are whitespace",
+          "input": {
+            "city": "New\tYork",
+            "sessionName": "Late\nSession"
+          },
+          "expected": "new-york/late-session"
+        }
+      ]
+    },
+    "guessTimezone": {
+      "params": [
+        "country",
+        "state",
+        "fallback"
+      ],
+      "cases": [
+        {
+          "name": "Ireland",
+          "input": {
+            "country": "Ireland",
+            "state": "Galway"
+          },
+          "expected": "Europe/Dublin"
+        },
+        {
+          "name": "England",
+          "input": {
+            "country": "England",
+            "state": ""
+          },
+          "expected": "Europe/London"
+        },
+        {
+          "name": "UK in capitals",
+          "input": {
+            "country": "UK",
+            "state": null
+          },
+          "expected": "Europe/London"
+        },
+        {
+          "name": "Scotland",
+          "input": {
+            "country": "Scotland",
+            "state": "Edinburgh"
+          },
+          "expected": "Europe/London"
+        },
+        {
+          "name": "USA, a state abbreviation",
+          "input": {
+            "country": "USA",
+            "state": "TX"
+          },
+          "expected": "America/Chicago"
+        },
+        {
+          "name": "United States, a state name",
+          "input": {
+            "country": "United States",
+            "state": "New York"
+          },
+          "expected": "America/New_York"
+        },
+        {
+          "name": "us, Arizona",
+          "input": {
+            "country": "us",
+            "state": "arizona"
+          },
+          "expected": "America/Phoenix"
+        },
+        {
+          "name": "USA, Hawaii",
+          "input": {
+            "country": "USA",
+            "state": "HI"
+          },
+          "expected": "Pacific/Honolulu"
+        },
+        {
+          "name": "USA, an unknown state takes the fallback",
+          "input": {
+            "country": "USA",
+            "state": "Puerto Rico",
+            "fallback": "America/Denver"
+          },
+          "expected": "America/Denver"
+        },
+        {
+          "name": "USA, no state, default fallback",
+          "input": {
+            "country": "USA",
+            "state": ""
+          },
+          "expected": "America/Chicago"
+        },
+        {
+          "name": "another country takes the fallback",
+          "input": {
+            "country": "Canada",
+            "state": "Ontario",
+            "fallback": "America/Toronto"
+          },
+          "expected": "America/Toronto"
+        },
+        {
+          "name": "nothing at all",
+          "input": {
+            "country": null,
+            "state": null
+          },
+          "expected": "America/Chicago"
+        },
+        {
+          "name": "state padded with spaces is not trimmed",
+          "input": {
+            "country": "USA",
+            "state": " TX "
+          },
+          "expected": "America/Chicago"
+        }
+      ]
+    },
+    "parseTheSessionRecurrence": {
+      "params": [
+        "text",
+        "comments"
+      ],
+      "cases": [
+        {
+          "name": "every Tuesday at 8pm",
+          "input": {
+            "text": "Every Tuesday @ 8pm"
+          },
+          "expected": {
+            "type": "weekly",
+            "weekday": "tuesday",
+            "every_n_weeks": 1,
+            "start_time": "20:00",
+            "end_time": "23:00"
+          }
+        },
+        {
+          "name": "weekly on Thursdays, no time",
+          "input": {
+            "text": "Weekly on Thursdays"
+          },
+          "expected": {
+            "type": "weekly",
+            "weekday": "thursday",
+            "every_n_weeks": 1,
+            "start_time": "19:00",
+            "end_time": "22:00"
+          }
+        },
+        {
+          "name": "first and third Mondays",
+          "input": {
+            "text": "First and third Mondays"
+          },
+          "expected": {
+            "type": "monthly_nth_weekday",
+            "weekday": "monday",
+            "which": [
+              1,
+              3
+            ],
+            "start_time": "19:00",
+            "end_time": "22:00"
+          }
+        },
+        {
+          "name": "every other Wednesday, a range",
+          "input": {
+            "text": "every other wed 7:30pm-10:30pm"
+          },
+          "expected": {
+            "type": "weekly",
+            "weekday": "wednesday",
+            "every_n_weeks": 2,
+            "start_time": "19:30",
+            "end_time": "22:30"
+          }
+        },
+        {
+          "name": "am/pm only at the end",
+          "input": {
+            "text": "Sundays 2:00-4:00 pm"
+          },
+          "expected": {
+            "type": "weekly",
+            "weekday": "sunday",
+            "every_n_weeks": 1,
+            "start_time": "14:00",
+            "end_time": "16:00"
+          }
+        },
+        {
+          "name": "7pm to 11pm",
+          "input": {
+            "text": "Fridays 7pm to 11pm"
+          },
+          "expected": {
+            "type": "weekly",
+            "weekday": "friday",
+            "every_n_weeks": 1,
+            "start_time": "19:00",
+            "end_time": "23:00"
+          }
+        },
+        {
+          "name": "from 9pm",
+          "input": {
+            "text": "Saturday from 9pm"
+          },
+          "expected": {
+            "type": "weekly",
+            "weekday": "saturday",
+            "every_n_weeks": 1,
+            "start_time": "21:00",
+            "end_time": "00:00"
+          }
+        },
+        {
+          "name": "noon",
+          "input": {
+            "text": "Sunday 12pm"
+          },
+          "expected": {
+            "type": "weekly",
+            "weekday": "sunday",
+            "every_n_weeks": 1,
+            "start_time": "12:00",
+            "end_time": "15:00"
+          }
+        },
+        {
+          "name": "midnight to 2am",
+          "input": {
+            "text": "Sat 12am to 2am"
+          },
+          "expected": {
+            "type": "weekly",
+            "weekday": "saturday",
+            "every_n_weeks": 1,
+            "start_time": "00:00",
+            "end_time": "02:00"
+          }
+        },
+        {
+          "name": "an array of lines",
+          "input": {
+            "text": [
+              "Every",
+              "Monday",
+              "8:30pm"
+            ]
+          },
+          "expected": {
+            "type": "weekly",
+            "weekday": "monday",
+            "every_n_weeks": 1,
+            "start_time": "20:30",
+            "end_time": "23:30"
+          }
+        },
+        {
+          "name": "last Friday",
+          "input": {
+            "text": "Last Friday of the month, 8pm"
+          },
+          "expected": {
+            "type": "monthly_nth_weekday",
+            "weekday": "friday",
+            "which": [
+              -1
+            ],
+            "start_time": "20:00",
+            "end_time": "23:00"
+          }
+        },
+        {
+          "name": "1st Sunday, a range with pm at the end",
+          "input": {
+            "text": "1st sunday of month, 3-6pm"
+          },
+          "expected": {
+            "type": "monthly_nth_weekday",
+            "weekday": "sunday",
+            "which": [
+              1
+            ],
+            "start_time": "15:00",
+            "end_time": "18:00"
+          }
+        },
+        {
+          "name": "biweekly",
+          "input": {
+            "text": "biweekly Monday 7pm"
+          },
+          "expected": {
+            "type": "weekly",
+            "weekday": "monday",
+            "every_n_weeks": 2,
+            "start_time": "19:00",
+            "end_time": "22:00"
+          }
+        },
+        {
+          "name": "\"every second week\" reads as a monthly 2nd",
+          "input": {
+            "text": "Mondays, every second week"
+          },
+          "expected": {
+            "type": "monthly_nth_weekday",
+            "weekday": "monday",
+            "which": [
+              2
+            ],
+            "start_time": "19:00",
+            "end_time": "22:00"
+          }
+        },
+        {
+          "name": "no weekday is null",
+          "input": {
+            "text": "Most evenings from 8pm"
+          },
+          "expected": null
+        },
+        {
+          "name": "empty and no comments",
+          "input": {
+            "text": ""
+          },
+          "expected": null
+        },
+        {
+          "name": "nothing at all",
+          "input": {},
+          "expected": null
+        },
+        {
+          "name": "the weekday from a comment",
+          "input": {
+            "text": "",
+            "comments": [
+              {
+                "content": "We meet on Thursdays at 8pm"
+              }
+            ]
+          },
+          "expected": {
+            "type": "weekly",
+            "weekday": "thursday",
+            "every_n_weeks": 1,
+            "start_time": "20:00",
+            "end_time": "23:00"
+          }
+        },
+        {
+          "name": "the first comment with a weekday wins",
+          "input": {
+            "text": null,
+            "comments": [
+              {
+                "content": "Great night"
+              },
+              {
+                "content": "Tuesdays 9pm"
+              },
+              {
+                "content": "Fridays 7pm"
+              }
+            ]
+          },
+          "expected": {
+            "type": "weekly",
+            "weekday": "tuesday",
+            "every_n_weeks": 1,
+            "start_time": "21:00",
+            "end_time": "00:00"
+          }
+        },
+        {
+          "name": "a comment's other weekday gives no details",
+          "input": {
+            "text": "Tuesdays",
+            "comments": [
+              {
+                "content": "Moved to Wednesdays, 1st and 3rd, 8pm"
+              }
+            ]
+          },
+          "expected": {
+            "type": "monthly_nth_weekday",
+            "weekday": "tuesday",
+            "which": [
+              1,
+              3
+            ],
+            "start_time": "20:00",
+            "end_time": "23:00"
+          }
+        },
+        {
+          "name": "a time from any comment",
+          "input": {
+            "text": "Tuesdays",
+            "comments": [
+              {
+                "content": "Great session"
+              },
+              {
+                "content": "starts 9pm these days"
+              }
+            ]
+          },
+          "expected": {
+            "type": "weekly",
+            "weekday": "tuesday",
+            "every_n_weeks": 1,
+            "start_time": "21:00",
+            "end_time": "00:00"
+          }
+        },
+        {
+          "name": "nth patterns from any comment",
+          "input": {
+            "text": "Sunday 4pm",
+            "comments": [
+              {
+                "content": "second and fourth only"
+              }
+            ]
+          },
+          "expected": {
+            "type": "monthly_nth_weekday",
+            "weekday": "sunday",
+            "which": [
+              2,
+              4
+            ],
+            "start_time": "16:00",
+            "end_time": "19:00"
+          }
+        },
+        {
+          "name": "empty comments",
+          "input": {
+            "text": "Thursdays",
+            "comments": []
+          },
+          "expected": {
+            "type": "weekly",
+            "weekday": "thursday",
+            "every_n_weeks": 1,
+            "start_time": "19:00",
+            "end_time": "22:00"
+          }
+        },
+        {
+          "name": "comments without content",
+          "input": {
+            "text": "Thursdays",
+            "comments": [
+              {}
+            ]
+          },
+          "expected": {
+            "type": "weekly",
+            "weekday": "thursday",
+            "every_n_weeks": 1,
+            "start_time": "19:00",
+            "end_time": "22:00"
+          }
+        }
+      ]
+    },
+    "summarizeRecurrence": {
+      "params": [
+        "state"
+      ],
+      "cases": [
+        {
+          "name": "no type",
+          "input": {
+            "state": {
+              "type": "",
+              "weekday": null,
+              "startTime": "19:00",
+              "endTime": "22:00"
+            }
+          },
+          "expected": {
+            "summary": "No schedule set",
+            "json": null
+          }
+        },
+        {
+          "name": "no day yet",
+          "input": {
+            "state": {
+              "type": "weekly",
+              "weekday": null,
+              "startTime": "19:00",
+              "endTime": "22:00"
+            }
+          },
+          "expected": {
+            "summary": "Select a day...",
+            "json": null
+          }
+        },
+        {
+          "name": "weekly",
+          "input": {
+            "state": {
+              "type": "weekly",
+              "weekday": "tuesday",
+              "frequency": 1,
+              "startTime": "20:00",
+              "endTime": "23:00"
+            }
+          },
+          "expected": {
+            "summary": "Tuesdays from 8pm-11pm",
+            "json": "{\"schedules\":[{\"type\":\"weekly\",\"weekday\":\"tuesday\",\"start_time\":\"20:00\",\"end_time\":\"23:00\",\"every_n_weeks\":1}]}"
+          }
+        },
+        {
+          "name": "weekly, frequency left out",
+          "input": {
+            "state": {
+              "type": "weekly",
+              "weekday": "monday",
+              "startTime": "19:00",
+              "endTime": "22:00"
+            }
+          },
+          "expected": {
+            "summary": "Mondays from 7pm-10pm",
+            "json": "{\"schedules\":[{\"type\":\"weekly\",\"weekday\":\"monday\",\"start_time\":\"19:00\",\"end_time\":\"22:00\",\"every_n_weeks\":1}]}"
+          }
+        },
+        {
+          "name": "every other",
+          "input": {
+            "state": {
+              "type": "weekly",
+              "weekday": "sunday",
+              "frequency": 2,
+              "startTime": "14:00",
+              "endTime": "17:30"
+            }
+          },
+          "expected": {
+            "summary": "Every other Sunday from 2pm-5:30pm",
+            "json": "{\"schedules\":[{\"type\":\"weekly\",\"weekday\":\"sunday\",\"start_time\":\"14:00\",\"end_time\":\"17:30\",\"every_n_weeks\":2}]}"
+          }
+        },
+        {
+          "name": "every 3 weeks",
+          "input": {
+            "state": {
+              "type": "weekly",
+              "weekday": "friday",
+              "frequency": 3,
+              "startTime": "19:30",
+              "endTime": "22:00"
+            }
+          },
+          "expected": {
+            "summary": "Every 3 weeks on Friday from 7:30pm-10pm",
+            "json": "{\"schedules\":[{\"type\":\"weekly\",\"weekday\":\"friday\",\"start_time\":\"19:30\",\"end_time\":\"22:00\",\"every_n_weeks\":3}]}"
+          }
+        },
+        {
+          "name": "monthly, none picked",
+          "input": {
+            "state": {
+              "type": "monthly_nth_weekday",
+              "weekday": "saturday",
+              "which": [],
+              "startTime": "19:00",
+              "endTime": "22:00"
+            }
+          },
+          "expected": {
+            "summary": "Select which occurrences...",
+            "json": null
+          }
+        },
+        {
+          "name": "monthly, 1st and 3rd",
+          "input": {
+            "state": {
+              "type": "monthly_nth_weekday",
+              "weekday": "wednesday",
+              "which": [
+                1,
+                3
+              ],
+              "startTime": "20:00",
+              "endTime": "23:00"
+            }
+          },
+          "expected": {
+            "summary": "1st & 3rd Wednesday from 8pm-11pm",
+            "json": "{\"schedules\":[{\"type\":\"monthly_nth_weekday\",\"weekday\":\"wednesday\",\"start_time\":\"20:00\",\"end_time\":\"23:00\",\"which\":[1,3]}]}"
+          }
+        },
+        {
+          "name": "monthly, last",
+          "input": {
+            "state": {
+              "type": "monthly_nth_weekday",
+              "weekday": "thursday",
+              "which": [
+                -1
+              ],
+              "startTime": "19:00",
+              "endTime": "22:00"
+            }
+          },
+          "expected": {
+            "summary": "last Thursday from 7pm-10pm",
+            "json": "{\"schedules\":[{\"type\":\"monthly_nth_weekday\",\"weekday\":\"thursday\",\"start_time\":\"19:00\",\"end_time\":\"22:00\",\"which\":[-1]}]}"
+          }
+        },
+        {
+          "name": "noon to midnight",
+          "input": {
+            "state": {
+              "type": "weekly",
+              "weekday": "saturday",
+              "frequency": 1,
+              "startTime": "12:00",
+              "endTime": "00:00"
+            }
+          },
+          "expected": {
+            "summary": "Saturdays from 12pm-12am",
+            "json": "{\"schedules\":[{\"type\":\"weekly\",\"weekday\":\"saturday\",\"start_time\":\"12:00\",\"end_time\":\"00:00\",\"every_n_weeks\":1}]}"
+          }
+        },
+        {
+          "name": "morning",
+          "input": {
+            "state": {
+              "type": "weekly",
+              "weekday": "sunday",
+              "frequency": 1,
+              "startTime": "09:05",
+              "endTime": "11:00"
+            }
+          },
+          "expected": {
+            "summary": "Sundays from 9:05am-11am",
+            "json": "{\"schedules\":[{\"type\":\"weekly\",\"weekday\":\"sunday\",\"start_time\":\"09:05\",\"end_time\":\"11:00\",\"every_n_weeks\":1}]}"
+          }
+        }
+      ],
+      "note": "The one argument is an object; the case input names it state."
+    }
+  }
+}

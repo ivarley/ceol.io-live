@@ -1695,7 +1695,7 @@ The plan (Phases 0-6) runs from here in `ios/`; see `ios/README.md` for the layo
   the difference, and the GET returns canonical names for older free spellings
   ("fiddle" -> "Fiddle"). UI tests: eight, adding browsing a session to a night,
   browsing tunes, and Me.
-- **Phase 4 — editing: in progress.** Slices: 4a My Tunes edits, 4b Admin / Help in a
+- **Phase 4 — editing: DONE.** Slices: 4a My Tunes edits, 4b Admin / Help in a
   signed-in Safari view and Share, 4c joining and leaving a session and adding a night,
   4d adding a session.
   - **4a DONE 2026-09-28.** The tune sheet edits a tune on your list (status, the heard
@@ -1726,3 +1726,23 @@ The plan (Phases 0-6) runs from here in `ios/`; see `ios/README.md` for the layo
     new to the surface), each with the Error response. `add_instance` answered every
     failure with 200 and `success: false`; it now sends 400 / 404 / 500 (the web reads
     the body either way).
+  - **4d DONE 2026-09-28.** Adding a session: a "+" on Sessions opens a search of
+    thesession.org (a name, a link, or bare digits offered as a row), which catches a
+    session Ceol already has and offers to open it; or "add it by hand". Then the details
+    form (name, place, schedule editor, time zone, add me as admin; path, thesession.org
+    id, venue contact, festival, the on-now window and people tracking behind Advanced),
+    which goes to the new session when saved. The rules are ported, not re-invented:
+    `frontend/src/addsession/logic.fixtures.json`, `shared/sessionpath.fixtures.json`
+    and `shared/parse.fixtures.json` are new, generated from the web's own functions,
+    and held by the web runner and `CeolLogic.AddSession` / `SessionPath` /
+    `TheSession.sessionID` (107 cases). The server's `session_path.py` reads the path
+    fixtures too; it trimmed with Python's `strip()`, which keeps a byte-order mark the
+    web trims, and now trims exactly what JS's `trim()` does. The five endpoints are in
+    the contract (`getAddSessionOptions`, `searchTheSessionSessions`,
+    `fetchTheSessionSession`, `checkExistingSession`, `addSession`) and now send real
+    status codes (every failure was a 200). `search-sessions` sends the query as an
+    encoded parameter (an "&" in it cut the search short) and `fetch-session-data` takes
+    only a numeric id, since it goes into thesession.org's URL. Three tests that sent
+    check-existing-session a `name` it never read, and a mocked create that was always
+    refused, passed only because failures were 200s; they now test what the endpoints do.
+- **Phase 4 DONE 2026-09-28.** Next: Phase 5, the live logger.

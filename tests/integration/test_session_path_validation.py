@@ -160,7 +160,7 @@ class TestCreateRejectsUnusablePaths:
         with logged_in(client):
             resp = client.post("/api/add-session", json=_create_payload(name, bad_path))
 
-        assert resp.status_code == 200
+        assert resp.status_code == 400
         assert resp.get_json()["success"] is False
 
         cur = db_conn.cursor()
@@ -178,7 +178,7 @@ class TestCreateRejectsUnusablePaths:
                 "/api/add-session", json=_create_payload("Probe NonString", bad_value)
             )
 
-        assert resp.status_code == 200
+        assert resp.status_code == 400
         body = resp.get_json()
         assert body["success"] is False
         assert body["message"] == "Path is required"

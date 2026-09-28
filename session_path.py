@@ -32,6 +32,18 @@ _HAS_ALPHANUMERIC = re.compile(r"[A-Za-z0-9]")
 _INVISIBLE_CATEGORIES = ("Cc", "Cf", "Zs", "Zl", "Zp")
 
 
+# What JavaScript's String.prototype.trim() removes: the ECMAScript WhiteSpace and
+# LineTerminator characters, which include the byte-order mark. Python's str.strip()
+# keeps the BOM and also strips a few characters JS does not (\x1c-\x1f, \x85), so
+# the web and the app (which trim like JS) and the server would disagree about a path
+# with one of them at an end. frontend/src/shared/sessionpath.fixtures.json holds all
+# three to the same cases.
+_JS_TRIM = (
+    "\t\n\x0b\x0c\r \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006"
+    "\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff"
+)
+
+
 def normalize_session_path(value):
     """Validate a session path.
 
@@ -41,7 +53,7 @@ def normalize_session_path(value):
     if not isinstance(value, str):
         return None, "Path is required"
 
-    path = value.strip()
+    path = value.strip(_JS_TRIM)
     if not path:
         return None, "Path is required"
 

@@ -74,6 +74,9 @@ enum Fixtures {
         "abcquery": "shared/abcquery.fixtures.json",
         "segments": "shared/segments.fixtures.json",
         "namematch": "tunesheet/namematch.fixtures.json",
+        "addsession": "addsession/logic.fixtures.json",
+        "sessionpath": "shared/sessionpath.fixtures.json",
+        "parse": "shared/parse.fixtures.json",
     ]
 
     /// frontend/src, from ios/CeolKit/Tests/CeolLogicTests/FixtureRunner.swift.

@@ -26,6 +26,9 @@ import * as abcquery from '../src/shared/abcquery.js'
 import * as segments from '../src/shared/segments.js'
 import * as offline from '../src/offline.js'
 import * as namematch from '../src/tunesheet/namematch.js'
+import * as addsession from '../src/addsession/logic.js'
+import * as sessionpath from '../src/shared/sessionpath.js'
+import * as parse from '../src/shared/parse.js'
 
 import logstateFx from '../src/logstate.fixtures.json'
 import fracindexFx from '../src/fracindex.fixtures.json'
@@ -33,6 +36,9 @@ import abcqueryFx from '../src/shared/abcquery.fixtures.json'
 import segmentsFx from '../src/shared/segments.fixtures.json'
 import offlineFx from '../src/offline.fixtures.json'
 import namematchFx from '../src/tunesheet/namematch.fixtures.json'
+import addsessionFx from '../src/addsession/logic.fixtures.json'
+import sessionpathFx from '../src/shared/sessionpath.fixtures.json'
+import parseFx from '../src/shared/parse.fixtures.json'
 
 const MODULES = [
   { name: 'logstate', mod: logstate, fx: logstateFx, load: () => import('../src/logstate.js') },
@@ -41,6 +47,9 @@ const MODULES = [
   { name: 'shared/segments', mod: segments, fx: segmentsFx },
   { name: 'offline', mod: offline, fx: offlineFx },
   { name: 'tunesheet/namematch', mod: namematch, fx: namematchFx },
+  { name: 'addsession/logic', mod: addsession, fx: addsessionFx },
+  { name: 'shared/sessionpath', mod: sessionpath, fx: sessionpathFx },
+  { name: 'shared/parse', mod: parse, fx: parseFx },
 ]
 
 // What a non-JS runner would see: Maps as entry lists, undefined properties gone.

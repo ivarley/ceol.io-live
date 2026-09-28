@@ -3166,10 +3166,10 @@ def get_top_tunes():
 @public_api  # backs the /add-session page, which has no @login_required (only the final POST /api/add-session is gated) — TODO tighten?
 def check_existing_session_ajax():
     if not request.json:
-        return jsonify({"success": False, "message": "No JSON data provided"})
+        return jsonify({"success": False, "message": "No JSON data provided"}), 400
     session_id = request.json.get("session_id")
     if not session_id:
-        return jsonify({"success": False, "message": "Session ID is required"})
+        return jsonify({"success": False, "message": "Session ID is required"}), 400
 
     try:
         conn = get_db_connection()
@@ -3190,28 +3190,36 @@ def check_existing_session_ajax():
             return jsonify({"exists": False})
 
     except Exception as e:
-        return jsonify({"success": False, "message": f"Database error: {str(e)}"})
+        return jsonify({"success": False, "message": f"Database error: {str(e)}"}), 500
 
 
 @public_api  # backs the /add-session page, which has no @login_required (only the final POST /api/add-session is gated) — TODO tighten?
 def search_sessions_ajax():
     if not request.json:
-        return jsonify({"success": False, "message": "No JSON data provided"})
+        return jsonify({"success": False, "message": "No JSON data provided"}), 400
     search_query = request.json.get("query")
-    if not search_query:
-        return jsonify({"success": False, "message": "Search query is required"})
+    if not isinstance(search_query, str) or not search_query.strip():
+        return jsonify({"success": False, "message": "Search query is required"}), 400
 
     try:
         # Search sessions on thesession.org API (perpage=50 is the max allowed)
-        api_url = f"https://thesession.org/sessions/search?q={search_query}&format=json&perpage=50"
-        response = requests.get(api_url, timeout=10)
+        # The query goes as a parameter, encoded: pasted into the URL, an "&" or "#" in
+        # it cut the search short.
+        response = requests.get(
+            "https://thesession.org/sessions/search",
+            params={"q": search_query.strip(), "format": "json", "perpage": 50},
+            timeout=10,
+        )
 
         if response.status_code != 200:
-            return jsonify(
-                {
-                    "success": False,
-                    "message": f"Failed to search sessions (status: {response.status_code})",
-                }
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": f"Failed to search sessions (status: {response.status_code})",
+                    }
+                ),
+                502,
             )
 
         data = response.json()
@@ -3274,15 +3282,21 @@ def search_sessions_ajax():
         return jsonify({"success": True, "results": results})
 
     except requests.exceptions.RequestException as e:
-        return jsonify(
-            {
-                "success": False,
-                "message": f"Error connecting to TheSession.org: {str(e)}",
-            }
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "message": f"Error connecting to TheSession.org: {str(e)}",
+                }
+            ),
+            502,
         )
     except Exception as e:
-        return jsonify(
-            {"success": False, "message": f"Error processing search results: {str(e)}"}
+        return (
+            jsonify(
+                {"success": False, "message": f"Error processing search results: {str(e)}"}
+            ),
+            500,
         )
 
 
@@ -3328,10 +3342,11 @@ def _thesession_ref_id(value):
 @public_api  # backs the /add-session page, which has no @login_required (only the final POST /api/add-session is gated) — TODO tighten?
 def fetch_session_data_ajax():
     if not request.json:
-        return jsonify({"success": False, "message": "No JSON data provided"})
-    session_id = request.json.get("session_id")
-    if not session_id:
-        return jsonify({"success": False, "message": "Session ID is required"})
+        return jsonify({"success": False, "message": "No JSON data provided"}), 400
+    # An id, not text: it goes into the thesession.org URL's path.
+    session_id = _thesession_ref_id(request.json.get("session_id"))
+    if session_id is None:
+        return jsonify({"success": False, "message": "Session ID is required"}), 400
 
     try:
         # Fetch data from thesession.org API
@@ -3339,15 +3354,19 @@ def fetch_session_data_ajax():
         response = requests.get(api_url, timeout=10)
 
         if response.status_code == 404:
-            return jsonify(
-                {"success": False, "message": "Session not found on TheSession.org"}
+            return (
+                jsonify({"success": False, "message": "Session not found on TheSession.org"}),
+                404,
             )
         elif response.status_code != 200:
-            return jsonify(
-                {
-                    "success": False,
-                    "message": f"Failed to fetch session data (status: {response.status_code})",
-                }
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": f"Failed to fetch session data (status: {response.status_code})",
+                    }
+                ),
+                502,
             )
 
         data = response.json()
@@ -3401,15 +3420,21 @@ def fetch_session_data_ajax():
         return jsonify({"success": True, "session_data": session_data})
 
     except requests.exceptions.RequestException as e:
-        return jsonify(
-            {
-                "success": False,
-                "message": f"Error connecting to TheSession.org: {str(e)}",
-            }
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "message": f"Error connecting to TheSession.org: {str(e)}",
+                }
+            ),
+            502,
         )
     except Exception as e:
-        return jsonify(
-            {"success": False, "message": f"Error processing session data: {str(e)}"}
+        return (
+            jsonify(
+                {"success": False, "message": f"Error processing session data: {str(e)}"}
+            ),
+            500,
         )
 
 
@@ -3417,7 +3442,7 @@ def fetch_session_data_ajax():
 def add_session_ajax():
     data = request.json
     if not data:
-        return jsonify({"success": False, "message": "No JSON data provided"})
+        return jsonify({"success": False, "message": "No JSON data provided"}), 400
 
     # Validate required fields. Anything non-string is a malformed payload — treat
     # it as missing rather than letting .strip() raise (that used to 500).
@@ -3425,15 +3450,16 @@ def add_session_ajax():
     for field in required_fields:
         value = data.get(field)
         if not isinstance(value, str) or not value.strip():
-            return jsonify(
-                {"success": False, "message": f"{field.title()} is required"}
+            return (
+                jsonify({"success": False, "message": f"{field.title()} is required"}),
+                400,
             )
 
     # The path is the session's URL, and a malformed one strands the session:
     # every admin route is keyed on the path, so there'd be no way back in.
     new_path, path_error = normalize_session_path(data.get("path"))
     if path_error:
-        return jsonify({"success": False, "message": path_error})
+        return jsonify({"success": False, "message": path_error}), 400
 
     # Same coercion the admin update uses (session_fields), so a session can be created
     # with the values the admin form can later edit — including a thesession.org link
@@ -3446,20 +3472,20 @@ def add_session_ajax():
 
     thesession_id, ts_error = parse_thesession_session_id(data.get("thesession_id"))
     if ts_error:
-        return jsonify({"success": False, "message": ts_error})
+        return jsonify({"success": False, "message": ts_error}), 400
     session_type, type_error = normalize_session_type(data.get("session_type"))
     if type_error:
-        return jsonify({"success": False, "message": type_error})
+        return jsonify({"success": False, "message": type_error}), 400
     buffer_before, before_error = normalize_active_buffer(
         data.get("active_buffer_minutes_before"), "Minutes before"
     )
     if before_error:
-        return jsonify({"success": False, "message": before_error})
+        return jsonify({"success": False, "message": before_error}), 400
     buffer_after, after_error = normalize_active_buffer(
         data.get("active_buffer_minutes_after"), "Minutes after"
     )
     if after_error:
-        return jsonify({"success": False, "message": after_error})
+        return jsonify({"success": False, "message": after_error}), 400
 
     try:
         conn = get_db_connection()
@@ -3471,8 +3497,9 @@ def add_session_ajax():
         if existing_session:
             cur.close()
             conn.close()
-            return jsonify(
-                {"success": False, "message": f'Path "{new_path}" is already taken'}
+            return (
+                jsonify({"success": False, "message": f'Path "{new_path}" is already taken'}),
+                409,
             )
 
         # Check if TheSession.org ID is already used
@@ -3485,11 +3512,14 @@ def add_session_ajax():
             if existing_thesession:
                 cur.close()
                 conn.close()
-                return jsonify(
-                    {
-                        "success": False,
-                        "message": f"TheSession.org session {thesession_id} is already in the database",
-                    }
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "message": f"TheSession.org session {thesession_id} is already in the database",
+                        }
+                    ),
+                    409,
                 )
 
         # Insert new session with timezone
@@ -3541,7 +3571,7 @@ def add_session_ajax():
         if not session_result:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Failed to create session"})
+            return jsonify({"success": False, "message": "Failed to create session"}), 500
 
         session_id = session_result[0]
 
@@ -3581,8 +3611,9 @@ def add_session_ajax():
         )
 
     except Exception as e:
-        return jsonify(
-            {"success": False, "message": f"Failed to create session: {str(e)}"}
+        return (
+            jsonify({"success": False, "message": f"Failed to create session: {str(e)}"}),
+            500,
         )
 
 

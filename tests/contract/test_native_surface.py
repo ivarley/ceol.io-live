@@ -35,6 +35,7 @@ SPEC_PATH = os.path.join(
 # (documented path template, concrete URL to call against the seeded DB)
 CHECKED_GETS = [
     ("/api/app-config", "/api/app-config"),
+    ("/api/add-session", "/api/add-session"),
     ("/api/me", "/api/me"),
     ("/api/me/profile", "/api/me/profile"),
     ("/api/home", "/api/home"),
@@ -458,6 +459,91 @@ class TestResponsesMatchSchemas:
             conn.commit()
         finally:
             conn.close()
+
+    def test_adding_a_session_validates(self, spec, native_client, monkeypatch):
+        """The add-session flow as the app runs it: search thesession.org, fetch one
+        session as the form's seed, check Ceol doesn't have it, create it. thesession.org
+        is stubbed; the create is real and removed afterwards."""
+        import api_routes
+        from database import get_db_connection
+
+        class _Resp:
+            def __init__(self, status, body):
+                self.status_code, self._body = status, body
+
+            def json(self):
+                return self._body
+
+        def fake_get(url, params=None, timeout=None):
+            if url.endswith("/sessions/search"):
+                assert params["q"] == "crossing & co"  # sent as a parameter, not pasted
+                return _Resp(200, {"sessions": [{
+                    "id": 4321, "venue": {"name": "The Crossing"}, "town": {"name": "Memphis"},
+                    "area": {"name": "Tennessee"}, "country": {"name": "USA"},
+                }]})
+            if url.endswith("/sessions/4321?format=json"):
+                return _Resp(200, {
+                    "id": 4321, "date": "2017-04-21 16:33:23", "schedule": ["Every Tuesday", "8pm"],
+                    "venue": {"name": "The Crossing", "phone": 9015551234, "web": None},
+                    "town": {"name": "Memphis"}, "area": {"name": "Tennessee"},
+                    "country": {"name": "USA"}, "comments": [{"date": "2020-01-01", "content": "Great"}],
+                })
+            return _Resp(404, {})
+
+        monkeypatch.setattr(api_routes.requests, "get", fake_get)
+        schemas = spec["components"]["schemas"]
+        error = spec["components"]["responses"]["Error"]["content"]["application/json"]["schema"]
+
+        r = native_client.post("/api/search-sessions", {"query": "crossing & co"})
+        assert r.status_code == 200, r.get_json()
+        self._validate(spec, schemas["TheSessionSessionSearch"], r.get_json())
+
+        r = native_client.post("/api/fetch-session-data", {"session_id": 4321})
+        assert r.status_code == 200, r.get_json()
+        self._validate(spec, schemas["TheSessionSessionData"], r.get_json())
+        assert r.get_json()["session_data"]["location_phone"] == "9015551234"
+        missing = native_client.post("/api/fetch-session-data", {"session_id": 1})
+        assert missing.status_code == 404
+        self._validate(spec, error, missing.get_json())
+        not_an_id = native_client.post("/api/fetch-session-data", {"session_id": "../tunes/1"})
+        assert not_an_id.status_code == 400
+
+        r = native_client.post("/api/check-existing-session", {"session_id": 4321})
+        assert r.status_code == 200
+        self._validate(spec, schemas["ExistingSession"], r.get_json())
+        assert r.get_json() == {"exists": False}
+
+        body = {
+            "name": "Contract Crossing", "path": "memphis/contract-crossing", "city": "Memphis",
+            "state": "Tennessee", "country": "USA", "thesession_id": "4321", "timezone": "America/Chicago",
+            "recurrence": '{"schedules":[{"type":"weekly","weekday":"tuesday","start_time":"20:00","end_time":"23:00","every_n_weeks":1}]}',
+            "add_current_user": True, "add_current_user_role": "admin",
+        }
+        try:
+            r = native_client.post("/api/add-session", body)
+            assert r.status_code == 200, r.get_json()
+            self._validate(spec, schemas["AddSessionResult"], r.get_json())
+            taken = native_client.post("/api/add-session", body)
+            assert taken.status_code == 409
+            self._validate(spec, error, taken.get_json())
+            r = native_client.post("/api/check-existing-session", {"session_id": 4321})
+            self._validate(spec, schemas["ExistingSession"], r.get_json())
+            assert r.get_json() == {"exists": True, "session_path": "/sessions/memphis/contract-crossing"}
+        finally:
+            conn = get_db_connection()
+            try:
+                cur = conn.cursor()
+                cur.execute("SELECT session_id FROM session WHERE path = 'memphis/contract-crossing'")
+                row = cur.fetchone()
+                if row:
+                    cur.execute("DELETE FROM session_person WHERE session_id = %s", row)
+                    cur.execute("DELETE FROM session WHERE session_id = %s", row)
+                conn.commit()
+            finally:
+                conn.close()
+        bad = native_client.post("/api/add-session", {**body, "path": "."})
+        assert bad.status_code == 400
+        self._validate(spec, error, bad.get_json())
 
     def test_error_envelope(self, native_client):
         r = native_client.get("/api/resolve?path=/sessions/no/such/2020-01-01")

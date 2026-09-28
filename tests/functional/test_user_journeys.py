@@ -361,10 +361,10 @@ class TestSessionCreationWorkflow:
 
             # Phase 2: Check if similar session exists
             response = client.post(
-                "/api/check-existing-session", json={"name": "New Test Session"}
+                "/api/check-existing-session", json={"session_id": 987654321}
             )
             assert response.status_code == 200
-            json.loads(response.data)  # valid JSON response
+            assert json.loads(response.data) == {"exists": False}
 
             # Phase 3: Create the session (DB mocked so no row is committed)
             with patch("api_routes.get_db_connection") as mock_get_conn:
@@ -372,7 +372,8 @@ class TestSessionCreationWorkflow:
                 mock_cursor = MagicMock()
                 mock_conn.cursor.return_value = mock_cursor
                 mock_get_conn.return_value = mock_conn
-                mock_cursor.fetchone.return_value = (1,)  # New session ID
+                # The path is free (None), then the INSERT returns the new id.
+                mock_cursor.fetchone.side_effect = [None, (1,)]
 
                 response = client.post(
                     "/api/add-session",
@@ -388,11 +389,10 @@ class TestSessionCreationWorkflow:
                     },
                 )
 
-                assert response.status_code == 200
+                assert response.status_code == 200, response.get_json()
                 data = json.loads(response.data)
-                # For functional test, just verify the API responds - specific
-                # success may depend on complex setup
-                assert "success" in data
+                assert data["success"] is True
+                assert data["session_path"] == "new-test-session"
 
 
 @pytest.mark.functional

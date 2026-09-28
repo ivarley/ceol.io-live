@@ -1,0 +1,94 @@
+{
+  "_readme": [
+    "thesession.org references (spec 052): a session's id from a link or bare digits. The",
+    "tune and setting parsers are fixtured with the logger (logstate.fixtures.json), whose",
+    "paste detection uses them; this file holds the session one, used when adding and",
+    "editing a session. The domain match is case-sensitive, as in the tune parser."
+  ],
+  "functions": {
+    "parseThesessionSessionId": {
+      "params": [
+        "raw"
+      ],
+      "cases": [
+        {
+          "name": "a link",
+          "input": {
+            "raw": "https://thesession.org/sessions/1234"
+          },
+          "expected": 1234
+        },
+        {
+          "name": "a link with more after",
+          "input": {
+            "raw": "thesession.org/sessions/77/comments"
+          },
+          "expected": 77
+        },
+        {
+          "name": "bare digits, padded",
+          "input": {
+            "raw": " 42 "
+          },
+          "expected": 42
+        },
+        {
+          "name": "a number",
+          "input": {
+            "raw": 42
+          },
+          "expected": 42
+        },
+        {
+          "name": "leading zeros",
+          "input": {
+            "raw": "007"
+          },
+          "expected": 7
+        },
+        {
+          "name": "a tune link",
+          "input": {
+            "raw": "https://thesession.org/tunes/1234"
+          },
+          "expected": null
+        },
+        {
+          "name": "the domain in capitals",
+          "input": {
+            "raw": "https://TheSession.org/sessions/5"
+          },
+          "expected": null
+        },
+        {
+          "name": "words",
+          "input": {
+            "raw": "Mueller"
+          },
+          "expected": null
+        },
+        {
+          "name": "empty",
+          "input": {
+            "raw": ""
+          },
+          "expected": null
+        },
+        {
+          "name": "null",
+          "input": {
+            "raw": null
+          },
+          "expected": null
+        }
+      ]
+    }
+  },
+  "_not_fixtured": {
+    "extractTuneId": "the Tunes tab's pasted-id search; ported with its own tests (MyTunesRules.extractTuneID)",
+    "parseThesessionId": "fixtured with the logger: logstate.fixtures.json",
+    "parseThesessionSettingId": "fixtured with the logger: logstate.fixtures.json",
+    "parseLocalDate": "a Date object; the app has Foundation dates",
+    "normalizeQuotes": "list search's quote folding; the app's search rules fold quotes their own way (SessionsRules, LogState.normName)"
+  }
+}

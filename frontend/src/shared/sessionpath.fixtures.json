@@ -1,0 +1,280 @@
+{
+  "_readme": [
+    "A session's URL path (spec 035): the one check the add and edit forms show inline.",
+    "The server's session_path.py is the authority and mirrors this; keep all three in step.",
+    "normalizeSessionPath returns {path, error}: the trimmed path and null, or null and the",
+    "sentence to show. Checks run in this order and the first failure is the answer:",
+    "empty, invisible characters (by code point, see isInvisible), length over 255, a",
+    "leading or trailing slash, more than 4 parts, then per part: empty, over 100",
+    "characters, outside A-Z a-z 0-9 . _ ~ -, no letter or digit."
+  ],
+  "functions": {
+    "normalizeSessionPath": {
+      "params": [
+        "value"
+      ],
+      "cases": [
+        {
+          "name": "a path",
+          "input": {
+            "value": "austin/mueller"
+          },
+          "expected": {
+            "path": "austin/mueller",
+            "error": null
+          }
+        },
+        {
+          "name": "trimmed",
+          "input": {
+            "value": "  austin/mueller \n"
+          },
+          "expected": {
+            "path": "austin/mueller",
+            "error": null
+          }
+        },
+        {
+          "name": "one part",
+          "input": {
+            "value": "mueller"
+          },
+          "expected": {
+            "path": "mueller",
+            "error": null
+          }
+        },
+        {
+          "name": "empty",
+          "input": {
+            "value": ""
+          },
+          "expected": {
+            "path": null,
+            "error": "Path is required"
+          }
+        },
+        {
+          "name": "only spaces",
+          "input": {
+            "value": "   "
+          },
+          "expected": {
+            "path": null,
+            "error": "Path is required"
+          }
+        },
+        {
+          "name": "null",
+          "input": {
+            "value": null
+          },
+          "expected": {
+            "path": null,
+            "error": "Path is required"
+          }
+        },
+        {
+          "name": "a number is not a string",
+          "input": {
+            "value": 42
+          },
+          "expected": {
+            "path": null,
+            "error": "Path is required"
+          }
+        },
+        {
+          "name": "a space inside",
+          "input": {
+            "value": "austin/mueller session"
+          },
+          "expected": {
+            "path": null,
+            "error": "Path can't contain spaces or invisible characters"
+          }
+        },
+        {
+          "name": "a zero-width space",
+          "input": {
+            "value": "austin/mueller​"
+          },
+          "expected": {
+            "path": null,
+            "error": "Path can't contain spaces or invisible characters"
+          }
+        },
+        {
+          "name": "a no-break space",
+          "input": {
+            "value": "austin mueller"
+          },
+          "expected": {
+            "path": null,
+            "error": "Path can't contain spaces or invisible characters"
+          }
+        },
+        {
+          "name": "a byte-order mark",
+          "input": {
+            "value": "﻿mueller"
+          },
+          "expected": {
+            "path": "mueller",
+            "error": null
+          }
+        },
+        {
+          "name": "leading slash",
+          "input": {
+            "value": "/austin/mueller"
+          },
+          "expected": {
+            "path": null,
+            "error": "Path can't start or end with a slash"
+          }
+        },
+        {
+          "name": "trailing slash",
+          "input": {
+            "value": "austin/mueller/"
+          },
+          "expected": {
+            "path": null,
+            "error": "Path can't start or end with a slash"
+          }
+        },
+        {
+          "name": "a lone slash",
+          "input": {
+            "value": "/"
+          },
+          "expected": {
+            "path": null,
+            "error": "Path can't start or end with a slash"
+          }
+        },
+        {
+          "name": "five parts",
+          "input": {
+            "value": "a/b/c/d/e"
+          },
+          "expected": {
+            "path": null,
+            "error": "Path can have at most 4 slash-separated parts"
+          }
+        },
+        {
+          "name": "four parts",
+          "input": {
+            "value": "a/b/c/d"
+          },
+          "expected": {
+            "path": "a/b/c/d",
+            "error": null
+          }
+        },
+        {
+          "name": "an empty part",
+          "input": {
+            "value": "austin//mueller"
+          },
+          "expected": {
+            "path": null,
+            "error": "Path can't contain an empty part (//)"
+          }
+        },
+        {
+          "name": "a dot",
+          "input": {
+            "value": "."
+          },
+          "expected": {
+            "path": null,
+            "error": "Each part of the path must contain a letter or number"
+          }
+        },
+        {
+          "name": "a dot-dot part",
+          "input": {
+            "value": "austin/.."
+          },
+          "expected": {
+            "path": null,
+            "error": "Each part of the path must contain a letter or number"
+          }
+        },
+        {
+          "name": "dots, tildes, underscores, hyphens",
+          "input": {
+            "value": "st.louis/o_flahertys~late-night"
+          },
+          "expected": {
+            "path": "st.louis/o_flahertys~late-night",
+            "error": null
+          }
+        },
+        {
+          "name": "an accent",
+          "input": {
+            "value": "zürich/café"
+          },
+          "expected": {
+            "path": null,
+            "error": "Path can only contain letters, numbers, hyphens, underscores, periods and slashes"
+          }
+        },
+        {
+          "name": "a question mark",
+          "input": {
+            "value": "austin/mueller?x=1"
+          },
+          "expected": {
+            "path": null,
+            "error": "Path can only contain letters, numbers, hyphens, underscores, periods and slashes"
+          }
+        },
+        {
+          "name": "a part of 100",
+          "input": {
+            "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "expected": {
+            "path": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "error": null
+          }
+        },
+        {
+          "name": "a part of 101",
+          "input": {
+            "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "expected": {
+            "path": null,
+            "error": "Each part of the path must be 100 characters or fewer"
+          }
+        },
+        {
+          "name": "255 long",
+          "input": {
+            "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/ccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+          },
+          "expected": {
+            "path": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/ccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "error": null
+          }
+        },
+        {
+          "name": "256 long",
+          "input": {
+            "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/cccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+          },
+          "expected": {
+            "path": null,
+            "error": "Path must be 255 characters or fewer"
+          }
+        }
+      ]
+    }
+  }
+}

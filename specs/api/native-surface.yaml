@@ -754,6 +754,84 @@ components:
         success: { type: boolean, const: true }
         session_instance_id: { type: integer }
         date: { $ref: "#/components/schemas/Date" }
+    AddSessionOptions:
+      type: object
+      required: [success, timezone_options, default_timezone]
+      properties:
+        success: { type: boolean, const: true }
+        timezone_options: { type: array, items: { $ref: "#/components/schemas/Option" } }
+        # When guessTimezone has no opinion.
+        default_timezone: { type: string }
+    ExistingSession:
+      type: object
+      required: [exists]
+      properties:
+        exists: { type: boolean }
+        # "/sessions/<path>" when it exists.
+        session_path: { type: string }
+    TheSessionSessionSearch:
+      type: object
+      required: [success, results]
+      properties:
+        success: { type: boolean, const: true }
+        results:
+          type: array
+          items:
+            type: object
+            required: [id, name, city, state, country, display_text, exists_in_db, session_path]
+            properties:
+              id: { type: integer }
+              # thesession.org lists a session by its venue.
+              name: { type: string }
+              city: { type: string }
+              state: { type: string }
+              country: { type: string }
+              display_text: { type: string }
+              exists_in_db: { type: boolean }
+              # "/sessions/<path>" when it is already on Ceol.
+              session_path: { type: [string, "null"] }
+    TheSessionSessionData:
+      description: >-
+        A session as thesession.org has it, every value coerced to text at the server
+        (their JSON is not type-guaranteed). The seed for the add-session form.
+      type: object
+      required: [success, session_data]
+      properties:
+        success: { type: boolean, const: true }
+        session_data:
+          type: object
+          required: [id, name, inception_date, location_name, location_phone, location_website,
+                     city, state, country, recurrence, comments]
+          properties:
+            id: { type: [integer, "null"] }
+            name: { type: string }
+            inception_date: { type: string }
+            location_name: { type: string }
+            location_phone: { type: string }
+            location_website: { type: string }
+            city: { type: string }
+            state: { type: string }
+            country: { type: string }
+            # thesession.org's schedule: one line, or several.
+            recurrence:
+              oneOf:
+                - { type: string }
+                - { type: array, items: { type: string } }
+            # Most recent first.
+            comments:
+              type: array
+              items:
+                type: object
+                required: [date, content]
+                properties:
+                  date: { type: string }
+                  content: { type: string }
+    AddSessionResult:
+      type: object
+      required: [success, session_path]
+      properties:
+        success: { type: boolean, const: true }
+        session_path: { type: string }
     NextInstanceSuggestion:
       type: object
       required: [success, date, start_time, end_time]
@@ -984,6 +1062,106 @@ paths:
       summary: Whole tunebook + top catalog with incipits — the local-store sync primitive
       security: [{ bearer: [] }]
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/OfflineBundle" } } } } }
+
+  # --- adding a session (spec 052 §B9) -------------------------------------------
+  /api/add-session:
+    get:
+      operationId: getAddSessionOptions
+      summary: The add-session form's time zones and default
+      responses:
+        "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/AddSessionOptions" } } } }
+    post:
+      operationId: addSession
+      summary: >-
+        Create a session. 400 when a required field is missing or a value is refused
+        (the path by session_path.py), 409 when the path or the thesession.org session
+        is already taken.
+      security: [{ bearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, path, city, state, country]
+              properties:
+                name: { type: string }
+                path: { type: string }
+                city: { type: string }
+                state: { type: string }
+                country: { type: string }
+                # A thesession.org session link or id.
+                thesession_id: { type: string }
+                location_name: { type: string }
+                location_phone: { type: string }
+                location_website: { type: string }
+                inception_date: { $ref: "#/components/schemas/Date" }
+                timezone: { type: string }
+                session_type: { type: string, enum: [regular, festival] }
+                active_buffer_minutes_before: { type: integer, minimum: 0, maximum: 1440 }
+                active_buffer_minutes_after: { type: integer, minimum: 0, maximum: 1440 }
+                # {"schedules": [...]} as a JSON string (summarizeRecurrence's json).
+                recurrence: { type: string }
+                add_current_user: { type: boolean }
+                add_current_user_role: { type: string, enum: [admin, member] }
+                show_people_list: { type: boolean }
+                track_attendance: { type: boolean }
+                track_set_starters: { type: boolean }
+      responses:
+        "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/AddSessionResult" } } } }
+        default: { $ref: "#/components/responses/Error" }
+  /api/check-existing-session:
+    post:
+      operationId: checkExistingSession
+      summary: Is this thesession.org session on Ceol already? 400 without a session_id.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [session_id]
+              properties:
+                session_id: { type: integer }
+      responses:
+        "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/ExistingSession" } } } }
+        default: { $ref: "#/components/responses/Error" }
+  /api/search-sessions:
+    post:
+      operationId: searchTheSessionSessions
+      summary: >-
+        Search thesession.org's sessions (up to 50), each marked with whether Ceol has it.
+        502 when thesession.org can't be reached.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [query]
+              properties:
+                query: { type: string }
+      responses:
+        "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/TheSessionSessionSearch" } } } }
+        default: { $ref: "#/components/responses/Error" }
+  /api/fetch-session-data:
+    post:
+      operationId: fetchTheSessionSession
+      summary: >-
+        One thesession.org session, as the add-session form's seed. 404 when thesession.org
+        has no such session, 502 when it can't be reached.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [session_id]
+              properties:
+                session_id: { type: integer }
+      responses:
+        "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/TheSessionSessionData" } } } }
+        default: { $ref: "#/components/responses/Error" }
 
   # --- tunes ---------------------------------------------------------------------
   /api/tunes/search:

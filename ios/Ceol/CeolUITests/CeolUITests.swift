@@ -246,6 +246,56 @@ final class CeolUITests: XCTestCase {
         XCTAssertTrue(app.buttons["session.join"].waitForExistence(timeout: 10))
     }
 
+    /// Phase 4d: add a session by hand (no thesession.org call), with a weekly schedule,
+    /// and land on its page. Each run's name is new, so a second run isn't refused as a
+    /// taken path; the test-DB reseed clears them (paths 'uitest-town/ui-test-session-*').
+    @MainActor
+    func testAddingASessionByHand() throws {
+        let app = launch()
+        signIn(app)
+        app.tabBars.buttons["Sessions"].firstMatch.tap()
+        let add = app.buttons["sessions.add"]
+        XCTAssertTrue(add.waitForExistence(timeout: 10))
+        add.tap()
+        let manual = app.buttons["addSession.manual"]
+        XCTAssertTrue(manual.waitForExistence(timeout: 10))
+        manual.tap()
+
+        func type(_ id: String, _ text: String) {
+            let f = app.textFields[id]
+            XCTAssertTrue(f.waitForExistence(timeout: 5), id)
+            f.tap()
+            f.typeText(text)
+        }
+        let n = Int.random(in: 1000...9999)
+        type("details.name", "UI Test Session \(n)")
+        type("details.city", "UITest Town")
+        type("details.state", "TX")
+        type("details.country", "USA")
+        // The path is made from the city and name as the web makes it.
+        XCTAssertTrue(app.staticTexts["ceol.io/sessions/uitest-town/ui-test-session-\(n)"].exists)
+
+        app.keyboards.buttons["Return"].firstMatch.tap()
+        let repeats = app.buttons["details.repeats"]
+        XCTAssertTrue(repeats.waitForExistence(timeout: 5))
+        repeats.tap()
+        let weekly = app.buttons["Weekly"].firstMatch
+        XCTAssertTrue(weekly.waitForExistence(timeout: 5))
+        weekly.tap()
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'Tuesdays from 7pm-10pm'")).firstMatch
+            .waitForExistence(timeout: 5))
+        snapshot("details")
+
+        app.buttons["details.save"].tap()
+        // Straight to the new session's page, as its admin.
+        let role = app.buttons["session.role"]
+        XCTAssertTrue(role.waitForExistence(timeout: 15), app.debugDescription)
+        XCTAssertTrue(role.label.contains("Admin"), role.label)
+        XCTAssertTrue(app.staticTexts["Tuesdays from 7:00pm-10:00pm"].exists || app.staticTexts.containing(
+            NSPredicate(format: "label CONTAINS 'Tuesdays'")).firstMatch.exists)
+        snapshot("created")
+    }
+
     /// Phase 3d: Me shows the profile and opens it to edit (cancelled: seed data stays put).
     @MainActor
     func testMeShowsTheProfile() throws {

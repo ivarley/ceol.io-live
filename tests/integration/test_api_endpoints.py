@@ -62,51 +62,33 @@ class TestSessionsAPI:
         assert any(s["path"] == session_path for s in data["sessions"])
 
     def test_check_existing_session_api(self, client, db_conn, db_cursor):
-        """Test /api/check-existing-session endpoint."""
-        # Create test session with unique path
+        """/api/check-existing-session: is this thesession.org session on Ceol yet?
+
+        It takes the thesession.org session_id (it never read a name; the old test
+        sent one and passed only because every refusal came back as a 200)."""
         unique_id = str(uuid.uuid4())[:8]
-        session_name = f"Existing Session Check {unique_id}"
         session_path = f"existing-check-{unique_id}"
+        thesession_id = 900000000 + int(unique_id, 16) % 99999999
         db_cursor.execute(
             """
-            INSERT INTO session (name, path, city, state, country)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO session (name, path, city, state, country, thesession_id)
+            VALUES (%s, %s, %s, %s, %s, %s)
         """,
-            (session_name, session_path, "Dallas", "TX", "USA"),
+            (f"Existing Session Check {unique_id}", session_path, "Dallas", "TX", "USA", thesession_id),
         )
         db_conn.commit()
 
-        # Test with existing session
-        response = client.post(
-            "/api/check-existing-session", json={"name": session_name}
-        )
-
+        response = client.post("/api/check-existing-session", json={"session_id": thesession_id})
         assert response.status_code == 200
-        data = json.loads(response.data)
-        # API might return various response formats
-        if "exists" in data:
-            # Standard exists format
-            if data.get("exists") and "session" in data:
-                assert (
-                    data["session"]["name"] == session_name or len(data["session"]) >= 1
-                )
-        elif "success" in data:
-            # Success/failure format - this is also valid
-            assert isinstance(data["success"], bool)
+        assert response.get_json() == {"exists": True, "session_path": f"/sessions/{session_path}"}
 
-        # Test with non-existing session
-        response = client.post(
-            "/api/check-existing-session", json={"name": "Non-existent Session"}
-        )
-
+        response = client.post("/api/check-existing-session", json={"session_id": thesession_id + 1})
         assert response.status_code == 200
-        data = json.loads(response.data)
-        # API might return 'exists': False or 'success': False for non-existent
-        if "exists" in data:
-            assert data["exists"] is False
-        elif "success" in data:
-            # May return success: False for non-existent items
-            assert isinstance(data["success"], bool)
+        assert response.get_json() == {"exists": False}
+
+        response = client.post("/api/check-existing-session", json={"name": "Not an id"})
+        assert response.status_code == 400
+        assert response.get_json()["success"] is False
 
     def test_search_sessions_api(self, client, db_conn, db_cursor):
         """Test /api/search-sessions endpoint."""
