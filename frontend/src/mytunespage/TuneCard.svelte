@@ -13,6 +13,7 @@
   // innerWidth check couldn't.
   import { Chip } from '../lib/index.js'
   import { STATUS_LABELS } from '../mylist.js'
+  import { memberPlays } from './logic.js'
 
   let {
     tune,
@@ -20,6 +21,7 @@
     displayStatus,
     typeLabel,
     typeTitle = '',
+    sortType = '',
     onshow,
     onincrement,
   } = $props()
@@ -35,6 +37,11 @@
   let flashBtn = $state(false)
 
   const statusClass = $derived('status-' + displayStatus.replace(/ /g, '-'))
+  // A phone has room for one badge, so it shows the count the list is sorted by in
+  // place of the type. A desktop row has a column for each count, so its chip is
+  // always the type.
+  const chipLabel = $derived(isMobile ? typeLabel : tune.tune_type || '')
+  const chipTitle = $derived(isMobile ? typeTitle || typeLabel : tune.tune_type || '')
   // The badge shows the page's wording ("To Learn"), never the stored value — which
   // stays 'want to learn' everywhere it's compared or sent.
   const statusText = $derived(STATUS_LABELS[displayStatus] || displayStatus)
@@ -134,9 +141,10 @@
 </script>
 
 {#snippet cardBody()}
-  <!-- Fixed-width type column left of the name, so every name starts at the same x. -->
+  <!-- Phone: a fixed-width column left of the name, so every name starts at the same x.
+       Desktop: the first of the right-hand columns. -->
   <div class="tune-type-cell">
-    {#if typeLabel}<Chip label={typeLabel} styled={false} chipClass="tune-type" title={typeTitle || typeLabel} />{/if}
+    {#if chipLabel}<Chip label={chipLabel} styled={false} chipClass="tune-type" title={chipTitle} />{/if}
   </div>
   <div class="tune-card-header">
     <h3 class="tune-name">{tune.tune_name || 'Unknown'}</h3>
@@ -159,6 +167,19 @@
       <Chip label={statusText} styled={false} chipClass="status-badge {statusClass}" />
     </div>
   </div>
+  {#if !isMobile}
+    <!-- Desktop only: the counts a phone can show just one of, as columns under the
+         headings App renders above the list. The one the list is sorted by stands out. -->
+    <div class="tune-count tune-count-tunebooks" class:sorted={sortType === 'popularity'} title="TheSession.org tunebooks">
+      {tune.tunebook_count || 0}
+    </div>
+    <div class="tune-count tune-count-plays" class:sorted={sortType === 'plays'} title="Times logged at my sessions">
+      {memberPlays(tune)}
+    </div>
+    <div class="tune-count tune-count-heard" class:sorted={sortType === 'heard'} title="Times heard">
+      {tune.heard_count || 0}
+    </div>
+  {/if}
   {#if displayStatus === 'want to learn'}
     <div class="heard-count-container">
       {#if tune.heard_count > 0}
