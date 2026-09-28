@@ -138,6 +138,18 @@ public struct AuthService: Sendable {
         try? store.setToken(nil)
     }
 
+    /// Delete this account and its private data, at once (spec 054). `confirmEmail` must
+    /// repeat the account's email; the server checks it again. Every token of the account
+    /// dies with it, so the stored one is forgotten.
+    public func deleteAccount(confirmEmail: String) async throws {
+        switch try await client.deleteAccount(body: .json(.init(confirmEmail: confirmEmail))) {
+        case .ok:
+            try? store.setToken(nil)
+        case .default(let status, let error):
+            throw failure(status, try? error.body.json)
+        }
+    }
+
     // MARK: - Profile setup
 
     public func profile() async throws -> Profile {

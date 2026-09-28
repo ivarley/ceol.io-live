@@ -91,6 +91,7 @@ struct MainTabView: View {
 struct MeView: View {
     @Environment(AppModel.self) private var model
     @State private var confirmSignOut = false
+    @State private var deleting = false
 
     var body: some View {
         NavigationStack {
@@ -105,6 +106,15 @@ struct MeView: View {
                 Section {
                     Button("Sign out", role: .destructive) { confirmSignOut = true }
                         .accessibilityIdentifier("me.signout")
+                }
+                // Last, and on its own. Not offered to system admins, whom the server
+                // refuses: removing an admin is another admin's decision.
+                if let user = model.user, let email = user.email, !user.isSystemAdmin {
+                    Section {
+                        Button("Delete Account", role: .destructive) { deleting = true }
+                            .accessibilityIdentifier("me.delete")
+                    }
+                    .sheet(isPresented: $deleting) { DeleteAccountView(email: email) }
                 }
             }
             .scrollContentBackground(.hidden)

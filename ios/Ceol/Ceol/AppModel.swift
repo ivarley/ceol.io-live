@@ -23,6 +23,8 @@ final class AppModel {
     private(set) var user: User?
     /// Why an emailed link didn't sign you in, for the sign-in screen to show.
     var linkError: String?
+    /// A plain notice for the sign-in screen (e.g. after deleting the account).
+    var notice: String?
     /// An emailed link is being exchanged.
     private(set) var openingLink = false
 
@@ -136,6 +138,13 @@ final class AppModel {
     func signOut() async {
         await auth.logout()
         user = nil
+        phase = .signedOut
+    }
+
+    /// The account is gone (AuthService.deleteAccount already forgot the token).
+    func accountDeleted() {
+        user = nil
+        notice = "Your account has been deleted."
         phase = .signedOut
     }
 }

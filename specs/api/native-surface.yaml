@@ -877,8 +877,9 @@ paths:
                 confirm_email: { type: string, description: "The account's email, case-insensitive" }
       responses:
         "200": { description: deleted, content: { application/json: { schema: { $ref: "#/components/schemas/Ok" } } } }
-        "400": { description: "code confirmation_mismatch: the email did not match" }
-        "403": { description: "code admin_account or sent_update_emails: this flow may not delete it" }
+        # Error codes: confirmation_mismatch (400, the email did not match); admin_account or
+        # sent_update_emails (403, this flow may not delete it).
+        default: { $ref: "#/components/responses/Error" }
   /api/home:
     get:
       operationId: getHome

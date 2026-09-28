@@ -30,6 +30,9 @@ struct SignInView: View {
         NavigationStack {
             Form {
                 header
+                if let notice = model.notice, step == .email {
+                    Section { Text(notice).accessibilityIdentifier("signin.notice") }
+                }
                 if let linkError = model.linkError, step == .email {
                     Section { Text(linkError).foregroundStyle(CeolTokens.warning).accessibilityIdentifier("signin.linkError") }
                 }
@@ -138,6 +141,7 @@ struct SignInView: View {
         guard !address.isEmpty else { return }
         await run {
             model.linkError = nil
+            model.notice = nil
             switch try await model.auth.checkEmail(address) {
             case .needsPassword(let email): step = .password(email: email)
             case .linkSent(let email, let message): step = .sent(email: email, message: message, registration: false)

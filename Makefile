@@ -127,7 +127,9 @@ IOS_TEST_SERVER ?= http://127.0.0.1:5031
 ios-ui-test: ## iOS: sign-in UI tests in the simulator, against a local server (IOS_TEST_SERVER)
 	@case "$(IOS_TEST_SERVER)" in http://127.0.0.1:*|http://localhost:*) ;; *) echo "IOS_TEST_SERVER must be local"; exit 1;; esac
 	TOKEN=$$(./venv/bin/python scripts/mint_login_token.py) && \
+	DELETE_TOKEN=$$(./venv/bin/python scripts/mint_login_token.py ios-delete-$$$$@example.com --create) && \
 	TEST_RUNNER_CEOL_TEST_SERVER=$(IOS_TEST_SERVER) TEST_RUNNER_CEOL_TEST_LOGIN_TOKEN=$$TOKEN \
+	TEST_RUNNER_CEOL_TEST_DELETE_TOKEN=$$DELETE_TOKEN TEST_RUNNER_CEOL_TEST_DELETE_EMAIL=ios-delete-$$$$@example.com \
 	xcodebuild -project ios/Ceol/Ceol.xcodeproj -scheme Ceol -destination '$(IOS_SIM)' \
 		-derivedDataPath $(IOS_DERIVED) -skipPackagePluginValidation -only-testing:CeolUITests test
 

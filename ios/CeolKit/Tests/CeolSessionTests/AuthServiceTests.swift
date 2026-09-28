@@ -140,6 +140,24 @@ struct AuthServiceTests {
         #expect(store.token() == nil)
     }
 
+    @Test("delete account: forgets the token; a refusal keeps it")
+    func deleteAccount() async throws {
+        let (auth, store, _) = service(["/api/me/delete-account": (200, #"{"success": true}"#)], token: "tok")
+        try await auth.deleteAccount(confirmEmail: "vera@example.com")
+        #expect(store.token() == nil)
+
+        let (refused, keptStore, _) = service(
+            ["/api/me/delete-account": (403, error("admin_account", "A system admin account can't be deleted from here."))],
+            token: "tok")
+        do {
+            try await refused.deleteAccount(confirmEmail: "ian@ceol.io")
+            Issue.record("expected a refusal")
+        } catch let f as AuthFailure {
+            #expect(f.code == "admin_account")
+        }
+        #expect(keptStore.token() == "tok")
+    }
+
     @Test("network failures are thrown as is, not dressed up as refusals")
     func networkFailure() async throws {
         let (auth, _, _) = service([:])

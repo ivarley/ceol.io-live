@@ -91,6 +91,32 @@ final class CeolUITests: XCTestCase {
     }
 
     @MainActor
+    func testDeletingTheAccount() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let token = env["CEOL_TEST_DELETE_TOKEN"], let email = env["CEOL_TEST_DELETE_EMAIL"], !token.isEmpty else {
+            throw XCTSkip("No throwaway account (make ios-ui-test creates one).")
+        }
+        let app = launch(openURL: "\(server!)/auth/login/\(token)")
+        let me = app.tabBars.buttons["Me"]
+        XCTAssertTrue(me.waitForExistence(timeout: 15))
+        me.tap()
+        app.buttons["me.delete"].tap()
+
+        let confirm = app.buttons["delete.confirm"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+        XCTAssertFalse(confirm.isEnabled, "stays disabled until the email is typed")
+        let field = app.textFields["delete.email"]
+        field.tap()
+        field.typeText(email)
+        XCTAssertTrue(confirm.isEnabled)
+        confirm.tap()
+
+        let notice = app.staticTexts["signin.notice"]
+        XCTAssertTrue(notice.waitForExistence(timeout: 10))
+        XCTAssertTrue(notice.label.contains("deleted"))
+    }
+
+    @MainActor
     func testAnEmailedLinkSignsIn() throws {
         guard let token = ProcessInfo.processInfo.environment["CEOL_TEST_LOGIN_TOKEN"], !token.isEmpty else {
             throw XCTSkip("No CEOL_TEST_LOGIN_TOKEN (make ios-ui-test mints one).")
