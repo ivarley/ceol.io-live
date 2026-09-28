@@ -12,7 +12,7 @@ open the web in a Safari view. Plan and phases: `specs/changes/inprogress/052-na
 | `CeolKit/Sources/CeolAPI` | The API client. **Generated at build time** by `swift-openapi-generator` from `openapi.yaml`, a symlink to `specs/api/native-surface.yaml`. Each operation is a method named by its `operationId` (`getSessionDetail`, `applyLiveOp`, …); schemas are `Components.Schemas.<Name>`. `CeolClient.swift` adds what the spec can't say: `Client.ceol(clientID:token:)` sends `X-Ceol-Client` and, when signed in, `Authorization: Bearer`. |
 | `CeolKit/Sources/CeolDesign` | `CeolTokens`: `Tokens.swift` is a symlink to `design/Tokens.swift`, which `make tokens` generates from the same source as the web's CSS. |
 | `CeolKit/Sources/CeolSession` | Sign-in: `AuthService` (check-email, password login, link exchange, logout, app-config, profile), `KeychainTokenStore` (the Bearer token, this device only), `AuthLink` (the emailed `/auth/login/<token>` and `/verify-email/<token>` links). |
-| `CeolKit/Sources/CeolLogic` | The live logger's client rules, ported from the web: `FracIndex`, `LogState` (ordering, sets, cursor, anchors, merge), `OfflineRules`, `ABCQuery`, `Segments`, `NameMatch`, `TheSession` (id parsing). Records and op payloads stay `JSONValue`, so a row passes through with every field it arrived with. |
+| `CeolKit/Sources/CeolLogic` | The live logger's client rules, ported from the web: `FracIndex`, `LogState` (ordering, sets, cursor, anchors, merge), `OfflineRules`, `ABCQuery`, `Segments`, `NameMatch`, `TheSession` (id parsing); and the screens' list rules, `HomeRules`, `SessionsRules`, `MyTunesRules`. Records and op payloads stay `JSONValue`, so a row passes through with every field it arrived with. |
 | `CeolKit/Tests/CeolLogicTests` | Holds that port to the web's OWN fixture files (`frontend/src/**/*.fixtures.json`), read in place: every function in a file needs a Swift port, and every case must give the web's answer, including the name matcher's calibration bars. |
 | `CeolKit/Tests/CeolAPITests` | The client's headers, and decoding: `Fixtures/` holds **real** responses captured from the seeded server (`make ios-fixtures`), and each must decode into its generated type. |
 
@@ -23,7 +23,7 @@ contract or the palette. A change to either is picked up on the next build.
 
 ```bash
 make ios-test       # swift test in CeolKit (Mac, no simulator), then the app's tests in the simulator
-make ios-ui-test    # sign-in UI tests in the simulator, against a LOCAL server (see below)
+make ios-ui-test    # UI tests (sign-in, browsing, Me) in the simulator, against a LOCAL server (see below)
 make ios-build      # build the app for the simulator
 make ios-fixtures   # re-capture the response fixtures from the seeded local DB
 ```

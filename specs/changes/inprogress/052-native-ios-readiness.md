@@ -1678,4 +1678,21 @@ The plan (Phases 0-6) runs from here in `ios/`; see `ios/README.md` for the layo
   emailed link). Not yet: the optional set-password step after a magic link (the server's
   `next: set_password` is ignored for now), and delete-account in the app (the endpoint
   exists; App Store review will want it on Me).
-- **Phase 3 — the read-only screens:** next.
+- **Delete Account on Me: DONE 2026-09-28.** Last on Me and on its own; you confirm by
+  typing your email. Not offered to system admins, whom the server refuses.
+- **Phase 3 — the read-only screens: DONE 2026-09-28.** Home (the today strip, this
+  week, your stats), Sessions (the directory with its filters and search, a session's
+  page with Tunes / Logs / People, and a night's sets), Tunes (your list with the status
+  segments, a type menu and search; the catalogue's matches below as "Not on your list";
+  the tune sheet with server-rendered notation, opening bars or the whole tune) and Me
+  (your profile; Admin and Help open on the web; Sign out; Delete Account). Me's Edit
+  reuses the profile-setup form. List rules are ported with tests (`HomeRules`,
+  `SessionsRules`, `MyTunesRules`). The contract gained the fields the screens read
+  (`current_year`, `viewer_country`, `default_tab`, a session's address and contacts)
+  and the query parameters the app sends (deep search, notation `kind`, tune detail's
+  session scope). Found on the way: `PUT /api/me/profile` deleted and re-inserted every
+  instrument, which reset `is_auto` on a manual per-instrument list; it now changes only
+  the difference, and the GET returns canonical names for older free spellings
+  ("fiddle" -> "Fiddle"). UI tests: eight, adding browsing a session to a night,
+  browsing tunes, and Me.
+- **Phase 4 — editing:** next.

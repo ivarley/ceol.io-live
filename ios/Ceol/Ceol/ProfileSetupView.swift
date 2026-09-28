@@ -2,6 +2,9 @@
 // and somewhere you play are required (the server's needs_profile_setup test — a first
 // and last name, and at least one of city, state, country); time zone and instruments
 // are optional. The form won't save what the server would still call incomplete.
+//
+// The Me tab opens the same form to edit the profile (`editing`): Cancel in place of
+// Sign out, the account's time zone as it is, and it closes when saved.
 
 import CeolAPI
 import CeolDesign
@@ -10,6 +13,9 @@ import SwiftUI
 
 struct ProfileSetupView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    var editing = false
+    var onSaved: () -> Void = {}
 
     @State private var loaded: Profile?
     @State private var firstName = ""
@@ -80,14 +86,20 @@ struct ProfileSetupView: View {
             }
             .scrollContentBackground(.hidden)
             .background(CeolTokens.bgColor)
-            .navigationTitle("Your profile")
+            .navigationTitle(editing ? "Edit profile" : "Your profile")
+            .navigationBarTitleDisplayMode(editing ? .inline : .automatic)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { Task { await save() } }
                         .disabled(!complete || busy || loaded == nil)
+                        .accessibilityIdentifier("profile.save")
                 }
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Sign out", role: .destructive) { Task { await model.signOut() } }
+                    if editing {
+                        Button("Cancel") { dismiss() }
+                    } else {
+                        Button("Sign out", role: .destructive) { Task { await model.signOut() } }
+                    }
                 }
             }
             .task { await load() }
@@ -112,8 +124,9 @@ struct ProfileSetupView: View {
             city = p.profile.city
             state = p.profile.state
             country = p.profile.country
-            // Keep the account's zone unless it is still the default and the device knows better.
-            if !p.profile.timezone.isEmpty && p.profile.timezone != "UTC" { timezone = p.profile.timezone }
+            // Keep the account's zone; at first setup, unless it is still the default and
+            // the device knows better.
+            if !p.profile.timezone.isEmpty && (editing || p.profile.timezone != "UTC") { timezone = p.profile.timezone }
             instruments = Set(p.profile.instruments)
             loaded = p
         } catch {
@@ -135,6 +148,8 @@ struct ProfileSetupView: View {
                 error = "That's not quite everything: a first and last name, and somewhere you play."
             } else {
                 await model.profileSaved()
+                onSaved()
+                if editing { dismiss() }
             }
         } catch let f as AuthFailure {
             error = f.message

@@ -424,7 +424,9 @@ def delete_account_api():
     expected = (current_user.email or current_user.username or "").strip().lower()
     if not typed or typed != expected:
         return api_error(
-            "Type your account's email address to confirm.", 400, code="confirmation_mismatch"
+            "Type your account's email address to confirm.",
+            400,
+            code="confirmation_mismatch",
         )
 
     user_id = current_user.user_id
@@ -494,7 +496,9 @@ def _load_profile(cur, person_id, user_id):
         "SELECT instrument FROM person_instrument WHERE person_id = %s ORDER BY instrument",
         (person_id,),
     )
-    instruments = [r[0] for r in cur.fetchall()]
+    # Older rows hold free spellings ("fiddle"); show the canonical names the
+    # profile form offers, so its checkmarks line up.
+    instruments = sorted(normalize_instruments([r[0] for r in cur.fetchall()]))
     return {
         "first_name": p[0] or "",
         "last_name": p[1] or "",
@@ -593,18 +597,31 @@ def me_profile():
             instruments = normalize_instruments(
                 [i for i in instruments if isinstance(i, str)]
             )
+            # Only the difference: an instrument that stays keeps its row, and so
+            # its is_auto flag (a manual per-instrument list must not turn auto
+            # because the profile was saved). Matched case-insensitively, since
+            # older rows hold free spellings.
+            wanted = {i.lower() for i in instruments}
             cur.execute(
-                "DELETE FROM person_instrument WHERE person_id = %s",
+                "SELECT instrument FROM person_instrument WHERE person_id = %s",
                 (current_user.person_id,),
             )
+            have = [r[0] for r in cur.fetchall()]
+            held = {normalize_instruments([h])[0].lower() for h in have}
+            for h in have:
+                if normalize_instruments([h])[0].lower() not in wanted:
+                    cur.execute(
+                        "DELETE FROM person_instrument WHERE person_id = %s AND instrument = %s",
+                        (current_user.person_id, h),
+                    )
             for instrument in instruments:
-                if instrument:
+                if instrument.lower() not in held:
                     cur.execute(
                         """
-                        INSERT INTO person_instrument (person_id, instrument)
-                        VALUES (%s, %s) ON CONFLICT (person_id, instrument) DO NOTHING
+                        INSERT INTO person_instrument (person_id, instrument, created_by_user_id)
+                        VALUES (%s, %s, %s) ON CONFLICT (person_id, instrument) DO NOTHING
                         """,
-                        (current_user.person_id, instrument),
+                        (current_user.person_id, instrument, current_user.user_id),
                     )
         conn.commit()
         return jsonify(_profile_body(cur))

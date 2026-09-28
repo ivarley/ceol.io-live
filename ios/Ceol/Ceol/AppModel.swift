@@ -29,6 +29,8 @@ final class AppModel {
     private(set) var openingLink = false
 
     let auth: AuthService
+    /// The server the app talks to; its web pages (Help, Admin) open from here too.
+    let server: URL
     /// Hosts, beyond ceol.io, whose sign-in links the app accepts: a development server.
     private let devHosts: Set<String>
     private var pendingLink: URL?
@@ -36,6 +38,7 @@ final class AppModel {
     init(server: URL = AppModel.serverURL, store: any TokenStore = KeychainTokenStore()) {
         let client = Client.ceol(serverURL: server, clientID: ClientID.current, token: { store.token() })
         auth = AuthService(client: client, store: store)
+        self.server = server
         devHosts = CeolServer.production.host() == server.host() ? [] : [server.host() ?? ""]
     }
 

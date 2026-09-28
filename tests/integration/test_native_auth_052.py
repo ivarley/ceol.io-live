@@ -256,6 +256,47 @@ class TestSetPasswordAndProfile:
         p = r.get_json()["profile"]
         assert p["city"] == "" and p["state"] == "Clare"
 
+    def test_profile_save_keeps_instrument_rows(self, client, passwordless_user):
+        """Saving the profile adds and removes only the difference: a kept
+        instrument keeps its row (a manual list stays manual), and an old free
+        spelling reads back as the canonical name."""
+        pid = passwordless_user["person_id"]
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "INSERT INTO person_instrument (person_id, instrument, is_auto)"
+                " VALUES (%s, 'fiddle', FALSE), (%s, 'flute', TRUE)",
+                (pid, pid),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        token = generate_login_token()
+        _set_token(passwordless_user["user_id"], "login_token", token, 15)
+        bearer = client.post(
+            "/api/auth/exchange", json={"token": token}, headers=IOS
+        ).get_json()["token"]
+        got = client.get("/api/me/profile", headers=_bearer(bearer)).get_json()
+        assert got["profile"]["instruments"] == ["Fiddle", "Flute"]
+        r = client.put(
+            "/api/me/profile",
+            json={"instruments": ["Fiddle", "Banjo"]},
+            headers=_bearer(bearer),
+        )
+        assert r.get_json()["profile"]["instruments"] == ["Banjo", "Fiddle"]
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT instrument, is_auto FROM person_instrument"
+                " WHERE person_id = %s ORDER BY instrument",
+                (pid,),
+            )
+            assert cur.fetchall() == [("Banjo", True), ("fiddle", False)]
+        finally:
+            conn.close()
+
 
 class TestResendVerification:
     @patch("api_app_routes.send_verification_email")
@@ -372,7 +413,7 @@ class TestWebSession:
         url = r.get_json()["url"]
         assert "/auth/login/" in url and "next=%2Fadmin" in url or "next=/admin" in url
         path = url.split("://", 1)[1]
-        path = path[path.index("/"):]  # noqa: E203 (black slice style)
+        path = path[path.index("/") :]  # noqa: E203 (black slice style)
         r2 = client.get(path)
         assert r2.status_code == 302
         assert r2.headers["Location"].endswith("/admin")

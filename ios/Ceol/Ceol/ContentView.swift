@@ -86,47 +86,6 @@ struct MainTabView: View {
     }
 }
 
-/// The account, for now: who you are signed in as, and signing out. The profile and
-/// the rest of /me arrive with the other screens (plan Phase 3).
-struct MeView: View {
-    @Environment(AppModel.self) private var model
-    @State private var confirmSignOut = false
-    @State private var deleting = false
-
-    var body: some View {
-        NavigationStack {
-            List {
-                if let user = model.user {
-                    Section {
-                        LabeledContent("Name", value: "\(user.firstName) \(user.lastName)")
-                            .accessibilityIdentifier("me.name")
-                        if let email = user.email { LabeledContent("Email", value: email) }
-                    }
-                }
-                Section {
-                    Button("Sign out", role: .destructive) { confirmSignOut = true }
-                        .accessibilityIdentifier("me.signout")
-                }
-                // Last, and on its own. Not offered to system admins, whom the server
-                // refuses: removing an admin is another admin's decision.
-                if let user = model.user, let email = user.email, !user.isSystemAdmin {
-                    Section {
-                        Button("Delete Account", role: .destructive) { deleting = true }
-                            .accessibilityIdentifier("me.delete")
-                    }
-                    .sheet(isPresented: $deleting) { DeleteAccountView(email: email) }
-                }
-            }
-            .scrollContentBackground(.hidden)
-            .background(CeolTokens.bgColor)
-            .navigationTitle("Me")
-            .confirmationDialog("Sign out of Ceol on this iPhone?", isPresented: $confirmSignOut, titleVisibility: .visible) {
-                Button("Sign out", role: .destructive) { Task { await model.signOut() } }
-            }
-        }
-    }
-}
-
 /// Stands in for each tab until its screen is built (plan Phase 3).
 struct PlaceholderScreen: View {
     let title: String

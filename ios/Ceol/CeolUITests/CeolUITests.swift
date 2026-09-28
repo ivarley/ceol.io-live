@@ -107,6 +107,25 @@ final class CeolUITests: XCTestCase {
         snapshot("search")
     }
 
+    /// Phase 3d: Me shows the profile and opens it to edit (cancelled: seed data stays put).
+    @MainActor
+    func testMeShowsTheProfile() throws {
+        let app = launch()
+        signIn(app)
+        app.tabBars.buttons["Me"].tap()
+        XCTAssertTrue(app.staticTexts["Ian Varley"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS '@ian' AND label CONTAINS 'Austin'")).firstMatch.exists)
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS 'Fiddle'")).firstMatch.exists)
+        XCTAssertFalse(app.buttons["me.delete"].exists, "not offered to a system admin")
+        snapshot("me")
+        app.buttons["me.edit"].tap()
+        XCTAssertTrue(app.navigationBars["Edit profile"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.textFields["First name"].waitForExistence(timeout: 10))
+        snapshot("edit")
+        app.buttons["Cancel"].tap()
+        XCTAssertTrue(app.navigationBars["Edit profile"].waitForNonExistence(timeout: 5))
+    }
+
     @MainActor
     func testPasswordSignInThenSignOut() throws {
         let app = launch()
