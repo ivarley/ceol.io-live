@@ -1716,3 +1716,13 @@ The plan (Phases 0-6) runs from here in `ios/`; see `ios/README.md` for the layo
     `auth.is_site_path`, shared by the API and the login redirect. Share: a session and
     a night have the system share sheet with their web address. A tune has none: the
     web has no page for a tune outside a session.
+  - **4c DONE 2026-09-28.** A session's screen asks "Do you attend this session?" (local
+    or just visiting; you land unconfirmed, as on the web). Once you belong, a "You're
+    Member / Visitor / Admin" row opens a sheet to switch member/visitor and to Leave,
+    confirmed. The Logs tab has Add a night, prefilled from the recurrence's next date
+    and times, which goes straight to the new night. The contract now types join
+    (`Relationship`, `JoinSessionResult`), leave, add_instance (its body and
+    `AddSessionInstanceResult`), and the relationship PUT (`setSessionRelationship`,
+    new to the surface), each with the Error response. `add_instance` answered every
+    failure with 200 and `success: false`; it now sends 400 / 404 / 500 (the web reads
+    the body either way).

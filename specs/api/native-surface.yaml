@@ -737,6 +737,23 @@ components:
         success: { type: boolean, const: true }
         session_id: { type: integer }
         active_instance_ids: { type: array, items: { type: integer } }
+    Relationship:
+      type: string
+      enum: [member, visitor]
+    JoinSessionResult:
+      type: object
+      required: [success, relationship, confirmed]
+      properties:
+        success: { type: boolean, const: true }
+        relationship: { $ref: "#/components/schemas/Relationship" }
+        confirmed: { type: boolean }
+    AddSessionInstanceResult:
+      type: object
+      required: [success, session_instance_id, date]
+      properties:
+        success: { type: boolean, const: true }
+        session_instance_id: { type: integer }
+        date: { $ref: "#/components/schemas/Date" }
     NextInstanceSuggestion:
       type: object
       required: [success, date, start_time, end_time]
@@ -1082,24 +1099,77 @@ paths:
   /api/sessions/{session_path}/join:
     post:
       operationId: joinSession
-      summary: Ask to join / join a session
+      summary: >-
+        Join a session as a local (member) or a visitor. You land unconfirmed: a session
+        admin confirms you before you can see its people. 400 when you already belong.
       security: [{ bearer: [] }]
       parameters: [{ name: session_path, in: path, required: true, schema: { type: string } }]
-      responses: { "200": { description: ok } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                relationship: { $ref: "#/components/schemas/Relationship" }
+      responses:
+        "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/JoinSessionResult" } } } }
+        default: { $ref: "#/components/responses/Error" }
   /api/sessions/{session_path}/leave:
     delete:
       operationId: leaveSession
-      summary: Leave a session
+      summary: Leave a session. What you logged there stays. 404 when you don't belong.
       security: [{ bearer: [] }]
       parameters: [{ name: session_path, in: path, required: true, schema: { type: string } }]
-      responses: { "200": { description: ok } }
+      responses:
+        "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Ok" } } } }
+        default: { $ref: "#/components/responses/Error" }
+  /api/sessions/{session_path}/people/{person_id}/relationship:
+    put:
+      operationId: setSessionRelationship
+      summary: >-
+        Member or visitor: whose session this is. You may set your own; a session admin
+        may set anyone's. Grants no access (that is `confirmed`).
+      security: [{ bearer: [] }]
+      parameters:
+        - { name: session_path, in: path, required: true, schema: { type: string } }
+        - { name: person_id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [relationship]
+              properties:
+                relationship: { $ref: "#/components/schemas/Relationship" }
+      responses:
+        "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Ok" } } } }
+        default: { $ref: "#/components/responses/Error" }
   /api/sessions/{session_path}/add_instance:
     post:
       operationId: addSessionInstance
-      summary: Create a session instance (a log for a date)
+      summary: >-
+        Add a night (a session instance, the log for a date). Anyone signed in may, as on
+        the web. Several nights may share a date.
       security: [{ bearer: [] }]
       parameters: [{ name: session_path, in: path, required: true, schema: { type: string } }]
-      responses: { "200": { description: ok } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [date]
+              properties:
+                date: { $ref: "#/components/schemas/Date" }
+                start_time: { type: string, description: "HH:MM" }
+                end_time: { type: string, description: "HH:MM" }
+                # Stored only when it differs from the session's usual venue.
+                location: { type: string }
+                comments: { type: string }
+      responses:
+        "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/AddSessionInstanceResult" } } } }
+        default: { $ref: "#/components/responses/Error" }
   /api/sessions/{session_path}/next_instance_suggestion:
     get:
       operationId: getNextInstanceSuggestion

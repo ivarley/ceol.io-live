@@ -128,6 +128,15 @@ struct SessionDetailView: View {
     @State private var tab: Tab = .tunes
     @State private var logs: LoadState<SessionLogsPayload> = .loading
     @State private var people: LoadState<SessionPeoplePayload> = .loading
+    @State private var addingNight = false
+    @State private var editingRole = false
+    @State private var newNight: NewNight?
+
+    /// A night just added, to go straight to.
+    struct NewNight: Identifiable, Hashable {
+        let id: Int
+        let title: String
+    }
 
     var body: some View {
         Loaded(state: state, retry: load) { d in content(d) }
@@ -141,6 +150,22 @@ struct SessionDetailView: View {
                         Image(systemName: "square.and.arrow.up")
                     }
                     .accessibilityLabel("Share")
+                }
+            }
+            .navigationDestination(item: $newNight) { NightView(sessionInstanceID: $0.id, title: $0.title) }
+            .sheet(isPresented: $editingRole) {
+                if let p = state.value?.permissions, let relationship = p.relationship {
+                    RoleSheet(path: path, relationship: relationship, isAdmin: p.isSessionAdmin) {
+                        await load()
+                        people = .loading
+                    }
+                }
+            }
+            .sheet(isPresented: $addingNight) {
+                AddNightView(path: path, usualVenue: state.value?.session.locationName) { id, date in
+                    logs = .loading
+                    newNight = NewNight(id: id, title: "\(name) · \(HomeRules.shortDate(date, currentYear: nil))")
+                    Task { await load() }
                 }
             }
             .task { if state.value == nil { await load() } }
@@ -186,6 +211,13 @@ struct SessionDetailView: View {
                 }
             }
             about(d.session)
+            MembershipSection(
+                path: path, permissions: d.permissions,
+                onChange: {
+                    await load()
+                    people = .loading
+                },
+                onEditRole: { editingRole = true })
             Section {
                 Picker("Show", selection: $tab) {
                     ForEach(tabs, id: \.self) { t in Text(label(t, d)).tag(t) }
@@ -261,6 +293,12 @@ struct SessionDetailView: View {
                 Button("Retry") { Task { await loadLogs() } }
             }
         case .loaded(let l):
+            if d.permissions.isLoggedIn {
+                Section {
+                    Button { addingNight = true } label: { Label("Add a night", systemImage: "plus.circle") }
+                        .accessibilityIdentifier("session.addNight")
+                }
+            }
             ForEach(l.sortedYears, id: \.self) { year in
                 Section(String(year)) {
                     ForEach(l.instancesByYear.additionalProperties[String(year)] ?? [], id: \.sessionInstanceId) { night in

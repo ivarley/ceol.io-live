@@ -119,6 +119,12 @@ def native_client(client):
         def post(self, url, json):
             return client.post(url, json=json, headers=headers)
 
+        def put(self, url, json):
+            return client.put(url, json=json, headers=headers)
+
+        def delete(self, url):
+            return client.delete(url, headers=headers)
+
     return _C()
 
 
@@ -393,6 +399,65 @@ class TestResponsesMatchSchemas:
         assert bad.status_code == 400
         error = spec["components"]["responses"]["Error"]["content"]["application/json"]["schema"]
         self._validate(spec, error, bad.get_json())
+
+    def test_session_membership_and_adding_a_night_validate(self, spec, native_client):
+        """Joining a session, changing your relationship, adding a night, and leaving,
+        as the app does them, on a session the admin does not belong to."""
+        from database import get_db_connection
+
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """SELECT s.path, s.session_id FROM session s
+                   WHERE NOT EXISTS (SELECT 1 FROM session_person sp
+                                     WHERE sp.session_id = s.session_id AND sp.person_id = 1)
+                   ORDER BY s.session_id LIMIT 1"""
+            )
+            path, session_id = cur.fetchone()
+        finally:
+            conn.close()
+        schemas = spec["components"]["schemas"]
+        error = spec["components"]["responses"]["Error"]["content"]["application/json"]["schema"]
+        base = f"/api/sessions/{path}"
+
+        r = native_client.post(f"{base}/join", {"relationship": "visitor"})
+        assert r.status_code == 200, r.get_json()
+        self._validate(spec, schemas["JoinSessionResult"], r.get_json())
+        assert r.get_json()["confirmed"] is False
+        again = native_client.post(f"{base}/join", {"relationship": "visitor"})
+        assert again.status_code == 400
+        self._validate(spec, error, again.get_json())
+
+        r = native_client.put(f"{base}/people/1/relationship", {"relationship": "member"})
+        assert r.status_code == 200, r.get_json()
+        self._validate(spec, schemas["Ok"], r.get_json())
+
+        r = native_client.post(f"{base}/add_instance", {"date": "2031-02-03", "start_time": "20:00"})
+        assert r.status_code == 200, r.get_json()
+        self._validate(spec, schemas["AddSessionInstanceResult"], r.get_json())
+        instance_id = r.get_json()["session_instance_id"]
+        missing = native_client.post(f"{base}/add_instance", {"date": ""})
+        assert missing.status_code == 400
+        self._validate(spec, error, missing.get_json())
+        nowhere = native_client.post("/api/sessions/no/such/add_instance", {"date": "2031-02-03"})
+        assert nowhere.status_code == 404
+        self._validate(spec, error, nowhere.get_json())
+
+        r = native_client.delete(f"{base}/leave")
+        assert r.status_code == 200, r.get_json()
+        self._validate(spec, schemas["Ok"], r.get_json())
+        gone = native_client.delete(f"{base}/leave")
+        assert gone.status_code == 404
+        self._validate(spec, error, gone.get_json())
+
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM session_instance WHERE session_instance_id = %s", (instance_id,))
+            conn.commit()
+        finally:
+            conn.close()
 
     def test_error_envelope(self, native_client):
         r = native_client.get("/api/resolve?path=/sessions/no/such/2020-01-01")

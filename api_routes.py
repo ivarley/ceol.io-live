@@ -2499,8 +2499,10 @@ def delete_session_tune_alias(session_path, tune_id, alias_id):
 
 @api_login_required
 def add_session_instance_ajax(session_path):
+    # Failures carry a 4xx/5xx status (they were all 200 with success: false). The web
+    # reads the body's success either way; a native client reads the status.
     if not request.json:
-        return jsonify({"success": False, "message": "No JSON data provided"})
+        return jsonify({"success": False, "message": "No JSON data provided"}), 400
     date = request.json.get("date", "").strip()
     start_time = (
         request.json.get("start_time", "").strip()
@@ -2525,7 +2527,7 @@ def add_session_instance_ajax(session_path):
     cancelled = request.json.get("cancelled", False)
 
     if not date:
-        return jsonify({"success": False, "message": "Please enter a session date"})
+        return jsonify({"success": False, "message": "Please enter a session date"}), 400
 
     try:
         conn = get_db_connection()
@@ -2540,7 +2542,7 @@ def add_session_instance_ajax(session_path):
         if not session_result:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Session not found"})
+            return jsonify({"success": False, "message": "Session not found"}), 404
 
         session_id, session_location_name = session_result
 
@@ -2563,8 +2565,9 @@ def add_session_instance_ajax(session_path):
         if not session_instance_result:
             cur.close()
             conn.close()
-            return jsonify(
-                {"success": False, "message": "Failed to create session instance"}
+            return (
+                jsonify({"success": False, "message": "Failed to create session instance"}),
+                500,
             )
 
         session_instance_id = session_instance_result[0]
@@ -2586,11 +2589,14 @@ def add_session_instance_ajax(session_path):
         )
 
     except Exception as e:
-        return jsonify(
-            {
-                "success": False,
-                "message": f"Failed to create session instance: {str(e)}",
-            }
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "message": f"Failed to create session instance: {str(e)}",
+                }
+            ),
+            500,
         )
 
 

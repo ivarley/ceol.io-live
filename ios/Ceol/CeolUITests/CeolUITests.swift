@@ -181,6 +181,71 @@ final class CeolUITests: XCTestCase {
         XCTAssertTrue(admin.waitForExistence(timeout: 10))
     }
 
+    /// Phase 4c: join a session you don't belong to, change your role, add a night,
+    /// and leave again. The night stays (nights aren't yours to delete); the seed is
+    /// refreshed by the next test-DB reseed.
+    @MainActor
+    func testJoiningASessionAndAddingANight() throws {
+        let app = launch()
+        signIn(app)
+        app.tabBars.buttons["Sessions"].firstMatch.tap()
+        let filter = app.buttons.containing(NSPredicate(format: "label CONTAINS 'My Sessions'")).firstMatch
+        XCTAssertTrue(filter.waitForExistence(timeout: 10))
+        filter.tap()
+        let allActive = app.buttons["All Active"].firstMatch
+        XCTAssertTrue(allActive.waitForExistence(timeout: 5))
+        allActive.tap()
+        let boston = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Boston Celtic Session'")).firstMatch
+        XCTAssertTrue(boston.waitForExistence(timeout: 10))
+        boston.tap()
+
+        let join = app.buttons["session.join"]
+        let role = app.buttons["session.role"]
+        // A run that failed partway may have left us a member: leave first.
+        if role.waitForExistence(timeout: 5) {
+            role.tap()
+            app.buttons["role.leave"].tap()
+            app.buttons.matching(NSPredicate(format: "label == 'Leave' AND identifier != 'role.leave'")).firstMatch.tap()
+        }
+        XCTAssertTrue(join.waitForExistence(timeout: 10))
+        join.tap()
+        let visiting = app.buttons["Just visiting"]
+        XCTAssertTrue(visiting.waitForExistence(timeout: 5))
+        visiting.tap()
+        XCTAssertTrue(role.waitForExistence(timeout: 10))
+        XCTAssertTrue(role.label.contains("Visitor"), role.label)
+        snapshot("joined")
+
+        role.tap()
+        let member = app.buttons["I attend this session"].firstMatch
+        XCTAssertTrue(member.waitForExistence(timeout: 5))
+        member.tap()
+        app.buttons["role.save"].tap()
+        XCTAssertTrue(app.buttons["role.save"].waitForNonExistence(timeout: 10))
+        XCTAssertTrue(role.label.contains("Member"), role.label)
+
+        app.buttons.containing(NSPredicate(format: "label BEGINSWITH 'Logs'")).firstMatch.tap()
+        let addNight = app.buttons["session.addNight"]
+        XCTAssertTrue(addNight.waitForExistence(timeout: 10))
+        addNight.tap()
+        let add = app.buttons["night.add"]
+        XCTAssertTrue(add.waitForExistence(timeout: 10))
+        snapshot("add night")
+        add.tap()
+        // Straight to the new night's log.
+        XCTAssertTrue(app.staticTexts["No tunes logged yet."].waitForExistence(timeout: 10))
+        snapshot("new night")
+        app.navigationBars.buttons.firstMatch.tap()
+
+        XCTAssertTrue(role.waitForExistence(timeout: 10))
+        role.tap()
+        app.buttons["role.leave"].tap()
+        let leave = app.buttons.matching(NSPredicate(format: "label == 'Leave' AND identifier != 'role.leave'")).firstMatch
+        XCTAssertTrue(leave.waitForExistence(timeout: 5))
+        leave.tap()
+        XCTAssertTrue(app.buttons["session.join"].waitForExistence(timeout: 10))
+    }
+
     /// Phase 3d: Me shows the profile and opens it to edit (cancelled: seed data stays put).
     @MainActor
     func testMeShowsTheProfile() throws {
