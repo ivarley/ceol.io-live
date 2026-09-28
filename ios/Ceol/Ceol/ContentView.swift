@@ -73,7 +73,7 @@ struct MainTabView: View {
                 HomeView()
             }
             Tab("Sessions", systemImage: "calendar", value: AppTab.sessions) {
-                PlaceholderScreen(title: "Sessions", detail: "The sessions you play at, and the logs of each night.")
+                SessionsView()
             }
             Tab("Tunes", systemImage: "music.note.list", value: AppTab.tunes) {
                 PlaceholderScreen(title: "Tunes", detail: "Your list, and the whole catalogue from the search field.")

@@ -35,6 +35,54 @@ final class CeolUITests: XCTestCase {
         return app
     }
 
+    /// Sign in with the seeded password account (nothing is emailed).
+    private func signIn(_ app: XCUIApplication) {
+        let email = app.textFields["signin.email"]
+        XCTAssertTrue(email.waitForExistence(timeout: 15))
+        email.tap()
+        email.typeText("ian@ceol.io")
+        app.buttons["signin.continue"].tap()
+        let password = app.secureTextFields["signin.password"]
+        XCTAssertTrue(password.waitForExistence(timeout: 10))
+        password.tap()
+        password.typeText("password123")
+        app.buttons["signin.submit"].tap()
+        XCTAssertTrue(app.tabBars.buttons["Me"].waitForExistence(timeout: 10))
+    }
+
+    private func snapshot(_ name: String) {
+        let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        shot.name = name
+        shot.lifetime = .keepAlways
+        add(shot)
+    }
+
+    /// Phase 3: the read-only screens, walked the way a person would.
+    @MainActor
+    func testBrowsingASessionToANight() throws {
+        let app = launch()
+        signIn(app)
+        XCTAssertTrue(app.staticTexts["Welcome back, Ian"].waitForExistence(timeout: 10))
+        snapshot("home")
+
+        app.tabBars.buttons["Sessions"].tap()
+        let mueller = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Mueller Session'")).firstMatch
+        XCTAssertTrue(mueller.waitForExistence(timeout: 10))
+        snapshot("sessions")
+        mueller.tap()
+
+        XCTAssertTrue(app.buttons.containing(NSPredicate(format: "label BEGINSWITH 'Tunes'")).firstMatch.waitForExistence(timeout: 10))
+        snapshot("session")
+        app.buttons.containing(NSPredicate(format: "label BEGINSWITH 'Logs'")).firstMatch.tap()
+        // The first night with tunes in it (the newest may have none yet).
+        let night = app.buttons.matching(NSPredicate(format: "label MATCHES '.*[1-9][0-9]* tunes.*'")).firstMatch
+        XCTAssertTrue(night.waitForExistence(timeout: 10))
+        snapshot("logs")
+        night.tap()
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'Set 1'")).firstMatch.waitForExistence(timeout: 10))
+        snapshot("night")
+    }
+
     @MainActor
     func testPasswordSignInThenSignOut() throws {
         let app = launch()

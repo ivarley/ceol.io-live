@@ -15,6 +15,7 @@ typealias HomePayload = Components.Schemas.Home
 /// A screen pushed onto a tab's navigation stack.
 enum Route: Hashable {
     case session(path: String, name: String)
+    case night(id: Int, title: String)
 }
 
 extension HomePayload.UpcomingSessionsPayloadPayload {
@@ -38,11 +39,7 @@ struct HomeView: View {
             }
             .ceolBackground()
             .navigationTitle("Home")
-            .navigationDestination(for: Route.self) { route in
-                switch route {
-                case .session(let sessionPath, let name): SessionDetailView(path: sessionPath, name: name)
-                }
-            }
+            .modifier(SessionDestinations())
             .task { if state.value == nil { await load() } }
         }
     }
@@ -227,19 +224,5 @@ private struct Stat: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 12)
         .background(CeolTokens.headerBg, in: RoundedRectangle(cornerRadius: 10))
-    }
-}
-
-/// A session's page. Built in Phase 3b; for now it says where it will be.
-struct SessionDetailView: View {
-    let path: String
-    let name: String
-
-    var body: some View {
-        Text("This session's tunes, logs and people.")
-            .foregroundStyle(CeolTokens.secondary)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(CeolTokens.bgColor)
-            .navigationTitle(name)
     }
 }

@@ -333,6 +333,8 @@ components:
       properties:
         success: { type: boolean, const: true }
         today: { $ref: "#/components/schemas/Date" }
+        # The viewer's country, for dropping it from each row's location ("Austin, TX").
+        viewer_country: { type: [string, "null"] }
         sessions:
           type: array
           items:
@@ -366,7 +368,7 @@ components:
         location_override: { type: [string, "null"] }
     SessionDetail:
       type: object
-      required: [success, session, permissions, today_in_session_tz, active_instances, tunes, total_tunes_count,
+      required: [success, session, permissions, today_in_session_tz, default_tab, active_instances, tunes, total_tunes_count,
                  total_logs_count, total_people_count, has_more_tunes, popular_tunes]
       properties:
         success: { type: boolean, const: true }
@@ -389,6 +391,11 @@ components:
             recurrence_readable: { type: [string, "null"] }
             session_type: { type: string }
             timezone: { type: string }
+            # About the session, shown on its page; each may be null.
+            location_street: { type: [string, "null"] }
+            location_phone: { type: [string, "null"] }
+            location_website: { type: [string, "null"] }
+            comments: { type: [string, "null"] }
             show_people_list: { type: boolean }
             track_attendance: { type: boolean }
             track_set_starters: { type: boolean }
@@ -403,6 +410,8 @@ components:
             is_confirmed: { type: boolean }
             can_view_people: { type: boolean }
         today_in_session_tz: { $ref: "#/components/schemas/Date" }
+        # Which tab the session page opens on: logs for a festival, tunes otherwise.
+        default_tab: { type: string, enum: [tunes, logs] }
         # Nights on right now; the session screen leads with a banner into tonight's log.
         active_instances: { type: array, items: { $ref: "#/components/schemas/ActiveInstanceSummary" } }
         tunes:
