@@ -366,8 +366,10 @@
    the foot of the page, and hide the hamburger the bar replaces. Set here from the
    same condition tab_bar.html renders under, rather than inferred in CSS with
    :has(.tab-bar) — if :has() were ever unsupported that would fail OPEN, showing
-   both navigations at once. #}
-<body class="docs-page has-tab-bar">
+   both navigations at once.
+   A full-screen tool sets hide_tab_bar (the recording segmenter: its transport and
+   timeline need the whole height, and it is a task, not somewhere you navigate from). #}
+<body class="docs-page{% if not hide_tab_bar %} has-tab-bar{% endif %}">
 <header class="header fixed-top">	    
     <div class="branding docs-branding">
         <div class="container-fluid position-relative" style="padding-top: 3px; padding-bottom: 3px;">
@@ -449,7 +451,7 @@
     </div>
 
 {# Bottom tab bar -- phone only, signed-in only. See templates/tab_bar.html. #}
-{% include 'tab_bar.html' %}
+{% if not hide_tab_bar %}{% include 'tab_bar.html' %}{% endif %}
 
 {# Share sheet. Hidden until the header button opens it; the QR's src is set at that
    point rather than on page load, so carrying this on every page costs nothing. #}

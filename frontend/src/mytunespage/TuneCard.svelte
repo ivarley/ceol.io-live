@@ -141,7 +141,7 @@
 </script>
 
 {#snippet cardBody()}
-  <!-- Phone: a fixed-width column left of the name, so every name starts at the same x.
+  <!-- Phone: the one thing right of the name, right-aligned.
        Desktop: the first of the right-hand columns. -->
   <div class="tune-type-cell">
     {#if chipLabel}<Chip label={chipLabel} styled={false} chipClass="tune-type" title={chipTitle} />{/if}
