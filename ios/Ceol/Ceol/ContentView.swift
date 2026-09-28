@@ -76,7 +76,7 @@ struct MainTabView: View {
                 SessionsView()
             }
             Tab("Tunes", systemImage: "music.note.list", value: AppTab.tunes) {
-                PlaceholderScreen(title: "Tunes", detail: "Your list, and the whole catalogue from the search field.")
+                TunesView()
             }
             Tab("Me", systemImage: "person.crop.circle", value: AppTab.me) {
                 MeView()

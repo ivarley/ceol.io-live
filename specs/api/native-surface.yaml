@@ -567,7 +567,8 @@ components:
             tune_id: { type: integer }
             tune_name: { type: string }
             tune_type: { type: [string, "null"] }
-            aliases: { type: array }
+            # The session's own names for the tune, when the detail is session-scoped.
+            aliases: { type: array, items: { type: string } }
             setting_id: { type: [integer, "null"] }
             setting_key: { type: [string, "null"] }
             abc: { type: [string, "null"] }
@@ -937,6 +938,14 @@ paths:
       operationId: deepSearchTunes
       summary: Rich search cards; scope via ?session=<path> | ?instance=<id>
       security: [{ bearer: [] }]
+      parameters:
+        - { name: q, in: query, required: false, schema: { type: string }, description: "Name or notation (ABC); empty browses by popularity" }
+        - { name: type, in: query, required: false, schema: { type: string }, description: "Only this tune type" }
+        - { name: prefer_type, in: query, required: false, schema: { type: string }, description: "Sort this tune type first" }
+        - { name: mode, in: query, required: false, schema: { type: string, enum: [mixed, name, abc] }, description: "mixed (default) blends name and notation matches" }
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 40 }, description: "Default 25" }
+        - { name: session, in: query, required: false, schema: { type: string }, description: "Scope to a session path (in-session tunes sort last)" }
+        - { name: instance, in: query, required: false, schema: { type: integer }, description: "Scope to a live night (flags only)" }
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/DeepSearch" } } } } }
   /api/tunes/thesession-search:
     get:
@@ -948,7 +957,10 @@ paths:
     get:
       operationId: getTuneDetail
       summary: The tune drawer payload (?session=&instance= scope)
-      parameters: [{ name: tune_id, in: path, required: true, schema: { type: integer } }]
+      parameters:
+        - { name: tune_id, in: path, required: true, schema: { type: integer } }
+        - { name: session, in: query, required: false, schema: { type: string }, description: "A session path: adds that session's aliases, plays and settings" }
+        - { name: instance, in: query, required: false, schema: { type: string }, description: "A night's date or id within that session" }
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/TuneDetail" } } } } }
   /api/tunes/{tune_id}/preview:
     get:
@@ -962,14 +974,18 @@ paths:
       operationId: getTuneIncipitImage
       summary: Incipit PNG (base64), rendered on demand
       security: [{ bearer: [] }]
-      parameters: [{ name: tune_id, in: path, required: true, schema: { type: integer } }]
+      parameters:
+        - { name: tune_id, in: path, required: true, schema: { type: integer } }
+        - { name: kind, in: query, required: false, schema: { type: string, enum: [incipit, both] }, description: "both also renders the full image, for the sheet's toggle" }
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Image" } } } } }
   /api/tunes/settings/{setting_id}/image:
     get:
       operationId: getSettingImage
       summary: One setting's notation PNG (?kind=incipit|full)
       security: [{ bearer: [] }]
-      parameters: [{ name: setting_id, in: path, required: true, schema: { type: integer } }]
+      parameters:
+        - { name: setting_id, in: path, required: true, schema: { type: integer } }
+        - { name: kind, in: query, required: false, schema: { type: string, enum: [incipit, full] }, description: "incipit (the default) or the whole tune" }
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Image" } } } } }
   /api/tunes/thesession/{thesession_id}/preview:
     get:

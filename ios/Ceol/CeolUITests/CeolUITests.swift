@@ -83,6 +83,30 @@ final class CeolUITests: XCTestCase {
         snapshot("night")
     }
 
+    /// Phase 3c: the Tunes tab, a tune's sheet, and the catalogue below your matches.
+    @MainActor
+    func testBrowsingTunes() throws {
+        let app = launch()
+        signIn(app)
+        app.tabBars.buttons["Tunes"].tap()
+        let cooleys = app.buttons.containing(NSPredicate(format: "label CONTAINS \"Cooley's\"")).firstMatch
+        XCTAssertTrue(cooleys.waitForExistence(timeout: 10))
+        snapshot("tunes")
+        cooleys.tap()
+        XCTAssertTrue(app.images["Notation for Cooley's"].waitForExistence(timeout: 20))
+        snapshot("sheet")
+        app.buttons["Done"].tap()
+        XCTAssertTrue(app.images["Notation for Cooley's"].waitForNonExistence(timeout: 5))
+
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        search.typeText("maid")
+        XCTAssertTrue(app.staticTexts["Not on your list"].waitForExistence(timeout: 10))
+        snapshot("search")
+    }
+
     @MainActor
     func testPasswordSignInThenSignOut() throws {
         let app = launch()
