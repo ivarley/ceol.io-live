@@ -70,7 +70,7 @@ struct MainTabView: View {
     var body: some View {
         TabView(selection: $selection) {
             Tab("Home", systemImage: "house", value: AppTab.home) {
-                PlaceholderScreen(title: "Home", detail: "Today's session, this week, and what you're learning.")
+                HomeView()
             }
             Tab("Sessions", systemImage: "calendar", value: AppTab.sessions) {
                 PlaceholderScreen(title: "Sessions", detail: "The sessions you play at, and the logs of each night.")

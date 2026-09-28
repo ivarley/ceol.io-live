@@ -141,7 +141,7 @@ components:
     Home:
       type: object
       required: [success, learning_count, want_to_learn_count, suggested_tune,
-                 upcoming_sessions, in_progress_logs, in_progress_recordings, today, week]
+                 upcoming_sessions, in_progress_logs, in_progress_recordings, today, current_year, week]
       properties:
         success: { type: boolean, const: true }
         learning_count: { type: integer }
@@ -210,6 +210,8 @@ components:
               placed: { type: integer }
               tune_count: { type: integer }
         today: { $ref: "#/components/schemas/Date" }
+        # For dates shown without a year when they fall in it ("Sep 16" vs "Sep 16 2025").
+        current_year: { type: integer }
         week:
           type: object
           required: [start, end]
