@@ -327,6 +327,32 @@ components:
           type: string
           enum: [add, set_status, set_heard, set_notes, set_tags, remove, set_instrument_status]
         tune_id: { type: integer }
+        # add (optional, default "want to learn") and set_status (required).
+        learn_status: { $ref: "#/components/schemas/LearnStatus" }
+        # set_heard: the target count, not a delta, so a replay can't double-count.
+        heard_count: { type: integer, minimum: 0 }
+        # set_notes; null clears.
+        notes: { type: [string, "null"] }
+        # set_tags: the whole list.
+        tags: { type: array, items: { type: string } }
+        # set_instrument_status: an instrument on your profile, and its status (null
+        # removes the override).
+        instrument: { type: string }
+        status: { oneOf: [{ $ref: "#/components/schemas/LearnStatus" }, { type: "null" }] }
+    LearnStatus:
+      type: string
+      enum: [want to learn, learning, learned]
+    MyTunesOpResult:
+      type: object
+      required: [success, op_id, type, tune_id]
+      properties:
+        success: { type: boolean, const: true }
+        op_id: { type: [string, "null"] }
+        type: { type: string }
+        # The tune the op landed on: a merged-away id is applied to its canonical tune.
+        tune_id: { type: integer }
+        remapped_from: { type: integer }
+        heard_count: { type: [integer, "null"] }
     SessionsDirectory:
       type: object
       required: [success, sessions, today]
@@ -918,7 +944,9 @@ paths:
       summary: Idempotent tunebook write (see MyTunesOp)
       security: [{ bearer: [] }]
       requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/MyTunesOp" } } } }
-      responses: { "200": { description: ok } }
+      responses:
+        "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/MyTunesOpResult" } } } }
+        default: { $ref: "#/components/responses/Error" }
   /api/offline/bundle:
     get:
       operationId: getOfflineBundle

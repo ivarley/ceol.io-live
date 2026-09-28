@@ -116,6 +116,9 @@ def native_client(client):
         def get(self, url):
             return client.get(url, headers=headers)
 
+        def post(self, url, json):
+            return client.post(url, json=json, headers=headers)
+
     return _C()
 
 
@@ -346,6 +349,50 @@ class TestResponsesMatchSchemas:
         assert bad_token.status_code == 401
         self._validate(spec, schema, bad_token.get_json())
         assert bad_token.get_json()["code"] == "invalid_token"
+
+    def test_my_tunes_ops_validate(self, spec, native_client):
+        """The tunebook writes the app sends: each body is a valid MyTunesOp, each
+        answer a MyTunesOpResult, and a refused op the Error response. Uses a tune
+        that is not on the admin's list, and removes it at the end."""
+        import uuid
+
+        from database import get_db_connection
+
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """SELECT t.tune_id FROM tune t WHERE t.redirect_to_tune_id IS NULL
+                   AND NOT EXISTS (SELECT 1 FROM person_tune pt
+                                   WHERE pt.person_id = 1 AND pt.tune_id = t.tune_id)
+                   ORDER BY t.tune_id LIMIT 1"""
+            )
+            tune_id = cur.fetchone()[0]
+        finally:
+            conn.close()
+        schemas = spec["components"]["schemas"]
+        ops = [
+            {"type": "add", "learn_status": "learning"},
+            {"type": "set_status", "learn_status": "want to learn"},
+            {"type": "set_heard", "heard_count": 3},
+            {"type": "set_notes", "notes": "from the contract test"},
+            {"type": "set_notes", "notes": None},
+            {"type": "set_tags", "tags": ["slow session"]},
+            {"type": "remove"},
+        ]
+        for op in ops:
+            body = {"op_id": str(uuid.uuid4()), "tune_id": tune_id, **op}
+            self._validate(spec, schemas["MyTunesOp"], body)
+            r = native_client.post("/api/my-tunes/ops", body)
+            assert r.status_code == 200, (op, r.get_json())
+            self._validate(spec, schemas["MyTunesOpResult"], r.get_json())
+        assert r.get_json()["tune_id"] == tune_id
+        bad = native_client.post(
+            "/api/my-tunes/ops", {"op_id": str(uuid.uuid4()), "type": "set_status", "tune_id": tune_id}
+        )
+        assert bad.status_code == 400
+        error = spec["components"]["responses"]["Error"]["content"]["application/json"]["schema"]
+        self._validate(spec, error, bad.get_json())
 
     def test_error_envelope(self, native_client):
         r = native_client.get("/api/resolve?path=/sessions/no/such/2020-01-01")

@@ -1,6 +1,7 @@
 // The Tunes tab (plan Phase 3c): your list, and the tune sheet — the app's twins of
-// the Svelte /my-tunes and the shared tune drawer, from the same payloads. Read-only
-// for now: changing a status, and adding tunes, arrive in Phase 4.
+// the Svelte /my-tunes and the shared tune drawer, from the same payloads. The sheet
+// edits a tune on your list (status, heard count, notes, remove) or adds one from the
+// catalogue (Phase 4a); the list reloads after each change.
 //
 // The search field reaches the whole catalogue as on the web: your matching tunes
 // first, then "Not on your list" from the server's catalogue search (name or notation).
@@ -29,6 +30,7 @@ struct TuneRef: Identifiable, Hashable {
     let type: String?
     var status: String?
     var heardCount: Int?
+    var notes: String?
 }
 
 struct TunesView: View {
@@ -40,6 +42,8 @@ struct TunesView: View {
     @State private var catalogue: [DeepSearchResult] = []
     @State private var catalogueFailed = false
     @State private var open: TuneRef?
+    @State private var failure: String?
+    @FocusState private var searching: Bool
 
     var body: some View {
         NavigationStack {
@@ -47,12 +51,20 @@ struct TunesView: View {
                 .ceolBackground()
                 .navigationTitle("Tunes")
                 .searchable(text: $search, prompt: "Name, notes, or notes like GED BED")
+                .searchFocused($searching)
                 .task(id: search) { await searchCatalogue() }
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) { typeMenu }
                 }
-                .sheet(item: $open) { TuneSheet(tune: $0) }
+                // The search keyboard would otherwise stay up over the sheet.
+                .onChange(of: open) { _, tune in if tune != nil { searching = false } }
+                .sheet(item: $open) { TuneSheet(tune: $0) { Task { await load() } } }
                 .task { if state.value == nil { await load() } }
+                .alert("Not saved", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
+                    Button("OK") {}
+                } message: {
+                    Text(failure ?? "")
+                }
         }
     }
 
@@ -69,6 +81,17 @@ struct TunesView: View {
 
     private var types: [String] {
         Set((state.value?.tunes ?? []).compactMap(\.tuneType)).sorted()
+    }
+
+    private func heard(_ tuneID: Int, count: Int) async {
+        do {
+            try await model.applyTuneOp(.setHeard, tuneID: tuneID, heardCount: count)
+            await load()
+        } catch let f as TuneOpFailure {
+            failure = f.message
+        } catch {
+            failure = "That wasn't saved. Try again."
+        }
     }
 
     private func load() async {
@@ -101,6 +124,8 @@ struct TunesView: View {
     @ViewBuilder private func list(_ payload: MyTunesPayload) -> some View {
         let byID = Dictionary(payload.tunes.map { ($0.tuneId, $0) }, uniquingKeysWith: { a, _ in a })
         let shown = MyTunesRules.filter(payload.tunes.map(\.entry), status: status, type: type, search: search)
+        // Less any you added since the search ran.
+        let catalogue = catalogue.filter { byID[$0.tuneId] == nil }
         List {
             Section {
                 Picker("Status", selection: $status) {
@@ -114,11 +139,20 @@ struct TunesView: View {
                 ForEach(shown, id: \.tuneID) { e in
                     let t = byID[e.tuneID]
                     Button {
-                        open = TuneRef(id: e.tuneID, name: e.name, type: e.type, status: e.status, heardCount: t?.heardCount)
+                        open = TuneRef(
+                            id: e.tuneID, name: e.name, type: e.type, status: e.status, heardCount: t?.heardCount,
+                            notes: e.notes)
                     } label: {
                         TuneRow(name: e.name, type: e.type, status: e.status)
                     }
                     .buttonStyle(.plain)
+                    .swipeActions(edge: .leading) {
+                        // The web's swipe: one more hearing of a tune you want to learn.
+                        if e.status == MyTunesRules.Status.wantToLearn.rawValue {
+                            Button("Heard it") { Task { await heard(e.tuneID, count: (t?.heardCount ?? 0) + 1) } }
+                                .tint(CeolTokens.primaryFill)
+                        }
+                    }
                 }
             } header: {
                 Text(MyTunesRules.countText(shown: shown.count, total: payload.tunes.count))
@@ -139,6 +173,7 @@ struct TunesView: View {
                             TuneRow(name: r.name, type: r.tuneType, status: nil, note: r.abcOnly ? "♪ notes match" : nil)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityIdentifier("catalogue.row")
                     }
                 }
             }
@@ -193,13 +228,22 @@ struct StatusBadge: View {
 
 // MARK: - The tune sheet
 
-/// A tune's sheet: name and type, the notation (opening bars, or the whole tune), your
-/// status, and how much it gets played. Notation is rendered by the server, as on the web.
+/// A tune's sheet: name and type, your status (and heard count and notes) or Add, the
+/// notation (opening bars, or the whole tune), and how much it gets played. Notation is
+/// rendered by the server, as on the web. `onChanged` runs after each saved edit.
 struct TuneSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let tune: TuneRef
+    var onChanged: () -> Void = {}
 
+    @State private var status: String?
+    @State private var heard = 0
+    @State private var notes = ""
+    @State private var savedNotes = ""
+    @State private var busy = false
+    @State private var failure: String?
+    @State private var confirmRemove = false
     @State private var detail: LoadState<Components.Schemas.TuneDetail> = .loading
     @State private var incipit: UIImage?
     @State private var full: UIImage?
@@ -213,9 +257,115 @@ struct TuneSheet: View {
                 .navigationTitle(tune.name)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
-                .task { await load() }
+                .task {
+                    status = tune.status
+                    heard = tune.heardCount ?? 0
+                    notes = tune.notes ?? ""
+                    savedNotes = notes
+                    await load()
+                }
+                .confirmationDialog("Remove \(tune.name) from your tunes?", isPresented: $confirmRemove, titleVisibility: .visible) {
+                    Button("Remove", role: .destructive) {
+                        Task { if await save(.remove) { dismiss() } }
+                    }
+                } message: {
+                    Text("Its status, notes and heard count go with it.")
+                }
         }
         .presentationDetents([.large])
+    }
+
+    /// Saves one op; true when the server took it.
+    @discardableResult
+    private func save(_ type: TuneOp._TypePayload, status s: LearnStatus? = nil, heard h: Int? = nil, notes n: String? = nil) async -> Bool {
+        busy = true
+        failure = nil
+        defer { busy = false }
+        do {
+            try await model.applyTuneOp(type, tuneID: tune.id, learnStatus: s, heardCount: h, notes: n)
+            onChanged()
+            return true
+        } catch let f as TuneOpFailure {
+            failure = f.message
+        } catch {
+            failure = "That wasn't saved. Try again."
+        }
+        return false
+    }
+
+    private func setStatus(_ new: MyTunesRules.Status) async {
+        let old = status
+        status = new.rawValue
+        if !(await save(.setStatus, status: LearnStatus(stored: new.rawValue))) { status = old }
+    }
+
+    private func add(_ new: MyTunesRules.Status) async {
+        if await save(.add, status: LearnStatus(stored: new.rawValue)) {
+            status = new.rawValue
+            heard = 1  // an add is itself a hearing, as on the web
+        }
+    }
+
+    private func setHeard(_ count: Int) async {
+        let old = heard
+        heard = count
+        if !(await save(.setHeard, heard: count)) { heard = old }
+    }
+
+    private func saveNotes() async {
+        let trimmed = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        if await save(.setNotes, notes: trimmed.isEmpty ? nil : trimmed) {
+            notes = trimmed
+            savedNotes = trimmed
+        }
+    }
+
+    /// Your list: the status, the heard count while you want to learn it, notes, and
+    /// Remove. Or, for a tune not on it, Add with a status.
+    @ViewBuilder private var yourList: some View {
+        if let current = status.flatMap(MyTunesRules.Status.init(rawValue:)) {
+            Section {
+                Picker("Status", selection: Binding(get: { current }, set: { new in Task { await setStatus(new) } })) {
+                    ForEach(MyTunesRules.Status.allCases, id: \.self) { Text($0.label).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .accessibilityIdentifier("sheet.status")
+                if current == .wantToLearn {
+                    Stepper(value: Binding(get: { heard }, set: { n in Task { await setHeard(n) } }), in: 0...999) {
+                        LabeledContent("Heard it", value: heard == 1 ? "once" : "\(heard) times")
+                    }
+                    .accessibilityIdentifier("sheet.heard")
+                }
+                TextField("Notes", text: $notes, axis: .vertical)
+                    .lineLimit(1...6)
+                    .accessibilityIdentifier("sheet.notes")
+                if notes != savedNotes {
+                    Button("Save notes") { Task { await saveNotes() } }.disabled(busy)
+                }
+            } header: {
+                Text("On your list")
+            } footer: {
+                if let failure { Text(failure).foregroundStyle(CeolTokens.danger) }
+            }
+        } else {
+            Section {
+                Menu {
+                    ForEach(MyTunesRules.Status.allCases, id: \.self) { s in
+                        Button(s.label) { Task { await add(s) } }
+                            .accessibilityIdentifier("sheet.add.\(s.rawValue)")
+                    }
+                } label: {
+                    // The whole row, not just the words, opens the menu.
+                    Label("Add to my tunes", systemImage: "plus.circle")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .disabled(busy)
+                .accessibilityIdentifier("sheet.add")
+            } footer: {
+                if let failure { Text(failure).foregroundStyle(CeolTokens.danger) }
+            }
+        }
     }
 
     private func load() async {
@@ -256,16 +406,10 @@ struct TuneSheet: View {
     @ViewBuilder private func content(_ t: Components.Schemas.TuneDetail.SessionTunePayload) -> some View {
         List {
             Section {
-                HStack {
-                    Text([t.tuneType, t.settingKey].compactMap { $0 }.joined(separator: " · "))
-                        .foregroundStyle(CeolTokens.secondary)
-                    Spacer()
-                    if let status = tune.status { StatusBadge(status: status) }
-                }
-                if let heard = tune.heardCount, tune.status == "want to learn" {
-                    LabeledContent("Heard at sessions", value: "\(heard)")
-                }
+                Text([t.tuneType, t.settingKey].compactMap { $0 }.joined(separator: " · "))
+                    .foregroundStyle(CeolTokens.secondary)
             }
+            yourList
             Section {
                 if let image = showFull ? (full ?? incipit) : incipit {
                     Image(uiImage: image)
@@ -299,6 +443,13 @@ struct TuneSheet: View {
             }
             Section {
                 Link("View on TheSession.org", destination: URL(string: "https://thesession.org/tunes/\(t.tuneId)")!)
+            }
+            if status != nil {
+                Section {
+                    Button("Remove from my tunes", role: .destructive) { confirmRemove = true }
+                        .disabled(busy)
+                        .accessibilityIdentifier("sheet.remove")
+                }
             }
         }
     }

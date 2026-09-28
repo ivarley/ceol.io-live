@@ -1695,4 +1695,13 @@ The plan (Phases 0-6) runs from here in `ios/`; see `ios/README.md` for the layo
   the difference, and the GET returns canonical names for older free spellings
   ("fiddle" -> "Fiddle"). UI tests: eight, adding browsing a session to a night,
   browsing tunes, and Me.
-- **Phase 4 — editing:** next.
+- **Phase 4 — editing: in progress.** Slices: 4a My Tunes edits, 4b Admin / Help in a
+  signed-in Safari view and Share, 4c joining and leaving a session and adding a night,
+  4d adding a session.
+  - **4a DONE 2026-09-28.** The tune sheet edits a tune on your list (status, the heard
+    count while you want to learn it, notes, Remove) and adds a catalogue tune with a
+    status; a row you want to learn swipes for "Heard it", as on the web. All through
+    `POST /api/my-tunes/ops`, whose `MyTunesOp` now declares each op's fields (it
+    declared only `op_id`, `type`, `tune_id`, so a generated client could not send a
+    status) and a typed `MyTunesOpResult`, with the Error response as its default. A
+    contract test sends every op type the app uses.

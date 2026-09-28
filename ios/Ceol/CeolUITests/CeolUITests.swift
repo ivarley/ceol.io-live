@@ -107,6 +107,58 @@ final class CeolUITests: XCTestCase {
         snapshot("search")
     }
 
+    /// Phase 4a: add a catalogue tune, change it, and remove it again (so the seed
+    /// data ends as it began).
+    @MainActor
+    func testEditingATune() throws {
+        let app = launch()
+        signIn(app)
+        app.tabBars.buttons["Tunes"].tap()
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 10))
+        search.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        search.typeText("maid")
+        XCTAssertTrue(app.staticTexts["Not on your list"].waitForExistence(timeout: 10))
+        let row = app.buttons.matching(identifier: "catalogue.row").firstMatch
+        let name = row.staticTexts.firstMatch.label
+        row.tap()
+
+        // The sheet is still sliding up when the button first exists; a tap then is lost.
+        let add = app.buttons["sheet.add"]
+        XCTAssertTrue(add.waitForExistence(timeout: 10))
+        let toLearn = app.buttons["sheet.add.want to learn"]
+        for _ in 0..<3 where !toLearn.exists {
+            add.tap()
+            _ = toLearn.waitForExistence(timeout: 2)
+        }
+        toLearn.tap()
+        let status = app.segmentedControls["sheet.status"]
+        XCTAssertTrue(status.waitForExistence(timeout: 10))
+        XCTAssertTrue(status.buttons["To Learn"].isSelected)
+        // The stepper reads its label and value as one: "Heard it, once".
+        let heard = app.steppers["sheet.heard"]
+        XCTAssertTrue(heard.descendants(matching: .any).containing(NSPredicate(format: "label CONTAINS 'once'")).firstMatch.exists
+            || heard.label.contains("once"), heard.debugDescription)
+        heard.buttons.element(boundBy: 1).tap()
+        let twice = app.descendants(matching: .any).containing(NSPredicate(format: "label CONTAINS '2 times'")).firstMatch
+        XCTAssertTrue(twice.waitForExistence(timeout: 5) || heard.label.contains("2 times"), heard.debugDescription)
+        status.buttons["Learning"].tap()
+        XCTAssertTrue(app.steppers["sheet.heard"].waitForNonExistence(timeout: 5))
+        snapshot("edited")
+
+        app.swipeUp()
+        app.buttons["sheet.remove"].tap()
+        let confirm = app.buttons.matching(NSPredicate(format: "label == 'Remove' AND identifier != 'sheet.remove'")).firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+        confirm.tap()
+        XCTAssertTrue(app.buttons["sheet.remove"].waitForNonExistence(timeout: 10))
+        // Back in the catalogue, not on the list.
+        XCTAssertTrue(
+            app.buttons.matching(identifier: "catalogue.row").containing(NSPredicate(format: "label == %@", name)).firstMatch
+                .waitForExistence(timeout: 10))
+    }
+
     /// Phase 3d: Me shows the profile and opens it to edit (cancelled: seed data stays put).
     @MainActor
     func testMeShowsTheProfile() throws {
