@@ -58,6 +58,19 @@ final class NightModel {
     /// Who's typing a tune (the stream's typing events), me included.
     private(set) var typers: [JSONValue] = []
 
+    /// Other people's changes, a line each ("Sarah O'Connor added The Kesh"), for four
+    /// seconds, three at most (spec 024 §E).
+    struct Activity: Identifiable, Equatable {
+        let id: Int
+        let text: String
+        /// The actor's colour index, if they're on the roster.
+        let color: Int?
+    }
+    private(set) var activities: [Activity] = []
+    @ObservationIgnored private var activitySeq = 0
+    /// Rows someone else just changed, ringed in their colour for a moment.
+    private(set) var flashes: [RecordID: Int?] = [:]
+
     /// Logging, not just watching.
     private(set) var editing = false
     /// Where the next tune goes.
@@ -324,6 +337,7 @@ final class NightModel {
         guard let json = try? JSONDecoder().decode(JSONValue.self, from: Data(event.data.utf8)) else { return }
         switch event.type {
         case "op":
+            noteRemote(json)
             let changed = log?.apply(json) == true
             if changed { settleCursor() }
             if changed, log?.meta["log_complete"] == true {
@@ -591,6 +605,38 @@ final class NightModel {
         guard !first.isEmpty else { return p["display_name"]?.stringValue ?? "" }
         if let last = p["last_name"]?.stringValue, let initial = last.first { return "\(first) \(initial)" }
         return first
+    }
+
+    /// Someone else changed the log: a line saying so, and their rows flash.
+    private func noteRemote(_ d: JSONValue) {
+        let actor = d["actor"]?["person_id"]?.intValue
+        let color = actor.flatMap { a in roster.first { $0["person_id"]?.intValue == a }?["arrival_seq"]?.intValue }
+        if let text = People.activityText(d, me: me, viewing: !editing) {
+            activitySeq += 1
+            let item = Activity(id: activitySeq, text: text, color: color)
+            activities = Array((activities + [item]).suffix(People.maxActivity))
+            Task { [weak self] in
+                try? await Task.sleep(for: .seconds(4))
+                self?.activities.removeAll { $0.id == item.id }
+            }
+        }
+        // As the web: a tune someone else added or changed, or moved, rings in their colour.
+        guard let actor, actor != me else { return }
+        var ids: [RecordID] = []
+        switch d["op_type"]?.stringValue {
+        case "add_tune", "change_tune", "set_confidence":
+            if let id = RecordID(d["record"]?["session_instance_tune_id"]) { ids = [id] }
+        case "move_tunes":
+            ids = (d["moved_ids"]?.arrayValue ?? []).compactMap { RecordID($0) }
+        default: break
+        }
+        for id in ids {
+            flashes[id] = color
+            Task { [weak self] in
+                try? await Task.sleep(for: .seconds(1.4))
+                self?.flashes.removeValue(forKey: id)
+            }
+        }
     }
 
     /// Me, as the night knows me (for my own rows and my own typing).

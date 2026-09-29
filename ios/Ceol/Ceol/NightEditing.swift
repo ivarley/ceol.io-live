@@ -126,6 +126,7 @@ struct EditableLog: View {
                                 editing: model.composer.editingID == id,
                                 byColor: t["tune_id"].isTruthy && !t["_temp"].isTruthy
                                     ? People.loggerColorIndex(t, me: model.me, roster: model.roster).map(Color.player) : nil)
+                            .remoteFlash(model, id)
                             .id(rowScrollID(id))
                         }
                         if endIsOpen && si == segments.count - 1 && ti == seg.tunes.count - 1 {

@@ -103,7 +103,11 @@ export default defineConfig({
       // its own tests; here it is switched off.
       // E2E_TEST_ROUTES registers the test-only pages in app.py (a stale-redirect
       // fixture for the service worker spec); production never sets it.
-      env: { RATE_LIMIT_DISABLED: "1", E2E_TEST_ROUTES: "1" },
+      // PGPOOL_MAX: Flask's dev server starts a thread per request with no cap, and the
+      // parallel workers burst well past the default pool of 10, which raises rather
+      // than waits ("connection pool exhausted"), failing whichever spec was unlucky.
+      // Production is bounded by gunicorn's threads (gunicorn.conf.py) and keeps 10.
+      env: { RATE_LIMIT_DISABLED: "1", E2E_TEST_ROUTES: "1", PGPOOL_MAX: "40" },
     },
     {
       command: "./venv/bin/python -m streaming.service",

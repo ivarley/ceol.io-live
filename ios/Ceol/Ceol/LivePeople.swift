@@ -349,3 +349,40 @@ struct NewPersonForm: View {
         }
     }
 }
+
+/// Other people's changes, a line each in their colour, under the header.
+struct ActivityLines: View {
+    let model: NightModel
+
+    var body: some View {
+        VStack(spacing: 6) {
+            ForEach(model.activities) { a in
+                Text(a.text)
+                    .font(.ceol(size: 13, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 14).padding(.vertical, 5)
+                    .background(a.color.map(Color.player) ?? CeolTokens.textMuted, in: RoundedRectangle(cornerRadius: 10))
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .accessibilityIdentifier("activity")
+            }
+        }
+        .padding(.top, 8)
+        .animation(.easeOut(duration: 0.24), value: model.activities)
+        .allowsHitTesting(false)
+    }
+}
+
+extension View {
+    /// A ring in someone's colour while their change is fresh (the web's flash-remote).
+    func remoteFlash(_ model: NightModel, _ id: RecordID?) -> some View {
+        let color: Color? = id.flatMap { model.flashes[$0] }.map { $0.map(Color.player) ?? CeolTokens.primary }
+        return overlay {
+            RoundedRectangle(cornerRadius: 6)
+                .strokeBorder(color ?? .clear, lineWidth: 3)
+                .opacity(color == nil ? 0 : 1)
+                .animation(.easeOut(duration: color == nil ? 1.0 : 0.1), value: color == nil)
+                .allowsHitTesting(false)
+        }
+    }
+}

@@ -547,6 +547,7 @@ struct NightView: View {
     @State private var infoTune: TuneRef?
     @State private var assigning = false
     @State private var detailsOpen = false
+    @State private var headerHeight: CGFloat = 0
     @State private var managingAttendance = false
     @State private var openTray: RecordID?
     @State private var scroll = ScrollPosition(edge: .top)
@@ -719,6 +720,7 @@ struct NightView: View {
                 .background(CeolTokens.headerBg.opacity(0.5))
                 .contentShape(Rectangle())
                 .onTapGesture { withAnimation(.easeOut(duration: 0.2)) { detailsOpen.toggle() } }
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { headerHeight = $0 }
                 if model.editing {
                     EditableLog(
                         model: model, log: log, trackStarters: trackStarters,
@@ -762,6 +764,8 @@ struct NightView: View {
                                     .font(.ceol(size: 19))
                                     .foregroundStyle(CeolTokens.textColor)
                                     .padding(.vertical, 9)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .remoteFlash(model, t.recordID)
                                     .transition(.opacity.combined(with: .move(edge: .top)))
                             }
                         }
@@ -782,6 +786,12 @@ struct NightView: View {
         .scrollPosition($scroll)
         .onScrollGeometryChange(for: ScrollGeometry.self) { $0 } action: { _, g in scrollGeometry = g }
         .coordinateSpace(name: nightScrollSpace)
+        .overlay(alignment: .top) {
+            // Just below the night's header, as the web's sit below its own; once the
+            // header scrolls away, at the top.
+            ActivityLines(model: model)
+                .padding(.top, max(0, headerHeight - scrollGeometry.contentOffset.y - scrollGeometry.contentInsets.top))
+        }
         .overlay(alignment: .topLeading) {
             // What a drag carries, under the finger.
             if let d = model.drag, d.started {

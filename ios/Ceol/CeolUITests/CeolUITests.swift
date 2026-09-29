@@ -1003,6 +1003,21 @@ final class CeolUITests: XCTestCase {
         typing.httpBody = try JSONSerialization.data(withJSONObject: ["typing": false, "anchor": NSNull()])
         _ = try await URLSession.shared.data(for: typing)
         XCTAssertTrue(line.waitForNonExistence(timeout: 10))
+
+        // Sarah's changes, said in a line each.
+        let tune = "Toast Test \(Int.random(in: 1000...9999))"
+        let added = try await sarah.post("/api/live/instances/\(instanceID)/ops",
+                                         ["op_id": UUID().uuidString.lowercased(), "op_type": "add_tune", "name": tune, "no_match": true])
+        // The actor is named as the log names loggers: "Sarah O".
+        let said = app.staticTexts["Sarah O added \(tune)"]
+        XCTAssertTrue(said.waitForExistence(timeout: 10), "an activity line for Sarah's add")
+        snapshot("activity")
+        if let id = (added["record"] as? [String: Any])?["session_instance_tune_id"] as? Int {
+            _ = try await sarah.post("/api/live/instances/\(instanceID)/ops",
+                                     ["op_id": UUID().uuidString.lowercased(), "op_type": "remove_tune", "record_id": id])
+            XCTAssertTrue(app.staticTexts["Sarah O removed \(tune)"].waitForExistence(timeout: 10))
+        }
+        XCTAssertTrue(said.waitForNonExistence(timeout: 8), "the line goes after a few seconds")
         app.buttons["night.done"].tap()
 
         // Attendance, from the header's details.

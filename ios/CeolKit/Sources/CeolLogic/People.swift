@@ -75,4 +75,61 @@ public enum People {
         let parts = JSText.trim(query ?? "").split(whereSeparator: { $0.unicodeScalars.allSatisfy { JSText.isWhitespace($0) } }).map(String.init)
         return (parts.first ?? "", parts.dropFirst().joined(separator: " "))
     }
+
+    // MARK: - Someone else's change, said in a line
+
+    public static let maxActivity = 3
+
+    /// What the actor did: "added The Kesh", "ended a set"; nil for an op not worth a line.
+    public static func remoteLabel(_ d: JSONValue) -> String? {
+        let rec = d["record"]
+        let n = rec?["name"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 }
+            ?? (rec?["tune_id"].isTruthy == true ? "#\(rec?["tune_id"]?.intValue.map(String.init) ?? "")" : "a tune")
+        func count(_ key: String) -> Int { d[key]?.arrayValue?.count ?? 0 }
+        func plural(_ c: Int) -> String { "\(c) tune\(c == 1 ? "" : "s")" }
+        let person = d["person"]?["display_name"]?.stringValue
+        let hasPerson = d["person"].isTruthy
+        switch d["op_type"]?.stringValue {
+        case "add_tune": return "added \(n)"
+        case "corroborate": return "also logged \(n)"
+        case "change_tune": return "edited \(n)"
+        case "remove_tune": return "removed \(n)"
+        case "move_tunes": return "moved \(plural(count("moved_ids")))"
+        case "remove_tunes": return "removed \(plural(count("records")))"
+        case "restore_tunes": return "restored \(plural(count("records")))"
+        case "set_break": return d["removed"].isTruthy ? "removed a break" : "ended a set"
+        case "attribute_set_starter": return hasPerson ? "set \(person ?? "") as starting a set" : "cleared a set starter"
+        case "set_confidence": return "confirmed \(n)"
+        case "attendance_add": return hasPerson ? "checked in \(person ?? "")" : "updated attendance"
+        case "attendance_create_person": return hasPerson ? "added \(person ?? "")" : "added a player"
+        case "attendance_remove": return hasPerson ? "checked out \(person ?? "")" : "updated attendance"
+        case "edit_notes": return "edited the notes"
+        case "set_date":
+            // Say which of the two edits actually happened.
+            let movedDate = !d["previous_date"].isNullish && d["date"] != d["previous_date"]
+            let movedTimes =
+                (d["start_time"] != nil && d["start_time"] != d["previous_start_time"])
+                || (d["end_time"] != nil && d["end_time"] != d["previous_end_time"])
+            let when = HomeRules.instanceTimeLabel(start: d["start_time"]?.stringValue, end: d["end_time"]?.stringValue)
+            let date = d["session_date"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 }
+            if movedDate && movedTimes, let date { return "re-dated this log to \(date)\(when.isEmpty ? "" : ", \(when)")" }
+            if movedDate { return date.map { "re-dated this log to \($0)" } ?? "re-dated this log" }
+            if movedTimes { return when.isEmpty ? "cleared this log's time" : "set this log's time to \(when)" }
+            return "re-dated this log"
+        case "set_name":
+            if let name = d["instance_name"]?.stringValue, !name.isEmpty { return "named this log \"\(name)\"" }
+            return "cleared this log's name"
+        default: return nil
+        }
+    }
+
+    /// The whole line, or nil. My own changes are skipped while I edit; watching, every
+    /// change shows (even mine, from another window).
+    public static func activityText(_ d: JSONValue, me: Int?, viewing: Bool) -> String? {
+        guard let actor = d["actor"], let who = actor["person_id"]?.intValue else { return nil }
+        if !viewing && who == me { return nil }
+        guard let label = remoteLabel(d) else { return nil }
+        let name = actor["name"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 } ?? "Someone"
+        return "\(name) \(label)"
+    }
 }

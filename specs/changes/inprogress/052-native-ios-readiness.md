@@ -1899,6 +1899,10 @@ The plan (Phases 0-6) runs from here in `ios/`; see `ios/README.md` for the layo
     in their colour. One people picker does attendance (check in, check out, add
     someone with name, email and instruments), a set's starter (checking them in
     first, as the web does), and Assign. Attendance needs a connection, as on the web.
-    Not built: the web's activity toasts ("Sarah added The Kesh") and remote-change
-    flashes. A UI test has a second account connect and type over the API, then checks
-    someone in and out and adds someone, checking the server each time.
+    Then the activity lines, as the web's toasts: someone else's change says so in a
+    line in their colour ("Sarah O added The Kesh"), four seconds, three at most, under
+    the header; your own are skipped while you edit; the rows they add, change or move
+    ring in their colour. The wording moved into `people.js` (`remoteLabel`,
+    `activityText`, 36 more cases). A UI test has a second account connect and type over
+    the API, add and remove a tune, then checks someone in and out and adds someone,
+    checking the server each time.

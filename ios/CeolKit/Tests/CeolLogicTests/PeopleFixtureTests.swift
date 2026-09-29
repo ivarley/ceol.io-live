@@ -15,12 +15,17 @@ let peopleAdapters = ModuleAdapters(
             let t = People.pickerTiers(args["people"]?.arrayValue, query: args.string("query"))
             return ["here": .array(t.here), "roster": .array(t.roster), "archived": .array(t.archived)]
         },
+        "remoteLabel": { args in People.remoteLabel(args["d"] ?? .null).map(JSONValue.string) ?? .null },
+        "activityText": { args in
+            People.activityText(args["d"] ?? .null, me: args["myPersonId"]?.intValue, viewing: args["viewing"].isTruthy)
+                .map(JSONValue.string) ?? .null
+        },
         "splitName": { args in
             let n = People.splitName(args.string("query"))
             return ["first": .string(n.first), "last": .string(n.last)]
         },
     ],
-    constants: ["PALETTE": .array(People.palette.map(JSONValue.string))]
+    constants: ["PALETTE": .array(People.palette.map(JSONValue.string)), "MAX_ACTIVITY": JSONValue(People.maxActivity)]
 )
 
 @Suite("people.fixtures.json")

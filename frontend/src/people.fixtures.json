@@ -17,7 +17,8 @@
       "#3fd0c9",
       "#ff8fab",
       "#9ab0c0"
-    ]
+    ],
+    "MAX_ACTIVITY": 3
   },
   "functions": {
     "colorFor": {
@@ -580,6 +581,494 @@
             "first": "",
             "last": ""
           }
+        }
+      ]
+    },
+    "remoteLabel": {
+      "params": [
+        "d"
+      ],
+      "cases": [
+        {
+          "name": "a tune added",
+          "input": {
+            "d": {
+              "op_type": "add_tune",
+              "record": {
+                "session_instance_tune_id": 9,
+                "name": "The Kesh",
+                "tune_id": 55
+              }
+            }
+          },
+          "expected": "added The Kesh"
+        },
+        {
+          "name": "one with no name, by its id",
+          "input": {
+            "d": {
+              "op_type": "add_tune",
+              "record": {
+                "tune_id": 7
+              }
+            }
+          },
+          "expected": "added #7"
+        },
+        {
+          "name": "one with neither",
+          "input": {
+            "d": {
+              "op_type": "add_tune",
+              "record": {}
+            }
+          },
+          "expected": "added a tune"
+        },
+        {
+          "name": "merged into an existing row",
+          "input": {
+            "d": {
+              "op_type": "corroborate",
+              "record": {
+                "session_instance_tune_id": 9,
+                "name": "The Kesh",
+                "tune_id": 55
+              }
+            }
+          },
+          "expected": "also logged The Kesh"
+        },
+        {
+          "name": "edited",
+          "input": {
+            "d": {
+              "op_type": "change_tune",
+              "record": {
+                "session_instance_tune_id": 9,
+                "name": "The Kesh",
+                "tune_id": 55
+              }
+            }
+          },
+          "expected": "edited The Kesh"
+        },
+        {
+          "name": "removed",
+          "input": {
+            "d": {
+              "op_type": "remove_tune",
+              "record": {
+                "session_instance_tune_id": 9,
+                "name": "The Kesh",
+                "tune_id": 55
+              }
+            }
+          },
+          "expected": "removed The Kesh"
+        },
+        {
+          "name": "moved, one",
+          "input": {
+            "d": {
+              "op_type": "move_tunes",
+              "moved_ids": [
+                1
+              ]
+            }
+          },
+          "expected": "moved 1 tune"
+        },
+        {
+          "name": "moved, several",
+          "input": {
+            "d": {
+              "op_type": "move_tunes",
+              "moved_ids": [
+                1,
+                2,
+                3
+              ]
+            }
+          },
+          "expected": "moved 3 tunes"
+        },
+        {
+          "name": "bulk removed",
+          "input": {
+            "d": {
+              "op_type": "remove_tunes",
+              "records": [
+                {
+                  "session_instance_tune_id": 9,
+                  "name": "The Kesh",
+                  "tune_id": 55
+                },
+                {
+                  "session_instance_tune_id": 9,
+                  "name": "The Kesh",
+                  "tune_id": 55
+                }
+              ]
+            }
+          },
+          "expected": "removed 2 tunes"
+        },
+        {
+          "name": "restored",
+          "input": {
+            "d": {
+              "op_type": "restore_tunes",
+              "records": [
+                {
+                  "session_instance_tune_id": 9,
+                  "name": "The Kesh",
+                  "tune_id": 55
+                }
+              ]
+            }
+          },
+          "expected": "restored 1 tune"
+        },
+        {
+          "name": "a set ended",
+          "input": {
+            "d": {
+              "op_type": "set_break",
+              "record": {}
+            }
+          },
+          "expected": "ended a set"
+        },
+        {
+          "name": "a break removed",
+          "input": {
+            "d": {
+              "op_type": "set_break",
+              "removed": true
+            }
+          },
+          "expected": "removed a break"
+        },
+        {
+          "name": "a starter set",
+          "input": {
+            "d": {
+              "op_type": "attribute_set_starter",
+              "person": {
+                "display_name": "Sarah O'Connor"
+              }
+            }
+          },
+          "expected": "set Sarah O'Connor as starting a set"
+        },
+        {
+          "name": "a starter cleared",
+          "input": {
+            "d": {
+              "op_type": "attribute_set_starter",
+              "person": null
+            }
+          },
+          "expected": "cleared a set starter"
+        },
+        {
+          "name": "confirmed",
+          "input": {
+            "d": {
+              "op_type": "set_confidence",
+              "record": {
+                "session_instance_tune_id": 9,
+                "name": "The Kesh",
+                "tune_id": 55
+              }
+            }
+          },
+          "expected": "confirmed The Kesh"
+        },
+        {
+          "name": "checked in",
+          "input": {
+            "d": {
+              "op_type": "attendance_add",
+              "person": {
+                "display_name": "Brian Kelly"
+              }
+            }
+          },
+          "expected": "checked in Brian Kelly"
+        },
+        {
+          "name": "someone new",
+          "input": {
+            "d": {
+              "op_type": "attendance_create_person",
+              "person": {
+                "display_name": "Zed Tester"
+              }
+            }
+          },
+          "expected": "added Zed Tester"
+        },
+        {
+          "name": "checked out",
+          "input": {
+            "d": {
+              "op_type": "attendance_remove",
+              "person": {
+                "display_name": "Brian Kelly"
+              }
+            }
+          },
+          "expected": "checked out Brian Kelly"
+        },
+        {
+          "name": "attendance with no person",
+          "input": {
+            "d": {
+              "op_type": "attendance_add"
+            }
+          },
+          "expected": "updated attendance"
+        },
+        {
+          "name": "notes",
+          "input": {
+            "d": {
+              "op_type": "edit_notes"
+            }
+          },
+          "expected": "edited the notes"
+        },
+        {
+          "name": "re-dated and re-timed",
+          "input": {
+            "d": {
+              "op_type": "set_date",
+              "date": "2026-09-30",
+              "previous_date": "2026-09-29",
+              "session_date": "Wed Sep 30",
+              "start_time": "19:00",
+              "previous_start_time": "20:00",
+              "end_time": "22:00",
+              "previous_end_time": "22:00"
+            }
+          },
+          "expected": "re-dated this log to Wed Sep 30, 7:00pm-10:00pm"
+        },
+        {
+          "name": "re-dated only",
+          "input": {
+            "d": {
+              "op_type": "set_date",
+              "date": "2026-09-30",
+              "previous_date": "2026-09-29",
+              "session_date": "Wed Sep 30"
+            }
+          },
+          "expected": "re-dated this log to Wed Sep 30"
+        },
+        {
+          "name": "re-dated, no display date",
+          "input": {
+            "d": {
+              "op_type": "set_date",
+              "date": "2026-09-30",
+              "previous_date": "2026-09-29"
+            }
+          },
+          "expected": "re-dated this log"
+        },
+        {
+          "name": "a new time",
+          "input": {
+            "d": {
+              "op_type": "set_date",
+              "date": "2026-09-29",
+              "previous_date": "2026-09-29",
+              "start_time": "19:30",
+              "previous_start_time": "19:00"
+            }
+          },
+          "expected": "set this log's time to 7:30pm - ?"
+        },
+        {
+          "name": "an open-ended time",
+          "input": {
+            "d": {
+              "op_type": "set_date",
+              "start_time": "21:30",
+              "previous_start_time": "21:00",
+              "end_time": null,
+              "previous_end_time": "23:00"
+            }
+          },
+          "expected": "set this log's time to 9:30pm - ?"
+        },
+        {
+          "name": "the time cleared",
+          "input": {
+            "d": {
+              "op_type": "set_date",
+              "start_time": null,
+              "previous_start_time": "19:00"
+            }
+          },
+          "expected": "cleared this log's time"
+        },
+        {
+          "name": "nothing actually moved",
+          "input": {
+            "d": {
+              "op_type": "set_date",
+              "date": "2026-09-29",
+              "previous_date": "2026-09-29"
+            }
+          },
+          "expected": "re-dated this log"
+        },
+        {
+          "name": "named",
+          "input": {
+            "d": {
+              "op_type": "set_name",
+              "instance_name": "Céilí night"
+            }
+          },
+          "expected": "named this log \"Céilí night\""
+        },
+        {
+          "name": "name cleared",
+          "input": {
+            "d": {
+              "op_type": "set_name",
+              "instance_name": ""
+            }
+          },
+          "expected": "cleared this log's name"
+        },
+        {
+          "name": "something else",
+          "input": {
+            "d": {
+              "op_type": "mark_complete"
+            }
+          },
+          "expected": null
+        }
+      ]
+    },
+    "activityText": {
+      "params": [
+        "d",
+        "myPersonId",
+        "viewing"
+      ],
+      "cases": [
+        {
+          "name": "someone else, while I edit",
+          "input": {
+            "d": {
+              "op_type": "add_tune",
+              "record": {
+                "session_instance_tune_id": 9,
+                "name": "The Kesh",
+                "tune_id": 55
+              },
+              "actor": {
+                "person_id": 5,
+                "name": "Sarah O'Connor"
+              }
+            },
+            "myPersonId": 1,
+            "viewing": false
+          },
+          "expected": "Sarah O'Connor added The Kesh"
+        },
+        {
+          "name": "me, while I edit: nothing",
+          "input": {
+            "d": {
+              "op_type": "add_tune",
+              "record": {
+                "session_instance_tune_id": 9,
+                "name": "The Kesh",
+                "tune_id": 55
+              },
+              "actor": {
+                "person_id": 1,
+                "name": "Ian Varley"
+              }
+            },
+            "myPersonId": 1,
+            "viewing": false
+          },
+          "expected": null
+        },
+        {
+          "name": "me, from another window, while I watch",
+          "input": {
+            "d": {
+              "op_type": "add_tune",
+              "record": {
+                "session_instance_tune_id": 9,
+                "name": "The Kesh",
+                "tune_id": 55
+              },
+              "actor": {
+                "person_id": 1,
+                "name": "Ian Varley"
+              }
+            },
+            "myPersonId": 1,
+            "viewing": true
+          },
+          "expected": "Ian Varley added The Kesh"
+        },
+        {
+          "name": "no actor: nothing",
+          "input": {
+            "d": {
+              "op_type": "add_tune",
+              "record": {
+                "session_instance_tune_id": 9,
+                "name": "The Kesh",
+                "tune_id": 55
+              }
+            },
+            "myPersonId": 1,
+            "viewing": true
+          },
+          "expected": null
+        },
+        {
+          "name": "a nameless actor",
+          "input": {
+            "d": {
+              "op_type": "edit_notes",
+              "actor": {
+                "person_id": 5
+              }
+            },
+            "myPersonId": 1,
+            "viewing": false
+          },
+          "expected": "Someone edited the notes"
+        },
+        {
+          "name": "an op not worth a line",
+          "input": {
+            "d": {
+              "op_type": "mark_complete",
+              "actor": {
+                "person_id": 5,
+                "name": "Sarah O'Connor"
+              }
+            },
+            "myPersonId": 1,
+            "viewing": false
+          },
+          "expected": null
         }
       ]
     }

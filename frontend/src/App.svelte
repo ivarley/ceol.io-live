@@ -30,7 +30,9 @@
     cursorSegment as cursorSegmentOf, setTuneType, setTuneIds, likelyNext, nextMatchesInput,
     nextAssocKey, commitStep, resolution, withNotationResults,
   } from './composer.js'
-  import { colorFor, initials, loggerColorIdx as loggerColorIdxOf, othersTyping as othersTypingOf } from './people.js'
+  import {
+    colorFor, initials, loggerColorIdx as loggerColorIdxOf, othersTyping as othersTypingOf, activityText, MAX_ACTIVITY,
+  } from './people.js'
   import { listStatus, statusClass, planStatusOps, applyStatusLocally, NOT_ON_LIST } from './mylist.js'
   import { instanceTimeLabel } from './shared/format.js'
   import { resolveSegments, playbackStep, formatClock } from './shared/segments.js'
@@ -193,7 +195,6 @@
   let typers = $state([]) // who's currently composing (ephemeral typing, §F)
   let activities = $state([]) // transient "X did Y" toasts for others' changes (§E); stack up to MAX
   let activityId = 0
-  const MAX_TOASTS = 3 // cap concurrent toasts; oldest drops off
   let mergeNudge = $state(null) // {name, payload} when my append merged into a dup (§D16)
   let mergeNudgeSeq = 0
   let reconcile = $state(null) // {items:[{op_type,name,reason,message}]} reconnect review (§G)
@@ -2194,54 +2195,17 @@
     return p ? colorFor(p.arrival_seq) : 'var(--muted)'
   }
 
-  function remoteLabel(d) {
-    const n = d.record?.name || (d.record?.tune_id ? `#${d.record.tune_id}` : 'a tune')
-    switch (d.op_type) {
-      case 'add_tune': return `added ${n}`
-      case 'corroborate': return `also logged ${n}`
-      case 'change_tune': return `edited ${n}`
-      case 'remove_tune': return `removed ${n}`
-      case 'move_tunes': { const c = d.moved_ids?.length || 0; return `moved ${c} tune${c === 1 ? '' : 's'}` }
-      case 'remove_tunes': { const c = d.records?.length || 0; return `removed ${c} tune${c === 1 ? '' : 's'}` }
-      case 'restore_tunes': { const c = d.records?.length || 0; return `restored ${c} tune${c === 1 ? '' : 's'}` }
-      case 'set_break': return d.removed ? 'removed a break' : 'ended a set'
-      case 'attribute_set_starter': return d.person ? `set ${d.person.display_name} as starting a set` : 'cleared a set starter'
-      case 'set_confidence': return `confirmed ${n}`
-      case 'attendance_add': return d.person ? `checked in ${d.person.display_name}` : 'updated attendance'
-      case 'attendance_create_person': return d.person ? `added ${d.person.display_name}` : 'added a player'
-      case 'attendance_remove': return d.person ? `checked out ${d.person.display_name}` : 'updated attendance'
-      case 'edit_notes': return 'edited the notes'
-      // One op, up to two distinct edits — say which actually happened, or the
-      // toast claims someone re-dated a log when they only fixed the end time.
-      case 'set_date': {
-        const movedDate = d.previous_date != null && d.date !== d.previous_date
-        const movedTimes =
-          ('start_time' in d && d.start_time !== d.previous_start_time) ||
-          ('end_time' in d && d.end_time !== d.previous_end_time)
-        const when = instanceTimeLabel({ start_time: d.start_time, end_time: d.end_time })
-        if (movedDate && movedTimes && d.session_date) return `re-dated this log to ${d.session_date}${when ? `, ${when}` : ''}`
-        if (movedDate) return d.session_date ? `re-dated this log to ${d.session_date}` : 're-dated this log'
-        if (movedTimes) return when ? `set this log's time to ${when}` : "cleared this log's time"
-        return 're-dated this log'
-      }
-      case 'set_name': return d.instance_name ? `named this log "${d.instance_name}"` : "cleared this log's name"
-      default: return null
-    }
-  }
-
   // A change made by someone else — surface a brief, attributed activity notice (§E).
   // In edit mode we skip your own changes (you just made them). In view mode this
   // window authors nothing, so every incoming change is "remote" worth showing — even
   // one from your own account logging in another window.
   function noteRemote(d) {
-    if (!d.actor || d.actor.person_id == null) return
-    if (!viewing && d.actor.person_id === person.person_id) return
-    const label = remoteLabel(d)
-    if (!label) return
+    const text = activityText(d, person ? person.person_id : null, viewing) // people.js
+    if (!text) return
     const id = ++activityId
-    // Append; keep only the most recent MAX_TOASTS so a burst from several people
+    // Append; keep only the most recent MAX_ACTIVITY so a burst from several people
     // stacks (newest at the bottom) instead of one clobbering the last.
-    activities = [...activities, { id, text: `${d.actor.name || 'Someone'} ${label}`, color: colorForPerson(d.actor.person_id) }].slice(-MAX_TOASTS)
+    activities = [...activities, { id, text, color: colorForPerson(d.actor.person_id) }].slice(-MAX_ACTIVITY)
     setTimeout(() => { activities = activities.filter((a) => a.id !== id) }, 4000)
   }
 
