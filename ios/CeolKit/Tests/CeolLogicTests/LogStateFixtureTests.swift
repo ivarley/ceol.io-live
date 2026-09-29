@@ -120,6 +120,11 @@ let logStateAdapters = ModuleAdapters(
             guard let step else { return .null }
             return ["pos": JSONValue(step.pos), "value": .string(step.value)]
         },
+        "recordChanges": { args in
+            let c = LogState.recordChanges(args["d"])
+            return ["puts": .array(c.puts), "drops": .array(c.drops)]
+        },
+        "metaChanges": { args in .object(LogState.metaChanges(args["d"])) },
     ],
     constants: [:]
 )

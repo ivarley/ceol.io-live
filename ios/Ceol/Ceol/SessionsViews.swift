@@ -532,58 +532,83 @@ private struct PersonRow: View {
 
 // MARK: - A night
 
-/// A night's log, read-only: its tunes in sets. Ordered and split by the same rules
-/// the live logger uses (CeolLogic.LogState, ported from the web in Phase 1).
+/// A night's log, live: its sets as the referee has them, kept current by the stream
+/// (NightModel), with the connection's state in the header. Ordered and split by the
+/// rules the live logger uses (CeolLogic.LogState). Read-only until Phase 5b.
 struct NightView: View {
-    @Environment(AppModel.self) private var model
+    @Environment(AppModel.self) private var app
+    @Environment(\.scenePhase) private var scenePhase
     let sessionInstanceID: Int
     let title: String
-    @State private var state: LoadState<LiveBootstrapPayload> = .loading
+    @State private var model: NightModel?
 
     var body: some View {
-        Loaded(state: state, retry: load) { b in content(b) }
-            .background(CeolTokens.bgColor)
-            .ceolPushedBar(title)
-            .toolbar {
-                if let b = state.value {
-                    // A night's page is its date, or its id when it has none.
-                    ToolbarItem(placement: .topBarTrailing) {
-                        ShareButton(
-                            path: "/sessions/\(b.sessionPath)/\(b.instanceDate ?? String(sessionInstanceID))",
-                            subject: "\(b.sessionName), \(b.sessionDate)")
-                    }
-                    .sharedBackgroundVisibility(.hidden)
+        Group {
+            if let model, let log = model.log, let night = model.night {
+                content(log, night, model)
+            } else if let error = model?.loadError {
+                ContentUnavailableView {
+                    Label("Couldn't load this", systemImage: "wifi.exclamationmark")
+                } description: {
+                    Text(error)
+                } actions: {
+                    Button("Retry") { Task { await model?.start() } }.buttonStyle(.bordered)
                 }
+            } else {
+                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .task { if state.value == nil { await load() } }
-    }
-
-    private func load() async {
-        do {
-            state = .loaded(
-                try await model.auth.client.getLiveBootstrap(path: .init(sessionInstanceId: sessionInstanceID)).ok.body.json)
-        } catch {
-            if state.value == nil { state = .failed(loadFailureMessage(error)) }
+        }
+        .background(CeolTokens.bgColor)
+        .ceolPushedBar(title)
+        .toolbar {
+            if let night = model?.night, let path = night["session_path"]?.stringValue {
+                // A night's page is its date, or its id when it has none.
+                ToolbarItem(placement: .topBarTrailing) {
+                    ShareButton(
+                        path: "/sessions/\(path)/\(night["instance_date"]?.stringValue ?? String(sessionInstanceID))",
+                        subject: "\(night["session_name"]?.stringValue ?? ""), \(night["session_date"]?.stringValue ?? "")")
+                }
+                .sharedBackgroundVisibility(.hidden)
+            }
+        }
+        .task {
+            if model == nil {
+                let m = NightModel(instanceID: sessionInstanceID, app: app)
+                model = m
+                await m.start()
+            }
+        }
+        .onDisappear { model?.stop() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await model?.resume() } }
         }
     }
 
-    @ViewBuilder private func content(_ b: LiveBootstrapPayload) -> some View {
-        let records = b.records.compactMap { JSONValue(encoding: $0) }
-        let sets = LogState.segmentByBreaks(LogState.computeOrdered(records))
+    @ViewBuilder private func content(_ log: LiveLog, _ b: JSONValue, _ model: NightModel) -> some View {
+        let sets = LogState.segmentByBreaks(log.ordered)
         let tuneCount = sets.reduce(0) { $0 + $1.tunes.count }
         // As the web logger: starters only where the session tracks them, which needs
         // attendance too (spec 039). An older server doesn't say: on, as the web's default.
-        let trackStarters = (b.trackSetStarters ?? true) && (b.trackAttendance ?? true)
+        let trackStarters = (b["track_set_starters"]?.boolValue ?? true) && (b["track_attendance"]?.boolValue ?? true)
+        let notes = log.meta["notes"]?.stringValue ?? ""
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                // The web's night header: the session, the date and a tally, the notes.
+                // The web's night header: the session, the date and a tally, the notes,
+                // and how the connection is.
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(b.sessionName).font(.ceol(size: 24, weight: .semibold, relativeTo: .title2))
-                        .foregroundStyle(CeolTokens.textColor)
-                    Text([b.sessionDate, tuneCount == 0 ? nil : "\(tuneCount) tune\(tuneCount == 1 ? "" : "s") in \(sets.count) set\(sets.count == 1 ? "" : "s")"]
-                        .compactMap { $0 }.joined(separator: " · "))
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(b["session_name"]?.stringValue ?? "").font(.ceol(size: 24, weight: .semibold, relativeTo: .title2))
+                            .foregroundStyle(CeolTokens.textColor)
+                        Spacer(minLength: 8)
+                        LiveStatusPill(status: model.status)
+                    }
+                    if let name = log.meta["instance_name"]?.stringValue, !name.isEmpty {
+                        Text(name).font(.ceol(size: 15, weight: .semibold)).foregroundStyle(CeolTokens.textColor)
+                    }
+                    Text([log.meta["session_date"]?.stringValue, tuneCount == 0 ? nil : "\(tuneCount) tune\(tuneCount == 1 ? "" : "s") in \(sets.count) set\(sets.count == 1 ? "" : "s")"]
+                        .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
                         .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
-                    if let notes = b.notes, !notes.isEmpty {
+                    if !notes.isEmpty {
                         Text(notes).font(.ceolItalic(size: 15)).foregroundStyle(CeolTokens.textMuted)
                     }
                 }
@@ -597,25 +622,54 @@ struct NightView: View {
                     }
                     ForEach(Array(sets.enumerated()), id: \.offset) { i, set in
                         SetCard(label: LogState.setLabel(set.tunes), starter: trackStarters ? setStarter(set.tunes) : nil) {
-                            ForEach(Array(set.tunes.enumerated()), id: \.offset) { _, t in
+                            ForEach(Array(set.tunes.enumerated()), id: \.element) { _, t in
                                 Text(t["name"]?.stringValue ?? "Unknown tune")
                                     .font(.ceol(size: 19))
                                     .foregroundStyle(CeolTokens.textColor)
                                     .padding(.vertical, 9)
+                                    .transition(.opacity.combined(with: .move(edge: .top)))
                             }
                         }
                         .accessibilityElement(children: .contain)
                         .accessibilityLabel("Set \(i + 1) · \(LogState.setLabel(set.tunes))")
                     }
-                    if b.logComplete {
+                    if log.meta["log_complete"] == true {
                         Text("✓ This session has been fully logged").font(.ceol(size: 16, weight: .medium))
                             .foregroundStyle(CeolTokens.textMuted).padding(.top, 12)
                     }
                 }
                 .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 24)
+                .animation(.easeOut(duration: 0.25), value: log.records)
             }
         }
-        .refreshable { await load() }
+        .refreshable { await model.start() }
+    }
+}
+
+/// How the night's live connection is: a green "Live", amber "Reconnecting", grey
+/// "Offline". Nothing for a finished log, which has nothing to stream.
+struct LiveStatusPill: View {
+    let status: NightModel.Status
+
+    var body: some View {
+        let (label, color): (String?, Color) =
+            switch status {
+            case .live: ("Live", CeolTokens.primary)
+            case .connecting: ("Connecting", CeolTokens.textMuted)
+            case .reconnecting: ("Reconnecting", CeolTokens.warning)
+            case .offline: ("Offline", CeolTokens.textMuted)
+            case .finished: (nil, .clear)
+            }
+        if let label {
+            HStack(spacing: 6) {
+                Circle().fill(color).frame(width: 8, height: 8)
+                Text(label).font(.ceol(size: 13, weight: .medium)).foregroundStyle(color)
+            }
+            .padding(.horizontal, 10).padding(.vertical, 4)
+            .overlay(Capsule().strokeBorder(color.opacity(0.6), lineWidth: 1))
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("night.status")
+        }
     }
 }
 

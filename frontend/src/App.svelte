@@ -19,7 +19,7 @@
     maxPos, cursorPos, remapAnchors, normName, normAbc, stripThe,
     openSetMergeTarget, mergeStable, parseThesessionId, parseThesessionSettingId,
     computeCursorSlots, seamKeyFor, seamActionFor,
-    rememberInHistory, historyStep, nextTs,
+    rememberInHistory, historyStep, nextTs, recordChanges, metaChanges,
   } from './logstate.js'
   import {
     dragBlock, dropTargets, optimisticMove,
@@ -2288,16 +2288,19 @@
     if (d.event_id && d.event_id > highWater) highWater = d.event_id
     noteRemote(d)
     const prevLastId = lastRecordId // before applying, to detect an append at the end
+    // The data half is logstate's recordChanges / metaChanges, shared with the iOS app;
+    // what follows each is this screen's own (flashes, the cursor, toasts).
+    const { puts, drops } = recordChanges(d)
+    for (const r of puts) put(r)
+    for (const id of drops) drop(id)
+    const meta = metaChanges(d)
     switch (d.op_type) {
-      case 'attribute_set_starter': // applies to the whole set -> many records
-        for (const r of d.records || []) put(r)
-        // no tune-row flash here — the starter pill flash is the confirmation
+      case 'attribute_set_starter': // no tune-row flash here — the starter pill flash is the confirmation
         break
       case 'add_tune':
       case 'change_tune':
       case 'set_confidence':
-      case 'corroborate': // server collapsed a duplicate into this record (§H30)
-        put(d.record)
+      case 'corroborate':
         {
           const rid = d.record?.session_instance_tune_id
           if (d.op_type === 'corroborate') flashId(rid, 'merge')
@@ -2315,25 +2318,10 @@
           insertAfterId = null
         }
         break
-      case 'set_break':
-        if (d.removed) drop(d.record_id)
-        else put(d.record)
-        break
-      case 'remove_tune':
-        if (d.record) (d.record.deleted ? drop(d.record.session_instance_tune_id) : put(d.record))
-        break
-      case 'move_tunes': // one atomic block move (spec 029 §F)
-        for (const r of d.records || []) put(r)
-        for (const id of d.removed_break_ids || []) drop(id)
+      case 'move_tunes':
         if (d.actor && d.actor.person_id !== person.person_id) {
           for (const id of d.moved_ids || []) flashId(id, 'remote', colorForPerson(d.actor.person_id))
         }
-        break
-      case 'remove_tunes': // atomic bulk delete (spec 029 §E)
-        for (const r of d.records || []) drop(r.session_instance_tune_id)
-        break
-      case 'restore_tunes': // the delete's inverse op (undo)
-        for (const r of d.records || []) put(r)
         break
       case 'attendance_add':
       case 'attendance_remove':
@@ -2342,7 +2330,7 @@
         break
       case 'edit_notes': {
         const wasClean = notesDraft === notesText
-        notesText = d.notes || ''
+        notesText = meta.notes
         if (wasClean) notesDraft = notesText // don't clobber an in-progress local edit
         break
       }

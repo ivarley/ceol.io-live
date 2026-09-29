@@ -290,3 +290,69 @@ export function historyStep(hist, pos, dir) {
   if (pos >= n - 1) return { pos: null, value: '' }
   return { pos: pos + 1, value: hist[pos + 1] }
 }
+
+// --- applying a server op (spec 024) --- //
+//
+// What one op from the referee (an SSE `op` event, or a POST's ack) does to the log. The
+// logger's applyOp dispatches on op_type; these are its data half, so the web logger
+// and the iOS app apply every op the same way. The screen half (flashes, the follow-
+// the-end cursor, toasts, re-fetching attendance) stays with each client.
+
+// The records an op puts (insert or replace, by session_instance_tune_id) and the ids it
+// drops. Put before drop, in the order given. An op that isn't about records changes none.
+export function recordChanges(d) {
+  const puts = []
+  const drops = []
+  const put = (r) => { if (r) puts.push(r) }
+  switch (d?.op_type) {
+    case 'attribute_set_starter': // applies to the whole set -> many records
+    case 'restore_tunes': // the delete's inverse op (undo)
+      for (const r of d.records || []) put(r)
+      break
+    case 'add_tune':
+    case 'change_tune':
+    case 'set_confidence':
+    case 'corroborate': // server collapsed a duplicate into this record (§H30)
+      put(d.record)
+      break
+    case 'set_break':
+      if (d.removed) drops.push(d.record_id)
+      else put(d.record)
+      break
+    case 'remove_tune':
+      if (d.record) (d.record.deleted ? drops.push(d.record.session_instance_tune_id) : put(d.record))
+      break
+    case 'move_tunes': // one atomic block move (spec 029 §F)
+      for (const r of d.records || []) put(r)
+      for (const id of d.removed_break_ids || []) drops.push(id)
+      break
+    case 'remove_tunes': // atomic bulk delete (spec 029 §E)
+      for (const r of d.records || []) drops.push(r.session_instance_tune_id)
+      break
+  }
+  return { puts, drops }
+}
+
+// The night's own fields an op sets (notes, date and times, name, complete), as a patch:
+// only the keys it changes. {} for an op that sets none.
+export function metaChanges(d) {
+  switch (d?.op_type) {
+    case 'edit_notes':
+      return { notes: d.notes || '' }
+    case 'set_date': {
+      const out = {}
+      if (d.date) out.instance_date = d.date
+      if (d.session_date) out.session_date = d.session_date
+      if ('start_time' in d) out.start_time = d.start_time || ''
+      if ('end_time' in d) out.end_time = d.end_time || ''
+      return out
+    }
+    case 'set_name':
+      return { instance_name: d.instance_name || '' }
+    case 'mark_complete':
+      return { log_complete: true }
+    case 'mark_incomplete':
+      return { log_complete: false }
+  }
+  return {}
+}

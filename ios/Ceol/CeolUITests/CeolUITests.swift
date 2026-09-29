@@ -410,6 +410,48 @@ final class CeolUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["share.url"].label.contains("thesession.org/tunes/"), app.staticTexts["share.url"].label)
     }
 
+    /// Phase 5a: a night shows what another client logs, live. The test is the other
+    /// client: it signs in over the API and adds a tune to the night the app has open,
+    /// then removes it again.
+    @MainActor
+    func testANightUpdatesLive() async throws {
+        let api = try await TestAPI.signedIn(server: server)
+        let nights = try await api.get("/api/sessions/austin/mueller/logs")
+        let years = (nights["sorted_years"] as? [Any])?.compactMap { "\($0)" } ?? []
+        let byYear = nights["instances_by_year"] as? [String: [[String: Any]]] ?? [:]
+        let newest = try XCTUnwrap(years.first.flatMap { byYear[$0]?.first })
+        let instanceID = try XCTUnwrap(newest["session_instance_id"] as? Int)
+
+        let app = launch()
+        signIn(app)
+        app.buttons["tab.sessions"].firstMatch.tap()
+        let mueller = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Mueller Session'")).firstMatch
+        XCTAssertTrue(mueller.waitForExistence(timeout: 10))
+        mueller.tap()
+        app.buttons.containing(NSPredicate(format: "label BEGINSWITH 'Logs'")).firstMatch.tap()
+        let night = app.buttons.matching(NSPredicate(format: "label MATCHES '.*[0-9]+ tunes?.*'")).firstMatch
+        XCTAssertTrue(night.waitForExistence(timeout: 10))
+        night.tap()
+        let status = app.descendants(matching: .any)["night.status"]
+        XCTAssertTrue(status.waitForExistence(timeout: 15))
+        let live = NSPredicate(format: "label CONTAINS 'Live'")
+        await fulfillment(of: [XCTNSPredicateExpectation(predicate: live, object: status)], timeout: 15)
+
+        let name = "Live Test Reel \(Int.random(in: 1000...9999))"
+        let added = try await api.post("/api/live/instances/\(instanceID)/ops", [
+            "op_id": UUID().uuidString.lowercased(), "op_type": "add_tune", "name": name,
+        ])
+        let recordID = (added["record"] as? [String: Any])?["session_instance_tune_id"] as? Int
+        XCTAssertTrue(app.staticTexts[name].waitForExistence(timeout: 10), "the tune didn't arrive live")
+        snapshot("night live")
+        if let recordID {
+            _ = try await api.post("/api/live/instances/\(instanceID)/ops", [
+                "op_id": UUID().uuidString.lowercased(), "op_type": "remove_tune", "record_id": recordID,
+            ])
+            XCTAssertTrue(app.staticTexts[name].waitForNonExistence(timeout: 10), "the removal didn't arrive live")
+        }
+    }
+
     /// Phase 3d: Me shows the profile and opens it to edit (cancelled: seed data stays put).
     @MainActor
     func testMeShowsTheProfile() throws {
@@ -518,5 +560,44 @@ final class CeolUITests: XCTestCase {
         }
         let app = launch(openURL: "\(server!)/auth/login/\(token)")
         XCTAssertTrue(app.buttons["tab.me"].firstMatch.waitForExistence(timeout: 15))
+    }
+}
+
+
+/// The server as a second client would use it, for tests that need something to happen
+/// while the app watches: signed in with the seeded admin over the API.
+struct TestAPI {
+    let server: String
+    let token: String
+
+    static func signedIn(server: String) async throws -> TestAPI {
+        var r = URLRequest(url: URL(string: server + "/api/auth/login-password")!)
+        r.httpMethod = "POST"
+        r.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        r.setValue("ios/0.0.0 (ui-test)", forHTTPHeaderField: "X-Ceol-Client")
+        r.httpBody = try JSONSerialization.data(withJSONObject: ["email": "ian@ceol.io", "password": "password123"])
+        let (data, _) = try await URLSession.shared.data(for: r)
+        let body = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        return TestAPI(server: server, token: try XCTUnwrap(body?["token"] as? String))
+    }
+
+    func get(_ path: String) async throws -> [String: Any] {
+        try await send(URLRequest(url: URL(string: server + path)!))
+    }
+
+    func post(_ path: String, _ body: [String: Any]) async throws -> [String: Any] {
+        var r = URLRequest(url: URL(string: server + path)!)
+        r.httpMethod = "POST"
+        r.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        r.httpBody = try JSONSerialization.data(withJSONObject: body)
+        return try await send(r)
+    }
+
+    private func send(_ request: URLRequest) async throws -> [String: Any] {
+        var r = request
+        r.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        r.setValue("ios/0.0.0 (ui-test)", forHTTPHeaderField: "X-Ceol-Client")
+        let (data, _) = try await URLSession.shared.data(for: r)
+        return (try JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
     }
 }

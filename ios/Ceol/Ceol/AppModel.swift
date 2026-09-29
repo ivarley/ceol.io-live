@@ -39,6 +39,9 @@ final class AppModel {
     /// (the tab view does when there are none): presenting from underneath closes the
     /// drawer on top.
     var shareHosts: [UUID] = []
+    /// The streaming service's address, from app-config (fetched once, when a night
+    /// first goes live).
+    var streamingURL: URL?
 
     /// A session, in the Sessions tab.
     func openSession(path: String, name: String) {

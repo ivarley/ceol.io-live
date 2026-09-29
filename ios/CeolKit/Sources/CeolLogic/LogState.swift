@@ -379,4 +379,68 @@ public enum LogState {
         if pos >= n - 1 { return (nil, "") }
         return (pos + 1, hist[pos + 1])
     }
+
+    // MARK: - Applying a server op (spec 024)
+    //
+    // Ports of logstate.js recordChanges / metaChanges: the data half of the logger's
+    // applyOp, so the web and the app apply every referee op the same way.
+
+    /// The records an op puts (insert or replace, by session_instance_tune_id) and the ids
+    /// it drops, as JSON so no field is lost. Put before drop, in the order given.
+    public struct RecordChanges: Sendable, Equatable {
+        public var puts: [JSONValue] = []
+        public var drops: [JSONValue] = []
+    }
+
+    public static func recordChanges(_ d: JSONValue?) -> RecordChanges {
+        var out = RecordChanges()
+        func put(_ r: JSONValue?) { if let r, !r.isNull { out.puts.append(r) } }
+        guard let d else { return out }
+        switch d["op_type"]?.stringValue {
+        case "attribute_set_starter", "restore_tunes":
+            for r in d["records"]?.arrayValue ?? [] { put(r) }
+        case "add_tune", "change_tune", "set_confidence", "corroborate":
+            put(d["record"])
+        case "set_break":
+            if d["removed"].isTruthy { out.drops.append(d["record_id"] ?? .null) } else { put(d["record"]) }
+        case "remove_tune":
+            if let r = d["record"], r.isTruthy {
+                if r["deleted"].isTruthy { out.drops.append(r["session_instance_tune_id"] ?? .null) } else { put(r) }
+            }
+        case "move_tunes":
+            for r in d["records"]?.arrayValue ?? [] { put(r) }
+            for id in d["removed_break_ids"]?.arrayValue ?? [] { out.drops.append(id) }
+        case "remove_tunes":
+            for r in d["records"]?.arrayValue ?? [] { out.drops.append(r["session_instance_tune_id"] ?? .null) }
+        default:
+            break
+        }
+        return out
+    }
+
+    /// The night's own fields an op sets (notes, date and times, name, complete): only the
+    /// keys it changes.
+    public static func metaChanges(_ d: JSONValue?) -> [String: JSONValue] {
+        guard let d else { return [:] }
+        func text(_ k: String) -> JSONValue { d[k].isTruthy ? d[k]! : .string("") }
+        switch d["op_type"]?.stringValue {
+        case "edit_notes":
+            return ["notes": text("notes")]
+        case "set_date":
+            var out: [String: JSONValue] = [:]
+            if d["date"].isTruthy { out["instance_date"] = d["date"] }
+            if d["session_date"].isTruthy { out["session_date"] = d["session_date"] }
+            if d.objectValue?["start_time"] != nil { out["start_time"] = text("start_time") }
+            if d.objectValue?["end_time"] != nil { out["end_time"] = text("end_time") }
+            return out
+        case "set_name":
+            return ["instance_name": text("instance_name")]
+        case "mark_complete":
+            return ["log_complete": .bool(true)]
+        case "mark_incomplete":
+            return ["log_complete": .bool(false)]
+        default:
+            return [:]
+        }
+    }
 }

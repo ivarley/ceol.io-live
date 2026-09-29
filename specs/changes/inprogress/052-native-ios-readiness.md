@@ -1792,3 +1792,18 @@ The plan (Phases 0-6) runs from here in `ios/`; see `ios/README.md` for the layo
   was already gated: the server folds `show_people_list` into `can_view_people`.
 - **The splash:** the wordmark on black with "Trad Irish Session Tracker", matched by
   the launch screen (Ceol-Info.plist) so the hand-over doesn't jump.
+- **Phase 5 — the live logger: in progress.** Slices: 5a watching a night live, 5b
+  writing (add, break, reorder, remove), 5c entering tunes fast, 5d offline, 5e who's
+  there, 5f real sessions.
+  - **5a DONE 2026-09-29.** A night reads its bootstrap raw (JSON, so no record field is
+    dropped) into `CeolLogic.LiveLog`, opens the streaming service's events with the
+    app's Bearer token from the night's `last_event_id` (`mode=view`), and applies each
+    op; errors reopen from the high-water mark, backing off; 45 quiet seconds (the
+    server pings every 15) get a full fresh start, as the web's watchdog does; a
+    finished log doesn't stream. A status pill shows Live / Reconnecting / Offline.
+    The data half of the web logger's `applyOp` moved into `logstate.js` as
+    `recordChanges` / `metaChanges` (28 new fixture cases), which the web logger now
+    calls and `LogState` ports, so both clients apply every op the same way.
+    `CeolLogic.SSEParser` parses the stream from raw bytes (URLSession's line reader
+    drops the blank lines that end events). A UI test plays a second client over the
+    API and checks the app shows its add and its removal live.
