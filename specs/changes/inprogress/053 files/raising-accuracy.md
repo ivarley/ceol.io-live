@@ -27,17 +27,19 @@ The misses are redone on that result. 25 of 502:
 | reels | 17 of 25 (jigs 3, polkas 2, hornpipes 2, slip jig 1) |
 | wrong answer is The Mason's Apron | 2 of 25 (was 19 of 41): the hubs are gone |
 | truth ranked 2 to 8 | 10 of 25 |
-| truth ranked 11 or worse but present | 7 of 25 |
-| truth not in the shortlist at all | 8 of 25 |
+| truth ranked 11 to 300 | 2 of 25 |
+| truth outside the 300-tune shortlist | 13 of 25 (8 in no component's top 300, 5 returned at 329-592 and left unaligned in the tail) |
 | misses shared with the 120 s headline | 15 of 25 |
 | misses whose tune is right elsewhere in the corpus | 13 of 25 |
 
 What that does to the ten angles:
 
 - **Angle 1, the hubs, is moot for ranking** and survives only as a
-  question about shortlist recall: the 8 segments never shortlisted are the
+  question about shortlist recall: the 13 segments outside the shortlist (8 in no
+  component's top 300, 7 of those sharing no phrase at all; corrected from "8 never shortlisted" on 2026-09-29) are the
   index's failures, not the aligner's, and a hub-free or lattice-fed index
-  is how the generator's recall rises. `found_at_all` is 0.984.
+  is how the generator's recall rises. `found_at_all` is 0.984. Measured in
+  the spec, "Shortlist recall".
 - **Angles 2, 4 and 6 are now one project: the aligner's cost model.** It
   has flat costs today (match +2, mismatch -1, gap -1). Per-slot costs from a
   profile of the settings, the metrical weight from the notated slot, and

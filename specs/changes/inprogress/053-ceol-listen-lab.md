@@ -1510,12 +1510,16 @@ With the three trackers fused (both readings, replace, shortlist 300):
 | 120 s, yin alone with it | 0.970 | 0.976 | +53/-1 against yin alone at 120 s |
 | 120 s, the three with it | **0.982** | **0.982** | +35/-3 against the 0.918 headline; +6/-0 against yin with it |
 
-At 120 s top-1 equals top-5: whenever the right tune is on the shortlist it is
-first, and the 9 remaining misses are the index not shortlisting it. At 30 s
-the misses were redone in `053 files/raising-accuracy.md`: 25 of 502, 17 of
-them reels, the right tune at rank 2-8 for 10, below 10 for 7, not shortlisted
-for 8; The Mason's Apron, the wrong answer in 19 of 41 misses under the
-n-grams, is the wrong answer in 2.
+At 120 s top-1 equals top-5, and of the 9 remaining misses 4 are the index
+not shortlisting the right tune and 5 are shortlisted but aligned to ranks 9 to
+191 (corrected 2026-09-29; this first said all 9 were the index). At 30 s the
+misses were redone in `053 files/raising-accuracy.md`: 25 of 502, 17 of them
+reels, the right tune at rank 2-8 for 10, ranks 11-300 for 2, and outside the
+300-tune shortlist for 13 (corrected 2026-09-29: the note counted 8, because a
+tune the index returns below 300 keeps its place in the unaligned tail, at
+329-592, and was read as "present"); The Mason's Apron, the wrong answer in 19
+of 41 misses under the n-grams, is the wrong answer in 2. See "Shortlist
+recall" below.
 
 **Set decoding over the aligner's scores is broken.** At 120 s the three
 trackers with the aligner and set decoding read 0.753 top-1 against 0.986
@@ -1543,6 +1547,53 @@ shortlisting the right tune among 23,000 (its rank falls to 331, 373, 939 or
 off the list) and 2 are real near misses at rank 2 (The Scholar under The
 South Shore, Larry Redican's Mother under The Whinny Hills of Leitrim). The
 shortlist's recall is the ceiling again.
+
+**Shortlist recall (2026-09-29).** How often the right tune is among the
+tunes the aligner is handed. Each component ranking (three trackers, plain and
+eighth readings) cut at T and then fused, exactly as the bench builds the
+shortlist; the script reproduces the aligner runs' unshortlisted segments
+exactly on all four scopes. Audio alone, the headline front end, bench scope
+(labelled boundaries, eight nights every setting was tuned on):
+
+| recall at T | 25 | 50 | 100 | 200 | 300 | 500 | 1000 | 2000 |
+|---|---|---|---|---|---|---|---|---|
+| repertoire, 30 s | 0.918 | 0.938 | 0.950 | 0.968 | **0.974** | 0.982 | 0.986 | 0.986 |
+| repertoire, 120 s | 0.968 | 0.982 | 0.988 | 0.992 | **0.992** | 0.992 | 0.994 | 0.996 |
+| full corpus, 30 s | 0.896 | 0.908 | 0.928 | 0.942 | **0.950** | 0.960 | 0.968 | 0.978 |
+| full corpus, 120 s | 0.966 | 0.974 | 0.984 | 0.986 | **0.990** | 0.990 | 0.990 | 0.992 |
+
+At 30 s on the repertoire the aligner puts the right tune first for 477 of
+the 489 segments that are shortlisted (97.5%); the shortlist costs 13
+segments and the ranking 12. Fusing is the right way to build it: the fused
+list beats every single component at every T (yin plain, the best, has 0.942
+at 300), and the union of each component's own top m is no better than the
+fused list at the same size (union of top 100s, median 328 tunes, 0.968,
+against 0.974 for the fused 300).
+
+A longer shortlist, repertoire, 30 s, paired against the 300-tune headline
+(0.950 / 0.968):
+
+| aligned | top-1 | top-5 | top-1 paired |
+|---|---|---|---|
+| fused list cut at 1000 | 0.956 | 0.972 | +3/-0 (p 0.25) |
+| cut at 3000 (everything the index returns) | 0.956 | 0.972 | identical to 1000 |
+| every repertoire tune, the index bypassed | **0.960** | **0.978** | +5/-0 (p 0.06) |
+
+The index returns only tunes that share at least one six-note phrase with
+what was heard, so no cut-off reaches the 7 segments whose tune shares none
+(The Sailor on the Rock, The Honeymoon, The Bank of Ireland on night 1, The
+Maids of Mitchellstown, Sonny Murray's, The Donegal Reel, Take Your Churn).
+None of the 7 is in another key: each scores best at no transposition. Aligned
+against the whole repertoire, 2 of them come first (The Sailor on the Rock,
+The Donegal Reel), one second, and the rest 7th to 87th. Aligning everything
+roughly doubles the bench's time (about 30 minutes for the eight nights
+against 60, under contention, so only a rough ratio) and on the repertoire
+reaches recall 1.000, leaving 20 misses that are all the aligner's ranking.
+Not adopted: +5/-0 is not significant, and against 23,307 tunes aligning
+everything is not an option. What it says is that the shortlist is no longer
+the main ceiling on the repertoire; the aligner's ranking is (item 4 of the
+plan, the cost model), and on the full corpus the shortlist still is (25
+unshortlisted at 30 s).
 
 **Not yet measured:** a start that is not the labelled one; the board; tunes
 played in another key than all their settings (the aligner compares note
