@@ -92,20 +92,28 @@ struct MainTabView: View {
 
     var body: some View {
         @Bindable var model = model
-        // The bar is inset into each tab, not laid over the TabView: that way every
-        // scroll view in it (and on the screens it pushes) ends above the bar.
+        // The bar is laid over the tabs, and every scroll view in them (and on the
+        // screens they push) gets a bottom margin of the bar's height, so a list at rest
+        // ends above it. (An inset on each tab didn't reach the lists inside the
+        // navigation stacks: they came to rest under the bar.)
         TabView(selection: $model.tab) {
-            Tab(value: AppTab.home) { HomeView().safeAreaInset(edge: .bottom, spacing: 0) { CeolTabBar() } }
-            Tab(value: AppTab.sessions) { SessionsView().safeAreaInset(edge: .bottom, spacing: 0) { CeolTabBar() } }
-            Tab(value: AppTab.tunes) { TunesView().safeAreaInset(edge: .bottom, spacing: 0) { CeolTabBar() } }
-            Tab(value: AppTab.me) { MeView().safeAreaInset(edge: .bottom, spacing: 0) { CeolTabBar() } }
+            Tab(value: AppTab.home) { HomeView() }
+            Tab(value: AppTab.sessions) { SessionsView() }
+            Tab(value: AppTab.tunes) { TunesView() }
+            Tab(value: AppTab.me) { MeView() }
         }
+        .contentMargins(.bottom, CeolTabBar.height, for: .scrollContent)
+        .contentMargins(.bottom, CeolTabBar.height, for: .scrollIndicators)
+        .overlay(alignment: .bottom) { CeolTabBar() }
+        .ceolSharePane()
         .tint(CeolTokens.primary)
     }
 }
 
 struct CeolTabBar: View {
     @Environment(AppModel.self) private var model
+    /// The bar above the home indicator: its top padding, the tabs, and the rule.
+    static let height: CGFloat = 6 + 54 + 1 + 8
 
     var body: some View {
         HStack(spacing: 0) {

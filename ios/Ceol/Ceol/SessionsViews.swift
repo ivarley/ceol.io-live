@@ -59,7 +59,10 @@ struct SessionsView: View {
                 .sheet(isPresented: $filtering) {
                     SessionsFilterSheet(
                         filter: $filter, sort: $sort, country: $country,
-                        countries: SessionsRules.countries((state.value?.sessions ?? []).map(\.entry)))
+                        // Only countries with sessions under the other choices, so none is empty.
+                        countries: SessionsRules.countries((state.value?.sessions ?? []).map(\.entry).filter {
+                            SessionsRules.matches($0, filter: filter, search: search, today: localToday())
+                        }))
                 }
                 .sheet(isPresented: $adding) {
                     AddSessionView { path, name in
@@ -133,7 +136,7 @@ struct SessionsView: View {
             }
             VStack(spacing: 4) {
                 if shown.isEmpty { Text("No sessions found.").foregroundStyle(CeolTokens.textMuted) }
-                (Text("Don't see your session? ")
+                (Text("Don't see your session?\n")
                     + Text("Search all sessions").foregroundStyle(CeolTokens.primary)
                     + Text(" or ")
                     + Text("add it!").foregroundStyle(CeolTokens.primary))
@@ -185,7 +188,7 @@ struct SessionDetailView: View {
             .ceolPushedBar(name)
             .toolbar {
                 // The web's Share: a link to this page, for someone without the app too.
-                ToolbarItem(placement: .topBarTrailing) { ShareButton(path: "/sessions/\(path)", subject: name) }
+                ToolbarItem(placement: .topBarTrailing) { ShareButton(path: "/sessions/\(path)/\(tab.rawValue.lowercased())", subject: name) }
                     .sharedBackgroundVisibility(.hidden)
             }
             .navigationDestination(item: $newNight) { NightView(sessionInstanceID: $0.id, title: $0.title) }

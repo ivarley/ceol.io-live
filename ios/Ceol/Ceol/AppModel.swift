@@ -30,6 +30,16 @@ final class AppModel {
     /// The Tunes tab's status filter (nil: All). Home's Learning / To Learn boxes set it.
     var tunesStatus: MyTunesRules.Status?
 
+    /// The Share pane, when open (ShareButton sets it; ceolSharePane shows it).
+    var sharing: ShareTarget?
+    /// What Share offers while a drawer is up over the screen (the tune drawer: that
+    /// tune's page). The drawer sets it as it appears and clears it as it goes.
+    var shareOverride: ShareTarget?
+    /// The drawers that are up, bottom to top. Only the topmost presents the Share pane
+    /// (the tab view does when there are none): presenting from underneath closes the
+    /// drawer on top.
+    var shareHosts: [UUID] = []
+
     /// A session, in the Sessions tab.
     func openSession(path: String, name: String) {
         sessionsPath = [.session(path: path, name: name)]

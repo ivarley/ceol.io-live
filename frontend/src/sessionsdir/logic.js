@@ -6,9 +6,27 @@
  * it is covered here instead.
  */
 
-/** The viewer's country, normalised for comparison. */
+// Spellings of one country that sessions arrive with (thesession.org imports say
+// "United States", hand-added sessions "USA"). Folded to one key so a USA viewer
+// doesn't see "United States" on every imported row. The iOS app keeps the same
+// list (CeolLogic/SessionsRules.swift, countryAliases).
+const COUNTRY_ALIASES = {
+  us: 'usa',
+  'u.s.': 'usa',
+  'u.s.a.': 'usa',
+  'united states': 'usa',
+  'united states of america': 'usa',
+  'united kingdom': 'uk',
+  'great britain': 'uk',
+  'republic of ireland': 'ireland',
+  eire: 'ireland',
+  '\u00e9ire': 'ireland',
+}
+
+/** A country, normalised for comparison: trimmed, lower-cased, spellings folded. */
 export function normaliseCountry(country) {
-  return (country || '').trim().toLowerCase()
+  const key = (country || '').trim().toLowerCase()
+  return COUNTRY_ALIASES[key] || key
 }
 
 /**

@@ -77,10 +77,24 @@ public enum SessionsRules {
 
     /// Where a session is: "Austin, TX" to someone in the USA, "Galway, Ireland" to that
     /// same person. With no viewer country known, nothing is dropped.
+    /// Spellings of one country (thesession.org imports say "United States", hand-added
+    /// sessions "USA"), folded to one key. The web keeps the same list
+    /// (frontend/src/sessionsdir/logic.js, COUNTRY_ALIASES).
+    static let countryAliases: [String: String] = [
+        "us": "usa", "u.s.": "usa", "u.s.a.": "usa", "united states": "usa", "united states of america": "usa",
+        "united kingdom": "uk", "great britain": "uk", "republic of ireland": "ireland", "eire": "ireland",
+        "\u{e9}ire": "ireland",
+    ]
+
+    /// A country for comparison: trimmed, lower-cased, spellings folded.
+    public static func normaliseCountry(_ s: String?) -> String {
+        let key = (s ?? "").trimmingCharacters(in: .whitespaces).lowercased()
+        return countryAliases[key] ?? key
+    }
+
     public static func locationLabel(city: String?, state: String?, country: String?, viewerCountry: String?) -> String {
-        func norm(_ s: String?) -> String { (s ?? "").trimmingCharacters(in: .whitespaces).lowercased() }
-        let mine = norm(viewerCountry)
-        let same = !mine.isEmpty && norm(country) == mine
+        let mine = normaliseCountry(viewerCountry)
+        let same = !mine.isEmpty && normaliseCountry(country) == mine
         let parts = [city, state, same ? nil : country].compactMap { $0 }.filter { !$0.isEmpty }
         return parts.isEmpty ? "Unknown" : parts.joined(separator: ", ")
     }
@@ -103,21 +117,26 @@ public enum SessionsRules {
     }
 
     /// The countries in the list, most sessions first, then by name ("USA", "Ireland").
+    /// Spellings of one country are one choice, named by its commonest spelling.
     public static func countries(_ entries: [Entry]) -> [String] {
-        var counts: [String: (label: String, n: Int)] = [:]
+        var spellings: [String: [String: Int]] = [:]
         for e in entries {
             guard let c = e.country?.trimmingCharacters(in: .whitespaces), !c.isEmpty else { continue }
-            let key = c.lowercased()
-            counts[key] = (counts[key]?.label ?? c, (counts[key]?.n ?? 0) + 1)
+            spellings[normaliseCountry(c), default: [:]][c, default: 0] += 1
+        }
+        var counts: [String: (label: String, n: Int)] = [:]
+        for (key, names) in spellings {
+            let label = names.max { $0.value != $1.value ? $0.value < $1.value : $0.key > $1.key }!.key
+            counts[key] = (label, names.values.reduce(0, +))
         }
         return counts.values.sorted { $0.n != $1.n ? $0.n > $1.n : $0.label.localizedCaseInsensitiveCompare($1.label) == .orderedAscending }
             .map(\.label)
     }
 
-    /// Whether a session is in `country` (case-insensitive; nil or empty is any).
+    /// Whether a session is in `country` (spellings folded; nil or empty is any).
     public static func inCountry(_ e: Entry, _ country: String?) -> Bool {
         guard let country, !country.isEmpty else { return true }
-        return e.country?.trimmingCharacters(in: .whitespaces).lowercased() == country.lowercased()
+        return normaliseCountry(e.country) == normaliseCountry(country)
     }
 
     /// Indices of `entries` in sort order. Name: case-insensitive. Place: country, state,

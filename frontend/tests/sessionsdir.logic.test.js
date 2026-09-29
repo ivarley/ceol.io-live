@@ -40,6 +40,13 @@ describe('normaliseCountry', () => {
     expect(normaliseCountry('  Ireland ')).toBe('ireland')
   })
 
+  it('folds the spellings of one country', () => {
+    expect(normaliseCountry('United States')).toBe('usa')
+    expect(normaliseCountry('USA')).toBe('usa')
+    expect(normaliseCountry('Republic of Ireland')).toBe('ireland')
+    expect(locationLabel({ city: 'Memphis', state: 'Tennessee', country: 'United States' }, 'USA')).toBe('Memphis, Tennessee')
+  })
+
   it('treats missing as empty', () => {
     expect(normaliseCountry(undefined)).toBe('')
     expect(normaliseCountry(null)).toBe('')

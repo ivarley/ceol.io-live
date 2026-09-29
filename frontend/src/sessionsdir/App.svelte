@@ -282,7 +282,7 @@
      than left-aligned like a caption. "Back to home" went with the page heading:
      the tab bar has a Home tab, and a link that repeats a tab is furniture. -->
 <p class="sessions-footnote">
-  Don't see your session?
+  Don't see your session?<br />
   {#if currentFilter === 'my'}
     <a href="/sessions" onclick={searchAllSessions}>Search all sessions</a> or
     <a href="/add-session" onclick={openAdd}>add it!</a>

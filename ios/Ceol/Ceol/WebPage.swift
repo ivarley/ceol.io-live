@@ -29,6 +29,8 @@ struct SafariView: UIViewControllerRepresentable {
 extension AppModel {
     /// The site's own address for `path` ("/sessions/austin/mueller").
     func webURL(_ path: String) -> URL {
-        server.appending(path: path.hasPrefix("/") ? String(path.dropFirst()) : path)
+        // Resolved, not appended: a path may carry a query ("/my-tunes?status=learning"),
+        // whose "?" appending(path:) would escape.
+        URL(string: path.hasPrefix("/") ? path : "/" + path, relativeTo: server)?.absoluteURL ?? server
     }
 }

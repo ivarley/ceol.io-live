@@ -56,7 +56,7 @@ struct TunesView: View {
         NavigationStack {
             Loaded(state: state, retry: load) { payload in list(payload) }
                 .background(CeolTokens.bgColor)
-                .ceolRootBar("Tunes", sharePath: "/my-tunes")
+                .ceolRootBar("Tunes", sharePath: model.tunesStatus.map { "/my-tunes?status=\($0.rawValue.replacingOccurrences(of: " ", with: "+"))" } ?? "/my-tunes")
                 .task(id: search) { await searchCatalogue() }
                 // The search keyboard would otherwise stay up over the sheet.
                 .onChange(of: open) { _, tune in if tune != nil { searching = false } }
@@ -291,6 +291,16 @@ struct TuneSheet: View {
                     ToolbarItem(placement: .principal) { Color.clear.frame(width: 1, height: 1) }
                     ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
                 }
+                // Share, with this drawer up, is this tune: its page at the session it was
+                // opened from, else its thesession.org page (Ceol has no public page for a
+                // tune on its own).
+                .onAppear {
+                    model.shareOverride = ShareTarget(
+                        url: tune.sessionPath.map { model.webURL("/sessions/\($0)/tunes/\(tune.id)") }
+                            ?? URL(string: "https://thesession.org/tunes/\(tune.id)")!,
+                        title: tune.name)
+                }
+                .onDisappear { model.shareOverride = nil }
                 .task {
                     status = tune.status
                     heard = tune.heardCount ?? 0
@@ -617,6 +627,8 @@ struct AddTuneSheet: View {
                             TuneRow(name: r.name, type: r.tuneType, status: nil, note: r.abcOnly ? "♪ notes match" : nil)
                         }
                         .buttonStyle(.plain)
+                        // Already yours: dimmed, and still opens.
+                        .opacity(onList ? 0.45 : 1)
                         .accessibilityIdentifier("addTune.row")
                         if onList {
                             Image(systemName: "checkmark").foregroundStyle(CeolTokens.primary).frame(width: 36)

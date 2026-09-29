@@ -353,6 +353,56 @@ final class CeolUITests: XCTestCase {
         XCTAssertTrue(segment.isSelected)
     }
 
+    /// Lists scroll clear of the tab bar: at rest after scrolling to the end, the last
+    /// row sits above the bar (it came to rest under it).
+    @MainActor
+    func testListsEndAboveTheTabBar() throws {
+        let app = launch()
+        signIn(app)
+        app.buttons["tab.tunes"].firstMatch.tap()
+        let last = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Rights Of Man'")).firstMatch
+        XCTAssertTrue(last.waitForExistence(timeout: 10))
+        for _ in 0..<3 { app.swipeUp() }
+        sleep(1)
+        let bar = app.buttons["tab.home"].firstMatch.frame.minY - 6
+        snapshot("tunes end")
+        XCTAssertLessThanOrEqual(last.frame.maxY, bar, "the last tune rests under the tab bar")
+
+        app.buttons["tab.me"].firstMatch.tap()
+        let signOut = app.buttons["me.signout"]
+        XCTAssertTrue(signOut.waitForExistence(timeout: 10))
+        for _ in 0..<3 { app.swipeUp() }
+        sleep(1)
+        snapshot("me end")
+        XCTAssertLessThanOrEqual(signOut.frame.maxY, bar, "Log Out rests under the tab bar")
+    }
+
+    /// Share: the pane with a QR code and this screen's address; with a tune's drawer
+    /// up, Share (still in reach above it) offers that tune.
+    @MainActor
+    func testSharingAScreenAndATune() throws {
+        let app = launch()
+        signIn(app)
+        app.buttons["tab.tunes"].firstMatch.tap()
+        let share = app.buttons["share"].firstMatch
+        XCTAssertTrue(share.waitForExistence(timeout: 10))
+        share.tap()
+        XCTAssertTrue(app.images["share.qr"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["share.url"].label.hasSuffix("/my-tunes"), app.staticTexts["share.url"].label)
+        snapshot("share")
+        app.swipeDown(velocity: .fast)
+        XCTAssertTrue(app.images["share.qr"].waitForNonExistence(timeout: 5))
+
+        app.buttons.containing(NSPredicate(format: "label CONTAINS \"Cooley's\"")).firstMatch.tap()
+        XCTAssertTrue(app.images["Notation for Cooley's"].waitForExistence(timeout: 20))
+        snapshot("drawer below the bar")
+        // Tapped where it is on screen: behind a sheet, accessibility calls it hidden
+        // even though the drawer stops below the bar and the tap gets through.
+        share.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        XCTAssertTrue(app.staticTexts["share.url"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["share.url"].label.contains("thesession.org/tunes/"), app.staticTexts["share.url"].label)
+    }
+
     /// Phase 3d: Me shows the profile and opens it to edit (cancelled: seed data stays put).
     @MainActor
     func testMeShowsTheProfile() throws {

@@ -110,7 +110,7 @@ struct MeView: View {
                     if let member = profile.thesessionUserId {
                         Link(destination: URL(string: "https://thesession.org/members/\(member)")!) {
                             KitRow(label: "thesession.org") {
-                                Text("Member \(member)").font(.ceol(size: 18)).foregroundStyle(CeolTokens.primary)
+                                Text(verbatim: "Member \(member)").font(.ceol(size: 18)).foregroundStyle(CeolTokens.primary)
                             }
                         }
                     } else {

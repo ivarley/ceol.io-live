@@ -61,8 +61,11 @@ struct SessionsRulesTests {
 
     @Test("countries: most sessions first; a country filter ignores case")
     func countries() {
-        let list = [entry(country: "USA"), entry(country: "Ireland"), entry(country: "usa"), entry(country: nil)]
+        let list = [entry(country: "USA"), entry(country: "Ireland"), entry(country: "usa"), entry(country: nil),
+                    entry(country: "United States")]
         #expect(SessionsRules.countries(list) == ["USA", "Ireland"])
+        #expect(SessionsRules.inCountry(list[4], "USA"))
+        #expect(SessionsRules.locationLabel(city: "Memphis", state: "TN", country: "United States", viewerCountry: "USA") == "Memphis, TN")
         #expect(SessionsRules.inCountry(list[2], "USA"))
         #expect(!SessionsRules.inCountry(list[1], "USA"))
         #expect(SessionsRules.inCountry(list[3], nil))

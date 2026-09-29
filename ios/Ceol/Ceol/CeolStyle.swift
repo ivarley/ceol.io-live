@@ -5,6 +5,7 @@
 // clients stay alike as either changes.
 
 import CeolDesign
+import CoreImage
 import CoreText
 import SwiftUI
 import UIKit
@@ -554,32 +555,138 @@ struct WordmarkButton: View {
     }
 }
 
-/// The web's Share (its glyph, muted): the system share sheet with this page's address
-/// on the web, for someone without the app too.
+/// What Share hands on: a page's full address on the web (which opens the app for
+/// anyone who has it, through the Universal Links) and a name for it.
+struct ShareTarget: Identifiable, Equatable {
+    let url: URL
+    let title: String
+    var id: URL { url }
+}
+
+/// The web's Share (its glyph, muted). It opens the Share pane for this screen, or for
+/// the drawer over it when there is one.
 struct ShareButton: View {
     @Environment(AppModel.self) private var model
     let path: String
     var subject: String = "Ceol"
 
     var body: some View {
-        ShareLink(item: model.webURL(path), subject: Text(subject)) {
+        Button {
+            model.sharing = model.shareOverride ?? ShareTarget(url: model.webURL(path), title: subject)
+        } label: {
             Image("IconShare").renderingMode(.template).resizable().scaledToFit().frame(width: 20, height: 20)
                 .foregroundStyle(CeolTokens.textMuted)
                 .frame(width: 36, height: 36)
                 .contentShape(Rectangle())
         }
-        .accessibilityLabel("Share")
+        .buttonStyle(.plain)
+        .accessibilityLabel("Share this page")
+        .accessibilityIdentifier("share")
     }
 }
 
 
 extension View {
     /// A drawer: a lighter surface than the page under it, and the grabber that says it
-    /// can be dragged away.
-    func ceolDrawer(_ detents: Set<PresentationDetent> = [.large]) -> some View {
+    /// can be dragged away. At full height it stops below the top bar, which stays
+    /// live, so Share (top right) is in reach with a drawer up.
+    func ceolDrawer(_ detents: Set<PresentationDetent> = [.custom(BelowTopBar.self)]) -> some View {
         presentationDetents(detents)
             .presentationDragIndicator(.visible)
             .presentationBackground(CeolTokens.drawerBg)
+            .presentationBackgroundInteraction(.enabled)
+            .modifier(SharePaneHost(isRoot: false))
+    }
+
+    /// Where the Share pane opens from when no drawer is up: the tab view.
+    func ceolSharePane() -> some View {
+        modifier(SharePaneHost(isRoot: true))
+    }
+}
+
+/// A drawer's full height: the screen below the top bar.
+struct BelowTopBar: CustomPresentationDetent {
+    static func height(in context: Context) -> CGFloat? {
+        context.maxDetentValue - 58
+    }
+}
+
+private struct SharePaneHost: ViewModifier {
+    @Environment(AppModel.self) private var model
+    let isRoot: Bool
+    @State private var id = UUID()
+
+    func body(content: Content) -> some View {
+        let mine = isRoot ? model.shareHosts.isEmpty : model.shareHosts.last == id
+        content
+            .sheet(item: Binding(get: { mine ? model.sharing : nil }, set: { model.sharing = $0 })) { SharePane(target: $0) }
+            .onAppear { if !isRoot { model.shareHosts.append(id) } }
+            .onDisappear { model.shareHosts.removeAll { $0 == id } }
+    }
+}
+
+/// The web's share sheet (static/js/share.js), in its order of usefulness at an actual
+/// session: the QR code first (how you hand a link across a table), then Copy link, then
+/// the system share sheet.
+struct SharePane: View {
+    @Environment(\.dismiss) private var dismiss
+    let target: ShareTarget
+    @State private var copied = false
+
+    var body: some View {
+        VStack(spacing: 18) {
+            Text("Share this page").font(.ceol(size: 20, weight: .semibold)).foregroundStyle(CeolTokens.textColor)
+                .padding(.top, 20)
+            if let qr = QRCode.image(for: target.url.absoluteString) {
+                Image(uiImage: qr).interpolation(.none).resizable().scaledToFit()
+                    .frame(width: 220, height: 220)
+                    .padding(14)
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 10))
+                    .accessibilityLabel("QR code linking to \(target.url.absoluteString)")
+                    .accessibilityIdentifier("share.qr")
+            }
+            Text(target.url.absoluteString)
+                .font(.system(size: 13, design: .monospaced)).foregroundStyle(CeolTokens.textMuted)
+                .multilineTextAlignment(.center).textSelection(.enabled).padding(.horizontal, 20)
+                .accessibilityIdentifier("share.url")
+            HStack(spacing: 12) {
+                Button {
+                    UIPasteboard.general.url = target.url
+                    copied = true
+                } label: {
+                    Label(copied ? "Copied" : "Copy link", systemImage: copied ? "checkmark" : "doc.on.doc")
+                        .font(.ceol(size: 16, weight: .medium)).frame(maxWidth: .infinity, minHeight: 46)
+                        .foregroundStyle(CeolTokens.textColor)
+                        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(CeolTokens.borderColor, lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                ShareLink(item: target.url, subject: Text(target.title)) {
+                    Label("Share…", systemImage: "square.and.arrow.up")
+                        .font(.ceol(size: 16, weight: .medium)).frame(maxWidth: .infinity, minHeight: 46)
+                        .foregroundStyle(.white)
+                        .background(CeolTokens.primaryFill, in: RoundedRectangle(cornerRadius: 6))
+                }
+            }
+            .padding(.horizontal, 20)
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity)
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
+        .presentationBackground(CeolTokens.drawerBg)
+    }
+}
+
+/// A QR code for a string, drawn on the phone (CoreImage), so it works offline.
+enum QRCode {
+    static func image(for text: String) -> UIImage? {
+        let filter = CIFilter(name: "CIQRCodeGenerator")
+        filter?.setValue(Data(text.utf8), forKey: "inputMessage")
+        filter?.setValue("M", forKey: "inputCorrectionLevel")
+        guard let out = filter?.outputImage?.transformed(by: CGAffineTransform(scaleX: 10, y: 10)),
+            let cg = CIContext().createCGImage(out, from: out.extent)
+        else { return nil }
+        return UIImage(cgImage: cg)
     }
 }
 

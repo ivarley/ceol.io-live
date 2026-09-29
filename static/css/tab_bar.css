@@ -63,6 +63,16 @@
     color: var(--primary, #65b464);
   }
 
+  /* Where you are, at a glance: a soft green lozenge behind the current tab, as the
+     iOS app's bar has (ios/Ceol/Ceol/ContentView.swift, CeolTabBar). */
+  .tab-bar .tab-bar-item.active {
+    /* Sideways only: a vertical margin would make the bar taller than the room the
+       page reserves for it (--tab-bar-h). */
+    margin: 0 12px;
+    border-radius: 12px;
+    background: rgba(101, 180, 100, 0.16);
+  }
+
   /* The C is a mask taking currentColor, so it greens with its label for free —
      which is the reason it is a mask and not an <img> (see .tab-bar-c below). */
 
