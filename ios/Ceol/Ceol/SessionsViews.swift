@@ -50,25 +50,8 @@ struct SessionsView: View {
     var body: some View {
         NavigationStack(path: $navPath) {
             Loaded(state: state, retry: load) { payload in list(payload) }
-                .ceolBackground()
-                .navigationTitle("Sessions")
-                .searchable(text: $search, prompt: "Name or place")
-                .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button { adding = true } label: { Image(systemName: "plus") }
-                            .accessibilityLabel("Add a session")
-                            .accessibilityIdentifier("sessions.add")
-                    }
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Menu {
-                            Picker("Show", selection: $filter) {
-                                ForEach(SessionsRules.Filter.allCases, id: \.self) { Text($0.label).tag($0) }
-                            }
-                        } label: {
-                            Label(filter.label, systemImage: "line.3.horizontal.decrease.circle")
-                        }
-                    }
-                }
+                .background(CeolTokens.bgColor)
+                .ceolRootBar("Sessions")
                 .modifier(SessionDestinations())
                 .sheet(isPresented: $adding) {
                     AddSessionView { path, name in
@@ -103,27 +86,56 @@ struct SessionsView: View {
                 filter: filter, search: search, today: today)
         }
         List {
-            Section {
-                ForEach(shown, id: \.sessionId) { s in
-                    NavigationLink(value: Route.session(path: s.path, name: s.name)) {
-                        HStack {
-                            Text(s.name)
-                            Spacer()
-                            if !s.activeInstances.isEmpty {
-                                Text("On now").font(.caption.weight(.semibold)).foregroundStyle(CeolTokens.primary)
-                            }
-                            Text(SessionsRules.locationLabel(
-                                city: s.city, state: s.state, country: s.country, viewerCountry: payload.viewerCountry))
-                                .font(.footnote).foregroundStyle(CeolTokens.secondary)
+            VStack(alignment: .leading, spacing: 8) {
+                SearchRow(
+                    text: $search, prompt: "Search by name or location…", fieldID: "sessions.search",
+                    filterActive: filter != .mine,
+                    filterMenu: {
+                        Picker("Show", selection: $filter) {
+                            ForEach(SessionsRules.Filter.allCases, id: \.self) { Text($0.label).tag($0) }
                         }
+                    },
+                    onAdd: { adding = true }, addID: "sessions.add", addLabel: "Add a session")
+                Text("\(shown.count) \(filter.countNoun)").font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
+            }
+            .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 8, trailing: 16))
+            .listRowBackground(CeolTokens.bgColor)
+            .listRowSeparator(.hidden)
+            ForEach(shown, id: \.sessionId) { s in
+                ZStack {
+                    NavigationLink(value: Route.session(path: s.path, name: s.name)) { EmptyView() }.opacity(0)
+                    HStack(spacing: 10) {
+                        Text(s.name).font(.ceol(size: 19, weight: .medium)).foregroundStyle(CeolTokens.textColor).lineLimit(1)
+                        Spacer(minLength: 6)
+                        if !s.activeInstances.isEmpty { Pill(text: "On Now", style: .filled, color: CeolTokens.primaryFill) }
+                        Text(SessionsRules.locationLabel(
+                            city: s.city, state: s.state, country: s.country, viewerCountry: payload.viewerCountry))
+                            .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted).lineLimit(1)
                     }
                 }
-            } header: {
-                Text("\(shown.count) \(filter.countNoun)")
-            } footer: {
-                if shown.isEmpty { Text("No sessions found.") }
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isButton)
+                .ceolRow()
             }
+            VStack(spacing: 4) {
+                if shown.isEmpty { Text("No sessions found.").foregroundStyle(CeolTokens.textMuted) }
+                (Text("Don't see your session? ")
+                    + Text("Search all sessions").foregroundStyle(CeolTokens.primary)
+                    + Text(" or ")
+                    + Text("add it!").foregroundStyle(CeolTokens.primary))
+                    .font(.ceol(size: 17))
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(CeolTokens.textMuted)
+                    .onTapGesture {
+                        if filter == .all { adding = true } else { filter = .all }
+                    }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 24)
+            .listRowBackground(CeolTokens.bgColor)
+            .listRowSeparator(.hidden)
         }
+        .ceolPlainList()
         .refreshable { await load() }
     }
 }
@@ -143,6 +155,7 @@ struct SessionDetailView: View {
     @State private var people: LoadState<SessionPeoplePayload> = .loading
     @State private var addingNight = false
     @State private var editingRole = false
+    @State private var aboutOpen = false
     @State private var newNight: NewNight?
 
     /// A night just added, to go straight to.
@@ -153,9 +166,8 @@ struct SessionDetailView: View {
 
     var body: some View {
         Loaded(state: state, retry: load) { d in content(d) }
-            .ceolBackground()
-            .navigationTitle(name)
-            .navigationBarTitleDisplayMode(.inline)
+            .background(CeolTokens.bgColor)
+            .ceolPushedBar(name)
             .toolbar {
                 // The web's Share: a link to this page, for someone without the app too.
                 ToolbarItem(placement: .topBarTrailing) {
@@ -208,41 +220,49 @@ struct SessionDetailView: View {
 
     @ViewBuilder private func content(_ d: SessionDetailPayload) -> some View {
         let tabs: [Tab] = d.permissions.canViewPeople ? Tab.allCases : [.tunes, .logs]
-        List {
-            // The one thing you came for mid-session: tonight's log.
-            ForEach(d.activeInstances, id: \.sessionInstanceId) { night in
-                NavigationLink(value: Route.night(id: night.sessionInstanceId, title: "\(d.session.name) · Tonight")) {
-                    Label {
-                        VStack(alignment: .leading) {
-                            Text("On now").font(.headline)
-                            Text(HomeRules.instanceTimeLabel(start: night.startTime, end: night.endTime))
-                                .font(.footnote).foregroundStyle(CeolTokens.secondary)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text(d.session.name).font(.ceol(size: 28, weight: .semibold, relativeTo: .title))
+                    .foregroundStyle(CeolTokens.textColor)
+                    .padding(.horizontal, 20)
+                // The one thing you came for mid-session: tonight's log.
+                ForEach(d.activeInstances, id: \.sessionInstanceId) { night in
+                    NavigationLink(value: Route.night(id: night.sessionInstanceId, title: "\(d.session.name) · Tonight")) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "dot.radiowaves.left.and.right").foregroundStyle(CeolTokens.primary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("On now").font(.ceol(size: 17, weight: .semibold)).foregroundStyle(CeolTokens.textColor)
+                                Text(HomeRules.instanceTimeLabel(start: night.startTime, end: night.endTime))
+                                    .font(.ceol(size: 14)).foregroundStyle(CeolTokens.textMuted)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right").foregroundStyle(CeolTokens.textMuted)
                         }
-                    } icon: {
-                        Image(systemName: "dot.radiowaves.left.and.right").foregroundStyle(CeolTokens.primary)
+                        .padding(14)
+                        .background(CeolTokens.primaryFill.opacity(0.25), in: RoundedRectangle(cornerRadius: 8))
+                        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(CeolTokens.primaryFill, lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 20)
+                }
+                about(d)
+                    .padding(.horizontal, 20)
+                JoinPrompt(path: path, permissions: d.permissions) {
+                    await load()
+                    people = .loading
+                }
+                .padding(.horizontal, 20)
+                VStack(spacing: 0) {
+                    UnderlineTabs(items: tabs.map { ($0, $0.rawValue, count($0, d)) }, selection: $tab)
+                    switch tab {
+                    case .tunes: tunes(d)
+                    case .logs: logsSection(d)
+                    case .people: peopleSection()
                     }
                 }
             }
-            about(d.session)
-            MembershipSection(
-                path: path, permissions: d.permissions,
-                onChange: {
-                    await load()
-                    people = .loading
-                },
-                onEditRole: { editingRole = true })
-            Section {
-                Picker("Show", selection: $tab) {
-                    ForEach(tabs, id: \.self) { t in Text(label(t, d)).tag(t) }
-                }
-                .pickerStyle(.segmented)
-                .listRowBackground(Color.clear)
-            }
-            switch tab {
-            case .tunes: tunes(d)
-            case .logs: logsSection(d)
-            case .people: peopleSection()
-            }
+            .padding(.top, 8)
+            .padding(.bottom, 24)
         }
         .refreshable {
             await load()
@@ -251,47 +271,92 @@ struct SessionDetailView: View {
         }
     }
 
-    private func label(_ t: Tab, _ d: SessionDetailPayload) -> String {
+    private func count(_ t: Tab, _ d: SessionDetailPayload) -> Int? {
         switch t {
-        case .tunes: return "Tunes \(d.totalTunesCount)"
-        case .logs: return "Logs \(d.totalLogsCount)"
-        case .people: return d.totalPeopleCount.map { "People \($0)" } ?? "People"
+        case .tunes: d.totalTunesCount
+        case .logs: d.totalLogsCount
+        case .people: d.totalPeopleCount
         }
     }
 
-    @ViewBuilder private func about(_ s: SessionDetailPayload.SessionPayload) -> some View {
-        Section {
+    /// The web's info card: your role, then Location, Schedule and About with bold
+    /// labels, the about text folded to two lines with "more".
+    @ViewBuilder private func about(_ d: SessionDetailPayload) -> some View {
+        let s = d.session
+        VStack(alignment: .leading, spacing: 10) {
+            if let relationship = d.permissions.relationship {
+                Button { editingRole = true } label: {
+                    Pill(
+                        text: d.permissions.isSessionAdmin ? "Admin" : relationship == "visitor" ? "Visitor" : "Member",
+                        style: .filled,
+                        color: relationship == "visitor" && !d.permissions.isSessionAdmin
+                            ? Color(red: 0.55, green: 0.45, blue: 0.15) : CeolTokens.primaryFill,
+                        size: 15)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("session.role")
+                .accessibilityLabel("You're \(d.permissions.isSessionAdmin ? "Admin" : relationship == "visitor" ? "Visitor" : "Member")")
+            }
+            if let venue = s.locationName, !venue.isEmpty {
+                labelled("Location", venue)
+            }
+            let place = [s.locationStreet, s.city, s.state, s.country].compactMap { $0 }.filter { !$0.isEmpty }
+            if !place.isEmpty || s.locationWebsite != nil {
+                HStack(spacing: 6) {
+                    if !place.isEmpty { Text(place.joined(separator: ", ")).foregroundStyle(CeolTokens.textColor) }
+                    if let site = s.locationWebsite, let url = URL(string: site) {
+                        if !place.isEmpty { Text("•").foregroundStyle(CeolTokens.textMuted) }
+                        Link("Web", destination: url).foregroundStyle(CeolTokens.primary)
+                    }
+                }
+                .font(.ceol(size: 16))
+            }
             if let schedule = s.recurrenceReadable, !schedule.isEmpty {
-                LabeledContent("When", value: schedule)
-            }
-            let place = [s.locationName, s.locationStreet, [s.city, s.state].compactMap { $0 }.joined(separator: ", ")]
-                .compactMap { $0 }.filter { !$0.isEmpty }
-            if !place.isEmpty {
-                LabeledContent("Where") { Text(place.joined(separator: "\n")).multilineTextAlignment(.trailing) }
-            }
-            if let site = s.locationWebsite, let url = URL(string: site) {
-                Link("Website", destination: url)
+                labelled("Schedule", schedule)
             }
             if let about = s.comments, !about.isEmpty {
-                Text(about).font(.subheadline).foregroundStyle(CeolTokens.secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    labelled("About this session", about).lineLimit(aboutOpen ? nil : 2)
+                    Button(aboutOpen ? "less" : "more …") { aboutOpen.toggle() }
+                        .font(.ceol(size: 16)).foregroundStyle(CeolTokens.primary)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                }
+            }
+            if d.permissions.relationship != nil && !d.permissions.isConfirmed {
+                Text("A session admin can confirm you to show you who else plays here.")
+                    .font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
             }
         }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(CeolTokens.headerBg, in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    private func labelled(_ label: String, _ value: String) -> Text {
+        (Text("\(label): ").font(.ceol(size: 16, weight: .semibold)) + Text(value).font(.ceol(size: 16)))
+            .foregroundStyle(CeolTokens.textColor)
     }
 
     @ViewBuilder private func tunes(_ d: SessionDetailPayload) -> some View {
-        Section {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(d.totalTunesCount == 1 ? "1 tune" : "\(d.totalTunesCount) tunes")
+                .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
+                .padding(.horizontal, 16).padding(.vertical, 10)
+            Hairline()
             ForEach(d.tunes, id: \.tuneId) { t in
-                HStack {
-                    Text(t.tuneName)
-                    Spacer()
-                    if let type = t.tuneType { Text(type).font(.caption).foregroundStyle(CeolTokens.secondary) }
-                    Text("\(t.playCount)").font(.footnote.monospacedDigit()).foregroundStyle(CeolTokens.secondary)
-                        .frame(minWidth: 24, alignment: .trailing)
+                HStack(spacing: 8) {
+                    Text(t.tuneName).font(.ceol(size: 19, weight: .medium)).foregroundStyle(CeolTokens.textColor).lineLimit(1)
+                    Spacer(minLength: 6)
+                    if let type = t.tuneType { TypeChip(label: type, size: 15) }
+                    CountBox(count: t.playCount)
                 }
+                .padding(.horizontal, 16).padding(.vertical, 12)
+                Hairline()
             }
-        } footer: {
             if d.hasMoreTunes {
-                Text("The \(d.tunes.count) most played of \(d.totalTunesCount). The full list comes with search in a later build.")
+                Text("The \(d.tunes.count) most played of \(d.totalTunesCount).")
+                    .font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
+                    .padding(16)
             }
         }
     }
@@ -299,30 +364,57 @@ struct SessionDetailView: View {
     @ViewBuilder private func logsSection(_ d: SessionDetailPayload) -> some View {
         switch logs {
         case .loading:
-            ProgressView().task { await loadLogs() }
+            ProgressView().padding(24).task { await loadLogs() }
         case .failed(let message):
-            Section {
-                Text(message)
+            VStack(spacing: 8) {
+                Text(message).foregroundStyle(CeolTokens.textMuted)
                 Button("Retry") { Task { await loadLogs() } }
             }
+            .padding(24)
         case .loaded(let l):
-            if d.permissions.isLoggedIn {
-                Section {
-                    Button { addingNight = true } label: { Label("Add a night", systemImage: "plus.circle") }
-                        .accessibilityIdentifier("session.addNight")
+            VStack(alignment: .leading, spacing: 0) {
+                if d.permissions.isLoggedIn {
+                    Button { addingNight = true } label: {
+                        Label("Add a night", systemImage: "plus").font(.ceol(size: 17, weight: .medium))
+                            .foregroundStyle(CeolTokens.primary)
+                            .frame(maxWidth: .infinity, minHeight: 46)
+                            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(CeolTokens.borderColor, lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("session.addNight")
+                    .padding(16)
                 }
-            }
-            ForEach(l.sortedYears, id: \.self) { year in
-                Section(String(year)) {
-                    ForEach(l.instancesByYear.additionalProperties[String(year)] ?? [], id: \.sessionInstanceId) { night in
+                ForEach(l.sortedYears, id: \.self) { year in
+                    let nights = l.instancesByYear.additionalProperties[String(year)] ?? []
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Text(String(year)).font(.ceol(size: 24, weight: .semibold, relativeTo: .title2))
+                            .foregroundStyle(CeolTokens.textColor)
+                        Text(nights.count == 1 ? "1 log" : "\(nights.count) logs").font(.ceol(size: 16))
+                            .foregroundStyle(CeolTokens.textMuted)
+                    }
+                    .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 8)
+                    Hairline()
+                    ForEach(nights, id: \.sessionInstanceId) { night in
                         NavigationLink(value: Route.night(id: night.sessionInstanceId, title: "\(d.session.name) · \(HomeRules.shortDate(night.date, currentYear: nil))")) {
-                            HStack {
-                                Text(HomeRules.shortDate(night.date, currentYear: nil))
+                            HStack(spacing: 14) {
+                                DateBlock(weekday: HomeRules.dayOfWeek(night.date), day: HomeRules.dayOfMonth(night.date),
+                                          color: CeolTokens.textMuted)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(longDay(night.date)).font(.ceol(size: 18, weight: .medium))
+                                        .foregroundStyle(CeolTokens.primary)
+                                    Text([HomeRules.instanceTimeLabel(start: night.startTime, end: night.endTime),
+                                          night.tuneCount == 1 ? "1 tune logged" : "\(night.tuneCount) tunes logged"]
+                                        .filter { !$0.isEmpty }.joined(separator: " · "))
+                                        .font(.ceol(size: 14)).foregroundStyle(CeolTokens.textMuted)
+                                }
                                 Spacer()
-                                Text(night.tuneCount == 1 ? "1 tune" : "\(night.tuneCount) tunes")
-                                    .font(.footnote).foregroundStyle(CeolTokens.secondary)
                             }
+                            .padding(.horizontal, 16).padding(.vertical, 12)
+                            .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("\(longDay(night.date)), \(night.tuneCount) tunes")
+                        Hairline()
                     }
                 }
             }
@@ -332,36 +424,61 @@ struct SessionDetailView: View {
     @ViewBuilder private func peopleSection() -> some View {
         switch people {
         case .loading:
-            ProgressView().task { await loadPeople() }
+            ProgressView().padding(24).task { await loadPeople() }
         case .failed(let message):
-            Section {
-                Text(message)
+            VStack(spacing: 8) {
+                Text(message).foregroundStyle(CeolTokens.textMuted)
                 Button("Retry") { Task { await loadPeople() } }
             }
+            .padding(24)
         case .loaded(let p):
             // Members first, as the web's People tab opens (visitors and archived after).
             let members = p.people.filter { $0.relationship != "visitor" && $0.archived != true }
             let others = p.people.filter { $0.relationship == "visitor" || $0.archived == true }
-            Section("Members") { ForEach(members, id: \.personId) { PersonRow(person: $0) } }
-            if !others.isEmpty {
-                Section("Visitors and archived") { ForEach(others, id: \.personId) { PersonRow(person: $0) } }
+            VStack(alignment: .leading, spacing: 0) {
+                peopleGroup("Members", members)
+                if !others.isEmpty { peopleGroup("Visitors and archived", others) }
             }
         }
     }
+
+    @ViewBuilder private func peopleGroup(_ title: String, _ people: [SessionPeoplePayload.PeoplePayloadPayload]) -> some View {
+        Text(title.uppercased()).font(.ceol(size: 12, weight: .semibold)).tracking(0.8)
+            .foregroundStyle(CeolTokens.textMuted)
+            .padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 6)
+        Hairline()
+        ForEach(people, id: \.personId) { person in
+            PersonRow(person: person).padding(.horizontal, 16).padding(.vertical, 10)
+            Hairline()
+        }
+    }
+}
+
+/// "Tuesday, Jan 27" from "2026-01-27".
+func longDay(_ date: String) -> String {
+    let parse = DateFormatter()
+    parse.locale = Locale(identifier: "en_US_POSIX")
+    parse.dateFormat = "yyyy-MM-dd"
+    guard let d = parse.date(from: date) else { return date }
+    let out = DateFormatter()
+    out.locale = Locale(identifier: "en_US_POSIX")
+    out.dateFormat = "EEEE, MMM d"
+    return out.string(from: d)
 }
 
 private struct PersonRow: View {
     let person: SessionPeoplePayload.PeoplePayloadPayload
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack {
-                Text(person.displayName)
-                if person.isAdmin { Text("Admin").font(.caption).foregroundStyle(CeolTokens.primary) }
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(person.displayName).font(.ceol(size: 18, weight: .medium)).foregroundStyle(CeolTokens.textColor)
+                if !person.instruments.isEmpty {
+                    Text(person.instruments.joined(separator: ", ")).font(.ceol(size: 14)).foregroundStyle(CeolTokens.textMuted)
+                }
             }
-            if !person.instruments.isEmpty {
-                Text(person.instruments.joined(separator: ", ")).font(.footnote).foregroundStyle(CeolTokens.secondary)
-            }
+            Spacer()
+            if person.isAdmin { Pill(text: "Admin", style: .filled, color: CeolTokens.primaryFill, size: 12) }
         }
     }
 }
@@ -378,9 +495,8 @@ struct NightView: View {
 
     var body: some View {
         Loaded(state: state, retry: load) { b in content(b) }
-            .ceolBackground()
-            .navigationTitle(title)
-            .navigationBarTitleDisplayMode(.inline)
+            .background(CeolTokens.bgColor)
+            .ceolPushedBar(title)
             .toolbar {
                 if let b = state.value {
                     ToolbarItem(placement: .topBarTrailing) {
@@ -410,20 +526,46 @@ struct NightView: View {
     @ViewBuilder private func content(_ b: LiveBootstrapPayload) -> some View {
         let records = b.records.compactMap { JSONValue(encoding: $0) }
         let sets = LogState.segmentByBreaks(LogState.computeOrdered(records))
-        List {
-            Section {
-                Text(b.sessionDate).foregroundStyle(CeolTokens.secondary)
-                if let notes = b.notes, !notes.isEmpty { Text(notes).font(.subheadline) }
-            }
-            if sets.isEmpty {
-                Section { Text("No tunes logged yet.").foregroundStyle(CeolTokens.secondary) }
-            }
-            ForEach(Array(sets.enumerated()), id: \.offset) { i, set in
-                Section("Set \(i + 1) · \(LogState.setLabel(set.tunes))") {
-                    ForEach(Array(set.tunes.enumerated()), id: \.offset) { _, t in
-                        Text(t["name"]?.stringValue ?? "Unknown tune")
+        let tuneCount = sets.reduce(0) { $0 + $1.tunes.count }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                // The web's night header: the session, the date and a tally, the notes.
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(b.sessionName).font(.ceol(size: 24, weight: .semibold, relativeTo: .title2))
+                        .foregroundStyle(CeolTokens.textColor)
+                    Text([b.sessionDate, tuneCount == 0 ? nil : "\(tuneCount) tune\(tuneCount == 1 ? "" : "s") in \(sets.count) set\(sets.count == 1 ? "" : "s")"]
+                        .compactMap { $0 }.joined(separator: " · "))
+                        .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
+                    if let notes = b.notes, !notes.isEmpty {
+                        Text(notes).font(.ceolItalic(size: 15)).foregroundStyle(CeolTokens.textMuted)
                     }
                 }
+                .padding(.horizontal, 20).padding(.vertical, 14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(CeolTokens.headerBg.opacity(0.5))
+                VStack(spacing: 12) {
+                    if sets.isEmpty {
+                        Text("No tunes logged yet.").font(.ceol(size: 16)).foregroundStyle(CeolTokens.textMuted)
+                            .frame(maxWidth: .infinity).padding(.vertical, 32)
+                    }
+                    ForEach(Array(sets.enumerated()), id: \.offset) { i, set in
+                        SetCard(label: LogState.setLabel(set.tunes), starter: set.tunes.first?["started_by_name"]?.stringValue) {
+                            ForEach(Array(set.tunes.enumerated()), id: \.offset) { _, t in
+                                Text(t["name"]?.stringValue ?? "Unknown tune")
+                                    .font(.ceol(size: 19))
+                                    .foregroundStyle(CeolTokens.textColor)
+                                    .padding(.vertical, 9)
+                            }
+                        }
+                        .accessibilityElement(children: .contain)
+                        .accessibilityLabel("Set \(i + 1) · \(LogState.setLabel(set.tunes))")
+                    }
+                    if b.logComplete {
+                        Text("✓ This session has been fully logged").font(.ceol(size: 16, weight: .medium))
+                            .foregroundStyle(CeolTokens.textMuted).padding(.top, 12)
+                    }
+                }
+                .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 24)
             }
         }
         .refreshable { await load() }

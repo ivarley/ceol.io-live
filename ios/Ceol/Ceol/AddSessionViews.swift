@@ -51,52 +51,56 @@ struct AddSessionView: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                Section {
-                    TextField("Session name, or a thesession.org link", text: $query)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .accessibilityIdentifier("addSession.query")
-                } footer: {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    SearchRow(text: $query, prompt: "Session name, or a thesession.org link", fieldID: "addSession.query")
                     if let failure {
-                        Text(failure).foregroundStyle(CeolTokens.danger)
+                        Text(failure).font(.ceol(size: 15)).foregroundStyle(CeolTokens.danger)
                     } else if searching {
-                        Text("Searching thesession.org…")
+                        Text("Searching thesession.org…").font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
+                    } else if results == nil && pendingID == nil {
+                        Text("Sessions come from thesession.org. Search for yours, or paste its link.")
+                            .font(.ceol(size: 16)).foregroundStyle(CeolTokens.textMuted)
                     }
-                }
-                if let existing {
-                    Section {
-                        Button("Open \(existing.name)") {
+                    if let existing {
+                        Button {
                             dismiss()
                             onOpen(existing.path, existing.name)
+                        } label: {
+                            card(title: "Open \(existing.name)", subtitle: "That session is already on Ceol.")
                         }
-                    } footer: {
-                        Text("That session is already on Ceol.")
+                        .buttonStyle(.plain)
                     }
-                }
-                if let pendingID {
-                    Section {
-                        Button("thesession.org session \(pendingID)") { Task { await check(pendingID) } }
-                            .accessibilityIdentifier("addSession.pendingID")
+                    if let pendingID {
+                        Button { Task { await check(pendingID) } } label: {
+                            card(title: "thesession.org session \(pendingID)", subtitle: "Look it up")
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("addSession.pendingID")
                     }
-                }
-                if let results {
-                    Section(results.isEmpty ? "Nothing on thesession.org by that name" : "On thesession.org") {
-                        ForEach(results, id: \.id) { r in
-                            Button { Task { await pick(r) } } label: { resultRow(r) }
-                                .buttonStyle(.plain)
-                                .accessibilityIdentifier("addSession.result")
+                    if let results {
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text(results.isEmpty ? "Nothing on thesession.org by that name" : "On thesession.org")
+                                .font(.ceol(size: 13, weight: .semibold)).textCase(.uppercase).tracking(0.8)
+                                .foregroundStyle(CeolTokens.textMuted).padding(.bottom, 6)
+                            ForEach(results, id: \.id) { r in
+                                Button { Task { await pick(r) } } label: { resultRow(r) }
+                                    .buttonStyle(.plain)
+                                    .accessibilityIdentifier("addSession.result")
+                                Hairline()
+                            }
                         }
                     }
-                }
-                Section {
-                    Button("It's not on thesession.org: add it by hand") {
+                    Button {
                         seed = SessionSeed(timezone: options?.defaultTimezone)
+                    } label: {
+                        card(title: "Add a session manually", subtitle: "For sessions that aren't on thesession.org")
                     }
+                    .buttonStyle(.plain)
                     .accessibilityIdentifier("addSession.manual")
                 }
+                .padding(20)
             }
-            .scrollContentBackground(.hidden)
             .background(CeolTokens.bgColor)
             .navigationTitle("Add a Session")
             .navigationBarTitleDisplayMode(.inline)
@@ -112,16 +116,31 @@ struct AddSessionView: View {
         }
     }
 
+    private func card(title: String, subtitle: String) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title).font(.ceol(size: 19, weight: .medium)).foregroundStyle(CeolTokens.textColor)
+                Text(subtitle).font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
+            }
+            Spacer()
+            Image(systemName: "chevron.right").foregroundStyle(CeolTokens.textMuted)
+        }
+        .padding(16)
+        .background(CeolTokens.headerBg, in: RoundedRectangle(cornerRadius: 10))
+        .contentShape(Rectangle())
+    }
+
     private func resultRow(_ r: SessionSearchResult) -> some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text(r.name).foregroundStyle(CeolTokens.textColor)
+                Text(r.name).font(.ceol(size: 18, weight: .medium)).foregroundStyle(CeolTokens.textColor)
                 let place = placeOf(r)
-                if !place.isEmpty { Text(place).font(.footnote).foregroundStyle(CeolTokens.secondary) }
+                if !place.isEmpty { Text(place).font(.ceol(size: 14)).foregroundStyle(CeolTokens.textMuted) }
             }
             Spacer()
-            if r.existsInDb { Text("On Ceol").font(.caption).foregroundStyle(CeolTokens.primary) }
+            if r.existsInDb { Text("On Ceol").font(.ceol(.caption)).foregroundStyle(CeolTokens.primary) }
         }
+        .padding(.vertical, 10)
         .contentShape(Rectangle())
     }
 

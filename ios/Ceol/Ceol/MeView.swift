@@ -23,15 +23,8 @@ struct MeView: View {
     var body: some View {
         NavigationStack {
             Loaded(state: state, retry: load) { p in list(p) }
-                .ceolBackground()
-                .navigationTitle("Me")
-                .toolbar {
-                    if state.value != nil {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            Button("Edit") { editing = true }.accessibilityIdentifier("me.edit")
-                        }
-                    }
-                }
+                .background(CeolTokens.bgColor)
+                .ceolRootBar("Me")
                 .sheet(isPresented: $editing) {
                     ProfileSetupView(editing: true) { Task { await load() } }
                 }
@@ -76,75 +69,101 @@ struct MeView: View {
     @ViewBuilder private func list(_ p: Profile) -> some View {
         let profile = p.profile
         let user = model.user
-        List {
-            Section {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("\(profile.firstName) \(profile.lastName)")
-                        .font(.title2.weight(.semibold))
-                        .foregroundStyle(CeolTokens.textColor)
-                        .accessibilityIdentifier("me.name")
-                    let place = [profile.city, profile.state, profile.country].filter { !$0.isEmpty }.joined(separator: ", ")
-                    let line: [String] = [user.map { "@\($0.username)" }, place.isEmpty ? nil : place].compactMap { $0 }
-                    if !line.isEmpty {
-                        Text(line.joined(separator: "  ·  ")).font(.subheadline).foregroundStyle(CeolTokens.secondary)
+        let place = [profile.city, profile.state, profile.country].filter { !$0.isEmpty }.joined(separator: ", ")
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                // The web's identity header: initials, name and role, handle and place, Edit.
+                HStack(alignment: .center, spacing: 16) {
+                    InitialsAvatar(first: profile.firstName, last: profile.lastName)
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 10) {
+                            Text("\(profile.firstName) \(profile.lastName)")
+                                .font(.ceol(size: 24, weight: .semibold, relativeTo: .title2))
+                                .foregroundStyle(CeolTokens.textColor)
+                                .accessibilityIdentifier("me.name")
+                            if user?.isSystemAdmin == true {
+                                Text("ADMIN").font(.ceolItalic(size: 12)).tracking(0.8)
+                                    .padding(.horizontal, 10).padding(.vertical, 3)
+                                    .background(CeolTokens.primaryFill, in: Capsule())
+                                    .foregroundStyle(.white)
+                            }
+                        }
+                        let line = [user.map { "@\($0.username)" }, place.isEmpty ? nil : place].compactMap { $0 }
+                        if !line.isEmpty {
+                            Text(line.joined(separator: " · ")).font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
+                        }
                     }
+                    Spacer(minLength: 4)
+                    Button("Edit") { editing = true }
+                        .font(.ceol(size: 17, weight: .medium)).foregroundStyle(CeolTokens.primary)
+                        .accessibilityIdentifier("me.edit")
                 }
-                .padding(.vertical, 4)
-            }
-            Section {
-                LabeledContent("Instruments", value: profile.instruments.isEmpty ? "None yet" : profile.instruments.joined(separator: ", "))
-                LabeledContent("Time zone", value: p.timezoneOptions.first { $0.value == profile.timezone }?.label ?? profile.timezone)
-                if let email = user?.email { LabeledContent("Email", value: email) }
-            }
-            Section {
-                if user?.isSystemAdmin == true {
-                    Button { Task { await openWeb("/admin", needsSignIn: true) } } label: {
-                        WebRow(title: "Admin", busy: opening == "/admin")
+                KitGroup {
+                    KitRow("Instruments", value: profile.instruments.isEmpty ? "None yet" : profile.instruments.joined(separator: ", "),
+                           muted: profile.instruments.isEmpty)
+                    KitRow("Location", value: place.isEmpty ? "Not provided" : place, muted: place.isEmpty)
+                }
+                KitGroup(title: "Account") {
+                    if let user { KitRow("Username", value: user.username) }
+                    if let email = user?.email { KitRow("Email", value: email) }
+                    KitRow("Time zone", value: shortZone(p))
+                }
+                KitGroup {
+                    if user?.isSystemAdmin == true {
+                        Button { Task { await openWeb("/admin", needsSignIn: true) } } label: {
+                            KitRow(label: "Admin") { WebMark(busy: opening == "/admin") }
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(opening != nil)
+                        .accessibilityIdentifier("me.admin")
                     }
+                    Button { Task { await openWeb("/help", needsSignIn: false) } } label: {
+                        KitRow(label: "Help") { WebMark(busy: opening == "/help") }
+                    }
+                    .buttonStyle(.plain)
                     .disabled(opening != nil)
-                    .accessibilityIdentifier("me.admin")
-                }
-                Button { Task { await openWeb("/help", needsSignIn: false) } } label: {
-                    WebRow(title: "Help", busy: opening == "/help")
-                }
-                .disabled(opening != nil)
-                .accessibilityIdentifier("me.help")
-            } footer: {
-                if user?.isSystemAdmin == true { Text("Admin opens the web, signed in.") }
-            }
-            Section {
-                Button("Sign out", role: .destructive) { confirmSignOut = true }
+                    .accessibilityIdentifier("me.help")
+                    Button { confirmSignOut = true } label: {
+                        KitRow(label: "Log Out", labelColor: CeolTokens.danger) { EmptyView() }
+                    }
+                    .buttonStyle(.plain)
                     .accessibilityIdentifier("me.signout")
-            }
-            // Last, and on its own. Not offered to system admins, whom the server
-            // refuses: removing an admin is another admin's decision.
-            if let user, let email = user.email, !user.isSystemAdmin {
-                Section {
-                    Button("Delete Account", role: .destructive) { deleting = true }
-                        .accessibilityIdentifier("me.delete")
+                    .accessibilityLabel("Sign out")
                 }
-                .sheet(isPresented: $deleting) { DeleteAccountView(email: email) }
+                // Last, and on its own. Not offered to system admins, whom the server
+                // refuses: removing an admin is another admin's decision.
+                if let user, let email = user.email, !user.isSystemAdmin {
+                    KitGroup {
+                        Button { deleting = true } label: {
+                            KitRow(label: "Delete Account", labelColor: CeolTokens.danger) { EmptyView() }
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("me.delete")
+                    }
+                    .sheet(isPresented: $deleting) { DeleteAccountView(email: email) }
+                }
             }
+            .padding(20)
         }
         .refreshable { await load() }
     }
+
+    /// "US Central" from the option "US Central (UTC-05:00)", as the web's row shows it.
+    private func shortZone(_ p: Profile) -> String {
+        let label = p.timezoneOptions.first { $0.value == p.profile.timezone }?.label ?? p.profile.timezone
+        return label.components(separatedBy: " (").first ?? label
+    }
 }
 
-/// A row that leaves the app for a page on the web.
-private struct WebRow: View {
-    let title: String
-    var busy = false
+/// Opens on the web: a Safari mark, or a spinner while the link is made.
+private struct WebMark: View {
+    let busy: Bool
 
     var body: some View {
-        HStack {
-            Text(title).foregroundStyle(CeolTokens.textColor)
-            Spacer()
-            if busy {
-                ProgressView()
-            } else {
-                Image(systemName: "safari").foregroundStyle(CeolTokens.secondary)
-            }
+        if busy {
+            ProgressView()
+        } else {
+            Image(systemName: "chevron.right").foregroundStyle(CeolTokens.textMuted)
         }
-        .contentShape(Rectangle())
     }
 }

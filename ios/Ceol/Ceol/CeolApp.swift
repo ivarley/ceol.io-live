@@ -11,10 +11,16 @@ import SwiftUI
 struct CeolApp: App {
     @State private var model = AppModel()
 
+    init() {
+        CeolFont.register()
+        CeolAppearance.apply()
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environment(model)
+                .font(.ceol())
                 // Universal Links (applinks:ceol.io) and any URL the app is opened with.
                 .onOpenURL { url in Task { await model.open(url) } }
         }

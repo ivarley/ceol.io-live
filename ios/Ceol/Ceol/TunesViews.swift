@@ -48,14 +48,9 @@ struct TunesView: View {
     var body: some View {
         NavigationStack {
             Loaded(state: state, retry: load) { payload in list(payload) }
-                .ceolBackground()
-                .navigationTitle("Tunes")
-                .searchable(text: $search, prompt: "Name, notes, or notes like GED BED")
-                .searchFocused($searching)
+                .background(CeolTokens.bgColor)
+                .ceolRootBar("Tunes")
                 .task(id: search) { await searchCatalogue() }
-                .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) { typeMenu }
-                }
                 // The search keyboard would otherwise stay up over the sheet.
                 .onChange(of: open) { _, tune in if tune != nil { searching = false } }
                 .sheet(item: $open) { TuneSheet(tune: $0) { Task { await load() } } }
@@ -65,17 +60,6 @@ struct TunesView: View {
                 } message: {
                     Text(failure ?? "")
                 }
-        }
-    }
-
-    private var typeMenu: some View {
-        Menu {
-            Picker("Tune type", selection: $type) {
-                Text("All tune types").tag(String?.none)
-                ForEach(types, id: \.self) { Text($0).tag(Optional($0)) }
-            }
-        } label: {
-            Label(type ?? "All types", systemImage: "line.3.horizontal.decrease.circle")
         }
     }
 
@@ -127,61 +111,82 @@ struct TunesView: View {
         // Less any you added since the search ran.
         let catalogue = catalogue.filter { byID[$0.tuneId] == nil }
         List {
-            Section {
+            VStack(alignment: .leading, spacing: 10) {
+                // The web's toolbar: search (your list, then the catalogue below it),
+                // the type filter, and + to find a tune to add, which is the same search.
+                SearchRow(
+                    text: $search, prompt: "Search", fieldID: "tunes.search", filterActive: type != nil,
+                    filterMenu: {
+                        Picker("Tune type", selection: $type) {
+                            Text("All tune types").tag(String?.none)
+                            ForEach(types, id: \.self) { Text($0).tag(Optional($0)) }
+                        }
+                    },
+                    onAdd: { searching = true }, addID: "tunes.add", addLabel: "Find a tune to add",
+                    focused: $searching)
                 Picker("Status", selection: $status) {
                     ForEach(MyTunesRules.Status.allCases, id: \.self) { Text($0.label).tag(Optional($0)) }
                     Text("All").tag(MyTunesRules.Status?.none)
                 }
                 .pickerStyle(.segmented)
-                .listRowBackground(Color.clear)
-            }
-            Section {
-                ForEach(shown, id: \.tuneID) { e in
-                    let t = byID[e.tuneID]
-                    Button {
-                        open = TuneRef(
-                            id: e.tuneID, name: e.name, type: e.type, status: e.status, heardCount: t?.heardCount,
-                            notes: e.notes)
-                    } label: {
-                        TuneRow(name: e.name, type: e.type, status: e.status)
-                    }
-                    .buttonStyle(.plain)
-                    .swipeActions(edge: .leading) {
-                        // The web's swipe: one more hearing of a tune you want to learn.
-                        if e.status == MyTunesRules.Status.wantToLearn.rawValue {
-                            Button("Heard it") { Task { await heard(e.tuneID, count: (t?.heardCount ?? 0) + 1) } }
-                                .tint(CeolTokens.primaryFill)
-                        }
-                    }
-                }
-            } header: {
                 Text(MyTunesRules.countText(shown: shown.count, total: payload.tunes.count))
-            } footer: {
-                if shown.isEmpty && catalogue.isEmpty {
-                    Text(search.isEmpty ? "No tunes here yet." : "None of your tunes match.")
+                    .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
+            }
+            .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 6, trailing: 16))
+            .listRowBackground(CeolTokens.bgColor)
+            .listRowSeparator(.hidden)
+            ForEach(shown, id: \.tuneID) { e in
+                let t = byID[e.tuneID]
+                Button {
+                    open = TuneRef(
+                        id: e.tuneID, name: e.name, type: e.type, status: e.status, heardCount: t?.heardCount,
+                        notes: e.notes)
+                } label: {
+                    TuneRow(name: e.name, type: e.type, status: e.status)
                 }
+                .buttonStyle(.plain)
+                .ceolRow()
+                .swipeActions(edge: .leading) {
+                    // The web's swipe: one more hearing of a tune you want to learn.
+                    if e.status == MyTunesRules.Status.wantToLearn.rawValue {
+                        Button("Heard it") { Task { await heard(e.tuneID, count: (t?.heardCount ?? 0) + 1) } }
+                            .tint(CeolTokens.primaryFill)
+                    }
+                }
+            }
+            if shown.isEmpty && catalogue.isEmpty {
+                Text(search.isEmpty ? "No tunes here yet." : "None of your tunes match.")
+                    .font(.ceol(size: 16)).foregroundStyle(CeolTokens.textMuted)
+                    .listRowBackground(CeolTokens.bgColor).listRowSeparator(.hidden)
             }
             if !catalogue.isEmpty || catalogueFailed {
-                Section("Not on your list") {
-                    if catalogueFailed {
-                        Text("Couldn't search the catalogue.").foregroundStyle(CeolTokens.secondary)
+                Text("Not on your list").font(.ceol(size: 13, weight: .semibold)).textCase(.uppercase).tracking(0.8)
+                    .foregroundStyle(CeolTokens.textMuted)
+                    .listRowInsets(EdgeInsets(top: 22, leading: 16, bottom: 6, trailing: 16))
+                    .listRowBackground(CeolTokens.bgColor)
+                    .accessibilityAddTraits(.isHeader)
+                    .accessibilityLabel("Not on your list")
+                if catalogueFailed {
+                    Text("Couldn't search the catalogue.").foregroundStyle(CeolTokens.textMuted).ceolRow()
+                }
+                ForEach(catalogue, id: \.tuneId) { r in
+                    Button {
+                        open = TuneRef(id: r.tuneId, name: r.name, type: r.tuneType)
+                    } label: {
+                        TuneRow(name: r.name, type: r.tuneType, status: nil, note: r.abcOnly ? "♪ notes match" : nil)
                     }
-                    ForEach(catalogue, id: \.tuneId) { r in
-                        Button {
-                            open = TuneRef(id: r.tuneId, name: r.name, type: r.tuneType)
-                        } label: {
-                            TuneRow(name: r.name, type: r.tuneType, status: nil, note: r.abcOnly ? "♪ notes match" : nil)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("catalogue.row")
-                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("catalogue.row")
+                    .ceolRow()
                 }
             }
         }
+        .ceolPlainList()
         .refreshable { await load() }
     }
 }
 
+/// A tune in a list, as the web's phone row: the status glyph, the name, the type chip.
 private struct TuneRow: View {
     let name: String
     let type: String?
@@ -190,39 +195,16 @@ private struct TuneRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            if let status { StatusBadge(status: status) }
+            if let status { StatusGlyph(status: status) }
             VStack(alignment: .leading, spacing: 2) {
-                Text(name).foregroundStyle(CeolTokens.textColor)
-                if let note { Text(note).font(.caption).foregroundStyle(CeolTokens.warning) }
+                Text(name).font(.ceol(size: 19, weight: .medium)).foregroundStyle(CeolTokens.textColor).lineLimit(1)
+                if let note { Text(note).font(.ceol(size: 12)).foregroundStyle(CeolTokens.warning) }
             }
-            Spacer()
-            if let type {
-                Text(type).font(.caption).padding(.horizontal, 6).padding(.vertical, 2)
-                    .background(CeolTokens.primaryFill, in: RoundedRectangle(cornerRadius: 3))
-                    .foregroundStyle(.white)
-            }
+            Spacer(minLength: 6)
+            if let type { TypeChip(label: type, size: 15) }
         }
+        .padding(.vertical, 3)
         .contentShape(Rectangle())
-    }
-}
-
-/// The learn-status badge, in the web's colours (want to learn blue, learning yellow,
-/// learned green) and words.
-struct StatusBadge: View {
-    let status: String
-
-    var body: some View {
-        let (bg, fg): (Color, Color) =
-            switch status {
-            case "learning": (Color(red: 0.29, green: 0.25, blue: 0.12), Color(red: 1, green: 0.92, blue: 0.65))
-            case "learned": (Color(red: 0.12, green: 0.29, blue: 0.18), Color(red: 0.76, green: 0.9, blue: 0.8))
-            default: (Color(red: 0.12, green: 0.23, blue: 0.29), Color(red: 0.8, green: 0.9, blue: 1))
-            }
-        Text(MyTunesRules.Status(rawValue: status)?.label ?? status)
-            .font(.caption.weight(.medium))
-            .padding(.horizontal, 8).padding(.vertical, 3)
-            .background(bg, in: Capsule())
-            .foregroundStyle(fg)
     }
 }
 
@@ -253,10 +235,13 @@ struct TuneSheet: View {
     var body: some View {
         NavigationStack {
             Loaded(state: detail, retry: load) { d in content(d.sessionTune) }
-                .ceolBackground()
+                .background(CeolTokens.bgColor)
                 .navigationTitle(tune.name)
                 .navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+                .toolbar {
+                    ToolbarItem(placement: .principal) { Color.clear.frame(width: 1, height: 1) }
+                    ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+                }
                 .task {
                     status = tune.status
                     heard = tune.heardCount ?? 0
@@ -320,50 +305,62 @@ struct TuneSheet: View {
         }
     }
 
-    /// Your list: the status, the heard count while you want to learn it, notes, and
-    /// Remove. Or, for a tune not on it, Add with a status.
+    /// Your list, in the web's green panel: "This tune is on your list as" and the three
+    /// statuses as buttons, the heard count while you want to learn it; or, for a tune
+    /// not on it, the three ways to add it.
     @ViewBuilder private var yourList: some View {
-        if let current = status.flatMap(MyTunesRules.Status.init(rawValue:)) {
-            Section {
-                Picker("Status", selection: Binding(get: { current }, set: { new in Task { await setStatus(new) } })) {
-                    ForEach(MyTunesRules.Status.allCases, id: \.self) { Text($0.label).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .accessibilityIdentifier("sheet.status")
-                if current == .wantToLearn {
-                    Stepper(value: Binding(get: { heard }, set: { n in Task { await setHeard(n) } }), in: 0...999) {
-                        LabeledContent("Heard it", value: heard == 1 ? "once" : "\(heard) times")
+        let current = status.flatMap(MyTunesRules.Status.init(rawValue:))
+        VStack(spacing: 14) {
+            Text(current == nil ? "Add this tune to your list as" : "This tune is on your list as")
+                .font(.ceol(size: 17)).foregroundStyle(CeolTokens.textColor)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: 0) {
+                ForEach(MyTunesRules.Status.allCases, id: \.self) { s in
+                    let on = s == current
+                    Button {
+                        Task { if current == nil { await add(s) } else if !on { await setStatus(s) } }
+                    } label: {
+                        Text(s.label).font(.ceol(size: 16, weight: on ? .semibold : .medium))
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity, minHeight: 42)
+                            .background(on ? CeolTokens.primaryFill : .clear)
+                            .contentShape(Rectangle())
                     }
-                    .accessibilityIdentifier("sheet.heard")
+                    .buttonStyle(.plain)
+                    .disabled(busy)
+                    .accessibilityIdentifier(current == nil ? "sheet.add.\(s.rawValue)" : "sheet.status.\(s.rawValue)")
+                    .accessibilityAddTraits(on ? .isSelected : [])
+                    if s != MyTunesRules.Status.allCases.last { Rectangle().fill(.white.opacity(0.5)).frame(width: 1) }
                 }
-                TextField("Notes", text: $notes, axis: .vertical)
-                    .lineLimit(1...6)
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.white.opacity(0.6), lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+            if current == .wantToLearn {
+                Stepper(value: Binding(get: { heard }, set: { n in Task { await setHeard(n) } }), in: 0...999) {
+                    Text("Heard it \(heard == 1 ? "once" : "\(heard) times")").font(.ceol(size: 16)).foregroundStyle(.white)
+                }
+                .accessibilityIdentifier("sheet.heard")
+            }
+            if let failure { Text(failure).font(.ceol(size: 13)).foregroundStyle(.white) }
+        }
+        .padding(16)
+        // The web's panel colour (the tune drawer's "My List" box).
+        .background(Color(red: 0.13, green: 0.29, blue: 0.19), in: RoundedRectangle(cornerRadius: 8))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("sheet.status")
+        if current != nil {
+            VStack(alignment: .trailing, spacing: 6) {
+                TextField("", text: $notes, prompt: Text("Notes").foregroundStyle(CeolTokens.textMuted), axis: .vertical)
+                    .font(.ceol(size: 17))
+                    .lineLimit(3...8)
+                    .padding(12)
+                    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(CeolTokens.borderColor, lineWidth: 1))
                     .accessibilityIdentifier("sheet.notes")
                 if notes != savedNotes {
-                    Button("Save notes") { Task { await saveNotes() } }.disabled(busy)
+                    Button("Save notes") { Task { await saveNotes() } }
+                        .font(.ceol(size: 15, weight: .medium)).foregroundStyle(CeolTokens.primary).disabled(busy)
                 }
-            } header: {
-                Text("On your list")
-            } footer: {
-                if let failure { Text(failure).foregroundStyle(CeolTokens.danger) }
-            }
-        } else {
-            Section {
-                Menu {
-                    ForEach(MyTunesRules.Status.allCases, id: \.self) { s in
-                        Button(s.label) { Task { await add(s) } }
-                            .accessibilityIdentifier("sheet.add.\(s.rawValue)")
-                    }
-                } label: {
-                    // The whole row, not just the words, opens the menu.
-                    Label("Add to my tunes", systemImage: "plus.circle")
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle())
-                }
-                .disabled(busy)
-                .accessibilityIdentifier("sheet.add")
-            } footer: {
-                if let failure { Text(failure).foregroundStyle(CeolTokens.danger) }
             }
         }
     }
@@ -404,53 +401,98 @@ struct TuneSheet: View {
     }
 
     @ViewBuilder private func content(_ t: Components.Schemas.TuneDetail.SessionTunePayload) -> some View {
-        List {
-            Section {
-                Text([t.tuneType, t.settingKey].compactMap { $0 }.joined(separator: " · "))
-                    .foregroundStyle(CeolTokens.secondary)
-            }
-            yourList
-            Section {
-                if let image = showFull ? (full ?? incipit) : incipit {
-                    Image(uiImage: image)
-                        .resizable().scaledToFit()
-                        .background(Color.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
-                        .accessibilityLabel("Notation for \(t.tuneName)")
-                } else if notationFailed {
-                    Text("Couldn't draw the notation just now.").foregroundStyle(CeolTokens.secondary)
-                } else if t.incipitAbc == nil && t.abc == nil {
-                    Text("No notation for this tune yet.").foregroundStyle(CeolTokens.secondary)
-                } else {
-                    ProgressView()
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                // The web's header: the type chip beside the name, the key under it.
+                HStack(spacing: 12) {
+                    if let type = t.tuneType { TypeChip(label: type, size: 16) }
+                    Text(t.tuneName).font(.ceol(size: 26, weight: .semibold, relativeTo: .title)).foregroundStyle(CeolTokens.textColor)
                 }
-                if t.abc != nil {
-                    Toggle("Whole tune", isOn: $showFull)
-                        .onChange(of: showFull) { _, on in if on { Task { await loadFull(t) } } }
+                notation(t)
+                yourList
+                VStack(spacing: 0) {
+                    stat("At sessions on Ceol", t.globalPlayCount)
+                    Hairline()
+                    stat("Sessions that play it", t.sessionCount)
+                    if let books = t.tunebookCount {
+                        Hairline()
+                        stat("TheSession.org tunebooks", books)
+                    }
+                    if let key = t.settingKey {
+                        Hairline()
+                        HStack { Text("Key"); Spacer(); Text(key).foregroundStyle(CeolTokens.textMuted) }
+                            .font(.ceol(size: 16)).padding(.vertical, 12)
+                    }
                 }
-            } header: {
-                Text("Notation")
-            }
-            Section("Played") {
-                LabeledContent("At sessions on Ceol", value: "\(t.globalPlayCount)")
-                LabeledContent("Sessions that play it", value: "\(t.sessionCount)")
-                if let books = t.tunebookCount {
-                    LabeledContent("TheSession.org tunebooks", value: "\(books)")
+                .padding(.horizontal, 16)
+                .background(CeolTokens.headerBg, in: RoundedRectangle(cornerRadius: 10))
+                if let aliases = t.aliases, !aliases.isEmpty {
+                    (Text("Also called: ").font(.ceol(size: 15, weight: .semibold)) + Text(aliases.joined(separator: ", ")).font(.ceol(size: 15)))
+                        .foregroundStyle(CeolTokens.textMuted)
+                }
+                HStack {
+                    Link("TheSession.org", destination: URL(string: "https://thesession.org/tunes/\(t.tuneId)")!)
+                        .font(.ceol(size: 16)).foregroundStyle(CeolTokens.primary)
+                    Spacer()
+                    if status != nil {
+                        Button("Remove From My Tunes") { confirmRemove = true }
+                            .font(.ceol(size: 16)).foregroundStyle(CeolTokens.textMuted)
+                            .disabled(busy)
+                            .accessibilityIdentifier("sheet.remove")
+                    }
                 }
             }
-            if let aliases = t.aliases, !aliases.isEmpty {
-                Section("Also called") { ForEach(aliases, id: \.self) { Text($0) } }
+            .padding(20)
+        }
+    }
+
+    private func stat(_ label: String, _ value: Int) -> some View {
+        HStack { Text(label); Spacer(); Text("\(value)").foregroundStyle(CeolTokens.textMuted) }
+            .font(.ceol(size: 16)).padding(.vertical, 12)
+    }
+
+    /// The notation card: white, the opening bars or the whole tune, and the switch
+    /// between them underneath, as the web's notes tab.
+    @ViewBuilder private func notation(_ t: Components.Schemas.TuneDetail.SessionTunePayload) -> some View {
+        VStack(spacing: 10) {
+            if let image = showFull ? (full ?? incipit) : incipit {
+                Image(uiImage: image)
+                    .resizable().scaledToFit()
+                    .padding(6)
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 6))
+                    .accessibilityLabel("Notation for \(t.tuneName)")
+            } else if notationFailed {
+                Text("Couldn't draw the notation just now.").font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
+            } else if t.incipitAbc == nil && t.abc == nil {
+                Text("No notation for this tune yet.").font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
+            } else {
+                ProgressView().frame(height: 80)
             }
-            Section {
-                Link("View on TheSession.org", destination: URL(string: "https://thesession.org/tunes/\(t.tuneId)")!)
-            }
-            if status != nil {
-                Section {
-                    Button("Remove from my tunes", role: .destructive) { confirmRemove = true }
-                        .disabled(busy)
-                        .accessibilityIdentifier("sheet.remove")
+            if t.abc != nil {
+                HStack(spacing: 22) {
+                    notationTab("Opening bars", on: !showFull) { showFull = false }
+                    notationTab("Whole tune", on: showFull) {
+                        showFull = true
+                        Task { await loadFull(t) }
+                    }
+                    Spacer()
                 }
             }
         }
+        .padding(12)
+        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(CeolTokens.borderColor, lineWidth: 1))
+    }
+
+    private func notationTab(_ label: String, on: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Text(label).font(.ceol(size: 15, weight: on ? .semibold : .regular))
+                    .foregroundStyle(on ? CeolTokens.textColor : CeolTokens.textMuted)
+                Rectangle().fill(on ? CeolTokens.primary : .clear).frame(height: 2)
+            }
+            .fixedSize()
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
     }
 }

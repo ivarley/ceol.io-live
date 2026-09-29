@@ -621,11 +621,16 @@ components:
         confidence: { type: [string, "null"] }
         deleted: { type: boolean }
         started_by_person_id: { type: [integer, "null"] }
+        # Who started the set, as the log shows it ("Sarah O").
+        started_by_name: { type: [string, "null"] }
         key_override: { type: [string, "null"] }
         setting_override: { type: [integer, "null"] }
         tune_type: { type: [string, "null"] }
         logged_at: { $ref: "#/components/schemas/DateTimeOrNull" }
         logged_by_person_id: { type: [integer, "null"] }
+        # Who logged it, and their colour in the log.
+        logged_by: { type: [string, "null"] }
+        logged_by_color: { type: [string, "null"] }
     LiveBootstrap:
       type: object
       required: [success, session_instance_id, can_edit, current_person, session_timezone, session_id,

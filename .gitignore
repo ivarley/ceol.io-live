@@ -171,3 +171,4 @@ ios/CeolKit/.swiftpm/
 
 # iOS build output from `make ios-test` / `make ios-build`
 ios/.derived/
+ios/.derived-release/

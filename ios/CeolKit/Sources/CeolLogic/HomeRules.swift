@@ -175,11 +175,15 @@ public enum HomeRules {
         /// Unique across both kinds (their id spaces overlap).
         public var id: String
         public var title: String
+        /// The night's date, for the row's date block.
+        public var date: String
         public var detail: String
         public var lastEdit: String?
         /// The web path it opens: a night's log, or the recording segmenter.
         public var path: String
         public var sessionPath: String
+        /// The night a log item opens in the app; nil for a recording.
+        public var sessionInstanceID: Int? = nil
     }
 
     public struct UnfinishedLog: Sendable {
@@ -195,9 +199,12 @@ public enum HomeRules {
 
     public struct UnfinishedRecording: Sendable {
         public var recordingID: Int, label: String?, name: String, path: String, lastEdit: String?, placed: Int, tuneCount: Int
+        public var date: String = ""
         public init(
-            recordingID: Int, label: String?, name: String, path: String, lastEdit: String?, placed: Int, tuneCount: Int
+            recordingID: Int, label: String?, name: String, path: String, lastEdit: String?, placed: Int, tuneCount: Int,
+            date: String = ""
         ) {
+            self.date = date
             self.recordingID = recordingID
             self.label = label
             self.name = name
@@ -214,14 +221,14 @@ public enum HomeRules {
     ) -> [ContinueItem] {
         let l = logs.map {
             ContinueItem(
-                kind: .log, id: "log-\($0.sessionInstanceID)", title: "Finish logging \($0.name)",
+                kind: .log, id: "log-\($0.sessionInstanceID)", title: "Finish logging \($0.name)", date: $0.date,
                 detail: shortDate($0.date, currentYear: currentYear), lastEdit: $0.lastEdit,
-                path: "/sessions/\($0.path)/\($0.date)", sessionPath: $0.path)
+                path: "/sessions/\($0.path)/\($0.date)", sessionPath: $0.path, sessionInstanceID: $0.sessionInstanceID)
         }
         let r = recordings.map {
             ContinueItem(
                 kind: .recording, id: "rec-\($0.recordingID)",
-                title: "Place tunes on \(($0.label?.isEmpty == false ? $0.label : nil) ?? $0.name)",
+                title: "Place tunes on \(($0.label?.isEmpty == false ? $0.label : nil) ?? $0.name)", date: $0.date,
                 detail: "\($0.placed) of \($0.tuneCount) tunes placed", lastEdit: $0.lastEdit,
                 path: "/admin/recordings/\($0.recordingID)/segment", sessionPath: $0.path)
         }

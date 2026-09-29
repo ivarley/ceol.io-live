@@ -21,6 +21,8 @@ final class AppModel {
 
     private(set) var phase: Phase = .launching
     private(set) var user: User?
+    /// The tab on screen; a screen can move you to another (Home's "See all" -> Tunes).
+    var tab: AppTab = .home
     /// Why an emailed link didn't sign you in, for the sign-in screen to show.
     var linkError: String?
     /// A plain notice for the sign-in screen (e.g. after deleting the account).

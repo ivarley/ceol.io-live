@@ -2,8 +2,8 @@
 // does them (spec 034):
 //   - not yours yet: "Do you attend this session?", local or just visiting. Joining lands
 //     you unconfirmed; a session admin confirms you before you see its people.
-//   - yours: your role (Member / Visitor, or Admin), a sheet to change member/visitor,
-//     and Leave, confirmed. What you logged there stays either way.
+//   - yours: your role (Member / Visitor, or Admin) as a pill on the session's info
+//     card, opening a sheet to change member/visitor and to Leave, confirmed. What you logged there stays either way.
 //   - Add a night: anyone signed in may, as on the web. It opens on the date and times
 //     the session's recurrence suggests, and goes to the new night when added.
 
@@ -22,50 +22,39 @@ private func refusal(_ error: Components.Responses._Error) -> String? {
 
 private let unreachable = "Couldn't reach Ceol, so nothing changed. Check your connection and try again."
 
-// MARK: - Joining, and your role
+// MARK: - Joining
 
-struct MembershipSection: View {
+/// The web's join prompt (sessionpage/SessionJoin.svelte), for a signed-in person who
+/// doesn't belong: "Do you attend this session? Yes, Add Me", then local or visiting.
+/// Once you belong, your role is the pill on the session's info card.
+struct JoinPrompt: View {
     @Environment(AppModel.self) private var model
     let path: String
     let permissions: SessionDetailPayload.PermissionsPayload
-    /// Reload the session after a change: membership decides much of the page.
+    /// Reload the session after joining: membership decides much of the page.
     let onChange: () async -> Void
-    /// Open the role sheet. The session screen presents it: a sheet hung on a Section
-    /// inside a List doesn't reliably appear.
-    let onEditRole: () -> Void
 
     @State private var asking = false
     @State private var busy = false
     @State private var failure: String?
-    @State private var joined = false
 
     var body: some View {
-        if let relationship = permissions.relationship {
-            Section {
-                Button { onEditRole() } label: {
-                    HStack {
-                        Text("You're").foregroundStyle(CeolTokens.textColor)
-                        Spacer()
-                        Text(roleLabel(relationship)).foregroundStyle(CeolTokens.secondary)
-                        Image(systemName: "chevron.right").font(.footnote).foregroundStyle(CeolTokens.secondary)
-                    }
-                    .contentShape(Rectangle())
+        if permissions.relationship == nil && permissions.isLoggedIn {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Text("Do you attend this session?").font(.ceol(size: 16)).foregroundStyle(CeolTokens.textColor)
+                    Button(busy ? "Adding…" : "Yes, Add Me") { asking = true }
+                        .font(.ceol(size: 16, weight: .semibold))
+                        .foregroundStyle(CeolTokens.primary)
+                        .disabled(busy)
+                        .accessibilityIdentifier("session.join")
                 }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("session.role")
-            } footer: {
-                if joined || !permissions.isConfirmed {
-                    Text("A session admin can confirm you to show you who else plays here.")
-                }
+                if let failure { Text(failure).font(.ceol(size: 13)).foregroundStyle(CeolTokens.danger) }
             }
-        } else if permissions.isLoggedIn {
-            Section {
-                Button(busy ? "Adding…" : "Do you attend this session? Yes, add me") { asking = true }
-                    .disabled(busy)
-                    .accessibilityIdentifier("session.join")
-            } footer: {
-                if let failure { Text(failure).foregroundStyle(CeolTokens.danger) }
-            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(CeolTokens.hoverBg, in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(CeolTokens.borderColor, lineWidth: 1))
             .confirmationDialog("Are you a local, or just visiting?", isPresented: $asking, titleVisibility: .visible) {
                 Button("I'm local") { Task { await join(.member) } }
                 Button("Just visiting") { Task { await join(.visitor) } }
@@ -73,11 +62,6 @@ struct MembershipSection: View {
                 Text("Local: one of your sessions, so its tunes count towards your stats. Visiting: a record that you came.")
             }
         }
-    }
-
-    private func roleLabel(_ relationship: String) -> String {
-        if permissions.isSessionAdmin { return "Admin" }
-        return relationship == "visitor" ? "Visitor" : "Member"
     }
 
     private func join(_ relationship: Relationship) async {
@@ -89,7 +73,6 @@ struct MembershipSection: View {
                 path: .init(sessionPath: path), body: .json(.init(relationship: relationship)))
             {
             case .ok:
-                joined = true
                 await onChange()
             case .default(_, let error):
                 failure = refusal(error) ?? "Couldn't add you to this session. Try again."
@@ -134,7 +117,7 @@ struct RoleSheet: View {
                     )
                 }
                 if isAdmin {
-                    Section { Text("You're an admin here. That doesn't change either way.").foregroundStyle(CeolTokens.secondary) }
+                    Section { Text("You're an admin here. That doesn't change either way.").foregroundStyle(CeolTokens.textMuted) }
                 }
                 Section {
                     Button("Leave this session", role: .destructive) { confirmLeave = true }

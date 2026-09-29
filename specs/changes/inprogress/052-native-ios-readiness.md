@@ -1746,3 +1746,17 @@ The plan (Phases 0-6) runs from here in `ios/`; see `ios/README.md` for the layo
     check-existing-session a `name` it never read, and a mocked create that was always
     refused, passed only because failures were 200s; they now test what the endpoints do.
 - **Phase 4 DONE 2026-09-28.** Next: Phase 5, the live logger.
+- **The web's look, in the app (2026-09-28).** The first TestFlight build looked like a
+  stock iOS app. Now: Poppins (bundled, OFL) everywhere; the web's muted grey (#888) in
+  place of the bluish `secondary`; the "ceol" wordmark on a header-coloured top bar, no
+  large titles; the web's flat tab bar in logo green with its own icons (the C, and the
+  nav_icons.html strokes), drawn over a TabView whose system bar is hidden, since iOS
+  26's glass bar takes no colours; edge-to-edge list rows; green selected segments. A
+  small kit in `ios/Ceol/Ceol/CeolStyle.swift` mirrors frontend/src/lib: TypeChip, Pill,
+  SectionHeading, DateBlock, StatusGlyph, UnderlineTabs, SetCard, CountBox,
+  InitialsAvatar, SearchRow, KitGroup/KitRow. Every screen was redrawn against a phone
+  screenshot of its web twin. Found on the way: the contract's `LiveRecord` omitted
+  `started_by_name`, `logged_by` and `logged_by_color`, so the generated type dropped
+  them (the set starter was missing from the night); Phase 5 must not decode records
+  through a type that can drop fields. Home's "Pick up" items lost their date in the
+  Swift port; both fixed.

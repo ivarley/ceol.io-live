@@ -47,10 +47,10 @@ struct UpgradeRequiredView: View {
     var body: some View {
         VStack(spacing: 16) {
             Image(systemName: "arrow.down.app").font(.system(size: 56)).foregroundStyle(CeolTokens.primary)
-            Text("Time to update").font(.title2.bold())
+            Text("Time to update").font(.ceol(.title2, weight: .semibold))
             Text("This version of Ceol is too old to talk to the server. Update it from the App Store to carry on.")
                 .multilineTextAlignment(.center)
-                .foregroundStyle(CeolTokens.secondary)
+                .foregroundStyle(CeolTokens.textMuted)
         }
         .padding(32)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -60,29 +60,76 @@ struct UpgradeRequiredView: View {
 
 /// The four tabs the web's phone tab bar already has (spec 052 §B1): Home, Sessions,
 /// Tunes, Me. Search is not a tab — it is the field at the top of Tunes.
-enum AppTab: Hashable {
+enum AppTab: Hashable, CaseIterable {
     case home, sessions, tunes, me
+
+    var title: String {
+        switch self {
+        case .home: "Home"
+        case .sessions: "Sessions"
+        case .tunes: "Tunes"
+        case .me: "Me"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .home: "TabHome"
+        case .sessions: "TabSessions"
+        case .tunes: "TabTunes"
+        case .me: "TabMe"
+        }
+    }
 }
 
+/// The tabs, under the web's own tab bar (templates/tab_bar.html, css/tab_bar.css): a
+/// flat strip, every tab in the logo's green and the current one in the full accent.
+/// The system TabView keeps each tab's state and shows only the current one; its own
+/// bar is hidden (iOS 26's glass bar takes no colours) and this one is drawn instead.
+/// Every screen hides the system bar through ceolRootBar / ceolPushedBar.
 struct MainTabView: View {
-    @State private var selection: AppTab = .home
+    @Environment(AppModel.self) private var model
 
     var body: some View {
-        TabView(selection: $selection) {
-            Tab("Home", systemImage: "house", value: AppTab.home) {
-                HomeView()
-            }
-            Tab("Sessions", systemImage: "calendar", value: AppTab.sessions) {
-                SessionsView()
-            }
-            Tab("Tunes", systemImage: "music.note.list", value: AppTab.tunes) {
-                TunesView()
-            }
-            Tab("Me", systemImage: "person.crop.circle", value: AppTab.me) {
-                MeView()
+        @Bindable var model = model
+        TabView(selection: $model.tab) {
+            Tab(value: AppTab.home) { HomeView() }
+            Tab(value: AppTab.sessions) { SessionsView() }
+            Tab(value: AppTab.tunes) { TunesView() }
+            Tab(value: AppTab.me) { MeView() }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) { CeolTabBar() }
+        .tint(CeolTokens.primary)
+    }
+}
+
+struct CeolTabBar: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(AppTab.allCases, id: \.self) { tab in
+                let on = model.tab == tab
+                Button {
+                    model.tab = tab
+                } label: {
+                    VStack(spacing: 3) {
+                        Image(tab.icon).renderingMode(.template).resizable().scaledToFit().frame(width: 24, height: 24)
+                        Text(tab.title).font(.ceol(size: 11, weight: on ? .semibold : .medium, relativeTo: .caption2))
+                    }
+                    .foregroundStyle(on ? CeolTokens.primary : CeolTokens.logoGreenSoft)
+                    .frame(maxWidth: .infinity, minHeight: 50)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("tab.\(tab.title.lowercased())")
+                .accessibilityLabel(tab.title)
+                .accessibilityAddTraits(on ? [.isSelected, .isButton] : .isButton)
             }
         }
-        .tint(CeolTokens.primary)
+        .padding(.top, 6)
+        .background(CeolTokens.bgColor.ignoresSafeArea(edges: .bottom))
+        .overlay(alignment: .top) { Rectangle().fill(CeolTokens.borderColor).frame(height: 1) }
     }
 }
 
@@ -94,8 +141,8 @@ struct PlaceholderScreen: View {
     var body: some View {
         NavigationStack {
             Text(detail)
-                .font(.subheadline)
-                .foregroundStyle(CeolTokens.secondary)
+                .font(.ceol(.subheadline))
+                .foregroundStyle(CeolTokens.textMuted)
                 .multilineTextAlignment(.center)
                 .padding()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -129,7 +176,7 @@ struct SplashView: View {
                     .foregroundStyle(.white)
 
                 Text("Irish session tracker")
-                    .font(.headline)
+                    .font(.ceol(.headline))
                     .foregroundStyle(.white.opacity(0.75))
             }
             .opacity(animateIn ? 1 : 0)

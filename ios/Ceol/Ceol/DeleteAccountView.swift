@@ -25,7 +25,7 @@ struct DeleteAccountView: View {
                 Section {
                     Text("This deletes your login, your tune list and instruments, and your contact details, straight away. It can't be undone.")
                     Text("Your name stays on the sessions you were part of, as it would for anyone a session admin adds, and the tunes logged at those sessions stay in their logs.")
-                        .foregroundStyle(CeolTokens.secondary)
+                        .foregroundStyle(CeolTokens.textMuted)
                 }
                 Section {
                     TextField(email, text: $typed)

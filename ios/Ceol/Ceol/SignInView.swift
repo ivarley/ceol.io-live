@@ -55,9 +55,9 @@ struct SignInView: View {
     private var header: some View {
         Section {
             VStack(alignment: .leading, spacing: 6) {
-                Text("Ceol").font(.largeTitle.bold()).foregroundStyle(CeolTokens.primary)
+                Text("Ceol").font(.ceol(.largeTitle, weight: .semibold)).foregroundStyle(CeolTokens.primary)
                 Text("The tunes you know, the sessions you play, and what gets played there.")
-                    .font(.subheadline).foregroundStyle(CeolTokens.secondary)
+                    .font(.ceol(.subheadline)).foregroundStyle(CeolTokens.textMuted)
             }
             .listRowBackground(Color.clear)
         }
@@ -112,10 +112,10 @@ struct SignInView: View {
         Section {
             Label(registration ? "Check your email to create your account" : "Check your email",
                   systemImage: "envelope")
-                .font(.headline)
+                .font(.ceol(.headline))
             Text(message)
             Text("We sent it to \(email). Open the link on this iPhone and it will sign you in here.")
-                .font(.footnote).foregroundStyle(CeolTokens.secondary)
+                .font(.ceol(.footnote)).foregroundStyle(CeolTokens.textMuted)
             Button(resent ? "Sent again." : "Send it again") {
                 Task {
                     await checkEmail(again: email)
