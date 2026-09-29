@@ -42,6 +42,22 @@ final class AppModel {
     /// The streaming service's address, from app-config (fetched once, when a night
     /// first goes live).
     var streamingURL: URL?
+    /// Test hook: every live-logging request fails as if the phone had no signal
+    /// (-CeolStartOffline YES starts that way; -CeolTestHooks YES shows a switch on a night).
+    var simulatedOffline: Bool = {
+        #if DEBUG
+            UserDefaults.standard.bool(forKey: "CeolStartOffline")
+        #else
+            false
+        #endif
+    }()
+    static var testHooks: Bool {
+        #if DEBUG
+            UserDefaults.standard.bool(forKey: "CeolTestHooks")
+        #else
+            false
+        #endif
+    }
     /// A night is being logged: the tab bar gives way to the composer.
     var editingNight = false
 
@@ -102,7 +118,10 @@ final class AppModel {
             // Test hooks (UI tests, manual runs): -CeolResetSession YES starts signed out
             // (Keychain items survive a reinstall on the simulator); -CeolOpenURL <url>
             // opens a URL as a tapped link would.
-            if UserDefaults.standard.bool(forKey: "CeolResetSession") { try? auth.store.setToken(nil) }
+            if UserDefaults.standard.bool(forKey: "CeolResetSession") {
+                try? auth.store.setToken(nil)
+                NightStore.clearAll()
+            }
             if let s = UserDefaults.standard.string(forKey: "CeolOpenURL"), let url = URL(string: s) { pendingLink = url }
         #endif
         // An obsolete build is told so before anything else. If the server can't be
@@ -184,12 +203,14 @@ final class AppModel {
 
     func signOut() async {
         await auth.logout()
+        NightStore.clearAll()
         user = nil
         phase = .signedOut
     }
 
     /// The account is gone (AuthService.deleteAccount already forgot the token).
     func accountDeleted() {
+        NightStore.clearAll()
         user = nil
         notice = "Your account has been deleted."
         phase = .signedOut

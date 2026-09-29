@@ -12,6 +12,13 @@
 //     full fresh start, as the web's watchdog does.
 //   - A finished log is shown as it is, with no stream (the web's render-only path).
 //
+// Offline (plan Phase 5d), as the web logger (spec 024 §G): the night and its unsent
+// changes are kept on the phone (NightStore). A change that can't be sent waits there,
+// marked "offline" on its row, with every later change queued behind it; when the
+// connection is back (the stream reconnects, a load succeeds, the network returns, the
+// app comes forward) the queue is sent in order. Changes refused then are listed for
+// review. Opening a night without a connection shows the saved copy.
+//
 // Editing (plan Phase 5b): "Edit" reopens the stream with mode=edit (which is what shows
 // you as logging to the others), and each change goes through LiveLog's optimistic
 // pipeline: shown at once, sent one at a time in order, settled by the answer or the
@@ -21,6 +28,7 @@ import CeolAPI
 import CeolLogic
 import CeolSession
 import Foundation
+import Network
 import Observation
 import UIKit
 
@@ -37,7 +45,9 @@ final class NightModel {
     }
 
     let instanceID: Int
-    private(set) var log: LiveLog?
+    private(set) var log: LiveLog? {
+        didSet { if running { scheduleSave() } }
+    }
     /// The night's bootstrap, raw: names, dates, the people settings.
     private(set) var night: JSONValue?
     private(set) var status: Status = .connecting
@@ -80,6 +90,30 @@ final class NightModel {
     /// Likely-next pairings dismissed this visit ("anchor->next").
     var dismissedNext: [String] = []
 
+    /// Offline changes the server refused once they were sent, for review.
+    var review: [ReviewItem]?
+    /// The vocabulary as it came, kept with the saved night.
+    private var knownRaw: JSONValue?
+    private var aliasesRaw: JSONValue?
+    /// The copy on the phone, until the night loads.
+    private var saved: SavedNight?
+    private var stalePaint: Task<Void, Never>?
+    private var saveTask: Task<Void, Never>?
+    /// A send failed for want of a connection: new changes queue behind it.
+    private var waitingForNetwork = false
+    private var flushRejects: [ReviewItem] = []
+    private var synced = 0
+    private let path = NWPathMonitor()
+
+    struct ReviewItem: Identifiable, Equatable {
+        let id = UUID()
+        let what: String
+        let why: String
+    }
+
+    /// Changes waiting on the phone for a connection.
+    var queuedCount: Int { log?.queuedCount ?? 0 }
+
     let app: AppModel
     /// Ops waiting to go, in order.
     private var outbox: [String] = []
@@ -100,10 +134,35 @@ final class NightModel {
     /// Load the night and, unless it's finished, go live.
     func start() async {
         running = true
+        path.pathUpdateHandler = { [weak self] p in
+            guard p.status == .satisfied else { return }
+            Task { @MainActor in await self?.networkBack() }
+        }
+        path.start(queue: .main)
         await connect()
     }
 
+    /// The phone has a network again: reconnect if we're not live.
+    private func networkBack() async {
+        guard running, status != .live, status != .finished, status != .connecting else { return }
+        await connect()
+    }
+
+    /// Test hook: pretend the phone has lost (or regained) its signal.
+    func setSimulatedOffline(_ on: Bool) {
+        app.simulatedOffline = on
+        if on {
+            stream?.cancel()
+            watchdog?.cancel()
+            status = .offline
+        } else {
+            Task { await connect() }
+        }
+    }
+
     func stop() {
+        saveNow()
+        path.cancel()
         running = false
         if editing { app.editingNight = false }
         stream?.cancel()
@@ -123,9 +182,21 @@ final class NightModel {
     private func connect() async {
         stream?.cancel()
         watchdog?.cancel()
-        if log == nil { status = .connecting }
+        if log == nil {
+            status = .connecting
+            // The copy on the phone: shown if the load is slow (800ms) or can't happen.
+            if saved == nil, let s = NightStore.load(instanceID) {
+                saved = s
+                stalePaint = Task { [weak self] in
+                    try? await Task.sleep(for: .milliseconds(800))
+                    guard let self, !Task.isCancelled, self.log == nil else { return }
+                    self.paintSaved()
+                }
+            }
+        }
         do {
             let b = try await app.getJSON("/api/live/instances/\(instanceID)/bootstrap")
+            stalePaint?.cancel()
             night = b
             let meta: [String: JSONValue] = [
                 "notes": b["notes"] ?? .null, "instance_date": b["instance_date"] ?? .null,
@@ -134,22 +205,72 @@ final class NightModel {
                 "log_complete": b["log_complete"] ?? false,
             ]
             let fresh = LiveLog(records: b["records"]?.arrayValue ?? [], meta: meta, lastEventID: b["last_event_id"]?.intValue ?? 0)
-            // Changes still in flight are laid over the fresh log, not lost.
-            log = log.map { $0.rebased(onto: fresh) } ?? fresh
+            // Changes still in flight, or saved from last time, are laid over the fresh
+            // log, not lost.
+            let wasQueued = queuedCount
+            let base = log ?? saved.map { restoredLog($0.log) }
+            log = base.map { $0.rebased(onto: fresh) } ?? fresh
+            if saved != nil && knownRaw == nil { knownRaw = saved?.knownTunes; aliasesRaw = saved?.knownAliases }
+            saved = nil
+            // (A send in flight owns the queue's head: leave the order to it.)
+            if sender == nil { outbox = log?.sendOrder ?? [] }
             loadError = nil
             failures = 0
             Task { await loadVocabulary() }
+            // Send what waited before listening again, as the web does.
+            if wasQueued > 0 || !outbox.isEmpty { await flush() }
         } catch {
-            if log == nil { loadError = loadFailureMessage(error) }
+            stalePaint?.cancel()
+            if log == nil {
+                if saved != nil { paintSaved() } else { loadError = loadFailureMessage(error) }
+            }
             status = .offline
             retryLater()
             return
         }
-        if log?.meta["log_complete"] == true {
+        if log?.meta["log_complete"] == true && queuedCount == 0 {
             status = .finished
             return
         }
         openStream()
+    }
+
+    /// Show the saved copy: the night, its log with its waiting changes, the vocabulary.
+    private func paintSaved() {
+        guard let s = saved, log == nil else { return }
+        night = s.night
+        log = restoredLog(s.log)
+        knownRaw = s.knownTunes
+        aliasesRaw = s.knownAliases
+        vocab = Composer.buildIndex(known: s.knownTunes?.arrayValue, aliases: s.knownAliases?.arrayValue)
+        outbox = log?.sendOrder ?? []
+        waitingForNetwork = !outbox.isEmpty
+        loadError = nil
+    }
+
+    /// A saved log's unanswered changes are waiting, whatever they were doing when saved.
+    private func restoredLog(_ l: LiveLog) -> LiveLog {
+        var l = l
+        for id in l.sendOrder { l.markQueued(id) }
+        return l
+    }
+
+    // MARK: - Saving
+
+    private func scheduleSave() {
+        saveTask?.cancel()
+        saveTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(800))
+            guard !Task.isCancelled else { return }
+            self?.saveNow()
+        }
+    }
+
+    private func saveNow() {
+        saveTask?.cancel()
+        guard let log, let night else { return }
+        NightStore.save(
+            SavedNight(night: night, log: log, knownTunes: knownRaw, knownAliases: aliasesRaw, savedAt: Date()), instanceID)
     }
 
     private func openStream() {
@@ -159,6 +280,7 @@ final class NightModel {
         stream = Task { [weak self] in
             guard let self else { return }
             do {
+                if self.app.simulatedOffline { throw URLError(.notConnectedToInternet) }
                 let base = try await self.app.streamingBase()
                 let url = base.appending(path: "live/instances/\(self.instanceID)/events")
                     .appending(queryItems: [.init(name: "last_event_id", value: String(from)), .init(name: "mode", value: self.editing ? "edit" : "view")])
@@ -171,6 +293,7 @@ final class NightModel {
                 self.status = .live
                 self.failures = 0
                 self.startWatchdog()
+                Task { await self.flush() }
                 var parser = SSEParser(lastEventID: String(from))
                 for try await byte in bytes {
                     self.lastAlive = Date()
@@ -285,7 +408,10 @@ final class NightModel {
 
     func loadVocabulary() async {
         guard let v = try? await app.getJSON("/api/live/instances/\(instanceID)/vocabulary") else { return }
+        knownRaw = v["known_tunes"]
+        aliasesRaw = v["known_aliases"]
         vocab = Composer.buildIndex(known: v["known_tunes"]?.arrayValue, aliases: v["known_aliases"]?.arrayValue)
+        scheduleSave()
     }
 
     /// The set the cursor is building, its type and its tunes (for the suggestions).
@@ -500,50 +626,90 @@ final class NightModel {
     private func enqueue(_ ops: [PendingOp]) {
         notice = nil
         outbox += ops.map(\.opID)
+        if waitingForNetwork {
+            // Behind a queue: never jump ahead of changes already waiting.
+            for op in ops { log?.markQueued(op.opID) }
+            saveNow()
+            return
+        }
         if sender == nil { sender = Task { await drain() } }
     }
 
+    /// Send what's waiting (the connection is back).
+    private func flush() async {
+        guard !outbox.isEmpty else { return }
+        waitingForNetwork = false
+        if sender == nil { sender = Task { await drain() } }
+        await sender?.value
+    }
+
     /// Send the outbox one op at a time, in order: a later op may anchor on an earlier
-    /// one's row, and needs its real id. A dropped connection retries the same op (the
-    /// server knows an op_id it has seen); a refusal or a server error rolls it back.
+    /// one's row, and needs its real id. No connection: this op and everything behind
+    /// it wait on the phone (the server knows an op_id it has seen, so a resend is
+    /// safe). A refusal or a server error rolls the op back; a refusal of a change that
+    /// waited offline is kept for review.
     private func drain() async {
-        var attempts = 0
         while let opID = outbox.first {
-            guard let l = log, l.pending[opID] != nil else {
+            guard let l = log, let op = l.pending[opID] else {
                 outbox.removeFirst()  // settled already, by the stream's echo
                 continue
             }
             guard let body = l.sendableBody(opID) else {
-                // Its row never reached the server (that add was refused): nothing to do.
+                // Its row never reached the server (that add was refused): nothing to send.
                 log?.rollback(opID)
                 outbox.removeFirst()
+                if op.queued { flushRejects.append(reviewItem(op, why: "the tune it changed was never saved")) }
                 continue
             }
             do {
                 let (code, answer) = try await app.postJSON("/api/live/instances/\(instanceID)/ops", body: .object(body))
                 outbox.removeFirst()
-                attempts = 0
                 if code == 200 {
-                    if let reason = log?.settle(opID: opID, answer: answer) { notice = reason }
+                    if let reason = log?.settle(opID: opID, answer: answer) {
+                        if op.queued { flushRejects.append(reviewItem(op, why: Self.reason(answer) ?? reason)) } else { notice = reason }
+                    } else if op.queued {
+                        synced += 1
+                    }
                 } else {
                     log?.rollback(opID)
                     notice = answer["message"]?.stringValue ?? answer["error"]?.stringValue ?? "That change wasn't saved."
                 }
                 settleCursor()
             } catch {
-                attempts += 1
-                if attempts > 5 {
-                    // Give up on everything waiting: the offline queue is Phase 5d.
-                    for id in outbox { log?.rollback(id) }
-                    outbox = []
-                    notice = "Couldn't reach Ceol, so that change wasn't saved."
-                    settleCursor()
-                    break
-                }
-                try? await Task.sleep(for: .seconds([1.0, 2, 3, 5, 8][attempts - 1]))
+                waitingForNetwork = true
+                for id in outbox { log?.markQueued(id) }
+                saveNow()
+                break
             }
         }
         sender = nil
+        if outbox.isEmpty {
+            if !flushRejects.isEmpty { review = flushRejects }
+            if synced > 0 { say("↻ \(synced) synced") }
+            flushRejects = []
+            synced = 0
+            saveNow()
+        }
+    }
+
+    /// The web's reconciliation wording (RECONCILE_VERB / RECONCILE_REASON).
+    private func reviewItem(_ op: PendingOp, why: String) -> ReviewItem {
+        let verbs = [
+            "add_tune": "Add", "change_tune": "Edit", "remove_tune": "Remove", "set_break": "Set break",
+            "set_confidence": "Confirm", "attribute_set_starter": "Set starter", "edit_notes": "Edit notes",
+            "move_tunes": "Move", "remove_tunes": "Bulk remove", "restore_tunes": "Restore",
+        ]
+        let verb = verbs[op.opType] ?? op.opType
+        let name = op.body["name"]?.stringValue ?? op.prev.first?["name"]?.stringValue
+        return ReviewItem(what: name.map { "\(verb) “\($0)”" } ?? verb, why: why)
+    }
+
+    static func reason(_ answer: JSONValue) -> String? {
+        switch answer["reason"]?.stringValue {
+        case "target_deleted", "target_removed": "it had already been removed"
+        case "not_found": "it no longer exists"
+        default: answer["message"]?.stringValue ?? answer["reason"]?.stringValue
+        }
     }
 
     /// A silent half-open stream never errors. If nothing arrives for 45 seconds (the
@@ -566,7 +732,7 @@ final class NightModel {
     private func retryLater() {
         guard running else { return }
         failures += 1
-        let delay = [2.0, 5, 10, 20][min(failures - 1, 3)]
+        let delay = [2.0, 5, 10, 10][min(failures - 1, 3)]
         stream = Task { [weak self] in
             try? await Task.sleep(for: .seconds(delay))
             guard let self, !Task.isCancelled, self.running else { return }
@@ -587,7 +753,9 @@ extension AppModel {
 
     /// A GET, as raw JSON: for payloads whose every field must survive (a night's records).
     func getJSON(_ path: String) async throws -> JSONValue {
+        if simulatedOffline { throw URLError(.notConnectedToInternet) }
         var request = authorized(URLRequest(url: webURL(path)))
+        request.timeoutInterval = 10
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { throw URLError(.badServerResponse) }
@@ -596,7 +764,9 @@ extension AppModel {
 
     /// A POST of raw JSON: the status code and the body (an error's body too).
     func postJSON(_ path: String, body: JSONValue) async throws -> (Int, JSONValue) {
+        if simulatedOffline { throw URLError(.notConnectedToInternet) }
         var request = authorized(URLRequest(url: webURL(path)))
+        request.timeoutInterval = 10
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")

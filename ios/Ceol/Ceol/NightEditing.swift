@@ -590,6 +590,9 @@ struct LogToasts: View {
 
     var body: some View {
         VStack(spacing: 6) {
+            if model.queuedCount > 0 {
+                QueuedBanner(model: model)
+            }
             if let u = model.undoable {
                 HStack {
                     Text("Deleted \(u.count) tune\(u.count == 1 ? "" : "s")").foregroundStyle(CeolTokens.textColor)
@@ -698,6 +701,12 @@ struct EditableRow: View {
                 if record["_resolving"].isTruthy {
                     ProgressView().controlSize(.small)
                     Text("resolving…").font(.ceol(size: 12)).foregroundStyle(CeolTokens.textMuted)
+                } else if record["_status"] == "queued" {
+                    // Saved on the phone; sent when the connection is back.
+                    Text("offline").font(.ceol(size: 12, weight: .semibold)).foregroundStyle(CeolTokens.warning)
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .overlay(Capsule().strokeBorder(CeolTokens.warning.opacity(0.6), lineWidth: 1))
+                        .accessibilityIdentifier("row.offline")
                 } else if unlinked && !record["_temp"].isTruthy {
                     Text("⚠ unlinked").font(.ceol(size: 12, weight: .semibold)).foregroundStyle(CeolTokens.attention)
                 }
@@ -1060,5 +1069,51 @@ struct Suggestions: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier(id)
+    }
+}
+
+/// Changes waiting on the phone (the web's "⏳ N changes queued — offline").
+struct QueuedBanner: View {
+    let model: NightModel
+
+    var body: some View {
+        let n = model.queuedCount
+        Text("⏳ \(n) change\(n == 1 ? "" : "s") queued — \(model.status == .live ? "syncing…" : "offline")")
+            .font(.ceol(size: 14)).foregroundStyle(CeolTokens.warning)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12).padding(.vertical, 8)
+            .background(CeolTokens.warning.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+            .background(CeolTokens.bgColor, in: RoundedRectangle(cornerRadius: 8))
+            .accessibilityIdentifier("queued.banner")
+    }
+}
+
+/// Offline changes the server refused once they were sent (the web's reconciliation
+/// review): what, and why, and an OK.
+struct ReviewSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let items: [NightModel.ReviewItem]
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    ForEach(items) { item in
+                        Text("\(item.what) — \(item.why)").font(.ceol(size: 15)).foregroundStyle(CeolTokens.textColor)
+                    }
+                } header: {
+                    Text("\(items.count) change\(items.count == 1 ? "" : "s") you made offline couldn’t be applied when you reconnected — usually because someone else changed the same tune first.")
+                        .font(.ceol(size: 14)).foregroundStyle(CeolTokens.textMuted).textCase(nil)
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(CeolTokens.drawerBg)
+            .navigationTitle("Some offline changes didn’t stick")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("Got it") { dismiss() }.accessibilityIdentifier("review.ok") }
+            }
+        }
+        .ceolDrawer([.medium, .large])
     }
 }

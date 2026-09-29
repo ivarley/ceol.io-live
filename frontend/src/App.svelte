@@ -2364,8 +2364,10 @@
     if (entry.tempId) byId.delete(entry.tempId)
     if (entry.tempIds) for (const t of entry.tempIds) byId.delete(t) // optimistic move boundary breaks
     if (entry.restoreRecord) byId.set(entry.restoreRecord.session_instance_tune_id, entry.restoreRecord) // un-join
-    if ((entry.op_type === 'change_tune' || entry.op_type === 'set_confidence') && entry.prev) byId.set(entry.prev.session_instance_tune_id, entry.prev) // revert edit / confirm
-    if (entry.prevRecords) for (const r of entry.prevRecords) byId.set(r.session_instance_tune_id, r) // revert set-starter / move
+    // Revert edits only on rows still here: one someone else removed meanwhile (the
+    // usual reason an offline edit is refused) must stay removed, not come back.
+    if ((entry.op_type === 'change_tune' || entry.op_type === 'set_confidence') && entry.prev && byId.has(entry.prev.session_instance_tune_id)) byId.set(entry.prev.session_instance_tune_id, entry.prev) // revert edit / confirm
+    if (entry.prevRecords) for (const r of entry.prevRecords) if (byId.has(r.session_instance_tune_id)) byId.set(r.session_instance_tune_id, r) // revert set-starter / move
     if (entry.bulkRemoveIds) { // rejected bulk delete: clear the removing marks
       for (const id of entry.bulkRemoveIds) {
         const r = byId.get(id)

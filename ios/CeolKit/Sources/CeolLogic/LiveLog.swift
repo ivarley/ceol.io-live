@@ -9,7 +9,7 @@
 
 import Foundation
 
-public struct LiveLog: Sendable, Equatable {
+public struct LiveLog: Sendable, Equatable, Codable {
     public internal(set) var records: [LogRecord] = []
     /// The night's fields that ops change: notes, instance_date, session_date,
     /// start_time, end_time, instance_name, log_complete.
@@ -21,6 +21,8 @@ public struct LiveLog: Sendable, Equatable {
     public internal(set) var pending: [String: PendingOp] = [:]
     /// Temp ids the server has answered, and the real ids they became.
     public internal(set) var tempToReal: [String: JSONValue] = [:]
+    /// Stamps each op's ts, so two never share one.
+    var clock = LogState.OpClock()
 
     public init(records: [LogRecord], meta: [String: JSONValue] = [:], lastEventID: Int = 0) {
         self.meta = meta

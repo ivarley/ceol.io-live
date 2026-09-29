@@ -128,7 +128,8 @@ final class LogComposerModel {
         if let prefer { items.append(.init(name: "prefer_type", value: prefer)) }
         async let abc: [JSONValue] = ABCQuery.looksLikeAbc(q) ? notationSearch(q, prefer: prefer) : []
         var m: JSONValue = ["exact_match": false, "results": []]
-        if let r = try? await night.app.getJSON(path("/api/live/instances/\(night.instanceID)/match", items)) {
+        let answer = try? await night.app.getJSON(path("/api/live/instances/\(night.instanceID)/match", items))
+        if let r = answer {
             let rows: [JSONValue] = (r["results"]?.arrayValue ?? []).map { t in
                 var o: [String: JSONValue] = ["tune_id": t["tune_id"] ?? .null, "name": t["tune_name"] ?? .null,
                                               "tune_type": t["tune_type"] ?? .null]
@@ -136,6 +137,13 @@ final class LogComposerModel {
                 return .object(o)
             }
             m = ["exact_match": r["exact_match"] ?? false, "results": .array(rows)]
+        }
+        if !(m["results"]?.arrayValue ?? []).isEmpty {
+            // Remembered, so the same text can still link a tune offline.
+            NightStore.putMatch(night.instanceID, q, m)
+        } else if answer == nil || night.status == .offline, let cached = NightStore.getMatch(night.instanceID, q) {
+            // Offline (an online empty answer is the real answer): what we saw before.
+            return cached
         }
         return Composer.withNotationResults(m, abc: await abc)
     }

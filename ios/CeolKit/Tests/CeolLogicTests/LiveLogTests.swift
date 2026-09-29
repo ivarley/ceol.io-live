@@ -300,4 +300,60 @@ struct LiveEditingTests {
         log.settle(opID: "c1", answer: ["success": false, "rejected": true, "reason": "invalid"])
         #expect(names(log) == ["Kesh"])
     }
+
+    @Test("a queued change says so on its row, keeps its order, and survives being saved and restored")
+    func queuedAndSaved() throws {
+        var log = LiveLog(records: [rec(1, "a1", name: "A")], lastEventID: 7)
+        _ = log.addTune(["name": "B"], at: .end, opID: "b")
+        _ = log.addTune(["name": "C"], at: .end, opID: "c")
+        #expect(log.sendOrder == ["b", "c"])
+        #expect(log.pending["b"]!.ts < log.pending["c"]!.ts)
+        log.markQueued("b")
+        log.markQueued("c")
+        #expect(log.queuedCount == 2)
+        #expect(log.ordered.filter { $0["_status"] == "queued" }.count == 2)
+        // Saved to disk and read back: the queue, its rows and the cursor into the stream.
+        let data = try JSONEncoder().encode(log)
+        let back = try JSONDecoder().decode(LiveLog.self, from: data)
+        #expect(back == log)
+        // Laid over a fresh load, the queued rows stay where they were, still marked.
+        let fresh = LiveLog(records: [rec(1, "a1", name: "A"), rec(2, "a0", name: "Z")], lastEventID: 9)
+        let rebased = back.rebased(onto: fresh)
+        #expect(names(rebased) == ["Z", "A", "B", "C"])
+        #expect(rebased.ordered.filter { $0["_status"] == "queued" }.count == 2)
+        #expect(rebased.sendOrder == ["b", "c"])
+    }
+
+    @Test("ops made in the same millisecond still have an order")
+    func sameMillisecond() {
+        var log = LiveLog(records: [])
+        for i in 0..<20 { _ = log.addTune(["name": .string("T\(i)")], at: .end, opID: String(format: "op%02d", i)) }
+        #expect(log.sendOrder == (0..<20).map { String(format: "op%02d", $0) })
+    }
+
+    @Test("a row someone else removed stays removed: not brought back by a rebase or an undo")
+    func removedElsewhereStaysRemoved() throws {
+        var log = LiveLog(records: [rec(1, "a1", name: "A"), rec(2, "a2", name: "B")], lastEventID: 1)
+        _ = log.changeTune(.server(1), ["name": "A2", "unlink": true], patch: ["name": "A2"], opID: "c1")
+        log.markQueued("c1")
+        // Back online: the fresh log no longer has row 1.
+        var rebased = log.rebased(onto: LiveLog(records: [rec(2, "a2", name: "B")], lastEventID: 5))
+        #expect(names(rebased) == ["B"])
+        // The change is refused; undoing it doesn't resurrect the row.
+        rebased.settle(opID: "c1", answer: ["success": false, "rejected": true, "reason": "target_deleted"])
+        #expect(names(rebased) == ["B"])
+        // Live, too: the removal arrives on the stream while a change is pending.
+        var live = LiveLog(records: [rec(1, "a1", name: "A"), rec(2, "a2", name: "B")], lastEventID: 1)
+        _ = live.changeTune(.server(1), ["name": "A2", "unlink": true], patch: ["name": "A2"], opID: "c2")
+        var gone = rec(1, "a1", name: "A2")
+        if case .object(var o) = gone { o["deleted"] = true; gone = .object(o) }
+        live.apply(["op_type": "remove_tune", "event_id": 2, "record": gone])
+        live.rollback("c2")
+        #expect(names(live) == ["B"])
+        // But undoing a removal still brings the row back.
+        let removed = live.remove(.server(2), opID: "r1")
+        _ = try #require(removed)
+        live.rollback("r1")
+        #expect(names(live) == ["B"])
+    }
 }

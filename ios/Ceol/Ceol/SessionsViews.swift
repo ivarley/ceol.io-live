@@ -632,6 +632,9 @@ struct NightView: View {
             composerFocused = false
             withAnimation(.easeOut(duration: 0.25)) { scroll.scrollTo(id: rowScrollID(id), anchor: .center) }
         }
+        .sheet(isPresented: Binding(get: { model?.review != nil }, set: { if !$0 { model?.review = nil } })) {
+            if let items = model?.review { ReviewSheet(items: items) }
+        }
         .sheet(isPresented: $deepSearching) {
             if let model {
                 DeepSearchSheet(
@@ -679,6 +682,12 @@ struct NightView: View {
                         .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
                     if !notes.isEmpty {
                         Text(notes).font(.ceolItalic(size: 15)).foregroundStyle(CeolTokens.textMuted)
+                    }
+                    if !model.editing && model.queuedCount > 0 { QueuedBanner(model: model).padding(.top, 4) }
+                    if AppModel.testHooks {
+                        Toggle("Simulate offline", isOn: Binding(get: { app.simulatedOffline }, set: { model.setSimulatedOffline($0) }))
+                            .font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
+                            .accessibilityIdentifier("debug.offline")
                     }
                 }
                 .padding(.horizontal, 20).padding(.vertical, 14)

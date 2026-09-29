@@ -1861,3 +1861,26 @@ The plan (Phases 0-6) runs from here in `ios/`; see `ios/README.md` for the layo
     here log on tap), and the offline match cache (5d). A UI test covers the exact
     match, tapping a suggestion, choosing among several, an unmatched name then relinked
     by editing, and deep search, checking the server each time.
+  - **5d DONE 2026-09-29: logging offline**, as the web logger (spec 024 §G), with its
+    gaps closed where the app could close them cheaply. The phone keeps each night
+    (`NightStore`: the bootstrap, the log with its unanswered changes, the vocabulary;
+    one file per night, cleared on sign-out) and the match cache (`OfflineRules`,
+    already fixtured). A change that can't be sent is queued, marked "offline" on its
+    row, and every later change waits behind it; the queue is sent in order (ts, then
+    op_id) when the stream reconnects, a load succeeds, the network returns
+    (`NWPathMonitor`) or the app comes forward. Opening a night without a connection
+    (or after an 800ms slow load) shows the saved copy with the queue over it.
+    Refusals of queued changes are listed for review, in the web's words; "↻ N synced"
+    after; a banner counts what's waiting. Better than the web: a queued change keeps
+    everything it needs across a restart (`PendingOp` and `LiveLog` are Codable), so
+    queued rows come back in place and can still be undone, a change whose row never
+    reached the server is listed rather than silently dropped, and restored changes'
+    refusals are reviewed too. Found on the way, and fixed on both: undoing a refused
+    edit brought back a tune someone else had removed (`LiveLog.rollback`/`rebased`,
+    and the web's `undoOp`; a new e2e, `live-logger-offline.spec.ts`). A debug-only
+    switch (`-CeolTestHooks`, `-CeolStartOffline`) lets a UI test go offline: it queues
+    two tunes and a rename, quits and reopens offline, then reconnects after someone
+    else removed the renamed tune, and checks the server and the screen. Still online-
+    only, as on the web: the screens before a night (session lists) load from the
+    server, so reaching a night with no signal needs them to have been opened first in
+    this run (app-wide offline is not in this phase).

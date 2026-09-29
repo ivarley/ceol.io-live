@@ -10,9 +10,13 @@
 import Foundation
 
 /// An op sent and not yet answered, with what it takes to undo it.
-public struct PendingOp: Sendable, Equatable {
+public struct PendingOp: Sendable, Equatable, Codable {
     public var opID: String
     public var opType: String
+    /// When it was made (LogState.OpClock, ms): a queue replays in this order, ties by op_id.
+    public var ts: Int64 = 0
+    /// Couldn't be sent (no connection): saved on the device, sent when it's back.
+    public var queued = false
     /// The request body: op_id, op_type and the op's fields.
     public var body: [String: JSONValue]
     /// Optimistic rows this op added, dropped when it settles or rolls back.
@@ -390,7 +394,13 @@ extension LiveLog {
         guard let op = pending.removeValue(forKey: opID) else { return }
         for t in op.tempIDs { drop(t) }
         for id in op.rollbackDrops { drop(id) }
-        for r in op.prev { put(r) }
+        // Put back what the op changed, but only rows still here (or rows the op itself
+        // took away): one someone else removed meanwhile stays removed.
+        let removedByOp = Set(op.drops)
+        for r in op.prev {
+            let id = r["session_instance_tune_id"] ?? .null
+            if removedByOp.contains(id) || records.contains(where: { $0["session_instance_tune_id"] == id }) { put(r) }
+        }
     }
 
     /// The log from a fresh bootstrap, with this log's unanswered ops laid over it again,
@@ -399,12 +409,43 @@ extension LiveLog {
         var out = fresh
         out.pending = pending
         out.tempToReal = tempToReal
-        for op in pending.values {
-            for r in op.puts { out.put(r) }
+        out.clock = clock
+        // In the order they were made; a change to a row the fresh log no longer has
+        // (someone removed it) isn't laid back over it.
+        let here = Set(fresh.records.compactMap { $0["session_instance_tune_id"] })
+        for id in sendOrder {
+            guard let op = pending[id] else { continue }
+            for r in op.puts {
+                let rid = r["session_instance_tune_id"] ?? .null
+                if r["_temp"].isTruthy || here.contains(rid) { out.put(r) }
+            }
             for id in op.drops { out.drop(id) }
         }
         return out
     }
+
+    /// The unanswered ops in the order they must be sent: by ts, then op_id.
+    public var sendOrder: [String] {
+        pending.values.sorted { $0.ts != $1.ts ? $0.ts < $1.ts : $0.opID < $1.opID }.map(\.opID)
+    }
+
+    /// No connection: the op waits on the device. Its rows say so (the web's "offline").
+    public mutating func markQueued(_ opID: String) {
+        guard var op = pending[opID], !op.queued else { return }
+        op.queued = true
+        let temps = Set(op.tempIDs)
+        func mark(_ r: LogRecord) -> LogRecord {
+            guard temps.contains(r["session_instance_tune_id"] ?? .null), case .object(var o) = r else { return r }
+            o["_status"] = "queued"
+            return .object(o)
+        }
+        op.puts = op.puts.map(mark)
+        pending[opID] = op
+        for r in op.puts where temps.contains(r["session_instance_tune_id"] ?? .null) { put(r) }
+    }
+
+    /// Queued ops, oldest first.
+    public var queuedCount: Int { pending.values.filter(\.queued).count }
 
     /// Where a temp id stands now: its real id once answered.
     public func resolve(_ id: RecordID) -> RecordID {
@@ -431,7 +472,8 @@ extension LiveLog {
         var body = fields
         body["op_id"] = .string(opID)
         body["op_type"] = .string(type)
-        let op = PendingOp(opID: opID, opType: type, body: body, tempIDs: temps, puts: puts, drops: drops)
+        let ts = clock.next(now: Int64(Date().timeIntervalSince1970 * 1000))
+        let op = PendingOp(opID: opID, opType: type, ts: ts, body: body, tempIDs: temps, puts: puts, drops: drops)
         pending[opID] = op
         return op
     }

@@ -27,9 +27,9 @@ final class CeolUITests: XCTestCase {
         server = s
     }
 
-    private func launch(openURL: String? = nil) -> XCUIApplication {
+    private func launch(openURL: String? = nil, reset: Bool = true, extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["-CeolServerURL", server, "-CeolResetSession", "YES"]
+        app.launchArguments = ["-CeolServerURL", server, "-CeolResetSession", reset ? "YES" : "NO"] + extra
         if let openURL { app.launchArguments += ["-CeolOpenURL", openURL] }
         app.launch()
         return app
@@ -832,6 +832,110 @@ final class CeolUITests: XCTestCase {
         card.tap()
         try await waitFor("Silver Spear from deep search") { linked($0, "Silver Spear, The") }
         app.buttons["night.done"].tap()
+    }
+
+    /// Phase 5d: logging without a connection. Offline, two tunes are logged and an
+    /// existing one is renamed: all three wait on the phone, marked, and the server has
+    /// none of them. The app is quit and reopened, still offline: they're still there.
+    /// Meanwhile someone else removes the renamed tune. Back online, the two tunes arrive
+    /// in order, and the rename is refused and listed for review.
+    @MainActor
+    func testLoggingOffline() async throws {
+        let api = try await TestAPI.signedIn(server: server)
+        let nights = try await api.get("/api/sessions/austin/mueller/logs")
+        let years = (nights["sorted_years"] as? [Any])?.compactMap { "\($0)" } ?? []
+        let byYear = nights["instances_by_year"] as? [String: [[String: Any]]] ?? [:]
+        let newest = try XCTUnwrap(years.first.flatMap { byYear[$0]?.first })
+        let instanceID = try XCTUnwrap(newest["session_instance_id"] as? Int)
+        let opsPath = "/api/live/instances/\(instanceID)/ops"
+        func live() async throws -> [[String: Any]] {
+            let b = try await api.get("/api/live/instances/\(instanceID)/bootstrap")
+            return ((b["records"] as? [[String: Any]]) ?? []).filter { ($0["deleted"] as? Bool) != true }
+                .sorted { ($0["order_position"] as? String ?? "") < ($1["order_position"] as? String ?? "") }
+        }
+        let before = Set(try await live().compactMap { $0["session_instance_tune_id"] as? Int })
+        addTeardownBlock { await Self.clearAdded(api, instanceID, keeping: before) }
+        let n = Int.random(in: 1000...9999)
+        let (target, one, two, renamed) = ("Off Target \(n)", "Off One \(n)", "Off Two \(n)", "Off Renamed \(n)")
+        // A set of our own, holding the tune that will be renamed.
+        _ = try await api.post(opsPath, ["op_id": UUID().uuidString.lowercased(), "op_type": "set_break", "action": "insert", "after_record_id": NSNull()])
+        let added = try await api.post(opsPath, ["op_id": UUID().uuidString.lowercased(), "op_type": "add_tune", "name": target, "no_match": true])
+        let targetID = try XCTUnwrap((added["record"] as? [String: Any])?["session_instance_tune_id"] as? Int)
+
+        let hooks = ["-CeolTestHooks", "YES"]
+        var app = launch(extra: hooks)
+        signIn(app)
+        openNewestMuellerNight(app)
+        XCTAssertTrue(app.buttons["night.edit"].waitForExistence(timeout: 15))
+        app.buttons["night.edit"].tap()
+        let input = app.textFields["log.input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 5))
+
+        // No signal.
+        app.switches["debug.offline"].firstMatch.tap()
+        let status = app.descendants(matching: .any)["night.status"]
+        await fulfillment(of: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS 'Offline'"), object: status)], timeout: 5)
+        input.tap()
+        input.typeText(one + "\n")
+        input.typeText(two + "\n")
+        XCTAssertTrue(app.staticTexts[two].waitForExistence(timeout: 5))
+        // Rename the existing tune.
+        app.staticTexts[target].tap()
+        XCTAssertTrue(app.buttons["row.edit"].waitForExistence(timeout: 3))
+        app.buttons["row.edit"].tap()
+        app.buttons["Clear entry"].tap()
+        input.typeText(renamed)
+        app.buttons["log.commit"].tap()
+        XCTAssertTrue(app.staticTexts[renamed].waitForExistence(timeout: 5))
+        let banner = app.staticTexts["queued.banner"]
+        XCTAssertTrue(banner.waitForExistence(timeout: 5))
+        XCTAssertTrue(banner.label.contains("3 changes queued"), banner.label)
+        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "row.offline").count, 2)
+        snapshot("offline queue")
+        var names = try await live().compactMap { $0["name"] as? String }
+        XCTAssertFalse(names.contains(one), "nothing should reach the server offline")
+
+        // Quit and come back, still offline: the queue is still there.
+        app.terminate()
+        app = launch(reset: false, extra: hooks + ["-CeolStartOffline", "YES"])
+        openNewestMuellerNight(app)
+        XCTAssertTrue(app.staticTexts[two].waitForExistence(timeout: 10), "the saved copy should show")
+        XCTAssertTrue(app.staticTexts["queued.banner"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["queued.banner"].label.contains("3 changes queued"))
+
+        // Someone else removes the tune that was renamed.
+        _ = try await api.post(opsPath, ["op_id": UUID().uuidString.lowercased(), "op_type": "remove_tune", "record_id": targetID])
+
+        // Signal again.
+        app.switches["debug.offline"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["review.ok"].waitForExistence(timeout: 15), "the refused rename should be listed")
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "Edit “\(renamed)” — it had already been removed")).firstMatch.exists)
+        snapshot("review")
+        app.buttons["review.ok"].tap()
+        for _ in 0..<20 {
+            names = try await live().compactMap { $0["name"] as? String }
+            if names.contains(two) { break }
+            try await Task.sleep(for: .milliseconds(250))
+        }
+        let ours = names.filter { $0.hasSuffix(" \(n)") }
+        XCTAssertEqual(ours, [one, two], "both queued tunes, in order, and the removed one stays removed")
+        XCTAssertFalse(app.staticTexts["queued.banner"].exists)
+        // And on screen: the removed tune isn't brought back by undoing the refused rename.
+        XCTAssertTrue(app.staticTexts[two].exists)
+        XCTAssertFalse(app.staticTexts[target].exists, "the tune someone else removed came back")
+        XCTAssertFalse(app.staticTexts[renamed].exists)
+    }
+
+    @MainActor
+    private func openNewestMuellerNight(_ app: XCUIApplication) {
+        app.buttons["tab.sessions"].firstMatch.tap()
+        let mueller = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Mueller Session'")).firstMatch
+        XCTAssertTrue(mueller.waitForExistence(timeout: 10))
+        mueller.tap()
+        app.buttons.containing(NSPredicate(format: "label BEGINSWITH 'Logs'")).firstMatch.tap()
+        let night = app.buttons.matching(NSPredicate(format: "label MATCHES '.*[0-9]+ tunes?.*'")).firstMatch
+        XCTAssertTrue(night.waitForExistence(timeout: 10))
+        night.tap()
     }
 
     /// Phase 3d: Me shows the profile and opens it to edit (cancelled: seed data stays put).

@@ -48,7 +48,7 @@ public enum LogState {
     /// Monotonic op timestamps (spec §G): queued ops replay sorted by ts, so two ops
     /// must never share one, even when the clock hasn't advanced or stepped back.
     /// The JS keeps this in module state; here it is a value the logger owns.
-    public struct OpClock: Sendable {
+    public struct OpClock: Sendable, Equatable, Codable {
         public private(set) var last: Int64 = 0
 
         public init() {}
