@@ -1595,7 +1595,46 @@ the main ceiling on the repertoire; the aligner's ranking is (item 4 of the
 plan, the cost model), and on the full corpus the shortlist still is (25
 unshortlisted at 30 s).
 
-**Not yet measured:** a start that is not the labelled one; the board; tunes
+**A sloppy start (2026-09-29).** The bench with each window opening X
+seconds before the labelled start, repertoire, audio alone, three trackers,
+aligner (both readings, replace, 300). 60% of tunes begin within a second of
+the previous one ending, so what the window opens on is mostly the end of the
+previous tune in the set, otherwise chat. Paired on the original 502 segments
+(the corpus was re-pulled while these ran; see "Still open"):
+
+| window | top-1 | top-5 | paired against 30 s from the labelled start (0.950) | wrong answer is the previous tune |
+|---|---|---|---|---|
+| 5 s early, 30 s long | 0.922 | 0.944 | +4/-18 (p 0.004) | 3 of 39 |
+| 10 s early, 30 s long | 0.853 | 0.908 | +1/-50 | 25 of 74 |
+| 20 s early, 30 s long | 0.265 | 0.568 | +1/-345 | 215 of 369 |
+| 5 s in front of the full 30 s | 0.932 | 0.952 | +4/-13 (p 0.05) | 3 of 34 |
+| 10 s in front of the full 30 s | 0.928 | 0.952 | +3/-14 (p 0.01) | 8 of 36 |
+| 20 s in front of the full 30 s | 0.849 | 0.932 | +1/-52 | 38 of 76 |
+| the first 25 s only | 0.930 | 0.944 | +2/-12 (p 0.01) | |
+| the first 20 s only | 0.918 | 0.934 | +3/-19 | |
+| the first 10 s only | 0.791 | 0.833 | +3/-83 | |
+
+Two things are mixed in a window that opens early: less of the tune, and
+someone else's audio. Paired against the same amount of the tune heard
+cleanly, 5 s of the previous tune costs nothing measurable (0.930 to 0.922,
++6/-10, p 0.45), 10 s costs 6.5 points (0.918 to 0.853, +6/-39) and 20 s
+against 10 s of the tune is a collapse (0.791 to 0.265), because the
+previous tune then fills two thirds of the window and wins on its own
+chunks. With the whole 30 s of the tune kept, 5 or 10 s in front cost about
+two points and 20 s ten, half of those misses naming the previous tune. The
+aligner's advantage survives: at 5, 10 and 20 s early it is +106/-2,
++137/-5 and +73/-35 against the n-grams on the same windows (0.715, 0.590
+and 0.189 without it).
+
+What the board needs from this: a start found within about five seconds
+keeps nearly all of the bench's accuracy; a start ten or more seconds early
+does not, and the loss is mostly the previous tune winning. So on the board
+the aligner should score the span since the current tune's estimated start,
+and a candidate that was the previous span's answer needs its early chunks
+discounted, or the chunks weighted towards the latest audio. That is part of
+item 3 of the plan.
+
+**Not yet measured:** the board; tunes
 played in another key than all their settings (the aligner compares note
 names; `transpose=12` tries every key and is untested, and the player's
 better proposal is below).
