@@ -1677,11 +1677,41 @@ detail), in order:
    only score it afterwards), with today's baseline, the three-tracker fusion
    and the aligner on the board, and give the player the timeline to read
    against what was played; the bench on its labelled segments beside it.
-3. **The aligner on the board, with sequential evidence.** The bench is at
-   0.95-0.98 and the board at 0.819: the board is the gap. Evidence
-   accumulated over the span, the prior as a fixed offset, a commit when the
-   top two are far enough apart; then the display's hold and short list
-   re-measured on top.
+3. **The aligner on the board: is this still the same tune?** The bench is
+   at 0.95-0.98 and the board at 0.819: the board is the gap. The player's
+   framing (2026-09-29): live, one tune simply becomes another without
+   warning, so for every incoming chunk of notes the logger asks whether it
+   agrees with the tune it already believes, or whether a new tune has
+   begun. Answered well, the late start of item 1's offset test never
+   happens.
+   - **Agreement, per chunk.** The aligner already scores each chunk
+     (32 eighths or 24 pitch changes) on its own. While the tune continues,
+     each new chunk matches the current tune; after a change, chunks stop
+     matching it and start matching something else. That drop is the
+     evidence, and it is cheap to watch continuously.
+   - **Where in the tune we are.** A matched chunk also says where in the
+     tune it matched, so the logger can follow the part it is in, see the end
+     of the last part, and count passes.
+   - **Hints that make a change more likely at a given moment**, from the
+     player: the tune has been played through three times already; the last
+     chunk was in its final part; it has gone on about as long as it usually
+     does. Durations and passes per tune come from the labelled nights at
+     this session. The hints lower how much disagreement it takes to call a
+     change; they do not call one on their own, because a tune played twice
+     instead of three times must still be caught on the audio.
+   - **Which tune follows**, at the moment of change, is the set-decoding
+     prior (item 1's retuning), and a tune played in another key must not
+     read as a change (item 1's key allowance).
+   - **Measured on the bench first**: stream each labelled set through chunk
+     by chunk and score how many seconds after the real change it is noticed,
+     changes called that did not happen (a variation, a badly heard part), and
+     changes missed; with and without each hint, paired. Then on the board,
+     with the display's hold and short list re-measured on top.
+   - **Night 140's hard cases, from the player**: false starts that never
+     became tunes (a few chunks of a new tune, then nothing: not a tune);
+     The Old Copperplate and The New Copperplate, which are close enough
+     that the new tune's chunks half-match the old; and a set that goes from
+     jigs to reels (the rhythm changing is an extra signal).
 4. **The aligner's cost model** (angles 2, 4 and 6 of the note, now one
    project): metrical weight from the notated slot, a profile per tune from
    its settings, fitted substitution and insertion costs. The near misses at
