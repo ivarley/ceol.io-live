@@ -1517,11 +1517,28 @@ aligner's are on another scale and far more decisive. Retune the weight, or
 convert the aligner's score to the scale the decoder expects, before set
 decoding and the aligner are used together.
 
-**Not yet measured:** against the full 23,307-tune corpus (both full indexes
-are rebuilt with parser 2 for it); a start that is not the labelled one; the
-board; tunes played in another key than all their settings (the aligner
-compares note names; `transpose=12` tries every key and is untested, and the
-player's better proposal is below).
+**Against the full corpus the gain holds (2026-09-29).** The same runs
+choosing among all 23,307 tunes (indexes and the sequence store rebuilt with
+parser 2; 55,387 settings), 30 s, audio alone, shortlist 300:
+
+| | repertoire | full corpus | aligner, paired, full corpus |
+|---|---|---|---|
+| yin | 0.687 | 0.669 | |
+| yin + aligner | 0.902 | **0.876** | +104/-0 |
+| the three fused | 0.763 | 0.763 | |
+| the three + aligner | 0.950 | **0.932** / 0.946 top-5 | +87/-2 |
+
+The long tail costs the aligner about two points (+0/-9 for the three against
+the repertoire run, +2/-15 for yin), and of those 9, 7 are the index not
+shortlisting the right tune among 23,000 (its rank falls to 331, 373, 939 or
+off the list) and 2 are real near misses at rank 2 (The Scholar under The
+South Shore, Larry Redican's Mother under The Whinny Hills of Leitrim). The
+shortlist's recall is the ceiling again.
+
+**Not yet measured:** a start that is not the labelled one; the board; tunes
+played in another key than all their settings (the aligner compares note
+names; `transpose=12` tries every key and is untested, and the player's
+better proposal is below).
 
 **An outside comparison, three clips.** irishtune.id (Alan Ng, launched
 2026-09) was given 30 s of three of these segments through the player's
@@ -1538,8 +1555,9 @@ recording than a session.
 (which holds the field survey, the miss analysis and the ten angles in
 detail), in order:
 
-1. **Finish measuring the aligner.** The full 23,307-tune corpus at 30 s. A
-   sloppy start: windows beginning up to 20 s before the labelled start, so
+1. **Finish measuring the aligner.** (The full corpus is done: 0.932 at 30 s,
+   above.) Shortlist recall, which is now the ceiling on both candidate
+   sets. A sloppy start: windows beginning up to 20 s before the labelled start, so
    the query opens on the previous tune or the chat, to size how much of the
    gain survives not being handed the boundary. Retune set decoding for the
    aligner's scores. The player's key allowance: a tune may be played in
