@@ -65,7 +65,7 @@ def add_parser(sub):
                      help="re-rank the shortlist by aligning the heard notes against each tune's")
     ret.add_argument("--align-mode", default="fuse", choices=["fuse", "replace"])
     ret.add_argument("--align-param", action="append", default=[], metavar="K=V",
-                     help="Aligner settings: shortlist, chunk_eighths, chunk_notes, transpose")
+                     help="Aligner settings: shortlist, chunk_eighths, chunk_notes, transpose (0, 12 or fifths), max_fifths, step_cost")
     ret.add_argument("--param", action="append", default=[], metavar="K=V")
     ret.add_argument("--no-save", action="store_true")
     ret.set_defaults(func=cmd_retrieval)

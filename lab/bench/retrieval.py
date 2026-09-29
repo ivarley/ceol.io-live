@@ -171,6 +171,17 @@ def ranked_for_segment(frontends, store, sha, t0, t1, index, board, audio_top,
     return ranked, notes_all, cost_all, cached_all
 
 
+def fifths_steps(max_fifths):
+    """{semitone shift: steps round the circle of fifths}, out to
+    `max_fifths` steps either way: 0 -> 0, a fifth up (+7) or down (+5) -> 1,
+    a tone up (+2) or down (+10) -> 2, and so on."""
+    out = {}
+    for n in range(max_fifths + 1):
+        for k in ((7 * n) % 12, (-7 * n) % 12):
+            out.setdefault(k, n)
+    return out
+
+
 class Aligner:
     """Re-rank the n-gram shortlist by aligning what was heard against each
     candidate's notes (`analysis.align`), as Tunepal and FolkFriend match.
@@ -178,9 +189,15 @@ class Aligner:
     `reading`: "eighths" (both sides as runs of eighth notes), "notes" (both
     sides as changes of pitch, tempo-free) or "both". `mode`: "replace" orders
     the shortlist by alignment alone; "fuse" sums it with the n-gram ranking
-    the way front ends are fused. `transpose`: 0 aligns in the written key; 12
-    also tries every transposition and keeps the best, for a tune played in
-    another key than its settings (untested).
+    the way front ends are fused. `transpose`: 0 aligns in each setting's
+    written key; 12 also tries every transposition and keeps the best
+    (untested); "fifths" is the player's key allowance: a tune may be played
+    in another key than its settings, tried outward round the circle of
+    fifths from each setting's own key, at most `max_fifths` steps (one step
+    is a fifth either way, +7 or +5 semitones; two is a tone either way), each
+    step costing `step_cost` off the score, so the written key stays the
+    strong default and a wrong tune does not get twelve chances at a lucky
+    match. A key some setting is written in costs nothing.
 
     Measured over 502 segments, audio alone, both readings, replace, 300-tune
     shortlist: yin at 30 s 0.687 -> 0.902 top-1 (+108/-0); yin, Basic Pitch
@@ -195,17 +212,22 @@ class Aligner:
     """
 
     def __init__(self, reading="eighths", mode="fuse", shortlist=25, chunk_eighths=32,
-                 chunk_notes=24, transpose=0, candidate_set="repertoire"):
+                 chunk_notes=24, transpose=0, max_fifths=2, step_cost=0.02,
+                 candidate_set="repertoire"):
         from lab.corpus.sequences import TuneSequences
 
         self.reading, self.mode, self.shortlist = reading, mode, shortlist
         self.chunk_eighths, self.chunk_notes, self.transpose = chunk_eighths, chunk_notes, transpose
+        self.max_fifths, self.step_cost = int(max_fifths), float(step_cost)
         self.sequences = TuneSequences.load(candidate_set)
 
     def params(self):
-        return {"reading": self.reading, "mode": self.mode, "shortlist": self.shortlist,
-                "chunk_eighths": self.chunk_eighths, "chunk_notes": self.chunk_notes,
-                "transpose": self.transpose}
+        out = {"reading": self.reading, "mode": self.mode, "shortlist": self.shortlist,
+               "chunk_eighths": self.chunk_eighths, "chunk_notes": self.chunk_notes,
+               "transpose": self.transpose}
+        if self.transpose == "fifths":
+            out.update(max_fifths=self.max_fifths, step_cost=self.step_cost)
+        return out
 
     def _queries(self, heard):
         out = []
@@ -221,9 +243,32 @@ class Aligner:
                 out.append(("eighths", [-1 if p is None else int(p) % 12 for p in slots]))
         return out
 
+    def shift_scores(self, tune_id, queries, shifts):
+        """{semitone shift: the tune's score played that far from each
+        setting's written key}, each query taking its best setting."""
+        from lab.analysis.align import chunk_score
+
+        settings = self.sequences.by_tune.get(tune_id) or []
+        if not settings or not queries:
+            return {k: 0.0 for k in shifts}
+        out = {}
+        for k in shifts:
+            total = 0.0
+            for kind, q in queries:
+                chunk = self.chunk_eighths if kind == "eighths" else self.chunk_notes
+                total += max(chunk_score(q, eighths if kind == "eighths" else plain,
+                                         chunk=chunk, transpose=k)
+                             for _, eighths, plain in settings)
+            out[k] = total / len(queries)
+        return out
+
     def score(self, tune_id, queries):
         from lab.analysis.align import chunk_score
 
+        if self.transpose == "fifths":
+            steps = fifths_steps(self.max_fifths)
+            by_shift = self.shift_scores(tune_id, queries, steps)
+            return max(v - self.step_cost * steps[k] for k, v in by_shift.items())
         settings = self.sequences.by_tune.get(tune_id) or []
         if not settings or not queries:
             return 0.0

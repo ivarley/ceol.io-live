@@ -33,3 +33,30 @@ def test_an_unrelated_line_scores_low():
     rng = np.random.default_rng(0)
     other = list(rng.integers(0, 12, 32))
     assert chunk_score(other, TUNE, chunk=16) < 0.5
+
+
+def test_fifths_steps_walk_out_round_the_circle():
+    from lab.bench.retrieval import fifths_steps
+
+    assert fifths_steps(0) == {0: 0}
+    assert fifths_steps(1) == {0: 0, 7: 1, 5: 1}
+    assert fifths_steps(2) == {0: 0, 7: 1, 5: 1, 2: 2, 10: 2}
+
+
+def test_key_allowance_finds_a_tune_a_fifth_up_and_charges_for_it():
+    from lab.bench.retrieval import Aligner
+
+    al = Aligner.__new__(Aligner)
+    al.chunk_eighths, al.chunk_notes = 16, 16
+    al.max_fifths, al.step_cost = 2, 0.05
+    al.sequences = type("S", (), {"by_tune": {1: [(10, TUNE, TUNE)]}})()
+    up_a_fifth = [(p + 7) % 12 for p in TUNE[:32]]
+    queries = [("eighths", up_a_fifth)]
+    al.transpose = 0
+    written = al.score(1, queries)
+    al.transpose = "fifths"
+    allowed = al.score(1, queries)
+    assert allowed == 1.0 - 0.05          # one step, charged once
+    assert written < allowed
+    # a tune in its written key is not charged at all
+    assert al.score(1, [("eighths", TUNE[:32])]) == 1.0

@@ -1669,6 +1669,48 @@ and a candidate that was the previous span's answer needs its early chunks
 discounted, or the chunks weighted towards the latest audio. That is part of
 item 3 of the plan.
 
+**The key allowance (2026-09-29).** The player's proposal: a tune may be
+played in another key than any of its settings, so try it outward round the
+circle of fifths from each setting's own key (a fifth either way, +7 or +5
+semitones, then a tone either way), at most two steps, each costing a little,
+so the written key stays the strong default and a wrong tune does not get
+twelve chances at a lucky match. A key some setting is written in costs
+nothing, and because the aligner compares note names a key and its relative
+major or minor are the same to it: The Cock and the Hen, played in F-sharp
+minor on night 140, is already covered by its A major setting.
+`Aligner(transpose="fifths", max_fifths=2, step_cost=...)`. Every
+shortlisted tune's score at each of the five shifts was captured, and the
+cost swept offline; the capture's written-key ranks reproduce the 30 s
+headline exactly. Repertoire, audio alone, three trackers, both readings,
+replace, 300, bench scope, 502 segments:
+
+| | top-1 | top-5 | paired against the written key (0.950) |
+|---|---|---|---|
+| up to 2 steps, no cost | 0.952 | 0.968 | +2/-1 |
+| up to 2 steps, cost 0.005 to 0.02 per step | **0.954** | **0.972** | +2/-0 (p 0.5) |
+| up to 2 steps, cost 0.03 | 0.952 | 0.972 | +1/-0 |
+| up to 2 steps, cost 0.05 or more | 0.950 | 0.968 to 0.970 | +0/-0 |
+| up to 1 step, cost 0 to 0.02 | 0.954 | 0.968 to 0.972 | +2/-0 |
+
+The two newly right are Galway Belle (night 1, a fifth down from every
+setting, rank 126 to 1) and Mac's Fancy (night 4, the same, 158 to 1); both
+are also misses at 120 s. With no cost, The Porthole of the Kelp loses to a
+transposed wrong tune (1 to 3), which is the case the cost is there for.
+
+How often this session plays a tune away from all its settings' keys: of the
+489 segments whose tune is shortlisted, the right tune scores clearly better
+(by 0.03 or more) at a shift for 6, 1.2%: the two above, The New Leaf and
+Kenny's set on night 139 (Sergeant Early's Dream and Paddy Fahey's, +2, a
+tone up, which from their D dorian settings is B minor's key signature, as
+the player heard it; Julia Delaney's in the same set is +2 by 0.027), and
+Biddy Martin's (+7). The four in the written key's first place were already
+right; the allowance widens their margin.
+
+It is the musically right rule, it cannot be told from noise on the bench
+(+2/-0), and it costs five alignments per tune instead of one, which matters
+on the board. 120 s is being run before deciding whether it joins the
+headline.
+
 **Not yet measured:** the board; tunes
 played in another key than all their settings (the aligner compares note
 names; `transpose=12` tries every key and is untested, and the player's
@@ -1695,7 +1737,8 @@ detail), in order:
    the query opens on the previous tune or the chat, to size how much of the
    gain survives not being handed the boundary (done: within 5 s keeps nearly
    everything). Retune set decoding for the aligner's scores (done: harmless at
-   beta 0.01, worth nothing measurable). The player's key allowance: a tune may be played in
+   beta 0.01, worth nothing measurable). The player's (measured at 30 s:
+   +2/-0 at cost 0.02, 1.2% of tunes played away from every setting's key) key allowance: a tune may be played in
    another key than its settings, tried outward round the circle of fifths
    (the written key, then one fifth either way, then two, and never further;
    a G tune is played in D or A, not A-flat), each step costing a little, so
