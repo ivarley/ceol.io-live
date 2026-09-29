@@ -1839,3 +1839,25 @@ The plan (Phases 0-6) runs from here in `ios/`; see `ios/README.md` for the layo
     read-only. The web's selection bar ran off a phone's screen (Done cut off); it now
     wraps, with an e2e check. A UI test drags, deletes and undoes, copies and pastes,
     and sets a starter, checking the server after each step.
+  - **5c DONE 2026-09-29: finding tunes as you type.** The composer's rules moved out
+    of `App.svelte` into `frontend/src/composer.js` (the vocabulary index, the unique
+    exact match, the type-ahead, the set being built, the likely next tune, what Enter
+    does, what a /match verdict does, the notation merge), which the web logger now
+    calls; `composer.fixtures.json` (67 cases) holds both clients to it, ported as
+    `CeolLogic.Composer`. `/api/live/instances/{id}/match` joined the native contract
+    (`matchLiveTune`, `LiveMatch`), and `LiveVocabulary` documents `next`. In the app:
+    the vocabulary loads with the night; typing shows its matches at once and the
+    server's (and, for note-only text, the notation search's) 180ms later, best nearest
+    the box; a thesession.org number or link offers that tune; Enter logs a unique
+    match at once, decides from an answered search, or holds a "resolving…" placeholder
+    until the match lands, asking which when several fit (or "log as typed"); a tune
+    the open set already has merges into it with "Keep both"; the likely next tune is
+    pinned when the set ends on one, dismissible; "Search" opens deep search (both, by
+    name, by ABC; a type filter; the opening bars; thesession.org on request, imported
+    as it's logged; log as typed); "✎ Edit" on a row reuses the box to relink, rename
+    or unlink it (`change_tune`). Selecting a row now lowers the keyboard and brings
+    the row into view, so its actions aren't hidden behind the composer. Not ported:
+    the tune preview with settings paging (the web's look-before-you-log card; cards
+    here log on tap), and the offline match cache (5d). A UI test covers the exact
+    match, tapping a suggestion, choosing among several, an unmatched name then relinked
+    by editing, and deep search, checking the server each time.

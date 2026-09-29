@@ -13,10 +13,10 @@
   import { generateAppend, optimisticBetween } from './fracindex.js'
   // The "is this notation?" rules are shared with every other search box in the app
   // (and with the server) — see shared/abcquery.js.
-  import { looksLikeAbc, abcNeedle } from './shared/abcquery.js'
+  import { looksLikeAbc } from './shared/abcquery.js'
   import {
     computeOrdered, segmentByBreaks, setsOf, tunesOf, pluralType, setLabel,
-    maxPos, cursorPos, remapAnchors, normName, normAbc, stripThe,
+    maxPos, cursorPos, remapAnchors, normName,
     openSetMergeTarget, mergeStable, parseThesessionId, parseThesessionSettingId,
     computeCursorSlots, seamKeyFor, seamActionFor,
     rememberInHistory, historyStep, nextTs, recordChanges, metaChanges,
@@ -25,6 +25,11 @@
     dragBlock, dropTargets, optimisticMove,
     serializeClipboard, parseClipboard, rangeBetween, selectableIds,
   } from './selection.js'
+  import {
+    buildVocabIndex, resolveLocal as resolveLocalIn, resolveLocalMany as resolveLocalManyIn,
+    cursorSegment as cursorSegmentOf, setTuneType, setTuneIds, likelyNext, nextMatchesInput,
+    nextAssocKey, commitStep, resolution, withNotationResults,
+  } from './composer.js'
   import { listStatus, statusClass, planStatusOps, applyStatusLocally, NOT_ON_LIST } from './mylist.js'
   import { instanceTimeLabel } from './shared/format.js'
   import { resolveSegments, playbackStep, formatClock } from './shared/segments.js'
@@ -53,16 +58,10 @@
   const tempToReal = new Map()
   const flashing = new SvelteMap() // record id -> {kind:'mine'|'remote'|'merge', color, tok} (§39/§E)
   let flashSeq = 0
-  // "Likely next tune": anchor tune_id -> {tune_id, name, tune_type} of the successor that
-  // follows it within a set >50% of the time at this session (precomputed server-side and
-  // carried on each vocab entry's `next`). SvelteMap so the suggestion derived recomputes
-  // when the background vocabulary load fills it in.
-  const nextByTuneId = new SvelteMap()
   // Anchor->next associations the user has dismissed (the ✕ on the suggestion row) this
   // session. In-memory only, never persisted; keyed "<anchorTuneId>-><nextTuneId>" so a
   // dismissal only silences that one pairing. SvelteSet so nextSuggestion recomputes on add.
   const dismissedNext = new SvelteSet()
-  const nextAssocKey = (anchorId, nextId) => `${anchorId}->${nextId}`
   let sseStatus = $state('connecting') // raw SSE state: connecting | live | reconnecting | error
   // The first load failed and there's no cached copy to show: the list says so (with a
   // Retry) instead of "No tunes yet", which would be a lie.
@@ -2141,26 +2140,11 @@
   // view mode, or when the successor is already in the set (a redundant pick).
   const nextSuggestion = $derived.by(() => {
     if (viewing || logComplete || editingId != null || resolving) return null
-    if (insertAfterId && typeof insertAfterId === 'object') return null // before/new-set: not end-of-set
-    const seg = cursorSegment()
-    if (!seg || !seg.tunes.length) return null
-    const last = seg.tunes[seg.tunes.length - 1]
-    // anchor = the tune just before the cursor, only when the cursor is at the set's end
-    if (insertAfterId != null && last.session_instance_tune_id !== insertAfterId) return null
-    if (last.record_type === 'break' || last.tune_id == null) return null
-    const nx = nextByTuneId.get(last.tune_id)
-    if (!nx) return null
-    if (dismissedNext.has(nextAssocKey(last.tune_id, nx.tune_id))) return null // dismissed this session
-    if (currentSetTuneIds().has(nx.tune_id)) return null // already in this set -> suppress
-    return nx
+    return likelyNext(localIndex, cursorSegment(), insertAfterId, [...dismissedNext])
   })
   // The suggestion stays pinned while the typed text is an (accent-insensitive) substring of
   // its name — you may simply not have noticed it was already there. Empty box -> always show.
-  const nextMatches = $derived.by(() => {
-    if (!nextSuggestion) return false
-    const q = normName(input)
-    return !q || normName(nextSuggestion.name).includes(q)
-  })
+  const nextMatches = $derived(nextMatchesInput(nextSuggestion, input))
   const showNext = $derived(!viewing && !composerLocked && composerFocused && nextMatches)
   // Silence the current anchor->suggestion pairing for the rest of this session (memory only).
   function dismissNext() {
@@ -2750,22 +2734,14 @@
     // tune/setting, then log from there. (The op still queues offline from the preview.)
     if (tsInputId != null) { previewThesessionInput(); return }
     const q = input.trim()
-    if (!q) return
-    // Fast path: a UNIQUE exact match in the session's local vocabulary logs instantly.
-    const local = resolveLocal(q)
-    if (local) { pickResult(local); return }
-    // A single candidate is already on screen for this exact text -> use it immediately, even
-    // if the server search is still in flight. The user sees one option and Enter means "that
-    // one"; no reason to drop their raw text into a placeholder first. (Covers the common case
-    // the exact matchers miss — e.g. "kesh" -> the sole "Kesh, The" comma-form, found only by
-    // substring.)
-    if (resultsQuery === q && results.length === 1) { pickResult(results[0]); return }
-    // If the server already answered for this exact text, decide synchronously (no placeholder).
-    if (!searching && resultsQuery === q && (results.length || noMatch)) {
-      const m = { exact_match: lastMatchExact, results }
-      if (!m.results.length) { submit(); return }                          // no match -> unlinked
-      if (m.exact_match) { pickResult(m.results[0]); return }              // unique exact among several
-      startResolving(q); applyResolution(m); return                        // multiple -> placeholder + dropdown
+    // A unique exact local match or the only candidate showing logs at once; an answered
+    // search decides without a placeholder; otherwise a placeholder now (composer.js).
+    const step = commitStep(localIndex, q, { query: resultsQuery, results, searching, noMatch, exact: lastMatchExact })
+    if (!step) return
+    if (step.action === 'pick') { pickResult(step.tune); return }
+    if (step.action === 'submit') { submit(); return }
+    if (step.action === 'ambiguous') {
+      startResolving(q); applyResolution({ exact_match: lastMatchExact, results }); return
     }
     // Out-typed the search: drop a resolving placeholder NOW, then settle when the match lands.
     startResolving(q)
@@ -2779,12 +2755,10 @@
   // when several tunes match, keep it pending and surface the choices in the dropdown.
   function applyResolution(m) {
     if (!resolving) return
-    if (!m.results.length) { settleResolving({ name: resolving.text }, resolving.text); return }
-    if (m.exact_match || m.results.length === 1) {
-      const t = m.results[0]
-      settleResolving({ tune_id: t.tune_id, name: t.name, tune_type: t.tune_type }, t.name); return
-    }
-    results = m.results.slice(0, 8); resultsQuery = resolving.text; noMatch = false; ambiguous = true
+    const r = resolution(m)
+    if (r.kind === 'unlinked') { settleResolving({ name: resolving.text }, resolving.text); return }
+    if (r.kind === 'linked') { settleResolving(r.tune, r.tune.name); return }
+    results = r.results; resultsQuery = resolving.text; noMatch = false; ambiguous = true
   }
 
   // Drop a placeholder "resolving" row at the cursor and lock the composer. Captures the
@@ -2892,30 +2866,18 @@
   // The single tune type of the set the cursor currently points into (preset filter).
   // The set (segment) the cursor is appending/inserting into, or null (new set / unknown).
   function cursorSegment() {
-    const c = insertAfterId
-    if (c == null) return endIsOpen && segments.length ? segments[segments.length - 1] : null
-    if (typeof c === 'object') {
-      if (c.newSet != null) return null
-      return segments.find((s) => s.tunes.some((t) => t.session_instance_tune_id === c.before)) || null
-    }
-    return segments.find((s) => s.tunes.some((t) => t.session_instance_tune_id === c)) || null
+    return cursorSegmentOf(segments, endIsOpen, insertAfterId)
   }
 
   function cursorSetType() {
-    const seg = cursorSegment()
-    if (!seg) return null
-    const types = new Set(seg.tunes.map((t) => t.tune_type).filter(Boolean))
-    return types.size === 1 ? [...types][0] : null
+    return setTuneType(cursorSegment())
   }
 
   // tune_ids already logged into the set the cursor is building. They're DEMOTED in the
   // suggestion ranking — a tune you just added shouldn't be the top "log again" pick — but
   // kept in the list (a set can legitimately repeat a tune).
   function currentSetTuneIds() {
-    const seg = cursorSegment()
-    const ids = new Set()
-    if (seg) for (const t of seg.tunes) if (t.tune_id != null) ids.add(t.tune_id)
-    return ids
+    return new Set(setTuneIds(cursorSegment()))
   }
 
   // Deep search entry: on DESKTOP the deep search IS the side pane (spec 032 — never a
@@ -2994,109 +2956,21 @@
   // locally so a typed name matching a known tune EXACTLY logs with no network in the
   // hot path. Normalization mirrors the server matcher (find_matching_tune): apostrophe
   // fold, unaccent, lower; "The" prefix flexibility on the tune-name tier only.
-  let localIndex = null
+  // $state.raw so the likely-next suggestion recomputes when the background load lands.
+  let localIndex = $state.raw(null)
   let vocabKnown = [], vocabAliases = [] // raw bootstrap vocabulary, kept for offline persistence
-  // stripThe / normName / normAbc now live in logstate.js (pure, unit-tested).
+  // The index and the matches over it live in composer.js (pure, fixtured).
   function buildLocalIndex(known, aliases) {
-    nextByTuneId.clear()
-    if (!known && !aliases) { localIndex = null; vocabKnown = []; vocabAliases = []; return }
     vocabKnown = known || []
     vocabAliases = aliases || []
-    for (const t of known || []) if (t.tune_id && t.next) nextByTuneId.set(t.tune_id, t.next)
-    const aliasMap = new Map(), nameMap = new Map(), byId = new Map()
-    const add = (map, key, id) => { if (!key) return; let s = map.get(key); if (!s) map.set(key, (s = new Set())); s.add(id) }
-    // `list` is the flat, vocab-ordered set of entries scanned for SUBSTRING matches (the
-    // type-ahead dropdown). Vocabulary order already encodes ranking — this session's
-    // top-N by plays first, then globally-popular tunes — so an entry's index is a good
-    // relevance proxy. Deduped by tune_id; first occurrence keeps the better (earlier) rank.
-    const list = [], listById = new Map()
-    const ensure = (id, name, tune_type) => {
-      let e = listById.get(id)
-      if (!e) { e = { tune_id: id, name, tune_type: tune_type ?? null, nn: normName(name), aliases: [], abc: '' }; listById.set(id, e); list.push(e) }
-      return e
-    }
-    for (const t of known || []) {
-      if (!t.tune_id) continue
-      byId.set(t.tune_id, { tune_id: t.tune_id, name: t.name, tune_type: t.tune_type ?? null })
-      const n = normName(t.name)
-      add(nameMap, n, t.tune_id)
-      add(nameMap, stripThe(n), t.tune_id) // "The X" <-> "X" flexibility (both directions)
-      const e = ensure(t.tune_id, t.name, t.tune_type)
-      if (t.abc) e.abc = normAbc(t.abc) // searchable notation for instant ABC substring match
-      if (t.alias) { add(aliasMap, normName(t.alias), t.tune_id); e.aliases.push(normName(t.alias)) }
-    }
-    for (const a of aliases || []) {
-      if (!a.tune_id || !a.alias) continue
-      add(aliasMap, normName(a.alias), a.tune_id)
-      if (!byId.has(a.tune_id)) byId.set(a.tune_id, { tune_id: a.tune_id, name: a.name || a.alias, tune_type: a.tune_type ?? null })
-      ensure(a.tune_id, a.name || a.alias, a.tune_type).aliases.push(normName(a.alias))
-    }
-    list.forEach((e, i) => { e.idx = i })
-    localIndex = { aliasMap, nameMap, byId, list }
+    localIndex = buildVocabIndex(known, aliases)
   }
-  // Resolve a typed string to a UNIQUE exact known tune, or null (no match OR ambiguous
-  // -> defer to the server path, which never guesses). Alias tier wins, exactly as the
-  // server does, and only returns when there's a single candidate.
-  function resolveLocal(q) {
-    if (!localIndex) return null
-    const qn = normName(q)
-    if (!qn) return null
-    const aIds = localIndex.aliasMap.get(qn)
-    if (aIds && aIds.size === 1) return localIndex.byId.get([...aIds][0]) || null
-    if (aIds && aIds.size > 1) return null // ambiguous alias -> let the gate handle it
-    const ids = new Set()
-    for (const key of new Set([qn, stripThe(qn)])) {
-      const s = localIndex.nameMap.get(key)
-      if (s) for (const id of s) ids.add(id)
-    }
-    if (ids.size === 1) return localIndex.byId.get([...ids][0]) || null
-    return null
-  }
-
-  // Substring matches from the local vocabulary — the INSTANT type-ahead list (zero network).
-  // Mirrors the server wildcard: plain substring over name+alias, ranked by the set's type
-  // preference, then vocabulary order (session plays -> global popularity), then name. A
-  // note-only query ALSO substring-matches cached notation (marked abc:true, appended after
-  // name hits), so typing an incipit finds tunes instantly — even offline (§024 fast path).
-  function resolveLocalMany(q, limit = 8) {
-    if (!localIndex) return []
-    const qn = normName(q)
-    const prefer = cursorSetType() // the set's tune type (soft sort preference), or null
-    const inSet = currentSetTuneIds() // already in this set -> demote below fresh suggestions
-    const cmp = (a, b) => {
-      const ia = inSet.has(a.tune_id) ? 1 : 0
-      const ib = inSet.has(b.tune_id) ? 1 : 0
-      if (ia !== ib) return ia - ib // a tune already in this set sinks beneath everything else
-      const pa = prefer && a.tune_type === prefer ? 0 : 1
-      const pb = prefer && b.tune_type === prefer ? 0 : 1
-      if (pa !== pb) return pa - pb
-      if (a.idx !== b.idx) return a.idx - b.idx
-      return a.nn < b.nn ? -1 : a.nn > b.nn ? 1 : 0
-    }
-    const nameHits = []
-    if (qn.length >= 2) {
-      for (const e of localIndex.list) {
-        if (e.nn.includes(qn) || e.aliases.some((a) => a.includes(qn))) nameHits.push(e)
-      }
-      nameHits.sort(cmp)
-    }
-    // Notation hits: only for note-only input with a selective needle (abcNeedle applies
-    // the same minimum the server does, so a one- or two-note fragment doesn't match half
-    // the catalog). Deduped against name hits.
-    const abcHits = []
-    const an = abcNeedle(q)
-    if (an) {
-      const seen = new Set(nameHits.map((e) => e.tune_id))
-      for (const e of localIndex.list) {
-        if (e.abc && !seen.has(e.tune_id) && e.abc.includes(an)) abcHits.push(e)
-      }
-      abcHits.sort(cmp)
-    }
-    return [
-      ...nameHits.map((e) => ({ tune_id: e.tune_id, name: e.name, tune_type: e.tune_type })),
-      ...abcHits.map((e) => ({ tune_id: e.tune_id, name: e.name, tune_type: e.tune_type, abc: true })),
-    ].slice(0, limit)
-  }
+  // A UNIQUE exact known tune for the text, or null (the server decides the rest).
+  const resolveLocal = (q) => resolveLocalIn(localIndex, q)
+  // The instant type-ahead over the vocabulary (zero network), preferring the set's type
+  // and demoting tunes already in it.
+  const resolveLocalMany = (q, limit = 8) =>
+    resolveLocalManyIn(localIndex, q, limit, cursorSetType(), setTuneIds(cursorSegment()))
 
   // mergeStable now lives in logstate.js (pure, unit-tested).
 
@@ -3133,17 +3007,8 @@
       const cached = await matchCacheGet(config.sessionInstanceId, q).catch(() => null)
       if (cached && cached.results.length) return cached
     }
-    if (abcPromise) {
-      const abc = await abcPromise
-      const seen = new Set(m.results.map((r) => r.tune_id))
-      const extra = abc
-        .filter((t) => t.tune_id != null && !seen.has(t.tune_id))
-        .map((t) => ({ tune_id: t.tune_id, name: t.name, tune_type: t.tune_type, in_session_tune: t.in_session, abc: true }))
-      if (extra.length) {
-        // Name matches first, then notation-only; exact_match stays the name match's verdict.
-        return { exact_match: m.exact_match, results: [...m.results, ...extra].slice(0, 8) }
-      }
-    }
+    // Name matches first, then notation-only; exact_match stays the name match's verdict.
+    if (abcPromise) return withNotationResults(m, await abcPromise)
     return m
   }
 

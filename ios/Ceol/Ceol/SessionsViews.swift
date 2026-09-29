@@ -542,7 +542,7 @@ struct NightView: View {
     let sessionInstanceID: Int
     let title: String
     @State private var model: NightModel?
-    @State private var entry = ""
+    @State private var deepSearching = false
     @FocusState private var composerFocused: Bool
     @State private var infoTune: TuneRef?
     @State private var assigning = false
@@ -619,9 +619,27 @@ struct NightView: View {
                         SelectionBar(model: model, trackStarters: trackStarters(model.night)) { assigning = true }
                     } else {
                         LogComposer(
-                            model: model, endIsOpen: !(log.ordered.last?.isBreak ?? true), text: $entry,
-                            focused: $composerFocused, onDone: finishEditing)
+                            model: model, endIsOpen: !(log.ordered.last?.isBreak ?? true),
+                            focused: $composerFocused, onDone: finishEditing, onDeepSearch: { deepSearching = true })
                     }
+                }
+            }
+        }
+        .onChange(of: model?.selected) { _, id in
+            // A selected row's actions sit under it: lower the keyboard and bring the row
+            // into view so they aren't hidden behind the composer.
+            guard let id else { return }
+            composerFocused = false
+            withAnimation(.easeOut(duration: 0.25)) { scroll.scrollTo(id: rowScrollID(id), anchor: .center) }
+        }
+        .sheet(isPresented: $deepSearching) {
+            if let model {
+                DeepSearchSheet(
+                    model: model, initialQuery: model.composer.text,
+                    preferType: Composer.setTuneType(model.cursorSegment)
+                ) { payload in
+                    model.composer.text = ""
+                    model.logTune(payload)
                 }
             }
         }
@@ -756,7 +774,6 @@ struct NightView: View {
 
     private func finishEditing() {
         composerFocused = false
-        entry = ""
         model?.setEditing(false)
     }
 }

@@ -106,7 +106,25 @@ struct EditableLog: View {
                                 onInsertBelow: { place(.after(id), endIsOpen: endIsOpen, segments: segments) },
                                 onInfo: { onInfo(t) },
                                 onConfirm: { model.confirm(id) },
-                                onRemove: { withAnimation(.easeOut(duration: 0.2)) { model.remove(id) } })
+                                onRemove: {
+                                    if t["_resolving"].isTruthy {
+                                        model.selected = nil
+                                        model.composer.cancelResolving(returnText: false)
+                                    } else {
+                                        withAnimation(.easeOut(duration: 0.2)) { model.remove(id) }
+                                    }
+                                },
+                                onEdit: {
+                                    if t["_resolving"].isTruthy {
+                                        model.selected = nil
+                                        model.composer.cancelResolving(returnText: true)
+                                    } else {
+                                        model.composer.startEdit(t)
+                                    }
+                                    onFocusComposer()
+                                },
+                                editing: model.composer.editingID == id)
+                            .id(rowScrollID(id))
                         }
                         if endIsOpen && si == segments.count - 1 && ti == seg.tunes.count - 1 {
                             seam(.end, label: "＋", active: active, tall: true)
@@ -245,7 +263,7 @@ struct EditableLog: View {
     // MARK: - Edit mode
 
     private func tap(_ t: LogRecord) {
-        guard let id = t.recordID, !t["_temp"].isTruthy else { return }
+        guard let id = t.recordID, !t["_temp"].isTruthy || t["_resolving"].isTruthy else { return }
         model.selected = model.selected == id ? nil : id
     }
 
@@ -272,6 +290,9 @@ struct EditableLog: View {
         onFocusComposer()
     }
 }
+
+/// A log row's scroll id, for bringing a selected row into view.
+func rowScrollID(_ id: RecordID) -> String { "row-\(id)" }
 
 /// The set a starter is being picked for, as a sheet item.
 struct StarterChoice: Identifiable {
@@ -657,6 +678,9 @@ struct EditableRow: View {
     let onInfo: () -> Void
     let onConfirm: () -> Void
     let onRemove: () -> Void
+    var onEdit: () -> Void = {}
+    /// Being edited in the box below (yellow, like a selection, without the actions).
+    var editing = false
 
     @State private var dx: CGFloat = 0
     static let removeAt: CGFloat = 110
@@ -671,20 +695,27 @@ struct EditableRow: View {
                     .font(.ceol(size: 19))
                     .foregroundStyle(unlinked || low ? CeolTokens.attention : CeolTokens.textColor)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                if unlinked && !record["_temp"].isTruthy {
+                if record["_resolving"].isTruthy {
+                    ProgressView().controlSize(.small)
+                    Text("resolving…").font(.ceol(size: 12)).foregroundStyle(CeolTokens.textMuted)
+                } else if unlinked && !record["_temp"].isTruthy {
                     Text("⚠ unlinked").font(.ceol(size: 12, weight: .semibold)).foregroundStyle(CeolTokens.attention)
                 }
             }
             .padding(.vertical, 9).padding(.horizontal, 8)
             .background {
-                if selected {
+                if selected || editing {
                     RoundedRectangle(cornerRadius: 6).fill(CeolTokens.insert.opacity(0.14))
                         .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(CeolTokens.insert, lineWidth: 1))
                         .shadow(color: CeolTokens.insert.opacity(0.18), radius: 6)
                 }
             }
-            .overlay(alignment: .topTrailing) { if selected { insertPill("↑", "Insert above", onInsertAbove).offset(y: -10) } }
-            .overlay(alignment: .bottomTrailing) { if selected { insertPill("↓", "Insert below", onInsertBelow).offset(y: 10) } }
+            .overlay(alignment: .topTrailing) {
+                if selected && !record["_temp"].isTruthy { insertPill("↑", "Insert above", onInsertAbove).offset(y: -10) }
+            }
+            .overlay(alignment: .bottomTrailing) {
+                if selected && !record["_temp"].isTruthy { insertPill("↓", "Insert below", onInsertBelow).offset(y: 10) }
+            }
             .zIndex(1)
             .contentShape(Rectangle())
             .onTapGesture(perform: onTap)
@@ -696,6 +727,7 @@ struct EditableRow: View {
                 HStack(spacing: 6) {
                     if record["tune_id"].isTruthy { action("ⓘ Info", onInfo) }
                     if low { action("✓ Confirm", onConfirm) }
+                    action("✎ Edit", onEdit)
                     action("🗑 Remove", onRemove, danger: true)
                 }
                 .padding(.top, 14).padding(.bottom, 8).padding(.horizontal, 2)
@@ -788,15 +820,18 @@ struct SwipeLeft: UIGestureRecognizerRepresentable {
     }
 }
 
-/// The bottom of the screen while logging: the name, Log, and End set or Done.
+/// The bottom of the screen while logging (the web's dock): the suggestions above the
+/// box, the box, Log (Save while editing), and one more: Cancel while editing, Search
+/// while typing, End set on an open set at the end, or Done on a closed one.
 struct LogComposer: View {
     let model: NightModel
     let endIsOpen: Bool
-    @Binding var text: String
     var focused: FocusState<Bool>.Binding
     let onDone: () -> Void
+    let onDeepSearch: () -> Void
 
     var body: some View {
+        let c = model.composer
         VStack(spacing: 6) {
             if let notice = model.notice {
                 Text(notice).font(.ceol(size: 14)).foregroundStyle(CeolTokens.errorText)
@@ -806,73 +841,224 @@ struct LogComposer: View {
                     .onTapGesture { model.notice = nil }
                     .accessibilityIdentifier("log.notice")
             }
+            if let m = model.merged {
+                HStack {
+                    Text("Merged with \(m.name) already in this set").foregroundStyle(CeolTokens.textColor)
+                    Spacer()
+                    Button("Keep both") { model.keepBoth() }.foregroundStyle(CeolTokens.primary)
+                        .accessibilityIdentifier("merge.keepBoth")
+                    Button { model.dismissMerged() } label: { Image(systemName: "xmark") }.foregroundStyle(CeolTokens.textMuted)
+                }
+                .font(.ceol(size: 14))
+                .padding(.horizontal, 12).padding(.vertical, 8)
+                .background(CeolTokens.headerBg, in: RoundedRectangle(cornerRadius: 8))
+            }
+            if c.editingID != nil {
+                HStack(spacing: 8) {
+                    (Text("Editing ") + Text(c.editingName).bold() + Text(" — pick a match, or type a new name"))
+                        .font(.ceol(size: 14)).foregroundStyle(CeolTokens.textColor)
+                    Spacer(minLength: 4)
+                    Button("Unlink") { c.unlink() }
+                        .font(.ceol(size: 14, weight: .semibold)).foregroundStyle(CeolTokens.attention)
+                        .accessibilityIdentifier("edit.unlink")
+                }
+                .padding(.horizontal, 12).padding(.vertical, 8)
+                .background(CeolTokens.insert.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+            }
+            Suggestions(model: model, focused: focused.wrappedValue)
             HStack(spacing: 8) {
                 HStack(spacing: 0) {
-                    TextField("", text: $text, prompt: Text(prompt).foregroundStyle(CeolTokens.textMuted))
+                    TextField("", text: Binding(get: { c.text }, set: { c.text = $0 }), prompt: Text(prompt).foregroundStyle(CeolTokens.textMuted))
                         .font(.ceol(size: 17))
                         .foregroundStyle(CeolTokens.textColor)
                         .focused(focused)
                         .submitLabel(.done)
                         .autocorrectionDisabled()
+                        .textInputAutocapitalization(.words)
+                        .disabled(c.resolving != nil)
                         .onSubmit(commit)
                         .accessibilityIdentifier("log.input")
-                    if !text.isEmpty {
-                        Button { text = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(CeolTokens.textMuted) }
+                    if !c.text.isEmpty {
+                        Button { c.text = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(CeolTokens.textMuted) }
                             .buttonStyle(.plain).accessibilityLabel("Clear entry")
                     }
                 }
                 .padding(.horizontal, 12).frame(height: 46)
                 .background(CeolTokens.headerBg, in: RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(CeolTokens.borderColor, lineWidth: 1))
-                Button("Log", action: commit)
+                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(c.ambiguous ? CeolTokens.danger : CeolTokens.borderColor, lineWidth: 1))
+                let canLog = c.editingID != nil || c.ambiguous || !trimmed.isEmpty
+                Button(c.editingID != nil ? "Save" : "Log", action: commit)
                     .font(.ceol(size: 16, weight: .semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 18).frame(height: 46)
                     .background(CeolTokens.primaryFill, in: RoundedRectangle(cornerRadius: 8))
-                    .opacity(trimmed.isEmpty ? 0.4 : 1)
-                    .disabled(trimmed.isEmpty)
+                    .opacity(canLog ? 1 : 0.4)
+                    .disabled(!canLog)
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("log.commit")
-                if trimmed.isEmpty && model.cursor == .end && model.selected == nil {
-                    if endIsOpen {
-                        Button("End set") { model.endSet() }
-                            .font(.ceol(size: 16, weight: .bold))
-                            .foregroundStyle(CeolTokens.insertInk)
-                            .padding(.horizontal, 16).frame(height: 46)
-                            .background(CeolTokens.insert, in: RoundedRectangle(cornerRadius: 8))
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("log.endSet")
-                    } else {
-                        Button("Done", action: onDone)
-                            .font(.ceol(size: 16, weight: .semibold))
-                            .foregroundStyle(CeolTokens.textMuted)
-                            .padding(.horizontal, 16).frame(height: 46)
-                            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(CeolTokens.borderColor, lineWidth: 1))
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("log.done")
-                    }
-                }
+                trailing
             }
         }
         .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 8)
         .background(CeolTokens.bgColor)
+        // The box is locked while a placeholder waits; when it settles, the keyboard
+        // comes back for the next tune.
+        .onChange(of: c.resolving == nil) { _, free in if free { focused.wrappedValue = true } }
     }
 
-    private var trimmed: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
+    @ViewBuilder private var trailing: some View {
+        let c = model.composer
+        if c.editingID != nil {
+            outline("Cancel", id: "edit.cancel") { c.cancelEdit() }
+        } else if !trimmed.isEmpty && c.resolving == nil {
+            outline("Search", id: "log.search", color: CeolTokens.info, action: onDeepSearch)
+        } else if trimmed.isEmpty && model.cursor == .end && model.selected == nil && c.resolving == nil {
+            if endIsOpen {
+                Button("End set") { model.endSet() }
+                    .font(.ceol(size: 16, weight: .bold))
+                    .foregroundStyle(CeolTokens.insertInk)
+                    .padding(.horizontal, 16).frame(height: 46)
+                    .background(CeolTokens.insert, in: RoundedRectangle(cornerRadius: 8))
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("log.endSet")
+            } else {
+                outline("Done", id: "log.done", action: onDone)
+            }
+        }
+    }
+
+    private func outline(_ title: String, id: String, color: Color = CeolTokens.textMuted, action: @escaping () -> Void) -> some View {
+        Button(title, action: action)
+            .font(.ceol(size: 16, weight: .semibold))
+            .foregroundStyle(color)
+            .padding(.horizontal, 16).frame(height: 46)
+            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(CeolTokens.borderColor, lineWidth: 1))
+            .buttonStyle(.plain)
+            .accessibilityIdentifier(id)
+    }
+
+    private var trimmed: String { model.composer.text.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     private var prompt: String {
+        let c = model.composer
+        if c.resolving != nil { return c.ambiguous ? "Pick one above" : "Resolving…" }
+        if c.editingID != nil { return "Re-pick or rename this tune…" }
         switch model.cursor {
-        case .end: "Tune name"
-        case .newSet: "Tune name — starts a new set"
-        default: "Tune name — goes at the yellow line"
+        case .end: return "Tune name"
+        case .newSet: return "Tune name — starts a new set"
+        default: return "Tune name — goes at the yellow line"
         }
     }
 
     private func commit() {
-        guard !trimmed.isEmpty else { return }
-        model.logTune(trimmed)
-        text = ""
+        Task { await model.composer.commit() }
         // Keep the keyboard up for the next tune, as the web's composer does.
         focused.wrappedValue = true
+    }
+}
+
+/// What shows above the box: a thesession.org tune, the likely next tune, the matches,
+/// "no match", and while a placeholder waits, the choice to log the text as typed.
+struct Suggestions: View {
+    let model: NightModel
+    let focused: Bool
+
+    var body: some View {
+        let c = model.composer
+        let next = focused || c.text.isEmpty ? model.likelyNext : nil
+        let showNext = next != nil && Composer.nextMatchesInput(next, c.text)
+        let rows = showNext ? c.results.filter { $0["tune_id"]?.intValue != next?.tuneID } : c.results
+        let any = c.theSessionID != nil || showNext || !rows.isEmpty || (c.noMatch && c.editingID == nil) || c.resolving != nil
+        if any {
+            VStack(spacing: 0) {
+                if c.ambiguous, let r = c.resolving {
+                    Text("“\(r.text)” matches several tunes — tap one, or log it as typed")
+                        .font(.ceol(size: 13)).foregroundStyle(CeolTokens.attention)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 12).padding(.vertical, 8)
+                }
+                ScrollView {
+                    // Bottom-up, as the web's list: the best match sits nearest the box.
+                    VStack(spacing: 0) {
+                        ForEach(Array(items(c, next: showNext ? next : nil, rows: rows).reversed().enumerated()), id: \.offset) { _, item in
+                            view(item, c)
+                        }
+                    }
+                }
+                .defaultScrollAnchor(.bottom)
+                .frame(maxHeight: 240)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+            .background(CeolTokens.headerBg, in: RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(CeolTokens.borderColor, lineWidth: 1))
+            .overlay(alignment: .topTrailing) {
+                if c.searching { ProgressView().controlSize(.small).padding(8) }
+            }
+        }
+    }
+
+    private enum Item {
+        case theSession(Int)
+        case next(VocabTune)
+        case result(JSONValue)
+        case noMatch
+        case asIs(String)
+    }
+
+    /// Nearest the box first: the thesession tune, the likely next, the matches, then
+    /// "no match" or "log as typed".
+    private func items(_ c: LogComposerModel, next: VocabTune?, rows: [JSONValue]) -> [Item] {
+        var out: [Item] = []
+        if let id = c.theSessionID { out.append(.theSession(id)) }
+        if let next { out.append(.next(next)) }
+        out += rows.map { .result($0) }
+        if c.noMatch && c.editingID == nil && c.resolving == nil { out.append(.noMatch) }
+        if let r = c.resolving { out.append(.asIs(r.text)) }
+        return out
+    }
+
+    @ViewBuilder private func view(_ item: Item, _ c: LogComposerModel) -> some View {
+        switch item {
+        case .theSession(let id):
+            row(title: "Tune #\(id) from thesession.org", detail: nil, id: "suggest.thesession") { c.logTheSession(id) }
+        case .next(let next):
+            HStack(spacing: 0) {
+                row(title: next.name, detail: ["usually next", next.tuneType].compactMap { $0 }.joined(separator: " · "),
+                    bold: true, id: "suggest.next") { c.pick(next.json) }
+                Button { model.dismissLikelyNext() } label: {
+                    Image(systemName: "xmark").font(.system(size: 13)).foregroundStyle(CeolTokens.textMuted).frame(width: 40, height: 40)
+                }
+                .accessibilityLabel("Not this one")
+            }
+        case .result(let t):
+            let detail = [
+                t["tune_type"]?.stringValue, t["in_session_tune"] == true ? "in session" : nil,
+                t["abc"] == true ? "♪ notation" : nil,
+            ].compactMap { $0 }.joined(separator: " · ")
+            row(title: t["name"]?.stringValue ?? "", detail: detail.isEmpty ? nil : detail, id: "suggest.row") { c.pick(t) }
+        case .noMatch:
+            Text("No tunes match your search").font(.ceol(size: 14)).foregroundStyle(CeolTokens.textMuted)
+                .frame(maxWidth: .infinity, alignment: .leading).padding(12)
+        case .asIs(let text):
+            row(title: "Log “\(text)” as typed", detail: nil, id: "suggest.asIs", color: CeolTokens.primary) { c.logAsIs() }
+        }
+    }
+
+    private func row(title: String, detail: String?, bold: Bool = false, id: String, color: Color = CeolTokens.textColor,
+                     action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Text(title).font(.ceol(size: 16, weight: bold ? .semibold : .regular)).foregroundStyle(color)
+                    .lineLimit(1)
+                Spacer(minLength: 4)
+                if let detail {
+                    Text(detail).font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted).lineLimit(1)
+                }
+            }
+            .padding(.horizontal, 12).frame(minHeight: 42)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(id)
     }
 }

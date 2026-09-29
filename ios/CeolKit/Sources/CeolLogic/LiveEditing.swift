@@ -73,6 +73,65 @@ extension LiveLog {
         return ([op], next)
     }
 
+    /// Log a tune as the composer does: a plain append of a tune the open set already
+    /// has (same tune, or the same unlinked name) merges into that row instead, with no
+    /// new row shown (the server corroborates it); `mergedInto` says which. Otherwise
+    /// addTune. `no_merge` in the payload skips the check ("Keep both").
+    public mutating func logTune(_ payload: [String: JSONValue], at cursor: Cursor, opID: String = LiveLog.newOpID())
+        -> (ops: [PendingOp], cursor: Cursor, mergedInto: LogRecord?)
+    {
+        if case .newSet = cursor {} else if payload["no_merge"] != true {
+            let pos = LogState.cursorPos(cursor, ordered: ordered, allRecords: records)
+            if pos.afterID == nil && pos.beforeID == nil,
+                let target = LogState.openSetMergeTarget(.object(payload), ordered: ordered)
+            {
+                var body = payload
+                body["after_record_id"] = .null
+                body["before_record_id"] = .null
+                return ([register(opID, "add_tune", body, temps: [])], cursor, target)
+            }
+        }
+        let r = addTune(payload, at: cursor, opID: opID)
+        return (r.ops, r.cursor, nil)
+    }
+
+    /// A placeholder row at the cursor while the server decides what the typed text
+    /// names ("resolving…"). Nothing is sent; settle it with settleResolving or drop it.
+    public mutating func startResolving(_ text: String, at cursor: Cursor) -> String {
+        let id = "temp-resolving-\(LiveLog.newOpID())"
+        let position: String
+        if case .newSet(let next) = cursor {
+            let ord = ordered
+            let i = ord.firstIndex { $0.recordID == next }
+            position = FracIndex.optimisticBetween(i.flatMap { $0 > 0 ? ord[$0 - 1].orderPosition : nil }, i.flatMap { ord[$0].orderPosition })
+        } else {
+            position = LogState.cursorPos(cursor, ordered: ordered, allRecords: records).position
+        }
+        put(.object([
+            "session_instance_tune_id": .string(id), "name": .string(text), "tune_id": .null, "tune_type": .null,
+            "record_type": "tune", "order_position": .string(position), "deleted": false, "_temp": true,
+            "_resolving": true,
+        ]))
+        return id
+    }
+
+    /// Drop a placeholder (settled, or cancelled).
+    public mutating func dropPlaceholder(_ id: String) { drop(.string(id)) }
+
+    /// Change a logged tune (change_tune): relink {tune_id, name}, unlink {unlink: true},
+    /// or rename {name, unlink: true}. `patch` is how the row shows it until the answer.
+    public mutating func changeTune(
+        _ id: RecordID, _ payload: [String: JSONValue], patch: [String: JSONValue], opID: String = LiveLog.newOpID()
+    ) -> PendingOp? {
+        guard let r = records.first(where: { $0.recordID == id }), case .object(var o) = r, !r["_temp"].isTruthy else { return nil }
+        for (k, v) in patch { o[k] = v }
+        put(.object(o))
+        var op = register(opID, "change_tune", payload.merging(["record_id": id.json]) { a, _ in a }, temps: [], puts: [.object(o)])
+        op.prev = [r]
+        pending[opID] = op
+        return op
+    }
+
     /// End the open set: a break at the end (nil on an empty log). The anchor is null so
     /// the server appends when it runs the op, never a temp id.
     public mutating func endSet(opID: String = LiveLog.newOpID()) -> PendingOp? {

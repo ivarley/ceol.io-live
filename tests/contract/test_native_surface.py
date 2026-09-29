@@ -71,6 +71,14 @@ CHECKED_GETS = [
         "/api/live/instances/1/people",
     ),
     (
+        "/api/live/instances/{session_instance_id}/match",
+        "/api/live/instances/1/match?q=cooley",
+    ),
+    (
+        "/api/live/instances/{session_instance_id}/match",
+        "/api/live/instances/1/match?q=the%20kesh&prefer_type=jig&limit=3",
+    ),
+    (
         "/api/session-instances/{session_instance_id}/recordings",
         "/api/session-instances/1/recordings",
     ),

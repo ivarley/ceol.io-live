@@ -79,6 +79,7 @@ enum Fixtures {
         "parse": "shared/parse.fixtures.json",
         "mytunes": "mytunespage/logic.fixtures.json",
         "selection": "selection.fixtures.json",
+        "composer": "composer.fixtures.json",
     ]
 
     /// frontend/src, from ios/CeolKit/Tests/CeolLogicTests/FixtureRunner.swift.

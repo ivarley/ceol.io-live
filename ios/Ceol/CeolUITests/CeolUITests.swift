@@ -700,6 +700,140 @@ final class CeolUITests: XCTestCase {
         app.buttons["night.done"].tap()
     }
 
+    /// Phase 5c: finding tunes as you type. A name the session knows logs at once; "maid"
+    /// shows several and one is tapped; Enter on "maid" once the answer is in asks which,
+    /// and the first choice is taken; a name nothing matches logs unlinked, and is then
+    /// edited and relinked from the suggestions; deep search logs a tune from its sheet.
+    /// Each lands on the server as expected; everything added is removed after.
+    @MainActor
+    func testFindingTunesAsYouType() async throws {
+        let api = try await TestAPI.signedIn(server: server)
+        let nights = try await api.get("/api/sessions/austin/mueller/logs")
+        let years = (nights["sorted_years"] as? [Any])?.compactMap { "\($0)" } ?? []
+        let byYear = nights["instances_by_year"] as? [String: [[String: Any]]] ?? [:]
+        let newest = try XCTUnwrap(years.first.flatMap { byYear[$0]?.first })
+        let instanceID = try XCTUnwrap(newest["session_instance_id"] as? Int)
+        func live() async throws -> [[String: Any]] {
+            let b = try await api.get("/api/live/instances/\(instanceID)/bootstrap")
+            return ((b["records"] as? [[String: Any]]) ?? [])
+                .filter { ($0["deleted"] as? Bool) != true }
+                .sorted { ($0["order_position"] as? String ?? "") < ($1["order_position"] as? String ?? "") }
+        }
+        let before = Set(try await live().compactMap { $0["session_instance_tune_id"] as? Int })
+        func added() async throws -> [[String: Any]] {
+            try await live().filter { ($0["record_type"] as? String) == "tune" && !before.contains($0["session_instance_tune_id"] as? Int ?? -1) }
+        }
+        func waitFor(_ what: String, _ check: ([[String: Any]]) -> Bool) async throws {
+            for _ in 0..<40 {
+                if check(try await added()) { return }
+                try await Task.sleep(for: .milliseconds(250))
+            }
+            XCTFail("the server never showed: \(what) — added: \(try await added().map { "\($0["name"] ?? "?") #\($0["tune_id"] ?? "-")" })")
+        }
+        func linked(_ rs: [[String: Any]], _ name: String) -> Bool {
+            rs.contains { ($0["name"] as? String) == name && $0["tune_id"] is Int }
+        }
+        addTeardownBlock { await Self.clearAdded(api, instanceID, keeping: before) }
+        try await findingSteps(waitFor: waitFor, linked: linked)
+    }
+
+    /// Remove every row added to a night since `keeping` was taken (a teardown block, so
+    /// it runs even when a failed tap stops the test).
+    static func clearAdded(_ api: TestAPI, _ instanceID: Int, keeping: Set<Int>) async {
+        func rows() async -> [[String: Any]] {
+            let b = (try? await api.get("/api/live/instances/\(instanceID)/bootstrap")) ?? [:]
+            return ((b["records"] as? [[String: Any]]) ?? []).filter { ($0["deleted"] as? Bool) != true }
+        }
+        let ops = "/api/live/instances/\(instanceID)/ops"
+        let tunes = await rows().filter { ($0["record_type"] as? String) == "tune" }
+            .compactMap { $0["session_instance_tune_id"] as? Int }.filter { !keeping.contains($0) }
+        if !tunes.isEmpty {
+            _ = try? await api.post(ops, ["op_id": UUID().uuidString.lowercased(), "op_type": "remove_tunes", "record_ids": tunes])
+        }
+        for r in await rows() where (r["record_type"] as? String) == "break" {
+            if let id = r["session_instance_tune_id"] as? Int, !keeping.contains(id) {
+                _ = try? await api.post(ops, ["op_id": UUID().uuidString.lowercased(), "op_type": "set_break", "action": "remove", "record_id": id])
+            }
+        }
+    }
+
+    @MainActor
+    private func findingSteps(
+        waitFor: (String, ([[String: Any]]) -> Bool) async throws -> Void,
+        linked: @escaping ([[String: Any]], String) -> Bool
+    ) async throws {
+        let app = launch()
+        signIn(app)
+        app.buttons["tab.sessions"].firstMatch.tap()
+        let mueller = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Mueller Session'")).firstMatch
+        XCTAssertTrue(mueller.waitForExistence(timeout: 10))
+        mueller.tap()
+        app.buttons.containing(NSPredicate(format: "label BEGINSWITH 'Logs'")).firstMatch.tap()
+        let night = app.buttons.matching(NSPredicate(format: "label MATCHES '.*[0-9]+ tunes?.*'")).firstMatch
+        XCTAssertTrue(night.waitForExistence(timeout: 10))
+        night.tap()
+        XCTAssertTrue(app.buttons["night.edit"].waitForExistence(timeout: 15))
+        app.buttons["night.edit"].tap()
+        let input = app.textFields["log.input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 5))
+        // A set of our own (an open set could merge a repeated tune), and the vocabulary.
+        if app.buttons["log.endSet"].exists { app.buttons["log.endSet"].tap() }
+        try await Task.sleep(for: .seconds(1.5))
+
+        // A name the session knows: logged, linked, at once.
+        input.tap()
+        input.typeText("drowsy maggie\n")
+        try await waitFor("Drowsy Maggie, linked") { linked($0, "Drowsy Maggie") }
+
+        // Several match: tap one.
+        input.typeText("maid")
+        let sligo = app.buttons.matching(identifier: "suggest.row").containing(NSPredicate(format: "label CONTAINS 'Sligo Maid'")).firstMatch
+        XCTAssertTrue(sligo.waitForExistence(timeout: 5))
+        snapshot("suggestions")
+        sligo.tap()
+        try await waitFor("Sligo Maid, linked") { linked($0, "Sligo Maid, The") }
+
+        // Enter once the answer is in, with several and none exact: choose.
+        input.typeText("maid")
+        XCTAssertTrue(sligo.waitForExistence(timeout: 5))
+        try await Task.sleep(for: .milliseconds(600))
+        app.buttons["log.commit"].tap()
+        let asIs = app.buttons["suggest.asIs"]
+        XCTAssertTrue(asIs.waitForExistence(timeout: 5), "several matches should ask which")
+        snapshot("ambiguous")
+        let first = app.buttons.matching(identifier: "suggest.row").containing(NSPredicate(format: "label CONTAINS 'Maid Behind'")).firstMatch
+        first.tap()
+        try await waitFor("Maid Behind The Bar, linked") { linked($0, "Maid Behind The Bar, The") }
+
+        // Nothing matches: unlinked. Then edit it and relink from the suggestions.
+        let odd = "Zzqx Unknown \(Int.random(in: 1000...9999))"
+        input.typeText(odd + "\n")
+        try await waitFor("the unmatched name, unlinked") { rs in rs.contains { ($0["name"] as? String) == odd && $0["tune_id"] is NSNull } }
+        XCTAssertTrue(app.staticTexts[odd].waitForExistence(timeout: 5))
+        app.staticTexts[odd].tap()
+        XCTAssertTrue(app.buttons["row.edit"].waitForExistence(timeout: 3))
+        app.buttons["row.edit"].tap()
+        XCTAssertTrue(app.buttons["edit.cancel"].waitForExistence(timeout: 3))
+        app.buttons["Clear entry"].tap()
+        input.typeText("banish")
+        let banish = app.buttons.matching(identifier: "suggest.row").containing(NSPredicate(format: "label CONTAINS 'Banish Misfortune'")).firstMatch
+        XCTAssertTrue(banish.waitForExistence(timeout: 5))
+        snapshot("editing")
+        banish.tap()
+        try await waitFor("the unmatched row relinked") { linked($0, "Banish Misfortune") }
+
+        // Deep search.
+        input.typeText("silver")
+        XCTAssertTrue(app.buttons["log.search"].waitForExistence(timeout: 3))
+        app.buttons["log.search"].tap()
+        let card = app.buttons.matching(identifier: "deep.result").containing(NSPredicate(format: "label CONTAINS 'Silver Spear'")).firstMatch
+        XCTAssertTrue(card.waitForExistence(timeout: 10))
+        snapshot("deep search")
+        card.tap()
+        try await waitFor("Silver Spear from deep search") { linked($0, "Silver Spear, The") }
+        app.buttons["night.done"].tap()
+    }
+
     /// Phase 3d: Me shows the profile and opens it to edit (cancelled: seed data stays put).
     @MainActor
     func testMeShowsTheProfile() throws {
@@ -814,7 +948,7 @@ final class CeolUITests: XCTestCase {
 
 /// The server as a second client would use it, for tests that need something to happen
 /// while the app watches: signed in with the seeded admin over the API.
-struct TestAPI {
+struct TestAPI: Sendable {
     let server: String
     let token: String
 
@@ -849,3 +983,4 @@ struct TestAPI {
         return (try JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
     }
 }
+

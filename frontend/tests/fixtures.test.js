@@ -34,6 +34,7 @@ import * as sessionpath from '../src/shared/sessionpath.js'
 import * as parse from '../src/shared/parse.js'
 import * as mytunes from '../src/mytunespage/logic.js'
 import * as selection from '../src/selection.js'
+import * as composer from '../src/composer.js'
 
 import logstateFx from '../src/logstate.fixtures.json'
 import fracindexFx from '../src/fracindex.fixtures.json'
@@ -46,6 +47,7 @@ import sessionpathFx from '../src/shared/sessionpath.fixtures.json'
 import parseFx from '../src/shared/parse.fixtures.json'
 import mytunesFx from '../src/mytunespage/logic.fixtures.json'
 import selectionFx from '../src/selection.fixtures.json'
+import composerFx from '../src/composer.fixtures.json'
 
 const MODULES = [
   { name: 'logstate', mod: logstate, fx: logstateFx, load: () => import('../src/logstate.js') },
@@ -59,6 +61,7 @@ const MODULES = [
   { name: 'shared/parse', mod: parse, fx: parseFx },
   { name: 'mytunespage/logic', mod: mytunes, fx: mytunesFx },
   { name: 'selection', mod: selection, fx: selectionFx },
+  { name: 'composer', mod: composer, fx: composerFx },
 ]
 
 // What a non-JS runner would see: Maps as entry lists, undefined properties gone.

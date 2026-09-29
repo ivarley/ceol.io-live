@@ -70,7 +70,17 @@ final class NightModel {
     private(set) var people: [JSONValue] = []
     private(set) var peopleLoaded = false
 
-    private let app: AppModel
+    /// The session's vocabulary as a match index (Composer), loaded after the night.
+    private(set) var vocab: VocabIndex?
+    /// The typing box: search, matching, the placeholder, editing a logged tune.
+    @ObservationIgnored private(set) lazy var composer = LogComposerModel(night: self)
+    /// A tune that just merged into the open set, for "Keep both" (seven seconds).
+    private(set) var merged: (name: String, payload: [String: JSONValue])?
+    private var mergedSeq = 0
+    /// Likely-next pairings dismissed this visit ("anchor->next").
+    var dismissedNext: [String] = []
+
+    let app: AppModel
     /// Ops waiting to go, in order.
     private var outbox: [String] = []
     private var sender: Task<Void, Never>?
@@ -128,6 +138,7 @@ final class NightModel {
             log = log.map { $0.rebased(onto: fresh) } ?? fresh
             loadError = nil
             failures = 0
+            Task { await loadVocabulary() }
         } catch {
             if log == nil { loadError = loadFailureMessage(error) }
             status = .offline
@@ -207,6 +218,7 @@ final class NightModel {
     /// Start or stop logging: the stream reopens in the new mode.
     func setEditing(_ on: Bool) {
         guard editing != on else { return }
+        if !on { composer.reset() }
         editing = on
         selected = nil
         selecting = false
@@ -220,15 +232,79 @@ final class NightModel {
         openStream()
     }
 
-    /// Log a tune by name at the cursor; the server matches the name to a tune.
-    func logTune(_ name: String) {
-        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty, var l = log else { return }
+    /// Log a tune at a cursor (the current one unless a placeholder captured another):
+    /// {tune_id, name, tune_type}, {name} for the server to match, or {thesession_id}. A
+    /// tune the open set already has merges into it, with "Keep both" offered.
+    func logTune(_ payload: [String: JSONValue], at: Cursor? = nil) {
+        guard var l = log else { return }
         selected = nil
-        let r = l.addTune(["name": .string(name)], at: cursor)
+        let at = at ?? cursor
+        let r = l.logTune(payload, at: at)
         log = l
-        cursor = r.cursor
+        if cursor == at { cursor = r.cursor }
         enqueue(r.ops)
+        if let target = r.mergedInto {
+            let name = target["name"]?.stringValue ?? payload["name"]?.stringValue ?? "that tune"
+            mergedSeq += 1
+            let seq = mergedSeq
+            merged = (name, payload)
+            Task { [weak self] in
+                try? await Task.sleep(for: .seconds(7))
+                if self?.mergedSeq == seq { self?.merged = nil }
+            }
+        }
+    }
+
+    /// "Keep both": log the merged tune again as its own row at the end.
+    func keepBoth() {
+        guard let m = merged else { return }
+        merged = nil
+        logTune(m.payload.merging(["no_merge": true]) { _, b in b }, at: .end)
+    }
+
+    func dismissMerged() { merged = nil }
+
+    /// A placeholder row while the server decides what typed text names.
+    func startPlaceholder(_ text: String, at cursor: Cursor) -> String? {
+        guard var l = log else { return nil }
+        let id = l.startResolving(text, at: cursor)
+        log = l
+        return id
+    }
+
+    func dropPlaceholder(_ id: String) {
+        log?.dropPlaceholder(id)
+    }
+
+    /// Relink, unlink or rename a logged tune.
+    func changeTune(_ id: RecordID, _ payload: [String: JSONValue], patch: [String: JSONValue]) {
+        guard var l = log, let op = l.changeTune(id, payload, patch: patch) else { return }
+        log = l
+        enqueue([op])
+    }
+
+    func loadVocabulary() async {
+        guard let v = try? await app.getJSON("/api/live/instances/\(instanceID)/vocabulary") else { return }
+        vocab = Composer.buildIndex(known: v["known_tunes"]?.arrayValue, aliases: v["known_aliases"]?.arrayValue)
+    }
+
+    /// The set the cursor is building, its type and its tunes (for the suggestions).
+    var cursorSegment: LogSegment? {
+        guard let log else { return nil }
+        return Composer.cursorSegment(
+            LogState.segmentByBreaks(log.ordered), endIsOpen: !(log.ordered.last?.isBreak ?? true), cursor: cursor)
+    }
+
+    /// The tune that usually comes next here, at the end of a set.
+    var likelyNext: VocabTune? {
+        guard editing, !selecting, log?.meta["log_complete"] != true, composer.resolving == nil, composer.editingID == nil
+        else { return nil }
+        return Composer.likelyNext(vocab, seg: cursorSegment, cursor: cursor, dismissed: dismissedNext)
+    }
+
+    func dismissLikelyNext() {
+        guard let nx = likelyNext, let tid = cursorSegment?.tunes.last?["tune_id"]?.intValue else { return }
+        dismissedNext.append(Composer.nextAssocKey(tid, nx.tuneID))
     }
 
     func endSet() {

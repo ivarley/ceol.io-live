@@ -695,7 +695,34 @@ components:
               alias: { type: [string, "null"] }
               tune_type: { type: [string, "null"] }
               abc: { type: [string, "null"] }
+              # The tune that usually follows this one here (>50% of at least 3 times).
+              next:
+                type: [object, "null"]
+                properties:
+                  tune_id: { type: integer }
+                  name: { type: string }
+                  tune_type: { type: [string, "null"] }
         known_aliases: { type: array }
+    LiveMatch:
+      # The composer's Enter gate and type-ahead (shared with the legacy pill editor):
+      # exact_match with one result when the text names exactly one tune, else
+      # substring matches ranked by prefer_type, plays here, then popularity.
+      type: object
+      required: [success, matched, exact_match, results]
+      properties:
+        success: { type: boolean, const: true }
+        matched: { type: boolean }
+        exact_match: { type: boolean }
+        results:
+          type: array
+          items:
+            type: object
+            required: [tune_id, tune_name]
+            properties:
+              tune_id: { type: integer }
+              tune_name: { type: string }
+              tune_type: { type: [string, "null"] }
+              in_session_tune: { type: boolean }
     LiveOp:
       type: object
       required: [op_id, op_type]
@@ -1411,6 +1438,17 @@ paths:
       security: [{ bearer: [] }]
       parameters: [{ name: session_instance_id, in: path, required: true, schema: { type: integer } }]
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/LiveVocabulary" } } } } }
+  /api/live/instances/{session_instance_id}/match:
+    get:
+      operationId: matchLiveTune
+      summary: Match typed text to tunes (the composer's Enter gate and type-ahead)
+      security: [{ bearer: [] }]
+      parameters:
+        - { name: session_instance_id, in: path, required: true, schema: { type: integer } }
+        - { name: q, in: query, required: true, schema: { type: string } }
+        - { name: prefer_type, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 20 } }
+      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/LiveMatch" } } } } }
   /api/live/instances/{session_instance_id}/ops:
     post:
       operationId: applyLiveOp

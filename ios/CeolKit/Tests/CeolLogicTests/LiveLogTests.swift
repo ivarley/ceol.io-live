@@ -258,4 +258,46 @@ struct LiveEditingTests {
         #expect(ops[4].body["before_record_id"] == 3)
         #expect(names(log) == ["A", "|", "X", "Y", "|", "Z", "|", "C"])
     }
+
+    @Test("a tune the open set already has merges into it: no new row, a plain add with no anchors")
+    func mergeIntoOpenSet() {
+        var r1 = rec(1, "a1", name: "The Kesh")
+        if case .object(var o) = r1 { o["tune_id"] = 55; r1 = .object(o) }
+        var log = LiveLog(records: [r1, rec(2, "a2", name: "Unlinked Thing")])
+        let merged = log.logTune(["tune_id": 55, "name": "The Kesh"], at: .end, opID: "m1")
+        #expect(merged.mergedInto?.recordID == .server(1))
+        #expect(merged.ops[0].body["after_record_id"] == .null)
+        #expect(log.records.count == 2)
+        let byName = log.logTune(["name": "unlinked thing"], at: .end, opID: "m2")
+        #expect(byName.mergedInto?.recordID == .server(2))
+        // Keep both, and anywhere but the end, adds a row.
+        let both = log.logTune(["tune_id": 55, "name": "The Kesh", "no_merge": true], at: .end, opID: "m3")
+        #expect(both.mergedInto == nil)
+        #expect(both.ops[0].body["no_merge"] == true)
+        let mid = log.logTune(["tune_id": 55, "name": "The Kesh"], at: .after(.server(1)), opID: "m4")
+        #expect(mid.mergedInto == nil)
+        #expect(log.records.count == 4)
+    }
+
+    @Test("a placeholder sits at the cursor until it's dropped")
+    func placeholder() {
+        var log = LiveLog(records: [rec(1, "a1", name: "A"), rec(2, "a2", name: "B")])
+        let id = log.startResolving("kesh", at: .after(.server(1)))
+        #expect(names(log) == ["A", "kesh", "B"])
+        #expect(log.pending.isEmpty)
+        log.dropPlaceholder(id)
+        #expect(names(log) == ["A", "B"])
+    }
+
+    @Test("editing a tune: shown at once, one change_tune op, rolled back on a refusal")
+    func changeTune() throws {
+        var log = LiveLog(records: [rec(1, "a1", name: "Kesh")])
+        let changed = log.changeTune(.server(1), ["tune_id": 9, "name": "The Kesh"], patch: ["tune_id": 9, "name": "The Kesh"], opID: "c1")
+        let op = try #require(changed)
+        #expect(op.body["op_type"] == "change_tune")
+        #expect(op.body["record_id"] == 1)
+        #expect(names(log) == ["The Kesh"])
+        log.settle(opID: "c1", answer: ["success": false, "rejected": true, "reason": "invalid"])
+        #expect(names(log) == ["Kesh"])
+    }
 }
