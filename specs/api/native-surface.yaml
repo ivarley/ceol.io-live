@@ -112,6 +112,20 @@ components:
             country: { type: string }
             timezone: { type: string }
             instruments: { type: array, items: { type: string } }
+            sms_number: { type: string }
+            thesession_user_id: { type: [integer, "null"] }
+        # The login, as /me's Account rows show it.
+        account:
+          type: [object, "null"]
+          required: [username, email, email_verified, has_password, receive_update_emails, created_at, last_login]
+          properties:
+            username: { type: string }
+            email: { type: [string, "null"] }
+            email_verified: { type: boolean }
+            has_password: { type: boolean }
+            receive_update_emails: { type: boolean }
+            created_at: { $ref: "#/components/schemas/DateTimeOrNull" }
+            last_login: { $ref: "#/components/schemas/DateTimeOrNull" }
         needs_profile_setup: { type: boolean }
         canonical_instruments: { type: array, items: { type: string } }
         timezone_options: { type: array, items: { $ref: "#/components/schemas/Option" } }
@@ -618,7 +632,8 @@ components:
         order_position: { type: string }
         record_type: { type: string }
         source: { type: [string, "null"] }
-        confidence: { type: [string, "null"] }
+        # 0-100, how sure an automatic source was; the live logger writes 100.
+        confidence: { type: [integer, "null"] }
         deleted: { type: boolean }
         started_by_person_id: { type: [integer, "null"] }
         # Who started the set, as the log shows it ("Sarah O").
@@ -630,7 +645,8 @@ components:
         logged_by_person_id: { type: [integer, "null"] }
         # Who logged it, and their colour in the log.
         logged_by: { type: [string, "null"] }
-        logged_by_color: { type: [string, "null"] }
+        # The logger's palette index in this session (session_logger_color.color).
+        logged_by_color: { type: [integer, "null"] }
     LiveBootstrap:
       type: object
       required: [success, session_instance_id, can_edit, current_person, session_timezone, session_id,
@@ -990,8 +1006,11 @@ paths:
     put:
       operationId: updateProfile
       summary: >-
-        Update profile (name, location, timezone, instruments). Every field is optional: an
-        absent name or location keeps its value, an empty location clears it.
+        Update profile (name, location, timezone, instruments, SMS, thesession.org member,
+        username, update emails). Every field is optional and only a field the request
+        names changes: an absent name or location keeps its value, an empty location
+        clears it. Error codes username_taken, invalid_username,
+        invalid_thesession_user_id (400).
       security: [{ bearer: [] }]
       requestBody:
         required: true
@@ -1007,6 +1026,12 @@ paths:
                 country: { type: string }
                 timezone: { type: string }
                 instruments: { type: array, items: { type: string } }
+                # Empty clears it.
+                sms_number: { type: string }
+                # A member number or a thesession.org/members/<n> link; empty clears it.
+                thesession_user_id: { type: string }
+                username: { type: string }
+                receive_update_emails: { type: boolean }
       responses:
         "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Profile" } } } }
         default: { $ref: "#/components/responses/Error" }

@@ -92,13 +92,14 @@ struct MainTabView: View {
 
     var body: some View {
         @Bindable var model = model
+        // The bar is inset into each tab, not laid over the TabView: that way every
+        // scroll view in it (and on the screens it pushes) ends above the bar.
         TabView(selection: $model.tab) {
-            Tab(value: AppTab.home) { HomeView() }
-            Tab(value: AppTab.sessions) { SessionsView() }
-            Tab(value: AppTab.tunes) { TunesView() }
-            Tab(value: AppTab.me) { MeView() }
+            Tab(value: AppTab.home) { HomeView().safeAreaInset(edge: .bottom, spacing: 0) { CeolTabBar() } }
+            Tab(value: AppTab.sessions) { SessionsView().safeAreaInset(edge: .bottom, spacing: 0) { CeolTabBar() } }
+            Tab(value: AppTab.tunes) { TunesView().safeAreaInset(edge: .bottom, spacing: 0) { CeolTabBar() } }
+            Tab(value: AppTab.me) { MeView().safeAreaInset(edge: .bottom, spacing: 0) { CeolTabBar() } }
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) { CeolTabBar() }
         .tint(CeolTokens.primary)
     }
 }
@@ -118,7 +119,11 @@ struct CeolTabBar: View {
                         Text(tab.title).font(.ceol(size: 11, weight: on ? .semibold : .medium, relativeTo: .caption2))
                     }
                     .foregroundStyle(on ? CeolTokens.primary : CeolTokens.logoGreenSoft)
-                    .frame(maxWidth: .infinity, minHeight: 50)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 5)
+                    // Where you are, at a glance: a soft green lozenge behind the tab.
+                    .background(on ? CeolTokens.primary.opacity(0.16) : .clear, in: RoundedRectangle(cornerRadius: 12))
+                    .frame(maxWidth: .infinity, minHeight: 54)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)

@@ -545,6 +545,68 @@ class TestResponsesMatchSchemas:
         assert bad.status_code == 400
         self._validate(spec, error, bad.get_json())
 
+    def test_a_live_logged_night_validates(self, spec, native_client):
+        """A night logged with the live logger: its records carry a confidence (the
+        logger writes 100) and the logger's colour. The seed has neither, which let a
+        contract that typed them as strings through, and every such night failed to
+        decode in the app."""
+        from database import get_db_connection
+
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """SELECT sit.session_instance_tune_id, si.session_id, cu.person_id
+                   FROM session_instance_tune sit
+                   JOIN session_instance si USING (session_instance_id)
+                   JOIN user_account cu ON cu.user_id = 1
+                   WHERE sit.session_instance_id = 1 AND sit.record_type = 'tune'
+                   ORDER BY sit.session_instance_tune_id LIMIT 1"""
+            )
+            record_id, session_id, person_id = cur.fetchone()
+            cur.execute(
+                "SELECT confidence, created_by_user_id FROM session_instance_tune WHERE session_instance_tune_id = %s",
+                (record_id,),
+            )
+            was_confidence, was_creator = cur.fetchone()
+            cur.execute(
+                "SELECT 1 FROM session_logger_color WHERE session_id = %s AND person_id = %s", (session_id, person_id)
+            )
+            had_color = cur.fetchone() is not None
+            cur.execute(
+                "UPDATE session_instance_tune SET confidence = 100, created_by_user_id = 1"
+                " WHERE session_instance_tune_id = %s",
+                (record_id,),
+            )
+            cur.execute(
+                "INSERT INTO session_logger_color (session_id, person_id, color) VALUES (%s, %s, 3)"
+                " ON CONFLICT DO NOTHING",
+                (session_id, person_id),
+            )
+            # Committed, because the endpoint reads through its own connection; put back
+            # in the finally below.
+            conn.commit()
+            r = native_client.get("/api/live/instances/1/bootstrap")
+            assert r.status_code == 200
+            body = r.get_json()
+            record = next(x for x in body["records"] if x["session_instance_tune_id"] == record_id)
+            assert record["confidence"] == 100 and isinstance(record["logged_by_color"], int)
+            self._validate(spec, spec["components"]["schemas"]["LiveBootstrap"], body)
+        finally:
+            conn.rollback()
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE session_instance_tune SET confidence = %s, created_by_user_id = %s"
+                " WHERE session_instance_tune_id = %s",
+                (was_confidence, was_creator, record_id),
+            )
+            if not had_color:
+                cur.execute(
+                    "DELETE FROM session_logger_color WHERE session_id = %s AND person_id = %s", (session_id, person_id)
+                )
+            conn.commit()
+            conn.close()
+
     def test_error_envelope(self, native_client):
         r = native_client.get("/api/resolve?path=/sessions/no/such/2020-01-01")
         assert r.status_code == 404

@@ -1760,3 +1760,25 @@ The plan (Phases 0-6) runs from here in `ios/`; see `ios/README.md` for the layo
   them (the set starter was missing from the night); Phase 5 must not decode records
   through a type that can drop fields. Home's "Pick up" items lost their date in the
   Swift port; both fixed.
+- **First round of TestFlight feedback (2026-09-29).**
+  - "Couldn't load this" on many nights: the contract typed a record's `confidence`
+    (SMALLINT, 100 from the live logger) and `logged_by_color` (a palette index) as
+    strings, so the app rejected every night logged live. The seed has neither, so the
+    contract tests passed; a new test sets both on a seeded night.
+  - My Tunes' sort and filter drawer ports the web's rules: `filterAndSort` and the
+    lines around the list are held to a new `mytunespage/logic.fixtures.json` (57
+    cases) by both runners. Sessions' drawer adds a sort and a country, app-side for
+    now (SessionsRules); the web's Sessions page has only the five filters.
+  - Tunes' + opens an add-a-tune drawer (the web's add pane: search, a tune's sheet,
+    and + to add at once as To Learn). It searches Ceol's catalogue only; the web's
+    thesession.org fallback isn't in the app yet.
+  - A session's tunes open the tune sheet, with that session's plays; from Home, a
+    session or night opens in the Sessions tab, and the Learning boxes open Tunes
+    filtered.
+  - `/api/me/profile` carries the rest of /me: SMS, thesession.org member, and an
+    account block (username, email, password or not, update emails, created, last
+    login). Its PUT changes each only when named, unlike `PUT /api/person/<id>/update`,
+    which overwrites the whole row (an omitted field becomes null) and changes the
+    login email with no verification. The app doesn't use that endpoint.
+  - The search row's buttons sat in one List row, so a tap on + could open the filter
+    (and the reverse); they are borderless now.

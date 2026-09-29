@@ -84,4 +84,64 @@ public enum SessionsRules {
         let parts = [city, state, same ? nil : country].compactMap { $0 }.filter { !$0.isEmpty }
         return parts.isEmpty ? "Unknown" : parts.joined(separator: ", ")
     }
+
+    // MARK: - The app's sort and country filter
+    //
+    // The web's Sessions page has only the five filters above. The app's drawer adds a
+    // sort and a country, which a traveller wants and a long list needs.
+
+    public enum Sort: String, CaseIterable, Sendable {
+        case name, place, onNow
+
+        public var label: String {
+            switch self {
+            case .name: return "Name"
+            case .place: return "Place"
+            case .onNow: return "On now first"
+            }
+        }
+    }
+
+    /// The countries in the list, most sessions first, then by name ("USA", "Ireland").
+    public static func countries(_ entries: [Entry]) -> [String] {
+        var counts: [String: (label: String, n: Int)] = [:]
+        for e in entries {
+            guard let c = e.country?.trimmingCharacters(in: .whitespaces), !c.isEmpty else { continue }
+            let key = c.lowercased()
+            counts[key] = (counts[key]?.label ?? c, (counts[key]?.n ?? 0) + 1)
+        }
+        return counts.values.sorted { $0.n != $1.n ? $0.n > $1.n : $0.label.localizedCaseInsensitiveCompare($1.label) == .orderedAscending }
+            .map(\.label)
+    }
+
+    /// Whether a session is in `country` (case-insensitive; nil or empty is any).
+    public static func inCountry(_ e: Entry, _ country: String?) -> Bool {
+        guard let country, !country.isEmpty else { return true }
+        return e.country?.trimmingCharacters(in: .whitespaces).lowercased() == country.lowercased()
+    }
+
+    /// Indices of `entries` in sort order. Name: case-insensitive. Place: country, state,
+    /// city, then name. On now first: sessions on now (`onNow`), then by name. Ties keep
+    /// the list's order.
+    public static func sorted(_ entries: [Entry], by sort: Sort, onNow: (Int) -> Bool = { _ in false }) -> [Int] {
+        func cmp(_ a: String?, _ b: String?) -> ComparisonResult {
+            (a ?? "").localizedCaseInsensitiveCompare(b ?? "")
+        }
+        return entries.indices.sorted { i, j in
+            let a = entries[i], b = entries[j]
+            switch sort {
+            case .name:
+                return cmp(a.name, b.name) == .orderedAscending
+            case .place:
+                for (x, y) in [(a.country, b.country), (a.state, b.state), (a.city, b.city), (a.name, b.name)] {
+                    let r = cmp(x, y)
+                    if r != .orderedSame { return r == .orderedAscending }
+                }
+                return false
+            case .onNow:
+                if onNow(i) != onNow(j) { return onNow(i) }
+                return cmp(a.name, b.name) == .orderedAscending
+            }
+        }
+    }
 }

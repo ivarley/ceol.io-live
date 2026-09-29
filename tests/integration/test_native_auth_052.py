@@ -256,6 +256,61 @@ class TestSetPasswordAndProfile:
         p = r.get_json()["profile"]
         assert p["city"] == "" and p["state"] == "Clare"
 
+    def test_profile_saves_the_rest_of_me_one_field_at_a_time(
+        self, client, passwordless_user
+    ):
+        """SMS, thesession.org member, username and update emails: each changes only
+        when named, so saving one row leaves the rest alone."""
+        token = generate_login_token()
+        _set_token(passwordless_user["user_id"], "login_token", token, 15)
+        bearer = client.post(
+            "/api/auth/exchange", json={"token": token}, headers=IOS
+        ).get_json()["token"]
+        got = client.get("/api/me/profile", headers=_bearer(bearer)).get_json()
+        assert got["account"]["has_password"] is False
+        assert got["account"]["username"].startswith("magic")
+        r = client.put(
+            "/api/me/profile",
+            json={
+                "sms_number": " 512-555-0100 ",
+                "thesession_user_id": "https://thesession.org/members/4242",
+            },
+            headers=_bearer(bearer),
+        )
+        p = r.get_json()
+        assert p["profile"]["sms_number"] == "512-555-0100"
+        assert p["profile"]["thesession_user_id"] == 4242
+        assert p["profile"]["first_name"] == "Magic"  # untouched
+        r = client.put(
+            "/api/me/profile",
+            json={"receive_update_emails": False},
+            headers=_bearer(bearer),
+        )
+        assert r.get_json()["account"]["receive_update_emails"] is False
+        assert r.get_json()["profile"]["sms_number"] == "512-555-0100"  # untouched
+        taken = client.put(
+            "/api/me/profile", json={"username": "IAN"}, headers=_bearer(bearer)
+        )
+        assert taken.status_code == 400 and taken.get_json()["code"] == "username_taken"
+        bad = client.put(
+            "/api/me/profile",
+            json={"thesession_user_id": "fiddler"},
+            headers=_bearer(bearer),
+        )
+        assert (
+            bad.status_code == 400
+            and bad.get_json()["code"] == "invalid_thesession_user_id"
+        )
+        r = client.put(
+            "/api/me/profile",
+            json={"sms_number": "", "thesession_user_id": ""},
+            headers=_bearer(bearer),
+        )
+        assert (
+            r.get_json()["profile"]["sms_number"] == ""
+            and r.get_json()["profile"]["thesession_user_id"] is None
+        )
+
     def test_profile_save_keeps_instrument_rows(self, client, passwordless_user):
         """Saving the profile adds and removes only the difference: a kept
         instrument keeps its row (a manual list stays manual), and an old free

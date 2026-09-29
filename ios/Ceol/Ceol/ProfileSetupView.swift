@@ -25,6 +25,10 @@ struct ProfileSetupView: View {
     @State private var country = ""
     @State private var timezone = TimeZone.current.identifier
     @State private var instruments: Set<String> = []
+    // Editing from Me: the rest of the profile.
+    @State private var username = ""
+    @State private var sms = ""
+    @State private var thesession = ""
     @State private var busy = false
     @State private var error: String?
 
@@ -51,6 +55,19 @@ struct ProfileSetupView: View {
                         Text("Where you play")
                     } footer: {
                         Text("At least one of these, so sessions near you make sense.")
+                    }
+                    if editing {
+                        Section {
+                            TextField("Username", text: $username)
+                                .textInputAutocapitalization(.never).autocorrectionDisabled()
+                            TextField("SMS number", text: $sms).keyboardType(.phonePad).textContentType(.telephoneNumber)
+                            TextField("thesession.org member number or link", text: $thesession)
+                                .textInputAutocapitalization(.never).autocorrectionDisabled()
+                        } header: {
+                            Text("Account")
+                        } footer: {
+                            Text("Your thesession.org member number is in your profile's address there: thesession.org/members/1234.")
+                        }
                     }
                     Section("Time zone") {
                         Picker("Time zone", selection: $timezone) {
@@ -128,6 +145,9 @@ struct ProfileSetupView: View {
             // the device knows better.
             if !p.profile.timezone.isEmpty && (editing || p.profile.timezone != "UTC") { timezone = p.profile.timezone }
             instruments = Set(p.profile.instruments)
+            username = p.account?.username ?? ""
+            sms = p.profile.smsNumber ?? ""
+            thesession = p.profile.thesessionUserId.map(String.init) ?? ""
             loaded = p
         } catch {
             self.error = "Couldn't load your profile. Check your connection and try again."
@@ -143,7 +163,10 @@ struct ProfileSetupView: View {
                 .init(
                     firstName: trimmed(firstName), lastName: trimmed(lastName), city: trimmed(city),
                     state: trimmed(state), country: trimmed(country), timezone: timezone,
-                    instruments: instruments.sorted()))
+                    instruments: instruments.sorted(),
+                    smsNumber: editing ? trimmed(sms) : nil,
+                    thesessionUserId: editing ? trimmed(thesession) : nil,
+                    username: editing && !trimmed(username).isEmpty ? trimmed(username) : nil))
             if saved.needsProfileSetup {
                 error = "That's not quite everything: a first and last name, and somewhere you play."
             } else {

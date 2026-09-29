@@ -29,6 +29,7 @@ import * as namematch from '../src/tunesheet/namematch.js'
 import * as addsession from '../src/addsession/logic.js'
 import * as sessionpath from '../src/shared/sessionpath.js'
 import * as parse from '../src/shared/parse.js'
+import * as mytunes from '../src/mytunespage/logic.js'
 
 import logstateFx from '../src/logstate.fixtures.json'
 import fracindexFx from '../src/fracindex.fixtures.json'
@@ -39,6 +40,7 @@ import namematchFx from '../src/tunesheet/namematch.fixtures.json'
 import addsessionFx from '../src/addsession/logic.fixtures.json'
 import sessionpathFx from '../src/shared/sessionpath.fixtures.json'
 import parseFx from '../src/shared/parse.fixtures.json'
+import mytunesFx from '../src/mytunespage/logic.fixtures.json'
 
 const MODULES = [
   { name: 'logstate', mod: logstate, fx: logstateFx, load: () => import('../src/logstate.js') },
@@ -50,6 +52,7 @@ const MODULES = [
   { name: 'addsession/logic', mod: addsession, fx: addsessionFx },
   { name: 'shared/sessionpath', mod: sessionpath, fx: sessionpathFx },
   { name: 'shared/parse', mod: parse, fx: parseFx },
+  { name: 'mytunespage/logic', mod: mytunes, fx: mytunesFx },
 ]
 
 // What a non-JS runner would see: Maps as entry lists, undefined properties gone.
@@ -103,7 +106,8 @@ for (const { name, mod, fx, load } of MODULES) {
     }
 
     for (const [constName, value] of Object.entries(fx.constants || {})) {
-      it(`constant ${constName}`, () => expect(mod[constName]).toBe(value))
+      // By value: a constant may be a list (SORT_MODES), as the Swift runner compares.
+      it(`constant ${constName}`, () => expect(mod[constName]).toEqual(value))
     }
 
     // The guard: a new export cannot silently skip the fixtures. Every export is

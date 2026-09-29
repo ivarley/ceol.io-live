@@ -45,4 +45,26 @@ struct SessionsRulesTests {
         #expect(SessionsRules.matches(entry("Sligo Ma\u{ED}d"), filter: .all, search: "maid", today: today))
         #expect(SessionsRules.matches(entry("Sligo Maid"), filter: .all, search: "ma\u{ED}d", today: today))
     }
+
+    @Test("sorts: name, place, on now first; ties keep their order")
+    func sorts() {
+        let list = [
+            entry("Zed's", city: "Austin", state: "TX", country: "USA"),
+            entry("Crane's", city: "Galway", state: nil, country: "Ireland"),
+            entry("Bard", city: "Austin", state: "TX", country: "USA"),
+            entry("Anvil", city: "Boston", state: "MA", country: "USA"),
+        ]
+        #expect(SessionsRules.sorted(list, by: .name) == [3, 2, 1, 0])
+        #expect(SessionsRules.sorted(list, by: .place) == [1, 3, 2, 0])
+        #expect(SessionsRules.sorted(list, by: .onNow, onNow: { $0 == 0 }) == [0, 3, 2, 1])
+    }
+
+    @Test("countries: most sessions first; a country filter ignores case")
+    func countries() {
+        let list = [entry(country: "USA"), entry(country: "Ireland"), entry(country: "usa"), entry(country: nil)]
+        #expect(SessionsRules.countries(list) == ["USA", "Ireland"])
+        #expect(SessionsRules.inCountry(list[2], "USA"))
+        #expect(!SessionsRules.inCountry(list[1], "USA"))
+        #expect(SessionsRules.inCountry(list[3], nil))
+    }
 }

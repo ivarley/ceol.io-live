@@ -12,7 +12,8 @@
   background: none;
   border: none;
   border-radius: var(--r-sm, 4px);
-  color: var(--text-color);
+  /* Muted: it is on every page, so it stays out of the way until wanted. */
+  color: var(--text-muted, #888);
   cursor: pointer;
 }
 

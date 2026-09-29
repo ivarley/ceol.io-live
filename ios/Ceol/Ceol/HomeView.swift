@@ -30,16 +30,13 @@ extension HomePayload.UpcomingSessionsPayloadPayload {
 struct HomeView: View {
     @Environment(AppModel.self) private var model
     @State private var state: LoadState<HomePayload> = .loading
-    @State private var path: [Route] = []
-
     var body: some View {
-        NavigationStack(path: $path) {
+        NavigationStack {
             Loaded(state: state, retry: load) { home in
                 content(home)
             }
             .background(CeolTokens.bgColor)
-            .ceolRootBar("Home")
-            .modifier(SessionDestinations())
+            .ceolRootBar("Home", sharePath: "/")
             .task { if state.value == nil { await load() } }
         }
     }
@@ -74,20 +71,26 @@ struct HomeView: View {
                         WeekRow(night: s.night, today: home.today) {
                             openNight(s.night, id: s.sessionInstanceId)
                         } openSession: {
-                            path.append(.session(path: s.path, name: s.name))
+                            model.openSession(path: s.path, name: s.name)
                         }
                         Rectangle().fill(CeolTokens.borderColor).frame(height: 1)
                     }
                 }
                 VStack(alignment: .leading, spacing: 14) {
                     SectionHeading(title: "Learning", icon: "TabTunes") {
-                        Button("See all") { model.tab = .tunes }
+                        Button("See all") { model.openTunes(status: nil) }
                             .font(.ceol(size: 16))
                             .foregroundStyle(CeolTokens.primary)
                     }
                     HStack(spacing: 12) {
-                        Stat(number: home.learningCount, label: "Learning")
-                        Stat(number: home.wantToLearnCount, label: "To Learn")
+                        Button { model.openTunes(status: .learning) } label: {
+                            Stat(number: home.learningCount, label: "Learning")
+                        }
+                        .buttonStyle(.plain)
+                        Button { model.openTunes(status: .wantToLearn) } label: {
+                            Stat(number: home.wantToLearnCount, label: "To Learn")
+                        }
+                        .buttonStyle(.plain)
                     }
                     if let tune = home.suggestedTune {
                         let total = home.learningCount + home.wantToLearnCount
@@ -124,9 +127,9 @@ struct HomeView: View {
                 ForEach(unfinished) { item in
                     Button {
                         if let id = item.sessionInstanceID {
-                            path.append(.night(id: id, title: item.title))
+                            model.openNight(id: id, title: item.title, sessionPath: item.sessionPath, sessionName: item.title)
                         } else {
-                            path.append(.session(path: item.sessionPath, name: item.title))
+                            model.openSession(path: item.sessionPath, name: item.title)
                         }
                     } label: {
                         HStack(spacing: 14) {
@@ -152,10 +155,12 @@ struct HomeView: View {
     /// A night opens its log, as the web's week rows and View button do.
     private func openNight(_ night: HomeNight, id: Int?) {
         guard let id else {
-            if let p = night.path { path.append(.session(path: p, name: night.name)) }
+            if let p = night.path { model.openSession(path: p, name: night.name) }
             return
         }
-        path.append(.night(id: id, title: "\(night.name) · \(HomeRules.shortDate(night.date, currentYear: nil))"))
+        model.openNight(
+            id: id, title: "\(night.name) · \(HomeRules.shortDate(night.date, currentYear: nil))",
+            sessionPath: night.path, sessionName: night.name)
     }
 }
 

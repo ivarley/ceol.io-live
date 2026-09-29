@@ -10,6 +10,7 @@
 
 import CeolAPI
 import CeolSession
+import CeolLogic
 import Foundation
 import Observation
 
@@ -23,6 +24,32 @@ final class AppModel {
     private(set) var user: User?
     /// The tab on screen; a screen can move you to another (Home's "See all" -> Tunes).
     var tab: AppTab = .home
+    /// The Sessions tab's stack. Home opens sessions and nights here, in the Sessions
+    /// tab, which is where they live (as on the web, where they are /sessions pages).
+    var sessionsPath: [Route] = []
+    /// The Tunes tab's status filter (nil: All). Home's Learning / To Learn boxes set it.
+    var tunesStatus: MyTunesRules.Status?
+
+    /// A session, in the Sessions tab.
+    func openSession(path: String, name: String) {
+        sessionsPath = [.session(path: path, name: name)]
+        tab = .sessions
+    }
+
+    /// A night, in the Sessions tab, on top of its session so Back goes there.
+    func openNight(id: Int, title: String, sessionPath: String?, sessionName: String) {
+        var stack: [Route] = []
+        if let sessionPath { stack.append(.session(path: sessionPath, name: sessionName)) }
+        stack.append(.night(id: id, title: title))
+        sessionsPath = stack
+        tab = .sessions
+    }
+
+    /// Your tunes, filtered to one status.
+    func openTunes(status: MyTunesRules.Status?) {
+        tunesStatus = status
+        tab = .tunes
+    }
     /// Why an emailed link didn't sign you in, for the sign-in screen to show.
     var linkError: String?
     /// A plain notice for the sign-in screen (e.g. after deleting the account).

@@ -31,29 +31,40 @@ struct TuneRef: Identifiable, Hashable {
     var status: String?
     var heardCount: Int?
     var notes: String?
+    /// Opened from a session's page: the sheet adds that session's plays.
+    var sessionPath: String? = nil
+    /// Whether `status` is known. Opened from somewhere other than your list, the sheet
+    /// reads your status from the tune's detail instead.
+    var statusKnown = true
 }
 
 struct TunesView: View {
     @Environment(AppModel.self) private var model
     @State private var state: LoadState<MyTunesPayload> = .loading
-    @State private var status: MyTunesRules.Status?
-    @State private var type: String?
+    @State private var filters = MyTunesList.Filters()
+    @State private var sort = MyTunesList.Sort()
     @State private var search = ""
     @State private var catalogue: [DeepSearchResult] = []
     @State private var catalogueFailed = false
     @State private var open: TuneRef?
     @State private var failure: String?
+    @State private var filtering = false
+    @State private var adding = false
     @FocusState private var searching: Bool
 
     var body: some View {
         NavigationStack {
             Loaded(state: state, retry: load) { payload in list(payload) }
                 .background(CeolTokens.bgColor)
-                .ceolRootBar("Tunes")
+                .ceolRootBar("Tunes", sharePath: "/my-tunes")
                 .task(id: search) { await searchCatalogue() }
                 // The search keyboard would otherwise stay up over the sheet.
                 .onChange(of: open) { _, tune in if tune != nil { searching = false } }
                 .sheet(item: $open) { TuneSheet(tune: $0) { Task { await load() } } }
+                .sheet(isPresented: $filtering) {
+                    TunesFilterSheet(filters: $filters, sort: $sort, types: types, instruments: instruments)
+                }
+                .sheet(isPresented: $adding) { AddTuneSheet { Task { await load() } } }
                 .task { if state.value == nil { await load() } }
                 .alert("Not saved", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
                     Button("OK") {}
@@ -61,6 +72,10 @@ struct TunesView: View {
                     Text(failure ?? "")
                 }
         }
+    }
+
+    private var instruments: [MyTunesList.Instrument] {
+        (state.value?.instruments ?? []).map { .init(name: $0.instrument, isAuto: $0.isAuto) }
     }
 
     private var types: [String] {
@@ -107,44 +122,59 @@ struct TunesView: View {
 
     @ViewBuilder private func list(_ payload: MyTunesPayload) -> some View {
         let byID = Dictionary(payload.tunes.map { ($0.tuneId, $0) }, uniquingKeysWith: { a, _ in a })
-        let shown = MyTunesRules.filter(payload.tunes.map(\.entry), status: status, type: type, search: search)
+        var f = filters
+        let _ = { f.search = search; f.status = model.tunesStatus?.rawValue ?? "" }()
+        let rows = MyTunesList.filterAndSort(payload.tunes.map(\.listItem), filters: f, sort: sort, instruments: instruments)
+        let firstDimmed = rows.firstIndex { $0.dimmed }
         // Less any you added since the search ran.
         let catalogue = catalogue.filter { byID[$0.tuneId] == nil }
         List {
             VStack(alignment: .leading, spacing: 10) {
                 // The web's toolbar: search (your list, then the catalogue below it),
-                // the type filter, and + to find a tune to add, which is the same search.
+                // sort and filter, and + to add a tune.
                 SearchRow(
-                    text: $search, prompt: "Search", fieldID: "tunes.search", filterActive: type != nil,
-                    filterMenu: {
-                        Picker("Tune type", selection: $type) {
-                            Text("All tune types").tag(String?.none)
-                            ForEach(types, id: \.self) { Text($0).tag(Optional($0)) }
-                        }
-                    },
-                    onAdd: { searching = true }, addID: "tunes.add", addLabel: "Find a tune to add",
-                    focused: $searching)
-                Picker("Status", selection: $status) {
+                    text: $search, prompt: "Search", fieldID: "tunes.search",
+                    onAdd: { adding = true }, addID: "tunes.add", addLabel: "Add a tune",
+                    focused: $searching,
+                    onFilter: { filtering = true },
+                    filterCount: filters.activeCount + (sort == MyTunesList.Sort() ? 0 : 1))
+                Picker("Status", selection: Binding(get: { model.tunesStatus }, set: { model.tunesStatus = $0 })) {
                     ForEach(MyTunesRules.Status.allCases, id: \.self) { Text($0.label).tag(Optional($0)) }
                     Text("All").tag(MyTunesRules.Status?.none)
                 }
                 .pickerStyle(.segmented)
-                Text(MyTunesRules.countText(shown: shown.count, total: payload.tunes.count))
-                    .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
+                HStack {
+                    Text(MyTunesList.resultsCountText(rows, total: payload.tunes.count, filters: f))
+                    if sort.type != "alpha" || sort.descending {
+                        Text("· \(MyTunesList.sortModeLabel(sort.type)) \(sort.descending ? "↓" : "↑")")
+                    }
+                }
+                .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
             }
             .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 6, trailing: 16))
             .listRowBackground(CeolTokens.bgColor)
             .listRowSeparator(.hidden)
-            ForEach(shown, id: \.tuneID) { e in
+            ForEach(Array(rows.enumerated()), id: \.element.item.tuneID) { i, row in
+                let e = row.item
                 let t = byID[e.tuneID]
+                if i == firstDimmed {
+                    // The web's heading between the tunes on the instrument and the rest.
+                    Text("Not on \(filters.instrument)").font(.ceol(size: 13, weight: .semibold)).textCase(.uppercase)
+                        .tracking(0.8).foregroundStyle(CeolTokens.textMuted)
+                        .listRowInsets(EdgeInsets(top: 18, leading: 16, bottom: 4, trailing: 16))
+                        .listRowBackground(CeolTokens.bgColor)
+                }
                 Button {
                     open = TuneRef(
                         id: e.tuneID, name: e.name, type: e.type, status: e.status, heardCount: t?.heardCount,
                         notes: e.notes)
                 } label: {
-                    TuneRow(name: e.name, type: e.type, status: e.status)
+                    TuneRow(
+                        name: e.name, type: MyTunesList.typeBadgeLabel(e, sortType: sort.type), status: e.status,
+                        note: row.abcOnly ? "♪ notes match" : nil, typeIsCount: sort.type != "alpha")
                 }
                 .buttonStyle(.plain)
+                .opacity(row.dimmed ? 0.45 : 1)
                 .ceolRow()
                 .swipeActions(edge: .leading) {
                     // The web's swipe: one more hearing of a tune you want to learn.
@@ -154,8 +184,8 @@ struct TunesView: View {
                     }
                 }
             }
-            if shown.isEmpty && catalogue.isEmpty {
-                Text(search.isEmpty ? "No tunes here yet." : "None of your tunes match.")
+            if rows.isEmpty && catalogue.isEmpty {
+                Text(payload.tunes.isEmpty ? "No tunes here yet." : MyTunesList.noResultsMessage(f))
                     .font(.ceol(size: 16)).foregroundStyle(CeolTokens.textMuted)
                     .listRowBackground(CeolTokens.bgColor).listRowSeparator(.hidden)
             }
@@ -186,12 +216,27 @@ struct TunesView: View {
     }
 }
 
+extension PersonTune {
+    /// What the list's filters and sorts read (MyTunesList, the web's rules).
+    var listItem: MyTunesList.Item {
+        var overrides: [String: String] = [:]
+        for (k, v) in instrumentStatus.additionalProperties { overrides[k] = v }
+        return MyTunesList.Item(
+            tuneID: tuneId, name: tuneName, type: tuneType, status: learnStatus, notes: notes,
+            addedDay: String(createdDate.prefix(10)), tunebookCount: tunebookCount,
+            heardCount: heardCount, memberPlays: memberPlayCount, sessionPlays: sessionPlayCount,
+            attendedPlays: attendedPlayCount, instrumentStatus: overrides)
+    }
+}
+
 /// A tune in a list, as the web's phone row: the status glyph, the name, the type chip.
 private struct TuneRow: View {
     let name: String
     let type: String?
     let status: String?
     var note: String? = nil
+    /// Under a count sort the chip shows the count, not the type (the web's badge).
+    var typeIsCount = false
 
     var body: some View {
         HStack(spacing: 10) {
@@ -201,7 +246,11 @@ private struct TuneRow: View {
                 if let note { Text(note).font(.ceol(size: 12)).foregroundStyle(CeolTokens.warning) }
             }
             Spacer(minLength: 6)
-            if let type { TypeChip(label: type, size: 15) }
+            if typeIsCount, let type {
+                CountBox(count: Int(type) ?? 0)
+            } else if let type, !type.isEmpty {
+                TypeChip(label: type, size: 15)
+            }
         }
         .padding(.vertical, 3)
         .contentShape(Rectangle())
@@ -235,7 +284,7 @@ struct TuneSheet: View {
     var body: some View {
         NavigationStack {
             Loaded(state: detail, retry: load) { d in content(d.sessionTune) }
-                .background(CeolTokens.bgColor)
+                .background(Self.surface)
                 .navigationTitle(tune.name)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -257,8 +306,10 @@ struct TuneSheet: View {
                     Text("Its status, notes and heard count go with it.")
                 }
         }
-        .presentationDetents([.large])
+        .ceolDrawer()
     }
+
+    static let surface = CeolTokens.drawerBg
 
     /// Saves one op; true when the server took it.
     @discardableResult
@@ -321,7 +372,7 @@ struct TuneSheet: View {
                         Task { if current == nil { await add(s) } else if !on { await setStatus(s) } }
                     } label: {
                         Text(s.label).font(.ceol(size: 16, weight: on ? .semibold : .medium))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(current == nil ? CeolTokens.primary : .white)
                             .frame(maxWidth: .infinity, minHeight: 42)
                             .background(on ? CeolTokens.primaryFill : .clear)
                             .contentShape(Rectangle())
@@ -330,11 +381,14 @@ struct TuneSheet: View {
                     .disabled(busy)
                     .accessibilityIdentifier(current == nil ? "sheet.add.\(s.rawValue)" : "sheet.status.\(s.rawValue)")
                     .accessibilityAddTraits(on ? .isSelected : [])
-                    if s != MyTunesRules.Status.allCases.last { Rectangle().fill(.white.opacity(0.5)).frame(width: 1) }
+                    if s != MyTunesRules.Status.allCases.last {
+                        Rectangle().fill(current == nil ? CeolTokens.borderColor : .white.opacity(0.5)).frame(width: 1)
+                    }
                 }
             }
             .fixedSize(horizontal: false, vertical: true)
-            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.white.opacity(0.6), lineWidth: 1))
+            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(
+                current == nil ? CeolTokens.borderColor : .white.opacity(0.6), lineWidth: 1))
             .clipShape(RoundedRectangle(cornerRadius: 6))
             if current == .wantToLearn {
                 Stepper(value: Binding(get: { heard }, set: { n in Task { await setHeard(n) } }), in: 0...999) {
@@ -345,8 +399,10 @@ struct TuneSheet: View {
             if let failure { Text(failure).font(.ceol(size: 13)).foregroundStyle(.white) }
         }
         .padding(16)
-        // The web's panel colour (the tune drawer's "My List" box).
-        .background(Color(red: 0.13, green: 0.29, blue: 0.19), in: RoundedRectangle(cornerRadius: 8))
+        // On your list: the web's green panel (the tune drawer's "My List" box). Not yet
+        // on it: a plain outlined box, so green means "yours".
+        .background(current == nil ? Color.clear : Color(red: 0.13, green: 0.29, blue: 0.19), in: RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(current == nil ? CeolTokens.borderColor : .clear, lineWidth: 1))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("sheet.status")
         if current != nil {
@@ -367,7 +423,17 @@ struct TuneSheet: View {
 
     private func load() async {
         do {
-            let d = try await model.auth.client.getTuneDetail(path: .init(tuneId: tune.id)).ok.body.json
+            let d = try await model.auth.client.getTuneDetail(
+                path: .init(tuneId: tune.id), query: .init(session: tune.sessionPath)
+            ).ok.body.json
+            if !tune.statusKnown, let mine = JSONValue(encoding: d.sessionTune.personTuneStatus),
+                mine["on_list"]?.boolValue == true
+            {
+                status = mine["learn_status"]?.stringValue
+                heard = mine["heard_count"]?.intValue ?? 0
+                notes = mine["notes"]?.stringValue ?? ""
+                savedNotes = notes
+            }
             detail = .loaded(d)
             await loadNotation(d.sessionTune)
         } catch {
@@ -411,6 +477,10 @@ struct TuneSheet: View {
                 notation(t)
                 yourList
                 VStack(spacing: 0) {
+                    if tune.sessionPath != nil {
+                        stat("Played at this session", t.timesPlayed)
+                        Hairline()
+                    }
                     stat("At sessions on Ceol", t.globalPlayCount)
                     Hairline()
                     stat("Sessions that play it", t.sessionCount)
@@ -425,7 +495,7 @@ struct TuneSheet: View {
                     }
                 }
                 .padding(.horizontal, 16)
-                .background(CeolTokens.headerBg, in: RoundedRectangle(cornerRadius: 10))
+                .background(CeolTokens.bgColor, in: RoundedRectangle(cornerRadius: 10))
                 if let aliases = t.aliases, !aliases.isEmpty {
                     (Text("Also called: ").font(.ceol(size: 15, weight: .semibold)) + Text(aliases.joined(separator: ", ")).font(.ceol(size: 15)))
                         .foregroundStyle(CeolTokens.textMuted)
@@ -494,5 +564,125 @@ struct TuneSheet: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(on ? .isSelected : [])
+    }
+}
+
+// MARK: - Adding a tune
+
+/// The web's add pane (mytunes/AddTuneApp.svelte), as a drawer: search the catalogue by
+/// name, notes ("GED BED") or a pasted thesession.org link; tap a tune to see it and add
+/// it with a status; or + on a row adds it at once as To Learn, as the web's + rail does.
+struct AddTuneSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    let onChanged: () -> Void
+
+    @State private var query = ""
+    @State private var results: [DeepSearchResult] = []
+    @State private var searched = false
+    @State private var failed = false
+    @State private var added: Set<Int> = []
+    @State private var open: TuneRef?
+    @State private var failure: String?
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        NavigationStack {
+            List {
+                SearchRow(text: $query, prompt: "Tune name, notes, or a link", fieldID: "addTune.query", focused: $focused)
+                    .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 10, trailing: 16))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                if let failure {
+                    Text(failure).font(.ceol(size: 14)).foregroundStyle(CeolTokens.danger)
+                        .listRowBackground(Color.clear).listRowSeparator(.hidden)
+                }
+                if failed {
+                    Text("Couldn't search the catalogue. Check your connection.").font(.ceol(size: 15))
+                        .foregroundStyle(CeolTokens.textMuted).listRowBackground(Color.clear)
+                } else if searched && results.isEmpty {
+                    Text("No tunes found.").font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
+                        .listRowBackground(Color.clear)
+                } else if !searched {
+                    Text("Search the tunes on Ceol by name, by the notes (\"GED BED\"), or paste a thesession.org link.")
+                        .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
+                        .listRowBackground(Color.clear).listRowSeparator(.hidden)
+                }
+                ForEach(results, id: \.tuneId) { r in
+                    let onList = r.onList || added.contains(r.tuneId)
+                    HStack(spacing: 10) {
+                        Button {
+                            open = TuneRef(id: r.tuneId, name: r.name, type: r.tuneType, statusKnown: false)
+                        } label: {
+                            TuneRow(name: r.name, type: r.tuneType, status: nil, note: r.abcOnly ? "♪ notes match" : nil)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("addTune.row")
+                        if onList {
+                            Image(systemName: "checkmark").foregroundStyle(CeolTokens.primary).frame(width: 36)
+                                .accessibilityLabel("On your list")
+                        } else {
+                            Button { Task { await quickAdd(r) } } label: {
+                                Image(systemName: "plus").font(.system(size: 17, weight: .medium))
+                                    .foregroundStyle(CeolTokens.primary).frame(width: 36, height: 36)
+                                    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(CeolTokens.borderColor, lineWidth: 1))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Add \(r.name) as To Learn")
+                            .accessibilityIdentifier("addTune.quickAdd")
+                        }
+                    }
+                    .listRowBackground(Color.clear)
+                    .listRowSeparatorTint(CeolTokens.borderColor)
+                }
+            }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .background(CeolTokens.drawerBg)
+            .navigationTitle("Add a tune")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+            .task(id: query) { await search() }
+            .onAppear { focused = true }
+            .sheet(item: $open) { tune in
+                TuneSheet(tune: tune) {
+                    added.insert(tune.id)
+                    onChanged()
+                }
+            }
+        }
+        .ceolDrawer()
+    }
+
+    private func search() async {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        guard q.count >= 2 else {
+            results = []
+            searched = false
+            return
+        }
+        try? await Task.sleep(for: .milliseconds(300))
+        guard !Task.isCancelled else { return }
+        do {
+            results = try await model.auth.client.deepSearchTunes(query: .init(q: q, limit: 40)).ok.body.json.results
+            failed = false
+            searched = true
+        } catch {
+            if !Task.isCancelled { failed = true }
+        }
+    }
+
+    /// + : on the list at once, as To Learn (the web's + rail).
+    private func quickAdd(_ r: DeepSearchResult) async {
+        failure = nil
+        do {
+            try await model.applyTuneOp(.add, tuneID: r.tuneId, learnStatus: .wantToLearn)
+            added.insert(r.tuneId)
+            onChanged()
+        } catch let f as TuneOpFailure {
+            failure = f.message
+        } catch {
+            failure = "That wasn't saved. Try again."
+        }
     }
 }

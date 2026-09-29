@@ -487,10 +487,11 @@ _TIMEZONE_CHOICES = [
 
 def _load_profile(cur, person_id, user_id):
     cur.execute(
-        "SELECT first_name, last_name, city, state, country FROM person WHERE person_id = %s",
+        "SELECT first_name, last_name, city, state, country, sms_number, thesession_user_id"
+        " FROM person WHERE person_id = %s",
         (person_id,),
     )
-    p = cur.fetchone() or ("", "", None, None, None)
+    p = cur.fetchone() or ("", "", None, None, None, None, None)
     cur.execute("SELECT timezone FROM user_account WHERE user_id = %s", (user_id,))
     tz = (cur.fetchone() or ["UTC"])[0] or "UTC"
     cur.execute(
@@ -508,6 +509,37 @@ def _load_profile(cur, person_id, user_id):
         "country": p[4] or "",
         "timezone": tz,
         "instruments": instruments,
+        "sms_number": p[5] or "",
+        "thesession_user_id": p[6],
+    }
+
+
+def _load_account(cur, user_id):
+    """The account rows /me shows under Account: the login, the update-emails opt-in
+    and, behind a Details row, when the account was made and last used."""
+    cur.execute(
+        """
+        SELECT username, user_email, email_verified, hashed_password IS NOT NULL,
+               receive_update_emails, created_date
+        FROM user_account WHERE user_id = %s
+        """,
+        (user_id,),
+    )
+    row = cur.fetchone()
+    cur.execute(
+        "SELECT MAX(last_accessed) FROM user_session WHERE user_id = %s", (user_id,)
+    )
+    last = (cur.fetchone() or [None])[0]
+    if not row:
+        return None
+    return {
+        "username": row[0],
+        "email": row[1],
+        "email_verified": bool(row[2]),
+        "has_password": bool(row[3]),
+        "receive_update_emails": bool(row[4]),
+        "created_at": row[5].isoformat() if row[5] else None,
+        "last_login": last.isoformat() if last else None,
     }
 
 
@@ -518,6 +550,7 @@ def _profile_body(cur):
     return {
         "success": True,
         "profile": profile,
+        "account": _load_account(cur, current_user.user_id),
         "needs_profile_setup": needs_profile_setup(current_user.person_id),
         "canonical_instruments": list(CANONICAL_INSTRUMENTS),
         "timezone_options": [
@@ -545,6 +578,41 @@ def me_profile():
         if instruments is not None and not isinstance(instruments, list):
             return api_error("instruments must be a list", 400, "invalid")
         timezone = s("timezone") or None
+
+        # The rest of /me (spec 052): each is changed only when the request names it,
+        # so the app can save one row at a time without resending the others.
+        thesession_user_id = None
+        if "thesession_user_id" in data:
+            raw = data.get("thesession_user_id")
+            text = str(raw).strip() if raw is not None else ""
+            match = re.search(r"thesession\.org/members/(\d+)", text)
+            if match:
+                text = match.group(1)
+            if text and not text.isdigit():
+                return api_error(
+                    "Enter your thesession.org member number or profile link",
+                    400,
+                    "invalid_thesession_user_id",
+                )
+            thesession_user_id = int(text) if text else None
+        username = None
+        if "username" in data:
+            username = s("username")
+            if not username:
+                return api_error("Username can't be empty", 400, "invalid_username")
+            cur.execute(
+                "SELECT 1 FROM user_account WHERE LOWER(username) = LOWER(%s) AND user_id != %s",
+                (username, current_user.user_id),
+            )
+            if cur.fetchone():
+                return api_error("That username is taken", 400, "username_taken")
+        receive_update_emails = data.get("receive_update_emails")
+        if receive_update_emails is not None and not isinstance(
+            receive_update_emails, bool
+        ):
+            return api_error(
+                "receive_update_emails must be true or false", 400, "invalid"
+            )
 
         save_to_history(
             cur,
@@ -578,6 +646,46 @@ def me_profile():
                 current_user.person_id,
             ),
         )
+        if "sms_number" in data or "thesession_user_id" in data:
+            cur.execute(
+                """
+                UPDATE person
+                SET sms_number = CASE WHEN %s THEN %s ELSE sms_number END,
+                    thesession_user_id = CASE WHEN %s THEN %s ELSE thesession_user_id END
+                WHERE person_id = %s
+                """,
+                (
+                    "sms_number" in data,
+                    s("sms_number") or None,
+                    "thesession_user_id" in data,
+                    thesession_user_id,
+                    current_user.person_id,
+                ),
+            )
+        if username is not None or receive_update_emails is not None:
+            save_to_history(
+                cur,
+                "user_account",
+                "UPDATE",
+                current_user.user_id,
+                user_id=current_user.user_id,
+            )
+            cur.execute(
+                """
+                UPDATE user_account
+                SET username = COALESCE(%s, username),
+                    receive_update_emails = COALESCE(%s, receive_update_emails),
+                    last_modified_date = %s, last_modified_user_id = %s
+                WHERE user_id = %s
+                """,
+                (
+                    username,
+                    receive_update_emails,
+                    now_utc(),
+                    current_user.user_id,
+                    current_user.user_id,
+                ),
+            )
         if timezone:
             save_to_history(
                 cur,

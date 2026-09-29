@@ -73,6 +73,14 @@ final class CeolUITests: XCTestCase {
 
         XCTAssertTrue(app.buttons.containing(NSPredicate(format: "label BEGINSWITH 'Tunes'")).firstMatch.waitForExistence(timeout: 10))
         snapshot("session")
+        // A tune on the session's list opens its sheet, with this session's plays.
+        let tune = app.buttons["session.tune"].firstMatch
+        XCTAssertTrue(tune.waitForExistence(timeout: 10))
+        tune.tap()
+        XCTAssertTrue(app.staticTexts["Played at this session"].waitForExistence(timeout: 10))
+        snapshot("session tune")
+        app.buttons["Done"].firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["Played at this session"].waitForNonExistence(timeout: 5))
         app.buttons.containing(NSPredicate(format: "label BEGINSWITH 'Logs'")).firstMatch.tap()
         // The first night with tunes in it (the newest may have none yet).
         let night = app.buttons.matching(NSPredicate(format: "label MATCHES '.*[1-9][0-9]* tunes.*'")).firstMatch
@@ -98,6 +106,11 @@ final class CeolUITests: XCTestCase {
         app.buttons["Done"].tap()
         XCTAssertTrue(app.images["Notation for Cooley's"].waitForNonExistence(timeout: 5))
 
+        // The sort and filter drawer.
+        app.buttons["tunes.search.filter"].tap()
+        XCTAssertTrue(app.buttons["filters.done"].waitForExistence(timeout: 5))
+        snapshot("tunes filter")
+        app.buttons["filters.done"].tap()
         let search = app.textFields["tunes.search"]
         XCTAssertTrue(search.waitForExistence(timeout: 5))
         search.tap()
@@ -161,6 +174,8 @@ final class CeolUITests: XCTestCase {
         app.buttons["tab.me"].firstMatch.tap()
         let admin = app.buttons["me.admin"]
         XCTAssertTrue(admin.waitForExistence(timeout: 10))
+        // Below the Account rows now: scroll it clear of the tab bar first.
+        app.swipeUp()
         admin.tap()
         // The web's own page, not its login form.
         let web = app.webViews.firstMatch
@@ -183,12 +198,13 @@ final class CeolUITests: XCTestCase {
         let app = launch()
         signIn(app)
         app.buttons["tab.sessions"].firstMatch.tap()
-        let filter = app.buttons["Filter"].firstMatch
+        let filter = app.buttons["sessions.search.filter"].firstMatch
         XCTAssertTrue(filter.waitForExistence(timeout: 10))
         filter.tap()
         let allActive = app.buttons["All Active"].firstMatch
         XCTAssertTrue(allActive.waitForExistence(timeout: 5))
         allActive.tap()
+        app.buttons["filters.done"].tap()
         let boston = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Boston Celtic Session'")).firstMatch
         XCTAssertTrue(boston.waitForExistence(timeout: 10))
         boston.tap()
@@ -290,6 +306,53 @@ final class CeolUITests: XCTestCase {
         snapshot("created")
     }
 
+    /// The + on Tunes: search the catalogue, add a tune at once as To Learn, open it,
+    /// and remove it again.
+    @MainActor
+    func testAddingATuneFromThePlus() throws {
+        let app = launch()
+        signIn(app)
+        app.buttons["tab.tunes"].firstMatch.tap()
+        let plus = app.buttons["tunes.add"]
+        XCTAssertTrue(plus.waitForExistence(timeout: 10))
+        plus.tap()
+        let query = app.textFields["addTune.query"]
+        XCTAssertTrue(query.waitForExistence(timeout: 10))
+        query.tap()
+        query.typeText("kisco")
+        let quickAdd = app.buttons["addTune.quickAdd"].firstMatch
+        XCTAssertTrue(quickAdd.waitForExistence(timeout: 10))
+        quickAdd.tap()
+        XCTAssertTrue(app.images["On your list"].firstMatch.waitForExistence(timeout: 10)
+            || app.otherElements["On your list"].firstMatch.exists || app.descendants(matching: .any)["On your list"].exists)
+        snapshot("add a tune")
+        app.buttons["addTune.row"].firstMatch.tap()
+        let learn = app.buttons["sheet.status.want to learn"]
+        XCTAssertTrue(learn.waitForExistence(timeout: 10))
+        XCTAssertTrue(learn.isSelected)
+        app.swipeUp()
+        app.buttons["sheet.remove"].tap()
+        let confirm = app.buttons.matching(NSPredicate(format: "label == 'Remove' AND identifier != 'sheet.remove'")).firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+        confirm.tap()
+        XCTAssertTrue(app.buttons["sheet.remove"].waitForNonExistence(timeout: 10))
+    }
+
+    /// Home's Learning box opens Tunes, filtered to the tunes you're learning.
+    @MainActor
+    func testHomeLearningOpensTunes() throws {
+        let app = launch()
+        signIn(app)
+        let learning = app.buttons.containing(NSPredicate(format: "label CONTAINS[c] 'Learning'")).matching(
+            NSPredicate(format: "identifier != 'tab.tunes'")).firstMatch
+        app.swipeUp()
+        XCTAssertTrue(learning.waitForExistence(timeout: 10))
+        learning.tap()
+        let segment = app.segmentedControls.buttons["Learning"]
+        XCTAssertTrue(segment.waitForExistence(timeout: 10))
+        XCTAssertTrue(segment.isSelected)
+    }
+
     /// Phase 3d: Me shows the profile and opens it to edit (cancelled: seed data stays put).
     @MainActor
     func testMeShowsTheProfile() throws {
@@ -298,8 +361,9 @@ final class CeolUITests: XCTestCase {
         app.buttons["tab.me"].firstMatch.tap()
         XCTAssertTrue(app.staticTexts["Ian Varley"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS '@ian' AND label CONTAINS 'Austin'")).firstMatch.exists)
-        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS 'Fiddle'")).firstMatch.exists)
+        XCTAssertTrue(app.descendants(matching: .any).containing(NSPredicate(format: "label CONTAINS 'Fiddle'")).firstMatch.exists)
         XCTAssertFalse(app.buttons["me.delete"].exists, "not offered to a system admin")
+        XCTAssertTrue(app.switches["me.updateEmails"].exists || app.descendants(matching: .any)["me.updateEmails"].exists)
         snapshot("me")
         app.buttons["me.edit"].tap()
         XCTAssertTrue(app.navigationBars["Edit profile"].waitForExistence(timeout: 5))

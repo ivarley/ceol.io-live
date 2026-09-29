@@ -1,0 +1,4607 @@
+{
+  "_readme": [
+    "My Tunes' list rules (spec 035 Step 2): what a search, the filters and the sort leave",
+    "on the list, and the lines around it. The web's /my-tunes and the iOS Tunes tab both",
+    "apply these; a filter that shows different tunes on each would be a bug nobody finds.",
+    "",
+    "What a port must match exactly:",
+    "  - filterAndSort keeps input order until it sorts, returns copies, and marks a tune",
+    "    _instDimmed when an instrument filter is on and the tune isn't on that instrument",
+    "    (kept, sorted below the matches, never dropped). Search is accent- and",
+    "    smart-quote-insensitive over the name and notes, or a pasted thesession id or link.",
+    "  - alpha sorts with localeCompare (ICU); counts sort numerically, a null as 0, and",
+    "    ties keep input order (Array.prototype.sort is stable). abcIds is not fixtured",
+    "    (a Set); leaving it out is name-only matching.",
+    "  - Added compares the first ten characters of created_date as text: 'after' keeps",
+    "    dates on or after the day, 'before' keeps dates strictly before it."
+  ],
+  "functions": {
+    "filterAndSort": {
+      "params": [
+        "allTunes",
+        "filters",
+        "sort",
+        "instruments"
+      ],
+      "cases": [
+        {
+          "name": "no filters, by name",
+          "input": {
+            "allTunes": [
+              {
+                "tune_id": 1,
+                "tune_name": "Cooley's",
+                "tune_type": "reel",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2025-03-04T09:00:00+00:00",
+                "tunebook_count": 1350,
+                "heard_count": 12,
+                "member_play_count": 10,
+                "attended_play_count": 7,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 2,
+                "tune_name": "The Kesh",
+                "tune_type": "jig",
+                "learn_status": "learning",
+                "notes": "Slow at the start",
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 900,
+                "heard_count": 1,
+                "member_play_count": 4,
+                "attended_play_count": 1,
+                "session_play_count": 0,
+                "instrument_status": {
+                  "Concertina": "learning"
+                }
+              },
+              {
+                "tune_id": 3,
+                "tune_name": "Sligo Maíd",
+                "tune_type": "reel",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-06-10T23:30:00+00:00",
+                "tunebook_count": 700,
+                "heard_count": 3,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 4,
+                "tune_name": "Banish Misfortune",
+                "tune_type": "jig",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 800,
+                "heard_count": 1,
+                "member_play_count": 4,
+                "attended_play_count": 4,
+                "session_play_count": 0,
+                "instrument_status": {
+                  "Fiddle": "learning"
+                }
+              },
+              {
+                "tune_id": 5,
+                "tune_name": "Inisheer",
+                "tune_type": "waltz",
+                "learn_status": "learning",
+                "notes": null,
+                "created_date": "2026-09-20T08:00:00+00:00",
+                "tunebook_count": 500,
+                "heard_count": 0,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 6,
+                "tune_name": "Morrison’s",
+                "tune_type": "jig",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": null,
+                "heard_count": 5,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              }
+            ],
+            "filters": {
+              "search": "",
+              "type": "",
+              "status": "",
+              "instrument": "",
+              "rel": "",
+              "addedDir": "after",
+              "addedDate": ""
+            },
+            "sort": {
+              "type": "alpha",
+              "dir": "asc",
+              "type2": null,
+              "dir2": null
+            },
+            "instruments": [
+              {
+                "instrument": "Fiddle",
+                "is_auto": true
+              },
+              {
+                "instrument": "Concertina",
+                "is_auto": false
+              }
+            ]
+          },
+          "expected": [
+            {
+              "tune_id": 4,
+              "tune_name": "Banish Misfortune",
+              "tune_type": "jig",
+              "learn_status": "learned",
+              "notes": null,
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": 800,
+              "heard_count": 1,
+              "member_play_count": 4,
+              "attended_play_count": 4,
+              "session_play_count": 0,
+              "instrument_status": {
+                "Fiddle": "learning"
+              }
+            },
+            {
+              "tune_id": 1,
+              "tune_name": "Cooley's",
+              "tune_type": "reel",
+              "learn_status": "learned",
+              "notes": null,
+              "created_date": "2025-03-04T09:00:00+00:00",
+              "tunebook_count": 1350,
+              "heard_count": 12,
+              "member_play_count": 10,
+              "attended_play_count": 7,
+              "session_play_count": 0,
+              "instrument_status": {}
+            },
+            {
+              "tune_id": 5,
+              "tune_name": "Inisheer",
+              "tune_type": "waltz",
+              "learn_status": "learning",
+              "notes": null,
+              "created_date": "2026-09-20T08:00:00+00:00",
+              "tunebook_count": 500,
+              "heard_count": 0,
+              "member_play_count": 0,
+              "attended_play_count": 0,
+              "session_play_count": 0,
+              "instrument_status": {}
+            },
+            {
+              "tune_id": 6,
+              "tune_name": "Morrison’s",
+              "tune_type": "jig",
+              "learn_status": "want to learn",
+              "notes": null,
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": null,
+              "heard_count": 5,
+              "member_play_count": 0,
+              "attended_play_count": 0,
+              "session_play_count": 0,
+              "instrument_status": {}
+            },
+            {
+              "tune_id": 3,
+              "tune_name": "Sligo Maíd",
+              "tune_type": "reel",
+              "learn_status": "want to learn",
+              "notes": null,
+              "created_date": "2026-06-10T23:30:00+00:00",
+              "tunebook_count": 700,
+              "heard_count": 3,
+              "member_play_count": 0,
+              "attended_play_count": 0,
+              "session_play_count": 0,
+              "instrument_status": {}
+            },
+            {
+              "tune_id": 2,
+              "tune_name": "The Kesh",
+              "tune_type": "jig",
+              "learn_status": "learning",
+              "notes": "Slow at the start",
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": 900,
+              "heard_count": 1,
+              "member_play_count": 4,
+              "attended_play_count": 1,
+              "session_play_count": 0,
+              "instrument_status": {
+                "Concertina": "learning"
+              }
+            }
+          ]
+        },
+        {
+          "name": "by name, z-a",
+          "input": {
+            "allTunes": [
+              {
+                "tune_id": 1,
+                "tune_name": "Cooley's",
+                "tune_type": "reel",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2025-03-04T09:00:00+00:00",
+                "tunebook_count": 1350,
+                "heard_count": 12,
+                "member_play_count": 10,
+                "attended_play_count": 7,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 2,
+                "tune_name": "The Kesh",
+                "tune_type": "jig",
+                "learn_status": "learning",
+                "notes": "Slow at the start",
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 900,
+                "heard_count": 1,
+                "member_play_count": 4,
+                "attended_play_count": 1,
+                "session_play_count": 0,
+                "instrument_status": {
+                  "Concertina": "learning"
+                }
+              },
+              {
+                "tune_id": 3,
+                "tune_name": "Sligo Maíd",
+                "tune_type": "reel",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-06-10T23:30:00+00:00",
+                "tunebook_count": 700,
+                "heard_count": 3,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 4,
+                "tune_name": "Banish Misfortune",
+                "tune_type": "jig",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 800,
+                "heard_count": 1,
+                "member_play_count": 4,
+                "attended_play_count": 4,
+                "session_play_count": 0,
+                "instrument_status": {
+                  "Fiddle": "learning"
+                }
+              },
+              {
+                "tune_id": 5,
+                "tune_name": "Inisheer",
+                "tune_type": "waltz",
+                "learn_status": "learning",
+                "notes": null,
+                "created_date": "2026-09-20T08:00:00+00:00",
+                "tunebook_count": 500,
+                "heard_count": 0,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 6,
+                "tune_name": "Morrison’s",
+                "tune_type": "jig",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": null,
+                "heard_count": 5,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              }
+            ],
+            "filters": {
+              "search": "",
+              "type": "",
+              "status": "",
+              "instrument": "",
+              "rel": "",
+              "addedDir": "after",
+              "addedDate": ""
+            },
+            "sort": {
+              "type": "alpha",
+              "dir": "desc",
+              "type2": null,
+              "dir2": null
+            },
+            "instruments": [
+              {
+                "instrument": "Fiddle",
+                "is_auto": true
+              },
+              {
+                "instrument": "Concertina",
+                "is_auto": false
+              }
+            ]
+          },
+          "expected": [
+            {
+              "tune_id": 2,
+              "tune_name": "The Kesh",
+              "tune_type": "jig",
+              "learn_status": "learning",
+              "notes": "Slow at the start",
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": 900,
+              "heard_count": 1,
+              "member_play_count": 4,
+              "attended_play_count": 1,
+              "session_play_count": 0,
+              "instrument_status": {
+                "Concertina": "learning"
+              }
+            },
+            {
+              "tune_id": 3,
+              "tune_name": "Sligo Maíd",
+              "tune_type": "reel",
+              "learn_status": "want to learn",
+              "notes": null,
+              "created_date": "2026-06-10T23:30:00+00:00",
+              "tunebook_count": 700,
+              "heard_count": 3,
+              "member_play_count": 0,
+              "attended_play_count": 0,
+              "session_play_count": 0,
+              "instrument_status": {}
+            },
+            {
+              "tune_id": 6,
+              "tune_name": "Morrison’s",
+              "tune_type": "jig",
+              "learn_status": "want to learn",
+              "notes": null,
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": null,
+              "heard_count": 5,
+              "member_play_count": 0,
+              "attended_play_count": 0,
+              "session_play_count": 0,
+              "instrument_status": {}
+            },
+            {
+              "tune_id": 5,
+              "tune_name": "Inisheer",
+              "tune_type": "waltz",
+              "learn_status": "learning",
+              "notes": null,
+              "created_date": "2026-09-20T08:00:00+00:00",
+              "tunebook_count": 500,
+              "heard_count": 0,
+              "member_play_count": 0,
+              "attended_play_count": 0,
+              "session_play_count": 0,
+              "instrument_status": {}
+            },
+            {
+              "tune_id": 1,
+              "tune_name": "Cooley's",
+              "tune_type": "reel",
+              "learn_status": "learned",
+              "notes": null,
+              "created_date": "2025-03-04T09:00:00+00:00",
+              "tunebook_count": 1350,
+              "heard_count": 12,
+              "member_play_count": 10,
+              "attended_play_count": 7,
+              "session_play_count": 0,
+              "instrument_status": {}
+            },
+            {
+              "tune_id": 4,
+              "tune_name": "Banish Misfortune",
+              "tune_type": "jig",
+              "learn_status": "learned",
+              "notes": null,
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": 800,
+              "heard_count": 1,
+              "member_play_count": 4,
+              "attended_play_count": 4,
+              "session_play_count": 0,
+              "instrument_status": {
+                "Fiddle": "learning"
+              }
+            }
+          ]
+        },
+        {
+          "name": "search, accents folded",
+          "input": {
+            "allTunes": [
+              {
+                "tune_id": 1,
+                "tune_name": "Cooley's",
+                "tune_type": "reel",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2025-03-04T09:00:00+00:00",
+                "tunebook_count": 1350,
+                "heard_count": 12,
+                "member_play_count": 10,
+                "attended_play_count": 7,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 2,
+                "tune_name": "The Kesh",
+                "tune_type": "jig",
+                "learn_status": "learning",
+                "notes": "Slow at the start",
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 900,
+                "heard_count": 1,
+                "member_play_count": 4,
+                "attended_play_count": 1,
+                "session_play_count": 0,
+                "instrument_status": {
+                  "Concertina": "learning"
+                }
+              },
+              {
+                "tune_id": 3,
+                "tune_name": "Sligo Maíd",
+                "tune_type": "reel",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-06-10T23:30:00+00:00",
+                "tunebook_count": 700,
+                "heard_count": 3,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 4,
+                "tune_name": "Banish Misfortune",
+                "tune_type": "jig",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 800,
+                "heard_count": 1,
+                "member_play_count": 4,
+                "attended_play_count": 4,
+                "session_play_count": 0,
+                "instrument_status": {
+                  "Fiddle": "learning"
+                }
+              },
+              {
+                "tune_id": 5,
+                "tune_name": "Inisheer",
+                "tune_type": "waltz",
+                "learn_status": "learning",
+                "notes": null,
+                "created_date": "2026-09-20T08:00:00+00:00",
+                "tunebook_count": 500,
+                "heard_count": 0,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 6,
+                "tune_name": "Morrison’s",
+                "tune_type": "jig",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": null,
+                "heard_count": 5,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              }
+            ],
+            "filters": {
+              "search": "maid",
+              "type": "",
+              "status": "",
+              "instrument": "",
+              "rel": "",
+              "addedDir": "after",
+              "addedDate": ""
+            },
+            "sort": {
+              "type": "alpha",
+              "dir": "asc",
+              "type2": null,
+              "dir2": null
+            },
+            "instruments": [
+              {
+                "instrument": "Fiddle",
+                "is_auto": true
+              },
+              {
+                "instrument": "Concertina",
+                "is_auto": false
+              }
+            ]
+          },
+          "expected": [
+            {
+              "tune_id": 3,
+              "tune_name": "Sligo Maíd",
+              "tune_type": "reel",
+              "learn_status": "want to learn",
+              "notes": null,
+              "created_date": "2026-06-10T23:30:00+00:00",
+              "tunebook_count": 700,
+              "heard_count": 3,
+              "member_play_count": 0,
+              "attended_play_count": 0,
+              "session_play_count": 0,
+              "instrument_status": {}
+            }
+          ]
+        },
+        {
+          "name": "search, a smart quote folded",
+          "input": {
+            "allTunes": [
+              {
+                "tune_id": 1,
+                "tune_name": "Cooley's",
+                "tune_type": "reel",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2025-03-04T09:00:00+00:00",
+                "tunebook_count": 1350,
+                "heard_count": 12,
+                "member_play_count": 10,
+                "attended_play_count": 7,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 2,
+                "tune_name": "The Kesh",
+                "tune_type": "jig",
+                "learn_status": "learning",
+                "notes": "Slow at the start",
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 900,
+                "heard_count": 1,
+                "member_play_count": 4,
+                "attended_play_count": 1,
+                "session_play_count": 0,
+                "instrument_status": {
+                  "Concertina": "learning"
+                }
+              },
+              {
+                "tune_id": 3,
+                "tune_name": "Sligo Maíd",
+                "tune_type": "reel",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-06-10T23:30:00+00:00",
+                "tunebook_count": 700,
+                "heard_count": 3,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 4,
+                "tune_name": "Banish Misfortune",
+                "tune_type": "jig",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 800,
+                "heard_count": 1,
+                "member_play_count": 4,
+                "attended_play_count": 4,
+                "session_play_count": 0,
+                "instrument_status": {
+                  "Fiddle": "learning"
+                }
+              },
+              {
+                "tune_id": 5,
+                "tune_name": "Inisheer",
+                "tune_type": "waltz",
+                "learn_status": "learning",
+                "notes": null,
+                "created_date": "2026-09-20T08:00:00+00:00",
+                "tunebook_count": 500,
+                "heard_count": 0,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 6,
+                "tune_name": "Morrison’s",
+                "tune_type": "jig",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": null,
+                "heard_count": 5,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              }
+            ],
+            "filters": {
+              "search": "morrison's",
+              "type": "",
+              "status": "",
+              "instrument": "",
+              "rel": "",
+              "addedDir": "after",
+              "addedDate": ""
+            },
+            "sort": {
+              "type": "alpha",
+              "dir": "asc",
+              "type2": null,
+              "dir2": null
+            },
+            "instruments": [
+              {
+                "instrument": "Fiddle",
+                "is_auto": true
+              },
+              {
+                "instrument": "Concertina",
+                "is_auto": false
+              }
+            ]
+          },
+          "expected": [
+            {
+              "tune_id": 6,
+              "tune_name": "Morrison’s",
+              "tune_type": "jig",
+              "learn_status": "want to learn",
+              "notes": null,
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": null,
+              "heard_count": 5,
+              "member_play_count": 0,
+              "attended_play_count": 0,
+              "session_play_count": 0,
+              "instrument_status": {}
+            }
+          ]
+        },
+        {
+          "name": "search the notes",
+          "input": {
+            "allTunes": [
+              {
+                "tune_id": 1,
+                "tune_name": "Cooley's",
+                "tune_type": "reel",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2025-03-04T09:00:00+00:00",
+                "tunebook_count": 1350,
+                "heard_count": 12,
+                "member_play_count": 10,
+                "attended_play_count": 7,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 2,
+                "tune_name": "The Kesh",
+                "tune_type": "jig",
+                "learn_status": "learning",
+                "notes": "Slow at the start",
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 900,
+                "heard_count": 1,
+                "member_play_count": 4,
+                "attended_play_count": 1,
+                "session_play_count": 0,
+                "instrument_status": {
+                  "Concertina": "learning"
+                }
+              },
+              {
+                "tune_id": 3,
+                "tune_name": "Sligo Maíd",
+                "tune_type": "reel",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-06-10T23:30:00+00:00",
+                "tunebook_count": 700,
+                "heard_count": 3,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 4,
+                "tune_name": "Banish Misfortune",
+                "tune_type": "jig",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 800,
+                "heard_count": 1,
+                "member_play_count": 4,
+                "attended_play_count": 4,
+                "session_play_count": 0,
+                "instrument_status": {
+                  "Fiddle": "learning"
+                }
+              },
+              {
+                "tune_id": 5,
+                "tune_name": "Inisheer",
+                "tune_type": "waltz",
+                "learn_status": "learning",
+                "notes": null,
+                "created_date": "2026-09-20T08:00:00+00:00",
+                "tunebook_count": 500,
+                "heard_count": 0,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 6,
+                "tune_name": "Morrison’s",
+                "tune_type": "jig",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": null,
+                "heard_count": 5,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              }
+            ],
+            "filters": {
+              "search": "SLOW AT",
+              "type": "",
+              "status": "",
+              "instrument": "",
+              "rel": "",
+              "addedDir": "after",
+              "addedDate": ""
+            },
+            "sort": {
+              "type": "alpha",
+              "dir": "asc",
+              "type2": null,
+              "dir2": null
+            },
+            "instruments": [
+              {
+                "instrument": "Fiddle",
+                "is_auto": true
+              },
+              {
+                "instrument": "Concertina",
+                "is_auto": false
+              }
+            ]
+          },
+          "expected": [
+            {
+              "tune_id": 2,
+              "tune_name": "The Kesh",
+              "tune_type": "jig",
+              "learn_status": "learning",
+              "notes": "Slow at the start",
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": 900,
+              "heard_count": 1,
+              "member_play_count": 4,
+              "attended_play_count": 1,
+              "session_play_count": 0,
+              "instrument_status": {
+                "Concertina": "learning"
+              }
+            }
+          ]
+        },
+        {
+          "name": "a pasted link",
+          "input": {
+            "allTunes": [
+              {
+                "tune_id": 1,
+                "tune_name": "Cooley's",
+                "tune_type": "reel",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2025-03-04T09:00:00+00:00",
+                "tunebook_count": 1350,
+                "heard_count": 12,
+                "member_play_count": 10,
+                "attended_play_count": 7,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 2,
+                "tune_name": "The Kesh",
+                "tune_type": "jig",
+                "learn_status": "learning",
+                "notes": "Slow at the start",
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 900,
+                "heard_count": 1,
+                "member_play_count": 4,
+                "attended_play_count": 1,
+                "session_play_count": 0,
+                "instrument_status": {
+                  "Concertina": "learning"
+                }
+              },
+              {
+                "tune_id": 3,
+                "tune_name": "Sligo Maíd",
+                "tune_type": "reel",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-06-10T23:30:00+00:00",
+                "tunebook_count": 700,
+                "heard_count": 3,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 4,
+                "tune_name": "Banish Misfortune",
+                "tune_type": "jig",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 800,
+                "heard_count": 1,
+                "member_play_count": 4,
+                "attended_play_count": 4,
+                "session_play_count": 0,
+                "instrument_status": {
+                  "Fiddle": "learning"
+                }
+              },
+              {
+                "tune_id": 5,
+                "tune_name": "Inisheer",
+                "tune_type": "waltz",
+                "learn_status": "learning",
+                "notes": null,
+                "created_date": "2026-09-20T08:00:00+00:00",
+                "tunebook_count": 500,
+                "heard_count": 0,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 6,
+                "tune_name": "Morrison’s",
+                "tune_type": "jig",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": null,
+                "heard_count": 5,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              }
+            ],
+            "filters": {
+              "search": "https://thesession.org/tunes/4",
+              "type": "",
+              "status": "",
+              "instrument": "",
+              "rel": "",
+              "addedDir": "after",
+              "addedDate": ""
+            },
+            "sort": {
+              "type": "alpha",
+              "dir": "asc",
+              "type2": null,
+              "dir2": null
+            },
+            "instruments": [
+              {
+                "instrument": "Fiddle",
+                "is_auto": true
+              },
+              {
+                "instrument": "Concertina",
+                "is_auto": false
+              }
+            ]
+          },
+          "expected": [
+            {
+              "tune_id": 4,
+              "tune_name": "Banish Misfortune",
+              "tune_type": "jig",
+              "learn_status": "learned",
+              "notes": null,
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": 800,
+              "heard_count": 1,
+              "member_play_count": 4,
+              "attended_play_count": 4,
+              "session_play_count": 0,
+              "instrument_status": {
+                "Fiddle": "learning"
+              }
+            }
+          ]
+        },
+        {
+          "name": "a bare id",
+          "input": {
+            "allTunes": [
+              {
+                "tune_id": 1,
+                "tune_name": "Cooley's",
+                "tune_type": "reel",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2025-03-04T09:00:00+00:00",
+                "tunebook_count": 1350,
+                "heard_count": 12,
+                "member_play_count": 10,
+                "attended_play_count": 7,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 2,
+                "tune_name": "The Kesh",
+                "tune_type": "jig",
+                "learn_status": "learning",
+                "notes": "Slow at the start",
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 900,
+                "heard_count": 1,
+                "member_play_count": 4,
+                "attended_play_count": 1,
+                "session_play_count": 0,
+                "instrument_status": {
+                  "Concertina": "learning"
+                }
+              },
+              {
+                "tune_id": 3,
+                "tune_name": "Sligo Maíd",
+                "tune_type": "reel",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-06-10T23:30:00+00:00",
+                "tunebook_count": 700,
+                "heard_count": 3,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 4,
+                "tune_name": "Banish Misfortune",
+                "tune_type": "jig",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 800,
+                "heard_count": 1,
+                "member_play_count": 4,
+                "attended_play_count": 4,
+                "session_play_count": 0,
+                "instrument_status": {
+                  "Fiddle": "learning"
+                }
+              },
+              {
+                "tune_id": 5,
+                "tune_name": "Inisheer",
+                "tune_type": "waltz",
+                "learn_status": "learning",
+                "notes": null,
+                "created_date": "2026-09-20T08:00:00+00:00",
+                "tunebook_count": 500,
+                "heard_count": 0,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 6,
+                "tune_name": "Morrison’s",
+                "tune_type": "jig",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": null,
+                "heard_count": 5,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              }
+            ],
+            "filters": {
+              "search": "5",
+              "type": "",
+              "status": "",
+              "instrument": "",
+              "rel": "",
+              "addedDir": "after",
+              "addedDate": ""
+            },
+            "sort": {
+              "type": "alpha",
+              "dir": "asc",
+              "type2": null,
+              "dir2": null
+            },
+            "instruments": [
+              {
+                "instrument": "Fiddle",
+                "is_auto": true
+              },
+              {
+                "instrument": "Concertina",
+                "is_auto": false
+              }
+            ]
+          },
+          "expected": [
+            {
+              "tune_id": 5,
+              "tune_name": "Inisheer",
+              "tune_type": "waltz",
+              "learn_status": "learning",
+              "notes": null,
+              "created_date": "2026-09-20T08:00:00+00:00",
+              "tunebook_count": 500,
+              "heard_count": 0,
+              "member_play_count": 0,
+              "attended_play_count": 0,
+              "session_play_count": 0,
+              "instrument_status": {}
+            }
+          ]
+        },
+        {
+          "name": "type",
+          "input": {
+            "allTunes": [
+              {
+                "tune_id": 1,
+                "tune_name": "Cooley's",
+                "tune_type": "reel",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2025-03-04T09:00:00+00:00",
+                "tunebook_count": 1350,
+                "heard_count": 12,
+                "member_play_count": 10,
+                "attended_play_count": 7,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 2,
+                "tune_name": "The Kesh",
+                "tune_type": "jig",
+                "learn_status": "learning",
+                "notes": "Slow at the start",
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 900,
+                "heard_count": 1,
+                "member_play_count": 4,
+                "attended_play_count": 1,
+                "session_play_count": 0,
+                "instrument_status": {
+                  "Concertina": "learning"
+                }
+              },
+              {
+                "tune_id": 3,
+                "tune_name": "Sligo Maíd",
+                "tune_type": "reel",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-06-10T23:30:00+00:00",
+                "tunebook_count": 700,
+                "heard_count": 3,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 4,
+                "tune_name": "Banish Misfortune",
+                "tune_type": "jig",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 800,
+                "heard_count": 1,
+                "member_play_count": 4,
+                "attended_play_count": 4,
+                "session_play_count": 0,
+                "instrument_status": {
+                  "Fiddle": "learning"
+                }
+              },
+              {
+                "tune_id": 5,
+                "tune_name": "Inisheer",
+                "tune_type": "waltz",
+                "learn_status": "learning",
+                "notes": null,
+                "created_date": "2026-09-20T08:00:00+00:00",
+                "tunebook_count": 500,
+                "heard_count": 0,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 6,
+                "tune_name": "Morrison’s",
+                "tune_type": "jig",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": null,
+                "heard_count": 5,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              }
+            ],
+            "filters": {
+              "search": "",
+              "type": "jig",
+              "status": "",
+              "instrument": "",
+              "rel": "",
+              "addedDir": "after",
+              "addedDate": ""
+            },
+            "sort": {
+              "type": "alpha",
+              "dir": "asc",
+              "type2": null,
+              "dir2": null
+            },
+            "instruments": [
+              {
+                "instrument": "Fiddle",
+                "is_auto": true
+              },
+              {
+                "instrument": "Concertina",
+                "is_auto": false
+              }
+            ]
+          },
+          "expected": [
+            {
+              "tune_id": 4,
+              "tune_name": "Banish Misfortune",
+              "tune_type": "jig",
+              "learn_status": "learned",
+              "notes": null,
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": 800,
+              "heard_count": 1,
+              "member_play_count": 4,
+              "attended_play_count": 4,
+              "session_play_count": 0,
+              "instrument_status": {
+                "Fiddle": "learning"
+              }
+            },
+            {
+              "tune_id": 6,
+              "tune_name": "Morrison’s",
+              "tune_type": "jig",
+              "learn_status": "want to learn",
+              "notes": null,
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": null,
+              "heard_count": 5,
+              "member_play_count": 0,
+              "attended_play_count": 0,
+              "session_play_count": 0,
+              "instrument_status": {}
+            },
+            {
+              "tune_id": 2,
+              "tune_name": "The Kesh",
+              "tune_type": "jig",
+              "learn_status": "learning",
+              "notes": "Slow at the start",
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": 900,
+              "heard_count": 1,
+              "member_play_count": 4,
+              "attended_play_count": 1,
+              "session_play_count": 0,
+              "instrument_status": {
+                "Concertina": "learning"
+              }
+            }
+          ]
+        },
+        {
+          "name": "status",
+          "input": {
+            "allTunes": [
+              {
+                "tune_id": 1,
+                "tune_name": "Cooley's",
+                "tune_type": "reel",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2025-03-04T09:00:00+00:00",
+                "tunebook_count": 1350,
+                "heard_count": 12,
+                "member_play_count": 10,
+                "attended_play_count": 7,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 2,
+                "tune_name": "The Kesh",
+                "tune_type": "jig",
+                "learn_status": "learning",
+                "notes": "Slow at the start",
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 900,
+                "heard_count": 1,
+                "member_play_count": 4,
+                "attended_play_count": 1,
+                "session_play_count": 0,
+                "instrument_status": {
+                  "Concertina": "learning"
+                }
+              },
+              {
+                "tune_id": 3,
+                "tune_name": "Sligo Maíd",
+                "tune_type": "reel",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-06-10T23:30:00+00:00",
+                "tunebook_count": 700,
+                "heard_count": 3,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 4,
+                "tune_name": "Banish Misfortune",
+                "tune_type": "jig",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 800,
+                "heard_count": 1,
+                "member_play_count": 4,
+                "attended_play_count": 4,
+                "session_play_count": 0,
+                "instrument_status": {
+                  "Fiddle": "learning"
+                }
+              },
+              {
+                "tune_id": 5,
+                "tune_name": "Inisheer",
+                "tune_type": "waltz",
+                "learn_status": "learning",
+                "notes": null,
+                "created_date": "2026-09-20T08:00:00+00:00",
+                "tunebook_count": 500,
+                "heard_count": 0,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 6,
+                "tune_name": "Morrison’s",
+                "tune_type": "jig",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": null,
+                "heard_count": 5,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              }
+            ],
+            "filters": {
+              "search": "",
+              "type": "",
+              "status": "learning",
+              "instrument": "",
+              "rel": "",
+              "addedDir": "after",
+              "addedDate": ""
+            },
+            "sort": {
+              "type": "alpha",
+              "dir": "asc",
+              "type2": null,
+              "dir2": null
+            },
+            "instruments": [
+              {
+                "instrument": "Fiddle",
+                "is_auto": true
+              },
+              {
+                "instrument": "Concertina",
+                "is_auto": false
+              }
+            ]
+          },
+          "expected": [
+            {
+              "tune_id": 5,
+              "tune_name": "Inisheer",
+              "tune_type": "waltz",
+              "learn_status": "learning",
+              "notes": null,
+              "created_date": "2026-09-20T08:00:00+00:00",
+              "tunebook_count": 500,
+              "heard_count": 0,
+              "member_play_count": 0,
+              "attended_play_count": 0,
+              "session_play_count": 0,
+              "instrument_status": {}
+            },
+            {
+              "tune_id": 2,
+              "tune_name": "The Kesh",
+              "tune_type": "jig",
+              "learn_status": "learning",
+              "notes": "Slow at the start",
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": 900,
+              "heard_count": 1,
+              "member_play_count": 4,
+              "attended_play_count": 1,
+              "session_play_count": 0,
+              "instrument_status": {
+                "Concertina": "learning"
+              }
+            }
+          ]
+        },
+        {
+          "name": "added since a day",
+          "input": {
+            "allTunes": [
+              {
+                "tune_id": 1,
+                "tune_name": "Cooley's",
+                "tune_type": "reel",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2025-03-04T09:00:00+00:00",
+                "tunebook_count": 1350,
+                "heard_count": 12,
+                "member_play_count": 10,
+                "attended_play_count": 7,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 2,
+                "tune_name": "The Kesh",
+                "tune_type": "jig",
+                "learn_status": "learning",
+                "notes": "Slow at the start",
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 900,
+                "heard_count": 1,
+                "member_play_count": 4,
+                "attended_play_count": 1,
+                "session_play_count": 0,
+                "instrument_status": {
+                  "Concertina": "learning"
+                }
+              },
+              {
+                "tune_id": 3,
+                "tune_name": "Sligo Maíd",
+                "tune_type": "reel",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-06-10T23:30:00+00:00",
+                "tunebook_count": 700,
+                "heard_count": 3,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 4,
+                "tune_name": "Banish Misfortune",
+                "tune_type": "jig",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 800,
+                "heard_count": 1,
+                "member_play_count": 4,
+                "attended_play_count": 4,
+                "session_play_count": 0,
+                "instrument_status": {
+                  "Fiddle": "learning"
+                }
+              },
+              {
+                "tune_id": 5,
+                "tune_name": "Inisheer",
+                "tune_type": "waltz",
+                "learn_status": "learning",
+                "notes": null,
+                "created_date": "2026-09-20T08:00:00+00:00",
+                "tunebook_count": 500,
+                "heard_count": 0,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 6,
+                "tune_name": "Morrison’s",
+                "tune_type": "jig",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": null,
+                "heard_count": 5,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              }
+            ],
+            "filters": {
+              "search": "",
+              "type": "",
+              "status": "",
+              "instrument": "",
+              "rel": "",
+              "addedDir": "after",
+              "addedDate": "2026-06-10"
+            },
+            "sort": {
+              "type": "alpha",
+              "dir": "asc",
+              "type2": null,
+              "dir2": null
+            },
+            "instruments": [
+              {
+                "instrument": "Fiddle",
+                "is_auto": true
+              },
+              {
+                "instrument": "Concertina",
+                "is_auto": false
+              }
+            ]
+          },
+          "expected": [
+            {
+              "tune_id": 5,
+              "tune_name": "Inisheer",
+              "tune_type": "waltz",
+              "learn_status": "learning",
+              "notes": null,
+              "created_date": "2026-09-20T08:00:00+00:00",
+              "tunebook_count": 500,
+              "heard_count": 0,
+              "member_play_count": 0,
+              "attended_play_count": 0,
+              "session_play_count": 0,
+              "instrument_status": {}
+            },
+            {
+              "tune_id": 3,
+              "tune_name": "Sligo Maíd",
+              "tune_type": "reel",
+              "learn_status": "want to learn",
+              "notes": null,
+              "created_date": "2026-06-10T23:30:00+00:00",
+              "tunebook_count": 700,
+              "heard_count": 3,
+              "member_play_count": 0,
+              "attended_play_count": 0,
+              "session_play_count": 0,
+              "instrument_status": {}
+            }
+          ]
+        },
+        {
+          "name": "added before a day",
+          "input": {
+            "allTunes": [
+              {
+                "tune_id": 1,
+                "tune_name": "Cooley's",
+                "tune_type": "reel",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2025-03-04T09:00:00+00:00",
+                "tunebook_count": 1350,
+                "heard_count": 12,
+                "member_play_count": 10,
+                "attended_play_count": 7,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 2,
+                "tune_name": "The Kesh",
+                "tune_type": "jig",
+                "learn_status": "learning",
+                "notes": "Slow at the start",
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 900,
+                "heard_count": 1,
+                "member_play_count": 4,
+                "attended_play_count": 1,
+                "session_play_count": 0,
+                "instrument_status": {
+                  "Concertina": "learning"
+                }
+              },
+              {
+                "tune_id": 3,
+                "tune_name": "Sligo Maíd",
+                "tune_type": "reel",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-06-10T23:30:00+00:00",
+                "tunebook_count": 700,
+                "heard_count": 3,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 4,
+                "tune_name": "Banish Misfortune",
+                "tune_type": "jig",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 800,
+                "heard_count": 1,
+                "member_play_count": 4,
+                "attended_play_count": 4,
+                "session_play_count": 0,
+                "instrument_status": {
+                  "Fiddle": "learning"
+                }
+              },
+              {
+                "tune_id": 5,
+                "tune_name": "Inisheer",
+                "tune_type": "waltz",
+                "learn_status": "learning",
+                "notes": null,
+                "created_date": "2026-09-20T08:00:00+00:00",
+                "tunebook_count": 500,
+                "heard_count": 0,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 6,
+                "tune_name": "Morrison’s",
+                "tune_type": "jig",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": null,
+                "heard_count": 5,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              }
+            ],
+            "filters": {
+              "search": "",
+              "type": "",
+              "status": "",
+              "instrument": "",
+              "rel": "",
+              "addedDir": "before",
+              "addedDate": "2026-06-10"
+            },
+            "sort": {
+              "type": "alpha",
+              "dir": "asc",
+              "type2": null,
+              "dir2": null
+            },
+            "instruments": [
+              {
+                "instrument": "Fiddle",
+                "is_auto": true
+              },
+              {
+                "instrument": "Concertina",
+                "is_auto": false
+              }
+            ]
+          },
+          "expected": [
+            {
+              "tune_id": 4,
+              "tune_name": "Banish Misfortune",
+              "tune_type": "jig",
+              "learn_status": "learned",
+              "notes": null,
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": 800,
+              "heard_count": 1,
+              "member_play_count": 4,
+              "attended_play_count": 4,
+              "session_play_count": 0,
+              "instrument_status": {
+                "Fiddle": "learning"
+              }
+            },
+            {
+              "tune_id": 1,
+              "tune_name": "Cooley's",
+              "tune_type": "reel",
+              "learn_status": "learned",
+              "notes": null,
+              "created_date": "2025-03-04T09:00:00+00:00",
+              "tunebook_count": 1350,
+              "heard_count": 12,
+              "member_play_count": 10,
+              "attended_play_count": 7,
+              "session_play_count": 0,
+              "instrument_status": {}
+            },
+            {
+              "tune_id": 6,
+              "tune_name": "Morrison’s",
+              "tune_type": "jig",
+              "learn_status": "want to learn",
+              "notes": null,
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": null,
+              "heard_count": 5,
+              "member_play_count": 0,
+              "attended_play_count": 0,
+              "session_play_count": 0,
+              "instrument_status": {}
+            },
+            {
+              "tune_id": 2,
+              "tune_name": "The Kesh",
+              "tune_type": "jig",
+              "learn_status": "learning",
+              "notes": "Slow at the start",
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": 900,
+              "heard_count": 1,
+              "member_play_count": 4,
+              "attended_play_count": 1,
+              "session_play_count": 0,
+              "instrument_status": {
+                "Concertina": "learning"
+              }
+            }
+          ]
+        },
+        {
+          "name": "played at my sessions",
+          "input": {
+            "allTunes": [
+              {
+                "tune_id": 1,
+                "tune_name": "Cooley's",
+                "tune_type": "reel",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2025-03-04T09:00:00+00:00",
+                "tunebook_count": 1350,
+                "heard_count": 12,
+                "member_play_count": 10,
+                "attended_play_count": 7,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 2,
+                "tune_name": "The Kesh",
+                "tune_type": "jig",
+                "learn_status": "learning",
+                "notes": "Slow at the start",
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 900,
+                "heard_count": 1,
+                "member_play_count": 4,
+                "attended_play_count": 1,
+                "session_play_count": 0,
+                "instrument_status": {
+                  "Concertina": "learning"
+                }
+              },
+              {
+                "tune_id": 3,
+                "tune_name": "Sligo Maíd",
+                "tune_type": "reel",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-06-10T23:30:00+00:00",
+                "tunebook_count": 700,
+                "heard_count": 3,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 4,
+                "tune_name": "Banish Misfortune",
+                "tune_type": "jig",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 800,
+                "heard_count": 1,
+                "member_play_count": 4,
+                "attended_play_count": 4,
+                "session_play_count": 0,
+                "instrument_status": {
+                  "Fiddle": "learning"
+                }
+              },
+              {
+                "tune_id": 5,
+                "tune_name": "Inisheer",
+                "tune_type": "waltz",
+                "learn_status": "learning",
+                "notes": null,
+                "created_date": "2026-09-20T08:00:00+00:00",
+                "tunebook_count": 500,
+                "heard_count": 0,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 6,
+                "tune_name": "Morrison’s",
+                "tune_type": "jig",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": null,
+                "heard_count": 5,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              }
+            ],
+            "filters": {
+              "search": "",
+              "type": "",
+              "status": "",
+              "instrument": "",
+              "rel": "member",
+              "addedDir": "after",
+              "addedDate": ""
+            },
+            "sort": {
+              "type": "alpha",
+              "dir": "asc",
+              "type2": null,
+              "dir2": null
+            },
+            "instruments": [
+              {
+                "instrument": "Fiddle",
+                "is_auto": true
+              },
+              {
+                "instrument": "Concertina",
+                "is_auto": false
+              }
+            ]
+          },
+          "expected": [
+            {
+              "tune_id": 4,
+              "tune_name": "Banish Misfortune",
+              "tune_type": "jig",
+              "learn_status": "learned",
+              "notes": null,
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": 800,
+              "heard_count": 1,
+              "member_play_count": 4,
+              "attended_play_count": 4,
+              "session_play_count": 0,
+              "instrument_status": {
+                "Fiddle": "learning"
+              }
+            },
+            {
+              "tune_id": 1,
+              "tune_name": "Cooley's",
+              "tune_type": "reel",
+              "learn_status": "learned",
+              "notes": null,
+              "created_date": "2025-03-04T09:00:00+00:00",
+              "tunebook_count": 1350,
+              "heard_count": 12,
+              "member_play_count": 10,
+              "attended_play_count": 7,
+              "session_play_count": 0,
+              "instrument_status": {}
+            },
+            {
+              "tune_id": 2,
+              "tune_name": "The Kesh",
+              "tune_type": "jig",
+              "learn_status": "learning",
+              "notes": "Slow at the start",
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": 900,
+              "heard_count": 1,
+              "member_play_count": 4,
+              "attended_play_count": 1,
+              "session_play_count": 0,
+              "instrument_status": {
+                "Concertina": "learning"
+              }
+            }
+          ]
+        },
+        {
+          "name": "played when I was there",
+          "input": {
+            "allTunes": [
+              {
+                "tune_id": 1,
+                "tune_name": "Cooley's",
+                "tune_type": "reel",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2025-03-04T09:00:00+00:00",
+                "tunebook_count": 1350,
+                "heard_count": 12,
+                "member_play_count": 10,
+                "attended_play_count": 7,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 2,
+                "tune_name": "The Kesh",
+                "tune_type": "jig",
+                "learn_status": "learning",
+                "notes": "Slow at the start",
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 900,
+                "heard_count": 1,
+                "member_play_count": 4,
+                "attended_play_count": 1,
+                "session_play_count": 0,
+                "instrument_status": {
+                  "Concertina": "learning"
+                }
+              },
+              {
+                "tune_id": 3,
+                "tune_name": "Sligo Maíd",
+                "tune_type": "reel",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-06-10T23:30:00+00:00",
+                "tunebook_count": 700,
+                "heard_count": 3,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 4,
+                "tune_name": "Banish Misfortune",
+                "tune_type": "jig",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 800,
+                "heard_count": 1,
+                "member_play_count": 4,
+                "attended_play_count": 4,
+                "session_play_count": 0,
+                "instrument_status": {
+                  "Fiddle": "learning"
+                }
+              },
+              {
+                "tune_id": 5,
+                "tune_name": "Inisheer",
+                "tune_type": "waltz",
+                "learn_status": "learning",
+                "notes": null,
+                "created_date": "2026-09-20T08:00:00+00:00",
+                "tunebook_count": 500,
+                "heard_count": 0,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 6,
+                "tune_name": "Morrison’s",
+                "tune_type": "jig",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": null,
+                "heard_count": 5,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              }
+            ],
+            "filters": {
+              "search": "",
+              "type": "",
+              "status": "",
+              "instrument": "",
+              "rel": "attended",
+              "addedDir": "after",
+              "addedDate": ""
+            },
+            "sort": {
+              "type": "alpha",
+              "dir": "asc",
+              "type2": null,
+              "dir2": null
+            },
+            "instruments": [
+              {
+                "instrument": "Fiddle",
+                "is_auto": true
+              },
+              {
+                "instrument": "Concertina",
+                "is_auto": false
+              }
+            ]
+          },
+          "expected": [
+            {
+              "tune_id": 4,
+              "tune_name": "Banish Misfortune",
+              "tune_type": "jig",
+              "learn_status": "learned",
+              "notes": null,
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": 800,
+              "heard_count": 1,
+              "member_play_count": 4,
+              "attended_play_count": 4,
+              "session_play_count": 0,
+              "instrument_status": {
+                "Fiddle": "learning"
+              }
+            },
+            {
+              "tune_id": 1,
+              "tune_name": "Cooley's",
+              "tune_type": "reel",
+              "learn_status": "learned",
+              "notes": null,
+              "created_date": "2025-03-04T09:00:00+00:00",
+              "tunebook_count": 1350,
+              "heard_count": 12,
+              "member_play_count": 10,
+              "attended_play_count": 7,
+              "session_play_count": 0,
+              "instrument_status": {}
+            },
+            {
+              "tune_id": 2,
+              "tune_name": "The Kesh",
+              "tune_type": "jig",
+              "learn_status": "learning",
+              "notes": "Slow at the start",
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": 900,
+              "heard_count": 1,
+              "member_play_count": 4,
+              "attended_play_count": 1,
+              "session_play_count": 0,
+              "instrument_status": {
+                "Concertina": "learning"
+              }
+            }
+          ]
+        },
+        {
+          "name": "an auto instrument",
+          "input": {
+            "allTunes": [
+              {
+                "tune_id": 1,
+                "tune_name": "Cooley's",
+                "tune_type": "reel",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2025-03-04T09:00:00+00:00",
+                "tunebook_count": 1350,
+                "heard_count": 12,
+                "member_play_count": 10,
+                "attended_play_count": 7,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 2,
+                "tune_name": "The Kesh",
+                "tune_type": "jig",
+                "learn_status": "learning",
+                "notes": "Slow at the start",
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 900,
+                "heard_count": 1,
+                "member_play_count": 4,
+                "attended_play_count": 1,
+                "session_play_count": 0,
+                "instrument_status": {
+                  "Concertina": "learning"
+                }
+              },
+              {
+                "tune_id": 3,
+                "tune_name": "Sligo Maíd",
+                "tune_type": "reel",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-06-10T23:30:00+00:00",
+                "tunebook_count": 700,
+                "heard_count": 3,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 4,
+                "tune_name": "Banish Misfortune",
+                "tune_type": "jig",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 800,
+                "heard_count": 1,
+                "member_play_count": 4,
+                "attended_play_count": 4,
+                "session_play_count": 0,
+                "instrument_status": {
+                  "Fiddle": "learning"
+                }
+              },
+              {
+                "tune_id": 5,
+                "tune_name": "Inisheer",
+                "tune_type": "waltz",
+                "learn_status": "learning",
+                "notes": null,
+                "created_date": "2026-09-20T08:00:00+00:00",
+                "tunebook_count": 500,
+                "heard_count": 0,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 6,
+                "tune_name": "Morrison’s",
+                "tune_type": "jig",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": null,
+                "heard_count": 5,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              }
+            ],
+            "filters": {
+              "search": "",
+              "type": "",
+              "status": "",
+              "instrument": "Fiddle",
+              "rel": "",
+              "addedDir": "after",
+              "addedDate": ""
+            },
+            "sort": {
+              "type": "alpha",
+              "dir": "asc",
+              "type2": null,
+              "dir2": null
+            },
+            "instruments": [
+              {
+                "instrument": "Fiddle",
+                "is_auto": true
+              },
+              {
+                "instrument": "Concertina",
+                "is_auto": false
+              }
+            ]
+          },
+          "expected": [
+            {
+              "tune_id": 4,
+              "tune_name": "Banish Misfortune",
+              "tune_type": "jig",
+              "learn_status": "learned",
+              "notes": null,
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": 800,
+              "heard_count": 1,
+              "member_play_count": 4,
+              "attended_play_count": 4,
+              "session_play_count": 0,
+              "instrument_status": {
+                "Fiddle": "learning"
+              },
+              "_instDimmed": false,
+              "_abcOnly": false
+            },
+            {
+              "tune_id": 1,
+              "tune_name": "Cooley's",
+              "tune_type": "reel",
+              "learn_status": "learned",
+              "notes": null,
+              "created_date": "2025-03-04T09:00:00+00:00",
+              "tunebook_count": 1350,
+              "heard_count": 12,
+              "member_play_count": 10,
+              "attended_play_count": 7,
+              "session_play_count": 0,
+              "instrument_status": {},
+              "_instDimmed": false,
+              "_abcOnly": false
+            },
+            {
+              "tune_id": 5,
+              "tune_name": "Inisheer",
+              "tune_type": "waltz",
+              "learn_status": "learning",
+              "notes": null,
+              "created_date": "2026-09-20T08:00:00+00:00",
+              "tunebook_count": 500,
+              "heard_count": 0,
+              "member_play_count": 0,
+              "attended_play_count": 0,
+              "session_play_count": 0,
+              "instrument_status": {},
+              "_instDimmed": false,
+              "_abcOnly": false
+            },
+            {
+              "tune_id": 6,
+              "tune_name": "Morrison’s",
+              "tune_type": "jig",
+              "learn_status": "want to learn",
+              "notes": null,
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": null,
+              "heard_count": 5,
+              "member_play_count": 0,
+              "attended_play_count": 0,
+              "session_play_count": 0,
+              "instrument_status": {},
+              "_instDimmed": false,
+              "_abcOnly": false
+            },
+            {
+              "tune_id": 3,
+              "tune_name": "Sligo Maíd",
+              "tune_type": "reel",
+              "learn_status": "want to learn",
+              "notes": null,
+              "created_date": "2026-06-10T23:30:00+00:00",
+              "tunebook_count": 700,
+              "heard_count": 3,
+              "member_play_count": 0,
+              "attended_play_count": 0,
+              "session_play_count": 0,
+              "instrument_status": {},
+              "_instDimmed": false,
+              "_abcOnly": false
+            },
+            {
+              "tune_id": 2,
+              "tune_name": "The Kesh",
+              "tune_type": "jig",
+              "learn_status": "learning",
+              "notes": "Slow at the start",
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": 900,
+              "heard_count": 1,
+              "member_play_count": 4,
+              "attended_play_count": 1,
+              "session_play_count": 0,
+              "instrument_status": {
+                "Concertina": "learning"
+              },
+              "_instDimmed": false,
+              "_abcOnly": false
+            }
+          ]
+        },
+        {
+          "name": "a manual instrument: the rest dimmed and last",
+          "input": {
+            "allTunes": [
+              {
+                "tune_id": 1,
+                "tune_name": "Cooley's",
+                "tune_type": "reel",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2025-03-04T09:00:00+00:00",
+                "tunebook_count": 1350,
+                "heard_count": 12,
+                "member_play_count": 10,
+                "attended_play_count": 7,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 2,
+                "tune_name": "The Kesh",
+                "tune_type": "jig",
+                "learn_status": "learning",
+                "notes": "Slow at the start",
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 900,
+                "heard_count": 1,
+                "member_play_count": 4,
+                "attended_play_count": 1,
+                "session_play_count": 0,
+                "instrument_status": {
+                  "Concertina": "learning"
+                }
+              },
+              {
+                "tune_id": 3,
+                "tune_name": "Sligo Maíd",
+                "tune_type": "reel",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-06-10T23:30:00+00:00",
+                "tunebook_count": 700,
+                "heard_count": 3,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 4,
+                "tune_name": "Banish Misfortune",
+                "tune_type": "jig",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 800,
+                "heard_count": 1,
+                "member_play_count": 4,
+                "attended_play_count": 4,
+                "session_play_count": 0,
+                "instrument_status": {
+                  "Fiddle": "learning"
+                }
+              },
+              {
+                "tune_id": 5,
+                "tune_name": "Inisheer",
+                "tune_type": "waltz",
+                "learn_status": "learning",
+                "notes": null,
+                "created_date": "2026-09-20T08:00:00+00:00",
+                "tunebook_count": 500,
+                "heard_count": 0,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 6,
+                "tune_name": "Morrison’s",
+                "tune_type": "jig",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": null,
+                "heard_count": 5,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              }
+            ],
+            "filters": {
+              "search": "",
+              "type": "",
+              "status": "",
+              "instrument": "Concertina",
+              "rel": "",
+              "addedDir": "after",
+              "addedDate": ""
+            },
+            "sort": {
+              "type": "alpha",
+              "dir": "asc",
+              "type2": null,
+              "dir2": null
+            },
+            "instruments": [
+              {
+                "instrument": "Fiddle",
+                "is_auto": true
+              },
+              {
+                "instrument": "Concertina",
+                "is_auto": false
+              }
+            ]
+          },
+          "expected": [
+            {
+              "tune_id": 2,
+              "tune_name": "The Kesh",
+              "tune_type": "jig",
+              "learn_status": "learning",
+              "notes": "Slow at the start",
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": 900,
+              "heard_count": 1,
+              "member_play_count": 4,
+              "attended_play_count": 1,
+              "session_play_count": 0,
+              "instrument_status": {
+                "Concertina": "learning"
+              },
+              "_instDimmed": false,
+              "_abcOnly": false
+            },
+            {
+              "tune_id": 4,
+              "tune_name": "Banish Misfortune",
+              "tune_type": "jig",
+              "learn_status": "learned",
+              "notes": null,
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": 800,
+              "heard_count": 1,
+              "member_play_count": 4,
+              "attended_play_count": 4,
+              "session_play_count": 0,
+              "instrument_status": {
+                "Fiddle": "learning"
+              },
+              "_instDimmed": true,
+              "_abcOnly": false
+            },
+            {
+              "tune_id": 1,
+              "tune_name": "Cooley's",
+              "tune_type": "reel",
+              "learn_status": "learned",
+              "notes": null,
+              "created_date": "2025-03-04T09:00:00+00:00",
+              "tunebook_count": 1350,
+              "heard_count": 12,
+              "member_play_count": 10,
+              "attended_play_count": 7,
+              "session_play_count": 0,
+              "instrument_status": {},
+              "_instDimmed": true,
+              "_abcOnly": false
+            },
+            {
+              "tune_id": 5,
+              "tune_name": "Inisheer",
+              "tune_type": "waltz",
+              "learn_status": "learning",
+              "notes": null,
+              "created_date": "2026-09-20T08:00:00+00:00",
+              "tunebook_count": 500,
+              "heard_count": 0,
+              "member_play_count": 0,
+              "attended_play_count": 0,
+              "session_play_count": 0,
+              "instrument_status": {},
+              "_instDimmed": true,
+              "_abcOnly": false
+            },
+            {
+              "tune_id": 6,
+              "tune_name": "Morrison’s",
+              "tune_type": "jig",
+              "learn_status": "want to learn",
+              "notes": null,
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": null,
+              "heard_count": 5,
+              "member_play_count": 0,
+              "attended_play_count": 0,
+              "session_play_count": 0,
+              "instrument_status": {},
+              "_instDimmed": true,
+              "_abcOnly": false
+            },
+            {
+              "tune_id": 3,
+              "tune_name": "Sligo Maíd",
+              "tune_type": "reel",
+              "learn_status": "want to learn",
+              "notes": null,
+              "created_date": "2026-06-10T23:30:00+00:00",
+              "tunebook_count": 700,
+              "heard_count": 3,
+              "member_play_count": 0,
+              "attended_play_count": 0,
+              "session_play_count": 0,
+              "instrument_status": {},
+              "_instDimmed": true,
+              "_abcOnly": false
+            }
+          ]
+        },
+        {
+          "name": "an instrument and a status",
+          "input": {
+            "allTunes": [
+              {
+                "tune_id": 1,
+                "tune_name": "Cooley's",
+                "tune_type": "reel",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2025-03-04T09:00:00+00:00",
+                "tunebook_count": 1350,
+                "heard_count": 12,
+                "member_play_count": 10,
+                "attended_play_count": 7,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 2,
+                "tune_name": "The Kesh",
+                "tune_type": "jig",
+                "learn_status": "learning",
+                "notes": "Slow at the start",
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 900,
+                "heard_count": 1,
+                "member_play_count": 4,
+                "attended_play_count": 1,
+                "session_play_count": 0,
+                "instrument_status": {
+                  "Concertina": "learning"
+                }
+              },
+              {
+                "tune_id": 3,
+                "tune_name": "Sligo Maíd",
+                "tune_type": "reel",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-06-10T23:30:00+00:00",
+                "tunebook_count": 700,
+                "heard_count": 3,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 4,
+                "tune_name": "Banish Misfortune",
+                "tune_type": "jig",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 800,
+                "heard_count": 1,
+                "member_play_count": 4,
+                "attended_play_count": 4,
+                "session_play_count": 0,
+                "instrument_status": {
+                  "Fiddle": "learning"
+                }
+              },
+              {
+                "tune_id": 5,
+                "tune_name": "Inisheer",
+                "tune_type": "waltz",
+                "learn_status": "learning",
+                "notes": null,
+                "created_date": "2026-09-20T08:00:00+00:00",
+                "tunebook_count": 500,
+                "heard_count": 0,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 6,
+                "tune_name": "Morrison’s",
+                "tune_type": "jig",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": null,
+                "heard_count": 5,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              }
+            ],
+            "filters": {
+              "search": "",
+              "type": "",
+              "status": "learning",
+              "instrument": "Fiddle",
+              "rel": "",
+              "addedDir": "after",
+              "addedDate": ""
+            },
+            "sort": {
+              "type": "alpha",
+              "dir": "asc",
+              "type2": null,
+              "dir2": null
+            },
+            "instruments": [
+              {
+                "instrument": "Fiddle",
+                "is_auto": true
+              },
+              {
+                "instrument": "Concertina",
+                "is_auto": false
+              }
+            ]
+          },
+          "expected": [
+            {
+              "tune_id": 4,
+              "tune_name": "Banish Misfortune",
+              "tune_type": "jig",
+              "learn_status": "learned",
+              "notes": null,
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": 800,
+              "heard_count": 1,
+              "member_play_count": 4,
+              "attended_play_count": 4,
+              "session_play_count": 0,
+              "instrument_status": {
+                "Fiddle": "learning"
+              },
+              "_instDimmed": false,
+              "_abcOnly": false
+            },
+            {
+              "tune_id": 5,
+              "tune_name": "Inisheer",
+              "tune_type": "waltz",
+              "learn_status": "learning",
+              "notes": null,
+              "created_date": "2026-09-20T08:00:00+00:00",
+              "tunebook_count": 500,
+              "heard_count": 0,
+              "member_play_count": 0,
+              "attended_play_count": 0,
+              "session_play_count": 0,
+              "instrument_status": {},
+              "_instDimmed": false,
+              "_abcOnly": false
+            },
+            {
+              "tune_id": 2,
+              "tune_name": "The Kesh",
+              "tune_type": "jig",
+              "learn_status": "learning",
+              "notes": "Slow at the start",
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": 900,
+              "heard_count": 1,
+              "member_play_count": 4,
+              "attended_play_count": 1,
+              "session_play_count": 0,
+              "instrument_status": {
+                "Concertina": "learning"
+              },
+              "_instDimmed": false,
+              "_abcOnly": false
+            }
+          ]
+        },
+        {
+          "name": "popularity, most first",
+          "input": {
+            "allTunes": [
+              {
+                "tune_id": 1,
+                "tune_name": "Cooley's",
+                "tune_type": "reel",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2025-03-04T09:00:00+00:00",
+                "tunebook_count": 1350,
+                "heard_count": 12,
+                "member_play_count": 10,
+                "attended_play_count": 7,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 2,
+                "tune_name": "The Kesh",
+                "tune_type": "jig",
+                "learn_status": "learning",
+                "notes": "Slow at the start",
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 900,
+                "heard_count": 1,
+                "member_play_count": 4,
+                "attended_play_count": 1,
+                "session_play_count": 0,
+                "instrument_status": {
+                  "Concertina": "learning"
+                }
+              },
+              {
+                "tune_id": 3,
+                "tune_name": "Sligo Maíd",
+                "tune_type": "reel",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-06-10T23:30:00+00:00",
+                "tunebook_count": 700,
+                "heard_count": 3,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 4,
+                "tune_name": "Banish Misfortune",
+                "tune_type": "jig",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 800,
+                "heard_count": 1,
+                "member_play_count": 4,
+                "attended_play_count": 4,
+                "session_play_count": 0,
+                "instrument_status": {
+                  "Fiddle": "learning"
+                }
+              },
+              {
+                "tune_id": 5,
+                "tune_name": "Inisheer",
+                "tune_type": "waltz",
+                "learn_status": "learning",
+                "notes": null,
+                "created_date": "2026-09-20T08:00:00+00:00",
+                "tunebook_count": 500,
+                "heard_count": 0,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 6,
+                "tune_name": "Morrison’s",
+                "tune_type": "jig",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": null,
+                "heard_count": 5,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              }
+            ],
+            "filters": {
+              "search": "",
+              "type": "",
+              "status": "",
+              "instrument": "",
+              "rel": "",
+              "addedDir": "after",
+              "addedDate": ""
+            },
+            "sort": {
+              "type": "popularity",
+              "dir": "desc",
+              "type2": null,
+              "dir2": null
+            },
+            "instruments": [
+              {
+                "instrument": "Fiddle",
+                "is_auto": true
+              },
+              {
+                "instrument": "Concertina",
+                "is_auto": false
+              }
+            ]
+          },
+          "expected": [
+            {
+              "tune_id": 1,
+              "tune_name": "Cooley's",
+              "tune_type": "reel",
+              "learn_status": "learned",
+              "notes": null,
+              "created_date": "2025-03-04T09:00:00+00:00",
+              "tunebook_count": 1350,
+              "heard_count": 12,
+              "member_play_count": 10,
+              "attended_play_count": 7,
+              "session_play_count": 0,
+              "instrument_status": {}
+            },
+            {
+              "tune_id": 2,
+              "tune_name": "The Kesh",
+              "tune_type": "jig",
+              "learn_status": "learning",
+              "notes": "Slow at the start",
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": 900,
+              "heard_count": 1,
+              "member_play_count": 4,
+              "attended_play_count": 1,
+              "session_play_count": 0,
+              "instrument_status": {
+                "Concertina": "learning"
+              }
+            },
+            {
+              "tune_id": 4,
+              "tune_name": "Banish Misfortune",
+              "tune_type": "jig",
+              "learn_status": "learned",
+              "notes": null,
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": 800,
+              "heard_count": 1,
+              "member_play_count": 4,
+              "attended_play_count": 4,
+              "session_play_count": 0,
+              "instrument_status": {
+                "Fiddle": "learning"
+              }
+            },
+            {
+              "tune_id": 3,
+              "tune_name": "Sligo Maíd",
+              "tune_type": "reel",
+              "learn_status": "want to learn",
+              "notes": null,
+              "created_date": "2026-06-10T23:30:00+00:00",
+              "tunebook_count": 700,
+              "heard_count": 3,
+              "member_play_count": 0,
+              "attended_play_count": 0,
+              "session_play_count": 0,
+              "instrument_status": {}
+            },
+            {
+              "tune_id": 5,
+              "tune_name": "Inisheer",
+              "tune_type": "waltz",
+              "learn_status": "learning",
+              "notes": null,
+              "created_date": "2026-09-20T08:00:00+00:00",
+              "tunebook_count": 500,
+              "heard_count": 0,
+              "member_play_count": 0,
+              "attended_play_count": 0,
+              "session_play_count": 0,
+              "instrument_status": {}
+            },
+            {
+              "tune_id": 6,
+              "tune_name": "Morrison’s",
+              "tune_type": "jig",
+              "learn_status": "want to learn",
+              "notes": null,
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": null,
+              "heard_count": 5,
+              "member_play_count": 0,
+              "attended_play_count": 0,
+              "session_play_count": 0,
+              "instrument_status": {}
+            }
+          ]
+        },
+        {
+          "name": "my plays, then name",
+          "input": {
+            "allTunes": [
+              {
+                "tune_id": 1,
+                "tune_name": "Cooley's",
+                "tune_type": "reel",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2025-03-04T09:00:00+00:00",
+                "tunebook_count": 1350,
+                "heard_count": 12,
+                "member_play_count": 10,
+                "attended_play_count": 7,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 2,
+                "tune_name": "The Kesh",
+                "tune_type": "jig",
+                "learn_status": "learning",
+                "notes": "Slow at the start",
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 900,
+                "heard_count": 1,
+                "member_play_count": 4,
+                "attended_play_count": 1,
+                "session_play_count": 0,
+                "instrument_status": {
+                  "Concertina": "learning"
+                }
+              },
+              {
+                "tune_id": 3,
+                "tune_name": "Sligo Maíd",
+                "tune_type": "reel",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-06-10T23:30:00+00:00",
+                "tunebook_count": 700,
+                "heard_count": 3,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 4,
+                "tune_name": "Banish Misfortune",
+                "tune_type": "jig",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 800,
+                "heard_count": 1,
+                "member_play_count": 4,
+                "attended_play_count": 4,
+                "session_play_count": 0,
+                "instrument_status": {
+                  "Fiddle": "learning"
+                }
+              },
+              {
+                "tune_id": 5,
+                "tune_name": "Inisheer",
+                "tune_type": "waltz",
+                "learn_status": "learning",
+                "notes": null,
+                "created_date": "2026-09-20T08:00:00+00:00",
+                "tunebook_count": 500,
+                "heard_count": 0,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 6,
+                "tune_name": "Morrison’s",
+                "tune_type": "jig",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": null,
+                "heard_count": 5,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              }
+            ],
+            "filters": {
+              "search": "",
+              "type": "",
+              "status": "",
+              "instrument": "",
+              "rel": "",
+              "addedDir": "after",
+              "addedDate": ""
+            },
+            "sort": {
+              "type": "plays",
+              "dir": "desc",
+              "type2": "alpha",
+              "dir2": "asc"
+            },
+            "instruments": [
+              {
+                "instrument": "Fiddle",
+                "is_auto": true
+              },
+              {
+                "instrument": "Concertina",
+                "is_auto": false
+              }
+            ]
+          },
+          "expected": [
+            {
+              "tune_id": 1,
+              "tune_name": "Cooley's",
+              "tune_type": "reel",
+              "learn_status": "learned",
+              "notes": null,
+              "created_date": "2025-03-04T09:00:00+00:00",
+              "tunebook_count": 1350,
+              "heard_count": 12,
+              "member_play_count": 10,
+              "attended_play_count": 7,
+              "session_play_count": 0,
+              "instrument_status": {}
+            },
+            {
+              "tune_id": 4,
+              "tune_name": "Banish Misfortune",
+              "tune_type": "jig",
+              "learn_status": "learned",
+              "notes": null,
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": 800,
+              "heard_count": 1,
+              "member_play_count": 4,
+              "attended_play_count": 4,
+              "session_play_count": 0,
+              "instrument_status": {
+                "Fiddle": "learning"
+              }
+            },
+            {
+              "tune_id": 2,
+              "tune_name": "The Kesh",
+              "tune_type": "jig",
+              "learn_status": "learning",
+              "notes": "Slow at the start",
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": 900,
+              "heard_count": 1,
+              "member_play_count": 4,
+              "attended_play_count": 1,
+              "session_play_count": 0,
+              "instrument_status": {
+                "Concertina": "learning"
+              }
+            },
+            {
+              "tune_id": 5,
+              "tune_name": "Inisheer",
+              "tune_type": "waltz",
+              "learn_status": "learning",
+              "notes": null,
+              "created_date": "2026-09-20T08:00:00+00:00",
+              "tunebook_count": 500,
+              "heard_count": 0,
+              "member_play_count": 0,
+              "attended_play_count": 0,
+              "session_play_count": 0,
+              "instrument_status": {}
+            },
+            {
+              "tune_id": 6,
+              "tune_name": "Morrison’s",
+              "tune_type": "jig",
+              "learn_status": "want to learn",
+              "notes": null,
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": null,
+              "heard_count": 5,
+              "member_play_count": 0,
+              "attended_play_count": 0,
+              "session_play_count": 0,
+              "instrument_status": {}
+            },
+            {
+              "tune_id": 3,
+              "tune_name": "Sligo Maíd",
+              "tune_type": "reel",
+              "learn_status": "want to learn",
+              "notes": null,
+              "created_date": "2026-06-10T23:30:00+00:00",
+              "tunebook_count": 700,
+              "heard_count": 3,
+              "member_play_count": 0,
+              "attended_play_count": 0,
+              "session_play_count": 0,
+              "instrument_status": {}
+            }
+          ]
+        },
+        {
+          "name": "plays I attended",
+          "input": {
+            "allTunes": [
+              {
+                "tune_id": 1,
+                "tune_name": "Cooley's",
+                "tune_type": "reel",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2025-03-04T09:00:00+00:00",
+                "tunebook_count": 1350,
+                "heard_count": 12,
+                "member_play_count": 10,
+                "attended_play_count": 7,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 2,
+                "tune_name": "The Kesh",
+                "tune_type": "jig",
+                "learn_status": "learning",
+                "notes": "Slow at the start",
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 900,
+                "heard_count": 1,
+                "member_play_count": 4,
+                "attended_play_count": 1,
+                "session_play_count": 0,
+                "instrument_status": {
+                  "Concertina": "learning"
+                }
+              },
+              {
+                "tune_id": 3,
+                "tune_name": "Sligo Maíd",
+                "tune_type": "reel",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-06-10T23:30:00+00:00",
+                "tunebook_count": 700,
+                "heard_count": 3,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 4,
+                "tune_name": "Banish Misfortune",
+                "tune_type": "jig",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 800,
+                "heard_count": 1,
+                "member_play_count": 4,
+                "attended_play_count": 4,
+                "session_play_count": 0,
+                "instrument_status": {
+                  "Fiddle": "learning"
+                }
+              },
+              {
+                "tune_id": 5,
+                "tune_name": "Inisheer",
+                "tune_type": "waltz",
+                "learn_status": "learning",
+                "notes": null,
+                "created_date": "2026-09-20T08:00:00+00:00",
+                "tunebook_count": 500,
+                "heard_count": 0,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 6,
+                "tune_name": "Morrison’s",
+                "tune_type": "jig",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": null,
+                "heard_count": 5,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              }
+            ],
+            "filters": {
+              "search": "",
+              "type": "",
+              "status": "",
+              "instrument": "",
+              "rel": "",
+              "addedDir": "after",
+              "addedDate": ""
+            },
+            "sort": {
+              "type": "attended",
+              "dir": "desc",
+              "type2": null,
+              "dir2": null
+            },
+            "instruments": [
+              {
+                "instrument": "Fiddle",
+                "is_auto": true
+              },
+              {
+                "instrument": "Concertina",
+                "is_auto": false
+              }
+            ]
+          },
+          "expected": [
+            {
+              "tune_id": 1,
+              "tune_name": "Cooley's",
+              "tune_type": "reel",
+              "learn_status": "learned",
+              "notes": null,
+              "created_date": "2025-03-04T09:00:00+00:00",
+              "tunebook_count": 1350,
+              "heard_count": 12,
+              "member_play_count": 10,
+              "attended_play_count": 7,
+              "session_play_count": 0,
+              "instrument_status": {}
+            },
+            {
+              "tune_id": 4,
+              "tune_name": "Banish Misfortune",
+              "tune_type": "jig",
+              "learn_status": "learned",
+              "notes": null,
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": 800,
+              "heard_count": 1,
+              "member_play_count": 4,
+              "attended_play_count": 4,
+              "session_play_count": 0,
+              "instrument_status": {
+                "Fiddle": "learning"
+              }
+            },
+            {
+              "tune_id": 2,
+              "tune_name": "The Kesh",
+              "tune_type": "jig",
+              "learn_status": "learning",
+              "notes": "Slow at the start",
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": 900,
+              "heard_count": 1,
+              "member_play_count": 4,
+              "attended_play_count": 1,
+              "session_play_count": 0,
+              "instrument_status": {
+                "Concertina": "learning"
+              }
+            },
+            {
+              "tune_id": 3,
+              "tune_name": "Sligo Maíd",
+              "tune_type": "reel",
+              "learn_status": "want to learn",
+              "notes": null,
+              "created_date": "2026-06-10T23:30:00+00:00",
+              "tunebook_count": 700,
+              "heard_count": 3,
+              "member_play_count": 0,
+              "attended_play_count": 0,
+              "session_play_count": 0,
+              "instrument_status": {}
+            },
+            {
+              "tune_id": 5,
+              "tune_name": "Inisheer",
+              "tune_type": "waltz",
+              "learn_status": "learning",
+              "notes": null,
+              "created_date": "2026-09-20T08:00:00+00:00",
+              "tunebook_count": 500,
+              "heard_count": 0,
+              "member_play_count": 0,
+              "attended_play_count": 0,
+              "session_play_count": 0,
+              "instrument_status": {}
+            },
+            {
+              "tune_id": 6,
+              "tune_name": "Morrison’s",
+              "tune_type": "jig",
+              "learn_status": "want to learn",
+              "notes": null,
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": null,
+              "heard_count": 5,
+              "member_play_count": 0,
+              "attended_play_count": 0,
+              "session_play_count": 0,
+              "instrument_status": {}
+            }
+          ]
+        },
+        {
+          "name": "times heard, fewest first",
+          "input": {
+            "allTunes": [
+              {
+                "tune_id": 1,
+                "tune_name": "Cooley's",
+                "tune_type": "reel",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2025-03-04T09:00:00+00:00",
+                "tunebook_count": 1350,
+                "heard_count": 12,
+                "member_play_count": 10,
+                "attended_play_count": 7,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 2,
+                "tune_name": "The Kesh",
+                "tune_type": "jig",
+                "learn_status": "learning",
+                "notes": "Slow at the start",
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 900,
+                "heard_count": 1,
+                "member_play_count": 4,
+                "attended_play_count": 1,
+                "session_play_count": 0,
+                "instrument_status": {
+                  "Concertina": "learning"
+                }
+              },
+              {
+                "tune_id": 3,
+                "tune_name": "Sligo Maíd",
+                "tune_type": "reel",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-06-10T23:30:00+00:00",
+                "tunebook_count": 700,
+                "heard_count": 3,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 4,
+                "tune_name": "Banish Misfortune",
+                "tune_type": "jig",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 800,
+                "heard_count": 1,
+                "member_play_count": 4,
+                "attended_play_count": 4,
+                "session_play_count": 0,
+                "instrument_status": {
+                  "Fiddle": "learning"
+                }
+              },
+              {
+                "tune_id": 5,
+                "tune_name": "Inisheer",
+                "tune_type": "waltz",
+                "learn_status": "learning",
+                "notes": null,
+                "created_date": "2026-09-20T08:00:00+00:00",
+                "tunebook_count": 500,
+                "heard_count": 0,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 6,
+                "tune_name": "Morrison’s",
+                "tune_type": "jig",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": null,
+                "heard_count": 5,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              }
+            ],
+            "filters": {
+              "search": "",
+              "type": "",
+              "status": "",
+              "instrument": "",
+              "rel": "",
+              "addedDir": "after",
+              "addedDate": ""
+            },
+            "sort": {
+              "type": "heard",
+              "dir": "asc",
+              "type2": null,
+              "dir2": null
+            },
+            "instruments": [
+              {
+                "instrument": "Fiddle",
+                "is_auto": true
+              },
+              {
+                "instrument": "Concertina",
+                "is_auto": false
+              }
+            ]
+          },
+          "expected": [
+            {
+              "tune_id": 5,
+              "tune_name": "Inisheer",
+              "tune_type": "waltz",
+              "learn_status": "learning",
+              "notes": null,
+              "created_date": "2026-09-20T08:00:00+00:00",
+              "tunebook_count": 500,
+              "heard_count": 0,
+              "member_play_count": 0,
+              "attended_play_count": 0,
+              "session_play_count": 0,
+              "instrument_status": {}
+            },
+            {
+              "tune_id": 2,
+              "tune_name": "The Kesh",
+              "tune_type": "jig",
+              "learn_status": "learning",
+              "notes": "Slow at the start",
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": 900,
+              "heard_count": 1,
+              "member_play_count": 4,
+              "attended_play_count": 1,
+              "session_play_count": 0,
+              "instrument_status": {
+                "Concertina": "learning"
+              }
+            },
+            {
+              "tune_id": 4,
+              "tune_name": "Banish Misfortune",
+              "tune_type": "jig",
+              "learn_status": "learned",
+              "notes": null,
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": 800,
+              "heard_count": 1,
+              "member_play_count": 4,
+              "attended_play_count": 4,
+              "session_play_count": 0,
+              "instrument_status": {
+                "Fiddle": "learning"
+              }
+            },
+            {
+              "tune_id": 3,
+              "tune_name": "Sligo Maíd",
+              "tune_type": "reel",
+              "learn_status": "want to learn",
+              "notes": null,
+              "created_date": "2026-06-10T23:30:00+00:00",
+              "tunebook_count": 700,
+              "heard_count": 3,
+              "member_play_count": 0,
+              "attended_play_count": 0,
+              "session_play_count": 0,
+              "instrument_status": {}
+            },
+            {
+              "tune_id": 6,
+              "tune_name": "Morrison’s",
+              "tune_type": "jig",
+              "learn_status": "want to learn",
+              "notes": null,
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": null,
+              "heard_count": 5,
+              "member_play_count": 0,
+              "attended_play_count": 0,
+              "session_play_count": 0,
+              "instrument_status": {}
+            },
+            {
+              "tune_id": 1,
+              "tune_name": "Cooley's",
+              "tune_type": "reel",
+              "learn_status": "learned",
+              "notes": null,
+              "created_date": "2025-03-04T09:00:00+00:00",
+              "tunebook_count": 1350,
+              "heard_count": 12,
+              "member_play_count": 10,
+              "attended_play_count": 7,
+              "session_play_count": 0,
+              "instrument_status": {}
+            }
+          ]
+        },
+        {
+          "name": "an unknown sort leaves input order",
+          "input": {
+            "allTunes": [
+              {
+                "tune_id": 1,
+                "tune_name": "Cooley's",
+                "tune_type": "reel",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2025-03-04T09:00:00+00:00",
+                "tunebook_count": 1350,
+                "heard_count": 12,
+                "member_play_count": 10,
+                "attended_play_count": 7,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 2,
+                "tune_name": "The Kesh",
+                "tune_type": "jig",
+                "learn_status": "learning",
+                "notes": "Slow at the start",
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 900,
+                "heard_count": 1,
+                "member_play_count": 4,
+                "attended_play_count": 1,
+                "session_play_count": 0,
+                "instrument_status": {
+                  "Concertina": "learning"
+                }
+              },
+              {
+                "tune_id": 3,
+                "tune_name": "Sligo Maíd",
+                "tune_type": "reel",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-06-10T23:30:00+00:00",
+                "tunebook_count": 700,
+                "heard_count": 3,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 4,
+                "tune_name": "Banish Misfortune",
+                "tune_type": "jig",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 800,
+                "heard_count": 1,
+                "member_play_count": 4,
+                "attended_play_count": 4,
+                "session_play_count": 0,
+                "instrument_status": {
+                  "Fiddle": "learning"
+                }
+              },
+              {
+                "tune_id": 5,
+                "tune_name": "Inisheer",
+                "tune_type": "waltz",
+                "learn_status": "learning",
+                "notes": null,
+                "created_date": "2026-09-20T08:00:00+00:00",
+                "tunebook_count": 500,
+                "heard_count": 0,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 6,
+                "tune_name": "Morrison’s",
+                "tune_type": "jig",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": null,
+                "heard_count": 5,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              }
+            ],
+            "filters": {
+              "search": "",
+              "type": "",
+              "status": "",
+              "instrument": "",
+              "rel": "",
+              "addedDir": "after",
+              "addedDate": ""
+            },
+            "sort": {
+              "type": "nope",
+              "dir": "asc",
+              "type2": null,
+              "dir2": null
+            },
+            "instruments": [
+              {
+                "instrument": "Fiddle",
+                "is_auto": true
+              },
+              {
+                "instrument": "Concertina",
+                "is_auto": false
+              }
+            ]
+          },
+          "expected": [
+            {
+              "tune_id": 1,
+              "tune_name": "Cooley's",
+              "tune_type": "reel",
+              "learn_status": "learned",
+              "notes": null,
+              "created_date": "2025-03-04T09:00:00+00:00",
+              "tunebook_count": 1350,
+              "heard_count": 12,
+              "member_play_count": 10,
+              "attended_play_count": 7,
+              "session_play_count": 0,
+              "instrument_status": {}
+            },
+            {
+              "tune_id": 2,
+              "tune_name": "The Kesh",
+              "tune_type": "jig",
+              "learn_status": "learning",
+              "notes": "Slow at the start",
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": 900,
+              "heard_count": 1,
+              "member_play_count": 4,
+              "attended_play_count": 1,
+              "session_play_count": 0,
+              "instrument_status": {
+                "Concertina": "learning"
+              }
+            },
+            {
+              "tune_id": 3,
+              "tune_name": "Sligo Maíd",
+              "tune_type": "reel",
+              "learn_status": "want to learn",
+              "notes": null,
+              "created_date": "2026-06-10T23:30:00+00:00",
+              "tunebook_count": 700,
+              "heard_count": 3,
+              "member_play_count": 0,
+              "attended_play_count": 0,
+              "session_play_count": 0,
+              "instrument_status": {}
+            },
+            {
+              "tune_id": 4,
+              "tune_name": "Banish Misfortune",
+              "tune_type": "jig",
+              "learn_status": "learned",
+              "notes": null,
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": 800,
+              "heard_count": 1,
+              "member_play_count": 4,
+              "attended_play_count": 4,
+              "session_play_count": 0,
+              "instrument_status": {
+                "Fiddle": "learning"
+              }
+            },
+            {
+              "tune_id": 5,
+              "tune_name": "Inisheer",
+              "tune_type": "waltz",
+              "learn_status": "learning",
+              "notes": null,
+              "created_date": "2026-09-20T08:00:00+00:00",
+              "tunebook_count": 500,
+              "heard_count": 0,
+              "member_play_count": 0,
+              "attended_play_count": 0,
+              "session_play_count": 0,
+              "instrument_status": {}
+            },
+            {
+              "tune_id": 6,
+              "tune_name": "Morrison’s",
+              "tune_type": "jig",
+              "learn_status": "want to learn",
+              "notes": null,
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": null,
+              "heard_count": 5,
+              "member_play_count": 0,
+              "attended_play_count": 0,
+              "session_play_count": 0,
+              "instrument_status": {}
+            }
+          ]
+        },
+        {
+          "name": "everything at once",
+          "input": {
+            "allTunes": [
+              {
+                "tune_id": 1,
+                "tune_name": "Cooley's",
+                "tune_type": "reel",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2025-03-04T09:00:00+00:00",
+                "tunebook_count": 1350,
+                "heard_count": 12,
+                "member_play_count": 10,
+                "attended_play_count": 7,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 2,
+                "tune_name": "The Kesh",
+                "tune_type": "jig",
+                "learn_status": "learning",
+                "notes": "Slow at the start",
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 900,
+                "heard_count": 1,
+                "member_play_count": 4,
+                "attended_play_count": 1,
+                "session_play_count": 0,
+                "instrument_status": {
+                  "Concertina": "learning"
+                }
+              },
+              {
+                "tune_id": 3,
+                "tune_name": "Sligo Maíd",
+                "tune_type": "reel",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-06-10T23:30:00+00:00",
+                "tunebook_count": 700,
+                "heard_count": 3,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 4,
+                "tune_name": "Banish Misfortune",
+                "tune_type": "jig",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 800,
+                "heard_count": 1,
+                "member_play_count": 4,
+                "attended_play_count": 4,
+                "session_play_count": 0,
+                "instrument_status": {
+                  "Fiddle": "learning"
+                }
+              },
+              {
+                "tune_id": 5,
+                "tune_name": "Inisheer",
+                "tune_type": "waltz",
+                "learn_status": "learning",
+                "notes": null,
+                "created_date": "2026-09-20T08:00:00+00:00",
+                "tunebook_count": 500,
+                "heard_count": 0,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              },
+              {
+                "tune_id": 6,
+                "tune_name": "Morrison’s",
+                "tune_type": "jig",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": null,
+                "heard_count": 5,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {}
+              }
+            ],
+            "filters": {
+              "search": "",
+              "type": "jig",
+              "status": "learned",
+              "instrument": "",
+              "rel": "attended",
+              "addedDir": "after",
+              "addedDate": ""
+            },
+            "sort": {
+              "type": "plays",
+              "dir": "desc",
+              "type2": null,
+              "dir2": null
+            },
+            "instruments": [
+              {
+                "instrument": "Fiddle",
+                "is_auto": true
+              },
+              {
+                "instrument": "Concertina",
+                "is_auto": false
+              }
+            ]
+          },
+          "expected": [
+            {
+              "tune_id": 4,
+              "tune_name": "Banish Misfortune",
+              "tune_type": "jig",
+              "learn_status": "learned",
+              "notes": null,
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": 800,
+              "heard_count": 1,
+              "member_play_count": 4,
+              "attended_play_count": 4,
+              "session_play_count": 0,
+              "instrument_status": {
+                "Fiddle": "learning"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "resultsCountText": {
+      "params": [
+        "filtered",
+        "total",
+        "filters"
+      ],
+      "cases": [
+        {
+          "name": "all of them",
+          "input": {
+            "filtered": [
+              {},
+              {},
+              {}
+            ],
+            "total": 3,
+            "filters": {
+              "search": "",
+              "type": "",
+              "status": "",
+              "instrument": "",
+              "rel": "",
+              "addedDir": "after",
+              "addedDate": ""
+            }
+          },
+          "expected": "3 tunes"
+        },
+        {
+          "name": "one",
+          "input": {
+            "filtered": [
+              {}
+            ],
+            "total": 1,
+            "filters": {
+              "search": "",
+              "type": "",
+              "status": "",
+              "instrument": "",
+              "rel": "",
+              "addedDir": "after",
+              "addedDate": ""
+            }
+          },
+          "expected": "1 tune"
+        },
+        {
+          "name": "some of them",
+          "input": {
+            "filtered": [
+              {}
+            ],
+            "total": 42,
+            "filters": {
+              "search": "",
+              "type": "",
+              "status": "",
+              "instrument": "",
+              "rel": "",
+              "addedDir": "after",
+              "addedDate": ""
+            }
+          },
+          "expected": "Showing 1 of 42 tunes"
+        },
+        {
+          "name": "on an instrument",
+          "input": {
+            "filtered": [
+              {
+                "_instDimmed": false
+              },
+              {
+                "_instDimmed": true
+              },
+              {
+                "_instDimmed": false
+              }
+            ],
+            "total": 6,
+            "filters": {
+              "search": "",
+              "type": "",
+              "status": "",
+              "instrument": "Fiddle",
+              "rel": "",
+              "addedDir": "after",
+              "addedDate": ""
+            }
+          },
+          "expected": "2 of 3 tunes on Fiddle"
+        },
+        {
+          "name": "one on an instrument",
+          "input": {
+            "filtered": [
+              {
+                "_instDimmed": false
+              }
+            ],
+            "total": 6,
+            "filters": {
+              "search": "",
+              "type": "",
+              "status": "",
+              "instrument": "Fiddle",
+              "rel": "",
+              "addedDir": "after",
+              "addedDate": ""
+            }
+          },
+          "expected": "1 of 1 tune on Fiddle"
+        }
+      ]
+    },
+    "noResultsMessage": {
+      "params": [
+        "filters"
+      ],
+      "cases": [
+        {
+          "name": "nothing set",
+          "input": {
+            "filters": {
+              "search": "",
+              "type": "",
+              "status": "",
+              "instrument": "",
+              "rel": "",
+              "addedDir": "after",
+              "addedDate": ""
+            }
+          },
+          "expected": "No tunes found"
+        },
+        {
+          "name": "a type",
+          "input": {
+            "filters": {
+              "search": "",
+              "type": "jig",
+              "status": "",
+              "instrument": "",
+              "rel": "",
+              "addedDir": "after",
+              "addedDate": ""
+            }
+          },
+          "expected": "No Jigs found"
+        },
+        {
+          "name": "a search",
+          "input": {
+            "filters": {
+              "search": "kesh",
+              "type": "",
+              "status": "",
+              "instrument": "",
+              "rel": "",
+              "addedDir": "after",
+              "addedDate": ""
+            }
+          },
+          "expected": "No tunes containing 'kesh' found"
+        },
+        {
+          "name": "a status",
+          "input": {
+            "filters": {
+              "search": "",
+              "type": "",
+              "status": "want to learn",
+              "instrument": "",
+              "rel": "",
+              "addedDir": "after",
+              "addedDate": ""
+            }
+          },
+          "expected": "No tunes in 'To Learn' status found"
+        },
+        {
+          "name": "all three",
+          "input": {
+            "filters": {
+              "search": "maid",
+              "type": "reel",
+              "status": "learning",
+              "instrument": "",
+              "rel": "",
+              "addedDir": "after",
+              "addedDate": ""
+            }
+          },
+          "expected": "No Reels containing 'maid' in 'Learning' status found"
+        },
+        {
+          "name": "a tune id",
+          "input": {
+            "filters": {
+              "search": "thesession.org/tunes/77",
+              "type": "",
+              "status": "",
+              "instrument": "",
+              "rel": "",
+              "addedDir": "after",
+              "addedDate": ""
+            }
+          },
+          "expected": "No tune with ID 77 found"
+        }
+      ]
+    },
+    "typeBadgeLabel": {
+      "params": [
+        "tune",
+        "sortType"
+      ],
+      "cases": [
+        {
+          "name": "by name: the type",
+          "input": {
+            "tune": {
+              "tune_id": 1,
+              "tune_name": "Cooley's",
+              "tune_type": "reel",
+              "learn_status": "learned",
+              "notes": null,
+              "created_date": "2025-03-04T09:00:00+00:00",
+              "tunebook_count": 1350,
+              "heard_count": 12,
+              "member_play_count": 10,
+              "attended_play_count": 7,
+              "session_play_count": 0,
+              "instrument_status": {}
+            },
+            "sortType": "alpha"
+          },
+          "expected": "reel"
+        },
+        {
+          "name": "popularity",
+          "input": {
+            "tune": {
+              "tune_id": 1,
+              "tune_name": "Cooley's",
+              "tune_type": "reel",
+              "learn_status": "learned",
+              "notes": null,
+              "created_date": "2025-03-04T09:00:00+00:00",
+              "tunebook_count": 1350,
+              "heard_count": 12,
+              "member_play_count": 10,
+              "attended_play_count": 7,
+              "session_play_count": 0,
+              "instrument_status": {}
+            },
+            "sortType": "popularity"
+          },
+          "expected": "1350"
+        },
+        {
+          "name": "heard",
+          "input": {
+            "tune": {
+              "tune_id": 1,
+              "tune_name": "Cooley's",
+              "tune_type": "reel",
+              "learn_status": "learned",
+              "notes": null,
+              "created_date": "2025-03-04T09:00:00+00:00",
+              "tunebook_count": 1350,
+              "heard_count": 12,
+              "member_play_count": 10,
+              "attended_play_count": 7,
+              "session_play_count": 0,
+              "instrument_status": {}
+            },
+            "sortType": "heard"
+          },
+          "expected": "12"
+        },
+        {
+          "name": "plays",
+          "input": {
+            "tune": {
+              "tune_id": 1,
+              "tune_name": "Cooley's",
+              "tune_type": "reel",
+              "learn_status": "learned",
+              "notes": null,
+              "created_date": "2025-03-04T09:00:00+00:00",
+              "tunebook_count": 1350,
+              "heard_count": 12,
+              "member_play_count": 10,
+              "attended_play_count": 7,
+              "session_play_count": 0,
+              "instrument_status": {}
+            },
+            "sortType": "plays"
+          },
+          "expected": "10"
+        },
+        {
+          "name": "attended",
+          "input": {
+            "tune": {
+              "tune_id": 1,
+              "tune_name": "Cooley's",
+              "tune_type": "reel",
+              "learn_status": "learned",
+              "notes": null,
+              "created_date": "2025-03-04T09:00:00+00:00",
+              "tunebook_count": 1350,
+              "heard_count": 12,
+              "member_play_count": 10,
+              "attended_play_count": 7,
+              "session_play_count": 0,
+              "instrument_status": {}
+            },
+            "sortType": "attended"
+          },
+          "expected": "7"
+        },
+        {
+          "name": "no count is 0",
+          "input": {
+            "tune": {
+              "tune_id": 6,
+              "tune_name": "Morrison’s",
+              "tune_type": "jig",
+              "learn_status": "want to learn",
+              "notes": null,
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": null,
+              "heard_count": 5,
+              "member_play_count": 0,
+              "attended_play_count": 0,
+              "session_play_count": 0,
+              "instrument_status": {}
+            },
+            "sortType": "popularity"
+          },
+          "expected": "0"
+        },
+        {
+          "name": "no type",
+          "input": {
+            "tune": {
+              "tune_type": null
+            },
+            "sortType": "alpha"
+          },
+          "expected": ""
+        }
+      ]
+    },
+    "typeBadgeTitle": {
+      "params": [
+        "sortType"
+      ],
+      "cases": [
+        {
+          "name": "alpha",
+          "input": {
+            "sortType": "alpha"
+          },
+          "expected": ""
+        },
+        {
+          "name": "popularity",
+          "input": {
+            "sortType": "popularity"
+          },
+          "expected": "TheSession.org tunebooks"
+        },
+        {
+          "name": "heard",
+          "input": {
+            "sortType": "heard"
+          },
+          "expected": "Times heard"
+        },
+        {
+          "name": "plays",
+          "input": {
+            "sortType": "plays"
+          },
+          "expected": "Times logged at my sessions"
+        },
+        {
+          "name": "attended",
+          "input": {
+            "sortType": "attended"
+          },
+          "expected": "Times logged while I was there"
+        }
+      ]
+    },
+    "sortModeLabel": {
+      "params": [
+        "id"
+      ],
+      "cases": [
+        {
+          "name": "plays",
+          "input": {
+            "id": "plays"
+          },
+          "expected": "My plays"
+        },
+        {
+          "name": "unknown falls back to the first",
+          "input": {
+            "id": "nope"
+          },
+          "expected": "Name (a-z)"
+        }
+      ]
+    },
+    "memberPlays": {
+      "params": [
+        "tune"
+      ],
+      "cases": [
+        {
+          "name": "the member count",
+          "input": {
+            "tune": {
+              "member_play_count": 4,
+              "session_play_count": 9
+            }
+          },
+          "expected": 4
+        },
+        {
+          "name": "an old cache: the session count",
+          "input": {
+            "tune": {
+              "session_play_count": 9
+            }
+          },
+          "expected": 9
+        },
+        {
+          "name": "neither",
+          "input": {
+            "tune": {}
+          },
+          "expected": 0
+        }
+      ]
+    },
+    "attendedPlays": {
+      "params": [
+        "tune"
+      ],
+      "cases": [
+        {
+          "name": "a count",
+          "input": {
+            "tune": {
+              "attended_play_count": 3
+            }
+          },
+          "expected": 3
+        },
+        {
+          "name": "none",
+          "input": {
+            "tune": {}
+          },
+          "expected": 0
+        }
+      ]
+    },
+    "resolveTuneInstrumentStatus": {
+      "params": [
+        "tune",
+        "instruments",
+        "instrumentName"
+      ],
+      "cases": [
+        {
+          "name": "auto follows the status",
+          "input": {
+            "tune": {
+              "tune_id": 1,
+              "tune_name": "Cooley's",
+              "tune_type": "reel",
+              "learn_status": "learned",
+              "notes": null,
+              "created_date": "2025-03-04T09:00:00+00:00",
+              "tunebook_count": 1350,
+              "heard_count": 12,
+              "member_play_count": 10,
+              "attended_play_count": 7,
+              "session_play_count": 0,
+              "instrument_status": {}
+            },
+            "instruments": [
+              {
+                "instrument": "Fiddle",
+                "is_auto": true
+              },
+              {
+                "instrument": "Concertina",
+                "is_auto": false
+              }
+            ],
+            "instrumentName": "fiddle"
+          },
+          "expected": "learned"
+        },
+        {
+          "name": "an override wins",
+          "input": {
+            "tune": {
+              "tune_id": 4,
+              "tune_name": "Banish Misfortune",
+              "tune_type": "jig",
+              "learn_status": "learned",
+              "notes": null,
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": 800,
+              "heard_count": 1,
+              "member_play_count": 4,
+              "attended_play_count": 4,
+              "session_play_count": 0,
+              "instrument_status": {
+                "Fiddle": "learning"
+              }
+            },
+            "instruments": [
+              {
+                "instrument": "Fiddle",
+                "is_auto": true
+              },
+              {
+                "instrument": "Concertina",
+                "is_auto": false
+              }
+            ],
+            "instrumentName": "Fiddle"
+          },
+          "expected": "learning"
+        },
+        {
+          "name": "manual, no override: untracked",
+          "input": {
+            "tune": {
+              "tune_id": 1,
+              "tune_name": "Cooley's",
+              "tune_type": "reel",
+              "learn_status": "learned",
+              "notes": null,
+              "created_date": "2025-03-04T09:00:00+00:00",
+              "tunebook_count": 1350,
+              "heard_count": 12,
+              "member_play_count": 10,
+              "attended_play_count": 7,
+              "session_play_count": 0,
+              "instrument_status": {}
+            },
+            "instruments": [
+              {
+                "instrument": "Fiddle",
+                "is_auto": true
+              },
+              {
+                "instrument": "Concertina",
+                "is_auto": false
+              }
+            ],
+            "instrumentName": "Concertina"
+          },
+          "expected": null
+        },
+        {
+          "name": "manual with an override",
+          "input": {
+            "tune": {
+              "tune_id": 2,
+              "tune_name": "The Kesh",
+              "tune_type": "jig",
+              "learn_status": "learning",
+              "notes": "Slow at the start",
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": 900,
+              "heard_count": 1,
+              "member_play_count": 4,
+              "attended_play_count": 1,
+              "session_play_count": 0,
+              "instrument_status": {
+                "Concertina": "learning"
+              }
+            },
+            "instruments": [
+              {
+                "instrument": "Fiddle",
+                "is_auto": true
+              },
+              {
+                "instrument": "Concertina",
+                "is_auto": false
+              }
+            ],
+            "instrumentName": "concertina"
+          },
+          "expected": "learning"
+        },
+        {
+          "name": "not one of mine",
+          "input": {
+            "tune": {
+              "tune_id": 1,
+              "tune_name": "Cooley's",
+              "tune_type": "reel",
+              "learn_status": "learned",
+              "notes": null,
+              "created_date": "2025-03-04T09:00:00+00:00",
+              "tunebook_count": 1350,
+              "heard_count": 12,
+              "member_play_count": 10,
+              "attended_play_count": 7,
+              "session_play_count": 0,
+              "instrument_status": {}
+            },
+            "instruments": [
+              {
+                "instrument": "Fiddle",
+                "is_auto": true
+              },
+              {
+                "instrument": "Concertina",
+                "is_auto": false
+              }
+            ],
+            "instrumentName": "Banjo"
+          },
+          "expected": null
+        }
+      ]
+    }
+  },
+  "constants": {
+    "SORT_MODES": [
+      {
+        "id": "alpha",
+        "label": "Name (a-z)"
+      },
+      {
+        "id": "popularity",
+        "label": "Popularity"
+      },
+      {
+        "id": "plays",
+        "label": "My plays"
+      },
+      {
+        "id": "attended",
+        "label": "Plays I attended"
+      },
+      {
+        "id": "heard",
+        "label": "Times heard"
+      }
+    ]
+  },
+  "_not_fixtured": {
+    "buildSortFunction": "returns a function; held through filterAndSort's sort cases",
+    "stateFromParams": "the web's URL state; the app keeps its own",
+    "paramsFromState": "the web's URL state; the app keeps its own",
+    "applyPendingOps": "the offline op queue, fixtured when the app has one (plan Phase 5d)",
+    "overlayPendingOps": "reads the offline queue from the page (window.MyTunesOffline)",
+    "submitOp": "network",
+    "shouldSearchCatalogue": "when the page fetches the catalogue; the app decides that per screen",
+    "catalogueExtras": "shapes the page's catalogue rows; the app filters the server's on_list flag",
+    "fetchAllTunes": "network"
+  }
+}

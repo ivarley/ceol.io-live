@@ -119,20 +119,17 @@ enum CeolAppearance {
 
 extension View {
     /// A tab's root screen, as the web's pages look: the green "ceol" wordmark top-left
-    /// and no page heading. `title` still names the screen for the back button.
-    func ceolRootBar(_ title: String) -> some View {
+    /// (it goes Home, as the web's does), Share top-right, and no page heading. `title`
+    /// still names the screen for the back button; `sharePath` is the page on the web.
+    func ceolRootBar(_ title: String, sharePath: String) -> some View {
         navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Image("Wordmark")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 110, height: 42)
-                        .accessibilityLabel("Ceol")
-                }
-                .sharedBackgroundVisibility(.hidden)
+                ToolbarItem(placement: .topBarLeading) { WordmarkButton() }
+                    .sharedBackgroundVisibility(.hidden)
                 ToolbarItem(placement: .principal) { Color.clear.frame(width: 1, height: 1) }
+                ToolbarItem(placement: .topBarTrailing) { ShareButton(path: sharePath, subject: title) }
+                    .sharedBackgroundVisibility(.hidden)
             }
             .ceolHeaderBar()
     }
@@ -390,6 +387,9 @@ struct SearchRow<FilterMenu: View>: View {
     var addID: String = "add"
     var addLabel: String = "Add"
     var focused: FocusState<Bool>.Binding? = nil
+    /// Opens a sort and filter drawer (in place of the menu); `filterCount` badges it.
+    var onFilter: (() -> Void)? = nil
+    var filterCount = 0
 
     var body: some View {
         HStack(spacing: 10) {
@@ -406,13 +406,31 @@ struct SearchRow<FilterMenu: View>: View {
                         Button { text = "" } label: {
                             Image(systemName: "xmark.circle.fill").foregroundStyle(CeolTokens.textMuted)
                         }
+                        .buttonStyle(.borderless)
                         .padding(.trailing, 10)
                         .accessibilityLabel("Clear")
                     }
                 }
                 .accessibilityIdentifier(fieldID)
                 .modifier(OptionalFocus(focused: focused))
-            if FilterMenu.self != EmptyView.self {
+            if let onFilter {
+                Button(action: onFilter) {
+                    square(Image(systemName: "slider.vertical.3"), color: filterCount > 0 ? CeolTokens.primary : CeolTokens.textColor)
+                        .overlay(alignment: .topTrailing) {
+                            if filterCount > 0 {
+                                Text("\(filterCount)").font(.ceol(size: 11, weight: .semibold)).foregroundStyle(.white)
+                                    .frame(minWidth: 18, minHeight: 18)
+                                    .background(CeolTokens.primaryFill, in: Circle())
+                                    .offset(x: 6, y: -6)
+                            }
+                        }
+                }
+                // Borderless: in a List row, plain buttons share the row's tap, and the
+                // filter button's tap opened Add (and the reverse).
+                .buttonStyle(.borderless)
+                .accessibilityLabel(filterCount > 0 ? "Sort and filter, \(filterCount) on" : "Sort and filter")
+                .accessibilityIdentifier("\(fieldID).filter")
+            } else if FilterMenu.self != EmptyView.self {
                 Menu { filterMenu() } label: {
                     square(Image(systemName: "slider.vertical.3"), color: filterActive ? CeolTokens.primary : CeolTokens.textColor)
                 }
@@ -420,6 +438,7 @@ struct SearchRow<FilterMenu: View>: View {
             }
             if let onAdd {
                 Button(action: onAdd) { square(Image(systemName: "plus"), color: CeolTokens.primary) }
+                    .buttonStyle(.borderless)
                     .accessibilityLabel(addLabel)
                     .accessibilityIdentifier(addID)
             }
@@ -444,9 +463,10 @@ private struct OptionalFocus: ViewModifier {
 
 extension SearchRow where FilterMenu == EmptyView {
     init(text: Binding<String>, prompt: String, fieldID: String = "search", onAdd: (() -> Void)? = nil,
-         addID: String = "add", addLabel: String = "Add") {
+         addID: String = "add", addLabel: String = "Add", focused: FocusState<Bool>.Binding? = nil,
+         onFilter: (() -> Void)? = nil, filterCount: Int = 0) {
         self.init(text: text, prompt: prompt, fieldID: fieldID, filterMenu: { EmptyView() }, onAdd: onAdd,
-                  addID: addID, addLabel: addLabel)
+                  addID: addID, addLabel: addLabel, focused: focused, onFilter: onFilter, filterCount: filterCount)
     }
 }
 
@@ -515,6 +535,120 @@ extension KitRow where Trailing == Text {
     init(_ label: String, value: String, muted: Bool = false) {
         self.init(label: label) {
             Text(value).font(.ceol(size: 18)).foregroundStyle(muted ? CeolTokens.textMuted : CeolTokens.textColor)
+        }
+    }
+}
+
+
+/// The wordmark, which takes you Home.
+struct WordmarkButton: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        Button { model.tab = .home } label: {
+            Image("Wordmark").resizable().scaledToFit().frame(width: 110, height: 42)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Ceol, go to Home")
+        .accessibilityIdentifier("wordmark")
+    }
+}
+
+/// The web's Share (its glyph, muted): the system share sheet with this page's address
+/// on the web, for someone without the app too.
+struct ShareButton: View {
+    @Environment(AppModel.self) private var model
+    let path: String
+    var subject: String = "Ceol"
+
+    var body: some View {
+        ShareLink(item: model.webURL(path), subject: Text(subject)) {
+            Image("IconShare").renderingMode(.template).resizable().scaledToFit().frame(width: 20, height: 20)
+                .foregroundStyle(CeolTokens.textMuted)
+                .frame(width: 36, height: 36)
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel("Share")
+    }
+}
+
+
+extension View {
+    /// A drawer: a lighter surface than the page under it, and the grabber that says it
+    /// can be dragged away.
+    func ceolDrawer(_ detents: Set<PresentationDetent> = [.large]) -> some View {
+        presentationDetents(detents)
+            .presentationDragIndicator(.visible)
+            .presentationBackground(CeolTokens.drawerBg)
+    }
+}
+
+extension CeolTokens {
+    /// A drawer's surface: a step lighter than the page (#1a1a1a) and the cards on it.
+    static let drawerBg = Color(red: 0.17, green: 0.17, blue: 0.17)
+}
+
+/// A labelled row of choices in a drawer: the label above, the chips wrapping below.
+struct ChoiceChips<ID: Hashable>: View {
+    let label: String
+    let options: [(id: ID, label: String)]
+    @Binding var selection: ID
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(label.uppercased()).font(.ceol(size: 12, weight: .semibold)).tracking(0.8)
+                .foregroundStyle(CeolTokens.textMuted)
+            FlowLayout(spacing: 8) {
+                ForEach(options, id: \.id) { opt in
+                    let on = opt.id == selection
+                    Button { selection = opt.id } label: {
+                        Text(opt.label).font(.ceol(size: 15, weight: on ? .semibold : .regular))
+                            .padding(.horizontal, 14).padding(.vertical, 7)
+                            .foregroundStyle(on ? .white : CeolTokens.textColor)
+                            .background(on ? CeolTokens.primaryFill : .clear, in: Capsule())
+                            .overlay(Capsule().strokeBorder(on ? .clear : CeolTokens.borderColor, lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(on ? .isSelected : [])
+                }
+            }
+        }
+    }
+}
+
+/// Lays its children left to right, wrapping onto new lines.
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? .infinity
+        var x: CGFloat = 0, y: CGFloat = 0, line: CGFloat = 0, widest: CGFloat = 0
+        for v in subviews {
+            let s = v.sizeThatFits(.unspecified)
+            if x > 0 && x + s.width > width {
+                y += line + spacing
+                x = 0
+                line = 0
+            }
+            x += s.width + spacing
+            line = max(line, s.height)
+            widest = max(widest, x - spacing)
+        }
+        return CGSize(width: min(widest, width), height: y + line)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX, y = bounds.minY, line: CGFloat = 0
+        for v in subviews {
+            let s = v.sizeThatFits(.unspecified)
+            if x > bounds.minX && x + s.width > bounds.maxX {
+                y += line + spacing
+                x = bounds.minX
+                line = 0
+            }
+            v.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(s))
+            x += s.width + spacing
+            line = max(line, s.height)
         }
     }
 }

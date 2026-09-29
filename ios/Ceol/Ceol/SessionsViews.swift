@@ -44,18 +44,26 @@ struct SessionsView: View {
     @State private var filter: SessionsRules.Filter = .mine
     @State private var search = ""
     @State private var decidedDefault = false
-    @State private var navPath: [Route] = []
+    @State private var sort: SessionsRules.Sort = .name
+    @State private var country = ""
+    @State private var filtering = false
     @State private var adding = false
 
     var body: some View {
-        NavigationStack(path: $navPath) {
+        @Bindable var model = model
+        NavigationStack(path: $model.sessionsPath) {
             Loaded(state: state, retry: load) { payload in list(payload) }
                 .background(CeolTokens.bgColor)
-                .ceolRootBar("Sessions")
+                .ceolRootBar("Sessions", sharePath: "/sessions")
                 .modifier(SessionDestinations())
+                .sheet(isPresented: $filtering) {
+                    SessionsFilterSheet(
+                        filter: $filter, sort: $sort, country: $country,
+                        countries: SessionsRules.countries((state.value?.sessions ?? []).map(\.entry)))
+                }
                 .sheet(isPresented: $adding) {
                     AddSessionView { path, name in
-                        navPath.append(.session(path: path, name: name))
+                        model.sessionsPath.append(.session(path: path, name: name))
                         Task { await load() }
                     }
                 }
@@ -79,23 +87,19 @@ struct SessionsView: View {
 
     @ViewBuilder private func list(_ payload: SessionsPayload) -> some View {
         let today = localToday()
-        let shown = payload.sessions.filter {
-            SessionsRules.matches(
-                .init(name: $0.name, city: $0.city, state: $0.state, country: $0.country,
-                      terminationDate: $0.terminationDate, isMember: $0.userIsMember, relationship: $0.userRelationship),
-                filter: filter, search: search, today: today)
+        let passing = payload.sessions.filter {
+            SessionsRules.matches($0.entry, filter: filter, search: search, today: today)
+                && SessionsRules.inCountry($0.entry, country)
         }
+        let shown = SessionsRules.sorted(passing.map(\.entry), by: sort) { !passing[$0].activeInstances.isEmpty }
+            .map { passing[$0] }
         List {
             VStack(alignment: .leading, spacing: 8) {
                 SearchRow(
                     text: $search, prompt: "Search by name or location…", fieldID: "sessions.search",
-                    filterActive: filter != .mine,
-                    filterMenu: {
-                        Picker("Show", selection: $filter) {
-                            ForEach(SessionsRules.Filter.allCases, id: \.self) { Text($0.label).tag($0) }
-                        }
-                    },
-                    onAdd: { adding = true }, addID: "sessions.add", addLabel: "Add a session")
+                    onAdd: { adding = true }, addID: "sessions.add", addLabel: "Add a session",
+                    onFilter: { filtering = true },
+                    filterCount: (filter != .mine ? 1 : 0) + (sort != .name ? 1 : 0) + (country.isEmpty ? 0 : 1))
                 Text("\(shown.count) \(filter.countNoun)").font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
             }
             .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 8, trailing: 16))
@@ -107,7 +111,17 @@ struct SessionsView: View {
                     HStack(spacing: 10) {
                         Text(s.name).font(.ceol(size: 19, weight: .medium)).foregroundStyle(CeolTokens.textColor).lineLimit(1)
                         Spacer(minLength: 6)
-                        if !s.activeInstances.isEmpty { Pill(text: "On Now", style: .filled, color: CeolTokens.primaryFill) }
+                        if let night = s.activeInstances.first {
+                            // As on the web: straight into tonight's log.
+                            Button {
+                                model.sessionsPath.append(.session(path: s.path, name: s.name))
+                                model.sessionsPath.append(.night(id: night.sessionInstanceId, title: "\(s.name) · Tonight"))
+                            } label: {
+                                Pill(text: "On Now", style: .filled, color: CeolTokens.primaryFill)
+                            }
+                            .buttonStyle(.borderless)
+                            .accessibilityLabel("\(s.name) is on now: open tonight's log")
+                        }
                         Text(SessionsRules.locationLabel(
                             city: s.city, state: s.state, country: s.country, viewerCountry: payload.viewerCountry))
                             .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted).lineLimit(1)
@@ -156,6 +170,7 @@ struct SessionDetailView: View {
     @State private var addingNight = false
     @State private var editingRole = false
     @State private var aboutOpen = false
+    @State private var openTune: TuneRef?
     @State private var newNight: NewNight?
 
     /// A night just added, to go straight to.
@@ -170,12 +185,8 @@ struct SessionDetailView: View {
             .ceolPushedBar(name)
             .toolbar {
                 // The web's Share: a link to this page, for someone without the app too.
-                ToolbarItem(placement: .topBarTrailing) {
-                    ShareLink(item: model.webURL("/sessions/\(path)"), subject: Text(name)) {
-                        Image(systemName: "square.and.arrow.up")
-                    }
-                    .accessibilityLabel("Share")
-                }
+                ToolbarItem(placement: .topBarTrailing) { ShareButton(path: "/sessions/\(path)", subject: name) }
+                    .sharedBackgroundVisibility(.hidden)
             }
             .navigationDestination(item: $newNight) { NightView(sessionInstanceID: $0.id, title: $0.title) }
             .sheet(isPresented: $editingRole) {
@@ -186,6 +197,7 @@ struct SessionDetailView: View {
                     }
                 }
             }
+            .sheet(item: $openTune) { TuneSheet(tune: $0) }
             .sheet(isPresented: $addingNight) {
                 AddNightView(path: path, usualVenue: state.value?.session.locationName) { id, date in
                     logs = .loading
@@ -344,13 +356,20 @@ struct SessionDetailView: View {
                 .padding(.horizontal, 16).padding(.vertical, 10)
             Hairline()
             ForEach(d.tunes, id: \.tuneId) { t in
-                HStack(spacing: 8) {
-                    Text(t.tuneName).font(.ceol(size: 19, weight: .medium)).foregroundStyle(CeolTokens.textColor).lineLimit(1)
-                    Spacer(minLength: 6)
-                    if let type = t.tuneType { TypeChip(label: type, size: 15) }
-                    CountBox(count: t.playCount)
+                Button {
+                    openTune = TuneRef(id: t.tuneId, name: t.tuneName, type: t.tuneType, sessionPath: path, statusKnown: false)
+                } label: {
+                    HStack(spacing: 8) {
+                        Text(t.tuneName).font(.ceol(size: 19, weight: .medium)).foregroundStyle(CeolTokens.textColor).lineLimit(1)
+                        Spacer(minLength: 6)
+                        if let type = t.tuneType { TypeChip(label: type, size: 15) }
+                        CountBox(count: t.playCount)
+                    }
+                    .padding(.horizontal, 16).padding(.vertical, 12)
+                    .contentShape(Rectangle())
                 }
-                .padding(.horizontal, 16).padding(.vertical, 12)
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("session.tune")
                 Hairline()
             }
             if d.hasMoreTunes {
@@ -499,16 +518,13 @@ struct NightView: View {
             .ceolPushedBar(title)
             .toolbar {
                 if let b = state.value {
+                    // A night's page is its date, or its id when it has none.
                     ToolbarItem(placement: .topBarTrailing) {
-                        // A night's page is its date, or its id when it has none.
-                        ShareLink(
-                            item: model.webURL("/sessions/\(b.sessionPath)/\(b.instanceDate ?? String(sessionInstanceID))"),
-                            subject: Text("\(b.sessionName), \(b.sessionDate)")
-                        ) {
-                            Image(systemName: "square.and.arrow.up")
-                        }
-                        .accessibilityLabel("Share")
+                        ShareButton(
+                            path: "/sessions/\(b.sessionPath)/\(b.instanceDate ?? String(sessionInstanceID))",
+                            subject: "\(b.sessionName), \(b.sessionDate)")
                     }
+                    .sharedBackgroundVisibility(.hidden)
                 }
             }
             .task { if state.value == nil { await load() } }
@@ -579,5 +595,12 @@ extension JSONValue {
             let json = try? JSONDecoder().decode(JSONValue.self, from: data)
         else { return nil }
         self = json
+    }
+}
+
+extension SessionsPayload.SessionsPayloadPayload {
+    var entry: SessionsRules.Entry {
+        .init(name: name, city: city, state: state, country: country, terminationDate: terminationDate,
+              isMember: userIsMember, relationship: userRelationship)
     }
 }

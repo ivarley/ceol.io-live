@@ -77,6 +77,7 @@ enum Fixtures {
         "addsession": "addsession/logic.fixtures.json",
         "sessionpath": "shared/sessionpath.fixtures.json",
         "parse": "shared/parse.fixtures.json",
+        "mytunes": "mytunespage/logic.fixtures.json",
     ]
 
     /// frontend/src, from ios/CeolKit/Tests/CeolLogicTests/FixtureRunner.swift.
