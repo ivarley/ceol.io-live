@@ -102,9 +102,12 @@ struct MainTabView: View {
             Tab(value: AppTab.tunes) { TunesView() }
             Tab(value: AppTab.me) { MeView() }
         }
-        .contentMargins(.bottom, CeolTabBar.height, for: .scrollContent)
-        .contentMargins(.bottom, CeolTabBar.height, for: .scrollIndicators)
-        .overlay(alignment: .bottom) { CeolTabBar() }
+        .contentMargins(.bottom, model.editingNight ? 0 : CeolTabBar.height, for: .scrollContent)
+        .contentMargins(.bottom, model.editingNight ? 0 : CeolTabBar.height, for: .scrollIndicators)
+        .overlay(alignment: .bottom) {
+            // Logging a night, the composer takes the bottom of the screen.
+            if !model.editingNight { CeolTabBar() }
+        }
         .ceolSharePane()
         .tint(CeolTokens.primary)
     }

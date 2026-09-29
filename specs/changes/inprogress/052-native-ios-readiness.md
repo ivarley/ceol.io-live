@@ -1807,3 +1807,21 @@ The plan (Phases 0-6) runs from here in `ios/`; see `ios/README.md` for the layo
     `CeolLogic.SSEParser` parses the stream from raw bytes (URLSession's line reader
     drops the blank lines that end events). A UI test plays a second client over the
     API and checks the app shows its add and its removal live.
+  - **5b.1 DONE 2026-09-29: the core logging loop, "close plus"** (the web's edit mode,
+    with native gestures where they fit). "Edit" reopens the stream as `mode=edit` and
+    swaps the tab bar for the composer (name, Log, then End set on an open set or Done
+    on a closed one). Seams place the cursor as on the web (start of set, after a tune,
+    new set between sets and after a closed end), with Split and Join on the active
+    seam; tapping a tune selects it, with ↑/↓ insert pills and Info / Confirm / Remove.
+    The native addition: swipe a tune left to remove it. Every change goes through
+    `CeolLogic.LiveLog`'s optimistic pipeline (`LiveEditing.swift`): a temp row
+    (`temp-<op_id>`) at once, ops sent one at a time in order with temp anchors swapped
+    for real ids, settled by the POST's answer or the stream's echo (whichever comes
+    first; the answer never moves the high-water mark), rolled back on a refusal or a
+    server error, and laid back over a fresh bootstrap while still in flight. A new set
+    in a gap is an `add_tune` and a `set_break`, both `before_record_id` the next set.
+    A dropped connection retries the same op a few times, then rolls back (queuing is
+    5d). Unit tests cover the pipeline; a UI test logs two tunes, splits and joins
+    them, swipes one away, removes the other, and checks the server after each step.
+    Left for 5b.2: drag to reorder, select-many with bulk remove and undo, the set
+    starter picker, and editing a tune (needs 5c's search).

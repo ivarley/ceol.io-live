@@ -534,13 +534,17 @@ private struct PersonRow: View {
 
 /// A night's log, live: its sets as the referee has them, kept current by the stream
 /// (NightModel), with the connection's state in the header. Ordered and split by the
-/// rules the live logger uses (CeolLogic.LogState). Read-only until Phase 5b.
+/// rules the live logger uses (CeolLogic.LogState). "Edit" turns it into the logger
+/// (NightEditing.swift).
 struct NightView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.scenePhase) private var scenePhase
     let sessionInstanceID: Int
     let title: String
     @State private var model: NightModel?
+    @State private var entry = ""
+    @FocusState private var composerFocused: Bool
+    @State private var infoTune: TuneRef?
 
     var body: some View {
         Group {
@@ -561,7 +565,21 @@ struct NightView: View {
         .background(CeolTokens.bgColor)
         .ceolPushedBar(title)
         .toolbar {
-            if let night = model?.night, let path = night["session_path"]?.stringValue {
+            if let model, model.log != nil, model.status != .finished {
+                ToolbarItem(placement: .topBarTrailing) {
+                    if model.editing {
+                        Button("Done") { finishEditing() }
+                            .font(.ceol(size: 16, weight: .semibold))
+                            .accessibilityIdentifier("night.done")
+                    } else {
+                        Button { model.setEditing(true) } label: {
+                            Label("Edit log", systemImage: "pencil")
+                        }
+                        .accessibilityIdentifier("night.edit")
+                    }
+                }
+            }
+            if let night = model?.night, let path = night["session_path"]?.stringValue, model?.editing != true {
                 // A night's page is its date, or its id when it has none.
                 ToolbarItem(placement: .topBarTrailing) {
                     ShareButton(
@@ -579,6 +597,14 @@ struct NightView: View {
             }
         }
         .onDisappear { model?.stop() }
+        .sheet(item: $infoTune) { TuneSheet(tune: $0) }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if let model, model.editing, let log = model.log {
+                LogComposer(
+                    model: model, endIsOpen: !(log.ordered.last?.isBreak ?? true), text: $entry,
+                    focused: $composerFocused, onDone: finishEditing)
+            }
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await model?.resume() } }
         }
@@ -615,6 +641,20 @@ struct NightView: View {
                 .padding(.horizontal, 20).padding(.vertical, 14)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(CeolTokens.headerBg.opacity(0.5))
+                if model.editing {
+                    EditableLog(
+                        model: model, log: log, trackStarters: trackStarters,
+                        onFocusComposer: { composerFocused = true },
+                        onInfo: { t in
+                            guard let id = t["tune_id"]?.intValue else { return }
+                            infoTune = TuneRef(
+                                id: id, name: t["name"]?.stringValue ?? "", type: t["tune_type"]?.stringValue,
+                                sessionPath: b["session_path"]?.stringValue, statusKnown: false)
+                        }
+                    )
+                    .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 24)
+                    .animation(.easeOut(duration: 0.2), value: log.records)
+                } else {
                 VStack(spacing: 12) {
                     if sets.isEmpty {
                         Text("No tunes logged yet.").font(.ceol(size: 16)).foregroundStyle(CeolTokens.textMuted)
@@ -640,9 +680,17 @@ struct NightView: View {
                 }
                 .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 24)
                 .animation(.easeOut(duration: 0.25), value: log.records)
+                }
             }
         }
+        .scrollDismissesKeyboard(.interactively)
         .refreshable { await model.start() }
+    }
+
+    private func finishEditing() {
+        composerFocused = false
+        entry = ""
+        model?.setEditing(false)
     }
 }
 

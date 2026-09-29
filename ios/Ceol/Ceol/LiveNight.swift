@@ -11,6 +11,11 @@
 //     for 45 seconds (the server pings every 15) is dead without saying so, and gets a
 //     full fresh start, as the web's watchdog does.
 //   - A finished log is shown as it is, with no stream (the web's render-only path).
+//
+// Editing (plan Phase 5b): "Edit" reopens the stream with mode=edit (which is what shows
+// you as logging to the others), and each change goes through LiveLog's optimistic
+// pipeline: shown at once, sent one at a time in order, settled by the answer or the
+// stream's echo, rolled back on a refusal.
 
 import CeolAPI
 import CeolLogic
@@ -39,7 +44,19 @@ final class NightModel {
     /// Who's logging right now (the stream's presence events), for the header.
     private(set) var roster: [JSONValue] = []
 
+    /// Logging, not just watching.
+    private(set) var editing = false
+    /// Where the next tune goes.
+    var cursor: Cursor = .end
+    /// The row whose actions are showing (the cursor hides while one is).
+    var selected: RecordID?
+    /// The last refusal or failure, for a banner.
+    var notice: String?
+
     private let app: AppModel
+    /// Ops waiting to go, in order.
+    private var outbox: [String] = []
+    private var sender: Task<Void, Never>?
     private var stream: Task<Void, Never>?
     private var watchdog: Task<Void, Never>?
     private var lastAlive = Date()
@@ -61,6 +78,7 @@ final class NightModel {
 
     func stop() {
         running = false
+        if editing { app.editingNight = false }
         stream?.cancel()
         watchdog?.cancel()
         stream = nil
@@ -88,7 +106,9 @@ final class NightModel {
                 "end_time": b["end_time"] ?? .null, "instance_name": b["instance_name"] ?? .null,
                 "log_complete": b["log_complete"] ?? false,
             ]
-            log = LiveLog(records: b["records"]?.arrayValue ?? [], meta: meta, lastEventID: b["last_event_id"]?.intValue ?? 0)
+            let fresh = LiveLog(records: b["records"]?.arrayValue ?? [], meta: meta, lastEventID: b["last_event_id"]?.intValue ?? 0)
+            // Changes still in flight are laid over the fresh log, not lost.
+            log = log.map { $0.rebased(onto: fresh) } ?? fresh
             loadError = nil
             failures = 0
         } catch {
@@ -113,7 +133,7 @@ final class NightModel {
             do {
                 let base = try await self.app.streamingBase()
                 let url = base.appending(path: "live/instances/\(self.instanceID)/events")
-                    .appending(queryItems: [.init(name: "last_event_id", value: String(from)), .init(name: "mode", value: "view")])
+                    .appending(queryItems: [.init(name: "last_event_id", value: String(from)), .init(name: "mode", value: self.editing ? "edit" : "view")])
                 var request = self.app.authorized(URLRequest(url: url))
                 request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
                 request.setValue(String(from), forHTTPHeaderField: "Last-Event-ID")
@@ -149,10 +169,13 @@ final class NightModel {
         guard let json = try? JSONDecoder().decode(JSONValue.self, from: Data(event.data.utf8)) else { return }
         switch event.type {
         case "op":
-            if log?.apply(json) == true, log?.meta["log_complete"] == true {
-                // Finished while we watched: nothing more to stream.
+            let changed = log?.apply(json) == true
+            if changed { settleCursor() }
+            if changed, log?.meta["log_complete"] == true {
+                // Finished while we watched: nothing more to stream, or to edit.
                 status = .finished
                 stop()
+                editing = false
                 running = true
             }
         case "presence":
@@ -160,6 +183,153 @@ final class NightModel {
         default:
             break  // ping, typing: proof of life only
         }
+    }
+
+    // MARK: - Editing
+
+    /// Start or stop logging: the stream reopens in the new mode.
+    func setEditing(_ on: Bool) {
+        guard editing != on else { return }
+        editing = on
+        selected = nil
+        cursor = .end
+        app.editingNight = on
+        guard running, status != .finished else { return }
+        stream?.cancel()
+        watchdog?.cancel()
+        failures = 0
+        openStream()
+    }
+
+    /// Log a tune by name at the cursor; the server matches the name to a tune.
+    func logTune(_ name: String) {
+        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, var l = log else { return }
+        selected = nil
+        let r = l.addTune(["name": .string(name)], at: cursor)
+        log = l
+        cursor = r.cursor
+        enqueue(r.ops)
+    }
+
+    func endSet() {
+        guard var l = log, let op = l.endSet() else { return }
+        log = l
+        cursor = .end
+        enqueue([op])
+    }
+
+    func split(after id: RecordID) {
+        guard var l = log else { return }
+        let op = l.split(after: id)
+        log = l
+        // The spot becomes the gap between the two sets: tapping it again joins them.
+        if let next = nextTune(after: id) { cursor = .newSet(next) }
+        enqueue([op])
+    }
+
+    func join(breakID: RecordID, at cursor: Cursor) {
+        guard var l = log else { return }
+        // The gap becomes a seam inside the set: tapping it again splits it.
+        if case .newSet(let first) = cursor, let prev = previousTune(before: first) { self.cursor = .after(prev) }
+        guard let op = l.join(breakID: breakID) else { return }
+        log = l
+        enqueue([op])
+    }
+
+    func remove(_ id: RecordID) {
+        guard var l = log else { return }
+        if selected == id { selected = nil }
+        // A cursor anchored on the row moves to the row before it (or the end).
+        if cursor == .after(id) || cursor == .before(id) {
+            cursor = previousTune(before: id).map { .after($0) } ?? .end
+        }
+        guard let op = l.remove(id) else { return }
+        log = l
+        enqueue([op])
+    }
+
+    func confirm(_ id: RecordID) {
+        guard var l = log, let op = l.confirm(id) else { return }
+        log = l
+        selected = nil
+        enqueue([op])
+    }
+
+    private func nextTune(after id: RecordID) -> RecordID? {
+        guard let ord = log?.ordered, let i = ord.firstIndex(where: { $0.recordID == id }) else { return nil }
+        return ord[(i + 1)...].first { !$0.isBreak }?.recordID
+    }
+
+    private func previousTune(before id: RecordID) -> RecordID? {
+        guard let ord = log?.ordered, let i = ord.firstIndex(where: { $0.recordID == id }) else { return nil }
+        return ord[..<i].last { !$0.isBreak }?.recordID
+    }
+
+    /// A cursor on a row that has since been answered follows it to its real id; one
+    /// whose row went away falls back to the end.
+    private func settleCursor() {
+        guard let l = log else { return }
+        func fix(_ id: RecordID) -> RecordID? {
+            let r = l.resolve(id)
+            return l.records.contains { $0.recordID == r } ? r : nil
+        }
+        switch cursor {
+        case .end: break
+        case .after(let id): cursor = fix(id).map { .after($0) } ?? .end
+        case .before(let id): cursor = fix(id).map { .before($0) } ?? .end
+        case .newSet(let id): cursor = fix(id).map { .newSet($0) } ?? .end
+        }
+        if let sel = selected { selected = fix(sel) }
+    }
+
+    private func enqueue(_ ops: [PendingOp]) {
+        notice = nil
+        outbox += ops.map(\.opID)
+        if sender == nil { sender = Task { await drain() } }
+    }
+
+    /// Send the outbox one op at a time, in order: a later op may anchor on an earlier
+    /// one's row, and needs its real id. A dropped connection retries the same op (the
+    /// server knows an op_id it has seen); a refusal or a server error rolls it back.
+    private func drain() async {
+        var attempts = 0
+        while let opID = outbox.first {
+            guard let l = log, l.pending[opID] != nil else {
+                outbox.removeFirst()  // settled already, by the stream's echo
+                continue
+            }
+            guard let body = l.sendableBody(opID) else {
+                // Its row never reached the server (that add was refused): nothing to do.
+                log?.rollback(opID)
+                outbox.removeFirst()
+                continue
+            }
+            do {
+                let (code, answer) = try await app.postJSON("/api/live/instances/\(instanceID)/ops", body: .object(body))
+                outbox.removeFirst()
+                attempts = 0
+                if code == 200 {
+                    if let reason = log?.settle(opID: opID, answer: answer) { notice = reason }
+                } else {
+                    log?.rollback(opID)
+                    notice = answer["message"]?.stringValue ?? answer["error"]?.stringValue ?? "That change wasn't saved."
+                }
+                settleCursor()
+            } catch {
+                attempts += 1
+                if attempts > 5 {
+                    // Give up on everything waiting: the offline queue is Phase 5d.
+                    for id in outbox { log?.rollback(id) }
+                    outbox = []
+                    notice = "Couldn't reach Ceol, so that change wasn't saved."
+                    settleCursor()
+                    break
+                }
+                try? await Task.sleep(for: .seconds([1.0, 2, 3, 5, 8][attempts - 1]))
+            }
+        }
+        sender = nil
     }
 
     /// A silent half-open stream never errors. If nothing arrives for 45 seconds (the
@@ -208,6 +378,19 @@ extension AppModel {
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { throw URLError(.badServerResponse) }
         return try JSONDecoder().decode(JSONValue.self, from: data)
+    }
+
+    /// A POST of raw JSON: the status code and the body (an error's body too).
+    func postJSON(_ path: String, body: JSONValue) async throws -> (Int, JSONValue) {
+        var request = authorized(URLRequest(url: webURL(path)))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.httpBody = try JSONEncoder().encode(body)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+        let json = (try? JSONDecoder().decode(JSONValue.self, from: data)) ?? .null
+        return (http.statusCode, json)
     }
 
     /// The streaming service's address (app-config's streaming_base_url).

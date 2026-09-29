@@ -452,6 +452,116 @@ final class CeolUITests: XCTestCase {
         }
     }
 
+    /// Phase 5b.1: logging a night. Two tunes go in (shown at once, then saved), the set
+    /// is split between them from the ↑ pill's seam, and then joined; one tune is swiped
+    /// away and the other removed from its row. The server is checked after each step,
+    /// and what's left is cleaned up.
+    @MainActor
+    func testLoggingANight() async throws {
+        let api = try await TestAPI.signedIn(server: server)
+        let nights = try await api.get("/api/sessions/austin/mueller/logs")
+        let years = (nights["sorted_years"] as? [Any])?.compactMap { "\($0)" } ?? []
+        let byYear = nights["instances_by_year"] as? [String: [[String: Any]]] ?? [:]
+        let newest = try XCTUnwrap(years.first.flatMap { byYear[$0]?.first })
+        let instanceID = try XCTUnwrap(newest["session_instance_id"] as? Int)
+        func records() async throws -> [[String: Any]] {
+            let b = try await api.get("/api/live/instances/\(instanceID)/bootstrap")
+            return ((b["records"] as? [[String: Any]]) ?? [])
+                .filter { ($0["deleted"] as? Bool) != true }
+                .sorted { ($0["order_position"] as? String ?? "") < ($1["order_position"] as? String ?? "") }
+        }
+        func waitFor(_ what: String, _ check: ([[String: Any]]) -> Bool) async throws {
+            for _ in 0..<40 {
+                if check(try await records()) { return }
+                try await Task.sleep(for: .milliseconds(250))
+            }
+            XCTFail("the server never showed: \(what)")
+        }
+        let before = try await records().compactMap { $0["session_instance_tune_id"] as? Int }
+
+        let app = launch()
+        signIn(app)
+        app.buttons["tab.sessions"].firstMatch.tap()
+        let mueller = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Mueller Session'")).firstMatch
+        XCTAssertTrue(mueller.waitForExistence(timeout: 10))
+        mueller.tap()
+        app.buttons.containing(NSPredicate(format: "label BEGINSWITH 'Logs'")).firstMatch.tap()
+        let night = app.buttons.matching(NSPredicate(format: "label MATCHES '.*[0-9]+ tunes?.*'")).firstMatch
+        XCTAssertTrue(night.waitForExistence(timeout: 10))
+        night.tap()
+        let status = app.descendants(matching: .any)["night.status"]
+        XCTAssertTrue(status.waitForExistence(timeout: 15))
+        await fulfillment(
+            of: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS 'Live'"), object: status)], timeout: 15)
+
+        app.buttons["night.edit"].tap()
+        let input = app.textFields["log.input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["tab.home"].exists, "the tab bar gives way to the composer")
+        // A closed log starts a new set; an open one would need End set first.
+        if app.buttons["log.endSet"].exists { app.buttons["log.endSet"].tap() }
+
+        let n = Int.random(in: 1000...9999)
+        let first = "Edit Test Jig \(n)"
+        let second = "Edit Test Reel \(n)"
+        input.tap()
+        input.typeText(first + "\n")
+        input.typeText(second)
+        app.buttons["log.commit"].tap()
+        XCTAssertTrue(app.staticTexts[first].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts[second].waitForExistence(timeout: 5))
+        try await waitFor("both tunes, in order, in one set") { rs in
+            let names = rs.map { ($0["record_type"] as? String) == "break" ? "|" : ($0["name"] as? String ?? "") }
+            guard let i = names.firstIndex(of: first) else { return false }
+            return i + 1 < names.count && names[i + 1] == second
+        }
+        snapshot("logged two")
+
+        // Select the second tune, insert above it: the seam between them, with Split.
+        app.staticTexts[second].tap()
+        XCTAssertTrue(app.buttons["row.insertAbove"].waitForExistence(timeout: 3))
+        snapshot("selected")
+        app.buttons["row.insertAbove"].tap()
+        XCTAssertTrue(app.buttons["seam.split"].waitForExistence(timeout: 3))
+        app.buttons["seam.split"].tap()
+        try await waitFor("a break between them") { rs in
+            let names = rs.map { ($0["record_type"] as? String) == "break" ? "|" : ($0["name"] as? String ?? "") }
+            guard let i = names.firstIndex(of: first) else { return false }
+            return i + 2 < names.count && names[i + 1] == "|" && names[i + 2] == second
+        }
+        snapshot("split")
+        // The same spot now joins them again.
+        XCTAssertTrue(app.buttons["seam.join"].waitForExistence(timeout: 3))
+        app.buttons["seam.join"].tap()
+        try await waitFor("the break gone") { rs in
+            let names = rs.map { ($0["record_type"] as? String) == "break" ? "|" : ($0["name"] as? String ?? "") }
+            guard let i = names.firstIndex(of: first) else { return false }
+            return i + 1 < names.count && names[i + 1] == second
+        }
+
+        // Swipe one away; remove the other from its row.
+        app.staticTexts[second].swipeLeft()
+        XCTAssertTrue(app.staticTexts[second].waitForNonExistence(timeout: 5))
+        app.staticTexts[first].tap()
+        XCTAssertTrue(app.buttons["row.remove"].waitForExistence(timeout: 3))
+        app.buttons["row.remove"].tap()
+        XCTAssertTrue(app.staticTexts[first].waitForNonExistence(timeout: 5))
+        try await waitFor("both removed") { rs in !rs.contains { ($0["name"] as? String) == first || ($0["name"] as? String) == second } }
+
+        app.buttons["night.done"].tap()
+        XCTAssertTrue(app.buttons["night.edit"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["tab.home"].waitForExistence(timeout: 3))
+
+        // Leave the night as it was: drop any break this test added.
+        for r in try await records() where (r["record_type"] as? String) == "break" {
+            if let id = r["session_instance_tune_id"] as? Int, !before.contains(id) {
+                _ = try await api.post("/api/live/instances/\(instanceID)/ops", [
+                    "op_id": UUID().uuidString.lowercased(), "op_type": "set_break", "action": "remove", "record_id": id,
+                ])
+            }
+        }
+    }
+
     /// Phase 3d: Me shows the profile and opens it to edit (cancelled: seed data stays put).
     @MainActor
     func testMeShowsTheProfile() throws {

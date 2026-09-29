@@ -10,12 +10,17 @@
 import Foundation
 
 public struct LiveLog: Sendable, Equatable {
-    public private(set) var records: [LogRecord] = []
+    public internal(set) var records: [LogRecord] = []
     /// The night's fields that ops change: notes, instance_date, session_date,
     /// start_time, end_time, instance_name, log_complete.
     public var meta: [String: JSONValue]
     /// The last event applied: the cursor a reconnect resumes from.
-    public private(set) var highWater: Int
+    public internal(set) var highWater: Int
+
+    /// Ops sent and not yet answered, by op_id.
+    public internal(set) var pending: [String: PendingOp] = [:]
+    /// Temp ids the server has answered, and the real ids they became.
+    public internal(set) var tempToReal: [String: JSONValue] = [:]
 
     public init(records: [LogRecord], meta: [String: JSONValue] = [:], lastEventID: Int = 0) {
         self.meta = meta
@@ -35,6 +40,8 @@ public struct LiveLog: Sendable, Equatable {
             if eid <= highWater { return false }
             highWater = eid
         }
+        // My own op, echoed before (or instead of) its POST answer: settle it here.
+        if let opID = op["op_id"]?.stringValue, pending[opID] != nil { settlePending(opID, with: op) }
         let changes = LogState.recordChanges(op)
         for r in changes.puts { put(r) }
         for id in changes.drops { drop(id) }
@@ -43,7 +50,7 @@ public struct LiveLog: Sendable, Equatable {
         return !changes.puts.isEmpty || !changes.drops.isEmpty || !patch.isEmpty
     }
 
-    private mutating func put(_ r: LogRecord) {
+    mutating func put(_ r: LogRecord) {
         let id = r["session_instance_tune_id"]
         if let i = records.firstIndex(where: { $0["session_instance_tune_id"] == id }) {
             records[i] = r
@@ -52,7 +59,7 @@ public struct LiveLog: Sendable, Equatable {
         }
     }
 
-    private mutating func drop(_ id: JSONValue) {
+    mutating func drop(_ id: JSONValue) {
         records.removeAll { $0["session_instance_tune_id"] == id }
     }
 }

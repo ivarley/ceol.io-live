@@ -42,6 +42,8 @@ final class AppModel {
     /// The streaming service's address, from app-config (fetched once, when a night
     /// first goes live).
     var streamingURL: URL?
+    /// A night is being logged: the tab bar gives way to the composer.
+    var editingNight = false
 
     /// A session, in the Sessions tab.
     func openSession(path: String, name: String) {

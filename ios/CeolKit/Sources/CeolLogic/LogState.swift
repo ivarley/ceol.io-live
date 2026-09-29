@@ -18,7 +18,7 @@ extension JSONValue {
     /// session_instance_tune_id, as a RecordID.
     public var recordID: RecordID? { RecordID(self["session_instance_tune_id"]) }
     var orderPosition: String? { self["order_position"]?.stringValue }
-    var isBreak: Bool { self["record_type"] == .string("break") }
+    public var isBreak: Bool { self["record_type"] == .string("break") }
 }
 
 /// Where the insertion cursor stands (the JS `insertAfterId`): the end of the log,
