@@ -1666,6 +1666,12 @@ detail), in order:
    the written key stays the strong default and a wrong tune does not get
    twelve chances at a lucky match. Its runs also say how often this session
    plays a tune in another key than every setting.
+   *Corpus re-pulled 2026-09-29 (afternoon):* the player finished labelling
+   recording 140 (instance 499, 2026-09-17), which had 25 scored segments and
+   now has 86, and night 138 went from 37 to 62: 588 scored segments. The
+   same pull fetched a newer thesession.org dump (23,317 tunes, was 23,307);
+   indexes and aligner sequences are still built from the old one. Every
+   item-1 number is on the original 502 segment ids.
 2. **A night none of this was tuned on.** The player is labelling a recent
    night. Replay it raw on the board (the board never reads the labels; they
    only score it afterwards), with today's baseline, the three-tracker fusion
