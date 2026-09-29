@@ -1,0 +1,587 @@
+{
+  "_readme": [
+    "Who's there, in the live logger (spec 024 §F, spec 034): the loggers' colours",
+    "(PALETTE, by the persisted per-session index a roster entry carries as arrival_seq",
+    "and a record as logged_by_color), initials for the header avatars, whose colour a",
+    "logged tune carries (only someone else's), who else is typing, and how the",
+    "attendance picker groups a session's people (people rows from",
+    "/api/live/instances/{id}/people, in the server's order)."
+  ],
+  "constants": {
+    "PALETTE": [
+      "#4f9dff",
+      "#46d27a",
+      "#ef8b3d",
+      "#e0594b",
+      "#b07cff",
+      "#3fd0c9",
+      "#ff8fab",
+      "#9ab0c0"
+    ]
+  },
+  "functions": {
+    "colorFor": {
+      "params": [
+        "seq"
+      ],
+      "cases": [
+        {
+          "name": "the first",
+          "input": {
+            "seq": 0
+          },
+          "expected": "#4f9dff"
+        },
+        {
+          "name": "the last",
+          "input": {
+            "seq": 7
+          },
+          "expected": "#9ab0c0"
+        },
+        {
+          "name": "wraps past the end",
+          "input": {
+            "seq": 9
+          },
+          "expected": "#46d27a"
+        },
+        {
+          "name": "a negative index wraps too",
+          "input": {
+            "seq": -1
+          },
+          "expected": "#9ab0c0"
+        }
+      ]
+    },
+    "initials": {
+      "params": [
+        "name"
+      ],
+      "cases": [
+        {
+          "name": "first and last",
+          "input": {
+            "name": "Sarah O'Connor"
+          },
+          "expected": "SO"
+        },
+        {
+          "name": "first and last of several",
+          "input": {
+            "name": "Mary Kate  Quinn"
+          },
+          "expected": "MQ"
+        },
+        {
+          "name": "one word: two letters",
+          "input": {
+            "name": "ian"
+          },
+          "expected": "IA"
+        },
+        {
+          "name": "one letter",
+          "input": {
+            "name": "Q"
+          },
+          "expected": "Q"
+        },
+        {
+          "name": "nothing",
+          "input": {
+            "name": "  "
+          },
+          "expected": "?"
+        },
+        {
+          "name": "null",
+          "input": {
+            "name": null
+          },
+          "expected": "?"
+        },
+        {
+          "name": "accented",
+          "input": {
+            "name": "Éamonn Ó Súilleabháin"
+          },
+          "expected": "ÉS"
+        }
+      ]
+    },
+    "loggerColorIdx": {
+      "params": [
+        "r",
+        "myPersonId",
+        "roster"
+      ],
+      "cases": [
+        {
+          "name": "my own row: none",
+          "input": {
+            "r": {
+              "logged_by_person_id": 1,
+              "logged_by_color": 2
+            },
+            "myPersonId": 1,
+            "roster": [
+              {
+                "person_id": 5,
+                "arrival_seq": 3
+              },
+              {
+                "person_id": 6,
+                "arrival_seq": 1
+              }
+            ]
+          },
+          "expected": null
+        },
+        {
+          "name": "someone else's: their saved colour",
+          "input": {
+            "r": {
+              "logged_by_person_id": 5,
+              "logged_by_color": 2
+            },
+            "myPersonId": 1,
+            "roster": [
+              {
+                "person_id": 5,
+                "arrival_seq": 3
+              },
+              {
+                "person_id": 6,
+                "arrival_seq": 1
+              }
+            ]
+          },
+          "expected": 2
+        },
+        {
+          "name": "no saved colour: the roster's",
+          "input": {
+            "r": {
+              "logged_by_person_id": 6,
+              "logged_by_color": null
+            },
+            "myPersonId": 1,
+            "roster": [
+              {
+                "person_id": 5,
+                "arrival_seq": 3
+              },
+              {
+                "person_id": 6,
+                "arrival_seq": 1
+              }
+            ]
+          },
+          "expected": 1
+        },
+        {
+          "name": "not on the roster either: none",
+          "input": {
+            "r": {
+              "logged_by_person_id": 9,
+              "logged_by_color": null
+            },
+            "myPersonId": 1,
+            "roster": [
+              {
+                "person_id": 5,
+                "arrival_seq": 3
+              },
+              {
+                "person_id": 6,
+                "arrival_seq": 1
+              }
+            ]
+          },
+          "expected": null
+        },
+        {
+          "name": "a colour 0 counts",
+          "input": {
+            "r": {
+              "logged_by_person_id": 5,
+              "logged_by_color": 0
+            },
+            "myPersonId": 1,
+            "roster": [
+              {
+                "person_id": 5,
+                "arrival_seq": 3
+              },
+              {
+                "person_id": 6,
+                "arrival_seq": 1
+              }
+            ]
+          },
+          "expected": 0
+        },
+        {
+          "name": "nobody known",
+          "input": {
+            "r": {},
+            "myPersonId": 1
+          },
+          "expected": null
+        },
+        {
+          "name": "signed out (no me)",
+          "input": {
+            "r": {
+              "logged_by_person_id": 1,
+              "logged_by_color": 4
+            },
+            "myPersonId": null,
+            "roster": []
+          },
+          "expected": 4
+        }
+      ]
+    },
+    "othersTyping": {
+      "params": [
+        "typers",
+        "myPersonId"
+      ],
+      "cases": [
+        {
+          "name": "everyone but me",
+          "input": {
+            "typers": [
+              {
+                "person_id": 1,
+                "name": "Ian Varley",
+                "arrival_seq": 0
+              },
+              {
+                "person_id": 5,
+                "name": "Sarah O",
+                "arrival_seq": 3
+              }
+            ],
+            "myPersonId": 1
+          },
+          "expected": [
+            {
+              "person_id": 5,
+              "name": "Sarah O",
+              "arrival_seq": 3
+            }
+          ]
+        },
+        {
+          "name": "just me",
+          "input": {
+            "typers": [
+              {
+                "person_id": 1,
+                "name": "Ian Varley",
+                "arrival_seq": 0
+              }
+            ],
+            "myPersonId": 1
+          },
+          "expected": []
+        },
+        {
+          "name": "nobody",
+          "input": {
+            "typers": null,
+            "myPersonId": 1
+          },
+          "expected": []
+        }
+      ]
+    },
+    "pickerTiers": {
+      "params": [
+        "people",
+        "query"
+      ],
+      "cases": [
+        {
+          "name": "checked in (archived or not), the rest, archived hidden",
+          "input": {
+            "people": [
+              {
+                "person_id": 1,
+                "display_name": "Aoife Kelly",
+                "attending": false,
+                "archived": false
+              },
+              {
+                "person_id": 2,
+                "display_name": "Brian Kelly",
+                "attending": true,
+                "archived": false
+              },
+              {
+                "person_id": 3,
+                "display_name": "Maura Nolan",
+                "attending": true,
+                "archived": true
+              },
+              {
+                "person_id": 4,
+                "display_name": "Seán Kelly",
+                "attending": false,
+                "archived": true
+              },
+              {
+                "person_id": 5,
+                "display_name": "Tom Byrne",
+                "attending": false,
+                "archived": false
+              }
+            ],
+            "query": ""
+          },
+          "expected": {
+            "here": [
+              {
+                "person_id": 2,
+                "display_name": "Brian Kelly",
+                "attending": true,
+                "archived": false
+              },
+              {
+                "person_id": 3,
+                "display_name": "Maura Nolan",
+                "attending": true,
+                "archived": true
+              }
+            ],
+            "roster": [
+              {
+                "person_id": 1,
+                "display_name": "Aoife Kelly",
+                "attending": false,
+                "archived": false
+              },
+              {
+                "person_id": 5,
+                "display_name": "Tom Byrne",
+                "attending": false,
+                "archived": false
+              }
+            ],
+            "archived": []
+          }
+        },
+        {
+          "name": "a search finds the archived too",
+          "input": {
+            "people": [
+              {
+                "person_id": 1,
+                "display_name": "Aoife Kelly",
+                "attending": false,
+                "archived": false
+              },
+              {
+                "person_id": 2,
+                "display_name": "Brian Kelly",
+                "attending": true,
+                "archived": false
+              },
+              {
+                "person_id": 3,
+                "display_name": "Maura Nolan",
+                "attending": true,
+                "archived": true
+              },
+              {
+                "person_id": 4,
+                "display_name": "Seán Kelly",
+                "attending": false,
+                "archived": true
+              },
+              {
+                "person_id": 5,
+                "display_name": "Tom Byrne",
+                "attending": false,
+                "archived": false
+              }
+            ],
+            "query": "kelly"
+          },
+          "expected": {
+            "here": [
+              {
+                "person_id": 2,
+                "display_name": "Brian Kelly",
+                "attending": true,
+                "archived": false
+              }
+            ],
+            "roster": [
+              {
+                "person_id": 1,
+                "display_name": "Aoife Kelly",
+                "attending": false,
+                "archived": false
+              }
+            ],
+            "archived": [
+              {
+                "person_id": 4,
+                "display_name": "Seán Kelly",
+                "attending": false,
+                "archived": true
+              }
+            ]
+          }
+        },
+        {
+          "name": "case-insensitive, trimmed",
+          "input": {
+            "people": [
+              {
+                "person_id": 1,
+                "display_name": "Aoife Kelly",
+                "attending": false,
+                "archived": false
+              },
+              {
+                "person_id": 2,
+                "display_name": "Brian Kelly",
+                "attending": true,
+                "archived": false
+              },
+              {
+                "person_id": 3,
+                "display_name": "Maura Nolan",
+                "attending": true,
+                "archived": true
+              },
+              {
+                "person_id": 4,
+                "display_name": "Seán Kelly",
+                "attending": false,
+                "archived": true
+              },
+              {
+                "person_id": 5,
+                "display_name": "Tom Byrne",
+                "attending": false,
+                "archived": false
+              }
+            ],
+            "query": "  NOLAN "
+          },
+          "expected": {
+            "here": [
+              {
+                "person_id": 3,
+                "display_name": "Maura Nolan",
+                "attending": true,
+                "archived": true
+              }
+            ],
+            "roster": [],
+            "archived": []
+          }
+        },
+        {
+          "name": "no match",
+          "input": {
+            "people": [
+              {
+                "person_id": 1,
+                "display_name": "Aoife Kelly",
+                "attending": false,
+                "archived": false
+              },
+              {
+                "person_id": 2,
+                "display_name": "Brian Kelly",
+                "attending": true,
+                "archived": false
+              },
+              {
+                "person_id": 3,
+                "display_name": "Maura Nolan",
+                "attending": true,
+                "archived": true
+              },
+              {
+                "person_id": 4,
+                "display_name": "Seán Kelly",
+                "attending": false,
+                "archived": true
+              },
+              {
+                "person_id": 5,
+                "display_name": "Tom Byrne",
+                "attending": false,
+                "archived": false
+              }
+            ],
+            "query": "zz"
+          },
+          "expected": {
+            "here": [],
+            "roster": [],
+            "archived": []
+          }
+        },
+        {
+          "name": "no people",
+          "input": {
+            "people": null,
+            "query": ""
+          },
+          "expected": {
+            "here": [],
+            "roster": [],
+            "archived": []
+          }
+        }
+      ]
+    },
+    "splitName": {
+      "params": [
+        "query"
+      ],
+      "cases": [
+        {
+          "name": "first and the rest",
+          "input": {
+            "query": "  Mary Kate  Quinn "
+          },
+          "expected": {
+            "first": "Mary",
+            "last": "Kate Quinn"
+          }
+        },
+        {
+          "name": "one name",
+          "input": {
+            "query": "Cher"
+          },
+          "expected": {
+            "first": "Cher",
+            "last": ""
+          }
+        },
+        {
+          "name": "nothing",
+          "input": {
+            "query": ""
+          },
+          "expected": {
+            "first": "",
+            "last": ""
+          }
+        }
+      ]
+    }
+  }
+}

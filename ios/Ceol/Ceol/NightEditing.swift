@@ -123,7 +123,9 @@ struct EditableLog: View {
                                     }
                                     onFocusComposer()
                                 },
-                                editing: model.composer.editingID == id)
+                                editing: model.composer.editingID == id,
+                                byColor: t["tune_id"].isTruthy && !t["_temp"].isTruthy
+                                    ? People.loggerColorIndex(t, me: model.me, roster: model.roster).map(Color.player) : nil)
                             .id(rowScrollID(id))
                         }
                         if endIsOpen && si == segments.count - 1 && ti == seg.tunes.count - 1 {
@@ -148,10 +150,8 @@ struct EditableLog: View {
         .onPreferenceChange(SeamFrames.self) { frames = $0 }
         .sensoryFeedback(.selection, trigger: model.drag?.activeKey)
         .sheet(item: Binding(get: { pickingStarterFor.map(StarterChoice.init) }, set: { pickingStarterFor = $0?.tunes })) { choice in
-            StarterPicker(model: model, onlyHere: false, current: setStarter(choice.tunes)) { person in
-                model.setStarter(of: choice.tunes, person: person)
-                openTray = nil
-            }
+            PersonPicker(model: model, mode: .starter(tunes: choice.tunes, current: setStarter(choice.tunes)))
+                .onDisappear { openTray = nil }
         }
     }
 
@@ -472,73 +472,6 @@ enum HomeRulesISO {
     }
 }
 
-/// Who started a set: tonight's check-ins first, then the session's regulars; the
-/// archived only when a search finds them (the web's PersonPicker for starters). The
-/// bulk Assign offers only tonight's check-ins, as on the web.
-struct StarterPicker: View {
-    @Environment(\.dismiss) private var dismiss
-    let model: NightModel
-    let onlyHere: Bool
-    let current: String?
-    let onPick: (JSONValue?) -> Void
-    @State private var filter = ""
-
-    var body: some View {
-        NavigationStack {
-            List {
-                if !model.peopleLoaded {
-                    ProgressView().frame(maxWidth: .infinity)
-                } else {
-                    let f = filter.trimmingCharacters(in: .whitespaces).lowercased()
-                    let match = { (p: JSONValue) in f.isEmpty || (p["display_name"]?.stringValue ?? "").lowercased().contains(f) }
-                    let here = model.people.filter { $0["attending"] == true && match($0) }
-                    let rest = onlyHere ? [] : model.people
-                        .filter { $0["attending"] != true && match($0) && (!f.isEmpty || $0["archived"] != true) }
-                        .sorted { ($0["recent_attendance_count"]?.intValue ?? 0) > ($1["recent_attendance_count"]?.intValue ?? 0) }
-                    Button("— Clear —") { choose(nil) }
-                        .foregroundStyle(CeolTokens.textMuted)
-                        .disabled(current == nil && !onlyHere)
-                    Section("Here tonight") {
-                        if here.isEmpty {
-                            Text("No one checked in yet.").foregroundStyle(CeolTokens.textMuted)
-                        }
-                        ForEach(here, id: \.self) { row($0) }
-                    }
-                    if !rest.isEmpty {
-                        Section("Regulars") { ForEach(rest, id: \.self) { row($0) } }
-                    }
-                }
-            }
-            .scrollContentBackground(.hidden)
-            .background(CeolTokens.drawerBg)
-            .searchable(text: $filter, placement: .navigationBarDrawer(displayMode: .always), prompt: "Filter players…")
-            .navigationTitle(onlyHere ? "Sets started by…" : "Started by")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
-        }
-        .ceolDrawer([.medium, .large])
-        .task { if !model.peopleLoaded { await model.loadPeople() } }
-    }
-
-    private func row(_ p: JSONValue) -> some View {
-        Button { choose(p) } label: {
-            HStack {
-                Text(p["display_name"]?.stringValue ?? "").foregroundStyle(CeolTokens.textColor)
-                Spacer()
-                if NightModel.starterName(p) == current {
-                    Image(systemName: "checkmark").foregroundStyle(CeolTokens.primary)
-                }
-            }
-        }
-        .accessibilityIdentifier("starter.person")
-    }
-
-    private func choose(_ p: JSONValue?) {
-        onPick(p)
-        dismiss()
-    }
-}
-
 /// The bottom of the screen in select mode: the count, all or none, and the actions.
 struct SelectionBar: View {
     let model: NightModel
@@ -684,6 +617,8 @@ struct EditableRow: View {
     var onEdit: () -> Void = {}
     /// Being edited in the box below (yellow, like a selection, without the actions).
     var editing = false
+    /// Someone else logged it: a faint border in their colour (the web's has-by).
+    var byColor: Color? = nil
 
     @State private var dx: CGFloat = 0
     static let removeAt: CGFloat = 110
@@ -717,6 +652,8 @@ struct EditableRow: View {
                     RoundedRectangle(cornerRadius: 6).fill(CeolTokens.insert.opacity(0.14))
                         .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(CeolTokens.insert, lineWidth: 1))
                         .shadow(color: CeolTokens.insert.opacity(0.18), radius: 6)
+                } else if let byColor {
+                    RoundedRectangle(cornerRadius: 6).strokeBorder(byColor.opacity(0.3), lineWidth: 1)
                 }
             }
             .overlay(alignment: .topTrailing) {
@@ -874,6 +811,10 @@ struct LogComposer: View {
                 .padding(.horizontal, 12).padding(.vertical, 8)
                 .background(CeolTokens.insert.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
             }
+            TypingLine(model: model)
+                .font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityIdentifier("typing")
             Suggestions(model: model, focused: focused.wrappedValue)
             HStack(spacing: 8) {
                 HStack(spacing: 0) {
@@ -913,6 +854,8 @@ struct LogComposer: View {
         // The box is locked while a placeholder waits; when it settles, the keyboard
         // comes back for the next tune.
         .onChange(of: c.resolving == nil) { _, free in if free { focused.wrappedValue = true } }
+        // Letting go of the box stops "typing…" for the others.
+        .onChange(of: focused.wrappedValue) { _, on in if !on { model.stopTyping() } }
     }
 
     @ViewBuilder private var trailing: some View {

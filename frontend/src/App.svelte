@@ -30,6 +30,7 @@
     cursorSegment as cursorSegmentOf, setTuneType, setTuneIds, likelyNext, nextMatchesInput,
     nextAssocKey, commitStep, resolution, withNotationResults,
   } from './composer.js'
+  import { colorFor, initials, loggerColorIdx as loggerColorIdxOf, othersTyping as othersTypingOf } from './people.js'
   import { listStatus, statusClass, planStatusOps, applyStatusLocally, NOT_ON_LIST } from './mylist.js'
   import { instanceTimeLabel } from './shared/format.js'
   import { resolveSegments, playbackStep, formatClock } from './shared/segments.js'
@@ -426,14 +427,7 @@
   // The UI infers a presence color from the arrival ordinal (spec 024 §F).
   // Player colors. Avoid yellow/gold — that's reserved for the seam / insertion point
   // / End-set (var(--insert)); a player tinted the same would read as the cursor.
-  const PALETTE = ['#4f9dff', '#46d27a', '#ef8b3d', '#e0594b', '#b07cff', '#3fd0c9', '#ff8fab', '#9ab0c0']
-  const colorFor = (seq) => PALETTE[((seq % PALETTE.length) + PALETTE.length) % PALETTE.length]
-  const initials = (name) => {
-    const words = (name || '').trim().split(/\s+/).filter(Boolean)
-    if (words.length === 0) return '?'
-    if (words.length === 1) return words[0].slice(0, 2).toUpperCase()
-    return (words[0][0] + words[words.length - 1][0]).toUpperCase()
-  }
+  // PALETTE, colorFor and initials live in people.js (pure, fixtured).
 
   function put(record) {
     if (!record) return
@@ -483,16 +477,10 @@
   // insert), else the live roster keyed on the logger's person_id (a present logger
   // whose color row didn't join — e.g. just assigned, or a freshly-settled add) — so
   // a row colors as soon as its logger is known, not only after a reload.
+  // Only OTHER people's rows are tinted — never my own. Solo session => nothing tinted
+  // (clean); multi-logger => color reads as "someone else logged this" (§F). people.js.
   function loggerColorIdx(r) {
-    // Only tint OTHER people's rows — never my own. Solo session => nothing tinted
-    // (clean); multi-logger => color reads as "someone else logged this" (§F).
-    if (r.logged_by_person_id != null && person && r.logged_by_person_id === person.person_id) return null
-    if (r.logged_by_color != null) return r.logged_by_color
-    if (r.logged_by_person_id != null) {
-      const p = roster.find((x) => x.person_id === r.logged_by_person_id)
-      if (p) return p.arrival_seq
-    }
-    return null
+    return loggerColorIdxOf(r, person ? person.person_id : null, roster)
   }
 
   // Inline per-row style: the logger's persisted color drives a subtle attribution
@@ -3150,7 +3138,7 @@
     composerHl = -1
   }
 
-  const othersTyping = $derived(typers.filter((t) => t.person_id !== person.person_id))
+  const othersTyping = $derived(othersTypingOf(typers, person ? person.person_id : null))
 
   let connSeq = 0 // guards against overlapping connect() calls leaking a stream
   let renderOnly = $state(false) // completed-log fast-path: rendered, no stream (hide status pill)

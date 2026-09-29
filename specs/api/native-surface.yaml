@@ -517,6 +517,10 @@ components:
               archived: { type: boolean }
               is_admin: { type: boolean }
               attending: { type: boolean }
+              # How often they come (the attendance picker orders by these).
+              attendance_count: { type: integer }
+              recent_attendance_count: { type: integer }
+              last_attended: { type: [string, "null"] }
     TuneSearch:
       type: object
       required: [success, tunes, count]
@@ -739,8 +743,21 @@ components:
       properties:
         success: { type: boolean }
         rejected: { type: boolean }
+        # e.g. not_found, target_deleted, invalid, people_tracking_off
         reason: { type: string }
+        message: { type: string }
+        op_id: { type: [string, "null"] }
+        op_type: { type: string }
         event_id: { type: integer }
+        duplicate: { type: boolean }
+        # attendance_add / attendance_remove / attendance_create_person: who.
+        person:
+          type: [object, "null"]
+          properties:
+            person_id: { type: integer }
+            first_name: { type: [string, "null"] }
+            last_name: { type: [string, "null"] }
+            display_name: { type: string }
     Token:
       type: object
       required: [success, token, token_type]

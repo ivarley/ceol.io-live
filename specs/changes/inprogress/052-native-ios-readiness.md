@@ -1884,3 +1884,21 @@ The plan (Phases 0-6) runs from here in `ios/`; see `ios/README.md` for the layo
     only, as on the web: the screens before a night (session lists) load from the
     server, so reaching a night with no signal needs them to have been opened first in
     this run (app-wide offline is not in this phase).
+  - **5e DONE 2026-09-29: who's there.** The web's people rules moved into
+    `frontend/src/people.js` (the palette, initials, a row's logger colour, who else is
+    typing, the attendance picker's tiers, splitting a typed name), which the logger
+    and `PersonPicker` now use; `people.fixtures.json` (29 cases) holds both clients to
+    it, ported as `CeolLogic.People`. The contract documents the people list's
+    attendance counts and the op result's `person`, `message` and `op_type`, with a new
+    test checking someone in and out. In the app, as on the web: the header shows each
+    person logging as their colour and initials (dimmed when away, a count for two
+    devices); the chevron (or a tap on the header) shows who's logging and who's
+    attending, with Manage; "X is typing…" shows above the box, and the app sends its
+    own typing (every 3s while typing, stopped on commit, clear, blur or leaving edit)
+    to the streaming service with its Bearer token; others' tunes carry a faint border
+    in their colour. One people picker does attendance (check in, check out, add
+    someone with name, email and instruments), a set's starter (checking them in
+    first, as the web does), and Assign. Attendance needs a connection, as on the web.
+    Not built: the web's activity toasts ("Sarah added The Kesh") and remote-change
+    flashes. A UI test has a second account connect and type over the API, then checks
+    someone in and out and adds someone, checking the server each time.

@@ -617,6 +617,32 @@ class TestResponsesMatchSchemas:
             conn.commit()
             conn.close()
 
+    def test_attendance_ops_validate(self, spec, native_client):
+        """Checking someone in and out from the logger: the op results carry who, and the
+        people list carries how often they come (the picker orders by it). Leaves the
+        night's attendance as it found it."""
+        import uuid
+
+        people = native_client.get("/api/live/instances/1/people").get_json()
+        self._validate(spec, spec["components"]["schemas"]["SessionPeople"], people)
+        assert all("recent_attendance_count" in p for p in people["people"])
+        absent = next(p for p in people["people"] if not p.get("attending"))
+        schema = spec["components"]["schemas"]["LiveOpResult"]
+        try:
+            added = native_client.post(
+                "/api/live/instances/1/ops",
+                json={"op_id": str(uuid.uuid4()), "op_type": "attendance_add", "person_id": absent["person_id"]},
+            ).get_json()
+            assert added["success"] and added["person"]["person_id"] == absent["person_id"]
+            self._validate(spec, schema, added)
+        finally:
+            removed = native_client.post(
+                "/api/live/instances/1/ops",
+                json={"op_id": str(uuid.uuid4()), "op_type": "attendance_remove", "person_id": absent["person_id"]},
+            ).get_json()
+        assert removed["success"] and removed["person"]["person_id"] == absent["person_id"]
+        self._validate(spec, schema, removed)
+
     def test_error_envelope(self, native_client):
         r = native_client.get("/api/resolve?path=/sessions/no/such/2020-01-01")
         assert r.status_code == 404

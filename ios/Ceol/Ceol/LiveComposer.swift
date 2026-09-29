@@ -70,6 +70,7 @@ final class LogComposerModel {
     }
 
     private func typed() {
+        night.typed(text)
         guard !quiet, resolving == nil else { return }
         ambiguous = false
         runSearch()
@@ -233,6 +234,7 @@ final class LogComposerModel {
         seq += 1
         search?.cancel()
         resolving = Resolving(text: q, placeholderID: id, cursor: night.cursor, seq: seq)
+        night.stopTyping()
         setText("")
         searching = false
     }

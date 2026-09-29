@@ -546,6 +546,8 @@ struct NightView: View {
     @FocusState private var composerFocused: Bool
     @State private var infoTune: TuneRef?
     @State private var assigning = false
+    @State private var detailsOpen = false
+    @State private var managingAttendance = false
     @State private var openTray: RecordID?
     @State private var scroll = ScrollPosition(edge: .top)
     @State private var scrollGeometry = ScrollGeometry(
@@ -646,9 +648,12 @@ struct NightView: View {
                 }
             }
         }
+        .sheet(isPresented: $managingAttendance) {
+            if let model { PersonPicker(model: model, mode: .attendance) }
+        }
         .sheet(isPresented: $assigning) {
             if let model {
-                StarterPicker(model: model, onlyHere: true, current: nil) { model.assignPicked(to: $0) }
+                PersonPicker(model: model, mode: .assign)
             }
         }
         .onChange(of: scenePhase) { _, phase in
@@ -672,14 +677,33 @@ struct NightView: View {
                         Text(b["session_name"]?.stringValue ?? "").font(.ceol(size: 24, weight: .semibold, relativeTo: .title2))
                             .foregroundStyle(CeolTokens.textColor)
                         Spacer(minLength: 8)
+                        PresenceAvatars(roster: model.roster)
                         LiveStatusPill(status: model.status)
                     }
                     if let name = log.meta["instance_name"]?.stringValue, !name.isEmpty {
                         Text(name).font(.ceol(size: 15, weight: .semibold)).foregroundStyle(CeolTokens.textColor)
                     }
-                    Text([log.meta["session_date"]?.stringValue, tuneCount == 0 ? nil : "\(tuneCount) tune\(tuneCount == 1 ? "" : "s") in \(sets.count) set\(sets.count == 1 ? "" : "s")"]
-                        .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
-                        .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
+                    HStack(alignment: .firstTextBaseline) {
+                        Text([log.meta["session_date"]?.stringValue, tuneCount == 0 ? nil : "\(tuneCount) tune\(tuneCount == 1 ? "" : "s") in \(sets.count) set\(sets.count == 1 ? "" : "s")"]
+                            .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
+                            .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
+                        Spacer(minLength: 4)
+                        // Tap the header for who's here, as on the web.
+                        Button { withAnimation(.easeOut(duration: 0.2)) { detailsOpen.toggle() } } label: {
+                            Image(systemName: "chevron.down").font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(CeolTokens.textMuted)
+                                .rotationEffect(.degrees(detailsOpen ? 180 : 0))
+                                .frame(width: 32, height: 24)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(detailsOpen ? "Hide who's here" : "Who's here")
+                        .accessibilityIdentifier("night.header")
+                    }
+                    if detailsOpen {
+                        NightPeopleDetails(model: model) { managingAttendance = true }
+                            .padding(.top, 8)
+                            .transition(.opacity)
+                    }
                     if !notes.isEmpty {
                         Text(notes).font(.ceolItalic(size: 15)).foregroundStyle(CeolTokens.textMuted)
                     }
@@ -693,6 +717,8 @@ struct NightView: View {
                 .padding(.horizontal, 20).padding(.vertical, 14)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(CeolTokens.headerBg.opacity(0.5))
+                .contentShape(Rectangle())
+                .onTapGesture { withAnimation(.easeOut(duration: 0.2)) { detailsOpen.toggle() } }
                 if model.editing {
                     EditableLog(
                         model: model, log: log, trackStarters: trackStarters,

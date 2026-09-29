@@ -597,30 +597,29 @@ final class CeolUITests: XCTestCase {
             XCTFail("the server never showed: \(what) — it has \(ours(try await live()))")
         }
         let before = try await live().compactMap { $0["session_instance_tune_id"] as? Int }
+        let wasHere = Set(((try await api.get("/api/live/instances/\(instanceID)/people")["people"] as? [[String: Any]]) ?? [])
+            .filter { ($0["attending"] as? Bool) == true }.compactMap { $0["person_id"] as? Int })
         // A set of our own at the end.
         if let last = try await live().last, (last["record_type"] as? String) == "tune" {
             _ = try await op(["op_type": "set_break", "action": "insert", "after_record_id": NSNull()])
         }
         for name in [a, b, c] { _ = try await op(["op_type": "add_tune", "name": name]) }
-        func cleanup() async {
-            // Every tune and break this test added.
-            let rs = (try? await live()) ?? []
-            let tunes = rs.filter { ($0["name"] as? String)?.hasSuffix(" \(n)") == true }.compactMap { $0["session_instance_tune_id"] as? Int }
-            if !tunes.isEmpty { _ = try? await op(["op_type": "remove_tunes", "record_ids": tunes]) }
-            for r in (try? await live()) ?? [] where (r["record_type"] as? String) == "break" {
-                if let id = r["session_instance_tune_id"] as? Int, !before.contains(id) {
-                    _ = try? await op(["op_type": "set_break", "action": "remove", "record_id": id])
-                }
+        addTeardownBlock {
+            await Self.clearAdded(api, instanceID, keeping: Set(before))
+            await Self.checkOutAdded(api, instanceID, keeping: wasHere)
+        }
+        try await selectModeSteps(a, b, c, waitFor: waitFor, ours: ours)
+    }
+
+    /// Check out whoever was checked in since `keeping` was taken (a teardown block).
+    static func checkOutAdded(_ api: TestAPI, _ instanceID: Int, keeping: Set<Int>) async {
+        let now = (try? await api.get("/api/live/instances/\(instanceID)/people")["people"] as? [[String: Any]]) ?? []
+        for p in now where (p["attending"] as? Bool) == true {
+            if let id = p["person_id"] as? Int, !keeping.contains(id) {
+                _ = try? await api.post("/api/live/instances/\(instanceID)/ops",
+                                        ["op_id": UUID().uuidString.lowercased(), "op_type": "attendance_remove", "person_id": id])
             }
         }
-
-        do {
-            try await selectModeSteps(a, b, c, waitFor: waitFor, ours: ours)
-        } catch {
-            await cleanup()
-            throw error
-        }
-        await cleanup()
     }
 
     @MainActor
@@ -688,7 +687,7 @@ final class CeolUITests: XCTestCase {
             let starter = app.buttons["tray.starter"]
             if starter.waitForExistence(timeout: 3) {
                 starter.tap()
-                let person = app.buttons.matching(identifier: "starter.person").firstMatch
+                let person = app.buttons.matching(identifier: "people.person").firstMatch
                 XCTAssertTrue(person.waitForExistence(timeout: 10))
                 snapshot("starter picker")
                 person.tap()
@@ -938,6 +937,125 @@ final class CeolUITests: XCTestCase {
         night.tap()
     }
 
+    /// Phase 5e: who's there. Sarah (a second account, over the API) opens the night to
+    /// log: her initials appear in the header, and when she types, "Sarah O'Connor is
+    /// typing…" shows above the box. From the header's details, someone is checked in and
+    /// out, and someone new is added; the server agrees each time.
+    @MainActor
+    func testWhoIsThere() async throws {
+        let api = try await TestAPI.signedIn(server: server)
+        let sarah = try await TestAPI.signedIn(server: server, email: "sarah.oconnor@example.com")
+        let nights = try await api.get("/api/sessions/austin/mueller/logs")
+        let years = (nights["sorted_years"] as? [Any])?.compactMap { "\($0)" } ?? []
+        let byYear = nights["instances_by_year"] as? [String: [[String: Any]]] ?? [:]
+        let newest = try XCTUnwrap(years.first.flatMap { byYear[$0]?.first })
+        let instanceID = try XCTUnwrap(newest["session_instance_id"] as? Int)
+        let config = try await api.get("/api/app-config")
+        let stream = try XCTUnwrap(config["streaming_base_url"] as? String)
+        func people() async throws -> [[String: Any]] {
+            (try await api.get("/api/live/instances/\(instanceID)/people")["people"] as? [[String: Any]]) ?? []
+        }
+        let before = try await people()
+        let wasHere = Set(before.filter { $0["attending"] as? Bool == true }.compactMap { $0["person_id"] as? Int })
+        addTeardownBlock {
+            // Leave attendance as it was: check out whoever this test checked in.
+            let now = (try? await api.get("/api/live/instances/\(instanceID)/people")["people"] as? [[String: Any]]) ?? []
+            for p in now where (p["attending"] as? Bool) == true {
+                if let id = p["person_id"] as? Int, !wasHere.contains(id) {
+                    _ = try? await api.post("/api/live/instances/\(instanceID)/ops",
+                                            ["op_id": UUID().uuidString.lowercased(), "op_type": "attendance_remove", "person_id": id])
+                }
+            }
+        }
+
+        // Sarah, logging: an edit connection held open.
+        var events = URLRequest(url: URL(string: "\(stream)/live/instances/\(instanceID)/events?mode=edit")!)
+        events.setValue("Bearer \(sarah.token)", forHTTPHeaderField: "Authorization")
+        events.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+        let held = Task {
+            if let (bytes, _) = try? await URLSession.shared.bytes(for: events) {
+                for try await _ in bytes {}
+            }
+        }
+        defer { held.cancel() }
+
+        let app = launch()
+        signIn(app)
+        openNewestMuellerNight(app)
+        let presence = app.descendants(matching: .any)["presence"]
+        XCTAssertTrue(presence.waitForExistence(timeout: 15))
+        let sarahAvatar = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "Sarah O")).firstMatch
+        XCTAssertTrue(sarahAvatar.waitForExistence(timeout: 10), "Sarah should show as logging")
+
+        // Typing: shown to those logging.
+        app.buttons["night.edit"].tap()
+        XCTAssertTrue(app.textFields["log.input"].waitForExistence(timeout: 5))
+        var typing = URLRequest(url: URL(string: "\(stream)/live/instances/\(instanceID)/typing")!)
+        typing.httpMethod = "POST"
+        typing.setValue("Bearer \(sarah.token)", forHTTPHeaderField: "Authorization")
+        typing.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        typing.httpBody = try JSONSerialization.data(withJSONObject: ["typing": true, "anchor": NSNull()])
+        _ = try await URLSession.shared.data(for: typing)
+        let line = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "is typing…")).firstMatch
+        XCTAssertTrue(line.waitForExistence(timeout: 10))
+        XCTAssertTrue(line.label.contains("Sarah"), line.label)
+        snapshot("typing")
+        typing.httpBody = try JSONSerialization.data(withJSONObject: ["typing": false, "anchor": NSNull()])
+        _ = try await URLSession.shared.data(for: typing)
+        XCTAssertTrue(line.waitForNonExistence(timeout: 10))
+        app.buttons["night.done"].tap()
+
+        // Attendance, from the header's details.
+        app.descendants(matching: .any)["night.header"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["attendance.manage"].waitForExistence(timeout: 10))
+        snapshot("details")
+        app.buttons["attendance.manage"].tap()
+        let absent = try XCTUnwrap(before.first { ($0["attending"] as? Bool) != true && ($0["archived"] as? Bool) != true })
+        let name = try XCTUnwrap(absent["display_name"] as? String)
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap()
+        search.typeText(name)
+        let row = app.buttons.matching(identifier: "people.person").containing(NSPredicate(format: "label CONTAINS %@", name)).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        row.tap()
+        func attending(_ id: Int) async throws -> Bool {
+            try await people().first { $0["person_id"] as? Int == id }?["attending"] as? Bool == true
+        }
+        let id = try XCTUnwrap(absent["person_id"] as? Int)
+        for _ in 0..<20 where !(try await attending(id)) { try await Task.sleep(for: .milliseconds(250)) }
+        let checkedIn = try await attending(id)
+        XCTAssertTrue(checkedIn, "checked in on the server")
+        // Check out again.
+        search.tap()
+        search.typeText(name)
+        let out = app.buttons.matching(identifier: "people.checkOut").firstMatch
+        XCTAssertTrue(out.waitForExistence(timeout: 5))
+        snapshot("attendance")
+        out.tap()
+        for _ in 0..<20 where try await attending(id) { try await Task.sleep(for: .milliseconds(250)) }
+        let stillIn = try await attending(id)
+        XCTAssertFalse(stillIn, "checked out on the server")
+
+        // Someone new.
+        let newName = "Zed Tester\(Int.random(in: 1000...9999))"
+        search.tap()
+        if search.buttons["Clear text"].exists { search.buttons["Clear text"].tap() }
+        search.typeText(newName)
+        XCTAssertTrue(app.buttons["people.add"].waitForExistence(timeout: 5))
+        app.buttons["people.add"].tap()
+        XCTAssertTrue(app.buttons["newPerson.add"].waitForExistence(timeout: 5))
+        app.buttons["newPerson.add"].tap()
+        var found = false
+        for _ in 0..<20 {
+            found = try await people().contains { ($0["display_name"] as? String) == newName && ($0["attending"] as? Bool) == true }
+            if found { break }
+            try await Task.sleep(for: .milliseconds(250))
+        }
+        XCTAssertTrue(found, "the new person, checked in")
+        app.buttons["people.done"].tap()
+    }
+
     /// Phase 3d: Me shows the profile and opens it to edit (cancelled: seed data stays put).
     @MainActor
     func testMeShowsTheProfile() throws {
@@ -1056,12 +1174,12 @@ struct TestAPI: Sendable {
     let server: String
     let token: String
 
-    static func signedIn(server: String) async throws -> TestAPI {
+    static func signedIn(server: String, email: String = "ian@ceol.io") async throws -> TestAPI {
         var r = URLRequest(url: URL(string: server + "/api/auth/login-password")!)
         r.httpMethod = "POST"
         r.setValue("application/json", forHTTPHeaderField: "Content-Type")
         r.setValue("ios/0.0.0 (ui-test)", forHTTPHeaderField: "X-Ceol-Client")
-        r.httpBody = try JSONSerialization.data(withJSONObject: ["email": "ian@ceol.io", "password": "password123"])
+        r.httpBody = try JSONSerialization.data(withJSONObject: ["email": email, "password": "password123"])
         let (data, _) = try await URLSession.shared.data(for: r)
         let body = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         return TestAPI(server: server, token: try XCTUnwrap(body?["token"] as? String))

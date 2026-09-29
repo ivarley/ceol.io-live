@@ -52,8 +52,11 @@ final class NightModel {
     private(set) var night: JSONValue?
     private(set) var status: Status = .connecting
     private(set) var loadError: String?
-    /// Who's logging right now (the stream's presence events), for the header.
+    /// Who's logging right now (the stream's presence events), for the header:
+    /// {person_id, arrival_seq (their colour), name, devices, away}.
     private(set) var roster: [JSONValue] = []
+    /// Who's typing a tune (the stream's typing events), me included.
+    private(set) var typers: [JSONValue] = []
 
     /// Logging, not just watching.
     private(set) var editing = false
@@ -307,6 +310,7 @@ final class NightModel {
                 self.failures += 1
                 self.status = .reconnecting
                 self.roster = []
+                self.typers = []
                 self.watchdog?.cancel()
                 // Reopen from where it left off, backing off: 1, 2, 5, 10 seconds.
                 let delay = [1.0, 2, 5, 10][min(self.failures - 1, 3)]
@@ -331,8 +335,14 @@ final class NightModel {
             }
         case "presence":
             roster = json["roster"]?.arrayValue ?? []
+        case "typing":
+            typers = json["typing"]?.arrayValue ?? []
         default:
-            break  // ping, typing: proof of life only
+            break  // ping: proof of life only
+        }
+        // Someone checked in or out: the attendance list changed.
+        if event.type == "op", json["op_type"]?.stringValue?.hasPrefix("attendance_") == true {
+            Task { await loadPeople() }
         }
     }
 
@@ -341,7 +351,10 @@ final class NightModel {
     /// Start or stop logging: the stream reopens in the new mode.
     func setEditing(_ on: Bool) {
         guard editing != on else { return }
-        if !on { composer.reset() }
+        if !on {
+            composer.reset()
+            stopTyping()
+        }
         editing = on
         selected = nil
         selecting = false
@@ -578,6 +591,87 @@ final class NightModel {
         guard !first.isEmpty else { return p["display_name"]?.stringValue ?? "" }
         if let last = p["last_name"]?.stringValue, let initial = last.first { return "\(first) \(initial)" }
         return first
+    }
+
+    /// Me, as the night knows me (for my own rows and my own typing).
+    var me: Int? { night?["current_person"]?["person_id"]?.intValue }
+
+    /// The session tracks attendance (spec 039); set starters need it too.
+    var trackAttendance: Bool { night?["track_attendance"]?.boolValue ?? true }
+
+    // MARK: - Typing (spec 024 §F): others see "X is typing…"
+
+    @ObservationIgnored private var typingSentAt: Date?
+
+    /// The box's text changed: say so at most every 3 seconds (the server forgets after
+    /// 10), and say when it's empty again.
+    func typed(_ text: String) {
+        guard editing else { return }
+        if text.trimmingCharacters(in: .whitespaces).isEmpty {
+            stopTyping()
+        } else if typingSentAt.map({ Date().timeIntervalSince($0) > 3 }) ?? true {
+            typingSentAt = Date()
+            Task { await sendTyping(true) }
+        }
+    }
+
+    /// Committed, cleared, or the box let go.
+    func stopTyping() {
+        guard typingSentAt != nil else { return }
+        typingSentAt = nil
+        Task { await sendTyping(false) }
+    }
+
+    private func sendTyping(_ on: Bool) async {
+        guard !app.simulatedOffline, let base = try? await app.streamingBase() else { return }
+        var request = app.authorized(URLRequest(url: base.appending(path: "live/instances/\(instanceID)/typing")))
+        request.httpMethod = "POST"
+        request.timeoutInterval = 10
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        // The anchor is the log's last row, as the web sends it.
+        let anchor = log?.ordered.last?["session_instance_tune_id"] ?? .null
+        request.httpBody = try? JSONEncoder().encode(JSONValue.object(["typing": .bool(on), "anchor": anchor]))
+        _ = try? await URLSession.shared.data(for: request)  // best effort
+    }
+
+    // MARK: - Attendance (spec 034): needs a connection, as on the web
+
+    func checkIn(_ person: JSONValue) async {
+        guard let id = person["person_id"]?.intValue else { return }
+        await attendanceOp(["op_type": "attendance_add", "person_id": JSONValue(id)], label: "Check in")
+    }
+
+    func checkOut(_ person: JSONValue) async {
+        guard let id = person["person_id"]?.intValue else { return }
+        await attendanceOp(["op_type": "attendance_remove", "person_id": JSONValue(id)], label: "Remove")
+    }
+
+    /// Add someone new to the session, checked in. Returns them.
+    @discardableResult
+    func createPerson(first: String, last: String, email: String, instruments: [String]) async -> JSONValue? {
+        await attendanceOp(
+            [
+                "op_type": "attendance_create_person", "first_name": .string(first), "last_name": .string(last),
+                "email": email.isEmpty ? .null : .string(email), "instruments": .array(instruments.map(JSONValue.string)),
+            ], label: "Add person")
+    }
+
+    @discardableResult
+    private func attendanceOp(_ fields: [String: JSONValue], label: String) async -> JSONValue? {
+        var body = fields
+        body["op_id"] = .string(LiveLog.newOpID())
+        do {
+            let (code, answer) = try await app.postJSON("/api/live/instances/\(instanceID)/ops", body: .object(body))
+            if code != 200 || answer["success"] == false {
+                notice = answer["message"]?.stringValue ?? answer["error"]?.stringValue ?? "\(label) didn't work."
+                return nil
+            }
+            await loadPeople()
+            return answer["person"]
+        } catch {
+            notice = "You're offline — \(label.lowercased()) needs a connection."
+            return nil
+        }
     }
 
     func loadPeople() async {

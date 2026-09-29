@@ -33,6 +33,7 @@
   import SearchField from './SearchField.svelte'
   import List from './List.svelte'
   import Chip from './Chip.svelte'
+  import { pickerTiers, splitName } from '../people.js'
 
   let {
     open = $bindable(false),
@@ -62,34 +63,30 @@
   const heading = $derived(title || (mode === 'starter' ? 'Who started this set?' : 'Attendance'))
 
   const q = $derived(query.trim().toLowerCase())
-  const matches = (p) => !q || (p.display_name || '').toLowerCase().includes(q)
 
   /**
    * Flattened tiers. One List (it owns keyboard focus, and two would fight over it), with a
    * section label carried on the first row of each tier.
+   *
+   * Archived people are hidden from the DEFAULT list — but two things un-hide them: typing
+   * their name (hidden must never mean unfindable), and BEING CHECKED IN TONIGHT (checking
+   * Maura in must not make her vanish). The grouping is people.js pickerTiers (fixtured).
    */
   const items = $derived.by(() => {
     const out = []
     const push = (rows, tier, label) => {
       rows.forEach((p, i) => out.push({ ...p, _tier: tier, _label: i === 0 ? label : null }))
     }
-
-    // Archived people are hidden from the DEFAULT list — but two things un-hide them: typing
-    // their name (hidden must never mean unfindable), and BEING CHECKED IN TONIGHT.
-    //
-    // That second one matters. `archived` says "not currently around", so the moment someone
-    // checks Maura in she IS around, and she belongs under "Checked in". Without the
-    // `p.attending` clause she got checked in and then instantly vanished from the list —
-    // the write succeeded, but the UI swallowed her, which reads to the user as a no-op.
-    const visible = people.filter((p) => matches(p) && (!p.archived || q || p.attending))
-
+    const t = pickerTiers(people, query)
     if (scope === 'instance') {
-      // Attending wins over archived: if they're here, they're here.
-      push(visible.filter((p) => p.attending), 'here', 'Checked in')
-      const away = visible.filter((p) => !p.attending)
-      push(away.filter((p) => !p.archived), 'roster', 'Not checked in')
-      push(away.filter((p) => p.archived), 'archived', 'Archived')
+      push(t.here, 'here', 'Checked in')
+      push(t.roster, 'roster', 'Not checked in')
+      push(t.archived, 'archived', 'Archived')
     } else {
+      // Session scope has no check-ins: everyone visible, in the server's order, split
+      // only by archived.
+      const shown = new Set([...t.here, ...t.roster, ...t.archived])
+      const visible = people.filter((p) => shown.has(p))
       push(visible.filter((p) => !p.archived), 'roster', null)
       push(visible.filter((p) => p.archived), 'archived', 'Archived')
     }
@@ -101,9 +98,9 @@
   const noMatches = $derived(items.length === 0)
 
   function openCreate() {
-    const parts = query.trim().split(/\s+/)
-    newFirst = parts[0] || ''
-    newLast = parts.slice(1).join(' ')
+    const name = splitName(query)
+    newFirst = name.first
+    newLast = name.last
     newEmail = ''
     newInstruments = []
     newOther = ''
