@@ -263,10 +263,10 @@ def test_frontend_and_expert_produce_the_same_notes(lab_data):
         fe2 = get_frontend("yin", min_voiced=0.3, split_repeats=mode)
         expert = Notes(sources=["pitch_yin"], min_voiced=0.3, split_repeats=mode)
         direct = fe2.regrid([dict(long_note)], y, store.sr, t_offset_ms=5000)
-        viaboard = expert._split([dict(long_note)], obs)
+        viaboard = expert._split([dict(long_note)], obs, expert._settings("pitch_yin"))
         assert [(n["t0_ms"], n["t1_ms"], n["midi"]) for n in direct] == \
                [(n["t0_ms"], n["t1_ms"], n["midi"]) for n in viaboard], mode
-    pieces = expert._split([dict(long_note)], obs)
+    pieces = expert._split([dict(long_note)], obs, expert._settings("pitch_yin"))
     assert len(pieces) == 3, "grid mode splits every slot"
     assert all(n["t1_ms"] > n["t0_ms"] for n in pieces)
 
@@ -449,3 +449,44 @@ def test_the_board_and_the_bench_drop_the_same_out_of_key_notes():
     board = Intervals()._in_key([dict(n) for n in notes])
     assert [n["midi"] for n in bench] == [n["midi"] for n in board]
     assert len(board) == len(notes) - 2, "D# and G# go, C and C# stay"
+
+
+def test_the_board_fuses_pitch_sources_as_the_bench_fuses_front_ends(lab_data):
+    """Several trackers on the board are fused in one flat sum over every
+    source's readings, the bench's own `fuse`; a stale source is left out."""
+    from types import SimpleNamespace
+
+    from lab.bench.retrieval import fuse
+    from lab.board.board import Board
+    from lab.engine.run import execute
+    from lab.experts.matcher import Matcher
+
+    cfg = _config()
+    cfg["experts"].insert(2, {"name": "pulse"})
+    with Board() as board:
+        run_id = execute(cfg, RECORDING_ID, board=board, quiet=True)
+        seqs = board.observations(run_id, types=["interval_sequence"])
+    a, b = seqs[-1].payload, seqs[len(seqs) // 2].payload
+    matcher = Matcher(candidate_set="repertoire", top_k=5, fuse_sources=["one", "two"])
+    matcher.rank_fused("one", SimpleNamespace(t_end_ms=10000, payload=a))
+    got = [r["tune_id"] for r in matcher.rank_fused("two", SimpleNamespace(t_end_ms=12000, payload=b))]
+    want = [r["tune_id"] for r in fuse(matcher.readings(a) + matcher.readings(b), method="sum")[:5]]
+    assert got == want
+    alone = [r["tune_id"] for r in matcher.rank_fused("two", SimpleNamespace(t_end_ms=30000, payload=b))]
+    assert alone == [r["tune_id"] for r in fuse(matcher.readings(b), method="sum")[:5]]
+
+
+def test_a_front_end_tracker_on_the_board_reads_the_bench_track_and_note_settings():
+    """The board's PESTO and Basic Pitch experts are the front ends' own
+    tracker and note settings, not copies."""
+    from lab.experts.notes import Notes
+    from lab.frontends import get_frontend
+
+    notes = Notes(sources=["pitch_yin", "pitch_basic_pitch", "pitch_pesto"])
+    for name in ("yin", "basic_pitch", "pesto"):
+        fe = get_frontend(name)
+        got = notes._settings(f"pitch_{name}")
+        for k in Notes.SETTINGS:
+            assert got[k] == fe.params[k], (name, k)
+    # what a config sets on purpose still wins
+    assert Notes(min_voiced=0.3)._settings("pitch_pesto")["min_voiced"] == 0.3

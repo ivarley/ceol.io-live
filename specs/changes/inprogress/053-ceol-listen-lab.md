@@ -422,7 +422,7 @@ anything the harness could have discovered on its own.
 
 ### Where it stands
 
-As of 2026-09-25, on branch `053-ceol-listen-lab`.
+As of 2026-09-29, on branch `053-ceol-listen-lab`.
 
 On the retrieval bench, 502 segments over eight nights (recordings 1, 2, 3,
 4, 5, 138, 139, 140), the first two minutes of each:
@@ -439,8 +439,22 @@ On the retrieval bench, 502 segments over eight nights (recordings 1, 2, 3,
 | and the previous tune pulling by how predictable its follower is | 0.894 | 0.930 |
 | and 2/4 read in eighths, tuplets applied, one placement for both sides | 0.890 | 0.932 |
 | and heard notes outside the key and its modal neighbour dropped | 0.896 | 0.932 |
-| and yin fused with Basic Pitch and PESTO | **0.918** | **0.944** |
+| and yin fused with Basic Pitch and PESTO | 0.918 | 0.944 |
+| the three, aligned against each shortlisted tune, audio alone (no prior) | **0.982** | **0.982** |
 | the session's transitions alone, no audio | 0.245 | 0.368 |
+
+**Read every bench number with its scope.** The bench is handed each tune cut
+to its labelled boundaries: it never hears the chat between sets, the end of
+the previous tune or a tune starting partway through its window, and it
+chooses among the session's 1,279-tune repertoire. The live board, which
+hears the raw night and finds its own boundaries, is at 0.819 (below). Every
+setting in the lab was chosen on these eight nights, so a night none of them
+has seen is the honest test, and it has not been run yet.
+
+The aligner row is from 2026-09-29 (+35/-3 against the row above; at thirty
+seconds 0.950 / 0.968, against 0.763 / 0.859 without it, +95/-1); see "The
+aligner" below. Set decoding over the aligner's scores is broken for now and
+is not in that row.
 
 The last row is from 2026-09-28 (+16/-5 against the row above, p 0.03; at
 thirty seconds, audio alone, 0.687 to 0.763, +51/-13), below. The two before
@@ -1193,8 +1207,23 @@ Basic Pitch 0.906, of all three 0.922, and the sum fusion recovers most of
 that without choosing. The earlier fused number (0.867 against 0.867) was
 Basic Pitch version 1, audio alone, at 120 s, where fusion has least room;
 the gain lives at thirty seconds, which is where the live board answers.
-CREPE tiny is too weak to add anything and is not used. Fusing on the board
-needs a pitch expert for each tracker; none is there yet.
+CREPE tiny is too weak to add anything and is not used.
+
+**RMVPE, the tracker built for a melody over accompaniment, is the worst of
+them (2026-09-28).** Through `rmvpe-onnx` 0.2.3 on CoreML
+(`frontends/rmvpetrack.py`; the authors' singing weights, checked by SHA-256),
+6s per two minutes of audio. Labels: 41.2% of labelled time right with the
+gate open (0.05: 33.4%). Bench, audio alone, 30 s: 0.267 top-1 against yin's
+0.687 (+12/-223); yin + RMVPE 0.625 (+13/-44 against yin); added to yin, Basic
+Pitch and PESTO, 0.751 against 0.763 (+4/-10). Night by night it ranges from
+0.612 (night 3) to 0.101 (night 139). Checked as a possible bug before it was
+believed: its notes are as many and as long as yin's and PESTO's, peak
+normalising the input changes nothing (frame agreement with yin 0.38-0.49
+either way), and CoreML and the CPU agree (0.1% of frames more than half a
+semitone apart). On segments of night 139 it loses, it agrees with yin on
+38-49% of frames where PESTO agrees on 56-67%: it follows something else in
+the room, which for a model trained to find a voice over a band is not a
+surprise. Not used.
 
 ### Where a note starts, and why sung labels sounded late
 
@@ -1388,10 +1417,162 @@ held-out nights) rather than a number; a calibrator using the margin between
 the top two, how many recent updates agree and elapsed time is the way, and is
 deferred until accuracy is higher.
 
+### Three trackers on the board (2026-09-28)
+
+**The fused front end is better and steadier live.** The board now has a
+pitch expert for each bench front end's own tracker (`pitch_basic_pitch`,
+`pitch_pesto`, `pitch_rmvpe`: `FrontEnd.track` and `clean_track`, not a
+copy), the note expert cuts each source's notes with that front end's own
+settings (Basic Pitch's track is not split into repeats; PESTO has no
+voicing gate), unless the config sets one explicitly, and the matcher fuses
+the latest readings of every source with the bench's `fuse` (`fuse_sources`;
+a source more than 6 s stale is left out). Agreement tests for both in
+`test_engine.py`. The neural experts read 4 s windows on the 2 s hop rather
+than yin's 10 s: they need no long context, and 10 s windows five times over
+under nine parallel runs took PESTO from 3 s per two minutes of audio to 43 s
+and a night to about seven hours. `v2key`'s night 2 re-ran identically after
+these changes.
+
+All eight nights, 502 segments, against `v2key` (yin alone):
+
+| board | top-1 | top-5 | <30s | <60s | never | flips |
+|---|---|---|---|---|---|---|
+| yin | 0.769 | 0.876 | 12.0% | 49.8% | 17.7% | 4.14 |
+| yin + Basic Pitch + PESTO | **0.819** | **0.914** | **14.7%** | 48.6% | **14.9%** | **3.15** |
+
+Paired: top-1 +39/-14 (p 0.001), within 30s +28/-14 (p 0.04), ever right
++27/-13 (p 0.04), within 60s +33/-39 (p 0.56), fewer flips on 206 segments
+and more on 103. The first change in a while that is both better and
+steadier. Setup mistake caught before any number: a leftover explicit
+`min_voiced: 0.2` in the config would have gated PESTO, which on the bench
+scores 0.169 at that gate.
+
+### The aligner: matching that pays for one wrong note, not six (2026-09-28/29)
+
+**The largest gain the lab has measured.** The n-gram index counts shared
+six-note phrases, so one added ornament note (yin) or one lost note (the
+neural trackers) breaks every phrase spanning it. Tunepal and FolkFriend both
+match by alignment instead. `bench.retrieval.Aligner` re-ranks the index's
+shortlist that way:
+
+- **Both sides as the same sequences.** The heard notes as a run of eighth
+  notes on the estimated grid (unknown slots blank) and as changes of pitch
+  only (tempo-free); every setting of every candidate the same two ways, with
+  the index's own parser and eighth placement (`corpus/sequences.py`, cached).
+  Pitch classes, not intervals, so a wrong note costs one symbol, not two.
+- **Chunks, each placed anywhere.** The heard sequence is cut into chunks of
+  32 eighths or 24 pitch changes; each finds its best local alignment
+  (Smith-Waterman, `analysis/align.py`, numba: match +2, mismatch -1, gap -1,
+  a blank scores nothing) anywhere in the tune written twice over, since
+  repeats are not written out and a chunk may run across the end of a part.
+  A chunk of chat, a wrong part or the next tune scores near nothing and
+  costs nothing.
+- **Score and order.** Summed chunk scores as a share of the most the heard
+  notes could score; a candidate's best setting; averaged over readings and
+  trackers. "replace" orders the shortlist by this alone; "fuse" sums it with
+  the n-gram ranking.
+
+yin, audio alone, first 30 s, 502 segments, against 0.687 / 0.779:
+
+| aligner | top-1 | top-5 | top-1 paired |
+|---|---|---|---|
+| eighths, fused with the n-grams | 0.751 | 0.825 | +32/-0 |
+| pitch changes, fused | 0.729 | 0.811 | +21/-0 |
+| both, fused | 0.739 | 0.817 | +26/-0 |
+| eighths, replace | 0.835 | 0.845 | +77/-3 |
+| pitch changes, replace | 0.829 | 0.843 | +74/-3 |
+| both, replace, shortlist 25 | 0.843 | 0.847 | +78/-0 |
+| both, replace, shortlist 100 | 0.886 | 0.898 | +100/-0 |
+| both, replace, shortlist 300 | **0.902** | **0.922** | +108/-0 |
+
+With a 25-tune shortlist the right tune is on it for 87.1% of segments and the
+aligner puts it first for 84.3%, so the shortlist is the ceiling and a longer
+one lifts it. **Control:** each segment's shortlist aligned against the
+previous segment's heard notes gives 0.008 top-1 (shortlist 100), which is
+chance: the aligner is listening, and no leak or bias towards tunes with many
+settings is producing the gain. It costs 15 to 60 s a night on the bench.
+
+With the three trackers fused (both readings, replace, shortlist 300):
+
+| | top-1 | top-5 | paired |
+|---|---|---|---|
+| 30 s, without the aligner | 0.763 | 0.859 | |
+| 30 s, with it | **0.950** | **0.968** | +95/-1 |
+| 120 s, yin alone with it | 0.970 | 0.976 | +53/-1 against yin alone at 120 s |
+| 120 s, the three with it | **0.982** | **0.982** | +35/-3 against the 0.918 headline; +6/-0 against yin with it |
+
+At 120 s top-1 equals top-5: whenever the right tune is on the shortlist it is
+first, and the 9 remaining misses are the index not shortlisting it. At 30 s
+the misses were redone in `053 files/raising-accuracy.md`: 25 of 502, 17 of
+them reels, the right tune at rank 2-8 for 10, below 10 for 7, not shortlisted
+for 8; The Mason's Apron, the wrong answer in 19 of 41 misses under the
+n-grams, is the wrong answer in 2.
+
+**Set decoding over the aligner's scores is broken.** At 120 s the three
+trackers with the aligner and set decoding read 0.753 top-1 against 0.986
+top-5 (+17/-100 top-1 against the headline, +23/-2 top-5), yin alone 0.733 /
+0.980. The ranking is right and the decoder chooses wrongly among it: the
+prior's weight (`beta` 0.15) was set against the n-gram scores, and the
+aligner's are on another scale and far more decisive. Retune the weight, or
+convert the aligner's score to the scale the decoder expects, before set
+decoding and the aligner are used together.
+
+**Not yet measured:** against the full 23,307-tune corpus (both full indexes
+are rebuilt with parser 2 for it); a start that is not the labelled one; the
+board; tunes played in another key than all their settings (the aligner
+compares note names; `transpose=12` tries every key and is untested, and the
+player's better proposal is below).
+
+**An outside comparison, three clips.** irishtune.id (Alan Ng, launched
+2026-09) was given 30 s of three of these segments through the player's
+account: Paddy's Trip to Scotland (every tracker right), The Wise Maid (only
+the fusion right) and The Honeymoon (nothing right). It named none of them,
+each answer marked "HMM, MAYBE?"; it fingerprints in the browser and matches
+in 33-147 ms against 8,238 tunes, and its tips ask for one player close to
+the microphone. Three clips are an anecdote; it is built for a different
+recording than a session.
+
 ### Still open
 
-In rough order of what they are worth, as of 2026-09-25 (items added
-2026-09-26 are marked):
+**The plan, as of 2026-09-29**, merged with `053 files/raising-accuracy.md`
+(which holds the field survey, the miss analysis and the ten angles in
+detail), in order:
+
+1. **Finish measuring the aligner.** The full 23,307-tune corpus at 30 s. A
+   sloppy start: windows beginning up to 20 s before the labelled start, so
+   the query opens on the previous tune or the chat, to size how much of the
+   gain survives not being handed the boundary. Retune set decoding for the
+   aligner's scores. The player's key allowance: a tune may be played in
+   another key than its settings, tried outward round the circle of fifths
+   (the written key, then one fifth either way, then two, and never further;
+   a G tune is played in D or A, not A-flat), each step costing a little, so
+   the written key stays the strong default and a wrong tune does not get
+   twelve chances at a lucky match. Its runs also say how often this session
+   plays a tune in another key than every setting.
+2. **A night none of this was tuned on.** The player is labelling a recent
+   night. Replay it raw on the board (the board never reads the labels; they
+   only score it afterwards), with today's baseline, the three-tracker fusion
+   and the aligner on the board, and give the player the timeline to read
+   against what was played; the bench on its labelled segments beside it.
+3. **The aligner on the board, with sequential evidence.** The bench is at
+   0.95-0.98 and the board at 0.819: the board is the gap. Evidence
+   accumulated over the span, the prior as a fixed offset, a commit when the
+   top two are far enough apart; then the display's hold and short list
+   re-measured on top.
+4. **The aligner's cost model** (angles 2, 4 and 6 of the note, now one
+   project): metrical weight from the notated slot, a profile per tune from
+   its settings, fitted substitution and insertion costs. The near misses at
+   ranks 2-8 are what it is for.
+5. **Alternatives inside the alignment** (angles 3 and 5): a second-choice
+   pitch where trackers disagree, and the tune's own repeats as a consensus.
+6. **Research bets, lower now:** matching without transcribing, fine-tuning a
+   tracker on session audio, CoverHunterMPS as another expert.
+7. **Deferred by the player:** the calibrator (maybe / probably / certainly),
+   and the "this session plays it differently" report.
+
+The items below are older and are kept for their detail; where one is
+covered by the plan above, the plan is what is current. In rough order of
+what they were worth as of 2026-09-25 (items added later are marked):
 
 - **(2026-09-26) Extra notes against missed ones.** On forty hand-drawn bars
   yin adds 33 notes to 123 and salience_viterbi drops 14; a length threshold
@@ -1419,9 +1600,10 @@ In rough order of what they are worth, as of 2026-09-25 (items added
   follows when it is wrong is not settled, and the loudest-note melody is the
   first suspect, and it is ruled out: continuity and highest-note melodies
   both lose to it (above).
-  PESTO and CREPE are now built: PESTO fused with yin and Basic Pitch is the
-  new headline, CREPE tiny adds nothing (above). RMVPE (built for a melody
-  over accompaniment) is untried.
+  PESTO, CREPE and RMVPE are now built: PESTO fused with yin and Basic Pitch
+  is the new headline; CREPE tiny adds nothing and RMVPE takes away (above).
+  Every published pretrained tracker tried was trained on singing or on
+  synthesised monophonic audio; none has heard a session.
   2. Whole-segment notation alignment: the player segments many more
   sessions, each segment one tune, so the whole performance can be aligned
   to the notation with its repeats written out -- much stronger than the
@@ -1461,7 +1643,6 @@ In rough order of what they are worth, as of 2026-09-25 (items added
   still sit below anything a D whistle can play.
 - **Duration in the matcher.** The eighth-note reading carries duration only
   as repeated symbols; nothing scores rhythm directly.
-- Front-end fusion (several trackers) is a bench finding not on the board,
-  and since 2026-09-28 the largest one at thirty seconds (0.687 to 0.763);
+- Front-end fusion is on the board since 2026-09-28 (0.769 to 0.819, above);
   per-night variation (0.841 to 0.960 top-1 at the headline configuration) is wide and unexplained;
   nothing runs live.

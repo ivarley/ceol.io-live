@@ -61,6 +61,11 @@ def add_parser(sub):
                               "predicted_hard", "predicted_plausible"],
                      help="oracle: keep only candidates of the true tune type, to size "
                           "what a type classifier would be worth before building one")
+    ret.add_argument("--align", choices=["eighths", "notes", "both"],
+                     help="re-rank the shortlist by aligning the heard notes against each tune's")
+    ret.add_argument("--align-mode", default="fuse", choices=["fuse", "replace"])
+    ret.add_argument("--align-param", action="append", default=[], metavar="K=V",
+                     help="Aligner settings: shortlist, chunk_eighths, chunk_notes, transpose")
     ret.add_argument("--param", action="append", default=[], metavar="K=V")
     ret.add_argument("--no-save", action="store_true")
     ret.set_defaults(func=cmd_retrieval)
@@ -141,11 +146,17 @@ def cmd_retrieval(args):
 
     params = _parse_params(args.param)
     frontends = [get_frontend(name.strip(), **params) for name in args.frontend.split(",")]
+    aligner = None
+    if args.align:
+        from lab.bench.retrieval import Aligner
+
+        aligner = Aligner(reading=args.align, mode=args.align_mode,
+                          candidate_set=args.candidate_set, **_parse_params(args.align_param))
     result, rows = run_retrieval(
         frontends, recording_ids=_ids(args.recordings), candidate_set=args.candidate_set,
         n=args.n, seconds=args.seconds, prior=args.prior, beta=args.beta,
         fold_octaves=args.fold_octaves, particalized=args.particalized, type_filter=args.type_filter, fusion=args.fusion,
-        adaptive=args.adaptive)
+        adaptive=args.adaptive, aligner=aligner)
     print(format_retrieval(result, rows))
     if not args.no_save:
         print(f"  saved {result.save()}")

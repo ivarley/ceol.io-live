@@ -65,21 +65,34 @@ segment, looks the notes up, optionally applies the session's transitions,
 and scores top-1, top-5 and mean reciprocal rank. Pitch tracks are cached,
 so a full pass over 502 segments takes minutes.
 
-The headline configuration (0.918 top-1, 0.944 top-5 on 2026-09-28: yin,
-Basic Pitch and PESTO fused, parser version 2, the key filter on by default;
-a few minutes with pitch tracks cached, and PESTO and Basic Pitch need the
-Mac's GPU or much longer; indexes rebuild with `lab index --candidate-set
-repertoire -n 6 --fold-octaves [--particalized]`):
+The headline configuration (0.982 top-1, 0.982 top-5 on 2026-09-29: yin,
+Basic Pitch and PESTO fused, the aligner re-ranking a 300-tune shortlist,
+audio alone, first 120 seconds; about 15 minutes a night with pitch tracks
+cached, and Basic Pitch and PESTO need the Mac's GPU or much longer; indexes
+rebuild with `lab index --candidate-set repertoire -n 6 --fold-octaves
+[--particalized]`). The bench is handed each tune cut to its labelled
+boundaries, so this is not what the live board does on a raw night:
 
 ```bash
 lab bench retrieval --frontend yin,basic_pitch,pesto --fold-octaves --particalized --fusion sum \
-    -n 6 --seconds 120 --prior set_viterbi --beta 0.15 --candidate-set repertoire
+    -n 6 --seconds 120 --prior none --candidate-set repertoire \
+    --align both --align-mode replace --align-param shortlist=300
 ```
 
+Without the aligner, with set decoding (`--prior set_viterbi --beta 0.15`),
+it is 0.918 / 0.944. Do not combine the aligner with set decoding yet: the
+prior's weight was set against the n-gram scores and swamps the aligner's
+(0.753 top-1, 0.986 top-5).
 yin alone at the same settings is 0.896 / 0.932. `--param` applies to every
 fused front end, and one that does not have the parameter refuses it, so
 per-tracker settings live in each front end's defaults.
 
+- `--align eighths|notes|both` re-ranks the index's shortlist by aligning
+  the heard notes against each candidate's settings (`bench.retrieval.Aligner`,
+  `analysis/align.py`); `--align-mode replace` orders by alignment alone,
+  `fuse` sums it with the n-gram ranking; `--align-param shortlist=300` sets
+  how many candidates it sees (other keys: `chunk_eighths`, `chunk_notes`,
+  `transpose`).
 - `--prior none` is the audio alone.
 - `sequence` is an oracle, handed the true previous tune.
 - `sequence_self` chains the system's own top answer forward, which is what

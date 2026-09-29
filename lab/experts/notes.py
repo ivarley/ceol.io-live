@@ -41,10 +41,42 @@ class Notes(Expert):
                 # a `pulse` observation; without one this degrades to not
                 # splitting, which is the old behaviour.
                 "split_repeats": "attack", "split_min_slots": 1.6,
-                "split_tolerance": 0.12}
+                "split_tolerance": 0.12,
+                # A source that is a bench front end's tracker ("pitch_pesto")
+                # has its notes cut the way that front end cuts them, from the
+                # front end's own defaults, not from these; see _settings.
+                "settings_from_frontend": True}
+
+    SETTINGS = ("min_note_ms", "median_frames", "min_voiced", "fold_pitch_classes",
+                "split_repeats", "split_min_slots", "split_tolerance")
+
+    def __init__(self, **params):
+        # what a config set on purpose outranks a front end's default
+        self._explicit = set(params)
+        super().__init__(**params)
 
     def setup(self):
         self._emitted_to = {}
+        self._by_source = {}
+
+    def _settings(self, src):
+        """How to cut this source's notes. Basic Pitch's track is already notes
+        and is not split; PESTO has no usable voicing gate; yin's settings are
+        these defaults. Taken from the front end rather than copied into a
+        config, because copies are how the two loops have drifted before. A
+        parameter the config sets explicitly still wins."""
+        if src not in self._by_source:
+            settings = {k: self.params[k] for k in self.SETTINGS}
+            name = (src or "").removeprefix("pitch_")
+            if self.params["settings_from_frontend"]:
+                from lab.frontends import REGISTRY
+
+                if name in REGISTRY:
+                    fe = REGISTRY[name]()
+                    settings.update({k: fe.params[k] for k in self.SETTINGS
+                                     if k in fe.params and k not in self._explicit})
+            self._by_source[src] = settings
+        return self._by_source[src]
 
     def process(self, view, window):
         out = []
@@ -53,8 +85,9 @@ class Notes(Expert):
             src = track.payload.get("source")
             if self.params["sources"] and src not in self.params["sources"]:
                 continue
-            notes = self._segment(track.payload)
-            notes = self._split(notes, pulse)
+            settings = self._settings(src)
+            notes = self._segment(track.payload, settings)
+            notes = self._split(notes, pulse, settings)
             if not notes:
                 continue
             # A pitch expert reads long windows on a short hop, so every
@@ -75,7 +108,7 @@ class Notes(Expert):
                 {"source": src, "notes": fresh}, inputs=[track.obs_id]))
         return out
 
-    def _split(self, notes, pulse):
+    def _split(self, notes, pulse, settings):
         """Two eighths of one pitch look like one quarter to a run-length step.
 
         The corpus notates them as two notes, so the zero between them is a
@@ -84,7 +117,7 @@ class Notes(Expert):
         and the plain segmenter recovers 4.1%. Splitting them back is worth
         six and a half points of top-1 on the bench.
         """
-        if not notes or not pulse:
+        if not notes or not pulse or not settings["split_repeats"]:
             return notes
         from lab.frontends.grid import regrid_notes
 
@@ -93,11 +126,11 @@ class Notes(Expert):
             return notes
         return regrid_notes(
             notes, p["period_ms"], p["phase_ms"], attacks_ms=p.get("attacks_ms"),
-            mode=self.params["split_repeats"],
-            min_slots=self.params["split_min_slots"],
-            tolerance=self.params["split_tolerance"])
+            mode=settings["split_repeats"],
+            min_slots=settings["split_min_slots"],
+            tolerance=settings["split_tolerance"])
 
-    def _segment(self, payload):
+    def _segment(self, payload, settings):
         """Delegates to the one implementation, shared with the front ends.
 
         This used to be a second copy of the same logic, and the copies drifted:
@@ -108,10 +141,10 @@ class Notes(Expert):
         return notes_from_pitch(
             payload.get("times_ms") or [], payload.get("f0_hz") or [],
             payload.get("voiced_prob") or [],
-            min_note_ms=self.params["min_note_ms"],
-            median_frames=self.params["median_frames"],
-            min_voiced=self.params["min_voiced"],
-            fold_pitch_classes=self.params["fold_pitch_classes"])
+            min_note_ms=settings["min_note_ms"],
+            median_frames=settings["median_frames"],
+            min_voiced=settings["min_voiced"],
+            fold_pitch_classes=settings["fold_pitch_classes"])
 
 
 class Intervals(Expert):

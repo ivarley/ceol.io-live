@@ -128,7 +128,7 @@ def fuse(rankings, method="rrf", k=20):
 
 
 def ranked_for_segment(frontends, store, sha, t0, t1, index, board, audio_top,
-                       fusion="rrf", particalized_index=None):
+                       fusion="rrf", particalized_index=None, aligner=None):
     """Transcribe with each front end and fuse what the index says about each.
 
     With `particalized_index`, the same transcription is also read as a run of
@@ -141,25 +141,111 @@ def ranked_for_segment(frontends, store, sha, t0, t1, index, board, audio_top,
     tunes.
     """
     rankings, notes_all, cost_all, cached_all = [], [], 0.0, True
+    heard = []   # (notes, eighth slots or None) per front end, for the aligner
+    pulse = None
     for fe in frontends:
         notes, cost, cached = transcribe_segment(fe, store, sha, t0, t1, board=board)
         intervals = intervals_from_notes(notes, fold=index.fold_octaves)
         rankings.append(index.lookup(intervals, top_k=audio_top))
-        if particalized_index is not None and len(notes) >= 30:
+        slots = None
+        if (particalized_index is not None or aligner is not None) and len(notes) >= 30:
             from lab.analysis.notation import particalize
             from lab.analysis.pulse import estimate_pulse
             from lab.corpus.abc_pitch import interval_sequence
 
-            pulse = estimate_pulse(store.read(t0, t1), store.sr)
+            if pulse is None:
+                pulse = estimate_pulse(store.read(t0, t1), store.sr) or {}
             if pulse:
                 slots = particalize(notes, pulse["period_ms"], phase_ms=t0)
-                rankings.append(particalized_index.lookup(
-                    interval_sequence(slots, fold=particalized_index.fold_octaves),
-                    top_k=audio_top))
+                if particalized_index is not None:
+                    rankings.append(particalized_index.lookup(
+                        interval_sequence(slots, fold=particalized_index.fold_octaves),
+                        top_k=audio_top))
+        heard.append((notes, slots))
         notes_all.extend(notes)
         cost_all += cost
         cached_all = cached_all and cached
-    return fuse(rankings, method=fusion), notes_all, cost_all, cached_all
+    ranked = fuse(rankings, method=fusion)
+    if aligner is not None:
+        ranked = aligner.rerank(ranked, heard)
+    return ranked, notes_all, cost_all, cached_all
+
+
+class Aligner:
+    """Re-rank the n-gram shortlist by aligning what was heard against each
+    candidate's notes (`analysis.align`), as Tunepal and FolkFriend match.
+
+    `reading`: "eighths" (both sides as runs of eighth notes), "notes" (both
+    sides as changes of pitch, tempo-free) or "both". `mode`: "replace" orders
+    the shortlist by alignment alone; "fuse" sums it with the n-gram ranking
+    the way front ends are fused. `transpose`: 0 aligns in the written key; 12
+    also tries every transposition and keeps the best, for a tune played in
+    another key than its settings (untested).
+
+    Measured over 502 segments, audio alone, both readings, replace, 300-tune
+    shortlist: yin at 30 s 0.687 -> 0.902 top-1 (+108/-0); yin, Basic Pitch
+    and PESTO at 30 s 0.763 -> 0.950 (+95/-1), at 120 s 0.982. Replace beats
+    fuse (0.843 against 0.739 at a 25-tune shortlist) and the longer the
+    shortlist the better (0.843 / 0.886 / 0.902 at 25 / 100 / 300). Aligned
+    against the wrong segment's audio it scores 0.008. Not yet usable with
+    set decoding; see the spec, "The aligner".
+    """
+
+    def __init__(self, reading="eighths", mode="fuse", shortlist=25, chunk_eighths=32,
+                 chunk_notes=24, transpose=0, candidate_set="repertoire"):
+        from lab.corpus.sequences import TuneSequences
+
+        self.reading, self.mode, self.shortlist = reading, mode, shortlist
+        self.chunk_eighths, self.chunk_notes, self.transpose = chunk_eighths, chunk_notes, transpose
+        self.sequences = TuneSequences.load(candidate_set)
+
+    def params(self):
+        return {"reading": self.reading, "mode": self.mode, "shortlist": self.shortlist,
+                "chunk_eighths": self.chunk_eighths, "chunk_notes": self.chunk_notes,
+                "transpose": self.transpose}
+
+    def _queries(self, heard):
+        out = []
+        for notes, slots in heard:
+            if self.reading in ("notes", "both") and notes:
+                pcs = []
+                for n in notes:
+                    pc = int(round(n["midi"])) % 12
+                    if not pcs or pcs[-1] != pc:
+                        pcs.append(pc)
+                out.append(("notes", pcs))
+            if self.reading in ("eighths", "both") and slots:
+                out.append(("eighths", [-1 if p is None else int(p) % 12 for p in slots]))
+        return out
+
+    def score(self, tune_id, queries):
+        from lab.analysis.align import chunk_score
+
+        settings = self.sequences.by_tune.get(tune_id) or []
+        if not settings or not queries:
+            return 0.0
+        shifts = range(12) if self.transpose == 12 else (0,)
+        total = 0.0
+        for kind, q in queries:
+            chunk = self.chunk_eighths if kind == "eighths" else self.chunk_notes
+            best = 0.0
+            for _, eighths, plain in settings:
+                target = eighths if kind == "eighths" else plain
+                for k in shifts:
+                    best = max(best, chunk_score(q, target, chunk=chunk, transpose=k))
+            total += best
+        return total / len(queries)
+
+    def rerank(self, ranked, heard):
+        queries = self._queries(heard)
+        if not queries or not ranked:
+            return ranked
+        head, tail = ranked[:self.shortlist], ranked[self.shortlist:]
+        aligned = [{**r, "score": self.score(r["tune_id"], queries)} for r in head]
+        aligned.sort(key=lambda r: -r["score"])
+        if self.mode == "replace":
+            return aligned + tail
+        return fuse([head, aligned], method="sum") + tail
 
 
 def _apply_type_filter(ranked, seg, type_filter, type_probs):
@@ -243,7 +329,7 @@ def _blend(weights_by_prev, belief, floor=1e-4):
 
 def score_night(frontends, recording_id, index, seconds=DEFAULT_SECONDS, board=None,
                 top_k=25, quiet=True, prior="none", beta=1.0, belief_k=5,
-                type_filter="none", fusion="rrf", particalized_index=None):
+                type_filter="none", fusion="rrf", particalized_index=None, aligner=None):
     gt = load_ground_truth(recording_id)
     sequence = previous_of = None
     if prior != "none":
@@ -294,7 +380,9 @@ def score_night(frontends, recording_id, index, seconds=DEFAULT_SECONDS, board=N
             else:
                 ranked, notes, cost, cached = ranked_for_segment(
                     frontends, store, sha, t0, t1, index, board,
-                    audio_top=(200 if prior.startswith("sequence") else top_k), fusion=fusion, particalized_index=particalized_index)
+                    audio_top=max(200 if prior.startswith("sequence") else top_k,
+                                  aligner.shortlist if aligner is not None else 0),
+                    fusion=fusion, particalized_index=particalized_index, aligner=aligner)
                 intervals = []
                 if prior == "sequence":
                     weights = sequence.weights(previous_of.get(seg.session_instance_tune_id))
@@ -451,7 +539,7 @@ def summarise(rows):
 def score_night_set_decoded(frontends, recording_id, index, seconds=DEFAULT_SECONDS,
                             board=None, top_k=25, beta=1.0, audio_top=40,
                             type_filter="none", fusion="rrf", adaptive=False,
-                            particalized_index=None):
+                            particalized_index=None, aligner=None):
     """Score a night by decoding each set as a whole.
 
     Two passes: transcribe and rank every segment as usual, then group the
@@ -485,7 +573,9 @@ def score_night_set_decoded(frontends, recording_id, index, seconds=DEFAULT_SECO
             if t1 - t0 < 5000:
                 continue
             ranked, notes, cost, cached = ranked_for_segment(
-                frontends, store, sha, t0, t1, index, board, audio_top=audio_top, fusion=fusion, particalized_index=particalized_index)
+                frontends, store, sha, t0, t1, index, board,
+                audio_top=max(audio_top, aligner.shortlist if aligner is not None else 0),
+                fusion=fusion, particalized_index=particalized_index, aligner=aligner)
             ranked = _apply_type_filter(ranked, seg, type_filter, type_probs)
             prepared.append({"seg": seg, "ranked": ranked, "notes": notes,
                              "cost": cost, "cached": cached,
@@ -542,7 +632,7 @@ def score_night_set_decoded(frontends, recording_id, index, seconds=DEFAULT_SECO
 def run_retrieval(frontends, recording_ids=None, candidate_set="repertoire", n=5,
                   seconds=DEFAULT_SECONDS, quiet=False, prior="none", beta=1.0,
                   fold_octaves=False, belief_k=5, type_filter="none", fusion="rrf",
-                  adaptive=False, particalized=False):
+                  adaptive=False, particalized=False, aligner=None):
     from lab.corpus.index import Index
 
     index = Index.load(candidate_set, n=n, fold_octaves=fold_octaves)
@@ -559,12 +649,13 @@ def run_retrieval(frontends, recording_ids=None, candidate_set="repertoire", n=5
                 rows = score_night_set_decoded(frontends, rid, index, seconds=seconds,
                                                board=board, beta=beta, adaptive=adaptive,
                                                type_filter=type_filter, fusion=fusion,
-                                               particalized_index=particalized_index)
+                                               particalized_index=particalized_index,
+                                               aligner=aligner)
             else:
                 rows = score_night(frontends, rid, index, seconds=seconds, board=board,
                                    quiet=quiet, prior=prior, beta=beta, belief_k=belief_k,
                                    type_filter=type_filter, fusion=fusion,
-                                   particalized_index=particalized_index)
+                                   particalized_index=particalized_index, aligner=aligner)
             board.conn.commit()
             gt = load_ground_truth(rid)
             m = summarise(rows)
@@ -587,7 +678,8 @@ def run_retrieval(frontends, recording_ids=None, candidate_set="repertoire", n=5
                 "frontends": [f.name for f in frontends], "fusion": fusion,
                 "seconds": seconds, "prior": prior, "beta": beta,
                 "fold_octaves": fold_octaves, "type_filter": type_filter,
-                "adaptive": adaptive},
+                "adaptive": adaptive,
+                **({"align": aligner.params()} if aligner is not None else {})},
         features_version="audio", split="per-night",
         nights=nights, pooled=pooled, warnings=[],
         created_at=time.strftime("%Y-%m-%dT%H:%M:%S"), git_sha=git_sha(),

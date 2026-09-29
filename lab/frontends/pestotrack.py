@@ -25,7 +25,7 @@ Needs `pesto-pitch` (lab/requirements.txt), which brings torch.
 
 import numpy as np
 
-from lab.frontends.base import FrontEnd
+from lab.frontends.base import BandedFrontEnd, FrontEnd
 
 _MODELS = {}
 
@@ -41,12 +41,11 @@ def _model(name, sr):
     return _MODELS[key]
 
 
-class PestoFrontEnd(FrontEnd):
+class PestoFrontEnd(BandedFrontEnd):
     name = "pesto"
     version = "1"
     cost = 1.0
     TRACK_PARAMS = ("model",)
-    NOTE_PARAMS = FrontEnd.NOTE_PARAMS + ("fmin", "fmax")
 
     @classmethod
     def defaults(cls):
@@ -72,14 +71,3 @@ class PestoFrontEnd(FrontEnd):
         midi = semitones.cpu().numpy().astype(float)
         f0 = 440.0 * 2 ** ((midi - 69.0) / 12.0)
         return np.arange(f0.size) * 10.0, f0, conf.cpu().numpy().astype(float)
-
-    def notes_from_track(self, times_ms, f0_hz, voiced_prob, t_offset_ms=0):
-        # the pitch is blanked, not the voicing: with the gate open
-        # (min_voiced 0) a zero voicing still passes
-        outside = ~((f0_hz >= self.params["fmin"]) & (f0_hz <= self.params["fmax"]))
-        f0 = np.where(outside, np.nan, f0_hz)
-        return super().notes_from_track(times_ms, f0, voiced_prob, t_offset_ms=t_offset_ms)
-
-    def note_params(self):
-        # the band is applied here, not by the segmenter
-        return {k: v for k, v in super().note_params().items() if k not in ("fmin", "fmax")}

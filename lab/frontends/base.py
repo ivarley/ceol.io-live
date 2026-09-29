@@ -144,6 +144,31 @@ class FrontEnd:
         return hashlib.sha1(blob.encode()).hexdigest()
 
 
+class BandedFrontEnd(FrontEnd):
+    """A tracker with no search range of its own (PESTO, RMVPE), given yin's
+    band afterwards: frames outside `fmin`-`fmax` are blanked at the note
+    step, so sweeping the band costs no model run."""
+
+    NOTE_PARAMS = FrontEnd.NOTE_PARAMS + ("fmin", "fmax")
+
+    def clean_track(self, times_ms, f0_hz, voiced_prob):
+        """The band, applied to a track. Also called by the board's pitch
+        expert, so both loops read the same track."""
+        # the pitch is blanked, not the voicing: with the gate open
+        # (min_voiced 0) a zero voicing still passes
+        f0_hz = np.asarray(f0_hz, dtype=float)
+        outside = ~((f0_hz >= self.params["fmin"]) & (f0_hz <= self.params["fmax"]))
+        return times_ms, np.where(outside, np.nan, f0_hz), voiced_prob
+
+    def notes_from_track(self, times_ms, f0_hz, voiced_prob, t_offset_ms=0):
+        times_ms, f0, voiced_prob = self.clean_track(times_ms, f0_hz, voiced_prob)
+        return super().notes_from_track(times_ms, f0, voiced_prob, t_offset_ms=t_offset_ms)
+
+    def note_params(self):
+        # the band is applied by clean_track, not by the segmenter
+        return {k: v for k, v in super().note_params().items() if k not in ("fmin", "fmax")}
+
+
 def preprocess(y, sr, highpass_hz=None, lowpass_hz=None, hpss=None):
     """Shared input cleanup, so every front end can be tried with and without.
 

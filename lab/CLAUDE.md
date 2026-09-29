@@ -32,6 +32,10 @@ work happens in the other worktrees, never in this one.
   `lab/data/`, because `flake8 .` walks it.
 - Write every result into the spec, including negatives. Commit messages are
   long-form and carry the numbers.
+- A bench number is on tunes cut to their labelled boundaries, from the
+  session's repertoire, on nights every setting was tuned on. Say so whenever
+  one is quoted; the board on a raw night, and a night never tuned on, are
+  the numbers that stand for the product.
 
 ## Working with the player
 

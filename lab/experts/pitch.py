@@ -103,3 +103,61 @@ class PitchYin(_PitchExpert):
         rms = rms[:f0.size] if rms.size >= f0.size else np.pad(rms, (0, f0.size - rms.size))
         ref = np.percentile(rms, 90) or 1.0
         return f0, np.clip(rms / ref, 0.0, 1.0)
+
+
+class _PitchFromFrontEnd(_PitchExpert):
+    """A bench front end's own tracker, on the board.
+
+    One implementation for both loops: the track is `FrontEnd.track`, and
+    anything the front end does to the track before cutting notes
+    (`clean_track`, PESTO's band) is done here too. How that source's notes
+    are cut is the front end's as well; see `Notes._settings`.
+    """
+
+    FRONTEND = None
+
+    @classmethod
+    def defaults(cls):
+        return {"sr": 22050}
+
+    def setup(self):
+        from lab.frontends import get_frontend
+
+        self._fe = get_frontend(self.FRONTEND)
+        self.version = f"fe{self._fe.version}"
+
+    def _compute(self, view, window):
+        y = view.audio(window.t_start_ms, window.t_end_ms)
+        empty = {"source": self.name, "times_ms": [], "f0_hz": [], "voiced_prob": []}
+        if y.size < 2048:
+            return empty
+        times, f0, voiced = self._fe.track(y, self.params["sr"])
+        if hasattr(self._fe, "clean_track"):
+            times, f0, voiced = self._fe.clean_track(times, f0, voiced)
+        times, f0, voiced = (np.asarray(times, dtype=float), np.asarray(f0, dtype=float),
+                             np.asarray(voiced, dtype=float))
+        keep = np.isfinite(f0)
+        return {
+            "source": self.name,
+            "times_ms": [int(window.t_start_ms + t) for t in times[keep]],
+            "f0_hz": [round(float(v), 2) for v in f0[keep]],
+            "voiced_prob": [round(float(v), 3) for v in voiced[keep]],
+        }
+
+
+class PitchBasicPitch(_PitchFromFrontEnd):
+    name = "pitch_basic_pitch"
+    FRONTEND = "basic_pitch"
+    cost = 3.0
+
+
+class PitchPesto(_PitchFromFrontEnd):
+    name = "pitch_pesto"
+    FRONTEND = "pesto"
+    cost = 1.0
+
+
+class PitchRmvpe(_PitchFromFrontEnd):
+    name = "pitch_rmvpe"
+    FRONTEND = "rmvpe"
+    cost = 1.0

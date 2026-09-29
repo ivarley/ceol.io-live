@@ -30,3 +30,8 @@ pesto-pitch==2.0.1
 # CREPE through torchcrepe (lab/frontends/crepetrack.py). Pinned to the
 # version measured.
 torchcrepe==0.0.24
+
+# RMVPE through ONNX Runtime (lab/frontends/rmvpetrack.py); downloads the
+# model from Hugging Face once and checks its SHA-256. Pinned to the version
+# measured.
+rmvpe-onnx==0.2.3
