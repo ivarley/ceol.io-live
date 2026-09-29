@@ -453,8 +453,8 @@ has seen is the honest test, and it has not been run yet.
 
 The aligner row is from 2026-09-29 (+35/-3 against the row above; at thirty
 seconds 0.950 / 0.968, against 0.763 / 0.859 without it, +95/-1); see "The
-aligner" below. Set decoding over the aligner's scores is broken for now and
-is not in that row.
+aligner" below. Set decoding is not in that row: retuned for the aligner it is
+harmless and adds nothing measurable (2026-09-29, below).
 
 The last row is from 2026-09-28 (+16/-5 against the row above, p 0.03; at
 thirty seconds, audio alone, 0.687 to 0.763, +51/-13), below. The two before
@@ -1530,6 +1530,41 @@ aligner's are on another scale and far more decisive. Retune the weight, or
 convert the aligner's score to the scale the decoder expects, before set
 decoding and the aligner are used together.
 
+**Retuned, set decoding adds nothing to the aligner (2026-09-29).** Each
+set's aligned candidate lists were captured once (three trackers, both
+readings, replace, 300-tune shortlist, original 502 segments) and the
+decoder swept offline with the bench's own `decode_set`, over the prior's
+weight `beta`, with the emission as today's log of the aligner's score or as
+the score itself. The capture reproduces the 120 s run above except for 3
+segments in one set on night 4 (0.747 against 0.753), which fits the
+session's logged history having been re-pulled in between; the old history
+file was overwritten, so that is not confirmed.
+
+| | 120 s top-1 | paired against no prior | 30 s top-1 | paired against no prior |
+|---|---|---|---|---|
+| no prior, the aligner alone | 0.982 | | 0.950 | |
+| log, beta 0.15 (as before) | 0.747 | +2/-120 | 0.697 | +2/-129 |
+| log, beta 0.05 | 0.976 | +2/-5 | 0.948 | +5/-6 |
+| log, beta 0.01 | 0.982 | +1/-1 | **0.956** | +3/-0 (p 0.25) |
+| score itself, beta 0.01 | 0.982 | +1/-1 | 0.954 | +4/-2 |
+| weight chosen on seven nights, scored on the eighth | 0.980 | +0/-1 | 0.952 | +2/-1 |
+
+Nothing was broken except the weight: 0.15 is ten to fifteen times too much
+for the aligner's scores, and at 0.05 or below the decoder stops overruling
+the audio. But no weight helps. At 120 s top-1 already equals top-5, so there
+is nothing among the top few for the prior to reorder; at 30 s there are 9
+segments with the right tune at ranks 2-5 and the best weight recovers 3 of
+them, in-sample, which leave-one-night-out shrinks to +2/-1. Where the
+aligner is wrong it is usually confidently wrong or the tune is off the
+shortlist, and a prior of 0.245 top-1 on its own cannot outvote either.
+
+Not adopted on the bench. If set decoding is used with the aligner, `beta`
+0.01 with the log emission is the setting (harmless in both lengths). Where
+the prior could still earn its place is live: in the first seconds after a
+change, before the aligner has much to go on, which of the tunes usually
+follow is the only evidence. That belongs to plan item 3 and is measured
+there, not here.
+
 **Against the full corpus the gain holds (2026-09-29).** The same runs
 choosing among all 23,307 tunes (indexes and the sequence store rebuilt with
 parser 2; 55,387 settings), 30 s, audio alone, shortlist 300:
@@ -1658,8 +1693,9 @@ detail), in order:
    above.) Shortlist recall, which is now the ceiling on both candidate
    sets. A sloppy start: windows beginning up to 20 s before the labelled start, so
    the query opens on the previous tune or the chat, to size how much of the
-   gain survives not being handed the boundary. Retune set decoding for the
-   aligner's scores. The player's key allowance: a tune may be played in
+   gain survives not being handed the boundary (done: within 5 s keeps nearly
+   everything). Retune set decoding for the aligner's scores (done: harmless at
+   beta 0.01, worth nothing measurable). The player's key allowance: a tune may be played in
    another key than its settings, tried outward round the circle of fifths
    (the written key, then one fifth either way, then two, and never further;
    a G tune is played in D or A, not A-flat), each step costing a little, so

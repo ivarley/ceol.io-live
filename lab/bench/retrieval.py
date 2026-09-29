@@ -187,8 +187,11 @@ class Aligner:
     and PESTO at 30 s 0.763 -> 0.950 (+95/-1), at 120 s 0.982. Replace beats
     fuse (0.843 against 0.739 at a 25-tune shortlist) and the longer the
     shortlist the better (0.843 / 0.886 / 0.902 at 25 / 100 / 300). Aligned
-    against the wrong segment's audio it scores 0.008. Not yet usable with
-    set decoding; see the spec, "The aligner".
+    against the wrong segment's audio it scores 0.008. With set decoding,
+    `beta` 0.15 (tuned on the n-gram scores) swamps it (0.753 at 120 s);
+    0.01 is harmless and adds nothing measurable (30 s 0.950 -> 0.956, +3/-0;
+    +2/-1 with the weight chosen leave-one-night-out). See the spec, "The
+    aligner".
     """
 
     def __init__(self, reading="eighths", mode="fuse", shortlist=25, chunk_eighths=32,

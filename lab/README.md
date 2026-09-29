@@ -80,9 +80,10 @@ lab bench retrieval --frontend yin,basic_pitch,pesto --fold-octaves --particaliz
 ```
 
 Without the aligner, with set decoding (`--prior set_viterbi --beta 0.15`),
-it is 0.918 / 0.944. Do not combine the aligner with set decoding yet: the
-prior's weight was set against the n-gram scores and swamps the aligner's
-(0.753 top-1, 0.986 top-5).
+it is 0.918 / 0.944. With the aligner, set decoding at the
+default `--beta 0.15` swamps it (0.753 top-1); at `--beta 0.01` it is
+harmless and adds nothing measurable (0.956 against 0.950 at 30 s, +3/-0),
+so the headline leaves it out.
 yin alone at the same settings is 0.896 / 0.932. `--param` applies to every
 fused front end, and one that does not have the parameter refuses it, so
 per-tracker settings live in each front end's defaults.
