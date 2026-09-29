@@ -33,6 +33,9 @@ STREAM_PORT=8080
 # which is a miserable thing to debug. The e2e suite uses localhost too.
 HOST=localhost
 export STREAMING_BASE_URL="http://$HOST:$STREAM_PORT"
+# The e2e suite reuses this server, and one of its specs needs the test-only
+# pages app.py registers under this flag (see playwright.config.ts). Local only.
+export E2E_TEST_ROUTES=1
 DB_NAME=ceol_test
 DB_USER=test_user
 DB_PASS=test_password

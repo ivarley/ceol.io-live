@@ -301,6 +301,31 @@ class TestOrderingConsistency:
         # The logical order should match lexicographic sort
         assert positions == sorted(positions)
 
+    def test_repeated_inserts_after_the_same_anchor_use_the_suffix_room(self):
+        """The segmenter's pattern: every new tune goes after the last one and
+        before the same follower. Between adjacent keys the old midpoint just
+        appended 'V', so the key grew one character per insert and the 32nd tune
+        overflowed the VARCHAR(32) column (a 500 in production, Sept 2026). Now
+        the room in the suffix is used: about five inserts per character."""
+        before, after = "V", "W"
+        positions = []
+        for _ in range(120):
+            new_pos = generate_position_between(before, after)
+            assert before < new_pos < after
+            assert validate_position(new_pos)
+            positions.append(new_pos)
+            before = new_pos
+        assert positions == sorted(positions)
+        assert max(len(p) for p in positions) <= 32
+        assert len(positions[31]) <= 8  # the old code needed 33 characters here
+
+    def test_adjacent_with_a_longer_before_bisects_the_suffix(self):
+        assert generate_position_between("ni", "o") == "nr"
+        assert generate_position_between("Vk", "W") == "Vs"
+        assert generate_position_between("Vz", "W") == "VzV"
+        # A shorter `before` pads with '0' and starts the suffix at the midpoint.
+        assert generate_position_between("a", "a1") == "a0V"
+
     def test_repeated_inserts_at_same_point(self):
         """Repeated inserts at the same point don't cause issues."""
         # Start with two positions far apart

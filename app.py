@@ -687,6 +687,28 @@ def app_service_worker():
 app.add_url_rule("/sw.js", "app_service_worker", app_service_worker)
 
 
+# Test-only (E2E_TEST_ROUTES=1, set by playwright.config.ts): a page that answers a
+# NAVIGATION with a cacheable 301 to the wrong place but any other fetch with 200.
+# That is the shape of a stale redirect in a browser's HTTP cache — the thing the
+# service worker's healStaleRedirect exists for — and it cannot be staged from
+# Playwright alone: responses a route fulfills never enter Chromium's HTTP cache.
+# Never registered in production.
+if os.environ.get("E2E_TEST_ROUTES") == "1":
+
+    def e2e_stale_redirect():
+        if request.headers.get("Sec-Fetch-Mode") == "navigate":
+            resp = redirect("/help/sessions", code=301)
+            resp.headers["Cache-Control"] = "public, max-age=3600"
+            return resp
+        return (
+            "<!doctype html><title>healed</title><p>healed: the network answered 200</p>",
+            200,
+            {"Content-Type": "text/html; charset=utf-8"},
+        )
+
+    app.add_url_rule("/__e2e/stale-redirect", "e2e_stale_redirect", e2e_stale_redirect)
+
+
 # Minimal, self-contained offline fallback shown by the service worker when an
 # uncached page is requested with no connection. No template inheritance so it has
 # zero asset dependencies.

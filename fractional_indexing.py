@@ -182,15 +182,42 @@ def _midpoint(before: str, after: str) -> str:
         mid_val = (before_val + after_val) // 2
         return b[:diff_idx] + _int_to_char(mid_val)
     else:
-        # Adjacent characters - need to extend
-        if len(before) > diff_idx:
-            # 'before' has more characters - must extend it to stay greater
-            # e.g., before='ni', after='o' → return 'nii'
-            return before + _int_to_char(MIDPOINT)
-        else:
-            # 'before' ends at or before diff_idx - use padded prefix
-            # e.g., before='a', after='a1' → return 'a0i' (not 'ai' which > 'a1')
-            return b[:diff_idx + 1] + _int_to_char(MIDPOINT)
+        # Adjacent characters: no room at this index. Every key that fits shares
+        # before's prefix through diff_idx and then sorts above before's own
+        # suffix -- so bisect between that suffix and the top of the alphabet,
+        # the mirror of _generate_before.
+        #   before='ni', after='o'  → 'nr'  (midpoint of 'i'..top under 'n')
+        #   before='a',  after='a1' → 'a0V' (padded prefix 'a0', empty suffix)
+        # The old answer simply appended 'V' to `before`, which is correct but
+        # wastes all the room in the suffix: inserting repeatedly in the same
+        # gap grew the key by one character PER INSERT ('V','VV','VVV',...),
+        # and the segmenter -- which logs every tune after the last one, before
+        # the same follower -- hit the column's 32-character limit on the 32nd
+        # tune of a session. This keeps growth to about one character per five.
+        return b[:diff_idx + 1] + _generate_after(before[diff_idx + 1:])
+
+
+def _generate_after(before: str) -> str:
+    """Generate a position after `before` under the same prefix, bisecting
+    toward the top of the alphabet (the mirror of _generate_before).
+
+    Examples:
+        _generate_after('')   -> 'V'   (nothing to clear: the midpoint)
+        _generate_after('i')  -> 'r'   (midpoint of 'i'..top)
+        _generate_after('y')  -> 'z'
+        _generate_after('z')  -> 'zV'  (nothing above 'z' at this level: go deeper)
+        _generate_after('zz') -> 'zzV'
+    """
+    if not before:
+        return _int_to_char(MIDPOINT)
+
+    first_val = _char_to_int(before[0])
+    if first_val < BASE - 1:
+        # (first_val + BASE) // 2 > first_val whenever first_val <= BASE - 2, and a
+        # larger first character beats any suffix `before` may carry.
+        return _int_to_char((first_val + BASE) // 2)
+    # 'z' at this level: keep it and find room in the next.
+    return ALPHABET[-1] + _generate_after(before[1:])
 
 
 def validate_position(position: str) -> bool:

@@ -1524,6 +1524,56 @@ def test_remove_tunes_bulk_tombstones(client, authenticated_user, live_instance,
     assert all(r["deleted"] for r in res["records"])
 
 
+def test_tombstones_do_not_bound_new_keys(client, authenticated_user, live_instance, db_cursor):
+    """Remove the last tune, then keep logging after the one before it -- the
+    segmenter's mark / delete / mark rhythm. The dead row must not act as the
+    follower: every new key was bisected toward it, one character longer each
+    time, until one hit the column's 32-character limit (a 500 in production)."""
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        ids, _ = _seed_sets(client, inst, [["mvA", "mvB"]])
+        _op(client, inst, op_type="remove_tune", record_id=ids["mvB"])
+        anchor = ids["mvA"]
+        for i in range(12):
+            _, r = _op(client, inst, op_type="add_tune", name=f"after{i}", after_record_id=anchor)
+            anchor = r["record"]["session_instance_tune_id"]
+    live = _records(db_cursor, inst)
+    assert [r[2] for r in live] == ["mvA"] + [f"after{i}" for i in range(12)]
+    # Plain appends: single characters, not 'W', 'VV', 'VVV', ...
+    assert all(len(r[7]) == 1 for r in live)
+
+
+def test_restore_rekeys_a_tune_whose_key_was_reused(client, authenticated_user, live_instance, db_cursor):
+    """A tune logged while another was tombstoned may take its key (tombstones no
+    longer bound the gap). Restoring the tombstone puts it just BEFORE that tune --
+    it was logged first -- with a distinct key."""
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        ids, _ = _seed_sets(client, inst, [["mvA", "mvB"]])
+        _op(client, inst, op_type="remove_tunes", record_ids=[ids["mvB"]])
+        _, r = _op(client, inst, op_type="add_tune", name="mvC", after_record_id=ids["mvA"])
+        taken = {row[0]: row[7] for row in _records(db_cursor, inst, include_deleted=True)}
+        assert taken[r["record"]["session_instance_tune_id"]] == taken[ids["mvB"]]  # the collision
+        _, res = _op(client, inst, op_type="restore_tunes", record_ids=[ids["mvB"]])
+    assert res["success"] is True
+    assert _shape(db_cursor, inst) == ["mvA", "mvB", "mvC"]
+    keys = [row[7] for row in _records(db_cursor, inst)]
+    assert len(set(keys)) == 3 and keys == sorted(keys)
+
+
+def test_move_ignores_tombstones_at_the_destination(client, authenticated_user, live_instance, db_cursor):
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        ids, _ = _seed_sets(client, inst, [["mvA", "mvB", "mvC"]])
+        _op(client, inst, op_type="remove_tune", record_id=ids["mvC"])
+        _, res = _op(client, inst, op_type="move_tunes", record_ids=[ids["mvA"]], after_record_id=ids["mvB"])
+    assert res["success"] is True
+    assert _shape(db_cursor, inst) == ["mvB", "mvA"]
+    # Appended after mvB, not squeezed between mvB and the dead mvC.
+    keys = [row[7] for row in _records(db_cursor, inst)]
+    assert len(keys[-1]) == 1
+
+
 def test_remove_tunes_skips_already_deleted(client, authenticated_user, live_instance, db_cursor):
     inst = live_instance["instance_id"]
     with authenticated_user:

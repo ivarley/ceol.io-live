@@ -235,6 +235,13 @@ def _position_for(cur, session_instance_id, after_record_id, before_record_id=No
       - else after_record_id: insert just after it;
       - else append to the end.
     A vanished anchor degrades to append rather than dropping the op silently.
+
+    Only LIVE rows bound the gap. A tombstone keeps its key so restore can put it
+    back where it was, but it must not act as a neighbour: with tombstones counted,
+    removing the last tune and logging on bisected every later key toward the dead
+    row instead of appending -- the segmenter's mark/delete/mark rhythm did exactly
+    that and ran a key into the column's 32-character limit (Sept 2026). The price
+    is that a new key may equal a tombstone's; restore_tunes re-keys on collision.
     """
     if before_record_id is not None:
         cur.execute(
@@ -245,7 +252,8 @@ def _position_for(cur, session_instance_id, after_record_id, before_record_id=No
         if row:
             before_position = row[0]
             cur.execute(
-                "SELECT MAX(order_position) FROM session_instance_tune WHERE session_instance_id = %s AND order_position < %s",
+                "SELECT MAX(order_position) FROM session_instance_tune "
+                "WHERE session_instance_id = %s AND deleted = FALSE AND order_position < %s",
                 (session_instance_id, before_position),
             )
             pred = cur.fetchone()[0]  # None if before_record is the very first
@@ -263,13 +271,14 @@ def _position_for(cur, session_instance_id, after_record_id, before_record_id=No
 
     if after_position is None:
         cur.execute(
-            "SELECT MAX(order_position) FROM session_instance_tune WHERE session_instance_id = %s",
+            "SELECT MAX(order_position) FROM session_instance_tune WHERE session_instance_id = %s AND deleted = FALSE",
             (session_instance_id,),
         )
         return generate_append_position(cur.fetchone()[0])
 
     cur.execute(
-        "SELECT MIN(order_position) FROM session_instance_tune WHERE session_instance_id = %s AND order_position > %s",
+        "SELECT MIN(order_position) FROM session_instance_tune "
+        "WHERE session_instance_id = %s AND deleted = FALSE AND order_position > %s",
         (session_instance_id, after_position),
     )
     return generate_position_between(after_position, cur.fetchone()[0])
@@ -1172,9 +1181,8 @@ def _handle_move_tunes(cur, session_instance_id, data, user_id):
     moving = sorted(tunes + interior_breaks, key=lambda r: r[1])
     moving_ids = [r[0] for r in moving]
 
-    # Destination gap (pred_pos, succ_pos), excluding the moving rows. Tombstones
-    # still occupy positions (same convention as _position_for). A vanished anchor
-    # degrades to append.
+    # Destination gap (pred_pos, succ_pos), excluding the moving rows and, as in
+    # _position_for, tombstones. A vanished anchor degrades to append.
     def _pos_of(rid):
         cur.execute(
             "SELECT order_position FROM session_instance_tune "
@@ -1192,7 +1200,7 @@ def _handle_move_tunes(cur, session_instance_id, data, user_id):
             anchored = True
             cur.execute(
                 "SELECT MAX(order_position) FROM session_instance_tune "
-                "WHERE session_instance_id = %s AND order_position < %s "
+                "WHERE session_instance_id = %s AND deleted = FALSE AND order_position < %s "
                 "AND NOT (session_instance_tune_id = ANY(%s))",
                 (session_instance_id, succ_pos, moving_ids),
             )
@@ -1203,7 +1211,7 @@ def _handle_move_tunes(cur, session_instance_id, data, user_id):
             anchored = True
             cur.execute(
                 "SELECT MIN(order_position) FROM session_instance_tune "
-                "WHERE session_instance_id = %s AND order_position > %s "
+                "WHERE session_instance_id = %s AND deleted = FALSE AND order_position > %s "
                 "AND NOT (session_instance_tune_id = ANY(%s))",
                 (session_instance_id, pred_pos, moving_ids),
             )
@@ -1211,7 +1219,7 @@ def _handle_move_tunes(cur, session_instance_id, data, user_id):
     if not anchored:  # append (explicit, or degraded from a vanished anchor)
         cur.execute(
             "SELECT MAX(order_position) FROM session_instance_tune "
-            "WHERE session_instance_id = %s AND NOT (session_instance_tune_id = ANY(%s))",
+            "WHERE session_instance_id = %s AND deleted = FALSE AND NOT (session_instance_tune_id = ANY(%s))",
             (session_instance_id, moving_ids),
         )
         pred_pos = cur.fetchone()[0]
@@ -1310,7 +1318,11 @@ def _handle_remove_tunes(cur, session_instance_id, data, user_id):
 def _handle_restore_tunes(cur, session_instance_id, data, user_id):
     """Inverse of remove_tunes (spec 029 §E — first brick of the op/inverse-op undo
     pattern). Flips deleted back off for ids still tombstoned; positions were never
-    changed, so rows reappear exactly where they were. Live ids are skipped."""
+    changed, so rows reappear exactly where they were. Live ids are skipped.
+
+    One exception: a tune logged while this one was tombstoned may have taken its
+    key (tombstones don't bound the gap, see _position_for). Such a row is re-keyed
+    to sit just before the live row that holds its key -- it was logged first."""
     ids = data.get("record_ids")
     if not isinstance(ids, list) or not ids:
         raise OpRejected("invalid", "restore_tunes requires a non-empty record_ids list.")
@@ -1330,12 +1342,51 @@ def _handle_restore_tunes(cur, session_instance_id, data, user_id):
             "WHERE session_instance_tune_id = ANY(%s)",
             (user_id, target_ids),
         )
+        for rid in target_ids:
+            _rekey_if_collided(cur, session_instance_id, rid)
         # The delete may have un-enrolled these tunes (spec 045); putting the play
         # back puts the repertoire row back, so undo is a true round trip.
         session_id = _session_id_of(cur, session_instance_id)
         for tune_id in {r[1] for r in rows if r[1]}:
             _enroll_session_tune(cur, session_id, tune_id, user_id)
     return {"records": [_reselect(cur, rid) for rid in target_ids]}
+
+
+def _rekey_if_collided(cur, session_instance_id, record_id):
+    """If another live row holds this (just restored) row's key, move this row to
+    just before it: between the nearest live key below and the shared key."""
+    cur.execute(
+        "SELECT order_position FROM session_instance_tune WHERE session_instance_tune_id = %s",
+        (record_id,),
+    )
+    pos = cur.fetchone()[0]
+    cur.execute(
+        "SELECT 1 FROM session_instance_tune WHERE session_instance_id = %s AND deleted = FALSE "
+        "AND order_position = %s AND session_instance_tune_id <> %s LIMIT 1",
+        (session_instance_id, pos, record_id),
+    )
+    if cur.fetchone() is None:
+        return
+    cur.execute(
+        "SELECT MAX(order_position) FROM session_instance_tune WHERE session_instance_id = %s "
+        "AND deleted = FALSE AND order_position < %s",
+        (session_instance_id, pos),
+    )
+    below = cur.fetchone()[0]
+    try:
+        new_pos = generate_position_between(below, pos)
+    except ValueError:
+        # Nothing fits below a key of only 0s; go just after it instead.
+        cur.execute(
+            "SELECT MIN(order_position) FROM session_instance_tune WHERE session_instance_id = %s "
+            "AND deleted = FALSE AND order_position > %s",
+            (session_instance_id, pos),
+        )
+        new_pos = generate_position_between(pos, cur.fetchone()[0])
+    cur.execute(
+        "UPDATE session_instance_tune SET order_position = %s WHERE session_instance_tune_id = %s",
+        (new_pos, record_id),
+    )
 
 
 def _person_brief(cur, person_id):

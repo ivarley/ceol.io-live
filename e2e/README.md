@@ -23,7 +23,9 @@ The suite expects the seeded **`ceol_test`** database to be up (`make
 setup-test-db` / `./start`). `playwright.config.ts` starts **both** processes the
 app needs and reuses already-running ones locally: the Flask dev server on port
 3232 (override with `E2E_PORT`) and the **live-logging streaming sidecar** on
-8080 (`STREAMING_PORT`). The sidecar matters for any spec where a change must
+8080 (`STREAMING_PORT`). The Flask process is started with `E2E_TEST_ROUTES=1`, which
+registers the test-only fixture pages in `app.py` (`./start` sets it too, so a
+reused dev server has them; production never does). The sidecar matters for any spec where a change must
 reach a second client: without it the ops still commit and catch-up fills the
 gap, so the screen eventually looks right, but nothing arrives live. It reads
 `.env` itself, which is what keeps its session secret in step with Flask's — if

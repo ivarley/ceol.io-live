@@ -101,7 +101,9 @@ export default defineConfig({
       // limiter would trip partway through a run and fail whichever spec happened to
       // be next — a flake whose cause is nowhere near the failure. The limiter has
       // its own tests; here it is switched off.
-      env: { RATE_LIMIT_DISABLED: "1" },
+      // E2E_TEST_ROUTES registers the test-only pages in app.py (a stale-redirect
+      // fixture for the service worker spec); production never sets it.
+      env: { RATE_LIMIT_DISABLED: "1", E2E_TEST_ROUTES: "1" },
     },
     {
       command: "./venv/bin/python -m streaming.service",

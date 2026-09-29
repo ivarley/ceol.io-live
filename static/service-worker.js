@@ -30,6 +30,9 @@
 // awaits in rule 1 no longer sit in front of the network. It does NOT violate rule 1 —
 // the preload is browser-managed (cookies handled natively), and handleNav still
 // performs those awaits before consuming the response.
+// One more navigation wrinkle: a redirect answer is re-checked against the network
+// with the HTTP cache bypassed before it is handed back (healStaleRedirect), so a
+// stale cached 301 from a hostname change can't strand a returning visitor.
 // Data is never stored here.
 
 const VERSION = 'v35'
@@ -255,7 +258,8 @@ async function handleNav(req, event) {
   const uid = await currentUid()
   const cache = await caches.open(pagesCache(uid))
   try {
-    const res = (preload && (await preload)) || (await fetch(req))
+    let res = (preload && (await preload)) || (await fetch(req))
+    if (res && res.type === 'opaqueredirect') res = await healStaleRedirect(req, res)
     // Snapshot for offline — but never cache admin (excluded from offline support,
     // bar the segmenter) or pages the server marks X-Offline-Exclude (the legacy
     // editor). They still get the offline page on failure below; they just aren't
@@ -281,6 +285,32 @@ async function handleNav(req, event) {
     if (hit) return hit
     throw e
   }
+}
+
+// A same-origin navigation came back as a redirect. Usually that is genuine — a
+// login bounce, the trailing-slash canonicaliser — and the browser must follow it.
+// But it can also be a STALE redirect the browser's HTTP cache is replaying without
+// asking the network: Chrome keeps a 301 that carries no cache headers fresh
+// indefinitely, so when the canonical host flipped (www.ceol.io -> ceol.io, Sept
+// 2026) browsers that had once seen the old apex->www 301 kept following it, into
+// a loop with the new www->apex redirect, which behind a worker surfaces as a bare
+// ERR_FAILED. Only the network can tell the two apart, so ask it again with the
+// HTTP cache bypassed. A fresh, non-redirected page means the redirect was stale:
+// serve the page. Anything else (a genuine redirect, or no network at all) hands
+// back the original so the browser follows it exactly as it always did.
+async function healStaleRedirect(req, redirectRes) {
+  try {
+    const fresh = await fetch(req.url, {
+      cache: 'reload',
+      credentials: 'include',
+      redirect: 'manual',
+      headers: { Accept: req.headers.get('Accept') || 'text/html' },
+    })
+    if (fresh && fresh.ok && !fresh.redirected) return fresh
+  } catch (e) {
+    // Offline (or worse): fall through to the redirect we were given.
+  }
+  return redirectRes
 }
 
 // GET /api/* — network-first into the per-user API cache. Online always returns fresh

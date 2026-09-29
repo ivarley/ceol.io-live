@@ -65,6 +65,18 @@ inverse — the first brick of the op/inverse-op undo pattern).
 Each op carries a client-generated `op_id` (UUID) for idempotent retry. A rejected op
 returns `{rejected, reason}` rather than throwing (§E).
 
+**Positions.** An op names its place relationally (`after_record_id` / `before_record_id`);
+the referee turns that into an authoritative `order_position` (a fractional index,
+`fractional_indexing.py`, in a `VARCHAR(32)` column) by bisecting between the nearest
+**live** keys on either side. Tombstones keep their key so `restore_tunes` can put them
+back where they were, but they never bound the gap: counting them meant that removing the
+last tune and logging on bisected every later key toward the dead row, one character
+longer each time, which is how the segmenter's mark / delete / mark rhythm ran a key into
+the 32-character limit in September 2026. A new key may therefore equal a tombstone's;
+`restore_tunes` re-keys such a row to sit just before the live row holding its key. Keys
+that have already grown long are valid and harmless; `scripts/renumber_order_positions.py`
+reports the longest per instance and can repack one.
+
 ### Re-dating a log (spec 046)
 
 `set_date` moves `session_instance.date`. The motivating case is a session logged past
