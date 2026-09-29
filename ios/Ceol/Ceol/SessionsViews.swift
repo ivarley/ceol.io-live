@@ -173,6 +173,8 @@ struct SessionDetailView: View {
     @State private var addingNight = false
     @State private var editingRole = false
     @State private var aboutOpen = false
+    /// The session's details, folded under its band until tapped (as on the web).
+    @State private var infoOpen = false
     @State private var openTune: TuneRef?
     @State private var newNight: NewNight?
 
@@ -237,9 +239,34 @@ struct SessionDetailView: View {
         let tabs: [Tab] = d.permissions.canViewPeople ? Tab.allCases : [.tunes, .logs]
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text(d.session.name).font(.ceol(size: 28, weight: .semibold, relativeTo: .title))
-                    .foregroundStyle(CeolTokens.textColor)
-                    .padding(.horizontal, 20)
+                // The session's band, in the style of a night's header: its name and a
+                // chevron. The details fold away under it so the tabs sit right below
+                // the name; a tap opens them. The web's session page is the same.
+                Button { withAnimation(.easeOut(duration: 0.2)) { infoOpen.toggle() } } label: {
+                    HStack(spacing: 10) {
+                        Text(d.session.name).font(.ceol(size: 24, weight: .semibold, relativeTo: .title2))
+                            .foregroundStyle(CeolTokens.textColor)
+                            .multilineTextAlignment(.leading)
+                        Spacer(minLength: 8)
+                        Image(systemName: "chevron.right").font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(CeolTokens.textMuted)
+                            .rotationEffect(.degrees(infoOpen ? 90 : 0))
+                    }
+                    .padding(.horizontal, 14).padding(.vertical, 12)
+                    .background(Color(red: 0.11, green: 0.114, blue: 0.133), in: RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color(red: 0.204, green: 0.208, blue: 0.239), lineWidth: 1))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("session.band")
+                .accessibilityValue(infoOpen ? "details shown" : "details hidden")
+                .accessibilityHint("Shows the session's details")
+                .padding(.horizontal, 20)
+                if infoOpen {
+                    about(d)
+                        .padding(.horizontal, 20)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
                 // The one thing you came for mid-session: tonight's log.
                 ForEach(d.activeInstances, id: \.sessionInstanceId) { night in
                     NavigationLink(value: Route.night(id: night.sessionInstanceId, title: "\(d.session.name) · Tonight")) {
@@ -260,8 +287,6 @@ struct SessionDetailView: View {
                     .buttonStyle(.plain)
                     .padding(.horizontal, 20)
                 }
-                about(d)
-                    .padding(.horizontal, 20)
                 JoinPrompt(path: path, permissions: d.permissions) {
                     await load()
                     people = .loading
@@ -337,7 +362,7 @@ struct SessionDetailView: View {
                         .frame(maxWidth: .infinity, alignment: .trailing)
                 }
             }
-            if d.permissions.relationship != nil && !d.permissions.isConfirmed {
+            if d.permissions.relationship != nil && !d.permissions.isConfirmed && d.session.showPeopleList {
                 Text("A session admin can confirm you to show you who else plays here.")
                     .font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
             }
@@ -546,6 +571,9 @@ struct NightView: View {
         let records = b.records.compactMap { JSONValue(encoding: $0) }
         let sets = LogState.segmentByBreaks(LogState.computeOrdered(records))
         let tuneCount = sets.reduce(0) { $0 + $1.tunes.count }
+        // As the web logger: starters only where the session tracks them, which needs
+        // attendance too (spec 039). An older server doesn't say: on, as the web's default.
+        let trackStarters = (b.trackSetStarters ?? true) && (b.trackAttendance ?? true)
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 // The web's night header: the session, the date and a tally, the notes.
@@ -568,7 +596,7 @@ struct NightView: View {
                             .frame(maxWidth: .infinity).padding(.vertical, 32)
                     }
                     ForEach(Array(sets.enumerated()), id: \.offset) { i, set in
-                        SetCard(label: LogState.setLabel(set.tunes), starter: set.tunes.first?["started_by_name"]?.stringValue) {
+                        SetCard(label: LogState.setLabel(set.tunes), starter: trackStarters ? setStarter(set.tunes) : nil) {
                             ForEach(Array(set.tunes.enumerated()), id: \.offset) { _, t in
                                 Text(t["name"]?.stringValue ?? "Unknown tune")
                                     .font(.ceol(size: 19))
@@ -589,6 +617,12 @@ struct NightView: View {
         }
         .refreshable { await load() }
     }
+}
+
+/// A set's starter: the first of its tunes that names one (the web logger's
+/// setStarterName).
+func setStarter(_ tunes: [JSONValue]) -> String? {
+    tunes.lazy.compactMap { $0["started_by_name"]?.stringValue }.first
 }
 
 extension JSONValue {

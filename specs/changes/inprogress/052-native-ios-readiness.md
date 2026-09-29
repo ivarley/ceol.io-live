@@ -1782,3 +1782,13 @@ The plan (Phases 0-6) runs from here in `ios/`; see `ios/README.md` for the layo
     login email with no verification. The app doesn't use that endpoint.
   - The search row's buttons sat in one List row, so a tap on + could open the filter
     (and the reverse); they are borderless now.
+- **The session page's band (2026-09-29), web and app alike.** The session page opens on
+  a band with the session's name and a chevron, in the style of a night's header; the
+  details (role, place, schedule, about) fold away under it, so the Tunes / Logs /
+  People tabs sit right below the name. The web's admin link moved into the details as
+  "Admin page". The night's payload now carries the session's people settings
+  (`show_people_list`, `track_attendance`, `track_set_starters`); the app shows set
+  starters only when the session tracks both, as the web logger does. The People tab
+  was already gated: the server folds `show_people_list` into `can_view_people`.
+- **The splash:** the wordmark on black with "Trad Irish Session Tracker", matched by
+  the launch screen (Ceol-Info.plist) so the hand-over doesn't jump.

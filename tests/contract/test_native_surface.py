@@ -591,6 +591,8 @@ class TestResponsesMatchSchemas:
             body = r.get_json()
             record = next(x for x in body["records"] if x["session_instance_tune_id"] == record_id)
             assert record["confidence"] == 100 and isinstance(record["logged_by_color"], int)
+            assert {k: type(body[k]) for k in ("show_people_list", "track_attendance", "track_set_starters")} == {
+                "show_people_list": bool, "track_attendance": bool, "track_set_starters": bool}
             self._validate(spec, spec["components"]["schemas"]["LiveBootstrap"], body)
         finally:
             conn.rollback()

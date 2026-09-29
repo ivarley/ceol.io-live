@@ -47,6 +47,16 @@ scope specificity).
   snapshotted. The legacy word-processor editor is fetched live but never cached (the server
   marks its response `X-Offline-Exclude`; it is being deprecated and is intentionally out of
   offline support).
+- **Stale cached redirects are healed.** When a navigation comes back as a redirect
+  (`opaqueredirect`), `handleNav` re-asks the network for the same URL with the HTTP cache
+  bypassed (`cache: 'reload'`) before handing the redirect back. A fresh, non-redirected
+  page means the redirect was one the browser's HTTP cache was replaying on its own — Chrome
+  keeps a 301 with no cache headers fresh indefinitely, which is what stranded returning
+  visitors in an apex↔www loop (surfacing as ERR_FAILED) when the canonical host flipped to
+  `ceol.io` in September 2026 — and the page is served instead. A genuine redirect (login
+  bounce, trailing-slash canonicaliser) or a failed re-fetch returns the original, so the
+  browser follows it as before. Cost: one extra request per redirected navigation.
+  Covered by `e2e/app/stale-redirect.spec.ts`.
 - **Two correctness rules** (both learned from breaking the logout e2e test): `handleNav`
   awaits a cache handle *before* firing the navigation fetch (so SW activation settles and
   Chromium doesn't drop the navigation's `Set-Cookie`), and activation stays instant —

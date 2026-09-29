@@ -15,6 +15,48 @@
 @media (min-width: 769px) {
     body.mt-add-open .docs-content { margin-right: 440px; }
 }
+/* The session's band: its name and a chevron, as the session-instance page's header.
+   Tapping it unfolds .session-details beneath it. */
+.session-band {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    margin: 0 0 10px;
+    background: #1c1d22;
+    border: 1px solid #34353d;
+    border-radius: 8px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+.session-band .session-title-heading {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+}
+.session-band-chevron {
+    flex: none;
+    width: 20px;
+    height: 20px;
+    fill: none;
+    stroke: var(--text-muted, #888);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: transform 0.15s ease;
+}
+.session-band[aria-expanded="true"] .session-band-chevron {
+    transform: rotate(90deg);
+}
+.session-details-top {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.session-admin-link {
+    color: var(--primary, #65b464);
+}
+
 .session-details {
     position: relative;
     background-color: #2a2a2a;

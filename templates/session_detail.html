@@ -19,7 +19,16 @@
            a phone. The ⮐ that used to hang off the end of this heading was a
            second, worse way to do the same thing: 0.6em, border-grey, not aligned
            to anything and too small to hit. #}
-        <h1 class="session-title-heading">{{ session.name }}{% if is_session_admin %}<a href="/admin/sessions/{{ session.path }}" class="add-link">Admin</a>{% endif %}</h1>
+        {# The session's band (spec 052): its name and a chevron, in the style of the
+           session-instance page's header. The details — role, place, schedule, about —
+           fold away under it, so the tunes / logs / people tabs sit right below the
+           name; tapping the band opens them. The iOS app's session screen is the same
+           (ios/Ceol/Ceol/SessionsViews.swift). #}
+        <div class="session-band" id="session-band" role="button" tabindex="0"
+             aria-expanded="false" aria-controls="session-details">
+            <h1 class="session-title-heading">{{ session.name }}</h1>
+            <svg class="session-band-chevron" viewBox="0 0 24 24" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg>
+        </div>
 
         {# On now: the one thing you came to this page for mid-session, so it leads.
            Opens the log in view mode (the logger's default), since most people at a
@@ -35,9 +44,12 @@
         </a>
         {% endfor %}
 
-        <div class="session-details">
+        <div class="session-details" id="session-details" hidden>
             {# Role badge (Admin / Member / Visitor) -- mounted by the Svelte bundle. #}
-            <div id="session-role-root"></div>
+            <div class="session-details-top">
+                <div id="session-role-root"></div>
+                {% if is_session_admin %}<a href="/admin/sessions/{{ session.path }}" class="session-admin-link">Admin page</a>{% endif %}
+            </div>
             {% if session.location_name and session.location_name != session.name %}
             <p><strong>Location:</strong> {{ session.location_name }}</p>
             {% endif %}

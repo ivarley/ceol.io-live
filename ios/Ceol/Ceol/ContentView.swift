@@ -165,40 +165,32 @@ struct PlaceholderScreen: View {
     }
 }
 
+/// While the app starts: the wordmark on black, exactly where the launch screen put it
+/// (Ceol-Info.plist, LaunchLogo: 220 points wide, centred), and the tagline fading in
+/// under it, so the hand-over from the launch screen doesn't jump.
 struct SplashView: View {
-    @State private var animateIn = false
+    @State private var showTagline = false
 
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [Color(red: 0.10, green: 0.35, blue: 0.22),
-                         Color(red: 0.04, green: 0.18, blue: 0.12)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
-
-            VStack(spacing: 16) {
-                Image(systemName: "music.quarternote.3")
-                    .font(.system(size: 72, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .symbolEffect(.bounce, value: animateIn)
-
-                Text("Ceol.io")
-                    .font(.system(size: 44, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
-
-                Text("Irish session tracker")
-                    .font(.ceol(.headline))
-                    .foregroundStyle(.white.opacity(0.75))
-            }
-            .opacity(animateIn ? 1 : 0)
-            .scaleEffect(animateIn ? 1 : 0.92)
+            Color.black.ignoresSafeArea()
+            Image("LaunchLogo")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 220)
+                .accessibilityLabel("Ceol")
+            Text("Trad Irish Session Tracker")
+                .font(.ceol(size: 17, weight: .medium))
+                .tracking(0.5)
+                .foregroundStyle(Color.white.opacity(0.75))
+                .offset(y: 78 / 2 + 30)
+                .opacity(showTagline ? 1 : 0)
         }
+        // Centred on the whole screen, as the launch screen centres its image; centred
+        // in the safe area it sat 14 points lower and hopped at the hand-over.
+        .ignoresSafeArea()
         .onAppear {
-            withAnimation(.easeOut(duration: 0.7)) {
-                animateIn = true
-            }
+            withAnimation(.easeOut(duration: 0.5).delay(0.1)) { showTagline = true }
         }
     }
 }

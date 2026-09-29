@@ -673,6 +673,11 @@ components:
         instance_active: { type: boolean }
         records: { type: array, items: { $ref: "#/components/schemas/LiveRecord" } }
         sets: { type: array, items: { type: array, items: { $ref: "#/components/schemas/LiveRecord" } } }
+        # The session's people settings (spec 039). Set starters show only when
+        # track_set_starters and track_attendance are both on, as in the web logger.
+        show_people_list: { type: boolean }
+        track_attendance: { type: boolean }
+        track_set_starters: { type: boolean }
         last_event_id: { type: integer }
     LiveVocabulary:
       type: object

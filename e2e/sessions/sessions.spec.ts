@@ -175,6 +175,8 @@ test.describe("session detail (admin)", () => {
     // control landed (spec 052 §B1) — on the session you would be leaving, which is
     // where you are when you decide to.
     await page.goto(`/sessions/${SESSIONS.mueller.path}`);
+    // The role pill is in the session's details, folded under its band.
+    await page.locator("#session-band").click();
     await page.locator("#session-role-root .kit-chip").click();
 
     const leave = page.locator("#leave-session-btn");

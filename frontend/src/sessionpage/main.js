@@ -19,6 +19,24 @@ import SessionJoin from './SessionJoin.svelte'
 const pageData = window.__PAGE_DATA__
 const ctx = window.__PAGE_CTX__ || {}
 
+// The session's band: tapping it (or Enter / Space on it) unfolds the details under it.
+const band = document.getElementById('session-band')
+const details = document.getElementById('session-details')
+if (band && details) {
+  const toggle = () => {
+    const open = details.hidden
+    details.hidden = !open
+    band.setAttribute('aria-expanded', String(open))
+  }
+  band.addEventListener('click', toggle)
+  band.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      toggle()
+    }
+  })
+}
+
 const target = document.getElementById('session-detail-root')
 if (target && pageData) {
   mount(App, { target, props: { pageData, ctx } })

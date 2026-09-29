@@ -208,6 +208,10 @@ final class CeolUITests: XCTestCase {
         let boston = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Boston Celtic Session'")).firstMatch
         XCTAssertTrue(boston.waitForExistence(timeout: 10))
         boston.tap()
+        // The session's details (and the role pill) fold under its band: open them.
+        let band = app.buttons["session.band"]
+        XCTAssertTrue(band.waitForExistence(timeout: 10))
+        band.tap()
 
         let join = app.buttons["session.join"]
         let role = app.buttons["session.role"]
@@ -297,7 +301,10 @@ final class CeolUITests: XCTestCase {
         snapshot("details")
 
         app.buttons["details.save"].tap()
-        // Straight to the new session's page, as its admin.
+        // Straight to the new session's page, as its admin (in the details under its band).
+        let band = app.buttons["session.band"]
+        XCTAssertTrue(band.waitForExistence(timeout: 15), app.debugDescription)
+        band.tap()
         let role = app.buttons["session.role"]
         XCTAssertTrue(role.waitForExistence(timeout: 15), app.debugDescription)
         XCTAssertTrue(role.label.contains("Admin"), role.label)

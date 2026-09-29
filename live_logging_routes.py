@@ -2445,7 +2445,8 @@ def live_bootstrap(session_instance_id):
             """
             SELECT si.session_id, si.comments, si.log_complete_date, si.date, s.name, s.path,
                    s.timezone, si.is_active, si.location_override,
-                   si.start_time, si.end_time, s.session_type
+                   si.start_time, si.end_time, s.session_type,
+                   s.show_people_list, s.track_attendance, s.track_set_starters
             FROM session_instance si JOIN session s ON s.session_id = si.session_id
             WHERE si.session_instance_id = %s
             """,
@@ -2500,6 +2501,11 @@ def live_bootstrap(session_instance_id):
             # is (the sidecar enforces the same rule), and re-read it on every reconnect
             # so a viewer whose session ends settles into a static snapshot by itself.
             "instance_active": bool(meta[7]) if meta else False,
+            # The session's people settings (spec 039), which the page shell passes to the
+            # web logger as config: set starters show only when both tracking flags are on.
+            "show_people_list": bool(meta[12]) if meta else True,
+            "track_attendance": bool(meta[13]) if meta else True,
+            "track_set_starters": bool(meta[14]) if meta else True,
             "records": records,
             "sets": sets,
             "last_event_id": high_water,
