@@ -1825,3 +1825,17 @@ The plan (Phases 0-6) runs from here in `ios/`; see `ios/README.md` for the layo
     them, swipes one away, removes the other, and checks the server after each step.
     Left for 5b.2: drag to reorder, select-many with bulk remove and undo, the set
     starter picker, and editing a tune (needs 5c's search).
+  - **5b.2 DONE 2026-09-29, except editing a tune (waits on 5c's search).** The web's
+    selection rules (`selection.js`: dragBlock, dropTargets, optimisticMove, copy and
+    paste, range, select-all) now have shared fixtures (`selection.fixtures.json`, 39
+    cases; the web runner learned `setParams` and `mapFields`), ported as
+    `CeolLogic.Selection`. `LiveLog` gained move, bulk remove, restore (Undo), set
+    starter and paste, all through the same optimistic pipeline. In the app, "Select"
+    (while editing) picks tunes; Copy, Paste, Delete (with an eight-second Undo) and
+    Assign act on them; the ⠿ handle, or press-and-hold on the row (the native
+    addition), drags a tune or its picked run to any real target, with the log
+    scrolling near the edges. A set's label opens its tray (Started by, with a picker
+    of tonight's check-ins and then the regulars; Logged by), in view mode too,
+    read-only. The web's selection bar ran off a phone's screen (Done cut off); it now
+    wraps, with an e2e check. A UI test drags, deletes and undoes, copies and pastes,
+    and sets a starter, checking the server after each step.

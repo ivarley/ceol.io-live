@@ -22,6 +22,7 @@ import CeolLogic
 import CeolSession
 import Foundation
 import Observation
+import UIKit
 
 @Observable
 final class NightModel {
@@ -52,6 +53,22 @@ final class NightModel {
     var selected: RecordID?
     /// The last refusal or failure, for a banner.
     var notice: String?
+    /// A passing confirmation ("Copied 3 tunes in 2 sets").
+    var flash: String?
+
+    /// Selection mode (spec 029): tap to pick rows, drag to move, bulk actions.
+    private(set) var selecting = false
+    var picked: Set<RecordID> = []
+    /// A drag in progress (select mode).
+    var drag: LogDrag?
+    /// The last bulk delete, for Undo (for eight seconds).
+    private(set) var undoable: (rows: [LogRecord], count: Int)?
+    private var undoSeq = 0
+    /// Our own last copy: pasting it back keeps the tunes' links.
+    private var lastCopy: Selection.Copy?
+    /// The session's roster with tonight's check-ins (the starter picker).
+    private(set) var people: [JSONValue] = []
+    private(set) var peopleLoaded = false
 
     private let app: AppModel
     /// Ops waiting to go, in order.
@@ -192,6 +209,8 @@ final class NightModel {
         guard editing != on else { return }
         editing = on
         selected = nil
+        selecting = false
+        picked = []
         cursor = .end
         app.editingNight = on
         guard running, status != .finished else { return }
@@ -256,6 +275,123 @@ final class NightModel {
         enqueue([op])
     }
 
+    // MARK: - Selection mode
+
+    func setSelecting(_ on: Bool) {
+        selecting = on
+        picked = []
+        selected = nil
+        drag = nil
+    }
+
+    func togglePicked(_ id: RecordID) {
+        if picked.contains(id) { picked.remove(id) } else { picked.insert(id) }
+    }
+
+    func pickAll() {
+        guard let log else { return }
+        picked = Set(Selection.selectableIDs(LogState.segmentByBreaks(log.ordered)))
+    }
+
+    /// Move a block to a drop target; the cursor lands after it, as on the web.
+    func move(_ block: Selection.DragBlock, to target: Selection.DropTarget) {
+        guard var l = log else { return }
+        let op = l.move(block, to: target)
+        log = l
+        if let last = block.tuneIDs.last { cursor = .after(last) }
+        enqueue([op])
+    }
+
+    /// Delete the picked tunes in one op, with Undo.
+    func deletePicked() {
+        guard var l = log, let (op, rows) = l.removeMany(Array(picked)) else { return }
+        log = l
+        picked = []
+        undoSeq += 1
+        let seq = undoSeq
+        undoable = (rows, rows.count)
+        enqueue([op])
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(8))
+            if self?.undoSeq == seq { self?.undoable = nil }
+        }
+    }
+
+    func undoDelete() {
+        guard let u = undoable, var l = log else { return }
+        undoable = nil
+        guard let op = l.restore(u.rows) else { return }
+        log = l
+        enqueue([op])
+    }
+
+    func copyPicked() {
+        guard let log, let copy = Selection.serializeClipboard(LogState.segmentByBreaks(log.ordered), selected: picked)
+        else { return }
+        lastCopy = copy
+        UIPasteboard.general.string = copy.text
+        let tunes = copy.rich.reduce(0) { $0 + $1.count }
+        say("Copied \(tunes) tune\(tunes == 1 ? "" : "s") in \(copy.rich.count) set\(copy.rich.count == 1 ? "" : "s")")
+    }
+
+    /// Paste at the cursor: our own last copy with its links, the old logger's JSON,
+    /// or plain text (lines are sets, commas are tunes).
+    func paste() {
+        let text = UIPasteboard.general.string
+        guard let plan = Selection.parseClipboard(text, lastCopy: lastCopy) ?? lastCopy.map({ (.internal, $0.rich) }),
+            !plan.sets.isEmpty, var l = log
+        else {
+            say("Nothing to paste")
+            return
+        }
+        let ops = l.paste(plan.sets, at: cursor)
+        log = l
+        enqueue(ops)
+        let tunes = plan.sets.reduce(0) { $0 + $1.count }
+        say("Pasted \(tunes) tune\(tunes == 1 ? "" : "s") in \(plan.sets.count) set\(plan.sets.count == 1 ? "" : "s")")
+    }
+
+    /// Who started a set (nil clears it).
+    func setStarter(of setTunes: [LogRecord], person: JSONValue?) {
+        guard var l = log else { return }
+        let id = person?["person_id"]?.intValue
+        guard let op = l.setStarter(of: setTunes, personID: id, name: person.map(Self.starterName)) else { return }
+        log = l
+        enqueue([op])
+    }
+
+    /// Assign every set holding a picked tune to one person (or clear it).
+    func assignPicked(to person: JSONValue?) {
+        guard let log else { return }
+        let sets = LogState.segmentByBreaks(log.ordered).filter { $0.tunes.contains { $0.recordID.map(picked.contains) ?? false } }
+        for set in sets { setStarter(of: set.tunes, person: person) }
+        let n = sets.count
+        let name = person?["display_name"]?.stringValue ?? ""
+        say(person == nil ? "Cleared the starter on \(n) set\(n == 1 ? "" : "s")" : "Assigned \(n) set\(n == 1 ? "" : "s") to \(name)")
+    }
+
+    /// "Sarah O": the web's starterAbbrev.
+    static func starterName(_ p: JSONValue) -> String {
+        let first = p["first_name"]?.stringValue ?? ""
+        guard !first.isEmpty else { return p["display_name"]?.stringValue ?? "" }
+        if let last = p["last_name"]?.stringValue, let initial = last.first { return "\(first) \(initial)" }
+        return first
+    }
+
+    func loadPeople() async {
+        guard let p = try? await app.getJSON("/api/live/instances/\(instanceID)/people") else { return }
+        people = p["people"]?.arrayValue ?? []
+        peopleLoaded = true
+    }
+
+    private func say(_ text: String) {
+        flash = text
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(3))
+            if self?.flash == text { self?.flash = nil }
+        }
+    }
+
     private func nextTune(after id: RecordID) -> RecordID? {
         guard let ord = log?.ordered, let i = ord.firstIndex(where: { $0.recordID == id }) else { return nil }
         return ord[(i + 1)...].first { !$0.isBreak }?.recordID
@@ -281,6 +417,8 @@ final class NightModel {
         case .newSet(let id): cursor = fix(id).map { .newSet($0) } ?? .end
         }
         if let sel = selected { selected = fix(sel) }
+        // Rows removed elsewhere leave the selection.
+        picked = Set(picked.compactMap(fix))
     }
 
     private func enqueue(_ ops: [PendingOp]) {

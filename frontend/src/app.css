@@ -1839,6 +1839,16 @@ main.wide .sidepane { grid-area: pane; overflow-y: auto; min-height: 0; }
 .sel-act:disabled { opacity: 0.35; cursor: default; }
 .sel-act.dim:not(:disabled) { opacity: 0.55; } /* Paste with an empty internal clipboard: dimmed but tappable (§C) */
 .sel-act.sel-danger { color: #e0594b; }
+/* Phone: the actions don't fit beside the count and Done (Done ran off the edge), so
+   the count and Done share the first line and the actions get the second, as in the app. */
+@media (max-width: 480px) {
+  .selbar { flex-wrap: wrap; row-gap: 8px; }
+  .selcount { order: 0; flex: 1 1 auto; }
+  .sel-done { order: 1; }
+  /* a full-width line break between Done and the actions */
+  .selbar::after { content: ''; order: 1; flex-basis: 100%; }
+  .sel-act { order: 2; flex: 1 1 0; min-width: 0; }
+}
 .sel-done {
   flex: none;
   font: inherit;

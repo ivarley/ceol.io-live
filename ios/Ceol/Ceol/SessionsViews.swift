@@ -545,6 +545,11 @@ struct NightView: View {
     @State private var entry = ""
     @FocusState private var composerFocused: Bool
     @State private var infoTune: TuneRef?
+    @State private var assigning = false
+    @State private var openTray: RecordID?
+    @State private var scroll = ScrollPosition(edge: .top)
+    @State private var scrollGeometry = ScrollGeometry(
+        contentOffset: .zero, contentSize: .zero, contentInsets: .init(), containerSize: .zero)
 
     var body: some View {
         Group {
@@ -567,10 +572,18 @@ struct NightView: View {
         .toolbar {
             if let model, model.log != nil, model.status != .finished {
                 ToolbarItem(placement: .topBarTrailing) {
-                    if model.editing {
-                        Button("Done") { finishEditing() }
+                    if model.selecting {
+                        Button("Done") { model.setSelecting(false) }
                             .font(.ceol(size: 16, weight: .semibold))
-                            .accessibilityIdentifier("night.done")
+                            .accessibilityIdentifier("select.done")
+                    } else if model.editing {
+                        HStack(spacing: 14) {
+                            Button("Select") { model.setSelecting(true); composerFocused = false }
+                                .accessibilityIdentifier("night.select")
+                            Button("Done") { finishEditing() }
+                                .font(.ceol(size: 16, weight: .semibold))
+                                .accessibilityIdentifier("night.done")
+                        }
                     } else {
                         Button { model.setEditing(true) } label: {
                             Label("Edit log", systemImage: "pencil")
@@ -600,9 +613,21 @@ struct NightView: View {
         .sheet(item: $infoTune) { TuneSheet(tune: $0) }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if let model, model.editing, let log = model.log {
-                LogComposer(
-                    model: model, endIsOpen: !(log.ordered.last?.isBreak ?? true), text: $entry,
-                    focused: $composerFocused, onDone: finishEditing)
+                VStack(spacing: 6) {
+                    LogToasts(model: model)
+                    if model.selecting {
+                        SelectionBar(model: model, trackStarters: trackStarters(model.night)) { assigning = true }
+                    } else {
+                        LogComposer(
+                            model: model, endIsOpen: !(log.ordered.last?.isBreak ?? true), text: $entry,
+                            focused: $composerFocused, onDone: finishEditing)
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $assigning) {
+            if let model {
+                StarterPicker(model: model, onlyHere: true, current: nil) { model.assignPicked(to: $0) }
             }
         }
         .onChange(of: scenePhase) { _, phase in
@@ -644,13 +669,21 @@ struct NightView: View {
                 if model.editing {
                     EditableLog(
                         model: model, log: log, trackStarters: trackStarters,
+                        timeZone: b["timezone"]?.stringValue.flatMap(TimeZone.init(identifier:)),
                         onFocusComposer: { composerFocused = true },
                         onInfo: { t in
                             guard let id = t["tune_id"]?.intValue else { return }
                             infoTune = TuneRef(
                                 id: id, name: t["name"]?.stringValue ?? "", type: t["tune_type"]?.stringValue,
                                 sessionPath: b["session_path"]?.stringValue, statusKnown: false)
-                        }
+                        },
+                        autoScroll: { dy in
+                            let g = scrollGeometry
+                            let maxY = max(0, g.contentSize.height - g.containerSize.height + g.contentInsets.bottom)
+                            let y = min(max(g.contentOffset.y + dy, -g.contentInsets.top), maxY)
+                            scroll.scrollTo(y: y)
+                        },
+                        viewportHeight: scrollGeometry.containerSize.height
                     )
                     .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 24)
                     .animation(.easeOut(duration: 0.2), value: log.records)
@@ -661,7 +694,16 @@ struct NightView: View {
                             .frame(maxWidth: .infinity).padding(.vertical, 32)
                     }
                     ForEach(Array(sets.enumerated()), id: \.offset) { i, set in
-                        SetCard(label: LogState.setLabel(set.tunes), starter: trackStarters ? setStarter(set.tunes) : nil) {
+                        let first = set.tunes.first?.recordID
+                        SetCard(
+                            label: LogState.setLabel(set.tunes), starter: trackStarters ? setStarter(set.tunes) : nil,
+                            onLabelTap: { withAnimation(.easeOut(duration: 0.15)) { openTray = openTray == first ? nil : first } }
+                        ) {
+                            if openTray == first {
+                                SetTray(
+                                    tunes: set.tunes, trackStarters: trackStarters,
+                                    timeZone: b["timezone"]?.stringValue.flatMap(TimeZone.init(identifier:)))
+                            }
                             ForEach(Array(set.tunes.enumerated()), id: \.element) { _, t in
                                 Text(t["name"]?.stringValue ?? "Unknown tune")
                                     .font(.ceol(size: 19))
@@ -684,7 +726,32 @@ struct NightView: View {
             }
         }
         .scrollDismissesKeyboard(.interactively)
+        .scrollPosition($scroll)
+        .onScrollGeometryChange(for: ScrollGeometry.self) { $0 } action: { _, g in scrollGeometry = g }
+        .coordinateSpace(name: nightScrollSpace)
+        .overlay(alignment: .topLeading) {
+            // What a drag carries, under the finger.
+            if let d = model.drag, d.started {
+                Text(d.label)
+                    .font(.ceol(size: 16, weight: .semibold))
+                    .foregroundStyle(CeolTokens.textColor)
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .background(CeolTokens.headerBg, in: RoundedRectangle(cornerRadius: 10))
+                    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(CeolTokens.primary, lineWidth: 1.5))
+                    .shadow(color: .black.opacity(0.5), radius: 8)
+                    .position(x: d.location.x - 70, y: d.location.y - 34)
+                    .allowsHitTesting(false)
+                    .accessibilityIdentifier("drag.ghost")
+            }
+        }
+        .scrollDisabled(model.drag?.started == true)
         .refreshable { await model.start() }
+    }
+
+    /// As the web logger: starters only where the session tracks them, which needs
+    /// attendance too (spec 039).
+    private func trackStarters(_ b: JSONValue?) -> Bool {
+        (b?["track_set_starters"]?.boolValue ?? true) && (b?["track_attendance"]?.boolValue ?? true)
     }
 
     private func finishEditing() {

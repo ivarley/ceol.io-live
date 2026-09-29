@@ -562,6 +562,144 @@ final class CeolUITests: XCTestCase {
         }
     }
 
+    /// Phase 5b.2: select mode. Three tunes are put on the night over the API; in the
+    /// app the last is dragged by its handle to between the first two, two are deleted
+    /// and brought back with Undo, one is copied and pasted, and a set's starter is set
+    /// from its tray. The server is checked after each, and everything is cleaned up.
+    @MainActor
+    func testSelectModeMovesDeletesAndPastes() async throws {
+        let api = try await TestAPI.signedIn(server: server)
+        let nights = try await api.get("/api/sessions/austin/mueller/logs")
+        let years = (nights["sorted_years"] as? [Any])?.compactMap { "\($0)" } ?? []
+        let byYear = nights["instances_by_year"] as? [String: [[String: Any]]] ?? [:]
+        let newest = try XCTUnwrap(years.first.flatMap { byYear[$0]?.first })
+        let instanceID = try XCTUnwrap(newest["session_instance_id"] as? Int)
+        let opsPath = "/api/live/instances/\(instanceID)/ops"
+        func op(_ body: [String: Any]) async throws -> [String: Any] {
+            try await api.post(opsPath, body.merging(["op_id": UUID().uuidString.lowercased()]) { a, _ in a })
+        }
+        func live() async throws -> [[String: Any]] {
+            let b = try await api.get("/api/live/instances/\(instanceID)/bootstrap")
+            return ((b["records"] as? [[String: Any]]) ?? [])
+                .filter { ($0["deleted"] as? Bool) != true }
+                .sorted { ($0["order_position"] as? String ?? "") < ($1["order_position"] as? String ?? "") }
+        }
+        let n = Int.random(in: 1000...9999)
+        let (a, b, c) = ("Sel Alpha \(n)", "Sel Bravo \(n)", "Sel Charlie \(n)")
+        func ours(_ rs: [[String: Any]]) -> [String] {
+            rs.compactMap { $0["name"] as? String }.filter { $0.hasSuffix(" \(n)") }
+        }
+        func waitFor(_ what: String, _ check: ([[String: Any]]) -> Bool) async throws {
+            for _ in 0..<40 {
+                if check(try await live()) { return }
+                try await Task.sleep(for: .milliseconds(250))
+            }
+            XCTFail("the server never showed: \(what) — it has \(ours(try await live()))")
+        }
+        let before = try await live().compactMap { $0["session_instance_tune_id"] as? Int }
+        // A set of our own at the end.
+        if let last = try await live().last, (last["record_type"] as? String) == "tune" {
+            _ = try await op(["op_type": "set_break", "action": "insert", "after_record_id": NSNull()])
+        }
+        for name in [a, b, c] { _ = try await op(["op_type": "add_tune", "name": name]) }
+        func cleanup() async {
+            // Every tune and break this test added.
+            let rs = (try? await live()) ?? []
+            let tunes = rs.filter { ($0["name"] as? String)?.hasSuffix(" \(n)") == true }.compactMap { $0["session_instance_tune_id"] as? Int }
+            if !tunes.isEmpty { _ = try? await op(["op_type": "remove_tunes", "record_ids": tunes]) }
+            for r in (try? await live()) ?? [] where (r["record_type"] as? String) == "break" {
+                if let id = r["session_instance_tune_id"] as? Int, !before.contains(id) {
+                    _ = try? await op(["op_type": "set_break", "action": "remove", "record_id": id])
+                }
+            }
+        }
+
+        do {
+            try await selectModeSteps(a, b, c, waitFor: waitFor, ours: ours)
+        } catch {
+            await cleanup()
+            throw error
+        }
+        await cleanup()
+    }
+
+    @MainActor
+    private func selectModeSteps(
+        _ a: String, _ b: String, _ c: String,
+        waitFor: (String, ([[String: Any]]) -> Bool) async throws -> Void,
+        ours: @escaping ([[String: Any]]) -> [String]
+    ) async throws {
+        let app = launch()
+        signIn(app)
+        app.buttons["tab.sessions"].firstMatch.tap()
+        let mueller = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Mueller Session'")).firstMatch
+        XCTAssertTrue(mueller.waitForExistence(timeout: 10))
+        mueller.tap()
+        app.buttons.containing(NSPredicate(format: "label BEGINSWITH 'Logs'")).firstMatch.tap()
+        let night = app.buttons.matching(NSPredicate(format: "label MATCHES '.*[0-9]+ tunes?.*'")).firstMatch
+        XCTAssertTrue(night.waitForExistence(timeout: 10))
+        night.tap()
+        XCTAssertTrue(app.buttons["night.edit"].waitForExistence(timeout: 15))
+        app.buttons["night.edit"].tap()
+        XCTAssertTrue(app.staticTexts[c].waitForExistence(timeout: 10))
+        app.buttons["night.select"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["select.count"].waitForExistence(timeout: 3))
+
+        // Drag Charlie by its handle to between Alpha and Bravo.
+        let row = app.descendants(matching: .any).matching(identifier: "select.row")
+            .containing(NSPredicate(format: "label == %@", c)).firstMatch
+        let grab = row.descendants(matching: .any)["row.grab"]
+        XCTAssertTrue(grab.waitForExistence(timeout: 3))
+        let alpha = app.staticTexts[a]
+        let bravo = app.staticTexts[b]
+        let gap = (alpha.frame.maxY + bravo.frame.minY) / 2
+        let origin = app.coordinate(withNormalizedOffset: .zero)
+        let from = grab.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        let to = origin.withOffset(CGVector(dx: grab.frame.midX, dy: gap))
+        from.press(forDuration: 0.05, thenDragTo: to, withVelocity: 300, thenHoldForDuration: 0.4)
+        try await waitFor("Charlie between Alpha and Bravo") { ours($0) == [a, c, b] }
+        snapshot("moved")
+
+        // Delete two, then Undo.
+        app.staticTexts[a].tap()
+        app.staticTexts[b].tap()
+        XCTAssertEqual(app.descendants(matching: .any)["select.count"].label, "2 selected")
+        app.buttons["select.delete"].tap()
+        XCTAssertTrue(app.staticTexts[a].waitForNonExistence(timeout: 5))
+        try await waitFor("Alpha and Bravo deleted") { ours($0) == [c] }
+        XCTAssertTrue(app.buttons["toast.undo"].waitForExistence(timeout: 3))
+        snapshot("undo")
+        app.buttons["toast.undo"].tap()
+        XCTAssertTrue(app.staticTexts[a].waitForExistence(timeout: 5))
+        try await waitFor("Alpha and Bravo back") { ours($0) == [a, c, b] }
+
+        // Copy Charlie, paste it (at the cursor: after the moved tune).
+        app.staticTexts[c].tap()
+        app.buttons["select.copy"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["toast.flash"].waitForExistence(timeout: 3))
+        app.buttons["select.paste"].tap()
+        try await waitFor("a second Charlie") { ours($0).filter { $0 == c }.count == 2 }
+
+        // Set the starter from the set's tray, where the session tracks starters.
+        app.buttons["select.done"].tap()
+        let label = app.descendants(matching: .any).matching(identifier: "set.label").allElementsBoundByIndex.last
+        if let label, label.exists {
+            label.tap()
+            let starter = app.buttons["tray.starter"]
+            if starter.waitForExistence(timeout: 3) {
+                starter.tap()
+                let person = app.buttons.matching(identifier: "starter.person").firstMatch
+                XCTAssertTrue(person.waitForExistence(timeout: 10))
+                snapshot("starter picker")
+                person.tap()
+                try await waitFor("a starter on our set") { rs in
+                    rs.contains { ($0["name"] as? String) == c && !($0["started_by_person_id"] is NSNull) && $0["started_by_person_id"] != nil }
+                }
+            }
+        }
+        app.buttons["night.done"].tap()
+    }
+
     /// Phase 3d: Me shows the profile and opens it to edit (cancelled: seed data stays put).
     @MainActor
     func testMeShowsTheProfile() throws {

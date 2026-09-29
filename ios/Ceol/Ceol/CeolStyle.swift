@@ -314,6 +314,8 @@ struct UnderlineTabs<ID: Hashable>: View {
 struct SetCard<Content: View>: View {
     let label: String
     var starter: String? = nil
+    /// Tapping the label (or the starter) opens the set's tray, as on the web.
+    var onLabelTap: (() -> Void)? = nil
     @ViewBuilder var content: () -> Content
 
     var body: some View {
@@ -327,10 +329,19 @@ struct SetCard<Content: View>: View {
         .background(CeolTokens.headerBg.opacity(0.6), in: RoundedRectangle(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(CeolTokens.borderColor.opacity(0.6), lineWidth: 1))
         .overlay(alignment: .topLeading) {
-            if !label.isEmpty { edgeTag(label.uppercased(), letterSpacing: 1.2).offset(x: 14, y: -12) }
+            if !label.isEmpty {
+                edgeTag(label.uppercased(), letterSpacing: 1.2).offset(x: 14, y: -12)
+                    .onTapGesture { onLabelTap?() }
+                    .accessibilityAddTraits(onLabelTap == nil ? [] : .isButton)
+                    .accessibilityIdentifier("set.label")
+            }
         }
         .overlay(alignment: .topTrailing) {
-            if let starter { edgeTag("▸ \(starter)", letterSpacing: 0).offset(x: -14, y: -12) }
+            if let starter {
+                edgeTag("▸ \(starter)", letterSpacing: 0).offset(x: -14, y: -12)
+                    .onTapGesture { onLabelTap?() }
+                    .accessibilityIdentifier("set.starter")
+            }
         }
         .padding(.top, 12)
     }

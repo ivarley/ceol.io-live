@@ -161,6 +161,21 @@ test.describe("live logger — selection mode (spec 029)", () => {
     await expect(page.locator(".starter-pill")).toHaveCount(2); // both sets show a starter
   });
 
+  test("on a phone the selection bar fits: every action and Done on screen", async ({ page, request }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await seedLog(request, inst, [["Fit Alpha"]]);
+    await openLogger(page, inst);
+    await enterSelectMode(page);
+    // Inside the bar itself, not just the window: the bar clips what overflows it.
+    const bar = (await page.locator(".selbar").boundingBox())!;
+    for (const el of await page.locator(".selbar button").all()) {
+      const box = (await el.boundingBox())!;
+      expect(box.x).toBeGreaterThanOrEqual(bar.x);
+      expect(box.x + box.width).toBeLessThanOrEqual(bar.x + bar.width);
+    }
+    await page.screenshot({ path: test.info().outputPath("selbar-phone.png") });
+  });
+
   test("drag the grab bar: seam thickens, block moves, order persists", async ({ page, request }) => {
     await seedLog(request, inst, [["Mv Alpha", "Mv Bravo", "Mv Charlie", "Mv Delta"]]);
     await openLogger(page, inst);

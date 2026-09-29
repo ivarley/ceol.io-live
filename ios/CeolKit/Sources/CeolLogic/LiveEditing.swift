@@ -22,6 +22,8 @@ public struct PendingOp: Sendable, Equatable {
     /// What the op did to the log, done again over a fresh bootstrap while it's unanswered.
     var puts: [LogRecord] = []
     var drops: [JSONValue] = []
+    /// Rows a rollback takes away that aren't temps (a refused restore).
+    var rollbackDrops: [JSONValue] = []
 }
 
 extension LiveLog {
@@ -125,6 +127,173 @@ extension LiveLog {
         return op
     }
 
+    /// Move a block (Selection.dragBlock) to a drop target: one move_tunes op. The rows
+    /// take their new places at once, with a temporary break where a new set needs one.
+    public mutating func move(
+        _ block: Selection.DragBlock, to target: Selection.DropTarget, opID: String = LiveLog.newOpID()
+    ) -> PendingOp {
+        let ord = ordered
+        let plan = Selection.optimisticMove(ord, allRecords: records, block: block.recordIDs, target: target)
+        var prev: [LogRecord] = []
+        var puts: [LogRecord] = []
+        for (id, key) in plan.positions {
+            guard let r = records.first(where: { $0.recordID == id }), case .object(var o) = r else { continue }
+            prev.append(r)
+            o["order_position"] = .string(key)
+            puts.append(.object(o))
+            put(.object(o))
+        }
+        var temps: [JSONValue] = []
+        for (side, key) in [("before", plan.tempBreakBefore), ("after", plan.tempBreakAfter)] {
+            guard let key else { continue }
+            let t = JSONValue.string("temp-\(opID)-\(side)")
+            let brk = tempBreak(t, position: key)
+            put(brk)
+            puts.append(brk)
+            temps.append(t)
+        }
+        var op = register(
+            opID, "move_tunes",
+            [
+                "record_ids": .array(block.tuneIDs.map(\.json)), "after_record_id": target.afterID?.json ?? .null,
+                "before_record_id": target.beforeID?.json ?? .null, "new_set": .bool(target.newSet),
+            ],
+            temps: temps, puts: puts)
+        op.prev = prev
+        pending[opID] = op
+        return op
+    }
+
+    /// Remove several tunes in one op (remove_tunes). nil when none of them is a
+    /// settled row. Returns the removed records too, for an Undo.
+    public mutating func removeMany(_ ids: [RecordID], opID: String = LiveLog.newOpID()) -> (PendingOp, [LogRecord])? {
+        let rows = ids.compactMap { id in
+            records.first { $0.recordID == id && !$0["_temp"].isTruthy && !$0.isBreak }
+        }
+        guard !rows.isEmpty else { return nil }
+        for r in rows { if let id = r.recordID { drop(id.json) } }
+        let removed = rows.compactMap(\.recordID)
+        var op = register(
+            opID, "remove_tunes", ["record_ids": .array(removed.map(\.json))], temps: [], drops: removed.map(\.json))
+        op.prev = rows
+        pending[opID] = op
+        return (op, rows)
+    }
+
+    /// Undo a bulk remove: the rows come back at once, and restore_tunes brings them
+    /// back for everyone.
+    public mutating func restore(_ rows: [LogRecord], opID: String = LiveLog.newOpID()) -> PendingOp? {
+        let back: [LogRecord] = rows.compactMap { r in
+            guard case .object(var o) = r else { return nil }
+            o["deleted"] = false
+            return .object(o)
+        }
+        guard !back.isEmpty else { return nil }
+        for r in back { put(r) }
+        var op = register(
+            opID, "restore_tunes", ["record_ids": .array(back.compactMap { $0.recordID?.json })], temps: [], puts: back)
+        // A refused restore takes them away again.
+        op.rollbackDrops = back.compactMap { $0.recordID?.json }
+        pending[opID] = op
+        return op
+    }
+
+    /// Set (or clear) who started a set: every tune in it, one op on its first tune.
+    /// `name` is how the set shows it ("Sarah O").
+    public mutating func setStarter(
+        of setTunes: [LogRecord], personID: Int?, name: String?, opID: String = LiveLog.newOpID()
+    ) -> PendingOp? {
+        guard let first = setTunes.first?.recordID else { return nil }
+        var prev: [LogRecord] = []
+        var puts: [LogRecord] = []
+        for t in setTunes {
+            guard let id = t.recordID, let r = records.first(where: { $0.recordID == id }), case .object(var o) = r else { continue }
+            prev.append(r)
+            o["started_by_person_id"] = personID.map { JSONValue($0) } ?? .null
+            o["started_by_name"] = name.map(JSONValue.string) ?? .null
+            puts.append(.object(o))
+            put(.object(o))
+        }
+        var op = register(
+            opID, "attribute_set_starter", ["record_id": first.json, "person_id": personID.map { JSONValue($0) } ?? .null],
+            temps: [], puts: puts)
+        op.prev = prev
+        pending[opID] = op
+        return op
+    }
+
+    /// Paste sets of tunes at the cursor (the web's pasteSets): adds in order, a break
+    /// between sets, each anchored on the row before it, so to everyone else it looks like
+    /// fast logging. no_merge: a pasted duplicate is always a new row. At a new-set gap
+    /// the block is closed off from the set below.
+    public mutating func paste(_ sets: [[Selection.ClipTune]], at cursor: Cursor) -> [PendingOp] {
+        let ord = ordered
+        var afterAnchor: RecordID?
+        var beforeAnchor: RecordID?
+        var prevPos: String?
+        var succPos: String?
+        var newSetTarget: RecordID?
+        func bounds(before id: RecordID) {
+            let i = ord.firstIndex { $0.recordID == id }
+            succPos = i.flatMap { ord[$0].orderPosition }
+            prevPos = i.flatMap { $0 > 0 ? ord[$0 - 1].orderPosition : nil }
+        }
+        if case .newSet(let next) = cursor {
+            newSetTarget = next
+            beforeAnchor = next
+            bounds(before: next)
+        } else {
+            let p = LogState.cursorPos(cursor, ordered: ord, allRecords: records)
+            afterAnchor = p.afterID
+            beforeAnchor = p.beforeID
+            if let b = beforeAnchor {
+                bounds(before: b)
+            } else if let a = afterAnchor {
+                let i = ord.firstIndex { $0.recordID == a }
+                prevPos = i.flatMap { ord[$0].orderPosition }
+                succPos = i.flatMap { $0 + 1 < ord.count ? ord[$0 + 1].orderPosition : nil }
+            } else {
+                prevPos = LogState.maxPos(records)
+            }
+        }
+        var ops: [PendingOp] = []
+        var prevTemp: JSONValue?
+        func addBreak(_ fields: [String: JSONValue]) {
+            let opID = LiveLog.newOpID()
+            let t = JSONValue.string("temp-\(opID)")
+            let key = FracIndex.optimisticBetween(prevPos, succPos)
+            let brk = tempBreak(t, position: key)
+            put(brk)
+            ops.append(register(opID, "set_break", fields.merging(["action": "insert"]) { a, _ in a }, temps: [t], puts: [brk]))
+            prevPos = key
+            prevTemp = t
+        }
+        for (si, set) in sets.enumerated() {
+            if si > 0 { addBreak(["after_record_id": prevTemp ?? .null]) }
+            for t in set {
+                let opID = LiveLog.newOpID()
+                let temp = JSONValue.string("temp-\(opID)")
+                let key = FracIndex.optimisticBetween(prevPos, succPos)
+                let payload: [String: JSONValue] = [
+                    "tune_id": t.tuneID.map { JSONValue($0) } ?? .null, "name": .string(t.name),
+                    "tune_type": t.tuneType.map(JSONValue.string) ?? .null,
+                ]
+                let row = tempRecord(temp, name: .string(t.name), payload: payload, position: key)
+                put(row)
+                var body = payload
+                body.removeValue(forKey: "tune_type")
+                body["no_merge"] = true
+                body["after_record_id"] = prevTemp ?? afterAnchor?.json ?? .null
+                body["before_record_id"] = prevTemp != nil || afterAnchor != nil ? .null : beforeAnchor?.json ?? .null
+                ops.append(register(opID, "add_tune", body, temps: [temp], puts: [row]))
+                prevTemp = temp
+                prevPos = key
+            }
+        }
+        if let next = newSetTarget, prevTemp != nil { addBreak(["before_record_id": next.json]) }
+        return ops
+    }
+
     // MARK: - Sending and settling
 
     /// The body to POST for a pending op, with any temp anchors swapped for the real ids
@@ -161,6 +330,7 @@ extension LiveLog {
     public mutating func rollback(_ opID: String) {
         guard let op = pending.removeValue(forKey: opID) else { return }
         for t in op.tempIDs { drop(t) }
+        for id in op.rollbackDrops { drop(id) }
         for r in op.prev { put(r) }
     }
 

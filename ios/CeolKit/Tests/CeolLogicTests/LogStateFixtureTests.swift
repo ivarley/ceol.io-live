@@ -28,7 +28,7 @@ private func json(_ c: Cursor) -> JSONValue {
     }
 }
 
-private func segments(_ v: JSONValue?) throws -> [LogSegment] {
+func segments(_ v: JSONValue?) throws -> [LogSegment] {
     guard let arr = v?.arrayValue else { throw AdapterError.badInput("segments") }
     return try arr.map { seg in
         guard let tunes = seg["tunes"]?.arrayValue else { throw AdapterError.badInput("segments.tunes") }

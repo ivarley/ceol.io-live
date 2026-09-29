@@ -186,4 +186,76 @@ struct LiveEditingTests {
         #expect(rebased.pending.count == 3)
         #expect(rebased.highWater == 20)
     }
+
+    @Test("a move shows at once, keeps the block's order, and settles to the server's places")
+    func move() throws {
+        var log = LiveLog(records: [rec(1, "a1", name: "A"), rec(2, "a2", name: "B"), rec(3, "a3", name: "C"), rec(4, "a4", name: "D")])
+        let block = try #require(Selection.dragBlock(log.ordered, selected: [.server(3), .server(4)], grabbed: .server(3)))
+        let target = Selection.DropTarget(key: "after:1", afterID: .server(1), beforeID: nil, newSet: false)
+        let op = log.move(block, to: target, opID: "m1")
+        #expect(op.body["op_type"] == "move_tunes")
+        #expect(op.body["record_ids"] == [3, 4])
+        #expect(op.body["after_record_id"] == 1)
+        #expect(names(log) == ["A", "C", "D", "B"])
+        // Refused: back where they were.
+        log.settle(opID: "m1", answer: ["success": false, "rejected": true, "reason": "stale"])
+        #expect(names(log) == ["A", "B", "C", "D"])
+    }
+
+    @Test("a move into a new set shows its breaks, and they go when it settles")
+    func moveNewSet() throws {
+        var log = LiveLog(records: [rec(1, "a1", name: "A"), rec(2, "a2", name: "B"), rec(3, "a3", name: "C")])
+        let block = try #require(Selection.dragBlock(log.ordered, selected: [], grabbed: .server(3)))
+        let target = Selection.DropTarget(key: "top-new", afterID: nil, beforeID: .server(1), newSet: true)
+        _ = log.move(block, to: target, opID: "m2")
+        #expect(names(log) == ["C", "|", "A", "B"])
+        log.settle(opID: "m2", answer: ["success": true, "op_type": "move_tunes",
+                                         "records": [rec(3, "a0", name: "C"), rec(9, "a0V", type: "break")], "removed_break_ids": []])
+        #expect(names(log) == ["C", "|", "A", "B"])
+        #expect(log.records.count == 4)
+    }
+
+    @Test("a bulk remove comes back with Undo, and a refused Undo takes them away again")
+    func bulkRemoveAndUndo() throws {
+        var log = LiveLog(records: [rec(1, "a1", name: "A"), rec(2, "a2", name: "B"), rec(3, "a3", name: "C")])
+        let removed = log.removeMany([.server(1), .server(3)], opID: "r1")
+        let (op, rows) = try #require(removed)
+        #expect(op.body["record_ids"] == [1, 3])
+        #expect(names(log) == ["B"])
+        log.settle(opID: "r1", answer: ["success": true, "op_type": "remove_tunes", "records": []])
+        let restored = log.restore(rows, opID: "u1")
+        let undo = try #require(restored)
+        #expect(undo.body["op_type"] == "restore_tunes")
+        #expect(names(log) == ["A", "B", "C"])
+        log.rollback("u1")
+        #expect(names(log) == ["B"])
+    }
+
+    @Test("a set's starter goes on every tune in it, in one op")
+    func starter() throws {
+        var log = LiveLog(records: [rec(1, "a1", name: "A"), rec(2, "a2", name: "B"), rec(3, "a3", type: "break"), rec(4, "a4", name: "C")])
+        let set = LogState.segmentByBreaks(log.ordered)[0].tunes
+        let started = log.setStarter(of: set, personID: 7, name: "Sarah O", opID: "s1")
+        let op = try #require(started)
+        #expect(op.body["record_id"] == 1)
+        #expect(op.body["person_id"] == 7)
+        #expect(log.ordered.filter { $0["started_by_name"] == "Sarah O" }.count == 2)
+        log.rollback("s1")
+        #expect(log.ordered.filter { $0["started_by_name"] == "Sarah O" }.isEmpty)
+    }
+
+    @Test("a paste is adds and breaks in order, each anchored on the one before")
+    func paste() {
+        var log = LiveLog(records: [rec(1, "a1", name: "A"), rec(2, "a2", type: "break"), rec(3, "a3", name: "C")])
+        let sets: [[Selection.ClipTune]] = [[.init(tuneID: 5, name: "X"), .init(tuneID: nil, name: "Y")], [.init(tuneID: nil, name: "Z")]]
+        let ops = log.paste(sets, at: .newSet(.server(3)))
+        #expect(ops.map { $0.opType } == ["add_tune", "add_tune", "set_break", "add_tune", "set_break"])
+        #expect(ops[0].body["before_record_id"] == 3)
+        #expect(ops[0].body["tune_id"] == 5)
+        #expect(ops[0].body["no_merge"] == true)
+        #expect(ops[1].body["after_record_id"] == .string("temp-\(ops[0].opID)"))
+        #expect(ops[2].body["after_record_id"] == .string("temp-\(ops[1].opID)"))
+        #expect(ops[4].body["before_record_id"] == 3)
+        #expect(names(log) == ["A", "|", "X", "Y", "|", "Z", "|", "C"])
+    }
 }

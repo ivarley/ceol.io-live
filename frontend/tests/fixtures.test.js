@@ -9,6 +9,9 @@
 //   functions.<name>.params     argument names, in call order. An input key that is
 //                               absent means "argument not passed" (its default applies).
 //   functions.<name>.mapParams  params that are a JS Map, written as [[key, value], ...]
+//   functions.<name>.setParams  params that are a JS Set, written as [value, ...]
+//   functions.<name>.mapFields  fields of an object result that are Maps, compared as
+//                               [[key, value], ...] in insertion order
 //   functions.<name>.returns    "map": the result is a Map, compared as [[key, value], ...]
 //                               in insertion order
 //   functions.<name>.harness    "clock": stateful on the wall clock — see nextTs
@@ -30,6 +33,7 @@ import * as addsession from '../src/addsession/logic.js'
 import * as sessionpath from '../src/shared/sessionpath.js'
 import * as parse from '../src/shared/parse.js'
 import * as mytunes from '../src/mytunespage/logic.js'
+import * as selection from '../src/selection.js'
 
 import logstateFx from '../src/logstate.fixtures.json'
 import fracindexFx from '../src/fracindex.fixtures.json'
@@ -41,6 +45,7 @@ import addsessionFx from '../src/addsession/logic.fixtures.json'
 import sessionpathFx from '../src/shared/sessionpath.fixtures.json'
 import parseFx from '../src/shared/parse.fixtures.json'
 import mytunesFx from '../src/mytunespage/logic.fixtures.json'
+import selectionFx from '../src/selection.fixtures.json'
 
 const MODULES = [
   { name: 'logstate', mod: logstate, fx: logstateFx, load: () => import('../src/logstate.js') },
@@ -53,21 +58,29 @@ const MODULES = [
   { name: 'shared/sessionpath', mod: sessionpath, fx: sessionpathFx },
   { name: 'shared/parse', mod: parse, fx: parseFx },
   { name: 'mytunespage/logic', mod: mytunes, fx: mytunesFx },
+  { name: 'selection', mod: selection, fx: selectionFx },
 ]
 
 // What a non-JS runner would see: Maps as entry lists, undefined properties gone.
 function toJson(value, spec) {
-  const v = spec.returns === 'map' ? [...value.entries()] : value
+  let v = spec.returns === 'map' ? [...value.entries()] : value
+  if (v && spec.mapFields) {
+    v = { ...v }
+    for (const f of spec.mapFields) v[f] = [...v[f].entries()]
+  }
   return v === undefined ? null : JSON.parse(JSON.stringify(v))
 }
 
 function argsFor(spec, input) {
   const params = spec.params || []
   const maps = new Set(spec.mapParams || [])
+  const sets = new Set(spec.setParams || [])
   // Trailing absent inputs are not passed at all, so JS defaults apply.
   let n = params.length
   while (n > 0 && !(params[n - 1] in input)) n--
-  return params.slice(0, n).map((p) => (maps.has(p) ? new Map(input[p]) : structuredClone(input[p])))
+  return params.slice(0, n).map((p) =>
+    maps.has(p) ? new Map(input[p]) : sets.has(p) ? new Set(input[p]) : structuredClone(input[p])
+  )
 }
 
 // nextTs keeps its high-water mark in module state and reads Date.now(). Each case
