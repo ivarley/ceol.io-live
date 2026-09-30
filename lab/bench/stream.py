@@ -157,7 +157,8 @@ def _window(notes, starts, a, b):
 
 
 def night_features(rid, frontends, index, aligner, board, hop_ms=4000, window_ms=8000,
-                   pool_ms=24000, pool_top=100, keep=6, causal=True, quiet=True):
+                   pool_ms=24000, pool_top=100, keep=6, causal=True, extra_windows=(),
+                   quiet=True):
     """Per chunk: {"t_ms": end of the chunk, "scores": {tune: aligner score},
     "floor": the pool's lowest score, "n_notes"}. Cached per night and
     settings.
@@ -177,7 +178,8 @@ def night_features(rid, frontends, index, aligner, board, hop_ms=4000, window_ms
     key = repr((FEATURES_VERSION, rid, [f.name for f in frontends], [f.version for f in frontends],
                 [sorted(f.params.items()) for f in frontends], index.candidate_set, index.n,
                 aligner.params(), hop_ms, window_ms, pool_ms, pool_top, keep)
-               + (("causal", "hints-v1") if causal else ()))
+               + (("causal", "hints-v1") if causal else ())
+               + ((("extra_windows",) + tuple(extra_windows)) if extra_windows else ()))
     path = _features_path(rid, key)
     if os.path.exists(path):
         with open(path, "rb") as f:
@@ -216,6 +218,14 @@ def night_features(rid, frontends, index, aligner, board, hop_ms=4000, window_ms
                  "n_notes": n_notes}
         if causal:
             chunk.update(_hint_features(store, t, scores, queries, aligner))
+        if extra_windows:
+            # the same tunes scored on only the latest part of the window, so
+            # the decoder can weight the newest notes (`mix_windows`)
+            chunk["by_window"] = {}
+            for w in extra_windows:
+                q = aligner._queries([([n for n in h[0] if n["t0_ms"] >= t - w], None) for h in heard])
+                sw = aligner.scores(tunes, q) if (q and tunes) else {}
+                chunk["by_window"][w] = {k: float(v) for k, v in sw.items()}
         chunks.append(chunk)
     if store is not None:
         store.close()
@@ -274,6 +284,21 @@ class Decoder:
             log = np.maximum(log, -1e9)
             shown.append(ids[int(np.argmax(log))])
         return shown
+
+
+def mix_windows(chunks, weights, window_ms=8000):
+    """Chunks whose scores are a weighted mix of the full window's and the
+    extra windows' (`night_features(extra_windows=...)`), e.g. {8000: 0.5,
+    4000: 0.5}; weights are normalised. The floor is mixed the same way."""
+    total = sum(weights.values())
+    out = []
+    for c in chunks:
+        by = {window_ms: c["scores"], **c.get("by_window", {})}
+        tunes = c["scores"].keys()
+        mixed = {t: sum(w * by[k].get(t, 0.0) for k, w in weights.items()) / total for t in tunes}
+        floor = min(mixed.values()) if mixed else 0.0
+        out.append({**c, "scores": mixed, "floor": floor})
+    return out
 
 
 # eighths in twos or in threes, by tune type; None where the pulse says
@@ -456,7 +481,7 @@ def summarise(rows, gaps=None):
 
 def run_stream(recording_ids, frontends, candidate_set="repertoire", decoder=None, hop_ms=4000,
                window_ms=8000, pool_ms=24000, pool_top=100, keep=6, reading="notes", causal=True,
-               quiet=True):
+               extra_windows=(), quiet=True):
     """Features (cached) and decoding for each night -> (rows, gaps by night)."""
     from lab.bench.retrieval import Aligner
     from lab.board.board import Board
@@ -470,7 +495,8 @@ def run_stream(recording_ids, frontends, candidate_set="repertoire", decoder=Non
         for rid in recording_ids:
             feats = night_features(rid, frontends, index, aligner, board, hop_ms=hop_ms,
                                    window_ms=window_ms, pool_ms=pool_ms, pool_top=pool_top,
-                                   keep=keep, causal=causal, quiet=quiet)
+                                   keep=keep, causal=causal, extra_windows=extra_windows,
+                                   quiet=quiet)
             r, g = score_night(feats, decoder.run(feats["chunks"]), rid)
             for x in r:
                 x["recording_id"] = rid

@@ -59,3 +59,13 @@ def test_meter_hint_moves_off_a_jig_heard_in_twos():
     plain = HintDecoder(tune_types=types).run(jig + reel)
     hinted = HintDecoder(tune_types=types, mu=0.1).run(jig + reel)
     assert hinted.index(2) < plain.index(2) if 2 in plain else 2 in hinted
+
+
+def test_mix_windows_with_only_the_full_window_changes_nothing():
+    from lab.bench.stream import mix_windows
+
+    chunks = [{**chunk({1: 0.6, 2: 0.3}), "by_window": {4000: {1: 0.2, 2: 0.7}}}]
+    assert mix_windows(chunks, {8000: 1.0})[0]["scores"] == {1: 0.6, 2: 0.3}
+    assert mix_windows(chunks, {4000: 1.0})[0]["scores"] == {1: 0.2, 2: 0.7}
+    half = mix_windows(chunks, {8000: 1, 4000: 1})[0]
+    assert half["scores"] == {1: 0.4, 2: 0.5} and half["floor"] == 0.4

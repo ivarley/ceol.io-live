@@ -1944,9 +1944,33 @@ right at the end, 83.6% within 30 s, 1.59 flips, 11.7% of the gaps shown as
 a tune; against the block-tuned setting's 0.885 and 88.5% on the same
 features, a trade of speed for steadiness rather than a gain.
 
-Next: the false starts once the player marks them; the alignment window
-(shorter, or weighted to the latest notes) against carry-over; then the same
-decoder on the board.
+**The alignment window against carry-over (2026-09-30).** Each chunk's
+tunes were also scored on only its last 4 s and last 6 s
+(`night_features(extra_windows=...)`), and the decoder read a mix
+(`mix_windows`: 8 s as before, 6 s, 4 s, 8 s + 4 s, 8 s + 2 x 4 s, 6 s + 4 s),
+each with its own decoder setting. Chosen leaving each tuning night out on
+right-at-the-end plus within-30-s, the 8 s window won every fold, so on that
+objective nothing changes (+0/-0). Carry-over is not in that objective, and
+the trade is plain when each window at its own best setting is paired
+against 8 s:
+
+| window | seven nights (in-sample): right at end | within 30 s | carry-over shorter / longer | night 140 new 61: carry median, 90th percentile | right at end | within 30 s |
+|---|---|---|---|---|---|---|
+| 8 s | 0.950 | 89.2% | | 11.0 s, 15.0 s | 0.902 | 83.6% |
+| 6 s | +2/-6 (p 0.29) | +6/-7 | 141 / 5 (p < 0.001) | 8.7 s, 11.7 s (21 / 0) | +1/-2 | +2/-0 |
+| 4 s | +0/-19 (p < 0.001) | +7/-16 | 212 / 6 | 6.9 s, 10.8 s (28 / 0) | +0/-4 | +2/-0 |
+| 8 s + 4 s | +2/-14 (p 0.004) | +12/-3 (p 0.04) | 242 / 0 | 6.3 s, 10.3 s (32 / 0) | +0/-3 | +3/-0 |
+
+Six seconds takes about 2.5 s off the time the previous tune stays on
+display, on both the tuning nights and the held-out segments, at no
+measurable cost to the answer at the end or to speed; four seconds, or
+mixing it in, takes off about 4 s and costs the answer at the end
+significantly. Which to use is a product choice between a display that lets
+go sooner and one that is steadier; 6 s is the one that costs nothing
+measurable. Not yet the default.
+
+Next: the false starts once the player marks them; then the same decoder
+on the board.
 
 ### Still open
 
