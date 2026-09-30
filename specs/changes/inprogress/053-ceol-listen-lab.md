@@ -1824,6 +1824,59 @@ the lab scratch directory.
 All three are the problem plan item 3 is now framed around: the board holds
 the previous tune after a change, and has no state for "not a tune".
 
+### Is this still the same tune? The change-detection bench (2026-09-29)
+
+Plan item 3, first step. `lab/bench/stream.py` replays a whole night the way
+the live logger hears it and asks of every chunk whether it agrees with the
+tune already believed, a new one has begun, or none is playing. Every 4 s the
+last 8 s of each tracker's notes (tempo-free pitch changes) are aligned, with
+the retrieval bench's own `Aligner`, against a pool: the index's shortlist
+over the trailing 24 s plus the last six chunks' pools. A causal decoder (a
+forward filter over every tune seen plus "not a tune": stay, or jump to a
+pooled tune or to "not a tune"; emission `lam` times the chunk's aligner
+score, "not a tune" scoring `lam * tau`) displays its most believed state.
+No labels are read; they only score it, with the board's measures plus two
+new ones: carry-over (how long the previous tune stays displayed after a
+change inside a set) and the share of the unlabelled time between tunes
+displayed as a tune.
+
+Settings chosen on the seven tuning nights (1-5, 138, 139) over a grid of
+240 (`lam` 10-160, `tau` 0.35-0.6, `p_switch` 0.005-0.1, `p_none` 0.1 or
+0.3; objective top-1 at the end plus within 30 s minus a tenth of the gap
+shown as a tune): `lam` 80, `tau` 0.5, `p_switch` 0.05, `p_none` 0.1, inside
+the grid, and the choice on six nights of seven when each is left out.
+Paired against the board's `fuse3` runs on the same segments:
+
+| | right at end | within 30 s | within 60 s | never | flips | board: right at end, within 30 s, never, flips | paired right at end | paired within 30 s |
+|---|---|---|---|---|---|---|---|---|
+| seven tuning nights, setting chosen leaving each night out (502) | 0.922 | 90.2% | 96.4% | 2.2% | 2.34 | 0.831, 14.5%, 13.9%, 3.09 | +60/-14 (p < 0.001) | +380/-0 |
+| night 140, the 61 new segments, setting from the seven | **0.885** | **88.5%** | 93.4% | 6.6% | 2.30 | 0.721, 9.8%, 23.0%, 2.62 | +11/-1 (p 0.006) | +48/-0 |
+| night 140, the 25 tuned on | 0.880 | 88.0% | 96.0% | 0% | 2.28 | 0.720, 20.0%, 20.0%, 3.08 | +5/-1 | +17/-0 |
+
+On night 140's new segments the previous tune stays displayed a median 6.8 s
+after a change (none over 20 s), 15% of the time between tunes is displayed
+as a tune and none of it as the tune just played. Untuned (`lam` 10,
+`tau` 0.35) the seven nights were 0.936 right at the end but 65.7% within
+30 s, a median 22.8 s of carry-over and 44% of the gaps shown as a tune: the
+tuning trades a little top-1 and more flips (1.49 to 2.34) for answering
+three times as fast and letting go of the previous tune.
+
+**What this is and is not.** It is the aligner answering live, from no
+labels, on a raw night, and on the held-out segments it is right within 30 s
+nine times as often as the board. It is not yet the board: the notes are
+tracked in 60 s blocks and the key filter estimates each block's key over
+the whole block, so a note at time t can be filtered with up to a minute of
+later audio. Tracking is local and the effect should be small, but it is not
+measured, and the board version must be strictly causal. Nor does it find
+boundaries to hand to anything else: the display is the product here.
+Computing a night's features takes 8 to 13 minutes for 3.5 hours of audio,
+about 20 times faster than real time.
+
+Next: the player's hints (passes played, last part reached, usual length,
+a change of meter) as modulations of `p_switch`, each paired; the false
+starts once the player marks them; a causal version of the features; then
+the same decoder on the board.
+
 ### Still open
 
 **The plan, as of 2026-09-29**, merged with `053 files/raising-accuracy.md`
@@ -1856,7 +1909,10 @@ detail), in order:
    and the aligner on the board, and give the player the timeline to read
    against what was played; the bench on its labelled segments beside it.
 3. **The aligner on the board: is this still the same tune?** The bench is
-   at 0.95-0.98 and the board at 0.819: the board is the gap. The player's
+   at 0.95-0.98 and the board at 0.819: the board is the gap. (First step
+   done 2026-09-29: the change-detection bench, 0.885 right at the end and
+   88.5% within 30 s on night 140's held-out segments against the board's
+   0.721 and 9.8%; see its section above.) The player's
    framing (2026-09-29): live, one tune simply becomes another without
    warning, so for every incoming chunk of notes the logger asks whether it
    agrees with the tune it already believes, or whether a new tune has
