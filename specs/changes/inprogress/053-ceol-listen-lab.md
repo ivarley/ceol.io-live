@@ -1893,9 +1893,60 @@ one night and not yet explained. The decoder was tuned on block notes; it
 has not been re-tuned on causal ones, which can only help it. A night's
 causal features take about 7 minutes for 3.5 hours of audio.
 
-Next: the player's hints (passes played, last part reached, usual length,
-a change of meter) as modulations of `p_switch`, each paired; the false
-starts once the player marks them; then the same decoder on the board.
+**The player's hints measure nothing (2026-09-30).** `HintDecoder` makes it
+easier to leave the tune on display at a likely moment, never calling a
+change on its own: once it has been shown for a share of its usual length at
+this session (median labelled length on the tuning nights other than the one
+scored, never night 140; its type's median otherwise); while its latest
+notes sit near the end of the tune as written (the aligner now also returns
+where a chunk's notes end, `analysis.align.where_in_tune`); after a number
+of passes, counted as that position wrapping; and a tune whose meter
+disagrees with the meter heard over the last 12 s, when the pulse is sure of
+it, scoring less. With every hint off it equals `Decoder` (tested). The
+features were recomputed causally for all eight nights with these fields;
+night 140 reproduced its earlier numbers exactly.
+
+Each hint chosen leave-one-night-out on the seven tuning nights from a small
+grid that includes "no hint", paired night by night against the same base
+decoder with no hint:
+
+| hint | seven nights, top-1 at end | within 30 s | night 140 new 61, top-1 / within 30 s |
+|---|---|---|---|
+| usual length | +0/-0 (every fold chose no hint) | +0/-0 | +0/-0 / +0/-0 |
+| end of a pass | +0/-0 | +0/-0 | +0/-0 / +0/-0 |
+| passes played | +0/-1 | +0/-0 | +0/-0 / +0/-0 |
+| change of meter | +0/-0 | +0/-0 | +0/-0 / +0/-0 |
+| all four (in-sample) | +0/-3 | +1/-0 | +0/-0 / +0/-0 |
+
+A first pairing showed every hint at +10 to +12/-0 on the seven nights. That
+was a measurement error, caught before it was reported: the plain decoder's
+rows used a base setting chosen leaving each night out (four different
+choices across the folds), and the hint rows all sat on the base chosen on
+all seven, so the pairing credited the difference between two base settings
+to the hints. Paired against the same base, the gain is gone.
+
+Why nothing: the audio already decides. A tuned `lam` of 40 puts about 12
+nats on a chunk where the new tune scores 0.3 above the old, and the hints
+move the switch prior by ln 2 to ln 10, 0.7 to 2.3 nats; they could only
+matter where two tunes score alike, which is a handful of segments. The
+carry-over that is left (median 10 s) is set by the 8 s alignment window,
+whose first chunks after a change still hold the previous tune, not by
+reluctance to switch. Shortening or weighting the window is the lever for
+that, not the hints. The hints stay in the code, off by default, and the
+meter hint in particular is worth re-testing on the false starts and on the
+board, where evidence is thinner.
+
+The plain decoder re-tuned on causal features: `lam` 40, `tau` 0.45,
+`p_switch` 0.02, `p_none` 0.3 (the leave-one-night-out folds chose among
+four settings). Seven nights, leaving each out: 0.926 right at the end,
+89.6% within 30 s, 2.05 flips, carry-over 9.0 s. Night 140's new 61: 0.902
+right at the end, 83.6% within 30 s, 1.59 flips, 11.7% of the gaps shown as
+a tune; against the block-tuned setting's 0.885 and 88.5% on the same
+features, a trade of speed for steadiness rather than a gain.
+
+Next: the false starts once the player marks them; the alignment window
+(shorter, or weighted to the latest notes) against carry-over; then the same
+decoder on the board.
 
 ### Still open
 

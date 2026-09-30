@@ -126,6 +126,31 @@ def causal_notes(fe, track, store, a, t):
     return notes
 
 
+def _hint_features(store, t, scores, queries, aligner, meter_ms=12000, top=5):
+    """What the player's hints need, per chunk: the meter heard over the
+    trailing `meter_ms` (2 = eighths in twos, reels, hornpipes, polkas; 3 =
+    in threes, jigs, slides, slip jigs), and for the `top` best-scoring tunes
+    where in the tune the most recent notes sit (0..1 of the tune once
+    through), from whichever tracker's latest notes align best."""
+    from lab.analysis.align import where_in_tune
+    from lab.analysis.pulse import estimate_pulse
+
+    pulse = estimate_pulse(store.read(max(0, t - meter_ms), t), store.sr) or {}
+    out = {"grouping": pulse.get("grouping"), "grouping_margin": pulse.get("grouping_margin"),
+           "period_ms": pulse.get("period_ms"), "where": {}}
+    plain = [q for kind, q in queries if kind == "notes"]
+    for tid in sorted(scores, key=lambda k: -scores[k])[:top]:
+        best = (0.0, None)
+        for _, _, target in aligner.sequences.by_tune.get(tid) or []:
+            for q in plain:
+                got = where_in_tune(q, target, chunk=aligner.chunk_notes)
+                if got[1] is not None and got[0] > best[0]:
+                    best = got
+        if best[1] is not None:
+            out["where"][tid] = round(float(best[1]), 4)
+    return out
+
+
 def _window(notes, starts, a, b):
     i, j = np.searchsorted(starts, a), np.searchsorted(starts, b)
     return notes[i:j]
@@ -152,7 +177,7 @@ def night_features(rid, frontends, index, aligner, board, hop_ms=4000, window_ms
     key = repr((FEATURES_VERSION, rid, [f.name for f in frontends], [f.version for f in frontends],
                 [sorted(f.params.items()) for f in frontends], index.candidate_set, index.n,
                 aligner.params(), hop_ms, window_ms, pool_ms, pool_top, keep)
-               + (("causal",) if causal else ()))
+               + (("causal", "hints-v1") if causal else ()))
     path = _features_path(rid, key)
     if os.path.exists(path):
         with open(path, "rb") as f:
@@ -186,9 +211,12 @@ def night_features(rid, frontends, index, aligner, board, hop_ms=4000, window_ms
         n_notes = sum(len(h[0]) for h in heard)
         queries = aligner._queries(heard)
         scores = aligner.scores(tunes, queries) if (queries and tunes) else {}
-        chunks.append({"t_ms": t, "scores": {k: float(v) for k, v in scores.items()},
-                       "floor": float(min(scores.values())) if scores else 0.0,
-                       "n_notes": n_notes})
+        chunk = {"t_ms": t, "scores": {k: float(v) for k, v in scores.items()},
+                 "floor": float(min(scores.values())) if scores else 0.0,
+                 "n_notes": n_notes}
+        if causal:
+            chunk.update(_hint_features(store, t, scores, queries, aligner))
+        chunks.append(chunk)
     if store is not None:
         store.close()
     out = {"recording_id": rid, "hop_ms": hop_ms, "window_ms": window_ms, "chunks": chunks,
@@ -246,6 +274,121 @@ class Decoder:
             log = np.maximum(log, -1e9)
             shown.append(ids[int(np.argmax(log))])
         return shown
+
+
+# eighths in twos or in threes, by tune type; None where the pulse says
+# nothing useful (waltzes, mazurkas, set dances)
+METER = {"reel": 2, "hornpipe": 2, "polka": 2, "barndance": 2, "strathspey": 2, "march": 2,
+         "jig": 3, "slide": 3, "slip jig": 3, "hop jig": 3}
+
+
+class HintDecoder(Decoder):
+    """`Decoder` with the player's hints, each making it easier to leave the
+    tune on display at a likely moment, none calling a change on its own:
+
+    - `m_dur`: the leave probability is multiplied by this once the tune has
+      been displayed for `dur_frac` of its usual length at this session
+      (`usual_s`, from labelled nights other than the one scored);
+    - `m_end`: multiplied by this while its latest notes sit past `end_frac`
+      of the tune as written (the end of a pass);
+    - `m_pass`: multiplied by this once `n_pass` passes have been counted
+      (the position wrapping from past 0.7 to under 0.3) and it is at the end
+      of one;
+    - `mu`: a tune whose meter disagrees with the meter heard, when the pulse
+      is sure of it (`grouping_margin` >= `margin`), scores `lam * mu` less.
+
+    With the factors at 1 and `mu` 0 it is `Decoder`, value for value.
+
+    Measured 2026-09-30, each hint chosen leave-one-night-out on the seven
+    tuning nights and paired against the same base with no hint: usual
+    length +0/-0, end of a pass +0/-0, passes +0/-1, meter +0/-0; all four
+    +0/-3; night 140's held-out 61 +0/-0 for every one. The audio already
+    decides (see the spec). Off by default."""
+
+    def __init__(self, usual_s=None, tune_types=None, m_dur=1.0, dur_frac=0.8, m_end=1.0,
+                 end_frac=0.85, m_pass=1.0, n_pass=3, mu=0.0, margin=0.2, **kw):
+        super().__init__(**kw)
+        self.usual_s, self.tune_types = usual_s or {}, tune_types or {}
+        self.m_dur, self.dur_frac, self.m_end, self.end_frac = m_dur, dur_frac, m_end, end_frac
+        self.m_pass, self.n_pass, self.mu, self.margin = m_pass, n_pass, mu, margin
+
+    def params(self):
+        return {**super().params(), "m_dur": self.m_dur, "dur_frac": self.dur_frac,
+                "m_end": self.m_end, "end_frac": self.end_frac, "m_pass": self.m_pass,
+                "n_pass": self.n_pass, "mu": self.mu, "margin": self.margin}
+
+    def run(self, chunks):
+        ids = [NONE]
+        where = {NONE: 0}
+        log = np.array([0.0])
+        shown = []
+        showing, since_ms, passes, last_pos = None, None, 0, None
+        for c in chunks:
+            scores, floor = c["scores"], c["floor"]
+            fresh = [t for t in scores if t not in where]
+            if fresh:
+                for t in fresh:
+                    where[t] = len(ids)
+                    ids.append(t)
+                log = np.concatenate([log, np.full(len(fresh), -1e9)])
+            n = len(ids)
+            emit = np.full(n, self.lam * floor)
+            emit[0] = self.lam * self.tau
+            in_pool = np.zeros(n, dtype=bool)
+            if scores:
+                rows = np.fromiter((where[t] for t in scores), dtype=np.int64, count=len(scores))
+                emit[rows] = self.lam * np.fromiter(scores.values(), dtype=float, count=len(scores))
+                in_pool[rows] = True
+            heard = c.get("grouping")
+            if self.mu and heard and (c.get("grouping_margin") or 0) >= self.margin:
+                for t, row in where.items():
+                    m = METER.get((self.tune_types.get(t) or "").strip().lower())
+                    if m and m != heard:
+                        emit[row] -= self.lam * self.mu
+            # the displayed tune's leave probability, from the hints
+            p = np.full(n, self.p_switch)
+            if showing is not None and showing != NONE:
+                factor = 1.0
+                usual = self.usual_s.get(showing)
+                if usual and (c["t_ms"] - since_ms) / 1000.0 >= self.dur_frac * usual:
+                    factor *= self.m_dur
+                pos = (c.get("where") or {}).get(showing)
+                if pos is not None:
+                    if last_pos is not None and last_pos > 0.7 and pos < 0.3:
+                        passes += 1
+                    last_pos = pos
+                    if pos >= self.end_frac:
+                        factor *= self.m_end
+                        if passes >= self.n_pass - 1:
+                            factor *= self.m_pass
+                p[where[showing]] = min(0.9, self.p_switch * factor)
+            jump = np.logaddexp.reduce(np.log(p) + log)
+            jump_tune = jump + math.log(1 - self.p_none) - math.log(max(1, len(scores)))
+            jump_none = jump + math.log(self.p_none)
+            prior = np.log1p(-p) + log
+            prior[in_pool] = np.logaddexp(prior[in_pool], jump_tune)
+            prior[0] = np.logaddexp(prior[0], jump_none)
+            new = prior + emit
+            log = new - np.logaddexp.reduce(new)
+            log = np.maximum(log, -1e9)
+            now = ids[int(np.argmax(log))]
+            if now != showing:
+                showing, since_ms, passes, last_pos = now, c["t_ms"], 0, None
+            shown.append(now)
+        return shown
+
+
+def usual_durations(recording_ids):
+    """{tune: median labelled duration in seconds} over these nights, plus
+    {type: median} as the fallback for a tune not labelled on any of them."""
+    by_tune, by_type = defaultdict(list), defaultdict(list)
+    for rid in recording_ids:
+        for s in load_ground_truth(rid).eval_segments():
+            if s.evaluated and s.tune_id is not None and not s.capped:
+                by_tune[s.tune_id].append(s.duration_ms / 1000.0)
+                by_type[(s.tune_type or "").strip().lower()].append(s.duration_ms / 1000.0)
+    return ({t: float(np.median(v)) for t, v in by_tune.items()},
+            {t: float(np.median(v)) for t, v in by_type.items()})
 
 
 def score_night(features, shown, rid, gap_min_ms=15000, edge_ms=5000):

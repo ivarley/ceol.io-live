@@ -97,3 +97,15 @@ def test_aligner_batched_rerank_equals_the_one_at_a_time_scores():
         queries = al._queries(heard)
         tunes = [1, 2, 3, 4, 5, 6, 7, 9]
         assert al.scores(tunes, queries) == {t: al.score(t, queries) for t in tunes}
+
+
+def test_where_in_tune_finds_the_position_of_the_latest_notes():
+    from lab.analysis.align import local_align, local_align_end, where_in_tune
+
+    tune = list(range(12)) * 2 + [0, 2, 4, 5, 7, 9, 11, 0, 11, 9, 7, 5, 4, 2, 0, 2] * 2   # 56 long
+    q = np.asarray(tune[30:50], dtype=np.int8)
+    t = np.asarray(tune, dtype=np.int8)
+    assert local_align_end(q, t, 2.0, -1.0, -1.0)[0] == local_align(q, t, 2.0, -1.0, -1.0)
+    score, pos = where_in_tune(tune[30:50], tune, chunk=16)
+    assert score == 32.0
+    assert abs(pos - 49 / len(tune)) < 1e-9

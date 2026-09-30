@@ -146,3 +146,53 @@ def batch_chunk_scores(queries, targets, match=2.0, mismatch=-1.0, gap=-1.0):
     empty = [ti for ti, t in enumerate(targets) if len(t) == 0]
     out[:, empty] = 0.0
     return out
+
+
+@njit(cache=True)
+def local_align_end(q, t, match, mismatch, gap):
+    """`local_align`, also returning where in t the best alignment ends
+    (1-based column; 0 when nothing aligns)."""
+    m = t.shape[0]
+    prev = np.zeros(m + 1)
+    cur = np.zeros(m + 1)
+    best, end = 0.0, 0
+    for i in range(q.shape[0]):
+        qi = q[i]
+        cur[0] = 0.0
+        for j in range(1, m + 1):
+            tj = t[j - 1]
+            if qi < 0 or tj < 0:
+                s = 0.0
+            elif qi == tj:
+                s = match
+            else:
+                s = mismatch
+            v = prev[j - 1] + s
+            a = prev[j] + gap
+            if a > v:
+                v = a
+            b = cur[j - 1] + gap
+            if b > v:
+                v = b
+            if v < 0.0:
+                v = 0.0
+            cur[j] = v
+            if v > best:
+                best, end = v, j
+        for j in range(m + 1):
+            prev[j] = cur[j]
+    return best, end
+
+
+def where_in_tune(query, target, chunk=24, match=2.0, mismatch=-1.0, gap=-1.0):
+    """Where the most recent `chunk` symbols of the query sit in the tune:
+    (score of that piece, position of its end as a share of the tune once
+    through, 0..1). The tune is written twice over, as `chunk_score` aligns."""
+    q = np.asarray(query[-chunk:], dtype=np.int8)
+    t = np.asarray(target, dtype=np.int8)
+    if len(t) == 0 or (q >= 0).sum() < chunk // 4:
+        return 0.0, None
+    score, end = local_align_end(q, np.concatenate([t, t]), match, mismatch, gap)
+    if end == 0:
+        return 0.0, None
+    return score, ((end - 1) % len(t)) / len(t)
