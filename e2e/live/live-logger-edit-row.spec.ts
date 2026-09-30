@@ -74,4 +74,45 @@ test.describe("live logger — one tune, in edit mode", () => {
     await page.reload();
     await expect(rowByName(page, "Silver Spear")).not.toHaveClass(/unlinked/, { timeout: 15_000 });
   });
+
+  test("seam mode: End set at a closed set's end, or a tap on empty space, goes back to the end", async ({ page, request }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await seedLog(request, inst, [["Sm Alpha", "Sm Bravo"], ["Sm Charlie"]]);
+    await openLogger(page, inst);
+    const endSeam = page.locator('.seam.end-seam');
+    await expect(endSeam).toHaveClass(/active/);
+    // After the last tune of the closed first set: End set is offered, and returns to the end.
+    await rowByName(page, "Sm Bravo").click();
+    await page.locator(".insert-pill.bottom").click();
+    await expect(endSeam).not.toHaveClass(/active/);
+    const endHere = page.locator(".composer .endset", { hasText: "End set" });
+    await expect(endHere).toBeVisible();
+    await endHere.click();
+    await expect(endSeam).toHaveClass(/active/);
+    // Mid-set: a click on the empty part of the list returns to the end.
+    await rowByName(page, "Sm Bravo").click();
+    await page.locator(".insert-pill.top").click();
+    await expect(endSeam).not.toHaveClass(/active/);
+    await expect(page.locator(".composer .endset")).toHaveCount(0);
+    const sets = (await page.locator(".sets").boundingBox())!;
+    const last = (await page.locator(".set").last().boundingBox())!;
+    await page.mouse.click(sets.x + sets.width / 2, Math.min(sets.y + sets.height - 10, last.y + last.height + 40));
+    await expect(endSeam).toHaveClass(/active/);
+  });
+
+  test("search opens from the right on a phone", async ({ page, request }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await seedLog(request, inst, [["Sr Alpha"]]);
+    await openLogger(page, inst);
+    await page.locator(".composer input").fill("kesh");
+    await page.locator(".composer .search-btn").click();
+    const modal = page.locator(".deep-modal");
+    // Mid-slide it's still off to the right; then it settles across the screen.
+    await expect(modal).toBeVisible();
+    const early = (await modal.boundingBox())!;
+    await page.waitForTimeout(400);
+    const settled = (await modal.boundingBox())!;
+    expect(settled.x).toBeLessThan(early.x + 1);
+    expect(settled.x).toBeLessThanOrEqual(1);
+  });
 });

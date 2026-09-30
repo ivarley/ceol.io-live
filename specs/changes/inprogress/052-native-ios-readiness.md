@@ -1942,3 +1942,19 @@ The plan (Phases 0-6) runs from here in `ios/`; see `ios/README.md` for the layo
     New tests: `testWorkingOnOneNight` (all of it, on the server), and web
     `live-logger-edit-row.spec.ts`. Not in a test: changing the date (the test deletes
     its night by date).
+  - **More logger UX, 2026-09-30.**
+    - Search comes in from the right (web phone sheet and app), matching the desktop's
+      right-hand pane and where an iPad pane would sit. In the app it's a panel over the
+      night, swiped away to the right; it has no NavigationStack of its own (one nested
+      inside the night's popped the night).
+    - Leaving "seam mode" (the yellow line away from the end): a tap on the log's empty
+      space puts the cursor back at the end, and at the end of a closed set the composer
+      offers End set, which does the same (`cursorAtClosedSetEnd` in logstate.js,
+      fixtured, ported). Web and app. The footer's Done still means "leave editing".
+    - The night's audio in the app, as on the web (spec 050 read side): ▶ on each
+      timestamped tune, ▶ / ■ on its set, the tune playing tinted green, and the player
+      (Repeat 1, Auto-continue, HD, a scrubber within the tune). `/audio` decides who
+      hears it (the segmenter's gate); locally, with no S3, a debug-only
+      `-CeolTestAudioURL` plays a test tone (`CeolUITests/tone.m4a`).
+    Tests: `testLeavingSeamModeAndSearchFromTheRight`, `testHearingANight`, and two more
+    in the web's `live-logger-edit-row.spec.ts`.

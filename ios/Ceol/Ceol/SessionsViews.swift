@@ -543,6 +543,7 @@ struct NightView: View {
     let title: String
     @State private var model: NightModel?
     @State private var deepSearching = false
+    @State private var searchDrag: CGFloat = 0
     @FocusState private var composerFocused: Bool
     @State private var infoTune: TuneRef?
     @State private var assigning = false
@@ -573,7 +574,7 @@ struct NightView: View {
         .background(CeolTokens.bgColor)
         .ceolPushedBar(title)
         .toolbar {
-            if let model, model.log != nil, model.status != .finished {
+            if let model, model.log != nil, model.status != .finished, !deepSearching {
                 ToolbarItem(placement: .topBarTrailing) {
                     if model.selecting {
                         Button("Done") { model.setSelecting(false) }
@@ -617,6 +618,9 @@ struct NightView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if let model, model.editing, let log = model.log {
                 VStack(spacing: 6) {
+                    if model.player.isPlaying {
+                        PlayerBar(player: model.player, name: playingName(model)).padding(.horizontal, 16)
+                    }
                     LogToasts(model: model)
                     if model.selecting {
                         SelectionBar(model: model, trackStarters: trackStarters(model.night)) { assigning = true }
@@ -648,11 +652,14 @@ struct NightView: View {
         .sheet(isPresented: Binding(get: { model?.review != nil }, set: { if !$0 { model?.review = nil } })) {
             if let items = model?.review { ReviewSheet(items: items) }
         }
-        .sheet(isPresented: $deepSearching) {
-            if let model {
+        // Deep search comes in from the right, as the desktop web's pane sits on the right
+        // (and an iPad's would): a panel over the night, swiped away to the right.
+        .overlay {
+            if deepSearching, let model {
                 DeepSearchSheet(
                     model: model, initialQuery: model.composer.text,
-                    preferType: Composer.setTuneType(model.cursorSegment)
+                    preferType: Composer.setTuneType(model.cursorSegment),
+                    onClose: { closeSearch() }
                 ) { payload in
                     if model.composer.editingID != nil {
                         // Searching while editing a logged tune: the pick relinks it.
@@ -662,8 +669,20 @@ struct NightView: View {
                         model.logTune(payload)
                     }
                 }
+                .offset(x: max(0, searchDrag))
+                .gesture(
+                    SwipeLeft(
+                        rightward: true,
+                        onChange: { searchDrag = max(0, $0) },
+                        onEnd: { x in
+                            if x > 100 { closeSearch() }
+                            withAnimation(.spring(duration: 0.25)) { searchDrag = 0 }
+                        }))
+                .transition(.move(edge: .trailing))
+                .zIndex(2)
             }
         }
+        .animation(.easeOut(duration: 0.25), value: deepSearching)
         .sheet(isPresented: $showingDetails) {
             if let model { LogDetailsSheet(model: model) { managingAttendance = true } }
         }
@@ -751,6 +770,11 @@ struct NightView: View {
                     )
                     .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 24)
                     .animation(.easeOut(duration: 0.2), value: log.records)
+                    // Room under the last set, and a tap there leaves seam mode.
+                    Color.clear.frame(height: 160)
+                        .contentShape(Rectangle())
+                        .onTapGesture { model.leaveSeam() }
+                        .accessibilityHidden(true)
                 } else {
                 VStack(spacing: 12) {
                     if sets.isEmpty {
@@ -761,7 +785,9 @@ struct NightView: View {
                         let first = set.tunes.first?.recordID
                         SetCard(
                             label: LogState.setLabel(set.tunes), starter: trackStarters ? setStarter(set.tunes) : nil,
-                            onLabelTap: { withAnimation(.easeOut(duration: 0.15)) { openTray = openTray == first ? nil : first } }
+                            onLabelTap: { withAnimation(.easeOut(duration: 0.15)) { openTray = openTray == first ? nil : first } },
+                            play: model.player.queueFor(set.tunes).isEmpty
+                                ? nil : (model.player.setIsPlaying(set.tunes), { model.player.toggleSet(set.tunes) })
                         ) {
                             if openTray == first {
                                 SetTray(
@@ -769,20 +795,29 @@ struct NightView: View {
                                     timeZone: b["timezone"]?.stringValue.flatMap(TimeZone.init(identifier:)))
                             }
                             ForEach(Array(set.tunes.enumerated()), id: \.element) { _, t in
-                                // Tap a tune for its details, as on the web.
-                                Button { openInfo(t, b) } label: {
-                                    Text(t["name"]?.stringValue ?? "Unknown tune")
-                                        .font(.ceol(size: 19))
-                                        .foregroundStyle(CeolTokens.textColor)
-                                        .multilineTextAlignment(.leading)
-                                        .padding(.vertical, 9)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                        .contentShape(Rectangle())
+                                // Tap a tune for its details, as on the web; ▶ where it has audio.
+                                HStack(spacing: 0) {
+                                    Button { openInfo(t, b) } label: {
+                                        Text(t["name"]?.stringValue ?? "Unknown tune")
+                                            .font(.ceol(size: 19))
+                                            .foregroundStyle(CeolTokens.textColor)
+                                            .multilineTextAlignment(.leading)
+                                            .padding(.vertical, 9)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                            .contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(.plain)
+                                    .accessibilityIdentifier("night.tune")
+                                    if let id = t.recordID, model.player.resolved[id] != nil {
+                                        TunePlayButton(
+                                            playing: model.player.playingID == id, paused: model.player.paused,
+                                            action: { model.player.toggleTune(set.tunes, id) })
+                                    }
                                 }
-                                .buttonStyle(.plain)
+                                .padding(.horizontal, 4)
+                                .nowPlaying(t.recordID != nil && model.player.playingID == t.recordID)
                                 .remoteFlash(model, t.recordID)
                                 .transition(.opacity.combined(with: .move(edge: .top)))
-                                .accessibilityIdentifier("night.tune")
                             }
                         }
                         .accessibilityElement(children: .contain)
@@ -811,9 +846,24 @@ struct NightView: View {
             }
         }
         .scrollDismissesKeyboard(.interactively)
+        // A tap on empty space in the log (between the sets, or below them when it's
+        // short) leaves seam mode, as on the web.
+        .background {
+            if model.editing {
+                Color.clear.contentShape(Rectangle()).onTapGesture { model.leaveSeam() }
+            }
+        }
         .scrollPosition($scroll)
         .onScrollGeometryChange(for: ScrollGeometry.self) { $0 } action: { _, g in scrollGeometry = g }
         .coordinateSpace(name: nightScrollSpace)
+        .overlay(alignment: .bottom) {
+            // Watching, the player sits above the tab bar (editing, above the composer).
+            if !model.editing && model.player.isPlaying {
+                PlayerBar(player: model.player, name: playingName(model))
+                    .padding(.horizontal, 16).padding(.bottom, CeolTabBar.height + 8)
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: model.player.isPlaying)
         .overlay(alignment: .top) {
             // Just below the night's header, as the web's sit below its own; once the
             // header scrolls away, at the top.
@@ -854,6 +904,16 @@ struct NightView: View {
         infoTune = TuneRef(
             id: id, name: t["name"]?.stringValue ?? "", type: t["tune_type"]?.stringValue,
             sessionPath: b["session_path"]?.stringValue, statusKnown: false)
+    }
+
+    private func playingName(_ model: NightModel) -> String {
+        guard let id = model.player.playingID else { return "Playing" }
+        return model.log?.records.first { $0.recordID == id }?["name"]?.stringValue ?? "Playing"
+    }
+
+    private func closeSearch() {
+        deepSearching = false
+        searchDrag = 0
     }
 
     private func finishEditing() {

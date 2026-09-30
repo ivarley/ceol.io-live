@@ -9,10 +9,11 @@ import CeolLogic
 import SwiftUI
 
 struct DeepSearchSheet: View {
-    @Environment(\.dismiss) private var dismiss
     let model: NightModel
     let initialQuery: String
     let preferType: String?
+    /// Close the panel (Cancel, a swipe to the right, or after a pick).
+    let onClose: () -> Void
     /// {tune_id, name, tune_type}, {thesession_id, ...}, or {name}.
     let onPick: ([String: JSONValue]) -> Void
 
@@ -30,8 +31,13 @@ struct DeepSearchSheet: View {
 
     static let types = ["jig", "reel", "slip jig", "hornpipe", "polka", "slide", "waltz", "barndance", "strathspey", "three-two", "mazurka", "march"]
 
+    @FocusState private var fieldFocused: Bool
+
     var body: some View {
-        NavigationStack {
+        // No NavigationStack of its own: it's a panel over a screen that's already in one,
+        // and a stack nested there pops the screen underneath.
+        VStack(spacing: 0) {
+            header
             ScrollView {
                 VStack(alignment: .leading, spacing: 10) {
                     filters
@@ -74,15 +80,44 @@ struct DeepSearchSheet: View {
                 .font(.ceol(size: 15))
                 .padding(16)
             }
-            .background(CeolTokens.drawerBg)
-            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: prompt)
-            .autocorrectionDisabled()
-            .navigationTitle("Find a tune")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+            .scrollDismissesKeyboard(.interactively)
         }
+        .background(CeolTokens.drawerBg)
         .task(id: "\(query)|\(mode.rawValue)|\(type ?? "")") { await search() }
         .onAppear { if query.isEmpty { query = initialQuery } }
+    }
+
+    /// Cancel, the title, and the search field.
+    private var header: some View {
+        VStack(spacing: 10) {
+            ZStack {
+                Text("Find a tune").font(.ceol(size: 17, weight: .semibold)).foregroundStyle(CeolTokens.textColor)
+                HStack {
+                    Button("Cancel", action: onClose)
+                        .font(.ceol(size: 16)).foregroundStyle(CeolTokens.primary)
+                        .accessibilityIdentifier("deep.cancel")
+                    Spacer()
+                }
+            }
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass").foregroundStyle(CeolTokens.textMuted)
+                TextField("", text: $query, prompt: Text(prompt).foregroundStyle(CeolTokens.textMuted))
+                    .font(.ceol(size: 16)).foregroundStyle(CeolTokens.textColor)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                    .focused($fieldFocused)
+                    .submitLabel(.search)
+                    .accessibilityIdentifier("deep.field")
+                if !query.isEmpty {
+                    Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(CeolTokens.textMuted) }
+                        .buttonStyle(.plain).accessibilityLabel("Clear search")
+                }
+            }
+            .padding(.horizontal, 12).frame(height: 40)
+            .background(CeolTokens.headerBg, in: RoundedRectangle(cornerRadius: 10))
+        }
+        .padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 8)
+        .background(CeolTokens.drawerBg)
     }
 
     private var prompt: String {
@@ -163,7 +198,7 @@ struct DeepSearchSheet: View {
 
     private func pick(_ payload: [String: JSONValue]) {
         onPick(payload)
-        dismiss()
+        onClose()
     }
 
     private func search() async {

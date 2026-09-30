@@ -1250,6 +1250,144 @@ final class CeolUITests: XCTestCase {
         XCTAssertTrue(app.buttons["night.editBottom"].waitForExistence(timeout: 10), "editable again")
     }
 
+    /// Hearing a night (spec 050): the seeded recording's night gets three timestamped
+    /// tunes (over the segmenter's API); locally there's no S3, so the app plays a test
+    /// tone instead (-CeolTestAudioURL). The tunes and their set get ▶ buttons, a tune
+    /// plays in the player, next moves on, and stop ends it. The marks go after.
+    @MainActor
+    func testHearingANight() async throws {
+        let api = try await TestAPI.signedIn(server: server)
+        let instanceID = 449  // Mueller, 27 March 2025: the seeded recording's night
+        let recordingID = 1
+        let b = try await api.get("/api/live/instances/\(instanceID)/bootstrap")
+        let tunes = ((b["records"] as? [[String: Any]]) ?? [])
+            .filter { ($0["deleted"] as? Bool) != true }
+            .sorted { ($0["order_position"] as? String ?? "") < ($1["order_position"] as? String ?? "") }
+        // The first set's first three tunes.
+        var firstSet: [[String: Any]] = []
+        for r in tunes {
+            if (r["record_type"] as? String) == "break" { break }
+            firstSet.append(r)
+        }
+        let marked = Array(firstSet.prefix(3))
+        XCTAssertEqual(marked.count, 3, "the seeded night's first set")
+        let ids = marked.compactMap { $0["session_instance_tune_id"] as? Int }
+        for (i, id) in ids.enumerated() {
+            _ = try await api.put("/api/recordings/\(recordingID)/segments/\(id)", ["start_ms": i * 3000])
+        }
+        addTeardownBlock {
+            for id in ids { _ = try? await api.delete("/api/recordings/\(recordingID)/segments/\(id)") }
+        }
+        let tone = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appending(path: "tone.m4a").absoluteString
+        let app = launch(extra: ["-CeolTestAudioURL", tone])
+        signIn(app)
+        app.buttons["tab.sessions"].firstMatch.tap()
+        let mueller = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Mueller Session'")).firstMatch
+        XCTAssertTrue(mueller.waitForExistence(timeout: 10))
+        mueller.tap()
+        app.buttons.containing(NSPredicate(format: "label BEGINSWITH 'Logs'")).firstMatch.tap()
+        let night = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Mar 27' OR label CONTAINS '27 Mar'")).firstMatch
+        for _ in 0..<12 where !night.exists { app.swipeUp() }
+        XCTAssertTrue(night.waitForExistence(timeout: 5), "the 27 March 2025 night")
+        night.tap()
+
+        let plays = app.buttons.matching(identifier: "tune.play")
+        XCTAssertTrue(plays.firstMatch.waitForExistence(timeout: 15), "▶ on the timestamped tunes")
+        XCTAssertEqual(plays.count, 3)
+        XCTAssertTrue(app.buttons["set.play"].exists, "▶ on their set")
+        plays.firstMatch.tap()
+        let player = app.descendants(matching: .any)["player"]
+        XCTAssertTrue(player.waitForExistence(timeout: 5), "the player")
+        let first = marked[0]["name"] as? String ?? ""
+        XCTAssertTrue(app.buttons["player.open"].label.contains(first) || app.staticTexts[first].exists)
+        app.buttons["player.open"].tap()
+        let position = app.staticTexts.matching(NSPredicate(format: "label ENDSWITH ' of 3'")).firstMatch
+        XCTAssertTrue(position.waitForExistence(timeout: 5))
+        snapshot("player")
+        // The test tunes are three seconds long, so it may already have moved on: pause,
+        // then Next moves one on from wherever it is.
+        app.buttons["player.toggle"].tap()
+        let here = Int(position.label.prefix { $0.isNumber }) ?? 1
+        if here < 3 {
+            app.buttons["Next tune"].tap()
+            XCTAssertTrue(app.staticTexts["\(here + 1) of 3"].waitForExistence(timeout: 5))
+        }
+        app.buttons["player.stop"].tap()
+        XCTAssertTrue(player.waitForNonExistence(timeout: 5))
+        // The set's ▶ plays it; its ■ stops it.
+        app.buttons["set.play"].tap()
+        XCTAssertTrue(player.waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons["set.play"].label, "Stop")
+        app.buttons["set.play"].tap()
+        XCTAssertTrue(player.waitForNonExistence(timeout: 5))
+    }
+
+    /// Leaving "seam mode" (the yellow line away from the end): End set at the end of a
+    /// closed set, and a tap on empty space, both put the cursor back at the end; and
+    /// search opens as a panel from the right, swiped away to the right.
+    @MainActor
+    func testLeavingSeamModeAndSearchFromTheRight() async throws {
+        let api = try await TestAPI.signedIn(server: server)
+        let date = String(format: "2012-%02d-%02d", Int.random(in: 1...12), Int.random(in: 1...28))
+        let made = try await api.post("/api/sessions/austin/mueller/add_instance", ["date": date])
+        let instanceID = try XCTUnwrap(made["session_instance_id"] as? Int, "\(made)")
+        addTeardownBlock { _ = try? await api.delete("/api/sessions/austin/mueller/\(date)/delete") }
+        let ops = "/api/live/instances/\(instanceID)/ops"
+        for name in ["Seam Alpha", "Seam Bravo"] {
+            _ = try await api.post(ops, ["op_id": UUID().uuidString.lowercased(), "op_type": "add_tune", "name": name, "no_match": true])
+        }
+        _ = try await api.post(ops, ["op_id": UUID().uuidString.lowercased(), "op_type": "set_break", "action": "insert", "after_record_id": NSNull()])
+        _ = try await api.post(ops, ["op_id": UUID().uuidString.lowercased(), "op_type": "add_tune", "name": "Seam Charlie", "no_match": true])
+
+        let app = launch()
+        signIn(app)
+        let item = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Finish logging' AND label CONTAINS '2012'")).firstMatch
+        XCTAssertTrue(item.waitForExistence(timeout: 15))
+        item.tap()
+        XCTAssertTrue(app.buttons["night.edit"].waitForExistence(timeout: 15))
+        app.buttons["night.edit"].tap()
+        let input = app.textFields["log.input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 5))
+        func atTheEnd() -> Bool { input.placeholderValue == "Tune name" }
+        XCTAssertTrue(atTheEnd())
+
+        // After the last tune of the closed first set: End set, back to the end.
+        app.staticTexts["Seam Bravo"].tap()
+        app.buttons["row.insertBelow"].tap()
+        XCTAssertFalse(atTheEnd())
+        let endHere = app.buttons["log.endSetHere"]
+        XCTAssertTrue(endHere.waitForExistence(timeout: 3), "End set at the end of a closed set")
+        snapshot("seam at set end")
+        endHere.tap()
+        XCTAssertTrue(atTheEnd())
+
+        // Mid-set: a tap on the empty space below the log, back to the end.
+        app.staticTexts["Seam Bravo"].tap()
+        app.buttons["row.insertAbove"].tap()
+        XCTAssertFalse(atTheEnd())
+        XCTAssertFalse(app.buttons["log.endSetHere"].exists, "mid-set is not the end of a set")
+        // Scroll the empty space below the last set clear of the box and keyboard.
+        let last = app.staticTexts["Seam Charlie"]
+        for _ in 0..<4 where last.frame.maxY + 130 > input.frame.minY {
+            app.staticTexts["Seam Alpha"].swipeUp(velocity: .slow)
+        }
+        app.coordinate(withNormalizedOffset: .zero)
+            .withOffset(CGVector(dx: last.frame.midX, dy: last.frame.maxY + 110)).tap()
+        let back = NSPredicate(format: "placeholderValue == 'Tune name'")
+        await fulfillment(of: [XCTNSPredicateExpectation(predicate: back, object: input)], timeout: 3)
+
+        // Search comes from the right, and goes back there.
+        input.tap()
+        input.typeText("kesh")
+        app.buttons["log.search"].tap()
+        let cancel = app.buttons["deep.cancel"]
+        XCTAssertTrue(cancel.waitForExistence(timeout: 5))
+        snapshot("search panel")
+        app.swipeRight(velocity: .fast)
+        XCTAssertTrue(cancel.waitForNonExistence(timeout: 5), "swiped away to the right")
+        XCTAssertTrue(app.buttons["night.done"].waitForExistence(timeout: 3))
+    }
+
     /// Phase 3d: Me shows the profile and opens it to edit (cancelled: seed data stays put).
     @MainActor
     func testMeShowsTheProfile() throws {
@@ -1381,6 +1519,14 @@ struct TestAPI: Sendable {
 
     func get(_ path: String) async throws -> [String: Any] {
         try await send(URLRequest(url: URL(string: server + path)!))
+    }
+
+    func put(_ path: String, _ body: [String: Any]) async throws -> [String: Any] {
+        var r = URLRequest(url: URL(string: server + path)!)
+        r.httpMethod = "PUT"
+        r.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        r.httpBody = try JSONSerialization.data(withJSONObject: body)
+        return try await send(r)
     }
 
     func delete(_ path: String) async throws -> [String: Any] {

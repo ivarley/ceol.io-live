@@ -325,6 +325,14 @@ public enum LogState {
         }
     }
 
+    /// Is the cursor after the last tune of a set that's already closed? There "End
+    /// set" means "done with this set": the cursor goes back to the end of the log.
+    public static func cursorAtClosedSetEnd(_ cursor: Cursor, segments: [LogSegment]) -> Bool {
+        guard case .after(let id) = cursor, case .server = id else { return false }
+        for seg in segments where seg.tunes.last?.recordID == id { return seg.breakAfter != nil }
+        return false
+    }
+
     public enum SeamAction: Equatable, Sendable {
         case join(breakID: RecordID)
         case split(tuneID: Int)

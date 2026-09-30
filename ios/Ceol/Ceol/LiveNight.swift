@@ -100,6 +100,9 @@ final class NightModel {
     private(set) var vocab: VocabIndex?
     /// The typing box: search, matching, the placeholder, editing a logged tune.
     @ObservationIgnored private(set) lazy var composer = LogComposerModel(night: self)
+    /// The night's audio, where the segmenter has timestamped its tunes (spec 050).
+    @ObservationIgnored private(set) lazy var player = NightPlayer(instanceID: instanceID, app: app)
+    @ObservationIgnored private var audioAsked = false
     /// A tune that just merged into the open set, for "Keep both" (seven seconds).
     private(set) var merged: (name: String, payload: [String: JSONValue])?
     private var mergedSeq = 0
@@ -182,6 +185,7 @@ final class NightModel {
 
     func stop() {
         saveNow()
+        player.release()
         path.cancel()
         running = false
         if editing { app.editingNight = false }
@@ -237,6 +241,10 @@ final class NightModel {
             loadError = nil
             failures = 0
             Task { await loadVocabulary() }
+            if !audioAsked {
+                audioAsked = true
+                Task { await player.load() }
+            }
             // Send what waited before listening again, as the web does.
             if wasQueued > 0 || !outbox.isEmpty { await flush() }
         } catch {
@@ -452,6 +460,22 @@ final class NightModel {
         guard let log else { return nil }
         return Composer.cursorSegment(
             LogState.segmentByBreaks(log.ordered), endIsOpen: !(log.ordered.last?.isBreak ?? true), cursor: cursor)
+    }
+
+    /// The cursor is after the last tune of a closed set: "End set" there means done
+    /// with it (LogState.cursorAtClosedSetEnd, shared with the web).
+    var atClosedSetEnd: Bool {
+        guard let log else { return false }
+        return LogState.cursorAtClosedSetEnd(cursor, segments: LogState.segmentByBreaks(log.ordered))
+    }
+
+    /// Leave "seam mode": the cursor back to the end of the log, no row selected (a tap
+    /// on the empty part of the log, or End set at the end of a closed set).
+    func leaveSeam() {
+        guard editing, !selecting, cursor != .end || selected != nil else { return }
+        cursor = .end
+        selected = nil
+        revealCursor += 1
     }
 
     /// The tune that usually comes next here, at the end of a set.

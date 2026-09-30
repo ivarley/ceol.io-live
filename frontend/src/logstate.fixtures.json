@@ -3942,6 +3942,362 @@
           "expected": {}
         }
       ]
+    },
+    "cursorAtClosedSetEnd": {
+      "params": [
+        "insertAfterId",
+        "segments"
+      ],
+      "cases": [
+        {
+          "name": "after the last tune of a closed set",
+          "input": {
+            "insertAfterId": 2,
+            "segments": [
+              {
+                "tunes": [
+                  {
+                    "session_instance_tune_id": 1,
+                    "order_position": "a0",
+                    "record_type": "tune",
+                    "deleted": false
+                  },
+                  {
+                    "session_instance_tune_id": 2,
+                    "order_position": "a1",
+                    "record_type": "tune",
+                    "deleted": false
+                  }
+                ],
+                "breakAfter": 100
+              },
+              {
+                "tunes": [
+                  {
+                    "session_instance_tune_id": 3,
+                    "order_position": "a3",
+                    "record_type": "tune",
+                    "deleted": false
+                  },
+                  {
+                    "session_instance_tune_id": 4,
+                    "order_position": "a4",
+                    "record_type": "tune",
+                    "deleted": false
+                  }
+                ],
+                "breakAfter": null
+              }
+            ]
+          },
+          "expected": true
+        },
+        {
+          "name": "after a tune mid-set",
+          "input": {
+            "insertAfterId": 1,
+            "segments": [
+              {
+                "tunes": [
+                  {
+                    "session_instance_tune_id": 1,
+                    "order_position": "a0",
+                    "record_type": "tune",
+                    "deleted": false
+                  },
+                  {
+                    "session_instance_tune_id": 2,
+                    "order_position": "a1",
+                    "record_type": "tune",
+                    "deleted": false
+                  }
+                ],
+                "breakAfter": 100
+              },
+              {
+                "tunes": [
+                  {
+                    "session_instance_tune_id": 3,
+                    "order_position": "a3",
+                    "record_type": "tune",
+                    "deleted": false
+                  },
+                  {
+                    "session_instance_tune_id": 4,
+                    "order_position": "a4",
+                    "record_type": "tune",
+                    "deleted": false
+                  }
+                ],
+                "breakAfter": null
+              }
+            ]
+          },
+          "expected": false
+        },
+        {
+          "name": "after the last tune of the open last set",
+          "input": {
+            "insertAfterId": 4,
+            "segments": [
+              {
+                "tunes": [
+                  {
+                    "session_instance_tune_id": 1,
+                    "order_position": "a0",
+                    "record_type": "tune",
+                    "deleted": false
+                  },
+                  {
+                    "session_instance_tune_id": 2,
+                    "order_position": "a1",
+                    "record_type": "tune",
+                    "deleted": false
+                  }
+                ],
+                "breakAfter": 100
+              },
+              {
+                "tunes": [
+                  {
+                    "session_instance_tune_id": 3,
+                    "order_position": "a3",
+                    "record_type": "tune",
+                    "deleted": false
+                  },
+                  {
+                    "session_instance_tune_id": 4,
+                    "order_position": "a4",
+                    "record_type": "tune",
+                    "deleted": false
+                  }
+                ],
+                "breakAfter": null
+              }
+            ]
+          },
+          "expected": false
+        },
+        {
+          "name": "at the end (null)",
+          "input": {
+            "insertAfterId": null,
+            "segments": [
+              {
+                "tunes": [
+                  {
+                    "session_instance_tune_id": 1,
+                    "order_position": "a0",
+                    "record_type": "tune",
+                    "deleted": false
+                  },
+                  {
+                    "session_instance_tune_id": 2,
+                    "order_position": "a1",
+                    "record_type": "tune",
+                    "deleted": false
+                  }
+                ],
+                "breakAfter": 100
+              },
+              {
+                "tunes": [
+                  {
+                    "session_instance_tune_id": 3,
+                    "order_position": "a3",
+                    "record_type": "tune",
+                    "deleted": false
+                  },
+                  {
+                    "session_instance_tune_id": 4,
+                    "order_position": "a4",
+                    "record_type": "tune",
+                    "deleted": false
+                  }
+                ],
+                "breakAfter": null
+              }
+            ]
+          },
+          "expected": false
+        },
+        {
+          "name": "before a tune",
+          "input": {
+            "insertAfterId": {
+              "before": 3
+            },
+            "segments": [
+              {
+                "tunes": [
+                  {
+                    "session_instance_tune_id": 1,
+                    "order_position": "a0",
+                    "record_type": "tune",
+                    "deleted": false
+                  },
+                  {
+                    "session_instance_tune_id": 2,
+                    "order_position": "a1",
+                    "record_type": "tune",
+                    "deleted": false
+                  }
+                ],
+                "breakAfter": 100
+              },
+              {
+                "tunes": [
+                  {
+                    "session_instance_tune_id": 3,
+                    "order_position": "a3",
+                    "record_type": "tune",
+                    "deleted": false
+                  },
+                  {
+                    "session_instance_tune_id": 4,
+                    "order_position": "a4",
+                    "record_type": "tune",
+                    "deleted": false
+                  }
+                ],
+                "breakAfter": null
+              }
+            ]
+          },
+          "expected": false
+        },
+        {
+          "name": "a new-set gap",
+          "input": {
+            "insertAfterId": {
+              "newSet": 3
+            },
+            "segments": [
+              {
+                "tunes": [
+                  {
+                    "session_instance_tune_id": 1,
+                    "order_position": "a0",
+                    "record_type": "tune",
+                    "deleted": false
+                  },
+                  {
+                    "session_instance_tune_id": 2,
+                    "order_position": "a1",
+                    "record_type": "tune",
+                    "deleted": false
+                  }
+                ],
+                "breakAfter": 100
+              },
+              {
+                "tunes": [
+                  {
+                    "session_instance_tune_id": 3,
+                    "order_position": "a3",
+                    "record_type": "tune",
+                    "deleted": false
+                  },
+                  {
+                    "session_instance_tune_id": 4,
+                    "order_position": "a4",
+                    "record_type": "tune",
+                    "deleted": false
+                  }
+                ],
+                "breakAfter": null
+              }
+            ]
+          },
+          "expected": false
+        },
+        {
+          "name": "a temp id",
+          "input": {
+            "insertAfterId": "temp-x",
+            "segments": [
+              {
+                "tunes": [
+                  {
+                    "session_instance_tune_id": 1,
+                    "order_position": "a0",
+                    "record_type": "tune",
+                    "deleted": false
+                  },
+                  {
+                    "session_instance_tune_id": 2,
+                    "order_position": "a1",
+                    "record_type": "tune",
+                    "deleted": false
+                  }
+                ],
+                "breakAfter": 100
+              },
+              {
+                "tunes": [
+                  {
+                    "session_instance_tune_id": 3,
+                    "order_position": "a3",
+                    "record_type": "tune",
+                    "deleted": false
+                  },
+                  {
+                    "session_instance_tune_id": 4,
+                    "order_position": "a4",
+                    "record_type": "tune",
+                    "deleted": false
+                  }
+                ],
+                "breakAfter": null
+              }
+            ]
+          },
+          "expected": false
+        },
+        {
+          "name": "an unknown id",
+          "input": {
+            "insertAfterId": 99,
+            "segments": [
+              {
+                "tunes": [
+                  {
+                    "session_instance_tune_id": 1,
+                    "order_position": "a0",
+                    "record_type": "tune",
+                    "deleted": false
+                  },
+                  {
+                    "session_instance_tune_id": 2,
+                    "order_position": "a1",
+                    "record_type": "tune",
+                    "deleted": false
+                  }
+                ],
+                "breakAfter": 100
+              },
+              {
+                "tunes": [
+                  {
+                    "session_instance_tune_id": 3,
+                    "order_position": "a3",
+                    "record_type": "tune",
+                    "deleted": false
+                  },
+                  {
+                    "session_instance_tune_id": 4,
+                    "order_position": "a4",
+                    "record_type": "tune",
+                    "deleted": false
+                  }
+                ],
+                "breakAfter": null
+              }
+            ]
+          },
+          "expected": false
+        }
+      ]
     }
   }
 }

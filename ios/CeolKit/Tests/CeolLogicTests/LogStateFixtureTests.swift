@@ -120,6 +120,9 @@ let logStateAdapters = ModuleAdapters(
             guard let step else { return .null }
             return ["pos": JSONValue(step.pos), "value": .string(step.value)]
         },
+        "cursorAtClosedSetEnd": { args in
+            .bool(LogState.cursorAtClosedSetEnd(try cursor(args["insertAfterId"]), segments: try segments(args["segments"])))
+        },
         "recordChanges": { args in
             let c = LogState.recordChanges(args["d"])
             return ["puts": .array(c.puts), "drops": .array(c.drops)]

@@ -238,6 +238,18 @@ export function seamKeyFor(s) {
   return `after:${s}`
 }
 
+// Is the cursor after the last tune of a set that's already closed (a break follows)?
+// There, "End set" means "done with this set": the cursor goes back to the end of the
+// log. (At the end of the open last set the cursor is null, and End set adds a break.)
+export function cursorAtClosedSetEnd(insertAfterId, segments) {
+  if (typeof insertAfterId !== 'number') return false
+  for (const seg of segments) {
+    const last = seg.tunes[seg.tunes.length - 1]
+    if (last && last.session_instance_tune_id === insertAfterId) return seg.breakAfter != null
+  }
+  return false
+}
+
 // The action Enter performs on the current cursor seam (spec 028 keyboard nav): a between-sets
 // seam (`{ newSet }`) joins the two sets on the break between them; an intra-set after-tune seam
 // (`<tuneId>` that isn't a set's last tune) splits there. Start seams, the end, and a set's

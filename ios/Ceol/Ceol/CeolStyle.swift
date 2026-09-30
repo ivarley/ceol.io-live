@@ -316,6 +316,8 @@ struct SetCard<Content: View>: View {
     var starter: String? = nil
     /// Tapping the label (or the starter) opens the set's tray, as on the web.
     var onLabelTap: (() -> Void)? = nil
+    /// The set's ▶ / ■ (where its tunes have audio), beside the starter.
+    var play: (playing: Bool, action: () -> Void)? = nil
     @ViewBuilder var content: () -> Content
 
     var body: some View {
@@ -337,11 +339,26 @@ struct SetCard<Content: View>: View {
             }
         }
         .overlay(alignment: .topTrailing) {
-            if let starter {
-                edgeTag("▸ \(starter)", letterSpacing: 0).offset(x: -14, y: -12)
-                    .onTapGesture { onLabelTap?() }
-                    .accessibilityIdentifier("set.starter")
+            HStack(spacing: 6) {
+                if let starter {
+                    edgeTag("▸ \(starter)", letterSpacing: 0)
+                        .onTapGesture { onLabelTap?() }
+                        .accessibilityIdentifier("set.starter")
+                }
+                if let play {
+                    Button(action: play.action) {
+                        Image(systemName: play.playing ? "stop.fill" : "play.fill").font(.system(size: 10))
+                            .foregroundStyle(play.playing ? CeolTokens.primary : CeolTokens.textMuted)
+                            .padding(.horizontal, 10).padding(.vertical, 5)
+                            .background(CeolTokens.bgColor, in: Capsule())
+                            .overlay(Capsule().strokeBorder(play.playing ? CeolTokens.primary : CeolTokens.borderColor, lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(play.playing ? "Stop" : "Play this set")
+                    .accessibilityIdentifier("set.play")
+                }
             }
+            .offset(x: -14, y: -12)
         }
         .padding(.top, 12)
     }

@@ -87,7 +87,9 @@ struct EditableLog: View {
                 let first = seg.tunes[0].recordID!
                 SetCard(
                     label: LogState.setLabel(seg.tunes), starter: trackStarters ? setStarter(seg.tunes) : nil,
-                    onLabelTap: { withAnimation(.easeOut(duration: 0.15)) { openTray = openTray == first ? nil : first } }
+                    onLabelTap: { withAnimation(.easeOut(duration: 0.15)) { openTray = openTray == first ? nil : first } },
+                    play: model.selecting || model.player.queueFor(seg.tunes).isEmpty
+                        ? nil : (model.player.setIsPlaying(seg.tunes), { model.player.toggleSet(seg.tunes) })
                 ) {
                     if openTray == first {
                         SetTray(
@@ -168,7 +170,19 @@ struct EditableLog: View {
             },
             editing: model.composer.editingID == id,
             byColor: color,
-            drag: temp ? nil : { phase in dragChanged(id, phase, segments: segments, endIsOpen: endIsOpen) })
+            drag: temp ? nil : { phase in dragChanged(id, phase, segments: segments, endIsOpen: endIsOpen) },
+            play: playControl(t, id, segments: segments))
+    }
+
+    /// A tune's ▶, where the night's audio has it (never in select mode, as on the web).
+    private func playControl(_ t: LogRecord, _ id: RecordID, segments: [LogSegment])
+        -> (playing: Bool, paused: Bool, action: () -> Void)?
+    {
+        let player = model.player
+        guard !model.selecting, player.resolved[id] != nil,
+            let set = segments.first(where: { $0.tunes.contains { $0.recordID == id } })
+        else { return nil }
+        return (player.playingID == id, player.paused, { player.toggleTune(set.tunes, id) })
     }
 
     private func seam(
@@ -644,6 +658,8 @@ struct EditableRow: View {
     var byColor: Color? = nil
     /// The handle's drag (nil: no handle, e.g. an optimistic row).
     var drag: ((EditableLog.DragPhase) -> Void)? = nil
+    /// The tune's ▶, where it has audio.
+    var play: (playing: Bool, paused: Bool, action: () -> Void)? = nil
 
     @State private var dx: CGFloat = 0
     static let removeAt: CGFloat = 110
@@ -670,6 +686,7 @@ struct EditableRow: View {
                 } else if unlinked && !record["_temp"].isTruthy {
                     Text("⚠ unlinked").font(.ceol(size: 12, weight: .semibold)).foregroundStyle(CeolTokens.attention)
                 }
+                if let play { TunePlayButton(playing: play.playing, paused: play.paused, action: play.action) }
                 // The tune's details in one tap (the web's ⓘ), in its logger's colour.
                 if !unlinked && !record["_temp"].isTruthy {
                     Button(action: onInfo) {
@@ -694,6 +711,7 @@ struct EditableRow: View {
                 }
             }
             .padding(.vertical, 9).padding(.horizontal, 8)
+            .nowPlaying(play?.playing == true && !selected && !editing)
             .background {
                 if selected || editing {
                     RoundedRectangle(cornerRadius: 6).fill(CeolTokens.insert.opacity(0.14))
@@ -779,9 +797,10 @@ struct EditableRow: View {
     }
 }
 
-/// A leftward pan that only starts when the finger moves mostly sideways, so the log
-/// still scrolls under a vertical drag.
+/// A sideways pan (leftward by default) that only starts when the finger moves mostly
+/// sideways, so the list under it still scrolls on a vertical drag.
 struct SwipeLeft: UIGestureRecognizerRepresentable {
+    var rightward = false
     var onChange: (CGFloat) -> Void
     var onEnd: (CGFloat) -> Void
 
@@ -791,7 +810,7 @@ struct SwipeLeft: UIGestureRecognizerRepresentable {
         return g
     }
 
-    func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator { Coordinator() }
+    func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator { Coordinator(rightward: rightward) }
 
     func handleUIGestureRecognizerAction(_ g: UIPanGestureRecognizer, context: Context) {
         let x = g.translation(in: g.view).x
@@ -804,10 +823,12 @@ struct SwipeLeft: UIGestureRecognizerRepresentable {
     }
 
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        let rightward: Bool
+        init(rightward: Bool) { self.rightward = rightward }
         func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
             guard let pan = g as? UIPanGestureRecognizer else { return false }
             let v = pan.velocity(in: pan.view)
-            return v.x < 0 && abs(v.x) > abs(v.y) * 1.5
+            return (rightward ? v.x > 0 : v.x < 0) && abs(v.x) > abs(v.y) * 1.5
         }
     }
 }
@@ -914,6 +935,15 @@ struct LogComposer: View {
             outline("Cancel", id: "edit.cancel") { c.cancelEdit() }
         } else if !trimmed.isEmpty && c.resolving == nil {
             outline("Search", id: "log.search", color: CeolTokens.info, action: onDeepSearch)
+        } else if trimmed.isEmpty && model.atClosedSetEnd && model.selected == nil && c.resolving == nil {
+            // At the end of a set that's already closed: done with it, back to the end.
+            Button("End set") { model.leaveSeam() }
+                .font(.ceol(size: 16, weight: .bold))
+                .foregroundStyle(CeolTokens.insertInk)
+                .padding(.horizontal, 16).frame(height: 46)
+                .background(CeolTokens.insert, in: RoundedRectangle(cornerRadius: 8))
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("log.endSetHere")
         } else if trimmed.isEmpty && model.cursor == .end && model.selected == nil && c.resolving == nil {
             if endIsOpen {
                 Button("End set") { model.endSet() }

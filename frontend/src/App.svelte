@@ -18,7 +18,7 @@
     computeOrdered, segmentByBreaks, setsOf, tunesOf, pluralType, setLabel,
     maxPos, cursorPos, remapAnchors, normName,
     openSetMergeTarget, mergeStable, parseThesessionId, parseThesessionSettingId,
-    computeCursorSlots, seamKeyFor, seamActionFor,
+    computeCursorSlots, seamKeyFor, seamActionFor, cursorAtClosedSetEnd,
     rememberInHistory, historyStep, nextTs, recordChanges, metaChanges,
   } from './logstate.js'
   import {
@@ -556,6 +556,27 @@
   // spot, and showing both at once reads as two competing "active" spots. The underlying
   // position (insertAfterId) is kept, so it surfaces again when the row closes.
   const visibleSeam = $derived(selectedId != null || editingId != null ? null : activeSeam)
+  // The cursor sits after the last tune of a closed set: "End set" there returns it to
+  // the end of the log (logstate.js).
+  const atClosedSetEnd = $derived(cursorAtClosedSetEnd(insertAfterId, displaySegments))
+  // A tap on the empty part of the list leaves "seam mode": the cursor back to the end,
+  // no row selected.
+  function leaveSeam(e) {
+    // Empty space is the list itself or its full-height body, never a row or a seam.
+    const blank = e.target === e.currentTarget || e.target.classList?.contains('sets-body')
+    if (!blank || !canEdit || selectMode) return
+    if (insertAfterId == null && selectedId == null) return
+    insertAfterId = null
+    selectedId = null
+  }
+  // Attached here rather than as an onclick on the list: it's a pointer convenience on
+  // a container, not a control (the keyboard route is the end seam and End set).
+  $effect(() => {
+    const el = setsEl
+    if (!el) return
+    el.addEventListener('click', leaveSeam)
+    return () => el.removeEventListener('click', leaveSeam)
+  })
 
   // maxPos + cursorPos now live in logstate.js (pure, unit-tested). Call sites pass
   // the current insertion cursor, the ordered list, and all records (for append).
@@ -4339,6 +4360,9 @@
         {:else if selectedId == null}
           <button class="done-btn" title="Done logging — switch to read-only view" onclick={() => setMode('view')}>Done</button>
         {/if}
+      {:else if atClosedSetEnd && selectedId == null}
+        <!-- At the end of a set that's already closed: done with it, back to the end. -->
+        <button class="endset hot" title="Done with this set: back to the end of the log" onclick={() => setCursor(null)}>End set</button>
       {/if}
     </div>
     {/if}
@@ -4447,7 +4471,8 @@
   {/if}
 
   {#if deepOpen}
-    <div class="deep-modal" transition:fly={{ y: 24, duration: 200 }}>
+    <!-- In from the right: search lives on the right (the desktop pane, and an iPad's). -->
+    <div class="deep-modal" transition:fly={{ x: 420, opacity: 1, duration: 220 }}>
       <TuneSearch
         variant="modal"
         initialQuery={input.trim()}
