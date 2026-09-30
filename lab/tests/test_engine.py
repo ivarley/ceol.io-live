@@ -553,3 +553,40 @@ def test_the_follower_decodes_as_the_bench_does(lab_data):
         if now != shown and shown is not None and now is None:
             assert by_t[t][-1]["event"] == "withdrawn"
         shown = now
+
+
+def test_an_expert_that_skips_a_chunk_still_sees_that_chunks_observations(lab_data):
+    """BoardView.new returned only the current chunk's observations whenever
+    it had any, so an expert with a hop longer than a chunk silently lost
+    the chunks in between: the follower (4 s hop, 2 s chunks) was given
+    half the notes."""
+    from lab.board.board import Board, BoardView, Observation
+
+    def note(t):
+        return Observation(type="note_events", t_start_ms=t, t_end_ms=t + 1000,
+                           payload={"source": "s", "notes": [{"t0_ms": t}]},
+                           expert="notes", expert_version="1", params={})
+
+    with Board() as board:
+        board.create_run("skip-test", "skip", RECORDING_ID, {})
+        view = BoardView(board, "skip-test", None, {}, {})
+        # chunk 1: a note arrives; the reader runs and has seen it
+        view._pending = []
+        o = note(0)
+        board.append("skip-test", o, clock_ms=2000)
+        view.note(o)
+        view.begin_expert("reader")
+        assert [x.t_start_ms for x in view.new("note_events")] == [0]
+        view.mark_seen("reader", o.obs_id)
+        # chunk 2: a note arrives, the reader has no window and does not run
+        view._pending = []
+        o2 = note(2000)
+        board.append("skip-test", o2, clock_ms=4000)
+        view.note(o2)
+        # chunk 3: a note arrives, the reader runs: it must see chunks 2 and 3
+        view._pending = []
+        o3 = note(4000)
+        board.append("skip-test", o3, clock_ms=6000)
+        view.note(o3)
+        view.begin_expert("reader")
+        assert [x.t_start_ms for x in view.new("note_events")] == [2000, 4000]

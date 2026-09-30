@@ -322,10 +322,20 @@ class BoardView:
         return self._board.observations(self._run_id, types=[type_], t0=t0, t1=t1, expert=expert)
 
     def new(self, type_):
-        """Observations of a type since this expert last ran."""
+        """Observations of a type since this expert last ran.
+
+        Every one, including those from chunks on which the expert had no
+        window to run. The first version returned only this chunk's when it
+        had any, which is the same for an expert that runs on every chunk and
+        silently halved the notes the follower (a 4 s hop on 2 s chunks)
+        was given: on night 140 its display flipped 6.1 times a tune where
+        the same notes replayed offline flip 2.5 times."""
         after = self._seen.get(self._expert, 0)
         fresh = [o for o in self._pending if o.type == type_ and (o.obs_id or 0) > after]
-        return fresh or self._board.observations(self._run_id, types=[type_], after_obs_id=after)
+        oldest_pending = min(((o.obs_id or 0) for o in self._pending if o.obs_id), default=None)
+        if fresh and oldest_pending is not None and after >= oldest_pending - 1:
+            return fresh   # nothing was written between: the cheap path
+        return self._board.observations(self._run_id, types=[type_], after_obs_id=after)
 
     def latest(self, type_, expert=None):
         for o in reversed(self._pending):
