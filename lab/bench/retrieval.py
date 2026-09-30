@@ -750,6 +750,7 @@ def run_retrieval(frontends, recording_ids=None, candidate_set="repertoire", n=5
                                      particalized=True) if particalized else None)
     if not isinstance(frontends, (list, tuple)):
         frontends = [frontends]
+    explicit_nights = bool(recording_ids)
     recording_ids = recording_ids or paths.prepared_recording_ids()
     nights, all_rows = [], []
     with Board() as board:
@@ -789,7 +790,11 @@ def run_retrieval(frontends, recording_ids=None, candidate_set="repertoire", n=5
                 "seconds": seconds, "prior": prior, "beta": beta,
                 "fold_octaves": fold_octaves, "type_filter": type_filter,
                 "adaptive": adaptive,
-                **({"align": aligner.params()} if aligner is not None else {})},
+                **({"align": aligner.params()} if aligner is not None else {}),
+                # in the saved file's name, so a run over some nights does not
+                # overwrite the same settings over all of them; absent for the
+                # default (every prepared night) so those names are unchanged
+                **({"recording_ids": list(recording_ids)} if explicit_nights else {})},
         features_version="audio", split="per-night",
         nights=nights, pooled=pooled, warnings=[],
         created_at=time.strftime("%Y-%m-%dT%H:%M:%S"), git_sha=git_sha(),
