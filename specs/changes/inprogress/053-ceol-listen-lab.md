@@ -1713,6 +1713,14 @@ index's order (which matches intervals, so it does not depend on key) gives
 the same top-1 on all 502 segments from 20 up (Galway Belle is 17th, Mac's
 Fancy 4th), so the default is 50, at a third of the cost.
 
+At 120 s, all eight nights, cost 0.02, paired on the 502 against the
+aligner in the written key (0.982): 0.982 / 0.986, +2/-1. Galway Belle
+(74 to 1) and Mac's Fancy (191 to 1) come right, and Take Your Churn loses to
+The Mason's Apron transposed (1 to 2): with 35 settings each tried in five
+keys, the hub gets the lucky match the cost was meant to prevent, so at two
+minutes 0.02 is not quite enough for it. Not in the headline; the aligner's
+cost model (plan item 4) is where a per-tune cost for many settings belongs.
+
 **The aligner made parallel (2026-09-29).** `analysis.align.batch_chunk_scores`
 aligns every chunk against every candidate setting in one numba pass across
 all cores, summing each tune's chunks in the same order as `chunk_score`, so
@@ -1736,6 +1744,85 @@ each answer marked "HMM, MAYBE?"; it fingerprints in the browser and matches
 in 33-147 ms against 8,238 tunes, and its tips ask for one player close to
 the microphone. Three clips are an anecdote; it is built for a different
 recording than a session.
+
+### Night 140's new segments: the first measure on labels nothing was tuned on (2026-09-29)
+
+Recording 140 (2026-09-17, instance 499) had 25 scored segments, which every
+setting was tuned with; the player then labelled the rest of the night, 61
+more. No setting was chosen on whether those came out right, so they are the
+closest thing to held-out data yet, with the caveat that they share a night,
+players and room with 25 that were tuned on, and the board had replayed the
+raw audio (without these labels) before. A night recorded after 2026-09-17
+and never in the corpus remains the clean test.
+
+**The bench on the 61 new segments** (labelled boundaries, audio alone,
+three trackers unless named; the 25 tuned-on segments beside them):
+
+| | new 61, top-1 / top-5 | tuned-on 25 |
+|---|---|---|
+| yin, n-grams, 30 s | 0.590 / 0.721 | 0.720 / 0.800 |
+| three trackers, n-grams, 30 s | 0.738 / 0.836 | 0.760 / 0.880 |
+| and the aligner, 30 s | **0.967** / 0.967 | 0.960 / 1.000 |
+| and the key allowance, 30 s | 0.967 / 0.967 | 0.960 / 1.000 |
+| three trackers, n-grams, 120 s | 0.770 / 0.902 | 0.840 / 0.960 |
+| and the aligner, 120 s | 0.934 / 0.967 | 1.000 / 1.000 |
+| and the key allowance, 120 s | 0.951 / 0.967 | 1.000 / 1.000 |
+| full corpus, the aligner, 30 s | 0.934 / 0.934 | 0.960 / 1.000 |
+| full corpus, the aligner, 120 s | 0.951 / 0.967 | 1.000 / 1.000 |
+
+Paired on the 61: fusing the three trackers +9/-0 (p 0.004), the aligner
++14/-0 at 30 s and +10/-0 at 120 s, the key allowance +0/-0 and +1/-0. The
+held-out segments score as well as the tuned-on ones did: the gains were not
+fitted to the eight nights. At 30 s on the repertoire the only two misses are
+The Piper on Horseback and Rocking the Boat, which first entered the
+session's repertoire with this night's log, so the repertoire index (built
+before) cannot contain them: a tune new to the session. The full corpus finds
+both at 120 s. Its misses there are Stoney Brennan (rank 2, under The Mason's
+Apron), St Patrick's Day as a set dance (17) and The Cock and the Hen (406;
+first on the repertoire). The 25 newly labelled segments on night 138 score
+1.000 at 120 s with the aligner and key allowance.
+
+**The board on the 61**, the runs made on 2026-09-26 and 09-28 re-scored
+against the new labels (the board never reads labels; `lab eval` re-scores):
+
+| board | top-1 | top-5 | <30s | <60s | never | flips |
+|---|---|---|---|---|---|---|
+| yin (`v2key`) | 0.738 | 0.852 | 16.4% | 49.2% | 26.2% | 3.57 |
+| three trackers (`fuse3`) | 0.721 | 0.836 | 9.8% | 52.5% | 23.0% | 2.62 |
+
+Paired on the 61: top-1 +2/-3, within 30 s +1/-5, ever right +4/-2. Over the
+eight tuned nights the fusion was 0.769 to 0.819 (+39/-14); here it is not
+measurably better, only steadier. The board, at 0.72-0.74 on segments nothing
+was tuned on, against the bench's 0.97, is the gap; the aligner is not on the
+board yet (plan item 3). Re-scoring replaced both runs' stored per-segment
+rows for night 140 (25 before, 86 now), so an eight-night `lab compare`
+including night 140 now counts 86 segments there; the old rows are kept in
+the lab scratch directory.
+
+**The player's three hard cases**, read from the `fuse3` timeline:
+
+- **The Copperplate and The Old Copperplate** (set 29, after The Bag of
+  Spuds; The Copperplate is The New Copperplate on thesession.org). The bench
+  gets both right at 30 s with or without the aligner. The board found the
+  boundary into The Copperplate 1.3 s early and then showed The Bag of Spuds,
+  the tune before, for 50 s, then Rakish Paddy, and ended on Rakish Paddy 0.30
+  over The New Copperplate 0.28: wrong. The Old Copperplate opened on Rakish
+  Paddy and The New Copperplate and was right from 30 s. The two are close
+  enough that the board kept both near the top throughout.
+- **The set that goes from a jig to a reel** (set 35, Da Full Rigged Ship
+  into Da New Rigged Ship). The bench gets both right with the aligner. The
+  board found the boundary 2.9 s early and then showed Da Full Rigged Ship,
+  the jig, for 43 s into the reel, was briefly right at 87 s, and ended on The
+  Star of Munster: wrong. Nothing on the board uses the change of meter.
+- **False starts.** The board never says "no tune": in every gap of 15 s or
+  more between labelled tunes it showed a tune the whole time, mostly the
+  tune that had just ended (The Old Copperplate for 80 s after it stopped) or
+  The Mason's Apron over chat. So a false start will be called a tune, and so
+  will the chat around it. Where the player's false starts are is still to be
+  marked so they can be scored individually.
+
+All three are the problem plan item 3 is now framed around: the board holds
+the previous tune after a change, and has no state for "not a tune".
 
 ### Still open
 
