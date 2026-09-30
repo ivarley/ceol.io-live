@@ -1987,6 +1987,56 @@ fast the display can react; the board steps every 2 s.
 Next: the false starts once the player marks them; then the same decoder
 on the board.
 
+### The follower: the change detector on the board (2026-09-30)
+
+`lab/experts/follower.py` replaces the matcher and the assembler
+(`lab/configs/follower.json`: fuse3's three trackers, pulse and notes, then
+the follower; scheduler "always"). Every 4 s it takes the notes the `notes`
+expert has posted over the trailing 24 s, drops those outside the key and
+its modal neighbour, and calls the bench's own `ChunkScorer` and `Decoder`
+(6 s window, the tuned defaults), writing what it displays as the assembler
+does so every tool reads it. The two loops share the scoring and decoding
+code: night 140's saved bench features reproduce exactly through
+`ChunkScorer` (3,104 of 3,104 chunks), the stepping decoder equals the old
+one, and `test_engine` checks that replaying the notes the follower was
+given reproduces its display.
+
+**A board bug found on the way.** The first run flipped 6.1 times a tune.
+Night 140 replayed offline with only the notes the board had posted by each
+moment gave 0.902 and 2.52 flips, so neither the notes nor their lateness
+(median 2.2 s after a note ends; deciding 1 to 4 s behind the clock changed
+little) was the cause. `BoardView.new` returned only the current chunk's
+observations whenever it had any, so an expert that does not run on every
+chunk lost the chunks in between; the follower, a 4 s hop on 2 s chunks, was
+given half the notes. Fixed, with a regression test that fails on the old
+code. Every expert before it ran on every chunk, and fuse3 re-run on night
+140 after the fix reproduces its stored hypothesis events exactly (8,259 of
+8,259), so no earlier board number is affected.
+
+**All eight nights, 588 segments** (the new labels on nights 138 and 140
+included), against the current board:
+
+| board | top-1 at end | top-5 | <30s | <60s | never | flips |
+|---|---|---|---|---|---|---|
+| three trackers, n-grams, assembler (`fuse3`) | 0.815 | 0.910 | 14.3% | 49.5% | 15.1% | 3.04 |
+| three trackers, the follower | **0.908** | **0.934** | **84.5%** | **95.6%** | **3.4%** | **1.97** |
+
+Paired: top-1 at end +70/-15, within 30 s +414/-1, within 60 s +271/-0, ever
+right +70/-1 (all p < 0.001); fewer flips on 265 segments and more on 144.
+**Night 140's 61 held-out segments** (no setting chosen on them): 0.902
+against 0.721 (+12/-1, p 0.003), within 30 s 82.0% against 9.8% (+45/-1),
+never 6.6% against 23.0%, flips 2.15 against 2.62. A night takes about 3
+minutes with the pitch tracks cached.
+
+Scope: the decoder's settings were chosen on the bench over nights 1-5, 138
+and 139, which are seven of these eight; fuse3's were chosen on all eight.
+Night 140's new segments are the fair comparison, and they agree with the
+pooled one. The board still reads only this session's repertoire, so a tune
+new to the session (two on night 140) cannot be named.
+
+The board is no longer the gap: live, it is right within 30 s five times as
+often as it was, and within two points of the bench's answer at the end.
+
 ### Still open
 
 **The plan, as of 2026-09-29**, merged with `053 files/raising-accuracy.md`
@@ -2018,11 +2068,12 @@ detail), in order:
    only score it afterwards), with today's baseline, the three-tracker fusion
    and the aligner on the board, and give the player the timeline to read
    against what was played; the bench on its labelled segments beside it.
-3. **The aligner on the board: is this still the same tune?** The bench is
-   at 0.95-0.98 and the board at 0.819: the board is the gap. (First step
-   done 2026-09-29: the change-detection bench, 0.885 right at the end and
-   88.5% within 30 s on night 140's held-out segments against the board's
-   0.721 and 9.8%; see its section above.) The player's
+3. **The aligner on the board: is this still the same tune?** Done
+   2026-09-30: the follower, 0.908 right at the end and 84.5% within 30 s
+   over eight nights against fuse3's 0.815 and 14.3% (see "The follower").
+   Left: tunes new to the session (a full-corpus fallback when nothing
+   scores well), the false starts on a night never heard (the player's
+   ground truth), and a display for players on top. The player's
    framing (2026-09-29): live, one tune simply becomes another without
    warning, so for every incoming chunk of notes the logger asks whether it
    agrees with the tune it already believes, or whether a new tune has
