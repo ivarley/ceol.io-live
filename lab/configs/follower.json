@@ -1,0 +1,44 @@
+{
+  "name": "follower",
+  "chunk_ms": 2000,
+  "candidate_set": "repertoire",
+  "experts": [
+    {
+      "name": "pitch_yin"
+    },
+    {
+      "name": "pitch_basic_pitch",
+      "window": {
+        "length_ms": 4000,
+        "hop_ms": 2000
+      }
+    },
+    {
+      "name": "pitch_pesto",
+      "window": {
+        "length_ms": 4000,
+        "hop_ms": 2000
+      }
+    },
+    {
+      "name": "pulse"
+    },
+    {
+      "name": "notes",
+      "params": {
+        "sources": [
+          "pitch_yin",
+          "pitch_basic_pitch",
+          "pitch_pesto"
+        ]
+      }
+    },
+    {
+      "name": "follower"
+    }
+  ],
+  "scheduler": {
+    "rule": "always"
+  },
+  "_why": "The change-detection decoder on the board (spec, 'Is this still the same tune?'): the three trackers and their notes as in fuse3, then the follower in place of the intervals, matcher, prior and assembler. Every 4 s it scores a pool of candidates on the latest 6 s of notes with the bench's ChunkScorer and steps the bench's Decoder (its defaults, tuned on seven nights). Scheduler 'always': the decoder's belief is near certain quickly, and skipping the trackers when confident would leave it deaf."
+}

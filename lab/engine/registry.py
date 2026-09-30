@@ -8,6 +8,7 @@ the board is for.
 from lab.experts.activity import MusicEnergy
 from lab.experts.assembler import Assembler
 from lab.experts.boundary import BoundaryNovelty
+from lab.experts.follower import Follower
 from lab.experts.matcher import Matcher
 from lab.experts.notes import Intervals, Notes
 from lab.experts.oracle import OracleBoundary
@@ -19,7 +20,7 @@ REGISTRY = {
     c.name: c for c in (
         MusicEnergy, BoundaryNovelty, PitchPyin, PitchYin, PitchBasicPitch, PitchPesto,
         PitchRmvpe, Notes, Intervals,
-        Matcher, RepertoirePrior, Assembler, OracleBoundary, Pulse,
+        Matcher, RepertoirePrior, Assembler, OracleBoundary, Pulse, Follower,
     )
 }
 

@@ -490,3 +490,66 @@ def test_a_front_end_tracker_on_the_board_reads_the_bench_track_and_note_setting
             assert got[k] == fe.params[k], (name, k)
     # what a config sets on purpose still wins
     assert Notes(min_voiced=0.3)._settings("pitch_pesto")["min_voiced"] == 0.3
+
+
+def _follower_config():
+    return {
+        "name": "follow", "chunk_ms": 2000,
+        "experts": [
+            {"name": "pitch_yin"},
+            {"name": "notes", "params": {"sources": ["pitch_yin"], "min_note_ms": 80}},
+            {"name": "follower", "params": {"pool_top": 20, "window_ms": 6000}},
+        ],
+        "scheduler": {"rule": "always"},
+    }
+
+
+def test_the_follower_names_the_synthetic_tunes(lab_data):
+    """The change detector on the board, on audio rendered from indexed tunes:
+    failing here means the chain is broken, not outmatched."""
+    from lab.board.board import Board
+    from lab.engine.run import execute
+
+    with Board() as board:
+        run_id = execute(_follower_config(), RECORDING_ID, board=board, quiet=True)
+        shown = {e["top1_tune_id"] for e in board.hypothesis_events(run_id)
+                 if e["event"] != "withdrawn"}
+        assert synthetic.TUNE_A["tune_id"] in shown or synthetic.TUNE_B["tune_id"] in shown, shown
+
+
+def test_the_follower_decodes_as_the_bench_does(lab_data):
+    """The board's follower and the bench's stream decoder share ChunkScorer
+    and Decoder. Replaying the notes the follower was given through them,
+    the way it feeds them, gives exactly what it displayed."""
+    from lab.analysis.key import drop_out_of_key
+    from lab.bench.retrieval import Aligner
+    from lab.bench.stream import NONE, ChunkScorer, Decoder
+    from lab.board.board import Board
+    from lab.corpus.index import Index
+    from lab.engine.run import execute
+
+    cfg = _follower_config()
+    with Board() as board:
+        run_id = execute(cfg, RECORDING_ID, board=board, quiet=True)
+        notes = [n for o in board.observations(run_id, types=["note_events"]) for n in o.payload["notes"]]
+        updates = board.observations(run_id, types=["hypothesis_update"])
+    p = {"pool_top": 20, "window_ms": 6000, "pool_ms": 24000}
+    scorer = ChunkScorer(Index.load("repertoire", n=6, fold_octaves=True),
+                         Aligner(reading="notes", mode="replace", shortlist=10 ** 6),
+                         window_ms=p["window_ms"], pool_top=p["pool_top"])
+    dec = Decoder()
+    dec.reset()
+    by_t = {}
+    for o in updates:
+        by_t.setdefault(o.t_end_ms, []).append(o.payload)
+    shown = None
+    for t in range(4000, max(by_t) + 1, 4000):
+        seen = sorted({n["t0_ms"]: n for n in notes if t - p["pool_ms"] <= n["t0_ms"] < t}.values(),
+                      key=lambda n: n["t0_ms"])
+        state = dec.step(scorer.score(t, {"pitch_yin": drop_out_of_key(seen, "pair") if seen else []}))
+        now = None if state == NONE else state
+        if t in by_t and now is not None:
+            assert by_t[t][-1]["ranked"][0]["tune_id"] == now, t
+        if now != shown and shown is not None and now is None:
+            assert by_t[t][-1]["event"] == "withdrawn"
+        shown = now

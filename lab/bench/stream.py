@@ -157,6 +157,41 @@ def _window(notes, starts, a, b):
     return notes[i:j]
 
 
+class ChunkScorer:
+    """One chunk's evidence from the notes heard so far: the pool of
+    candidates (the index's fused shortlist over the context, plus the last
+    `keep` chunks' pools, so the tune being followed stays scored) and each
+    candidate's aligner score on the latest `window_ms` of notes. The bench
+    (`night_features`) and the board (`experts.follower`) both call this,
+    so the two loops cannot drift apart here."""
+
+    def __init__(self, index, aligner, window_ms=6000, pool_top=100, keep=6):
+        self.index, self.aligner = index, aligner
+        self.window_ms, self.pool_top, self.keep = window_ms, pool_top, keep
+        self.recent = []
+        self.last_heard = self.last_queries = self.last_tunes = None
+
+    def score(self, t, ctx_by):
+        """`ctx_by`: {source: notes over the context, by start time}, the
+        sources in a fixed order. -> {"t_ms", "scores", "floor", "n_notes"}."""
+        from lab.bench.retrieval import fuse
+        from lab.frontends.segmentation import intervals_from_notes
+
+        rankings = [self.index.lookup(intervals_from_notes(ctx, fold=self.index.fold_octaves),
+                                      top_k=self.pool_top) for ctx in ctx_by.values()]
+        pool = [r["tune_id"] for r in fuse(rankings, method="sum")[:self.pool_top]]
+        self.recent = (self.recent + [pool])[-(self.keep + 1):]
+        tunes = list(dict.fromkeys(tid for p in reversed(self.recent) for tid in p))
+        heard = [([n for n in ctx if n["t0_ms"] >= t - self.window_ms], None)
+                 for ctx in ctx_by.values()]
+        queries = self.aligner._queries(heard)
+        scores = self.aligner.scores(tunes, queries) if (queries and tunes) else {}
+        self.last_heard, self.last_queries, self.last_tunes = heard, queries, tunes
+        return {"t_ms": t, "scores": {k: float(v) for k, v in scores.items()},
+                "floor": float(min(scores.values())) if scores else 0.0,
+                "n_notes": sum(len(h[0]) for h in heard)}
+
+
 def night_features(rid, frontends, index, aligner, board, hop_ms=4000, window_ms=6000,
                    pool_ms=24000, pool_top=100, keep=6, causal=True, extra_windows=(),
                    quiet=True):
@@ -173,9 +208,6 @@ def night_features(rid, frontends, index, aligner, board, hop_ms=4000, window_ms
     tuned decoder, causal against block notes: +0/-0 right at the end and
     within 30 s on all 86 segments; the time between tunes shown as a tune
     14.7% to 6.8%. The block mode reproduces its saved features exactly."""
-    from lab.bench.retrieval import fuse
-    from lab.frontends.segmentation import intervals_from_notes
-
     key = repr((FEATURES_VERSION, rid, [f.name for f in frontends], [f.version for f in frontends],
                 [sorted(f.params.items()) for f in frontends], index.candidate_set, index.n,
                 aligner.params(), hop_ms, window_ms, pool_ms, pool_top, keep)
@@ -194,29 +226,16 @@ def night_features(rid, frontends, index, aligner, board, hop_ms=4000, window_ms
     else:
         by_fe, duration = night_notes(frontends, rid, board, quiet=quiet)
         starts = {k: np.array([n["t0_ms"] for n in v]) for k, v in by_fe.items()}
-    chunks, recent = [], []
+    chunks = []
+    scorer = ChunkScorer(index, aligner, window_ms=window_ms, pool_top=pool_top, keep=keep)
     for t in range(window_ms, int(duration) + 1, hop_ms):
         if causal:
             a = max(0, t - pool_ms)
             ctx_by = {fe.name: causal_notes(fe, tracks[fe.name], store, a, t) for fe in frontends}
-            recent_by = {k: [n for n in v if n["t0_ms"] >= t - window_ms] for k, v in ctx_by.items()}
         else:
             ctx_by = {name: _window(notes, starts[name], t - pool_ms, t) for name, notes in by_fe.items()}
-            recent_by = {name: _window(notes, starts[name], t - window_ms, t) for name, notes in by_fe.items()}
-        rankings = []
-        for name, ctx in ctx_by.items():
-            rankings.append(index.lookup(intervals_from_notes(ctx, fold=index.fold_octaves),
-                                         top_k=pool_top))
-        pool = [r["tune_id"] for r in fuse(rankings, method="sum")[:pool_top]]
-        recent = (recent + [pool])[-(keep + 1):]
-        tunes = list(dict.fromkeys(tid for p in reversed(recent) for tid in p))
-        heard = [(recent_by[name], None) for name in ctx_by]
-        n_notes = sum(len(h[0]) for h in heard)
-        queries = aligner._queries(heard)
-        scores = aligner.scores(tunes, queries) if (queries and tunes) else {}
-        chunk = {"t_ms": t, "scores": {k: float(v) for k, v in scores.items()},
-                 "floor": float(min(scores.values())) if scores else 0.0,
-                 "n_notes": n_notes}
+        chunk = scorer.score(t, ctx_by)
+        heard, queries, tunes, scores = scorer.last_heard, scorer.last_queries, scorer.last_tunes, chunk["scores"]
         if causal:
             chunk.update(_hint_features(store, t, scores, queries, aligner))
         if extra_windows:
@@ -251,42 +270,55 @@ class Decoder:
     def params(self):
         return {"lam": self.lam, "tau": self.tau, "p_switch": self.p_switch, "p_none": self.p_none}
 
+    def reset(self):
+        self._ids = [NONE]              # state order; row 0 is "not a tune"
+        self._where = {NONE: 0}
+        self._log = np.array([0.0])     # log belief per state, normalised each step
+
+    def step(self, c):
+        """One chunk in; the state to display out (a tune id or NONE)."""
+        if not hasattr(self, "_log"):
+            self.reset()
+        ids, where = self._ids, self._where
+        ls, lj = math.log(1 - self.p_switch), math.log(self.p_switch)
+        scores, floor = c["scores"], c["floor"]
+        fresh = [t for t in scores if t not in where]
+        if fresh:
+            for t in fresh:
+                where[t] = len(ids)
+                ids.append(t)
+            self._log = np.concatenate([self._log, np.full(len(fresh), -1e9)])
+        log = self._log
+        n = len(ids)
+        emit = np.full(n, self.lam * floor)
+        emit[0] = self.lam * self.tau
+        in_pool = np.zeros(n, dtype=bool)
+        if scores:
+            rows = np.fromiter((where[t] for t in scores), dtype=np.int64, count=len(scores))
+            emit[rows] = self.lam * np.fromiter(scores.values(), dtype=float, count=len(scores))
+            in_pool[rows] = True
+        # a jump lands on "not a tune" or on one of the tunes this chunk's
+        # pool proposes; a tune outside the pool can only be stayed in
+        total = np.logaddexp.reduce(log)
+        jump_tune = lj + math.log(1 - self.p_none) + total - math.log(max(1, len(scores)))
+        jump_none = lj + math.log(self.p_none) + total
+        prior = ls + log
+        prior[in_pool] = np.logaddexp(prior[in_pool], jump_tune)
+        prior[0] = np.logaddexp(prior[0], jump_none)
+        new = prior + emit
+        log = new - np.logaddexp.reduce(new)
+        self._log = np.maximum(log, -1e9)
+        return ids[int(np.argmax(self._log))]
+
+    def belief(self, k=5):
+        """The `k` most believed states now: [(state, probability)]."""
+        order = np.argsort(-self._log)[:k]
+        return [(self._ids[i], float(np.exp(self._log[i]))) for i in order]
+
     def run(self, chunks):
         """-> the displayed state after each chunk (a tune id or NONE)."""
-        ids = [NONE]                    # state order; row 0 is "not a tune"
-        where = {NONE: 0}
-        log = np.array([0.0])           # log belief per state, normalised each step
-        shown = []
-        ls, lj = math.log(1 - self.p_switch), math.log(self.p_switch)
-        for c in chunks:
-            scores, floor = c["scores"], c["floor"]
-            fresh = [t for t in scores if t not in where]
-            if fresh:
-                for t in fresh:
-                    where[t] = len(ids)
-                    ids.append(t)
-                log = np.concatenate([log, np.full(len(fresh), -1e9)])
-            n = len(ids)
-            emit = np.full(n, self.lam * floor)
-            emit[0] = self.lam * self.tau
-            in_pool = np.zeros(n, dtype=bool)
-            if scores:
-                rows = np.fromiter((where[t] for t in scores), dtype=np.int64, count=len(scores))
-                emit[rows] = self.lam * np.fromiter(scores.values(), dtype=float, count=len(scores))
-                in_pool[rows] = True
-            # a jump lands on "not a tune" or on one of the tunes this chunk's
-            # pool proposes; a tune outside the pool can only be stayed in
-            total = np.logaddexp.reduce(log)
-            jump_tune = lj + math.log(1 - self.p_none) + total - math.log(max(1, len(scores)))
-            jump_none = lj + math.log(self.p_none) + total
-            prior = ls + log
-            prior[in_pool] = np.logaddexp(prior[in_pool], jump_tune)
-            prior[0] = np.logaddexp(prior[0], jump_none)
-            new = prior + emit
-            log = new - np.logaddexp.reduce(new)
-            log = np.maximum(log, -1e9)
-            shown.append(ids[int(np.argmax(log))])
-        return shown
+        self.reset()
+        return [self.step(c) for c in chunks]
 
 
 def mix_windows(chunks, weights, window_ms=8000):   # the window the features were made with

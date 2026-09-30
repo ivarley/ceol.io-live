@@ -170,6 +170,16 @@ def build_index(data_dir, n=6, fold_octaves=True):
         for t in (TUNE_A, TUNE_B)
     ]
     os.makedirs(os.path.join(data_dir, "index"), exist_ok=True)
+    # The dump itself, with the two tunes, so the aligner's sequence store
+    # (`corpus.sequences`, built from the dump) exists as the index does.
+    import csv
+
+    os.makedirs(os.path.join(data_dir, "corpus"), exist_ok=True)
+    with open(os.path.join(data_dir, "corpus", "tunes.csv"), "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(["tune_id", "setting_id", "name", "type", "meter", "mode", "abc"])
+        for t in (TUNE_A, TUNE_B):
+            w.writerow([t["tune_id"], t["setting_id"], t["name"], t["type"], t["meter"], t["mode"], t["abc"]])
     # Both readings, as the matcher expects: the plain one and the one that
     # writes every note as a run of eighths. A fixture with only the first
     # would let the board's eighth-note path go untested.
