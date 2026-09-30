@@ -473,10 +473,13 @@ the tune plays and finding its own boundaries:
 | before the eighth-note reading | 0.697 | 0.811 | 12.5% | 40.4% | 26.9% | 3.7 |
 | with it | 0.753 | 0.869 | 13.3% | 47.6% | 18.9% | 4.2 |
 | with parser version 2 and the key filter (2026-09-26, `v2key`) | 0.769 | 0.876 | 12.0% | 49.8% | 17.7% | 4.14 |
-| and Basic Pitch and PESTO beside yin (2026-09-28, `lab/configs/fuse3.json`) | **0.819** | **0.914** | **14.7%** | **48.6%** | **14.9%** | **3.15** |
+| and Basic Pitch and PESTO beside yin (2026-09-28, `lab/configs/fuse3.json`) | 0.819 | 0.914 | 14.7% | 48.6% | 14.9% | 3.15 |
+| the follower in place of the matcher and assembler (2026-09-30, `lab/configs/follower.json`; 588 segments, fuse3 on the same 0.815) | **0.908** | **0.934** | **84.5%** | **95.6%** | **3.4%** | **1.97** |
 
-The last row is the current board: +39/-14 top-1 against the row above, see
-"Three trackers on the board". The aligner is not on the board yet, so the
+The last row is the current board (+70/-15 top-1, +414/-1 within 30 s against
+fuse3 on the same 588 segments; night 140's held-out segments 0.902 against
+0.721); see "The follower". The row before it was +39/-14 against its
+predecessor, see "Three trackers on the board". The aligner is not on the board yet, so the
 board is at 0.819 where the bench is at 0.95 to 0.98 on labelled boundaries;
 closing that gap is the plan's third item. `lab/configs/baseline.json` is
 still yin alone (the second row plus chaining); `fuse3.json` is what the next
