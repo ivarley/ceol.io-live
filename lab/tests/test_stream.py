@@ -54,8 +54,9 @@ def test_hint_decoder_with_hints_off_is_the_decoder():
             sc[tune] = rnd.uniform(0.5, 0.8)
         chunks.append({**chunk(sc), "t_ms": 4000 * i, "grouping": 2, "grouping_margin": 0.5,
                        "where": {1: (i % 10) / 10, 2: (i % 7) / 7}})
-    for kw in ({}, {"lam": 40, "tau": 0.45, "p_switch": 0.05, "p_none": 0.1}):
-        assert HintDecoder(**kw).run(chunks) == Decoder(**kw).run(chunks)
+    for kw in ({"lam": 10.0, "tau": 0.35, "p_switch": 0.02, "p_none": 0.3},
+               {"lam": 40, "tau": 0.45, "p_switch": 0.05, "p_none": 0.1}, {}):
+        assert HintDecoder(**kw).run(chunks) == _Decoder(**kw).run(chunks)
 
 
 def test_meter_hint_moves_off_a_jig_heard_in_twos():
@@ -65,8 +66,9 @@ def test_meter_hint_moves_off_a_jig_heard_in_twos():
     jig = [{**chunk({1: 0.7, 2: 0.3}), "grouping": 3, "grouping_margin": 0.5} for _ in range(10)]
     # the reel starts but the jig still half-matches it (a related tune)
     reel = [{**chunk({1: 0.55, 2: 0.6}), "grouping": 2, "grouping_margin": 0.5} for _ in range(6)]
-    plain = HintDecoder(tune_types=types).run(jig + reel)
-    hinted = HintDecoder(tune_types=types, mu=0.1).run(jig + reel)
+    gentle = {"lam": 10.0, "tau": 0.35, "p_switch": 0.02, "p_none": 0.3}
+    plain = HintDecoder(tune_types=types, **gentle).run(jig + reel)
+    hinted = HintDecoder(tune_types=types, mu=0.1, **gentle).run(jig + reel)
     assert hinted.index(2) < plain.index(2) if 2 in plain else 2 in hinted
 
 
