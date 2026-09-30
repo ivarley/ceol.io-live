@@ -596,6 +596,23 @@ def _apply_chosen_setting(cur, session_id, tune_id, record_id, setting_id, user_
     return "instance"
 
 
+def _tune_from_thesession(cur, ts_id, user_id):
+    """A thesession.org tune, in our catalogue: (tune_id, name). Follows a merge on
+    thesession.org to the canonical tune; imports one we don't have yet. Raises
+    TuneImportError for a fake or dead id (or thesession.org being down)."""
+    cur.execute("SELECT name, redirect_to_tune_id FROM tune WHERE tune_id = %s", (ts_id,))
+    row = cur.fetchone()
+    if row and row[1] is not None:
+        # Merged on thesession.org -> the canonical tune it points to.
+        ts_id = row[1]
+        cur.execute("SELECT name FROM tune WHERE tune_id = %s", (ts_id,))
+        row = cur.fetchone()
+    if row:
+        return ts_id, row[0]
+    imported_name, _tt = _import_tune_for_live(cur, ts_id, user_id)
+    return ts_id, imported_name
+
+
 def _handle_add_tune(cur, session_instance_id, data, user_id):
     tune_id = data.get("tune_id")
     name = data.get("name")
@@ -620,24 +637,13 @@ def _handle_add_tune(cur, session_instance_id, data, user_id):
     # entry unlinked so the client shows an unmatched row rather than losing it.
     import_failed = None
     if ts_id is not None:
-        cur.execute("SELECT name, redirect_to_tune_id FROM tune WHERE tune_id = %s", (ts_id,))
-        row = cur.fetchone()
-        if row and row[1] is not None:
-            # Merged on thesession.org -> log the canonical tune it points to.
-            ts_id = row[1]
-            cur.execute("SELECT name FROM tune WHERE tune_id = %s", (ts_id,))
-            row = cur.fetchone()
-        if row:
-            tune_id = ts_id
-            name = row[0] or name
-        else:
-            try:
-                imported_name, _tt = _import_tune_for_live(cur, ts_id, user_id)
-                tune_id, name = ts_id, imported_name
-            except TuneImportError as e:
-                import_failed = e.message
-                if not name:
-                    name = f"#{ts_id}"  # legible unmatched row for a fake/dead id
+        try:
+            tune_id, found_name = _tune_from_thesession(cur, ts_id, user_id)
+            name = found_name or name
+        except TuneImportError as e:
+            import_failed = e.message
+            if not name:
+                name = f"#{ts_id}"  # legible unmatched row for a fake/dead id
 
     # Name -> tune matching takes priority for typed text. Tapping a typeahead result sends a
     # tune_id directly; hitting Enter sends just the text, which we resolve here via the same
@@ -755,8 +761,26 @@ def _handle_change_tune(cur, session_instance_id, data, user_id):
 
     sets, params = [], []
     remapped_from = None
+    if data.get("thesession_id") is not None and not data.get("unlink"):
+        # Relinking to a tune found on thesession.org (deep search while editing): into
+        # our catalogue first, as an add does. Unlike an add, a failed import refuses the
+        # edit: the row keeps what it had rather than being unlinked.
+        ts_id = _parse_thesession_id(data.get("thesession_id"))
+        if ts_id is None:
+            raise OpRejected("invalid", "That isn't a thesession.org tune.")
+        try:
+            data["tune_id"], found_name = _tune_from_thesession(cur, ts_id, user_id)
+        except TuneImportError as e:
+            raise OpRejected("import_failed", e.message)
+        data["name"] = found_name or data.get("name")
     if data.get("unlink"):
         sets += ["tune_id = NULL"]
+        # A linked row usually stores no name of its own (it shows the tune's); keep
+        # the one it was showing, or the row would have neither and break the table's
+        # name-or-tune check. A rename (unlink with a name) sets its own below.
+        if "name" not in data:
+            sets += ["name = COALESCE(name, %s)"]
+            params += [_reselect(cur, record_id).get("name")]
     elif "tune_id" in data:
         # Relink to a merged-away tune remaps to the canonical one (spec 030) —
         # stale client caches mean the merged tune. Mutating data keeps the

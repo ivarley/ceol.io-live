@@ -442,13 +442,13 @@ final class CeolUITests: XCTestCase {
             "op_id": UUID().uuidString.lowercased(), "op_type": "add_tune", "name": name,
         ])
         let recordID = (added["record"] as? [String: Any])?["session_instance_tune_id"] as? Int
-        XCTAssertTrue(app.staticTexts[name].waitForExistence(timeout: 10), "the tune didn't arrive live")
+        XCTAssertTrue(labelled(app, name).waitForExistence(timeout: 10), "the tune didn't arrive live")
         snapshot("night live")
         if let recordID {
             _ = try await api.post("/api/live/instances/\(instanceID)/ops", [
                 "op_id": UUID().uuidString.lowercased(), "op_type": "remove_tune", "record_id": recordID,
             ])
-            XCTAssertTrue(app.staticTexts[name].waitForNonExistence(timeout: 10), "the removal didn't arrive live")
+            XCTAssertTrue(labelled(app, name).waitForNonExistence(timeout: 10), "the removal didn't arrive live")
         }
     }
 
@@ -569,11 +569,12 @@ final class CeolUITests: XCTestCase {
     @MainActor
     func testSelectModeMovesDeletesAndPastes() async throws {
         let api = try await TestAPI.signedIn(server: server)
-        let nights = try await api.get("/api/sessions/austin/mueller/logs")
-        let years = (nights["sorted_years"] as? [Any])?.compactMap { "\($0)" } ?? []
-        let byYear = nights["instances_by_year"] as? [String: [[String: Any]]] ?? [:]
-        let newest = try XCTUnwrap(years.first.flatMap { byYear[$0]?.first })
-        let instanceID = try XCTUnwrap(newest["session_instance_id"] as? Int)
+        // A night of its own: the shared newest night collects other tests' leftovers,
+        // and a long log puts the drag near the bottom edge, where holding scrolls it.
+        let date = String(format: "2013-%02d-%02d", Int.random(in: 1...12), Int.random(in: 1...28))
+        let made = try await api.post("/api/sessions/austin/mueller/add_instance", ["date": date])
+        let instanceID = try XCTUnwrap(made["session_instance_id"] as? Int, "\(made)")
+        addTeardownBlock { _ = try? await api.delete("/api/sessions/austin/mueller/\(date)/delete") }
         let opsPath = "/api/live/instances/\(instanceID)/ops"
         func op(_ body: [String: Any]) async throws -> [String: Any] {
             try await api.post(opsPath, body.merging(["op_id": UUID().uuidString.lowercased()]) { a, _ in a })
@@ -630,14 +631,9 @@ final class CeolUITests: XCTestCase {
     ) async throws {
         let app = launch()
         signIn(app)
-        app.buttons["tab.sessions"].firstMatch.tap()
-        let mueller = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Mueller Session'")).firstMatch
-        XCTAssertTrue(mueller.waitForExistence(timeout: 10))
-        mueller.tap()
-        app.buttons.containing(NSPredicate(format: "label BEGINSWITH 'Logs'")).firstMatch.tap()
-        let night = app.buttons.matching(NSPredicate(format: "label MATCHES '.*[0-9]+ tunes?.*'")).firstMatch
-        XCTAssertTrue(night.waitForExistence(timeout: 10))
-        night.tap()
+        let item = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Finish logging' AND label CONTAINS '2013'")).firstMatch
+        XCTAssertTrue(item.waitForExistence(timeout: 15))
+        item.tap()
         XCTAssertTrue(app.buttons["night.edit"].waitForExistence(timeout: 15))
         app.buttons["night.edit"].tap()
         XCTAssertTrue(app.staticTexts[c].waitForExistence(timeout: 10))
@@ -898,7 +894,7 @@ final class CeolUITests: XCTestCase {
         app.terminate()
         app = launch(reset: false, extra: hooks + ["-CeolStartOffline", "YES"])
         openNewestMuellerNight(app)
-        XCTAssertTrue(app.staticTexts[two].waitForExistence(timeout: 10), "the saved copy should show")
+        XCTAssertTrue(labelled(app, two).waitForExistence(timeout: 10), "the saved copy should show")
         XCTAssertTrue(app.staticTexts["queued.banner"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["queued.banner"].label.contains("3 changes queued"))
 
@@ -920,9 +916,9 @@ final class CeolUITests: XCTestCase {
         XCTAssertEqual(ours, [one, two], "both queued tunes, in order, and the removed one stays removed")
         XCTAssertFalse(app.staticTexts["queued.banner"].exists)
         // And on screen: the removed tune isn't brought back by undoing the refused rename.
-        XCTAssertTrue(app.staticTexts[two].exists)
-        XCTAssertFalse(app.staticTexts[target].exists, "the tune someone else removed came back")
-        XCTAssertFalse(app.staticTexts[renamed].exists)
+        XCTAssertTrue(labelled(app, two).exists)
+        XCTAssertFalse(labelled(app, target).exists, "the tune someone else removed came back")
+        XCTAssertFalse(labelled(app, renamed).exists)
     }
 
     @MainActor
@@ -1098,8 +1094,8 @@ final class CeolUITests: XCTestCase {
         let item = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Finish logging' AND label CONTAINS '2015'")).firstMatch
         XCTAssertTrue(item.waitForExistence(timeout: 15))
         item.tap()
-        XCTAssertTrue(app.staticTexts["Long Night 1"].waitForExistence(timeout: 15))
-        XCTAssertFalse(app.staticTexts["Long Night 40"].isHittable, "a long night opens at the top")
+        XCTAssertTrue(labelled(app, "Long Night 1").waitForExistence(timeout: 15))
+        XCTAssertFalse(labelled(app, "Long Night 40").isHittable, "a long night opens at the top")
         app.buttons["night.edit"].tap()
         let last = app.staticTexts["Long Night 40"]
         XCTAssertTrue(last.waitForExistence(timeout: 5))
@@ -1112,6 +1108,146 @@ final class CeolUITests: XCTestCase {
         XCTAssertTrue(logged.waitForExistence(timeout: 10))
         await fulfillment(of: [XCTNSPredicateExpectation(predicate: shown, object: logged)], timeout: 5)
         snapshot("long night")
+    }
+
+    /// TestFlight feedback on the logger: a tapped tune opens its details (watching, and
+    /// the ⓘ while editing); Edit under the last row; the handle moves a tune without
+    /// selection mode; Unlink works on a linked tune; Search while editing relinks; and the
+    /// header opens the log's details, where the notes and name save. Checked on the server.
+    @MainActor
+    func testWorkingOnOneNight() async throws {
+        let api = try await TestAPI.signedIn(server: server)
+        let date = String(format: "2014-%02d-%02d", Int.random(in: 1...12), Int.random(in: 1...28))
+        let made = try await api.post("/api/sessions/austin/mueller/add_instance", ["date": date])
+        let instanceID = try XCTUnwrap(made["session_instance_id"] as? Int, "\(made)")
+        addTeardownBlock { _ = try? await api.delete("/api/sessions/austin/mueller/\(date)/delete") }
+        let ops = "/api/live/instances/\(instanceID)/ops"
+        // Three tunes the catalogue knows (so they're linked), then one it doesn't.
+        for name in ["Drowsy Maggie", "Banish Misfortune", "Cooley's", "Zzq Mystery Tune"] {
+            _ = try await api.post(ops, ["op_id": UUID().uuidString.lowercased(), "op_type": "add_tune", "name": name, "no_merge": true])
+        }
+        func records() async throws -> [[String: Any]] {
+            let b = try await api.get("/api/live/instances/\(instanceID)/bootstrap")
+            return ((b["records"] as? [[String: Any]]) ?? []).filter { ($0["deleted"] as? Bool) != true && ($0["record_type"] as? String) == "tune" }
+                .sorted { ($0["order_position"] as? String ?? "") < ($1["order_position"] as? String ?? "") }
+        }
+        func waitFor(_ what: String, _ check: ([[String: Any]]) -> Bool) async throws {
+            for _ in 0..<40 {
+                if check(try await records()) { return }
+                try await Task.sleep(for: .milliseconds(250))
+            }
+            XCTFail("the server never showed: \(what) — \(try await records().map { "\($0["name"] ?? "?") #\($0["tune_id"] ?? "-")" })")
+        }
+
+        let app = launch()
+        signIn(app)
+        let item = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Finish logging' AND label CONTAINS '2014'")).firstMatch
+        XCTAssertTrue(item.waitForExistence(timeout: 15))
+        item.tap()
+
+        // Watching: a tap on a tune opens its details.
+        let maggie = app.buttons.matching(identifier: "night.tune").containing(NSPredicate(format: "label == 'Drowsy Maggie'")).firstMatch
+        XCTAssertTrue(maggie.waitForExistence(timeout: 15))
+        maggie.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["sheet.status"].waitForExistence(timeout: 10), "the tune's details")
+        app.buttons["Done"].firstMatch.tap()
+
+        // Edit, from under the last row.
+        let bottomEdit = app.buttons["night.editBottom"]
+        XCTAssertTrue(bottomEdit.waitForExistence(timeout: 5))
+        bottomEdit.tap()
+        XCTAssertTrue(app.textFields["log.input"].waitForExistence(timeout: 5))
+
+        // Editing: the ⓘ opens the details in one tap.
+        app.buttons.matching(identifier: "row.info").firstMatch.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["sheet.status"].waitForExistence(timeout: 10))
+        app.buttons["Done"].firstMatch.tap()
+
+        // The handle moves a tune, no selection mode needed: Cooley's up above Banish Misfortune.
+        let cooley = app.staticTexts["Cooley's"]
+        let grab = app.buttons.matching(identifier: "row.grab").count > 0
+            ? app.buttons.matching(identifier: "row.grab").element(boundBy: 2)
+            : app.descendants(matching: .any).matching(identifier: "row.grab").element(boundBy: 2)
+        XCTAssertTrue(grab.waitForExistence(timeout: 5))
+        let top = app.staticTexts["Drowsy Maggie"].frame
+        let banish = app.staticTexts["Banish Misfortune"].frame
+        let origin = app.coordinate(withNormalizedOffset: .zero)
+        grab.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            .press(forDuration: 0.05, thenDragTo: origin.withOffset(CGVector(dx: grab.frame.midX, dy: (top.maxY + banish.minY) / 2)),
+                   withVelocity: 300, thenHoldForDuration: 0.4)
+        try await waitFor("Cooley's second") { rs in rs.compactMap { $0["name"] as? String }.prefix(3) == ["Drowsy Maggie", "Cooley's", "Banish Misfortune"] }
+        XCTAssertTrue(cooley.exists)
+
+        // Unlink a linked tune: it keeps its name.
+        app.staticTexts["Drowsy Maggie"].tap()
+        app.buttons["row.edit"].tap()
+        XCTAssertTrue(app.buttons["edit.unlink"].waitForExistence(timeout: 3))
+        app.buttons["edit.unlink"].tap()
+        try await waitFor("Drowsy Maggie unlinked") { rs in rs.contains { ($0["name"] as? String) == "Drowsy Maggie" && $0["tune_id"] is NSNull } }
+
+        // Search while editing relinks the unknown tune. (Scrolled up first: the last
+        // tune sits behind the box and the keyboard.)
+        let mystery = app.staticTexts["Zzq Mystery Tune"]
+        for _ in 0..<4 where !mystery.isHittable || mystery.frame.maxY > app.textFields["log.input"].frame.minY {
+            app.staticTexts["Drowsy Maggie"].swipeUp(velocity: .slow)
+        }
+        mystery.tap()
+        app.buttons["row.edit"].tap()
+        XCTAssertTrue(app.buttons["edit.search"].waitForExistence(timeout: 3))
+        app.buttons["Clear entry"].tap()
+        app.textFields["log.input"].typeText("silver spear")
+        app.buttons["edit.search"].tap()
+        let card = app.buttons.matching(identifier: "deep.result").containing(NSPredicate(format: "label CONTAINS 'Silver Spear'")).firstMatch
+        XCTAssertTrue(card.waitForExistence(timeout: 10))
+        card.tap()
+        try await waitFor("the unknown tune relinked") { rs in
+            rs.contains { ($0["name"] as? String)?.contains("Silver Spear") == true && $0["tune_id"] is Int }
+                && !rs.contains { ($0["name"] as? String) == "Zzq Mystery Tune" }
+        }
+
+        // The log's details: notes and a name save.
+        app.buttons["night.done"].tap()
+        app.buttons["night.header"].tap()
+        XCTAssertTrue(app.buttons["details.name"].waitForExistence(timeout: 5))
+        snapshot("log details")
+        app.buttons["details.name"].tap()
+        let nameField = app.textFields["name.field"]
+        XCTAssertTrue(nameField.waitForExistence(timeout: 5))
+        nameField.tap()
+        nameField.typeText("Test Night")
+        app.buttons["name.save"].tap()
+        XCTAssertTrue(nameField.waitForNonExistence(timeout: 10))
+        let notes = app.textFields["details.notes"].exists ? app.textFields["details.notes"] : app.textViews["details.notes"]
+        XCTAssertTrue(notes.waitForExistence(timeout: 5))
+        notes.tap()
+        notes.typeText("Grand night")
+        app.buttons["details.saveNotes"].tap()
+        var night: [String: Any] = [:]
+        for _ in 0..<20 {
+            night = try await api.get("/api/live/instances/\(instanceID)/bootstrap")
+            if night["notes"] as? String == "Grand night" && night["instance_name"] as? String == "Test Night" { break }
+            try await Task.sleep(for: .milliseconds(250))
+        }
+        XCTAssertEqual(night["notes"] as? String, "Grand night")
+        XCTAssertEqual(night["instance_name"] as? String, "Test Night")
+
+        // Mark complete, then re-open.
+        app.swipeDown(velocity: .fast)  // the keyboard away, the top rows back
+        let complete = app.buttons["details.complete"]
+        XCTAssertTrue(complete.waitForExistence(timeout: 5))
+        complete.tap()
+        app.buttons.matching(NSPredicate(format: "label == 'Mark complete' AND identifier != 'details.complete'")).firstMatch.tap()
+        let reopen = app.buttons["details.reopen"]
+        XCTAssertTrue(reopen.waitForExistence(timeout: 10))
+        night = try await api.get("/api/live/instances/\(instanceID)/bootstrap")
+        XCTAssertEqual(night["log_complete"] as? Bool, true)
+        reopen.tap()
+        app.buttons.matching(NSPredicate(format: "label == 'Re-open log'")).firstMatch.tap()
+        XCTAssertTrue(complete.waitForExistence(timeout: 10))
+        night = try await api.get("/api/live/instances/\(instanceID)/bootstrap")
+        XCTAssertEqual(night["log_complete"] as? Bool, false)
+        app.buttons["details.done"].tap()
+        XCTAssertTrue(app.buttons["night.editBottom"].waitForExistence(timeout: 10), "editable again")
     }
 
     /// Phase 3d: Me shows the profile and opens it to edit (cancelled: seed data stays put).
@@ -1276,4 +1412,10 @@ final class OpenFlag: @unchecked Sendable {
     private var value = false
     var isSet: Bool { lock.withLock { value } }
     func set() { lock.withLock { value = true } }
+}
+
+/// A tune by its name, as text (editing) or as a button (watching, where a tap opens it).
+@MainActor
+func labelled(_ app: XCUIApplication, _ label: String) -> XCUIElement {
+    app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", label)).firstMatch
 }

@@ -356,6 +356,17 @@ struct ActivityLines: View {
 
     var body: some View {
         VStack(spacing: 6) {
+            // While watching, passing messages show here (editing, above the composer).
+            if !model.editing, let flash = model.flash {
+                Text(flash)
+                    .font(.ceol(size: 13, weight: .semibold)).foregroundStyle(CeolTokens.textColor)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 14).padding(.vertical, 6)
+                    .background(CeolTokens.headerBg, in: RoundedRectangle(cornerRadius: 10))
+                    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(CeolTokens.borderColor, lineWidth: 1))
+                    .padding(.horizontal, 16)
+                    .accessibilityIdentifier("toast.flash")
+            }
             ForEach(model.activities) { a in
                 Text(a.text)
                     .font(.ceol(size: 13, weight: .semibold))

@@ -1864,7 +1864,7 @@
   let dragPointerY = 0
   const dragKeys = $derived(drag?.started ? drag.keys : null)
   function startDrag(e, r) {
-    if (viewing || searchMode || !selectMode) return
+    if (viewing || searchMode) return
     const block = dragBlock(ordered, selected, r.session_instance_tune_id)
     if (!block) return
     e.preventDefault()
@@ -2060,10 +2060,14 @@
   }
 
   // Relink the edited record to a catalog tune (from a tapped/Enter-picked result).
+  // A deep-search pick from thesession.org carries its thesession_id: the server finds
+  // or imports the tune, as it does for an add.
   function relinkTo(t) {
     const id = editingId
     cancelEdit()
-    sendChange(id, { tune_id: t.tune_id, name: t.name }, { tune_id: t.tune_id, name: t.name, tune_type: t.tune_type ?? null, confidence: 100 })
+    const payload = { tune_id: t.tune_id, name: t.name }
+    if (t.thesession_id != null) payload.thesession_id = t.thesession_id
+    sendChange(id, payload, { tune_id: t.tune_id, name: t.name, tune_type: t.tune_type ?? null, confidence: 100 })
   }
   // Unlink: keep the text, drop the catalog link (becomes a raw name).
   function unlinkEdit() {
@@ -2869,6 +2873,8 @@
   // The shared terminal path for every TuneSearch add (modal pick / pane pick / log-as-is /
   // remote import): log at the cursor and hand focus back to the composer.
   function logTune(payload, name) {
+    // Deep search while editing a logged tune: the pick relinks that tune.
+    if (editingId != null) { relinkTo(payload); return }
     clearEntry()
     addOptimistic(payload, name)
     queueMicrotask(() => inputEl?.focus())
@@ -3968,9 +3974,11 @@
                 <button class="insert-pill bottom" title="Insert below" aria-label="Insert below" onclick={(e) => { e.stopPropagation(); insertAfterRow(r.session_instance_tune_id) }}>↓</button>
               {/if}
             {/if}
-            {#if selectMode}
-              {#if selected.has(r.session_instance_tune_id)}<span class="sel-badge" aria-hidden="true">✓</span>{/if}
-              {#if canEdit && !r._temp && !r._removing}
+            {#if selectMode && selected.has(r.session_instance_tune_id)}<span class="sel-badge" aria-hidden="true">✓</span>{/if}
+            <!-- The handle shows whenever you can edit, not only when selecting: moving
+                 one tune shouldn't take a mode switch. In select mode it lifts the
+                 selected run it belongs to. -->
+            {#if canEdit && !r._temp && !r._removing}
                 <!-- grab bar (spec 029 §F): touch-action:none here ONLY, so the handle
                      drags immediately while the rest of the row still scrolls the list -->
                 <span
@@ -3984,7 +3992,6 @@
                   onpointercancel={cancelDrag}
                   onclick={(e) => e.stopPropagation()}
                 >⠿</span>
-              {/if}
             {/if}
           </div>
           {#if canEdit && selectedId === r.session_instance_tune_id}
@@ -4261,6 +4268,7 @@
     {#if editingId != null}
       <div class="edit-banner">
         <span class="edit-label">Editing <b>{editingName}</b> — pick a match, or type a new name</span>
+        <button class="edit-unlink" onclick={openDeep} title="Search the whole catalogue, or thesession.org">Search</button>
         <button class="edit-unlink" onclick={unlinkEdit} title="Drop the catalog link, keep the text">Unlink</button>
       </div>
     {/if}

@@ -1920,3 +1920,25 @@ The plan (Phases 0-6) runs from here in `ios/`; see `ios/README.md` for the layo
     does (`testALongNightKeepsTheEndInView`, which fails without the fix). Still to try
     with a real account: the vocabulary and matching on real repertoires, and opening a
     ceol.io page link in the app (not built: only sign-in links are handled).
+  - **TestFlight build 6 feedback, 2026-09-29.** Six changes, on both clients where
+    they differed:
+    - A tapped tune opens its details while watching (as the web); editing, linked rows
+      carry the web's ⓘ, in their logger's colour.
+    - Search while editing a logged tune (web and app: a button beside Unlink); a pick
+      relinks it, including a thesession.org tune, which `change_tune` now finds or
+      imports (`thesession_id`), as an add does. Unlink failed on the server for any
+      linked row without its own name (the row ended with neither name nor tune and
+      broke the table's check); it now keeps the name it showed. Both have tests.
+    - Edit under the last row (the app; the web's footer already had it).
+    - The grab handle shows whenever you can edit, not only in selection mode (web and
+      app); in select mode it still lifts the picked run. The "new set" drop zones hold
+      their place, so nothing moves under the finger when a drag starts, and holding
+      near an edge scrolls by the visible area, not the whole scroll view.
+    - The header opens "Log details" as the web does: date and times (Change), name,
+      tunes, status (Mark complete / Re-open), who's attending and logging, notes, and
+      the way back to the session.
+    - The seams' "＋" marks are gone (invisible until tapped, as on the phone web), and
+      the seams are as thin as the web's.
+    New tests: `testWorkingOnOneNight` (all of it, on the server), and web
+    `live-logger-edit-row.spec.ts`. Not in a test: changing the date (the test deletes
+    its night by date).

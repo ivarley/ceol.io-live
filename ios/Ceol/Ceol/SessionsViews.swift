@@ -546,7 +546,7 @@ struct NightView: View {
     @FocusState private var composerFocused: Bool
     @State private var infoTune: TuneRef?
     @State private var assigning = false
-    @State private var detailsOpen = false
+    @State private var showingDetails = false
     @State private var headerHeight: CGFloat = 0
     @State private var managingAttendance = false
     @State private var openTray: RecordID?
@@ -654,10 +654,18 @@ struct NightView: View {
                     model: model, initialQuery: model.composer.text,
                     preferType: Composer.setTuneType(model.cursorSegment)
                 ) { payload in
-                    model.composer.text = ""
-                    model.logTune(payload)
+                    if model.composer.editingID != nil {
+                        // Searching while editing a logged tune: the pick relinks it.
+                        model.composer.relink(to: payload)
+                    } else {
+                        model.composer.text = ""
+                        model.logTune(payload)
+                    }
                 }
             }
+        }
+        .sheet(isPresented: $showingDetails) {
+            if let model { LogDetailsSheet(model: model) { managingAttendance = true } }
         }
         .sheet(isPresented: $managingAttendance) {
             if let model { PersonPicker(model: model, mode: .attendance) }
@@ -699,21 +707,15 @@ struct NightView: View {
                             .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
                             .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
                         Spacer(minLength: 4)
-                        // Tap the header for who's here, as on the web.
-                        Button { withAnimation(.easeOut(duration: 0.2)) { detailsOpen.toggle() } } label: {
+                        // Tap the header for the log's details, as on the web (spec 052 §B15).
+                        Button { showingDetails = true } label: {
                             Image(systemName: "chevron.down").font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(CeolTokens.textMuted)
-                                .rotationEffect(.degrees(detailsOpen ? 180 : 0))
                                 .frame(width: 32, height: 24)
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel(detailsOpen ? "Hide who's here" : "Who's here")
+                        .accessibilityLabel("Log details")
                         .accessibilityIdentifier("night.header")
-                    }
-                    if detailsOpen {
-                        NightPeopleDetails(model: model) { managingAttendance = true }
-                            .padding(.top, 8)
-                            .transition(.opacity)
                     }
                     if !notes.isEmpty {
                         Text(notes).font(.ceolItalic(size: 15)).foregroundStyle(CeolTokens.textMuted)
@@ -729,26 +731,23 @@ struct NightView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(CeolTokens.headerBg.opacity(0.5))
                 .contentShape(Rectangle())
-                .onTapGesture { withAnimation(.easeOut(duration: 0.2)) { detailsOpen.toggle() } }
+                .onTapGesture { showingDetails = true }
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { headerHeight = $0 }
                 if model.editing {
                     EditableLog(
                         model: model, log: log, trackStarters: trackStarters,
                         timeZone: b["timezone"]?.stringValue.flatMap(TimeZone.init(identifier:)),
                         onFocusComposer: { composerFocused = true },
-                        onInfo: { t in
-                            guard let id = t["tune_id"]?.intValue else { return }
-                            infoTune = TuneRef(
-                                id: id, name: t["name"]?.stringValue ?? "", type: t["tune_type"]?.stringValue,
-                                sessionPath: b["session_path"]?.stringValue, statusKnown: false)
-                        },
+                        onInfo: { t in openInfo(t, b) },
                         autoScroll: { dy in
                             let g = scrollGeometry
                             let maxY = max(0, g.contentSize.height - g.containerSize.height + g.contentInsets.bottom)
                             let y = min(max(g.contentOffset.y + dy, -g.contentInsets.top), maxY)
                             scroll.scrollTo(y: y)
                         },
-                        viewportHeight: scrollGeometry.containerSize.height
+                        visible: scrollGeometry.contentInsets.top...max(
+                            scrollGeometry.contentInsets.top,
+                            scrollGeometry.containerSize.height - scrollGeometry.contentInsets.bottom)
                     )
                     .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 24)
                     .animation(.easeOut(duration: 0.2), value: log.records)
@@ -770,13 +769,20 @@ struct NightView: View {
                                     timeZone: b["timezone"]?.stringValue.flatMap(TimeZone.init(identifier:)))
                             }
                             ForEach(Array(set.tunes.enumerated()), id: \.element) { _, t in
-                                Text(t["name"]?.stringValue ?? "Unknown tune")
-                                    .font(.ceol(size: 19))
-                                    .foregroundStyle(CeolTokens.textColor)
-                                    .padding(.vertical, 9)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .remoteFlash(model, t.recordID)
-                                    .transition(.opacity.combined(with: .move(edge: .top)))
+                                // Tap a tune for its details, as on the web.
+                                Button { openInfo(t, b) } label: {
+                                    Text(t["name"]?.stringValue ?? "Unknown tune")
+                                        .font(.ceol(size: 19))
+                                        .foregroundStyle(CeolTokens.textColor)
+                                        .multilineTextAlignment(.leading)
+                                        .padding(.vertical, 9)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                .remoteFlash(model, t.recordID)
+                                .transition(.opacity.combined(with: .move(edge: .top)))
+                                .accessibilityIdentifier("night.tune")
                             }
                         }
                         .accessibilityElement(children: .contain)
@@ -785,6 +791,18 @@ struct NightView: View {
                     if log.meta["log_complete"] == true {
                         Text("✓ This session has been fully logged").font(.ceol(size: 16, weight: .medium))
                             .foregroundStyle(CeolTokens.textMuted).padding(.top, 12)
+                    } else if model.status != .finished {
+                        // As the web's footer: Edit under the last row too, not only up top.
+                        Button { model.setEditing(true) } label: {
+                            Label("Edit log", systemImage: "pencil")
+                                .font(.ceol(size: 16, weight: .semibold))
+                                .foregroundStyle(CeolTokens.primary)
+                                .padding(.horizontal, 18).frame(height: 44)
+                                .overlay(Capsule().strokeBorder(CeolTokens.primary.opacity(0.6), lineWidth: 1))
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.top, 12)
+                        .accessibilityIdentifier("night.editBottom")
                     }
                 }
                 .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 24)
@@ -825,6 +843,17 @@ struct NightView: View {
     /// attendance too (spec 039).
     private func trackStarters(_ b: JSONValue?) -> Bool {
         (b?["track_set_starters"]?.boolValue ?? true) && (b?["track_attendance"]?.boolValue ?? true)
+    }
+
+    /// A tune's details; a tune logged as text has none yet, and says so (the web's words).
+    private func openInfo(_ t: LogRecord, _ b: JSONValue) {
+        guard let id = t["tune_id"]?.intValue else {
+            model?.say("Logged as text — link it to a catalog tune to see details, notation, and stats.")
+            return
+        }
+        infoTune = TuneRef(
+            id: id, name: t["name"]?.stringValue ?? "", type: t["tune_type"]?.stringValue,
+            sessionPath: b["session_path"]?.stringValue, statusKnown: false)
     }
 
     private func finishEditing() {

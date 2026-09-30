@@ -686,6 +686,54 @@ final class NightModel {
         _ = try? await URLSession.shared.data(for: request)  // best effort
     }
 
+    // MARK: - The log's details (spec 052 §B15): need a connection, as on the web
+
+    /// Notes, the date and times, the name, complete or not: one op each, answered
+    /// before it shows (the stream's echo updates everyone else). Returns the answer, or
+    /// nil with `why` set.
+    func metaOp(_ type: String, _ fields: [String: JSONValue], label: String) async -> (answer: JSONValue?, why: String?) {
+        var body = fields
+        body["op_id"] = .string(LiveLog.newOpID())
+        body["op_type"] = .string(type)
+        do {
+            let (code, answer) = try await app.postJSON("/api/live/instances/\(instanceID)/ops", body: .object(body))
+            if code != 200 {
+                return (nil, answer["message"]?.stringValue ?? answer["error"]?.stringValue ?? "That didn't save.")
+            }
+            if answer["rejected"].isTruthy || answer["success"] == false {
+                return (answer, answer["message"]?.stringValue ?? answer["reason"]?.stringValue ?? "That didn't save.")
+            }
+            var patched = answer
+            if case .object(var o) = patched, o["op_type"] == nil { o["op_type"] = .string(type); patched = .object(o) }
+            for (k, v) in LogState.metaChanges(patched) { log?.meta[k] = v }
+            return (answer, nil)
+        } catch {
+            return (nil, "You're offline — \(label) needs a connection.")
+        }
+    }
+
+    /// Mark the log complete: editing ends for everyone, and the stream closes.
+    func markComplete() async -> String? {
+        let r = await metaOp("mark_complete", [:], label: "marking complete")
+        guard r.why == nil else { return r.why }
+        log?.meta["log_complete"] = true
+        setEditing(false)
+        stream?.cancel()
+        watchdog?.cancel()
+        status = .finished
+        return nil
+    }
+
+    /// Re-open a completed log: it goes live again.
+    func reopen() async -> String? {
+        let r = await metaOp("mark_incomplete", [:], label: "re-opening")
+        guard r.why == nil else { return r.why }
+        log?.meta["log_complete"] = false
+        running = true
+        await connect()
+        return nil
+    }
+
     // MARK: - Attendance (spec 034): needs a connection, as on the web
 
     func checkIn(_ person: JSONValue) async {
@@ -732,7 +780,7 @@ final class NightModel {
         peopleLoaded = true
     }
 
-    private func say(_ text: String) {
+    func say(_ text: String) {
         flash = text
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(3))

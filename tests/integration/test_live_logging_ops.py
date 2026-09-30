@@ -393,6 +393,51 @@ def test_change_tune_rename_and_unlink(client, authenticated_user, live_instance
     assert unl["record"]["tune_id"] is None
 
 
+def test_change_tune_unlink_keeps_the_shown_name(client, authenticated_user, live_instance, db_cursor):
+    """A linked row stores no name of its own (it shows the tune's). Unlinking it must
+    keep the name it was showing: a row with neither a name nor a tune breaks the
+    table's check, and the unlink failed with a database error."""
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        _, a = _op(client, inst, op_type="add_tune", tune_id=live_instance["reel"])
+        rid = a["record"]["session_instance_tune_id"]
+        shown = a["record"]["name"]
+        _, unl = _op(client, inst, op_type="change_tune", record_id=rid, unlink=True)
+    assert unl["success"] is True, unl
+    assert unl["record"]["tune_id"] is None
+    assert unl["record"]["name"] == shown
+    rows = _records(db_cursor, inst)
+    assert rows[0][1] is None and rows[0][2] == shown
+
+
+def test_change_tune_relinks_to_a_thesession_tune(client, authenticated_user, live_instance, db_cursor):
+    """Deep search while editing can pick a thesession.org tune: change_tune takes its
+    thesession_id, finds (or would import) the tune, and relinks the row to it."""
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        _, a = _op(client, inst, op_type="add_tune", name="Something Odd", no_match=True)
+        rid = a["record"]["session_instance_tune_id"]
+        # The catalogue already has this one: no import needed.
+        _, rel = _op(client, inst, op_type="change_tune", record_id=rid, thesession_id=live_instance["reel"])
+    assert rel["success"] is True, rel
+    assert rel["record"]["tune_id"] == live_instance["reel"]
+
+
+def test_change_tune_refuses_a_failed_import(client, authenticated_user, live_instance, monkeypatch):
+    import live_logging_routes as llr
+
+    def fail(cur, ts_id, user_id):
+        raise llr.TuneImportError("thesession.org has no tune 999999999.")
+
+    monkeypatch.setattr(llr, "_import_tune_for_live", fail)
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        _, a = _op(client, inst, op_type="add_tune", tune_id=live_instance["reel"])
+        rid = a["record"]["session_instance_tune_id"]
+        _, rel = _op(client, inst, op_type="change_tune", record_id=rid, thesession_id=999999999)
+    assert rel["success"] is False and rel["reason"] == "import_failed"
+
+
 def test_change_tune_relink_clears_redundant_name(client, authenticated_user, live_instance, db_cursor):
     """Relink ships the new tune's display name alongside tune_id (the client always
     does); the redundant copy stores as NULL — which also clears any stale override

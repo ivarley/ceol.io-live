@@ -318,10 +318,19 @@ final class LogComposerModel {
         night.changeTune(id, ["name": .string(q), "unlink": true], patch: ["name": .string(q), "tune_id": .null, "tune_type": .null])
     }
 
+    /// A deep-search pick while editing: relink to it (a thesession.org pick carries its
+    /// thesession_id, and the server finds or imports the tune).
+    func relink(to pick: [String: JSONValue]) {
+        guard let id = editingID else { return }
+        relink(id, to: .object(pick))
+    }
+
     private func relink(_ id: RecordID, to t: JSONValue) {
         cancelEdit()
+        var payload: [String: JSONValue] = ["tune_id": t["tune_id"] ?? .null, "name": t["name"] ?? .null]
+        if let ts = t["thesession_id"], !ts.isNull { payload["thesession_id"] = ts }
         night.changeTune(
-            id, ["tune_id": t["tune_id"] ?? .null, "name": t["name"] ?? .null],
+            id, payload,
             patch: ["tune_id": t["tune_id"] ?? .null, "name": t["name"] ?? .null, "tune_type": t["tune_type"] ?? .null,
                     "confidence": 100])
     }

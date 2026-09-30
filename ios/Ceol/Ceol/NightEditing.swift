@@ -61,7 +61,9 @@ struct EditableLog: View {
     var onInfo: (LogRecord) -> Void
     /// Scroll the log by this much (a drag held near the top or bottom).
     var autoScroll: (CGFloat) -> Void
-    var viewportHeight: CGFloat
+    /// The part of the scroll view you can see (not what's under the header or the
+    /// bottom bar), in its own coordinates.
+    var visible: ClosedRange<CGFloat>
 
     @State private var frames: [String: CGRect] = [:]
     @State private var openTray: RecordID?
@@ -77,7 +79,10 @@ struct EditableLog: View {
                 Text("No tunes yet — log one below.").font(.ceol(size: 16)).foregroundStyle(CeolTokens.textMuted)
                     .frame(maxWidth: .infinity).padding(.vertical, 32)
             }
-            if model.drag != nil { dropStrip("top-new") }
+            // The drag-only "new set" zones (here, and below an open end) keep their
+            // place whenever there's a log, drawn only during a drag: nothing moves under
+            // the finger as a drag starts.
+            if !segments.isEmpty { dropStrip("top-new") }
             ForEach(Array(segments.enumerated()), id: \.offset) { si, seg in
                 let first = seg.tunes[0].recordID!
                 SetCard(
@@ -99,39 +104,13 @@ struct EditableLog: View {
                                 onTap: { if !t["_temp"].isTruthy { model.togglePicked(id) } },
                                 drag: { phase in dragChanged(id, phase, segments: segments, endIsOpen: endIsOpen) })
                         } else {
-                            EditableRow(
-                                record: t, selected: model.selected == id,
-                                onTap: { tap(t) },
-                                onInsertAbove: { insertAbove(id) },
-                                onInsertBelow: { place(.after(id), endIsOpen: endIsOpen, segments: segments) },
-                                onInfo: { onInfo(t) },
-                                onConfirm: { model.confirm(id) },
-                                onRemove: {
-                                    if t["_resolving"].isTruthy {
-                                        model.selected = nil
-                                        model.composer.cancelResolving(returnText: false)
-                                    } else {
-                                        withAnimation(.easeOut(duration: 0.2)) { model.remove(id) }
-                                    }
-                                },
-                                onEdit: {
-                                    if t["_resolving"].isTruthy {
-                                        model.selected = nil
-                                        model.composer.cancelResolving(returnText: true)
-                                    } else {
-                                        model.composer.startEdit(t)
-                                    }
-                                    onFocusComposer()
-                                },
-                                editing: model.composer.editingID == id,
-                                byColor: t["tune_id"].isTruthy && !t["_temp"].isTruthy
-                                    ? People.loggerColorIndex(t, me: model.me, roster: model.roster).map(Color.player) : nil)
+                            editRow(t, id, segments: segments, endIsOpen: endIsOpen)
                             .remoteFlash(model, id)
                             .id(rowScrollID(id))
                         }
                         if endIsOpen && si == segments.count - 1 && ti == seg.tunes.count - 1 {
                             seam(.end, label: "＋", active: active, tall: true)
-                            if model.drag != nil { dropStrip("end-new") }
+                            dropStrip("end-new")
                         } else if !t["_temp"].isTruthy {
                             seam(.after(id), label: "＋", active: active,
                                  pill: ti < seg.tunes.count - 1 ? ("Split", { model.split(after: id) }) : nil)
@@ -156,13 +135,49 @@ struct EditableLog: View {
         }
     }
 
+    /// One tune while editing, with everything it can do.
+    private func editRow(_ t: LogRecord, _ id: RecordID, segments: [LogSegment], endIsOpen: Bool) -> EditableRow {
+        let resolving = t["_resolving"].isTruthy
+        let temp = t["_temp"].isTruthy
+        let color: Color? =
+            t["tune_id"].isTruthy && !temp
+            ? People.loggerColorIndex(t, me: model.me, roster: model.roster).map(Color.player) : nil
+        return EditableRow(
+            record: t, selected: model.selected == id,
+            onTap: { tap(t) },
+            onInsertAbove: { insertAbove(id) },
+            onInsertBelow: { place(.after(id), endIsOpen: endIsOpen, segments: segments) },
+            onInfo: { onInfo(t) },
+            onConfirm: { model.confirm(id) },
+            onRemove: {
+                if resolving {
+                    model.selected = nil
+                    model.composer.cancelResolving(returnText: false)
+                } else {
+                    withAnimation(.easeOut(duration: 0.2)) { model.remove(id) }
+                }
+            },
+            onEdit: {
+                if resolving {
+                    model.selected = nil
+                    model.composer.cancelResolving(returnText: true)
+                } else {
+                    model.composer.startEdit(t)
+                }
+                onFocusComposer()
+            },
+            editing: model.composer.editingID == id,
+            byColor: color,
+            drag: temp ? nil : { phase in dragChanged(id, phase, segments: segments, endIsOpen: endIsOpen) })
+    }
+
     private func seam(
         _ cursor: Cursor, label: String, active: Cursor?, tall: Bool = false, hint: String? = nil,
         pill: (String, () -> Void)? = nil
     ) -> some View {
         let key = LogState.seamKey(for: cursor)
         return Group {
-            if model.selecting {
+            if model.selecting || model.drag != nil {
                 DropSeam(state: dropState(key), tall: tall, newSet: key == "end" ? hint != nil : key.hasPrefix("inter:"))
             } else {
                 Seam(label: label, isActive: active == cursor, tall: tall, hint: hint, pill: pill) {
@@ -178,12 +193,11 @@ struct EditableLog: View {
 
     /// A drag-only zone: a new set at the very top, or below an open end.
     private func dropStrip(_ key: String) -> some View {
-        Group {
-            if model.drag?.targets.contains(where: { $0.key == key }) == true {
-                DropSeam(state: dropState(key), tall: true, newSet: true, label: "new set")
-                    .background(frameReporter(key))
-            }
-        }
+        let shown = model.drag?.started == true && model.drag?.targets.contains(where: { $0.key == key }) == true
+        return DropSeam(state: shown ? dropState(key) : .idle, tall: true, newSet: true, label: shown ? "new set" : nil)
+            .opacity(shown ? 1 : 0)
+            .background(frameReporter(key))
+            .accessibilityHidden(!shown)
     }
 
     private func frameReporter(_ key: String) -> some View {
@@ -250,10 +264,10 @@ struct EditableLog: View {
                 guard let d = model.drag, d.started else { continue }
                 let edge: CGFloat = 70
                 let y = d.location.y
-                if y < edge {
-                    autoScroll(-max(2, (edge - y) / 5))
-                } else if y > viewportHeight - edge {
-                    autoScroll(max(2, (y - (viewportHeight - edge)) / 5))
+                if y < visible.lowerBound + edge {
+                    autoScroll(-max(2, (visible.lowerBound + edge - y) / 5))
+                } else if y > visible.upperBound - edge {
+                    autoScroll(max(2, (y - (visible.upperBound - edge)) / 5))
                 } else {
                     continue
                 }
@@ -328,7 +342,8 @@ struct DropSeam: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .frame(height: label != nil ? 30 : (tall ? 26 : 18))
+        // The seams' own heights: nothing moves when a drag starts.
+        .frame(height: label != nil || tall ? 22 : 12)
         .animation(.easeOut(duration: 0.12), value: state)
         .accessibilityHidden(state == .idle)
         .accessibilityIdentifier(state == .active ? "drop.active" : "drop")
@@ -584,7 +599,8 @@ struct Seam: View {
                     .accessibilityIdentifier("seam.\(pill.0.lowercased())")
             }
         }
-        .frame(height: tall ? 26 : 18)
+        // Thin, as the web's; the cursor's own seam grows to hold its Split or Join.
+        .frame(height: tall || (isActive && pill != nil) ? 22 : 12)
     }
 
     private var line: some View {
@@ -596,7 +612,9 @@ struct Seam: View {
                 Capsule().fill(hint == nil ? CeolTokens.insert : CeolTokens.textColor).frame(height: 3)
                     .shadow(color: (hint == nil ? CeolTokens.insert : CeolTokens.textColor).opacity(0.8), radius: 4)
             } else {
-                Text(label).font(.ceol(size: 12)).foregroundStyle(CeolTokens.textMuted.opacity(0.6))
+                // Invisible until it's the cursor, as on the web's phone layout: a tap
+                // still places the cursor here. (The label stays for VoiceOver.)
+                Color.clear
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -624,6 +642,8 @@ struct EditableRow: View {
     var editing = false
     /// Someone else logged it: a faint border in their colour (the web's has-by).
     var byColor: Color? = nil
+    /// The handle's drag (nil: no handle, e.g. an optimistic row).
+    var drag: ((EditableLog.DragPhase) -> Void)? = nil
 
     @State private var dx: CGFloat = 0
     static let removeAt: CGFloat = 110
@@ -650,6 +670,28 @@ struct EditableRow: View {
                 } else if unlinked && !record["_temp"].isTruthy {
                     Text("⚠ unlinked").font(.ceol(size: 12, weight: .semibold)).foregroundStyle(CeolTokens.attention)
                 }
+                // The tune's details in one tap (the web's ⓘ), in its logger's colour.
+                if !unlinked && !record["_temp"].isTruthy {
+                    Button(action: onInfo) {
+                        Image(systemName: "info.circle").font(.system(size: 17))
+                            .foregroundStyle(byColor ?? CeolTokens.textMuted)
+                            .frame(width: 30, height: 34)
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("Tune details")
+                    .accessibilityIdentifier("row.info")
+                }
+                if let drag {
+                    Text("⠿").font(.system(size: 22)).foregroundStyle(CeolTokens.textMuted)
+                        .frame(width: 30, height: 34)
+                        .contentShape(Rectangle())
+                        .gesture(
+                            DragGesture(minimumDistance: 0, coordinateSpace: .named(nightScrollSpace))
+                                .onChanged { drag(.changed($0.location)) }
+                                .onEnded { _ in drag(.ended) })
+                        .accessibilityLabel("Drag to move")
+                        .accessibilityIdentifier("row.grab")
+                }
             }
             .padding(.vertical, 9).padding(.horizontal, 8)
             .background {
@@ -670,8 +712,7 @@ struct EditableRow: View {
             .zIndex(1)
             .contentShape(Rectangle())
             .onTapGesture(perform: onTap)
-            .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(.isButton)
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("log.row")
             .accessibilityAction(named: "Remove", onRemove)
             if selected {
@@ -809,6 +850,10 @@ struct LogComposer: View {
                     (Text("Editing ") + Text(c.editingName).bold() + Text(" — pick a match, or type a new name"))
                         .font(.ceol(size: 14)).foregroundStyle(CeolTokens.textColor)
                     Spacer(minLength: 4)
+                    // The whole catalogue, or thesession.org, for the tune being edited.
+                    Button("Search", action: onDeepSearch)
+                        .font(.ceol(size: 14, weight: .semibold)).foregroundStyle(CeolTokens.info)
+                        .accessibilityIdentifier("edit.search")
                     Button("Unlink") { c.unlink() }
                         .font(.ceol(size: 14, weight: .semibold)).foregroundStyle(CeolTokens.attention)
                         .accessibilityIdentifier("edit.unlink")
