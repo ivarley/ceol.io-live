@@ -60,3 +60,40 @@ def test_key_allowance_finds_a_tune_a_fifth_up_and_charges_for_it():
     assert written < allowed
     # a tune in its written key is not charged at all
     assert al.score(1, [("eighths", TUNE[:32])]) == 1.0
+
+
+def test_batched_scores_equal_chunk_score_exactly():
+    from lab.analysis.align import batch_chunk_scores, doubled, query_pieces
+
+    rng = np.random.default_rng(0)
+    queries = [list(rng.integers(-1, 12, n)) for n in (40, 70, 5, 0)]
+    targets = [list(rng.integers(-1, 12, n)) for n in (30, 64, 9, 0)] + [TUNE]
+    for shift in (0, 7):
+        m = batch_chunk_scores([query_pieces(q, 16) for q in queries],
+                               [doubled(t, shift) for t in targets])
+        for i, q in enumerate(queries):
+            for j, t in enumerate(targets):
+                assert m[i, j] == chunk_score(q, t, chunk=16, transpose=shift)
+
+
+def test_aligner_batched_rerank_equals_the_one_at_a_time_scores():
+    from lab.bench.retrieval import Aligner
+
+    rng = np.random.default_rng(1)
+    by_tune = {t: [(t * 10 + s, np.array(rng.integers(-1, 12, 48), dtype=np.int8),
+                    np.array(rng.integers(0, 12, 30), dtype=np.int8)) for s in range(3)]
+               for t in range(1, 8)}
+    by_tune[3] = [(30, np.array(TUNE, dtype=np.int8), np.array(TUNE, dtype=np.int8))]
+    by_tune[9] = []
+    heard = [([{"midi": 60 + p} for p in [(x + 7) % 12 for x in TUNE]], [(x + 7) % 12 for x in TUNE]),
+             ([{"midi": 60 + p} for p in TUNE[:20]], None)]
+    for transpose in (0, "fifths"):
+        al = Aligner.__new__(Aligner)
+        al.reading, al.mode, al.shortlist = "both", "replace", 300
+        al.chunk_eighths, al.chunk_notes = 16, 12
+        al.transpose, al.max_fifths, al.step_cost, al.key_top = transpose, 2, 0.02, 300
+        al.sequences = type("S", (), {"by_tune": by_tune})()
+        al._doubled = {}
+        queries = al._queries(heard)
+        tunes = [1, 2, 3, 4, 5, 6, 7, 9]
+        assert al.scores(tunes, queries) == {t: al.score(t, queries) for t in tunes}

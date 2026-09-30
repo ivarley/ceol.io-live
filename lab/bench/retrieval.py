@@ -212,21 +212,23 @@ class Aligner:
     """
 
     def __init__(self, reading="eighths", mode="fuse", shortlist=25, chunk_eighths=32,
-                 chunk_notes=24, transpose=0, max_fifths=2, step_cost=0.02,
+                 chunk_notes=24, transpose=0, max_fifths=2, step_cost=0.02, key_top=50,
                  candidate_set="repertoire"):
         from lab.corpus.sequences import TuneSequences
 
         self.reading, self.mode, self.shortlist = reading, mode, shortlist
         self.chunk_eighths, self.chunk_notes, self.transpose = chunk_eighths, chunk_notes, transpose
         self.max_fifths, self.step_cost = int(max_fifths), float(step_cost)
+        self.key_top = int(key_top)
         self.sequences = TuneSequences.load(candidate_set)
+        self._doubled = {}   # (tune, setting index, kind, shift) -> target as aligned
 
     def params(self):
         out = {"reading": self.reading, "mode": self.mode, "shortlist": self.shortlist,
                "chunk_eighths": self.chunk_eighths, "chunk_notes": self.chunk_notes,
                "transpose": self.transpose}
         if self.transpose == "fifths":
-            out.update(max_fifths=self.max_fifths, step_cost=self.step_cost)
+            out.update(max_fifths=self.max_fifths, step_cost=self.step_cost, key_top=self.key_top)
         return out
 
     def _queries(self, heard):
@@ -284,12 +286,72 @@ class Aligner:
             total += best
         return total / len(queries)
 
+    def _batch_scores(self, tune_ids, queries, shift):
+        """{tune: score at `shift`} for many tunes in one parallel pass
+        (`analysis.align.batch_chunk_scores`), equal value for value to
+        `shift_scores` one tune at a time: each query takes its best setting,
+        averaged over queries."""
+        from lab.analysis.align import batch_chunk_scores, doubled, query_pieces
+
+        best = [dict() for _ in queries]     # per query: tune -> best setting's score
+        for kind in ("eighths", "notes"):
+            idx = [i for i, (k, _) in enumerate(queries) if k == kind]
+            if not idx:
+                continue
+            chunk = self.chunk_eighths if kind == "eighths" else self.chunk_notes
+            targets, owner = [], []
+            for tid in tune_ids:
+                for si, (_, eighths, plain) in enumerate(self.sequences.by_tune.get(tid) or []):
+                    key = (tid, si, kind, shift)
+                    if key not in self._doubled:
+                        self._doubled[key] = doubled(eighths if kind == "eighths" else plain, shift)
+                    targets.append(self._doubled[key])
+                    owner.append(tid)
+            m = batch_chunk_scores([query_pieces(queries[i][1], chunk) for i in idx], targets)
+            for row, i in enumerate(idx):
+                for ti, tid in enumerate(owner):
+                    if m[row, ti] > best[i].get(tid, 0.0):
+                        best[i][tid] = m[row, ti]
+        out = {}
+        for tid in tune_ids:
+            if not self.sequences.by_tune.get(tid):
+                out[tid] = 0.0
+                continue
+            total = 0.0
+            for i in range(len(queries)):
+                total += best[i].get(tid, 0.0)
+            out[tid] = total / len(queries)
+        return out
+
+    def scores(self, tune_ids, queries):
+        """Every shortlisted tune's score, as `score` would give it. With the
+        key allowance, other keys are tried only for the first `key_top` in
+        the index's order: the index matches intervals, so its order does not
+        depend on key, and at 30 s trying the top 20 gives the same top-1 as
+        trying all 300 on all 502 segments (Galway Belle is 17th, Mac's Fancy
+        4th); 50 leaves a margin, at a third of the cost."""
+        if self.transpose not in (0, "fifths"):
+            return {tid: self.score(tid, queries) for tid in tune_ids}
+        base = self._batch_scores(tune_ids, queries, 0)
+        if self.transpose == 0:
+            return base
+        steps = fifths_steps(self.max_fifths)
+        top = list(tune_ids[:self.key_top])
+        best = dict(base)
+        for k, n in steps.items():
+            if k == 0:
+                continue
+            for tid, v in self._batch_scores(top, queries, k).items():
+                best[tid] = max(best[tid], v - self.step_cost * n)
+        return best
+
     def rerank(self, ranked, heard):
         queries = self._queries(heard)
         if not queries or not ranked:
             return ranked
         head, tail = ranked[:self.shortlist], ranked[self.shortlist:]
-        aligned = [{**r, "score": self.score(r["tune_id"], queries)} for r in head]
+        by_tune = self.scores([r["tune_id"] for r in head], queries)
+        aligned = [{**r, "score": by_tune[r["tune_id"]]} for r in head]
         aligned.sort(key=lambda r: -r["score"])
         if self.mode == "replace":
             return aligned + tail

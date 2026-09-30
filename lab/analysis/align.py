@@ -19,7 +19,7 @@ zero, neither match nor mismatch.
 """
 
 import numpy as np
-from numba import njit
+from numba import njit, prange
 
 
 @njit(cache=True)
@@ -76,3 +76,73 @@ def chunk_score(query, target, chunk=32, match=2.0, mismatch=-1.0, gap=-1.0, tra
             continue
         total += local_align(piece, t2, match, mismatch, gap)
     return total / (match * known)
+
+
+@njit(cache=True, parallel=True)
+def _batch_local_align(q_flat, q_off, t_flat, t_off, pairs_q, pairs_t, match, mismatch, gap):
+    out = np.zeros(pairs_q.shape[0])
+    for i in prange(pairs_q.shape[0]):
+        a, b = pairs_q[i], pairs_t[i]
+        out[i] = local_align(q_flat[q_off[a]:q_off[a + 1]], t_flat[t_off[b]:t_off[b + 1]],
+                             match, mismatch, gap)
+    return out
+
+
+def query_pieces(query, chunk):
+    """The chunks `chunk_score` scores, and the most the query could score:
+    (list of int8 arrays, known symbols). Pieces with fewer than chunk // 4
+    known symbols are dropped, as there."""
+    q = np.asarray(query, dtype=np.int8)
+    known = int((q >= 0).sum())
+    pieces = []
+    for start in range(0, len(q), chunk):
+        piece = q[start:start + chunk]
+        if (piece >= 0).sum() >= chunk // 4:
+            pieces.append(piece)
+    return pieces, known
+
+
+def doubled(target, transpose=0):
+    """A target as `chunk_score` aligns against it: transposed, written twice."""
+    t = np.asarray(target, dtype=np.int8)
+    if transpose:
+        t = np.where(t >= 0, (t + transpose) % 12, -1).astype(np.int8)
+    return np.concatenate([t, t])
+
+
+def batch_chunk_scores(queries, targets, match=2.0, mismatch=-1.0, gap=-1.0):
+    """`chunk_score` for every (query, target) pair at once, across all cores.
+
+    `queries`: [(pieces, known)] from `query_pieces`; `targets`: doubled
+    arrays from `doubled`. Returns an array [len(queries), len(targets)]
+    equal, value for value, to calling `chunk_score` on each pair: the same
+    local alignments, summed in the same order."""
+    out = np.zeros((len(queries), len(targets)))
+    if not queries or not targets:
+        return out
+    q_list, q_owner = [], []
+    for qi, (pieces, _) in enumerate(queries):
+        for p in pieces:
+            q_list.append(p)
+            q_owner.append(qi)
+    if not q_list:
+        return out
+    q_off = np.zeros(len(q_list) + 1, dtype=np.int64)
+    q_off[1:] = np.cumsum([len(p) for p in q_list])
+    t_off = np.zeros(len(targets) + 1, dtype=np.int64)
+    t_off[1:] = np.cumsum([len(t) for t in targets])
+    q_flat = np.concatenate(q_list).astype(np.int8)
+    t_flat = np.concatenate(targets).astype(np.int8)
+    nq, nt = len(q_list), len(targets)
+    pairs_q = np.repeat(np.arange(nq, dtype=np.int64), nt)
+    pairs_t = np.tile(np.arange(nt, dtype=np.int64), nq)
+    scores = _batch_local_align(q_flat, q_off, t_flat, t_off, pairs_q, pairs_t,
+                                match, mismatch, gap).reshape(nq, nt)
+    # sum each query's pieces in order, as chunk_score does
+    for row, qi in enumerate(q_owner):
+        out[qi] += scores[row]
+    for qi, (_, known) in enumerate(queries):
+        out[qi] = out[qi] / (match * known) if known else 0.0
+    empty = [ti for ti, t in enumerate(targets) if len(t) == 0]
+    out[:, empty] = 0.0
+    return out

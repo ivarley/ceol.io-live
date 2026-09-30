@@ -1706,10 +1706,22 @@ the player heard it; Julia Delaney's in the same set is +2 by 0.027), and
 Biddy Martin's (+7). The four in the written key's first place were already
 right; the allowance widens their margin.
 
-It is the musically right rule, it cannot be told from noise on the bench
-(+2/-0), and it costs five alignments per tune instead of one, which matters
-on the board. 120 s is being run before deciding whether it joins the
-headline.
+It is the musically right rule and it cannot be told from noise on the bench
+(+2/-0). Trying the other keys for every shortlisted tune costs five
+alignments per tune; trying them only for the first `key_top` tunes in the
+index's order (which matches intervals, so it does not depend on key) gives
+the same top-1 on all 502 segments from 20 up (Galway Belle is 17th, Mac's
+Fancy 4th), so the default is 50, at a third of the cost.
+
+**The aligner made parallel (2026-09-29).** `analysis.align.batch_chunk_scores`
+aligns every chunk against every candidate setting in one numba pass across
+all cores, summing each tune's chunks in the same order as `chunk_score`, so
+the values are identical, not close: tests check equality, and night 2 at
+30 s reproduces every saved rank (written key, 184 s before, 59 s after, on a
+loaded machine), as do nights 1 and 2 with the key allowance against the
+capture. Settings are cached as aligned. Runs that use it should go one at a
+time, since each already uses every core; twenty in parallel on this
+laptop's four performance cores took the load average to 120.
 
 **Not yet measured:** the board; tunes
 played in another key than all their settings (the aligner compares note
