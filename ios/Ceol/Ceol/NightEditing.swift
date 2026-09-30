@@ -89,7 +89,8 @@ struct EditableLog: View {
                     label: LogState.setLabel(seg.tunes), starter: trackStarters ? setStarter(seg.tunes) : nil,
                     onLabelTap: { withAnimation(.easeOut(duration: 0.15)) { openTray = openTray == first ? nil : first } },
                     play: model.selecting || model.player.queueFor(seg.tunes).isEmpty
-                        ? nil : (model.player.setIsPlaying(seg.tunes), { model.player.toggleSet(seg.tunes) })
+                        ? nil : (model.player.setIsPlaying(seg.tunes), { model.player.toggleSet(seg.tunes) }),
+                    playCenter: EditableRow.playCenter
                 ) {
                     if openTray == first {
                         SetTray(
@@ -663,6 +664,9 @@ struct EditableRow: View {
 
     @State private var dx: CGFloat = 0
     static let removeAt: CGFloat = 110
+    /// The ▶'s centre, in from the set card's right edge: the card's padding (18), the
+    /// row's (8), the handle and ⓘ slots (30 each, 6 apart), and half the ▶ (15).
+    static let playCenter: CGFloat = 18 + 8 + 30 + 6 + 30 + 6 + 15
 
     var body: some View {
         let unlinked = !record["tune_id"].isTruthy
@@ -687,7 +691,9 @@ struct EditableRow: View {
                     Text("⚠ unlinked").font(.ceol(size: 12, weight: .semibold)).foregroundStyle(CeolTokens.attention)
                 }
                 if let play { TunePlayButton(playing: play.playing, paused: play.paused, action: play.action) }
-                // The tune's details in one tap (the web's ⓘ), in its logger's colour.
+                // The tune's details in one tap (the web's ⓘ), in its logger's colour. Its
+                // slot and the handle's are kept even when empty, so every row's ▶ sits
+                // in one column (under its set's).
                 if !unlinked && !record["_temp"].isTruthy {
                     Button(action: onInfo) {
                         Image(systemName: "info.circle").font(.system(size: 17))
@@ -697,6 +703,11 @@ struct EditableRow: View {
                     .buttonStyle(.borderless)
                     .accessibilityLabel("Tune details")
                     .accessibilityIdentifier("row.info")
+                } else if !record["_resolving"].isTruthy {
+                    Color.clear.frame(width: 30, height: 34)
+                }
+                if drag == nil && !record["_resolving"].isTruthy {
+                    Color.clear.frame(width: 30, height: 34)
                 }
                 if let drag {
                     Text("⠿").font(.system(size: 22)).foregroundStyle(CeolTokens.textMuted)

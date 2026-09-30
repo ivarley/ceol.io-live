@@ -1295,6 +1295,14 @@ final class CeolUITests: XCTestCase {
         XCTAssertTrue(plays.firstMatch.waitForExistence(timeout: 15), "▶ on the timestamped tunes")
         XCTAssertEqual(plays.count, 3)
         XCTAssertTrue(app.buttons["set.play"].exists, "▶ on their set")
+        // The set's ▶ and its tunes' ▶ form one column.
+        func aligned(_ when: String) {
+            let set = app.buttons["set.play"].frame.midX
+            for i in 0..<plays.count {
+                XCTAssertEqual(plays.element(boundBy: i).frame.midX, set, accuracy: 1.5, "\(when): tune \(i + 1)")
+            }
+        }
+        aligned("watching")
         plays.firstMatch.tap()
         let player = app.descendants(matching: .any)["player"]
         XCTAssertTrue(player.waitForExistence(timeout: 5), "the player")
@@ -1320,6 +1328,13 @@ final class CeolUITests: XCTestCase {
         XCTAssertEqual(app.buttons["set.play"].label, "Stop")
         app.buttons["set.play"].tap()
         XCTAssertTrue(player.waitForNonExistence(timeout: 5))
+        // And while editing, where each tune also has its ⓘ and handle.
+        app.buttons["night.edit"].tap()
+        XCTAssertTrue(app.textFields["log.input"].waitForExistence(timeout: 5))
+        app.scrollViews.firstMatch.swipeDown(velocity: .fast)
+        XCTAssertTrue(plays.firstMatch.waitForExistence(timeout: 5))
+        snapshot("play column editing")
+        aligned("editing")
     }
 
     /// Leaving "seam mode" (the yellow line away from the end): End set at the end of a

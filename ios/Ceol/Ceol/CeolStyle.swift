@@ -318,6 +318,9 @@ struct SetCard<Content: View>: View {
     var onLabelTap: (() -> Void)? = nil
     /// The set's ▶ / ■ (where its tunes have audio), beside the starter.
     var play: (playing: Bool, action: () -> Void)? = nil
+    /// How far in from the card's right edge the tunes' ▶ buttons are centred, so the
+    /// set's sits in the same column.
+    var playCenter: CGFloat = 37
     @ViewBuilder var content: () -> Content
 
     var body: some View {
@@ -349,7 +352,7 @@ struct SetCard<Content: View>: View {
                     Button(action: play.action) {
                         Image(systemName: play.playing ? "stop.fill" : "play.fill").font(.system(size: 10))
                             .foregroundStyle(play.playing ? CeolTokens.primary : CeolTokens.textMuted)
-                            .padding(.horizontal, 10).padding(.vertical, 5)
+                            .frame(width: 30).padding(.vertical, 5)
                             .background(CeolTokens.bgColor, in: Capsule())
                             .overlay(Capsule().strokeBorder(play.playing ? CeolTokens.primary : CeolTokens.borderColor, lineWidth: 1))
                     }
@@ -358,7 +361,8 @@ struct SetCard<Content: View>: View {
                     .accessibilityIdentifier("set.play")
                 }
             }
-            .offset(x: -14, y: -12)
+            // With a ▶, its centre over the tunes' ▶ column; else the starter at the corner.
+            .offset(x: play != nil ? -(playCenter - 15) : -14, y: -12)
         }
         .padding(.top, 12)
     }
