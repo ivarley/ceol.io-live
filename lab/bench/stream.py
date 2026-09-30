@@ -11,7 +11,8 @@ Three steps, kept apart so the expensive one is done once:
 1. **Features** (`night_features`, cached per night). Each tracker's notes
    for the whole night, tracked once in fixed blocks through the retrieval
    bench's own cached `transcribe_segment`. Every `hop_ms` the last
-   `window_ms` of notes are aligned (the retrieval bench's `Aligner`, same
+   `window_ms` of notes (6 s since 2026-09-30: 8 s kept the previous tune on
+   display 2.5 s longer at no gain; see the spec) are aligned (the retrieval bench's `Aligner`, same
    implementation) against a pool of candidates: the index's shortlist over
    the trailing `pool_ms`, plus the pools of the last `keep` chunks, so the
    tune being followed stays scored while it plays.
@@ -156,7 +157,7 @@ def _window(notes, starts, a, b):
     return notes[i:j]
 
 
-def night_features(rid, frontends, index, aligner, board, hop_ms=4000, window_ms=8000,
+def night_features(rid, frontends, index, aligner, board, hop_ms=4000, window_ms=6000,
                    pool_ms=24000, pool_top=100, keep=6, causal=True, extra_windows=(),
                    quiet=True):
     """Per chunk: {"t_ms": end of the chunk, "scores": {tune: aligner score},
@@ -242,7 +243,9 @@ def night_features(rid, frontends, index, aligner, board, hop_ms=4000, window_ms
 class Decoder:
     """Causal belief over tunes and "not a tune", a chunk at a time."""
 
-    def __init__(self, lam=10.0, tau=0.35, p_switch=0.02, p_none=0.3):
+    # defaults: tuned for the 6 s window on the seven tuning nights, causal
+    # features (lam 40, tau 0.45, p_switch 0.05, p_none 0.3)
+    def __init__(self, lam=40.0, tau=0.45, p_switch=0.05, p_none=0.3):
         self.lam, self.tau, self.p_switch, self.p_none = lam, tau, p_switch, p_none
 
     def params(self):
@@ -286,7 +289,7 @@ class Decoder:
         return shown
 
 
-def mix_windows(chunks, weights, window_ms=8000):
+def mix_windows(chunks, weights, window_ms=8000):   # the window the features were made with
     """Chunks whose scores are a weighted mix of the full window's and the
     extra windows' (`night_features(extra_windows=...)`), e.g. {8000: 0.5,
     4000: 0.5}; weights are normalised. The floor is mixed the same way."""
@@ -480,7 +483,7 @@ def summarise(rows, gaps=None):
 
 
 def run_stream(recording_ids, frontends, candidate_set="repertoire", decoder=None, hop_ms=4000,
-               window_ms=8000, pool_ms=24000, pool_top=100, keep=6, reading="notes", causal=True,
+               window_ms=6000, pool_ms=24000, pool_top=100, keep=6, reading="notes", causal=True,
                extra_windows=(), quiet=True):
     """Features (cached) and decoding for each night -> (rows, gaps by night)."""
     from lab.bench.retrieval import Aligner

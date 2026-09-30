@@ -1,6 +1,15 @@
 """The change-detection decoder on made-up chunk scores."""
 
-from lab.bench.stream import NONE, Decoder
+from lab.bench.stream import NONE
+from lab.bench.stream import Decoder as _Decoder
+
+
+def Decoder(**kw):
+    # the mechanism is tested at the gentle setting these cases were written
+    # for; the tuned default (lam 40) is decisive enough that one strongly
+    # contrary chunk flips it for a chunk, which on real nights it does about
+    # twice a tune
+    return _Decoder(**{"lam": 10.0, "tau": 0.35, "p_switch": 0.02, "p_none": 0.3, **kw})
 
 
 def chunk(scores, floor=0.2):

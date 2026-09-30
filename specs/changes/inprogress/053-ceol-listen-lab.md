@@ -1965,9 +1965,24 @@ Six seconds takes about 2.5 s off the time the previous tune stays on
 display, on both the tuning nights and the held-out segments, at no
 measurable cost to the answer at the end or to speed; four seconds, or
 mixing it in, takes off about 4 s and costs the answer at the end
-significantly. Which to use is a product choice between a display that lets
-go sooner and one that is steadier; 6 s is the one that costs nothing
-measurable. Not yet the default.
+significantly. The player chose 6 s (2026-09-30); it is the stream bench's
+default, with the decoder's defaults its tuned setting (`lam` 40, `tau`
+0.45, `p_switch` 0.05, `p_none` 0.3), and what the board will use.
+
+**Not tempo (2026-09-30).** The player asked whether the shorter window
+helps faster tunes. Over all eight nights, segments that follow another tune
+directly: the carry-over saved by 6 s (or 4 s) against 8 s correlates -0.01
+(-0.00) with the tempo, the eighth-note period over the segment (n 351).
+This session plays in a narrow band, 146 to 174 ms an eighth by tercile
+medians, about 9% either way. What differs is the kind of tune: at 6 s jigs,
+slides and slip jigs let go a median 4 s sooner, reels and polkas a median 0
+(and the right-at-end losses are reels, +3/-5); reels are not faster here in
+eighths a second, so that is not tempo either, and is not explained. A window
+that follows tempo (each chunk the stored 4, 6 or 8 s window nearest a fixed
+number of eighths) is no better than 6 s: 32 eighths lets go sooner and
+loses the answer at the end (+1/-12, p 0.003), 40 to 56 eighths hold on
+longer. Carry-over is measured in steps of the 4 s hop, which also floors how
+fast the display can react; the board steps every 2 s.
 
 Next: the false starts once the player marks them; then the same decoder
 on the board.
