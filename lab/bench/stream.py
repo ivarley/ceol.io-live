@@ -80,48 +80,119 @@ def night_notes(frontends, rid, board, block_ms=60000, quiet=True):
     return out, store.duration_ms
 
 
+def night_tracks(frontends, rid, board, block_ms=60000):
+    """{front end name: (times_ms, f0_hz, voiced_prob)} for the whole night,
+    absolute times, from the same cached block tracks as `night_notes`."""
+    from lab.bench.retrieval import transcribe_segment
+
+    store = AudioStore(paths.wav_path(rid))
+    store.clock_ms = store.duration_ms
+    sha = wav_sha1(rid) or ""
+    out = {}
+    try:
+        for fe in frontends:
+            ts, fs, vs = [], [], []
+            for t0 in range(0, int(store.duration_ms), block_ms):
+                t1 = min(int(store.duration_ms), t0 + block_ms)
+                if t1 - t0 < 2000:
+                    continue
+                key = fe.cache_key(sha, t0, t1)
+                hit = board.cache_get(key) if board is not None else None
+                if hit is None:       # track it (and cache it) the usual way
+                    transcribe_segment(fe, store, sha, t0, t1, board=board)
+                    hit = board.cache_get(key)
+                tr = hit[0]
+                ts.append(np.asarray(tr["times_ms"], dtype=float) + t0)
+                fs.append(np.array([np.nan if v is None else v for v in tr["f0_hz"]], dtype=float))
+                vs.append(np.asarray(tr["voiced_prob"], dtype=float))
+            out[fe.name] = (np.concatenate(ts), np.concatenate(fs), np.concatenate(vs))
+    finally:
+        store.close()
+    return out, store.duration_ms
+
+
+def causal_notes(fe, track, store, a, t):
+    """Notes from the frames and audio in [a, t) only: segmented, split and
+    key-filtered on that span, so nothing after t shapes them, and a note
+    still sounding at t is cut off there, as it would be live."""
+    times, f0, voiced = track
+    i, j = np.searchsorted(times, a), np.searchsorted(times, t)
+    if j - i < 4:
+        return []
+    notes = fe.notes_from_track(times[i:j] - a, f0[i:j], voiced[i:j], t_offset_ms=a)
+    if notes and (fe.params.get("split_repeats") or fe.params.get("min_note_eighths")
+                  or fe.params.get("out_of_key_drop")):
+        notes = fe.regrid(notes, store.read(a, t), store.sr, t_offset_ms=a)
+    return notes
+
+
 def _window(notes, starts, a, b):
     i, j = np.searchsorted(starts, a), np.searchsorted(starts, b)
     return notes[i:j]
 
 
 def night_features(rid, frontends, index, aligner, board, hop_ms=4000, window_ms=8000,
-                   pool_ms=24000, pool_top=100, keep=6, quiet=True):
+                   pool_ms=24000, pool_top=100, keep=6, causal=True, quiet=True):
     """Per chunk: {"t_ms": end of the chunk, "scores": {tune: aligner score},
     "floor": the pool's lowest score, "n_notes"}. Cached per night and
-    settings."""
+    settings.
+
+    `causal` (the default since 2026-09-30): notes for each chunk are
+    rebuilt from the frames and audio up to its end only (`causal_notes` over the trailing `pool_ms`), instead of
+    cut from notes made over 60 s blocks, whose key filter and repeat
+    splitting read up to a minute of later audio. The frame tracks are the
+    same cached ones; the neural trackers' frames still see under about a
+    second of later audio through their own input windows. On night 140,
+    tuned decoder, causal against block notes: +0/-0 right at the end and
+    within 30 s on all 86 segments; the time between tunes shown as a tune
+    14.7% to 6.8%. The block mode reproduces its saved features exactly."""
     from lab.bench.retrieval import fuse
     from lab.frontends.segmentation import intervals_from_notes
 
     key = repr((FEATURES_VERSION, rid, [f.name for f in frontends], [f.version for f in frontends],
                 [sorted(f.params.items()) for f in frontends], index.candidate_set, index.n,
-                aligner.params(), hop_ms, window_ms, pool_ms, pool_top, keep))
+                aligner.params(), hop_ms, window_ms, pool_ms, pool_top, keep)
+               + (("causal",) if causal else ()))
     path = _features_path(rid, key)
     if os.path.exists(path):
         with open(path, "rb") as f:
             return pickle.load(f)
     started = time.time()
-    by_fe, duration = night_notes(frontends, rid, board, quiet=quiet)
-    starts = {k: np.array([n["t0_ms"] for n in v]) for k, v in by_fe.items()}
+    store = None
+    if causal:
+        tracks, duration = night_tracks(frontends, rid, board)
+        store = AudioStore(paths.wav_path(rid))
+        store.clock_ms = store.duration_ms
+    else:
+        by_fe, duration = night_notes(frontends, rid, board, quiet=quiet)
+        starts = {k: np.array([n["t0_ms"] for n in v]) for k, v in by_fe.items()}
     chunks, recent = [], []
     for t in range(window_ms, int(duration) + 1, hop_ms):
+        if causal:
+            a = max(0, t - pool_ms)
+            ctx_by = {fe.name: causal_notes(fe, tracks[fe.name], store, a, t) for fe in frontends}
+            recent_by = {k: [n for n in v if n["t0_ms"] >= t - window_ms] for k, v in ctx_by.items()}
+        else:
+            ctx_by = {name: _window(notes, starts[name], t - pool_ms, t) for name, notes in by_fe.items()}
+            recent_by = {name: _window(notes, starts[name], t - window_ms, t) for name, notes in by_fe.items()}
         rankings = []
-        for name, notes in by_fe.items():
-            ctx = _window(notes, starts[name], t - pool_ms, t)
+        for name, ctx in ctx_by.items():
             rankings.append(index.lookup(intervals_from_notes(ctx, fold=index.fold_octaves),
                                          top_k=pool_top))
         pool = [r["tune_id"] for r in fuse(rankings, method="sum")[:pool_top]]
         recent = (recent + [pool])[-(keep + 1):]
         tunes = list(dict.fromkeys(tid for p in reversed(recent) for tid in p))
-        heard = [(_window(notes, starts[name], t - window_ms, t), None)
-                 for name, notes in by_fe.items()]
+        heard = [(recent_by[name], None) for name in ctx_by]
         n_notes = sum(len(h[0]) for h in heard)
         queries = aligner._queries(heard)
         scores = aligner.scores(tunes, queries) if (queries and tunes) else {}
         chunks.append({"t_ms": t, "scores": {k: float(v) for k, v in scores.items()},
                        "floor": float(min(scores.values())) if scores else 0.0,
                        "n_notes": n_notes})
+    if store is not None:
+        store.close()
     out = {"recording_id": rid, "hop_ms": hop_ms, "window_ms": window_ms, "chunks": chunks,
+           "causal": causal,
            "seconds": round(time.time() - started, 1)}
     with open(path, "wb") as f:
         pickle.dump(out, f)
@@ -241,7 +312,8 @@ def summarise(rows, gaps=None):
 
 
 def run_stream(recording_ids, frontends, candidate_set="repertoire", decoder=None, hop_ms=4000,
-               window_ms=8000, pool_ms=24000, pool_top=100, keep=6, reading="notes", quiet=True):
+               window_ms=8000, pool_ms=24000, pool_top=100, keep=6, reading="notes", causal=True,
+               quiet=True):
     """Features (cached) and decoding for each night -> (rows, gaps by night)."""
     from lab.bench.retrieval import Aligner
     from lab.board.board import Board
@@ -255,7 +327,7 @@ def run_stream(recording_ids, frontends, candidate_set="repertoire", decoder=Non
         for rid in recording_ids:
             feats = night_features(rid, frontends, index, aligner, board, hop_ms=hop_ms,
                                    window_ms=window_ms, pool_ms=pool_ms, pool_top=pool_top,
-                                   keep=keep, quiet=quiet)
+                                   keep=keep, causal=causal, quiet=quiet)
             r, g = score_night(feats, decoder.run(feats["chunks"]), rid)
             for x in r:
                 x["recording_id"] = rid

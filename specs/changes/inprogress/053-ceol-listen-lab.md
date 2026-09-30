@@ -1872,10 +1872,30 @@ boundaries to hand to anything else: the display is the product here.
 Computing a night's features takes 8 to 13 minutes for 3.5 hours of audio,
 about 20 times faster than real time.
 
+**Made causal (2026-09-30).** Notes for each chunk are now rebuilt from the
+frame tracks and audio up to the chunk's end only: segmented, split and
+key-filtered over the trailing 24 s, a note still sounding cut off where it
+is, as it would be live (`causal_notes`; the default). The only look-ahead
+left is inside the neural trackers' own input windows, under about a second,
+which a live logger running a second behind also has. The block mode first
+reproduced its saved features for night 2 exactly (2,459 of 2,459 chunks)
+through the rewritten code. Night 140, the decoder as tuned above:
+
+| | right at end | within 30 s | never | flips | carry-over median | time between tunes shown as a tune |
+|---|---|---|---|---|---|---|
+| block notes, new 61 | 0.885 | 88.5% | 6.6% | 2.30 | 6.8 s | 14.7% (all night) |
+| causal notes, new 61 | 0.885 | 88.5% | 6.6% | 2.28 | 6.7 s | 6.8% (all night) |
+
++0/-0 on both measures, on the new 61 and on the tuned 25. The look-ahead was
+worth nothing to identification; being causal halved the chat and silence
+displayed as a tune on this night (694 four-second chunks of gap), which is
+one night and not yet explained. The decoder was tuned on block notes; it
+has not been re-tuned on causal ones, which can only help it. A night's
+causal features take about 7 minutes for 3.5 hours of audio.
+
 Next: the player's hints (passes played, last part reached, usual length,
 a change of meter) as modulations of `p_switch`, each paired; the false
-starts once the player marks them; a causal version of the features; then
-the same decoder on the board.
+starts once the player marks them; then the same decoder on the board.
 
 ### Still open
 
