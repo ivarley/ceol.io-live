@@ -628,6 +628,16 @@ struct NightView: View {
                 }
             }
         }
+        .onChange(of: model?.revealCursor) { _, _ in
+            // Keep the insertion point in view, just above the composer. A beat later, so
+            // the row just logged (and the composer) have taken their places.
+            guard let model, model.editing, model.selected == nil else { return }
+            let key = LogState.seamKey(for: model.cursor)
+            Task {
+                try? await Task.sleep(for: .milliseconds(80))
+                withAnimation(.easeOut(duration: 0.25)) { scroll.scrollTo(id: seamScrollID(key), anchor: .bottom) }
+            }
+        }
         .onChange(of: model?.selected) { _, id in
             // A selected row's actions sit under it: lower the keyboard and bring the row
             // into view so they aren't hidden behind the composer.

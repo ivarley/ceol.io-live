@@ -106,6 +106,10 @@ final class NightModel {
     /// Likely-next pairings dismissed this visit ("anchor->next").
     var dismissedNext: [String] = []
 
+    /// Bumped when the insertion point should come into view: after I log a tune, and
+    /// on starting to edit (as the web keeps its active seam visible).
+    private(set) var revealCursor = 0
+
     /// Offline changes the server refused once they were sent, for review.
     var review: [ReviewItem]?
     /// The vocabulary as it came, kept with the saved night.
@@ -373,6 +377,7 @@ final class NightModel {
         selected = nil
         selecting = false
         picked = []
+        if on { revealCursor += 1 }
         cursor = .end
         app.editingNight = on
         guard running, status != .finished else { return }
@@ -392,6 +397,7 @@ final class NightModel {
         let r = l.logTune(payload, at: at)
         log = l
         if cursor == at { cursor = r.cursor }
+        revealCursor += 1
         enqueue(r.ops)
         if let target = r.mergedInto {
             let name = target["name"]?.stringValue ?? payload["name"]?.stringValue ?? "that tune"

@@ -173,6 +173,7 @@ struct EditableLog: View {
             }
         }
         .background(frameReporter(key))
+        .id(seamScrollID(key))
     }
 
     /// A drag-only zone: a new set at the very top, or below an open end.
@@ -294,6 +295,9 @@ struct EditableLog: View {
 
 /// A log row's scroll id, for bringing a selected row into view.
 func rowScrollID(_ id: RecordID) -> String { "row-\(id)" }
+
+/// A seam's scroll id (its seam key), for keeping the insertion point in view.
+func seamScrollID(_ key: String) -> String { "seam-\(key)" }
 
 /// The set a starter is being picked for, as a sheet item.
 struct StarterChoice: Identifiable {

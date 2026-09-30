@@ -972,12 +972,17 @@ final class CeolUITests: XCTestCase {
         var events = URLRequest(url: URL(string: "\(stream)/live/instances/\(instanceID)/events?mode=edit")!)
         events.setValue("Bearer \(sarah.token)", forHTTPHeaderField: "Authorization")
         events.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+        let open = OpenFlag()
         let held = Task {
             if let (bytes, _) = try? await URLSession.shared.bytes(for: events) {
+                open.set()
                 for try await _ in bytes {}
             }
         }
         defer { held.cancel() }
+        // Her connection is open (so she's on the roster) before the app looks.
+        for _ in 0..<60 where !open.isSet { try await Task.sleep(for: .milliseconds(250)) }
+        XCTAssertTrue(open.isSet, "Sarah's connection to the live-updates server")
 
         let app = launch()
         signIn(app)
@@ -1069,6 +1074,44 @@ final class CeolUITests: XCTestCase {
         }
         XCTAssertTrue(found, "the new person, checked in")
         app.buttons["people.done"].tap()
+    }
+
+    /// A long night (found on a real 126-tune production night): tapping Edit brings the
+    /// end into view, and a tune logged there is on screen, not behind the keyboard.
+    @MainActor
+    func testALongNightKeepsTheEndInView() async throws {
+        let api = try await TestAPI.signedIn(server: server)
+        let date = String(format: "2015-%02d-%02d", Int.random(in: 1...12), Int.random(in: 1...28))
+        let made = try await api.post("/api/sessions/austin/mueller/add_instance", ["date": date])
+        let instanceID = try XCTUnwrap(made["session_instance_id"] as? Int, "\(made)")
+        addTeardownBlock { _ = try? await api.delete("/api/sessions/austin/mueller/\(date)/delete") }
+        let ops = "/api/live/instances/\(instanceID)/ops"
+        for i in 1...40 {
+            _ = try await api.post(ops, ["op_id": UUID().uuidString.lowercased(), "op_type": "add_tune", "name": "Long Night \(i)", "no_match": true])
+            if i % 3 == 0 && i < 40 {
+                _ = try await api.post(ops, ["op_id": UUID().uuidString.lowercased(), "op_type": "set_break", "action": "insert", "after_record_id": NSNull()])
+            }
+        }
+        let app = launch()
+        signIn(app)
+        // Home offers it: the most recently edited unfinished log.
+        let item = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Finish logging' AND label CONTAINS '2015'")).firstMatch
+        XCTAssertTrue(item.waitForExistence(timeout: 15))
+        item.tap()
+        XCTAssertTrue(app.staticTexts["Long Night 1"].waitForExistence(timeout: 15))
+        XCTAssertFalse(app.staticTexts["Long Night 40"].isHittable, "a long night opens at the top")
+        app.buttons["night.edit"].tap()
+        let last = app.staticTexts["Long Night 40"]
+        XCTAssertTrue(last.waitForExistence(timeout: 5))
+        let shown = NSPredicate(format: "isHittable == true")
+        await fulfillment(of: [XCTNSPredicateExpectation(predicate: shown, object: last)], timeout: 5)
+        let input = app.textFields["log.input"]
+        input.tap()
+        input.typeText("Long Night Logged\n")
+        let logged = app.staticTexts["Long Night Logged"]
+        XCTAssertTrue(logged.waitForExistence(timeout: 10))
+        await fulfillment(of: [XCTNSPredicateExpectation(predicate: shown, object: logged)], timeout: 5)
+        snapshot("long night")
     }
 
     /// Phase 3d: Me shows the profile and opens it to edit (cancelled: seed data stays put).
@@ -1204,6 +1247,12 @@ struct TestAPI: Sendable {
         try await send(URLRequest(url: URL(string: server + path)!))
     }
 
+    func delete(_ path: String) async throws -> [String: Any] {
+        var r = URLRequest(url: URL(string: server + path)!)
+        r.httpMethod = "DELETE"
+        return try await send(r)
+    }
+
     func post(_ path: String, _ body: [String: Any]) async throws -> [String: Any] {
         var r = URLRequest(url: URL(string: server + path)!)
         r.httpMethod = "POST"
@@ -1221,3 +1270,10 @@ struct TestAPI: Sendable {
     }
 }
 
+/// A flag one task sets and another reads.
+final class OpenFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = false
+    var isSet: Bool { lock.withLock { value } }
+    func set() { lock.withLock { value = true } }
+}

@@ -1,6 +1,6 @@
 # Makefile for Irish Music Sessions Flask App Testing
 
-.PHONY: help install test test-unit test-integration test-functional test-smoke test-coverage clean setup-test-db reset-test-db seed-test-db schema-test-db lint format
+.PHONY: help install test test-unit test-integration test-functional test-smoke test-coverage clean setup-test-db reset-test-db seed-test-db schema-test-db lint format prod-parity
 
 # Default target
 help:
@@ -216,3 +216,8 @@ test-js-coverage:
 
 test-js-watch:
 	npm run test:watch
+
+prod-parity: ## Sample production (read-only, signed out); check the app decodes and orders it as the web does
+	./venv/bin/python scripts/prod_parity/capture.py $(or $(SAMPLES),/tmp/ceol-prod)
+	node scripts/prod_parity/web_summary.mjs $(or $(SAMPLES),/tmp/ceol-prod)
+	cd ios/CeolKit && CEOL_PROD_SAMPLES=$(or $(SAMPLES),/tmp/ceol-prod) swift test --filter Production

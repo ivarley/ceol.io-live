@@ -1906,3 +1906,17 @@ The plan (Phases 0-6) runs from here in `ios/`; see `ios/README.md` for the layo
     `activityText`, 36 more cases). A UI test has a second account connect and type over
     the API, add and remove a tune, then checks someone in and out and adds someone,
     checking the server each time.
+  - **5f, first pass 2026-09-29: production data, read-only.** Signing in to
+    production from here would need a real password, and logging to real nights would
+    reach real people, so this pass reads production signed out (`make prod-parity`,
+    `scripts/prod_parity/`): the sessions list, all 30 sessions' nights, and 40 nights'
+    logs (3,161 tunes; the 8 biggest and 32 at random). Every response decodes with the
+    generated API types, and every night orders, splits into sets, labels them, and
+    survives the phone's save-and-restore exactly as the web's logstate.js has it (the
+    opt-in `ProductionSampleTests` / `ProductionParityTests`). The biggest night (126
+    tunes, 56 sets), copied into the local database, found one bug: logging at the end
+    of a long night left the new tune below the keyboard, and Edit opened at the top.
+    The app now keeps the insertion point in view after logging and on Edit, as the web
+    does (`testALongNightKeepsTheEndInView`, which fails without the fix). Still to try
+    with a real account: the vocabulary and matching on real repertoires, and opening a
+    ceol.io page link in the app (not built: only sign-in links are handled).
