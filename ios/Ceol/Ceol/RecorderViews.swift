@@ -215,7 +215,9 @@ struct ListenMeterView: View {
                 .tint(CeolTokens.primaryFill)
                 .accessibilityIdentifier("meter.endSet")
             }
-            if let top = state?.top, !top.isEmpty {
+            if state?.notATune == true {
+                // nothing being played as a tune: no names to choose from
+            } else if let top = state?.top, !top.isEmpty {
                 let strong = top.filter { $0.p >= Self.lowBelief }
                 let weak = Array(top.filter { $0.p < Self.lowBelief }.prefix(Self.lowShown))
                 VStack(spacing: 8) {
@@ -234,13 +236,15 @@ struct ListenMeterView: View {
                 Text("Waiting for the first few seconds of music.")
                     .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted).padding(.vertical, 20)
             }
-            Button { recorder.tapNone() } label: {
-                Text("None of these").font(.ceol(size: 17, weight: .semibold))
-                    .frame(maxWidth: .infinity, minHeight: 50)
+            if state?.notATune != true {
+                Button { recorder.tapNone() } label: {
+                    Text("None of these").font(.ceol(size: 17, weight: .semibold))
+                        .frame(maxWidth: .infinity, minHeight: 50)
+                }
+                .buttonStyle(.bordered)
+                .disabled(state?.top.isEmpty ?? true)
+                .accessibilityIdentifier("meter.none")
             }
-            .buttonStyle(.bordered)
-            .disabled(state?.top.isEmpty ?? true)
-            .accessibilityIdentifier("meter.none")
         }
     }
 
