@@ -1063,8 +1063,8 @@ def set_recording_tune(recording_id, session_instance_tune_id):
     typed name); setting_id records the setting chosen in the preview.
     """
     from live_logging_routes import (
-        OpRejected, TuneImportError, _import_tune_for_live, _maybe_apply_chosen_setting,
-        _parse_thesession_id, apply_live_op, emit_change_tune,
+        OpRejected, TuneImportError, _maybe_apply_chosen_setting, _parse_thesession_id,
+        _tune_from_thesession, apply_live_op, emit_change_tune,
     )
 
     payload = request.get_json(silent=True) or {}
@@ -1096,14 +1096,13 @@ def set_recording_tune(recording_id, session_instance_tune_id):
 
         user_id = get_current_user_id()
         try:
-            if ts_id is not None and tune_id is None:
-                cur.execute("SELECT name, redirect_to_tune_id FROM tune WHERE tune_id = %s", (ts_id,))
-                row = cur.fetchone()
-                if row:
-                    tune_id = row[1] or ts_id
-                else:
-                    imported_name, _tt = _import_tune_for_live(cur, ts_id, user_id)
-                    tune_id, name = ts_id, (name or imported_name)
+            # A thesession.org pick arrives with BOTH ids (the search's payload sets
+            # tune_id to the thesession id too), so the import is decided by
+            # thesession_id alone, as add_tune does: into our catalogue first, or the
+            # link below would trip session_instance_tune's FK on a tune we don't have.
+            if ts_id is not None:
+                tune_id, found_name = _tune_from_thesession(cur, ts_id, user_id)
+                name = found_name or name
             change = {"record_id": session_instance_tune_id, "name": name or None}
             if tune_id is not None:
                 change["tune_id"] = int(tune_id)

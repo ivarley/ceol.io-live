@@ -513,6 +513,35 @@ def test_set_tune_links_renames_and_logs_as_is(client, admin_user, committed_rec
     assert [r[0] for r in db_cursor.fetchall()] == ["add_tune", "change_tune", "change_tune"]
 
 
+def test_set_tune_imports_a_thesession_pick_sent_with_both_ids(client, admin_user, committed_recording, db_cursor, monkeypatch):
+    """A thesession.org search result arrives with thesession_id AND tune_id (the
+    search sets both to the thesession id). The tune isn't in our catalogue yet, so
+    the pick must import it before linking -- it used to skip the import when
+    tune_id was present and 500 on the session_instance_tune FK."""
+    import live_logging_routes
+
+    ts_id = 4952
+    monkeypatch.setattr(
+        live_logging_routes, "_fetch_thesession_tune",
+        lambda tid: {"name": "Loch Lomond", "type": "waltz", "tunebooks": 7,
+                     "settings": [{"id": 4952001, "key": "Gmaj", "abc": "G2 B2 d2|"}]},
+    )
+    with admin_user:
+        _, body = _log_at(client, 130000)
+        sit = body["tune"]["session_instance_tune_id"]
+        resp = client.put(
+            f"/api/recordings/{REC_ID}/segments/{sit}/tune",
+            json={"thesession_id": ts_id, "tune_id": ts_id, "name": "Loch Lomond", "tune_type": "waltz"},
+        )
+        assert resp.status_code == 200, resp.get_json()
+        tune = resp.get_json()["tune"]
+        assert (tune["tune_id"], tune["name"], tune["tune_type"]) == (ts_id, "Loch Lomond", "Waltz")
+        assert tune["segment"]["start_ms"] == 130000
+
+    db_cursor.execute("SELECT name FROM tune WHERE tune_id = %s", (ts_id,))
+    assert db_cursor.fetchone()[0] == "Loch Lomond"
+
+
 def _insert(client, **body):
     resp = client.post(f"/api/recordings/{REC_ID}/segments", json=body)
     return resp, resp.get_json()
