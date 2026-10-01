@@ -2076,7 +2076,11 @@ unknown), all eight nights, 607 segments: right at the end 0.895 to 0.909
 0.004); known tunes 543 of 593 either way (+1/-1). Still missed: O'Connell's
 Trip to Parliament, Pete Bradley's, Take Your Churn, Colonel McBain and
 Stoney Brennan. The fallback is on in `lab/configs/follower.json`, where
-"known" is the session's repertoire, as it would be live.
+"known" is the session's repertoire, as it would be live, with `nu` 0.05:
+the player's choice (2026-10-01), "unknown is better than wrong". On the
+bench that names 6 of the 11 tuning-night new tunes instead of 8 and ends no
+known-tune segment on a wrong unfamiliar one instead of 2; the board numbers
+above are at `nu` 0.
 
 ### Still open
 
