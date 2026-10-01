@@ -135,6 +135,7 @@ See [scripts/LOCAL_DEVELOPMENT.md](scripts/LOCAL_DEVELOPMENT.md) for detailed se
 - [`frontend/`](frontend) - Svelte sources (`src/<page>/`, shared kit in `src/lib/`), one Vite config per bundle; `frontend/tests/` is Vitest
 - [`templates/`](templates) - Jinja2: page shells for Svelte pages, full pages for the legacy ones
 - [`streaming/`](streaming) - async SSE sidecar for live logging (Starlette + asyncpg), deployed separately
+- [`listen/`](listen/README.md) - the listening service (spec 053): a phone streams audio over a WebSocket, the lab's detector answers with the tune; deployed separately, own requirements
 - [`jobs/`](jobs) - Render cron jobs: active-session tracking, thesession.org merge sync
 - [`abc-renderer/`](abc-renderer) - Node.js microservice, ABC notation → PNG
 - [`ios/`](ios/README.md) - the native iOS app (spec 052): `Ceol/` (Xcode, screens) and `CeolKit/` (Swift package: the API client generated from `native-surface.yaml`, the design tokens); `make ios-test`

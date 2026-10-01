@@ -1,0 +1,31 @@
+# The listening service (listen/service.py). Kept apart from the app's
+# requirements.txt so the web service never installs any of this.
+#
+# PyTorch from its own CPU index: the default Linux wheels bring gigabytes of
+# CUDA libraries this service will never use.
+--extra-index-url https://download.pytorch.org/whl/cpu
+# A matched pair: PESTO needs torchaudio, whose newest CPU build is 2.11.0
+# (the lab's Mac venv has torch 2.14 beside torchaudio 2.11).
+torch==2.11.0+cpu
+torchaudio==2.11.0+cpu
+
+starlette
+uvicorn[standard]
+websockets
+python-dotenv
+boto3
+
+numpy<2.1
+scipy
+librosa>=0.10
+soundfile
+scikit-learn
+numba<0.61
+pesto-pitch==2.0.1
+onnxruntime
+# basic-pitch itself is installed by the build with --no-deps (its Linux
+# requirements pull in all of TensorFlow; it runs here through ONNX). These
+# are the dependencies it does use:
+mir-eval>=0.6
+pretty-midi>=0.2.9
+resampy<0.4.3,>=0.2.2

@@ -1,0 +1,233 @@
+"""The listening service: a phone streams a session's audio here and gets back,
+every 4 s, what tune the detector thinks is playing (spec 053, "listen on the
+server"; `specs/changes/inprogress/053 files/listen-on-the-server.md`).
+
+A separate async service, like the live-logging streaming sidecar
+(`streaming/service.py`), because its dependencies (three pitch trackers,
+PyTorch, numba) and its memory (about 3 GB) must stay off the web app. The
+detector is the lab's own (`lab.tools.listen`: `Models` loaded once and
+shared, a `Listener` per stream), so what the phone sees is what the lab
+measured.
+
+One WebSocket per stream, at /listen:
+
+  client -> {"type": "start", "stream_id": "<uuid>", "sample_rate": 22050}
+            (the same stream_id again after a reconnect resumes the stream)
+  server -> {"type": "ready", "stream_id", "have": <samples received>}
+  client -> binary: 8-byte little-endian uint64 sample offset, then 16-bit
+            little-endian mono PCM at 22050 Hz. Chunks may repeat or arrive
+            after a gap is refilled; each sample is taken once, in order.
+  server -> {"type": "ack", "have": <contiguous samples received>}
+  server -> {"type": "state", ...} each 4 s of audio: top tunes with beliefs,
+            "not a tune", tune-ness, what is shown, recent history
+  client -> {"type": "tap", "action": "this" | "none", "tune_id", "shown"}
+  client -> {"type": "stop"}  ->  server -> {"type": "done", "have"}
+
+Authentication for the spike is a shared token (LISTEN_TOKEN), sent as
+`Authorization: Bearer <token>` or `?token=`; the app's own bearer tokens
+replace it when the app talks to this.
+
+Run locally:  uvicorn listen.service:app --port 8440
+"""
+
+import asyncio
+import json
+import os
+import struct
+import tempfile
+import time
+from contextlib import asynccontextmanager
+
+import numpy as np
+from starlette.applications import Starlette
+from starlette.responses import JSONResponse
+from starlette.routing import Route, WebSocketRoute
+from starlette.websockets import WebSocket, WebSocketDisconnect
+
+SR = 22050
+TOKEN = os.environ.get("LISTEN_TOKEN", "")
+STREAM_DIR = os.environ.get("LISTEN_STREAM_DIR") or os.path.join(tempfile.gettempdir(), "listen-streams")
+IDLE_S = 300            # a stream nobody has sent to for this long is closed
+KEEP_S = 120            # audio held in memory per stream
+
+state = {"models": None, "loading": True, "error": None, "started": time.time(), "load_s": None}
+streams = {}            # stream_id -> Stream
+
+
+class Stream:
+    """One listening phone: a Listener, the next sample expected, chunks that
+    arrived ahead of a gap, and the socket currently attached (if any)."""
+
+    def __init__(self, stream_id):
+        from lab.tools.listen import Listener
+
+        self.id = stream_id
+        self.dir = os.path.join(STREAM_DIR, stream_id)
+        os.makedirs(self.dir, exist_ok=True)
+        self.listener = Listener(self.dir, models=state["models"], audio_name="audio.flac", keep_s=KEEP_S)
+        self.have = 0                 # contiguous samples taken
+        self.ahead = {}               # offset -> samples, waiting for a gap to fill
+        self.socket = None
+        self.last_seen = time.time()
+        self.stepping = False
+
+    def take(self, offset, samples):
+        if offset + len(samples) <= self.have:
+            return                    # a repeat after a reconnect
+        if offset > self.have:
+            self.ahead[offset] = samples
+            return
+        self._append(samples[self.have - offset:])
+        while self.have in self.ahead:
+            self._append(self.ahead.pop(self.have))
+        for k in [k for k in self.ahead if k < self.have]:
+            s = self.ahead.pop(k)
+            if k + len(s) > self.have:
+                self._append(s[self.have - k:])
+
+    def _append(self, samples):
+        if len(samples):
+            self.listener.store.append(samples)
+            self.have += len(samples)
+
+
+async def _send(ws, msg):
+    if ws is not None:
+        try:
+            await ws.send_text(json.dumps(msg))
+        except Exception:
+            pass
+
+
+async def _step_loop(stream):
+    """Run the detector for each 4 s of audio as it becomes available, off the
+    event loop, and send the meter's state to whichever socket is attached."""
+    from lab.tools.listen import HOP_MS
+
+    li = stream.listener
+    while li.running:
+        if li.store.duration_ms >= li.next_t:
+            t = li.next_t
+            try:
+                await asyncio.to_thread(li.step, t)
+            except Exception as e:      # keep listening; say what went wrong
+                li.state["status"] = f"error at {t} ms: {e!r}"
+            li.next_t += HOP_MS
+            with li.lock:
+                payload = {"type": "state", **li.state, "heard_ms": li.store.duration_ms}
+            await _send(stream.socket, payload)
+        else:
+            await asyncio.sleep(0.2)
+
+
+async def _sweep():
+    while True:
+        await asyncio.sleep(30)
+        now = time.time()
+        for sid, s in list(streams.items()):
+            if s.socket is None and now - s.last_seen > IDLE_S:
+                s.listener.close()
+                streams.pop(sid, None)
+
+
+async def _load():
+    try:
+        from lab.tools.listen import Models
+
+        t0 = time.time()
+        state["models"] = await asyncio.to_thread(Models)
+        state["load_s"] = round(time.time() - t0, 1)
+    except Exception as e:
+        state["error"] = repr(e)
+    finally:
+        state["loading"] = False
+
+
+@asynccontextmanager
+async def lifespan(app):
+    from listen.data import ensure_data
+
+    await asyncio.to_thread(ensure_data)
+    tasks = [asyncio.create_task(_load()), asyncio.create_task(_sweep())]
+    yield
+    for t in tasks:
+        t.cancel()
+
+
+def _authorised(scope_headers, query):
+    if not TOKEN:
+        return True                   # local development
+    auth = dict(scope_headers).get(b"authorization", b"").decode()
+    return auth == f"Bearer {TOKEN}" or query.get("token") == TOKEN
+
+
+async def health(request):
+    import resource
+
+    rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    rss_gb = rss / 1e9 if os.uname().sysname == "Darwin" else rss / 1e6   # bytes on macOS, KB on Linux
+    return JSONResponse({"ready": state["models"] is not None, "loading": state["loading"],
+                         "error": state["error"], "load_s": state["load_s"],
+                         "streams": len(streams), "peak_memory_gb": round(rss_gb, 2),
+                         "uptime_s": int(time.time() - state["started"])},
+                        status_code=200 if state["models"] is not None else 503)
+
+
+async def listen(ws: WebSocket):
+    if not _authorised(ws.scope.get("headers", []), dict(ws.query_params)):
+        await ws.close(code=4401)
+        return
+    await ws.accept()
+    if state["models"] is None:
+        await _send(ws, {"type": "error", "error": "still loading" if state["loading"] else state["error"]})
+        await ws.close(code=4503)
+        return
+    stream = None
+    try:
+        while True:
+            msg = await ws.receive()
+            if msg["type"] == "websocket.disconnect":
+                break
+            if msg.get("bytes") is not None:
+                if stream is None:
+                    continue
+                data = msg["bytes"]
+                offset = struct.unpack("<Q", data[:8])[0]
+                pcm = np.frombuffer(data[8:], dtype="<i2").astype(np.float32) / 32768.0
+                stream.take(offset, pcm)
+                stream.last_seen = time.time()
+                await _send(ws, {"type": "ack", "have": stream.have})
+                continue
+            m = json.loads(msg.get("text") or "{}")
+            kind = m.get("type")
+            if kind == "start":
+                if int(m.get("sample_rate", SR)) != SR:
+                    await _send(ws, {"type": "error", "error": f"send {SR} Hz"})
+                    continue
+                sid = str(m.get("stream_id") or "")
+                if not sid:
+                    await _send(ws, {"type": "error", "error": "stream_id needed"})
+                    continue
+                stream = streams.get(sid)
+                if stream is None:
+                    stream = Stream(sid)
+                    streams[sid] = stream
+                    asyncio.create_task(_step_loop(stream))
+                stream.socket = ws
+                await _send(ws, {"type": "ready", "stream_id": sid, "have": stream.have})
+            elif kind == "tap" and stream is not None:
+                stream.listener.tap(m.get("action"), m.get("tune_id"), m.get("shown") or ())
+            elif kind == "stop" and stream is not None:
+                await _send(ws, {"type": "done", "have": stream.have})
+                stream.listener.close()
+                streams.pop(stream.id, None)
+                stream = None
+    except WebSocketDisconnect:
+        pass
+    finally:
+        if stream is not None and stream.socket is ws:
+            stream.socket = None
+            stream.last_seen = time.time()
+
+
+app = Starlette(routes=[Route("/health", health), WebSocketRoute("/listen", listen)], lifespan=lifespan)

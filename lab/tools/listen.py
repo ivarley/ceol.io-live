@@ -49,16 +49,22 @@ def add_parser(sub):
 
 
 class LiveStore:
-    """Audio as it arrives, readable by time like `AudioStore`, and written to
-    a wav as it goes."""
+    """Audio as it arrives, readable by absolute time like `AudioStore`, and
+    written to a file as it goes (wav or flac, by its extension).
 
-    def __init__(self, wav_path):
+    `keep_s`: hold only the most recent this-many seconds in memory (the
+    listener reads at most the last 24 s); None keeps everything, which a
+    three-hour night makes about a gigabyte."""
+
+    def __init__(self, path, keep_s=None):
         import soundfile as sf
 
         self.sr = SR
-        self._chunks, self._n = [], 0
+        self._chunks, self._n, self._base = [], 0, 0   # samples written; first sample held
+        self._keep = None if keep_s is None else int(keep_s * SR)
         self._lock = threading.Lock()
-        self._wav = sf.SoundFile(wav_path, "w", samplerate=SR, channels=1, subtype="PCM_16")
+        fmt = "FLAC" if path.endswith(".flac") else "WAV"
+        self._file = sf.SoundFile(path, "w", samplerate=SR, channels=1, subtype="PCM_16", format=fmt)
 
     @property
     def duration_ms(self):
@@ -69,8 +75,8 @@ class LiveStore:
         with self._lock:
             self._chunks.append(y)
             self._n += len(y)
-            self._wav.write(y)
-            self._wav.flush()
+            self._file.write(y)
+            self._file.flush()
 
     def read(self, t0_ms, t1_ms):
         a, b = int(t0_ms * SR / 1000), int(t1_ms * SR / 1000)
@@ -78,38 +84,57 @@ class LiveStore:
             if len(self._chunks) > 1:
                 self._chunks = [np.concatenate(self._chunks)]
             buf = self._chunks[0] if self._chunks else np.zeros(0, dtype=np.float32)
-        return buf[max(0, a):max(0, min(b, len(buf)))]
+            if self._keep is not None and len(buf) > 2 * self._keep:
+                drop = len(buf) - self._keep
+                buf = buf[drop:]
+                self._chunks, self._base = [buf], self._base + drop
+            base = self._base
+        return buf[max(0, a - base):max(0, min(b - base, len(buf)))]
 
     def close(self):
-        self._wav.close()
+        self._file.close()
 
 
-class Listener:
-    def __init__(self, out_dir, rule_out_s=30.0):
+class Models:
+    """Everything a listener reads and never changes, loaded once and shared
+    by every stream: the three trackers, the session's repertoire index, the
+    whole corpus's index (the fallback), the aligner's sequences, the
+    tune-ness model. About 3 GB, most of it the corpus and PyTorch."""
+
+    def __init__(self):
+        from lab.analysis.tuneness import TunenessModel
         from lab.bench.retrieval import Aligner
-        from lab.bench.stream import ChunkScorer, Decoder
         from lab.corpus.index import Index
         from lab.frontends import get_frontend
 
-        self.out_dir = out_dir
-        self.store = LiveStore(os.path.join(out_dir, "audio.wav"))
         self.frontends = [get_frontend(n) for n in ("yin", "basic_pitch", "pesto")]
-        index = Index.load("repertoire", n=6, fold_octaves=True)
-        fallback = Index.load("all", n=6, fold_octaves=True)
-        self.names, self.types = fallback.tune_names, fallback.tune_types
-        aligner = Aligner(reading="notes", mode="replace", shortlist=10 ** 6, candidate_set="all")
-        # the follower's live configuration (lab/configs/follower.json)
-        self.scorer = ChunkScorer(index, aligner, window_ms=6000, fallback_index=fallback,
-                                  fallback_top=20)
-        from lab.analysis.tuneness import TunenessModel
-
-        # tune-ness (spec, "Is this a tune at all?") and the charge on hubs
+        self.index = Index.load("repertoire", n=6, fold_octaves=True)
+        self.fallback = Index.load("all", n=6, fold_octaves=True)
+        self.names, self.types = self.fallback.tune_names, self.fallback.tune_types
+        self.aligner = Aligner(reading="notes", mode="replace", shortlist=10 ** 6, candidate_set="all")
         self.tuneness = TunenessModel.load()
-        n_settings = {t: len(v) for t, v in aligner.sequences.by_tune.items()}
+        self.n_settings = {t: len(v) for t, v in self.aligner.sequences.by_tune.items()}
+
+
+class Listener:
+    def __init__(self, out_dir, models=None, rule_out_s=30.0, audio_name="audio.wav", keep_s=None):
+        from lab.bench.stream import ChunkScorer, Decoder
+
+        m = models or Models()
+        self.out_dir = out_dir
+        self.store = LiveStore(os.path.join(out_dir, audio_name), keep_s=keep_s)
+        self.frontends = m.frontends
+        self.names, self.types = m.names, m.types
+        # the follower's live configuration (lab/configs/follower.json)
+        self.scorer = ChunkScorer(m.index, m.aligner, window_ms=6000, fallback_index=m.fallback,
+                                  fallback_top=20)
+        # tune-ness (spec, "Is this a tune at all?") and the charge on hubs
+        self.tuneness = m.tuneness
         self.decoder = Decoder(nu=0.05, gamma=self.tuneness.meta["gamma"],
-                               kappa=self.tuneness.meta["kappa"], n_settings=n_settings)
+                               kappa=self.tuneness.meta["kappa"], n_settings=m.n_settings)
         self.decoder.reset()
         self.tracks = {fe.name: ([], [], []) for fe in self.frontends}
+        self.frames_keep_ms = None if keep_s is None else 60000
         self.tracked_to = 0
         self.next_t = HOP_MS
         self.rule_out_s = rule_out_s
@@ -142,6 +167,10 @@ class Listener:
         tt, ff, vv = self.tracks[name]
         if len(tt) > 1:   # keep the lists short
             self.tracks[name] = ([np.concatenate(tt)], [np.concatenate(ff)], [np.concatenate(vv)])
+            tt, ff, vv = self.tracks[name]
+        if self.frames_keep_ms is not None and len(tt[0]) and tt[0][0] < self.tracked_to - 2 * self.frames_keep_ms:
+            keep = tt[0] >= self.tracked_to - self.frames_keep_ms
+            self.tracks[name] = ([tt[0][keep]], [ff[0][keep]], [vv[0][keep]])
             tt, ff, vv = self.tracks[name]
         return tt[0], ff[0], vv[0]
 
