@@ -1,0 +1,37 @@
+# Ceol Listen lab (spec 053). Installed into ./venv by `make lab-install`.
+# Never listed in the root requirements.txt: Render installs only that file,
+# which is what keeps ~300MB of numba/scipy/sklearn off the web service.
+numpy
+scipy
+librosa>=0.10
+soundfile
+scikit-learn
+
+# numba is librosa's, not ours, but its version is our problem: from 0.61 it
+# subclasses coverage.types.Tracer at import time, which does not exist in the
+# coverage 7.3.2 that requirements-test.txt pins, so importing librosa dies
+# with AttributeError inside numba. Pinning numba here rather than bumping the
+# app's coverage pin keeps the blast radius in the lab. (numba < 0.61 also
+# caps numpy below 2.1.) Lift this when the app's coverage pin moves past 7.4.
+numba<0.61
+
+# The neural front end (lab/frontends/basicpitch.py). On macOS it runs the
+# CoreML model, so no TensorFlow. Pinned to the version measured: 0.4.0 pins
+# resampy<0.4.3, and resampy 0.4.2 imports pkg_resources, which setuptools
+# 81+ removed, so setuptools is held below 81. Asking for a newer resampy
+# instead made pip quietly choose basic-pitch 0.2.6.
+basic-pitch==0.4.0
+setuptools<81
+
+# PESTO (lab/frontends/pestotrack.py), a small pretrained pitch tracker. Brings
+# torch; runs on the Mac's GPU. Pinned to the version measured.
+pesto-pitch==2.0.1
+
+# CREPE through torchcrepe (lab/frontends/crepetrack.py). Pinned to the
+# version measured.
+torchcrepe==0.0.24
+
+# RMVPE through ONNX Runtime (lab/frontends/rmvpetrack.py); downloads the
+# model from Hugging Face once and checks its SHA-256. Pinned to the version
+# measured.
+rmvpe-onnx==0.2.3

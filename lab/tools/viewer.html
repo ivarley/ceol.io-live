@@ -1,0 +1,1352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Ceol Listen — what it heard</title>
+<style>
+  :root {
+    --bg: #12141a; --panel: #1a1d26; --line: #2a2f3d; --ink: #e6e9f0;
+    --dim: #8b93a7; --heard: #4a9eff; --matched: #3ddc97; --truth: #ffd166;
+    --playhead: #ff6b6b; --sel: #ffffff;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 13.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  header { padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  h1 { margin: 0 0 3px; font-size: 15px; font-weight: 600; }
+  h1 .type { color: var(--dim); font-weight: 400; }
+  .meta { color: var(--dim); font-size: 12px; }
+  .meta b { color: var(--ink); font-weight: 600; }
+  .verdict { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 11.5px; }
+  .ok { background: rgba(61,220,151,.15); color: var(--matched); }
+  .bad { background: rgba(255,107,107,.15); color: var(--playhead); }
+  main { padding: 12px 16px 26px; }
+  .bar { display: flex; align-items: center; gap: 9px; margin-bottom: 9px; flex-wrap: wrap; }
+  button, select, input[type=range] {
+    background: var(--panel); color: var(--ink); border: 1px solid var(--line);
+    padding: 5px 11px; border-radius: 5px; cursor: pointer; font: inherit;
+  }
+  input[type=range] { padding: 0; width: 84px; }
+  button:hover { border-color: var(--dim); }
+  button.on { background: #253044; border-color: var(--heard); color: #fff; }
+  button.save { border-color: var(--truth); color: var(--truth); }
+  button.save:disabled { opacity: .4; cursor: default; border-color: var(--line); color: var(--dim); }
+  .sep { width: 1px; height: 22px; background: var(--line); }
+  .time { font-variant-numeric: tabular-nums; color: var(--dim); }
+  .time b { color: var(--ink); }
+  label { color: var(--dim); display: inline-flex; align-items: center; gap: 5px; }
+  canvas { display: block; width: 100%; border: 1px solid var(--line); border-radius: 6px;
+           background: var(--panel); touch-action: none; }
+  #mini { height: 44px; margin-top: 6px; cursor: pointer; }
+  #staffwrap { margin-top: 6px; border: 1px solid var(--line); border-radius: 6px;
+               background: var(--panel); }
+  #staffhead { display: flex; gap: 14px; align-items: center; padding: 4px 8px;
+               border-bottom: 1px solid var(--line); font-size: 12px; color: var(--dim); }
+  #staffhead .dim { color: #5d657a; }
+  #staff { overflow-x: auto; overflow-y: hidden; padding: 2px 0; }
+  #staff svg { display: block; }
+  /* abcjs draws in black on white; everything visible is repainted here */
+  #staff svg path, #staff svg text { fill: #cdd4e2; }
+  #staff svg path[stroke], #staff svg line { stroke: #39404f; }
+  #staff .abcjs-staff path, #staff .abcjs-staff-extra path { fill: #39404f; }
+  #staff .abcjs-note path, #staff .abcjs-rest path,
+  #staff .abcjs-stem path, #staff .abcjs-beam-elem { fill: #cdd4e2; }
+  #staff .abcjs-note.here path, #staff .abcjs-note.here,
+  #staff .abcjs-rest.here path, #staff .abcjs-rest.here { fill: #ffd166; }
+  #staff .abcjs-note, #staff .abcjs-rest { cursor: pointer; }
+  .legend { margin-top: 9px; color: var(--dim); font-size: 12px; display: flex; gap: 16px; flex-wrap: wrap; }
+  .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px;
+            vertical-align: -1px; }
+  .hint { color: var(--dim); font-size: 12px; margin-top: 8px; }
+  .hint kbd { background: var(--panel); border: 1px solid var(--line); border-radius: 3px;
+              padding: 0 4px; color: var(--ink); }
+  section { margin-top: 20px; }
+  h2 { font-size: 12.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim);
+       margin: 0 0 7px; font-weight: 600; }
+  table { border-collapse: collapse; font-size: 12.5px; }
+  td, th { text-align: left; padding: 3px 15px 3px 0; }
+  th { color: var(--dim); font-weight: 600; }
+  .truthrow { color: var(--matched); }
+  .abc { color: var(--dim); word-break: break-all; line-height: 1.7; font-size: 12px; }
+  #agree { color: var(--truth); }
+  @media (max-width: 700px) { main { padding: 10px; } header { padding: 10px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">—</h1>
+  <div class="meta" id="meta"></div>
+</header>
+<main>
+  <div class="bar">
+    <button id="play">▶ Play</button>
+    <span class="time"><b id="cur">0:00</b> / <span id="dur">0:00</span></span>
+    <label>speed
+      <select id="rate">
+        <option value="0.4">0.4×</option><option value="0.6">0.6×</option>
+        <option value="0.8">0.8×</option><option value="1" selected>1×</option>
+      </select>
+    </label>
+    <span class="sep"></span>
+    <button class="mode on" data-mode="listen">listen</button>
+    <button class="mode" data-mode="edit">edit</button>
+    <button class="mode" data-mode="accept">accept</button>
+    <button class="mode" data-mode="draw">draw</button>
+    <button class="mode" data-mode="erase">erase</button>
+    <span class="sep"></span>
+    <button id="sing" title="sound your labels as the music plays">♪ sing labels</button>
+    <label>tone <input type="range" id="vol" min="0" max="100" value="45"></label>
+    <label title="shift the sung labels against the music, by ear; changes nothing that is saved"
+      >offset <input type="range" id="toneoffset" min="-150" max="150" step="5" value="0">
+      <span class="time" id="toneoffsetv">0ms</span></label>
+    <span class="time" id="syncmode" title="in sync: the music and the sung labels share one audio clock"></span>
+    <button id="pulsebtn" class="on" title="the eighth-note grid the music is on">grid</button>
+    <button class="mode" data-mode="beats">draw beats</button>
+    <label title="what one beat you draw is, and how many of them make a bar"
+           >meter
+      <select id="tapmeter">
+        <option value="2:8">reel / hornpipe · 4/4 · beat = quarter</option>
+        <option value="4:8">reel / hornpipe · 4/4 · beat = half</option>
+        <option value="3:6">jig · 6/8 · beat = dotted quarter</option>
+        <option value="6:6">jig · 6/8 · beat = whole bar</option>
+        <option value="3:9">slip jig · 9/8 · beat = dotted quarter</option>
+        <option value="3:12">slide · 12/8 · beat = dotted quarter</option>
+        <option value="2:4">polka · 2/4 · beat = quarter</option>
+      </select>
+    </label>
+    <button id="tapclear">clear beats</button>
+    <span class="time" id="offsetlabel"></span>
+    <span class="sep"></span>
+    <button id="zoomout">−</button><button id="zoomin">+</button><button id="zoomfit">fit</button>
+    <span class="sep"></span>
+    <button id="save" class="save" disabled>save labels</button>
+    <span id="agree"></span>
+  </div>
+
+  <canvas id="roll" height="460"></canvas>
+  <div id="staffwrap">
+    <div id="staffhead">
+      <span id="staffkey"></span>
+      <label><input type="checkbox" id="stafffollow" checked> follow the roll</label>
+      <span class="dim">click a note to hear from there</span>
+    </div>
+    <div id="staff"></div>
+  </div>
+  <canvas id="mini"></canvas>
+
+  <div class="legend">
+    <span><span class="swatch" style="background:var(--heard)"></span>heard</span>
+    <span><span class="swatch" style="background:var(--matched)"></span>heard, and in a phrase the real tune has</span>
+    <span><span class="swatch" style="background:var(--truth)"></span>your label</span>
+    <span><span class="swatch" style="background:var(--playhead)"></span>playhead</span>
+    <span>one octave: octave carries no information about which tune this is</span>
+  </div>
+  <div class="hint">
+    The strip along the top is the ruler — click or drag it to move the playhead, in any mode.
+    <b>listen</b> click anywhere to seek, click a note to hear it ·
+    <b>edit</b> drag a label to move it, drag its right edge to lengthen it, and it sounds as you go ·
+    <b>accept</b> drag a box over notes that are right ·
+    <b>draw</b> click an eighth (between two grid lines) at the pitch you hear; click it again to remove it,
+    or at another pitch to change it; drag to paint a run. Draw the beats first, so the eighths are in the right place ·
+    <b>erase</b> drag a box to remove labels ·
+    <b>draw beats</b> click where each quarter note lands; drag one to move it,
+    backspace to remove it. The eighths are the spaces between them, and your
+    spacing carries on to the end of the segment.
+    <b>Shift-click a beat to mark it as the start of a bar</b> — nothing
+    estimates that from the audio, so one marked bar start is worth a great
+    deal more than more beats
+    <br>
+    <kbd>space</kbd> play · <kbd>1-6</kbd> modes · <kbd>Tab</kbd> draw ⇄ draw beats · <kbd>+</kbd><kbd>−</kbd> zoom ·
+    <kbd>,</kbd><kbd>.</kbd> back/forward 3s · <kbd>r</kbd> replay this view · <kbd>Home</kbd> start ·
+    <kbd>l</kbd> loop on/off (drag the strip above the ruler to draw one) ·
+    <kbd>←</kbd><kbd>→</kbd> pan · <kbd>↑</kbd><kbd>↓</kbd> nudge a semitone · <kbd>⌫</kbd> delete · <kbd>s</kbd> sing · <kbd>g</kbd> grid ·
+    <kbd>cmd-z</kbd> undo · <kbd>cmd-s</kbd> save · swipe to pan, pinch or shift-scroll to zoom
+  </div>
+
+  <section>
+    <h2>What the index made of it</h2>
+    <table id="ranked"></table>
+  </section>
+  <section>
+    <h2>The tune's own notation, for comparison</h2>
+    <div class="abc" id="truthabc"></div>
+  </section>
+</main>
+
+<audio id="audio" preload="auto"></audio>
+<script src="abcjs-basic-min.js"></script>
+<script>
+const D = window.__DATA__;
+const audio = document.getElementById('audio');
+const roll = document.getElementById('roll');
+const mini = document.getElementById('mini');
+const rc = roll.getContext('2d');
+const mc = mini.getContext('2d');
+let dpr = window.devicePixelRatio || 1;
+audio.src = D.audio_url;
+
+// One octave, because octave carries no information about which tune this is.
+// Everything downstream already works in pitch classes; showing two octaves
+// only made the same note look like two different ones.
+const BASE = 60;                       // C4..B4
+const LO = BASE, HI = BASE + 11;
+const pc = m => BASE + (((Math.round(m) % 12) + 12) % 12);
+const PAD = 34, RULER = 22, LOOPH = 15;   // loop strip, then ruler, both above the plot
+const fmt = s => { s = Math.max(0, s | 0); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+let view = { t0: 0, t1: D.duration_s };
+let mode = 'listen';
+let labels = (D.labels || []).map(l => ({ ...l, midi: pc(l.midi) }));
+const HEARD = D.notes.map(n => ({ ...n, midi: pc(n.midi) }));
+let undoStack = [];
+let dirty = false;
+let drag = null;
+let selected = null;
+let singing = false;
+let showPulse = true;
+// Beats drawn by hand. Tapping along and then nudging the result never
+// settled: a person taps late by an amount that drifts, and correcting a
+// fitted grid means fighting the fit. Drawing the quarter notes where they
+// actually are removes the fit altogether - the lines are the answer, and
+// the eighths are simply the spaces between them.
+let beats = (D.tapped_pulse && D.tapped_pulse.beats) ? D.tapped_pulse.beats.slice() : [];
+// Which drawn beats start a bar. Nothing estimates this from audio, and the
+// derived grid used to assume the first beat drawn was one, so a bar line was
+// a guess with a one-in-four chance on a reel.
+let downbeats = (D.tapped_pulse && D.tapped_pulse.downbeats) ? D.tapped_pulse.downbeats.slice() : [];
+// A stretch to play over and over. Not saved with the annotation: it is a
+// way of listening, not a statement about the music.
+let loop = null;            // {t0, t1, on}
+let selectedBeat = null;
+let tapped = null;          // the derived grid, rebuilt from `beats`
+
+// ---- sound ---------------------------------------------------------------
+// A sine for each note, so a label can be checked by ear against the audio it
+// sits on. Being an octave out is the commonest error and it is instantly
+// obvious when you hear it beside the music, and nearly invisible on a grid.
+let actx = null;
+function audioCtx() {
+  if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+  if (actx.state === 'suspended') actx.resume();
+  return actx;
+}
+const hz = m => 440 * Math.pow(2, (m - 69) / 12);
+function tone(midi, seconds, delay) {
+  const gainValue = document.getElementById('vol').value / 100;
+  if (gainValue <= 0) return null;
+  const ctx = audioCtx();
+  const t = ctx.currentTime + Math.max(0, delay || 0);
+  const dur = clamp(seconds || 0.25, 0.06, 2.0);
+  const osc = ctx.createOscillator(), g = ctx.createGain();
+  osc.type = 'sine';
+  osc.frequency.value = hz(midi);
+  // a soft envelope, because a square-edged sine clicks and the click is
+  // what you end up listening to instead of the pitch
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(gainValue * 0.5, t + 0.012);
+  g.gain.setValueAtTime(gainValue * 0.5, t + dur - 0.04);
+  g.gain.linearRampToValueAtTime(0, t + dur);
+  osc.connect(g).connect(ctx.destination);
+  osc.start(t); osc.stop(t + dur + 0.02);
+  return osc;
+}
+
+// ---- header --------------------------------------------------------------
+document.getElementById('title').innerHTML =
+  D.truth_name + ' <span class="type">' + (D.tune_type || '') + '</span>';
+document.getElementById('meta').innerHTML =
+  '<b>' + D.notes.length + '</b> notes heard over <b>' + fmt(D.duration_s) + '</b> · ' +
+  'front end <b>' + D.frontend + '</b> · shares <b>' + D.shared_ngrams + '</b> of the tune\'s ' +
+  D.n + '-note phrases · index rank ' +
+  (D.truth_rank ? '<b>' + D.truth_rank + '</b>' : '<b>not found</b>') +
+  ' <span class="verdict ' + (D.truth_rank === 1 ? 'ok' : 'bad') + '">' +
+  (D.truth_rank === 1 ? 'correct' : 'wrong') + '</span>';
+if (D.pulse) {
+  const p = D.pulse;
+  const meter = p.grouping === 3 ? '6/8-ish (groups of three)' : '4/4-ish (groups of two)';
+  const agree = D.pulse_expected == null ? ''
+    : p.grouping === D.pulse_expected ? ' ✓' : ' ✗ the corpus says the other';
+  document.getElementById('meta').innerHTML +=
+    '<br>pulse: eighth every <b>' + p.period_ms.toFixed(0) + 'ms</b> · ' +
+    '<b>' + p.bpm_beat.toFixed(0) + '</b> beats a minute · ' + meter + agree +
+    ' · confidence ' + (p.grouping_margin).toFixed(2);
+}
+
+document.getElementById('ranked').innerHTML =
+  '<tr><th>#</th><th>tune</th><th>score</th><th>hits</th></tr>' +
+  D.ranked.map((r, i) => '<tr class="' + (r.tune_id === D.truth_tune_id ? 'truthrow' : '') + '">' +
+    '<td>' + (i + 1) + '</td><td>' + r.name + '</td><td>' + r.score.toFixed(4) +
+    '</td><td>' + r.hits + '</td></tr>').join('');
+document.getElementById('truthabc').innerHTML = D.truth_abc || '<i>no notation held for this tune</i>';
+
+// ---- geometry ------------------------------------------------------------
+const plotL = () => PAD * dpr;
+const plotW = () => roll.width - PAD * 1.5 * dpr;
+const loopB = () => LOOPH * dpr;         // bottom of the loop strip
+const plotT = () => (LOOPH + RULER) * dpr;
+const plotB = () => roll.height - PAD * dpr;
+function xOf(t) { return plotL() + ((t - view.t0) / (view.t1 - view.t0)) * plotW(); }
+function tOf(px) { return view.t0 + ((px - plotL()) / plotW()) * (view.t1 - view.t0); }
+function yOf(m) { return plotB() - ((m - LO) / Math.max(1, HI - LO)) * (plotB() - plotT() - 8 * dpr); }
+function mOf(py) { return LO + ((plotB() - py) / (plotB() - plotT() - 8 * dpr)) * (HI - LO); }
+function evPos(e) {
+  const r = roll.getBoundingClientRect();
+  return { x: (e.clientX - r.left) * (roll.width / r.width),
+           y: (e.clientY - r.top) * (roll.height / r.height) };
+}
+const noteH = () => Math.max(3 * dpr, (plotB() - plotT()) / Math.max(12, HI - LO) * 0.8);
+
+// ---- the staff ------------------------------------------------------------
+// What was heard, quantised to eighths and engraved by abcjs, which the repo
+// already carries for the app's own notation rendering. No bar lines, on
+// purpose: the lab knows the grid's period but not its phase, so it knows how
+// long each note is and not where a bar starts.
+//
+// This was hand-drawn on a canvas first and it was unreadable -- the range
+// needed 126 device pixels and the canvas was 92, so the low notes were drawn
+// off the bottom edge. Engraving is not a thing to do by hand.
+const staffEl = document.getElementById('staff');
+const MAX_STAFF_PX = 24000;   // as wide as it is worth asking abcjs to engrave
+let staffNotes = [];        // the drawn elements, in order, with their times
+let staffSpan = 0;          // the roll's zoom the strip was last engraved for
+let staffRedraw = null;
+
+function renderStaff() {
+  document.getElementById('staffkey').textContent =
+    D.staff_key ? ('key of ' + D.staff_key + ', eighth notes on the grid') : 'no grid';
+  if (!D.staff_abc) { staffEl.textContent = 'no grid, so nothing to write'; return; }
+  if (typeof ABCJS === 'undefined') {
+    staffEl.innerHTML = '<pre style="color:#222;padding:8px">' + D.staff_abc + '</pre>';
+    return;
+  }
+  // One unbroken line, drawn wide enough that the piano roll's current zoom
+  // fits the visible strip. Engraved width is capped, because abcjs lays out
+  // every note on every render and a segment zoomed right in would otherwise
+  // ask for a canvas tens of thousands of pixels wide.
+  const wide = staffEl.clientWidth || 900;
+  const span = Math.max(0.5, view.t1 - view.t0);
+  const perSecond = Math.min(MAX_STAFF_PX / Math.max(1, D.duration_s), wide / span);
+  ABCJS.renderAbc(staffEl, D.staff_abc, {
+    add_classes: true, staffwidth: Math.max(600, D.duration_s * perSecond),
+    wrap: false, paddingtop: 2, paddingbottom: 2, paddingleft: 6, paddingright: 6,
+  });
+  staffSpan = span;
+  // abcjs draws notes and rests in source order, which is the order of
+  // D.staff, so the two line up one for one and each drawn note knows when it
+  // sounds. Reading back where each one LANDED is what lets the strip be
+  // scrolled to a time: abcjs spaces by duration but not exactly, so the
+  // drawn positions are the truth and an assumed linear layout is not.
+  const drawn = staffEl.querySelectorAll('.abcjs-note, .abcjs-rest');
+  staffNotes = [];
+  for (let i = 0; i < drawn.length && i < D.staff.length; i++) {
+    const item = D.staff[i];
+    let x = 0;
+    try { x = drawn[i].getBBox().x; } catch (_) { x = 0; }
+    staffNotes.push({ el: drawn[i], t: item.t, x,
+                      t1: item.t + item.eighths * (D.pulse ? D.pulse.period_ms / 1000 : 0.15) });
+    drawn[i].addEventListener('click', () => { seek(item.t); audioCtx(); });
+  }
+  syncStaff(true);
+}
+
+// Where on the engraved strip a moment in the audio landed, by interpolating
+// between the two notes either side of it.
+function staffXat(t) {
+  if (!staffNotes.length) return 0;
+  if (t <= staffNotes[0].t) return staffNotes[0].x;
+  let lo = 0, hi = staffNotes.length - 1;
+  while (lo < hi - 1) {
+    const mid = (lo + hi) >> 1;
+    if (staffNotes[mid].t <= t) lo = mid; else hi = mid;
+  }
+  const a = staffNotes[lo], b = staffNotes[hi];
+  if (b.t <= a.t) return a.x;
+  return a.x + (b.x - a.x) * (t - a.t) / (b.t - a.t);
+}
+
+// Keep the strip showing the same stretch of time as the piano roll. Panning
+// is a scroll, which is cheap; zooming needs a re-engrave, so it waits until
+// the zoom has actually settled.
+function syncStaff(force) {
+  if (!staffNotes.length || !document.getElementById('stafffollow').checked) return;
+  const span = Math.max(0.5, view.t1 - view.t0);
+  if (!force && Math.abs(Math.log(span / staffSpan)) > 0.18) {
+    clearTimeout(staffRedraw);
+    staffRedraw = setTimeout(renderStaff, 120);
+    return;
+  }
+  staffEl.scrollLeft = Math.max(0, staffXat(view.t0) - 4);
+}
+
+let staffHere = -1;
+function followStaff() {
+  if (!staffNotes.length || !document.getElementById('stafffollow').checked) return;
+  const t = audio.currentTime;
+  let idx = -1;
+  for (let i = 0; i < staffNotes.length; i++) {
+    if (staffNotes[i].t <= t && t < staffNotes[i].t1) { idx = i; break; }
+  }
+  if (idx === staffHere) return;
+  if (staffHere >= 0 && staffNotes[staffHere]) staffNotes[staffHere].el.classList.remove('here');
+  staffHere = idx;
+  if (idx >= 0) staffNotes[idx].el.classList.add('here');
+}
+
+// ---- looping -------------------------------------------------------------
+function loopTick() {
+  if (!loop || !loop.on || audio.paused) return;
+  // Checked every frame rather than on timeupdate, which fires about four
+  // times a second and would overshoot the end of a short loop by enough to
+  // hear. Only the END is enforced: yanking the playhead forward when it sits
+  // before the loop would make it impossible to scrub back and listen in.
+  if (musicPos() >= loop.t1) {
+    try { audio.currentTime = loop.t0; } catch (_) {}
+    resetSung();
+  }
+}
+
+function setLoop(t0, t1) {
+  const a = Math.max(0, Math.min(t0, t1)), b = Math.min(D.duration_s, Math.max(t0, t1));
+  loop = (b - a) < 0.15 ? null : { t0: a, t1: b, on: true };
+  draw();
+}
+
+// ---- seeking -------------------------------------------------------------
+const NUDGE_S = 3;
+
+function nudgePlay(seconds) {
+  // Relative to where the audio is, not where the view is, so holding the key
+  // walks steadily backwards instead of fighting the playhead following it.
+  seek(audio.currentTime + seconds);
+}
+
+function seek(t) {
+  t = clamp(t, 0, D.duration_s);
+  const apply = () => { try { audio.currentTime = t; } catch (_) {} };
+  if (audio.readyState >= 1) apply();
+  else audio.addEventListener('loadedmetadata', apply, { once: true });
+  const span = view.t1 - view.t0;
+  if (t < view.t0 || t > view.t1) {
+    const t0 = clamp(t - span / 2, 0, D.duration_s - span);
+    view = { t0, t1: t0 + span };
+  }
+  resetSung();
+  draw();
+}
+
+// ---- hit testing ---------------------------------------------------------
+function labelAt(p) {
+  const h = noteH();
+  for (let i = labels.length - 1; i >= 0; i--) {
+    const l = labels[i];
+    const x0 = xOf(l.t0), x1 = Math.max(x0 + 3 * dpr, xOf(l.t1)), y = yOf(l.midi);
+    if (p.x >= x0 - 3 * dpr && p.x <= x1 + 4 * dpr && Math.abs(p.y - y) <= h) {
+      return { label: l, index: i, onEdge: p.x >= x1 - 5 * dpr };
+    }
+  }
+  return null;
+}
+function heardAt(p) {
+  // The eighth-note grid, drawn behind the notes: light at each eighth,
+  // brighter at the beat, brightest at the bar. Notation is entirely on this
+  // grid, so seeing where the music sits on it is the first step to
+  // comparing durations rather than only pitch shapes.
+  const grid = activeGrid();
+  if (grid.length) {
+    for (const g of grid) {
+      if (g.t < view.t0 || g.t > view.t1) continue;
+      const tint = tapped ? '61,220,151' : '255,209,102';
+      rc.strokeStyle = g.bar ? 'rgba(' + tint + ',.45)'
+        : g.beat ? 'rgba(' + tint + ',.22)' : 'rgba(' + tint + ',.08)';
+      rc.lineWidth = (g.bar ? 1.6 : 1) * dpr;
+      rc.beginPath(); rc.moveTo(xOf(g.t), plotT()); rc.lineTo(xOf(g.t), plotB()); rc.stroke();
+    }
+  }
+
+  if (D.onset && D.onset.length) {
+    const hop = D.onset_hop_ms / 1000;
+    const base = plotB(), height = 26 * dpr;
+    rc.strokeStyle = 'rgba(230,233,240,.30)'; rc.lineWidth = dpr;
+    rc.beginPath();
+    let started = false;
+    for (let i = Math.max(0, Math.floor(view.t0 / hop)); i < D.onset.length; i++) {
+      const t = i * hop;
+      if (t > view.t1) break;
+      const y = base - D.onset[i] * height;
+      if (!started) { rc.moveTo(xOf(t), y); started = true; } else rc.lineTo(xOf(t), y);
+    }
+    rc.stroke();
+  }
+
+  for (const t of taps) {
+    if (t < view.t0 || t > view.t1) continue;
+    rc.fillStyle = '#3ddc97';
+    rc.beginPath(); rc.moveTo(xOf(t) - 4 * dpr, plotB());
+    rc.lineTo(xOf(t) + 4 * dpr, plotB()); rc.lineTo(xOf(t), plotB() - 8 * dpr);
+    rc.closePath(); rc.fill();
+  }
+
+  const h = noteH();
+  for (const n of HEARD) {
+    const x0 = xOf(n.t0), x1 = Math.max(x0 + 3 * dpr, xOf(n.t1));
+    if (p.x >= x0 && p.x <= x1 && Math.abs(p.y - yOf(n.midi)) <= h) return n;
+  }
+  return null;
+}
+
+// ---- drawing -------------------------------------------------------------
+function activeGrid() {
+  // A tapped grid wins over an estimated one: it is ground truth and the
+  // estimate is what it exists to correct.
+  if (tapped) return tapped.grid;
+  return showPulse ? (D.pulse_grid || []) : [];
+}
+
+// The estimator's tempo through the clip, in ms per eighth. Used only to bend
+// a drawn grid where there are no drawn beats to follow.
+function periodAt(t) {
+  const m = D.tempo_map;
+  if (!m || !m.t || !m.t.length) return null;
+  const n = m.t.length;
+  if (t <= m.t[0]) return m.period[0];
+  if (t >= m.t[n - 1]) return m.period[n - 1];
+  let i = 1;
+  while (i < n - 1 && m.t[i] < t) i++;
+  const f = (t - m.t[i - 1]) / Math.max(1e-6, m.t[i] - m.t[i - 1]);
+  return m.period[i - 1] * (1 - f) + m.period[i] * f;
+}
+function stepFrom(t, typical, anchorT) {
+  const a = periodAt(anchorT), b = periodAt(t);
+  return (a && b) ? typical * b / a : typical;
+}
+
+// "beat:bar" in eighths, from the meter control.
+function meterChoice() {
+  const [beat, bar] = document.getElementById('tapmeter').value.split(':').map(Number);
+  return [beat || 2, bar || 8];
+}
+// The control's value for a saved annotation. Older ones stored only the beat,
+// and for those the bar is the one they always implied.
+function meterValue(tp) {
+  const beat = tp.grouping || 2;
+  const bar = tp.eighths_per_bar || ((beat === 3 || beat === 6) ? 6 : 8);
+  return beat + ':' + bar;
+}
+
+function fitTaps() {
+  if (beats.length < 1) { tapped = null; refreshBeatReadout(); return; }
+  // Two numbers, because one could not tell a jig from a slip jig. The
+  // first is how many eighths are inside one beat you draw -- a reel counted
+  // in two has four, counted in four has two, and it is the same reel. The
+  // second is how many eighths make a bar, which is what separates a jig (six)
+  // from a slip jig (nine) from a slide (twelve) when all three are drawn at
+  // the same dotted-quarter beat.
+  const [grouping, perBar] = meterChoice();
+  const beatsPerBar = Math.max(1, Math.round(perBar / grouping));
+  const sorted = [...beats].sort((a, b) => a - b);
+
+  // Spacing is taken from the drawn beats themselves, pair by pair, so a set
+  // that speeds up or drags is followed rather than averaged away.
+  const gaps = [];
+  for (let i = 1; i < sorted.length; i++) gaps.push(sorted[i] - sorted[i - 1]);
+  const sortedGaps = [...gaps].sort((a, b) => a - b);
+  const typical = sortedGaps.length ? sortedGaps[Math.floor(sortedGaps.length / 2)] : 0.5;
+
+  const marks = [];          // {t, beatIndex, drawn}
+  for (let i = 0; i < sorted.length; i++) marks.push({ t: sorted[i], drawn: true });
+  // Carry the drawn spacing forward to the end, and backwards to the start,
+  // so a few drawn beats cover the whole segment. The spacing is YOURS where
+  // you drew it; beyond that it follows the estimator's tempo map, scaled to
+  // agree with you at the last beat you drew. Carrying one fixed spacing on
+  // for a minute is what made the bar lines slide off the notes.
+  const lastT = sorted[sorted.length - 1], firstT = sorted[0];
+  for (let t = lastT + stepFrom(lastT, typical, lastT); t < D.duration_s;
+       t += stepFrom(t, typical, lastT)) {
+    marks.push({ t, drawn: false });
+  }
+  for (let t = firstT - stepFrom(firstT, typical, firstT); t > 0;
+       t -= stepFrom(t, typical, firstT)) {
+    marks.push({ t, drawn: false });
+  }
+  marks.sort((a, b) => a.t - b.t);
+
+  // Count bars from a marked downbeat if there is one; otherwise fall back to
+  // the first beat drawn, which is a guess and is recorded as one.
+  let anchorIndex = -1;
+  if (downbeats.length) {
+    const d = downbeats[0];
+    let best = Infinity;
+    for (let i = 0; i < marks.length; i++) {
+      const gap = Math.abs(marks[i].t - d);
+      if (gap < best) { best = gap; anchorIndex = i; }
+    }
+  }
+  if (anchorIndex < 0) anchorIndex = marks.findIndex(m => m.drawn);
+  const grid = [];
+  for (let i = 0; i < marks.length; i++) {
+    const beatNumber = i - anchorIndex;
+    grid.push({ t: marks[i].t, beat: true, drawn: marks[i].drawn,
+                bar: ((beatNumber % beatsPerBar) + beatsPerBar) % beatsPerBar === 0 });
+    const next = marks[i + 1];
+    if (!next) continue;
+    // the eighths are simply the spaces between two beats, divided evenly
+    const step = (next.t - marks[i].t) / grouping;
+    for (let k = 1; k < grouping; k++) {
+      grid.push({ t: marks[i].t + k * step, beat: false, bar: false, drawn: false });
+    }
+  }
+  const eighth = typical / grouping;
+  tapped = { period_ms: eighth * 1000, phase_ms: sorted[0] * 1000, grouping, eighths_per_bar: perBar,
+             level: 'beat', beats: sorted.slice(),
+             downbeats: downbeats.slice().sort((a, b) => a - b),
+             bar_anchored: downbeats.length > 0, grid };
+  resnapEighths();
+  dirty = true;
+  document.getElementById('save').disabled = false;
+  refreshBeatReadout();
+}
+
+function refreshBeatReadout() {
+  const el = document.getElementById('offsetlabel');
+  if (!tapped) { el.textContent = beats.length ? beats.length + ' beat drawn' : ''; return; }
+  const bpm = 60000 / (tapped.period_ms * tapped.grouping);
+  const perBar = tapped.eighths_per_bar;
+  const bars = downbeats.length ? downbeats.length + ' bar starts · ' : 'no bar start marked · ';
+  el.textContent = beats.length + ' beats drawn · ' + bars + bpm.toFixed(0) + ' bpm · eighth ' +
+    tapped.period_ms.toFixed(0) + 'ms · bar ' +
+    (tapped.period_ms * perBar / 1000).toFixed(2) + 's';
+}
+
+function beatAt(p) {
+  for (let i = 0; i < beats.length; i++) {
+    if (Math.abs(xOf(beats[i]) - p.x) <= 6 * dpr) return i;
+  }
+  return -1;
+}
+
+function draw() {
+  const W = roll.width, H = roll.height;
+  rc.clearRect(0, 0, W, H);
+  rc.font = (11 * dpr) + 'px ui-monospace, monospace';
+
+  // loop strip, then ruler
+  rc.fillStyle = '#12151c';
+  rc.fillRect(0, 0, W, loopB());
+  rc.fillStyle = '#161922';
+  rc.fillRect(0, loopB(), W, plotT() - loopB());
+  rc.strokeStyle = '#2a2f3d'; rc.lineWidth = dpr;
+  rc.beginPath(); rc.moveTo(0, plotT()); rc.lineTo(W, plotT()); rc.stroke();
+  if (loop) {
+    const a = xOf(loop.t0), b = xOf(loop.t1);
+    rc.fillStyle = loop.on ? 'rgba(255,209,102,.85)' : 'rgba(139,147,167,.35)';
+    rc.fillRect(a, 2 * dpr, Math.max(2 * dpr, b - a), loopB() - 4 * dpr);
+    if (loop.on) {
+      rc.fillStyle = 'rgba(255,209,102,.07)';
+      rc.fillRect(a, plotT(), Math.max(1, b - a), plotB() - plotT());
+      rc.strokeStyle = 'rgba(255,209,102,.4)';
+      rc.beginPath(); rc.moveTo(a, plotT()); rc.lineTo(a, plotB());
+      rc.moveTo(b, plotT()); rc.lineTo(b, plotB()); rc.stroke();
+    }
+  } else {
+    rc.fillStyle = '#3b4252';
+    rc.textBaseline = 'middle';
+    rc.fillText('drag here to loop', 4 * dpr, loopB() / 2);
+  }
+
+  rc.textBaseline = 'middle';
+  for (let m = LO; m <= HI; m++) {
+    const sharp = [1, 3, 6, 8, 10].includes(m % 12);
+    rc.fillStyle = sharp ? 'rgba(255,255,255,.018)' : 'rgba(255,255,255,.045)';
+    rc.fillRect(plotL(), yOf(m) - noteH() / 2, W - plotL() - PAD * 0.5 * dpr, noteH());
+    rc.fillStyle = sharp ? '#5d657a' : '#8b93a7';
+    rc.fillText(NAMES[m % 12], 4 * dpr, yOf(m));
+  }
+  const span = view.t1 - view.t0;
+  const step = span > 60 ? 10 : span > 24 ? 5 : span > 10 ? 2 : span > 4 ? 1 : 0.5;
+  rc.textBaseline = 'middle';
+  for (let t = Math.ceil(view.t0 / step) * step; t <= view.t1; t += step) {
+    rc.strokeStyle = '#232734';
+    rc.beginPath(); rc.moveTo(xOf(t), plotT()); rc.lineTo(xOf(t), plotB()); rc.stroke();
+    rc.fillStyle = '#8b93a7';
+    rc.fillText(step < 1 ? t.toFixed(1) : fmt(t), xOf(t) + 3 * dpr, (loopB() + plotT()) / 2);
+  }
+
+  // The eighth-note grid, drawn behind the notes: light at each eighth,
+  // brighter at the beat, brightest at the bar. Notation is entirely on this
+  // grid, so seeing where the music sits on it is the first step to
+  // comparing durations rather than only pitch shapes.
+  const grid = activeGrid();
+  if (grid.length) {
+    for (const g of grid) {
+      if (g.t < view.t0 || g.t > view.t1) continue;
+      const tint = tapped ? '61,220,151' : '255,209,102';
+      // a beat you drew is solid; one carried forward from your spacing is
+      // faint, so it is always clear which lines are yours
+      const alpha = g.drawn ? (g.bar ? 0.85 : 0.6)
+        : g.bar ? 0.34 : g.beat ? 0.20 : 0.07;
+      rc.strokeStyle = 'rgba(' + tint + ',' + alpha + ')';
+      rc.lineWidth = (g.bar ? 1.8 : g.drawn ? 1.4 : 1) * dpr;
+      rc.beginPath(); rc.moveTo(xOf(g.t), plotT()); rc.lineTo(xOf(g.t), plotB()); rc.stroke();
+    }
+  }
+
+  if (D.onset && D.onset.length) {
+    const hop = D.onset_hop_ms / 1000;
+    const base = plotB(), height = 26 * dpr;
+    rc.strokeStyle = 'rgba(230,233,240,.30)'; rc.lineWidth = dpr;
+    rc.beginPath();
+    let started = false;
+    for (let i = Math.max(0, Math.floor(view.t0 / hop)); i < D.onset.length; i++) {
+      const t = i * hop;
+      if (t > view.t1) break;
+      const y = base - D.onset[i] * height;
+      if (!started) { rc.moveTo(xOf(t), y); started = true; } else rc.lineTo(xOf(t), y);
+    }
+    rc.stroke();
+  }
+
+  for (let i = 0; i < beats.length; i++) {
+    const t = beats[i];
+    if (t < view.t0 || t > view.t1) continue;
+    const isBar = downbeats.some(d => Math.abs(d - t) < 1e-6);
+    rc.fillStyle = i === selectedBeat ? '#ffffff' : (isBar ? '#ffd166' : '#3ddc97');
+    const w = isBar ? 7 : 5, h = isBar ? 15 : 10;
+    rc.beginPath(); rc.moveTo(xOf(t) - w * dpr, plotB());
+    rc.lineTo(xOf(t) + w * dpr, plotB()); rc.lineTo(xOf(t), plotB() - h * dpr);
+    rc.closePath(); rc.fill();
+    if (isBar) {
+      rc.strokeStyle = 'rgba(255,209,102,.55)'; rc.lineWidth = 1.5 * dpr;
+      rc.beginPath(); rc.moveTo(xOf(t), plotT()); rc.lineTo(xOf(t), plotB()); rc.stroke();
+    }
+  }
+
+  const h = noteH();
+  for (const n of HEARD) {
+    if (n.t1 < view.t0 || n.t0 > view.t1) continue;
+    const x0 = xOf(n.t0), x1 = Math.max(x0 + 1.5 * dpr, xOf(n.t1));
+    rc.globalAlpha = n.matched ? 1 : 0.62;
+    rc.fillStyle = n.matched ? '#3ddc97' : '#4a9eff';
+    rc.beginPath(); rc.roundRect(x0, yOf(n.midi) - h / 2, x1 - x0, h,
+      Math.min(2.5 * dpr, (x1 - x0) / 2)); rc.fill();
+  }
+  rc.globalAlpha = 1;
+
+  for (const l of labels) {
+    if (l.t1 < view.t0 || l.t0 > view.t1) continue;
+    const x0 = xOf(l.t0), x1 = Math.max(x0 + 2.5 * dpr, xOf(l.t1));
+    rc.fillStyle = '#ffd166';
+    rc.beginPath(); rc.roundRect(x0, yOf(l.midi) - h * 0.44, x1 - x0, h * 0.88,
+      Math.min(2.5 * dpr, (x1 - x0) / 2)); rc.fill();
+    if (l === selected) {
+      rc.strokeStyle = '#fff'; rc.lineWidth = 1.5 * dpr;
+      rc.strokeRect(x0 - 1.5 * dpr, yOf(l.midi) - h * 0.44 - 1.5 * dpr,
+                    x1 - x0 + 3 * dpr, h * 0.88 + 3 * dpr);
+      rc.fillStyle = '#fff';
+      rc.fillText(noteName(l.midi), x1 + 6 * dpr, yOf(l.midi));
+    }
+  }
+
+  if (drag && drag.box) {
+    const x0 = Math.min(drag.x0, drag.x), x1 = Math.max(drag.x0, drag.x);
+    const y0 = Math.min(drag.y0, drag.y), y1 = Math.max(drag.y0, drag.y);
+    rc.fillStyle = mode === 'erase' ? 'rgba(255,107,107,.15)' : 'rgba(61,220,151,.15)';
+    rc.strokeStyle = mode === 'erase' ? '#ff6b6b' : '#3ddc97'; rc.lineWidth = dpr;
+    rc.fillRect(x0, y0, x1 - x0, y1 - y0); rc.strokeRect(x0, y0, x1 - x0, y1 - y0);
+  }
+
+  const t = audio.currentTime;
+  if (t >= view.t0 && t <= view.t1) {
+    rc.strokeStyle = '#ff6b6b'; rc.lineWidth = 1.5 * dpr;
+    rc.beginPath(); rc.moveTo(xOf(t), 0); rc.lineTo(xOf(t), plotB()); rc.stroke();
+    rc.fillStyle = '#ff6b6b';
+    rc.beginPath(); rc.moveTo(xOf(t) - 4 * dpr, 0); rc.lineTo(xOf(t) + 4 * dpr, 0);
+    rc.lineTo(xOf(t), 7 * dpr); rc.closePath(); rc.fill();
+  }
+  drawMini();
+}
+const NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const noteName = m => NAMES[((m % 12) + 12) % 12];
+
+function drawMini() {
+  const W = mini.width, H = mini.height;
+  mc.clearRect(0, 0, W, H);
+  const x = t => (t / D.duration_s) * W;
+  const y = m => H - 3 - ((m - LO) / Math.max(1, HI - LO)) * (H - 6);
+  for (const n of HEARD) {
+    mc.fillStyle = n.matched ? '#3ddc97' : '#4a9eff';
+    mc.globalAlpha = n.matched ? .9 : .4;
+    mc.fillRect(x(n.t0), y(n.midi) - dpr, Math.max(dpr, x(n.t1) - x(n.t0)), 2 * dpr);
+  }
+  mc.globalAlpha = 1;
+  for (const l of labels) {
+    mc.fillStyle = '#ffd166';
+    mc.fillRect(x(l.t0), y(l.midi) - dpr, Math.max(dpr, x(l.t1) - x(l.t0)), 2 * dpr);
+  }
+  mc.fillStyle = 'rgba(255,255,255,.07)';
+  mc.fillRect(x(view.t0), 0, x(view.t1) - x(view.t0), H);
+  mc.strokeStyle = '#4a9eff'; mc.lineWidth = dpr;
+  mc.strokeRect(x(view.t0), 0, x(view.t1) - x(view.t0), H);
+  mc.strokeStyle = '#ff6b6b';
+  mc.beginPath(); mc.moveTo(x(audio.currentTime), 0); mc.lineTo(x(audio.currentTime), H); mc.stroke();
+}
+
+// ---- labels --------------------------------------------------------------
+function pushUndo() {
+  undoStack.push(JSON.stringify(labels));
+  if (undoStack.length > 80) undoStack.shift();
+  dirty = true;
+  document.getElementById('save').disabled = false;
+}
+function mergeLabels() {
+  labels.sort((a, b) => a.t0 - b.t0 || a.midi - b.midi);
+  const out = [];
+  for (const l of labels) {
+    const prev = out[out.length - 1];
+    // eighths drawn on the grid stay eighths: two of the same pitch are what
+    // a repeated note looks like, and fusing them would erase it
+    if (prev && prev.midi === l.midi && l.t0 - prev.t1 < 0.06 && prev !== selected && l !== selected
+        && !prev.grid && !l.grid)
+      prev.t1 = Math.max(prev.t1, l.t1);
+    else out.push(l);
+  }
+  labels = out;
+}
+function agreement() {
+  if (!labels.length) return '';
+  let exact = 0, octave = 0, total = 0;
+  for (const l of labels) {
+    const mid = (l.t0 + l.t1) / 2;
+    const hit = HEARD.find(n => n.t0 <= mid && n.t1 >= mid);
+    total++;
+    if (!hit) continue;
+    if (hit.midi === l.midi) exact++;
+    else if (Math.abs(hit.midi - l.midi) % 12 === 0) octave++;
+  }
+  return total ? labels.length + ' labels · heard agrees ' + Math.round(100 * exact / total) +
+    '% exactly, ' + Math.round(100 * (exact + octave) / total) + '% ignoring octave' : '';
+}
+function refresh() { mergeLabels(); document.getElementById('agree').textContent = agreement(); draw(); }
+
+// ---- pointer -------------------------------------------------------------
+roll.addEventListener('pointerdown', e => {
+  const p = evPos(e);
+  roll.setPointerCapture(e.pointerId);
+
+  if (p.y < loopB()) {
+    // click the bar to turn it off and on, drag anywhere to draw a new one
+    drag = { mode: 'loop', x0: p.x, x: p.x, moved: false };
+    return;
+  }
+  if (p.y <= plotT()) { drag = { mode: 'scrub' }; seek(tOf(p.x)); return; }
+
+  if (mode === 'edit') {
+    const hit = labelAt(p);
+    if (hit) {
+      pushUndo();
+      selected = hit.label;
+      tone(hit.label.midi, hit.label.t1 - hit.label.t0);
+      drag = { mode: hit.onEdge ? 'resize' : 'move', label: hit.label,
+               grabT: tOf(p.x), t0: hit.label.t0, t1: hit.label.t1, midi: hit.label.midi };
+      draw();
+      return;
+    }
+    const heard = heardAt(p);
+    if (heard) { tone(heard.midi, heard.t1 - heard.t0); selected = null; draw(); return; }
+    selected = null; draw(); return;
+  }
+
+  if (mode === 'listen') {
+    // Always move the playhead. Sounding a note under the cursor is a bonus,
+    // never a replacement: a click that sometimes seeks and sometimes does
+    // not is the most annoying thing an editor can do.
+    seek(tOf(p.x));
+    drag = { mode: 'scrub' };
+    const lab = labelAt(p);
+    const heard = lab ? null : heardAt(p);
+    if (lab) tone(lab.label.midi, lab.label.t1 - lab.label.t0);
+    else if (heard) tone(heard.midi, heard.t1 - heard.t0);
+    return;
+  }
+
+  if (mode === 'beats') {
+    const hit = beatAt(p);
+    if (e.shiftKey) {
+      // shift marks where a bar starts, on an existing beat or a new one
+      let t = hit >= 0 ? beats[hit] : clamp(tOf(p.x), 0, D.duration_s);
+      if (hit < 0) { beats.push(t); beats.sort((a, b) => a - b); }
+      const at = downbeats.findIndex(d => Math.abs(d - t) < 1e-6);
+      if (at >= 0) downbeats.splice(at, 1); else downbeats.push(t);
+      selectedBeat = beats.indexOf(t);
+      fitTaps(); draw();
+      return;
+    }
+    if (hit >= 0) {
+      selectedBeat = hit;
+      drag = { mode: 'beat', index: hit };
+    } else {
+      beats.push(clamp(tOf(p.x), 0, D.duration_s));
+      beats.sort((a, b) => a - b);
+      selectedBeat = beats.indexOf(clamp(tOf(p.x), 0, D.duration_s));
+      drag = { mode: 'beat', index: selectedBeat };
+      fitTaps();
+    }
+    draw();
+    return;
+  }
+
+  if (mode === 'draw') { pushUndo(); drag = { mode: 'draw', lastSlot: null }; paint(p, true); return; }
+  drag = { mode: 'box', box: true, x0: p.x, y0: p.y, x: p.x, y: p.y };
+});
+
+roll.addEventListener('pointermove', e => {
+  if (!drag) {
+    if (mode === 'edit') {
+      const hit = labelAt(evPos(e));
+      roll.style.cursor = hit ? (hit.onEdge ? 'ew-resize' : 'move') : 'default';
+    }
+    return;
+  }
+  const p = evPos(e);
+  if (drag.mode === 'loop') {
+    if (Math.abs(p.x - drag.x0) > 3 * dpr) drag.moved = true;
+    drag.x = p.x;
+    if (drag.moved) setLoop(tOf(drag.x0), tOf(p.x));
+    return;
+  }
+  if (drag.mode === 'scrub') { seek(tOf(p.x)); return; }
+  if (drag.mode === 'draw') { paint(p, false); return; }
+  if (drag.mode === 'beat') {
+    const was = beats[drag.index];
+    const now = clamp(tOf(p.x), 0, D.duration_s);
+    const at = downbeats.findIndex(d => Math.abs(d - was) < 1e-6);
+    if (at >= 0) downbeats[at] = now;
+    beats[drag.index] = now;
+    fitTaps(); draw(); return;
+  }
+  if (drag.mode === 'move') {
+    const dt = tOf(p.x) - drag.grabT;
+    const m = Math.round(clamp(mOf(p.y), LO, HI));
+    const len = drag.t1 - drag.t0;
+    drag.label.t0 = clamp(drag.t0 + dt, 0, D.duration_s - len);
+    drag.label.t1 = drag.label.t0 + len;
+    if (m !== drag.label.midi) { drag.label.midi = pc(m); tone(drag.label.midi, 0.16); }
+    dirty = true; document.getElementById('save').disabled = false;
+    draw(); return;
+  }
+  if (drag.mode === 'resize') {
+    drag.label.t1 = clamp(tOf(p.x), drag.label.t0 + 0.03, D.duration_s);
+    dirty = true; document.getElementById('save').disabled = false;
+    draw(); return;
+  }
+  drag.x = p.x; drag.y = p.y; draw();
+});
+
+roll.addEventListener('pointerup', () => {
+  if (drag && drag.mode === 'loop' && !drag.moved) {
+    const t = tOf(drag.x0);
+    if (loop && t >= loop.t0 && t <= loop.t1) loop.on = !loop.on;
+    else if (loop) loop = null;      // a click outside the bar clears it
+    draw();
+  }
+  if (drag && drag.mode === 'beat') {
+    beats.sort((a, b) => a - b);
+    fitTaps();
+  }
+  if (drag && drag.mode === 'box') {
+    const t0 = tOf(Math.min(drag.x0, drag.x)), t1 = tOf(Math.max(drag.x0, drag.x));
+    const mHi = Math.round(mOf(Math.min(drag.y0, drag.y))), mLo = Math.round(mOf(Math.max(drag.y0, drag.y)));
+    if (mode === 'accept') {
+      pushUndo();
+      for (const n of HEARD) {
+        if (n.t1 < t0 || n.t0 > t1 || n.midi < mLo || n.midi > mHi) continue;
+        labels.push({ t0: n.t0, t1: n.t1, midi: n.midi, from: 'accepted' });
+      }
+    } else if (mode === 'erase') {
+      pushUndo();
+      labels = labels.filter(l => l.t1 < t0 || l.t0 > t1 || l.midi < mLo || l.midi > mHi);
+      selected = null;
+    }
+  }
+  drag = null;
+  refresh();
+});
+
+// The eighth a time falls in: the space between two grid lines, from your
+// drawn beats if there are any and the estimate otherwise. Draw the beats
+// first: the estimate has the period right but has been half a beat out on
+// reels, and a note snapped to a wrong grid is a wrong label.
+function slotAt(t) {
+  const g = tapped ? tapped.grid : (D.pulse_grid || []);
+  if (g.length < 2 || t < g[0].t || t >= g[g.length - 1].t) return null;
+  let lo = 0, hi = g.length - 1;
+  while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (g[mid].t <= t) lo = mid; else hi = mid; }
+  return { t0: g[lo].t, t1: g[hi].t };
+}
+
+// Eighths drawn on the grid follow it when the beats move, each to the
+// eighth its middle now falls in. Without this, moving a beat after drawing
+// left notes overlapping their neighbours (three pairs on Tom Sullivan's).
+// Two landing in one eighth keep the one that sat closer to it.
+function resnapEighths() {
+  const bySlot = new Map();
+  for (const l of labels) {
+    if (!l.grid) continue;
+    const mid = (l.t0 + l.t1) / 2, s = slotAt(mid);
+    if (!s) continue;
+    const off = Math.abs(mid - (s.t0 + s.t1) / 2);
+    const key = s.t0.toFixed(4), held = bySlot.get(key);
+    if (!held || off < held.off) bySlot.set(key, { l, s, off });
+  }
+  const keep = new Set([...bySlot.values()].map(v => v.l));
+  labels = labels.filter(l => !l.grid || keep.has(l) || !slotAt((l.t0 + l.t1) / 2));
+  for (const { l, s } of bySlot.values()) { l.t0 = s.t0; l.t1 = s.t1; }
+}
+
+// One click, one eighth. Exact onsets and lengths inside an eighth are not
+// worth the labeller's time for pitch scoring, and a held note is drawn as
+// eighths of the same pitch, which is how the matcher reads the notation too.
+// Clicking a drawn eighth at another pitch re-pitches it; at its own pitch,
+// removes it. Dragging paints each eighth it crosses.
+function paintSlot(p, first) {
+  const t = clamp(tOf(p.x), 0, D.duration_s);
+  const s = slotAt(t);
+  if (!s) return false;
+  if (drag.lastSlot === s.t0) return true;
+  drag.lastSlot = s.t0;
+  const m = pc(Math.round(clamp(mOf(p.y), LO, HI)));
+  const i = labels.findIndex(l => l.grid && Math.abs(l.t0 - s.t0) < 1e-3);
+  if (i >= 0) {
+    if (labels[i].midi !== m) { labels[i].midi = m; tone(m, s.t1 - s.t0); }
+    else if (first) labels.splice(i, 1);
+  } else {
+    labels.push({ t0: s.t0, t1: s.t1, midi: m, from: 'drawn', grid: true });
+    tone(m, s.t1 - s.t0);
+  }
+  draw();
+  return true;
+}
+
+function paint(p, first) {
+  if (paintSlot(p, first)) return;
+  // no grid at this point in the clip: paint freely, as before
+  const t = clamp(tOf(p.x), 0, D.duration_s);
+  const m = Math.round(clamp(mOf(p.y), LO, HI));
+  const w = Math.max(0.03, (view.t1 - view.t0) / 400);
+  const last = labels[labels.length - 1];
+  if (last && last.from === 'drawn' && last.midi === m && t - last.t1 < w * 4) {
+    last.t1 = Math.max(last.t1, t + w);
+  } else {
+    if (!last || last.midi !== m) tone(m, 0.14);
+    labels.push({ t0: t, t1: t + w, midi: m, from: 'drawn' });
+  }
+  draw();
+}
+
+// ---- singing the labels over the music -----------------------------------
+// Tones are scheduled ahead on the audio clock rather than started when a
+// frame notices a label has begun. Polling started every tone up to a frame
+// late, plus the browser's own output delay, and sung labels sounded behind
+// the beat even though the tracker's note starts and the drawn beats both sit
+// within a few ms of the attacks (measured on Tom Sullivan's). The offset
+// slider takes up whatever difference between the two output paths is left.
+const LOOKAHEAD_S = 0.15;
+let sungUpTo = -1;
+let queued = [];
+function resetSung() {
+  sungUpTo = audio.currentTime - 0.001;
+  // a seek or a pause must not leave the next few notes sounding
+  for (const osc of queued) { try { osc.stop(); } catch (_) {} }
+  queued = [];
+}
+let toneOffsetS = 0;
+try { toneOffsetS = (parseFloat(localStorage.getItem('toneOffsetMs')) || 0) / 1000; } catch (_) {}
+function showToneOffset() {
+  document.getElementById('toneoffset').value = Math.round(toneOffsetS * 1000);
+  document.getElementById('toneoffsetv').textContent =
+    (toneOffsetS > 0 ? '+' : '') + Math.round(toneOffsetS * 1000) + 'ms';
+}
+document.getElementById('toneoffset').oninput = e => {
+  toneOffsetS = parseFloat(e.target.value) / 1000;
+  try { localStorage.setItem('toneOffsetMs', String(Math.round(toneOffsetS * 1000))); } catch (_) {}
+  showToneOffset(); resetSung();
+};
+showToneOffset();
+document.getElementById('tapclear').onclick = () => {
+  beats = []; selectedBeat = null; tapped = null;
+  refreshBeatReadout(); draw();
+};
+document.getElementById('tapmeter').onchange = () => { fitTaps(); draw(); };
+document.getElementById('pulsebtn').onclick = () => {
+  showPulse = !showPulse;
+  document.getElementById('pulsebtn').classList.toggle('on', showPulse);
+  draw();
+};
+document.getElementById('sing').onclick = () => {
+  singing = !singing;
+  document.getElementById('sing').classList.toggle('on', singing);
+  resetSung();
+  if (singing) audioCtx();
+};
+// ---- the music on the tones' own clock ----------------------------------
+// Scheduling the tones ahead was not enough: they still sounded late. The
+// <audio> element and Web Audio reach the speakers by separate paths, and
+// the element's currentTime says nothing about how long its own path takes.
+// So at 1x the music is played from the decoded clip through the same
+// AudioContext as the tones, and each tone is started at the exact sample of
+// the music it belongs to. (The browser's decode of the clip lines up with
+// the original recording to the millisecond; measured.) The element keeps
+// running, muted, for the playhead and the controls. At a slower speed it
+// plays aloud again, because it slows without dropping the pitch and a
+// buffer does not.
+let clipBuffer = null, clipSource = null, clipStart = null;   // clipStart: {ctx, pos}
+try {
+  fetch(D.audio_url).then(r => r.arrayBuffer())
+    .then(b => audioCtx().decodeAudioData(b))
+    .then(buf => { clipBuffer = buf; if (!audio.paused) startClip(); })
+    .catch(() => {});
+} catch (_) {}
+function stopClip() {
+  if (clipSource) { try { clipSource.stop(); } catch (_) {} }
+  clipSource = null; clipStart = null;
+}
+function startClip() {
+  stopClip();
+  const ctx = audioCtx();
+  if (!clipBuffer || audio.paused || (audio.playbackRate || 1) !== 1 || ctx.state !== 'running') {
+    audio.muted = false;
+    if (clipBuffer && !audio.paused && ctx.state !== 'running') {
+      ctx.resume().then(() => { if (!audio.paused) startClip(); });
+    }
+    return;
+  }
+  const src = ctx.createBufferSource();
+  src.buffer = clipBuffer;
+  src.connect(ctx.destination);
+  const lead = 0.03;             // time to get the source going
+  const pos = Math.max(0, audio.currentTime + lead);
+  src.start(ctx.currentTime + lead, pos);
+  clipSource = src;
+  clipStart = { ctx: ctx.currentTime + lead, pos };
+  audio.muted = true;
+  resetSung();
+  sungUpTo = pos - 0.001;
+}
+// A missed 'playing' event must not leave the music on the old path for the
+// rest of the take, so every frame checks.
+function clipTick() {
+  const want = clipBuffer && !audio.paused && (audio.playbackRate || 1) === 1;
+  if (want && !clipStart && actx && actx.state === 'running' && audio.readyState >= 3) startClip();
+  const el = document.getElementById('syncmode');
+  const text = clipStart ? 'in sync' : (audio.paused ? '' : 'not in sync');
+  if (el.textContent !== text) el.textContent = text;
+}
+
+// Where the music you are hearing is, in the clip.
+function musicPos() {
+  if (!clipStart) return audio.currentTime;
+  return clipStart.pos + Math.max(0, actx.currentTime - clipStart.ctx);
+}
+
+function singTick() {
+  if (!singing || audio.paused) { if (audio.paused) resetSung(); return; }
+  if (clipStart) { singOnClip(); return; }
+  const t = audio.currentTime, rate = audio.playbackRate || 1;
+  // everything that should sound within the lookahead, at its own moment
+  const horizon = t + (LOOKAHEAD_S - toneOffsetS) * rate;
+  const ctx = audioCtx();
+  queued = queued.filter(o => o._end > ctx.currentTime);
+  for (const l of labels) {
+    if (l.t0 <= sungUpTo || l.t0 > horizon) continue;
+    const osc = tone(l.midi, (l.t1 - l.t0) / rate, (l.t0 - t) / rate + toneOffsetS);
+    if (osc) { osc._end = ctx.currentTime + LOOKAHEAD_S + 2.5; queued.push(osc); }
+  }
+  sungUpTo = Math.max(sungUpTo, horizon);
+}
+function singOnClip() {
+  const ctx = audioCtx(), now = ctx.currentTime;
+  const p = clipStart.pos + (now - clipStart.ctx);
+  const horizon = p + LOOKAHEAD_S - toneOffsetS;
+  queued = queued.filter(o => o._end > now);
+  for (const l of labels) {
+    if (l.t0 <= sungUpTo || l.t0 > horizon) continue;
+    const when = clipStart.ctx + (l.t0 - clipStart.pos) + toneOffsetS;
+    const osc = tone(l.midi, l.t1 - l.t0, when - now);
+    if (osc) { osc._end = now + LOOKAHEAD_S + 2.5; queued.push(osc); }
+  }
+  sungUpTo = Math.max(sungUpTo, horizon);
+}
+
+// ---- zoom and pan --------------------------------------------------------
+function zoomAt(t, factor) {
+  const span = clamp((view.t1 - view.t0) * factor, 0.5, D.duration_s);
+  const frac = clamp((t - view.t0) / (view.t1 - view.t0), 0, 1);
+  const t0 = clamp(t - span * frac, 0, Math.max(0, D.duration_s - span));
+  view = { t0, t1: t0 + span };
+  draw();
+}
+function panBy(seconds) {
+  const span = view.t1 - view.t0;
+  const t0 = clamp(view.t0 + seconds, 0, Math.max(0, D.duration_s - span));
+  view = { t0, t1: t0 + span };
+  draw();
+}
+roll.addEventListener('wheel', e => {
+  e.preventDefault();
+  // A trackpad pinch arrives as a wheel event with ctrlKey set; a two-finger
+  // swipe arrives without it. Zooming on the swipe was backwards and made the
+  // view jump every time you tried to move along the tune.
+  if (e.ctrlKey || e.metaKey) {
+    zoomAt(tOf(evPos(e).x), e.deltaY > 0 ? 1.08 : 0.93);
+    return;
+  }
+  if (e.shiftKey) { zoomAt(tOf(evPos(e).x), e.deltaY > 0 ? 1.15 : 0.87); return; }
+  const delta = Math.abs(e.deltaX) >= Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+  panBy(delta * (view.t1 - view.t0) / 700);
+}, { passive: false });
+mini.addEventListener('pointerdown', e => {
+  const r = mini.getBoundingClientRect();
+  const t = ((e.clientX - r.left) / r.width) * D.duration_s;
+  const span = view.t1 - view.t0;
+  const t0 = clamp(t - span / 2, 0, Math.max(0, D.duration_s - span));
+  view = { t0, t1: t0 + span };
+  draw();
+});
+document.getElementById('zoomin').onclick = () => zoomAt((view.t0 + view.t1) / 2, 0.6);
+document.getElementById('zoomout').onclick = () => zoomAt((view.t0 + view.t1) / 2, 1.7);
+document.getElementById('zoomfit').onclick = () => { view = { t0: 0, t1: D.duration_s }; draw(); };
+
+// ---- modes, transport, saving -------------------------------------------
+function setMode(m) {
+  mode = m;
+  document.querySelectorAll('.mode').forEach(b => b.classList.toggle('on', b.dataset.mode === m));
+  roll.style.cursor = m === 'listen' ? 'pointer' : m === 'draw' ? 'crosshair'
+    : m === 'edit' ? 'default' : m === 'beats' ? 'col-resize' : 'cell';
+}
+document.querySelectorAll('.mode').forEach(b => b.onclick = () => setMode(b.dataset.mode));
+
+const playBtn = document.getElementById('play');
+playBtn.onclick = () => { audioCtx(); audio.paused ? audio.play() : audio.pause(); };
+audio.addEventListener('play', () => { playBtn.textContent = '❚❚ Pause'; resetSung(); });
+audio.addEventListener('playing', startClip);
+audio.addEventListener('pause', () => { playBtn.textContent = '▶ Play'; stopClip(); audio.muted = false; });
+audio.addEventListener('ended', () => { stopClip(); audio.muted = false; });
+audio.addEventListener('seeked', () => { resetSung(); if (!audio.paused) startClip(); });
+audio.addEventListener('timeupdate', () => {
+  document.getElementById('cur').textContent = fmt(audio.currentTime);
+  const t = audio.currentTime, span = view.t1 - view.t0;
+  if (!audio.paused && (t < view.t0 || t > view.t1 - span * 0.15)) {
+    const t0 = clamp(t - span * 0.3, 0, Math.max(0, D.duration_s - span));
+    view = { t0, t1: t0 + span };
+  }
+});
+audio.addEventListener('loadedmetadata', () => document.getElementById('dur').textContent = fmt(audio.duration));
+document.getElementById('rate').onchange = e => { audio.playbackRate = parseFloat(e.target.value); startClip(); };
+
+async function save() {
+  const body = {
+    recording_id: D.recording_id, segment_id: D.segment_id, t0_ms: D.t0_ms,
+    duration_s: D.duration_s, tune_id: D.truth_tune_id, tune_name: D.truth_name,
+    frontend: D.frontend, labels,
+    pulse: tapped ? {
+      period_ms: tapped.period_ms, phase_ms: tapped.phase_ms,
+      grouping: tapped.grouping, eighths_per_bar: tapped.eighths_per_bar,
+      tapped_level: 'beat', beats: tapped.beats,
+      downbeats: tapped.downbeats, bar_anchored: tapped.bar_anchored,
+    } : null,
+  };
+  const res = await fetch('annotation', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const out = await res.json();
+  dirty = false;
+  document.getElementById('save').disabled = true;
+  document.getElementById('agree').textContent = 'saved ' + out.labels + ' labels → ' + out.path;
+}
+document.getElementById('save').onclick = save;
+window.addEventListener('beforeunload', e => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') return;
+  const meta = e.metaKey || e.ctrlKey;
+  if (meta && e.key === 's') { e.preventDefault(); save(); return; }
+  if (meta && e.key === 'z') {
+    e.preventDefault();
+    if (undoStack.length) { labels = JSON.parse(undoStack.pop()); selected = null; refresh(); }
+    return;
+  }
+  const modes = { '1': 'listen', '2': 'edit', '3': 'accept', '4': 'draw', '5': 'erase',
+                  '6': 'beats' };
+  if (modes[e.key]) { setMode(modes[e.key]); return; }
+  // Drawing notes needs the grid right, and fixing the grid is done while
+  // drawing notes, so the two are one key apart.
+  if (e.key === 'Tab') { e.preventDefault(); setMode(mode === 'draw' ? 'beats' : 'draw'); return; }
+  if (e.code === 'Space') { e.preventDefault(); audioCtx(); audio.paused ? audio.play() : audio.pause(); return; }
+  if (e.key === 's') { document.getElementById('sing').click(); return; }
+  if (e.key === 'g') { document.getElementById('pulsebtn').click(); return; }
+  // Rewinding, which drawing beats needs constantly: the same few seconds
+  // played over and over while you decide where the beat actually falls.
+  if (e.key === ',' || e.key === '<') { e.preventDefault(); nudgePlay(-NUDGE_S); return; }
+  if (e.key === '.' || e.key === '>') { e.preventDefault(); nudgePlay(NUDGE_S); return; }
+  if (e.key === 'r') {
+    // back to the left edge of what you are looking at, because when you are
+    // zoomed in on a phrase that is the stretch you want to hear again
+    e.preventDefault(); seek(view.t0); return;
+  }
+  if (e.key === 'Home') { e.preventDefault(); seek(0); return; }
+  if (e.key === 'l') {
+    // with no loop drawn, loop what you are looking at
+    if (!loop) setLoop(view.t0, view.t1); else loop.on = !loop.on;
+    draw(); return;
+  }
+  if ((e.key === 'Backspace' || e.key === 'Delete') && mode === 'beats' && selectedBeat != null) {
+    e.preventDefault();
+    beats.splice(selectedBeat, 1); selectedBeat = null; fitTaps(); draw(); return;
+  }
+  if (e.key === '+' || e.key === '=') { zoomAt((view.t0 + view.t1) / 2, 0.6); return; }
+  if (e.key === '-') { zoomAt((view.t0 + view.t1) / 2, 1.7); return; }
+  if ((e.key === 'Backspace' || e.key === 'Delete') && selected) {
+    e.preventDefault(); pushUndo();
+    labels = labels.filter(l => l !== selected); selected = null; refresh(); return;
+  }
+  if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+    if (!selected) return;
+    e.preventDefault(); pushUndo();
+    // wraps, because there is nowhere above B to go and an octave nudge
+    // would mean nothing on a folded axis
+    selected.midi = pc(selected.midi + (e.key === 'ArrowUp' ? 1 : -1));
+    tone(selected.midi, 0.18);
+    refresh(); return;
+  }
+  if (e.key === 'ArrowLeft') { panBy(-(view.t1 - view.t0) * 0.25); return; }
+  if (e.key === 'ArrowRight') { panBy((view.t1 - view.t0) * 0.25); return; }
+});
+
+function resize() {
+  dpr = window.devicePixelRatio || 1;
+  roll.width = roll.clientWidth * dpr; roll.height = (460 + LOOPH) * dpr;
+  mini.width = mini.clientWidth * dpr; mini.height = 44 * dpr;
+  draw();
+}
+window.addEventListener('resize', resize);
+let staffLastT0 = null, staffLastT1 = null;
+(function tick() {
+  loopTick(); clipTick(); singTick(); draw(); followStaff();
+  if (view.t0 !== staffLastT0 || view.t1 !== staffLastT1) {
+    staffLastT0 = view.t0; staffLastT1 = view.t1;
+    syncStaff(false);
+  }
+  requestAnimationFrame(tick);
+})();
+renderStaff();
+resize();
+setMode('listen');
+if (D.tapped_pulse && beats.length) {
+  document.getElementById('tapmeter').value = meterValue(D.tapped_pulse);
+  fitTaps();
+  dirty = false;
+  document.getElementById('save').disabled = true;
+}
+refresh();
+</script>
+</body>
+</html>

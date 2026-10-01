@@ -1,0 +1,48 @@
+{
+  "name": "follower",
+  "chunk_ms": 2000,
+  "candidate_set": "repertoire",
+  "experts": [
+    {
+      "name": "pitch_yin"
+    },
+    {
+      "name": "pitch_basic_pitch",
+      "window": {
+        "length_ms": 4000,
+        "hop_ms": 2000
+      }
+    },
+    {
+      "name": "pitch_pesto",
+      "window": {
+        "length_ms": 4000,
+        "hop_ms": 2000
+      }
+    },
+    {
+      "name": "pulse"
+    },
+    {
+      "name": "notes",
+      "params": {
+        "sources": [
+          "pitch_yin",
+          "pitch_basic_pitch",
+          "pitch_pesto"
+        ]
+      }
+    },
+    {
+      "name": "follower",
+      "params": {
+        "fallback_top": 20,
+        "nu": 0.05
+      }
+    }
+  ],
+  "scheduler": {
+    "rule": "always"
+  },
+  "_why": "The change-detection decoder on the board (spec, 'Is this still the same tune?'): the three trackers and their notes as in fuse3, then the follower in place of the intervals, matcher, prior and assembler. Every 4 s it scores a pool of candidates on the latest 6 s of notes with the bench's ChunkScorer and steps the bench's Decoder (its defaults, tuned on seven nights). Scheduler 'always': the decoder's belief is near certain quickly, and skipping the trackers when confident would leave it deaf. The full-corpus fallback is on (fallback_top 20, nu 0.05: the player chose to be conservative, 'unknown is better than wrong', 2026-10-01; on the bench nu 0.05 names 6 of 11 new tunes against 8 at nu 0 and ends no known-tune segment on a wrong unfamiliar tune, against 2; measured on the board at nu 0): with each night's new tunes made unknown, eight nights on the board, it names 9 of 14 tunes new to their night against 0 (+9/-1 overall right at the end, 0.895 -> 0.909) and leaves the 593 known-tune segments unchanged (+1/-1). Live, 'known' is the session's repertoire."
+}

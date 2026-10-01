@@ -1,0 +1,88 @@
+{
+  "name": "fuse3",
+  "chunk_ms": 2000,
+  "candidate_set": "repertoire",
+  "experts": [
+    {
+      "name": "music_energy",
+      "params": {
+        "threshold": 0.2
+      }
+    },
+    {
+      "name": "boundary_novelty",
+      "params": {
+        "threshold": 0.55
+      }
+    },
+    {
+      "name": "pitch_yin"
+    },
+    {
+      "name": "pitch_basic_pitch",
+      "window": {
+        "length_ms": 4000,
+        "hop_ms": 2000
+      }
+    },
+    {
+      "name": "pitch_pesto",
+      "window": {
+        "length_ms": 4000,
+        "hop_ms": 2000
+      }
+    },
+    {
+      "name": "pulse"
+    },
+    {
+      "name": "notes",
+      "params": {
+        "sources": [
+          "pitch_yin",
+          "pitch_basic_pitch",
+          "pitch_pesto"
+        ]
+      }
+    },
+    {
+      "name": "intervals",
+      "params": {
+        "window_ms": 120000,
+        "min_notes": 12,
+        "out_of_key_drop": "pair"
+      }
+    },
+    {
+      "name": "matcher",
+      "params": {
+        "candidate_set": "repertoire",
+        "n": 6,
+        "fold_octaves": true,
+        "top_k": 20,
+        "fuse_sources": [
+          "pitch_yin",
+          "pitch_basic_pitch",
+          "pitch_pesto"
+        ]
+      }
+    },
+    {
+      "name": "prior",
+      "params": {
+        "repertoire_weight": 20.0,
+        "played_tonight_weight": 0.2
+      }
+    },
+    {
+      "name": "assembler"
+    }
+  ],
+  "scheduler": {
+    "rule": "skip_expensive_when_confident",
+    "cost_threshold": 5,
+    "conf_threshold": 0.9,
+    "min_evidence_s": 20
+  },
+  "_why": "The baseline with Basic Pitch and PESTO as pitch experts beside yin, fused in the matcher as the bench fuses front ends; the neural experts on 4 s windows. Eight nights, against the baseline with the key filter (v2key): top-1 0.769 -> 0.819 (+39/-14), within 30s 12.0 -> 14.7%, flips 4.14 -> 3.15. The board config the next steps (the aligner on the board) build on; baseline.json is still yin alone."
+}

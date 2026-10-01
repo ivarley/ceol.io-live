@@ -8,6 +8,7 @@ help:
 	@echo ""
 	@echo "Setup:"
 	@echo "  install          Install dependencies"
+	@echo "  lab-install      Install the Ceol Listen lab's extra deps into venv (spec 053)"
 	@echo "  setup-test-db    Set up local test database (creates if not exists)"
 	@echo "  reset-test-db    Drop and recreate test database from scratch"
 	@echo "  seed-test-db     Refresh seed data only (keeps schema)"
@@ -15,6 +16,7 @@ help:
 	@echo ""
 	@echo "Testing:"
 	@echo "  test             Run all tests"
+	@echo "  lab-test         Run the lab's own tests (lab/pytest.ini, no coverage)"
 	@echo "  test-unit        Run unit tests only"
 	@echo "  test-integration Run integration tests only"
 	@echo "  test-functional  Run functional tests only"
@@ -38,6 +40,14 @@ help:
 install:
 	pip install -r requirements.txt
 	pip install -r requirements-test.txt
+
+# Ceol Listen lab (spec 053). Same venv on purpose: lab code imports recording.py
+# and services/; deploy safety comes from Render installing only requirements.txt.
+lab-install:
+	venv/bin/pip install -r lab/requirements.txt
+
+lab-test:
+	cd lab && ../venv/bin/python -m pytest
 
 # Database setup
 setup-test-db:

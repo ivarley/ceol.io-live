@@ -1,0 +1,66 @@
+{
+  "name": "oracle-boundaries",
+  "chunk_ms": 2000,
+  "candidate_set": "repertoire",
+  "experts": [
+    {
+      "name": "music_energy",
+      "params": {
+        "threshold": 0.2
+      }
+    },
+    {
+      "name": "oracle_boundary"
+    },
+    {
+      "name": "pitch_yin"
+    },
+    {
+      "name": "pulse"
+    },
+    {
+      "name": "notes",
+      "params": {
+        "sources": [
+          "pitch_yin"
+        ],
+        "fold_pitch_classes": true,
+        "min_voiced": 0.2
+      }
+    },
+    {
+      "name": "intervals",
+      "params": {
+        "window_ms": 120000,
+        "min_notes": 12,
+        "reset_on_boundary": true
+      }
+    },
+    {
+      "name": "matcher",
+      "params": {
+        "candidate_set": "repertoire",
+        "n": 6,
+        "fold_octaves": true,
+        "top_k": 20
+      }
+    },
+    {
+      "name": "prior",
+      "params": {
+        "repertoire_weight": 20.0,
+        "played_tonight_weight": 0.2
+      }
+    },
+    {
+      "name": "assembler"
+    }
+  ],
+  "scheduler": {
+    "rule": "skip_expensive_when_confident",
+    "cost_threshold": 5,
+    "conf_threshold": 0.9,
+    "min_evidence_s": 20
+  },
+  "_why": "NOT A RESULT. Reads true segment starts from the ground truth to measure what perfect boundary detection would be worth end to end. The board scores well below the bench because its trailing window still holds the previous tune at a change; this says how much of that gap a real detector could close."
+}

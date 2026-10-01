@@ -1,0 +1,7 @@
+# Coverage's `source = .` (pytest's --cov=.) reports never-imported files at 0%,
+# so a package the app's tests never touch drags the threshold down by existing.
+# lab/ (spec 053) is exactly that: it has its own pytest config and its own tests.
+[run]
+omit =
+    lab/*
+    venv/*

@@ -1,0 +1,68 @@
+{
+  "name": "baseline",
+  "chunk_ms": 2000,
+  "candidate_set": "repertoire",
+  "experts": [
+    {
+      "name": "music_energy",
+      "params": {
+        "threshold": 0.2
+      }
+    },
+    {
+      "name": "boundary_novelty",
+      "params": {
+        "threshold": 0.55
+      }
+    },
+    {
+      "name": "pitch_yin"
+    },
+    {
+      "name": "pulse"
+    },
+    {
+      "name": "notes",
+      "params": {
+        "sources": [
+          "pitch_yin"
+        ],
+        "fold_pitch_classes": true,
+        "min_voiced": 0.2
+      }
+    },
+    {
+      "name": "intervals",
+      "params": {
+        "window_ms": 120000,
+        "min_notes": 12
+      }
+    },
+    {
+      "name": "matcher",
+      "params": {
+        "candidate_set": "repertoire",
+        "n": 6,
+        "fold_octaves": true,
+        "top_k": 20
+      }
+    },
+    {
+      "name": "prior",
+      "params": {
+        "repertoire_weight": 20.0,
+        "played_tonight_weight": 0.2
+      }
+    },
+    {
+      "name": "assembler"
+    }
+  ],
+  "scheduler": {
+    "rule": "skip_expensive_when_confident",
+    "cost_threshold": 5,
+    "conf_threshold": 0.9,
+    "min_evidence_s": 20
+  },
+  "_why": "The steel thread, carrying what the retrieval bench found: yin from 160Hz, pitch folded to classes before notes are cut, 6-gram folded intervals, two minutes of trailing context, and the session's own transitions in the prior."
+}
