@@ -422,7 +422,23 @@ anything the harness could have discovered on its own.
 
 ### Where it stands
 
-As of 2026-09-29, on branch `053-ceol-listen-lab`.
+**As of 2026-10-01, when the lab was merged into the app branch.** The
+recogniser works live. `lab listen` runs on a laptop's microphone behind a
+certainty meter (top five tunes, ten-segment bars, "this is it" and "none of
+these"), and the player's first try with it, segments of other session
+recordings played from a phone, went perfectly by their account. Under it:
+the aligner (match by alignment, not shared phrases; "The aligner"), the
+change detector ("Is this still the same tune?", a causal decoder over every
+tune plus "not a tune"), on the board as the follower (0.908 right at the end
+and 84.5% within 30 s over eight nights against the old board's 0.815 and
+14.3%; 0.902 on night 140's held-out segments), a full-corpus fallback for
+tunes new to the session, tune-ness and a charge on hub tunes against
+noodling and chat. A night never tuned on, segmented blind (night 137): 0.855
+right at the end, 64 of 69 tunes named. What comes next is the app: the
+detector on a server, fed by the native app's recorder (`053 files/
+listen-on-the-server.md`); the lab's open items are under "Still open".
+
+The rest of this section is the retrieval bench's history, as of 2026-09-29.
 
 On the retrieval bench, 502 segments over eight nights (recordings 1, 2, 3,
 4, 5, 138, 139, 140), the first two minutes of each:
@@ -2161,6 +2177,21 @@ next lever for it. `lab listen` runs both; the follower expert on the board
 does not yet compute tune-ness (it reads notes, not pitch tracks).
 
 ### Still open
+
+**As of 2026-10-01.** Items 1 to 3 below are done (item 2 became night 137,
+segmented blind; item 3 the follower). Open, in rough order:
+- **Too short to be a tune:** a minimum duration before a detection counts,
+  the player's rule for melodic noodling, which tune-ness leaves at 50-70%
+  of its chunks.
+- **Hub tunes properly:** cluster each tune's settings and score the main
+  version, in place of the blunt per-setting charge.
+- **Walking starts back:** once a tune is named, find where it began (starts
+  are a median 9 s late on night 137); it matters for auto-segmenting
+  recordings, not for the live display.
+- **The aligner's cost model** (item 4 below) for the near misses.
+- **Tune-ness on the board:** the follower reads notes, not pitch tracks, so
+  it does not yet compute it; `lab listen` does.
+- **A night from the app's recorder,** labelled, as the next held-out test.
 
 **The plan, as of 2026-09-29**, merged with `053 files/raising-accuracy.md`
 (which holds the field survey, the miss analysis and the ten angles in

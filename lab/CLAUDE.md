@@ -5,6 +5,15 @@ Read `lab/README.md` (how to run things) and the spec
 worked", and every result so far) before changing anything here. The spec's
 "Where it stands" and "Still open" sections are the current state.
 
+## The lab and the app (2026-10-01)
+
+The lab was merged into the app branch on 2026-10-01 and the detector is to
+be extracted into a package the app's listening service uses (`specs/changes/
+inprogress/053 files/listen-on-the-server.md`). Until that package exists,
+`lab/` is the one implementation; once it does, the lab's tests become its
+agreement tests. Lab experiments still run from this worktree, with its venv
+and `lab/data`.
+
 ## Where the lab lives
 
 In its own worktree, `~/Local/code/ceol.io-053-listen` on branch
