@@ -3987,7 +3987,8 @@
                   </svg>
                 </a>
               {/if}
-              {#if canEdit && !selectMode && r.tune_id}<button class="info-btn" title="Tune details" onclick={(e) => { e.stopPropagation(); openDrawer(r) }}>ⓘ</button>{/if}
+              {#if canEdit && !selectMode && r.tune_id}<button class="info-btn" title="Tune details" onclick={(e) => { e.stopPropagation(); openDrawer(r) }}>ⓘ</button>
+              {:else if canEdit && !selectMode && resolved.has(r.session_instance_tune_id)}<span class="info-btn info-slot" aria-hidden="true"></span>{/if}
               {#if canEdit && !selectMode && selectedId === r.session_instance_tune_id}
                 <!-- selected-row insert points: pills riding the row's edges (like the
                      seam Split/Join pills) that place the cursor before/after this tune -->

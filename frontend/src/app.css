@@ -578,8 +578,11 @@ main.wide .hx-drawer {
 .tune-row .name { flex: 1; min-width: 0; }
 .info-btn {
   background: none; border: none; cursor: pointer;
-  color: var(--muted); font-size: 16px; line-height: 1; padding: 2px 4px;
+  color: var(--muted); font-size: 16px; line-height: 1; padding: 2px 0;
+  width: 26px; text-align: center; flex: none;
 }
+/* an unlinked tune's empty ⓘ place, kept where the row has a ▶ so it stays in the column */
+.info-btn.info-slot { visibility: hidden; cursor: default; }
 .info-btn:hover { color: var(--accent); }
 
 /* ---------- recording playback (spec 050 read side) ---------- */
@@ -588,7 +591,8 @@ main.wide .hx-drawer {
 .play-btn {
   flex: none;
   background: none; border: none; cursor: pointer;
-  color: var(--muted); font-size: 12px; line-height: 1; padding: 3px 5px;
+  color: var(--muted); font-size: 12px; line-height: 1; padding: 3px 0;
+  width: 24px; text-align: center;
   border-radius: 5px;
 }
 .play-btn:hover { color: var(--accent); background: rgba(255, 255, 255, 0.06); }
@@ -599,7 +603,7 @@ main.wide .hx-drawer {
   flex: none;
   display: inline-flex; align-items: center; justify-content: center;
   color: var(--muted); line-height: 0;
-  padding: 3px 5px; border-radius: 5px;
+  width: 26px; padding: 3px 0; border-radius: 5px;
   text-decoration: none;
 }
 .dl-btn:hover { color: var(--accent); background: rgba(255, 255, 255, 0.06); }
@@ -632,9 +636,15 @@ main.wide .hx-drawer {
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 2px 9px;
+  width: 30px; padding: 2px 0; text-align: center;
   cursor: pointer;
 }
+/* The set's ▶ sits over its tunes' ▶ column: in from the card's edge by the card's and
+   row's padding plus what follows a tune's ▶ (watching: ⤓; editing: ⤓, ⓘ and the
+   handle), with the fixed widths above. e2e/live/live-logger-audio.spec.ts measures it;
+   the app does the same (SetCard.playCenter). */
+.set-topright:has(.setplay-btn) { right: 100px; }
+.view-mode .set-topright:has(.setplay-btn) { right: 40px; }
 .setplay-btn:hover { color: var(--accent); border-color: var(--accent); }
 .setplay-btn.on { color: var(--accent); border-color: var(--accent); }
 
