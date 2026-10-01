@@ -165,9 +165,16 @@ class ChunkScorer:
     (`night_features`) and the board (`experts.follower`) both call this,
     so the two loops cannot drift apart here."""
 
-    def __init__(self, index, aligner, window_ms=6000, pool_top=100, keep=6):
+    def __init__(self, index, aligner, window_ms=6000, pool_top=100, keep=6, known=None,
+                 fallback_index=None, fallback_top=20):
         self.index, self.aligner = index, aligner
         self.window_ms, self.pool_top, self.keep = window_ms, pool_top, keep
+        # A tune new to the session: `known` restricts the index's pool to
+        # tunes the session has played (None: all of the index), and
+        # `fallback_index` (the whole corpus) adds its own top
+        # `fallback_top`, marked "outside" so the decoder can discount them.
+        # The aligner must hold sequences for every tune either can propose.
+        self.known, self.fallback_index, self.fallback_top = known, fallback_index, fallback_top
         self.recent = []
         self.last_heard = self.last_queries = self.last_tunes = None
 
@@ -180,6 +187,13 @@ class ChunkScorer:
         rankings = [self.index.lookup(intervals_from_notes(ctx, fold=self.index.fold_octaves),
                                       top_k=self.pool_top) for ctx in ctx_by.values()]
         pool = [r["tune_id"] for r in fuse(rankings, method="sum")[:self.pool_top]]
+        if self.known is not None:
+            pool = [t for t in pool if t in self.known]
+        if self.fallback_index is not None:
+            fb = [self.fallback_index.lookup(intervals_from_notes(ctx, fold=self.fallback_index.fold_octaves),
+                                             top_k=self.fallback_top) for ctx in ctx_by.values()]
+            pool += [r["tune_id"] for r in fuse(fb, method="sum")[:self.fallback_top]
+                     if r["tune_id"] not in pool]
         self.recent = (self.recent + [pool])[-(self.keep + 1):]
         tunes = list(dict.fromkeys(tid for p in reversed(self.recent) for tid in p))
         heard = [([n for n in ctx if n["t0_ms"] >= t - self.window_ms], None)
@@ -187,14 +201,18 @@ class ChunkScorer:
         queries = self.aligner._queries(heard)
         scores = self.aligner.scores(tunes, queries) if (queries and tunes) else {}
         self.last_heard, self.last_queries, self.last_tunes = heard, queries, tunes
-        return {"t_ms": t, "scores": {k: float(v) for k, v in scores.items()},
-                "floor": float(min(scores.values())) if scores else 0.0,
-                "n_notes": sum(len(h[0]) for h in heard)}
+        out = {"t_ms": t, "scores": {k: float(v) for k, v in scores.items()},
+               "floor": float(min(scores.values())) if scores else 0.0,
+               "n_notes": sum(len(h[0]) for h in heard)}
+        if self.fallback_index is not None:
+            known = self.known if self.known is not None else set(self.index.tune_names)
+            out["outside"] = [t for t in scores if t not in known]
+        return out
 
 
 def night_features(rid, frontends, index, aligner, board, hop_ms=4000, window_ms=6000,
                    pool_ms=24000, pool_top=100, keep=6, causal=True, extra_windows=(),
-                   quiet=True):
+                   known=None, fallback_index=None, fallback_top=20, quiet=True):
     """Per chunk: {"t_ms": end of the chunk, "scores": {tune: aligner score},
     "floor": the pool's lowest score, "n_notes"}. Cached per night and
     settings.
@@ -212,7 +230,9 @@ def night_features(rid, frontends, index, aligner, board, hop_ms=4000, window_ms
                 [sorted(f.params.items()) for f in frontends], index.candidate_set, index.n,
                 aligner.params(), hop_ms, window_ms, pool_ms, pool_top, keep)
                + (("causal", "hints-v1") if causal else ())
-               + ((("extra_windows",) + tuple(extra_windows)) if extra_windows else ()))
+               + ((("extra_windows",) + tuple(extra_windows)) if extra_windows else ())
+               + ((("known", tuple(sorted(known))) if known is not None else ()))
+               + ((("fallback", fallback_index.candidate_set, fallback_top)) if fallback_index is not None else ()))
     path = _features_path(rid, key)
     if os.path.exists(path):
         with open(path, "rb") as f:
@@ -227,7 +247,8 @@ def night_features(rid, frontends, index, aligner, board, hop_ms=4000, window_ms
         by_fe, duration = night_notes(frontends, rid, board, quiet=quiet)
         starts = {k: np.array([n["t0_ms"] for n in v]) for k, v in by_fe.items()}
     chunks = []
-    scorer = ChunkScorer(index, aligner, window_ms=window_ms, pool_top=pool_top, keep=keep)
+    scorer = ChunkScorer(index, aligner, window_ms=window_ms, pool_top=pool_top, keep=keep,
+                         known=known, fallback_index=fallback_index, fallback_top=fallback_top)
     for t in range(window_ms, int(duration) + 1, hop_ms):
         if causal:
             a = max(0, t - pool_ms)
@@ -264,11 +285,14 @@ class Decoder:
 
     # defaults: tuned for the 6 s window on the seven tuning nights, causal
     # features (lam 40, tau 0.45, p_switch 0.05, p_none 0.3)
-    def __init__(self, lam=40.0, tau=0.45, p_switch=0.05, p_none=0.3):
-        self.lam, self.tau, self.p_switch, self.p_none = lam, tau, p_switch, p_none
+    def __init__(self, lam=40.0, tau=0.45, p_switch=0.05, p_none=0.3, nu=0.0):
+        # `nu`: a tune outside the session's repertoire (a chunk's "outside",
+        # from the full-corpus fallback) scores `lam * nu` less
+        self.lam, self.tau, self.p_switch, self.p_none, self.nu = lam, tau, p_switch, p_none, nu
 
     def params(self):
-        return {"lam": self.lam, "tau": self.tau, "p_switch": self.p_switch, "p_none": self.p_none}
+        return {"lam": self.lam, "tau": self.tau, "p_switch": self.p_switch, "p_none": self.p_none,
+                "nu": self.nu}
 
     def reset(self):
         self._ids = [NONE]              # state order; row 0 is "not a tune"
@@ -297,6 +321,8 @@ class Decoder:
             rows = np.fromiter((where[t] for t in scores), dtype=np.int64, count=len(scores))
             emit[rows] = self.lam * np.fromiter(scores.values(), dtype=float, count=len(scores))
             in_pool[rows] = True
+            if self.nu and c.get("outside"):
+                emit[[where[t] for t in c["outside"]]] -= self.lam * self.nu
         # a jump lands on "not a tune" or on one of the tunes this chunk's
         # pool proposes; a tune outside the pool can only be stayed in
         total = np.logaddexp.reduce(log)

@@ -2040,6 +2040,34 @@ new to the session (two on night 140) cannot be named.
 The board is no longer the gap: live, it is right within 30 s five times as
 often as it was, and within two points of the bench's answer at the end.
 
+**Tunes new to the session: the full-corpus fallback (2026-09-30).** About
+2% of what is played on a night is a tune the session has not logged on any
+other of its 197 nights (14 of 607 labelled segments). Measured honestly by
+making each night's own new tunes unknown: the pool is the repertoire index
+restricted to tunes logged on OTHER nights, and the whole corpus's index
+adds its own top 20 (`ChunkScorer(known=..., fallback_index=...)`), marked
+"outside" so the decoder can discount them (`Decoder(nu=...)`: an outside
+tune scores `lam * nu` less). "No fallback" is the same features with the
+outside tunes removed, so both sides see identical evidence. Decoder as
+tuned; aligner sequences for the whole corpus.
+
+| | new tunes: right at end | within 30 s | known tunes: right at end | known tunes ending on a wrong outside tune (eight nights) |
+|---|---|---|---|---|
+| no fallback | 0 of 11 | 0 of 11 | 0.935 (510) | |
+| fallback, `nu` 0 | **0.727** (+8/-0, p 0.008) | 0.545 | 0.935 (+1/-1) | 2 |
+| fallback, `nu` 0.05 | 0.545 (+6/-0) | 0.545 | 0.937 (+1/-0) | 0 |
+| fallback, `nu` 0.1 to 0.3 | 0.455 to 0 | | 0.937 | 0 |
+
+The seven tuning nights; leaving each out, every fold chose `nu` 0. Night
+140 with it, held out: The Piper on Horseback right after 29 s and Rocking
+the Boat after 7 s, neither nameable before; Stoney Brennan (also new to the
+session in this simulation) still missed, as the full-corpus retrieval bench
+ranked it second under The Mason's Apron. The aligner is decisive enough that
+an unfamiliar tune rarely out-scores the right known one, so the fallback
+costs the known tunes nothing measurable; `nu` 0.05 is the cautious setting
+if a wrong unfamiliar name is worse than none (it removes both such endings
+and keeps 6 of the 11).
+
 ### Still open
 
 **The plan, as of 2026-09-29**, merged with `053 files/raising-accuracy.md`
