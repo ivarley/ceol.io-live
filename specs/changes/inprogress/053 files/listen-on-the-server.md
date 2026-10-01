@@ -47,7 +47,14 @@ sessions rarely overlap.
   whole-corpus index, the aligner's sequences, the tune-ness model; built by
   the lab and uploaded (S3), loaded at start (tens of seconds).
 - **Kept**: each listened session's audio and taps, as the lab keeps them
-  now, which is how the lab gets new nights to learn from.
+  now, which is how the lab gets new nights to learn from. The phone writes a
+  meter log beside each recording as it goes (one JSON line per state the
+  service sent, per tap, and per tune logged or set ended, with the wall-clock
+  time it happened) and, once the recording is confirmed, PUTs it to
+  `/api/recordings/<id>/listen-log`, which stores it in S3 beside the audio
+  (`recordings/<uuid>/listen-states.jsonl`; GET reads it back, Delete removes
+  it). So what the recogniser showed live can be set against the night's
+  labels afterwards.
 
 ## The spike, measured on Render (2026-10-01)
 

@@ -431,9 +431,10 @@ def test_delete_removes_the_row_its_segments_and_both_objects(
     assert body["segments_deleted"] == 1
     assert body["storage_warning"] is None
 
-    # The master AND the proxy — leaving the proxy behind is a silent storage leak.
-    assert len(deleted) == 2
+    # The master, the proxy and the meter log — leaving any behind is a silent storage leak.
+    assert len(deleted) == 3
     assert any(k.endswith(".stream.m4a") for k in deleted)
+    assert any(k.endswith("/listen-states.jsonl") for k in deleted)
 
     db_cursor.execute("SELECT count(*) FROM recording WHERE recording_id = %s", (recording_id,))
     assert db_cursor.fetchone()[0] == 0
@@ -512,3 +513,65 @@ def test_instance_list_carries_the_tune_count(client, admin_user, committed_inst
     body = resp.get_json()
     assert [i["date"] for i in body["instances"]] == ["2026-04-16", "2026-04-09"]
     assert all(i["tune_count"] == 0 for i in body["instances"])
+
+
+# --------------------------------------------------------------------------- #
+# the listening meter's log (spec 053)
+# --------------------------------------------------------------------------- #
+
+
+@pytest.fixture
+def fake_objects(monkeypatch):
+    """Small objects by key, for the meter log's put and get."""
+    import recording as rec
+
+    objects = {}
+    monkeypatch.setattr(rec, "put_text_object", lambda key, body, content_type=None: objects.__setitem__(key, body))
+    monkeypatch.setattr(rec, "get_object_bytes", lambda key: objects.get(key))
+    return objects
+
+
+def test_listen_log_is_stored_beside_the_audio(client, admin_user, committed_instance, fake_s3, no_ingest, fake_objects):
+    log = b'{"type":"state","t_ms":4000}\n{"type":"tap","action":"this","tune_id":91}\n'
+    with admin_user:
+        created = _create(client, fake_s3).get_json()
+        rid = created["recording_id"]
+        put = client.put(f"/api/recordings/{rid}/listen-log", data=log, content_type="application/x-ndjson")
+        got = client.get(f"/api/recordings/{rid}/listen-log")
+
+    assert put.status_code == 200 and put.get_json()["bytes"] == len(log)
+    (key,) = fake_objects
+    storage_key = next(k for k, _ in fake_s3["signed"])
+    assert key == storage_key.rsplit("/", 1)[0] + "/listen-states.jsonl"
+    assert got.status_code == 200 and got.data == log
+
+
+def test_listen_log_put_again_replaces_it(client, admin_user, committed_instance, fake_s3, no_ingest, fake_objects):
+    with admin_user:
+        rid = _create(client, fake_s3).get_json()["recording_id"]
+        client.put(f"/api/recordings/{rid}/listen-log", data=b"a\n")
+        client.put(f"/api/recordings/{rid}/listen-log", data=b"b\n")
+        got = client.get(f"/api/recordings/{rid}/listen-log")
+    assert got.data == b"b\n"
+
+
+def test_listen_log_refuses_an_empty_body(client, admin_user, committed_instance, fake_s3, no_ingest, fake_objects):
+    with admin_user:
+        rid = _create(client, fake_s3).get_json()["recording_id"]
+        resp = client.put(f"/api/recordings/{rid}/listen-log", data=b"")
+    assert resp.status_code == 400
+    assert not fake_objects
+
+
+def test_listen_log_404s_when_there_is_none(client, admin_user, committed_instance, fake_s3, no_ingest, fake_objects):
+    with admin_user:
+        rid = _create(client, fake_s3).get_json()["recording_id"]
+        resp = client.get(f"/api/recordings/{rid}/listen-log")
+    assert resp.status_code == 404
+
+
+def test_listen_log_404s_for_an_unknown_recording(client, admin_user, committed_instance, fake_objects):
+    with admin_user:
+        resp = client.put("/api/recordings/987654321/listen-log", data=b"x\n")
+    assert resp.status_code == 404
+    assert not fake_objects

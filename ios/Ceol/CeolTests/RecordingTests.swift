@@ -33,6 +33,23 @@ struct RecordingTests {
         print("encoded as \(out.pathExtension): \(try FileManager.default.attributesOfItem(atPath: out.path)[.size] ?? 0) bytes against \(try FileManager.default.attributesOfItem(atPath: caf.path)[.size] ?? 0)")
     }
 
+    /// The meter log is appended to, never replaced: a log reopened after a relaunch
+    /// keeps what came before, one JSON object per line.
+    @Test func theMeterLogAppendsAcrossAReopen() throws {
+        let url = FileManager.default.temporaryDirectory.appending(path: "meter-\(UUID().uuidString).jsonl")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let first = MeterLog(url: url, since: Date())
+        first.write("in", #"{"type":"state","t_ms":4000}"#)
+        first.close()
+        let second = MeterLog(url: url, since: Date())
+        second.write("out", #"{"type":"tap","action":"none","shown":[91]}"#)
+        second.close()
+        let lines = try String(contentsOf: url, encoding: .utf8).split(separator: "\n")
+        #expect(lines.count == 2)
+        let dirs = try lines.map { try #require(JSONSerialization.jsonObject(with: Data($0.utf8)) as? [String: Any])["dir"] as? String }
+        #expect(dirs == ["in", "out"])
+    }
+
     /// Every sample of a file. A compressed file can hand back fewer frames per read than
     /// asked for (FLAC: 65,536), so read until there are no more.
     static func samples(_ file: AVAudioFile) throws -> [Int16] {

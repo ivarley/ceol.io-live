@@ -10,6 +10,9 @@
 //      locked or the app in the background.
 //   3. POST /api/recordings confirms it and starts the server's ingest (waveform,
 //      playback proxy); from there the night opens in the segmenter like any upload.
+//   4. The meter log (what the listening service showed, and the taps; NightRecorder's
+//      MeterLog) goes up to PUT /api/recordings/<id>/listen-log, which keeps it beside
+//      the audio. If that fails it is tried again the next time the app starts.
 //
 // The CAF stays until the upload is confirmed; Delete removes a recording by hand.
 
@@ -34,6 +37,8 @@ struct LocalRecording: Codable, Identifiable, Equatable {
     var recordingID: Int?
     var error: String?
     var uploadName: String?
+    /// The meter log has reached the server.
+    var meterLogSent: Bool?
 }
 
 @Observable
@@ -56,6 +61,8 @@ final class RecordingStore {
 
     func caf(_ r: LocalRecording) -> URL { dir.appending(path: "\(r.id).caf") }
     private func json(_ id: String) -> URL { dir.appending(path: "\(id).json") }
+    /// What the meter showed while this was recorded (ListenWire.logLine).
+    func meterLog(_ id: String) -> URL { dir.appending(path: "\(id).states.jsonl") }
     private func encoded(_ r: LocalRecording) -> URL? { r.uploadName.map { dir.appending(path: $0) } }
 
     var active: LocalRecording? { items.first { [.converting, .uploading, .confirming].contains($0.phase) } }
@@ -85,7 +92,7 @@ final class RecordingStore {
     }
 
     func delete(_ r: LocalRecording) {
-        for url in [caf(r), json(r.id)] + [encoded(r)].compactMap({ $0 }) { try? FileManager.default.removeItem(at: url) }
+        for url in [caf(r), json(r.id), meterLog(r.id)] + [encoded(r)].compactMap({ $0 }) { try? FileManager.default.removeItem(at: url) }
         items.removeAll { $0.id == r.id }
     }
 
@@ -119,6 +126,9 @@ final class RecordingStore {
             } else {
                 Task { await upload(r.id) }
             }
+        }
+        for r in items where r.phase == .uploaded && r.meterLogSent != true {
+            Task { await sendMeterLog(r.id) }
         }
     }
 
@@ -184,6 +194,25 @@ final class RecordingStore {
         r.phase = .uploaded
         save(r)
         if let e = encoded(r) { try? FileManager.default.removeItem(at: e) }
+        await sendMeterLog(id)
+    }
+
+    /// The meter log to the server, once the recording has its id there. A failure is
+    /// left for the next start (resume); the recording itself is already safe.
+    func sendMeterLog(_ id: String) async {
+        guard var r = items.first(where: { $0.id == id }), let recordingID = r.recordingID, let app,
+            !app.simulatedOffline,
+            let data = try? Data(contentsOf: meterLog(id)), !data.isEmpty
+        else { return }
+        var request = app.authorized(URLRequest(url: app.webURL("/api/recordings/\(recordingID)/listen-log")))
+        request.httpMethod = "PUT"
+        request.timeoutInterval = 60
+        request.setValue("application/x-ndjson", forHTTPHeaderField: "Content-Type")
+        guard let (_, response) = try? await URLSession.shared.upload(for: request, from: data),
+            (response as? HTTPURLResponse)?.statusCode == 200
+        else { return }
+        r.meterLogSent = true
+        save(r)
     }
 
     fileprivate func uploaded(_ id: String, error: String?) {

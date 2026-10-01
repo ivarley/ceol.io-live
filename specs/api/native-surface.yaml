@@ -1515,6 +1515,16 @@ paths:
         offset), duration_ms?}. 201 with {recording_id, status, is_clock_anchor, label}.
       security: [{ bearer: [] }]
       responses: { "201": { description: created } }
+  /api/recordings/{recording_id}/listen-log:
+    put:
+      operationId: uploadRecordingListenLog
+      summary: Store what the listening meter showed while this recording was made
+      description: >-
+        Body is ndjson (application/x-ndjson): one line per state the listening service
+        sent and per tap. Replaces any earlier copy. Stored beside the audio in S3.
+      security: [{ bearer: [] }]
+      parameters: [{ name: recording_id, in: path, required: true, schema: { type: integer } }]
+      responses: { "200": { description: ok } }
   /api/session-instances/{session_instance_id}/audio:
     get:
       operationId: getInstanceAudio

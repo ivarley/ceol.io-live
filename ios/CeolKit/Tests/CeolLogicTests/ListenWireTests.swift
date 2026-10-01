@@ -67,4 +67,15 @@ struct ListenWireTests {
         #expect(ListenWire.tapThis(tuneID: 91, shown: [91, 514]) == #"{"action":"this","shown":[91,514],"tune_id":91,"type":"tap"}"#)
         #expect(ListenWire.tapNone(shown: [91]) == #"{"action":"none","shown":[91],"type":"tap"}"#)
     }
+
+    @Test("A meter-log line wraps the message as it came, on one line, with when and which way")
+    func meterLog() throws {
+        let line = ListenWire.logLine(atMs: 4210, dir: "in", message: "{\"type\":\"state\",\n \"t_ms\":4000}")
+        #expect(line.hasSuffix("\n") && line.dropLast().contains("\n") == false)
+        let obj = try #require(JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any])
+        #expect(obj["at_ms"] as? Int == 4210 && obj["dir"] as? String == "in")
+        #expect((obj["msg"] as? [String: Any])?["t_ms"] as? Int == 4000)
+        #expect(ListenWire.event("end_set") == #"{"type":"end_set"}"#)
+        #expect(ListenWire.event("logged", ["tune_id": 91]) == #"{"tune_id":91,"type":"logged"}"#)
+    }
 }

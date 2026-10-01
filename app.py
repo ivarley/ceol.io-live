@@ -33,6 +33,7 @@ from recording_routes import (
     create_recording,
     get_recording_status,
     reprocess_recording,
+    recording_listen_log,
     set_recording_segmenting_complete,
     delete_recording,
     get_session_instances_for_admin,
@@ -1583,6 +1584,13 @@ app.add_url_rule(
     "reprocess_recording",
     reprocess_recording,
     methods=["POST"],
+)
+# What the listening meter showed while the phone recorded (spec 053).
+app.add_url_rule(
+    "/api/recordings/<int:recording_id>/listen-log",
+    "recording_listen_log",
+    recording_listen_log,
+    methods=["GET", "PUT"],
 )
 app.add_url_rule(
     "/api/recordings/<int:recording_id>/segmenting-complete",

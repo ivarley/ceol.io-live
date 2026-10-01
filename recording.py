@@ -231,6 +231,37 @@ def delete_stored_objects(*storage_keys):
     return failures
 
 
+def listen_log_key(storage_key):
+    """Where a recording's meter log lives: beside its audio, in the same uuid folder.
+
+    The log is what the listening service (spec 053) showed while the night was
+    recorded, and every tap on it. Keyed off the audio rather than the row, so it
+    goes wherever the audio goes and needs no column.
+    """
+    return f"{os.path.dirname(storage_key)}/listen-states.jsonl"
+
+
+def put_text_object(storage_key, body, content_type="application/x-ndjson"):
+    """Store a small text object (bytes) under `storage_key`."""
+    problem = check_configured()
+    if problem:
+        raise RuntimeError(problem)
+    get_s3_client().put_object(Bucket=get_s3_bucket(), Key=storage_key, Body=body, ContentType=content_type)
+    return storage_key
+
+
+def get_object_bytes(storage_key):
+    """A small stored object's bytes, or None if it isn't there."""
+    problem = check_configured()
+    if problem:
+        raise RuntimeError(problem)
+    try:
+        obj = get_s3_client().get_object(Bucket=get_s3_bucket(), Key=storage_key)
+    except Exception:  # missing or forbidden: either way there is nothing to return
+        return None
+    return obj["Body"].read()
+
+
 def download_recording(storage_key, dest_path):
     """Pull a stored object down to a local path.
 

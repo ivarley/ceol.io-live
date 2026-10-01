@@ -481,6 +481,60 @@ def reprocess_recording(recording_id):
     return jsonify({"success": True, "recording_id": recording_id, "status": "processing"})
 
 
+# A night's meter log is one state every 4 s of audio plus the taps: about 1 MB for
+# three hours. Anything far past that is not a meter log.
+_LISTEN_LOG_MAX_BYTES = 20 * 1024 * 1024
+
+
+@api_login_required
+def recording_listen_log(recording_id):
+    """PUT/GET /api/recordings/<id>/listen-log — what the meter showed (spec 053).
+
+    The phone records a night and streams it to the listening service at the same
+    time; every state the service sent back, and every tap ("this one", "none of
+    these"), goes into a log beside the recording, one JSON object per line. Once
+    the recording is confirmed the phone PUTs that log here, and it is stored next
+    to the audio in S3. It is the record of what the recogniser thought live,
+    against which the night's labels can later be compared.
+
+    PUT rather than POST so the phone can simply send it again after a failure:
+    the second copy replaces the first. Same permission as the recording itself.
+    """
+    import recording as rec
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        denied = _recording_gate(cur, recording_id)
+        if denied:
+            return denied
+        cur.execute("SELECT storage_key FROM recording WHERE recording_id = %s", (recording_id,))
+        storage_key = cur.fetchone()[0]
+    finally:
+        conn.close()
+
+    key = rec.listen_log_key(storage_key)
+    if request.method == "GET":
+        try:
+            body = rec.get_object_bytes(key)
+        except RuntimeError as exc:
+            return jsonify({"success": False, "error": str(exc)}), 503
+        if body is None:
+            return jsonify({"success": False, "error": "No meter log for this recording"}), 404
+        return Response(body, mimetype="application/x-ndjson")
+
+    body = request.get_data(cache=False)
+    if not body:
+        return jsonify({"success": False, "error": "The log is empty"}), 400
+    if len(body) > _LISTEN_LOG_MAX_BYTES:
+        return jsonify({"success": False, "error": "The log is too large"}), 413
+    try:
+        rec.put_text_object(key, body)
+    except RuntimeError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 503
+    return jsonify({"success": True, "recording_id": recording_id, "bytes": len(body)})
+
+
 @api_login_required
 def set_recording_segmenting_complete(recording_id):
     """PUT /api/recordings/<id>/segmenting-complete — "nothing else in here to place".
@@ -582,7 +636,7 @@ def delete_recording(recording_id):
     finally:
         conn.close()
 
-    failures = rec.delete_stored_objects(storage_key, stream_key)
+    failures = rec.delete_stored_objects(storage_key, stream_key, rec.listen_log_key(storage_key))
 
     return jsonify(
         {

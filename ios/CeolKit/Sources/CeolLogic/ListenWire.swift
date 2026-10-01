@@ -45,6 +45,29 @@ public enum ListenWire {
         json(["type": "tap", "action": "none", "shown": shown])
     }
 
+    // MARK: The meter log
+    //
+    // Beside each recording the phone keeps what the meter showed: one JSON object per
+    // line, {"at_ms":…,"dir":"in"|"out"|"app","msg":{…}}. "in" is a message from the
+    // service exactly as it came (each state carries its own t_ms, the audio time it is
+    // about); "out" is a tap as it was sent; "app" is the phone's own doing (the night it
+    // began, a tune logged, a set ended, the link). at_ms is wall-clock time since the
+    // recording began, so the lag between audio and screen can be read back. Uploaded with
+    // the recording (PUT /api/recordings/<id>/listen-log).
+
+    /// One line of the meter log, newline included. `message` is a JSON object's text.
+    public static func logLine(atMs: Int, dir: String, message: String) -> String {
+        let flat = message.replacingOccurrences(of: "\n", with: " ").replacingOccurrences(of: "\r", with: " ")
+        return "{\"at_ms\":\(atMs),\"dir\":\"\(dir)\",\"msg\":\(flat)}\n"
+    }
+
+    /// An "app" event for the meter log: its type and fields.
+    public static func event(_ type: String, _ fields: [String: Any] = [:]) -> String {
+        var object = fields
+        object["type"] = type
+        return json(object)
+    }
+
     private static func json(_ object: [String: Any]) -> String {
         let data = (try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])) ?? Data()
         return String(decoding: data, as: UTF8.self)

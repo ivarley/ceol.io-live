@@ -11,7 +11,9 @@
 //
 // It records with the screen locked and while you use the rest of the app (the audio
 // background mode), and picks up again after an interruption such as a phone call.
-// The meter's taps ("this is it", "none of these") go back to the service.
+// The meter's taps ("this is it", "none of these") go back to the service. Every state
+// the service sends and every tap also go into a meter log beside the recording
+// (ListenWire.logLine), which is uploaded with it.
 //
 // The audio arrives on a real-time thread, so AudioCapture is nonisolated: a tap block
 // made inside a main-actor type would be main-actor isolated and trap off the main
@@ -52,6 +54,7 @@ final class NightRecorder {
     let fileURL: URL
     @ObservationIgnored private let capture: AudioCapture
     @ObservationIgnored private let streamLink: ListenLink
+    @ObservationIgnored private let meterLog: MeterLog
     @ObservationIgnored private var ticker: Task<Void, Never>?
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
 
@@ -66,15 +69,21 @@ final class NightRecorder {
     /// The tune "this is it" last logged, so a second tap doesn't log it twice.
     private(set) var logged: Int?
 
-    init(instanceID: Int, title: String, recordingID: String, fileURL: URL, listenURL: URL, token: String?,
-         app: AppModel? = nil) {
+    init(instanceID: Int, title: String, recordingID: String, fileURL: URL, meterLogURL: URL, listenURL: URL,
+         token: String?, app: AppModel? = nil) {
         self.instanceID = instanceID
         self.title = title
         self.app = app
         self.recordingID = recordingID
         self.fileURL = fileURL
         capture = AudioCapture(fileURL: fileURL)
-        streamLink = ListenLink(url: listenURL, token: token, streamID: UUID().uuidString, capture: capture)
+        let streamID = UUID().uuidString
+        streamLink = ListenLink(url: listenURL, token: token, streamID: streamID, capture: capture)
+        meterLog = MeterLog(url: meterLogURL, since: startedAt)
+        meterLog.write("app", ListenWire.event("begin", [
+            "instance_id": instanceID, "stream_id": streamID, "recording": recordingID,
+            "started_at": ISO8601DateFormatter().string(from: startedAt),
+        ]))
     }
 
     /// Asks for the microphone, starts the engine, the file and the stream.
@@ -97,9 +106,16 @@ final class NightRecorder {
             night = n
             Task { await n.start() }
         }
+        let log = meterLog
         streamLink.run(
-            onState: { [weak self] s in Task { @MainActor in self?.received(s) } },
-            onLink: { [weak self] l in Task { @MainActor in self?.link = l } })
+            onState: { [weak self] s, text in
+                log.write("in", text)
+                Task { @MainActor in self?.received(s) }
+            },
+            onLink: { [weak self] l in
+                log.write("app", ListenWire.event("link", ["link": "\(l)"]))
+                Task { @MainActor in self?.link = l }
+            })
         ticker = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(250))
@@ -119,6 +135,8 @@ final class NightRecorder {
         capture.stop()
         night?.stop()
         night = nil
+        meterLog.write("app", ListenWire.event("stop"))
+        meterLog.close()
         for o in observers { NotificationCenter.default.removeObserver(o) }
         observers = []
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
@@ -127,7 +145,7 @@ final class NightRecorder {
     func tapThis(_ tuneID: Int) {
         confirmed = tuneID
         confirmedAfterMs = state?.tMs ?? 0
-        streamLink.send(ListenWire.tapThis(tuneID: tuneID, shown: state?.top.map(\.tuneID) ?? []))
+        send(ListenWire.tapThis(tuneID: tuneID, shown: state?.top.map(\.tuneID) ?? []))
         logToNight(tuneID)
     }
 
@@ -141,6 +159,13 @@ final class NightRecorder {
     /// End the night's open set, as the logger's own "end the set" does.
     func endSet() {
         night?.endSet()
+        meterLog.write("app", ListenWire.event("end_set", ["t_ms": state?.tMs ?? 0]))
+    }
+
+    /// A tap to the service, kept in the meter log too.
+    private func send(_ text: String) {
+        meterLog.write("out", text)
+        streamLink.send(text)
     }
 
     /// Add the tapped tune to the end of the night's log. A tune of the session's
@@ -156,14 +181,18 @@ final class NightRecorder {
             night.logTune(["tune_id": JSONValue(tuneID), "name": name], at: .end)
         }
         logged = tuneID
+        meterLog.write("app", ListenWire.event("logged", ["tune_id": tuneID, "outside": c?.outside == true]))
     }
 
     /// Back to the alternatives after a wrong "this is it" (the service keeps listening).
-    func unconfirm() { confirmed = nil }
+    func unconfirm() {
+        confirmed = nil
+        meterLog.write("app", ListenWire.event("unconfirm", ["t_ms": state?.tMs ?? 0]))
+    }
 
     func tapNone() {
         confirmed = nil
-        streamLink.send(ListenWire.tapNone(shown: state?.top.map(\.tuneID) ?? []))
+        send(ListenWire.tapNone(shown: state?.top.map(\.tuneID) ?? []))
     }
 
     private func received(_ s: ListenState) {
@@ -320,7 +349,7 @@ nonisolated final class ListenLink: @unchecked Sendable {
         self.capture = capture
     }
 
-    func run(onState: @escaping @Sendable (ListenState) -> Void, onLink: @escaping @Sendable (NightRecorder.Link) -> Void) {
+    func run(onState: @escaping @Sendable (ListenState, String) -> Void, onLink: @escaping @Sendable (NightRecorder.Link) -> Void) {
         runner = Task.detached { [self] in
             var delay: Double = 1
             while self.isRunning {
@@ -360,7 +389,7 @@ nonisolated final class ListenLink: @unchecked Sendable {
     /// One connection, until it drops: start, then send what's unsent while reading the
     /// service's messages. Returns a reason when the service refused us (no point
     /// hammering it), nil when the connection just dropped.
-    private func session(onState: @escaping @Sendable (ListenState) -> Void,
+    private func session(onState: @escaping @Sendable (ListenState, String) -> Void,
                          onLink: @escaping @Sendable (NightRecorder.Link) -> Void) async -> String? {
         var request = URLRequest(url: url)
         if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
@@ -397,7 +426,7 @@ nonisolated final class ListenLink: @unchecked Sendable {
                     if case .string(let text) = msg {
                         switch ListenMessage.decode(text) {
                         case .ack(let have): self.capture.acknowledge(have)
-                        case .state(let s): onState(s)
+                        case .state(let s): onState(s, text)
                         default: break
                         }
                     }
@@ -421,6 +450,36 @@ nonisolated final class ListenLink: @unchecked Sendable {
             ws.cancel(with: .normalClosure, reason: nil)
             group.cancelAll()
             return nil
+        }
+    }
+}
+
+/// The meter log beside a recording (ListenWire.logLine), appended as things happen so a
+/// crash keeps what came before. Written from the socket's thread and the main actor.
+nonisolated final class MeterLog: @unchecked Sendable {
+    private let lock = NSLock()
+    private var handle: FileHandle?
+    private let since: Date
+
+    init(url: URL, since: Date) {
+        self.since = since
+        if !FileManager.default.fileExists(atPath: url.path) {
+            FileManager.default.createFile(atPath: url.path, contents: nil)
+        }
+        handle = try? FileHandle(forWritingTo: url)
+        _ = try? handle?.seekToEnd()
+    }
+
+    func write(_ dir: String, _ message: String) {
+        let ms = Int(Date().timeIntervalSince(since) * 1000)
+        let line = ListenWire.logLine(atMs: ms, dir: dir, message: message)
+        lock.withLock { try? handle?.write(contentsOf: Data(line.utf8)) }
+    }
+
+    func close() {
+        lock.withLock {
+            try? handle?.close()
+            handle = nil
         }
     }
 }
