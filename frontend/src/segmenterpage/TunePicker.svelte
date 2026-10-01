@@ -1,21 +1,24 @@
 <script>
-  // "Which tune was this?" for a tune the segmenter logged from the audio (spec
-  // 050 "Logging while segmenting"). The search itself is the live logger's own
-  // TuneSearch -- catalog search, thesession.org, paste-a-URL, the preview with
-  // its settings pager, "log as-is" -- unchanged, inside the same slide-in pane
-  // shell the My Tunes and session-tunes add panes use. Nothing here decides what
-  // a pick means: onPick gets TuneSearch's payload and the tune being named, and
-  // the segmenter does the write. The pane floats over the tool, so the audio
-  // keeps playing underneath; closing it without picking leaves the tune as it
-  // was.
+  // "Which tune was this?" for a tune the segmenter logged from the audio, and
+  // "which tune goes here?" for one added from the log (spec 050 "Logging while
+  // segmenting"). The search itself is the live logger's own TuneSearch --
+  // catalog search, thesession.org, paste-a-URL, the preview with its settings
+  // pager, "log as-is" -- unchanged, inside the same slide-in pane shell the My
+  // Tunes and session-tunes add panes use. Nothing here decides what a pick
+  // means: onPick gets TuneSearch's payload and whatever `target` open() was
+  // given (the tune being named, or where a new one goes), and the segmenter
+  // does the write. The pane floats over the tool, so the audio keeps playing
+  // underneath; closing it without picking changes nothing.
   import TuneSearch from '../TuneSearch.svelte'
   import { createPaneState } from '../mytunes/pane.svelte.js'
 
   let { config, onPick, onClosed = () => {} } = $props()
 
   const pane = createPaneState('sg-pick-open')
-  let target = $state(null) // the tune being named
+  let target = $state(null) // what the pick is for: handed back to onPick untouched
   let initialQuery = $state('')
+  let title = $state('Which tune was this?')
+  let actionLabel = $state('＋ Log This Tune')
   // The set's tune type, as the live logger passes it: a soft ranking
   // preference, so a reel's neighbours come up reels first.
   let preferType = $state(null)
@@ -23,12 +26,12 @@
   let busy = $state(false)
   let errorMsg = $state('')
 
-  export function open(tune, opts = {}) {
-    target = tune
+  export function open(what, opts = {}) {
+    target = what
     preferType = opts.preferType ?? null
-    // A tune logged on the night with a real name but no link seeds the search
-    // with that name; the segmenter's own placeholder seeds nothing.
-    initialQuery = tune?.tune_id == null && tune?.name && tune.name !== 'Gan Ainm' ? tune.name : ''
+    initialQuery = opts.initialQuery ?? ''
+    title = opts.title ?? 'Which tune was this?'
+    actionLabel = opts.actionLabel ?? '＋ Log This Tune'
     errorMsg = ''
     busy = false
     pane.open()
@@ -73,14 +76,14 @@
 
 {#if pane.visible}
   <div class="mt-add-backdrop" class:mt-open={pane.shown} onclick={close} aria-hidden="true"></div>
-  <div class="mt-add-pane sg-pick" class:mt-open={pane.shown} role="dialog" aria-label="Which tune was this?">
+  <div class="mt-add-pane sg-pick" class:mt-open={pane.shown} role="dialog" aria-label={title}>
     {#if errorMsg}<p class="mt-error sg-pick-error">{errorMsg}</p>{/if}
     <TuneSearch
       {config}
       variant="modal"
-      title="Which tune was this?"
+      {title}
       allowAsIs={true}
-      actionLabel="＋ Log This Tune"
+      {actionLabel}
       {initialQuery}
       {preferType}
       {history}

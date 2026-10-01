@@ -513,17 +513,77 @@ def test_set_tune_links_renames_and_logs_as_is(client, admin_user, committed_rec
     assert [r[0] for r in db_cursor.fetchall()] == ["add_tune", "change_tune", "change_tune"]
 
 
-def test_unlog_removes_only_what_the_segmenter_logged(client, admin_user, committed_recording, db_cursor):
+def _insert(client, **body):
+    resp = client.post(f"/api/recordings/{REC_ID}/segments", json=body)
+    return resp, resp.get_json()
+
+
+def test_insert_after_and_before_a_row_stay_in_its_set(client, admin_user, committed_recording):
+    """The log's own "add before / add after": [A, B] break [C] break [D]. After A
+    lands between A and B; before C lands at the front of set 2, after the break.
+    Neither is placed -- the mark key does that next."""
+    with admin_user:
+        resp, body = _insert(client, after_record_id=committed_recording["A"], tune_id=95113, name="Delta Hornpipe")
+        assert resp.status_code == 201, body
+        assert body["tune"]["tune_id"] == 95113 and body["tune"]["segment"] is None
+        assert body["tune"]["source"] == "segmenter"
+        assert _names(body["tunes"]) == [
+            ("Alpha Reel", 1), ("Delta Hornpipe", 1), ("Bravo Jig", 1), ("Charlie Polka", 2), ("Delta Hornpipe", 3),
+        ]
+        resp, body = _insert(client, before_record_id=committed_recording["C"], name="The Squirrely Hobbit")
+        assert resp.status_code == 201, body
+        assert body["tune"]["tune_id"] is None  # a bare name is "as-is": unlinked
+        assert _names(body["tunes"])[3:] == [("The Squirrely Hobbit", 2), ("Charlie Polka", 2), ("Delta Hornpipe", 3)]
+        # No identity at all: the tool's placeholder, placed where asked.
+        resp, body = _insert(client, before_record_id=committed_recording["A"])
+        assert resp.status_code == 201, body
+        assert _names(body["tunes"])[:2] == [("Gan Ainm", 1), ("Alpha Reel", 1)]
+
+
+def test_insert_new_set_opens_a_set_of_its_own(client, admin_user, committed_recording, db_cursor):
+    """The + between sets: after A's set (anchor = its last tune, B) the new tune
+    gets a break on each side, so it is set 2 and C's set becomes 3. After the
+    very last tune it opens a set at the end; on an empty night there is nothing
+    to break from, so no break is written."""
+    with admin_user:
+        resp, body = _insert(client, after_record_id=committed_recording["B"], new_set=True, tune_id=95110, name="Alpha Reel")
+        assert resp.status_code == 201, body
+        assert _names(body["tunes"]) == [
+            ("Alpha Reel", 1), ("Bravo Jig", 1), ("Alpha Reel", 2), ("Charlie Polka", 3), ("Delta Hornpipe", 4),
+        ]
+        resp, body = _insert(client, after_record_id=committed_recording["D"], new_set=True)
+        assert resp.status_code == 201, body
+        assert _names(body["tunes"])[-2:] == [("Delta Hornpipe", 4), ("Gan Ainm", 5)]
+        # An anchor that has since been removed is an error, not a silent append.
+        assert _insert(client, after_record_id=999999, new_set=True)[0].status_code == 404
+
+    db_cursor.execute("DELETE FROM session_instance_tune WHERE session_instance_id = %s", (REC_INSTANCE,))
+    db_cursor.connection.commit()
+    with admin_user:
+        resp, body = _insert(client, new_set=True)
+        assert resp.status_code == 201, body
+        assert _names(body["tunes"]) == [("Gan Ainm", 1)]
+    db_cursor.execute(
+        "SELECT COUNT(*) FROM session_instance_tune WHERE session_instance_id = %s AND record_type = 'break'", (REC_INSTANCE,)
+    )
+    assert db_cursor.fetchone()[0] == 0
+
+
+def test_unlog_removes_any_tune_from_the_log(client, admin_user, committed_recording, db_cursor):
     with admin_user:
         _, body = _log_at(client, 130000)
         sit = body["tune"]["session_instance_tune_id"]
-        # A tune written down on the night is not the tool's to remove.
-        resp = client.post(f"/api/recordings/{REC_ID}/segments/{committed_recording['A']}/unlog")
-        assert resp.status_code == 409
         resp = client.post(f"/api/recordings/{REC_ID}/segments/{sit}/unlog")
         assert resp.status_code == 200
         assert "Gan Ainm" not in [t["name"] for t in resp.get_json()["tunes"]]
         assert client.post(f"/api/recordings/{REC_ID}/segments/{sit}/unlog").status_code == 404
+        # A tune written down on the night goes too: the log's own Remove.
+        client.put(f"/api/recordings/{REC_ID}/segments/{committed_recording['A']}", json={"start_ms": 1000})
+        resp = client.post(f"/api/recordings/{REC_ID}/segments/{committed_recording['A']}/unlog")
+        assert resp.status_code == 200
+        assert [t["name"] for t in resp.get_json()["tunes"]] == ["Bravo Jig", "Charlie Polka", "Delta Hornpipe"]
+    db_cursor.execute("SELECT COUNT(*) FROM recording_tune_segment WHERE session_instance_tune_id = %s", (committed_recording["A"],))
+    assert db_cursor.fetchone()[0] == 0
 
     db_cursor.execute("SELECT deleted FROM session_instance_tune WHERE session_instance_tune_id = %s", (sit,))
     assert db_cursor.fetchone()[0] is True  # tombstoned, like any live removal

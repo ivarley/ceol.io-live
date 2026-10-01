@@ -12,10 +12,29 @@
     onpick = () => {},
     onseek = () => {},
     onclear = () => {},
-    onname = () => {}, // an unlinked tune's name was tapped: say which tune it was
-    onunlog = () => {}, // remove a tune the segmenter itself logged (spec 050)
+    onname = () => {}, // a tune's name needs (re)matching: say which tune it was
+    onunlog = () => {}, // take a tune out of the log altogether (spec 050)
+    oninsert = () => {}, // (index, 'before' | 'after'): add a tune next to this one
+    onnewset = () => {}, // (index | null): open a new set after this tune's set
     revealId = null, // a tune to scroll into view (a row just logged from the audio)
   } = $props()
+
+  // The row whose menu is open: tapping a linked tune's name moves the cursor
+  // there AND shows the log's own edits under it (edit / add before / add after
+  // / remove), the way a tap on a row does in the live logger. Tapping the
+  // name again, or any action, closes it. An unlinked row skips the menu:
+  // naming it is the one thing it needs, and it already had the × for removal.
+  let menuId = $state(null)
+
+  function tapName(idx, id) {
+    onpick(idx)
+    menuId = menuId === id ? null : id
+  }
+
+  function act(fn) {
+    menuId = null
+    fn()
+  }
 
   const sets = $derived(groupIntoSets(tunes))
   const indexById = $derived(new Map(tunes.map((t, i) => [t.session_instance_tune_id, i])))
@@ -57,6 +76,7 @@
           class:is-cursor={tune.session_instance_tune_id === cursorId}
           class:is-placed={!!seg}
           class:is-pending={!!tune.segment?.pending}
+          class:has-menu={tune.session_instance_tune_id === menuId}
           data-tune-id={tune.session_instance_tune_id}
         >
           {#if tune.tune_id == null}
@@ -74,7 +94,13 @@
               <span class="tl-type">name it</span>
             </button>
           {:else}
-            <button class="tl-main" type="button" onclick={() => onpick(idx)}>
+            <button
+              class="tl-main"
+              type="button"
+              title="Put the cursor here — and edit, add beside, or remove this tune"
+              aria-expanded={tune.session_instance_tune_id === menuId}
+              onclick={() => tapName(idx, tune.session_instance_tune_id)}
+            >
               <span class="tl-name">{tune.name}</span>
               {#if tune.tune_type}<span class="tl-type">{tune.tune_type}</span>{/if}
             </button>
@@ -123,12 +149,33 @@
             <span class="tl-unplaced">—</span>
           {/if}
         </div>
+        {#if tune.session_instance_tune_id === menuId}
+          <!-- The log's own edits for this row, the live logger's row actions in
+               miniature. Edit is the same re-match the name-it tap runs; before
+               and after add a tune beside this one, unplaced, for the mark key
+               to place; remove takes it out of the log (not just its time). -->
+          <div class="tl-actions" role="group" aria-label="Edit this tune">
+            <button type="button" onclick={() => act(() => onname(idx))}>✎ Edit</button>
+            <button type="button" onclick={() => act(() => oninsert(idx, 'before'))}>＋ Before</button>
+            <button type="button" onclick={() => act(() => oninsert(idx, 'after'))}>＋ After</button>
+            <button type="button" class="danger" onclick={() => act(() => onunlog(idx))}>🗑 Remove</button>
+          </div>
+        {/if}
       {/each}
     </div>
+    <!-- The gap after a set: a new set starts here. Anchored on the set's last
+         tune, so the server puts the tune after it and a break on each side. -->
+    <button
+      class="tl-newset"
+      type="button"
+      title="Start a new set here"
+      onclick={() => act(() => onnewset(indexById.get(set.tunes[set.tunes.length - 1].session_instance_tune_id)))}
+    >＋ new set</button>
   {/each}
 
   {#if !tunes.length}
     <p class="tl-empty">This session instance has no logged tunes, so there is nothing to place.</p>
+    <button class="tl-newset" type="button" title="Log the first tune" onclick={() => onnewset(null)}>＋ add a tune</button>
   {/if}
 </div>
 
@@ -280,5 +327,70 @@
   .tl-empty {
     color: var(--disabled-text, #888);
     padding: 12px 4px;
+  }
+  .tl-row.has-menu {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 5px 5px 0 0;
+  }
+  .tl-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    padding: 3px 6px 8px;
+    margin-bottom: 2px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 0 0 5px 5px;
+  }
+  .tl-actions button {
+    font: inherit;
+    font-size: 0.78rem;
+    line-height: 1;
+    padding: 6px 9px;
+    background: var(--bg-color, #1a1a1a);
+    border: 1px solid var(--border-color, #3a3a3a);
+    border-radius: 6px;
+    color: var(--text-color, #e0e0e0);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .tl-actions button:hover {
+    border-color: var(--primary, #65b464);
+  }
+  .tl-actions button.danger {
+    color: var(--danger, #e85a5a);
+  }
+  .tl-actions button.danger:hover {
+    border-color: var(--danger, #e85a5a);
+  }
+  /* The seam between sets: quiet until wanted, a line with a label on it. */
+  .tl-newset {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    margin: -4px 0 8px;
+    padding: 2px 4px;
+    background: none;
+    border: 0;
+    color: var(--disabled-text, #888);
+    font: inherit;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    opacity: 0.55;
+  }
+  .tl-newset::before,
+  .tl-newset::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: currentColor;
+    opacity: 0.4;
+  }
+  .tl-newset:hover,
+  .tl-newset:focus-visible {
+    opacity: 1;
+    color: var(--primary, #65b464);
   }
 </style>

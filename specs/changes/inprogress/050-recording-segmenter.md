@@ -538,11 +538,27 @@ next — reads naturally, and picking a row in the list still re-marks it.
 `×` on a tune the tool logged removes it from the log (`POST
 .../segments/<sit_id>/unlog`: segment deleted, row tombstoned as a `remove_tune`
 op), not just its placement — an unplaced nameless row is nothing. Undo after a
-mark that logged a tune does the same. Rows logged on the night are refused by
-that endpoint and keep their unplace `×`. All three writes return the whole
-tune list, since an insert can renumber every set after it. Logging a tune
-needs a connection (a row id has to come from the server); everything else in
-the tool still works offline.
+mark that logged a tune does the same. Rows logged on the night keep their
+unplace `×`. All three writes return the whole tune list, since an insert can
+renumber every set after it. Logging a tune needs a connection (a row id has
+to come from the server); everything else in the tool still works offline.
+
+**Editing the log from the list.** Timestamping is where the log's mistakes
+surface, and most of them are one row. Tapping a linked tune's name still puts
+the cursor there, and now also opens the live logger's row actions under it,
+in miniature: **Edit** (the same re-match search the *name it* tap runs, seeded
+with the current name; a pick is the same `PUT .../tune`), **Before** and
+**After** (add a tune beside this one), and **Remove** (`.../unlog`, which now
+takes any tune out of the log, not only the tool's own — the same thing Remove
+means in the logger). A **+ new set** seam sits after every set, and after the
+last. The adds go through the picker *first* — "Add a tune" / "Start a new set
+with…" — so cancelling leaves no placeholder behind, and the row they make is
+unplaced and becomes the cursor: the next mark places it. `POST .../segments`
+takes the placement from the log for these (`after_record_id` /
+`before_record_id`, `new_set` for the seam, anchored on the previous set's last
+tune so a break lands on each side) and the tune's identity from TuneSearch's
+payload; with neither a mark nor an anchor the body is rejected. An unlinked
+row keeps its one-tap flow — naming it is the one thing it needs — and its `×`.
 
 ### Offline
 
@@ -613,9 +629,9 @@ segmenter until both have synced — the two queues are independent by design.
 | `GET /api/recordings/<id>/peaks` | the envelope as raw bytes, cached |
 | `PUT /api/recordings/<id>/segments/<sit_id>` | place or move a tune (upsert) |
 | `DELETE /api/recordings/<id>/segments/<sit_id>` | unplace a tune |
-| `POST /api/recordings/<id>/segments` | log a new, unidentified tune starting here (returns the whole list) |
-| `PUT /api/recordings/<id>/segments/<sit_id>/tune` | say which tune it was (TuneSearch's payload) |
-| `POST /api/recordings/<id>/segments/<sit_id>/unlog` | remove a tune the tool logged, and its placement |
+| `POST /api/recordings/<id>/segments` | log a new tune: at a mark (`start_ms`), or beside a row / as a new set (`after_record_id`, `before_record_id`, `new_set`), optionally identified (TuneSearch's payload); returns the whole list |
+| `PUT /api/recordings/<id>/segments/<sit_id>/tune` | say which tune it was, or change it (TuneSearch's payload) |
+| `POST /api/recordings/<id>/segments/<sit_id>/unlog` | take a tune out of the log, and its placement with it |
 | `GET /api/recordings/<id>/export` | the resolved slice list |
 | `GET /api/session-instances/<id>/recordings` | recordings + progress |
 

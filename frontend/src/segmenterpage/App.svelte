@@ -870,11 +870,69 @@
     return types.size === 1 ? [...types][0] : null
   }
 
+  // Name (or rename) a tune: the picker over the log, seeded with the name the
+  // row already has when that name is worth searching for -- a tune logged on
+  // the night that matched nothing, or a linked tune being corrected. The
+  // tool's own placeholder seeds nothing.
   function openPicker(index) {
     const tune = tunes[index]
     if (!tune || !picker) return
     pickerOpen = true
-    picker.open(tune, { preferType: setTypeAround(index) })
+    picker.open(
+      { kind: 'name', tune },
+      {
+        preferType: setTypeAround(index),
+        initialQuery: tune.name && tune.name !== GAN_AINM ? tune.name : '',
+      },
+    )
+  }
+
+  // Add a tune next to a row (the row menu's "before" / "after"), or open a new
+  // set after one (the + between sets; `newSet`). The picker asks which tune
+  // first, so cancelling leaves no placeholder behind; the row it makes is
+  // unplaced and becomes the cursor, so the next mark places it. With no anchor
+  // (an empty log) the tune simply starts the log.
+  function openInsertPicker(where) {
+    if (!picker) return
+    const anchor = where.index != null ? tunes[where.index] : null
+    const preferType = where.index != null && !where.newSet ? setTypeAround(where.index) : null
+    pickerOpen = true
+    picker.open(
+      { kind: 'insert', anchorId: anchor?.session_instance_tune_id ?? null, side: where.side, newSet: !!where.newSet },
+      { preferType, title: where.newSet ? 'Start a new set with…' : 'Add a tune', actionLabel: '＋ Add This Tune' },
+    )
+  }
+
+  function onPick(target, payload) {
+    return target.kind === 'insert' ? insertTune(target, payload) : nameTune(target.tune, payload)
+  }
+
+  async function insertTune(target, payload) {
+    const body = { ...payload, new_set: target.newSet }
+    if (target.anchorId != null) {
+      body[target.side === 'before' ? 'before_record_id' : 'after_record_id'] = target.anchorId
+    }
+    const res = await fetch(`/api/recordings/${recording.recording_id}/segments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify(body),
+    })
+    const resBody = await res.json().catch(() => ({}))
+    if (!res.ok || !resBody.success) throw new Error(resBody.error || `HTTP ${res.status}`)
+    const previousCursor = cursorIndex
+    const newId = resBody.tune?.session_instance_tune_id ?? null
+    adoptTunes(resBody.tunes, newId)
+    revealId = newId
+    undoStack.push({ kind: 'log', sitId: newId, cursor: previousCursor })
+    const name = resBody.tune?.name ?? 'that tune'
+    flash(
+      resBody.setting_failed
+        ? `Added "${name}" (setting not saved: ${resBody.setting_failed}) — M places it`
+        : `Added "${name}" — M places it at the playhead`,
+    )
+    persistMirror()
+    return true
   }
 
   // The picker's pick: TuneSearch's own payload (tune_id, or thesession_id for
@@ -1263,6 +1321,8 @@
           onclear={(i) => clearAt(i, true)}
           onname={openPicker}
           onunlog={(i) => unlogAt(i)}
+          oninsert={(i, side) => openInsertPicker({ index: i, side })}
+          onnewset={(i) => openInsertPicker({ index: i, side: 'after', newSet: true })}
           {revealId}
         />
       </section>
@@ -1273,7 +1333,7 @@
     <TunePicker
       bind:this={picker}
       config={searchConfig}
-      onPick={(tune, payload) => nameTune(tune, payload)}
+      onPick={onPick}
       onClosed={() => (pickerOpen = false)}
     />
 
