@@ -38,21 +38,31 @@ class Follower(Expert):
         return {"sources": None, "candidate_set": "repertoire", "n": 6, "fold_octaves": True,
                 "window_ms": 6000, "pool_ms": 24000, "pool_top": 100, "keep": 6,
                 "out_of_key_drop": "pair", "ranked_k": 5,
-                "lam": d.lam, "tau": d.tau, "p_switch": d.p_switch, "p_none": d.p_none}
+                "lam": d.lam, "tau": d.tau, "p_switch": d.p_switch, "p_none": d.p_none,
+                # Tunes new to the session (spec, "Tunes new to the session"):
+                # the whole corpus's index adds its own top `fallback_top`
+                # (0: off), scored `lam * nu` less. `known`: "repertoire" (every
+                # tune in the repertoire index, as live) or "other_nights" (the
+                # tunes logged on the session's other nights, which is how it
+                # is measured: tonight's new tunes become unknown).
+                "fallback_top": 0, "nu": 0.0, "known": "repertoire"}
 
     def setup(self):
         from lab.bench.retrieval import Aligner
-        from lab.bench.stream import ChunkScorer, Decoder
+        from lab.bench.stream import Decoder
         from lab.corpus.index import Index
 
         p = self.params
         self.index = Index.load(p["candidate_set"], n=p["n"], fold_octaves=p["fold_octaves"])
+        fallback = p["fallback_top"] > 0
         aligner = Aligner(reading="notes", mode="replace", shortlist=10 ** 6,
-                          candidate_set=p["candidate_set"])
-        self.scorer = ChunkScorer(self.index, aligner, window_ms=p["window_ms"],
-                                  pool_top=p["pool_top"], keep=p["keep"])
+                          candidate_set="all" if fallback else p["candidate_set"])
+        self._fallback_index = (Index.load("all", n=p["n"], fold_octaves=p["fold_octaves"])
+                                if fallback else None)
+        self._aligner = aligner
+        self.scorer = None        # built on the first window, when the manifest is known
         self.decoder = Decoder(lam=p["lam"], tau=p["tau"], p_switch=p["p_switch"],
-                               p_none=p["p_none"])
+                               p_none=p["p_none"], nu=p["nu"])
         self.decoder.reset()
         self._notes = {}          # source -> notes, by start time
         self._showing = None      # tune id on display, or None
@@ -82,14 +92,40 @@ class Follower(Expert):
             out[src] = drop_out_of_key(ctx, self.params["out_of_key_drop"]) if ctx else []
         return out
 
+    def _known(self, view):
+        if self.params["known"] != "other_nights":
+            return None
+        import json
+        from collections import defaultdict
+
+        from lab import paths
+
+        rec = view.manifest["recording"]
+        with open(paths.session_history_path(rec["session_id"])) as f:
+            rows = json.load(f)["rows"]
+        by_inst = defaultdict(set)
+        for r in rows:
+            if r.get("tune_id"):
+                by_inst[r["session_instance_id"]].add(int(r["tune_id"]))
+        return set().union(*(v for k, v in by_inst.items() if k != rec["session_instance_id"]))
+
     def process(self, view, window):
+        from lab.bench.stream import ChunkScorer
+
+        if self.scorer is None:
+            p = self.params
+            self.scorer = ChunkScorer(self.index, self._aligner, window_ms=p["window_ms"],
+                                      pool_top=p["pool_top"], keep=p["keep"], known=self._known(view),
+                                      fallback_index=self._fallback_index,
+                                      fallback_top=p["fallback_top"])
         t = window.t_end_ms
         self._ingest(view, t)
         chunk = self.scorer.score(t, self._context(t))
         state = self.decoder.step(chunk)
         from lab.bench.stream import NONE
 
-        ranked = [{"tune_id": int(tid), "name": self.index.tune_names.get(tid), "conf": round(p, 4)}
+        names = self._fallback_index.tune_names if self._fallback_index is not None else self.index.tune_names
+        ranked = [{"tune_id": int(tid), "name": names.get(tid), "conf": round(p, 4)}
                   for tid, p in self.decoder.belief(self.params["ranked_k"] + 1) if tid != NONE]
         ranked = ranked[:self.params["ranked_k"]]
         clock = window.clock_ms

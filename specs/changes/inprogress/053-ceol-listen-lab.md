@@ -2068,6 +2068,16 @@ costs the known tunes nothing measurable; `nu` 0.05 is the cautious setting
 if a wrong unfamiliar name is worse than none (it removes both such endings
 and keeps 6 of the 11).
 
+On the board (`follower(fallback_top=20, nu=0, known="other_nights")`
+against the same without the fallback, both with each night's new tunes
+unknown), all eight nights, 607 segments: right at the end 0.895 to 0.909
+(+10/-1, p 0.01), within 30 s 83.5% to 84.5% (+6/-0), never right 4.9% to
+3.3% (+10/-0). Tunes new to their night: 0 of 14 to 9 of 14 (+9/-0, p
+0.004); known tunes 543 of 593 either way (+1/-1). Still missed: O'Connell's
+Trip to Parliament, Pete Bradley's, Take Your Churn, Colonel McBain and
+Stoney Brennan. The fallback is on in `lab/configs/follower.json`, where
+"known" is the session's repertoire, as it would be live.
+
 ### Still open
 
 **The plan, as of 2026-09-29**, merged with `053 files/raising-accuracy.md`
