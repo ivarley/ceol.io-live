@@ -23,9 +23,15 @@ One WebSocket per stream, at /listen:
   client -> {"type": "tap", "action": "this" | "none", "tune_id", "shown"}
   client -> {"type": "stop"}  ->  server -> {"type": "done", "have"}
 
-Authentication for the spike is a shared token (LISTEN_TOKEN), sent as
-`Authorization: Bearer <token>` or `?token=`; the app's own bearer tokens
-replace it when the app talks to this.
+  client -> {"type": "skip", "to": <sample>}  after an outage longer than the
+            phone keeps unsent audio: the gap is filled with silence so the
+            detector's clock stays the recording's (the phone's own file is the
+            complete recording)
+
+Authentication: `Authorization: Bearer <token>` (or `?token=`). Either the
+service's own LISTEN_TOKEN (the test client), or a Ceol app token belonging
+to a system admin, checked by asking the web app's /api/me (CEOL_API_URL)
+and cached for ten minutes, so this service needs no database credentials.
 
 Run locally:  uvicorn listen.service:app --port 8440
 """
@@ -84,6 +90,15 @@ class Stream:
             s = self.ahead.pop(k)
             if k + len(s) > self.have:
                 self._append(s[self.have - k:])
+
+    def skip_to(self, to):
+        """Silence up to `to` (at most an hour), for audio the phone no longer has."""
+        gap = min(int(to) - self.have, 3600 * SR)
+        if gap > 0:
+            self._append(np.zeros(gap, dtype=np.float32))
+            self.ahead = {k: v for k, v in self.ahead.items() if k + len(v) > self.have}
+            while self.have in self.ahead:
+                self._append(self.ahead.pop(self.have))
 
     def _append(self, samples):
         if len(samples):
@@ -154,11 +169,37 @@ async def lifespan(app):
         t.cancel()
 
 
-def _authorised(scope_headers, query):
-    if not TOKEN:
-        return True                   # local development
+CEOL_API_URL = os.environ.get("CEOL_API_URL", "https://ceol.io")
+_app_tokens = {}      # token -> (allowed, checked at)
+
+
+def _app_token_allowed(token):
+    """Does this Ceol app token belong to a system admin? The web app says."""
+    import urllib.request
+
+    hit = _app_tokens.get(token)
+    if hit and time.time() - hit[1] < 600:
+        return hit[0]
+    allowed = False
+    try:
+        req = urllib.request.Request(f"{CEOL_API_URL}/api/me",
+                                     headers={"Authorization": f"Bearer {token}", "X-Ceol-Client": "listen"})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            allowed = bool(json.loads(r.read()).get("user", {}).get("is_system_admin"))
+    except Exception:
+        allowed = False
+    _app_tokens[token] = (allowed, time.time())
+    return allowed
+
+
+async def _authorised(scope_headers, query):
     auth = dict(scope_headers).get(b"authorization", b"").decode()
-    return auth == f"Bearer {TOKEN}" or query.get("token") == TOKEN
+    token = auth[7:].strip() if auth.lower().startswith("bearer ") else (query.get("token") or "")
+    if not TOKEN and not token:
+        return True                   # local development
+    if TOKEN and token == TOKEN:
+        return True
+    return bool(token) and await asyncio.to_thread(_app_token_allowed, token)
 
 
 async def health(request):
@@ -174,7 +215,7 @@ async def health(request):
 
 
 async def listen(ws: WebSocket):
-    if not _authorised(ws.scope.get("headers", []), dict(ws.query_params)):
+    if not await _authorised(ws.scope.get("headers", []), dict(ws.query_params)):
         await ws.close(code=4401)
         return
     await ws.accept()
@@ -215,6 +256,9 @@ async def listen(ws: WebSocket):
                     asyncio.create_task(_step_loop(stream))
                 stream.socket = ws
                 await _send(ws, {"type": "ready", "stream_id": sid, "have": stream.have})
+            elif kind == "skip" and stream is not None:
+                stream.skip_to(int(m.get("to", 0)))
+                await _send(ws, {"type": "ack", "have": stream.have})
             elif kind == "tap" and stream is not None:
                 stream.listener.tap(m.get("action"), m.get("tune_id"), m.get("shown") or ())
             elif kind == "stop" and stream is not None:
