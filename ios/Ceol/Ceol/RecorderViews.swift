@@ -129,13 +129,6 @@ struct ListenMeterView: View {
                         Text(error).font(.ceol(size: 14)).foregroundStyle(CeolTokens.danger)
                     }
                     candidates
-                    Button { recorder.tapNone() } label: {
-                        Text("None of these").font(.ceol(size: 17, weight: .semibold))
-                            .frame(maxWidth: .infinity, minHeight: 50)
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(recorder.state?.top.isEmpty ?? true)
-                    .accessibilityIdentifier("meter.none")
                     history
                 }
                 .padding(16)
@@ -165,23 +158,58 @@ struct ListenMeterView: View {
         .preferredColorScheme(.dark)
     }
 
+    /// Names under this belief are greyed, and only a couple of them shown: in practice
+    /// the right one comes up to full almost at once, or in one step.
+    static let lowBelief = 0.05
+    static let lowShown = 2
+
     @ViewBuilder private var candidates: some View {
         let state = recorder.state
-        if state?.notATune == true {
-            Text("Probably not a tune right now (\(Int(((state?.none ?? 0) * 100).rounded()))%)")
-                .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
-        }
-        if let top = state?.top, !top.isEmpty {
-            VStack(spacing: 8) {
-                ForEach(top) { c in
-                    Button { recorder.tapThis(c.tuneID) } label: { row(c, shown: c.tuneID == state?.shown) }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("meter.tune")
+        if let c = recorder.confirmed {
+            // "This is it": just that tune, until the service moves on.
+            let candidate = state?.top.first { $0.tuneID == c }
+            VStack(alignment: .leading, spacing: 10) {
+                if let candidate { row(candidate, shown: true) }
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("Listening for the tune to end or a new tune to start…")
+                        .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
                 }
+                Button("Not this one? Show the others") { recorder.unconfirm() }
+                    .font(.ceol(size: 13)).buttonStyle(.borderless)
+                    .accessibilityIdentifier("meter.unconfirm")
             }
-        } else if state == nil {
-            Text("Waiting for the first few seconds of music.")
-                .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted).padding(.vertical, 20)
+        } else {
+            if state?.notATune == true {
+                Text("Probably not a tune right now (\(Int(((state?.none ?? 0) * 100).rounded()))%)")
+                    .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
+            }
+            if let top = state?.top, !top.isEmpty {
+                let strong = top.filter { $0.p >= Self.lowBelief }
+                let weak = Array(top.filter { $0.p < Self.lowBelief }.prefix(Self.lowShown))
+                VStack(spacing: 8) {
+                    ForEach(strong) { c in
+                        Button { recorder.tapThis(c.tuneID) } label: { row(c, shown: c.tuneID == state?.shown) }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("meter.tune")
+                    }
+                    ForEach(weak) { c in
+                        Button { recorder.tapThis(c.tuneID) } label: { row(c, shown: false).opacity(0.45) }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("meter.tune.weak")
+                    }
+                }
+            } else if state == nil {
+                Text("Waiting for the first few seconds of music.")
+                    .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted).padding(.vertical, 20)
+            }
+            Button { recorder.tapNone() } label: {
+                Text("None of these").font(.ceol(size: 17, weight: .semibold))
+                    .frame(maxWidth: .infinity, minHeight: 50)
+            }
+            .buttonStyle(.bordered)
+            .disabled(state?.top.isEmpty ?? true)
+            .accessibilityIdentifier("meter.none")
         }
     }
 

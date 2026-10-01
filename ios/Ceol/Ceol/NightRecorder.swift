@@ -45,6 +45,9 @@ final class NightRecorder {
     var showingMeter = false
     /// "This is it": the name a person tapped, until the service moves on.
     private(set) var confirmed: Int?
+    /// The audio time of the state on screen when "this is it" was tapped: a state from
+    /// before the service heard the tap must not undo it.
+    @ObservationIgnored private var confirmedAfterMs = 0
 
     let fileURL: URL
     @ObservationIgnored private let capture: AudioCapture
@@ -106,8 +109,12 @@ final class NightRecorder {
 
     func tapThis(_ tuneID: Int) {
         confirmed = tuneID
+        confirmedAfterMs = state?.tMs ?? 0
         streamLink.send(ListenWire.tapThis(tuneID: tuneID, shown: state?.top.map(\.tuneID) ?? []))
     }
+
+    /// Back to the alternatives after a wrong "this is it" (the service keeps listening).
+    func unconfirm() { confirmed = nil }
 
     func tapNone() {
         confirmed = nil
@@ -116,7 +123,8 @@ final class NightRecorder {
 
     private func received(_ s: ListenState) {
         state = s
-        if let c = confirmed, s.shown != c { confirmed = nil }
+        // the service has moved on (a new tune, or nothing playing): the meter again
+        if let c = confirmed, s.tMs > confirmedAfterMs + 4000, s.shown != c || s.notATune { confirmed = nil }
     }
 
     /// A phone call or another app's audio stops the engine; when it ends, start again.
