@@ -289,14 +289,22 @@ class Decoder:
 
     # defaults: tuned for the 6 s window on the seven tuning nights, causal
     # features (lam 40, tau 0.45, p_switch 0.05, p_none 0.3)
-    def __init__(self, lam=40.0, tau=0.45, p_switch=0.05, p_none=0.3, nu=0.0):
+    def __init__(self, lam=40.0, tau=0.45, p_switch=0.05, p_none=0.3, nu=0.0, kappa=0.0,
+                 n_settings=None, gamma=0.0):
         # `nu`: a tune outside the session's repertoire (a chunk's "outside",
-        # from the full-corpus fallback) scores `lam * nu` less
+        # from the full-corpus fallback) scores `lam * nu` less.
+        # `kappa`: a tune with many settings scores `lam * kappa * ln(n)` less,
+        # n its number of settings (`n_settings`, {tune: n}); a hub's best
+        # setting has had more chances at a lucky match.
         self.lam, self.tau, self.p_switch, self.p_none, self.nu = lam, tau, p_switch, p_none, nu
+        self.kappa, self.n_settings = kappa, n_settings or {}
+        # `gamma`: "not a tune" scores `lam * (tau - gamma * logodds / 10)`, the
+        # chunk's "tune_logodds" from `analysis.tuneness` (0 when absent)
+        self.gamma = gamma
 
     def params(self):
         return {"lam": self.lam, "tau": self.tau, "p_switch": self.p_switch, "p_none": self.p_none,
-                "nu": self.nu}
+                "nu": self.nu, "kappa": self.kappa, "gamma": self.gamma}
 
     def reset(self):
         self._ids = [NONE]              # state order; row 0 is "not a tune"
@@ -319,7 +327,7 @@ class Decoder:
         log = self._log
         n = len(ids)
         emit = np.full(n, self.lam * floor)
-        emit[0] = self.lam * self.tau
+        emit[0] = self.lam * (self.tau - self.gamma * c.get("tune_logodds", 0.0) / 10.0)
         in_pool = np.zeros(n, dtype=bool)
         if scores:
             rows = np.fromiter((where[t] for t in scores), dtype=np.int64, count=len(scores))
@@ -327,6 +335,9 @@ class Decoder:
             in_pool[rows] = True
             if self.nu and c.get("outside"):
                 emit[[where[t] for t in c["outside"]]] -= self.lam * self.nu
+            if self.kappa:
+                emit[rows] -= self.lam * self.kappa * np.log(np.fromiter(
+                    (max(1, self.n_settings.get(t, 1)) for t in scores), dtype=float, count=len(scores)))
         # a jump lands on "not a tune" or on one of the tunes this chunk's
         # pool proposes; a tune outside the pool can only be stayed in
         total = np.logaddexp.reduce(log)

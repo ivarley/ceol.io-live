@@ -101,7 +101,13 @@ class Listener:
         # the follower's live configuration (lab/configs/follower.json)
         self.scorer = ChunkScorer(index, aligner, window_ms=6000, fallback_index=fallback,
                                   fallback_top=20)
-        self.decoder = Decoder(nu=0.05)
+        from lab.analysis.tuneness import TunenessModel
+
+        # tune-ness (spec, "Is this a tune at all?") and the charge on hubs
+        self.tuneness = TunenessModel.load()
+        n_settings = {t: len(v) for t, v in aligner.sequences.by_tune.items()}
+        self.decoder = Decoder(nu=0.05, gamma=self.tuneness.meta["gamma"],
+                               kappa=self.tuneness.meta["kappa"], n_settings=n_settings)
         self.decoder.reset()
         self.tracks = {fe.name: ([], [], []) for fe in self.frontends}
         self.tracked_to = 0
@@ -149,6 +155,10 @@ class Listener:
         wide = t < self.widen_until
         self.scorer.pool_top, self.scorer.fallback_top = (300, 60) if wide else (100, 20)
         chunk = self.scorer.score(t, ctx)
+        from lab.analysis.tuneness import audio_features, with_evidence
+
+        frames = {fe.name: self._frames(fe.name) for fe in self.frontends}
+        chunk["tune_logodds"] = self.tuneness.logodds(with_evidence(audio_features(self.store, t, frames), chunk))
         with self.lock:      # a tap changes the decoder from the server's thread
             self._decide(t, chunk, wide, started)
 
@@ -175,6 +185,7 @@ class Listener:
         if now is not None and (not hist or hist[-1]["tune_id"] != now):
             hist.append({"tune_id": now, "name": self.names.get(now), "from_ms": t})
         self.state = {"status": "listening", "t_ms": t, "top": top, "none": round(none, 4),
+                      "tuneness": round(1 / (1 + np.exp(-chunk.get("tune_logodds", 0.0))), 3),
                       "shown": now, "notes": chunk["n_notes"], "wide": wide,
                       "compute_ms": int(1000 * (time.time() - started)),
                       "lag_ms": self.store.duration_ms - t, "history": hist[-8:]}

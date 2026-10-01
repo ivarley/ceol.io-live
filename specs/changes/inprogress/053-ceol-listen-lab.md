@@ -2112,6 +2112,54 @@ display needs its hold (`lab display`) on top of the follower. The two
 levers the night shows: starts that are late by about 9 s, and the hubs
 standing in for "not a tune" over chat and false starts.
 
+### Is this a tune at all? Tune-ness, and a charge on hubs (2026-10-01)
+
+The player's notes on night 137's seven false segments: tuning and random
+noodling, a few phrases of a jig, a piper improvising a slow air with no
+pulse; notes random and broken by silence, too short to be a tune, and
+"musical coherence WAY lower than any tune". Every one was shown as a hub
+(The Frieze Breeches, The Mason's Apron, Tarbolton).
+
+**A charge per setting** (`Decoder(kappa=..., n_settings=...)`: a tune scores
+`lam * kappa * ln(settings)` less; the median repertoire tune has 9 settings,
+The Mason's Apron 35). Chosen leaving each tuning night out, 0.01 every
+fold. The time between tunes shown as a hub: seven nights 6.3% to 2.5%,
+night 140 5.2% to 1.3%, night 137 12.8% to 6.3%; right at the end +3/-2,
++0/-1, +0/-1. At 0.04 and above it wrecks naming (+1/-52), because the right
+tune is often one with many settings: a blunt tool, and clustering each
+tune's settings is the precise one, still to do.
+
+**Tune-ness** (`lab/analysis/tuneness.py`, model `lab/configs/tuneness.json`).
+Per 4 s chunk: the pulse over the last 12 s (strength, how sure the meter
+is), loudness, and per tracker over the last 6 s how much is pitched, how
+spread the pitch classes are and how settled the pitch; with the aligner's
+note count, best score and margin. Labels: a chunk inside a labelled tune
+(5 s from its edges) is a tune, one inside a gap of 15 s or more is not.
+Logistic, class-balanced. Each night scored by a model fitted on the other
+seven: AUC 0.988 to 0.997; audio features alone 0.993 on average; night 137,
+never seen, 0.990. The strongest signs of a tune: loudness, notes, pulse,
+Basic Pitch's voicing, the best tune's score. Much of the gap time is talk
+and silence, which is easy; noodling is the hard minority, so read the AUC
+with the player's stretches below. Into the decoder: "not a tune" scores
+`lam * (tau - gamma * logodds / 10)`.
+
+Both, each chosen leaving each night out (every fold: `gamma` 0.5, `kappa`
+0.01), against neither:
+
+| | time between tunes shown as a tune | right at the end | within 30 s |
+|---|---|---|---|
+| eight nights | 13.0% to **3.1%** | +5/-2 | +6/-5 |
+| night 137, held out | 21.4% to **4.5%** | +1/-1 | +1/-0 |
+
+The player's stretches on night 137, share of chunks shown as a tune, before
+and with both: the piper's air after the Dr O'Neill's snippets 97% to 0%;
+tuning at 4:34 64% to 27%; noodling with phrases of the Cuil Aodha jig 100%
+to 50%; the piper's noodling at 35:58 91% to 55% and at 1:11:22 80% to 70%.
+Noodling that carries real melodic fragments is what is left; the player's
+"too short to be a tune" (a minimum duration before a segment counts) is the
+next lever for it. `lab listen` runs both; the follower expert on the board
+does not yet compute tune-ness (it reads notes, not pitch tracks).
+
 ### Still open
 
 **The plan, as of 2026-09-29**, merged with `053 files/raising-accuracy.md`

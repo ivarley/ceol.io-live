@@ -79,7 +79,8 @@ function render() {
   if (!state) return;
   const lag = state.lag_ms != null ? " · " + (state.lag_ms / 1000).toFixed(1) + " s behind" : "";
   const status = state.status.startsWith("error") ? '<span class="err">' + state.status + "</span>"
-    : "heard " + fmt(state.heard_ms || 0) + lag + (state.wide ? " · searching wider" : "");
+    : "heard " + fmt(state.heard_ms || 0) + lag + (state.wide ? " · searching wider" : "") +
+      (state.tuneness != null ? " · sounds like a tune " + Math.round(state.tuneness * 100) + "%" : "");
   $("status").innerHTML = status;
   const top = state.top || [];
   if (state.none > 0.5) {
