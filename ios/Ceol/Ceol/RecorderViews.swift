@@ -237,3 +237,111 @@ struct RecordNightButton: View {
         .accessibilityIdentifier("night.record")
     }
 }
+
+// MARK: - Recordings on this phone
+
+extension LocalRecording {
+    var statusText: String {
+        switch phase {
+        case .recording: "Recording"
+        case .ready: "Not uploaded yet"
+        case .converting: "Preparing the file…"
+        case .uploading: "Uploading…"
+        case .confirming: "Finishing the upload…"
+        case .uploaded: "Uploaded — open it in the segmenter"
+        case .failed: error ?? "Upload failed"
+        }
+    }
+}
+
+/// While a recording goes up, a slim bar over the tabs (once the recorder's has gone).
+struct UploadBar: View {
+    let store: RecordingStore
+
+    var body: some View {
+        if let r = store.active {
+            HStack(spacing: 10) {
+                Image(systemName: "arrow.up.circle").foregroundStyle(CeolTokens.primary)
+                Text("\(r.title): \(r.statusText)").lineLimit(1).font(.ceol(size: 13))
+                    .foregroundStyle(CeolTokens.textColor)
+                Spacer(minLength: 4)
+                if let p = store.progress[r.id] {
+                    ProgressView(value: p).frame(width: 70).tint(CeolTokens.primary)
+                }
+            }
+            .padding(.horizontal, 14)
+            .frame(height: Self.height)
+            .background(CeolTokens.headerBg)
+            .overlay(alignment: .top) { Rectangle().fill(CeolTokens.borderColor).frame(height: 1) }
+            .accessibilityIdentifier("upload.bar")
+        }
+    }
+
+    static let height: CGFloat = 36
+}
+
+/// Every recording on this phone: its night, length, size and where its upload has got to.
+struct RecordingsView: View {
+    @Environment(AppModel.self) private var app
+    @Environment(\.dismiss) private var dismiss
+    @State private var deleting: LocalRecording?
+
+    var body: some View {
+        let store = app.recordings
+        NavigationStack {
+            List {
+                if store.items.isEmpty {
+                    Text("Nothing recorded on this phone yet. Record a night from its page.")
+                        .font(.ceol(size: 14)).foregroundStyle(CeolTokens.textMuted)
+                }
+                ForEach(store.items) { r in
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(r.title).font(.ceol(size: 16, weight: .semibold)).foregroundStyle(CeolTokens.textColor)
+                        Text(details(r, store)).font(.ceol(size: 12)).foregroundStyle(CeolTokens.textMuted)
+                        Text(r.statusText).font(.ceol(size: 13))
+                            .foregroundStyle(r.phase == .failed ? CeolTokens.danger : r.phase == .uploaded ? CeolTokens.success : CeolTokens.textMuted)
+                        if let p = store.progress[r.id] { ProgressView(value: p).tint(CeolTokens.primary) }
+                        HStack(spacing: 16) {
+                            if [.ready, .failed].contains(r.phase), app.recorder?.recordingID != r.id {
+                                Button(r.phase == .failed ? "Retry upload" : "Upload") { Task { await store.upload(r.id) } }
+                                    .accessibilityIdentifier("recordings.upload")
+                            }
+                            if [.ready, .failed, .uploaded].contains(r.phase), app.recorder?.recordingID != r.id {
+                                Button("Delete", role: .destructive) { deleting = r }
+                            }
+                        }
+                        .buttonStyle(.borderless)
+                        .font(.ceol(size: 14, weight: .semibold))
+                    }
+                    .padding(.vertical, 4)
+                    .listRowBackground(CeolTokens.headerBg)
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(CeolTokens.bgColor)
+            .navigationTitle("Recordings on this phone")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+            .confirmationDialog("Delete this recording from the phone?", isPresented: Binding(
+                get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible
+            ) {
+                Button("Delete", role: .destructive) {
+                    if let d = deleting { store.delete(d) }
+                    deleting = nil
+                }
+            } message: {
+                Text(deleting?.phase == .uploaded ? "It is on the server; this only frees the space here."
+                     : "It hasn't been uploaded: this is the only copy.")
+            }
+        }
+        .preferredColorScheme(.dark)
+    }
+
+    private func details(_ r: LocalRecording, _ store: RecordingStore) -> String {
+        let seconds = Int(store.duration(r))
+        let length = seconds >= 3600 ? String(format: "%d:%02d:%02d", seconds / 3600, seconds / 60 % 60, seconds % 60)
+            : String(format: "%d:%02d", seconds / 60, seconds % 60)
+        let mb = Double(store.bytes(r)) / 1_000_000
+        return "\(r.startedAt.formatted(date: .abbreviated, time: .shortened)) · \(length) · \(String(format: "%.0f MB", mb))"
+    }
+}

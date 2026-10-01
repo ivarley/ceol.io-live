@@ -15,6 +15,7 @@ struct MeView: View {
     @State private var state: LoadState<Profile> = .loading
     @State private var editing = false
     @State private var confirmSignOut = false
+    @State private var showingRecordings = false
     @State private var deleting = false
     @State private var page: WebPage?
     @State private var opening: String?
@@ -33,6 +34,7 @@ struct MeView: View {
                     ProfileSetupView(editing: true) { Task { await load() } }
                 }
                 .sheet(item: $page) { SafariView(url: $0.url).ignoresSafeArea() }
+                .sheet(isPresented: $showingRecordings) { RecordingsView() }
                 .alert("Couldn't open that page", isPresented: Binding(get: { webFailure != nil }, set: { if !$0 { webFailure = nil } })) {
                     Button("OK") {}
                 } message: {
@@ -159,6 +161,14 @@ struct MeView: View {
                 }
                 KitGroup {
                     if user?.isSystemAdmin == true {
+                        // Nights recorded with the app (spec 053), and their uploads.
+                        Button { showingRecordings = true } label: {
+                            KitRow(label: "Recordings on this phone") {
+                                Image(systemName: "chevron.right").foregroundStyle(CeolTokens.textMuted)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("me.recordings")
                         Button { Task { await openWeb("/admin", needsSignIn: true) } } label: {
                             KitRow(label: "Admin") { WebMark(busy: opening == "/admin") }
                         }

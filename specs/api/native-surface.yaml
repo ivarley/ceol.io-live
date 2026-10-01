@@ -1496,6 +1496,25 @@ paths:
       security: [{ bearer: [] }]
       parameters: [{ name: session_instance_id, in: path, required: true, schema: { type: integer } }]
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Recordings" } } } } }
+  /api/recordings/upload-url:
+    post:
+      operationId: createRecordingUploadUrl
+      summary: Sign a direct-to-S3 upload of a night's recording (the app's recorder, spec 053)
+      description: >-
+        Body {session_instance_id, filename, content_type?}. The extension decides the
+        content type, which is signed into the URL and must be sent byte for byte on the
+        PUT. Gated as the segmenter (recording_routes._instance_gate).
+      security: [{ bearer: [] }]
+      responses: { "200": { description: ok } }
+  /api/recordings:
+    post:
+      operationId: createRecording
+      summary: Confirm an uploaded recording and start its ingest
+      description: >-
+        Body {session_instance_id, storage_key, label?, started_at? (ISO 8601 with an
+        offset), duration_ms?}. 201 with {recording_id, status, is_clock_anchor, label}.
+      security: [{ bearer: [] }]
+      responses: { "201": { description: created } }
   /api/session-instances/{session_instance_id}/audio:
     get:
       operationId: getInstanceAudio

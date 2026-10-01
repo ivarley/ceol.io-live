@@ -52,14 +52,14 @@ final class NightRecorder {
     @ObservationIgnored private var ticker: Task<Void, Never>?
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
 
-    init(instanceID: Int, title: String, listenURL: URL, token: String?) throws {
+    /// The recording's id in RecordingStore (its file's base name).
+    let recordingID: String
+
+    init(instanceID: Int, title: String, recordingID: String, fileURL: URL, listenURL: URL, token: String?) {
         self.instanceID = instanceID
         self.title = title
-        let dir = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
-                                              appropriateFor: nil, create: true).appending(path: "Recordings")
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
-        fileURL = dir.appending(path: "night-\(instanceID)-\(stamp).caf")
+        self.recordingID = recordingID
+        self.fileURL = fileURL
         capture = AudioCapture(fileURL: fileURL)
         streamLink = ListenLink(url: listenURL, token: token, streamID: UUID().uuidString, capture: capture)
     }

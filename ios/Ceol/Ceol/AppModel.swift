@@ -73,23 +73,30 @@ final class AppModel {
         return URL(string: "wss://ceol-listen.onrender.com/listen")!
     }
 
+    /// The recordings on this phone, and their uploads (RecordingStore).
+    let recordings = RecordingStore()
+
     /// Start recording a night (stopping any other first), and open the meter.
     func startRecording(instanceID: Int, title: String) {
-        recorder?.stop()
-        do {
-            let r = try NightRecorder(instanceID: instanceID, title: title, listenURL: Self.listenURL,
-                                      token: auth.store.token())
-            recorder = r
-            r.showingMeter = true
-            Task { await r.start() }
-        } catch {
-            recorder = nil
-        }
+        stopRecording()
+        let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
+        let id = "night-\(instanceID)-\(stamp)"
+        recordings.begin(id: id, instanceID: instanceID, title: title)
+        let r = NightRecorder(instanceID: instanceID, title: title, recordingID: id,
+                              fileURL: recordings.dir.appending(path: "\(id).caf"),
+                              listenURL: Self.listenURL, token: auth.store.token())
+        recorder = r
+        r.showingMeter = true
+        Task { await r.start() }
     }
 
+    /// Stop, keep the file, and send it up (RecordingStore.upload).
     func stopRecording() {
-        recorder?.stop()
+        guard let r = recorder else { return }
+        r.stop()
         recorder = nil
+        recordings.finish(id: r.recordingID)
+        Task { await recordings.upload(r.recordingID) }
     }
 
     /// A session, in the Sessions tab.
@@ -189,6 +196,8 @@ final class AppModel {
     private func enter(_ user: User, next: SignedIn.Next?) {
         self.user = user
         phase = user.needsProfileSetup || next == .setupProfile ? .profileSetup : .signedIn
+        // a recording's upload left half-way when the app last went away
+        recordings.resume(app: self)
     }
 
     /// Profile setup saved: reload who we are and carry on.

@@ -91,7 +91,9 @@ struct MainTabView: View {
     @Environment(AppModel.self) private var model
 
     /// The tab bar, and the recorder's bar above it while a night is recorded.
-    private var bottomBars: CGFloat { CeolTabBar.height + (model.recorder == nil ? 0 : RecorderBar.height) }
+    private var bottomBars: CGFloat {
+        CeolTabBar.height + (model.recorder != nil ? RecorderBar.height : model.recordings.active != nil ? UploadBar.height : 0)
+    }
 
     var body: some View {
         @Bindable var model = model
@@ -112,7 +114,11 @@ struct MainTabView: View {
             // shows the recorder above it itself).
             if !model.editingNight {
                 VStack(spacing: 0) {
-                    if let recorder = model.recorder { RecorderBar(recorder: recorder) }
+                    if let recorder = model.recorder {
+                        RecorderBar(recorder: recorder)
+                    } else if model.recordings.active != nil {
+                        UploadBar(store: model.recordings)
+                    }
                     CeolTabBar()
                 }
             }

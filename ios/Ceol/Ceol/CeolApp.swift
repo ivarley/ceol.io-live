@@ -9,6 +9,7 @@ import SwiftUI
 
 @main
 struct CeolApp: App {
+    @UIApplicationDelegateAdaptor(CeolAppDelegate.self) private var delegate
     @State private var model = AppModel()
 
     init() {
@@ -24,6 +25,15 @@ struct CeolApp: App {
                 // Universal Links (applinks:ceol.io) and any URL the app is opened with.
                 .onOpenURL { url in Task { await model.open(url) } }
         }
+    }
+}
+
+/// The system wakes the app when a recording's background upload finishes
+/// (RecordingStore, UploadSession); the session calls this back once it has caught up.
+final class CeolAppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication, handleEventsForBackgroundURLSession identifier: String,
+                     completionHandler: @escaping () -> Void) {
+        if identifier == UploadSession.identifier { UploadSession.systemCompletion = completionHandler }
     }
 }
 
