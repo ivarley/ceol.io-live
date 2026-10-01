@@ -22,7 +22,12 @@ import os
 import numpy as np
 
 FRONTENDS = ("yin", "basic_pitch", "pesto")
-NAMES = (["pulse_strength", "grouping_margin", "duple", "triple", "log_rms"]
+# No loudness (2026-10-01): absolute level depends on the microphone; a phone
+# hearing a laptop sits at the pub recorder's between-tunes level, and the model
+# called that music "not a tune" for 15-20 s (recordings 141, 142). Without it the
+# eight nights' AUC is 0.992 against 0.993, and the gaps shown as a tune 3.9%
+# against 3.1%. `audio_features` still reports log_rms, for inspection.
+NAMES = (["pulse_strength", "grouping_margin", "duple", "triple"]
          + [f"{f}_{k}" for f in FRONTENDS for k in ("voiced", "pc_entropy", "steady")]
          + ["n_notes", "top_score", "margin"])
 PULSE_MS, FRAMES_MS = 12000, 6000
