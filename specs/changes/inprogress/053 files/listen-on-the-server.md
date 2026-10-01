@@ -1,4 +1,4 @@
-# Listening on the server: a design, not yet built
+# Listening on the server: a design, and the first spike
 
 2026-10-01. What it would take to run `lab listen` as a service the app's
 phone page talks to, so a player can hold up a phone at a session. Written
@@ -48,6 +48,19 @@ sessions rarely overlap.
   the lab and uploaded (S3), loaded at start (tens of seconds).
 - **Kept**: each listened session's audio and taps, as the lab keeps them
   now, which is how the lab gets new nights to learn from.
+
+## The spike, measured on Render (2026-10-01)
+
+`listen/` (service, client, data; `listen/README.md`) deployed as
+`ceol-listen` (Pro, 4 GB, Oregon). Night 137 streamed at it in real time from
+a laptop: the same states as the lab on the Mac, step for step; 2.0 to 3.2 s
+of compute per 4 s step (one stream uses about three quarters of real time,
+so two at once would fall behind); states a median 2.9 s after their audio
+was sent; peak memory 1.72 GB (not the 3.0 GB the laptop estimate gave);
+a deliberate drop resumed at exactly the acknowledged sample. The player
+chose the 4 GB tier and FLAC (2026-10-01), and the native app over the web
+page (background recording with the screen locked, a mini-recorder bar
+beside the hand logger, the phone's own file as the master copy).
 
 ## Choices for the player
 

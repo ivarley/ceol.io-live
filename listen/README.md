@@ -78,5 +78,13 @@ and the process's peak memory.
    and read `/health`. The numbers that decide the next step: each 4 s step's
    compute time against 4 s, and peak memory against the instance's 4 GB.
 
-Mirror the service in `render.yaml` once it exists in the dashboard, not before
-(see the note at the top of that file).
+**Measured on Render, 2026-10-01** (`ceol-listen`, Pro, Oregon, from
+`054-native-prereqs`): the same answers as the lab on the laptop, state for
+state (The Roaring Barmaid at 0.62 at 16 s, The Rose in the Heather at 0.99 at
+88 s); each 4 s step takes 2.0 to 3.2 s of compute, about five times the
+laptop's, so one stream uses about three quarters of real time and two at
+once would fall behind; states arrive a median 2.9 s after their audio is
+sent (worst 3.4 s once warm; 48 s for the first stream after a start, while
+the models load and numba compiles); peak memory 1.72 GB; a dropped
+connection resumed at exactly the acknowledged sample. The service is
+mirrored in `render.yaml`.

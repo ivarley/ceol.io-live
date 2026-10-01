@@ -12,7 +12,7 @@
 # things that do exist. Nothing in this file should describe a service you have
 # not seen in the dashboard.
 #
-# Last checked against the dashboard: 2026-08-19.
+# Last checked against the dashboard: 2026-08-19 (ceol-listen added 2026-10-01, when created).
 services:
   - type: web
     name: ceol.io-live
@@ -121,3 +121,29 @@ services:
         value: "18"
       - key: PORT
         value: "10000"
+
+  # The listening service (spec 053; listen/README.md). Created 2026-10-01 for the
+  # spike: a phone streams audio over a WebSocket, the lab's detector answers.
+  # Deploys from the native-app branch, not production, while it is a spike.
+  # LISTEN_TOKEN and the AWS keys are set in the dashboard.
+  - type: web
+    name: ceol-listen
+    env: python
+    branch: 054-native-prereqs
+    buildCommand: "pip install -r listen/requirements.txt && pip install --no-deps basic-pitch==0.4.0"
+    startCommand: "uvicorn listen.service:app --host 0.0.0.0 --port $PORT"
+    plan: pro
+    region: oregon
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.0"
+      - key: AWS_S3_BUCKET
+        value: ceol-io-recordings
+      - key: AWS_S3_REGION
+        value: us-east-1
+      - key: LISTEN_TOKEN
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
