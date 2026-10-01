@@ -90,6 +90,9 @@ enum AppTab: Hashable, CaseIterable {
 struct MainTabView: View {
     @Environment(AppModel.self) private var model
 
+    /// The tab bar, and the recorder's bar above it while a night is recorded.
+    private var bottomBars: CGFloat { CeolTabBar.height + (model.recorder == nil ? 0 : RecorderBar.height) }
+
     var body: some View {
         @Bindable var model = model
         // The bar is laid over the tabs, and every scroll view in them (and on the
@@ -102,11 +105,25 @@ struct MainTabView: View {
             Tab(value: AppTab.tunes) { TunesView() }
             Tab(value: AppTab.me) { MeView() }
         }
-        .contentMargins(.bottom, model.editingNight ? 0 : CeolTabBar.height, for: .scrollContent)
-        .contentMargins(.bottom, model.editingNight ? 0 : CeolTabBar.height, for: .scrollIndicators)
+        .contentMargins(.bottom, model.editingNight ? 0 : bottomBars, for: .scrollContent)
+        .contentMargins(.bottom, model.editingNight ? 0 : bottomBars, for: .scrollIndicators)
         .overlay(alignment: .bottom) {
-            // Logging a night, the composer takes the bottom of the screen.
-            if !model.editingNight { CeolTabBar() }
+            // Logging a night, the composer takes the bottom of the screen (the night
+            // shows the recorder above it itself).
+            if !model.editingNight {
+                VStack(spacing: 0) {
+                    if let recorder = model.recorder { RecorderBar(recorder: recorder) }
+                    CeolTabBar()
+                }
+            }
+        }
+        .fullScreenCover(isPresented: Binding(
+            get: { model.recorder?.showingMeter ?? false },
+            set: { model.recorder?.showingMeter = $0 })
+        ) {
+            if let recorder = model.recorder {
+                ListenMeterView(recorder: recorder) { model.stopRecording() }
+            }
         }
         .ceolSharePane()
         .tint(CeolTokens.primary)

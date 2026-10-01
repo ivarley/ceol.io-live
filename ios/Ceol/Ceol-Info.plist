@@ -13,5 +13,14 @@
 		<key>UIImageRespectsSafeAreaInsets</key>
 		<false/>
 	</dict>
+	<!-- Recording a night (spec 053, NightRecorder): the microphone, and the audio
+	     background mode so it keeps recording with the screen locked or while the rest
+	     of the app is in use. -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Ceol records the session to work out which tunes are being played, and keeps the recording on this phone.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
 </dict>
 </plist>

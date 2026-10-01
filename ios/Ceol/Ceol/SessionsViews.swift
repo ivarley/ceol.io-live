@@ -596,6 +596,12 @@ struct NightView: View {
                     }
                 }
             }
+            if app.user?.isSystemAdmin == true, model?.night != nil, model?.editing != true {
+                // Recording a night for the listener (spec 053): system admins, for now.
+                ToolbarItem(placement: .topBarTrailing) {
+                    RecordNightButton(instanceID: sessionInstanceID, title: title)
+                }
+            }
             if let night = model?.night, let path = night["session_path"]?.stringValue, model?.editing != true {
                 // A night's page is its date, or its id when it has none.
                 ToolbarItem(placement: .topBarTrailing) {
@@ -618,6 +624,7 @@ struct NightView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if let model, model.editing, let log = model.log {
                 VStack(spacing: 6) {
+                    if let recorder = app.recorder { RecorderBar(recorder: recorder) }
                     if model.player.isPlaying {
                         PlayerBar(player: model.player, name: playingName(model)).padding(.horizontal, 16)
                     }

@@ -60,6 +60,37 @@ final class AppModel {
     }
     /// A night is being logged: the tab bar gives way to the composer.
     var editingNight = false
+    /// A night being recorded and listened to (spec 053): the mini bar over the tabs,
+    /// the meter when it's opened. One at a time.
+    var recorder: NightRecorder?
+
+    /// The listening service. A debug build can point elsewhere with
+    /// `-CeolListenURL ws://127.0.0.1:8440/listen`.
+    static var listenURL: URL {
+        #if DEBUG
+            if let s = UserDefaults.standard.string(forKey: "CeolListenURL"), let url = URL(string: s) { return url }
+        #endif
+        return URL(string: "wss://ceol-listen.onrender.com/listen")!
+    }
+
+    /// Start recording a night (stopping any other first), and open the meter.
+    func startRecording(instanceID: Int, title: String) {
+        recorder?.stop()
+        do {
+            let r = try NightRecorder(instanceID: instanceID, title: title, listenURL: Self.listenURL,
+                                      token: auth.store.token())
+            recorder = r
+            r.showingMeter = true
+            Task { await r.start() }
+        } catch {
+            recorder = nil
+        }
+    }
+
+    func stopRecording() {
+        recorder?.stop()
+        recorder = nil
+    }
 
     /// A session, in the Sessions tab.
     func openSession(path: String, name: String) {
