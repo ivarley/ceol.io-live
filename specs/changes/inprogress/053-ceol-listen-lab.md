@@ -2082,6 +2082,36 @@ bench that names 6 of the 11 tuning-night new tunes instead of 8 and ends no
 known-tune segment on a wrong unfamiliar one instead of 2; the board numbers
 above are at `nu` 0.
 
+### A night segmented blind: night 137 (2026-10-01)
+
+The first test on a night nothing was tuned on, treated as unlabelled.
+Recording 137 (instance 404, 2026-04-30, 69 labelled tunes) was replayed raw
+on the board with the follower (corpus fallback, `nu` 0.05) and the night's
+own tunes made unknown; the segmentation (sets, tunes, estimated starts and
+ends, confidence) was written from the board's display alone, with a
+cleaning rule fixed in advance (drop detections shown under 20 s, merge one
+tune's detections across under 20 s), and committed with its hash before any
+label was read (`053 files/blind-r137.md`, `.json`; 7a62ad1). The comparison
+is `053 files/blind-r137-comparison.md`.
+
+| | night 137, blind |
+|---|---|
+| right when the tune ends (`lab eval`) | 59 of 69 (0.855), top-5 0.899 |
+| first right, median | 15 s |
+| changes of answer a tune | 2.6 |
+| labelled tunes named right in their span / wrong / never | 64 / 4 / 1 |
+| start error when right | median +9 s (middle half +5.5 to +17 s); 55% within 10 s |
+| labelled sets starting within 30 s of a detected one | 25 of 29 (35 detected) |
+| segments over no labelled tune | 7, every one a hub (Frieze Breeches 4, Mason's Apron 2, Tarbolton 1) |
+| tunes new to the session | 1 of 3 named |
+
+Against night 140's held-out segments (0.902) it is three to five points
+lower, on a night that shares nothing with the tuning but the session.
+Raw, the display made 280 detections, 189 of them under 20 s: the live
+display needs its hold (`lab display`) on top of the follower. The two
+levers the night shows: starts that are late by about 9 s, and the hubs
+standing in for "not a tune" over chat and false starts.
+
 ### Still open
 
 **The plan, as of 2026-09-29**, merged with `053 files/raising-accuracy.md`
