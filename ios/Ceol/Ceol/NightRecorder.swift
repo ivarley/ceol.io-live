@@ -58,9 +58,19 @@ final class NightRecorder {
     /// The recording's id in RecordingStore (its file's base name).
     let recordingID: String
 
-    init(instanceID: Int, title: String, recordingID: String, fileURL: URL, listenURL: URL, token: String?) {
+    /// The night's live log, kept open while recording so "this is it" can log the tune
+    /// (NightModel.logTune: the same path, ops and offline queue as logging by hand, as
+    /// the person using the app). The night's screen, if open, hears it on the stream.
+    @ObservationIgnored private var night: NightModel?
+    @ObservationIgnored private weak var app: AppModel?
+    /// The tune "this is it" last logged, so a second tap doesn't log it twice.
+    private(set) var logged: Int?
+
+    init(instanceID: Int, title: String, recordingID: String, fileURL: URL, listenURL: URL, token: String?,
+         app: AppModel? = nil) {
         self.instanceID = instanceID
         self.title = title
+        self.app = app
         self.recordingID = recordingID
         self.fileURL = fileURL
         capture = AudioCapture(fileURL: fileURL)
@@ -82,6 +92,11 @@ final class NightRecorder {
             return
         }
         watchInterruptions()
+        if let app {
+            let n = NightModel(instanceID: instanceID, app: app)
+            night = n
+            Task { await n.start() }
+        }
         streamLink.run(
             onState: { [weak self] s in Task { @MainActor in self?.received(s) } },
             onLink: { [weak self] l in Task { @MainActor in self?.link = l } })
@@ -102,6 +117,8 @@ final class NightRecorder {
         ticker?.cancel()
         streamLink.stop()
         capture.stop()
+        night?.stop()
+        night = nil
         for o in observers { NotificationCenter.default.removeObserver(o) }
         observers = []
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
@@ -111,6 +128,22 @@ final class NightRecorder {
         confirmed = tuneID
         confirmedAfterMs = state?.tMs ?? 0
         streamLink.send(ListenWire.tapThis(tuneID: tuneID, shown: state?.top.map(\.tuneID) ?? []))
+        logToNight(tuneID)
+    }
+
+    /// Add the tapped tune to the end of the night's log. A tune of the session's
+    /// repertoire goes in by its id; one the whole-corpus fallback found goes in by its
+    /// thesession.org id, as the composer logs a pasted thesession link.
+    private func logToNight(_ tuneID: Int) {
+        guard logged != tuneID, let night, night.log != nil else { return }
+        let c = state?.top.first { $0.tuneID == tuneID }
+        let name: JSONValue = c?.name.map(JSONValue.string) ?? .null
+        if c?.outside == true {
+            night.logTune(["thesession_id": JSONValue(tuneID), "name": name], at: .end)
+        } else {
+            night.logTune(["tune_id": JSONValue(tuneID), "name": name], at: .end)
+        }
+        logged = tuneID
     }
 
     /// Back to the alternatives after a wrong "this is it" (the service keeps listening).

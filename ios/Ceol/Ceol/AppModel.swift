@@ -84,7 +84,7 @@ final class AppModel {
         recordings.begin(id: id, instanceID: instanceID, title: title)
         let r = NightRecorder(instanceID: instanceID, title: title, recordingID: id,
                               fileURL: recordings.dir.appending(path: "\(id).caf"),
-                              listenURL: Self.listenURL, token: auth.store.token())
+                              listenURL: Self.listenURL, token: auth.store.token(), app: self)
         recorder = r
         r.showingMeter = true
         Task { await r.start() }

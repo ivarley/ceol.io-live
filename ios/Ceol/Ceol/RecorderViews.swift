@@ -170,6 +170,10 @@ struct ListenMeterView: View {
             let candidate = state?.top.first { $0.tuneID == c }
             VStack(alignment: .leading, spacing: 10) {
                 if let candidate { row(candidate, shown: true) }
+                if recorder.logged == c {
+                    Label("Logged to the night", systemImage: "checkmark")
+                        .font(.ceol(size: 13, weight: .semibold)).foregroundStyle(CeolTokens.success)
+                }
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
                     Text("Listening for the tune to end or a new tune to start…")
