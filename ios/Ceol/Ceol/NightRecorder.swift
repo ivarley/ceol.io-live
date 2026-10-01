@@ -61,7 +61,7 @@ final class NightRecorder {
     /// The night's live log, kept open while recording so "this is it" can log the tune
     /// (NightModel.logTune: the same path, ops and offline queue as logging by hand, as
     /// the person using the app). The night's screen, if open, hears it on the stream.
-    @ObservationIgnored private var night: NightModel?
+    private var night: NightModel?
     @ObservationIgnored private weak var app: AppModel?
     /// The tune "this is it" last logged, so a second tap doesn't log it twice.
     private(set) var logged: Int?
@@ -129,6 +129,18 @@ final class NightRecorder {
         confirmedAfterMs = state?.tMs ?? 0
         streamLink.send(ListenWire.tapThis(tuneID: tuneID, shown: state?.top.map(\.tuneID) ?? []))
         logToNight(tuneID)
+    }
+
+    /// Nothing is being played as a tune and the night's last set is still open (it has a
+    /// tune, and no break after it): offer to end it.
+    var canEndSet: Bool {
+        guard state?.notATune == true, let last = night?.log?.ordered.last else { return false }
+        return !last.isBreak
+    }
+
+    /// End the night's open set, as the logger's own "end the set" does.
+    func endSet() {
+        night?.endSet()
     }
 
     /// Add the tapped tune to the end of the night's log. A tune of the session's

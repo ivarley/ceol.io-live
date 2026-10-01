@@ -75,6 +75,25 @@ struct RecorderBar: View {
     static let height: CGFloat = 56
 
     var body: some View {
+        HStack(spacing: 0) {
+            openButton
+            if recorder.canEndSet {
+                Button { recorder.endSet() } label: {
+                    Text("End set").font(.ceol(size: 13, weight: .semibold))
+                        .padding(.horizontal, 10).padding(.vertical, 6)
+                        .background(CeolTokens.primaryFill, in: Capsule())
+                        .foregroundStyle(.white)
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, 12)
+                .accessibilityIdentifier("recorder.endSet")
+            }
+        }
+        .background(CeolTokens.headerBg)
+        .overlay(alignment: .top) { Rectangle().fill(CeolTokens.borderColor).frame(height: 1) }
+    }
+
+    private var openButton: some View {
         Button { recorder.showingMeter = true } label: {
             HStack(spacing: 10) {
                 RecordingDot(level: recorder.level)
@@ -97,8 +116,6 @@ struct RecorderBar: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .background(CeolTokens.headerBg)
-        .overlay(alignment: .top) { Rectangle().fill(CeolTokens.borderColor).frame(height: 1) }
         .accessibilityLabel("Recording, \(recorder.headline). Show the meter.")
         .accessibilityIdentifier("recorder.bar")
     }
@@ -187,6 +204,16 @@ struct ListenMeterView: View {
             if state?.notATune == true {
                 Text("Probably not a tune right now (\(Int(((state?.none ?? 0) * 100).rounded()))%)")
                     .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
+            }
+            if recorder.canEndSet {
+                Button { recorder.endSet() } label: {
+                    Label("End the set", systemImage: "stop.circle")
+                        .font(.ceol(size: 17, weight: .semibold))
+                        .frame(maxWidth: .infinity, minHeight: 50)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(CeolTokens.primaryFill)
+                .accessibilityIdentifier("meter.endSet")
             }
             if let top = state?.top, !top.isEmpty {
                 let strong = top.filter { $0.p >= Self.lowBelief }
