@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ceol Listen</title>
+<style>
+  :root {
+    --bg: #14161a; --panel: #1d2026; --text: #e8e6e1; --dim: #8b8f98; --line: #2c3038;
+    --red: #d9534f; --orange: #e8913a; --green: #4caf6e; --off: #30343c; --accent: #6aa7ff;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  main { max-width: 640px; margin: 0 auto; padding: 16px; }
+  header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  h1 { font-size: 20px; margin: 0; font-weight: 600; }
+  .status { color: var(--dim); font-size: 14px; font-variant-numeric: tabular-nums; }
+  .start { margin: 14px 0; display: flex; gap: 8px; flex-wrap: wrap; }
+  button { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line);
+           border-radius: 10px; padding: 10px 14px; cursor: pointer; }
+  button.primary { background: var(--accent); color: #0b1220; border-color: var(--accent); font-weight: 600; }
+  .now { color: var(--dim); margin: 10px 0 6px; font-size: 14px; min-height: 20px; }
+  .now b { color: var(--text); }
+  .rows { display: flex; flex-direction: column; gap: 8px; }
+  .row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center;
+         background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+         padding: 12px 14px; cursor: pointer; text-align: left; width: 100%; }
+  .row:active, .row.confirmed { border-color: var(--green); }
+  .row.shown { border-color: var(--accent); }
+  .name { font-size: 18px; font-weight: 600; overflow-wrap: anywhere; }
+  .meta { font-size: 13px; color: var(--dim); }
+  .bar { display: grid; grid-template-columns: repeat(10, 12px); gap: 3px; }
+  .cell { height: 22px; border-radius: 3px; background: var(--off); }
+  .cell.on.r { background: var(--red); } .cell.on.o { background: var(--orange); } .cell.on.g { background: var(--green); }
+  .none { margin-top: 12px; width: 100%; padding: 14px; font-size: 17px; }
+  .empty { color: var(--dim); padding: 20px 4px; }
+  .history { margin-top: 20px; color: var(--dim); font-size: 14px; }
+  .history li { margin: 2px 0; }
+  .history ol { padding-left: 20px; margin: 6px 0; }
+  .err { color: var(--red); }
+  @media (max-width: 420px) { .bar { grid-template-columns: repeat(10, 9px); gap: 2px; } .name { font-size: 16px; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Ceol Listen</h1>
+    <span class="status" id="status">starting…</span>
+  </header>
+  <div class="start" id="start"></div>
+  <div class="now" id="now"></div>
+  <div class="rows" id="rows"><div class="empty">Waiting for the first few seconds of music.</div></div>
+  <button class="none" id="none">None of these</button>
+  <div class="history"><b>Shown so far</b><ol id="history"></ol></div>
+  <audio id="play" preload="none"></audio>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+let state = null, mode = null, confirmed = null;
+
+function fmt(ms) {
+  const s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60;
+  return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(s % 60).padStart(2, "0");
+}
+
+function bar(p) {
+  // ten cells; cells 1-5 red, 6-8 orange, 9-10 green; filled up to p
+  const on = Math.round(p * 10);
+  let html = '<div class="bar" aria-label="' + Math.round(p * 100) + '%">';
+  for (let i = 1; i <= 10; i++) {
+    const c = i <= 5 ? "r" : i <= 8 ? "o" : "g";
+    html += '<div class="cell ' + c + (i <= on ? " on" : "") + '"></div>';
+  }
+  return html + "</div>";
+}
+
+function render() {
+  if (!state) return;
+  const lag = state.lag_ms != null ? " · " + (state.lag_ms / 1000).toFixed(1) + " s behind" : "";
+  const status = state.status.startsWith("error") ? '<span class="err">' + state.status + "</span>"
+    : "heard " + fmt(state.heard_ms || 0) + lag + (state.wide ? " · searching wider" : "");
+  $("status").innerHTML = status;
+  const top = state.top || [];
+  if (state.none > 0.5) {
+    $("now").innerHTML = "Probably not a tune right now (" + Math.round(state.none * 100) + "%)";
+  } else if (state.shown != null) {
+    const t = top.find((x) => x.tune_id === state.shown);
+    $("now").innerHTML = "Showing <b>" + (t ? t.name : state.shown) + "</b>";
+  } else {
+    $("now").textContent = "";
+  }
+  if (!top.length) {
+    $("rows").innerHTML = '<div class="empty">Listening…</div>';
+  } else {
+    $("rows").innerHTML = top.map((t) =>
+      '<button class="row' + (t.tune_id === state.shown ? " shown" : "") + (t.tune_id === confirmed ? " confirmed" : "") +
+      '" data-id="' + t.tune_id + '">' +
+      '<div><div class="name">' + t.name + "</div>" +
+      '<div class="meta">' + (t.type || "") + (t.outside ? " · new to this session" : "") + " · " +
+      Math.round(t.p * 100) + "%</div></div>" + bar(t.p) + "</button>").join("");
+    for (const el of document.querySelectorAll(".row")) {
+      el.onclick = () => tap("this", +el.dataset.id);
+    }
+  }
+  $("history").innerHTML = (state.history || []).slice().reverse()
+    .map((h) => "<li>" + fmt(h.from_ms) + " · " + h.name + "</li>").join("");
+}
+
+async function tap(action, tuneId) {
+  const shown = (state && state.top || []).map((t) => t.tune_id);
+  if (action === "this") confirmed = tuneId;
+  await fetch("/tap", { method: "POST", body: JSON.stringify({ action, tune_id: tuneId, shown }) });
+  render();
+}
+$("none").onclick = () => tap("none");
+
+async function poll() {
+  try {
+    state = await (await fetch("/state")).json();
+    if (!mode) setup(state.mode);
+    render();
+  } catch (e) { $("status").textContent = "lost the listener: " + e; }
+  setTimeout(poll, 700);
+}
+
+function setup(m) {
+  mode = m;
+  if (m.source === "microphone" && !window.isSecureContext) {
+    // a phone on the network: browsers only give pages served over https or
+    // from localhost the microphone, so the laptop listens and this taps
+    const d = document.createElement("div");
+    d.className = "status";
+    d.textContent = "Showing what the laptop hears. Start listening on the laptop.";
+    $("start").appendChild(d);
+  } else if (m.source === "microphone") {
+    const b = document.createElement("button");
+    b.className = "primary"; b.textContent = "Start listening";
+    b.onclick = () => { b.disabled = true; b.textContent = "Listening on the microphone"; startMic(); };
+    $("start").appendChild(b);
+  } else {
+    const b = document.createElement("button");
+    b.textContent = "Play along";
+    b.title = "Plays the recording where the listener has got to";
+    b.onclick = () => {
+      const a = $("play");
+      if (!a.src) a.src = "/recording.wav";
+      a.currentTime = m.start_min * 60 + (state.heard_ms || 0) / 1000;
+      a.play();
+    };
+    $("start").appendChild(b);
+  }
+}
+
+async function startMic() {
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: {
+    echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 } });
+  const ctx = new AudioContext();
+  const src = ctx.createMediaStreamSource(stream);
+  const proc = ctx.createScriptProcessor(4096, 1, 1);
+  let pending = [], n = 0;
+  proc.onaudioprocess = (e) => {
+    const x = e.inputBuffer.getChannelData(0);
+    pending.push(new Float32Array(x)); n += x.length;
+    if (n >= ctx.sampleRate) {          // about a second at a time
+      const out = new Float32Array(n);
+      let o = 0; for (const p of pending) { out.set(p, o); o += p.length; }
+      pending = []; n = 0;
+      fetch("/audio", { method: "POST", headers: { "X-Sample-Rate": String(ctx.sampleRate),
+        "Content-Type": "application/octet-stream" }, body: out.buffer });
+    }
+  };
+  src.connect(proc);
+  proc.connect(ctx.destination);   // needed for the processor to run; it outputs silence
+}
+
+poll();
+</script>
+</body>
+</html>

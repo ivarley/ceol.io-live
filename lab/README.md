@@ -182,6 +182,28 @@ Board metrics per segment:
 
 A change that raises top-1 and doubles flips is not an improvement.
 
+## Listening live
+
+```bash
+caffeinate -i venv/bin/python -m lab listen --phone        # the laptop's microphone, page also on the phone
+venv/bin/python -m lab listen --recording 137 --start-min 90  # a prepared night at real speed, to try it
+```
+
+The change detector (the follower's settings: 6 s window, corpus fallback at
+`nu` 0.05) on audio as it arrives, behind a certainty meter: the top five
+tunes with ten-segment bars (red, orange, green). Tap a name for "this is
+it": the decoder is set to it and it is scored every hop until the decoder
+moves on. "None of these" rules the shown names out for 30 s and searches
+wider. The laptop's browser does the listening ("Start listening", allow the
+microphone); with `--phone` a phone on the same Wi-Fi or the phone's hotspot
+can open the printed `.local` address to watch and tap (a page served over
+plain http to another device cannot use that device's microphone).
+`caffeinate` keeps the laptop awake. Everything is kept under
+`lab/data/listen/<started>/`: `audio.wav`, `states.jsonl` (what was shown,
+each hop) and `taps.jsonl` (every tap and its time), so a night listened to
+is a night ready to label and replay. Each 4 s hop costs about 0.3 s on this
+laptop.
+
 ## Looking at one segment
 
 ```bash

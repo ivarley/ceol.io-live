@@ -175,6 +175,9 @@ class ChunkScorer:
         # `fallback_top`, marked "outside" so the decoder can discount them.
         # The aligner must hold sequences for every tune either can propose.
         self.known, self.fallback_index, self.fallback_top = known, fallback_index, fallback_top
+        # tunes scored on every chunk whatever the index proposes: a tune a
+        # person has said is playing (`lab listen`)
+        self.pinned = set()
         self.recent = []
         self.last_heard = self.last_queries = self.last_tunes = None
 
@@ -196,6 +199,7 @@ class ChunkScorer:
                      if r["tune_id"] not in pool]
         self.recent = (self.recent + [pool])[-(self.keep + 1):]
         tunes = list(dict.fromkeys(tid for p in reversed(self.recent) for tid in p))
+        tunes += [t for t in self.pinned if t not in tunes]
         heard = [([n for n in ctx if n["t0_ms"] >= t - self.window_ms], None)
                  for ctx in ctx_by.values()]
         queries = self.aligner._queries(heard)
@@ -335,6 +339,27 @@ class Decoder:
         log = new - np.logaddexp.reduce(new)
         self._log = np.maximum(log, -1e9)
         return ids[int(np.argmax(self._log))]
+
+    def confirm(self, tune_id):
+        """A person said "this is it": all belief on that tune. The decoder
+        keeps listening, so a later change of tune is still followed."""
+        if not hasattr(self, "_log"):
+            self.reset()
+        if tune_id not in self._where:
+            self._where[tune_id] = len(self._ids)
+            self._ids.append(tune_id)
+            self._log = np.concatenate([self._log, [-1e9]])
+        self._log = np.full(len(self._ids), -30.0)
+        self._log[self._where[tune_id]] = 0.0
+
+    def rule_out(self, tune_ids):
+        """A person said "none of these": no belief left on them."""
+        if not hasattr(self, "_log"):
+            self.reset()
+        for t in tune_ids:
+            if t in self._where:
+                self._log[self._where[t]] = -1e9
+        self._log = np.maximum(self._log - np.logaddexp.reduce(self._log), -1e9)
 
     def belief(self, k=5):
         """The `k` most believed states now: [(state, probability)]."""

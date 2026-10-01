@@ -29,6 +29,7 @@ COMMANDS = {
     "compare": "lab.tools.compare",
     "suspects": "lab.tools.suspects",
     "view": "lab.tools.viewer",
+    "listen": "lab.tools.listen",
 }
 
 

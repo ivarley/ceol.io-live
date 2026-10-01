@@ -80,3 +80,15 @@ def test_mix_windows_with_only_the_full_window_changes_nothing():
     assert mix_windows(chunks, {4000: 1.0})[0]["scores"] == {1: 0.2, 2: 0.7}
     half = mix_windows(chunks, {8000: 1, 4000: 1})[0]
     assert half["scores"] == {1: 0.4, 2: 0.5} and half["floor"] == 0.4
+
+
+def test_confirm_and_rule_out():
+    d = Decoder()
+    tune1 = [chunk({1: 0.7, 2: 0.6, 3: 0.2}) for _ in range(5)]
+    d.run(tune1)
+    d.rule_out([1])
+    assert d.belief(1)[0][0] != 1
+    d.confirm(3)
+    assert d.belief(1)[0][0] == 3
+    d.confirm(99)                       # a tune the decoder had not seen yet
+    assert d.belief(1)[0][0] == 99
