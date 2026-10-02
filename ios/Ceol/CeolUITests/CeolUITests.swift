@@ -91,6 +91,54 @@ final class CeolUITests: XCTestCase {
         snapshot("night")
     }
 
+    /// A session's three tabs each lead with a search and a filter button, as on the web.
+    @MainActor
+    func testSearchingASessionsTabs() throws {
+        let app = launch()
+        signIn(app)
+        app.buttons["tab.sessions"].firstMatch.tap()
+        let mueller = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Mueller Session'")).firstMatch
+        XCTAssertTrue(mueller.waitForExistence(timeout: 10))
+        mueller.tap()
+
+        // Tunes: the search narrows the list; the filter opens its drawer.
+        let tunes = app.textFields["session.tunes.search"]
+        XCTAssertTrue(tunes.waitForExistence(timeout: 10))
+        tunes.tap()
+        tunes.typeText("drowsy")
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Showing 1 of'")).firstMatch.waitForExistence(timeout: 10))
+        XCTAssertEqual(app.buttons.matching(identifier: "session.tune").count, 1)
+        snapshot("session tunes search")
+        app.buttons["session.tunes.search.filter"].tap()
+        XCTAssertTrue(app.buttons["filters.done"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Nights I attended"].exists)
+        snapshot("session tunes filter")
+        app.buttons["filters.done"].tap()
+
+        // Logs: a tune search suggests what's been logged here, then shows its nights.
+        app.buttons.containing(NSPredicate(format: "label BEGINSWITH 'Logs'")).firstMatch.tap()
+        let logs = app.textFields["logs.search"]
+        XCTAssertTrue(logs.waitForExistence(timeout: 10))
+        logs.tap()
+        logs.typeText("drowsy")
+        let suggestion = app.buttons["logs.suggestion"].firstMatch
+        XCTAssertTrue(suggestion.waitForExistence(timeout: 10))
+        suggestion.tap()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'with Drowsy Maggie'")).firstMatch.waitForExistence(timeout: 10))
+        snapshot("session logs search")
+        app.buttons["logs.search.filter"].tap()
+        XCTAssertTrue(app.buttons["Attended"].waitForExistence(timeout: 5))
+        app.buttons["filters.done"].tap()
+
+        // People: the search, and members / visitors / archived behind the filter.
+        app.buttons.containing(NSPredicate(format: "label BEGINSWITH 'People'")).firstMatch.tap()
+        XCTAssertTrue(app.textFields["people.search"].waitForExistence(timeout: 10))
+        app.buttons["people.search.filter"].tap()
+        XCTAssertTrue(app.buttons["Visitors"].waitForExistence(timeout: 5))
+        snapshot("session people filter")
+        app.buttons["filters.done"].tap()
+    }
+
     /// Phase 3c: the Tunes tab, a tune's sheet, and the catalogue below your matches.
     @MainActor
     func testBrowsingTunes() throws {

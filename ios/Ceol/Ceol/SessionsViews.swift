@@ -14,6 +14,7 @@ typealias SessionDetailPayload = Components.Schemas.SessionDetail
 typealias SessionLogsPayload = Components.Schemas.SessionLogs
 typealias SessionPeoplePayload = Components.Schemas.SessionPeople
 typealias LiveBootstrapPayload = Components.Schemas.LiveBootstrap
+typealias SessionTunePayload = Components.Schemas.SessionTune
 
 /// "YYYY-MM-DD" in the device's time zone.
 func localToday() -> String {
@@ -178,6 +179,44 @@ struct SessionDetailView: View {
     @State private var openTune: TuneRef?
     @State private var newNight: NewNight?
 
+    // Each tab's search and filter row, as on the web (SessionPage holds the rules).
+    // Tunes: every tune once the rest arrive (the detail carries the first 20), and
+    // your tunebook once the status filter asks for it.
+    @State private var allTunes: [SessionTunePayload]?
+    @State private var remainingFailed = false
+    @State private var tuneSearch = ""
+    @State private var tuneFilters = SessionPage.Filters()
+    @State private var tuneSort = SessionPage.Sort()
+    @State private var filteringTunes = false
+    @State private var tunebook: Tunebook?
+    @State private var tunebookFailed = false
+    // Logs: a tune search over what's been logged here, and which nights.
+    @State private var logSearch = ""
+    @State private var logView = SessionPage.LogView.logged
+    @State private var loggedTunes: [SessionPage.LoggedTune]?
+    @State private var chosenTune: SessionPage.LoggedTune?
+    @State private var tuneNights: LoadState<TuneNights>?
+    @State private var filteringLogs = false
+    @FocusState private var searchingLogs: Bool
+    @FocusState private var searchingTunes: Bool
+    @FocusState private var searchingPeople: Bool
+    // People.
+    @State private var peopleSearch = ""
+    @State private var peopleView = SessionPage.PeopleView.members
+    @State private var filteringPeople = false
+
+    /// Your tunebook, for the Tunes tab's status filter.
+    struct Tunebook {
+        let entries: [Int: SessionPage.TunebookEntry]
+        let instruments: [MyTunesList.Instrument]
+    }
+
+    /// The nights the chosen tune was played, and where in each ("Set 2, tune 1").
+    struct TuneNights {
+        let ids: Set<Int>
+        let positions: [Int: [String]]
+    }
+
     /// A night just added, to go straight to.
     struct NewNight: Identifiable, Hashable {
         let id: Int
@@ -203,6 +242,27 @@ struct SessionDetailView: View {
                 }
             }
             .sheet(item: $openTune) { TuneSheet(tune: $0) }
+            .sheet(isPresented: $filteringTunes) {
+                SessionTunesFilterSheet(
+                    filters: $tuneFilters, sort: $tuneSort,
+                    types: Set((allTunes ?? state.value?.tunes ?? []).compactMap(\.tuneType)).sorted(),
+                    signedIn: state.value?.permissions.isLoggedIn == true,
+                    instruments: (tunebook?.instruments ?? []).map(\.name),
+                    tunebookFailed: tunebookFailed)
+            }
+            .sheet(isPresented: $filteringLogs) {
+                SessionTabFilterSheet(
+                    label: "Show",
+                    options: SessionPage.LogView.options(signedIn: state.value?.permissions.isLoggedIn == true).map { ($0, $0.label) },
+                    selection: $logView, initial: defaultLogView)
+            }
+            .sheet(isPresented: $filteringPeople) {
+                SessionTabFilterSheet(
+                    label: "Show", options: SessionPage.PeopleView.allCases.map { ($0, $0.label) },
+                    selection: $peopleView, initial: .members)
+            }
+            // The status filter needs your tunebook; a failure turns it off and says so.
+            .task(id: tuneFilters.myStatus != .off) { await loadTunebook() }
             .sheet(isPresented: $addingNight) {
                 AddNightView(path: path, usualVenue: state.value?.session.locationName) { id, date in
                     logs = .loading
@@ -216,10 +276,77 @@ struct SessionDetailView: View {
     private func load() async {
         do {
             let d = try await model.auth.client.getSessionDetail(path: .init(sessionPath: path)).ok.body.json
-            if d.defaultTab == .logs && state.value == nil { tab = .logs }
+            if state.value == nil {
+                if d.defaultTab == .logs { tab = .logs }
+                // A festival's list is its schedule, so it shows every night.
+                logView = d.session.sessionType == "festival" ? .all : .logged
+            }
             state = .loaded(d)
+            await loadRemainingTunes(d)
         } catch {
             if state.value == nil { state = .failed(loadFailureMessage(error)) }
+        }
+    }
+
+    /// The tunes after the first 20, so the search and filters cover them all.
+    private func loadRemainingTunes(_ d: SessionDetailPayload) async {
+        guard d.hasMoreTunes else {
+            allTunes = d.tunes
+            return
+        }
+        do {
+            let rest = try await model.auth.client.getSessionTunesRemaining(path: .init(sessionPath: path)).ok.body.json
+            allTunes = d.tunes + rest.tunes
+            remainingFailed = false
+        } catch {
+            remainingFailed = true
+        }
+    }
+
+    private func loadTunebook() async {
+        guard tuneFilters.myStatus != .off, tunebook == nil else { return }
+        tunebookFailed = false
+        do {
+            let mine = try await model.auth.client.getMyTunes().ok.body.json
+            var entries: [Int: SessionPage.TunebookEntry] = [:]
+            for t in mine.tunes {
+                entries[t.tuneId] = .init(status: t.learnStatus, instrumentStatus: t.instrumentStatus.additionalProperties)
+            }
+            tunebook = Tunebook(entries: entries, instruments: mine.instruments.map { .init(name: $0.instrument, isAuto: $0.isAuto) })
+        } catch {
+            tunebookFailed = true
+            tuneFilters.myStatus = .off
+        }
+    }
+
+    private var defaultLogView: SessionPage.LogView {
+        state.value?.session.sessionType == "festival" ? .all : .logged
+    }
+
+    private func loadLoggedTunes() async {
+        guard loggedTunes == nil else { return }
+        do {
+            let r = try await model.auth.client.getSessionLoggedTunes(path: .init(sessionPath: path)).ok.body.json
+            loggedTunes = r.tunes.map { .init(tuneID: $0.tuneId, name: $0.name, logCount: $0.logCount) }
+        } catch {}
+    }
+
+    private func choose(_ t: SessionPage.LoggedTune) async {
+        chosenTune = t
+        logSearch = t.name
+        searchingLogs = false
+        tuneNights = .loading
+        do {
+            let r = try await model.auth.client.getSessionTuneLogInstances(
+                path: .init(sessionPath: path, tuneId: t.tuneID)).ok.body.json
+            guard chosenTune == t else { return }
+            var positions: [Int: [String]] = [:]
+            for night in r.instances {
+                positions[night.sessionInstanceId] = night.positions.map { "Set \($0.setNumber), tune \($0.positionInSet)" }
+            }
+            tuneNights = .loaded(TuneNights(ids: Set(r.sessionInstanceIds), positions: positions))
+        } catch {
+            if chosenTune == t { tuneNights = .failed(loadFailureMessage(error)) }
         }
     }
 
@@ -305,6 +432,7 @@ struct SessionDetailView: View {
             .padding(.bottom, 24)
         }
         .refreshable {
+            loggedTunes = nil
             await load()
             if tab == .logs { await loadLogs() }
             if tab == .people { await loadPeople() }
@@ -378,20 +506,53 @@ struct SessionDetailView: View {
     }
 
     @ViewBuilder private func tunes(_ d: SessionDetailPayload) -> some View {
+        let all = (allTunes ?? d.tunes).map {
+            SessionPage.Tune(tuneID: $0.tuneId, name: $0.tuneName, type: $0.tuneType, playCount: $0.playCount,
+                             tunebookCount: $0.tunebookCount ?? 0, attendedPlayCount: $0.attendedPlayCount ?? 0)
+        }
+        var f = tuneFilters
+        let _ = { f.search = tuneSearch }()
+        let shown = SessionPage.filterAndSortTunes(all, filters: f, sort: tuneSort, status: myStatus)
         VStack(alignment: .leading, spacing: 0) {
-            Text(d.totalTunesCount == 1 ? "1 tune" : "\(d.totalTunesCount) tunes")
-                .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
-                .padding(.horizontal, 16).padding(.vertical, 10)
+            VStack(alignment: .leading, spacing: 8) {
+                SearchRow(
+                    text: $tuneSearch, prompt: "Search", fieldID: "session.tunes.search",
+                    focused: $searchingTunes,
+                    // The keyboard would otherwise stay up over the drawer.
+                    onFilter: {
+                        searchingTunes = false
+                        filteringTunes = true
+                    },
+                    filterCount: (tuneFilters.active ? 1 : 0) + (tuneSort == .init() ? 0 : 1))
+                HStack(spacing: 8) {
+                    Text(tunesCountText(shown: shown.count, loaded: all.count, total: d.totalTunesCount))
+                        .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
+                    if remainingFailed {
+                        Button("Retry") { Task { await loadRemainingTunes(d) } }
+                            .font(.ceol(size: 15)).foregroundStyle(CeolTokens.primary)
+                    }
+                }
+            }
+            .padding(.horizontal, 16).padding(.vertical, 10)
             Hairline()
-            ForEach(d.tunes, id: \.tuneId) { t in
+            ForEach(shown, id: \.tuneID) { t in
                 Button {
-                    openTune = TuneRef(id: t.tuneId, name: t.tuneName, type: t.tuneType, sessionPath: path, statusKnown: false)
+                    openTune = TuneRef(id: t.tuneID, name: t.name, type: t.type, sessionPath: path, statusKnown: false)
                 } label: {
                     HStack(spacing: 8) {
-                        Text(t.tuneName).font(.ceol(size: 19, weight: .medium)).foregroundStyle(CeolTokens.textColor).lineLimit(1)
+                        // My tunebook on: each tune's status (none for one not on your list).
+                        if let status = myStatus?(t.tuneID) {
+                            if status == SessionPage.MyStatus.notOnList.rawValue {
+                                Color.clear.frame(width: 20, height: 1).accessibilityHidden(true)
+                            } else {
+                                StatusGlyph(status: status)
+                            }
+                        }
+                        Text(t.name).font(.ceol(size: 19, weight: .medium)).foregroundStyle(CeolTokens.textColor).lineLimit(1)
                         Spacer(minLength: 6)
-                        if let type = t.tuneType { TypeChip(label: type, size: 15) }
-                        CountBox(count: t.playCount)
+                        if let type = t.type { TypeChip(label: type, size: 15) }
+                        // Filtered to nights you were there, the count is those plays.
+                        CountBox(count: tuneFilters.attended ? t.attendedPlayCount : t.playCount)
                     }
                     .padding(.horizontal, 16).padding(.vertical, 12)
                     .contentShape(Rectangle())
@@ -400,12 +561,27 @@ struct SessionDetailView: View {
                 .accessibilityIdentifier("session.tune")
                 Hairline()
             }
-            if d.hasMoreTunes {
-                Text("The \(d.tunes.count) most played of \(d.totalTunesCount).")
-                    .font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
-                    .padding(16)
+            if shown.isEmpty && !tuneSearch.isEmpty {
+                Text("No tunes found matching \"\(tuneSearch)\"")
+                    .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
+                    .frame(maxWidth: .infinity)
+                    .padding(24)
             }
         }
+    }
+
+    /// Your status for a tune, under the filter's instrument; nil until your tunebook loads.
+    private var myStatus: ((Int) -> String)? {
+        guard tuneFilters.myStatus != .off, let tunebook else { return nil }
+        let scope = tuneFilters.myStatusInstrument
+        return { SessionPage.resolveStatus(tunebook.entries[$0], instruments: tunebook.instruments, scope: scope) }
+    }
+
+    private func tunesCountText(shown: Int, loaded: Int, total: Int) -> String {
+        if tuneFilters.myStatus != .off && tunebook == nil && !tunebookFailed { return "Loading your tunebook…" }
+        if remainingFailed { return "Showing \(shown) of the first \(loaded) of \(total) tunes" }
+        if allTunes == nil && loaded < total { return "Loading all tunes… (\(loaded)/\(total))" }
+        return SessionPage.resultsCountLabel(shown, loaded)
     }
 
     @ViewBuilder private func logsSection(_ d: SessionDetailPayload) -> some View {
@@ -419,29 +595,26 @@ struct SessionDetailView: View {
             }
             .padding(24)
         case .loaded(let l):
+            let years = filteredYears(l)
             VStack(alignment: .leading, spacing: 0) {
-                if d.permissions.isLoggedIn {
-                    Button { addingNight = true } label: {
-                        Label("Add a night", systemImage: "plus").font(.ceol(size: 17, weight: .medium))
-                            .foregroundStyle(CeolTokens.primary)
-                            .frame(maxWidth: .infinity, minHeight: 46)
-                            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(CeolTokens.borderColor, lineWidth: 1))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("session.addNight")
-                    .padding(16)
+                logsSearch(d)
+                Hairline()
+                if years.isEmpty && (chosenTune == nil || tuneNights?.value != nil) {
+                    Text(chosenTune == nil && logView != .all ? "No \(logView.rawValue) nights." : "No nights found.")
+                        .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
+                        .frame(maxWidth: .infinity)
+                        .padding(24)
                 }
-                ForEach(l.sortedYears, id: \.self) { year in
-                    let nights = l.instancesByYear.additionalProperties[String(year)] ?? []
+                ForEach(years, id: \.year) { group in
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
-                        Text(String(year)).font(.ceol(size: 24, weight: .semibold, relativeTo: .title2))
+                        Text(String(group.year)).font(.ceol(size: 24, weight: .semibold, relativeTo: .title2))
                             .foregroundStyle(CeolTokens.textColor)
-                        Text(nights.count == 1 ? "1 log" : "\(nights.count) logs").font(.ceol(size: 16))
+                        Text(group.nights.count == 1 ? "1 log" : "\(group.nights.count) logs").font(.ceol(size: 16))
                             .foregroundStyle(CeolTokens.textMuted)
                     }
                     .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 8)
                     Hairline()
-                    ForEach(nights, id: \.sessionInstanceId) { night in
+                    ForEach(group.nights, id: \.sessionInstanceId) { night in
                         NavigationLink(value: Route.night(id: night.sessionInstanceId, title: "\(d.session.name) · \(HomeRules.shortDate(night.date, currentYear: nil))")) {
                             HStack(spacing: 14) {
                                 DateBlock(weekday: HomeRules.dayOfWeek(night.date), day: HomeRules.dayOfMonth(night.date),
@@ -453,6 +626,11 @@ struct SessionDetailView: View {
                                           night.tuneCount == 1 ? "1 tune logged" : "\(night.tuneCount) tunes logged"]
                                         .filter { !$0.isEmpty }.joined(separator: " · "))
                                         .font(.ceol(size: 14)).foregroundStyle(CeolTokens.textMuted)
+                                    // Searched for a tune: where it came round that night.
+                                    if let spots = tuneNights?.value?.positions[night.sessionInstanceId], !spots.isEmpty {
+                                        Text(spots.joined(separator: " · ")).font(.ceol(size: 14))
+                                            .foregroundStyle(CeolTokens.textColor)
+                                    }
                                 }
                                 Spacer()
                             }
@@ -468,6 +646,87 @@ struct SessionDetailView: View {
         }
     }
 
+    typealias LogNight = SessionLogsPayload.InstancesByYearPayload.AdditionalPropertiesPayloadPayload
+
+    /// The years left after the filter, each with its nights; a year left empty goes.
+    private func filteredYears(_ l: SessionLogsPayload) -> [(year: Int, nights: [LogNight])] {
+        // Searched for a tune: its nights, whatever the filter (they are all logged ones).
+        let ids: Set<Int>? = chosenTune == nil ? nil : tuneNights?.value?.ids ?? []
+        return l.sortedYears.compactMap { year in
+            let kept = (l.instancesByYear.additionalProperties[String(year)] ?? []).filter {
+                SessionPage.keepInstance(tuneCount: $0.tuneCount, attended: $0.attended ?? false, view: logView,
+                                         tuneInstanceIDs: ids, id: $0.sessionInstanceId)
+            }
+            return kept.isEmpty ? nil : (year, kept)
+        }
+    }
+
+    /// The Logs tab's row: search for a tune to see the nights it was played, the
+    /// filter (logged, attended or all), and + to add a night.
+    @ViewBuilder private func logsSearch(_ d: SessionDetailPayload) -> some View {
+        let suggestions = chosenTune == nil ? SessionPage.matchLoggedTunes(loggedTunes ?? [], query: logSearch) : []
+        VStack(alignment: .leading, spacing: 8) {
+            SearchRow(
+                text: $logSearch, prompt: "Search for a tune", fieldID: "logs.search",
+                onAdd: d.permissions.isLoggedIn ? { addingNight = true } : nil,
+                addID: "session.addNight", addLabel: "Add a night",
+                focused: $searchingLogs,
+                onFilter: {
+                    searchingLogs = false
+                    filteringLogs = true
+                },
+                filterCount: logView == .logged ? 0 : 1)
+            if !suggestions.isEmpty {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(suggestions, id: \.tuneID) { t in
+                        Button { Task { await choose(t) } } label: {
+                            HStack {
+                                Text(t.name).font(.ceol(size: 17)).foregroundStyle(CeolTokens.textColor).lineLimit(1)
+                                Spacer()
+                                Text("\(t.logCount)").font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
+                            }
+                            .padding(.horizontal, 12).padding(.vertical, 10)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("logs.suggestion")
+                        .accessibilityLabel("\(t.name), \(t.logCount) nights")
+                    }
+                }
+                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(CeolTokens.borderColor, lineWidth: 1))
+            } else if chosenTune == nil && loggedTunes != nil && !logSearch.trimmingCharacters(in: .whitespaces).isEmpty {
+                Text("No tune by that name has been logged here.")
+                    .font(.ceol(size: 14)).foregroundStyle(CeolTokens.textMuted)
+            }
+            if let t = chosenTune {
+                switch tuneNights {
+                case .failed(let message):
+                    HStack {
+                        Text(message).font(.ceol(size: 14)).foregroundStyle(CeolTokens.textMuted)
+                        Button("Retry") { Task { await choose(t) } }.font(.ceol(size: 14))
+                    }
+                case .loaded(let n):
+                    Text(n.ids.count == 1 ? "1 night with \(t.name)" : "\(n.ids.count) nights with \(t.name)")
+                        .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
+                default:
+                    ProgressView()
+                }
+            }
+        }
+        .padding(16)
+        // The tunes logged here, fetched once you start a search.
+        .task(id: searchingLogs || !logSearch.isEmpty) {
+            if searchingLogs || !logSearch.isEmpty { await loadLoggedTunes() }
+        }
+        .onChange(of: logSearch) { _, q in
+            // Typing past the chosen tune starts a new search.
+            if let t = chosenTune, q != t.name {
+                chosenTune = nil
+                tuneNights = nil
+            }
+        }
+    }
+
     @ViewBuilder private func peopleSection() -> some View {
         switch people {
         case .loading:
@@ -479,24 +738,39 @@ struct SessionDetailView: View {
             }
             .padding(24)
         case .loaded(let p):
-            // Members first, as the web's People tab opens (visitors and archived after).
-            let members = p.people.filter { $0.relationship != "visitor" && $0.archived != true }
-            let others = p.people.filter { $0.relationship == "visitor" || $0.archived == true }
+            let shown = SessionPage.filterPeople(
+                p.people.map {
+                    SessionPage.Person(name: "\($0.firstName) \($0.lastName)", instruments: $0.instruments,
+                                       relationship: $0.relationship, archived: $0.archived ?? false)
+                },
+                view: peopleView, search: peopleSearch
+            ).map { p.people[$0] }
             VStack(alignment: .leading, spacing: 0) {
-                peopleGroup("Members", members)
-                if !others.isEmpty { peopleGroup("Visitors and archived", others) }
+                VStack(alignment: .leading, spacing: 8) {
+                    SearchRow(
+                        text: $peopleSearch, prompt: "Search people…", fieldID: "people.search",
+                        focused: $searchingPeople,
+                        onFilter: {
+                            searchingPeople = false
+                            filteringPeople = true
+                        },
+                        filterCount: peopleView == .members ? 0 : 1)
+                    Text(shown.count == 1 ? "1 person" : "\(shown.count) people")
+                        .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
+                }
+                .padding(.horizontal, 16).padding(.vertical, 10)
+                Hairline()
+                ForEach(shown, id: \.personId) { person in
+                    PersonRow(person: person).padding(.horizontal, 16).padding(.vertical, 10)
+                    Hairline()
+                }
+                if shown.isEmpty {
+                    Text(peopleSearch.isEmpty ? "No \(peopleView.rawValue)." : "No one found.")
+                        .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
+                        .frame(maxWidth: .infinity)
+                        .padding(24)
+                }
             }
-        }
-    }
-
-    @ViewBuilder private func peopleGroup(_ title: String, _ people: [SessionPeoplePayload.PeoplePayloadPayload]) -> some View {
-        Text(title.uppercased()).font(.ceol(size: 12, weight: .semibold)).tracking(0.8)
-            .foregroundStyle(CeolTokens.textMuted)
-            .padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 6)
-        Hairline()
-        ForEach(people, id: \.personId) { person in
-            PersonRow(person: person).padding(.horizontal, 16).padding(.vertical, 10)
-            Hairline()
         }
     }
 }
@@ -525,6 +799,12 @@ private struct PersonRow: View {
                 }
             }
             Spacer()
+            // A search reaches everyone, so say who's a visitor or has gone.
+            if person.archived == true {
+                Pill(text: "Archived", size: 12)
+            } else if person.relationship == "visitor" {
+                Pill(text: "Visitor", style: .filled, color: Color(red: 0.55, green: 0.45, blue: 0.15), size: 12)
+            }
             if person.isAdmin { Pill(text: "Admin", style: .filled, color: CeolTokens.primaryFill, size: 12) }
         }
     }

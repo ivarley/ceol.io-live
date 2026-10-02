@@ -454,18 +454,8 @@ components:
         default_tab: { type: string, enum: [tunes, logs] }
         # Nights on right now; the session screen leads with a banner into tonight's log.
         active_instances: { type: array, items: { $ref: "#/components/schemas/ActiveInstanceSummary" } }
-        tunes:
-          type: array
-          items:
-            type: object
-            required: [tune_id, tune_name, tune_type, play_count, tunebook_count, setting_id]
-            properties:
-              tune_id: { type: integer }
-              tune_name: { type: string }
-              tune_type: { type: [string, "null"] }
-              play_count: { type: integer }
-              tunebook_count: { type: [integer, "null"] }
-              setting_id: { type: [integer, "null"] }
+        # The first 20; the rest from /tunes/remaining when has_more_tunes.
+        tunes: { type: array, items: { $ref: "#/components/schemas/SessionTune" } }
         total_tunes_count: { type: integer }
         # Tab-label counts (spec 052 §B8 Stage 2): the Logs and People tabs load lazily.
         total_logs_count: { type: integer, description: "Instances not cancelled — what the Logs tab lists." }
@@ -474,6 +464,64 @@ components:
           description: "Members, not visitors, not archived. null when the viewer may not see the roster (can_view_people false) — distinct from 0."
         has_more_tunes: { type: boolean }
         popular_tunes: { type: array }
+    SessionTune:
+      description: One of a session's tunes, as its Tunes tab lists them.
+      type: object
+      required: [tune_id, tune_name, tune_type, play_count, tunebook_count, setting_id]
+      properties:
+        tune_id: { type: integer }
+        tune_name: { type: string }
+        tune_type: { type: [string, "null"] }
+        play_count: { type: integer }
+        tunebook_count: { type: [integer, "null"] }
+        setting_id: { type: [integer, "null"] }
+        # Signed in only: plays on nights the viewer checked in to ("Nights I attended").
+        attended_play_count: { type: integer }
+    SessionTunesRemaining:
+      type: object
+      required: [success, tunes]
+      properties:
+        success: { type: boolean, const: true }
+        tunes: { type: array, items: { $ref: "#/components/schemas/SessionTune" } }
+    SessionLoggedTunes:
+      description: Every linked tune ever logged at a session — the Logs tab's tune search.
+      type: object
+      required: [success, tunes]
+      properties:
+        success: { type: boolean, const: true }
+        tunes:
+          type: array
+          items:
+            type: object
+            required: [tune_id, name, log_count]
+            properties:
+              tune_id: { type: integer }
+              name: { type: string }
+              log_count: { type: integer, description: "Nights it was played." }
+    SessionTuneLogInstances:
+      description: The nights a tune was played at a session, and where in each night.
+      type: object
+      required: [success, session_instance_ids, instances]
+      properties:
+        success: { type: boolean, const: true }
+        session_instance_ids: { type: array, items: { type: integer } }
+        instances:
+          type: array
+          items:
+            type: object
+            required: [session_instance_id, positions]
+            properties:
+              session_instance_id: { type: integer }
+              positions:
+                type: array
+                items:
+                  type: object
+                  required: [session_instance_tune_id, set_number, position_in_set]
+                  properties:
+                    session_instance_tune_id: { type: integer }
+                    name: { type: [string, "null"] }
+                    set_number: { type: integer }
+                    position_in_set: { type: integer }
     SessionLogs:
       type: object
       required: [success, instances_by_year, sorted_years, session_type]
@@ -496,6 +544,8 @@ components:
                 session_instance_id: { type: integer }
                 multiple_on_date: { type: boolean }
                 tune_count: { type: integer }
+                # Signed in: whether the viewer checked in that night (the "Attended" filter).
+                attended: { type: boolean }
     SessionPeople:
       type: object
       required: [success, people]
@@ -1345,7 +1395,21 @@ paths:
       operationId: getSessionLoggedTunes
       summary: Tunes that appear in this session's logs
       parameters: [{ name: session_path, in: path, required: true, schema: { type: string } }]
-      responses: { "200": { description: ok } }
+      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/SessionLoggedTunes" } } } } }
+  /api/sessions/{session_path}/logged-tunes/{tune_id}/instances:
+    get:
+      operationId: getSessionTuneLogInstances
+      summary: The nights a tune was played at this session (the Logs tab's tune filter)
+      parameters:
+        - { name: session_path, in: path, required: true, schema: { type: string } }
+        - { name: tune_id, in: path, required: true, schema: { type: integer } }
+      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/SessionTuneLogInstances" } } } } }
+  /api/sessions/{session_path}/tunes/remaining:
+    get:
+      operationId: getSessionTunesRemaining
+      summary: A session's tunes after the first 20 the detail carries
+      parameters: [{ name: session_path, in: path, required: true, schema: { type: string } }]
+      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/SessionTunesRemaining" } } } } }
   /api/sessions/{session_path}/people:
     get:
       operationId: getSessionPeople

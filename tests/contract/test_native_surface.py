@@ -54,6 +54,18 @@ CHECKED_GETS = [
     ("/api/sessions/{session_path}/logs", "/api/sessions/austin/mueller/logs"),
     ("/api/sessions/{session_path}/people", "/api/sessions/austin/mueller/people"),
     (
+        "/api/sessions/{session_path}/tunes/remaining",
+        "/api/sessions/austin/mueller/tunes/remaining",
+    ),
+    (
+        "/api/sessions/{session_path}/logged-tunes",
+        "/api/sessions/austin/mueller/logged-tunes",
+    ),
+    (
+        "/api/sessions/{session_path}/logged-tunes/{tune_id}/instances",
+        "/api/sessions/austin/mueller/logged-tunes/27/instances",
+    ),
+    (
         "/api/sessions/{session_path}/next_instance_suggestion",
         "/api/sessions/austin/mueller/next_instance_suggestion",
     ),

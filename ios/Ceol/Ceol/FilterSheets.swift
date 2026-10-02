@@ -7,6 +7,10 @@
 //
 // Sessions: which sessions (the web's five), plus a sort and a country, which the web's
 // page doesn't have yet (SessionsRules).
+//
+// A session's tabs: the web's /sessions/<path> panels (SessionPage). Tunes: type, sort,
+// nights I attended, and my tunebook status; Logs: logged, attended or all; People:
+// members, visitors or archived.
 
 import CeolDesign
 import CeolLogic
@@ -180,5 +184,135 @@ struct SessionsFilterSheet: View {
             }
         }
         .ceolDrawer([.medium, .large])
+    }
+}
+
+// MARK: - A session's tabs
+
+struct SessionTunesFilterSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var filters: SessionPage.Filters
+    @Binding var sort: SessionPage.Sort
+    let types: [String]
+    let signedIn: Bool
+    /// Your instruments, when you play two or more (the status can be one instrument's).
+    let instruments: [String]
+    /// Your tunebook failed to load, so the status filter is off.
+    var tunebookFailed = false
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ChoiceChips(
+                            label: "Sort",
+                            options: SessionPage.SortMode.allCases.map { ($0, $0.label) },
+                            selection: Binding(get: { sort.mode }, set: { mode in
+                                // Tapping the current mode flips it, as the web's buttons do.
+                                if mode == sort.mode { sort.descending.toggle() } else {
+                                    sort = .init(mode: mode, descending: mode.defaultDescending)
+                                }
+                            }))
+                        Button { sort.descending.toggle() } label: {
+                            Label(directionLabel, systemImage: sort.descending ? "arrow.down" : "arrow.up")
+                                .font(.ceol(size: 15)).foregroundStyle(CeolTokens.primary)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("filters.direction")
+                    }
+                    ChoiceChips(
+                        label: "Type",
+                        options: [("", "All types")] + types.map { ($0, $0.capitalized) },
+                        selection: $filters.type)
+                    if signedIn {
+                        ChoiceChips(
+                            label: "Played",
+                            options: [(false, "Any night"), (true, "Nights I attended")],
+                            selection: $filters.attended)
+                        VStack(alignment: .leading, spacing: 8) {
+                            ChoiceChips(
+                                label: "My tunebook",
+                                options: SessionPage.MyStatus.allCases.map { ($0, $0.label) },
+                                selection: $filters.myStatus)
+                            if tunebookFailed {
+                                Text("Your tunebook didn't load, so this is off. Try again.")
+                                    .font(.ceol(size: 14)).foregroundStyle(CeolTokens.textMuted)
+                            }
+                        }
+                        if filters.myStatus != .off && instruments.count >= 2 {
+                            ChoiceChips(
+                                label: "Instrument",
+                                options: [("all", "All instruments")] + instruments.map { ($0, $0.capitalized) },
+                                selection: $filters.myStatusInstrument)
+                        }
+                    }
+                }
+                .padding(20)
+            }
+            .background(CeolTokens.drawerBg)
+            .navigationTitle("Sort & filter")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    // As on the web: the search stays.
+                    Button("Clear") {
+                        filters.type = ""
+                        filters.attended = false
+                        filters.myStatus = .off
+                        filters.myStatusInstrument = "all"
+                        sort = .init()
+                    }
+                    .disabled(!filters.active && sort == .init())
+                    .accessibilityIdentifier("filters.clear")
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }.accessibilityIdentifier("filters.done")
+                }
+            }
+        }
+        .ceolDrawer([.medium, .large])
+    }
+
+    private var directionLabel: String {
+        switch (sort.mode, sort.descending) {
+        case (.alpha, false): "A to Z"
+        case (.alpha, true): "Z to A"
+        case (_, true): "Most first"
+        case (_, false): "Fewest first"
+        }
+    }
+}
+
+/// One choice for a tab: which nights, or which people.
+struct SessionTabFilterSheet<ID: Hashable>: View {
+    @Environment(\.dismiss) private var dismiss
+    let label: String
+    let options: [(id: ID, label: String)]
+    @Binding var selection: ID
+    let initial: ID
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                ChoiceChips(label: label, options: options, selection: $selection)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(20)
+            }
+            .background(CeolTokens.drawerBg)
+            .navigationTitle("Filter")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Clear") { selection = initial }
+                        .disabled(selection == initial)
+                        .accessibilityIdentifier("filters.clear")
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }.accessibilityIdentifier("filters.done")
+                }
+            }
+        }
+        .ceolDrawer([.medium])
     }
 }
