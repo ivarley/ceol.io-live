@@ -302,7 +302,7 @@ def apply(rid, drafts, args):
                 continue
             r = s.put(f"{base}/api/recordings/{rid}/segments/{d['session_instance_tune_id']}",
                       json={"start_ms": int(d["start_ms"]), "end_ms": d["end_ms"]})
-            if r.status_code == 200:
+            if r.ok:                       # 201 for a new segment, 200 for a moved one
                 done += 1
             else:
                 failed += 1
