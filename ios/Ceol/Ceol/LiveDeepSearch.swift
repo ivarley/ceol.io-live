@@ -3,18 +3,43 @@
 // notation, or both, with a type filter; each card shows the tune's opening bars. On
 // request, thesession.org too, where picking a tune imports it as it's logged. And the
 // escape: log the text as typed.
+//
+// The same search adds a tune to a session's list (the web's add pane uses TuneSearch
+// too): scoped to the session, tunes already on its list dimmed, no "as typed".
 
 import CeolDesign
 import CeolLogic
 import SwiftUI
 
+/// What a tune search is for, which the server reads to mark results ("played here",
+/// "in this session"): a night being logged, or a session's list.
+enum TuneSearchScope {
+    case instance(Int)
+    case session(String)
+
+    var queryItem: URLQueryItem {
+        switch self {
+        case .instance(let id): .init(name: "instance", value: String(id))
+        case .session(let path): .init(name: "session", value: path)
+        }
+    }
+}
+
 struct DeepSearchSheet: View {
-    let model: NightModel
+    let app: AppModel
+    let scope: TuneSearchScope
     let initialQuery: String
     let preferType: String?
+    var title = "Find a tune"
+    /// Offer to log the text as typed (the logger only).
+    var allowAsIs = true
+    /// Close after a pick; off when the pick leads on to a next step in the same sheet.
+    var closesOnPick = true
+    /// The whole result picked, before `onPick` (what a next step shows of it).
+    var pickedResult: ((JSONValue) -> Void)? = nil
     /// Close the panel (Cancel, a swipe to the right, or after a pick).
     let onClose: () -> Void
-    /// {tune_id, name, tune_type}, {thesession_id, ...}, or {name}.
+    /// {tune_id, name, tune_type, ...the result's fields}, {thesession_id, ...}, or {name}.
     let onPick: ([String: JSONValue]) -> Void
 
     enum Mode: String, CaseIterable { case mixed, name, abc }
@@ -58,7 +83,7 @@ struct DeepSearchSheet: View {
                                 Task { await searchTheSession(q) }
                             }
                         }
-                        if mode != .abc {
+                        if allowAsIs && mode != .abc {
                             wide("＋ Log “\(q)” as typed (unlinked)", color: CeolTokens.primary, id: "deep.asIs") {
                                 pick(["name": .string(q)])
                             }
@@ -91,7 +116,7 @@ struct DeepSearchSheet: View {
     private var header: some View {
         VStack(spacing: 10) {
             ZStack {
-                Text("Find a tune").font(.ceol(size: 17, weight: .semibold)).foregroundStyle(CeolTokens.textColor)
+                Text(title).font(.ceol(size: 17, weight: .semibold)).foregroundStyle(CeolTokens.textColor)
                 HStack {
                     Button("Cancel", action: onClose)
                         .font(.ceol(size: 16)).foregroundStyle(CeolTokens.primary)
@@ -155,7 +180,10 @@ struct DeepSearchSheet: View {
             ? ["thesession_id": r["tune_id"] ?? .null, "tune_id": r["tune_id"] ?? .null, "name": r["name"] ?? .null,
                "tune_type": r["tune_type"] ?? .null]
             : ["tune_id": r["tune_id"] ?? .null, "name": r["name"] ?? .null, "tune_type": r["tune_type"] ?? .null]
-        return Button { pick(payload) } label: {
+        return Button {
+            pickedResult?(r)
+            pick(payload)
+        } label: {
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text(r["name"]?.stringValue ?? "").font(.ceol(size: 17, weight: .semibold)).foregroundStyle(CeolTokens.textColor)
@@ -163,7 +191,7 @@ struct DeepSearchSheet: View {
                     if let t = r["tune_type"]?.stringValue { TypeChip(label: t) }
                 }
                 if !remote, let id = r["tune_id"]?.intValue {
-                    DeepIncipit(model: model, tuneID: id, base64: r["incipit_image"]?.stringValue, canRender: r["can_render"] == true)
+                    DeepIncipit(app: app, tuneID: id, base64: r["incipit_image"]?.stringValue, canRender: r["can_render"] == true)
                 }
                 let badges = [
                     r["abc_only"] == true ? "♪ notation" : nil, r["on_list"] == true ? "★ on your list" : nil,
@@ -179,7 +207,7 @@ struct DeepSearchSheet: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(CeolTokens.headerBg, in: RoundedRectangle(cornerRadius: 10))
             .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(CeolTokens.borderColor, lineWidth: 1))
-            .opacity(r["in_session"] == true && remote ? 0.6 : 1)
+            .opacity(r["in_session"] == true && (remote || !allowAsIs) ? 0.6 : 1)
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier(remote ? "deep.remote" : "deep.result")
@@ -198,7 +226,7 @@ struct DeepSearchSheet: View {
 
     private func pick(_ payload: [String: JSONValue]) {
         onPick(payload)
-        onClose()
+        if closesOnPick { onClose() }
     }
 
     private func search() async {
@@ -214,13 +242,13 @@ struct DeepSearchSheet: View {
         loading = true
         defer { loading = false }
         var items: [URLQueryItem] = [
-            .init(name: "instance", value: String(model.instanceID)), .init(name: "limit", value: "30"),
+            scope.queryItem, .init(name: "limit", value: "30"),
             .init(name: "q", value: q), .init(name: "mode", value: mode.rawValue),
         ]
         if let type { items.append(.init(name: "type", value: type)) }
         if let preferType { items.append(.init(name: "prefer_type", value: preferType)) }
         do {
-            let r = try await model.app.getJSON(Self.path("/api/tunes/deep-search", items))
+            let r = try await app.getJSON(Self.path("/api/tunes/deep-search", items))
             guard !Task.isCancelled else { return }
             results = r["results"]?.arrayValue ?? []
             failed = false
@@ -232,10 +260,10 @@ struct DeepSearchSheet: View {
     private func searchTheSession(_ q: String) async {
         remoteLoading = true
         defer { remoteLoading = false }
-        var items: [URLQueryItem] = [.init(name: "instance", value: String(model.instanceID)), .init(name: "q", value: q)]
+        var items: [URLQueryItem] = [scope.queryItem, .init(name: "q", value: q)]
         if let type { items.append(.init(name: "type", value: type)) }
         do {
-            let r = try await model.app.getJSON(Self.path("/api/tunes/thesession-search", items))
+            let r = try await app.getJSON(Self.path("/api/tunes/thesession-search", items))
             // Only tunes the local list doesn't already show.
             let local = Set(results.compactMap { $0["tune_id"]?.intValue })
             var seen = Set<Int>()
@@ -259,7 +287,7 @@ struct DeepSearchSheet: View {
 
 /// A search card's opening bars: the cached image, or rendered on demand.
 struct DeepIncipit: View {
-    let model: NightModel
+    let app: AppModel
     let tuneID: Int
     let base64: String?
     let canRender: Bool
@@ -278,11 +306,22 @@ struct DeepIncipit: View {
             if let base64, let data = Data(base64Encoded: base64) {
                 image = UIImage(data: data)
             } else if canRender,
-                let r = try? await model.app.getJSON("/api/tunes/\(tuneID)/incipit-image"),
+                let r = try? await app.getJSON("/api/tunes/\(tuneID)/incipit-image"),
                 let s = r["image"]?.stringValue, let data = Data(base64Encoded: s)
             {
                 image = UIImage(data: data)
             }
         }
+    }
+}
+
+extension DeepSearchSheet {
+    /// The logger's search: scoped to the night.
+    init(
+        model: NightModel, initialQuery: String, preferType: String?, onClose: @escaping () -> Void,
+        onPick: @escaping ([String: JSONValue]) -> Void
+    ) {
+        self.init(app: model.app, scope: .instance(model.instanceID), initialQuery: initialQuery, preferType: preferType,
+                  onClose: onClose, onPick: onPick)
     }
 }

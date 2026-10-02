@@ -480,6 +480,71 @@ class TestResponsesMatchSchemas:
         finally:
             conn.close()
 
+    def test_adding_to_a_session_validates(self, spec, native_client):
+        """A session's Tunes and People tabs as the app adds to them: a tune on its list
+        (and the 409 for one already there), someone on its list, and the notation
+        filter the Tunes tab's search runs."""
+        from database import get_db_connection
+
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT session_id FROM session WHERE path = 'austin/mueller'")
+            session_id = cur.fetchone()[0]
+            # A local tune with its default setting cached, so adding it fetches nothing.
+            cur.execute(
+                """SELECT t.tune_id FROM tune t
+                   WHERE t.redirect_to_tune_id IS NULL
+                     AND EXISTS (SELECT 1 FROM tune_setting ts WHERE ts.tune_id = t.tune_id)
+                     AND NOT EXISTS (SELECT 1 FROM session_tune st
+                                     WHERE st.session_id = %s AND st.tune_id = t.tune_id)
+                   ORDER BY t.tune_id LIMIT 1""",
+                (session_id,),
+            )
+            tune_id = cur.fetchone()[0]
+        finally:
+            conn.close()
+        schemas = spec["components"]["schemas"]
+        error = spec["components"]["responses"]["Error"]["content"]["application/json"]["schema"]
+        base = "/api/sessions/austin/mueller"
+        person_id = None
+        try:
+            r = native_client.post(f"{base}/tunes", {"tune_id": tune_id, "alias": "Contract Alias"})
+            assert r.status_code == 201, r.get_json()
+            self._validate(spec, schemas["SessionTuneAdded"], r.get_json())
+            again = native_client.post(f"{base}/tunes", {"tune_id": tune_id})
+            assert again.status_code == 409
+            self._validate(spec, error, again.get_json())
+
+            r = native_client.post(
+                f"{base}/people/add",
+                {"first_name": "Contract", "last_name": "Person", "instruments": ["fiddle"]},
+            )
+            assert r.status_code == 200, r.get_json()
+            self._validate(spec, schemas["SessionPersonAdded"], r.get_json())
+            person_id = r.get_json()["person_id"]
+            nameless = native_client.post(f"{base}/people/add", {"first_name": "Contract"})
+            assert nameless.status_code == 400
+            self._validate(spec, error, nameless.get_json())
+
+            r = native_client.post("/api/tunes/abc-filter", {"q": "GEDBED", "tune_ids": [tune_id]})
+            assert r.status_code == 200, r.get_json()
+            self._validate(spec, schemas["AbcFilterResult"], r.get_json())
+        finally:
+            conn = get_db_connection()
+            try:
+                cur = conn.cursor()
+                cur.execute(
+                    "DELETE FROM session_tune WHERE session_id = %s AND tune_id = %s", (session_id, tune_id)
+                )
+                if person_id:
+                    cur.execute("DELETE FROM session_person WHERE person_id = %s", (person_id,))
+                    cur.execute("DELETE FROM person_instrument WHERE person_id = %s", (person_id,))
+                    cur.execute("DELETE FROM person WHERE person_id = %s", (person_id,))
+                conn.commit()
+            finally:
+                conn.close()
+
     def test_adding_a_session_validates(self, spec, native_client, monkeypatch):
         """The add-session flow as the app runs it: search thesession.org, fetch one
         session as the form's seed, check Ceol doesn't have it, create it. thesession.org

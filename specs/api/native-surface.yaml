@@ -477,6 +477,27 @@ components:
         setting_id: { type: [integer, "null"] }
         # Signed in only: plays on nights the viewer checked in to ("Nights I attended").
         attended_play_count: { type: integer }
+    AbcFilterResult:
+      type: object
+      required: [success, tune_ids]
+      properties:
+        success: { type: boolean, const: true }
+        tune_ids: { type: array, items: { type: integer } }
+    SessionTuneAdded:
+      type: object
+      required: [success, tune_id]
+      properties:
+        success: { type: boolean, const: true }
+        tune_id: { type: integer }
+        # The id asked for, when it had been merged into tune_id.
+        remapped_from: { type: [integer, "null"] }
+    SessionPersonAdded:
+      type: object
+      required: [success, person_id, confirmed]
+      properties:
+        success: { type: boolean, const: true }
+        person_id: { type: integer }
+        confirmed: { type: boolean }
     SessionTunesRemaining:
       type: object
       required: [success, tunes]
@@ -1369,8 +1390,22 @@ paths:
   /api/tunes/abc-filter:
     post:
       operationId: filterTunesByAbc
-      summary: Which of these tune_ids match this notation query
-      responses: { "200": { description: "{tune_ids}" } }
+      summary: >-
+        Which of these tune_ids match this notation query. For a list the client already
+        holds (a session's tunes): the client sends the ids it shows and unions the answer
+        into its name filter. Public.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [q, tune_ids]
+              properties:
+                q: { type: string, maxLength: 200 }
+                tune_ids: { type: array, maxItems: 2000, items: { type: integer } }
+      responses:
+        "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/AbcFilterResult" } } } }
+        default: { $ref: "#/components/responses/Error" }
 
   # --- sessions ------------------------------------------------------------------
   /api/sessions/with-today-status:
@@ -1404,6 +1439,52 @@ paths:
         - { name: session_path, in: path, required: true, schema: { type: string } }
         - { name: tune_id, in: path, required: true, schema: { type: integer } }
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/SessionTuneLogInstances" } } } } }
+  /api/sessions/{session_path}/tunes:
+    post:
+      operationId: addSessionTune
+      summary: >-
+        Add a tune to a session's list, optionally with the session's own name for it, a
+        setting and a key. A thesession_id not yet on Ceol is imported. 409 when it is
+        already on the list.
+      security: [{ bearer: [] }]
+      parameters: [{ name: session_path, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                tune_id: { type: [integer, "null"] }
+                thesession_id: { type: [integer, "null"] }
+                alias: { type: [string, "null"], maxLength: 255 }
+                setting_id: { type: [integer, "null"] }
+                key: { type: [string, "null"] }
+      responses:
+        "201": { description: added, content: { application/json: { schema: { $ref: "#/components/schemas/SessionTuneAdded" } } } }
+        default: { $ref: "#/components/responses/Error" }
+  /api/sessions/{session_path}/people/add:
+    post:
+      operationId: addSessionPerson
+      summary: >-
+        Add someone to a session's list, as a member. Needs the people list to be visible
+        to you; they land confirmed only when you are a session admin. An email that
+        matches someone already on Ceol adds that person rather than a new one.
+      security: [{ bearer: [] }]
+      parameters: [{ name: session_path, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [first_name, last_name]
+              properties:
+                first_name: { type: string }
+                last_name: { type: string }
+                email: { type: [string, "null"] }
+                instruments: { type: array, items: { type: string } }
+      responses:
+        "200": { description: added, content: { application/json: { schema: { $ref: "#/components/schemas/SessionPersonAdded" } } } }
+        default: { $ref: "#/components/responses/Error" }
   /api/sessions/{session_path}/tunes/remaining:
     get:
       operationId: getSessionTunesRemaining

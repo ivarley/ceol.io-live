@@ -139,6 +139,70 @@ final class CeolUITests: XCTestCase {
         app.buttons["filters.done"].tap()
     }
 
+    /// A session's + buttons: a tune onto its list (from the catalogue, with the name the
+    /// session gives it), and someone onto its people; and the Tunes search by notes.
+    /// Writes to the seeded database: a rerun finds the tune already there and opens it.
+    @MainActor
+    func testAddingToASession() throws {
+        let app = launch()
+        signIn(app)
+        app.buttons["tab.sessions"].firstMatch.tap()
+        let mueller = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Mueller Session'")).firstMatch
+        XCTAssertTrue(mueller.waitForExistence(timeout: 10))
+        mueller.tap()
+
+        // Notes, not a name: Drowsy Maggie's second bar.
+        let search = app.textFields["session.tunes.search"]
+        XCTAssertTrue(search.waitForExistence(timeout: 10))
+        search.tap()
+        search.typeText("BABc dAFD")
+        XCTAssertTrue(app.staticTexts["♪ notes match"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Drowsy Maggie"].exists)
+        snapshot("session notes search")
+        app.buttons["Clear"].firstMatch.tap()
+
+        // A tune from the catalogue.
+        app.buttons["session.addTune"].tap()
+        let field = app.textFields["deep.field"]
+        XCTAssertTrue(field.waitForExistence(timeout: 10))
+        field.tap()
+        field.typeText("Lucy Farr")
+        let result = app.buttons["deep.result"].firstMatch
+        XCTAssertTrue(result.waitForExistence(timeout: 10))
+        result.tap()
+        let add = app.buttons["addSessionTune.add"]
+        if add.waitForExistence(timeout: 5) {
+            snapshot("add session tune")
+            add.tap()
+            XCTAssertTrue(add.waitForNonExistence(timeout: 10))
+            // Searched to the new one.
+            XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier == 'session.tune' AND label CONTAINS \"Lucy Farr's\"")).firstMatch.waitForExistence(timeout: 10))
+        } else {
+            // Already there from an earlier run: it opens instead.
+            XCTAssertTrue(app.staticTexts["Played at this session"].waitForExistence(timeout: 10))
+            app.buttons["Done"].firstMatch.tap()
+        }
+
+        // Someone new on the People tab.
+        app.buttons.containing(NSPredicate(format: "label BEGINSWITH 'People'")).firstMatch.tap()
+        let addPerson = app.buttons["session.addPerson"]
+        XCTAssertTrue(addPerson.waitForExistence(timeout: 10))
+        addPerson.tap()
+        let last = "Fiddler\(Int(Date().timeIntervalSince1970) % 100000)"
+        let name = app.searchFields.firstMatch
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        name.tap()
+        name.typeText("Uitest \(last)")
+        app.buttons["addPerson.new"].tap()
+        let create = app.buttons["newPerson.add"]
+        XCTAssertTrue(create.waitForExistence(timeout: 5))
+        snapshot("add session person")
+        create.tap()
+        XCTAssertTrue(create.waitForNonExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Uitest \(last)"].waitForExistence(timeout: 10))
+        snapshot("session person added")
+    }
+
     /// Phase 3c: the Tunes tab, a tune's sheet, and the catalogue below your matches.
     @MainActor
     func testBrowsingTunes() throws {

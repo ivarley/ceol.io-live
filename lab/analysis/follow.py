@@ -201,3 +201,4 @@ def boundaries(path_state, times, n_tunes):
     after = np.nonzero(path_state == n_tunes)[0]
     end = float(times[after[0]]) if len(after) else float(times[-1])
     return starts, end
+

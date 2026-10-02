@@ -190,6 +190,10 @@ struct SessionDetailView: View {
     @State private var filteringTunes = false
     @State private var tunebook: Tunebook?
     @State private var tunebookFailed = false
+    /// Tunes whose notes match a search that looks like notes (the server's answer).
+    @State private var abcIDs: Set<Int>?
+    @State private var addingTune = false
+    @State private var addingPerson = false
     // Logs: a tune search over what's been logged here, and which nights.
     @State private var logSearch = ""
     @State private var logView = SessionPage.LogView.logged
@@ -261,6 +265,24 @@ struct SessionDetailView: View {
                     label: "Show", options: SessionPage.PeopleView.allCases.map { ($0, $0.label) },
                     selection: $peopleView, initial: .members)
             }
+            .sheet(isPresented: $addingTune) {
+                AddSessionTuneSheet(path: path, initialQuery: tuneSearch) { _, name in
+                    // Searched to the new one, so you see where it landed.
+                    tuneSearch = name
+                    Task { await load() }
+                } onAlready: { id, name, type in
+                    openTune = TuneRef(id: id, name: name, type: type, sessionPath: path, statusKnown: false)
+                }
+            }
+            .sheet(isPresented: $addingPerson) {
+                AddSessionPersonSheet(path: path, people: people.value?.people ?? []) {
+                    Task {
+                        await loadPeople()
+                        await load()
+                    }
+                }
+            }
+            .task(id: "\(tuneSearch)#\(allTunes?.count ?? 0)") { await matchNotation() }
             // The status filter needs your tunebook; a failure turns it off and says so.
             .task(id: tuneFilters.myStatus != .off) { await loadTunebook() }
             .sheet(isPresented: $addingNight) {
@@ -300,6 +322,24 @@ struct SessionDetailView: View {
             remainingFailed = false
         } catch {
             remainingFailed = true
+        }
+    }
+
+    /// A search that looks like notes asks the server which of the session's tunes have
+    /// them (the list carries no notation), after a pause in typing. Name typing costs
+    /// nothing; a failure leaves the search to names, as on the web.
+    private func matchNotation() async {
+        guard !ABCQuery.abcNeedle(tuneSearch).isEmpty, let ids = allTunes?.map(\.tuneId), !ids.isEmpty else {
+            abcIDs = nil
+            return
+        }
+        try? await Task.sleep(for: .milliseconds(450))
+        guard !Task.isCancelled else { return }
+        do {
+            let r = try await model.auth.client.filterTunesByAbc(body: .json(.init(q: tuneSearch, tuneIds: ids))).ok.body.json
+            if !Task.isCancelled { abcIDs = Set(r.tuneIds) }
+        } catch {
+            if !Task.isCancelled { abcIDs = nil }
         }
     }
 
@@ -512,11 +552,16 @@ struct SessionDetailView: View {
         }
         var f = tuneFilters
         let _ = { f.search = tuneSearch }()
-        let shown = SessionPage.filterAndSortTunes(all, filters: f, sort: tuneSort, status: myStatus)
+        let shown = SessionPage.filterAndSortTunes(all, filters: f, sort: tuneSort, status: myStatus, abcIDs: abcIDs)
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 8) {
                 SearchRow(
-                    text: $tuneSearch, prompt: "Search", fieldID: "session.tunes.search",
+                    text: $tuneSearch, prompt: "Search by name or notes", fieldID: "session.tunes.search",
+                    onAdd: d.permissions.isLoggedIn ? {
+                        searchingTunes = false
+                        addingTune = true
+                    } : nil,
+                    addID: "session.addTune", addLabel: "Add a tune to this session",
                     focused: $searchingTunes,
                     // The keyboard would otherwise stay up over the drawer.
                     onFilter: {
@@ -535,7 +580,8 @@ struct SessionDetailView: View {
             }
             .padding(.horizontal, 16).padding(.vertical, 10)
             Hairline()
-            ForEach(shown, id: \.tuneID) { t in
+            ForEach(shown, id: \.tune.tuneID) { row in
+                let t = row.tune
                 Button {
                     openTune = TuneRef(id: t.tuneID, name: t.name, type: t.type, sessionPath: path, statusKnown: false)
                 } label: {
@@ -548,7 +594,11 @@ struct SessionDetailView: View {
                                 StatusGlyph(status: status)
                             }
                         }
-                        Text(t.name).font(.ceol(size: 19, weight: .medium)).foregroundStyle(CeolTokens.textColor).lineLimit(1)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(t.name).font(.ceol(size: 19, weight: .medium)).foregroundStyle(CeolTokens.textColor).lineLimit(1)
+                            // Here for its notes, not its name: say so.
+                            if row.abcOnly { Text("♪ notes match").font(.ceol(size: 12)).foregroundStyle(CeolTokens.warning) }
+                        }
                         Spacer(minLength: 6)
                         if let type = t.type { TypeChip(label: type, size: 15) }
                         // Filtered to nights you were there, the count is those plays.
@@ -749,6 +799,11 @@ struct SessionDetailView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     SearchRow(
                         text: $peopleSearch, prompt: "Search people…", fieldID: "people.search",
+                        onAdd: {
+                            searchingPeople = false
+                            addingPerson = true
+                        },
+                        addID: "session.addPerson", addLabel: "Add someone to this session",
                         focused: $searchingPeople,
                         onFilter: {
                             searchingPeople = false

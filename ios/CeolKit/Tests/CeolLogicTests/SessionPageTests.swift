@@ -17,8 +17,24 @@ struct SessionPageTests {
         tune(103, "The Ashplant", "reel", 9, 100),
     ]
 
-    private func ids(_ f: SessionPage.Filters, _ sort: SessionPage.Sort = .init(), status: ((Int) -> String)? = nil, in all: [SessionPage.Tune]? = nil) -> [Int] {
-        SessionPage.filterAndSortTunes(all ?? tunes, filters: f, sort: sort, status: status).map(\.tuneID)
+    private func ids(
+        _ f: SessionPage.Filters, _ sort: SessionPage.Sort = .init(), status: ((Int) -> String)? = nil,
+        in all: [SessionPage.Tune]? = nil, abc: Set<Int>? = nil
+    ) -> [Int] {
+        SessionPage.filterAndSortTunes(all ?? tunes, filters: f, sort: sort, status: status, abcIDs: abc).map(\.tune.tuneID)
+    }
+
+    @Test("notation: the server's matches join a search that would drop them, tagged when only the notes matched")
+    func notation() {
+        var f = SessionPage.Filters()
+        f.search = "gedbed"
+        #expect(ids(f, abc: [102]) == [102])
+        #expect(ids(f).isEmpty)
+        #expect(SessionPage.filterAndSortTunes(tunes, filters: f, sort: .init(), abcIDs: [102])[0].abcOnly)
+        f.search = "banish"
+        #expect(!SessionPage.filterAndSortTunes(tunes, filters: f, sort: .init(), abcIDs: [102])[0].abcOnly)
+        f.search = ""
+        #expect(SessionPage.filterAndSortTunes(tunes, filters: f, sort: .init(), abcIDs: [102]).allSatisfy { !$0.abcOnly })
     }
 
     @Test("no filters: sorted by plays here, most first")

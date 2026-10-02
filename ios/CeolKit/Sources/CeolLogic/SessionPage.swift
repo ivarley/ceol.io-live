@@ -82,31 +82,44 @@ public enum SessionPage {
         }
     }
 
+    public struct Row: Sendable {
+        public var tune: Tune
+        /// Here because its notes matched the search, not its name.
+        public var abcOnly: Bool
+    }
+
     /// The tunes that pass, sorted. `status` answers your status for a tune (nil until
     /// your tunebook has loaded, when the status filter lets everything through, as the
-    /// web's does).
-    public static func filterAndSortTunes(_ all: [Tune], filters f: Filters, sort: Sort, status: ((Int) -> String)? = nil) -> [Tune] {
+    /// web's does). `abcIDs`: the tunes whose notation matched a search that looks like
+    /// notes (the server's answer, ABCQuery); nil is name-only matching.
+    public static func filterAndSortTunes(
+        _ all: [Tune], filters f: Filters, sort: Sort, status: ((Int) -> String)? = nil, abcIDs: Set<Int>? = nil
+    ) -> [Row] {
         let needle = MyTunesList.fold(JSText.trim(f.search))
         let searchedID = needle.isEmpty ? nil : MyTunesRules.extractTuneID(f.search)
-        var out = all.filter { t in
+        var out: [Row] = all.compactMap { t in
+            var abcOnly = false
             if !needle.isEmpty {
                 let idMatch = searchedID != nil && t.tuneID == searchedID
-                if !idMatch && !MyTunesList.fold(t.name).contains(needle) { return false }
+                let nameMatch = MyTunesList.fold(t.name).contains(needle)
+                let abcMatch = abcIDs?.contains(t.tuneID) ?? false
+                if !idMatch && !nameMatch && !abcMatch { return nil }
+                abcOnly = abcMatch && !idMatch && !nameMatch
             }
-            if !f.type.isEmpty && t.type != f.type { return false }
-            if f.attended && t.attendedPlayCount <= 0 { return false }
-            if f.myStatus != .off && f.myStatus != .all, let status, status(t.tuneID) != f.myStatus.rawValue { return false }
-            return true
+            if !f.type.isEmpty && t.type != f.type { return nil }
+            if f.attended && t.attendedPlayCount <= 0 { return nil }
+            if f.myStatus != .off && f.myStatus != .all, let status, status(t.tuneID) != f.myStatus.rawValue { return nil }
+            return Row(tune: t, abcOnly: abcOnly)
         }
         let sign = sort.descending ? -1 : 1
         switch sort.mode {
         case .alpha:
             out.sort { a, b in
-                let r = a.name.compare(b.name, locale: Locale(identifier: "en"))
+                let r = a.tune.name.compare(b.tune.name, locale: Locale(identifier: "en"))
                 return sort.descending ? r == .orderedDescending : r == .orderedAscending
             }
-        case .session: out.sort { ($0.playCount - $1.playCount) * sign < 0 }
-        case .everywhere: out.sort { ($0.tunebookCount - $1.tunebookCount) * sign < 0 }
+        case .session: out.sort { ($0.tune.playCount - $1.tune.playCount) * sign < 0 }
+        case .everywhere: out.sort { ($0.tune.tunebookCount - $1.tune.tunebookCount) * sign < 0 }
         }
         return out
     }

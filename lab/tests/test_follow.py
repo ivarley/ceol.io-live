@@ -32,3 +32,4 @@ def test_heard_slots_take_a_note_where_it_starts_and_hold_it():
     times = slot_grid(0, 1000, period_ms=100.0)
     notes = [{"t0_ms": 0, "t1_ms": 300, "midi": 62}, {"t0_ms": 500, "t1_ms": 600, "midi": 64}]
     assert list(heard_slots(notes, times)[:7]) == [2, 2, 2, -1, -1, 4, -1]
+

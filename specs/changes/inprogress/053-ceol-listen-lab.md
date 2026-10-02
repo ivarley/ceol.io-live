@@ -2258,6 +2258,20 @@ later in a set 350 -> 349, better 53 worse 44 (p = 0.42). Tuttle's moved under
 0.1 s: the wrong grid was not what held it back, the weakly transcribed first
 time through was. Taken out; `tempo_map` keeps each window's `strength`.
 
+Negative: walking a set's first tune back. The path enters a tune only at its
+first eighth, and what it matched there could as well be the A part's repeat
+or a later time round, so the start was allowed to step back by any distance
+that puts the entry on an A start (from the played form), keeping the furthest
+step from which the form, played from its first eighth, beats "not a tune"
+over the stretch and over its first part alone. Over the nine nights it moved
+8 set starts: better 3 (Take Your Churn +18.3 -> +5.6 s, The White Petticoat
++8.1 -> +0.8, The Dunmore Lasses +6.8 -> -4.4), worse 5 (four right ones
+pulled back about one A part, 7-9 s; p = 0.73), and none of the long late
+misses (Tuttle's +26 s, the four of about 33 s) moved. So those are not entries
+a time round late, and "beats not a tune" is too weak a test of whether the
+tune was playing: the chat or lead-in before a set sometimes passes it. Taken
+out.
+
 ### Still open
 
 **As of 2026-10-01.** Items 1 to 3 below are done (item 2 became night 137,

@@ -4398,6 +4398,7 @@ def get_session_person_detail(session_path, person_id):
         return jsonify({"success": False, "message": f"Failed to get person details: {str(e)}"}), 500
 
 
+@api_login_required
 def add_person_to_session_people_tab(session_path):
     """Add a person to this session's roster (spec 034).
 

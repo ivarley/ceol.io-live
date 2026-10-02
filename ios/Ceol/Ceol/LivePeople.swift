@@ -145,7 +145,9 @@ struct PersonPicker: View {
         NavigationStack {
             Group {
                 if creating {
-                    NewPersonForm(model: model, name: People.splitName(query)) { person in
+                    NewPersonForm(app: model.app, name: People.splitName(query), create: { first, last, email, instruments in
+                        await model.createPerson(first: first, last: last, email: email, instruments: instruments)
+                    }) { person in
                         creating = false
                         query = ""
                         if let person { chose(person, isNew: true) }
@@ -273,9 +275,15 @@ struct PersonPicker: View {
     }
 }
 
-/// Someone new: name, email (links an account), instruments. Checked in on adding.
+/// Someone new: name, email (links an account), instruments. On a night they are checked
+/// in on adding; on a session's People tab they join its list.
 struct NewPersonForm: View {
-    let model: NightModel
+    let app: AppModel
+    /// Saves them: the new person, nil when it didn't work and the caller has said so,
+    /// or a thrown error whose description the form shows.
+    let create: (_ first: String, _ last: String, _ email: String, _ instruments: [String]) async throws -> JSONValue?
+    /// A session's list needs both names; a night takes a first name alone.
+    var needsLastName = false
     let onDone: (JSONValue?) -> Void
     @State private var first: String
     @State private var last: String
@@ -284,9 +292,16 @@ struct NewPersonForm: View {
     @State private var other = ""
     @State private var canonical: [String] = []
     @State private var busy = false
+    @State private var failure: String?
 
-    init(model: NightModel, name: (first: String, last: String), onDone: @escaping (JSONValue?) -> Void) {
-        self.model = model
+    init(
+        app: AppModel, name: (first: String, last: String), needsLastName: Bool = false,
+        create: @escaping (_ first: String, _ last: String, _ email: String, _ instruments: [String]) async throws -> JSONValue?,
+        onDone: @escaping (JSONValue?) -> Void
+    ) {
+        self.app = app
+        self.create = create
+        self.needsLastName = needsLastName
         self.onDone = onDone
         _first = State(initialValue: name.first)
         _last = State(initialValue: name.last)
@@ -296,10 +311,13 @@ struct NewPersonForm: View {
         Form {
             Section {
                 TextField("First name", text: $first).accessibilityIdentifier("newPerson.first")
-                TextField("Last name", text: $last)
+                TextField("Last name", text: $last).accessibilityIdentifier("newPerson.last")
                 TextField("Email (optional)", text: $email).keyboardType(.emailAddress).textInputAutocapitalization(.never)
             } footer: {
-                Text("If they already have an account, their email links them to it.")
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("If they already have an account, their email links them to it.")
+                    if let failure { Text(failure).foregroundStyle(CeolTokens.danger) }
+                }
             }
             Section("Instruments (optional)") {
                 FlowLayout(spacing: 6) {
@@ -330,22 +348,29 @@ struct NewPersonForm: View {
             ToolbarItem(placement: .confirmationAction) {
                 Button(busy ? "Adding…" : "Add person") {
                     busy = true
+                    failure = nil
                     Task {
-                        let p = await model.createPerson(
-                            first: first.trimmingCharacters(in: .whitespaces), last: last.trimmingCharacters(in: .whitespaces),
-                            email: email.trimmingCharacters(in: .whitespaces), instruments: chosen)
-                        busy = false
-                        onDone(p)
+                        do {
+                            let p = try await create(
+                                first.trimmingCharacters(in: .whitespaces), last.trimmingCharacters(in: .whitespaces),
+                                email.trimmingCharacters(in: .whitespaces), chosen)
+                            busy = false
+                            onDone(p)
+                        } catch {
+                            busy = false
+                            failure = (error as? LocalizedError)?.errorDescription ?? "That person wasn't added. Try again."
+                        }
                     }
                 }
-                .disabled(first.trimmingCharacters(in: .whitespaces).isEmpty || busy)
+                .disabled(first.trimmingCharacters(in: .whitespaces).isEmpty
+                    || (needsLastName && last.trimmingCharacters(in: .whitespaces).isEmpty) || busy)
                 .accessibilityIdentifier("newPerson.add")
             }
         }
         .scrollContentBackground(.hidden)
         .background(CeolTokens.drawerBg)
         .task {
-            canonical = (try? await model.app.getJSON("/api/me/profile"))?["canonical_instruments"]?.arrayValue?.compactMap(\.stringValue) ?? []
+            canonical = (try? await app.getJSON("/api/me/profile"))?["canonical_instruments"]?.arrayValue?.compactMap(\.stringValue) ?? []
         }
     }
 }
