@@ -294,6 +294,9 @@ def tempo_map(y, sr, window_s=20.0, hop_s=10.0, hop=HOP):
     The meter is taken across the whole span rather than per window, because
     a tune does not change from a jig to a reel halfway through and a short
     window is a much worse judge of it.
+
+    `strength` is each window's pulse strength, so a caller can tell a window
+    of music from one of chat between tunes, whose "tempo" is noise.
     """
     whole = estimate_pulse(y, sr, hop=hop)
     if not whole:
@@ -301,7 +304,7 @@ def tempo_map(y, sr, window_s=20.0, hop_s=10.0, hop=HOP):
     n = y.size
     step = int(hop_s * sr)
     width = int(window_s * sr)
-    times, periods = [], []
+    times, periods, strengths = [], [], []
     start = 0
     while start < n:
         end = min(n, start + width)
@@ -318,12 +321,13 @@ def tempo_map(y, sr, window_s=20.0, hop_s=10.0, hop=HOP):
                     p *= 2.0
                 times.append((start + end) / 2.0 / sr * 1000.0)
                 periods.append(p)
+                strengths.append(float(local["pulse_strength"]))
         if end >= n:
             break
         start += step
     if not times:
         return None
-    return {"t_ms": times, "period_ms": periods, "grouping": whole["grouping"],
+    return {"t_ms": times, "period_ms": periods, "strength": strengths, "grouping": whole["grouping"],
             "median_period_ms": float(np.median(periods)),
             "whole_period_ms": whole["period_ms"],
             "spread_ms": float(max(periods) - min(periods))}

@@ -2250,6 +2250,14 @@ the path waiting for a cleaner time round to enter the tune; on Tuttle's (143,
 being mostly the chat before the set (179 ms an eighth against 145-151 in the
 tune).
 
+Negative: a tempo map from only the windows that heard a beat (pulse
+strength at least half the span's median; the grid holds the nearest strong
+window's tempo across the weak ones), threshold fixed before the run. Over the
+nine nights: first of a set within 1 s 181 -> 182, better 40 worse 39 (p = 1);
+later in a set 350 -> 349, better 53 worse 44 (p = 0.42). Tuttle's moved under
+0.1 s: the wrong grid was not what held it back, the weakly transcribed first
+time through was. Taken out; `tempo_map` keeps each window's `strength`.
+
 ### Still open
 
 **As of 2026-10-01.** Items 1 to 3 below are done (item 2 became night 137,
