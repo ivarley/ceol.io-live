@@ -133,6 +133,20 @@ Two things about the segments that every label-cutting routine must know:
 - A trailing implicit end runs to the end of the file (one is 5,475 s). The
   harness caps those at ten minutes and flags them.
 
+Where a segment starts, agreed with the player on 2026-10-02 while scoring
+boundaries on recording 143:
+
+- **A tune starts at its first note as played, however quiet.** Not where it
+  becomes clearly audible: that depends on the microphone, where it sat and
+  how loud the room was, so it moves from night to night for reasons that
+  are not the music, and a label that followed what a detector can hear would
+  hide the detector's limits. (The Cordal on 143: a guitarist started it very
+  quietly at 1:48:41, and it is clearly audible only on the second time through
+  the A part, at 1:48:59; it starts at 1:48:41.)
+- **A false start belongs to no tune.** The tune starts at the attempt that
+  carried on. (Music For A Found Harmonium on 143: 2:57:43, after a couple of
+  false starts.)
+
 ### Board (`board.sqlite`)
 
 | Table | What a row is |
