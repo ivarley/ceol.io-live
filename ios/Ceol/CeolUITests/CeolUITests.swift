@@ -541,6 +541,7 @@ final class CeolUITests: XCTestCase {
         XCTAssertTrue(mueller.waitForExistence(timeout: 10))
         mueller.tap()
         app.buttons.containing(NSPredicate(format: "label BEGINSWITH 'Logs'")).firstMatch.tap()
+        showAllNights(app)
         let night = app.buttons.matching(NSPredicate(format: "label MATCHES '.*[0-9]+ tunes?.*'")).firstMatch
         XCTAssertTrue(night.waitForExistence(timeout: 10))
         night.tap()
@@ -598,6 +599,7 @@ final class CeolUITests: XCTestCase {
         XCTAssertTrue(mueller.waitForExistence(timeout: 10))
         mueller.tap()
         app.buttons.containing(NSPredicate(format: "label BEGINSWITH 'Logs'")).firstMatch.tap()
+        showAllNights(app)
         let night = app.buttons.matching(NSPredicate(format: "label MATCHES '.*[0-9]+ tunes?.*'")).firstMatch
         XCTAssertTrue(night.waitForExistence(timeout: 10))
         night.tap()
@@ -876,6 +878,7 @@ final class CeolUITests: XCTestCase {
         XCTAssertTrue(mueller.waitForExistence(timeout: 10))
         mueller.tap()
         app.buttons.containing(NSPredicate(format: "label BEGINSWITH 'Logs'")).firstMatch.tap()
+        showAllNights(app)
         let night = app.buttons.matching(NSPredicate(format: "label MATCHES '.*[0-9]+ tunes?.*'")).firstMatch
         XCTAssertTrue(night.waitForExistence(timeout: 10))
         night.tap()
@@ -1034,12 +1037,32 @@ final class CeolUITests: XCTestCase {
     }
 
     @MainActor
+    /// The Logs tab opens on logged nights only, as the web's does; the newest night
+    /// (tonight's, say) may have nothing logged yet.
+    private func showAllNights(_ app: XCUIApplication) {
+        let filter = app.buttons["logs.search.filter"]
+        XCTAssertTrue(filter.waitForExistence(timeout: 10))
+        filter.tap()
+        let all = app.buttons["All"].firstMatch
+        XCTAssertTrue(all.waitForExistence(timeout: 5))
+        all.tap()
+        app.buttons["filters.done"].tap()
+    }
+
     private func openNewestMuellerNight(_ app: XCUIApplication) {
         app.buttons["tab.sessions"].firstMatch.tap()
         let mueller = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Mueller Session'")).firstMatch
         XCTAssertTrue(mueller.waitForExistence(timeout: 10))
         mueller.tap()
         app.buttons.containing(NSPredicate(format: "label BEGINSWITH 'Logs'")).firstMatch.tap()
+        // showAllNights, inline: this helper is called from nonisolated tests.
+        let filter = app.buttons["logs.search.filter"]
+        XCTAssertTrue(filter.waitForExistence(timeout: 10))
+        filter.tap()
+        let all = app.buttons["All"].firstMatch
+        XCTAssertTrue(all.waitForExistence(timeout: 5))
+        all.tap()
+        app.buttons["filters.done"].tap()
         let night = app.buttons.matching(NSPredicate(format: "label MATCHES '.*[0-9]+ tunes?.*'")).firstMatch
         XCTAssertTrue(night.waitForExistence(timeout: 10))
         night.tap()
