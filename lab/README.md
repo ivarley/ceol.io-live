@@ -33,8 +33,10 @@ Everything under `lab/data/` (gitignored). Set `LAB_DATA_DIR` to put it elsewher
 
 ```bash
 # 1. Pull the corpus from production, read-only. AWS_* in lab/.env for the audio.
-lab pull --database-url "$PROD_DB_URL" --recordings 2 --skip-audio   # manifests + tunes.csv
-lab pull --database-url "$PROD_DB_URL" --recordings 2                # + master audio
+# `lab` is `python -m lab` (venv active, in this directory). The database URL
+# defaults to PROD_DB_URL from lab/.env; --database-url overrides it.
+python -m lab pull --recordings 2 --skip-audio   # manifests + tunes.csv (+ meter log)
+python -m lab pull --recordings 2                # + master audio
 
 # 2. Derive the working audio and bench features
 lab prepare --recordings 2

@@ -118,7 +118,8 @@ _EXT_BY_MIME = {
 
 def add_parser(sub):
     p = sub.add_parser("pull", help="copy manifests, master audio and tunes.csv from production (read-only)")
-    p.add_argument("--database-url", required=True, help="production DATABASE_URL; read-only transaction enforced")
+    p.add_argument("--database-url", default=None,
+                   help="production DATABASE_URL (default: PROD_DB_URL from lab/.env); read-only transaction enforced")
     p.add_argument("--recordings", help="comma-separated recording ids (default: every recording with segments)")
     p.add_argument("--skip-audio", action="store_true", help="manifests and tunes.csv only")
     p.add_argument("--skip-corpus", action="store_true", help="do not fetch tunes.csv")
@@ -134,7 +135,7 @@ def _parse_ids(text):
 
 def _connect_readonly(database_url):
     if not database_url.strip():
-        raise SystemExit("--database-url is empty (an unset shell variable?). Refusing to fall back to the local database.")
+        raise SystemExit("--database-url is empty (an unset shell variable, or no PROD_DB_URL in lab/.env?). Refusing to fall back to the local database.")
     import psycopg2
 
     return psycopg2.connect(
@@ -358,7 +359,12 @@ def _count_dump_tunes(path):
 
 def main(args):
     wanted = _parse_ids(args.recordings)
-    conn = _connect_readonly(args.database_url)
+    # Not lab.env.prod_database_url(): that falls back to DATABASE_URL, which the
+    # repo's .env points at the LOCAL database.
+    url = args.database_url
+    if url is None:
+        url = os.environ.get("PROD_DB_URL") or os.environ.get("PROD_DATABASE_URL") or ""
+    conn = _connect_readonly(url)
     try:
         manifests = write_manifests(conn, wanted)
     finally:
