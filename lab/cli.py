@@ -30,6 +30,7 @@ COMMANDS = {
     "suspects": "lab.tools.suspects",
     "view": "lab.tools.viewer",
     "listen": "lab.tools.listen",
+    "drafts": "lab.tools.drafts",
 }
 
 
