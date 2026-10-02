@@ -247,6 +247,34 @@ def download_masters(manifests):
         print(f"recording {rec['recording_id']:>4}  -> {dest}")
 
 
+def download_meter_logs(manifests):
+    """The listening meter's log beside each recording, where the phone made one.
+
+    The native recorder (spec 053) uploads what the meter showed while it recorded,
+    and every tap, to recordings/<uuid>/listen-states.jsonl beside the audio
+    (recording.listen_log_key). Most recordings have none: they were not made by
+    the phone. Small, so fetched every time.
+    """
+    import recording as rec_mod
+
+    if rec_mod.check_configured():
+        return
+    s3 = rec_mod.get_s3_client()
+    bucket = rec_mod.get_s3_bucket()
+    for manifest in manifests:
+        rec = manifest["recording"]
+        dest = os.path.join(paths.recording_dir(rec["recording_id"]), "listen-states.jsonl")
+        try:
+            obj = s3.get_object(Bucket=bucket, Key=rec_mod.listen_log_key(rec["storage_key"]))
+        except Exception:  # none for this recording
+            continue
+        body = obj["Body"].read()
+        with open(dest, "wb") as f:
+            f.write(body)
+        lines = body.count(b"\n")
+        print(f"recording {rec['recording_id']:>4}  meter log, {lines} lines -> {dest}")
+
+
 def fetch_tunes_csv(force=False, attempts=4):
     """Download the public dump, whole or not at all.
 
@@ -339,6 +367,7 @@ def main(args):
         fetch_tunes_csv(force=args.refresh_corpus)
     if not args.skip_audio:
         download_masters(manifests)
+    download_meter_logs(manifests)
     return 0
 
 
