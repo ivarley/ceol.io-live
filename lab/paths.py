@@ -65,12 +65,22 @@ def ensure_dir(path):
 
 
 def prepared_recording_ids():
-    """Recordings that have been pulled (manifest present), ascending."""
+    """Labelled recordings that have been pulled (manifest with segments), ascending.
+
+    A recording pulled before anyone segmented it (to draft its segments) has a
+    manifest with none; it is not part of the corpus until it is labelled and
+    pulled again, so every "all recordings" default leaves it out.
+    """
+    import json
+
     root = data("recordings")
     if not os.path.isdir(root):
         return []
     ids = []
     for name in os.listdir(root):
-        if name.isdigit() and os.path.exists(manifest_path(name)):
-            ids.append(int(name))
+        path = manifest_path(name)
+        if name.isdigit() and os.path.exists(path):
+            with open(path) as f:
+                if json.load(f).get("segments"):
+                    ids.append(int(name))
     return sorted(ids)

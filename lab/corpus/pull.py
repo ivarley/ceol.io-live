@@ -45,7 +45,7 @@ RECORDINGS_SQL = """
     JOIN session_instance si ON si.session_instance_id = r.session_instance_id
     JOIN session s ON s.session_id = si.session_id
     WHERE r.status = 'ready'
-      AND EXISTS (SELECT 1 FROM recording_tune_segment rts WHERE rts.recording_id = r.recording_id)
+      AND (%(named)s OR EXISTS (SELECT 1 FROM recording_tune_segment rts WHERE rts.recording_id = r.recording_id))
     ORDER BY r.recording_id
 """
 
@@ -120,7 +120,7 @@ def add_parser(sub):
     p = sub.add_parser("pull", help="copy manifests, master audio and tunes.csv from production (read-only)")
     p.add_argument("--database-url", default=None,
                    help="production DATABASE_URL (default: PROD_DB_URL from lab/.env); read-only transaction enforced")
-    p.add_argument("--recordings", help="comma-separated recording ids (default: every recording with segments)")
+    p.add_argument("--recordings", help="comma-separated recording ids, segmented or not (default: every recording with segments)")
     p.add_argument("--skip-audio", action="store_true", help="manifests and tunes.csv only")
     p.add_argument("--skip-corpus", action="store_true", help="do not fetch tunes.csv")
     p.add_argument("--refresh-corpus", action="store_true", help="fetch tunes.csv even if it is fresh")
@@ -160,12 +160,15 @@ def _rows(cur, sql, params=()):
 
 def write_manifests(conn, wanted_ids):
     cur = conn.cursor()
-    recordings = _rows(cur, RECORDINGS_SQL)
+    # Named recordings come whether or not they have segments yet: a night still to
+    # be segmented is pulled to draft its segments (lab drafts). The default, every
+    # recording, means the labelled corpus, so only the segmented ones.
+    recordings = _rows(cur, RECORDINGS_SQL, {"named": wanted_ids is not None})
     if wanted_ids is not None:
         recordings = [r for r in recordings if r["recording_id"] in wanted_ids]
         missing = set(wanted_ids) - {r["recording_id"] for r in recordings}
         if missing:
-            print(f"warning: recordings {sorted(missing)} have no segments (or are not ready); skipped", file=sys.stderr)
+            print(f"warning: recordings {sorted(missing)} not found, or not ready; skipped", file=sys.stderr)
     cur.execute("SELECT current_database(), inet_server_addr()::text")
     dbname, host = cur.fetchone()
     repertoire_cache = {}
