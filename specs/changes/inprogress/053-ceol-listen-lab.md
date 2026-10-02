@@ -2190,6 +2190,66 @@ Noodling that carries real melodic fragments is what is left; the player's
 next lever for it. `lab listen` runs both; the follower expert on the board
 does not yet compute tune-ness (it reads notes, not pitch tracks).
 
+### Where each tune starts: following a set through its tunes (2026-10-02)
+
+The job here is after the fact, not live: segmenting hundreds of hours of
+back recordings, and giving the session page segments that start where the
+tune does. The tunes, their order and their sets are known (the night's log,
+or the meter's), so what is left is where each one begins.
+
+**The meter's drafts** (`lab drafts`, from the phone's meter log, first used
+on recording 143): a set's first tune from where the music starts back from
+when it was first shown, a later tune 15 s before it was first shown. Against
+the player's corrections on 143: first of a set within 1 s 5 of 31 (median
+3.4 s); later in a set 5 of 40 (median 6.0 s). The meter showed a later tune
+a median 10.5 s after it began, not 15. Set ends, at the last state that heard
+a tune: median 1.1 s off.
+
+**A setting's played form** (`analysis/form.py`): the parser reads a setting
+once through as written; a session plays A A B B. Expanding repeats, first and
+second endings and `::` gives each setting on a grid of eighths with its bar
+lines. It reads all 12,641 repertoire settings; 1,107 of 5,560 reels come out
+16 bars, written without repeat signs because players repeat each part
+anyway, so the written form cannot say how long a tune runs as played.
+
+**Finding the opening** (feasibility, 143): each tune's first 24 eighths,
+searched on a beat grid within 30 s either side of the corrected start. The
+best match lands a median 9.6 s late, on the A part's repeat, which matches
+more cleanly than the first time through; the earliest match scoring half of a
+perfect one lands within 1 s for 33 of 64.
+
+**Score following** (`analysis/follow.py`): a Viterbi path through "not a
+tune", each tune's played form eighth by eighth and round again, and "not a
+tune", over the heard notes (Basic Pitch) on a grid from the tempo map. The
+position moves one eighth a slot, or two, or none; a tune is entered only at
+its first eighth; the change to the next tune is cheap from the last bar of
+the form and dear elsewhere, so the outgoing tune's grid running forward and
+the incoming tune's opening running back meet at one slot. Every setting runs
+side by side. Constants set before the first run, none tuned since.
+
+| | first of a set, within 1 s | 2 s | 5 s | median | later in a set, within 1 s | 2 s | 5 s | median |
+|---|---|---|---|---|---|---|---|---|
+| 143, drafts | 5 / 31 | 11 | 22 | 3.40 s | 5 / 40 | 9 | 16 | 5.95 s |
+| 143, following (spans from the meter) | 22 / 31 | 24 | 26 | 0.44 s | 35 / 41 | 39 | 39 | 0.16 s |
+| nights 1-5, 138-140, following (spans from the labels) | 159 / 251 | 196 | 223 | 0.58 s | 315 / 357 | 334 | 351 | 0.25 s |
+
+On 143, paired against the drafts: better 61, worse 9 (sign test p = 1.3e-10).
+143 is the night it was built on; the eight older nights were never looked at
+while building it, and every night is alike (changeovers within 1 s 83-98%,
+set starts 44-77%). On the older nights a set's span is the labels' with 60 s
+before and 30 s after, which hands the set start a bound the meter would not;
+the changeovers do not depend on it.
+
+Negative: where the path leaves the set's last tune is a worse set end than
+tune-ness (median 2.3 s on the eight nights, 3.4 s on 143, against 1.1 s);
+set ends stay with tune-ness for now.
+
+Misses over 2 s on the eight nights: 78 of 608, 54 late and 24 early. Late is
+the path waiting for a cleaner time round to enter the tune; on Tuttle's (143,
++26 s) the grid at the set's start was also wrong, the first tempo window
+being mostly the chat before the set (179 ms an eighth against 145-151 in the
+tune).
+
 ### Still open
 
 **As of 2026-10-01.** Items 1 to 3 below are done (item 2 became night 137,
