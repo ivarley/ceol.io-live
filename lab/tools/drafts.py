@@ -46,6 +46,7 @@ out. It writes to production only with --apply.
 import json
 import os
 import sys
+import time
 
 from lab import paths
 
@@ -54,6 +55,7 @@ IN_SET_LEAD_MS = 15000
 TUNE = 0.5                # tune-ness at or above this: the state heard a tune
 MIN_GAP_MS = 10000        # a draft start stays this far after the tune before
 ID_WINDOW = 8             # rows (breaks, hand-added tunes) made between two taps
+MIN_RUN_MS = 16000        # a run showing a tune without a tap, to be taken as the tune
 SET_LEAD_MAX_MS = 40000   # a set's start reaches back at most this far before it was shown
 
 
@@ -171,6 +173,9 @@ def draft(states, logged, logged_order, duration_ms, names=None):
         lo = next((x["_anchor"] for x in reversed(rows[:i]) if x["_anchor"] is not None), 0)
         hi = next((x["_anchor"] for x in rows[i + 1:] if x["_anchor"] is not None), duration_ms)
         runs = [r for r in runs_of(states, d["tune_id"]) if lo <= r[0] <= hi]
+        # without a tap, a state or two showing the tune by mistake is not its run
+        held = [r for r in runs if r[1] - r[0] >= MIN_RUN_MS]
+        runs = held or runs
         if runs:
             d["_anchor"], d["how"] = runs[0][0], "shown"
 
@@ -299,6 +304,37 @@ def _fmt(ms):
     return f"{s // 3600}:{s // 60 % 60:02d}:{s % 60:02d}"
 
 
+def replay(rid, out_path, log=print):
+    """The listener (lab listen, the service's) run over a recording's audio
+    offline, for a night recorded without the phone's meter: its states written
+    as a meter log (dir "in"; at_ms is the audio time, there being no screen),
+    so the rest of drafting reads it the same way. Hours of audio take tens of
+    minutes; the file is kept and reused."""
+    import tempfile
+
+    import soundfile as sf
+
+    from lab.tools.listen import HOP_MS as STEP, Listener, Models
+
+    li = Listener(tempfile.mkdtemp(prefix=f"replay-{rid}-"), models=Models(), keep_s=120)
+    part = out_path + ".part"
+    started = time.time()
+    with open(part, "w") as out:
+        begin = {"type": "begin", "replay": True, "recording_id": rid}
+        out.write(json.dumps({"at_ms": 0, "dir": "app", "msg": begin}) + "\n")
+        for block in sf.blocks(paths.wav_path(rid), blocksize=22050 * 10, dtype="float32"):
+            li.store.append(block)
+            while li.store.duration_ms >= li.next_t:
+                li.step(li.next_t)
+                state = {k: v for k, v in li.state.items() if k != "history"}
+                out.write(json.dumps({"at_ms": li.next_t, "dir": "in", "msg": {"type": "state", **state}}) + "\n")
+                if li.next_t % 600000 == 0:
+                    log(f"replay: {li.next_t / 60000:.0f} min of audio in {(time.time() - started) / 60:.0f} min")
+                li.next_t += STEP
+    li.close()
+    os.replace(part, out_path)
+
+
 def add_parser(sub):
     p = sub.add_parser("drafts", help="draft a recording's segments from the phone's meter log")
     p.add_argument("recording", type=int)
@@ -306,6 +342,8 @@ def add_parser(sub):
     p.add_argument("--email", help="your Ceol login, for --apply")
     p.add_argument("--base-url", default="https://ceol.io")
     p.add_argument("--force", action="store_true", help="with --apply, also replace tunes already placed")
+    p.add_argument("--replay", action="store_true",
+                   help="no meter log: run the listener over the audio instead (tens of minutes; kept)")
     p.add_argument("--no-follow", action="store_true",
                    help="the meter's starts only, without score following (minutes, not seconds)")
     p.set_defaults(func=main)
@@ -316,8 +354,13 @@ def main(args):
     with open(paths.manifest_path(rid)) as f:
         manifest = json.load(f)
     log = os.path.join(paths.recording_dir(rid), "listen-states.jsonl")
-    if not os.path.exists(log):
-        raise SystemExit(f"no meter log for recording {rid} (lab pull fetches it, where the phone made one)")
+    if args.replay or not os.path.exists(log):
+        if not args.replay:
+            raise SystemExit(f"no meter log for recording {rid} (lab pull fetches it, where the phone made one); "
+                             f"--replay runs the listener over the audio instead")
+        log = os.path.join(paths.recording_dir(rid), "replay-states.jsonl")
+        if not os.path.exists(log):
+            replay(rid, log)
     states, _, logged = load_log(log)
     names = {r["tune_id"]: r["name"] for r in manifest.get("repertoire", [])}
     drafts = draft(states, logged, manifest["logged_order"], int(manifest["recording"]["duration_ms"]), names)

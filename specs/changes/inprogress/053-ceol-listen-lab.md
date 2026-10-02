@@ -2308,6 +2308,31 @@ more clearly where nothing tuneful plays: tune-ness as evidence in the path.
 Where it stands, 143 on the corrected labels: first of a set within 1 s 22
 of 31, later in a set 36 of 41.
 
+**In `lab drafts`** (2026-10-02): the meter's drafts first (sets, tunes in
+order, each set's rough span), then following for each set's starts; set ends
+stay the meter's. On 143: first of a set within 1 s 22 of 31, later in a set
+37 of 41 (all 41 within 2 s; the session's key now places Mac's Fancy).
+
+**Back recordings, with no meter log** (`lab drafts N --replay`): the
+listener run over the audio offline (about 12 times faster than real time on
+the laptop) stands in for the meter, with no taps, so every tune is placed by
+the first run of at least 16 s showing it after the tune before; then
+following. Night 140, from its audio and its logged order only, the labels
+used only to score:
+
+| | within 1 s | 2 s | 5 s | median |
+|---|---|---|---|---|
+| later in a set, followed | 45 / 50 | 46 | 48 | 0.23 s |
+| later in a set, replay alone | 3 / 50 | 8 | 30 | 4.35 s |
+| first of a set, followed | 21 / 36 | 25 | 29 | 0.72 s |
+| first of a set, replay alone | 6 / 36 | 9 | 19 | 3.35 s |
+| set ends (where the music stops) | within 2 s 25 / 36 | | | 1.45 s |
+
+About what following gave on 140 with spans from the labels (22 and 44
+within 1 s), so the replay's spans are good enough. The worst: Soggy's +33 s,
+Banish Misfortune -17 s, Out On The Ocean +16.5 s (the night's first tune,
+at 0:00:00), The Salamanca -12 s, The Milliner's Daughter -11 s.
+
 ### Still open
 
 **As of 2026-10-01.** Items 1 to 3 below are done (item 2 became night 137,
