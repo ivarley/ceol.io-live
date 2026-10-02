@@ -2272,6 +2272,42 @@ a time round late, and "beats not a tune" is too weak a test of whether the
 tune was playing: the chat or lead-in before a set sometimes passes it. Taken
 out.
 
+**The player listened to the worst six on 143** (2026-10-02). Rolling Waves
+(the second) was mislabelled: following was right, 0:43:25. Martin Wynne's
+moved to 1:09:06, where the player's rhythm settles and he plays the A part
+twice; before that is a best guess. Tuttle's: a guitar plays the A part from
+3:00:26 under the player talking, barely audible; the label stays there by
+the rule above (first note as played), and following's 3:00:52 is what can
+be heard. The Cordal: no music is audible where following put it (20 s
+before the guitar's quiet start), so the path matched chat or room noise to
+the tune's opening. Music For A Found Harmonium: a banjo plays the A part
+once from 2:57:43; following took the stronger start at 2:58:00. Mac's Fancy:
+played in D mixolydian, and every setting on thesession.org is in A
+mixolydian. The player's verdict: reasonable mistakes on a recording whose
+ground truth is hard to hear.
+
+**The session's key** (`session_tune.key`, set on 2 of the 1,284 tunes in
+session 1's repertoire): a setting is moved from its written key's tonic to
+the session's. Mac's Fancy +14.6 s -> -0.2 s; over the nine nights better 1,
+worse 1. Kept: it is a fact about how the session plays the tune.
+
+Negative: the aligner's key allowance in following, each setting also a fifth
+either way at a cost of 3: better 5, worse 4 over the nine nights (p = 1),
+for three times the work. Taken out.
+
+Negative: entering a set's first tune at a later section of its form (the B
+part, or the A part's repeat) at a cost of 6, the start then counted back
+along the grid to the form's first eighth, for an A part too quiet to hear
+(the player's suggestion for The Cordal). Over the nine nights first of a
+set better 8, worse 18; all tunes better 8, worse 20 (p = 0.036). The Cordal
+did not move (-19.6 s), since the path was not entering at a later section
+but matching chat 20 s before any music; Music For A Found Harmonium went
+from +16.7 to -41 s. Taken out. What The Cordal wants is "not a tune" winning
+more clearly where nothing tuneful plays: tune-ness as evidence in the path.
+
+Where it stands, 143 on the corrected labels: first of a set within 1 s 22
+of 31, later in a set 36 of 41.
+
 ### Still open
 
 **As of 2026-10-01.** Items 1 to 3 below are done (item 2 became night 137,

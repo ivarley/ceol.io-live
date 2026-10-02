@@ -33,3 +33,13 @@ def test_heard_slots_take_a_note_where_it_starts_and_hold_it():
     notes = [{"t0_ms": 0, "t1_ms": 300, "midi": 62}, {"t0_ms": 500, "t1_ms": 600, "midi": 64}]
     assert list(heard_slots(notes, times)[:7]) == [2, 2, 2, -1, -1, 4, -1]
 
+
+def test_a_tune_the_session_plays_in_its_own_key_is_moved_there():
+    from lab.analysis.follow import chains_for, tonic_pc
+    from lab.analysis.form import played_form
+
+    form = played_form("|:ABcd efga|bagf edcB:|", key="Amixolydian")
+    assert tonic_pc("Amixolydian") == 9 and tonic_pc("Dmixolydian") == 2 and tonic_pc("F#minor") == 6
+    (written,) = chains_for(0, [(1, "Amixolydian", form)])
+    (moved,) = chains_for(0, [(1, "Amixolydian", form)], session_key="Dmixolydian")
+    assert moved.shift == 5 and list(moved.form[:3]) == [(p + 5) % 12 for p in written.form[:3]]

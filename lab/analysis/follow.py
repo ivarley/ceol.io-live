@@ -43,11 +43,49 @@ NEG = -1e18
 
 @dataclass
 class Chain:
-    """One setting of one tune: its played form as pitch classes."""
+    """One setting of one tune, in one key: its played form as pitch classes."""
     tune: int            # index of the tune in the set
     setting_id: int
     form: np.ndarray     # int8 pitch classes, -1 for nothing
     last_bar: int        # eighths in the form's last bar
+    shift: int = 0       # semitones the setting was moved (the session's own key)
+
+
+_TONIC = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
+
+
+def tonic_pc(key_text):
+    """'Amixolydian', 'F#minor', 'Bb' -> the tonic's pitch class, or None."""
+    t = (key_text or "").strip()
+    if not t or t[0].upper() not in _TONIC:
+        return None
+    pc = _TONIC[t[0].upper()]
+    if len(t) > 1 and t[1] in "#b":
+        pc += 1 if t[1] == "#" else -1
+    return pc % 12
+
+
+def shifted(form, semitones):
+    """A form's pitch classes moved by some semitones (nothing heard stays -1)."""
+    return np.where(form < 0, form, (form.astype(np.int16) + semitones) % 12).astype(np.int8)
+
+
+def chains_for(tune, settings, session_key=None):
+    """The chains a tune is followed through. `settings`: [(setting_id, mode,
+    analysis.form.Form)]. Each setting in its written key; or, when the session
+    plays the tune in a key of its own (session_tune.key), moved there instead:
+    Mac's Fancy on 143 is played in D mixolydian, every setting on
+    thesession.org is in A mixolydian, and in A it started 14.6 s late, in D
+    0.2 s early."""
+    out = []
+    want = tonic_pc(session_key)
+    for setting_id, mode, f in settings:
+        shift = 0
+        if want is not None and tonic_pc(mode) is not None:
+            shift = (want - tonic_pc(mode) + 6) % 12 - 6
+        out.append(Chain(tune=tune, setting_id=setting_id, form=shifted(f.eighths, shift),
+                         last_bar=f.length - f.bar_starts[-1], shift=shift))
+    return out
 
 
 def slot_grid(t0_ms, t1_ms, tmap=None, period_ms=None):
@@ -201,4 +239,3 @@ def boundaries(path_state, times, n_tunes):
     after = np.nonzero(path_state == n_tunes)[0]
     end = float(times[after[0]]) if len(after) else float(times[-1])
     return starts, end
-
