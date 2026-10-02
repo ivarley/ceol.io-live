@@ -174,3 +174,21 @@ def played_form(abc, key=None, meter=None):
         pos += n
     section_starts = [bar_starts[b] for b in sec_bars if b < len(bar_starts)]
     return Form(eighths=eighths, bar_starts=bar_starts, section_starts=section_starts, bars=order)
+
+
+def played_forms(tune_ids, min_eighths=32):
+    """{tune_id: [(setting_id, mode, Form)]} for every readable setting of these
+    tunes in the thesession.org dump. A setting too short to be a tune (under
+    `min_eighths`) or with no bar lines is left out."""
+    from lab import paths
+    from lab.corpus.tunes_csv import iter_settings
+
+    out = {}
+    for s in iter_settings(paths.tunes_csv_path(), tune_ids=set(tune_ids)):
+        try:
+            f = played_form(s.abc, key=s.mode, meter=s.meter)
+        except Exception:  # one unreadable setting must not lose the tune
+            continue
+        if f.length >= min_eighths and f.bar_starts:
+            out.setdefault(s.tune_id, []).append((s.setting_id, s.mode, f))
+    return out

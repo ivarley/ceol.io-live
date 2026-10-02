@@ -28,6 +28,15 @@ The rules, fixed before any of this night's corrections were seen:
   heard a tune, before the set was ended. Other tunes get no end; the next
   tune's start ends them, as in the segmenter.
 
+Then, unless --no-follow, score following (analysis/follow.py) replaces each
+set's starts: the drafts give the sets, the tunes in order and each set's
+rough span (from 90 s before its first tune was shown to 30 s after its
+drafted end), and following finds where each tune starts in the audio, one
+tune's end and the next one's start decided together. It needs the audio
+(lab pull, then lab prepare) and takes minutes. Set ends stay the meter's.
+On 143, against the player's corrections: first of a set within 1 s 22 of
+31, later in a set 36 of 41, where the meter alone had 5 and 4.
+
 --apply signs in as you (a password login that returns a token, as the app's
 does), skips any tune that already has a segment unless --force, PUTs the
 rest to /api/recordings/<id>/segments/<session_instance_tune_id>, and signs
@@ -228,6 +237,61 @@ def draft(states, logged, logged_order, duration_ms, names=None):
     return rows
 
 
+FOLLOW_LEAD_MS = 90000    # a set's span for following: from this long before its first tune was shown
+FOLLOW_TAIL_MS = 30000    # ... to this long after its drafted end
+
+
+def follow_drafts(rid, manifest, drafts, log=print):
+    """Each set's starts from score following (analysis.follow), in place of
+    the meter's: the drafts give the sets, the tunes in order and each set's
+    rough span; following finds where each tune starts, the one ending and
+    the next beginning decided together. Set ends stay the meter's (where the
+    music stops), which following does worse. A set with a tune that has no
+    readable setting keeps the meter's starts. The meter's start is kept on
+    each draft as `meter_start_ms`."""
+    from lab.analysis.follow import follow_span
+    from lab.analysis.form import played_forms
+    from lab.audio.chunks import AudioStore
+    from lab.board.board import Board
+
+    duration = int(manifest["recording"]["duration_ms"])
+    forms = played_forms({d["tune_id"] for d in drafts if d["tune_id"]})
+    keys = {r["tune_id"]: r.get("key") for r in manifest.get("repertoire", [])}
+    with open(os.path.join(paths.recording_dir(rid), "mono22k.sha1")) as f:
+        sha = f.read().strip()
+    store = AudioStore(paths.wav_path(rid))
+    store.clock_ms = store.duration_ms
+    prev_end = 0
+    with Board() as board:
+        for k in sorted({d["set"] for d in drafts}):
+            rows = [d for d in drafts if d["set"] == k]
+            for d in rows:
+                d["meter_start_ms"] = d["start_ms"]
+            seen = [d["first_shown_ms"] or d["start_ms"] for d in rows]
+            end = rows[-1]["end_ms"] or max(d["start_ms"] for d in rows) + 120000
+            t0 = max(prev_end, min(seen) - FOLLOW_LEAD_MS)
+            t1 = min(duration, end + FOLLOW_TAIL_MS)
+            prev_end = end
+            missing = [d["name"] for d in rows if d["tune_id"] not in forms]
+            if missing:
+                log(f"set {k}: not followed, no readable setting for {', '.join(str(m) for m in missing)}")
+                continue
+            got = follow_span(store, sha, t0, t1, [forms[d["tune_id"]] for d in rows],
+                              [keys.get(d["tune_id"]) for d in rows], board=board)
+            if got is None:
+                log(f"set {k}: not followed, no beat found")
+                continue
+            starts, _, _ = got
+            for d, st in zip(rows, starts):
+                if st is not None:
+                    d["start_ms"] = int(round(st))
+                    d["how"] = f"{d['how']}, followed"
+            # a set end before its last start (the meter's was early) is dropped
+            if rows[-1]["end_ms"] is not None and rows[-1]["end_ms"] <= rows[-1]["start_ms"]:
+                rows[-1]["end_ms"] = None
+    return drafts
+
+
 def _fmt(ms):
     if ms is None:
         return ""
@@ -242,6 +306,8 @@ def add_parser(sub):
     p.add_argument("--email", help="your Ceol login, for --apply")
     p.add_argument("--base-url", default="https://ceol.io")
     p.add_argument("--force", action="store_true", help="with --apply, also replace tunes already placed")
+    p.add_argument("--no-follow", action="store_true",
+                   help="the meter's starts only, without score following (minutes, not seconds)")
     p.set_defaults(func=main)
 
 
@@ -255,9 +321,15 @@ def main(args):
     states, _, logged = load_log(log)
     names = {r["tune_id"]: r["name"] for r in manifest.get("repertoire", [])}
     drafts = draft(states, logged, manifest["logged_order"], int(manifest["recording"]["duration_ms"]), names)
+    if not args.no_follow:
+        if not os.path.exists(paths.wav_path(rid)):
+            raise SystemExit(f"following needs the audio: python -m lab pull --recordings {rid}, then "
+                             f"python -m lab prepare --recordings {rid} (or --no-follow)")
+        drafts = follow_drafts(rid, manifest, drafts)
     out = os.path.join(paths.recording_dir(rid), "drafts.json")
     with open(out, "w") as f:
-        json.dump({"recording_id": rid, "rules": {"in_set_lead_ms": IN_SET_LEAD_MS, "tuneness": TUNE},
+        json.dump({"recording_id": rid, "followed": not args.no_follow,
+                   "rules": {"in_set_lead_ms": IN_SET_LEAD_MS, "tuneness": TUNE},
                    "drafts": drafts}, f, indent=1)
 
     set_no = 0
@@ -266,8 +338,11 @@ def main(args):
             set_no += 1
             print(f"-- set {set_no}")
         name = d["name"] or f"tune {d['tune_id']}"
-        print(f"  {_fmt(d['start_ms']):>8}  {name[:34]:<34} {d['how'][:6]:<6} shown {_fmt(d['first_shown_ms']):>8}"
-              + (f"  ends {_fmt(d['end_ms'])}" if d["end_ms"] else ""))
+        moved = d.get("meter_start_ms")
+        moved = f"  (meter {_fmt(moved)})" if moved is not None and abs(moved - d["start_ms"]) >= 1000 else ""
+        how = d["how"].split(",")[0].split(" ")[0] + (" +follow" if d["how"].endswith("followed") else "")
+        print(f"  {_fmt(d['start_ms']):>8}  {name[:34]:<34} {how:<13} shown {_fmt(d['first_shown_ms']):>8}"
+              + (f"  ends {_fmt(d['end_ms'])}" if d["end_ms"] else "") + moved)
     guesses = sum(d["how"].startswith("added") for d in drafts)
     print(f"{len(drafts)} tunes in {set_no} sets; {guesses} guessed; -> {out}")
     if args.apply:

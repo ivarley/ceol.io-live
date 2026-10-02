@@ -239,3 +239,42 @@ def boundaries(path_state, times, n_tunes):
     after = np.nonzero(path_state == n_tunes)[0]
     end = float(times[after[0]]) if len(after) else float(times[-1])
     return starts, end
+
+
+def eighth(period_ms):
+    """A tempo window's period folded into the range an eighth note of this
+    music lives in (110-230 ms): the beat estimator sometimes returns the
+    quarter (Silver Spear on 143, 281 ms)."""
+    while period_ms > 230:
+        period_ms /= 2
+    while period_ms < 110:
+        period_ms *= 2
+    return period_ms
+
+
+def follow_span(store, audio_sha1, t0, t1, settings, session_keys=None, frontend=None, board=None):
+    """Follow one set through the audio from t0 to t1 (ms). `settings`: per tune,
+    in the order played, [(setting_id, mode, Form)]; `session_keys`: per tune,
+    the session's key for it or None. Transcribes with Basic Pitch unless told
+    otherwise (cached on the board). -> (start ms of each tune or None, the
+    path's set end, {tune index: setting_id}), or None when no grid can be
+    found."""
+    from lab.analysis.pulse import tempo_map
+    from lab.bench.retrieval import transcribe_segment
+    from lab.frontends import get_frontend
+
+    fe = frontend or get_frontend("basic_pitch")
+    notes, _, _ = transcribe_segment(fe, store, audio_sha1, t0, t1, board=board)
+    tm = tempo_map(store.read(t0, t1), store.sr)
+    if not tm:
+        return None
+    tm = {"t_ms": tm["t_ms"], "period_ms": [eighth(p) for p in tm["period_ms"]]}
+    times = slot_grid(t0, t1, tmap=tm)
+    heard = heard_slots(notes, times)
+    keys = session_keys or [None] * len(settings)
+    chains = []
+    for i, (tune_settings, key) in enumerate(zip(settings, keys)):
+        chains += chains_for(i, tune_settings, session_key=key)
+    state, _, chosen = follow(heard, chains, len(settings))
+    starts, end = boundaries(state, times, len(settings))
+    return starts, end, chosen
