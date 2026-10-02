@@ -128,6 +128,7 @@ final class CeolUITests: XCTestCase {
         snapshot("session logs search")
         app.buttons["logs.search.filter"].tap()
         XCTAssertTrue(app.buttons["Attended"].waitForExistence(timeout: 5))
+        snapshot("session logs filter")
         app.buttons["filters.done"].tap()
 
         // People: the search, and members / visitors / archived behind the filter.

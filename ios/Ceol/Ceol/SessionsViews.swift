@@ -258,7 +258,7 @@ struct SessionDetailView: View {
                 SessionTabFilterSheet(
                     label: "Show",
                     options: SessionPage.LogView.options(signedIn: state.value?.permissions.isLoggedIn == true).map { ($0, $0.label) },
-                    selection: $logView, initial: defaultLogView)
+                    selection: $logView, initial: .logged, oneLine: true)
             }
             .sheet(isPresented: $filteringPeople) {
                 SessionTabFilterSheet(
@@ -298,11 +298,7 @@ struct SessionDetailView: View {
     private func load() async {
         do {
             let d = try await model.auth.client.getSessionDetail(path: .init(sessionPath: path)).ok.body.json
-            if state.value == nil {
-                if d.defaultTab == .logs { tab = .logs }
-                // A festival's list is its schedule, so it shows every night.
-                logView = d.session.sessionType == "festival" ? .all : .logged
-            }
+            if d.defaultTab == .logs && state.value == nil { tab = .logs }
             state = .loaded(d)
             await loadRemainingTunes(d)
         } catch {
@@ -357,10 +353,6 @@ struct SessionDetailView: View {
             tunebookFailed = true
             tuneFilters.myStatus = .off
         }
-    }
-
-    private var defaultLogView: SessionPage.LogView {
-        state.value?.session.sessionType == "festival" ? .all : .logged
     }
 
     private func loadLoggedTunes() async {

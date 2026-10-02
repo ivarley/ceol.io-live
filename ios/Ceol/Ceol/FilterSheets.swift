@@ -204,23 +204,7 @@ struct SessionTunesFilterSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        ChoiceChips(
-                            label: "Sort",
-                            options: SessionPage.SortMode.allCases.map { ($0, $0.label) },
-                            selection: Binding(get: { sort.mode }, set: { mode in
-                                // Tapping the current mode flips it, as the web's buttons do.
-                                if mode == sort.mode { sort.descending.toggle() } else {
-                                    sort = .init(mode: mode, descending: mode.defaultDescending)
-                                }
-                            }))
-                        Button { sort.descending.toggle() } label: {
-                            Label(directionLabel, systemImage: sort.descending ? "arrow.down" : "arrow.up")
-                                .font(.ceol(size: 15)).foregroundStyle(CeolTokens.primary)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("filters.direction")
-                    }
+                    sortSection
                     ChoiceChips(
                         label: "Type",
                         options: [("", "All types")] + types.map { ($0, $0.capitalized) },
@@ -274,12 +258,38 @@ struct SessionTunesFilterSheet: View {
         .ceolDrawer([.medium, .large])
     }
 
-    private var directionLabel: String {
-        switch (sort.mode, sort.descending) {
-        case (.alpha, false): "A to Z"
-        case (.alpha, true): "Z to A"
-        case (_, true): "Most first"
-        case (_, false): "Fewest first"
+    /// A droplist and a direction, as the Tunes page's drawer has them.
+    private var sortSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("SORT").font(.ceol(size: 12, weight: .semibold)).tracking(0.8).foregroundStyle(CeolTokens.textMuted)
+            HStack(spacing: 10) {
+                Menu {
+                    Picker("Sort", selection: Binding(get: { sort.mode }, set: { mode in
+                        // Name starts A to Z; the counts start with the most.
+                        if mode != sort.mode { sort = .init(mode: mode, descending: mode.defaultDescending) }
+                    })) {
+                        ForEach(SessionPage.SortMode.allCases, id: \.self) { Text($0.label).tag($0) }
+                    }
+                } label: {
+                    HStack {
+                        Text(sort.mode.label).font(.ceol(size: 16)).foregroundStyle(CeolTokens.textColor)
+                        Spacer()
+                        Image(systemName: "chevron.up.chevron.down").font(.system(size: 13)).foregroundStyle(CeolTokens.textMuted)
+                    }
+                    .padding(.horizontal, 14).frame(height: 44)
+                    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(CeolTokens.borderColor, lineWidth: 1))
+                }
+                .accessibilityIdentifier("filters.sort")
+                Button { sort.descending.toggle() } label: {
+                    Image(systemName: sort.descending ? "arrow.down" : "arrow.up")
+                        .font(.system(size: 17, weight: .medium)).foregroundStyle(CeolTokens.textColor)
+                        .frame(width: 44, height: 44)
+                        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(CeolTokens.borderColor, lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(sort.descending ? "Sorting downward" : "Sorting upward")
+                .accessibilityIdentifier("filters.direction")
+            }
         }
     }
 }
@@ -291,13 +301,28 @@ struct SessionTabFilterSheet<ID: Hashable>: View {
     let options: [(id: ID, label: String)]
     @Binding var selection: ID
     let initial: ID
+    /// The choices on one line, as a segmented control.
+    var oneLine = false
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                ChoiceChips(label: label, options: options, selection: $selection)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(20)
+                Group {
+                    if oneLine {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(label.uppercased()).font(.ceol(size: 12, weight: .semibold)).tracking(0.8)
+                                .foregroundStyle(CeolTokens.textMuted)
+                            Picker(label, selection: $selection) {
+                                ForEach(options, id: \.id) { Text($0.label).tag($0.id) }
+                            }
+                            .pickerStyle(.segmented)
+                        }
+                    } else {
+                        ChoiceChips(label: label, options: options, selection: $selection)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(20)
             }
             .background(CeolTokens.drawerBg)
             .navigationTitle("Filter")

@@ -63,9 +63,9 @@ public enum SessionPage {
 
         public var label: String {
             switch self {
-            case .alpha: "A–Z"
-            case .session: "Played here"
-            case .everywhere: "Everywhere"
+            case .alpha: "Name"
+            case .session: "Popularity Here"
+            case .everywhere: "Popularity Anywhere"
             }
         }
 
@@ -166,12 +166,12 @@ public enum SessionPage {
     // MARK: Logs
 
     public enum LogView: String, CaseIterable, Sendable {
-        case logged, attended, all
+        case all, logged, attended
 
         public var label: String { rawValue.capitalized }
 
         /// "Attended" means nothing signed out.
-        public static func options(signedIn: Bool) -> [LogView] { signedIn ? [.logged, .attended, .all] : [.logged, .all] }
+        public static func options(signedIn: Bool) -> [LogView] { signedIn ? [.all, .logged, .attended] : [.all, .logged] }
     }
 
     /// Whether a night stays on the list. A tune filter supersedes the view: every

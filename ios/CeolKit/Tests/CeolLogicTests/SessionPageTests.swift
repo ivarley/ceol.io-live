@@ -120,7 +120,8 @@ struct SessionPageTests {
         #expect(!SessionPage.keepInstance(tuneCount: 5, attended: false, view: .attended, tuneInstanceIDs: nil, id: 1))
         #expect(SessionPage.keepInstance(tuneCount: 0, attended: false, view: .logged, tuneInstanceIDs: [2], id: 2))
         #expect(!SessionPage.keepInstance(tuneCount: 5, attended: false, view: .all, tuneInstanceIDs: [2], id: 1))
-        #expect(SessionPage.LogView.options(signedIn: false) == [.logged, .all])
+        #expect(SessionPage.LogView.options(signedIn: false) == [.all, .logged])
+        #expect(SessionPage.LogView.options(signedIn: true) == [.all, .logged, .attended])
     }
 
     @Test("logged-tune suggestions: none for an empty box, prefix first, then most played, capped")
