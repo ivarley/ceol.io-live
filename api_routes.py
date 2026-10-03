@@ -4324,17 +4324,21 @@ def get_session_person_detail(session_path, person_id):
 
         session_id = session_result[0]
 
-        # Verify current user is a member of this session
+        # The People tab's own gate (spec 034): confirmed or a session admin. Membership
+        # alone is not enough -- anyone can join a session, and an unconfirmed member
+        # cannot see its list, so must not read the people on it one id at a time.
         user_person_id = getattr(current_user, 'person_id', None)
-        if not user_person_id:
-            return jsonify({"success": False, "message": "User not linked to person"}), 403
+        if not can_view_session_people(cur, session_id, user_person_id):
+            return jsonify({"success": False, "message": "Not allowed to see this session's people"}), 403
 
+        # And only someone on THIS session's list: the sheet is about them here, and a
+        # person elsewhere on Ceol is not this session's to show.
         cur.execute(
             "SELECT 1 FROM session_person WHERE session_id = %s AND person_id = %s",
-            (session_id, user_person_id)
+            (session_id, person_id)
         )
         if not cur.fetchone():
-            return jsonify({"success": False, "message": "Not a member of this session"}), 403
+            return jsonify({"success": False, "message": "Person not found in this session"}), 404
 
         # Fetch person details with attendance
         cur.execute(

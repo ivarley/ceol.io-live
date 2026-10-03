@@ -67,6 +67,44 @@ class TestConfirmedGatesPeopleVisibility:
         assert response.status_code == 403
         assert json.loads(response.data)["success"] is False
 
+    def test_unconfirmed_member_cannot_read_a_person_either(
+        self, client, authenticated_regular_user, db_conn, db_cursor
+    ):
+        """The person sheet has the list's gate: what the list hides, a guessed id must
+        not show one person at a time."""
+        session_id, session_path = self._session(db_cursor)
+        person_id = authenticated_regular_user.person_id
+        self._set_relationship(db_conn, db_cursor, session_id, person_id, "member", False)
+        other = _mk_person(db_cursor, "Other")
+        self._set_relationship(db_conn, db_cursor, session_id, other, "member", True)
+
+        with authenticated_regular_user:
+            response = client.get(f"/api/sessions/{session_path}/people/{other}")
+
+        assert response.status_code == 403
+        assert json.loads(response.data)["success"] is False
+
+    def test_confirmed_member_reads_people_on_this_session_only(
+        self, client, authenticated_regular_user, db_conn, db_cursor
+    ):
+        """Confirmed here opens this session's people, not everyone on Ceol: someone
+        who isn't on its list is not found."""
+        session_id, session_path = self._session(db_cursor)
+        person_id = authenticated_regular_user.person_id
+        self._set_relationship(db_conn, db_cursor, session_id, person_id, "member", True)
+        here = _mk_person(db_cursor, "Here")
+        self._set_relationship(db_conn, db_cursor, session_id, here, "member", False)
+        elsewhere = _mk_person(db_cursor, "Elsewhere")
+        db_conn.commit()
+
+        with authenticated_regular_user:
+            found = client.get(f"/api/sessions/{session_path}/people/{here}")
+            missing = client.get(f"/api/sessions/{session_path}/people/{elsewhere}")
+
+        assert found.status_code == 200, found.data
+        assert json.loads(found.data)["person"]["person_id"] == here
+        assert missing.status_code == 404
+
     def test_confirmed_visitor_CAN_see_people(
         self, client, authenticated_regular_user, db_conn, db_cursor
     ):
