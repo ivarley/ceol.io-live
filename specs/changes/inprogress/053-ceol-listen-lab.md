@@ -2363,6 +2363,35 @@ the median belief while shown did not separate wrong tunes (all 0.68-1.0).
 Sets come out split: 310 blind against 252 labelled, a set break wherever
 the display shows nothing for 10 s inside a set.
 
+Then three changes: the player's join rule (same tune type and under 5 s
+between them is one set, the 5 s read off these nights' labels: same-type
+breaks under 5 s were one labelled set 13 times of 15); a followed start more
+than one step after the tune was first shown rejected (the path had pushed
+tunes it matched badly into the quiet after the music, which also read as 30 s
+gaps between sets); and a set's end capped at the next tune's start. Same
+eight nights, same scoring:
+
+| | before | after |
+|---|---|---|
+| labelled tunes named right | 549 / 610 | 583 / 610 (0.96) |
+| named wrong | 56 | 22 |
+| nothing over a labelled tune | 5 | 5 |
+| blind tunes over no labelled tune | 37 | 7 |
+| starts within 1 s, of those right | 418 / 549 | 422 / 583 |
+| sets, blind (labelled 252) | 310 | 266 |
+| labelled set starts with a blind one within 5 s | | 212 / 252 |
+
+Most of the "wrong" names before were the right tune put in the wrong place:
+scored by overlap, a tune pushed past its music overlapped its neighbour. The
+join threshold was read off these nights, so the set counts are fitted. The
+19 same-type breaks that remain where the labels have one set are in
+`053 files/set-breaks-to-review.md`, for the player; some are long (100-288 s),
+which looks like music the blind log does not cover rather than a pause.
+
+Recording 112 (2025-07-03, session 1, never logged, 202 min), blind: 80 tunes
+in 34 sets, 74 starts from following, 4 rejected, 3 sets joined, 2 same-type
+breaks of 8 and 14 s kept for review.
+
 ### Still open
 
 **As of 2026-10-01.** Items 1 to 3 below are done (item 2 became night 137,
