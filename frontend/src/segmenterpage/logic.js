@@ -16,6 +16,22 @@ export function formatDuration(ms) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 }
 
+/**
+ * The time a link asks the segmenter to open at, from its URL fragment, as ms;
+ * null when it names none. The media-fragment form, `#t=`, with the time as
+ * h:mm:ss, m:ss or plain seconds (decimals allowed): `#t=1:25:20`, `#t=85:20`,
+ * `#t=5120.5`. A fragment, not a query string, so the link never changes what
+ * the server or the offline cache sees.
+ */
+export function timeFromHash(hash) {
+  const m = /(?:^#|&)t=([0-9:.]+)/.exec(hash || '')
+  if (!m) return null
+  const parts = m[1].split(':')
+  if (parts.length > 3 || parts.some((p) => p === '' || isNaN(Number(p)))) return null
+  const seconds = parts.reduce((total, p) => total * 60 + Number(p), 0)
+  return Number.isFinite(seconds) ? Math.round(seconds * 1000) : null
+}
+
 /** Index of the first tune with no segment, at or after `from`. -1 if none. */
 export function nextUnplacedIndex(tunes, from = 0) {
   for (let i = Math.max(0, from); i < tunes.length; i++) {

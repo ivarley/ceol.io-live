@@ -474,6 +474,14 @@ where you were in three hours of audio, so the playhead is stashed in
 session-scoped on purpose: it means "resume this round trip", not "always reopen
 two hours in".
 
+**A link to a moment.** `/admin/recordings/<id>/segment#t=1:25:20` opens the
+tool with the playhead there (h:mm:ss, m:ss or seconds; the media-fragment
+form). A fragment rather than a query string, so neither the server nor the
+offline cache sees a different URL. It outranks the stashed round-trip spot
+and uses it up, and a second `#t=` link opened in the same tab moves the
+playhead too. Made for review lists that point at a place in a night (spec
+053's set breaks to check).
+
 **Onset snap** (on by default, <kbd>S</kbd> toggles) nudges a mark to the
 nearest sharp rise, and leaves it alone when the window holds no real onset.
 The window is ±500ms and that number matters: it started at ±1.5s, which was

@@ -235,3 +235,21 @@ describe('edgeLimits', () => {
     expect(edgeLimits(resolved(), 99, 'start', 60000)).toBeNull()
   })
 })
+
+describe('timeFromHash', () => {
+  it('reads h:mm:ss, m:ss and plain seconds from #t=', async () => {
+    const { timeFromHash } = await import('../src/segmenterpage/logic.js')
+    expect(timeFromHash('#t=1:25:20')).toBe(5120000)
+    expect(timeFromHash('#t=85:20')).toBe(5120000)
+    expect(timeFromHash('#t=5120')).toBe(5120000)
+    expect(timeFromHash('#t=12.5')).toBe(12500)
+    expect(timeFromHash('#x=1&t=0:30')).toBe(30000)
+  })
+
+  it('is null for no time, or one it cannot read', async () => {
+    const { timeFromHash } = await import('../src/segmenterpage/logic.js')
+    for (const h of ['', '#', '#top', '#t=', '#t=1:2:3:4', '#t=1::2', '#t=abc', null]) {
+      expect(timeFromHash(h)).toBeNull()
+    }
+  })
+})

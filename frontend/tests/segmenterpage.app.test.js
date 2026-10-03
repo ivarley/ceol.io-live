@@ -1244,3 +1244,31 @@ describe('logging while segmenting', () => {
     await waitFor(() => expect(container.querySelector('.tl-row[data-tune-id="4"]')).toBeNull())
   })
 })
+
+describe('a link to a moment', () => {
+  afterEach(() => {
+    window.history.replaceState(null, '', window.location.pathname)
+  })
+
+  it('opens at the #t= time, and says so', async () => {
+    window.history.replaceState(null, '', `${window.location.pathname}#t=1:25`)
+    const { container, getByText } = render(App, { props: { pageData: payload() } })
+    expect(container.querySelector('.sg-time').textContent).toMatch(/^1:25/)
+    await waitFor(() => expect(getByText(/from the link/)).toBeTruthy())
+  })
+
+  it('outranks the remembered spot, and uses it up', () => {
+    window.sessionStorage.setItem('ceol.segmenter.resume.7', '30000')
+    window.history.replaceState(null, '', `${window.location.pathname}#t=2:00`)
+    const { container } = render(App, { props: { pageData: payload() } })
+    expect(container.querySelector('.sg-time').textContent).toMatch(/^2:00/)
+    expect(window.sessionStorage.getItem('ceol.segmenter.resume.7')).toBeNull()
+  })
+
+  it('goes to a new #t= opened in the same tab', async () => {
+    const { container } = render(App, { props: { pageData: payload() } })
+    window.location.hash = '#t=3:30'
+    window.dispatchEvent(new HashChangeEvent('hashchange'))
+    await waitFor(() => expect(container.querySelector('.sg-time').textContent).toMatch(/^3:30/))
+  })
+})

@@ -18,6 +18,7 @@
     resolveSegments,
     snapToOnset,
     SPEEDS,
+    timeFromHash,
     ZOOM_LEVELS,
   } from './logic.js'
 
@@ -177,9 +178,34 @@
     }
   }
 
+  // A link can name the moment to open at: #t=1:25:20 (logic.timeFromHash).
+  // It outranks the remembered spot, which is about a round trip, not a link.
+  function linkedTime() {
+    const ms = timeFromHash(window.location.hash)
+    return ms == null ? null : Math.min(durationMs, Math.max(0, ms))
+  }
+
+  function goToLinkedTime() {
+    const ms = linkedTime()
+    if (ms == null) return
+    if (audio && audio.readyState >= 1) seek(ms)
+    else {
+      pendingSeekMs = ms
+      currentMs = ms
+    }
+    flash(`At ${formatTime(ms)}, from the link`)
+  }
+
   onMount(() => {
+    const linked = linkedTime()
+    // Taken either way, so a link's visit also uses up the round trip's mark
+    // rather than leaving it to yank some later visit back.
     const resumeAt = takeResumeMark()
-    if (resumeAt != null) {
+    if (linked != null) {
+      pendingSeekMs = linked
+      currentMs = linked
+      flash(`At ${formatTime(linked)}, from the link`)
+    } else if (resumeAt != null) {
       // Paint the waveform at the remembered spot immediately -- the peaks are
       // already here, so the tape is back in place long before the audio is.
       pendingSeekMs = resumeAt
@@ -195,6 +221,8 @@
     loadPeaks()
     initOffline()
     window.addEventListener('segmenter-synced', onSynced)
+    // another #t= link to this recording, opened in the same tab
+    window.addEventListener('hashchange', goToLinkedTime)
     const tick = () => {
       // A pending restore means the element's clock is not authoritative yet:
       // it still reads 0 (and reads 0 forever if the audio never loads), which
@@ -218,6 +246,7 @@
       cancelAnimationFrame(raf)
       window.removeEventListener('keydown', onKeydown)
       window.removeEventListener('segmenter-synced', onSynced)
+      window.removeEventListener('hashchange', goToLinkedTime)
       download?.abort?.abort()
       for (const copy of Object.values(local)) URL.revokeObjectURL(copy.url)
       window.removeEventListener('pageshow', dropResumeMarkOnRestore)
