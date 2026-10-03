@@ -41,3 +41,21 @@ def test_a_night_with_taps_a_hand_added_tune_and_a_deleted_row():
     # never shown: a guess between the last tune shown and the set's end, carrying the end
     assert d[15]["how"].startswith("added") and 380000 < d[15]["start_ms"] < 400000
     assert d[15]["end_ms"] == 400000 and d[14]["end_ms"] is None
+
+
+def test_blind_sets_a_few_seconds_apart_with_the_same_type_are_one_set():
+    from lab.tools.drafts import join_sets
+
+    def row(start, end, typ, first):
+        return {"start_ms": start, "end_ms": end, "type": typ, "first_in_set": first, "how": "blind",
+                "name": "t", "set": 0}
+
+    drafts = [row(0, 100000, "reel", True),
+              row(103000, 200000, "reel", True),     # 3 s after: one set
+              row(210000, 300000, "reel", True),     # 10 s after: kept, for review
+              row(302000, 400000, "jig", True)]      # 2 s after but a jig: kept
+    noted = []
+    out = join_sets(drafts, log=noted.append)
+    assert [d["first_in_set"] for d in out] == [True, False, True, True]
+    assert out[0]["end_ms"] is None and [d["set"] for d in out] == [1, 1, 2, 3]
+    assert len(noted) == 1 and "10 s" in noted[0]

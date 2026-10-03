@@ -265,12 +265,15 @@ def infer_log(states, duration_ms, names=None):
     `conf` (the median belief while shown) and `outside` (found in the whole
     corpus, not the session's repertoire)."""
     names = dict(names or {})
+    types = {}
     runs = []                                   # [tune, first_t, last_t, [p], outside]
     for st in states:
         tid = st.get("shown")
         cand = next((c for c in st.get("top", []) if c["tune_id"] == tid), None)
         if cand and cand.get("name"):
             names.setdefault(tid, cand["name"])
+        if cand and cand.get("type"):
+            types.setdefault(tid, cand["type"].lower())
         if tid is None:
             continue
         if runs and runs[-1][0] == tid and st["t_ms"] - runs[-1][2] <= 3 * HOP_MS:
@@ -300,7 +303,8 @@ def infer_log(states, duration_ms, names=None):
         rows.append({"session_instance_tune_id": None, "tune_id": int(tid), "name": names.get(tid),
                      "set": set_no, "first_in_set": new_set, "how": "blind",
                      "first_shown_ms": first, "start_ms": max(0, first - WINDOW_MS), "end_ms": None,
-                     "conf": round(float(np.median(ps)), 3), "outside": outside, "_last": last})
+                     "conf": round(float(np.median(ps)), 3), "outside": outside, "type": types.get(tid),
+                     "_last": last})
     # a set's last tune ends where the music stops after it
     for i, d in enumerate(rows):
         if i + 1 < len(rows) and not rows[i + 1]["first_in_set"]:
@@ -312,6 +316,62 @@ def infer_log(states, duration_ms, names=None):
     for d in rows:
         d.pop("_last")
     return rows
+
+
+JOIN_MS = 5000            # blind: two sets this close, same tune type, are one set
+REVIEW_MS = 15000         # ... closer than this but not joined: listed for a person to judge
+
+
+def join_sets(drafts, log=print):
+    """Blind sets split where one tune's grid runs into the next. The player's
+    rule (2026-10-03): if the next tune starts within a few seconds of where the
+    last one stopped, and they are the same type, it is a changeover, a pause
+    while someone remembers how to start the next tune, and the split point is
+    the next tune's start (the quiet before it belongs to the tune before);
+    15 s or more is two sets. A few seconds is JOIN_MS: on the eight labelled
+    nights, same-type breaks under 5 s were one labelled set 13 times out of
+    15, and from 5 to 15 s mostly two. Same-type gaps from JOIN_MS to REVIEW_MS
+    are left split and listed for review. Run after following, so the gap is
+    from where the music stopped to the followed start."""
+    review = []
+    for i in range(1, len(drafts)):
+        d, prev = drafts[i], drafts[i - 1]
+        if not d["first_in_set"] or prev["end_ms"] is None:
+            continue
+        gap = d["start_ms"] - prev["end_ms"]
+        same = d.get("type") and d.get("type") == prev.get("type")
+        if same and gap < JOIN_MS:
+            d["first_in_set"] = False
+            prev["end_ms"] = None
+            d["how"] += ", joined"
+        elif same and gap < REVIEW_MS:
+            review.append((d, gap))
+    set_no = 0
+    for d in drafts:
+        if d["first_in_set"]:
+            set_no += 1
+        d["set"] = set_no
+    for d, gap in review:
+        log(f"set break kept, for review: {gap / 1000:.0f} s before {d['name']} at {_fmt(d['start_ms'])}")
+    return drafts
+
+
+def tidy(drafts):
+    """The drafts in time order, a set's end no later than the next tune's
+    start. A set break can come from the display going blank while the music
+    plays on (recording 112, set 5's end walked on over all of set 6), and a
+    segment that runs into the next is not a segment the segmenter can hold."""
+    drafts.sort(key=lambda d: d["start_ms"])
+    for i, d in enumerate(drafts[:-1]):
+        nxt = drafts[i + 1]["start_ms"]
+        if d["end_ms"] is not None and d["end_ms"] > nxt:
+            d["end_ms"] = nxt if nxt > d["start_ms"] else None
+    set_no = 0
+    for d in drafts:
+        if d["first_in_set"]:
+            set_no += 1
+        d["set"] = set_no
+    return drafts
 
 
 FOLLOW_LEAD_MS = 90000    # a set's span for following: from this long before its first tune was shown
@@ -360,9 +420,18 @@ def follow_drafts(rid, manifest, drafts, log=print):
                 continue
             starts, _, _ = got
             for d, st in zip(rows, starts):
-                if st is not None:
-                    d["start_ms"] = int(round(st))
-                    d["how"] = f"{d['how']}, followed"
+                if st is None:
+                    continue
+                # The listener names a tune only after hearing it, so a start
+                # more than a step after it was first shown cannot be right: the
+                # path, which must place every tune, has pushed one it matches
+                # badly into the quiet after the music (Glen Allen, night 2,
+                # put at 0:13:10 after a tune shown from 0:10:56 and ending 0:12:38).
+                if d.get("first_shown_ms") is not None and st > d["first_shown_ms"] + HOP_MS:
+                    d["how"] = f"{d['how']}, follow rejected"
+                    continue
+                d["start_ms"] = int(round(st))
+                d["how"] = f"{d['how']}, followed"
             # a set end before its last start (the meter's was early) is dropped
             if rows[-1]["end_ms"] is not None and rows[-1]["end_ms"] <= rows[-1]["start_ms"]:
                 rows[-1]["end_ms"] = None
@@ -449,6 +518,9 @@ def main(args):
             raise SystemExit(f"following needs the audio: python -m lab pull --recordings {rid}, then "
                              f"python -m lab prepare --recordings {rid} (or --no-follow)")
         drafts = follow_drafts(rid, manifest, drafts)
+    if args.blind:
+        drafts = join_sets(tidy(drafts))
+        drafts = tidy(drafts)
     out = os.path.join(paths.recording_dir(rid), "drafts.json")
     with open(out, "w") as f:
         json.dump({"recording_id": rid, "followed": not args.no_follow, "blind": args.blind,
@@ -463,7 +535,8 @@ def main(args):
         name = d["name"] or f"tune {d['tune_id']}"
         moved = d.get("meter_start_ms")
         moved = f"  (meter {_fmt(moved)})" if moved is not None and abs(moved - d["start_ms"]) >= 1000 else ""
-        how = d["how"].split(",")[0].split(" ")[0] + (" +follow" if d["how"].endswith("followed") else "")
+        how = d["how"].split(",")[0].split(" ")[0] + (" +follow" if "followed" in d["how"] else "") \
+            + (" !follow" if "rejected" in d["how"] else "")
         print(f"  {_fmt(d['start_ms']):>8}  {name[:34]:<34} {how:<13} shown {_fmt(d['first_shown_ms']):>8}"
               + (f"  ends {_fmt(d['end_ms'])}" if d["end_ms"] else "") + moved)
     guesses = sum(d["how"].startswith("added") for d in drafts)
