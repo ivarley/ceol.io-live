@@ -194,6 +194,7 @@ struct SessionDetailView: View {
     @State private var abcIDs: Set<Int>?
     @State private var addingTune = false
     @State private var addingPerson = false
+    @State private var openPerson: PersonRef?
     // Logs: a tune search over what's been logged here, and which nights.
     @State private var logSearch = ""
     @State private var logView = SessionPage.LogView.logged
@@ -272,6 +273,16 @@ struct SessionDetailView: View {
                     Task { await load() }
                 } onAlready: { id, name, type in
                     openTune = TuneRef(id: id, name: name, type: type, sessionPath: path, statusKnown: false)
+                }
+            }
+            .sheet(item: $openPerson) { ref in
+                if let d = state.value, let row = people.value?.people.first(where: { $0.personId == ref.id }) {
+                    SessionPersonSheet(
+                        path: path, sessionName: d.session.name, row: row,
+                        isSessionAdmin: d.permissions.isSessionAdmin, trackAttendance: d.session.trackAttendance
+                    ) {
+                        await loadPeople()
+                    }
                 }
             }
             .sheet(isPresented: $addingPerson) {
@@ -808,7 +819,12 @@ struct SessionDetailView: View {
                 .padding(.horizontal, 16).padding(.vertical, 10)
                 Hairline()
                 ForEach(shown, id: \.personId) { person in
-                    PersonRow(person: person).padding(.horizontal, 16).padding(.vertical, 10)
+                    Button { openPerson = PersonRef(id: person.personId) } label: {
+                        PersonRow(person: person).padding(.horizontal, 16).padding(.vertical, 10)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("session.person")
                     Hairline()
                 }
                 if shown.isEmpty {

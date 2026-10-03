@@ -54,6 +54,10 @@ CHECKED_GETS = [
     ("/api/sessions/{session_path}/logs", "/api/sessions/austin/mueller/logs"),
     ("/api/sessions/{session_path}/people", "/api/sessions/austin/mueller/people"),
     (
+        "/api/sessions/{session_path}/people/{person_id}",
+        "/api/sessions/austin/mueller/people/1",
+    ),
+    (
         "/api/sessions/{session_path}/tunes/remaining",
         "/api/sessions/austin/mueller/tunes/remaining",
     ),
@@ -544,6 +548,38 @@ class TestResponsesMatchSchemas:
                 conn.commit()
             finally:
                 conn.close()
+
+    def test_a_session_admin_confirming_and_archiving_validates(self, spec, native_client):
+        """The person sheet's admin controls, as the app uses them: confirm someone and
+        archive them, then put them back. The seeded admin runs austin/mueller."""
+        from database import get_db_connection
+
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """SELECT sp.person_id, sp.confirmed, sp.archived FROM session_person sp
+                   JOIN session s ON s.session_id = sp.session_id
+                   WHERE s.path = 'austin/mueller' AND sp.person_id <> 1
+                   ORDER BY sp.person_id LIMIT 1"""
+            )
+            person_id, confirmed, archived = cur.fetchone()
+        finally:
+            conn.close()
+        ok = spec["components"]["schemas"]["Ok"]
+        error = spec["components"]["responses"]["Error"]["content"]["application/json"]["schema"]
+        base = f"/api/sessions/austin/mueller/people/{person_id}"
+        try:
+            for field, value in (("confirmed", not confirmed), ("archived", not archived)):
+                r = native_client.put(f"{base}/{field}", {field: value})
+                assert r.status_code == 200, r.get_json()
+                self._validate(spec, ok, r.get_json())
+            nobody = native_client.put("/api/sessions/austin/mueller/people/999999/archived", {"archived": True})
+            assert nobody.status_code == 404
+            self._validate(spec, error, nobody.get_json())
+        finally:
+            native_client.put(f"{base}/confirmed", {"confirmed": confirmed})
+            native_client.put(f"{base}/archived", {"archived": archived})
 
     def test_adding_a_session_validates(self, spec, native_client, monkeypatch):
         """The add-session flow as the app runs it: search thesession.org, fetch one

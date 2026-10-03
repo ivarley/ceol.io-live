@@ -32,7 +32,6 @@ INLINE_AUTH = {
     # is_admin OR confirmed -- membership alone is NOT enough to see a session's people).
     # /people/search and /people/add-existing are gone: there is no global person search.
     "get_session_people_list": "inline 401 + can_view_session_people()",
-    "get_session_person_detail": "inline 401",
     # user preference toggle
     "update_auto_save_preference": "inline 401",
     # The feature-022 recording endpoints lived here. Spec 050 replaced them; the

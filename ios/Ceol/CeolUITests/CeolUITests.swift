@@ -200,8 +200,42 @@ final class CeolUITests: XCTestCase {
         snapshot("add session person")
         create.tap()
         XCTAssertTrue(create.waitForNonExistence(timeout: 10))
-        XCTAssertTrue(app.staticTexts["Uitest \(last)"].waitForExistence(timeout: 10))
+        let added = app.buttons.matching(NSPredicate(format: "identifier == 'session.person' AND label BEGINSWITH %@", "Uitest \(last)"))
+        XCTAssertTrue(added.firstMatch.waitForExistence(timeout: 10))
         snapshot("session person added")
+    }
+
+    /// A person on a session's People tab opens their sheet: how often they come, and an
+    /// admin's controls (archived and restored here, so the roster is as it was), and a
+    /// night they came opens its log.
+    @MainActor
+    func testAPersonsSheet() throws {
+        let app = launch()
+        signIn(app)
+        app.buttons["tab.sessions"].firstMatch.tap()
+        let mueller = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Mueller Session'")).firstMatch
+        XCTAssertTrue(mueller.waitForExistence(timeout: 10))
+        mueller.tap()
+        app.buttons.containing(NSPredicate(format: "label BEGINSWITH 'People'")).firstMatch.tap()
+        let sarah = app.buttons.matching(NSPredicate(format: "identifier == 'session.person' AND label BEGINSWITH \"Sarah O'Connor\"")).firstMatch
+        XCTAssertTrue(sarah.waitForExistence(timeout: 10))
+        sarah.tap()
+
+        XCTAssertTrue(app.staticTexts["person.nights"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.descendants(matching: .any)["person.relationship"].exists)
+        snapshot("person sheet")
+        let archive = app.buttons["person.archive"]
+        XCTAssertTrue(archive.exists)
+        archive.tap()
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier == 'person.archive' AND label BEGINSWITH 'Restore'")).firstMatch.waitForExistence(timeout: 10))
+        archive.tap()
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier == 'person.archive' AND label BEGINSWITH 'Archive'")).firstMatch.waitForExistence(timeout: 10))
+
+        let night = app.buttons["person.night"].firstMatch
+        XCTAssertTrue(night.waitForExistence(timeout: 5))
+        night.tap()
+        XCTAssertTrue(app.buttons["night.header"].waitForExistence(timeout: 15))
+        snapshot("person's night")
     }
 
     /// Phase 3c: the Tunes tab, a tune's sheet, and the catalogue below your matches.

@@ -491,6 +491,34 @@ components:
         tune_id: { type: integer }
         # The id asked for, when it had been merged into tune_id.
         remapped_from: { type: [integer, "null"] }
+    SessionPersonDetail:
+      type: object
+      required: [success, person]
+      properties:
+        success: { type: boolean, const: true }
+        person:
+          type: object
+          required: [person_id, first_name, last_name, city, state, country, thesession_user_id,
+                     has_user_account, instruments, attended_instances]
+          properties:
+            person_id: { type: integer }
+            first_name: { type: string }
+            last_name: { type: string }
+            city: { type: [string, "null"] }
+            state: { type: [string, "null"] }
+            country: { type: [string, "null"] }
+            thesession_user_id: { type: [integer, "null"] }
+            has_user_account: { type: boolean }
+            instruments: { type: array, items: { type: string } }
+            # The nights they checked in to here, newest first.
+            attended_instances:
+              type: array
+              items:
+                type: object
+                required: [date, session_instance_id]
+                properties:
+                  date: { $ref: "#/components/schemas/Date" }
+                  session_instance_id: { type: integer }
     SessionPersonAdded:
       type: object
       required: [success, person_id, confirmed]
@@ -1522,6 +1550,64 @@ paths:
       summary: Leave a session. What you logged there stays. 404 when you don't belong.
       security: [{ bearer: [] }]
       parameters: [{ name: session_path, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Ok" } } } }
+        default: { $ref: "#/components/responses/Error" }
+  /api/sessions/{session_path}/people/{person_id}:
+    get:
+      operationId: getSessionPerson
+      summary: >-
+        One person on a session's list, as the People tab's sheet shows them: where
+        they're from, their instruments, thesession.org, and the nights they came. For
+        someone on the session's list themselves.
+      security: [{ bearer: [] }]
+      parameters:
+        - { name: session_path, in: path, required: true, schema: { type: string } }
+        - { name: person_id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/SessionPersonDetail" } } } }
+        default: { $ref: "#/components/responses/Error" }
+  /api/sessions/{session_path}/people/{person_id}/confirmed:
+    put:
+      operationId: setSessionPersonConfirmed
+      summary: >-
+        Confirm someone (or not): the session vouches for them, and only then can they see
+        its people and attendance. Session admins only.
+      security: [{ bearer: [] }]
+      parameters:
+        - { name: session_path, in: path, required: true, schema: { type: string } }
+        - { name: person_id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirmed]
+              properties:
+                confirmed: { type: boolean }
+      responses:
+        "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Ok" } } } }
+        default: { $ref: "#/components/responses/Error" }
+  /api/sessions/{session_path}/people/{person_id}/archived:
+    put:
+      operationId: setSessionPersonArchived
+      summary: >-
+        Archive someone (or restore them): hidden from the session's lists, still found by
+        name. Session admins only.
+      security: [{ bearer: [] }]
+      parameters:
+        - { name: session_path, in: path, required: true, schema: { type: string } }
+        - { name: person_id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [archived]
+              properties:
+                archived: { type: boolean }
       responses:
         "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Ok" } } } }
         default: { $ref: "#/components/responses/Error" }

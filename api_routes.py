@@ -4278,6 +4278,7 @@ def get_session_people_list(session_path):
         return jsonify({"success": False, "message": f"Failed to get people: {str(e)}"}), 500
 
 
+@api_login_required
 def get_session_person_detail(session_path, person_id):
     """
     Get detailed information about a person in a session, including attendance history.
