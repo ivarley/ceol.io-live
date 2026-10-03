@@ -304,7 +304,7 @@ def infer_log(states, duration_ms, names=None):
                      "set": set_no, "first_in_set": new_set, "how": "blind",
                      "first_shown_ms": first, "start_ms": max(0, first - WINDOW_MS), "end_ms": None,
                      "conf": round(float(np.median(ps)), 3), "outside": outside, "type": types.get(tid),
-                     "_last": last})
+                     "last_shown_ms": last, "_last": last})
     # a set's last tune ends where the music stops after it
     for i, d in enumerate(rows):
         if i + 1 < len(rows) and not rows[i + 1]["first_in_set"]:

@@ -2392,6 +2392,28 @@ Recording 112 (2025-07-03, session 1, never logged, 202 min), blind: 80 tunes
 in 34 sets, 74 starts from following, 4 rejected, 3 sets joined, 2 same-type
 breaks of 8 and 14 s kept for review.
 
+**Negative: searching the blind log's holes for missed tunes** (2026-10-03).
+The listener can call a tune "not a tune" for its whole length when people
+talk loudly over it: The Sailor On The Rock, night 1, 20:47-21:46 (labelled),
+tune-ness 0.1-0.3 throughout and never shown, so the blind log jumped from
+Speed The Plough to The Lady On The Island and the set-break review list
+showed a 48 s gap. Every stretch of at least 20 s between where one blind tune
+was last shown and the next one's start was transcribed with the listener's
+three trackers and searched whole, as the bench searches a segment (the
+repertoire's n-gram shortlist of 300, then the aligner), with no tune-ness and
+no decoder. On the eight labelled nights: 244 such gaps; 17 hold a labelled
+tune the blind log missed, 34 the tail of a tune it has, 193 no labelled tune.
+For the 17, the labelled tune was first once (The Floating Crowbar) and in the
+top three 3 times. Scores do not separate them: top score median 0.437 for a
+missed tune against 0.391 for no tune, ranges overlapping; the top's lead over
+the second a median 0.007 either way; the same hub tunes (The Tarbolton, The
+Scholar, The Mason's Apron) lead everywhere. A whole minute of talk over music,
+searched at once, loses what protects the listener from hubs. Nor does a
+simple rule flag the holes for a person: the best, median tune-ness at least
+0.3 in the gap, flags 22 gaps and catches 6 of the 17. Taken out. What might
+work: the listener's own per-window scoring over the gap with "not a tune"
+switched off, so the decoder's hub charge still applies.
+
 ### Still open
 
 **As of 2026-10-01.** Items 1 to 3 below are done (item 2 became night 137,
