@@ -2333,6 +2333,36 @@ within 1 s), so the replay's spans are good enough. The worst: Soggy's +33 s,
 Banish Misfortune -17 s, Out On The Ocean +16.5 s (the night's first tune,
 at 0:00:00), The Salamanca -12 s, The Milliner's Daughter -11 s.
 
+**Never-logged nights** (`lab drafts N --blind`, 2026-10-03): the log itself
+inferred from the replay, by the blind-segmentation rules fixed on night 137
+(runs of one tune on display; under 20 s dropped; one tune's runs merged
+across under 40 s; a set break after more than 10 s with nothing shown; a
+set's last tune ends where the music stops), then following for the starts.
+`--apply` logs and places each tune in one pass. Each labelled night treated
+as never logged, labels only to score:
+
+| night | labelled tunes named right | wrong | nothing over it | blind tunes over no labelled tune | starts within 1 s, of those right | sets, blind / labelled |
+|---|---|---|---|---|---|---|
+| 1 | 71 / 83 | 11 | 1 | 7 | 53 / 71 | 43 / 34 |
+| 2 | 52 / 59 | 7 | 0 | 4 | 37 / 52 | 29 / 23 |
+| 3 | 64 / 68 | 3 | 1 | 2 | 56 / 64 | 36 / 31 |
+| 4 | 75 / 83 | 7 | 1 | 6 | 51 / 75 | 43 / 34 |
+| 5 | 68 / 81 | 12 | 1 | 5 | 45 / 68 | 48 / 36 |
+| 138 | 80 / 81 | 1 | 0 | 1 | 63 / 80 | 33 / 32 |
+| 139 | 60 / 69 | 9 | 0 | 9 | 53 / 60 | 39 / 26 |
+| 140 | 79 / 86 | 6 | 1 | 3 | 60 / 79 | 39 / 36 |
+| all | 549 / 610 (0.90) | 56 | 5 | 37 | 418 / 549 (0.76) | 310 / 252 |
+
+Scope: the listener's decoder was tuned on nights 1-5 (and its window,
+tune-ness and fallback chosen on nights 1-5 and 138-140), so these are its
+own nights; only the inference rules and following were never fitted to them.
+The first real test is a back recording the player checks. On night 140 the
+mistakes were a tune held on the display into the next one (whose own run
+then lands after the set), two tunes merged into one, and single confusions;
+the median belief while shown did not separate wrong tunes (all 0.68-1.0).
+Sets come out split: 310 blind against 252 labelled, a set break wherever
+the display shows nothing for 10 s inside a set.
+
 ### Still open
 
 **As of 2026-10-01.** Items 1 to 3 below are done (item 2 became night 137,
