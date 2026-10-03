@@ -9,6 +9,9 @@ for a person to correct in the segmenter rather than place from nothing.
 
     python -m lab drafts 143                       # the table, and drafts.json
     python -m lab drafts 143 --apply --email you@  # write them to the segmenter
+    python -m lab drafts 140 --replay              # no meter log: the listener run over the audio
+    python -m lab drafts 112 --blind               # the night was never logged: infer the log too
+    python -m lab drafts 112 --blind --apply ...   # log the tunes and place them, in one pass
 
 The rules, fixed before any of this night's corrections were seen:
 
@@ -47,6 +50,8 @@ import json
 import os
 import sys
 import time
+
+import numpy as np
 
 from lab import paths
 
@@ -242,6 +247,73 @@ def draft(states, logged, logged_order, duration_ms, names=None):
     return rows
 
 
+BRIEF_MS = 20000          # blind: a tune shown for less than this is a wobble or a false start
+MERGE_GAP_MS = 20000      # blind: one tune's runs closer than this (plus BRIEF_MS) are one tune
+SET_GAP_MS = 10000        # blind: more than this with nothing shown between two tunes is a set break
+WINDOW_MS = 6000          # the listener names a tune from its last 6 s of notes
+
+
+def infer_log(states, duration_ms, names=None):
+    """A night's log from the listener's states alone, for a recording whose
+    night was never logged: the tunes it showed, in order, grouped into sets.
+    The rules are the blind segmentation's (night 137, 053 files/blind-r137.md),
+    fixed before any label was read there: runs of one tune on display; a run
+    under BRIEF_MS dropped; consecutive runs of one tune merged across less
+    than MERGE_GAP_MS (plus BRIEF_MS) of other things; a set break where
+    nothing is shown for more than SET_GAP_MS. -> draft rows as `draft` makes
+    them, `session_instance_tune_id` None (the row does not exist yet), with
+    `conf` (the median belief while shown) and `outside` (found in the whole
+    corpus, not the session's repertoire)."""
+    names = dict(names or {})
+    runs = []                                   # [tune, first_t, last_t, [p], outside]
+    for st in states:
+        tid = st.get("shown")
+        cand = next((c for c in st.get("top", []) if c["tune_id"] == tid), None)
+        if cand and cand.get("name"):
+            names.setdefault(tid, cand["name"])
+        if tid is None:
+            continue
+        if runs and runs[-1][0] == tid and st["t_ms"] - runs[-1][2] <= 3 * HOP_MS:
+            runs[-1][2] = st["t_ms"]
+            runs[-1][3].append(cand["p"] if cand else 0.0)
+            runs[-1][4] = runs[-1][4] or bool(cand and cand.get("outside"))
+        else:
+            runs.append([tid, st["t_ms"], st["t_ms"], [cand["p"] if cand else 0.0],
+                         bool(cand and cand.get("outside"))])
+    kept = []
+    for r in runs:
+        if r[2] + HOP_MS - r[1] < BRIEF_MS:
+            continue
+        if kept and kept[-1][0] == r[0] and r[1] - kept[-1][2] < MERGE_GAP_MS + BRIEF_MS:
+            kept[-1][2] = r[2]
+            kept[-1][3] += r[3]
+            kept[-1][4] = kept[-1][4] or r[4]
+            continue
+        kept.append(list(r))
+    tuneful = {st["t_ms"]: (st.get("tuneness") or 0) >= TUNE for st in states}
+    by_t = [st["t_ms"] for st in states]
+    rows, set_no = [], 0
+    for i, (tid, first, last, ps, outside) in enumerate(kept):
+        new_set = i == 0 or first - (kept[i - 1][2] + HOP_MS) > SET_GAP_MS
+        if new_set:
+            set_no += 1
+        rows.append({"session_instance_tune_id": None, "tune_id": int(tid), "name": names.get(tid),
+                     "set": set_no, "first_in_set": new_set, "how": "blind",
+                     "first_shown_ms": first, "start_ms": max(0, first - WINDOW_MS), "end_ms": None,
+                     "conf": round(float(np.median(ps)), 3), "outside": outside, "_last": last})
+    # a set's last tune ends where the music stops after it
+    for i, d in enumerate(rows):
+        if i + 1 < len(rows) and not rows[i + 1]["first_in_set"]:
+            continue
+        j = by_t.index(d["_last"])
+        while j + 1 < len(by_t) and tuneful.get(by_t[j + 1]):
+            j += 1
+        d["end_ms"] = min(by_t[j], duration_ms)
+    for d in rows:
+        d.pop("_last")
+    return rows
+
+
 FOLLOW_LEAD_MS = 90000    # a set's span for following: from this long before its first tune was shown
 FOLLOW_TAIL_MS = 30000    # ... to this long after its drafted end
 
@@ -342,6 +414,9 @@ def add_parser(sub):
     p.add_argument("--email", help="your Ceol login, for --apply")
     p.add_argument("--base-url", default="https://ceol.io")
     p.add_argument("--force", action="store_true", help="with --apply, also replace tunes already placed")
+    p.add_argument("--blind", action="store_true",
+                   help="the night was never logged: infer its log from the audio too (implies --replay "
+                        "unless there is a meter log); --apply then logs the tunes as well as placing them")
     p.add_argument("--replay", action="store_true",
                    help="no meter log: run the listener over the audio instead (tens of minutes; kept)")
     p.add_argument("--no-follow", action="store_true",
@@ -354,6 +429,8 @@ def main(args):
     with open(paths.manifest_path(rid)) as f:
         manifest = json.load(f)
     log = os.path.join(paths.recording_dir(rid), "listen-states.jsonl")
+    if args.blind and not os.path.exists(log):
+        args.replay = True
     if args.replay or not os.path.exists(log):
         if not args.replay:
             raise SystemExit(f"no meter log for recording {rid} (lab pull fetches it, where the phone made one); "
@@ -363,7 +440,10 @@ def main(args):
             replay(rid, log)
     states, _, logged = load_log(log)
     names = {r["tune_id"]: r["name"] for r in manifest.get("repertoire", [])}
-    drafts = draft(states, logged, manifest["logged_order"], int(manifest["recording"]["duration_ms"]), names)
+    if args.blind:
+        drafts = infer_log(states, int(manifest["recording"]["duration_ms"]), names)
+    else:
+        drafts = draft(states, logged, manifest["logged_order"], int(manifest["recording"]["duration_ms"]), names)
     if not args.no_follow:
         if not os.path.exists(paths.wav_path(rid)):
             raise SystemExit(f"following needs the audio: python -m lab pull --recordings {rid}, then "
@@ -371,7 +451,7 @@ def main(args):
         drafts = follow_drafts(rid, manifest, drafts)
     out = os.path.join(paths.recording_dir(rid), "drafts.json")
     with open(out, "w") as f:
-        json.dump({"recording_id": rid, "followed": not args.no_follow,
+        json.dump({"recording_id": rid, "followed": not args.no_follow, "blind": args.blind,
                    "rules": {"in_set_lead_ms": IN_SET_LEAD_MS, "tuneness": TUNE},
                    "drafts": drafts}, f, indent=1)
 
@@ -388,27 +468,69 @@ def main(args):
               + (f"  ends {_fmt(d['end_ms'])}" if d["end_ms"] else "") + moved)
     guesses = sum(d["how"].startswith("added") for d in drafts)
     print(f"{len(drafts)} tunes in {set_no} sets; {guesses} guessed; -> {out}")
+    if args.blind:
+        low = [d for d in drafts if d["conf"] < 0.5]
+        print(f"blind: {len(low)} tunes named with a median belief under 0.5 (check these first): "
+              + ", ".join(f"{_fmt(d['start_ms'])} {d['name']}" for d in low[:12]))
     if args.apply:
-        return apply(rid, drafts, args)
+        return apply_log(rid, drafts, args) if args.blind else apply(rid, drafts, args)
     return 0
 
 
-def apply(rid, drafts, args):
+def _signed_in(args):
     import getpass
 
     import requests
 
     if not args.email:
         raise SystemExit("--apply needs --email")
-    base = args.base_url.rstrip("/")
     s = requests.Session()
     # A native client's login returns a Bearer token rather than a cookie.
     s.headers["X-Ceol-Client"] = "macos/lab-drafts"
-    r = s.post(f"{base}/api/auth/login-password",
+    r = s.post(f"{args.base_url.rstrip('/')}/api/auth/login-password",
                json={"email": args.email, "password": getpass.getpass(f"Ceol password for {args.email}: ")})
     if r.status_code != 200 or "token" not in r.json():
         raise SystemExit(f"sign-in failed ({r.status_code}): {r.text[:200]}")
     s.headers["Authorization"] = f"Bearer {r.json()['token']}"
+    return s
+
+
+def apply_log(rid, drafts, args):
+    """Log a blind night's tunes and place them, in one pass: each tune posted
+    in time order to POST /api/recordings/<id>/segments with its start (and,
+    for a set's last tune, its end). The server puts each new tune after the
+    placed tune before it, and an explicit end closes a set, so the log's sets
+    come out as drafted. A tune from outside the repertoire is named by its
+    thesession.org id, which imports it. Refuses a night that already has
+    tunes logged, unless --force."""
+    base = args.base_url.rstrip("/")
+    s = _signed_in(args)
+    try:
+        r = s.get(f"{base}/api/recordings/{rid}/segmenter")
+        r.raise_for_status()
+        logged = [t for t in r.json().get("tunes", []) if t.get("record_type", "tune") == "tune"]
+        if logged and not args.force:
+            raise SystemExit(f"recording {rid}'s night already has {len(logged)} tunes logged; "
+                             f"use lab drafts {rid} (without --blind), or --force")
+        done = failed = 0
+        for d in sorted(drafts, key=lambda d: d["start_ms"]):
+            body = {"start_ms": int(d["start_ms"]), "end_ms": d["end_ms"]}
+            body["thesession_id" if d.get("outside") else "tune_id"] = d["tune_id"]
+            r = s.post(f"{base}/api/recordings/{rid}/segments", json=body)
+            if r.ok:
+                done += 1
+            else:
+                failed += 1
+                print(f"  {d['name']}: {r.status_code} {r.text[:120]}", file=sys.stderr)
+        print(f"logged and placed {done}, failed {failed}")
+    finally:
+        s.post(f"{base}/api/auth/logout")
+    return 0 if failed == 0 else 1
+
+
+def apply(rid, drafts, args):
+    base = args.base_url.rstrip("/")
+    s = _signed_in(args)
     try:
         r = s.get(f"{base}/api/recordings/{rid}/segmenter")
         r.raise_for_status()
