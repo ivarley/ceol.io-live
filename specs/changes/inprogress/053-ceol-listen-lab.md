@@ -2492,6 +2492,18 @@ segmented blind; item 3 the follower). Open, in rough order:
   history. Rebuilding a per-session index is dropped as a stopgap. The test is
   the one below: our nights with the repertoire hidden, against weighted; the
   target is a brand-new session nearly as good, and ours no worse.
+- **(2026-10-04) Live latency and more than one night at once.** The service
+  takes 2.0-3.2 s of compute a 4 s step on Render Pro, about three quarters
+  of a core for one stream (spike, 2026-10-01), so a second night streaming at
+  the same time would push both behind real time, the lag growing through the
+  night (nothing is lost: the phone keeps the recording and the service skips
+  after a long gap). Profile where the step goes first. Candidates: the three
+  trackers (Basic Pitch and PESTO are networks on the CPU), re-transcribing the
+  overlapping window each step instead of only the new audio, fewer trackers
+  live, batching across streams, the aligner and the key allowance (+20%);
+  then the shape: transcription on the phone (Basic Pitch runs under Core ML)
+  sending notes rather than audio, or one stream per instance, scaled with the
+  sessions.
 - **(2026-10-04) Loudness, relative to the night.** Absolute loudness was taken
   out of tune-ness after a test of laptop speakers recorded through a phone,
   which says nothing about a phone on a pub table (the player's correction).
