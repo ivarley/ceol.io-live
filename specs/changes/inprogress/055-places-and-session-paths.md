@@ -231,6 +231,65 @@ One script, run once against production, in this order:
 Seed data (`schema/seed_data.sql`) gains place rows for its sessions; the seeded festival
 `austin/hill-country-fest` becomes `hill-country-fest/2026` with a festival place row.
 
+## Implementation notes (from the first code read, 2026-10-04)
+
+Decisions made while reading the code, so a fresh session does not re-derive them:
+
+- **`session.place_id` is nullable in the database until the step-two cleanup.** Dozens
+  of tests insert sessions with raw SQL and one-segment paths (`conftest.py`
+  `sample_session_data`, `test_tune_merge_030`, `test_live_logging_public`, …); a
+  NOT NULL column breaks them all at once. The two API write paths enforce it instead,
+  and the migration backfills every production row. SET NOT NULL lands with the column
+  drop.
+- **`city`, `state`, `country` keep being written** by both write paths, derived from the
+  matched place (normalized long form), until the serializers switch to the `place`
+  object. Otherwise a session created in the gap shows blank geography.
+- **Schema delta file is `schema/058_places.sql`** — `055_*` and `056_*` filenames are
+  already taken by unrelated features (abc search, pending registration). It adds
+  `place`, `path_redirect`, `session.place_id` (nullable, FK, indexed) and
+  `session_history.place_id`; `database.save_to_history` gains the column for `session`.
+  `full_schema.sql` gets the same with `place` created before `session`.
+- **Seed**: place rows 1–5 (austin, boston, chicago, sf, hill-country-fest); every seeded
+  session gets `place_id`; session 6 becomes `hill-country-fest/2026` with a festival
+  place row under Austin. No test references the old festival path; four reference the
+  regular seed paths, which do not change. `sf` keeps its slug with name "San Francisco"
+  (a slug need not equal the slug of its name).
+- **Validators**: `session_path.py` and `frontend/src/shared/sessionpath.js` go from
+  "at most 4 segments" to "exactly 2", same wording in both; the fixture file
+  `sessionpath.fixtures.json` changes ("one part" becomes an error, add 3-segment cases);
+  **`ios/CeolKit/Sources/CeolLogic/AddSession.swift` ports the same validator**
+  (`maxSegments = 4`, line ~335) and reads the same fixtures, so it changes too or
+  `make ios-test` fails. The kind/containment clauses live only on the server, in
+  `places.py`.
+- **Tests that post one-segment or non-place paths to `POST /api/add-session`** and need
+  new payloads: `test_people_tracking_039.py` (`test/flags-*`, city Austin →
+  `austin/flags-*`), `test_session_admin_fields.py` `TestCreate._payload` (one segment,
+  city Testville), `test_api_endpoints.py` (`new-api-session-*`, city Houston),
+  `test_session_path_validation.py` `_create_payload` (`probe/trimmed`, city Testville —
+  first segment must become the town slug), `test_user_journeys.py` (mocked cursor; its
+  `fetchone` side-effect sequence changes because the matcher adds queries),
+  `test_page_payload_add_session_admin_people.py` (`x/x`, city `X` — passes as is since
+  the town `x` gets created), `test_native_surface.py` (`memphis/contract-crossing`,
+  city Memphis — passes as is).
+- **New module `places.py`**: slugify (byte-for-byte the client's `generatePath` clean
+  step: lowercase, drop anything outside `[a-z0-9\s-]`, spaces to hyphens, collapse,
+  trim), US state table both directions, country aliases, `match_place`,
+  `disambiguated_slug`, `validate_path_for_place`, `resolve_session_path` (exact → bare
+  place → alias → redirect), `record_redirect` (upsert; delete rows whose `from_path` is
+  the new live path; repoint rows whose `to_path` was the old path so chains collapse).
+- **Sheet needs a pre-submit lookup**: `GET /api/places/match?city=&state=&country=`
+  returning match / new / ambiguous plus the matched place with its parent, so the
+  town-or-metro droplist and the "did you mean" prompt render before the save, not as a
+  failed save. On an ambiguous create the server answers 409 `place_ambiguous` with the
+  existing place and the suggested slug; the client resubmits with `place_id` or
+  `place_new: true`.
+- **Festival creation API** (`session_type = 'festival'` with `festival_name` and `year`,
+  spec 056) is wired on the server in phase 1, because the new rule rejects the old
+  `city/name` shape for festivals; the sheet side follows with spec 056.
+- **Resolution in `web_routes.session_handler`** applies to the tab routes too
+  (`/sessions/<path>/tunes|logs|people` call it with `active_tab`), so a 301 preserves
+  the tab suffix. The admin routes do not redirect.
+
 ## Build order
 
 055 schema, migration and validator first; then spec 056's copy and routing (the
