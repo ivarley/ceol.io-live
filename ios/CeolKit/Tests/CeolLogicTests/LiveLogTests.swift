@@ -279,6 +279,29 @@ struct LiveEditingTests {
         #expect(log.records.count == 4)
     }
 
+    @Test("a tune named by id is sent as the id alone; its name only labels the row")
+    func sentByID() throws {
+        var log = LiveLog(records: [rec(1, "a1", name: "Kesh")])
+        let byID = log.logTune(["tune_id": 1566, "name": "Holly Bush, The"], at: .end, opID: "i1")
+        #expect(byID.ops[0].body["tune_id"] == 1566)
+        #expect(byID.ops[0].body["name"] == nil)
+        #expect(byID.ops[0].label == "Holly Bush, The")
+        #expect(names(log) == ["Kesh", "Holly Bush, The"])
+        let imported = log.logTune(["thesession_id": 7080, "name": "#7080"], at: .end, opID: "i2")
+        #expect(imported.ops[0].body["name"] == nil)
+        // A typed name goes as typed: the server matches it.
+        let typed = log.logTune(["name": "Some Reel"], at: .end, opID: "i3")
+        #expect(typed.ops[0].body["name"] == "Some Reel")
+        // A relink sends the id alone; a rename (unlink with a name) keeps its name.
+        let relinked = log.changeTune(.server(1), ["tune_id": 9, "name": "Kesh, The"], patch: ["tune_id": 9], opID: "c1")
+        let relink = try #require(relinked)
+        #expect(relink.body["name"] == nil)
+        log.settle(opID: "c1", answer: ["success": false, "rejected": true, "reason": "invalid"])
+        let renamed = log.changeTune(.server(1), ["name": "A2", "unlink": true], patch: ["name": "A2"], opID: "c2")
+        let rename = try #require(renamed)
+        #expect(rename.body["name"] == "A2")
+    }
+
     @Test("a placeholder sits at the cursor until it's dropped")
     func placeholder() {
         var log = LiveLog(records: [rec(1, "a1", name: "A"), rec(2, "a2", name: "B")])

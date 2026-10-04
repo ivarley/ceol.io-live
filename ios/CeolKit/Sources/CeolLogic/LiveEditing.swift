@@ -28,6 +28,10 @@ public struct PendingOp: Sendable, Equatable, Codable {
     var drops: [JSONValue] = []
     /// Rows a rollback takes away that aren't temps (a refused restore).
     var rollbackDrops: [JSONValue] = []
+
+    /// The tune's name as this device shows the op: the body's, else its optimistic
+    /// row's (a tune sent by id goes without one, LogState.wireBody).
+    public var label: String? { body["name"]?.stringValue ?? puts.first?["name"]?.stringValue }
 }
 
 extension LiveLog {
@@ -55,7 +59,7 @@ extension LiveLog {
             let brkRec = tempBreak(breakTemp, position: breakPos)
             put(tune)
             put(brkRec)
-            var addBody = payload
+            var addBody = LogState.wireBody(payload)
             addBody["before_record_id"] = nextFirst.json
             addBody["after_record_id"] = .null
             let add = register(opID, "add_tune", addBody, temps: [tempID], puts: [tune])
@@ -67,7 +71,7 @@ extension LiveLog {
         let pos = LogState.cursorPos(cursor, ordered: ordered, allRecords: records)
         let tune = tempRecord(tempID, name: name, payload: payload, position: pos.position)
         put(tune)
-        var body = payload
+        var body = LogState.wireBody(payload)
         body["after_record_id"] = pos.afterID?.json ?? .null
         body["before_record_id"] = pos.beforeID?.json ?? .null
         let op = register(opID, "add_tune", body, temps: [tempID], puts: [tune])
@@ -89,7 +93,7 @@ extension LiveLog {
             if pos.afterID == nil && pos.beforeID == nil,
                 let target = LogState.openSetMergeTarget(.object(payload), ordered: ordered)
             {
-                var body = payload
+                var body = LogState.wireBody(payload)
                 body["after_record_id"] = .null
                 body["before_record_id"] = .null
                 return ([register(opID, "add_tune", body, temps: [])], cursor, target)
@@ -130,7 +134,8 @@ extension LiveLog {
         guard let r = records.first(where: { $0.recordID == id }), case .object(var o) = r, !r["_temp"].isTruthy else { return nil }
         for (k, v) in patch { o[k] = v }
         put(.object(o))
-        var op = register(opID, "change_tune", payload.merging(["record_id": id.json]) { a, _ in a }, temps: [], puts: [.object(o)])
+        var op = register(
+            opID, "change_tune", LogState.wireBody(payload).merging(["record_id": id.json]) { a, _ in a }, temps: [], puts: [.object(o)])
         op.prev = [r]
         pending[opID] = op
         return op

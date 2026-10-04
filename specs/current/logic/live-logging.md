@@ -178,16 +178,29 @@ instances so connected live screens relink in place.
 
 `session_instance_tune.name` is the top of the display hierarchy
 `COALESCE(sit.name, session_tune.alias, tune.name)` and is stored **only when it
-genuinely differs from both fallbacks**. Clients always ship a display `name`
-alongside `tune_id` (typeahead tap, relink, paste); the server normalizes it via
-`database.normalize_override_name` (case/accent/smart-quote-insensitive) at every
-write path — `add_tune`, `change_tune`, `link_tune_ajax`, the legacy bulk save, and
-the tune-drawer instance edit — so linked rows follow later alias/name changes
-instead of freezing a redundant copy at log time. Names that survive normalization
-are real overrides: per-night renames, and the old display name kept when an add
-remaps a merged-away tune (or frozen by `merge_tune_ids()`, spec 030). Unlinked
-rows (`tune_id NULL`) always keep their raw name. Backfill for pre-fix redundant
-copies: `schema/039_sit_name_override_only.sql`.
+genuinely differs from both fallbacks**.
+
+**A tune named by id records the id only.** An `add_tune` with a `tune_id` or
+`thesession_id`, and a `change_tune` relink, never store a name the client sent with
+it: that name is the client's label for its optimistic row, and the row shows the
+hierarchy. Both clients strip it before sending (`wireBody` in `logstate.js`,
+`LogState.wireBody` in CeolKit, one fixture set), and the server ignores it from
+older builds. The rule exists because the native app's live listener labelled tunes
+with thesession.org setting names from the data dump ("Holly Bush, The"), which were
+stored as overrides on every tune it logged (cleaned up by
+`schema/057_the_suffix_cleanup.sql`). A failed `thesession_id` import still uses the
+client's label for the unlinked row, else `#<id>`.
+
+What can still set a name: typed text (`add_tune` with only a `name`, matched or
+not), a rename (`change_tune` with a `name`, unlinking or keeping the link), and a
+merged-away `tune_id` remapped to its canonical tune, which keeps the merged tune's
+own catalog name (or the typed name it was matched from; spec 030). The server
+normalizes these via `database.normalize_override_name` (case/accent/smart-quote-
+insensitive) at every write path — `add_tune`, `change_tune`, `link_tune_ajax`, the
+legacy bulk save, and the tune-drawer instance edit — so linked rows follow later
+alias/name changes instead of freezing a redundant copy at log time. Unlinked rows
+(`tune_id NULL`) always keep their raw name. Backfill for pre-fix redundant copies:
+`schema/039_sit_name_override_only.sql`.
 
 ## Presence & typing (§F, ephemeral)
 

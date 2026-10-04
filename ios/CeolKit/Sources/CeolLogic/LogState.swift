@@ -161,6 +161,19 @@ public enum LogState {
 
     // MARK: - Anchor remapping (offline replay)
 
+    /// What an op's payload sends. A tune named by id (tune_id, or a thesession_id to
+    /// import) goes as the id alone: the server shows it through the name hierarchy (the
+    /// night's own name, the session's alias, the tune's name), so the payload's name is
+    /// only this device's label for the row until the answer. A typed name, a rename and
+    /// an unlink keep theirs. Returns a copy.
+    public static func wireBody(_ payload: [String: JSONValue]) -> [String: JSONValue] {
+        let byID = [payload["tune_id"], payload["thesession_id"]].contains { $0.map { !$0.isNull } ?? false }
+        guard byID else { return payload }
+        var body = payload
+        body["name"] = nil
+        return body
+    }
+
     /// Replace temp ids in an op payload with their real server ids. Unresolved
     /// anchors fall back to null (append); an unresolved record_id target means the row
     /// never persisted, so the op is skipped. A record_ids list keeps what resolves,

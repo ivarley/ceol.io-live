@@ -623,6 +623,16 @@ def _handle_add_tune(cur, session_instance_id, data, user_id):
     if tune_id is None and not name and ts_id is None:
         raise OpRejected("invalid", "add_tune requires tune_id, name, or thesession_id.")
 
+    # An add that names its tune by id (a typeahead tap, the listener's pick, a pasted
+    # thesession link) records the id only, and the row shows the name hierarchy,
+    # COALESCE(sit.name, session_tune.alias, tune.name). A name shipped alongside the id
+    # is the client's label for its optimistic row -- a search result's, or the
+    # listener's thesession.org setting name ("Holly Bush, The") -- and is never
+    # stored; it only labels an unlinked row when an import fails.
+    client_label = name
+    if tune_id is not None or ts_id is not None:
+        name = None
+
     # session_id is needed both for name->tune matching and for repertoire enrollment,
     # so resolve it once up front whenever a tune_id might end up linked.
     cur.execute("SELECT session_id FROM session_instance WHERE session_instance_id = %s", (session_instance_id,))
@@ -638,12 +648,11 @@ def _handle_add_tune(cur, session_instance_id, data, user_id):
     import_failed = None
     if ts_id is not None:
         try:
-            tune_id, found_name = _tune_from_thesession(cur, ts_id, user_id)
-            name = found_name or name
+            tune_id, _found_name = _tune_from_thesession(cur, ts_id, user_id)
         except TuneImportError as e:
             import_failed = e.message
-            if not name:
-                name = f"#{ts_id}"  # legible unmatched row for a fake/dead id
+            if tune_id is None:
+                name = client_label or f"#{ts_id}"  # legible unmatched row for a fake/dead id
 
     # Name -> tune matching takes priority for typed text. Tapping a typeahead result sends a
     # tune_id directly; hitting Enter sends just the text, which we resolve here via the same
@@ -659,21 +668,22 @@ def _handle_add_tune(cur, session_instance_id, data, user_id):
 
     # A merged-away tune_id remaps to the canonical tune (spec 030): stale typeahead
     # caches and replayed offline ops mean the merged tune, so proceed rather than
-    # reject. The name already resolved above stays on the record, preserving what
-    # the logger saw.
+    # reject. The record keeps the name the logger saw: a typed name resolved above,
+    # or else the merged-away tune's own catalog name.
     remapped_from = None
     if tune_id is not None:
-        cur.execute("SELECT redirect_to_tune_id FROM tune WHERE tune_id = %s", (tune_id,))
+        cur.execute("SELECT redirect_to_tune_id, name FROM tune WHERE tune_id = %s", (tune_id,))
         rrow = cur.fetchone()
         if rrow and rrow[0] is not None:
             remapped_from = tune_id
             tune_id = rrow[0]
+            name = name or rrow[1]
 
     # name is an override slot: a linked row stores it only when it genuinely differs
-    # from the display fallbacks (COALESCE(sit.name, st.alias, t.name)). Clients always
-    # send the display name alongside tune_id; dropping the redundant copy here keeps
-    # rows following later alias/name changes. A remapped add's old name survives this
-    # (it differs from the canonical tune's name — that's the spec 030 preservation).
+    # from the display fallbacks (COALESCE(sit.name, st.alias, t.name)). Dropping the
+    # redundant copy here keeps rows following later alias/name changes. A remapped
+    # add's old name survives this (it differs from the canonical tune's name — that's
+    # the spec 030 preservation).
     name = normalize_override_name(cur, session_id, tune_id, name)
 
     source = data.get("source") or "human"
@@ -769,10 +779,9 @@ def _handle_change_tune(cur, session_instance_id, data, user_id):
         if ts_id is None:
             raise OpRejected("invalid", "That isn't a thesession.org tune.")
         try:
-            data["tune_id"], found_name = _tune_from_thesession(cur, ts_id, user_id)
+            data["tune_id"], _found_name = _tune_from_thesession(cur, ts_id, user_id)
         except TuneImportError as e:
             raise OpRejected("import_failed", e.message)
-        data["name"] = found_name or data.get("name")
     if data.get("unlink"):
         sets += ["tune_id = NULL"]
         # A linked row usually stores no name of its own (it shows the tune's); keep
@@ -786,18 +795,25 @@ def _handle_change_tune(cur, session_instance_id, data, user_id):
         # stale client caches mean the merged tune. Mutating data keeps the
         # enrollment below on the canonical id too.
         if data["tune_id"] is not None:
-            cur.execute("SELECT redirect_to_tune_id FROM tune WHERE tune_id = %s", (data["tune_id"],))
+            cur.execute("SELECT redirect_to_tune_id, name FROM tune WHERE tune_id = %s", (data["tune_id"],))
             rrow = cur.fetchone()
+            merged_name = None
             if rrow and rrow[0] is not None:
                 remapped_from = data["tune_id"]
                 data["tune_id"] = rrow[0]
+                merged_name = rrow[1]
+            # A relink records the id only, as an add does: the row shows the name
+            # hierarchy, and any name shipped alongside (the client's label) is dropped,
+            # clearing whatever override the row carried. A relink to a merged-away tune
+            # keeps that tune's own name (spec 030).
+            data["name"] = merged_name
         sets += ["tune_id = %s"]; params += [data["tune_id"]]
     if "name" in data:
         nm = data["name"]
         nm = str(nm).strip() if nm else None
-        # Override-only: on a row that ends up linked (relink sends the display name
-        # alongside tune_id), a name matching the display fallbacks stores as NULL.
-        # A rename ships unlink:true, so effective_tune_id is None and nm is kept.
+        # Override-only: on a row that stays linked (a rename keeping the link, or a
+        # relink's merged-away name), a name matching the display fallbacks stores as
+        # NULL. A rename that unlinks has effective_tune_id None, so nm is kept.
         if data.get("unlink"):
             effective_tune_id = None
         elif "tune_id" in data:

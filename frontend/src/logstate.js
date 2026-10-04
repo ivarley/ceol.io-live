@@ -102,6 +102,20 @@ export function cursorPos(insertAfterId, ordered, allRecords) {
   return { afterId: c, beforeId: null, position: optimisticBetween(before, after) }
 }
 
+// --- What goes on the wire ------------------------------------------------ //
+
+// A tune named by id (tune_id, or a thesession_id to import) is sent as the id alone:
+// the server shows it through the name hierarchy (the night's own name, the session's
+// alias, the tune's name), so the payload's name is only this page's label for the row
+// until the answer. A typed name, a rename and an unlink keep theirs. Returns a COPY:
+// entry.payload keeps the name for the optimistic row and a reload's replay.
+export function wireBody(payload) {
+  const byId = payload.tune_id != null || payload.thesession_id != null
+  if (!byId || !('name' in payload)) return payload
+  const { name: _label, ...body } = payload
+  return body
+}
+
 // --- Anchor remapping (offline replay, #5b) ------------------------------- //
 
 // Replace temp anchor/target ids in an op payload with their real server ids.

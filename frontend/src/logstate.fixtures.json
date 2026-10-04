@@ -51,7 +51,11 @@
     "data half of the logger's applyOp, shared with the iOS app. recordChanges lists the",
     "records to put (by session_instance_tune_id; replace in place, else append) and the",
     "ids to drop, in the order given, puts first. metaChanges is a patch of only the night",
-    "fields the op sets; set_date sets start_time / end_time only when the op names them."
+    "fields the op sets; set_date sets start_time / end_time only when the op names them.",
+    "",
+    "wireBody: what an op's payload sends. A tune named by id (a non-null tune_id or",
+    "thesession_id) goes without its name -- the server shows the name hierarchy -- and",
+    "anything else goes as it is. It only ever removes the name key."
   ],
   "_not_fixtured": {
     "normAbc": "re-export of shared/abcquery.js normAbc; fixtured in shared/abcquery.fixtures.json"
@@ -1464,6 +1468,103 @@
               "record_ids": []
             },
             "skip": false
+          }
+        }
+      ]
+    },
+    "wireBody": {
+      "params": [
+        "payload"
+      ],
+      "cases": [
+        {
+          "name": "a tune named by id goes as the id alone",
+          "input": {
+            "payload": {
+              "tune_id": 1566,
+              "name": "Holly Bush, The",
+              "after_record_id": null
+            }
+          },
+          "expected": {
+            "tune_id": 1566,
+            "after_record_id": null
+          }
+        },
+        {
+          "name": "so does a thesession id to import",
+          "input": {
+            "payload": {
+              "thesession_id": 7080,
+              "name": "#7080"
+            }
+          },
+          "expected": {
+            "thesession_id": 7080
+          }
+        },
+        {
+          "name": "a relink",
+          "input": {
+            "payload": {
+              "record_id": 4,
+              "tune_id": 9,
+              "name": "Kesh, The"
+            }
+          },
+          "expected": {
+            "record_id": 4,
+            "tune_id": 9
+          }
+        },
+        {
+          "name": "a typed name keeps it",
+          "input": {
+            "payload": {
+              "name": "Some Reel"
+            }
+          },
+          "expected": {
+            "name": "Some Reel"
+          }
+        },
+        {
+          "name": "a null tune_id is not an id",
+          "input": {
+            "payload": {
+              "tune_id": null,
+              "name": "Typed"
+            }
+          },
+          "expected": {
+            "tune_id": null,
+            "name": "Typed"
+          }
+        },
+        {
+          "name": "a rename keeps its name",
+          "input": {
+            "payload": {
+              "record_id": 4,
+              "name": "A2",
+              "unlink": true
+            }
+          },
+          "expected": {
+            "record_id": 4,
+            "name": "A2",
+            "unlink": true
+          }
+        },
+        {
+          "name": "an id with no name is unchanged",
+          "input": {
+            "payload": {
+              "tune_id": 5
+            }
+          },
+          "expected": {
+            "tune_id": 5
           }
         }
       ]

@@ -16,7 +16,7 @@
   import { looksLikeAbc } from './shared/abcquery.js'
   import {
     computeOrdered, segmentByBreaks, setsOf, tunesOf, pluralType, setLabel,
-    maxPos, cursorPos, remapAnchors, normName,
+    maxPos, cursorPos, remapAnchors, wireBody, normName,
     openSetMergeTarget, mergeStable, parseThesessionId, parseThesessionSettingId,
     computeCursorSlots, seamKeyFor, seamActionFor, cursorAtClosedSetEnd,
     rememberInHistory, historyStep, nextTs, recordChanges, metaChanges,
@@ -2430,7 +2430,7 @@
       return
     }
     try {
-      const res = await sendOp(config, entry.op_type, payload, entry.op_id)
+      const res = await sendOp(config, entry.op_type, wireBody(payload), entry.op_id)
       settleOp(entry, res)
       // This POST just proved the server is reachable. If the stream isn't live,
       // resync NOW instead of waiting for a poll — while the stream is down, ops

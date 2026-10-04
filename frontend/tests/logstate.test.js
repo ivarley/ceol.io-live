@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import {
   computeOrdered, segmentByBreaks, setsOf, tunesOf,
-  pluralType, setLabel, maxPos, cursorPos, remapAnchors,
+  pluralType, setLabel, maxPos, cursorPos, remapAnchors, wireBody,
   normName, normAbc, stripThe, openSetMergeTarget, mergeStable,
   computeCursorSlots, seamKeyFor, seamActionFor, parseThesessionId, parseThesessionSettingId,
   rememberInHistory, historyStep, nextTs,
@@ -119,6 +119,20 @@ describe('cursorPos', () => {
     const cp = cursorPos(999, ordered, all)
     expect(cp.afterId).toBeNull()
     expect(cp.position > 'C').toBe(true)
+  })
+})
+
+describe('wireBody', () => {
+  it('sends a tune named by id as the id alone', () => {
+    const payload = { tune_id: 1566, name: 'Holly Bush, The', after_record_id: null }
+    expect(wireBody(payload)).toEqual({ tune_id: 1566, after_record_id: null })
+    expect(payload.name).toBe('Holly Bush, The') // the entry keeps its label
+    expect(wireBody({ thesession_id: 7080, name: '#7080' })).toEqual({ thesession_id: 7080 })
+  })
+  it('keeps a typed name, a rename and an unlink', () => {
+    expect(wireBody({ name: 'Some Reel' })).toEqual({ name: 'Some Reel' })
+    expect(wireBody({ record_id: 4, name: 'A2', unlink: true })).toEqual({ record_id: 4, name: 'A2', unlink: true })
+    expect(wireBody({ tune_id: null, name: 'Typed' })).toEqual({ tune_id: null, name: 'Typed' })
   })
 })
 

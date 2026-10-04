@@ -918,7 +918,7 @@ final class NightModel {
             "move_tunes": "Move", "remove_tunes": "Bulk remove", "restore_tunes": "Restore",
         ]
         let verb = verbs[op.opType] ?? op.opType
-        let name = op.body["name"]?.stringValue ?? op.prev.first?["name"]?.stringValue
+        let name = op.label ?? op.prev.first?["name"]?.stringValue
         return ReviewItem(what: name.map { "\(verb) “\($0)”" } ?? verb, why: why)
     }
 

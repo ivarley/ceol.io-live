@@ -86,6 +86,7 @@ let logStateAdapters = ModuleAdapters(
             let r = LogState.remapAnchors(try args.require("payload", \.objectValue), tempToReal: table)
             return ["payload": .object(r.payload), "skip": .bool(r.skip)]
         },
+        "wireBody": { args in .object(LogState.wireBody(try args.require("payload", \.objectValue))) },
         "stripThe": { args in .string(LogState.stripThe(try args.require("s", \.stringValue))) },
         "normName": { args in .string(LogState.normName(args.string("s"))) },
         "openSetMergeTarget": { args in

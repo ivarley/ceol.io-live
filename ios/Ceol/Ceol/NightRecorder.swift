@@ -170,11 +170,15 @@ final class NightRecorder {
 
     /// Add the tapped tune to the end of the night's log. A tune of the session's
     /// repertoire goes in by its id; one the whole-corpus fallback found goes in by its
-    /// thesession.org id, as the composer logs a pasted thesession link.
+    /// thesession.org id, as the composer logs a pasted thesession link. Only the id is
+    /// sent; the name is the row's label until the server answers with the session's
+    /// name for it. The listener's own name is a thesession.org setting name ("Holly
+    /// Bush, The"), so the session's vocabulary names it when it can.
     private func logToNight(_ tuneID: Int) {
         guard logged != tuneID, let night, night.log != nil else { return }
         let c = state?.top.first { $0.tuneID == tuneID }
-        let name: JSONValue = c?.name.map(JSONValue.string) ?? .null
+        let known = c?.outside == true ? nil : night.vocab?.byID[tuneID]?.name
+        let name: JSONValue = (known ?? c?.name).map(JSONValue.string) ?? .null
         if c?.outside == true {
             night.logTune(["thesession_id": JSONValue(tuneID), "name": name], at: .end)
         } else {

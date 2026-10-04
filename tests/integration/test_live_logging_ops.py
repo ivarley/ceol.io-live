@@ -232,24 +232,37 @@ def test_add_tune_alias_variant_stores_null_name(client, authenticated_user, liv
     assert rows[0][2] is None
 
 
-def test_add_tune_divergent_name_kept_as_override(client, authenticated_user, live_instance, db_cursor):
-    """A name that genuinely differs from both fallbacks is a real per-row override."""
+def test_add_tune_by_id_never_stores_the_shipped_name(client, authenticated_user, live_instance, db_cursor):
+    """An add by tune_id records the id only: a name shipped alongside is the client's
+    label (the live listener sent thesession.org setting names like "Holly Bush, The"),
+    so the row shows the name hierarchy instead."""
     inst = live_instance["instance_id"]
     with authenticated_user:
         _, body = _op(client, inst, op_type="add_tune",
-                      tune_id=live_instance["reel"], name="Sonny's Version")
-    assert body["record"]["name"] == "Sonny's Version"
+                      tune_id=live_instance["reel"], name="Test Reel, The")
+    assert body["record"]["name"] == "The Test Reel"
     rows = _records(db_cursor, inst)
-    assert rows[0][2] == "Sonny's Version"
+    assert rows[0][2] is None
 
 
-def test_add_merged_tune_keeps_logged_name_as_override(client, authenticated_user, live_instance, db_cursor):
-    """A remapped add (merged-away tune_id) keeps the name the logger saw — it differs
-    from the canonical tune's name, so it survives normalization (spec 030)."""
+def test_add_tune_by_id_shows_the_session_alias(client, authenticated_user, live_instance, db_cursor):
+    """With the shipped label dropped, a tune with a session alias shows the alias."""
     inst = live_instance["instance_id"]
     with authenticated_user:
         _, body = _op(client, inst, op_type="add_tune",
-                      tune_id=live_instance["merged"], name="The Merged Reel")
+                      tune_id=live_instance["cooley"], name="Cooley's Reel")
+    assert body["record"]["name"] == "The Tumbling Cooley"
+    rows = _records(db_cursor, inst)
+    assert rows[0][2] is None
+
+
+def test_add_merged_tune_keeps_the_merged_tunes_name(client, authenticated_user, live_instance, db_cursor):
+    """A remapped add (merged-away tune_id) keeps the merged tune's own catalog name --
+    what the logger saw -- whatever label the client shipped (spec 030)."""
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        _, body = _op(client, inst, op_type="add_tune",
+                      tune_id=live_instance["merged"], name="Merged Reel, The")
     assert body["record"]["tune_id"] == live_instance["reel"]
     rows = _records(db_cursor, inst)
     assert rows[0][2] == "The Merged Reel"
@@ -449,6 +462,20 @@ def test_change_tune_relink_clears_redundant_name(client, authenticated_user, li
         _, rel = _op(client, inst, op_type="change_tune", record_id=rid,
                      tune_id=live_instance["reel"], name="The Test Reel")
     assert rel["record"]["tune_id"] == live_instance["reel"]
+    assert rel["record"]["name"] == "The Test Reel"
+    db_cursor.execute("SELECT name FROM session_instance_tune WHERE session_instance_tune_id = %s", (rid,))
+    assert db_cursor.fetchone()[0] is None
+
+
+def test_change_tune_relink_never_stores_the_shipped_name(client, authenticated_user, live_instance, db_cursor):
+    """A relink records the id only, as an add does: a divergent label shipped with the
+    tune_id is dropped too, not kept as an override."""
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        _, a = _op(client, inst, op_type="add_tune", name="mystery reel xyz")
+        rid = a["record"]["session_instance_tune_id"]
+        _, rel = _op(client, inst, op_type="change_tune", record_id=rid,
+                     tune_id=live_instance["reel"], name="Test Reel, The")
     assert rel["record"]["name"] == "The Test Reel"
     db_cursor.execute("SELECT name FROM session_instance_tune WHERE session_instance_tune_id = %s", (rid,))
     assert db_cursor.fetchone()[0] is None
@@ -724,6 +751,7 @@ def test_change_tune_relink_to_merged_id_remaps(client, authenticated_user, live
     assert body["success"] is True
     assert body["record"]["tune_id"] == reel
     assert body["remapped_from"] == merged
+    assert body["record"]["name"] == "The Merged Reel"  # the merged tune's own name
     assert _repertoire_count(db_cursor, sid, merged) == 0
 
 
@@ -792,6 +820,21 @@ def test_add_tune_thesession_id_already_local_no_fetch(
         resp, body = _op(client, inst, op_type="add_tune", thesession_id=reel)
     assert body["success"] is True
     assert body["record"]["tune_id"] == reel
+
+
+def test_add_tune_thesession_id_never_stores_the_shipped_name(
+        client, authenticated_user, live_instance, db_cursor, monkeypatch):
+    """The live listener logs a tune by thesession id with its own label for it, a
+    thesession.org setting name ("Test Reel, The"); only the id is recorded."""
+    import live_logging_routes
+    monkeypatch.setattr(live_logging_routes, "_fetch_thesession_tune",
+                        _no_fetch("should not fetch a tune already in the catalog"))
+    inst, reel = live_instance["instance_id"], live_instance["reel"]
+    with authenticated_user:
+        _, body = _op(client, inst, op_type="add_tune", thesession_id=reel, name="Test Reel, The")
+    assert body["record"]["tune_id"] == reel
+    assert body["record"]["name"] == "The Test Reel"
+    assert _records(db_cursor, inst)[0][2] is None
 
 
 def test_add_tune_thesession_id_merged_follows_redirect(
