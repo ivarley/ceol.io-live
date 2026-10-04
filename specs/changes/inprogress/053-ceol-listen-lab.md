@@ -2463,6 +2463,22 @@ segmented blind; item 3 the follower). Open, in rough order:
   tunes of the recording's repertoire; a beat check against a short run of one
   tune type wedged between tunes of another (The Bucks Of Oranmore, a reel,
   for the first minute of The Gold Ring on 112).
+- **(2026-10-04) Production: one corpus for every session.** Detection will
+  run in production for many sessions, most of which have never logged a
+  tune. The lab's repertoire index is a hard filter (and goes stale: 7 tunes
+  missing, The Duke Of Leinster among them); production wants the reverse, one
+  whole-corpus index shared by every session, with the session's history
+  (repertoire, play counts, sets, keys) as a preference that raises a tune's
+  odds, and thesession.org tunebook counts doing that job when there is no
+  history. Rebuilding a per-session index is dropped as a stopgap. The test is
+  the one below: our nights with the repertoire hidden, against weighted; the
+  target is a brand-new session nearly as good, and ours no worse.
+- **(2026-10-04) Loudness, relative to the night.** Absolute loudness was taken
+  out of tune-ness after a test of laptop speakers recorded through a phone,
+  which says nothing about a phone on a pub table (the player's correction).
+  Level relative to the night's running median and its quietest moments is
+  still to test, for tune-ness and set ends; it won't rescue quiet music under
+  loud talk (The Sailor On The Rock).
 - **(2026-10-04) Sessions without years of logs.** This session's repertoire
   is the player's years of logging; another session's is thin, and the whole
   corpus is the candidate set. Not every tune is equally likely there:
