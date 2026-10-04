@@ -145,12 +145,32 @@ async def _sweep():
                 streams.pop(sid, None)
 
 
+def tune_name(name):
+    """A tune's name as people write it. thesession.org's data dump, which the
+    detector's indexes were built from, keeps a leading "The" at the end so
+    names sort under the noun ("Holly Bush, The": 6,581 of its 23,317 tunes);
+    no other word is moved. The phone shows names, so it goes back in front."""
+    if name and name.endswith(", The"):
+        return "The " + name[: -len(", The")]
+    return name
+
+
+def _name_tunes(models):
+    """Every name the detector reports, in place: the repertoire index, and the
+    whole corpus's, which is also Models.names."""
+    for names in (models.index.tune_names, models.fallback.tune_names):
+        for tune_id, name in names.items():
+            names[tune_id] = tune_name(name)
+
+
 async def _load():
     try:
         from lab.tools.listen import Models
 
         t0 = time.time()
-        state["models"] = await asyncio.to_thread(Models)
+        models = await asyncio.to_thread(Models)
+        _name_tunes(models)
+        state["models"] = models
         state["load_s"] = round(time.time() - t0, 1)
     except Exception as e:
         state["error"] = repr(e)

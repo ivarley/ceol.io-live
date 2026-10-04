@@ -171,14 +171,12 @@ final class NightRecorder {
     /// Add the tapped tune to the end of the night's log. A tune of the session's
     /// repertoire goes in by its id; one the whole-corpus fallback found goes in by its
     /// thesession.org id, as the composer logs a pasted thesession link. Only the id is
-    /// sent; the name is the row's label until the server answers with the session's
-    /// name for it. The listener's own name is a thesession.org setting name ("Holly
-    /// Bush, The"), so the session's vocabulary names it when it can.
+    /// sent; the name (as the meter shows it, received) is the row's label until the
+    /// server answers.
     private func logToNight(_ tuneID: Int) {
         guard logged != tuneID, let night, night.log != nil else { return }
         let c = state?.top.first { $0.tuneID == tuneID }
-        let known = c?.outside == true ? nil : night.vocab?.byID[tuneID]?.name
-        let name: JSONValue = (known ?? c?.name).map(JSONValue.string) ?? .null
+        let name: JSONValue = c?.name.map(JSONValue.string) ?? .null
         if c?.outside == true {
             night.logTune(["thesession_id": JSONValue(tuneID), "name": name], at: .end)
         } else {
@@ -200,7 +198,8 @@ final class NightRecorder {
     }
 
     private func received(_ s: ListenState) {
-        state = s
+        let vocab = night?.vocab
+        state = vocab.map { v in s.named { v.byID[$0]?.displayName } } ?? s
         // the service has moved on (a new tune, or nothing playing): the meter again
         if let c = confirmed, s.tMs > confirmedAfterMs + 4000, s.shown != c || s.notATune { confirmed = nil }
     }

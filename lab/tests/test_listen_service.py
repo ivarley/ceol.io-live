@@ -43,3 +43,20 @@ def test_skip_fills_a_gap_the_phone_no_longer_has_with_silence():
     assert s.have == 35                              # the held chunk follows
     y = np.concatenate(got)
     assert list(y[:10]) == [1] * 10 and list(y[10:30]) == [0] * 20 and list(y[30:]) == [2] * 5
+
+
+def test_names_go_back_to_how_people_write_them():
+    from listen.service import _name_tunes, tune_name
+
+    assert tune_name("Holly Bush, The") == "The Holly Bush"
+    assert tune_name("Careful With That Ale, Eugene") == "Careful With That Ale, Eugene"
+    assert tune_name("Toss The Feathers") == "Toss The Feathers"
+    assert tune_name(None) is None
+
+    corpus = {1566: "Holly Bush, The", 113: "Toss The Feathers"}
+    index = type("I", (), {"tune_names": corpus})
+    models = type("M", (), {"index": type("I", (), {"tune_names": {1566: "Holly Bush, The"}}),
+                            "fallback": index, "names": corpus})
+    _name_tunes(models)
+    assert models.names[1566] == "The Holly Bush"
+    assert models.index.tune_names[1566] == "The Holly Bush"

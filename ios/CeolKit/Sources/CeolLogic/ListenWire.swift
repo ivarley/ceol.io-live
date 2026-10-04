@@ -143,7 +143,7 @@ public struct ListenOutbox: Sendable {
 public struct ListenState: Decodable, Sendable, Equatable {
     public struct Candidate: Decodable, Sendable, Equatable, Identifiable {
         public let tuneID: Int
-        public let name: String?
+        public internal(set) var name: String?
         public let type: String?
         /// The decoder's belief, 0...1.
         public let p: Double
@@ -165,21 +165,21 @@ public struct ListenState: Decodable, Sendable, Equatable {
 
     public struct Shown: Decodable, Sendable, Equatable {
         public let tuneID: Int
-        public let name: String?
+        public internal(set) var name: String?
         public let fromMs: Int
         enum CodingKeys: String, CodingKey { case tuneID = "tune_id", name, fromMs = "from_ms" }
     }
 
     /// ms of audio this state is about.
     public let tMs: Int
-    public let top: [Candidate]
+    public internal(set) var top: [Candidate]
     /// Belief that nothing is being played as a tune.
     public let none: Double
     /// 0...1: how much the last seconds sound like a tune at all.
     public let tuneness: Double?
     /// The tune the decoder would display, if any.
     public let shown: Int?
-    public let history: [Shown]
+    public internal(set) var history: [Shown]
     public let status: String
     public let computeMs: Int?
 
@@ -197,6 +197,16 @@ public struct ListenState: Decodable, Sendable, Equatable {
         history = try c.decodeIfPresent([Shown].self, forKey: .history) ?? []
         status = try c.decodeIfPresent(String.self, forKey: .status) ?? ""
         computeMs = try c.decodeIfPresent(Int.self, forKey: .computeMs)
+    }
+
+    /// The same state with the names this device knows put in: the service's are from
+    /// thesession.org's data dump, and a tune the session knows shows as the session
+    /// shows it (its alias, else its name), as the night's log does.
+    public func named(by name: (Int) -> String?) -> ListenState {
+        var s = self
+        for i in s.top.indices { s.top[i].name = name(s.top[i].tuneID) ?? s.top[i].name }
+        for i in s.history.indices { s.history[i].name = name(s.history[i].tuneID) ?? s.history[i].name }
+        return s
     }
 
     /// The candidate on display, if the decoder is showing one.

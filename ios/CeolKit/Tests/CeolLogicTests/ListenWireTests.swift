@@ -62,6 +62,27 @@ struct ListenWireTests {
         #expect(s.top[1].outside == false && !s.notATune && s.history.first?.fromMs == 16000)
     }
 
+    @Test("The meter shows a tune as the session does; the dump's name only for one it doesn't know")
+    func named() throws {
+        let text = #"""
+            {"type":"state","t_ms":8000,"top":[{"tune_id":91,"name":"Roaring Barmaid, The","p":0.6},
+             {"tune_id":7,"name":"The Rose In The Heather","p":0.2},{"tune_id":514,"name":"Down The Broom","p":0.1}],
+             "none":0.1,"shown":91,"history":[{"tune_id":91,"name":"Roaring Barmaid, The","from_ms":4000}]}
+            """#
+        guard case .state(let s) = ListenMessage.decode(text) else {
+            Issue.record("not a state")
+            return
+        }
+        let vocab = try #require(Composer.buildIndex(
+            known: [["tune_id": 91, "name": "The Roaring Barmaid", "alias": ""],
+                    ["tune_id": 7, "name": "The Rose In The Heather", "alias": "Rosie"]],
+            aliases: nil))
+        let n = s.named { vocab.byID[$0]?.displayName }
+        #expect(n.top.map(\.name) == ["The Roaring Barmaid", "Rosie", "Down The Broom"])
+        #expect(n.history.first?.name == "The Roaring Barmaid")
+        #expect(n.shown == 91 && n.top[0].p == 0.6)
+    }
+
     @Test("A tap names the tune and what was on screen")
     func taps() {
         #expect(ListenWire.tapThis(tuneID: 91, shown: [91, 514]) == #"{"action":"this","shown":[91,514],"tune_id":91,"type":"tap"}"#)
