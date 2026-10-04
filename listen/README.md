@@ -45,8 +45,10 @@ and the process's peak memory.
    LAB_DATA_DIR=~/Local/code/ceol.io-053-listen/lab/data venv/bin/python -m listen.data upload
    ```
 
-2. **A new Web Service** in the dashboard, from this repo and the branch that
-   carries `listen/`:
+2. **A new Web Service** in the dashboard, from this repo's `production`
+   branch, like the web app (the live one is `ceol-listen`). Every push to
+   `production` redeploys it, which reloads the models (about a minute) and
+   drops open streams; phones reconnect and resume.
 
    | | |
    |---|---|
