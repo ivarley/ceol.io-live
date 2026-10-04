@@ -318,6 +318,65 @@ def infer_log(states, duration_ms, names=None):
     return rows
 
 
+HELD_MS = 400             # a set's end: the last note held at least this long ...
+QUIET_MS = 400            # ... with no new note for this long after it ...
+RING_OUT_MS = 726         # ... ends this much after the transcribed note does
+
+
+def held_note_end(notes, lo_ms, hi_ms):
+    """The end of the last held note between lo and hi with nothing after it
+    for QUIET_MS, or None: a tune ends on a long held note, then a moment of
+    no music (the player, 2026-10-04)."""
+    best = None
+    notes = sorted(notes, key=lambda n: n["t0_ms"])
+    for i, n in enumerate(notes):
+        if n["t1_ms"] - n["t0_ms"] < HELD_MS or not lo_ms <= n["t1_ms"] <= hi_ms:
+            continue
+        nxt = [x["t0_ms"] for x in notes[i + 1:] if x["t0_ms"] > n["t1_ms"] - 50]
+        if not nxt or nxt[0] - n["t1_ms"] >= QUIET_MS:
+            best = n["t1_ms"]
+    return best
+
+
+def refine_ends(rid, drafts, log=print):
+    """Each set's end from its last held note. The meter's end (the last 4 s
+    step that heard a tune) is where to look: from 6 s before it to 2 s after,
+    the end of the last note held at least HELD_MS with no new note for
+    QUIET_MS (Basic Pitch), plus RING_OUT_MS, the note ringing on past where the
+    transcription lets it go. Without such a note the meter's end stands.
+
+    Measured on 311 labelled set ends over nights 1-5, 138-140, 143 and 112:
+    the meter's end within 1 s of the label 125 times, this 168 (within 0.5 s
+    62 -> 100, median error 1.34 -> 0.91 s); better 73, worse 33, sign test
+    p = 0.0001; every night better. RING_OUT_MS is the median over those ends
+    (leave-one-night-out gives the same counts); HELD_MS and QUIET_MS were
+    chosen among a few on the same ends."""
+    from lab.audio.chunks import AudioStore
+    from lab.bench.retrieval import transcribe_segment
+    from lab.board.board import Board
+    from lab.frontends import get_frontend
+
+    fe = get_frontend("basic_pitch")
+    with open(os.path.join(paths.recording_dir(rid), "mono22k.sha1")) as f:
+        sha = f.read().strip()
+    store = AudioStore(paths.wav_path(rid))
+    store.clock_ms = store.duration_ms
+    moved = 0
+    with Board() as board:
+        for d in drafts:
+            if d["end_ms"] is None:
+                continue
+            e = d["end_ms"]
+            notes, _, _ = transcribe_segment(fe, store, sha, int(e - 10000), int(e + 6000), board=board)
+            held = held_note_end(notes, e - 6000, e + 2000)
+            if held is not None and held + RING_OUT_MS > d["start_ms"]:
+                d["meter_end_ms"] = e
+                d["end_ms"] = int(held + RING_OUT_MS)
+                moved += 1
+    log(f"set ends from a held note: {moved} of {sum(d['end_ms'] is not None for d in drafts)}")
+    return drafts
+
+
 JOIN_MS = 5000            # blind: two sets this close, same tune type, are one set
 REVIEW_MS = 15000         # ... closer than this but not joined: listed for a person to judge
 
@@ -447,7 +506,7 @@ def _fmt(ms):
     return f"{s // 3600}:{s // 60 % 60:02d}:{s % 60:02d}"
 
 
-def replay(rid, out_path, log=print):
+def replay(rid, out_path, log=print, transpose=0):
     """The listener (lab listen, the service's) run over a recording's audio
     offline, for a night recorded without the phone's meter: its states written
     as a meter log (dir "in"; at_ms is the audio time, there being no screen),
@@ -459,7 +518,7 @@ def replay(rid, out_path, log=print):
 
     from lab.tools.listen import HOP_MS as STEP, Listener, Models
 
-    li = Listener(tempfile.mkdtemp(prefix=f"replay-{rid}-"), models=Models(), keep_s=120)
+    li = Listener(tempfile.mkdtemp(prefix=f"replay-{rid}-"), models=Models(transpose=transpose), keep_s=120)
     part = out_path + ".part"
     started = time.time()
     with open(part, "w") as out:
@@ -491,6 +550,9 @@ def add_parser(sub):
     p.add_argument("--blind", action="store_true",
                    help="the night was never logged: infer its log from the audio too (implies --replay "
                         "unless there is a meter log); --apply then logs the tunes as well as placing them")
+    p.add_argument("--fifths", action="store_true",
+                   help="replay with the key allowance (a tune a fifth or two from its settings' keys); "
+                        "kept apart, as replay-states-fifths.jsonl")
     p.add_argument("--replay", action="store_true",
                    help="no meter log: run the listener over the audio instead (tens of minutes; kept)")
     p.add_argument("--no-follow", action="store_true",
@@ -527,9 +589,10 @@ def main(args):
         if not args.replay:
             raise SystemExit(f"no meter log for recording {rid} (lab pull fetches it, where the phone made one); "
                              f"--replay runs the listener over the audio instead")
-        log = os.path.join(paths.recording_dir(rid), "replay-states.jsonl")
+        log = os.path.join(paths.recording_dir(rid),
+                           "replay-states-fifths.jsonl" if args.fifths else "replay-states.jsonl")
         if not os.path.exists(log):
-            replay(rid, log)
+            replay(rid, log, transpose="fifths" if args.fifths else 0)
     states, _, logged = load_log(log)
     names = {r["tune_id"]: r["name"] for r in manifest.get("repertoire", [])}
     if args.blind:
@@ -544,6 +607,8 @@ def main(args):
     if args.blind:
         drafts = join_sets(tidy(drafts))
         drafts = tidy(drafts)
+    if os.path.exists(paths.wav_path(rid)):
+        drafts = tidy(refine_ends(rid, drafts)) if args.blind else refine_ends(rid, drafts)
     out = os.path.join(paths.recording_dir(rid), "drafts.json")
     with open(out, "w") as f:
         json.dump({"recording_id": rid, "followed": not args.no_follow, "blind": args.blind,

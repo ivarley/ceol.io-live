@@ -59,3 +59,14 @@ def test_blind_sets_a_few_seconds_apart_with_the_same_type_are_one_set():
     assert [d["first_in_set"] for d in out] == [True, False, True, True]
     assert out[0]["end_ms"] is None and [d["set"] for d in out] == [1, 1, 2, 3]
     assert len(noted) == 1 and "10 s" in noted[0]
+
+
+def test_a_set_ends_on_its_last_held_note_then_quiet():
+    from lab.tools.drafts import held_note_end
+
+    notes = [{"t0_ms": 0, "t1_ms": 150}, {"t0_ms": 150, "t1_ms": 300},
+             {"t0_ms": 300, "t1_ms": 1200},            # the final note, held
+             {"t0_ms": 2000, "t1_ms": 2100}]           # chat, 800 ms later
+    assert held_note_end(notes, 0, 3000) == 1200
+    # a held note with more tune straight after it is not the end
+    assert held_note_end(notes[:3] + [{"t0_ms": 1250, "t1_ms": 1400}], 0, 3000) is None

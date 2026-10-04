@@ -101,7 +101,7 @@ class Models:
     whole corpus's index (the fallback), the aligner's sequences, the
     tune-ness model. About 3 GB, most of it the corpus and PyTorch."""
 
-    def __init__(self):
+    def __init__(self, transpose=0):
         from lab.analysis.tuneness import TunenessModel
         from lab.bench.retrieval import Aligner
         from lab.corpus.index import Index
@@ -111,7 +111,10 @@ class Models:
         self.index = Index.load("repertoire", n=6, fold_octaves=True)
         self.fallback = Index.load("all", n=6, fold_octaves=True)
         self.names, self.types = self.fallback.tune_names, self.fallback.tune_types
-        self.aligner = Aligner(reading="notes", mode="replace", shortlist=10 ** 6, candidate_set="all")
+        # transpose="fifths" is the key allowance (spec 053, 2026-09-29): a tune
+        # may be played a fifth or two from every setting's key (Mac's Fancy).
+        self.aligner = Aligner(reading="notes", mode="replace", shortlist=10 ** 6, candidate_set="all",
+                               transpose=transpose)
         self.tuneness = TunenessModel.load()
         self.n_settings = {t: len(v) for t, v in self.aligner.sequences.by_tune.items()}
 

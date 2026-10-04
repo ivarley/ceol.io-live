@@ -2431,6 +2431,26 @@ almost all tunes right. Their description of an end, for a rule to find it:
 a long held final note, then a moment of silence or at least no music,
 sometimes applause.
 
+**Set ends from the held final note** (2026-10-04). Against the 311 explicit
+set ends labelled on nights 1-5, 138-140, 143 and 112, searched around the
+meter's end (the last 4 s step that heard a tune, R0):
+
+| rule | placed | median error | within 0.5 s | 1 s | 2 s |
+|---|---|---|---|---|---|
+| R0, the meter's end | 311 | 1.34 s | 62 | 125 | 215 |
+| the end of the last note held >= 300 ms with no new note for 1 s | 113 | 0.92 s (early 0.55 s) | 27 | 65 | 86 |
+| where the level falls 8 dB below the 10 s before and stays down 0.5 s | 189 | 1.69 s (late 1.65 s) | 42 | 66 | 101 |
+| held >= 400 ms, quiet 400 ms, within 6 s before to 2 s after R0, plus 726 ms; else R0 | 311 | 0.91 s | 100 | 168 | 237 |
+
+The held note's transcribed end comes early, the note ringing on past where
+Basic Pitch lets it go; 726 ms is the median over those ends, and leave-one-
+night-out gives the same counts. Chat and applause straight after the tune are
+transcribed as notes too, so a whole second of nothing is rare; 400 ms is
+enough. Paired against R0: better 73, worse 33 (sign test p = 0.0001); every
+night better (within 1 s, e.g. night 3 8 -> 16, 138 9 -> 17, 112 18 -> 24).
+The held note is found for 114 of 311 ends; the rest keep R0. The thresholds
+were chosen among a few on these same ends. In `lab drafts` for every mode.
+
 ### Still open
 
 **As of 2026-10-01.** Items 1 to 3 below are done (item 2 became night 137,
