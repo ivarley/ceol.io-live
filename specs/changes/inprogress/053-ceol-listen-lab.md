@@ -2451,6 +2451,25 @@ night better (within 1 s, e.g. night 3 8 -> 16, 138 9 -> 17, 112 18 -> 24).
 The held note is found for 114 of 311 ends; the rest keep R0. The thresholds
 were chosen among a few on these same ends. In `lab drafts` for every mode.
 
+**The key allowance in the listener** (2026-10-04). The bench's allowance (a
+tune a fifth or two from every setting's key, 0.02 a step) was never in the
+listener, so blind mode could not name Mac's Fancy, played in D against
+settings all in A. Nine nights (112, 1-5, 138-140) run blind with and without
+it: named right 659 -> 662 of 689. Tune by tune: gained Mac's Fancy (112 and
+night 4) and Jim Keefe's (night 1), all played away from their settings'
+keys; at two changeovers a wrong extra tune went and the start came out
+23-26 s late (Martin Wynne's #1, night 2; The Blockers, 138); at two others a
+zero-length wrong tune appeared (The Mason's Apron, Frieze Britches). Compute:
+252 -> 304 ms a 4 s step on the laptop (+20%). On by default for replays,
+where time is cheap; off in the live service, which on Render already takes
+2.0-3.2 s a step.
+
+**Squeezed blind tunes.** Following has to place every tune it is given, and a
+brief misreading at a changeover ends up squeezed in front of the tune really
+there. Over the nine nights, both runs, all 23 blind tunes following left
+under 5 s before the next were wrong, none right; they are dropped (5 s read
+off these runs).
+
 ### Still open
 
 **As of 2026-10-01.** Items 1 to 3 below are done (item 2 became night 137,

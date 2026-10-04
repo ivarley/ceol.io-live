@@ -70,3 +70,15 @@ def test_a_set_ends_on_its_last_held_note_then_quiet():
     assert held_note_end(notes, 0, 3000) == 1200
     # a held note with more tune straight after it is not the end
     assert held_note_end(notes[:3] + [{"t0_ms": 1250, "t1_ms": 1400}], 0, 3000) is None
+
+
+def test_a_blind_tune_following_squeezes_to_nothing_is_dropped():
+    from lab.tools.drafts import drop_squeezed
+
+    def row(start, end, first, name):
+        return {"start_ms": start, "end_ms": end, "first_in_set": first, "name": name, "set": 1}
+
+    out = drop_squeezed([row(0, None, True, "squeezed"), row(2000, None, False, "real"),
+                         row(100000, 200000, False, "next")], log=lambda *_: None)
+    assert [d["name"] for d in out] == ["real", "next"]
+    assert out[0]["first_in_set"]           # it opens the set the squeezed one opened

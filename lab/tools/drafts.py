@@ -415,6 +415,31 @@ def join_sets(drafts, log=print):
     return drafts
 
 
+SQUEEZED_MS = 5000        # blind: a tune following leaves shorter than this is dropped
+
+
+def drop_squeezed(drafts, log=print):
+    """Blind tunes that following leaves with almost no length. Following has to
+    place every tune it is given, and a brief misreading at a changeover (The
+    Mason's Apron at The Humours Of Ballyconnell's first note, night 138) ends
+    up squeezed in front of the tune that is really there. Over nine nights, run
+    with and without the key allowance, all 23 blind tunes left under 5 s
+    before the next were wrong, none right."""
+    rows = sorted(drafts, key=lambda d: d["start_ms"])
+    keep = []
+    for i, d in enumerate(rows):
+        nxt = rows[i + 1]["start_ms"] if i + 1 < len(rows) else None
+        own_end = d["end_ms"] if d["end_ms"] is not None else nxt
+        if own_end is not None and own_end - d["start_ms"] < SQUEEZED_MS:
+            left = (own_end - d["start_ms"]) / 1000
+            log(f"dropped {d['name']} at {_fmt(d['start_ms'])}: following left it {left:.0f} s")
+            if d["first_in_set"] and nxt is not None and i + 1 < len(rows):
+                rows[i + 1]["first_in_set"] = True
+            continue
+        keep.append(d)
+    return keep
+
+
 def tidy(drafts):
     """The drafts in time order, a set's end no later than the next tune's
     start. A set break can come from the display going blank while the music
@@ -550,9 +575,9 @@ def add_parser(sub):
     p.add_argument("--blind", action="store_true",
                    help="the night was never logged: infer its log from the audio too (implies --replay "
                         "unless there is a meter log); --apply then logs the tunes as well as placing them")
-    p.add_argument("--fifths", action="store_true",
-                   help="replay with the key allowance (a tune a fifth or two from its settings' keys); "
-                        "kept apart, as replay-states-fifths.jsonl")
+    p.add_argument("--no-fifths", action="store_true",
+                   help="replay without the key allowance (a tune played a fifth or two from every "
+                        "setting's key); the replay with it is kept as replay-states-fifths.jsonl")
     p.add_argument("--replay", action="store_true",
                    help="no meter log: run the listener over the audio instead (tens of minutes; kept)")
     p.add_argument("--no-follow", action="store_true",
@@ -589,10 +614,15 @@ def main(args):
         if not args.replay:
             raise SystemExit(f"no meter log for recording {rid} (lab pull fetches it, where the phone made one); "
                              f"--replay runs the listener over the audio instead")
+        # The key allowance by default (2026-10-04): over nine nights it named Mac's
+        # Fancy twice and Jim Keefe's, all played away from their settings' keys,
+        # for about 20% more compute, which a replay can spare and the live
+        # service, near real time on Render, cannot yet.
+        fifths = not args.no_fifths
         log = os.path.join(paths.recording_dir(rid),
-                           "replay-states-fifths.jsonl" if args.fifths else "replay-states.jsonl")
+                           "replay-states-fifths.jsonl" if fifths else "replay-states.jsonl")
         if not os.path.exists(log):
-            replay(rid, log, transpose="fifths" if args.fifths else 0)
+            replay(rid, log, transpose="fifths" if fifths else 0)
     states, _, logged = load_log(log)
     names = {r["tune_id"]: r["name"] for r in manifest.get("repertoire", [])}
     if args.blind:
@@ -605,7 +635,7 @@ def main(args):
                              f"python -m lab prepare --recordings {rid} (or --no-follow)")
         drafts = follow_drafts(rid, manifest, drafts)
     if args.blind:
-        drafts = join_sets(tidy(drafts))
+        drafts = join_sets(tidy(drop_squeezed(tidy(drafts))))
         drafts = tidy(drafts)
     if os.path.exists(paths.wav_path(rid)):
         drafts = tidy(refine_ends(rid, drafts)) if args.blind else refine_ends(rid, drafts)
