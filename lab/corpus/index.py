@@ -273,6 +273,14 @@ def candidate_tune_ids(candidate_set, recording_id=None):
     """Which tunes the index should cover. None = every tune in the dump."""
     if candidate_set == "all":
         return None
+    if candidate_set.startswith("popular"):
+        # thesession.org's well-known tunes: at least N tunebooks ("popular" = 100,
+        # "popular500" = 500), from corpus/tune_popularity.csv (TheSession-data)
+        import csv
+
+        floor = int(candidate_set[len("popular"):] or 100)
+        with open(os.path.join(paths.data("corpus"), "tune_popularity.csv"), newline="") as f:
+            return {int(r["tune_id"]) for r in csv.DictReader(f) if int(r["tunebooks"]) >= floor}
     ids = set()
     rec_ids = [recording_id] if recording_id else paths.prepared_recording_ids()
     if not rec_ids:
@@ -291,7 +299,8 @@ def candidate_tune_ids(candidate_set, recording_id=None):
 
 def add_parser(sub):
     p = sub.add_parser("index", help="build an interval n-gram index over the ABC corpus")
-    p.add_argument("--candidate-set", default="all", choices=["all", "repertoire", "eval_tunes"])
+    p.add_argument("--candidate-set", default="all",
+                   help="all, repertoire, eval_tunes, or popular[N] (at least N thesession.org tunebooks, default 100)")
     p.add_argument("--recording", type=int, help="restrict repertoire/eval_tunes to one recording")
     p.add_argument("-n", type=int, default=DEFAULT_N, help=f"n-gram length (default {DEFAULT_N})")
     p.add_argument("--fold-octaves", action="store_true",

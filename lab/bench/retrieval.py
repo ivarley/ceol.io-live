@@ -439,7 +439,11 @@ def _blend(weights_by_prev, belief, floor=1e-4):
 
 def score_night(frontends, recording_id, index, seconds=DEFAULT_SECONDS, board=None,
                 top_k=25, quiet=True, prior="none", beta=1.0, belief_k=5,
-                type_filter="none", fusion="rrf", particalized_index=None, aligner=None):
+                type_filter="none", fusion="rrf", particalized_index=None, aligner=None,
+                keep_candidates=0):
+    """Rank every evaluated segment of one night. With `keep_candidates`, each
+    row also keeps the segment's top N candidates and their scores, so a prior
+    can be swept offline without transcribing and aligning again."""
     gt = load_ground_truth(recording_id)
     sequence = previous_of = None
     if prior != "none":
@@ -523,6 +527,8 @@ def score_night(frontends, recording_id, index, seconds=DEFAULT_SECONDS, board=N
                 "margin": true_score - best_wrong,
                 "top1_name": ranked[0]["name"] if ranked else None,
                 "cost_ms": cost, "cached": cached,
+                **({"candidates": [[int(r["tune_id"]), round(float(r["score"]), 5)]
+                                   for r in ranked[:keep_candidates]]} if keep_candidates else {}),
             })
             if not quiet and len(rows) % 20 == 0:
                 print(f"    {len(rows)} segments ...", flush=True)
@@ -742,7 +748,7 @@ def score_night_set_decoded(frontends, recording_id, index, seconds=DEFAULT_SECO
 def run_retrieval(frontends, recording_ids=None, candidate_set="repertoire", n=5,
                   seconds=DEFAULT_SECONDS, quiet=False, prior="none", beta=1.0,
                   fold_octaves=False, belief_k=5, type_filter="none", fusion="rrf",
-                  adaptive=False, particalized=False, aligner=None):
+                  adaptive=False, particalized=False, aligner=None, keep_candidates=0):
     from lab.corpus.index import Index
 
     index = Index.load(candidate_set, n=n, fold_octaves=fold_octaves)
@@ -766,7 +772,8 @@ def run_retrieval(frontends, recording_ids=None, candidate_set="repertoire", n=5
                 rows = score_night(frontends, rid, index, seconds=seconds, board=board,
                                    quiet=quiet, prior=prior, beta=beta, belief_k=belief_k,
                                    type_filter=type_filter, fusion=fusion,
-                                   particalized_index=particalized_index, aligner=aligner)
+                                   particalized_index=particalized_index, aligner=aligner,
+                                   keep_candidates=keep_candidates)
             board.conn.commit()
             gt = load_ground_truth(rid)
             m = summarise(rows)
@@ -798,7 +805,7 @@ def run_retrieval(frontends, recording_ids=None, candidate_set="repertoire", n=5
         features_version="audio", split="per-night",
         nights=nights, pooled=pooled, warnings=[],
         created_at=time.strftime("%Y-%m-%dT%H:%M:%S"), git_sha=git_sha(),
-        rows=[{k: r[k] for k in PAIRED_ROW_KEYS} for r in all_rows])
+        rows=[{k: r[k] for k in PAIRED_ROW_KEYS + ("candidates",) if k in r} for r in all_rows])
     return result, all_rows
 
 

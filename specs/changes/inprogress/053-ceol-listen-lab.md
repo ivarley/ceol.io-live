@@ -2470,6 +2470,35 @@ there. Over the nine nights, both runs, all 23 blind tunes following left
 under 5 s before the next were wrong, none right; they are dropped (5 s read
 off these runs).
 
+**One corpus for every session: shortlists merged** (2026-10-04). The bench's
+headline setup (yin, Basic Pitch and PESTO fused, 30 s, both readings, aligner
+replacing, a 300-tune shortlist) over 607 segments of nights 1-5 and 138-140,
+each run keeping every segment's 300 candidates with their aligner scores, so
+shortlists can be merged offline (the aligner scores a tune the same whichever
+shortlist brought it):
+
+| shortlist | named right / 607 | right tune on the shortlist |
+|---|---|---|
+| whole thesession.org corpus, 300 | 561 | 567 |
+| the repertoire as today (includes each night's own tunes) | 572 | 584 |
+| the repertoire as known before the night, as a filter | 559 | 570 |
+| popular tunes (>= 100 tunebooks, 2,320), 300 | 545 (0.898) | |
+| a new session: whole corpus + popular | 568 | 578 |
+| this session: whole corpus + repertoire before the night | 572 | 584 |
+| this session: + popular as well | 572 | 584 |
+
+Against the whole corpus alone: a new session's union better 10, worse 3 (p
+0.092); this session's better 14, worse 3 (p 0.013). Priors on the ranking
+(tunebook tiers or a log-tunebook bonus, the session's history as a bonus, all
+chosen leave-one-night-out) moved the whole-corpus run by 1 at most (560-562):
+the gap is the shortlist, not the ranking, since the aligner already names the
+right tune 561 times of the 567 it reaches. The repertoire as a filter, scored
+fairly, is below the whole corpus: 18 of the 607 are tunes the session played
+for the first time that night. So production's shortlist is a union: the whole
+corpus, the session's own tunes, and, with no history, popular ones. The cost is
+the aligner's, the bulk of the live step: up to 600-900 candidates against
+300; the sizes are to trade against the profiling.
+
 ### Still open
 
 **As of 2026-10-01.** Items 1 to 3 below are done (item 2 became night 137,

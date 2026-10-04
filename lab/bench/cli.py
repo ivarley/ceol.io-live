@@ -67,6 +67,8 @@ def add_parser(sub):
     ret.add_argument("--align-param", action="append", default=[], metavar="K=V",
                      help="Aligner settings: shortlist, chunk_eighths, chunk_notes, transpose (0, 12 or fifths), max_fifths, step_cost, key_top")
     ret.add_argument("--param", action="append", default=[], metavar="K=V")
+    ret.add_argument("--keep-candidates", type=int, default=0, metavar="N",
+                     help="also save each segment's top N candidates with scores, to sweep a prior offline")
     ret.add_argument("--no-save", action="store_true")
     ret.set_defaults(func=cmd_retrieval)
 
@@ -156,7 +158,7 @@ def cmd_retrieval(args):
         frontends, recording_ids=_ids(args.recordings), candidate_set=args.candidate_set,
         n=args.n, seconds=args.seconds, prior=args.prior, beta=args.beta,
         fold_octaves=args.fold_octaves, particalized=args.particalized, type_filter=args.type_filter, fusion=args.fusion,
-        adaptive=args.adaptive, aligner=aligner)
+        adaptive=args.adaptive, aligner=aligner, keep_candidates=args.keep_candidates)
     print(format_retrieval(result, rows))
     if not args.no_save:
         print(f"  saved {result.save()}")
