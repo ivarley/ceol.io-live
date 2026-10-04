@@ -2455,6 +2455,24 @@ were chosen among a few on these same ends. In `lab drafts` for every mode.
 
 **As of 2026-10-01.** Items 1 to 3 below are done (item 2 became night 137,
 segmented blind; item 3 the follower). Open, in rough order:
+- **(2026-10-04) In progress:** the key allowance in the listener (Mac's
+  Fancy, played in D against settings all in A); the repertoire index rebuilt
+  when the repertoire grows (7 of 1,287 tunes were missing from it, among them
+  The Duke Of Leinster, which recording 112 could therefore never name; the
+  live service's data too), and `lab drafts` warning when the index lacks
+  tunes of the recording's repertoire; a beat check against a short run of one
+  tune type wedged between tunes of another (The Bucks Of Oranmore, a reel,
+  for the first minute of The Gold Ring on 112).
+- **(2026-10-04) Sessions without years of logs.** This session's repertoire
+  is the player's years of logging; another session's is thin, and the whole
+  corpus is the candidate set. Not every tune is equally likely there:
+  thesession.org's tunebook count is a rough, decent proxy for popularity, with
+  a long tail of obscure or made-up tunes to penalise or search in a second
+  tier (the session's own repertoire stays a tier of its own, so a tail tune it
+  plays, Luke Skywalker Walks On Sunshine, is still found). Testable here by
+  hiding the repertoire: names right with the repertoire, with the whole corpus
+  and no prior, and with tunebook tiers, the threshold and penalty swept on
+  the labels. It will flatter a session that plays many obscure tunes.
 - **Too short to be a tune:** a minimum duration before a detection counts,
   the player's rule for melodic noodling, which tune-ness leaves at 50-70%
   of its chunks.
