@@ -400,7 +400,8 @@ def follow_drafts(rid, manifest, drafts, log=print):
     store.clock_ms = store.duration_ms
     prev_end = 0
     with Board() as board:
-        for k in sorted({d["set"] for d in drafts}):
+        sets_seen = sorted({d["set"] for d in drafts})
+        for k in sets_seen:
             rows = [d for d in drafts if d["set"] == k]
             for d in rows:
                 d["meter_start_ms"] = d["start_ms"]
@@ -413,6 +414,7 @@ def follow_drafts(rid, manifest, drafts, log=print):
             if missing:
                 log(f"set {k}: not followed, no readable setting for {', '.join(str(m) for m in missing)}")
                 continue
+            log(f"following set {k} of {len(sets_seen)} ({_fmt(t0)}-{_fmt(t1)}, {len(rows)} tunes)")
             got = follow_span(store, sha, t0, t1, [forms[d["tune_id"]] for d in rows],
                               [keys.get(d["tune_id"]) for d in rows], board=board)
             if got is None:
@@ -483,6 +485,9 @@ def add_parser(sub):
     p.add_argument("--email", help="your Ceol login, for --apply")
     p.add_argument("--base-url", default="https://ceol.io")
     p.add_argument("--force", action="store_true", help="with --apply, also replace tunes already placed")
+    p.add_argument("--saved", action="store_true",
+                   help="with --apply: apply the drafts.json already made for this recording, as it is, "
+                        "instead of drafting again")
     p.add_argument("--blind", action="store_true",
                    help="the night was never logged: infer its log from the audio too (implies --replay "
                         "unless there is a meter log); --apply then logs the tunes as well as placing them")
@@ -495,6 +500,24 @@ def add_parser(sub):
 
 def main(args):
     rid = args.recording
+    if args.saved:
+        path = os.path.join(paths.recording_dir(rid), "drafts.json")
+        if not args.apply:
+            raise SystemExit("--saved is for --apply: it applies the drafts already made")
+        if not os.path.exists(path):
+            raise SystemExit(f"no saved drafts for recording {rid}: run python -m lab drafts {rid} first")
+        with open(path) as f:
+            saved = json.load(f)
+        if bool(saved.get("blind")) != bool(args.blind):
+            raise SystemExit(f"the saved drafts were made {'with' if saved.get('blind') else 'without'} "
+                             f"--blind; apply them the same way")
+        drafts = saved["drafts"]
+        print(f"applying the saved drafts: {len(drafts)} tunes in {max(d['set'] for d in drafts)} sets")
+        return apply_log(rid, drafts, args) if args.blind else apply(rid, drafts, args)
+    if args.apply:
+        # ask for the password now, not after minutes of replaying and following
+        _signed_in(args)
+        print("signed in; drafting (following prints a line per set)", flush=True)
     with open(paths.manifest_path(rid)) as f:
         manifest = json.load(f)
     log = os.path.join(paths.recording_dir(rid), "listen-states.jsonl")
@@ -555,6 +578,8 @@ def _signed_in(args):
 
     import requests
 
+    if getattr(args, "_session", None) is not None:
+        return args._session
     if not args.email:
         raise SystemExit("--apply needs --email")
     s = requests.Session()
@@ -565,6 +590,7 @@ def _signed_in(args):
     if r.status_code != 200 or "token" not in r.json():
         raise SystemExit(f"sign-in failed ({r.status_code}): {r.text[:200]}")
     s.headers["Authorization"] = f"Bearer {r.json()['token']}"
+    args._session = s
     return s
 
 
