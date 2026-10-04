@@ -2414,6 +2414,23 @@ simple rule flag the holes for a person: the best, median tune-ness at least
 work: the listener's own per-window scoring over the gap with "not a tune"
 switched off, so the decoder's hub charge still applies.
 
+**Recording 112, applied blind and corrected by the player** (2026-10-04): the
+first night the listener was never tuned on, logged and segmented from its
+audio alone. Of the player's 79 tunes, 76 named right; 2 wrong (The Duke Of
+Leinster read as Cregg's Pipes then Christmas Eve; Mac's Fancy as The Blarney
+Pilgrim, the session playing it in D mixolydian against settings all in A); 1
+missed (The Bunch Of Green Rushes, played once through, near a false start,
+not to be chased). One hallucinated tune: The Bucks Of Oranmore, a reel in
+the middle of a jig set (following had rejected its start). Sets: 34 and 34;
+28 of the player's set starts have a blind one within 5 s. The player left 63
+of 75 starts as drafted (a draft anchors its corrector, so "left" means good
+enough, not exact); of the 12 moved, 6 by 3 s or less, the largest 69 and
+50 s. Set ends moved for 24 of 33, median 1.1 s, earlier 15 times and later 9:
+the end comes from 4 s tune-ness steps. The player's verdict: very good,
+almost all tunes right. Their description of an end, for a rule to find it:
+a long held final note, then a moment of silence or at least no music,
+sometimes applause.
+
 ### Still open
 
 **As of 2026-10-01.** Items 1 to 3 below are done (item 2 became night 137,
