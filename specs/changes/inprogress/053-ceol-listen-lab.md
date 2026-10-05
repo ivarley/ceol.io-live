@@ -2499,6 +2499,32 @@ corpus, the session's own tunes, and, with no history, popular ones. The cost is
 the aligner's, the bulk of the live step: up to 600-900 candidates against
 300; the sizes are to trade against the profiling.
 
+**Tempo and beat grouping by tune type** (2026-10-05). Night 1 with merged
+shortlists named Jim Keefe's, a polka, as The Mason's Apron, a reel; the
+player's suggestion: track a tune's usual tempo at the session and use it.
+Each labelled segment over ten nights (1-5, 138-140, 143, 112), 30 s from 10 s
+in, the beat estimator's eighth note folded into 110-230 ms:
+
+| type | n | eighth, median (p10-p90) | in twos / threes |
+|---|---|---|---|
+| reel | 387 | 153 ms (144-168) | 382 / 5 |
+| jig | 252 | 166 ms (157-179) | 16 / 236 |
+| polka | 33 | 215 ms (p10 124, the estimator doubling; p90 223) | 33 / 0 |
+| slide | 29 | 152 ms (133-207) | 8 / 21 |
+| slip jig | 28 | 172 ms (158-192) | 3 / 25 |
+| hornpipe | 21 | 176 ms (122-201) | 13 / 8 |
+
+Twos against threes separates reels from jigs almost perfectly (the beat check
+The Bucks Of Oranmore, a reel inside The Gold Ring, needed); speed separates
+polkas from reels (Jim Keefe's measured 221 and 206 ms, The Mason's Apron 150
+and 167). A tune holds its speed at this session: over the 87 tunes played
+three or more times, the median spread across nights is 11%. Hornpipes split
+on grouping (their swing) and slides vary, so this is a likelihood, not a
+rule. To build: each candidate's likelihood of the measured speed and grouping
+given its type, and given its own usual speed where the session has played it,
+as evidence in the decoder beside the aligner; for a session with no history
+the type-typical speeds stand in (this session's, until there are others).
+
 ### Still open
 
 **As of 2026-10-01.** Items 1 to 3 below are done (item 2 became night 137,
