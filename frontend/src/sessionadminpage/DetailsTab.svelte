@@ -92,7 +92,10 @@
     }
     // Not just non-empty: this path is the URL of the very screen you're on, so
     // saving an unusable one locks you out of the only form that could fix it.
-    const { error: pathError } = normalizeSessionPath(formData.path)
+    // An unchanged path is not checked: one from before the two-part rule (spec
+    // 055) must not block every other edit. The server skips it the same way.
+    const { error: pathError } =
+      formData.path === sessionPath ? { error: null } : normalizeSessionPath(formData.path)
     if (pathError) {
       toast(pathError, 'error')
       return

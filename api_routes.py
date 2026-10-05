@@ -1108,6 +1108,11 @@ def update_session_ajax(session_path):
         # blank or unresolvable path here locks the session out of its own admin
         # screen, and this endpoint is the only way back.
         new_path = None
+        # The form sends the path on every save. An unchanged one is not a write, so
+        # it is not re-validated: a path from before the two-part rule (spec 055)
+        # must not lock its session out of every other edit.
+        if "path" in data and isinstance(data["path"], str) and data["path"].strip() == session_path:
+            data = {k: v for k, v in data.items() if k != "path"}
         if "path" in data:
             new_path, path_error = normalize_session_path(data["path"])
             if path_error:
@@ -1149,14 +1154,87 @@ def update_session_ajax(session_path):
         cur = conn.cursor()
 
         # Get current session details for history tracking
-        cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
+        cur.execute(
+            """SELECT session_id, path, place_id, session_type, city, state, country
+               FROM session WHERE path = %s""",
+            (session_path,),
+        )
         session_result = cur.fetchone()
         if not session_result:
             cur.close()
             conn.close()
             return jsonify({"success": False, "error": "Session not found"}), 404
 
-        session_id = session_result[0]
+        session_id, current_path, current_place_id, current_type = session_result[:4]
+        current_geo = session_result[4:7]
+
+        # The session's town (spec 055). The admin form sends city/state/country on
+        # every save; only a change (or a session that has no town yet) runs the
+        # matcher, so re-saving an untouched form never creates or moves anything.
+        import places
+
+        town_id = current_place_id
+        geo_fields = ("city", "state", "country")
+        if "place_id" in data and data["place_id"] not in (None, ""):
+            geo_changed = True
+        elif any(f in data for f in geo_fields):
+            new_geo = [data.get(f, current_geo[i]) for i, f in enumerate(geo_fields)]
+            new_country = places.normalize_country(new_geo[2])
+            old_country = places.normalize_country(current_geo[2])
+            geo_changed = current_place_id is None or not (
+                (str(new_geo[0] or "").strip().casefold() == str(current_geo[0] or "").strip().casefold())
+                and places.normalize_area(new_geo[1], new_country) == places.normalize_area(current_geo[1], old_country)
+                and new_country == old_country
+            )
+        else:
+            geo_changed = False
+        if geo_changed:
+            try:
+                town, _ = places.resolve_town(
+                    cur,
+                    data.get("city", current_geo[0]),
+                    data.get("state", current_geo[1]),
+                    data.get("country", current_geo[2]),
+                    place_id=data.get("place_id"),
+                    place_new=bool(data.get("place_new")),
+                    user_id=get_current_user_id(),
+                )
+            except places.PlaceAmbiguous as e:
+                match = e.match
+                cur.close()
+                conn.close()
+                return jsonify(
+                    {
+                        "success": False,
+                        "error": f"Did you mean {match['place']['name']}"
+                        f"{', ' + match['place']['area'] if match['place']['area'] else ''}? "
+                        "Places are fixed on the Places page; ask a site admin.",
+                        "code": "place_ambiguous",
+                        "place": places.place_summary(cur, match["place"]),
+                        "suggested_slug": match["slug"],
+                    }
+                ), 409
+            except places.PlaceError as e:
+                cur.close()
+                conn.close()
+                return jsonify({"success": False, "error": str(e)}), 400
+            town_id = town["place_id"]
+            # Geography is the town's from now on (spec 055 step one).
+            data = {**data, "city": town["name"], "state": town["area"], "country": town["country"]}
+
+        # The place clauses of the path rule, whenever something they depend on moves.
+        # A pre-055 session whose path, type and town are all untouched is left alone.
+        effective_path = new_path if new_path is not None else current_path
+        effective_type = data.get("session_type", current_type)
+        # Giving a pre-055 session its first town (current_place_id NULL) does not by
+        # itself make its old path answer to the rule.
+        town_moved = town_id != current_place_id and current_place_id is not None
+        if effective_path != current_path or effective_type != current_type or town_moved:
+            rule_error = places.validate_path_for_place(cur, effective_path, effective_type, town_id)
+            if rule_error:
+                cur.close()
+                conn.close()
+                return jsonify({"success": False, "error": rule_error}), 400
 
         # Paths are unique; without this the UNIQUE index raises and the caller
         # gets a raw "duplicate key" string instead of something actionable.
@@ -1276,6 +1354,10 @@ def update_session_ajax(session_path):
                 update_fields.append(f"{db_field} = %s")
                 update_values.append(value)
 
+        if town_id != current_place_id:
+            update_fields.append("place_id = %s")
+            update_values.append(town_id)
+
         if not update_fields:
             cur.close()
             conn.close()
@@ -1291,6 +1373,10 @@ def update_session_ajax(session_path):
         update_values.append(session_path)
 
         cur.execute(update_query, update_values)
+
+        # A rename used to break every shared link silently (spec 055).
+        if new_path is not None and new_path != current_path:
+            places.record_redirect(cur, current_path, new_path)
 
         conn.commit()
         cur.close()
@@ -3439,27 +3525,53 @@ def fetch_session_data_ajax():
 
 
 @api_login_required
+def match_place_ajax():
+    """GET /api/places/match?city=&state=&country= — the place matcher, before the
+    save (spec 055 "Adding a session"), so the sheet can render the town-or-metro
+    droplist and the "did you mean" prompt instead of meeting them as a failed save.
+
+    `status` is match / new / ambiguous / invalid. `place` is the matched town (or,
+    when ambiguous, the one the adder may have meant) with its parent;
+    `path_prefixes` are the first segments a session there may use, town first;
+    `slug` is where a new town would go."""
+    import places
+
+    city = request.args.get("city", "")
+    state = request.args.get("state", "")
+    country = request.args.get("country", "")
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        match = places.match_place(cur, city, state, country)
+        place = match["place"]
+        if match["status"] == "match":
+            prefixes = places.path_prefixes(cur, place["place_id"])
+        elif match["status"] in ("new", "ambiguous"):
+            prefixes = [match["slug"]]
+        else:
+            prefixes = []
+        return jsonify(
+            {
+                "success": True,
+                "status": match["status"],
+                "place": places.place_summary(cur, place),
+                "slug": match["slug"],
+                "path_prefixes": prefixes,
+                "name": match["name"],
+                "area": match["area"],
+                "country": match["country"],
+                "error": match.get("error"),
+            }
+        )
+    finally:
+        conn.close()
+
+
+@api_login_required
 def add_session_ajax():
     data = request.json
     if not data:
         return jsonify({"success": False, "message": "No JSON data provided"}), 400
-
-    # Validate required fields. Anything non-string is a malformed payload — treat
-    # it as missing rather than letting .strip() raise (that used to 500).
-    required_fields = ["name", "path", "city", "state", "country"]
-    for field in required_fields:
-        value = data.get(field)
-        if not isinstance(value, str) or not value.strip():
-            return (
-                jsonify({"success": False, "message": f"{field.title()} is required"}),
-                400,
-            )
-
-    # The path is the session's URL, and a malformed one strands the session:
-    # every admin route is keyed on the path, so there'd be no way back in.
-    new_path, path_error = normalize_session_path(data.get("path"))
-    if path_error:
-        return jsonify({"success": False, "message": path_error}), 400
 
     # Same coercion the admin update uses (session_fields), so a session can be created
     # with the values the admin form can later edit — including a thesession.org link
@@ -3469,13 +3581,59 @@ def add_session_ajax():
         normalize_session_type,
         parse_thesession_session_id,
     )
+    import places
+
+    session_type, type_error = normalize_session_type(data.get("session_type"))
+    if type_error:
+        return jsonify({"success": False, "message": type_error}), 400
+
+    # A new festival (spec 056) names the festival and its first year; the path and
+    # the session name follow from them. Everything else names the session and
+    # sends the path the sheet generated.
+    festival_name = data.get("festival_name")
+    is_new_festival = session_type == "festival" and isinstance(festival_name, str) and festival_name.strip()
+    if is_new_festival:
+        required_fields = ["festival_name", "year", "city", "state", "country"]
+    else:
+        required_fields = ["name", "path", "city", "state", "country"]
+
+    # Validate required fields. Anything non-string is a malformed payload — treat
+    # it as missing rather than letting .strip() raise (that used to 500).
+    for field in required_fields:
+        value = data.get(field)
+        if isinstance(value, int) and not isinstance(value, bool) and field == "year":
+            value = str(value)
+        if not isinstance(value, str) or not value.strip():
+            label = field.replace("_", " ").capitalize()
+            return (
+                jsonify({"success": False, "message": f"{label} is required"}),
+                400,
+            )
+
+    festival_slug = None
+    if is_new_festival:
+        festival_name = festival_name.strip()
+        year = str(data["year"]).strip()
+        if not re.match(r"^\d{4}$", year):
+            return jsonify({"success": False, "message": "Year must be four digits, like 2026"}), 400
+        festival_slug = places.slugify(data.get("festival_slug") or festival_name)
+        if not festival_slug:
+            return jsonify({"success": False, "message": "Festival name must contain a letter or number"}), 400
+        session_name = (data.get("name") or "").strip() or f"{festival_name} {year}"
+        raw_path = f"{festival_slug}/{year}"
+    else:
+        session_name = data["name"]
+        raw_path = data.get("path")
+
+    # The path is the session's URL, and a malformed one strands the session:
+    # every admin route is keyed on the path, so there'd be no way back in.
+    new_path, path_error = normalize_session_path(raw_path)
+    if path_error:
+        return jsonify({"success": False, "message": path_error}), 400
 
     thesession_id, ts_error = parse_thesession_session_id(data.get("thesession_id"))
     if ts_error:
         return jsonify({"success": False, "message": ts_error}), 400
-    session_type, type_error = normalize_session_type(data.get("session_type"))
-    if type_error:
-        return jsonify({"success": False, "message": type_error}), 400
     buffer_before, before_error = normalize_active_buffer(
         data.get("active_buffer_minutes_before"), "Minutes before"
     )
@@ -3491,16 +3649,67 @@ def add_session_ajax():
         conn = get_db_connection()
         cur = conn.cursor()
 
+        def refuse(message, status, **extra):
+            conn.rollback()
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "message": message, **extra}), status
+
+        # The session's town (spec 055): the adder's pick from a "did you mean", or
+        # the matcher's answer for the city text, creating the town if it is new.
+        try:
+            town, _ = places.resolve_town(
+                cur,
+                data["city"],
+                data["state"],
+                data["country"],
+                place_id=data.get("place_id"),
+                place_new=bool(data.get("place_new")),
+                user_id=get_current_user_id(),
+            )
+        except places.PlaceAmbiguous as e:
+            match = e.match
+            return refuse(
+                f"Did you mean {match['place']['name']}"
+                f"{', ' + match['place']['area'] if match['place']['area'] else ''}?",
+                409,
+                code="place_ambiguous",
+                place=places.place_summary(cur, match["place"]),
+                suggested_slug=match["slug"],
+            )
+        except places.PlaceError as e:
+            return refuse(str(e), 400)
+
+        if is_new_festival:
+            # The festival's own place row, under the town. A festival already at
+            # this slug in this town is the same festival: the year joins it.
+            festival = places.get_place_by_slug(cur, festival_slug)
+            if festival is None:
+                places.create_place(
+                    cur, festival_slug, festival_name, "festival", town["place_id"],
+                    user_id=get_current_user_id(),
+                )
+            elif not (festival["kind"] == "festival" and festival["parent_place_id"] == town["place_id"]):
+                return refuse(
+                    f'"{festival_slug}" is already taken by {festival["name"]}',
+                    409,
+                    code="slug_taken",
+                    suggested_slug=places.disambiguated_slug(
+                        cur, festival_slug, town["area"], town["country"]
+                    ),
+                )
+        else:
+            new_path = places.rewrite_generated_prefix(cur, new_path, data["city"], town)
+
+        rule_error = places.validate_path_for_place(cur, new_path, session_type, town["place_id"])
+        if rule_error:
+            return refuse(rule_error, 400)
+
         # Check if path is already taken
         cur.execute("SELECT session_id FROM session WHERE path = %s", (new_path,))
         existing_session = cur.fetchone()
         if existing_session:
-            cur.close()
-            conn.close()
-            return (
-                jsonify({"success": False, "message": f'Path "{new_path}" is already taken'}),
-                409,
-            )
+            return refuse(f'Path "{new_path}" is already taken', 409)
 
         # Check if TheSession.org ID is already used
         if thesession_id is not None:
@@ -3510,15 +3719,8 @@ def add_session_ajax():
             )
             existing_thesession = cur.fetchone()
             if existing_thesession:
-                cur.close()
-                conn.close()
-                return (
-                    jsonify(
-                        {
-                            "success": False,
-                            "message": f"TheSession.org session {thesession_id} is already in the database",
-                        }
-                    ),
+                return refuse(
+                    f"TheSession.org session {thesession_id} is already in the database",
                     409,
                 )
 
@@ -3530,30 +3732,33 @@ def add_session_ajax():
         show_people_list = bool(data.get("show_people_list", True))
         track_attendance = bool(data.get("track_attendance", True))
         track_set_starters = bool(data.get("track_set_starters", True)) and track_attendance
+        # city/state/country are still written, from the town, until the serializers
+        # read geography through the place (spec 055 step one).
         cur.execute(
             """
             INSERT INTO session (
                 thesession_id, name, path, location_name, location_phone, location_website,
-                city, state, country, timezone, initiation_date, recurrence,
+                city, state, country, place_id, timezone, initiation_date, recurrence,
                 session_type, active_buffer_minutes_before, active_buffer_minutes_after,
                 show_people_list, track_attendance, track_set_starters,
                 created_date, last_modified_date, created_by_user_id
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                 %s, %s, %s,
                 %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, %s
             ) RETURNING session_id
         """,
             (
                 thesession_id,
-                data["name"],
+                session_name,
                 new_path,
                 data.get("location_name") or None,
                 data.get("location_phone") or None,
                 data.get("location_website") or None,
-                data["city"],
-                data["state"],
-                data["country"],
+                town["name"],
+                town["area"],
+                town["country"],
+                town["place_id"],
                 timezone,
                 data.get("inception_date") or None,
                 data.get("recurrence") or None,
@@ -3605,7 +3810,7 @@ def add_session_ajax():
         return jsonify(
             {
                 "success": True,
-                "message": f'Session "{data["name"]}" created successfully!',
+                "message": f'Session "{session_name}" created successfully!',
                 "session_path": new_path,
             }
         )

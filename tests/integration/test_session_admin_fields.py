@@ -188,7 +188,7 @@ class TestUpdate:
                 "/api/sessions/austin/mueller/admin-update",
                 json={
                     "thesession_id": "4321",
-                    "session_type": "festival",
+                    "session_type": "regular",
                     "active_buffer_minutes_before": 15,
                     "active_buffer_minutes_after": 90,
                 },
@@ -197,7 +197,21 @@ class TestUpdate:
         assert resp.get_json()["success"] is True
 
         cur = db_conn.cursor()
-        assert _fields(cur) == (4321, "festival", 15, 90)
+        assert _fields(cur) == (4321, "regular", 15, 90)
+        cur.close()
+
+    def test_a_town_path_cannot_become_a_festival(self, client, db_conn, restore_session_one):
+        # Spec 055: a festival year lives at {festival}/{yyyy}; austin/mueller can't be one.
+        with logged_in(client):
+            resp = client.put(
+                "/api/sessions/austin/mueller/admin-update",
+                json={"session_type": "festival"},
+            )
+        assert resp.status_code == 400
+        assert "festival" in resp.get_json()["error"]
+
+        cur = db_conn.cursor()
+        assert _fields(cur)[1] == "regular"
         cur.close()
 
     def test_accepts_a_pasted_session_url(self, client, db_conn, restore_session_one):
@@ -328,7 +342,7 @@ class TestCreate:
     def _payload(self, name, **extra):
         return {
             "name": name,
-            "path": name.lower().replace(" ", "-"),
+            "path": "testville/" + name.lower().replace(" ", "-"),
             "city": "Testville",
             "state": "Texas",
             "country": "USA",
@@ -343,7 +357,10 @@ class TestCreate:
                 json=self._payload(
                     "Fields Probe Create",
                     thesession_id=f"https://thesession.org/sessions/{PROBE_TS_ID}",
+                    # A festival is created by its name and first year (spec 056).
                     session_type="festival",
+                    festival_name="Fields Probe Fest",
+                    year="2031",
                     active_buffer_minutes_before=30,
                     active_buffer_minutes_after=45,
                 ),

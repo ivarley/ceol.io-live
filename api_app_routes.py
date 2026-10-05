@@ -826,8 +826,8 @@ def resolve_path():
 
     Accepts `?path=` as a bare session path (`oflahertys/2025-09-20`), a site path
     (`/sessions/oflahertys/123`, `/live/instances/123`), or a full URL. Applies the
-    same rule as web_routes.session_handler: a trailing date or number is an
-    instance UNLESS the whole path is itself a session (`oflahertys/2025`).
+    same resolution as web_routes.session_handler (spec 055, places.py): a bare
+    place answers `kind: "place"`.
     """
     raw = (request.args.get("path") or "").strip()
     if not raw:
@@ -874,11 +874,30 @@ def resolve_path():
         if not path:
             return api_error("Not found", 404)
 
+        # Spec 055 resolution, the same as web_routes.session_handler: exact path,
+        # town/metro alias, path_redirect, then {path}/{date-or-id}. The payload
+        # carries the session's real path, so an alias or an old link lands there.
+        import places
+
+        resolved = places.resolve_session_path(cur, path)
+        if resolved is None:
+            return api_error("Not found", 404)
+        if resolved["kind"] == "place":
+            # Shape from spec 056; `years` and `current` arrive with the festival
+            # picker.
+            return jsonify(
+                {
+                    "success": True,
+                    "kind": "place",
+                    "place": places.place_summary(cur, resolved["place"]),
+                }
+            )
         cur.execute(
-            "SELECT session_id, path, name FROM session WHERE path = %s", (path,)
+            "SELECT session_id, path, name FROM session WHERE session_id = %s",
+            (resolved["session_id"],),
         )
         srow = cur.fetchone()
-        if srow:
+        if resolved["kind"] == "session":
             return jsonify(
                 {
                     "success": True,
@@ -888,29 +907,25 @@ def resolve_path():
                 }
             )
 
-        parts = path.split("/")
-        last = parts[-1]
-        session_path = "/".join(parts[:-1])
-        if len(parts) < 2 or not (_DATE_RE.match(last) or _ID_RE.match(last)):
-            return api_error("Not found", 404)
+        last = resolved["instance"]
         if _DATE_RE.match(last):
             cur.execute(
                 """
                 SELECT s.session_id, s.path, s.name, si.session_instance_id, si.date, si.location_override
                 FROM session_instance si JOIN session s ON s.session_id = si.session_id
-                WHERE s.path = %s AND si.date = %s
+                WHERE s.session_id = %s AND si.date = %s
                 ORDER BY si.session_instance_id ASC LIMIT 1
                 """,
-                (session_path, last),
+                (resolved["session_id"], last),
             )
         else:
             cur.execute(
                 """
                 SELECT s.session_id, s.path, s.name, si.session_instance_id, si.date, si.location_override
                 FROM session_instance si JOIN session s ON s.session_id = si.session_id
-                WHERE s.path = %s AND si.session_instance_id = %s
+                WHERE s.session_id = %s AND si.session_instance_id = %s
                 """,
-                (session_path, int(last)),
+                (resolved["session_id"], int(last)),
             )
         row = cur.fetchone()
         if not row:

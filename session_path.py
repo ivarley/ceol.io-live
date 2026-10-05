@@ -13,14 +13,15 @@ browser resolves the URL, so the admin list renders a link to
 `/admin/sessions/` and the session is stranded.
 
 So: validate structure at every write, not just non-emptiness. Mirrored on the
-client in frontend/src/shared/sessionpath.js — keep the two in lockstep.
+client in frontend/src/shared/sessionpath.js and in the iOS app
+(ios/CeolKit/Sources/CeolLogic/AddSession.swift) — keep all three in lockstep.
 """
 
 import re
 import unicodedata
 
 MAX_PATH_LENGTH = 255  # session.path is VARCHAR(255)
-MAX_SEGMENTS = 4
+PATH_SEGMENTS = 2  # {place}/{name-or-year}, spec 055
 MAX_SEGMENT_LENGTH = 100
 
 # RFC 3986 "unreserved" characters — safe in a URL path segment unescaped.
@@ -66,9 +67,15 @@ def normalize_session_path(value):
     if path.startswith("/") or path.endswith("/"):
         return None, "Path can't start or end with a slash"
 
+    # Spec 055: exactly `{place}/{name-or-year}`. Whether the first part names a
+    # real place, and what the second may be under it, needs the database:
+    # places.validate_path_for_place.
     segments = path.split("/")
-    if len(segments) > MAX_SEGMENTS:
-        return None, f"Path can have at most {MAX_SEGMENTS} slash-separated parts"
+    if len(segments) != PATH_SEGMENTS:
+        return (
+            None,
+            "Path must have exactly two parts, a place and a name, like austin/mueller",
+        )
 
     for segment in segments:
         if not segment:

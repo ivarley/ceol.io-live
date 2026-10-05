@@ -99,15 +99,17 @@ STRANDING_PATHS = [
     pytest.param("austin?x=1", id="query-string"),
     pytest.param("austin#frag", id="fragment"),
     pytest.param("a/b/c/d/e", id="too-many-segments"),
+    # Spec 055: exactly {place}/{name-or-year}.
+    pytest.param("mueller", id="one-segment"),
+    pytest.param("austin/mueller/2025-10-01", id="three-segments"),
 ]
 
 VALID_PATHS = [
     "austin/mueller",
-    "mueller",
     "austin/mcgraths-irish-pub",
-    "st.james",
-    "with_underscore",
-    "a/b/c/d",
+    "st.louis/st.james",
+    "austin/with_underscore",
+    "oflahertys/2025",
     "MixedCase/Path",
 ]
 
@@ -188,7 +190,7 @@ class TestCreateRejectsUnusablePaths:
         name = "Probe Trimmed"
         with logged_in(client):
             resp = client.post(
-                "/api/add-session", json=_create_payload(name, "  probe/trimmed  ")
+                "/api/add-session", json=_create_payload(name, "  testville/trimmed  ")
             )
         assert resp.get_json()["success"] is True
 
@@ -197,7 +199,7 @@ class TestCreateRejectsUnusablePaths:
         row = cur.fetchone()
         cur.close()
         assert row is not None
-        assert row[0] == "probe/trimmed"
+        assert row[0] == "testville/trimmed"
 
 
 @pytest.mark.integration

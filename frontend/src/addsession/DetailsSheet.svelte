@@ -131,6 +131,22 @@
   let formError = $state('')
   let saving = $state(false)
 
+  // "Did you mean Athens, Georgia?" (spec 055). The server answers 409
+  // place_ambiguous when the city names a town that exists with another state or
+  // country; the adder picks that town or a new one and the save is sent again with
+  // the answer. The answer only holds for the city/state/country it was given for.
+  let placeQuestion = $state(null) // { place, suggested_slug }
+  let placeAnswer = $state(null) // { place_id } | { place_new: true }
+  const geography = $derived(`${city.trim()}|${stateArea.trim()}|${country.trim()}`)
+  let answeredGeography = ''
+
+  function answerPlace(answer) {
+    placeAnswer = answer
+    answeredGeography = geography
+    placeQuestion = null
+    save()
+  }
+
   // Everything that lives behind the Advanced disclosure. An error on one of these
   // has to open it, or the message points at a control that isn't on screen.
   const ADVANCED_FIELDS = [
@@ -259,6 +275,7 @@
       show_people_list: showPeopleList,
       track_attendance: trackAttendance,
       track_set_starters: trackSetStarters && trackAttendance,
+      ...(placeAnswer && answeredGeography === geography ? placeAnswer : {}),
     }
 
     // Path isn't listed: it's generated from name + city, so those are what a
@@ -322,7 +339,13 @@
       .then((data) => {
         if (data.success) {
           open = false
-          navigate(`/sessions/${formData.path}`)
+          // The server's path, not ours: it may have put the matched town's slug
+          // in front (sf/... for "San Francisco").
+          navigate(`/sessions/${data.session_path || formData.path}`)
+        } else if (data.code === 'place_ambiguous' && data.place) {
+          saving = false
+          formError = ''
+          placeQuestion = { place: data.place, suggested_slug: data.suggested_slug }
         } else {
           saving = false
           formError = data.message || data.error || 'Failed to save session'
@@ -635,6 +658,23 @@
 
   {#snippet footer()}
     <div class="session-sheet-actions">
+      {#if placeQuestion}
+        {@const p = placeQuestion.place}
+        <div class="as-place-question" role="alert" id="placeQuestion">
+          <p>
+            There is already a {p.name}{p.area ? `, ${p.area}` : ''}{p.country ? `, ${p.country}` : ''}.
+            Is this session there?
+          </p>
+          <button type="button" class="as-place-choice" id="placeExistingBtn"
+            onclick={() => answerPlace({ place_id: p.place_id })}>
+            Yes, {p.name}{p.area ? `, ${p.area}` : ''}
+          </button>
+          <button type="button" class="as-place-choice" id="placeNewBtn"
+            onclick={() => answerPlace({ place_new: true })}>
+            No, a new place (/{placeQuestion.suggested_slug})
+          </button>
+        </div>
+      {/if}
       {#if formError}
         <div class="field-error" role="alert">{formError}</div>
       {/if}
@@ -771,9 +811,13 @@
     gap: var(--sp-2, 8px);
   }
 
+  /* theme.css still gives every <code> a light-theme chip (#f4fcf6); clear it here
+     or the path reads as pale text on a near-white box. */
   .as-path-display code {
     font-size: 0.82rem;
     color: var(--text-color);
+    background: transparent;
+    padding: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -844,5 +888,27 @@
   .btn-save-session:disabled {
     opacity: 0.6;
     cursor: not-allowed;
+  }
+
+  .as-place-question {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 0.9rem;
+  }
+
+  .as-place-question p {
+    margin: 0;
+  }
+
+  .as-place-choice {
+    padding: 10px 14px;
+    font: inherit;
+    text-align: left;
+    color: var(--text-color, inherit);
+    background: transparent;
+    border: 1px solid var(--border-color, #444);
+    border-radius: var(--r, 8px);
+    cursor: pointer;
   }
 </style>

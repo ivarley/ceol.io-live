@@ -366,8 +366,16 @@ class TestSessionCreationWorkflow:
             assert response.status_code == 200
             assert json.loads(response.data) == {"exists": False}
 
-            # Phase 3: Create the session (DB mocked so no row is committed)
-            with patch("api_routes.get_db_connection") as mock_get_conn:
+            # Phase 3: Create the session (DB mocked so no row is committed). The
+            # place matcher (spec 055) is stubbed to an existing Houston, since it
+            # reads the place table through the same mocked cursor.
+            houston = {"place_id": 7, "slug": "houston", "name": "Houston", "kind": "place",
+                       "parent_place_id": None, "area": "Texas", "country": "United States"}
+            with patch("api_routes.get_db_connection") as mock_get_conn, patch(
+                "places.resolve_town", return_value=(houston, False)
+            ), patch("places.validate_path_for_place", return_value=None), patch(
+                "places.rewrite_generated_prefix", side_effect=lambda cur, path, city, town: path
+            ):
                 mock_conn = MagicMock()
                 mock_cursor = MagicMock()
                 mock_conn.cursor.return_value = mock_cursor
@@ -379,7 +387,7 @@ class TestSessionCreationWorkflow:
                     "/api/add-session",
                     json={
                         "name": "New Test Session",
-                        "path": "new-test-session",
+                        "path": "houston/new-test-session",
                         "city": "Houston",
                         "state": "TX",
                         "country": "USA",
@@ -392,7 +400,7 @@ class TestSessionCreationWorkflow:
                 assert response.status_code == 200, response.get_json()
                 data = json.loads(response.data)
                 assert data["success"] is True
-                assert data["session_path"] == "new-test-session"
+                assert data["session_path"] == "houston/new-test-session"
 
 
 @pytest.mark.functional
@@ -490,7 +498,12 @@ class TestLongRunningWorkflows:
         # tunes logged over multiple sessions, players joining/leaving, etc.
         # For brevity, implementing a simplified version
 
-        with patch("web_routes.get_db_connection") as mock_get_conn:
+        # Path resolution (spec 055) is stubbed: it reads through the same mocked
+        # cursor and would eat the session row below.
+        resolved = {"kind": "session", "session_id": 1, "path": "evolving-session", "moved": False}
+        with patch("web_routes.get_db_connection") as mock_get_conn, patch(
+            "places.resolve_session_path", return_value=resolved
+        ):
             mock_conn = MagicMock()
             mock_cursor = MagicMock()
             mock_conn.cursor.return_value = mock_cursor

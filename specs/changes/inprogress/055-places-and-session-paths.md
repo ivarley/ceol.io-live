@@ -1,8 +1,11 @@
 # 055: Places and session paths
 
 **Date:** 2026-10-04
-**Status:** SPECIFIED — not started. Decided in a design interview on 2026-10-04; the
-decisions below are the product owner's. Spec [056 Festival years](056-festival-years.md)
+**Status:** PHASE 1 BUILT (2026-10-05): schema, migration script, validators, place
+matcher, both write paths, resolution — see "Phase 1 as built" at the end. Not yet run
+against production. Not built: place pages and directory scoping, the Places admin page,
+the `place` object in payloads, the native surface. Decided in a design interview on
+2026-10-04; the decisions below are the product owner's. Spec [056 Festival years](056-festival-years.md)
 depends on this one.
 
 ## Why
@@ -306,3 +309,58 @@ Places admin, redirect-writing on rename); the native surface last.
   sessions or children; parent cycle refused.
 - Contract tests updated for the `place` object; Vitest for the sheet's droplist and the
   "did you mean" step.
+
+## Phase 1 as built (2026-10-05)
+
+Files: `schema/058_places.sql` (and `full_schema.sql`), `scripts/migrate_055_places.py`,
+`places.py`, `session_path.py` + `frontend/src/shared/sessionpath.js` + the iOS port,
+`api_routes.py` (`add_session_ajax`, `update_session_ajax`, `match_place_ajax`),
+`web_routes.session_handler`, `api_app_routes.resolve_path`, the add-session sheet's
+"did you mean". Tests: `tests/unit/test_places_normalize.py`,
+`tests/integration/test_place_matcher.py`, `tests/integration/test_path_resolution.py`,
+`frontend/tests/addsession.sheet.test.js` ("the place the session is in").
+
+Choices made while building, beyond the notes above:
+
+- **The matcher also matches by name.** After the slug candidates (the bare slug and the
+  two slugs disambiguation would have produced, so the second Athens is found again at
+  `athens-greece`), a town whose name equals the city text with the same area and country
+  is a match. Without it "San Francisco" would create a second town beside `sf`, and so
+  would any production town whose slug is not its city's slug.
+- **A festival holding the slug is not a town to have meant**: the city then gets a new
+  town at the disambiguated slug, no question asked.
+- **The generated prefix follows the town.** When the posted path's first segment is the
+  slug of the typed city but the chosen town has another slug (`sf`, `athens-ga`) and no
+  place of that name contains the town, the server puts the town's slug in front. The
+  response's `session_path` is what was saved; the sheet now navigates there.
+- **Creating a festival through `POST /api/add-session`**: `session_type = 'festival'`
+  with `festival_name` and `year` (and optional `festival_slug`, `name`). A festival
+  already at that slug whose parent is the matched town is the same festival and the year
+  joins it; a slug held by anything else is `409 slug_taken` with `suggested_slug`. The old
+  `city/name` shape for a festival is refused by the rule.
+- **Admin update**: the form sends city/state/country on every save, so the matcher runs
+  only when they differ from the session's (after normalization) or the session has no
+  town. The rule is checked when the path, the type or the town changes — not when a
+  pre-055 session merely gets its first town. A path sent unchanged is not re-validated
+  (server and `DetailsTab.svelte`), so a pre-migration path cannot block other edits. A
+  path change writes a `path_redirect` row (built here rather than with the Places page).
+  An ambiguous city answers 409 `place_ambiguous`; the admin page shows the message only.
+- **A bare place is still a 404 page** (`kind: "place"` from `/api/resolve`, without
+  `years`/`current`) until place pages and spec 056's picker exist. One-segment session
+  paths still resolve by exact match until the migration has run.
+- **The town-or-metro droplist is not built**: no town has a parent until the Places page
+  exists, so it would only ever offer one choice. `GET /api/places/match` already returns
+  `path_prefixes` for it.
+- The eager full-path lookup in `api_routes.get_session_instance_tune_detail` and in the
+  legacy `session_instance_players` route are left in place; they are harmless.
+
+### Running it in production
+
+1. `psql "$PROD_URL" -f schema/058_places.sql` (idempotent; the old code ignores the new
+   column and tables).
+2. `DATABASE_URL="$PROD_URL" python3 scripts/migrate_055_places.py` — a dry run that does
+   everything, prints it, and rolls back. Anything it cannot place is listed under "Not
+   handled" and blocks `--apply`.
+3. `... --apply`, then deploy. Rerunning is a no-op, so it can be run again after the
+   deploy to catch a session created by the old code in between.
+

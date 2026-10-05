@@ -26,6 +26,39 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
+-- Place table (spec 055): the first segment of every session path. A town or
+-- metro (kind 'place'), or a festival prefix (kind 'festival', spec 056).
+-- -----------------------------------------------------------------------------
+CREATE TABLE place (
+    place_id SERIAL PRIMARY KEY,
+    slug VARCHAR(100) NOT NULL UNIQUE,
+    name VARCHAR(255) NOT NULL,
+    kind VARCHAR(16) NOT NULL DEFAULT 'place' CHECK (kind IN ('place', 'festival')),
+    -- A town's metro, or a festival's town. Always a kind 'place' row.
+    parent_place_id INTEGER REFERENCES place(place_id),
+    -- thesession.org's word: a US state, an Irish county. Normalized long form.
+    area VARCHAR(255),
+    country VARCHAR(255),
+    created_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
+    last_modified_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
+    created_by_user_id INTEGER,
+    last_modified_user_id INTEGER,
+    CONSTRAINT ck_place_not_own_parent CHECK (parent_place_id IS NULL OR parent_place_id <> place_id)
+);
+
+CREATE INDEX idx_place_parent ON place(parent_place_id);
+
+-- Paths that used to be (or might be guessed as) a session's: written by the
+-- spec 055 migration and by path renames. /sessions/<from_path> 301s to to_path.
+CREATE TABLE path_redirect (
+    from_path VARCHAR(255) PRIMARY KEY,
+    to_path VARCHAR(255) NOT NULL,
+    created_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC')
+);
+
+CREATE INDEX idx_path_redirect_to_path ON path_redirect(to_path);
+
+-- -----------------------------------------------------------------------------
 -- Session table
 -- -----------------------------------------------------------------------------
 CREATE TABLE session (
@@ -40,6 +73,9 @@ CREATE TABLE session (
     city VARCHAR(100),
     state VARCHAR(100),
     country VARCHAR(100),
+    -- The session's TOWN (spec 055), whichever slug its path uses. Nullable until
+    -- city/state/country are dropped; the API write paths require it.
+    place_id INTEGER REFERENCES place(place_id),
     timezone VARCHAR(50) NOT NULL DEFAULT 'UTC',
     comments TEXT,
     unlisted_address BOOLEAN DEFAULT FALSE,
@@ -74,6 +110,7 @@ CREATE INDEX idx_session_path ON session(path);
 CREATE INDEX idx_session_created_by ON session(created_by_user_id);
 CREATE INDEX idx_session_thesession_id ON session(thesession_id);
 CREATE INDEX idx_session_timezone ON session(timezone);
+CREATE INDEX idx_session_place ON session(place_id);
 CREATE INDEX idx_session_type ON session(session_type);
 
 CREATE OR REPLACE FUNCTION update_session_last_modified_date()
@@ -953,6 +990,7 @@ CREATE TABLE session_history (
     city VARCHAR(100),
     state VARCHAR(100),
     country VARCHAR(100),
+    place_id INTEGER,
     comments TEXT,
     unlisted_address BOOLEAN,
     initiation_date DATE,

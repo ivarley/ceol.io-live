@@ -1052,6 +1052,9 @@ app.add_url_rule(
     "/api/add-session", "add_session_ajax", add_session_ajax, methods=["POST"]
 )
 app.add_url_rule(
+    "/api/places/match", "match_place_ajax", match_place_ajax, methods=["GET"]
+)
+app.add_url_rule(
     "/api/admin/sessions/<path:session_path>/people",
     "get_session_players_ajax",
     get_session_players_ajax,

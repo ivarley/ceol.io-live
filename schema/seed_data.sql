@@ -183,35 +183,48 @@ INSERT INTO tune (tune_id, name, tune_type, tunebook_count_cached, tunebook_coun
 (5976, 'Ridée Six Temps', 'Three-Two', 900, '2024-01-15');
 
 -- =============================================================================
+-- PLACES (spec 055): the first segment of every session path. `sf` keeps its slug
+-- under the name "San Francisco" -- a slug need not be its name's slug. Place 5 is
+-- the seeded festival's prefix (spec 056), under its town.
+-- =============================================================================
+
+INSERT INTO place (place_id, slug, name, kind, parent_place_id, area, country) VALUES
+(1, 'austin', 'Austin', 'place', NULL, 'Texas', 'United States'),
+(2, 'boston', 'Boston', 'place', NULL, 'Massachusetts', 'United States'),
+(3, 'chicago', 'Chicago', 'place', NULL, 'Illinois', 'United States'),
+(4, 'sf', 'San Francisco', 'place', NULL, 'California', 'United States'),
+(5, 'hill-country-fest', 'Hill Country Trad Fest', 'festival', 1, NULL, NULL);
+
+-- =============================================================================
 -- SESSIONS
 -- =============================================================================
 
-INSERT INTO session (session_id, name, path, city, state, country, timezone, location_name, location_street, location_website, recurrence, comments, initiation_date) VALUES
-(1, 'Mueller Session', 'austin/mueller', 'Austin', 'TX', 'USA', 'America/Chicago',
+INSERT INTO session (session_id, place_id, name, path, city, state, country, timezone, location_name, location_street, location_website, recurrence, comments, initiation_date) VALUES
+(1, 1, 'Mueller Session', 'austin/mueller', 'Austin', 'TX', 'USA', 'America/Chicago',
  'BD Riley''s Irish Pub', '2000 Manor Rd', 'https://bdrileys.com',
  '{"schedules": [{"type": "weekly", "weekday": "tuesday", "start_time": "19:00", "end_time": "22:00", "every_n_weeks": 1}]}',
  'Weekly Irish session, all levels welcome. Slow session from 7-8pm, faster tunes after.',
  '2015-03-15'),
 
-(2, 'Downtown Session', 'austin/downtown', 'Austin', 'TX', 'USA', 'America/Chicago',
+(2, 1, 'Downtown Session', 'austin/downtown', 'Austin', 'TX', 'USA', 'America/Chicago',
  'The Driskill Hotel Bar', '604 Brazos St', 'https://driskillhotel.com',
  '{"schedules": [{"type": "weekly", "weekday": "thursday", "start_time": "20:00", "end_time": "23:00", "every_n_weeks": 2}]}',
  'Intermediate to advanced session. Focus on Clare style tunes.',
  '2018-09-01'),
 
-(3, 'Boston Celtic Session', 'boston/celtic', 'Boston', 'MA', 'USA', 'America/New_York',
+(3, 2, 'Boston Celtic Session', 'boston/celtic', 'Boston', 'MA', 'USA', 'America/New_York',
  'The Burren', '247 Elm St', 'https://burren.com',
  '{"schedules": [{"type": "weekly", "weekday": "sunday", "start_time": "17:00", "end_time": "20:00", "every_n_weeks": 1}]}',
  'Sunday afternoon session. Great for families. All levels.',
  '2012-01-08'),
 
-(4, 'Chicago Traditional', 'chicago/trad', 'Chicago', 'IL', 'USA', 'America/Chicago',
+(4, 3, 'Chicago Traditional', 'chicago/trad', 'Chicago', 'IL', 'USA', 'America/Chicago',
  'Chief O''Neill''s Pub', '3471 N Elston Ave', 'https://chiefoneillspub.com',
  '{"schedules": [{"type": "weekly", "weekday": "wednesday", "start_time": "19:30", "end_time": "22:30", "every_n_weeks": 1}]}',
  'Named after the famous Chicago police chief and tune collector.',
  '2010-06-15'),
 
-(5, 'San Francisco Session', 'sf/sunset', 'San Francisco', 'CA', 'USA', 'America/Los_Angeles',
+(5, 4, 'San Francisco Session', 'sf/sunset', 'San Francisco', 'CA', 'USA', 'America/Los_Angeles',
  'The Plough and Stars', '116 Clement St', 'https://theploughandstars.com',
  '{"schedules": [{"type": "weekly", "weekday": "monday", "start_time": "21:00", "end_time": "00:00", "every_n_weeks": 1}]}',
  'Late night session. Experienced players. Fast and furious!',
@@ -2704,10 +2717,12 @@ INSERT INTO session_instance_person (session_instance_id, person_id, attendance)
 --                               session's own location_name.
 --
 -- One edition only. initiation_date/termination_date model a single run, so an
--- annually-repeating festival is a separate session row per year, not one row.
+-- annually-repeating festival is a separate session row per year, not one row: a
+-- year lives at {festival-slug}/{yyyy} under the festival's place row (spec 056),
+-- and its place_id is the town (Austin).
 
-INSERT INTO session (session_id, name, path, city, state, country, timezone, location_name, location_street, location_website, recurrence, session_type, comments, initiation_date, termination_date) VALUES
-(6, 'Hill Country Trad Fest', 'austin/hill-country-fest', 'Austin', 'TX', 'USA', 'America/Chicago',
+INSERT INTO session (session_id, place_id, name, path, city, state, country, timezone, location_name, location_street, location_website, recurrence, session_type, comments, initiation_date, termination_date) VALUES
+(6, 1, 'Hill Country Trad Fest 2026', 'hill-country-fest/2026', 'Austin', 'Texas', 'United States', 'America/Chicago',
  'Scholz Garten', '1607 San Jacinto Blvd', 'https://example.com/hillcountrytrad',
  NULL, 'festival',
  'Three days of sessions across four venues. Slow session Saturday morning; the after-hours session runs until it stops.',
@@ -2871,6 +2886,7 @@ INSERT INTO session_instance_person (session_instance_id, person_id, attendance)
 -- =============================================================================
 
 SELECT setval('session_session_id_seq', (SELECT MAX(session_id) FROM session));
+SELECT setval('place_place_id_seq', (SELECT MAX(place_id) FROM place));
 SELECT setval('person_person_id_seq', (SELECT MAX(person_id) FROM person));
 SELECT setval('user_account_user_id_seq', (SELECT MAX(user_id) FROM user_account));
 SELECT setval('session_instance_session_instance_id_seq', (SELECT MAX(session_instance_id) FROM session_instance));

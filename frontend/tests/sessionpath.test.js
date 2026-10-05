@@ -14,11 +14,10 @@ const NON_BREAKING_SPACE = String.fromCharCode(0x00a0)
 describe('normalizeSessionPath', () => {
   it.each([
     ['austin/mueller'],
-    ['mueller'],
     ['austin/mcgraths-irish-pub'],
-    ['st.james'],
-    ['with_underscore'],
-    ['a/b/c/d'],
+    ['st.louis/st.james'],
+    ['austin/with_underscore'],
+    ['oflahertys/2025'],
     ['MixedCase/Path'],
   ])('accepts %s', (value) => {
     expect(normalizeSessionPath(value)).toEqual({ path: value, error: null })
@@ -43,6 +42,8 @@ describe('normalizeSessionPath', () => {
     ['space', 'austin mueller'],
     ['query string', 'austin?x=1'],
     ['fragment', 'austin#frag'],
+    ['one segment', 'mueller'],
+    ['three segments', 'austin/mueller/2025-10-01'],
     ['too many segments', 'a/b/c/d/e'],
     ['zero-width space', ZERO_WIDTH_SPACE],
     ['byte order mark', BYTE_ORDER_MARK],

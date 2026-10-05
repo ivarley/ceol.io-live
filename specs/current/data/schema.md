@@ -1,10 +1,10 @@
 # Database Schema Reference
 
-31 tables organized into core domain, tunes, people, live logging, and audit tracking.
+33 tables organized into core domain, tunes, people, live logging, and audit tracking.
 
 ## Tables by Category
 
-### Core Domain (8)
+### Core Domain (10)
 - `session` - Recurring session definitions | `schema/create_session_table.sql:2`
 - `session_instance` - Specific dated occurrences | `schema/create_session_instance_table.sql:2`
 - `session_instance_tune` - Tune log entries (order, sets) | `schema/create_session_instance_tune_table.sql:2`
@@ -13,6 +13,8 @@
 - `session_person` - Membership & roles | `schema/create_session_person_table.sql:3`
 - `session_instance_person` - Attendance records | `schema/create_session_instance_person_table.sql:3`
 - `user_session` - "My Sessions" tracking | `schema/create_user_session_table.sql:2`
+- `place` - Towns, metros, festival prefixes: the first segment of every session path (spec 055) | `schema/058_places.sql`
+- `path_redirect` - Old session paths → current ones (spec 055) | `schema/058_places.sql`
 
 ### Tunes (3)
 - `tune` - Canonical metadata from thesession.org | `schema/create_tune_tables.sql:2`
@@ -40,7 +42,8 @@ All core tables have `*_history` tables tracking INSERT/UPDATE/DELETE. See [Hist
 ## Key Fields Quick Reference
 
 ### session
-- `path` VARCHAR(255) UNIQUE - URL slug (e.g., "austin/mueller")
+- `path` VARCHAR(255) UNIQUE - URL slug, exactly `{place}/{name-or-year}` (e.g., "austin/mueller", "oflahertys/2025")
+- `place_id` INTEGER → place - the session's town (spec 055)
 - `timezone` VARCHAR(50) - IANA timezone for local times
 - `recurrence` TEXT - JSON pattern (parsed by `recurrence_utils.py`)
 - `initiation_date` / `termination_date` - Active date range
@@ -114,6 +117,7 @@ All core tables have `*_history` tables tracking INSERT/UPDATE/DELETE. See [Hist
 - `expand_key_field_length.sql` - Key field VARCHAR(10) → VARCHAR(20)
 - `optimize_session_tune_performance.sql` - Performance indexes
 - `024_session_event.sql` / `024_live_logging_delta.sql` / `025_session_local_cache_limits.sql` - Live logging (Feature 024)
+- `058_places.sql` + `scripts/migrate_055_places.py` - Places and session paths (spec 055)
 
 ## Procedures
 

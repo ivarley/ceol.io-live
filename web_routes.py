@@ -230,37 +230,56 @@ def session_logs(session_path):
     return session_handler(session_path, active_tab='logs')
 
 
+def _session_tab_suffix(active_tab=None, tune_id=None, person_id=None):
+    """The part of a session-page URL after the path, so a 301 keeps the tab."""
+    if tune_id is not None:
+        return f"/tunes/{tune_id}"
+    if person_id is not None:
+        return f"/people/{person_id}"
+    return f"/{active_tab}" if active_tab else ""
+
+
 def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
     # Strip trailing slash to normalize the path
     full_path = full_path.rstrip("/")
 
-    # Check if the last part of the path looks like a date (yyyy-mm-dd) or a numeric ID
-    path_parts = full_path.split("/")
-    last_part = path_parts[-1]
-    date_pattern = r"^\d{4}-\d{2}-\d{2}$"
-    id_pattern = r"^\d+$"
+    # Spec 055 resolution: the exact path, a town/metro alias, a path_redirect, or
+    # {path}/{date-or-id} with the path itself resolved the same three ways. Every
+    # session path is exactly two parts, so a third is always an instance.
+    import places
 
-    # CRITICAL: Eagerly match full paths first (e.g., "oflahertys/2025" should be a session path, not "oflahertys" + year 2025)
-    # Determine if this looks like a session instance request
-    looks_like_instance = re.match(date_pattern, last_part) or re.match(id_pattern, last_part)
-
-    # If it looks like an instance, check if the FULL path is actually a session first
-    is_session_overview = False
-    if looks_like_instance:
+    try:
+        conn = get_db_connection()
         try:
-            conn = get_db_connection()
-            cur = conn.cursor()
-            cur.execute("SELECT session_id FROM session WHERE path = %s", (full_path,))
-            full_path_session = cur.fetchone()
-            cur.close()
+            resolved = places.resolve_session_path(conn.cursor(), full_path)
+        finally:
             conn.close()
+    except Exception:
+        return _page_error()
 
-            if full_path_session:
-                # The full path IS a session (e.g., "oflahertys/2025")
-                # Treat as session overview, not instance
-                is_session_overview = True
-        except Exception:
-            return _page_error()
+    if resolved is None or resolved["kind"] == "place":
+        # A bare place: its page (spec 055) and the festival picker (spec 056) are
+        # not built yet.
+        from app import render_error_page
+
+        return render_error_page(f"Session not found: {full_path}", 404)
+
+    if resolved["moved"]:
+        target = f"/sessions/{resolved['path']}"
+        if resolved["kind"] == "instance":
+            target += f"/{resolved['instance']}"
+        target += _session_tab_suffix(active_tab, tune_id, person_id)
+        if request.query_string:
+            target += "?" + request.query_string.decode("utf-8", "replace")
+        return redirect(target, code=301)
+
+    looks_like_instance = resolved["kind"] == "instance"
+    is_session_overview = not looks_like_instance
+    if looks_like_instance:
+        path_parts = [resolved["path"], resolved["instance"]]
+        last_part = resolved["instance"]
+    full_path = resolved["path"] if is_session_overview else full_path
+    date_pattern = r"^\d{4}-\d{2}-\d{2}$"
 
     # Check if this is a session instance request (by date or ID)
     if looks_like_instance and not is_session_overview:

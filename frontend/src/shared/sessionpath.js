@@ -7,7 +7,7 @@
 // to nothing in a browser, leaving the session with no reachable admin screen.
 
 const MAX_PATH_LENGTH = 255 // session.path is VARCHAR(255)
-const MAX_SEGMENTS = 4
+const PATH_SEGMENTS = 2 // {place}/{name-or-year}, spec 055
 const MAX_SEGMENT_LENGTH = 100
 
 const SEGMENT_ALLOWED = /^[A-Za-z0-9._~-]+$/ // RFC 3986 "unreserved"
@@ -61,9 +61,15 @@ export function normalizeSessionPath(value) {
     return { path: null, error: "Path can't start or end with a slash" }
   }
 
+  // Spec 055: exactly `{place}/{name-or-year}`. Whether the first part is a real
+  // place needs the database, so the server checks that and it comes back as an
+  // ordinary form error.
   const segments = path.split('/')
-  if (segments.length > MAX_SEGMENTS) {
-    return { path: null, error: `Path can have at most ${MAX_SEGMENTS} slash-separated parts` }
+  if (segments.length !== PATH_SEGMENTS) {
+    return {
+      path: null,
+      error: 'Path must have exactly two parts, a place and a name, like austin/mueller',
+    }
   }
 
   for (const segment of segments) {
