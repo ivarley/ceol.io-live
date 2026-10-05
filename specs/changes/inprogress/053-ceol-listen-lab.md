@@ -2499,6 +2499,22 @@ corpus, the session's own tunes, and, with no history, popular ones. The cost is
 the aligner's, the bulk of the live step: up to 600-900 candidates against
 300; the sizes are to trade against the profiling.
 
+**Merged shortlists in the listener** (2026-10-05). The listener's pool from
+one whole-corpus index: the corpus's top 100 a step and the session's own
+tunes' top 100 (a restricted lookup; the tunes logged before the night, as a
+live system would know them), tunes outside the session's discounted as the
+fallback's were. Nine nights blind (112, 1-5, 138-140), key allowance on,
+against the repertoire shortlist on the same code: named right 662 and 662 of
+689, extra wrong tunes 5 and 5; tune by tune better 6, worse 2 (p 0.29). Gained
+The Gold Ring (112, where The Bucks Of Oranmore had been), Martin Wynne's #1,
+The Maid Behind The Bar, The Peeler's Jacket, Music For A Found Harmonium, The
+Piper On Horseback (first played that night); lost Jim Keefe's (first played
+that night, a polka named as The Mason's Apron, a reel; the repertoire
+shortlist had it only because today's repertoire includes the night's own
+tunes) and The Porthole Of The Kelp. Compute +3% a step. So the production
+design costs nothing here and needs no index per session; The Duke Of Leinster
+(112, first played that night) is still not reached.
+
 **Tempo and beat grouping by tune type** (2026-10-05). Night 1 with merged
 shortlists named Jim Keefe's, a polka, as The Mason's Apron, a reel; the
 player's suggestion: track a tune's usual tempo at the session and use it.
