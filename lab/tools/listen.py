@@ -101,7 +101,7 @@ class Models:
     whole corpus's index (the fallback), the aligner's sequences, the
     tune-ness model. About 3 GB, most of it the corpus and PyTorch."""
 
-    def __init__(self, transpose=0):
+    def __init__(self, transpose=0, merged=False):
         from lab.analysis.tuneness import TunenessModel
         from lab.bench.retrieval import Aligner
         from lab.corpus.index import Index
@@ -117,10 +117,20 @@ class Models:
                                transpose=transpose)
         self.tuneness = TunenessModel.load()
         self.n_settings = {t: len(v) for t, v in self.aligner.sequences.by_tune.items()}
+        # merged shortlists (spec 053, "One corpus for every session"): every
+        # session shortlists from the whole corpus, and from its own tunes or,
+        # having none, from the popular ones (>= 100 thesession.org tunebooks)
+        self.merged = merged
+        self.popular = None
+        if merged:
+            from lab.corpus.index import candidate_tune_ids
+
+            self.popular = candidate_tune_ids("popular")
 
 
 class Listener:
-    def __init__(self, out_dir, models=None, rule_out_s=30.0, audio_name="audio.wav", keep_s=None):
+    def __init__(self, out_dir, models=None, rule_out_s=30.0, audio_name="audio.wav", keep_s=None,
+                 session_tunes=None):
         from lab.bench.stream import ChunkScorer, Decoder
 
         m = models or Models()
@@ -129,8 +139,15 @@ class Listener:
         self.frontends = m.frontends
         self.names, self.types = m.names, m.types
         # the follower's live configuration (lab/configs/follower.json)
-        self.scorer = ChunkScorer(m.index, m.aligner, window_ms=6000, fallback_index=m.fallback,
-                                  fallback_top=20)
+        if m.merged:
+            own = set(session_tunes) if session_tunes else m.popular
+            self.shortlist_sets = own
+            self.scorer = ChunkScorer(m.fallback, m.aligner, window_ms=6000,
+                                      shortlists=[(None, 100), (own, 100)], preferred=own)
+        else:
+            self.shortlist_sets = None
+            self.scorer = ChunkScorer(m.index, m.aligner, window_ms=6000, fallback_index=m.fallback,
+                                      fallback_top=20)
         # tune-ness (spec, "Is this a tune at all?") and the charge on hubs
         self.tuneness = m.tuneness
         self.decoder = Decoder(nu=0.05, gamma=self.tuneness.meta["gamma"],
@@ -185,7 +202,11 @@ class Listener:
         a = max(0, t - POOL_MS)
         ctx = {fe.name: causal_notes(fe, self._frames(fe.name), self.store, a, t) for fe in self.frontends}
         wide = t < self.widen_until
-        self.scorer.pool_top, self.scorer.fallback_top = (300, 60) if wide else (100, 20)
+        if self.shortlist_sets is not None:
+            top = 300 if wide else 100
+            self.scorer.shortlists = [(None, top), (self.shortlist_sets, top)]
+        else:
+            self.scorer.pool_top, self.scorer.fallback_top = (300, 60) if wide else (100, 20)
         chunk = self.scorer.score(t, ctx)
         from lab.analysis.tuneness import audio_features, with_evidence
 

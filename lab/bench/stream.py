@@ -166,8 +166,14 @@ class ChunkScorer:
     so the two loops cannot drift apart here."""
 
     def __init__(self, index, aligner, window_ms=6000, pool_top=100, keep=6, known=None,
-                 fallback_index=None, fallback_top=20):
+                 fallback_index=None, fallback_top=20, shortlists=None, preferred=None):
         self.index, self.aligner = index, aligner
+        # Merged shortlists (spec 053, "One corpus for every session"): with
+        # `shortlists` = [(only, top)], the pool is the union of each one's top
+        # from this one index, `only` a set of tunes to rank among (the
+        # session's own, or popular ones) or None for the whole index. Tunes not
+        # in `preferred` are marked "outside", as the fallback's are.
+        self.shortlists, self.preferred = shortlists, preferred
         self.window_ms, self.pool_top, self.keep = window_ms, pool_top, keep
         # A tune new to the session: `known` restricts the index's pool to
         # tunes the session has played (None: all of the index), and
@@ -187,6 +193,13 @@ class ChunkScorer:
         from lab.bench.retrieval import fuse
         from lab.frontends.segmentation import intervals_from_notes
 
+        if self.shortlists is not None:
+            pool = []
+            for only, top in self.shortlists:
+                ranked = [self.index.lookup(intervals_from_notes(ctx, fold=self.index.fold_octaves),
+                                            top_k=top, only=only) for ctx in ctx_by.values()]
+                pool += [r["tune_id"] for r in fuse(ranked, method="sum")[:top] if r["tune_id"] not in pool]
+            return self._finish(t, ctx_by, pool, outside_of=self.preferred)
         rankings = [self.index.lookup(intervals_from_notes(ctx, fold=self.index.fold_octaves),
                                       top_k=self.pool_top) for ctx in ctx_by.values()]
         pool = [r["tune_id"] for r in fuse(rankings, method="sum")[:self.pool_top]]
@@ -197,6 +210,12 @@ class ChunkScorer:
                                              top_k=self.fallback_top) for ctx in ctx_by.values()]
             pool += [r["tune_id"] for r in fuse(fb, method="sum")[:self.fallback_top]
                      if r["tune_id"] not in pool]
+        outside_of = None
+        if self.fallback_index is not None:
+            outside_of = self.known if self.known is not None else set(self.index.tune_names)
+        return self._finish(t, ctx_by, pool, outside_of=outside_of)
+
+    def _finish(self, t, ctx_by, pool, outside_of=None):
         self.recent = (self.recent + [pool])[-(self.keep + 1):]
         tunes = list(dict.fromkeys(tid for p in reversed(self.recent) for tid in p))
         tunes += [t for t in self.pinned if t not in tunes]
@@ -208,9 +227,8 @@ class ChunkScorer:
         out = {"t_ms": t, "scores": {k: float(v) for k, v in scores.items()},
                "floor": float(min(scores.values())) if scores else 0.0,
                "n_notes": sum(len(h[0]) for h in heard)}
-        if self.fallback_index is not None:
-            known = self.known if self.known is not None else set(self.index.tune_names)
-            out["outside"] = [t for t in scores if t not in known]
+        if outside_of is not None:
+            out["outside"] = [k for k in scores if k not in outside_of]
         return out
 
 
