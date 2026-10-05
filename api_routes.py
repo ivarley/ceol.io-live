@@ -3531,6 +3531,119 @@ def fetch_session_data_ajax():
         )
 
 
+# Spec 056 "What copies": the source year's columns a new year starts from. Path,
+# dates and name come from the form; thesession_id, recurrence and the audit
+# columns are deliberately not here.
+_COPY_YEAR_COLUMNS = (
+    "session_type", "place_id", "city", "state", "country",
+    "location_name", "location_street", "location_website", "location_phone",
+    "timezone", "comments", "unlisted_address",
+    "active_buffer_minutes_before", "active_buffer_minutes_after",
+    "live_cache_session_limit", "live_cache_global_limit",
+    "show_people_list", "track_attendance", "track_set_starters",
+)
+
+
+@api_login_required
+def copy_festival_year(session_path):
+    """POST /api/sessions/<path>/copy-year {year, initiation_date, termination_date, name}
+    — a new year of a festival, copied from this one (spec 056 "Spawning a year").
+
+    One transaction: the session row (the copied columns, the form's path, dates and
+    name), the copier as a confirmed admin member, and the source year's admins as
+    confirmed admin members. Not the rest of the roster, not the tunes, not the
+    instances. 201 {success, path}."""
+    import datetime as _dt
+
+    import festivals
+
+    data = request.get_json(silent=True) or {}
+    year = str(data.get("year") or "").strip()
+    if not re.match(r"^\d{4}$", year):
+        return jsonify({"success": False, "message": "Year must be four digits, like 2026"}), 400
+    try:
+        start = _dt.date.fromisoformat(str(data.get("initiation_date") or ""))
+        end = _dt.date.fromisoformat(str(data.get("termination_date") or ""))
+    except ValueError:
+        return jsonify({"success": False, "message": "First and last day are both required"}), 400
+    if end < start:
+        return jsonify({"success": False, "message": "The last day can't be before the first"}), 400
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT session_id, session_type FROM session WHERE path = %s", (session_path,)
+        )
+        source = cur.fetchone()
+        if not source:
+            return jsonify({"success": False, "message": "Session not found"}), 404
+        source_id, source_type = source
+        user_id = get_current_user_id()
+        person_id = getattr(current_user, "person_id", None)
+        if not is_session_admin_for(cur, source_id, person_id):
+            return jsonify({"success": False, "message": "Only an admin of this year can copy it"}), 403
+
+        festival = festivals.festival_of_path(cur, session_path)
+        if festival is None or source_type != "festival":
+            return (
+                jsonify({"success": False, "message": "Only a festival year can be copied to a new year",
+                         "code": "not_festival"}),
+                400,
+            )
+        new_path = f"{festival['slug']}/{year}"
+        cur.execute("SELECT 1 FROM session WHERE path = %s", (new_path,))
+        if cur.fetchone():
+            return (
+                jsonify({"success": False, "message": f"{festival['name']} already has {year}",
+                         "code": "year_exists"}),
+                400,
+            )
+        name = str(data.get("name") or "").strip() or f"{festival['name']} {year}"
+
+        columns = ", ".join(_COPY_YEAR_COLUMNS)
+        cur.execute(
+            f"""
+            INSERT INTO session (
+                {columns}, name, path, initiation_date, termination_date, recurrence,
+                created_date, last_modified_date, created_by_user_id, last_modified_user_id
+            )
+            SELECT {columns}, %s, %s, %s, %s, NULL,
+                   CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, %s, %s
+            FROM session WHERE session_id = %s
+            RETURNING session_id
+            """,
+            (name, new_path, start, end, user_id, user_id, source_id),
+        )
+        new_id = cur.fetchone()[0]
+        save_to_history(cur, "session", "INSERT", new_id, user_id=user_id)
+
+        # Being a member of last year says nothing about this one; the admins carry
+        # so the people who ran it can run the next one.
+        cur.execute(
+            "SELECT person_id FROM session_person WHERE session_id = %s AND is_admin = TRUE ORDER BY person_id",
+            (source_id,),
+        )
+        admins = [r[0] for r in cur.fetchall()]
+        if person_id and person_id not in admins:
+            admins.insert(0, person_id)
+        for admin_id in admins:
+            cur.execute(
+                """
+                INSERT INTO session_person
+                    (session_id, person_id, relationship, confirmed, archived, is_admin, created_by_user_id)
+                VALUES (%s, %s, 'member', TRUE, FALSE, TRUE, %s)
+                """,
+                (new_id, admin_id, user_id),
+            )
+            save_to_history(cur, "session_person", "INSERT", (new_id, admin_id), user_id=user_id)
+
+        conn.commit()
+        return jsonify({"success": True, "path": new_path}), 201
+    finally:
+        conn.close()
+
+
 @api_login_required
 def match_place_ajax():
     """GET /api/places/match?city=&state=&country= — the place matcher, before the

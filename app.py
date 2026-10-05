@@ -1055,6 +1055,12 @@ app.add_url_rule(
     "/api/places/match", "match_place_ajax", match_place_ajax, methods=["GET"]
 )
 app.add_url_rule(
+    "/api/sessions/<path:session_path>/copy-year",
+    "copy_festival_year",
+    copy_festival_year,
+    methods=["POST"],
+)
+app.add_url_rule(
     "/api/admin/sessions/<path:session_path>/people",
     "get_session_players_ajax",
     get_session_players_ajax,

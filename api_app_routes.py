@@ -883,8 +883,21 @@ def resolve_path():
         if resolved is None:
             return api_error("Not found", 404)
         if resolved["kind"] == "place":
-            # Shape from spec 056; `years` and `current` arrive with the festival
-            # picker.
+            # Spec 056: a festival answers with its years and the window rule's pick
+            # (`current`, null when the picker applies); a town with just the place.
+            if resolved["place"]["kind"] == "festival":
+                from flask import session as flask_session
+                from serializers import build_festival_payload
+
+                payload = build_festival_payload(
+                    conn,
+                    resolved["place"],
+                    person_id=getattr(current_user, "person_id", None)
+                    if current_user.is_authenticated
+                    else None,
+                    is_system_admin=flask_session.get("is_system_admin", False),
+                )
+                return jsonify({"kind": "place", **payload})
             return jsonify(
                 {
                     "success": True,

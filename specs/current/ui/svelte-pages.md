@@ -30,6 +30,7 @@ First paint needs no fetch — no loading flash.
 | `/me`, `/admin/people/<id>` | `person_details.html` | `build_person_details_payload` | `GET /api/me/details`, `GET /api/admin/people/<id>/details` | `frontend/src/personpage/` | `static/personpage/` |
 | `/admin/sessions/<path>` (+ tab wrappers) | `session_admin.html` | `build_session_admin_payload` | `GET /api/admin/sessions/<path>/admin-detail` | `frontend/src/sessionadminpage/` | `static/sessionadminpage/` |
 | `/admin/people` | `admin_people.html` | `build_admin_people_payload` | `GET /api/admin/people` (system-admin) | `frontend/src/peopleadminpage/` | `static/peopleadminpage/` |
+| `/sessions/<festival-slug>` (no year near; spec 056) | `festival.html` | `build_festival_payload` | `GET /api/resolve?path=<slug>` | `frontend/src/festivalpage/` | `static/festivalpage/` |
 | `/admin/recordings/<id>/segment` | `recording_segmenter.html` | `build_recording_segmenter_payload` | `GET /api/recordings/<id>/segmenter` (system-admin) | `frontend/src/segmenterpage/` | `static/segmenterpage/` |
 
 `/add-session` is no longer in this table. Adding a session is a sheet presented

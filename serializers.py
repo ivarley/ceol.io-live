@@ -526,8 +526,56 @@ def build_session_admin_payload(conn, session_path: str) -> Optional[Dict[str, A
         "success": True,
         "session": session,
         "timezone_options": timezone_options(),
+        # The year switcher and "Copy to a new year" (spec 056); null unless this
+        # session is a year of a festival.
+        "festival": _festival_block(conn, session["path"]),
     }
 
+
+
+def build_festival_payload(
+    conn,
+    festival: Dict[str, Any],
+    *,
+    person_id: Optional[int] = None,
+    is_system_admin: bool = False,
+    now_utc=None,
+) -> Dict[str, Any]:
+    """A festival as a whole (spec 056): the place row, its years in the picker's
+    order (upcoming first, then newest first), and `current`, the year the window
+    rule lands on (None means the picker). Backs the /sessions/<festival> picker
+    page and GET /api/resolve's `kind: "place"` answer for a festival.
+
+    `permissions.can_add_year` is whether the viewer may copy the most recent year,
+    which is the source "Add a year" copies from."""
+    import festivals
+    import places
+
+    cur = conn.cursor()
+    years = festivals.festival_years(cur, festival)
+    current = festivals.window_pick(years, now_utc)
+    latest = years[-1] if years else None
+    can_add_year = bool(is_system_admin)
+    if latest and person_id and not can_add_year:
+        cur.execute(
+            "SELECT 1 FROM session_person WHERE session_id = %s AND person_id = %s AND is_admin = TRUE",
+            (latest["session_id"], person_id),
+        )
+        can_add_year = cur.fetchone() is not None
+    return {
+        "success": True,
+        "place": places.place_summary(cur, festival),
+        "years": [festivals.year_wire(y) for y in festivals.picker_order(years, now_utc)],
+        "current": {"path": current["path"]} if current else None,
+        "latest": festivals.year_wire(latest) if latest else None,
+        "permissions": {"can_add_year": can_add_year and latest is not None},
+    }
+
+
+def _festival_block(conn, session_path):
+    import festivals
+
+    return festivals.festival_block(conn.cursor(), session_path)
 
 
 def recurrence_readable(recurrence: Optional[str]) -> Optional[str]:
@@ -1116,6 +1164,8 @@ def build_session_detail_payload(
         "total_people_count": total_people_count,
         "has_more_tunes": total_tunes_count > first_page,
         "popular_tunes": popular_tunes,
+        # The year switcher (spec 056); null unless this session is a festival year.
+        "festival": _festival_block(conn, session["path"]),
     }
 
 

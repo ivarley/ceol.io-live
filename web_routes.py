@@ -239,6 +239,34 @@ def _session_tab_suffix(active_tab=None, tune_id=None, person_id=None):
     return f"/{active_tab}" if active_tab else ""
 
 
+def _festival_landing(festival, active_tab=None, tune_id=None, person_id=None):
+    """`/sessions/<festival-slug>` (spec 056): a 302 to the year the window rule
+    picks (or the only year), keeping a tab suffix; otherwise the picker."""
+    from flask import session as flask_session
+    from serializers import build_festival_payload
+
+    conn = get_db_connection()
+    try:
+        payload = build_festival_payload(
+            conn,
+            festival,
+            person_id=getattr(current_user, "person_id", None) if current_user.is_authenticated else None,
+            is_system_admin=flask_session.get("is_system_admin", False),
+        )
+    finally:
+        conn.close()
+
+    if payload["current"]:
+        target = f"/sessions/{payload['current']['path']}" + _session_tab_suffix(
+            active_tab, tune_id, person_id
+        )
+        if request.query_string:
+            target += "?" + request.query_string.decode("utf-8", "replace")
+        return redirect(target, code=302)
+
+    return render_template("festival.html", payload=payload, place=payload["place"])
+
+
 def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
     # Strip trailing slash to normalize the path
     full_path = full_path.rstrip("/")
@@ -257,9 +285,11 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
     except Exception:
         return _page_error()
 
+    if resolved is not None and resolved["kind"] == "place" and resolved["place"]["kind"] == "festival":
+        return _festival_landing(resolved["place"], active_tab, tune_id, person_id)
+
     if resolved is None or resolved["kind"] == "place":
-        # A bare place: its page (spec 055) and the festival picker (spec 056) are
-        # not built yet.
+        # A bare town or metro: its page (spec 055) is not built yet.
         from app import render_error_page
 
         return render_error_page(f"Session not found: {full_path}", 404)

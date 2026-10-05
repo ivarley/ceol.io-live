@@ -6,9 +6,14 @@
   import { parseThesessionSessionId } from '../shared/parse.js'
   import { normalizeSessionPath } from '../shared/sessionpath.js'
 
-  let { session, sessionPath, timezoneOptions = [] } = $props()
+  let { session, sessionPath, timezoneOptions = [], festival = null } = $props()
 
   import { Dialog, Sheet, toast } from '../lib/index.js'
+  import CopyYearSheet from '../festival/CopyYearSheet.svelte'
+
+  // Spec 056: a festival year can be copied to a new year by its admins.
+  let copyYearOpen = $state(false)
+  const thisYear = $derived(festival?.years?.find((y) => y.path === sessionPath) || null)
 
   // --- Form fields ------------------------------------------------------------
   let name = $state(session.name || '')
@@ -794,6 +799,19 @@
 
     <button type="submit" class="btn btn-primary" disabled={savingDetails}>{savingDetails ? 'Saving…' : 'Save Changes'}</button>
   </form>
+
+  {#if festival && thisYear}
+    <div class="copy-year-entry" id="copy-year-entry">
+      <p>
+        This is <a href="/sessions/{festival.place.slug}">{festival.place.name}</a> {thisYear.year}.
+        A new year starts from this one's venue, timezone, settings and admins.
+      </p>
+      <button type="button" class="btn btn-outline-primary" id="copy-year-btn" onclick={() => (copyYearOpen = true)}>
+        Copy to a new year
+      </button>
+    </div>
+    <CopyYearSheet bind:open={copyYearOpen} {festival} source={thisYear} />
+  {/if}
 </section>
 
 <!-- Termination Date Sheet: a Sheet (not a Dialog) because the date field can

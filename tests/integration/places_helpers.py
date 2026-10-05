@@ -70,15 +70,42 @@ class Committed:
         self.conn.commit()
         return place_id
 
-    def session(self, path, place_id, name=None, session_type="regular"):
+    def session(self, path, place_id, name=None, session_type="regular", **columns):
+        """A session row; `columns` sets any others (initiation_date, timezone, …)."""
+        fields = {
+            "name": name or f"{PROBE} {path}",
+            "path": path,
+            "place_id": place_id,
+            "session_type": session_type,
+            "city": "x",
+            "timezone": "UTC",
+            **columns,
+        }
+        cols = ", ".join(fields)
+        marks = ", ".join(["%s"] * len(fields))
         self.cur.execute(
-            """INSERT INTO session (name, path, place_id, session_type, city, timezone)
-               VALUES (%s, %s, %s, %s, 'x', 'UTC') RETURNING session_id""",
-            (name or f"{PROBE} {path}", path, place_id, session_type),
+            f"INSERT INTO session ({cols}) VALUES ({marks}) RETURNING session_id",
+            tuple(fields.values()),
         )
         session_id = self.cur.fetchone()[0]
         self.conn.commit()
         return session_id
+
+    def member(self, session_id, person_id, is_admin=False):
+        self.cur.execute(
+            """INSERT INTO session_person (session_id, person_id, relationship, confirmed, is_admin)
+               VALUES (%s, %s, 'member', TRUE, %s)""",
+            (session_id, person_id, is_admin),
+        )
+        self.conn.commit()
+
+    def logged_tune(self, instance_id, tune_id):
+        self.cur.execute(
+            """INSERT INTO session_instance_tune (session_instance_id, tune_id, order_position)
+               VALUES (%s, %s, 'a0')""",
+            (instance_id, tune_id),
+        )
+        self.conn.commit()
 
     def instance(self, session_id, date):
         self.cur.execute(
@@ -106,6 +133,15 @@ class Committed:
         cur = self.cur
         self.conn.rollback()
         new_sessions = "SELECT session_id FROM session WHERE session_id > %s"
+        cur.execute(
+            "DELETE FROM session_instance_tune WHERE session_instance_id IN "
+            f"(SELECT session_instance_id FROM session_instance WHERE session_id IN ({new_sessions}))",
+            (self.max_session,),
+        )
+        cur.execute(
+            f"DELETE FROM session_person_history WHERE session_id IN ({new_sessions})",
+            (self.max_session,),
+        )
         for table in ("session_instance", "session_person", "session_history"):
             cur.execute(
                 f"DELETE FROM {table} WHERE session_id IN ({new_sessions})",

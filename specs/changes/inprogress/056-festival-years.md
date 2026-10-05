@@ -1,7 +1,10 @@
 # 056: Festival years
 
 **Date:** 2026-10-04
-**Status:** SPECIFIED — not started. Depends on [055 Places and session paths](055-places-and-session-paths.md):
+**Status:** OCTOBER PATH BUILT (2026-10-05): copy endpoint and form, window rule and
+picker, year switcher, help — see "As built" at the end. Not built: the new-festival
+mode of the add-session sheet (the server side exists, spec 055 phase 1), the
+directory's one-row-per-festival, the native surface. Depends on [055 Places and session paths](055-places-and-session-paths.md):
 the `place` table, the two-segment path rule, the resolution order and the `path_redirect`
 table are defined there. Decided in a design interview on 2026-10-04.
 
@@ -202,3 +205,35 @@ new-festival path in the sheet, the directory row, resolve and the native surfac
 - Vitest: the switcher renders only with siblings and navigates; the sheet's festival
   mode previews `{slug}/{year}`; the picker's Add a year is admin-only.
 - Contract tests for `kind: "place"` and `festival` on session detail.
+
+## As built (2026-10-05)
+
+Files: `festivals.py` (years, window rule, picker order, the `festival` block),
+`api_routes.copy_festival_year`, `serializers.build_festival_payload` (the picker page
+and `/api/resolve`'s festival answer, one builder), `web_routes._festival_landing`,
+`templates/festival.html` + `frontend/src/festivalpage/` (new bundle),
+`frontend/src/festival/` (`CopyYearSheet.svelte`, `YearSwitcher.svelte`, `dates.js`),
+the switcher in `templates/session_detail.html` and the admin page, `/help`. Tests:
+`tests/unit/test_festival_window.py`, `tests/integration/test_festival_routing.py`,
+`tests/integration/test_festival_copy.py`, `frontend/tests/festival.test.js`,
+`frontend/tests/festivaldates.test.js`.
+
+Choices made while building:
+
+- **The weekday nudge is client code** (`frontend/src/festival/dates.js`, Vitest), not
+  Python: the form recomputes it as the year is edited and the server only receives
+  dates. The window rule is Python (`tests/unit/test_festival_window.py`).
+- **After a copy** the form goes to the new year's admin page, where the venue and the
+  rest are edited.
+- **`/sessions/<festival>/<tab>`** with a year in the window 302s to that year's tab; the
+  picker ignores the tab.
+- **"Add a year"** shows to system admins and admins of the most recent year (the copy
+  source), as `permissions.can_add_year` in the picker payload, which also carries
+  `latest` (the source).
+- **The picker payload** is `/api/resolve`'s festival answer plus `latest` and
+  `permissions`; `years` there is in the picker's order (upcoming first, then newest
+  first). The `festival.years` block on session payloads is oldest first.
+- **Upcoming years** show "Coming up" in place of a logged count.
+- `PUT .../admin-update` had no session-admin check at all (commit 63847eb fixed it
+  before this work); the copy endpoint uses the same `is_session_admin_for` gate.
+
