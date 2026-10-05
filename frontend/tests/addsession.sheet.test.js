@@ -393,6 +393,10 @@ describe('add-session sheet: the details', () => {
     const type = document.querySelector('#sessionType')
     type.value = 'festival'
     await fireEvent.change(type)
+    // A festival asks for its first and last day (spec 056).
+    await waitFor(() => expect(document.querySelector('#festivalStart')).toBeTruthy())
+    await fill('#festivalStart', '2026-10-22')
+    await fill('#festivalEnd', '2026-10-25')
     await fireEvent.click(document.querySelector('#saveSessionBtn'))
 
     await waitFor(() => expect(navigate).toHaveBeenCalled())
@@ -736,5 +740,109 @@ describe('the place the session is in', () => {
     await fireEvent.click(document.querySelector('#placeExistingBtn'))
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/sessions/testville/new-session'))
     expect(JSON.parse(createCalls()[1][1].body).place_id).toBe(42)
+  })
+
+  it("the path starts with the matched town's slug", async () => {
+    fetchRoutes['/api/places/match'] = {
+      success: true, status: 'match', path_prefixes: ['sf'],
+      place: { place_id: 4, slug: 'sf', name: 'San Francisco', parent: null },
+    }
+    await openDetails()
+    await fill('#sessionName', 'Sunset')
+    await fill('#cityName', 'San Francisco')
+    await fill('#stateName', 'CA')
+    await fill('#countryName', 'USA')
+    await openAdvanced()
+    await waitFor(() =>
+      expect(document.querySelector('#sessionPathValue').textContent).toBe('/sessions/sf/sunset')
+    )
+    expect(document.querySelector('#pathPrefix')).toBeNull() // one choice, no droplist
+  })
+
+  it('a town inside a metro chooses either for its address', async () => {
+    fetchRoutes['/api/places/match'] = {
+      success: true, status: 'match', path_prefixes: ['conroe', 'houston'],
+      place: { place_id: 9, slug: 'conroe', name: 'Conroe', parent: { slug: 'houston', name: 'Houston' } },
+    }
+    const navigate = vi.fn()
+    await openDetails({ navigate })
+    await fill('#sessionName', 'The Pub')
+    await fill('#cityName', 'Conroe')
+    await fill('#stateName', 'TX')
+    await fill('#countryName', 'USA')
+    await waitFor(() => expect(document.querySelector('#pathPrefix')).toBeTruthy())
+    const select = document.querySelector('#pathPrefix')
+    expect([...select.options].map((o) => o.textContent)).toEqual(['/conroe/…', '/houston/…'])
+    select.value = 'houston'
+    await fireEvent.change(select)
+    await fireEvent.click(document.querySelector('#saveSessionBtn'))
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/sessions/houston/the-pub'))
+    expect(createdBody().path).toBe('houston/the-pub')
+  })
+})
+
+// Spec 056: a new festival is named once; its first year goes beside the name.
+describe('a new festival', () => {
+  async function festivalForm(navigate = vi.fn()) {
+    await openDetails({ navigate })
+    await fillRequired('Probe Trad Weekend')
+    await openAdvanced()
+    const type = document.querySelector('#sessionType')
+    type.value = 'festival'
+    await fireEvent.change(type)
+    await waitFor(() => expect(document.querySelector('#festivalYear')).toBeTruthy())
+    await fill('#festivalYear', '2027')
+    await fill('#festivalStart', '2027-10-21')
+    await fill('#festivalEnd', '2027-10-24')
+    return navigate
+  }
+
+  it('previews /{festival}/{year} and sends the name and year', async () => {
+    const navigate = await festivalForm()
+    expect(document.querySelector('label[for="sessionName"]').textContent).toBe('Festival')
+    expect(document.querySelector('#sessionPathValue').textContent).toBe('/sessions/probe-trad-weekend/2027')
+    expect(document.querySelector('#editPathBtn')).toBeNull()
+    await fireEvent.click(document.querySelector('#saveSessionBtn'))
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/sessions/probe-trad-weekend/2027'))
+    expect(createdBody()).toMatchObject({
+      session_type: 'festival', festival_name: 'Probe Trad Weekend', year: '2027', name: '',
+      inception_date: '2027-10-21', termination_date: '2027-10-24', recurrence: null,
+    })
+  })
+
+  it('asks for a first and last day instead of a schedule', async () => {
+    await festivalForm()
+    expect(document.querySelector('#recurrence-summary')).toBeNull()
+    await fill('#festivalEnd', '')
+    await fireEvent.click(document.querySelector('#saveSessionBtn'))
+    await waitFor(() => expect(document.querySelector('.field-error').textContent).toContain('Last day'))
+    await fill('#festivalEnd', '2027-10-20')
+    await fireEvent.click(document.querySelector('#saveSessionBtn'))
+    await waitFor(() => expect(document.querySelector('.field-error').textContent).toContain("can't be before"))
+    expect(createCalls()).toHaveLength(0)
+  })
+
+  it('a year is required', async () => {
+    await festivalForm()
+    await fill('#festivalYear', '27')
+    await fireEvent.click(document.querySelector('#saveSessionBtn'))
+    await waitFor(() => expect(document.querySelector('.field-error').textContent).toContain('Year'))
+    expect(createCalls()).toHaveLength(0)
+  })
+
+  it('a taken address offers the suggested one', async () => {
+    fetchRoutes['/api/add-session'] = (options) => {
+      if (options?.method !== 'POST') return { ...payload(), session_path: 'austin/bd-rileys' }
+      const body = JSON.parse(options.body)
+      if (!body.festival_slug) {
+        return { success: false, code: 'slug_taken', message: '"probe-trad-weekend" is already taken by Somewhere', suggested_slug: 'probe-trad-weekend-tx' }
+      }
+      return { success: true, session_path: `${body.festival_slug}/${body.year}` }
+    }
+    const navigate = await festivalForm()
+    await fireEvent.click(document.querySelector('#saveSessionBtn'))
+    await waitFor(() => expect(document.querySelector('#useSuggestedSlugBtn')).toBeTruthy())
+    await fireEvent.click(document.querySelector('#useSuggestedSlugBtn'))
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/sessions/probe-trad-weekend-tx/2027'))
   })
 })

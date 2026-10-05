@@ -211,6 +211,33 @@ class TestCreate:
             "SELECT kind, parent_place_id, name FROM place WHERE slug = 'probe-trad-weekend'"
         ) == [("festival", 1, "Probe Trad Weekend")]
 
+    def test_new_festival_dates(self, client, committed):
+        resp = _create(
+            client,
+            session_type="festival",
+            festival_name="Probe Dates Fest",
+            year="2027",
+            inception_date="2027-10-21",
+            termination_date="2027-10-24",
+            recurrence='{"schedules": []}',
+        )
+        assert resp.get_json()["success"] is True, resp.get_json()
+        assert committed.query(
+            "SELECT initiation_date::text, termination_date::text, recurrence FROM session "
+            "WHERE path = 'probe-dates-fest/2027'"
+        ) == [("2027-10-21", "2027-10-24", None)]
+
+    def test_new_festival_inverted_dates(self, client, committed):
+        resp = _create(
+            client,
+            session_type="festival",
+            festival_name="Probe Dates Fest",
+            year="2027",
+            inception_date="2027-10-24",
+            termination_date="2027-10-21",
+        )
+        assert resp.status_code == 400
+
     def test_another_year_of_the_same_festival(self, client, committed):
         resp = _create(
             client,

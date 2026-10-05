@@ -25,12 +25,13 @@ First paint needs no fetch — no loading flash.
 | Page | Shell template | Serializer (`serializers.py`) | Aggregate API | Bundle source | Output |
 |---|---|---|---|---|---|
 | `/my-tunes` | `my_tunes.html` | `build_my_tunes_payload` | `GET /api/my-tunes` | `frontend/src/mytunespage/` | `static/mytunespage/` |
-| `/sessions` | `sessions.html` | `build_sessions_directory_payload` | `GET /api/sessions/with-today-status` | `frontend/src/sessionsdir/` | `static/sessionsdir/` |
+| `/sessions`, `/sessions/<town-or-metro>` | `sessions.html` | `build_sessions_directory_payload` (`place=` scopes it) | `GET /api/sessions/with-today-status[?place=]` | `frontend/src/sessionsdir/` | `static/sessionsdir/` |
 | `/sessions/<path>` | `session_detail.html` | `build_session_detail_payload` | `GET /api/sessions/<path>/detail` | `frontend/src/sessionpage/` | `static/sessionpage/` |
 | `/me`, `/admin/people/<id>` | `person_details.html` | `build_person_details_payload` | `GET /api/me/details`, `GET /api/admin/people/<id>/details` | `frontend/src/personpage/` | `static/personpage/` |
 | `/admin/sessions/<path>` (+ tab wrappers) | `session_admin.html` | `build_session_admin_payload` | `GET /api/admin/sessions/<path>/admin-detail` | `frontend/src/sessionadminpage/` | `static/sessionadminpage/` |
 | `/admin/people` | `admin_people.html` | `build_admin_people_payload` | `GET /api/admin/people` (system-admin) | `frontend/src/peopleadminpage/` | `static/peopleadminpage/` |
 | `/sessions/<festival-slug>` (no year near; spec 056) | `festival.html` | `build_festival_payload` | `GET /api/resolve?path=<slug>` | `frontend/src/festivalpage/` | `static/festivalpage/` |
+| `/admin/places` (spec 055) | `admin_places.html` | `build_admin_places_payload` | `GET /api/admin/places` (system-admin) | `frontend/src/placesadminpage/` | `static/placesadminpage/` |
 | `/admin/recordings/<id>/segment` | `recording_segmenter.html` | `build_recording_segmenter_payload` | `GET /api/recordings/<id>/segmenter` (system-admin) | `frontend/src/segmenterpage/` | `static/segmenterpage/` |
 
 `/add-session` is no longer in this table. Adding a session is a sheet presented

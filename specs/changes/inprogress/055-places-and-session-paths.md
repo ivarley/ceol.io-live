@@ -1,10 +1,12 @@
 # 055: Places and session paths
 
 **Date:** 2026-10-04
-**Status:** PHASE 1 BUILT (2026-10-05): schema, migration script, validators, place
-matcher, both write paths, resolution — see "Phase 1 as built" at the end. Not yet run
-against production. Not built: place pages and directory scoping, the Places admin page,
-the `place` object in payloads, the native surface. Decided in a design interview on
+**Status:** BUILT except the native surface (2026-10-06): phase 1 (schema, migration,
+validators, matcher, write paths, resolution), then place pages, directory scoping, the
+Places admin page and the sheet's town-or-metro choice — see "Phase 1 as built" and
+"Phase 2 as built" at the end. Not yet run against production. Not built: the `place`
+object replacing `city`/`state`/`country` in session payloads, and the native surface.
+Decided in a design interview on
 2026-10-04; the decisions below are the product owner's. Spec [056 Festival years](056-festival-years.md)
 depends on this one.
 
@@ -363,4 +365,33 @@ Choices made while building, beyond the notes above:
    handled" and blocks `--apply`.
 3. `... --apply`, then deploy. Rerunning is a no-op, so it can be run again after the
    deploy to catch a session created by the old code in between.
+
+## Phase 2 as built (2026-10-06)
+
+Place pages, directory scoping, the Places admin page, the sheet's town-or-metro choice.
+Files: `serializers.build_sessions_directory_payload` (`place=`),
+`web_routes._place_page`, `frontend/src/sessionsdir/` (heading, row place links,
+festival rows), `places.py` (admin operations), `place_routes.py`,
+`serializers.build_admin_places_payload`, `templates/admin_places.html` +
+`frontend/src/placesadminpage/`, `frontend/src/addsession/DetailsSheet.svelte`. Tests:
+`tests/integration/test_place_pages.py`, `tests/integration/test_places_admin.py`,
+`frontend/tests/sessionsdir.app.test.js`, `frontend/tests/placesadminpage.test.js`, the
+sheet tests.
+
+- **Directory rows read geography from the town** (`city`/`state`/`country` are the
+  place's name, area and country), so "TX" and "Texas" no longer sit side by side. The
+  row shape is unchanged apart from the added `kind`, `place` and (festival rows)
+  `years`; the `place` object proper is still the native-surface step.
+- **A place page opens on "All Active"**, not "My Sessions".
+- **The row's place is a link by script** (`role="link"`), because the row itself is
+  an `<a>` and links cannot nest.
+- **Places admin**: one `PUT` carries edits and a slug change; a changed slug is the
+  rename (paths move, a `path_redirect` row per path and one for the bare prefix, which
+  resolution follows to the renamed place with a 301). A slug an admin types is
+  lowercase letters, digits and single hyphens, and not a year. Editing a town also
+  rewrites its sessions' `city`/`state`/`country`. A festival's parent (its town) can be
+  changed but not cleared.
+- **The sheet's place lookup** (`GET /api/places/match`, debounced) supplies the path's
+  first segment; a town with a parent shows "Address under" with `/{town}/…` and
+  `/{metro}/…`. With no answer the path falls back to the city text, as before.
 

@@ -162,10 +162,11 @@ def db_test():
         return _page_error()
 
 
-def sessions():
+def sessions(place=None):
     """Sessions directory (spec 035 Step 4a): a thin shell that embeds the SAME
     payload GET /api/sessions/with-today-status returns (one serializer — they
-    can't drift) and mounts the Svelte view."""
+    can't drift) and mounts the Svelte view. With `place` (a place row), the same
+    page scoped to that town or metro (spec 055 place pages)."""
     try:
         from serializers import build_sessions_directory_payload
 
@@ -177,13 +178,23 @@ def sessions():
 
         conn = get_db_connection()
         try:
-            payload = build_sessions_directory_payload(conn, user_person_id, user_timezone)
+            payload = build_sessions_directory_payload(conn, user_person_id, user_timezone, place=place)
         finally:
             conn.close()
 
-        return render_template("sessions.html", payload=payload, is_logged_in=current_user.is_authenticated)
+        return render_template(
+            "sessions.html",
+            payload=payload,
+            is_logged_in=current_user.is_authenticated,
+            place=payload.get("place"),
+        )
     except Exception:
         return _page_error()
+
+
+def _place_page(place):
+    """`/sessions/<town-or-metro>` (spec 055): the directory scoped to the place."""
+    return sessions(place=place)
 
 
 def session_tunes(session_path):
@@ -285,11 +296,19 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
     except Exception:
         return _page_error()
 
+    if resolved is not None and resolved["kind"] == "place" and resolved.get("moved"):
+        target = f"/sessions/{resolved['place']['slug']}" + _session_tab_suffix(active_tab, tune_id, person_id)
+        if request.query_string:
+            target += "?" + request.query_string.decode("utf-8", "replace")
+        return redirect(target, code=301)
+
     if resolved is not None and resolved["kind"] == "place" and resolved["place"]["kind"] == "festival":
         return _festival_landing(resolved["place"], active_tab, tune_id, person_id)
 
-    if resolved is None or resolved["kind"] == "place":
-        # A bare town or metro: its page (spec 055) is not built yet.
+    if resolved is not None and resolved["kind"] == "place":
+        return _place_page(resolved["place"])
+
+    if resolved is None:
         from app import render_error_page
 
         return render_error_page(f"Session not found: {full_path}", 404)
@@ -2452,6 +2471,24 @@ def admin_people():
     finally:
         conn.close()
     return render_template("admin_people.html", payload=payload, active_tab="people")
+
+
+@login_required
+def admin_places():
+    """The Places admin page (spec 055): a thin shell embedding the SAME payload
+    GET /api/admin/places returns. System admins only."""
+    if not current_user.is_system_admin:
+        flash("You must be authorized to view this page.", "error")
+        return redirect(url_for("home"))
+
+    from serializers import build_admin_places_payload
+
+    conn = get_db_connection()
+    try:
+        payload = build_admin_places_payload(conn)
+    finally:
+        conn.close()
+    return render_template("admin_places.html", payload=payload, active_tab="places")
 
 
 @login_required

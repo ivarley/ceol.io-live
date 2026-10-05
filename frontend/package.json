@@ -14,9 +14,10 @@
     "dev:personpage": "vite build --watch --config vite.personpage.config.js",
     "dev:sessionadminpage": "vite build --watch --config vite.sessionadminpage.config.js",
     "dev:festivalpage": "vite build --watch --config vite.festivalpage.config.js",
+    "dev:placesadminpage": "vite build --watch --config vite.placesadminpage.config.js",
     "dev:peopleadminpage": "vite build --watch --config vite.peopleadminpage.config.js",
     "dev:segmenterpage": "vite build --watch --config vite.segmenterpage.config.js",
-    "build": "vite build && vite build --config vite.mytunespage.config.js && vite build --config vite.tunesheet.config.js && vite build --config vite.sessionsdir.config.js && vite build --config vite.sessionpage.config.js && vite build --config vite.personpage.config.js && vite build --config vite.sessionadminpage.config.js && vite build --config vite.peopleadminpage.config.js && vite build --config vite.segmenterpage.config.js && vite build --config vite.homepage.config.js && vite build --config vite.festivalpage.config.js",
+    "build": "vite build && vite build --config vite.mytunespage.config.js && vite build --config vite.tunesheet.config.js && vite build --config vite.sessionsdir.config.js && vite build --config vite.sessionpage.config.js && vite build --config vite.personpage.config.js && vite build --config vite.sessionadminpage.config.js && vite build --config vite.peopleadminpage.config.js && vite build --config vite.segmenterpage.config.js && vite build --config vite.homepage.config.js && vite build --config vite.festivalpage.config.js && vite build --config vite.placesadminpage.config.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "coverage": "vitest run --coverage"

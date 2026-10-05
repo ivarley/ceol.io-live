@@ -1,12 +1,9 @@
 # 056: Festival years
 
 **Date:** 2026-10-04
-**Status:** OCTOBER PATH BUILT (2026-10-05): copy endpoint and form, window rule and
-picker, year switcher, help — see "As built" at the end. Not built: the new-festival
-mode of the add-session sheet (the server side exists, spec 055 phase 1), the
-directory's one-row-per-festival, the native surface. Depends on [055 Places and session paths](055-places-and-session-paths.md):
-the `place` table, the two-segment path rule, the resolution order and the `path_redirect`
-table are defined there. Decided in a design interview on 2026-10-04.
+**Status:** BUILT except the native surface (2026-10-06): copy endpoint and form,
+window rule and picker, year switcher, help, then the sheet's festival mode and one
+directory row per festival — see "As built" at the end.
 
 ## Why
 
@@ -236,4 +233,13 @@ Choices made while building:
 - **Upcoming years** show "Coming up" in place of a logged count.
 - `PUT .../admin-update` had no session-admin check at all (commit 63847eb fixed it
   before this work); the copy endpoint uses the same `is_session_admin_for` gate.
+- **The sheet's festival mode** (2026-10-06): the type select (under Advanced) turns the
+  name field into the festival's name and adds a Year; the address previews
+  `/{festival}/{year}` and has no Edit; the weekly schedule gives way to a required First
+  day and Last day (sent as `inception_date` / `termination_date`, `recurrence` NULL). A
+  `409 slug_taken` offers the server's suggested slug, resent as `festival_slug`.
+- **One directory row per festival**: `kind: "festival"`, `path` = the festival slug,
+  name and town from the place rows, `termination_date` NULL while any year has none
+  (else the latest), membership if any year's, and every year's live nights, each with
+  its own `path`.
 

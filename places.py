@@ -517,6 +517,12 @@ def resolve_session_path(cur, path):
                 "path": row[1],
                 "moved": True,
             }
+        # A renamed place's old slug (spec 055 "Rename the slug").
+        cur.execute("SELECT to_path FROM path_redirect WHERE from_path = %s", (path,))
+        target = cur.fetchone()
+        place = get_place_by_slug(cur, target[0]) if target else None
+        if place:
+            return {"kind": "place", "place": place, "moved": True}
         return None
 
     found = _resolve_session(cur, path)
@@ -560,3 +566,139 @@ def record_redirect(cur, old_path, new_path):
         """,
         (old_path, new_path),
     )
+
+
+# ---------------------------------------------------------------------------
+# The Places admin page (spec 055 "Who may change a place"): site admins only
+# ---------------------------------------------------------------------------
+
+_SLUG = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+
+
+def check_new_slug(cur, slug, place_id=None):
+    """An error sentence for a slug a site admin types, or None. Stricter than a
+    path segment: lowercase letters, digits and single hyphens."""
+    if not slug:
+        return "A slug is required"
+    if len(slug) > 100:
+        return "A slug must be 100 characters or fewer"
+    if not _SLUG.match(slug):
+        return "A slug is lowercase letters, numbers and hyphens, like east-durham"
+    if _YEAR.match(slug):
+        return "A slug can't be a year"
+    cur.execute("SELECT place_id FROM place WHERE slug = %s", (slug,))
+    row = cur.fetchone()
+    if row and row[0] != place_id:
+        return f'"{slug}" is already taken'
+    return None
+
+
+def check_parent(cur, place, parent_id):
+    """An error sentence for making `parent_id` the parent of `place`, or None."""
+    if parent_id is None:
+        return None
+    parent = get_place(cur, parent_id)
+    if parent is None:
+        return "That parent doesn't exist"
+    if parent["kind"] != "place":
+        return "A parent must be a town or metro, not a festival"
+    if place is not None and any(
+        p["place_id"] == place["place_id"] for p in place_ancestors(cur, parent_id)
+    ):
+        return f"{parent['name']} is inside {place['name']}, so it can't contain it"
+    return None
+
+
+def update_place(cur, place, name, area, country, parent_id, user_id=None):
+    """Edit a place's name, area, country and parent. A town's sessions get its new
+    geography in their city/state/country columns, which are still written from the
+    place until they are dropped (spec 055 step one). Returns an error or None."""
+    name = _clean(name)
+    if not name:
+        return "A name is required"
+    error = check_parent(cur, place, parent_id)
+    if error:
+        return error
+    if place["kind"] == "festival":
+        if parent_id is None:
+            return "A festival needs the town it happens in"
+        area_n = country_n = None
+    else:
+        country_n = normalize_country(country)
+        area_n = normalize_area(area, country_n)
+    cur.execute(
+        """UPDATE place SET name = %s, area = %s, country = %s, parent_place_id = %s,
+                  last_modified_date = (NOW() AT TIME ZONE 'UTC'), last_modified_user_id = %s
+           WHERE place_id = %s""",
+        (name, area_n, country_n, parent_id, user_id, place["place_id"]),
+    )
+    if place["kind"] == "place":
+        cur.execute(
+            "UPDATE session SET city = %s, state = %s, country = %s WHERE place_id = %s",
+            (name, area_n, country_n, place["place_id"]),
+        )
+    return None
+
+
+def sessions_under_slug(cur, slug):
+    """(session_id, path) of every session whose path starts with `slug/`."""
+    cur.execute(
+        "SELECT session_id, path FROM session WHERE split_part(path, '/', 1) = %s ORDER BY path",
+        (slug,),
+    )
+    return [(r[0], r[1]) for r in cur.fetchall() if r[1].count("/") == 1]
+
+
+def rename_slug(cur, place, new_slug, user_id=None):
+    """Rename a place's slug: rewrite the path of every session under it, with a
+    path_redirect row for each and one for the bare prefix. Returns (error, moved)
+    where moved is [(old_path, new_path)]."""
+    from database import save_to_history
+
+    old_slug = place["slug"]
+    if new_slug == old_slug:
+        return None, []
+    error = check_new_slug(cur, new_slug, place["place_id"])
+    if error:
+        return error, []
+    if sessions_under_slug(cur, new_slug):
+        return f'Sessions already use "{new_slug}/…" paths', []
+    cur.execute(
+        """UPDATE place SET slug = %s, last_modified_date = (NOW() AT TIME ZONE 'UTC'),
+                  last_modified_user_id = %s WHERE place_id = %s""",
+        (new_slug, user_id, place["place_id"]),
+    )
+    moved = []
+    for session_id, old_path in sessions_under_slug(cur, old_slug):
+        new_path = f"{new_slug}/{old_path.split('/', 1)[1]}"
+        save_to_history(cur, "session", "UPDATE", session_id, user_id=user_id)
+        cur.execute(
+            """UPDATE session SET path = %s, last_modified_date = CURRENT_TIMESTAMP,
+                      last_modified_user_id = %s WHERE session_id = %s""",
+            (new_path, user_id, session_id),
+        )
+        record_redirect(cur, old_path, new_path)
+        moved.append((old_path, new_path))
+    record_redirect(cur, old_slug, new_slug)
+    return None, moved
+
+
+def delete_place(cur, place):
+    """Delete a place nothing depends on. Returns an error or None."""
+    cur.execute(
+        "SELECT COUNT(*) FROM session WHERE place_id = %s", (place["place_id"],)
+    )
+    in_town = cur.fetchone()[0]
+    under = len(sessions_under_slug(cur, place["slug"]))
+    if in_town or under:
+        return f"{place['name']} has sessions; move them first"
+    cur.execute(
+        "SELECT name FROM place WHERE parent_place_id = %s ORDER BY name",
+        (place["place_id"],),
+    )
+    children = [r[0] for r in cur.fetchall()]
+    if children:
+        return f"{place['name']} contains {', '.join(children)}; move those first"
+    cur.execute("DELETE FROM path_redirect WHERE from_path = %s", (place["slug"],))
+    cur.execute("DELETE FROM place WHERE place_id = %s", (place["place_id"],))
+    return None

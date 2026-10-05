@@ -3740,6 +3740,17 @@ def add_session_ajax():
         if not festival_slug:
             return jsonify({"success": False, "message": "Festival name must contain a letter or number"}), 400
         session_name = (data.get("name") or "").strip() or f"{festival_name} {year}"
+        # A festival year runs from its first to its last day (spec 056); it does
+        # not recur. Both are optional here and editable on the admin page.
+        import datetime as _dt
+
+        try:
+            first_day = _dt.date.fromisoformat(data["inception_date"]) if data.get("inception_date") else None
+            last_day = _dt.date.fromisoformat(data["termination_date"]) if data.get("termination_date") else None
+        except (TypeError, ValueError):
+            return jsonify({"success": False, "message": "Enter the first and last day as dates"}), 400
+        if first_day and last_day and last_day < first_day:
+            return jsonify({"success": False, "message": "The last day can't be before the first"}), 400
         raw_path = f"{festival_slug}/{year}"
     else:
         session_name = data["name"]
@@ -3858,12 +3869,13 @@ def add_session_ajax():
             """
             INSERT INTO session (
                 thesession_id, name, path, location_name, location_phone, location_website,
-                city, state, country, place_id, timezone, initiation_date, recurrence,
+                city, state, country, place_id, timezone, initiation_date, termination_date,
+                recurrence,
                 session_type, active_buffer_minutes_before, active_buffer_minutes_after,
                 show_people_list, track_attendance, track_set_starters,
                 created_date, last_modified_date, created_by_user_id
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                 %s, %s, %s,
                 %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, %s
             ) RETURNING session_id
@@ -3881,7 +3893,9 @@ def add_session_ajax():
                 town["place_id"],
                 timezone,
                 data.get("inception_date") or None,
-                data.get("recurrence") or None,
+                # Only a new festival sets a last day here; a festival never recurs.
+                data.get("termination_date") or None if is_new_festival else None,
+                None if is_new_festival else data.get("recurrence") or None,
                 session_type,
                 buffer_before,
                 buffer_after,
@@ -10391,9 +10405,18 @@ def get_sessions_with_today_status():
 
         # The whole response body comes from the shared serializer; the /sessions
         # page shell embeds the same function's output, so they can't drift.
+        # ?place=<slug> scopes it to a town or metro (spec 055 place pages).
+        import places
+
         conn = get_db_connection()
         try:
-            payload = build_sessions_directory_payload(conn, user_person_id, user_timezone)
+            place = None
+            slug = request.args.get("place")
+            if slug:
+                place = places.get_place_by_slug(conn.cursor(), slug)
+                if place is None or place["kind"] != "place":
+                    return jsonify({"success": False, "error": "No such place"}), 404
+            payload = build_sessions_directory_payload(conn, user_person_id, user_timezone, place=place)
         finally:
             conn.close()
 

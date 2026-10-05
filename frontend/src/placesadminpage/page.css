@@ -1,0 +1,73 @@
+/* The Places admin page (spec 055). */
+.places-toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 12px 0;
+}
+
+.places-toolbar .places-search-wrap {
+  flex: 1;
+}
+
+.places-add {
+  flex: none;
+  padding: 8px 14px;
+  font: inherit;
+  font-weight: 600;
+  color: #fff;
+  background: var(--primary-fill, #4a8049);
+  border: none;
+  border-radius: var(--r, 8px);
+  cursor: pointer;
+}
+
+.places-count {
+  font-size: 0.85rem;
+  color: var(--secondary-text, #888);
+}
+
+.places-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+/* :root prefix: the legacy .docs-article table rules outrank a bare class and
+   paint the cells in the old docs grey (specs/current/ui/theming.md). */
+:root .places-table th,
+:root .places-table td {
+  padding: 8px;
+  border-bottom: 1px solid var(--border-color, #444);
+  text-align: left;
+}
+
+:root .places-table td {
+  color: var(--text-color, #e0e0e0);
+}
+
+:root .places-table th {
+  font-size: 0.8rem;
+  color: var(--secondary-text, #888);
+  font-weight: 600;
+}
+
+.places-table .num {
+  text-align: right;
+}
+
+.place-row {
+  cursor: pointer;
+}
+
+.place-row:hover {
+  background: var(--hover-bg, #3d3d3d);
+}
+
+.place-kind {
+  margin-left: 6px;
+  font-size: 11px;
+  padding: 1px 6px;
+  border: 1px solid var(--border-color, #444);
+  border-radius: 999px;
+  color: var(--secondary-text, #888);
+}

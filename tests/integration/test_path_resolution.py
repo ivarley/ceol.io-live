@@ -135,8 +135,8 @@ class TestPages:
     def test_festival_year_renders(self, client):
         assert client.get("/sessions/hill-country-fest/2026").status_code == 200
 
-    def test_bare_place_is_404_for_now(self, client):
-        assert client.get("/sessions/austin").status_code == 404
+    def test_bare_place_is_its_page(self, client):
+        assert client.get("/sessions/austin").status_code == 200
 
     def test_unknown_is_404(self, client):
         assert client.get("/sessions/nowhere/at-all").status_code == 404

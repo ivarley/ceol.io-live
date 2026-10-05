@@ -43,10 +43,12 @@ class Committed:
     def __init__(self):
         self.conn = get_db_connection()
         self.cur = self.conn.cursor()
-        self.cur.execute("SELECT COALESCE(MAX(place_id), 0) FROM place")
-        self.max_place = self.cur.fetchone()[0]
-        self.cur.execute("SELECT COALESCE(MAX(session_id), 0) FROM session")
-        self.max_session = self.cur.fetchone()[0]
+        # The ids that existed before the test, not a max: another test may leave a
+        # row with a high explicit id, and new rows would then slip under a max.
+        self.cur.execute("SELECT place_id FROM place")
+        self.places_before = [r[0] for r in self.cur.fetchall()]
+        self.cur.execute("SELECT session_id FROM session")
+        self.sessions_before = [r[0] for r in self.cur.fetchall()]
         self.cur.execute("SELECT from_path FROM path_redirect")
         self.redirects = {r[0] for r in self.cur.fetchall()}
 
@@ -132,30 +134,44 @@ class Committed:
     def cleanup(self):
         cur = self.cur
         self.conn.rollback()
-        new_sessions = "SELECT session_id FROM session WHERE session_id > %s"
         cur.execute(
-            "DELETE FROM session_instance_tune WHERE session_instance_id IN "
-            f"(SELECT session_instance_id FROM session_instance WHERE session_id IN ({new_sessions}))",
-            (self.max_session,),
+            "SELECT session_id FROM session WHERE NOT (session_id = ANY(%s))",
+            (self.sessions_before,),
         )
-        cur.execute(
-            f"DELETE FROM session_person_history WHERE session_id IN ({new_sessions})",
-            (self.max_session,),
-        )
-        for table in ("session_instance", "session_person", "session_history"):
+        new_sessions = [r[0] for r in cur.fetchall()]
+        if new_sessions:
             cur.execute(
-                f"DELETE FROM {table} WHERE session_id IN ({new_sessions})",
-                (self.max_session,),
+                "DELETE FROM session_instance_tune WHERE session_instance_id IN "
+                "(SELECT session_instance_id FROM session_instance WHERE session_id = ANY(%s))",
+                (new_sessions,),
             )
-        cur.execute("DELETE FROM session WHERE session_id > %s", (self.max_session,))
+            for table in (
+                "session_instance",
+                "session_person",
+                "session_person_history",
+                "session_history",
+            ):
+                cur.execute(
+                    f"DELETE FROM {table} WHERE session_id = ANY(%s)", (new_sessions,)
+                )
+            cur.execute(
+                "DELETE FROM session WHERE session_id = ANY(%s)", (new_sessions,)
+            )
         cur.execute(
-            "UPDATE session SET place_id = NULL WHERE place_id > %s", (self.max_place,)
+            "SELECT place_id FROM place WHERE NOT (place_id = ANY(%s))",
+            (self.places_before,),
         )
-        cur.execute(
-            "UPDATE place SET parent_place_id = NULL WHERE place_id > %s",
-            (self.max_place,),
-        )
-        cur.execute("DELETE FROM place WHERE place_id > %s", (self.max_place,))
+        new_places = [r[0] for r in cur.fetchall()]
+        if new_places:
+            cur.execute(
+                "UPDATE session SET place_id = NULL WHERE place_id = ANY(%s)",
+                (new_places,),
+            )
+            cur.execute(
+                "UPDATE place SET parent_place_id = NULL WHERE place_id = ANY(%s)",
+                (new_places,),
+            )
+            cur.execute("DELETE FROM place WHERE place_id = ANY(%s)", (new_places,))
         cur.execute("SELECT from_path FROM path_redirect")
         for (from_path,) in cur.fetchall():
             if from_path not in self.redirects:

@@ -17,6 +17,12 @@ from api_app_routes import (
 )
 from api_routes import *
 from web_routes import *
+from place_routes import (
+    create_admin_place,
+    delete_admin_place,
+    get_admin_places,
+    update_admin_place,
+)
 from recording_routes import (
     get_recording_segmenter,
     get_recording_peaks,
@@ -533,6 +539,7 @@ app.add_url_rule("/admin/login-sessions", "admin_login_sessions", admin_login_se
 app.add_url_rule("/admin/login-history", "admin_login_history", admin_login_history)
 app.add_url_rule("/admin/activity", "admin_activity", admin_activity)
 app.add_url_rule("/admin/people", "admin_people", admin_people)
+app.add_url_rule("/admin/places", "admin_places", admin_places)
 app.add_url_rule("/admin/tunes", "admin_tunes", admin_tunes)
 app.add_url_rule("/admin/tunes/merge", "admin_tune_merge", admin_tune_merge)
 app.add_url_rule("/admin/tunes/<int:tune_id>", "admin_tune_detail", admin_tune_detail)
@@ -597,6 +604,14 @@ app.add_url_rule(
     "get_admin_people_api",
     get_admin_people_api,
     methods=["GET"],
+)
+app.add_url_rule("/api/admin/places", "get_admin_places", get_admin_places, methods=["GET"])
+app.add_url_rule("/api/admin/places", "create_admin_place", create_admin_place, methods=["POST"])
+app.add_url_rule(
+    "/api/admin/places/<int:place_id>", "update_admin_place", update_admin_place, methods=["PUT"]
+)
+app.add_url_rule(
+    "/api/admin/places/<int:place_id>", "delete_admin_place", delete_admin_place, methods=["DELETE"]
 )
 app.add_url_rule(
     "/api/admin/people/merge",

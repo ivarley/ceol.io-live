@@ -572,6 +572,46 @@ def build_festival_payload(
     }
 
 
+def build_admin_places_payload(conn) -> Dict[str, Any]:
+    """The Places admin page (spec 055): every place with its parent, how many
+    sessions it is the town of, how many paths use its slug, and how many places it
+    contains. GET /api/admin/places returns exactly this; /admin/places embeds it."""
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(
+        """
+        SELECT p.place_id, p.slug, p.name, p.kind, p.area, p.country, p.parent_place_id,
+               parent.slug AS parent_slug, parent.name AS parent_name,
+               (SELECT COUNT(*) FROM session s WHERE s.place_id = p.place_id) AS town_sessions,
+               (SELECT COUNT(*) FROM session s
+                 WHERE split_part(s.path, '/', 1) = p.slug AND s.path ~ '^[^/]+/[^/]+$') AS paths,
+               (SELECT COUNT(*) FROM place c WHERE c.parent_place_id = p.place_id) AS children
+        FROM place p
+        LEFT JOIN place parent ON parent.place_id = p.parent_place_id
+        ORDER BY LOWER(p.name), p.slug
+        """
+    )
+    return {
+        "success": True,
+        "places": [
+            {
+                "place_id": r["place_id"],
+                "slug": r["slug"],
+                "name": r["name"],
+                "kind": r["kind"],
+                "area": r["area"],
+                "country": r["country"],
+                "parent": {"place_id": r["parent_place_id"], "slug": r["parent_slug"], "name": r["parent_name"]}
+                if r["parent_place_id"]
+                else None,
+                "town_sessions": r["town_sessions"],
+                "paths": r["paths"],
+                "children": r["children"],
+            }
+            for r in cur.fetchall()
+        ],
+    }
+
+
 def _festival_block(conn, session_path):
     import festivals
 
@@ -633,7 +673,7 @@ def instance_labels(
 # ---------------------------------------------------------------------------
 
 
-def build_sessions_directory_payload(conn, person_id, user_timezone="UTC"):
+def build_sessions_directory_payload(conn, person_id, user_timezone="UTC", place=None):
     """The COMPLETE /api/sessions/with-today-status response body. The API endpoint
     returns exactly this and the /sessions page shell embeds exactly this — one
     function, so they cannot drift (spec 035's core invariant).
@@ -641,15 +681,36 @@ def build_sessions_directory_payload(conn, person_id, user_timezone="UTC"):
     Each session carries `active_instances` (is_active=TRUE instances, batched in
     one query) and `user_is_member` for the logged-in person. `today` is in the
     USER's timezone (per-session "today" is derived client-side from recurrence).
+
+    Spec 055/056:
+    - every row carries `place` (its town, `{slug, name}`) and `kind`;
+    - a festival's years are ONE row (`kind: "festival"`, `path` = the festival's
+      slug, so the link lands on the window rule), active while any year is;
+    - `place` (a place row) scopes the list to sessions whose town is that place or
+      lies under it, and the payload then carries `place` (with `children`) for the
+      place page's heading.
     """
     from timezone_utils import get_today_in_timezone
 
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("SELECT place_id, slug, name, kind, parent_place_id, area, country FROM place")
+    all_places = {r["place_id"]: r for r in cur.fetchall()}
+    festivals_by_slug = {p["slug"]: p for p in all_places.values() if p["kind"] == "festival"}
+
+    def within(place_id, scope_id):
+        seen = set()
+        while place_id is not None and place_id not in seen:
+            if place_id == scope_id:
+                return True
+            seen.add(place_id)
+            place_id = all_places.get(place_id, {}).get("parent_place_id")
+        return False
+
     cur.execute(
         """
         SELECT
             s.session_id, s.name, s.path, s.city, s.state, s.country,
-            s.termination_date, s.recurrence, s.timezone,
+            s.termination_date, s.recurrence, s.timezone, s.place_id,
             -- Member-strict (spec 033): a visitor row is an association, not membership.
             CASE WHEN sp.relationship = 'member' THEN TRUE ELSE FALSE END AS user_is_member,
             sp.relationship AS user_relationship,
@@ -661,13 +722,16 @@ def build_sessions_directory_payload(conn, person_id, user_timezone="UTC"):
         (person_id,),
     )
     session_rows = cur.fetchall()
+    if place is not None:
+        session_rows = [r for r in session_rows if within(r["place_id"], place["place_id"])]
 
     cur.execute(
         """
-        SELECT session_id, session_instance_id, date, start_time, end_time, location_override
-        FROM session_instance
-        WHERE is_active = TRUE
-        ORDER BY session_id, date, start_time
+        SELECT si.session_id, si.session_instance_id, si.date, si.start_time, si.end_time,
+               si.location_override, s.path
+        FROM session_instance si JOIN session s ON s.session_id = si.session_id
+        WHERE si.is_active = TRUE
+        ORDER BY si.session_id, si.date, si.start_time
         """
     )
     active_by_session = {}
@@ -679,26 +743,67 @@ def build_sessions_directory_payload(conn, person_id, user_timezone="UTC"):
                 "start_time": r["start_time"].isoformat() if r["start_time"] else None,
                 "end_time": r["end_time"].isoformat() if r["end_time"] else None,
                 "location_override": r["location_override"],
+                # A festival row gathers several years' nights, so each says whose it is.
+                "path": r["path"],
             }
         )
 
-    sessions = [
-        {
+    def town_of(r):
+        town = all_places.get(r["place_id"])
+        return {"slug": town["slug"], "name": town["name"]} if town else None
+
+    def session_row(r):
+        # Geography comes from the town (spec 055), in its one normalized spelling;
+        # the old free-text columns ("TX" beside "Texas") only for a session with none.
+        town = all_places.get(r["place_id"])
+        return {
             "session_id": r["session_id"],
+            "kind": "session",
             "name": r["name"],
             "path": r["path"],
-            "city": r["city"],
-            "state": r["state"],
-            "country": r["country"],
+            "city": town["name"] if town else r["city"],
+            "state": town["area"] if town else r["state"],
+            "country": town["country"] if town else r["country"],
             "termination_date": r["termination_date"].isoformat() if r["termination_date"] else None,
             "recurrence": r["recurrence"],
             "user_is_member": r["user_is_member"],
             "user_relationship": r["user_relationship"],
             "location_name": r["location_name"],
             "active_instances": active_by_session.get(r["session_id"], []),
+            "place": town_of(r),
         }
-        for r in session_rows
-    ]
+
+    # Festival years fold into one row per festival (spec 056 "Directory and home").
+    sessions = []
+    festival_years = {}
+    for r in session_rows:
+        prefix, _, second = r["path"].partition("/")
+        if prefix in festivals_by_slug and second.isdigit() and len(second) == 4:
+            festival_years.setdefault(prefix, []).append(r)
+        else:
+            sessions.append(session_row(r))
+    for slug, years in festival_years.items():
+        festival = festivals_by_slug[slug]
+        latest = max(years, key=lambda r: r["path"])
+        ends = [r["termination_date"] for r in years]
+        relationships = {r["user_relationship"] for r in years}
+        sessions.append(
+            {
+                **session_row(latest),
+                "kind": "festival",
+                "name": festival["name"],
+                "path": slug,
+                "recurrence": None,
+                # Active while any year is: one with no last day, or a future one.
+                "termination_date": None if None in ends else max(ends).isoformat(),
+                "user_is_member": any(r["user_is_member"] for r in years),
+                "user_relationship": "member" if "member" in relationships
+                else "visitor" if "visitor" in relationships else None,
+                "active_instances": [i for r in years for i in active_by_session.get(r["session_id"], [])],
+                "years": len(years),
+            }
+        )
+    sessions.sort(key=lambda row: (row["name"] or "").lower())
 
     # The viewer's own country, so the list can leave it off the rows. "Austin, TX,
     # USA" carries three pieces of information for somebody abroad and one for
@@ -710,12 +815,26 @@ def build_sessions_directory_payload(conn, person_id, user_timezone="UTC"):
         if row:
             viewer_country = row["country"]
 
-    return {
+    payload = {
         "success": True,
         "sessions": sessions,
         "today": get_today_in_timezone(user_timezone or "UTC").isoformat(),
         "viewer_country": viewer_country,
     }
+    if place is not None:
+        import places as _places
+
+        summary = _places.place_summary(conn.cursor(), _places.get_place(conn.cursor(), place["place_id"]))
+        summary["children"] = sorted(
+            (
+                {"slug": p["slug"], "name": p["name"]}
+                for p in all_places.values()
+                if p["parent_place_id"] == place["place_id"] and p["kind"] == "place"
+            ),
+            key=lambda c: c["name"].lower(),
+        )
+        payload["place"] = summary
+    return payload
 
 
 # ---------------------------------------------------------------------------

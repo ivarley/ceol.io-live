@@ -175,3 +175,38 @@ select.today-action-btn {
     line-height: 1.5;
     color: var(--secondary-text);
 }
+
+/* Spec 055: a place page's heading, and the place on each row as a link to one. */
+.place-heading {
+    padding: 4px 0 8px;
+}
+
+.place-name {
+    margin: 0;
+    font-size: 1.6rem;
+}
+
+.place-where,
+.place-children {
+    margin: 2px 0 0;
+    font-size: 0.9rem;
+    color: var(--secondary-text);
+}
+
+.session-row-place {
+    cursor: pointer;
+}
+
+.session-row-place:hover {
+    color: var(--text-color);
+    text-decoration: underline;
+}
+
+/* Spec 056: a festival is one row, labelled so it isn't read as a weekly session. */
+.session-row-kind {
+    font-size: 11px;
+    padding: 1px 6px;
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    color: var(--secondary-text);
+}

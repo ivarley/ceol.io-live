@@ -77,8 +77,58 @@
   let manualPath = $state('')
   let pathIsManual = $state(false)
 
-  const generatedPath = $derived(generatePath(city, name))
-  const effectivePath = $derived(pathIsManual ? manualPath.trim() : generatedPath)
+  // The town the city names (spec 055), looked up before the save so the path
+  // starts with the town's real slug (`sf` for "San Francisco") and a town inside
+  // a metro can choose either for its address. No answer (offline, or an older
+  // server) leaves the path generated from the city text, as before.
+  let placeMatch = $state(null) // GET /api/places/match
+  let prefixChoice = $state('')
+  let lookupSeq = 0
+  $effect(() => {
+    const c = city.trim()
+    const a = stateArea.trim()
+    const n = country.trim()
+    const seq = ++lookupSeq
+    if (!c || !a || !n) {
+      placeMatch = null
+      return
+    }
+    const timer = setTimeout(() => {
+      const q = new URLSearchParams({ city: c, state: a, country: n })
+      fetch(`/api/places/match?${q}`, { credentials: 'same-origin' })
+        .then((r) => r.json())
+        .then((d) => {
+          if (seq === lookupSeq) placeMatch = d && d.success ? d : null
+        })
+        .catch(() => {
+          if (seq === lookupSeq) placeMatch = null
+        })
+    }, 300)
+    return () => clearTimeout(timer)
+  })
+  const prefixes = $derived(placeMatch?.status === 'match' ? placeMatch.path_prefixes || [] : [])
+  const prefix = $derived(prefixes.includes(prefixChoice) ? prefixChoice : prefixes[0] || '')
+
+  // A festival (spec 056) is named once and its years live under that name: the
+  // name field is the festival's, a year goes beside it, and the address is
+  // /{festival}/{year}.
+  const isFestival = $derived(sessionType === 'festival')
+  let festivalYear = $state(String(new Date().getFullYear()))
+  let festivalSlug = $state('') // the server's suggestion after a taken slug
+  let festivalStart = $state('')
+  let festivalEnd = $state('')
+
+  const nameSlug = $derived(generatePath('', name))
+  const generatedPath = $derived(
+    isFestival
+      ? nameSlug && /^\d{4}$/.test(festivalYear.trim())
+        ? `${festivalSlug || nameSlug}/${festivalYear.trim()}`
+        : ''
+      : prefix && nameSlug
+        ? `${prefix}/${nameSlug}`
+        : generatePath(city, name)
+  )
+  const effectivePath = $derived(pathIsManual && !isFestival ? manualPath.trim() : generatedPath)
 
   async function startEditingPath() {
     manualPath = effectivePath
@@ -136,6 +186,8 @@
   // country; the adder picks that town or a new one and the save is sent again with
   // the answer. The answer only holds for the city/state/country it was given for.
   let placeQuestion = $state(null) // { place, suggested_slug }
+  // A festival whose name slugs to a taken address (spec 056): offer the server's.
+  let slugQuestion = $state(null) // { message, suggested }
   let placeAnswer = $state(null) // { place_id } | { place_new: true }
   const geography = $derived(`${city.trim()}|${stateArea.trim()}|${country.trim()}`)
   let answeredGeography = ''
@@ -193,6 +245,10 @@
     const seededPath = asText(s.path).trim()
     pathIsManual = Boolean(seededPath) && seededPath !== generatePath(s.city, s.name)
     manualPath = seededPath
+    prefixChoice = ''
+    festivalSlug = ''
+    slugQuestion = null
+    placeQuestion = null
     invalidFields = []
     formError = ''
     saving = false
@@ -276,12 +332,30 @@
       track_attendance: trackAttendance,
       track_set_starters: trackSetStarters && trackAttendance,
       ...(placeAnswer && answeredGeography === geography ? placeAnswer : {}),
+      ...(isFestival
+        ? {
+            festival_name: name.trim(),
+            year: festivalYear.trim(),
+            name: '',
+            inception_date: festivalStart || null,
+            termination_date: festivalEnd || null,
+            recurrence: null,
+            ...(festivalSlug ? { festival_slug: festivalSlug } : {}),
+          }
+        : {}),
     }
 
     // Path isn't listed: it's generated from name + city, so those are what a
     // person actually has to supply.
     const requiredFields = [
-      { id: 'sessionName', value: formData.name, label: 'Name' },
+      { id: 'sessionName', value: isFestival ? formData.festival_name : formData.name, label: isFestival ? 'Festival name' : 'Name' },
+      ...(isFestival
+        ? [
+            { id: 'festivalYear', value: /^\d{4}$/.test(festivalYear.trim()) ? festivalYear : '', label: 'Year' },
+            { id: 'festivalStart', value: festivalStart, label: 'First day' },
+            { id: 'festivalEnd', value: festivalEnd, label: 'Last day' },
+          ]
+        : []),
       { id: 'cityName', value: formData.city, label: 'City' },
       { id: 'stateName', value: formData.state, label: 'State' },
       { id: 'countryName', value: formData.country, label: 'Country' },
@@ -291,6 +365,12 @@
       invalidFields = missing.map((f) => f.id)
       formError = `Please fill in required fields: ${missing.map((f) => f.label).join(', ')}`
       await focusField(missing[0].id)
+      return
+    }
+    if (isFestival && festivalEnd < festivalStart) {
+      invalidFields = ['festivalEnd']
+      formError = "The last day can't be before the first"
+      await focusField('festivalEnd')
       return
     }
 
@@ -342,6 +422,10 @@
           // The server's path, not ours: it may have put the matched town's slug
           // in front (sf/... for "San Francisco").
           navigate(`/sessions/${data.session_path || formData.path}`)
+        } else if (data.code === 'slug_taken' && data.suggested_slug) {
+          saving = false
+          formError = ''
+          slugQuestion = { message: data.message, suggested: data.suggested_slug }
         } else if (data.code === 'place_ambiguous' && data.place) {
           saving = false
           formError = ''
@@ -364,11 +448,20 @@
     <!-- What the session is. Name is the only thing here anyone must supply. -->
     <div class="kit-group">
       <div class="kit-field">
-        <label for="sessionName">Name</label>
-        <input type="text" id="sessionName" required bind:value={name} placeholder="Required"
+        <label for="sessionName">{isFestival ? 'Festival' : 'Name'}</label>
+        <input type="text" id="sessionName" required bind:value={name}
+          placeholder={isFestival ? "Its name, without a year" : 'Required'}
           class:is-invalid={invalidFields.includes('sessionName')}
-          oninput={() => markValid('sessionName')} />
+          oninput={() => { markValid('sessionName'); festivalSlug = '' }} />
       </div>
+      {#if isFestival}
+        <div class="kit-field">
+          <label for="festivalYear">Year</label>
+          <input type="text" id="festivalYear" inputmode="numeric" maxlength="4" bind:value={festivalYear}
+            class:is-invalid={invalidFields.includes('festivalYear')}
+            oninput={() => markValid('festivalYear')} />
+        </div>
+      {/if}
       <div class="kit-field">
         <label for="locationName">Venue</label>
         <input type="text" id="locationName" bind:value={locationName} placeholder="Pub or hall" />
@@ -395,6 +488,17 @@
           class:is-invalid={invalidFields.includes('countryName')}
           oninput={() => markValid('countryName')} />
       </div>
+      {#if prefixes.length > 1 && !isFestival}
+        <!-- A town inside a metro (spec 055): the address may use either. -->
+        <div class="kit-field">
+          <label for="pathPrefix">Address under</label>
+          <select id="pathPrefix" value={prefix} onchange={(e) => (prefixChoice = e.currentTarget.value)}>
+            {#each prefixes as p (p)}
+              <option value={p}>/{p}/…</option>
+            {/each}
+          </select>
+        </div>
+      {/if}
       <div class="kit-field">
         <label for="timezone">Time zone</label>
         <select id="timezone" bind:value={timezone}>
@@ -407,6 +511,24 @@
 
     <!-- When it meets. This is the point of the app, so it sits on the main path
          rather than in Advanced, and the summary reads as a sentence. -->
+    {#if isFestival}
+      <!-- A festival runs from a first to a last day (spec 056); it doesn't recur. -->
+      <h3 class="kit-group-head">When</h3>
+      <div class="kit-group">
+        <div class="kit-field">
+          <label for="festivalStart">First day</label>
+          <input type="date" id="festivalStart" bind:value={festivalStart}
+            class:is-invalid={invalidFields.includes('festivalStart')}
+            oninput={() => markValid('festivalStart')} />
+        </div>
+        <div class="kit-field">
+          <label for="festivalEnd">Last day</label>
+          <input type="date" id="festivalEnd" bind:value={festivalEnd}
+            class:is-invalid={invalidFields.includes('festivalEnd')}
+            oninput={() => markValid('festivalEnd')} />
+        </div>
+      </div>
+    {:else}
     <h3 class="kit-group-head">When</h3>
     <div class="kit-group">
       <div id="recurrence-section" class="recurrence-section" class:expanded={recExpanded}>
@@ -501,6 +623,7 @@
         {/if}
       </div>
     </div>
+    {/if}
 
     <!-- Your own relationship to it. On by default, and the one thing here that
          decides whether you can administer the session you just created. -->
@@ -556,10 +679,12 @@
                 {#if generatedPath}
                   <code id="sessionPathValue">/sessions/{generatedPath}</code>
                 {:else}
-                  <span class="as-path-empty" id="sessionPathValue">Enter a name and city first</span>
+                  <span class="as-path-empty" id="sessionPathValue">{isFestival ? 'Enter the festival and a year' : 'Enter a name and city first'}</span>
                 {/if}
-                <button type="button" class="as-path-action" id="editPathBtn"
-                  onclick={startEditingPath}>Edit</button>
+                {#if !isFestival}
+                  <button type="button" class="as-path-action" id="editPathBtn"
+                    onclick={startEditingPath}>Edit</button>
+                {/if}
               </span>
             {/if}
           </div>
@@ -672,6 +797,15 @@
           <button type="button" class="as-place-choice" id="placeNewBtn"
             onclick={() => answerPlace({ place_new: true })}>
             No, a new place (/{placeQuestion.suggested_slug})
+          </button>
+        </div>
+      {/if}
+      {#if slugQuestion}
+        <div class="as-place-question" role="alert" id="slugQuestion">
+          <p>{slugQuestion.message}.</p>
+          <button type="button" class="as-place-choice" id="useSuggestedSlugBtn"
+            onclick={() => { festivalSlug = slugQuestion.suggested; slugQuestion = null; save() }}>
+            Use /{slugQuestion.suggested}
           </button>
         </div>
       {/if}
