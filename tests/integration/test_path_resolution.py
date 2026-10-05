@@ -95,7 +95,7 @@ class TestRecordRedirect:
         places.record_redirect(committed.cur, "austin/a", "austin/b")
         places.record_redirect(committed.cur, "austin/b", "austin/c")
         committed.cur.execute(
-            "SELECT from_path, to_path FROM path_redirect WHERE from_path LIKE 'austin/%%' ORDER BY 1"
+            "SELECT from_path, to_path FROM path_redirect WHERE from_path IN ('austin/a', 'austin/b') ORDER BY 1"
         )
         assert committed.cur.fetchall() == [
             ("austin/a", "austin/c"),

@@ -1168,6 +1168,13 @@ def update_session_ajax(session_path):
         session_id, current_path, current_place_id, current_type = session_result[:4]
         current_geo = session_result[4:7]
 
+        # The page that sends this is admin-only; the endpoint has to be too, or any
+        # signed-in user could rename (and so re-point the URL of) any session.
+        if not is_session_admin_for(cur, session_id, getattr(current_user, "person_id", None)):
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "error": "Only a session admin can change this session"}), 403
+
         # The session's town (spec 055). The admin form sends city/state/country on
         # every save; only a change (or a session that has no town yet) runs the
         # matcher, so re-saving an untouched form never creates or moves anything.

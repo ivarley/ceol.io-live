@@ -200,6 +200,34 @@ class TestUpdate:
         assert _fields(cur) == (4321, "regular", 15, 90)
         cur.close()
 
+    def test_a_non_admin_is_refused(self, client, db_conn, restore_session_one):
+        # Person 2 is not an admin of session 1 and not a system admin.
+        with logged_in(client, person_id=2, is_system_admin=False):
+            resp = client.put(
+                "/api/sessions/austin/mueller/admin-update",
+                json={"active_buffer_minutes_before": 5, "path": "austin/hijacked"},
+            )
+        assert resp.status_code == 403
+
+        cur = db_conn.cursor()
+        cur.execute("SELECT path FROM session WHERE session_id = 1")
+        assert cur.fetchone()[0] == "austin/mueller"
+        assert _fields(cur)[2] != 5
+        cur.close()
+
+    def test_a_session_admin_who_is_not_a_system_admin_may(self, client, db_conn, restore_session_one):
+        # Person 1 is an admin of session 1 through session_person.
+        with logged_in(client, person_id=1, is_system_admin=False):
+            resp = client.put(
+                "/api/sessions/austin/mueller/admin-update",
+                json={"active_buffer_minutes_before": 5},
+            )
+        assert resp.status_code == 200, resp.get_json()
+
+        cur = db_conn.cursor()
+        assert _fields(cur)[2] == 5
+        cur.close()
+
     def test_a_town_path_cannot_become_a_festival(self, client, db_conn, restore_session_one):
         # Spec 055: a festival year lives at {festival}/{yyyy}; austin/mueller can't be one.
         with logged_in(client):

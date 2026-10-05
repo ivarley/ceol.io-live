@@ -54,10 +54,10 @@ class TestMatch:
         )
 
     def test_same_slug_elsewhere_is_ambiguous(self, committed):
-        m = places.match_place(committed.cur, "Austin", "MN", "USA")
+        m = places.match_place(committed.cur, "Austin", "VT", "USA")
         assert m["status"] == "ambiguous"
         assert m["place"]["slug"] == "austin"
-        assert m["slug"] == "austin-mn"
+        assert m["slug"] == "austin-vt"
 
     def test_disambiguates_by_country_without_an_area(self, committed):
         committed.place("athens", "Athens", area="Georgia")
@@ -150,24 +150,24 @@ class TestCreate:
         ) == [("Probetown", "Texas", "United States")]
 
     def test_ambiguous_is_a_409_and_creates_nothing(self, client, committed):
-        resp = _create(client, path="austin/probe-mn", state="MN")
+        resp = _create(client, path="austin/probe-vt", state="VT")
         assert resp.status_code == 409
         data = resp.get_json()
         assert data["code"] == "place_ambiguous"
         assert data["place"]["slug"] == "austin"
-        assert data["suggested_slug"] == "austin-mn"
-        assert _session(committed, "austin/probe-mn") is None
-        assert committed.query("SELECT 1 FROM place WHERE slug = 'austin-mn'") == []
+        assert data["suggested_slug"] == "austin-vt"
+        assert _session(committed, "austin/probe-vt") is None
+        assert committed.query("SELECT 1 FROM place WHERE slug = 'austin-vt'") == []
 
     def test_resubmit_with_the_existing_place(self, client, committed):
-        resp = _create(client, path="austin/probe-pick", state="MN", place_id=1)
+        resp = _create(client, path="austin/probe-pick", state="VT", place_id=1)
         assert resp.get_json()["success"] is True, resp.get_json()
         assert _session(committed, "austin/probe-pick")[1] == "austin"
 
     def test_resubmit_as_a_new_place(self, client, committed):
-        resp = _create(client, path="austin-mn/probe-new", state="MN", place_new=True)
+        resp = _create(client, path="austin-vt/probe-new", state="VT", place_new=True)
         assert resp.get_json()["success"] is True, resp.get_json()
-        assert _session(committed, "austin-mn/probe-new")[1] == "austin-mn"
+        assert _session(committed, "austin-vt/probe-new")[1] == "austin-vt"
 
     def test_generated_prefix_follows_the_town(self, client, committed):
         # The sheet generated san-francisco/...; the town is `sf`.
