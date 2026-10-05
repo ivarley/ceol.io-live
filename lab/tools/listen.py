@@ -101,7 +101,7 @@ class Models:
     whole corpus's index (the fallback), the aligner's sequences, the
     tune-ness model. About 3 GB, most of it the corpus and PyTorch."""
 
-    def __init__(self, transpose=0, merged=False):
+    def __init__(self, transpose=0, merged=False, tempo=None):
         from lab.analysis.tuneness import TunenessModel
         from lab.bench.retrieval import Aligner
         from lab.corpus.index import Index
@@ -121,6 +121,8 @@ class Models:
         # session shortlists from the whole corpus, and from its own tunes or,
         # having none, from the popular ones (>= 100 thesession.org tunebooks)
         self.merged = merged
+        # tempo evidence (analysis.tempo.TempoModel), or None
+        self.tempo = tempo
         self.popular = None
         if merged:
             from lab.corpus.index import candidate_tune_ids
@@ -138,6 +140,7 @@ class Listener:
         self.store = LiveStore(os.path.join(out_dir, audio_name), keep_s=keep_s)
         self.frontends = m.frontends
         self.names, self.types = m.names, m.types
+        self.tempo = m.tempo
         # the follower's live configuration (lab/configs/follower.json)
         if m.merged:
             own = set(session_tunes) if session_tunes else m.popular
@@ -211,7 +214,15 @@ class Listener:
         from lab.analysis.tuneness import audio_features, with_evidence
 
         frames = {fe.name: self._frames(fe.name) for fe in self.frontends}
-        chunk["tune_logodds"] = self.tuneness.logodds(with_evidence(audio_features(self.store, t, frames), chunk))
+        feats = audio_features(self.store, t, frames)
+        chunk["tune_logodds"] = self.tuneness.logodds(with_evidence(feats, chunk))
+        if self.tempo is not None and chunk["scores"]:
+            # each candidate's cost for the beat heard, by its type (analysis.tempo)
+            cost = self.tempo.penalties(feats.get("period_ms"), feats.get("grouping"), feats.get("pulse_strength"))
+            if cost:
+                for tid in chunk["scores"]:
+                    chunk["scores"][tid] -= cost.get((self.types.get(tid) or "").lower(), 0.0)
+                chunk["floor"] = min(chunk["scores"].values())
         with self.lock:      # a tap changes the decoder from the server's thread
             self._decide(t, chunk, wide, started)
 

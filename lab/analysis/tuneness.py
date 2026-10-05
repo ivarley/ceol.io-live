@@ -46,7 +46,9 @@ def audio_features(store, t, frames_by_source):
     y = store.read(max(0, t - FRAMES_MS), t)
     row = {"pulse_strength": p.get("pulse_strength"), "grouping_margin": p.get("grouping_margin"),
            "duple": p.get("duple_strength"), "triple": p.get("triple_strength"),
-           "log_rms": float(np.log10(np.sqrt(np.mean(y ** 2)) + 1e-6)) if len(y) else None}
+           "log_rms": float(np.log10(np.sqrt(np.mean(y ** 2)) + 1e-6)) if len(y) else None,
+           # not features of the model (NAMES); kept for the tempo evidence
+           "period_ms": p.get("period_ms"), "grouping": p.get("grouping")}
     for name in FRONTENDS:
         times, f0, voiced = frames_by_source[name]
         i, j = np.searchsorted(times, t - FRAMES_MS), np.searchsorted(times, t)
