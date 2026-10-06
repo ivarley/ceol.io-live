@@ -1,9 +1,10 @@
 # 056: Festival years
 
 **Date:** 2026-10-04
-**Status:** BUILT except the native surface (2026-10-06): copy endpoint and form,
-window rule and picker, year switcher, help, then the sheet's festival mode and one
-directory row per festival — see "As built" at the end.
+**Status:** BUILT (2026-10-06), native surface included (spec 055 "Phase 3 as built"):
+copy endpoint and form, window rule and picker, year switcher, help, the sheet's
+festival mode, one directory row per festival, `festival` on session detail and
+`kind: "place"` from `/api/resolve`.
 
 ## Why
 

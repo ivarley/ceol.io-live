@@ -1,7 +1,7 @@
 {
   "active_instances": [
     {
-      "date": "2026-09-27",
+      "date": "2026-10-05",
       "end_time": "22:00:00",
       "location_override": null,
       "session_instance_id": 121,
@@ -141,9 +141,7 @@
     }
   ],
   "session": {
-    "city": "Austin",
     "comments": "Weekly Irish session, all levels welcome. Slow session from 7-8pm, faster tunes after.",
-    "country": "USA",
     "initiation_date": "2015-03-15",
     "location_name": "BD Riley's Irish Pub",
     "location_phone": null,
@@ -151,12 +149,20 @@
     "location_website": "https://bdrileys.com",
     "name": "Mueller Session",
     "path": "austin/mueller",
+    "place": {
+      "area": "Texas",
+      "country": "United States",
+      "kind": "place",
+      "name": "Austin",
+      "parent": null,
+      "place_id": 1,
+      "slug": "austin"
+    },
     "recurrence": "{\"schedules\": [{\"type\": \"weekly\", \"weekday\": \"tuesday\", \"start_time\": \"19:00\", \"end_time\": \"22:00\", \"every_n_weeks\": 1}]}",
     "recurrence_readable": "Tuesdays from 7:00pm-10:00pm",
     "session_id": 1,
     "session_type": "regular",
     "show_people_list": true,
-    "state": "TX",
     "termination_date": null,
     "thesession_id": null,
     "timezone": "America/Chicago",
@@ -165,7 +171,7 @@
     "unlisted_address": false
   },
   "success": true,
-  "today_in_session_tz": "2026-09-27",
+  "today_in_session_tz": "2026-10-05",
   "total_logs_count": 15,
   "total_people_count": 9,
   "total_tunes_count": 16,

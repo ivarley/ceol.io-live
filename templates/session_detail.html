@@ -62,7 +62,7 @@
             <p><strong>Location:</strong> {{ session.location_name }}</p>
             {% endif %}
 
-            <p>{% if session.unlisted_address %}(unlisted address), {% else %}{% if session.location_street %}{{ session.location_street }}, {% endif %}{% endif %}{{ session.city }}, {{ session.state }}, {{ session.country }}{% if session.location_phone %} • {{ session.location_phone }}{% endif %}{% if session.location_website %} • <a href="{{ session.location_website }}" target="_blank">Web</a>{% endif %}{% if session.thesession_id %} • <a href="https://thesession.org/sessions/{{ session.thesession_id }}" target="_blank">thesession.org</a>{% endif %}</p>
+            <p>{% if session.unlisted_address %}(unlisted address), {% else %}{% if session.location_street %}{{ session.location_street }}, {% endif %}{% endif %}{% if session.place %}{{ session.place.name }}{% if session.place.area %}, {{ session.place.area }}{% endif %}{% if session.place.country %}, {{ session.place.country }}{% endif %}{% endif %}{% if session.location_phone %} • {{ session.location_phone }}{% endif %}{% if session.location_website %} • <a href="{{ session.location_website }}" target="_blank">Web</a>{% endif %}{% if session.thesession_id %} • <a href="https://thesession.org/sessions/{{ session.thesession_id }}" target="_blank">thesession.org</a>{% endif %}</p>
 
             {% if session.recurrence_readable %}
             <p><strong>Schedule:</strong> {{ session.recurrence_readable }}</p>

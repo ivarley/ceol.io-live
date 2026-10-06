@@ -47,7 +47,9 @@ def test_a_town_lists_its_own(client, metro):
 def test_rows_carry_their_town(client, metro):
     data = client.get(f"{API}?place=probemetro").get_json()
     pub = next(s for s in data["sessions"] if s["path"] == "probemetro/the-pub")
-    assert pub["place"] == {"slug": "probetown", "name": "Probetown"}
+    assert pub["place"]["slug"] == "probetown"
+    assert pub["place"]["parent"] == {"slug": "probemetro", "name": "Probemetro"}
+    assert "city" not in pub  # the place object replaced the flat fields
     assert pub["kind"] == "session"
 
 
@@ -90,7 +92,7 @@ class TestFestivalRows:
             "hill-country-fest",
             2,
         )
-        assert row["place"] == {"slug": "austin", "name": "Austin"}
+        assert (row["place"]["slug"], row["place"]["area"]) == ("austin", "Texas")
         # Active while any year is: 2027 ends in the future.
         assert row["termination_date"] == "2027-06-06"
 

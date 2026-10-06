@@ -129,10 +129,7 @@ class TestSwitcherBlock:
         assert [y["year"] for y in data["festival"]["years"]] == [2001, 2002]
 
     def test_a_regular_session_has_none(self, client):
-        assert (
-            client.get("/api/sessions/austin/mueller/detail").get_json()["festival"]
-            is None
-        )
+        assert "festival" not in client.get("/api/sessions/austin/mueller/detail").get_json()
 
     def test_the_admin_payload_too(self, client, fest):
         fest["years"]((2001, TODAY - 400 * DAY, None))

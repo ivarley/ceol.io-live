@@ -1,11 +1,11 @@
 # 055: Places and session paths
 
 **Date:** 2026-10-04
-**Status:** BUILT except the native surface (2026-10-06): phase 1 (schema, migration,
-validators, matcher, write paths, resolution), then place pages, directory scoping, the
-Places admin page and the sheet's town-or-metro choice — see "Phase 1 as built" and
-"Phase 2 as built" at the end. Not yet run against production. Not built: the `place`
-object replacing `city`/`state`/`country` in session payloads, and the native surface.
+**Status:** BUILT (2026-10-06): phase 1 (schema, migration, validators, matcher,
+write paths, resolution), phase 2 (place pages, directory scoping, the Places admin
+page, the sheet's town-or-metro choice) and phase 3 (the `place` object and the native
+surface) — see the "as built" sections at the end. Not yet run against production;
+the `city`/`state`/`country` column drop (step two) is still to come.
 Decided in a design interview on
 2026-10-04; the decisions below are the product owner's. Spec [056 Festival years](056-festival-years.md)
 depends on this one.
@@ -394,4 +394,37 @@ sheet tests.
 - **The sheet's place lookup** (`GET /api/places/match`, debounced) supplies the path's
   first segment; a town with a parent shows "Address under" with `/{town}/…` and
   `/{metro}/…`. With no answer the path falls back to the city text, as before.
+
+## Phase 3 as built (2026-10-06): the `place` object and the native surface
+
+- **Session payloads** (`build_sessions_directory_payload` rows,
+  `build_session_detail_payload`, `build_session_admin_payload`) carry `place` —
+  `{place_id, slug, name, kind, area, country, parent}` — and no longer `city`, `state`,
+  `country`. Consumers moved: `templates/session_detail.html`, `sessionsdir/logic.js`
+  (`locationLabel` reads the place), the admin Details form (prefills city/state/country
+  from the place; still posts them as inputs to the matcher), and the iOS sessions list
+  and session screen (`SessionsViews.swift`). Inputs are unchanged: the add-session POST,
+  the admin update and the thesession.org search/import still speak city/state/country.
+  Not touched, web-internal and unused by a client: `/api/person/<id>/available-sessions`,
+  `/api/person/<id>/search-sessions`, the bulk-import `session_info`, the person page's
+  flattened `location` string.
+- **`native-surface.yaml`**: `Place`, `FestivalYear`, `FestivalBlock` schemas; directory
+  rows gain `kind`, `place`, `years`; `SessionDetail.session.place` and
+  `SessionDetail.festival`; `ActiveInstanceSummary.path`; `Resolve.kind` gains `place`
+  with `place`/`years`/`current`/`latest`/`permissions`, and `session`/`instance` are no
+  longer required. The header records the one-time exception to the additive rule.
+- **Optional, not nullable**: swift-openapi-generator drops a property declared as
+  `oneOf: [$ref, {type: null}]`, so `place` and `festival` are plain `$ref`s left out of
+  `required` (the Swift type is optional). The server therefore omits `festival` on a
+  session that is not a festival year rather than sending null; `place` is always present
+  after the migration.
+- **Contract**: `VARIANT_GETS` in `tests/contract/test_native_surface.py` also validates a
+  festival's resolve, a town's resolve, a festival year's detail and a scoped directory
+  (kept out of `CHECKED_GETS`, which the fixture capture reads).
+- **iOS**: the client regenerates at build time from the symlinked yaml (touch the
+  symlink, `touch -h ios/CeolKit/Sources/CeolAPI/openapi.yaml`, if SwiftPM does not notice
+  the target changed). `SessionsDirectory.json` and `SessionDetail.json` fixtures
+  re-captured (the other fixtures' date drift was left out). CeolKit tests, the app build
+  and the app's unit tests pass. Production samples (`make prod-parity`) will not decode
+  until the new server is deployed.
 

@@ -20,9 +20,11 @@
   let path = $state(session.path || '')
   let locationName = $state(session.location_name || '')
   let locationStreet = $state(session.location_street || '')
-  let city = $state(session.city || '')
-  let stateField = $state(session.state || '')
-  let country = $state(session.country || '')
+  // The town's name, area and country (spec 055). Changing them re-runs the place
+  // matcher on save; the town itself is edited on the Places page.
+  let city = $state(session.place?.name || '')
+  let stateField = $state(session.place?.area || '')
+  let country = $state(session.place?.country || '')
   let timezone = $state(session.timezone)
   let locationPhone = $state(session.location_phone || '')
   let locationWebsite = $state(session.location_website || '')

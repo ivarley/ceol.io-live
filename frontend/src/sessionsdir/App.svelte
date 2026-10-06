@@ -111,7 +111,7 @@
       }
       if (!passes) return false
       if (searchTerm) {
-        const location = [session.place?.name, session.city, session.state, session.country]
+        const location = [session.place?.name, session.place?.area, session.place?.country]
           .filter(Boolean)
           .join(', ')
           .toLowerCase()

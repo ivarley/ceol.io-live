@@ -522,9 +522,7 @@ class TestLongRunningWorkflows:
                     "location_website": None,
                     "location_phone": None,
                     "location_street": None,
-                    "city": "Austin",
-                    "state": "TX",
-                    "country": "USA",
+                    "place_id": None,  # the place object (spec 055); none on this mock
                     "comments": "A session that grows over time",
                     "unlisted_address": False,
                     "initiation_date": date(2023, 1, 1),

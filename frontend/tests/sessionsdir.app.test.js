@@ -3,15 +3,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, fireEvent } from '@testing-library/svelte'
 import App from '../src/sessionsdir/App.svelte'
 
-const austin = { slug: 'austin', name: 'Austin' }
+const austin = { slug: 'austin', name: 'Austin', kind: 'place', area: 'Texas', country: 'United States', parent: null }
 const row = (over) => ({
   session_id: 1,
   kind: 'session',
   name: 'Mueller Session',
   path: 'austin/mueller',
-  city: 'Austin',
-  state: 'Texas',
-  country: 'United States',
   termination_date: null,
   recurrence: null,
   user_is_member: false,

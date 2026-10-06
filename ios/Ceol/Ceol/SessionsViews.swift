@@ -127,7 +127,8 @@ struct SessionsView: View {
                             .accessibilityLabel("\(s.name) is on now: open tonight's log")
                         }
                         Text(SessionsRules.locationLabel(
-                            city: s.city, state: s.state, country: s.country, viewerCountry: payload.viewerCountry))
+                            city: s.place?.name, state: s.place?.area, country: s.place?.country,
+                            viewerCountry: payload.viewerCountry))
                             .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted).lineLimit(1)
                     }
                 }
@@ -511,7 +512,9 @@ struct SessionDetailView: View {
             if let venue = s.locationName, !venue.isEmpty {
                 labelled("Location", venue)
             }
-            let place = [s.locationStreet, s.city, s.state, s.country].compactMap { $0 }.filter { !$0.isEmpty }
+            // The session's town (spec 055): its name, area and country.
+            let place = [s.locationStreet, s.place?.name, s.place?.area, s.place?.country]
+                .compactMap { $0 }.filter { !$0.isEmpty }
             if !place.isEmpty || s.locationWebsite != nil {
                 HStack(spacing: 6) {
                     if !place.isEmpty { Text(place.joined(separator: ", ")).foregroundStyle(CeolTokens.textColor) }
@@ -1317,7 +1320,8 @@ extension JSONValue {
 
 extension SessionsPayload.SessionsPayloadPayload {
     var entry: SessionsRules.Entry {
-        .init(name: name, city: city, state: state, country: country, terminationDate: terminationDate,
+        .init(name: name, city: place?.name, state: place?.area, country: place?.country,
+              terminationDate: terminationDate,
               isMember: userIsMember, relationship: userRelationship)
     }
 }

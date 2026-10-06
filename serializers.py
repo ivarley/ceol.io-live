@@ -465,7 +465,7 @@ def build_session_admin_payload(conn, session_path: str) -> Optional[Dict[str, A
         """
         SELECT session_id, thesession_id, name, path, location_name, location_website,
                location_phone,
-               location_street, city, state, country, comments, unlisted_address,
+               location_street, place_id, comments, unlisted_address,
                initiation_date, termination_date, recurrence, timezone,
                COALESCE(session_type, 'regular') AS session_type,
                COALESCE(active_buffer_minutes_before, 60) AS active_buffer_minutes_before,
@@ -499,9 +499,9 @@ def build_session_admin_payload(conn, session_path: str) -> Optional[Dict[str, A
         "location_website": row["location_website"],
         "location_phone": row["location_phone"],
         "location_street": row["location_street"],
-        "city": row["city"],
-        "state": row["state"],
-        "country": row["country"],
+        # The session's town (spec 055); the form edits its city/state/country through
+        # the place matcher.
+        "place": _session_place(conn, row["place_id"]),
         "comments": row["comments"],
         "unlisted_address": row["unlisted_address"],
         "initiation_date": row["initiation_date"].isoformat() if row["initiation_date"] else None,
@@ -612,6 +612,35 @@ def build_admin_places_payload(conn) -> Dict[str, Any]:
     }
 
 
+def place_wire(all_places: Dict[int, Any], place_id: Optional[int]) -> Optional[Dict[str, Any]]:
+    """The `place` object (spec 055 "API: the place object") from a preloaded
+    {place_id: row} map: slug, name, kind, area, country, parent {slug, name}."""
+    place = all_places.get(place_id) if place_id is not None else None
+    if not place:
+        return None
+    parent = all_places.get(place["parent_place_id"]) if place["parent_place_id"] else None
+    return {
+        "place_id": place["place_id"],
+        "slug": place["slug"],
+        "name": place["name"],
+        "kind": place["kind"],
+        "area": place["area"],
+        "country": place["country"],
+        "parent": {"slug": parent["slug"], "name": parent["name"]} if parent else None,
+    }
+
+
+def _session_place(conn, place_id):
+    """A session's `place` object, or None for a session with no town (only rows
+    from before spec 055's migration)."""
+    import places
+
+    if place_id is None:
+        return None
+    cur = conn.cursor()
+    return places.place_summary(cur, places.get_place(cur, place_id))
+
+
 def _festival_block(conn, session_path):
     import festivals
 
@@ -709,7 +738,7 @@ def build_sessions_directory_payload(conn, person_id, user_timezone="UTC", place
     cur.execute(
         """
         SELECT
-            s.session_id, s.name, s.path, s.city, s.state, s.country,
+            s.session_id, s.name, s.path,
             s.termination_date, s.recurrence, s.timezone, s.place_id,
             -- Member-strict (spec 033): a visitor row is an association, not membership.
             CASE WHEN sp.relationship = 'member' THEN TRUE ELSE FALSE END AS user_is_member,
@@ -748,29 +777,21 @@ def build_sessions_directory_payload(conn, person_id, user_timezone="UTC", place
             }
         )
 
-    def town_of(r):
-        town = all_places.get(r["place_id"])
-        return {"slug": town["slug"], "name": town["name"]} if town else None
-
     def session_row(r):
-        # Geography comes from the town (spec 055), in its one normalized spelling;
-        # the old free-text columns ("TX" beside "Texas") only for a session with none.
-        town = all_places.get(r["place_id"])
+        # Geography is the town's (spec 055 "API: the place object"): the `place`
+        # object replaced the flat city/state/country.
         return {
             "session_id": r["session_id"],
             "kind": "session",
             "name": r["name"],
             "path": r["path"],
-            "city": town["name"] if town else r["city"],
-            "state": town["area"] if town else r["state"],
-            "country": town["country"] if town else r["country"],
             "termination_date": r["termination_date"].isoformat() if r["termination_date"] else None,
             "recurrence": r["recurrence"],
             "user_is_member": r["user_is_member"],
             "user_relationship": r["user_relationship"],
             "location_name": r["location_name"],
             "active_instances": active_by_session.get(r["session_id"], []),
-            "place": town_of(r),
+            "place": place_wire(all_places, r["place_id"]),
         }
 
     # Festival years fold into one row per festival (spec 056 "Directory and home").
@@ -1067,7 +1088,7 @@ def build_session_detail_payload(
     cur.execute(
         """
         SELECT session_id, thesession_id, name, path, location_name, location_website,
-               location_phone, location_street, city, state, country, comments,
+               location_phone, location_street, place_id, comments,
                unlisted_address, initiation_date, termination_date, recurrence,
                session_type, timezone,
                show_people_list, track_attendance, track_set_starters
@@ -1089,9 +1110,8 @@ def build_session_detail_payload(
         "location_website": row["location_website"],
         "location_phone": row["location_phone"],
         "location_street": row["location_street"],
-        "city": row["city"],
-        "state": row["state"],
-        "country": row["country"],
+        # The session's town (spec 055), replacing the flat city/state/country.
+        "place": _session_place(conn, row["place_id"]),
         "comments": row["comments"],
         "unlisted_address": row["unlisted_address"],
         "initiation_date": row["initiation_date"].isoformat() if row["initiation_date"] else None,
@@ -1261,7 +1281,7 @@ def build_session_detail_payload(
         for r in cur.fetchall()
     ]
 
-    return {
+    payload = {
         "success": True,
         "session": session,
         "permissions": {
@@ -1283,9 +1303,13 @@ def build_session_detail_payload(
         "total_people_count": total_people_count,
         "has_more_tunes": total_tunes_count > first_page,
         "popular_tunes": popular_tunes,
-        # The year switcher (spec 056); null unless this session is a festival year.
-        "festival": _festival_block(conn, session["path"]),
     }
+    # The year switcher (spec 056): only on a festival year. Absent rather than null,
+    # because the native contract types it as an optional object.
+    festival = _festival_block(conn, session["path"])
+    if festival is not None:
+        payload["festival"] = festival
+    return payload
 
 
 # ---------------------------------------------------------------------------
