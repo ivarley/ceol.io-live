@@ -48,6 +48,23 @@ def add_parser(sub):
     p.set_defaults(func=main)
 
 
+def pack_heard(t_ms, ctx, feats, heard_ms):
+    """A step's hearing as the phone sends it (spec 053, "Listening on the
+    phone"): {"type": "heard", "t_ms", "heard_ms", "notes": {tracker: [[t0_ms,
+    t1_ms, midi], ...]}, "features": {...}}. Times in whole ms, pitches whole
+    semitones: what the notes carry anyway."""
+    notes = {name: [[int(round(n["t0_ms"])), int(round(n["t1_ms"])), int(n["midi"])] for n in ns]
+             for name, ns in ctx.items()}
+    clean = {k: (None if v is None else (int(v) if k == "grouping" else float(v))) for k, v in feats.items()}
+    return {"type": "heard", "t_ms": int(t_ms), "heard_ms": int(heard_ms), "notes": notes, "features": clean}
+
+
+def unpack_heard(msg):
+    """-> (t_ms, ctx, feats, heard_ms) from `pack_heard`'s message."""
+    ctx = {name: [{"t0_ms": a, "t1_ms": b, "midi": m} for a, b, m in ns] for name, ns in msg["notes"].items()}
+    return int(msg["t_ms"]), ctx, dict(msg.get("features") or {}), msg.get("heard_ms")
+
+
 class LiveStore:
     """Audio as it arrives, readable by absolute time like `AudioStore`, and
     written to a file as it goes (wav or flac, by its extension).
@@ -130,46 +147,20 @@ class Models:
             self.popular = candidate_tune_ids("popular")
 
 
-class Listener:
-    def __init__(self, out_dir, models=None, rule_out_s=30.0, audio_name="audio.wav", keep_s=None,
-                 session_tunes=None):
-        from lab.bench.stream import ChunkScorer, Decoder
+class Hearer:
+    """The hearing half of a listener: audio -> notes per tracker and the
+    step's features. Needs only the trackers, so it is what a phone runs when
+    it listens for itself (spec 053, "Listening on the phone"); the Swift port
+    is checked against this one."""
 
-        m = models or Models()
-        self.out_dir = out_dir
-        self.store = LiveStore(os.path.join(out_dir, audio_name), keep_s=keep_s)
-        self.frontends = m.frontends
-        self.names, self.types = m.names, m.types
-        self.tempo = m.tempo
-        # the follower's live configuration (lab/configs/follower.json)
-        if m.merged:
-            own = set(session_tunes) if session_tunes else m.popular
-            self.shortlist_sets = own
-            self.scorer = ChunkScorer(m.fallback, m.aligner, window_ms=6000,
-                                      shortlists=[(None, 100), (own, 100)], preferred=own)
-        else:
-            self.shortlist_sets = None
-            self.scorer = ChunkScorer(m.index, m.aligner, window_ms=6000, fallback_index=m.fallback,
-                                      fallback_top=20)
-        # tune-ness (spec, "Is this a tune at all?") and the charge on hubs
-        self.tuneness = m.tuneness
-        self.decoder = Decoder(nu=0.05, gamma=self.tuneness.meta["gamma"],
-                               kappa=self.tuneness.meta["kappa"], n_settings=m.n_settings)
-        self.decoder.reset()
+    def __init__(self, store, frontends=None, keep_s=None):
+        from lab.frontends import get_frontend
+
+        self.store = store
+        self.frontends = frontends or [get_frontend(n) for n in ("yin", "basic_pitch", "pesto")]
         self.tracks = {fe.name: ([], [], []) for fe in self.frontends}
         self.frames_keep_ms = None if keep_s is None else 60000
         self.tracked_to = 0
-        self.next_t = HOP_MS
-        self.rule_out_s = rule_out_s
-        self.banned = {}          # tune -> until (ms of audio)
-        self.widen_until = 0
-        self.state = {"status": "waiting for audio", "t_ms": 0, "top": [], "none": 1.0, "history": []}
-        self.lock = threading.Lock()
-        self._states = open(os.path.join(out_dir, "states.jsonl"), "a")
-        self._taps = open(os.path.join(out_dir, "taps.jsonl"), "a")
-        self.running = True
-
-    # -- the causal path, a hop at a time ---------------------------------
 
     def _track(self, t, lap=None):
         a = max(0, self.tracked_to - TRACK_CONTEXT_MS)
@@ -199,17 +190,10 @@ class Listener:
             tt, ff, vv = self.tracks[name]
         return tt[0], ff[0], vv[0]
 
-    def step(self, t):
+    def hear(self, t, lap, timing):
+        """Audio -> (notes per tracker over the last POOL_MS, features)."""
+        from lab.analysis.tuneness import audio_features
         from lab.bench.stream import causal_notes
-
-        started = time.time()
-        clock = [time.perf_counter()]
-        timing = {}
-
-        def lap(name):
-            now = time.perf_counter()
-            timing[name] = round(1000 * (now - clock[0]))
-            clock[0] = now
 
         self._track(t, lap)
         a = max(0, t - POOL_MS)
@@ -222,6 +206,98 @@ class Listener:
         for k in ("pulse_ms", "attacks_ms"):     # inside the notes, worked out once a step
             if k in _SPAN.get("shared", {}):
                 timing[f"notes_{k[:-3]}"] = _SPAN["shared"][k]
+        frames = {fe.name: self._frames(fe.name) for fe in self.frontends}
+        feats = audio_features(self.store, t, frames)
+        lap("features")
+        return ctx, feats
+
+    def heard(self, t, lap=None, timing=None):
+        """-> `pack_heard`'s message for the step at `t`."""
+        ctx, feats = self.hear(t, lap or (lambda name: None), {} if timing is None else timing)
+        return pack_heard(t, ctx, feats, self.store.duration_ms)
+
+
+class Listener:
+    def __init__(self, out_dir, models=None, rule_out_s=30.0, audio_name="audio.wav", keep_s=None,
+                 session_tunes=None, audio=True):
+        from lab.bench.stream import ChunkScorer, Decoder
+
+        m = models or Models()
+        self.out_dir = out_dir
+        # audio=False: the phone does the hearing and sends notes; no audio here
+        self.store = LiveStore(os.path.join(out_dir, audio_name), keep_s=keep_s) if audio else None
+        self.hearer = Hearer(self.store, m.frontends, keep_s=keep_s) if audio else None
+        self.frontends = m.frontends
+        self.names, self.types = m.names, m.types
+        self.tempo = m.tempo
+        # the follower's live configuration (lab/configs/follower.json)
+        if m.merged:
+            own = set(session_tunes) if session_tunes else m.popular
+            self.shortlist_sets = own
+            self.scorer = ChunkScorer(m.fallback, m.aligner, window_ms=6000,
+                                      shortlists=[(None, 100), (own, 100)], preferred=own)
+        else:
+            self.shortlist_sets = None
+            self.scorer = ChunkScorer(m.index, m.aligner, window_ms=6000, fallback_index=m.fallback,
+                                      fallback_top=20)
+        # tune-ness (spec, "Is this a tune at all?") and the charge on hubs
+        self.tuneness = m.tuneness
+        self.decoder = Decoder(nu=0.05, gamma=self.tuneness.meta["gamma"],
+                               kappa=self.tuneness.meta["kappa"], n_settings=m.n_settings)
+        self.decoder.reset()
+        self.next_t = HOP_MS
+        self.rule_out_s = rule_out_s
+        self.banned = {}          # tune -> until (ms of audio)
+        self.widen_until = 0
+        self.state = {"status": "waiting for audio", "t_ms": 0, "top": [], "none": 1.0, "history": []}
+        self.lock = threading.Lock()
+        self._states = open(os.path.join(out_dir, "states.jsonl"), "a")
+        self._taps = open(os.path.join(out_dir, "taps.jsonl"), "a")
+        self.running = True
+
+    # -- the causal path, a hop at a time ---------------------------------
+
+    def step(self, t):
+        """One 4 s step from audio: hear (audio -> notes and features), then
+        decide (notes and features -> what is playing). A phone listening for
+        itself does the hearing and sends what it heard (`step_heard`)."""
+        started = time.time()
+        clock = [time.perf_counter()]
+        timing = {}
+
+        def lap(name):
+            now = time.perf_counter()
+            timing[name] = round(1000 * (now - clock[0]))
+            clock[0] = now
+
+        ctx, feats = self.hear(t, lap, timing)
+        self.decide(t, ctx, feats, started, lap, timing)
+
+    def step_heard(self, t, ctx, feats, heard_ms=None):
+        """One step from notes and features worked out elsewhere (the phone):
+        `ctx` {tracker: [{"t0_ms", "t1_ms", "midi"}]} over the last POOL_MS,
+        `feats` the step's beat and music-detector features (`audio_features`).
+        `heard_ms`: how much audio the phone has heard, for the lag."""
+        started = time.time()
+        clock = [time.perf_counter()]
+        timing = {}
+
+        def lap(name):
+            now = time.perf_counter()
+            timing[name] = round(1000 * (now - clock[0]))
+            clock[0] = now
+
+        self.heard_ms = heard_ms
+        self.decide(t, ctx, feats, started, lap, timing)
+
+    def hear(self, t, lap, timing):
+        return self.hearer.hear(t, lap, timing)
+
+    def decide(self, t, ctx, feats, started, lap, timing):
+        """Notes and features -> the shortlist, the aligner, tune-ness, the
+        decoder, and the state."""
+        from lab.analysis.tuneness import with_evidence
+
         wide = t < self.widen_until
         if self.shortlist_sets is not None:
             top = 300 if wide else 100
@@ -230,10 +306,6 @@ class Listener:
             self.scorer.pool_top, self.scorer.fallback_top = (300, 60) if wide else (100, 20)
         chunk = self.scorer.score(t, ctx)
         lap("shortlist_align")
-        from lab.analysis.tuneness import audio_features, with_evidence
-
-        frames = {fe.name: self._frames(fe.name) for fe in self.frontends}
-        feats = audio_features(self.store, t, frames)
         chunk["tune_logodds"] = self.tuneness.logodds(with_evidence(feats, chunk))
         if self.tempo is not None and chunk["scores"]:
             # each candidate's cost for the beat heard, by its type (analysis.tempo)
@@ -242,7 +314,7 @@ class Listener:
                 for tid in chunk["scores"]:
                     chunk["scores"][tid] -= cost.get((self.types.get(tid) or "").lower(), 0.0)
                 chunk["floor"] = min(chunk["scores"].values())
-        lap("features")
+        lap("decide")
         self.timing = timing          # each part of this step, ms: reported with the state
         with self.lock:      # a tap changes the decoder from the server's thread
             self._decide(t, chunk, wide, started)
@@ -274,9 +346,14 @@ class Listener:
                       "shown": now, "notes": chunk["n_notes"], "wide": wide,
                       "compute_ms": int(1000 * (time.time() - started)),
                       "timing": getattr(self, "timing", None),
-                      "lag_ms": self.store.duration_ms - t, "history": hist[-8:]}
+                      "lag_ms": self._heard_ms() - t, "history": hist[-8:]}
         self._states.write(json.dumps({k: v for k, v in self.state.items() if k != "history"}) + "\n")
         self._states.flush()
+
+    def _heard_ms(self):
+        if self.store is not None:
+            return self.store.duration_ms
+        return getattr(self, "heard_ms", None) or 0
 
     def run(self):
         while self.running:
@@ -296,7 +373,7 @@ class Listener:
     # -- what a person says ------------------------------------------------
 
     def tap(self, action, tune_id=None, shown=()):
-        t = self.store.duration_ms
+        t = self._heard_ms()
         with self.lock:
             if action == "this" and tune_id is not None:
                 self.decoder.confirm(int(tune_id))
@@ -314,7 +391,8 @@ class Listener:
 
     def close(self):
         self.running = False
-        self.store.close()
+        if self.store is not None:
+            self.store.close()
         self._states.close()
         self._taps.close()
 

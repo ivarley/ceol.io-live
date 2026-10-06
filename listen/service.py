@@ -23,6 +23,13 @@ One WebSocket per stream, at /listen:
   client -> {"type": "tap", "action": "this" | "none", "tune_id", "shown"}
   client -> {"type": "stop"}  ->  server -> {"type": "done", "have"}
 
+  client -> {"type": "start", ..., "mode": "heard"}  instead of audio, the
+            phone hears for itself (spec 053, "Listening on the phone") and sends
+            each 4 s step's notes and features:
+            {"type": "heard", "t_ms", "heard_ms", "notes": {tracker: [[t0_ms,
+            t1_ms, midi], ...] over the last 24 s}, "features": {...}};
+            server -> state, then {"type": "ack", "heard_t": <last step taken>};
+            "ready" carries "heard_t" so a reconnect resends only later steps
   client -> {"type": "skip", "to": <sample>}  after an outage longer than the
             phone keeps unsent audio: the gap is filled with silence so the
             detector's clock stays the recording's (the phone's own file is the
@@ -64,13 +71,17 @@ class Stream:
     """One listening phone: a Listener, the next sample expected, chunks that
     arrived ahead of a gap, and the socket currently attached (if any)."""
 
-    def __init__(self, stream_id):
+    def __init__(self, stream_id, mode="audio"):
         from lab.tools.listen import Listener
 
         self.id = stream_id
+        self.mode = mode              # "audio": the phone streams audio; "heard": it sends notes
         self.dir = os.path.join(STREAM_DIR, stream_id)
         os.makedirs(self.dir, exist_ok=True)
-        self.listener = Listener(self.dir, models=state["models"], audio_name="audio.flac", keep_s=KEEP_S)
+        self.listener = Listener(self.dir, models=state["models"], audio_name="audio.flac", keep_s=KEEP_S,
+                                 audio=mode == "audio")
+        self.heard_t = 0              # heard mode: the last step taken (ms of audio)
+        self.heard_lock = asyncio.Lock()  # one step at a time, across a reconnect's two sockets
         self.have = 0                 # contiguous samples taken
         self.ahead = {}               # offset -> samples, waiting for a gap to fill
         self.socket = None
@@ -133,6 +144,28 @@ async def _step_loop(stream):
             await _send(stream.socket, payload)
         else:
             await asyncio.sleep(0.2)
+
+
+async def _take_heard(stream, m):
+    """Heard mode: one step's notes and features from the phone -> the meter's
+    state. A step at or before the last one taken is a resend after a
+    reconnect and is only acknowledged."""
+    from lab.tools.listen import unpack_heard
+
+    t, ctx, feats, heard_ms = unpack_heard(m)
+    stream.last_seen = time.time()
+    li = stream.listener
+    async with stream.heard_lock:
+        if t > stream.heard_t:
+            try:
+                await asyncio.to_thread(li.step_heard, t, ctx, feats, heard_ms)
+            except Exception as e:      # keep listening; say what went wrong
+                li.state["status"] = f"error at {t} ms: {e!r}"
+            stream.heard_t = t
+            with li.lock:
+                payload = {"type": "state", **li.state, "heard_ms": heard_ms}
+            await _send(stream.socket, payload)
+    await _send(stream.socket, {"type": "ack", "heard_t": stream.heard_t})
 
 
 async def _sweep():
@@ -278,13 +311,22 @@ async def listen(ws: WebSocket):
                 if not sid:
                     await _send(ws, {"type": "error", "error": "stream_id needed"})
                     continue
+                mode = "heard" if m.get("mode") == "heard" else "audio"
                 stream = streams.get(sid)
+                if stream is not None and stream.mode != mode:
+                    await _send(ws, {"type": "error", "error": f"stream {sid} is in {stream.mode} mode"})
+                    stream = None
+                    continue
                 if stream is None:
-                    stream = Stream(sid)
+                    stream = Stream(sid, mode)
                     streams[sid] = stream
-                    asyncio.create_task(_step_loop(stream))
+                    if mode == "audio":
+                        asyncio.create_task(_step_loop(stream))
                 stream.socket = ws
-                await _send(ws, {"type": "ready", "stream_id": sid, "have": stream.have})
+                await _send(ws, {"type": "ready", "stream_id": sid, "mode": mode, "have": stream.have,
+                                 "heard_t": stream.heard_t})
+            elif kind == "heard" and stream is not None and stream.mode == "heard":
+                await _take_heard(stream, m)
             elif kind == "skip" and stream is not None:
                 stream.skip_to(int(m.get("to", 0)))
                 await _send(ws, {"type": "ack", "have": stream.have})
