@@ -316,6 +316,9 @@ struct SessionDetailView: View {
         do {
             let d = try await model.auth.client.getSessionDetail(path: .init(sessionPath: path)).ok.body.json
             if d.defaultTab == .logs && state.value == nil { tab = .logs }
+            // A festival's list is its schedule: hiding the nights with nothing logged
+            // yet would hide the festival (the web defaults it to "all" too).
+            if d.session.sessionType == "festival" && state.value == nil { logView = .all }
             state = .loaded(d)
             await loadRemainingTunes(d)
         } catch {
@@ -412,7 +415,10 @@ struct SessionDetailView: View {
     }
 
     @ViewBuilder private func content(_ d: SessionDetailPayload) -> some View {
-        let tabs: [Tab] = d.permissions.canViewPeople ? Tab.allCases : [.tunes, .logs]
+        // A festival leads with its schedule, called "Sessions" (spec 004, as the web does).
+        let festival = d.session.sessionType == "festival"
+        let order: [Tab] = festival ? [.logs, .tunes, .people] : [.tunes, .logs, .people]
+        let tabs: [Tab] = order.filter { $0 != .people || d.permissions.canViewPeople }
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 // The session's band, in the style of a night's header: its name and a
@@ -469,7 +475,8 @@ struct SessionDetailView: View {
                 }
                 .padding(.horizontal, 20)
                 VStack(spacing: 0) {
-                    UnderlineTabs(items: tabs.map { ($0, $0.rawValue, count($0, d)) }, selection: $tab)
+                    UnderlineTabs(items: tabs.map { ($0, festival && $0 == .logs ? "Sessions" : $0.rawValue, count($0, d)) },
+                                  selection: $tab)
                     switch tab {
                     case .tunes: tunes(d)
                     case .logs: logsSection(d)
@@ -656,7 +663,8 @@ struct SessionDetailView: View {
             }
             .padding(24)
         case .loaded(let l):
-            let years = filteredYears(l)
+            let years = filteredGroups(l)
+            let festival = l.sessionType == "festival"
             VStack(alignment: .leading, spacing: 0) {
                 logsSearch(d)
                 Hairline()
@@ -666,22 +674,32 @@ struct SessionDetailView: View {
                         .frame(maxWidth: .infinity)
                         .padding(24)
                 }
-                ForEach(years, id: \.year) { group in
+                ForEach(years, id: \.key) { group in
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
-                        Text(String(group.year)).font(.ceol(size: 24, weight: .semibold, relativeTo: .title2))
+                        Text(group.title).font(.ceol(size: festival ? 20 : 24, weight: .semibold, relativeTo: .title2))
                             .foregroundStyle(CeolTokens.textColor)
-                        Text(group.nights.count == 1 ? "1 log" : "\(group.nights.count) logs").font(.ceol(size: 16))
+                        let noun = festival ? "session" : "log"
+                        Text(group.nights.count == 1 ? "1 \(noun)" : "\(group.nights.count) \(noun)s").font(.ceol(size: 16))
                             .foregroundStyle(CeolTokens.textMuted)
                     }
                     .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 8)
                     Hairline()
                     ForEach(group.nights, id: \.sessionInstanceId) { night in
-                        NavigationLink(value: Route.night(id: night.sessionInstanceId, title: "\(d.session.name) · \(HomeRules.shortDate(night.date, currentYear: nil))")) {
+                        // At a festival a night is named by its session (the room, the leader),
+                        // and its day is the group's header; elsewhere the date names it.
+                        let title = festival
+                            ? (night.locationOverride ?? d.session.locationName ?? "Session")
+                            : longDay(night.date)
+                        NavigationLink(value: Route.night(
+                            id: night.sessionInstanceId,
+                            title: festival ? title : "\(d.session.name) · \(HomeRules.shortDate(night.date, currentYear: nil))")) {
                             HStack(spacing: 14) {
-                                DateBlock(weekday: HomeRules.dayOfWeek(night.date), day: HomeRules.dayOfMonth(night.date),
-                                          color: CeolTokens.textMuted)
+                                if !festival {
+                                    DateBlock(weekday: HomeRules.dayOfWeek(night.date), day: HomeRules.dayOfMonth(night.date),
+                                              color: CeolTokens.textMuted)
+                                }
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(longDay(night.date)).font(.ceol(size: 18, weight: .medium))
+                                    Text(title).font(.ceol(size: 18, weight: .medium))
                                         .foregroundStyle(CeolTokens.primary)
                                     Text([HomeRules.instanceTimeLabel(start: night.startTime, end: night.endTime),
                                           night.tuneCount == 1 ? "1 tune logged" : "\(night.tuneCount) tunes logged"]
@@ -699,7 +717,7 @@ struct SessionDetailView: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("\(longDay(night.date)), \(night.tuneCount) tunes")
+                        .accessibilityLabel("\(title), \(night.tuneCount) tunes")
                         Hairline()
                     }
                 }
@@ -707,18 +725,24 @@ struct SessionDetailView: View {
         }
     }
 
-    typealias LogNight = SessionLogsPayload.InstancesByYearPayload.AdditionalPropertiesPayloadPayload
+    typealias LogNight = Components.Schemas.SessionLogNight
 
-    /// The years left after the filter, each with its nights; a year left empty goes.
-    private func filteredYears(_ l: SessionLogsPayload) -> [(year: Int, nights: [LogNight])] {
+    /// The groups left after the filter, each with its nights; a group left empty goes.
+    /// A session's nights are grouped by year, newest first; a festival's by day,
+    /// earliest first ("Friday, October 23"), as the web groups them.
+    private func filteredGroups(_ l: SessionLogsPayload) -> [(key: String, title: String, nights: [LogNight])] {
         // Searched for a tune: its nights, whatever the filter (they are all logged ones).
         let ids: Set<Int>? = chosenTune == nil ? nil : tuneNights?.value?.ids ?? []
-        return l.sortedYears.compactMap { year in
-            let kept = (l.instancesByYear.additionalProperties[String(year)] ?? []).filter {
+        let festival = l.sessionType == "festival"
+        let groups: [(key: String, title: String, nights: [LogNight])] = festival
+            ? l.sortedDays.map { ($0, festivalDay($0), l.instancesByDay.additionalProperties[$0] ?? []) }
+            : l.sortedYears.map { (String($0), String($0), l.instancesByYear.additionalProperties[String($0)] ?? []) }
+        return groups.compactMap { group in
+            let kept = group.nights.filter {
                 SessionPage.keepInstance(tuneCount: $0.tuneCount, attended: $0.attended ?? false, view: logView,
                                          tuneInstanceIDs: ids, id: $0.sessionInstanceId)
             }
-            return kept.isEmpty ? nil : (year, kept)
+            return kept.isEmpty ? nil : (group.key, group.title, kept)
         }
     }
 
@@ -736,7 +760,8 @@ struct SessionDetailView: View {
                     searchingLogs = false
                     filteringLogs = true
                 },
-                filterCount: logView == .logged ? 0 : 1)
+                // Counted against the default: "all" for a festival, "logged" otherwise.
+                filterCount: logView == (d.session.sessionType == "festival" ? .all : .logged) ? 0 : 1)
             if !suggestions.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(suggestions, id: \.tuneID) { t in
@@ -844,6 +869,18 @@ struct SessionDetailView: View {
             }
         }
     }
+}
+
+/// A festival day's header, "Friday, October 23" from "2026-10-23".
+func festivalDay(_ date: String) -> String {
+    let parse = DateFormatter()
+    parse.locale = Locale(identifier: "en_US_POSIX")
+    parse.dateFormat = "yyyy-MM-dd"
+    guard let d = parse.date(from: date) else { return date }
+    let out = DateFormatter()
+    out.locale = Locale(identifier: "en_US_POSIX")
+    out.dateFormat = "EEEE, MMMM d"
+    return out.string(from: d)
 }
 
 /// "Tuesday, Jan 27" from "2026-01-27".

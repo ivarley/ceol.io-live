@@ -43,6 +43,8 @@ private let decoders: [String: @Sendable (String) throws -> Void] = [
     "ResolveFestival": { _ = try decode(Components.Schemas.Resolve.self, $0) },
     "SessionDetail": { _ = try decode(Components.Schemas.SessionDetail.self, $0) },
     "SessionLogs": { _ = try decode(Components.Schemas.SessionLogs.self, $0) },
+    // A festival year's nights, grouped by day (spec 056), from production.
+    "SessionLogsFestival": { _ = try decode(Components.Schemas.SessionLogs.self, $0) },
     "SessionPeople": { _ = try decode(Components.Schemas.SessionPeople.self, $0) },
     "SessionsDirectory": { _ = try decode(Components.Schemas.SessionsDirectory.self, $0) },
     "TuneDetail": { _ = try decode(Components.Schemas.TuneDetail.self, $0) },
@@ -58,6 +60,16 @@ private func fixtureNames() -> [String] {
 
 @Suite("Server responses decode")
 struct FixtureDecodingTests {
+    @Test("a festival year's nights come grouped by day, earliest first")
+    func festivalLogs() throws {
+        let l = try decode(Components.Schemas.SessionLogs.self, "SessionLogsFestival")
+        #expect(l.sessionType == "festival")
+        #expect(l.sortedYears.isEmpty)
+        #expect(!l.sortedDays.isEmpty)
+        #expect(l.sortedDays == l.sortedDays.sorted())
+        for day in l.sortedDays { #expect(!(l.instancesByDay.additionalProperties[day] ?? []).isEmpty) }
+    }
+
     @Test("a festival's resolve carries its years, newest-or-upcoming first")
     func festivalResolve() throws {
         let r = try decode(Components.Schemas.Resolve.self, "ResolveFestival")

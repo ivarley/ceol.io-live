@@ -649,8 +649,13 @@ components:
                     set_number: { type: integer }
                     position_in_set: { type: integer }
     SessionLogs:
+      description: >-
+        A session's nights. A regular session groups them by year (`instances_by_year`,
+        newest first); a festival year (session_type festival) groups them by day
+        (`instances_by_day`, keyed yyyy-mm-dd, `sorted_days` earliest first) and leaves
+        the year grouping empty. Both groupings are always present.
       type: object
-      required: [success, instances_by_year, sorted_years, session_type]
+      required: [success, instances_by_year, sorted_years, instances_by_day, sorted_days, session_type]
       properties:
         success: { type: boolean, const: true }
         session_type: { type: string }
@@ -659,19 +664,27 @@ components:
           type: object
           additionalProperties:
             type: array
-            items:
-              type: object
-              required: [date, location_override, start_time, end_time, session_instance_id, tune_count]
-              properties:
-                date: { $ref: "#/components/schemas/Date" }
-                location_override: { type: [string, "null"] }
-                start_time: { $ref: "#/components/schemas/TimeOrNull" }
-                end_time: { $ref: "#/components/schemas/TimeOrNull" }
-                session_instance_id: { type: integer }
-                multiple_on_date: { type: boolean }
-                tune_count: { type: integer }
-                # Signed in: whether the viewer checked in that night (the "Attended" filter).
-                attended: { type: boolean }
+            items: { $ref: "#/components/schemas/SessionLogNight" }
+        sorted_days: { type: array, items: { $ref: "#/components/schemas/Date" } }
+        instances_by_day:
+          type: object
+          additionalProperties:
+            type: array
+            items: { $ref: "#/components/schemas/SessionLogNight" }
+    SessionLogNight:
+      description: One night in a session's Logs (a festival's Sessions) tab.
+      type: object
+      required: [date, location_override, start_time, end_time, session_instance_id, tune_count]
+      properties:
+        date: { $ref: "#/components/schemas/Date" }
+        location_override: { type: [string, "null"] }
+        start_time: { $ref: "#/components/schemas/TimeOrNull" }
+        end_time: { $ref: "#/components/schemas/TimeOrNull" }
+        session_instance_id: { type: integer }
+        multiple_on_date: { type: boolean }
+        tune_count: { type: integer }
+        # Signed in: whether the viewer checked in that night (the "Attended" filter).
+        attended: { type: boolean }
     SessionPeople:
       type: object
       required: [success, people]

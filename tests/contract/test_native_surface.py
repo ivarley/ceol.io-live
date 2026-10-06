@@ -265,6 +265,7 @@ VARIANT_GETS = [
     ("/api/resolve", "/api/resolve?path=hill-country-fest"),
     ("/api/resolve", "/api/resolve?path=austin"),
     ("/api/sessions/{session_path}/detail", "/api/sessions/hill-country-fest/2026/detail"),
+    ("/api/sessions/{session_path}/logs", "/api/sessions/hill-country-fest/2026/logs"),
     ("/api/sessions/with-today-status", "/api/sessions/with-today-status?place=austin"),
 ]
 

@@ -91,6 +91,34 @@ final class CeolUITests: XCTestCase {
         snapshot("night")
     }
 
+    /// A festival is one row in the list; it opens its year (spec 056), which leads with
+    /// a "Sessions" tab grouped by day, every night shown whether or not it has tunes.
+    @MainActor
+    func testAFestivalShowsItsSessionsByDay() throws {
+        let app = launch()
+        signIn(app)
+        app.buttons["tab.sessions"].firstMatch.tap()
+        let filter = app.buttons["sessions.search.filter"].firstMatch
+        XCTAssertTrue(filter.waitForExistence(timeout: 10))
+        filter.tap()
+        let all = app.buttons["All"].firstMatch
+        XCTAssertTrue(all.waitForExistence(timeout: 5))
+        all.tap()
+        app.buttons["filters.done"].tap()
+        let festival = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Hill Country Trad Fest'")).firstMatch
+        XCTAssertTrue(festival.waitForExistence(timeout: 10))
+        snapshot("sessions with a festival")
+        festival.tap()
+
+        // Its only year opens in the festival's place; its first tab is "Sessions".
+        let sessionsTab = app.buttons.containing(NSPredicate(format: "label BEGINSWITH 'Sessions'")).firstMatch
+        XCTAssertTrue(sessionsTab.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Friday, June 5"].waitForExistence(timeout: 10))
+        let opening = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Opening Ceili'")).firstMatch
+        XCTAssertTrue(opening.waitForExistence(timeout: 5))
+        snapshot("festival sessions by day")
+    }
+
     /// A session's three tabs each lead with a search and a filter button, as on the web.
     @MainActor
     func testSearchingASessionsTabs() throws {
