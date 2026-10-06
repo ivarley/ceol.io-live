@@ -39,6 +39,8 @@ private let decoders: [String: @Sendable (String) throws -> Void] = [
     "Profile": { _ = try decode(Components.Schemas.Profile.self, $0) },
     "Recordings": { _ = try decode(Components.Schemas.Recordings.self, $0) },
     "Resolve": { _ = try decode(Components.Schemas.Resolve.self, $0) },
+    // A bare festival prefix (spec 056), from production: kind place, with its years.
+    "ResolveFestival": { _ = try decode(Components.Schemas.Resolve.self, $0) },
     "SessionDetail": { _ = try decode(Components.Schemas.SessionDetail.self, $0) },
     "SessionLogs": { _ = try decode(Components.Schemas.SessionLogs.self, $0) },
     "SessionPeople": { _ = try decode(Components.Schemas.SessionPeople.self, $0) },
@@ -56,6 +58,16 @@ private func fixtureNames() -> [String] {
 
 @Suite("Server responses decode")
 struct FixtureDecodingTests {
+    @Test("a festival's resolve carries its years, newest-or-upcoming first")
+    func festivalResolve() throws {
+        let r = try decode(Components.Schemas.Resolve.self, "ResolveFestival")
+        #expect(r.kind == .place)
+        #expect(r.place?.kind == .festival)
+        let years = try #require(r.years)
+        #expect(years.map(\.path).allSatisfy { $0.hasPrefix("oflahertys/") })
+        #expect(!years.isEmpty)
+    }
+
     @Test("every fixture has a decoder")
     func everyFixtureIsDecoded() {
         let names = fixtureNames()

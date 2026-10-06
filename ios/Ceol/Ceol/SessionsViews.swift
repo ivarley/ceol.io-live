@@ -32,6 +32,7 @@ struct SessionDestinations: ViewModifier {
             switch route {
             case .session(let path, let name): SessionDetailView(path: path, name: name)
             case .night(let id, let title): NightView(sessionInstanceID: id, title: title)
+            case .festival(let slug, let name): FestivalView(slug: slug, name: name)
             }
         }
     }
@@ -111,14 +112,18 @@ struct SessionsView: View {
             .listRowSeparator(.hidden)
             ForEach(shown, id: \.sessionId) { s in
                 ZStack {
-                    NavigationLink(value: Route.session(path: s.path, name: s.name)) { EmptyView() }.opacity(0)
+                    // A festival's row is the festival, not a session (spec 056).
+                    NavigationLink(value: s.kind == .festival
+                        ? Route.festival(slug: s.path, name: s.name)
+                        : Route.session(path: s.path, name: s.name)) { EmptyView() }.opacity(0)
                     HStack(spacing: 10) {
                         Text(s.name).font(.ceol(size: 19, weight: .medium)).foregroundStyle(CeolTokens.textColor).lineLimit(1)
                         Spacer(minLength: 6)
                         if let night = s.activeInstances.first {
                             // As on the web: straight into tonight's log.
                             Button {
-                                model.sessionsPath.append(.session(path: s.path, name: s.name))
+                                // A festival row gathers its years' nights: each says whose it is.
+                                model.sessionsPath.append(.session(path: night.path ?? s.path, name: s.name))
                                 model.sessionsPath.append(.night(id: night.sessionInstanceId, title: "\(s.name) · Tonight"))
                             } label: {
                                 Pill(text: "On Now", style: .filled, color: CeolTokens.primaryFill)
