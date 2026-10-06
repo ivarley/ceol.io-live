@@ -2,12 +2,17 @@
 // tn(), keyed by its English text, with the Irish in ./ga.json. The page carries the
 // language in window.__CEOL_LANG__ (templates/base.html, from the profile setting or
 // the visitor's switch). The rule (CLAUDE.md): every string exists in both languages,
-// and frontend/tests/i18n.test.js fails when one has no Irish entry.
+// and frontend/tests/i18n.test.js fails when one has no Irish entry. A converted file
+// carries the marker `i18n-converted` in a comment; the test then checks it has no
+// English outside t()/tn().
 //
-// ga.json: { "<English>": { "ga": "<Irish>", "review": true } }. A plural entry's
-// "ga" is { one, two, few, many, other } (Irish has five forms) and is keyed by the
-// English plural form passed to tn(). "review": true until the Irish is approved.
-import ga from './ga.json'
+// The Irish lives in ./ga/*.json, one file per area of the app (so areas can be
+// translated side by side), merged here: { "<English>": { "ga": "<Irish>", "review": true } }.
+// A plural entry's "ga" is { one, two, few, many, other } (Irish has five forms) and is
+// keyed by the English plural form passed to tn(). "review": true until approved.
+// Terms follow specs/current/ui/irish-glossary.md.
+const parts = import.meta.glob('./ga/*.json', { eager: true, import: 'default' })
+export const ga = Object.assign({}, ...Object.keys(parts).sort().map((k) => parts[k]))
 
 export function currentLang() {
   return typeof window !== 'undefined' && window.__CEOL_LANG__ === 'ga' ? 'ga' : 'en'
@@ -43,3 +48,21 @@ export function tn(n, one, other, vars) {
   }
   return fill(n === 1 ? one : other, all)
 }
+
+const LOCALES = { en: 'en-US', ga: 'ga-IE' }
+
+/** Dates and times in the page's language ("Dé hAoine 23 Deireadh Fómhair"). `value`
+ * is a Date or an ISO date (yyyy-mm-dd, read as that calendar day, not UTC midnight);
+ * `options` are Intl.DateTimeFormat's. */
+export function formatDate(value, options) {
+  const d = typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? new Date(Number(value.slice(0, 4)), Number(value.slice(5, 7)) - 1, Number(value.slice(8, 10)))
+    : value instanceof Date ? value : new Date(value)
+  return new Intl.DateTimeFormat(LOCALES[currentLang()], options).format(d)
+}
+
+/** Numbers in the page's language (Irish groups thousands the same way). */
+export function formatNumber(n, options) {
+  return new Intl.NumberFormat(LOCALES[currentLang()], options).format(n)
+}
+

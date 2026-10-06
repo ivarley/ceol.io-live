@@ -4,8 +4,8 @@
   `ngettext`, `lazy_gettext`) has an Irish entry in translations/ga/LC_MESSAGES/
   messages.po: not missing, not empty, every plural form filled.
 - The compiled .mo the server reads matches the .po (`make i18n-compile`).
-- A template on CONVERTED_TEMPLATES has no English left outside `_()`: no bare text
-  and no literal aria-label, title, placeholder or alt.
+- A template carrying the marker `{# i18n-converted #}` has no English left outside
+  `_()`: no bare text and no literal aria-label, title, placeholder or alt.
 
 A drafted string still flagged `review` counts as present; `scripts/i18n_po.py pending`
 lists those. Adding a string: `make i18n-extract`, write its Irish, `make i18n-compile`.
@@ -41,9 +41,24 @@ IGNORE = {
     "translations",
 }
 
-# Templates whose every user-facing string goes through _(). A template joins this
-# list when it is converted, and then stays converted.
-CONVERTED_TEMPLATES = ["header_nav.html", "hamburger_menu.html", "tab_bar.html"]
+# Templates whose every user-facing string goes through _(): those carrying the
+# marker {# i18n-converted #}. A template gains it when converted, then stays converted.
+MARKER = "i18n-converted"
+
+
+def _converted_templates():
+    names = []
+    for dirpath, _dirs, files in os.walk(os.path.join(ROOT, "templates")):
+        for f in files:
+            if f.endswith(".html"):
+                path = os.path.join(dirpath, f)
+                with open(path, encoding="utf-8") as fh:
+                    if MARKER in fh.read():
+                        names.append(os.path.relpath(path, os.path.join(ROOT, "templates")))
+    return sorted(names)
+
+
+CONVERTED_TEMPLATES = _converted_templates()
 
 
 def _extracted():
@@ -119,6 +134,10 @@ def _bare_english(html):
     s = re.sub(r"<[^>]*>", " ", s, flags=re.S)
     words = [w for w in re.split(r"\s+", s) if re.search(r"[A-Za-z]", w)]
     return words + literal_attrs
+
+
+def test_the_chrome_is_converted():
+    assert {"header_nav.html", "hamburger_menu.html", "tab_bar.html"} <= set(CONVERTED_TEMPLATES)
 
 
 @pytest.mark.parametrize("name", CONVERTED_TEMPLATES)

@@ -1,4 +1,5 @@
 <script>
+  // i18n-converted
   // The language Ceol is in, for the person whose /me this is (spec 057). Saves at once
   // through PUT /api/me/profile, then reloads: the page's own server-rendered text is in
   // the old language until it is fetched again.

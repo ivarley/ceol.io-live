@@ -3,7 +3,7 @@
 **Date:** 2026-10-06
 **Status:** STAGE 1 BUILT (2026-10-06): the machinery, the setting and switch, the
 tests, the CLAUDE.md rule and a draft glossary; the page chrome (header links, menu,
-tab bar) converted as the proof. Next: the glossary agreed, then stage 2. The
+tab bar) converted as the proof. The glossary was agreed the same day. Next: stage 2. The
 decisions are the product owner's, from a short Q&A on 2026-10-06.
 
 ## Why
@@ -76,5 +76,9 @@ And from here on, any interface work has to work in both languages.
 - Converted: `header_nav.html`, `hamburger_menu.html`, `tab_bar.html`, and
   `LanguageSetting.svelte`.
 - Glossary: [specs/current/ui/irish-glossary.md](../../current/ui/irish-glossary.md),
-  every term "proposed" until the product owner agrees it.
+  agreed by the product owner on 2026-10-06.
+- Since stage 1: the Svelte catalog is split by area (`frontend/src/lib/i18n/ga/*.json`,
+  merged at build; a test fails if two files translate one English string two ways), a
+  converted file is found by its `i18n-converted` marker rather than a list, and
+  `formatDate()` / `formatNumber()` format in the page's language.
 

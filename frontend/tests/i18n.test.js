@@ -1,21 +1,21 @@
 // Spec 057: the bundles' strings exist in Irish.
 //
-// - Every t('…') and tn(n, '…', '…') in frontend/src has an entry in
-//   src/lib/i18n/ga.json with its Irish filled in (all five forms for a plural).
-// - A component on CONVERTED has no English outside t()/tn(): no bare text in its
-//   markup, no literal placeholder/title/aria-label/alt.
+// - Every t('…') and tn(n, '…', '…') in frontend/src has an entry in one of
+//   src/lib/i18n/ga/*.json with its Irish filled in (all five forms for a plural),
+//   and no two of those files translate the same English differently.
+// - A component carrying the marker `i18n-converted` has no English outside t()/tn():
+//   no bare text in its markup, no literal placeholder/title/aria-label/alt.
 // A drafted entry with "review": true counts as present.
 import { describe, it, expect, afterEach } from 'vitest'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
-import ga from '../src/lib/i18n/ga.json'
-import { t, tn } from '../src/lib/i18n/index.js'
+import { ga, t, tn, formatDate } from '../src/lib/i18n/index.js'
 
 const SRC = join(__dirname, '..', 'src')
 
-// Components whose every user-facing string goes through t()/tn(). A component joins
-// this list when it is converted, and then stays converted.
-const CONVERTED = ['personpage/LanguageSetting.svelte']
+// Components whose every user-facing string goes through t()/tn(): those carrying the
+// marker. A component gains it when it is converted, and then stays converted.
+const MARKER = 'i18n-converted'
 
 const PLURAL_FORMS = ['one', 'two', 'few', 'many', 'other']
 
@@ -89,9 +89,34 @@ function bareEnglish(source) {
   return [...out.split(/\s+/).filter((w) => /[A-Za-z]/.test(w)), ...attrs]
 }
 
+const converted = sources()
+  .filter((f) => f.endsWith('.svelte') && readFileSync(f, 'utf8').includes(MARKER))
+  .map((f) => relative(SRC, f))
+
 describe('converted components', () => {
-  it.each(CONVERTED)('%s has no English outside t()', (path) => {
+  it('include the language setting', () => {
+    expect(converted).toContain('personpage/LanguageSetting.svelte')
+  })
+
+  it.each(converted)('%s has no English outside t()', (path) => {
     expect(bareEnglish(readFileSync(join(SRC, path), 'utf8'))).toEqual([])
+  })
+})
+
+describe('the catalog files', () => {
+  it('never translate the same English two ways', () => {
+    const dir = join(SRC, 'lib', 'i18n', 'ga')
+    const seen = new Map()
+    const clashes = []
+    for (const file of readdirSync(dir).filter((f) => f.endsWith('.json')).sort()) {
+      const part = JSON.parse(readFileSync(join(dir, file), 'utf8'))
+      for (const [key, entry] of Object.entries(part)) {
+        const value = JSON.stringify(entry.ga)
+        if (seen.has(key) && seen.get(key).value !== value) clashes.push(`${key}: ${seen.get(key).file} vs ${file}`)
+        else seen.set(key, { file, value })
+      }
+    }
+    expect(clashes).toEqual([])
   })
 })
 
@@ -109,6 +134,12 @@ describe('t() and tn()', () => {
     window.__CEOL_LANG__ = 'ga'
     expect(t('Language')).toBe('Teanga')
     expect(t('Not in the catalog')).toBe('Not in the catalog')
+  })
+
+  it('formatDate() speaks the page language', () => {
+    expect(formatDate('2026-10-23', { weekday: 'long' })).toBe('Friday')
+    window.__CEOL_LANG__ = 'ga'
+    expect(formatDate('2026-10-23', { weekday: 'long' })).toMatch(/Aoine/)
   })
 
   it("tn() picks Irish's five forms", () => {
