@@ -65,7 +65,13 @@ SET_LEAD_MAX_MS = 40000   # a set's start reaches back at most this far before i
 
 
 def load_log(path):
+    """-> (states, taps, logged) from a meter log. A night whose listening moved
+    (phone to server or back, an "app" "listen" event) starts a new stream
+    there, whose times count from that sample of the recording: they are put
+    back on the recording's clock. A state that does not move time forward (a
+    repeat) is dropped."""
     states, taps, logged = [], [], []
+    offset_ms = 0
     with open(path) as f:
         for line in f:
             line = line.strip()
@@ -74,8 +80,13 @@ def load_log(path):
             row = json.loads(line)
             msg = row["msg"]
             kind = msg.get("type")
-            if row["dir"] == "in" and kind == "state":
-                states.append({**msg, "_at_ms": row["at_ms"]})
+            if row["dir"] == "app" and kind == "listen":
+                offset_ms = int(1000 * msg.get("from_sample", 0) / 22050)
+            elif row["dir"] == "in" and kind == "state":
+                t = msg.get("t_ms", 0) + offset_ms
+                if states and t <= states[-1]["t_ms"]:
+                    continue
+                states.append({**msg, "t_ms": t, "_at_ms": row["at_ms"]})
             elif row["dir"] == "out" and kind == "tap":
                 taps.append({**msg, "at_ms": row["at_ms"]})
             elif row["dir"] == "app" and kind == "logged":

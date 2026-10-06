@@ -14,11 +14,16 @@
 //      MeterLog) goes up to PUT /api/recordings/<id>/listen-log, which keeps it beside
 //      the audio. If that fails it is tried again the next time the app starts.
 //
+// An upload that failed (offline at the pub, say) is tried again by itself whenever the
+// phone gets a connection and when the app starts, at most every ten minutes each:
+// whichever way the night was listened to, its recording reaches the server.
+//
 // The CAF stays until the upload is confirmed; Delete removes a recording by hand.
 
 import AVFoundation
 import CeolLogic
 import Foundation
+import Network
 import Observation
 
 struct LocalRecording: Codable, Identifiable, Equatable {
@@ -50,6 +55,9 @@ final class RecordingStore {
     @ObservationIgnored let dir: URL
     @ObservationIgnored private var uploads: UploadSession?
     @ObservationIgnored private weak var app: AppModel?
+    @ObservationIgnored private var monitor: NWPathMonitor?
+    @ObservationIgnored private var lastTried: [String: Date] = [:]
+    static let retryEvery: TimeInterval = 600
 
     init() {
         let base = (try? FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
@@ -130,10 +138,37 @@ final class RecordingStore {
         for r in items where r.phase == .uploaded && r.meterLogSent != true {
             Task { await sendMeterLog(r.id) }
         }
+        watchNetwork()
+    }
+
+    /// Whenever there is a connection (and at once, if there is one now), try again
+    /// what didn't go up.
+    private func watchNetwork() {
+        guard monitor == nil else { return }
+        let m = NWPathMonitor()
+        m.pathUpdateHandler = { [weak self] path in
+            guard path.status == .satisfied else { return }
+            Task { @MainActor in self?.retryWaiting() }
+        }
+        m.start(queue: DispatchQueue(label: "io.ceol.recordings.network"))
+        monitor = m
+    }
+
+    /// Recordings not uploaded (a failure, or a stop the app never got to upload),
+    /// each at most every ten minutes.
+    func retryWaiting() {
+        guard let app, !app.simulatedOffline else { return }
+        let now = Date()
+        for r in items where r.phase == .failed || r.phase == .ready {
+            if let t = lastTried[r.id], now.timeIntervalSince(t) < Self.retryEvery { continue }
+            lastTried[r.id] = now
+            Task { await upload(r.id) }
+        }
     }
 
     func upload(_ id: String) async {
         guard var r = items.first(where: { $0.id == id }), let app else { return }
+        lastTried[id] = Date()
         r.error = nil
         r.phase = .converting
         save(r)

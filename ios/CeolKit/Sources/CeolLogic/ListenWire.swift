@@ -9,6 +9,14 @@
 //   srv -> {"type":"state",…}                 every 4 s of audio: what it thinks is playing
 //   app -> {"type":"tap","action":"this"|"none",…}, {"type":"skip","to":N}, {"type":"stop"}
 //
+// Listening on the phone ("heard" mode, spec 053): the phone hears for itself
+// (CeolHearing) and sends what it heard instead of the audio; the service only decides.
+//
+//   app -> {"type":"start","stream_id":…,"mode":"heard"}
+//   srv -> {"type":"ready","mode":"heard","heard_t":T}   T: the last step it has taken
+//   app -> {"type":"heard","t_ms":…,"heard_ms":…,"notes":{…},"features":{…}}  every 4 s
+//   srv -> {"type":"state",…}, then {"type":"ack","heard_t":T}
+//
 // The phone's own file is the recording; the stream is for the meter. So the outbox
 // holds only the last few minutes of unacknowledged audio, and after a longer outage the
 // app says "skip" and the server fills the gap with silence, keeping its clock the
@@ -29,6 +37,11 @@ public enum ListenWire {
 
     public static func start(streamID: String) -> String {
         json(["type": "start", "stream_id": streamID, "sample_rate": sampleRate])
+    }
+
+    /// Start (or resume) a stream the phone hears for itself.
+    public static func startHeard(streamID: String) -> String {
+        json(["type": "start", "stream_id": streamID, "mode": "heard"])
     }
 
     public static func skip(to offset: Int) -> String { json(["type": "skip", "to": offset]) }
@@ -139,6 +152,44 @@ public struct ListenOutbox: Sendable {
     }
 }
 
+/// Heard-mode steps not yet acknowledged by the service, by their audio time. A
+/// reconnect resends every step after the last one the service says it took. Holds at
+/// most `capacity` steps; the oldest go first (the service then decides from later ones).
+public struct HeardOutbox: Sendable {
+    public let capacity: Int
+    private var steps: [(t: Int, message: String)] = []
+    /// The newest step sent on this connection.
+    public private(set) var sentT = 0
+
+    public init(capacity: Int) { self.capacity = capacity }
+
+    public var count: Int { steps.count }
+    public var unsent: Int { steps.filter { $0.t > sentT }.count }
+
+    public mutating func append(t: Int, message: String) {
+        steps.append((t, message))
+        if steps.count > capacity { steps.removeFirst(steps.count - capacity) }
+    }
+
+    /// The service has taken every step up to `t`.
+    public mutating func acknowledge(_ t: Int) {
+        steps.removeAll { $0.t <= t }
+    }
+
+    /// After a (re)connect: the service last took `t`; send from after it.
+    public mutating func resume(serverTook t: Int) {
+        acknowledge(t)
+        sentT = t
+    }
+
+    /// The next step to send, if any.
+    public mutating func next() -> (t: Int, message: String)? {
+        guard let s = steps.first(where: { $0.t > sentT }) else { return nil }
+        sentT = s.t
+        return s
+    }
+}
+
 /// What the service thinks is playing (its "state" message).
 public struct ListenState: Decodable, Sendable, Equatable {
     public struct Candidate: Decodable, Sendable, Equatable, Identifiable {
@@ -219,6 +270,10 @@ public struct ListenState: Decodable, Sendable, Equatable {
 public enum ListenMessage: Sendable, Equatable {
     case ready(have: Int)
     case ack(have: Int)
+    /// Heard mode: ready, having taken every step up to `heardT`.
+    case readyHeard(heardT: Int)
+    /// Heard mode: the service has taken every step up to `heardT`.
+    case heardAck(heardT: Int)
     case state(ListenState)
     case done(have: Int)
     case error(String)
@@ -230,8 +285,11 @@ public enum ListenMessage: Sendable, Equatable {
             let type = obj["type"] as? String
         else { return .other }
         let have = (obj["have"] as? NSNumber)?.intValue ?? 0
+        let heardT = (obj["heard_t"] as? NSNumber)?.intValue
         switch type {
+        case "ready" where obj["mode"] as? String == "heard": return .readyHeard(heardT: heardT ?? 0)
         case "ready": return .ready(have: have)
+        case "ack" where heardT != nil: return .heardAck(heardT: heardT!)
         case "ack": return .ack(have: have)
         case "done": return .done(have: have)
         case "error": return .error(obj["error"] as? String ?? "error")

@@ -75,7 +75,8 @@ public final class Hearer {
     public static let trackers = ["yin", "basic_pitch", "pesto"]
     static let params: [String: NoteParams] = ["yin": .yin, "basic_pitch": .basicPitch, "pesto": .pesto]
 
-    let models: HearingModels
+    /// Replaceable: a phone falls back to models held to its CPU if a prediction fails.
+    public var models: HearingModels
     private var samples = [Int16]()
     private var base = 0                 // the stream offset of samples[0]
     private var total = 0                // samples heard
@@ -178,14 +179,18 @@ public final class Hearer {
         let pcm = readPCM(a, t)
         guard pcm.count >= Self.sampleRate / 2 else { return }
         let y = pcm.map { Float($0) / 32767 }
+        // every tracker first, then the frames: a failure leaves the step to be taken again
+        var all = [String: Track]()
         for name in Self.trackers {
-            var got: Track
             switch name {
-            case "yin": got = Yin.track(y, sr: Self.sampleRate)
-            case "basic_pitch": got = try BasicPitch.track(pcm, model: models.basicPitch)
-            default: got = try Pesto.track(y, model: models.pesto)
+            case "yin": all[name] = Yin.track(y, sr: Self.sampleRate)
+            case "basic_pitch": all[name] = try BasicPitch.track(pcm, model: models.basicPitch)
+            default: all[name] = try Pesto.track(y, model: models.pesto)
             }
             lap("track_\(name)")
+        }
+        for name in Self.trackers {
+            let got = all[name]!
             var tr = tracks[name]!
             for k in 0..<got.count {
                 let time = got.times[k] + Double(a)

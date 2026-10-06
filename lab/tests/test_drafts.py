@@ -82,3 +82,25 @@ def test_a_blind_tune_following_squeezes_to_nothing_is_dropped():
                          row(100000, 200000, False, "next")], log=lambda *_: None)
     assert [d["name"] for d in out] == ["real", "next"]
     assert out[0]["first_in_set"]           # it opens the set the squeezed one opened
+
+
+def test_a_switch_of_where_the_night_is_listened_to_keeps_the_recordings_clock(tmp_path):
+    """Moving the listening mid-night (phone to server, or back) starts a new
+    stream whose times count from the switch; the log reader puts them back on
+    the recording's clock. (The app logs no late state from the stream it left.)"""
+    import json
+
+    from lab.tools.drafts import load_log
+
+    rows = [
+        {"at_ms": 5000, "dir": "in", "msg": {"type": "state", "t_ms": 4000}},
+        {"at_ms": 9000, "dir": "in", "msg": {"type": "state", "t_ms": 8000}},
+        {"at_ms": 9500, "dir": "app", "msg": {"type": "listen", "listen": "phone", "from_sample": 22050 * 9}},
+        {"at_ms": 14000, "dir": "in", "msg": {"type": "state", "t_ms": 4000}},
+        {"at_ms": 14100, "dir": "in", "msg": {"type": "state", "t_ms": 4000}},     # a repeat
+        {"at_ms": 18000, "dir": "in", "msg": {"type": "state", "t_ms": 8000}},
+    ]
+    path = tmp_path / "log.jsonl"
+    path.write_text("".join(json.dumps(r) + "\n" for r in rows))
+    states, _, _ = load_log(str(path))
+    assert [s["t_ms"] for s in states] == [4000, 8000, 13000, 17000]

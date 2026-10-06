@@ -97,8 +97,10 @@ reasonable**; its bench result is the reason it is there.
 - **Lab and runtime are separate.** The lab is a package in this repo with its
   own dependencies, excluded from deploy, from the app's test collection and
   from its coverage denominator, but not from lint. Nothing reaches a runtime
-  worker that has not been scored here. Nothing runs on the phone: a phone-side
-  computation cannot be replayed or re-run with provenance.
+  worker that has not been scored here. What runs on the phone (its hearing,
+  since 2026-10-06) is a port of the lab's code held to it by fixtures the lab
+  writes, and the phone uploads the night's audio, so the lab can always
+  re-run the same hearing on the same samples with provenance.
 
 ## Data
 
@@ -2676,6 +2678,66 @@ segmented blind; item 3 the follower). Open, in rough order:
     the lab writes (audio in, notes out), with a tolerance.
   - Still to measure: the phone's own speed, battery and heat over three hours,
     from the app. Next: the notes-in wire for the service, and the fixtures.
+- **(2026-10-06) Listening on the phone: built, and held to the lab.** Branch
+  `057-phone-listening`.
+  - **The split in the lab.** `listen.Hearer` is the hearing half (audio to
+    each tracker's notes over the last 24 s, and the step's features), needing
+    only the trackers; `Listener.decide` is the rest. `pack_heard` is the
+    wire message. Deciding from the wire reaches the audio listener's states
+    exactly (10 steps of 112, `test_listen_heard`).
+  - **The service's "heard" mode.** A stream started with `"mode": "heard"`
+    takes one notes-and-features message a step instead of audio, keeps no
+    audio, and acknowledges the last step taken so a reconnect resends only
+    later ones. Laptop, 112 at 25 min: the server's step 50 ms median against
+    374 ms with audio; a dropped connection resumed with no step taken twice.
+    Swift's messages go through the same service and come back naming the tune
+    (`HeardServiceTests`, against a local service).
+  - **The port** (CeolKit's `CeolHearing`, about 1,100 lines of Swift):
+    librosa's yin, RMS, short-time spectrum, onset strength and peak picking,
+    the beat estimate, pitch to notes, the grid, the key pair, the features,
+    Basic Pitch's windowing and note-making line for line, and PESTO's roll
+    and reduction, on Accelerate; PESTO and Basic Pitch as Core ML models
+    shipped in the package (PESTO now takes any length from 0.5 to 30 s,
+    since the first step tracks 4 s and the rest 6 s: within 0.0001
+    semitones of PyTorch). One thing the lab hides: its Basic Pitch reads the
+    audio back from a 16-bit WAV, which takes each sample to floor(x * 32768)
+    of its float form, one step down for most negative ones (checked on all
+    65,536 values); the phone does the same.
+  - **Held to the lab** by `python -m lab hearing-fixtures`: three 30 s clips
+    of real nights (a reel on 112, a jig on 143, talk into a tune on 137) as
+    16-bit samples, each stage's input and output as the lab computes them,
+    and each Swift stage run on the lab's own input. yin within 0.05
+    semitones on 99.8% or more of the frames in every step; PESTO within
+    0.01 on every frame; Basic Pitch's events 740 of 740 the same; the onset
+    envelope within 5e-6, attacks 2,237 of 2,237, period and phase within
+    3e-5 ms, meter 21 of 21. End to end, every note the same (yin 1,685,
+    Basic Pitch 1,009, PESTO 1,569) and every feature within 3e-5, with the
+    models on the CPU, on CPU and Neural Engine, and on the Mac's GPU.
+  - **Speed on a Mac** (M-series, release build), a step's hearing: about 150
+    ms with the models on the CPU (PESTO 75, Basic Pitch 24, yin 7, beat and
+    attacks 29, features 9), the same on CPU and Neural Engine (these fp32
+    models do not go to the Neural Engine), about 100 ms on the GPU. The app
+    keeps the GPU out because iOS refuses it to an app in the background, and
+    a night is mostly a locked screen; fp16 models for the Neural Engine are
+    untested, and would need the fixtures to pass again.
+  - **In the app.** The meter has a two-way choice, "Listening on: This phone
+    / Ceol's server", remembered for the next night and changeable mid-night
+    (the recording carries on; listening starts again on a new stream, logged
+    with the sample it starts at, which `drafts.load_log` puts back on the
+    recording's clock). The default stays the server until the phone has
+    been measured. The meter log gets the phone's work a step at a time
+    (`heard`: its time and how far behind the microphone) and, once a
+    minute, `device`: battery, charging, heat, low-power mode, and where
+    the night is listened to. A failed prediction moves the models to the
+    CPU once (`hearing_fallback`) before giving up (`hearing_failed`); the
+    recording goes on regardless.
+  - **The recording, either way,** is the phone's file, uploaded after Stop
+    straight to S3 (a presigned PUT in a background session); an upload that
+    failed is now tried again by itself whenever the phone gets a
+    connection and when the app starts, each at most every ten minutes.
+  - Still to measure: a real night with the phone listening: its speed and
+    lag on an iPhone, battery and heat over three hours, and that the names
+    shown match a server-listened night (they should: the same notes).
 - **(2026-10-04) Loudness, relative to the night.** Absolute loudness was taken
   out of tune-ness after a test of laptop speakers recorded through a phone,
   which says nothing about a phone on a pub table (the player's correction).

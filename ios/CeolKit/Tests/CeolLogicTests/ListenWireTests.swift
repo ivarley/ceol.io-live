@@ -47,6 +47,9 @@ struct ListenWireTests {
     func messages() {
         #expect(ListenMessage.decode(#"{"type":"ready","stream_id":"x","have":44100}"#) == .ready(have: 44100))
         #expect(ListenMessage.decode(#"{"type":"ack","have":22050}"#) == .ack(have: 22050))
+        #expect(ListenMessage.decode(#"{"type":"ready","mode":"heard","have":0,"heard_t":36000}"#)
+                == .readyHeard(heardT: 36000))
+        #expect(ListenMessage.decode(#"{"type":"ack","heard_t":40000}"#) == .heardAck(heardT: 40000))
         let text = #"""
             {"type":"state","status":"listening","t_ms":16000,"top":[{"tune_id":91,"name":"Roaring Barmaid, The",
              "type":"jig","p":0.62,"outside":false},{"tune_id":514,"name":"Down The Broom","type":"reel","p":0.3}],
@@ -98,5 +101,25 @@ struct ListenWireTests {
         #expect((obj["msg"] as? [String: Any])?["t_ms"] as? Int == 4000)
         #expect(ListenWire.event("end_set") == #"{"type":"end_set"}"#)
         #expect(ListenWire.event("logged", ["tune_id": 91]) == #"{"tune_id":91,"type":"logged"}"#)
+    }
+
+    @Test("Heard mode: steps go out in order, and a reconnect resends what the service didn't take")
+    func heardOutbox() {
+        var box = HeardOutbox(capacity: 3)
+        for t in [4000, 8000, 12000] { box.append(t: t, message: "m\(t)") }
+        #expect(box.next()?.t == 4000)
+        #expect(box.next()?.t == 8000)
+        box.acknowledge(4000)
+        #expect(box.count == 2)
+        // the connection drops; the service had taken 4000 only
+        box.resume(serverTook: 4000)
+        #expect(box.next()?.message == "m8000")
+        #expect(box.next()?.t == 12000)
+        #expect(box.next() == nil)
+        // more than it holds: the oldest go
+        for t in [16000, 20000, 24000] { box.append(t: t, message: "m\(t)") }
+        #expect(box.count == 3)
+        box.resume(serverTook: 0)
+        #expect(box.next()?.t == 16000)
     }
 }

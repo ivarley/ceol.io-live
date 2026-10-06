@@ -45,7 +45,9 @@ extension NightRecorder {
     var linkText: String {
         switch link {
         case .connecting: "Connecting to the listener…"
-        case .live: behind > 8 ? "Catching up, \(Int(behind)) s behind" : "Listening"
+        case .live where hearingError != nil: "Not listening — still recording"
+        case .live: behind > 8 ? "Catching up, \(Int(behind)) s behind"
+            : listenWhere == .phone ? "Listening on this phone" : "Listening"
         case .reconnecting: "Offline — still recording, will catch up"
         case .unavailable(let why): "Listener unavailable (\(why)) — still recording"
         }
@@ -142,7 +144,8 @@ struct ListenMeterView: View {
                         }
                     }
                     Text(recorder.linkText).font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
-                    if let error = recorder.error {
+                    listenWhere
+                    if let error = recorder.hearingError ?? recorder.error {
                         Text(error).font(.ceol(size: 14)).foregroundStyle(CeolTokens.danger)
                     }
                     candidates
@@ -173,6 +176,19 @@ struct ListenMeterView: View {
             }
         }
         .preferredColorScheme(.dark)
+    }
+
+    /// Where the listening is done: a choice for whoever is recording, kept for the next
+    /// night. Changing it mid-night restarts the listening, never the recording.
+    private var listenWhere: some View {
+        HStack(spacing: 10) {
+            Text("Listening on").font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
+            Picker("Listening on", selection: Binding(get: { recorder.listenWhere }, set: { recorder.listen(on: $0) })) {
+                ForEach(ListenWhere.allCases) { Text($0.label).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier("meter.listenWhere")
+        }
     }
 
     /// Names under this belief are greyed, and only a couple of them shown: in practice

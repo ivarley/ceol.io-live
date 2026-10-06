@@ -9,6 +9,12 @@
 //     chunks, so a reconnect resends from what the service acknowledged, and after a
 //     long outage the service is told to skip (the file still has that audio).
 //
+// Or the phone listens for itself (ListenWhere.phone, spec 053 "Listening on the
+// phone"): CeolHearing turns the audio into notes and features every 4 s, and only
+// those go to the service, which decides what is playing. Much less to send, and the
+// service does a sixth of the work. Which one is chosen in the meter, and can change
+// mid-night: the recording goes on, and listening starts again on a new stream.
+//
 // It records with the screen locked and while you use the rest of the app (the audio
 // background mode), and picks up again after an interruption such as a phone call.
 // The meter's taps ("this is it", "none of these") go back to the service. Every state
@@ -20,9 +26,26 @@
 // thread under Swift 6.
 
 @preconcurrency import AVFoundation
+import CeolHearing
 import CeolLogic
+import CoreML
 import Foundation
 import Observation
+import UIKit
+
+/// Where a night is listened to (spec 053). Remembered for the next night.
+enum ListenWhere: String, CaseIterable, Identifiable {
+    case phone, server
+    var id: String { rawValue }
+
+    static let key = "ListenWhere"
+    static var preferred: ListenWhere {
+        get { UserDefaults.standard.string(forKey: key).flatMap(ListenWhere.init(rawValue:)) ?? .server }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: key) }
+    }
+
+    var label: String { self == .phone ? "This phone" : "Ceol's server" }
+}
 
 @Observable
 final class NightRecorder {
@@ -52,9 +75,17 @@ final class NightRecorder {
     @ObservationIgnored private var confirmedAfterMs = 0
 
     let fileURL: URL
+    /// Where the listening is done now.
+    private(set) var listenWhere: ListenWhere
+    /// Listening on the phone couldn't start (the models), or stopped.
+    private(set) var hearingError: String?
     @ObservationIgnored private let capture: AudioCapture
-    @ObservationIgnored private let streamLink: ListenLink
+    @ObservationIgnored private var streamLink: ListenLink
+    @ObservationIgnored private var hearing: PhoneHearing?
     @ObservationIgnored private let meterLog: MeterLog
+    @ObservationIgnored private let listenURL: URL
+    @ObservationIgnored private let token: String?
+    @ObservationIgnored private var lastDeviceLog = Date.distantPast
     @ObservationIgnored private var ticker: Task<Void, Never>?
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
 
@@ -70,20 +101,69 @@ final class NightRecorder {
     private(set) var logged: Int?
 
     init(instanceID: Int, title: String, recordingID: String, fileURL: URL, meterLogURL: URL, listenURL: URL,
-         token: String?, app: AppModel? = nil) {
+         token: String?, listenWhere: ListenWhere = .preferred, app: AppModel? = nil) {
         self.instanceID = instanceID
         self.title = title
         self.app = app
         self.recordingID = recordingID
         self.fileURL = fileURL
+        self.listenURL = listenURL
+        self.token = token
+        self.listenWhere = listenWhere
         capture = AudioCapture(fileURL: fileURL)
         let streamID = UUID().uuidString
-        streamLink = ListenLink(url: listenURL, token: token, streamID: streamID, capture: capture)
         meterLog = MeterLog(url: meterLogURL, since: startedAt)
         meterLog.write("app", ListenWire.event("begin", [
             "instance_id": instanceID, "stream_id": streamID, "recording": recordingID,
-            "started_at": ISO8601DateFormatter().string(from: startedAt),
+            "started_at": ISO8601DateFormatter().string(from: startedAt), "listen": listenWhere.rawValue,
         ]))
+        streamLink = ListenLink(url: listenURL, token: token, streamID: streamID, source: capture)
+        streamLink = makeLink(streamID: streamID)
+    }
+
+    /// The stream for the chosen place: audio from the capture, or the phone's hearing.
+    private func makeLink(streamID: String) -> ListenLink {
+        hearing = nil
+        hearingError = nil
+        capture.onSamples = nil
+        capture.streamsAudio = listenWhere == .server
+        guard listenWhere == .phone else {
+            return ListenLink(url: listenURL, token: token, streamID: streamID, source: capture)
+        }
+        let log = meterLog
+        let h = PhoneHearing(
+            onStep: { heard, lagMs in
+                // the phone's own work, a step at a time: how long and how far behind
+                log.write("app", ListenWire.event("heard", [
+                    "t_ms": heard.tMs, "lag_ms": lagMs, "hear_ms": heard.timing.values.reduce(0, +),
+                    "timing": heard.timing,
+                ]))
+            },
+            onFailure: { [weak self] why, stopped in
+                log.write("app", ListenWire.event(stopped ? "hearing_failed" : "hearing_fallback", ["error": why]))
+                if stopped { Task { @MainActor in self?.hearingError = why } }
+            })
+        hearing = h
+        capture.onSamples = { h.take($0) }
+        return ListenLink(url: listenURL, token: token, streamID: streamID, source: h)
+    }
+
+    /// Listen somewhere else from now on. The recording carries on; listening starts
+    /// again on a new stream, whose times count from here (logged with the sample).
+    func listen(on place: ListenWhere) {
+        guard place != listenWhere, !stopped else { return }
+        ListenWhere.preferred = place
+        streamLink.stop()
+        listenWhere = place
+        state = nil
+        confirmed = nil
+        let streamID = UUID().uuidString
+        capture.resetOutbox()
+        meterLog.write("app", ListenWire.event("listen", [
+            "listen": place.rawValue, "stream_id": streamID, "from_sample": capture.written,
+        ]))
+        streamLink = makeLink(streamID: streamID)
+        runLink()
     }
 
     /// Asks for the microphone, starts the engine, the file and the stream.
@@ -106,25 +186,56 @@ final class NightRecorder {
             night = n
             Task { await n.start() }
         }
-        let log = meterLog
-        streamLink.run(
-            onState: { [weak self] s, text in
-                log.write("in", text)
-                Task { @MainActor in self?.received(s) }
-            },
-            onLink: { [weak self] l in
-                log.write("app", ListenWire.event("link", ["link": "\(l)"]))
-                Task { @MainActor in self?.link = l }
-            })
+        runLink()
+        UIDevice.current.isBatteryMonitoringEnabled = true
         ticker = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(250))
                 guard let self else { return }
                 self.elapsed = Date().timeIntervalSince(self.startedAt)
                 self.level = self.capture.level
-                self.behind = Double(self.capture.unsent) / Double(ListenWire.sampleRate)
+                self.behind = self.hearing?.behindSeconds
+                    ?? Double(self.capture.unsent) / Double(ListenWire.sampleRate)
+                self.logDevice()
             }
         }
+    }
+
+    private func runLink() {
+        let log = meterLog
+        let link = streamLink
+        link.run(
+            onState: { [weak self, weak link] s, text in
+                // a stream stopped by a switch may still deliver a late state: not this night's
+                guard link?.isRunning == true else { return }
+                log.write("in", text)
+                Task { @MainActor in
+                    // a state from a stream left behind by a switch is not this one's
+                    guard let self, let link, self.streamLink === link else { return }
+                    self.received(s)
+                }
+            },
+            onLink: { [weak self, weak link] l in
+                log.write("app", ListenWire.event("link", ["link": "\(l)"]))
+                Task { @MainActor in
+                    guard let self, let link, self.streamLink === link else { return }
+                    self.link = l
+                }
+            })
+    }
+
+    /// Once a minute, the phone's battery and temperature beside where it listens: what
+    /// listening on the phone costs, read back from the meter log.
+    private func logDevice() {
+        guard Date().timeIntervalSince(lastDeviceLog) >= 60 else { return }
+        lastDeviceLog = Date()
+        let d = UIDevice.current
+        let thermal = ["nominal", "fair", "serious", "critical"][min(3, ProcessInfo.processInfo.thermalState.rawValue)]
+        meterLog.write("app", ListenWire.event("device", [
+            "listen": listenWhere.rawValue, "battery": Double(d.batteryLevel),
+            "charging": d.batteryState == .charging || d.batteryState == .full, "thermal": thermal,
+            "low_power": ProcessInfo.processInfo.isLowPowerModeEnabled,
+        ]))
     }
 
     func stop() {
@@ -133,6 +244,7 @@ final class NightRecorder {
         ticker?.cancel()
         streamLink.stop()
         capture.stop()
+        hearing = nil
         night?.stop()
         night = nil
         meterLog.write("app", ListenWire.event("stop"))
@@ -240,6 +352,9 @@ nonisolated final class AudioCapture: @unchecked Sendable {
     // Ten minutes of unsent audio, about 26 MB; older audio is still in the file.
     private var outbox = ListenOutbox(capacity: ListenWire.sampleRate * 600)
     private var _level: Double = 0
+    private var _written = 0
+    private var _streamsAudio = true
+    private var _onSamples: (@Sendable ([Int16]) -> Void)?
     private let outFormat = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: Double(ListenWire.sampleRate),
                                           channels: 1, interleaved: true)!
 
@@ -247,6 +362,21 @@ nonisolated final class AudioCapture: @unchecked Sendable {
 
     var level: Double { lock.withLock { _level } }
     var unsent: Int { lock.withLock { outbox.unsent } }
+    /// Samples written to the file so far.
+    var written: Int { lock.withLock { _written } }
+    /// Whether the audio goes to the listening service (not when the phone listens).
+    var streamsAudio: Bool {
+        get { lock.withLock { _streamsAudio } }
+        set { lock.withLock { _streamsAudio = newValue } }
+    }
+    /// Every converted block of samples, as it comes (the phone's hearing).
+    var onSamples: (@Sendable ([Int16]) -> Void)? {
+        get { lock.withLock { _onSamples } }
+        set { lock.withLock { _onSamples = newValue } }
+    }
+
+    /// A new stream: nothing sent, nothing held.
+    func resetOutbox() { lock.withLock { outbox = ListenOutbox(capacity: ListenWire.sampleRate * 600) } }
 
     func start() throws {
         let session = AVAudioSession.sharedInstance()
@@ -300,17 +430,142 @@ nonisolated final class AudioCapture: @unchecked Sendable {
         var sum = 0.0
         for s in samples { let v = Double(s) / 32768; sum += v * v }
         let rms = (sum / Double(samples.count)).squareRoot()
-        lock.withLock {
+        let hear = lock.withLock { () -> (@Sendable ([Int16]) -> Void)? in
             try? file?.write(from: out)
-            outbox.append(samples)
+            _written += samples.count
+            if _streamsAudio { outbox.append(samples) }
             _level = min(1, rms * 4)
+            return _onSamples
+        }
+        hear?(samples)
+    }
+}
+
+/// What a stream to the listening service carries: the audio (AudioCapture), or what the
+/// phone heard (PhoneHearing). ListenLink does the connecting and reconnecting.
+nonisolated protocol ListenSource: AnyObject, Sendable {
+    func startMessage(streamID: String) -> String
+    /// The service's first reply -> what to send before the rest, or nil if it isn't the
+    /// "ready" this stream expects.
+    func ready(_ reply: ListenMessage) -> [String]?
+    func acknowledged(_ message: ListenMessage)
+    /// The next message to send, if there is one now.
+    func next() -> URLSessionWebSocketTask.Message?
+}
+
+nonisolated extension AudioCapture: ListenSource {
+    func startMessage(streamID: String) -> String { ListenWire.start(streamID: streamID) }
+
+    func ready(_ reply: ListenMessage) -> [String]? {
+        guard case .ready(let have) = reply else { return nil }
+        let skip = lock.withLock { outbox.resume(serverHas: have) }
+        return skip.map { [ListenWire.skip(to: $0)] } ?? []
+    }
+
+    func acknowledged(_ message: ListenMessage) {
+        if case .ack(let have) = message { lock.withLock { outbox.acknowledge(have) } }
+    }
+
+    func next() -> URLSessionWebSocketTask.Message? {
+        guard let chunk = lock.withLock({ outbox.next(max: ListenWire.sampleRate) }) else { return nil }
+        return .data(ListenWire.frame(offset: chunk.offset, samples: chunk.samples))
+    }
+}
+
+// MARK: - Listening on the phone
+
+/// The phone's own hearing (CeolHearing.Hearer) on a queue of its own: every 4 s of audio
+/// becomes a "heard" message, held until the service acknowledges it.
+nonisolated final class PhoneHearing: ListenSource, @unchecked Sendable {
+    private let queue = DispatchQueue(label: "io.ceol.hearing", qos: .userInitiated)
+    private let lock = NSLock()
+    private var outbox = HeardOutbox(capacity: 150)       // ten minutes of steps
+    private var hearer: Hearer?                          // touched only on `queue`
+    private var captured = 0                             // samples handed over
+    private var lastStepT = 0
+    private var failed = false
+    private let onStep: @Sendable (Heard, Int) -> Void
+    /// Why, and whether listening has stopped (or only moved to the CPU).
+    private let onFailure: @Sendable (String, Bool) -> Void
+
+    init(onStep: @escaping @Sendable (Heard, Int) -> Void, onFailure: @escaping @Sendable (String, Bool) -> Void) {
+        self.onStep = onStep
+        self.onFailure = onFailure
+        // first on the queue, so every block of audio waits for the models
+        queue.async { [self] in
+            do {
+                // the CPU and Neural Engine, not the GPU, which iOS refuses an app in the
+                // background (the screen locked, which is most of a night)
+                hearer = Hearer(models: try HearingModels(computeUnits: .cpuAndNeuralEngine))
+            } catch {
+                fail("Couldn't start listening on this phone: \(error.localizedDescription)")
+            }
         }
     }
 
-    // The link's side of the outbox.
-    func resume(serverHas have: Int) -> Int? { lock.withLock { outbox.resume(serverHas: have) } }
-    func acknowledge(_ have: Int) { lock.withLock { outbox.acknowledge(have) } }
-    func next(max: Int) -> (offset: Int, samples: ArraySlice<Int16>)? { lock.withLock { outbox.next(max: max) } }
+    private func fail(_ why: String) {
+        lock.withLock { failed = true }
+        onFailure(why, true)
+    }
+
+    /// A block of 22,050 Hz samples from the microphone.
+    func take(_ samples: [Int16]) {
+        lock.withLock { captured += samples.count }
+        queue.async { [self] in
+            guard let hearer else { return }
+            hearer.append(samples)
+            do {
+                try steps(hearer)
+            } catch {
+                // once: the models held to the CPU, and the step again
+                do {
+                    hearer.models = try HearingModels(computeUnits: .cpuOnly)
+                    onFailure("Listening on this phone moved to its CPU: \(error.localizedDescription)", false)
+                    try steps(hearer)
+                } catch {
+                    self.hearer = nil
+                    fail("Listening on this phone stopped: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    private func steps(_ hearer: Hearer) throws {
+        for heard in try hearer.readySteps() {
+            let lag = lock.withLock { () -> Int in
+                outbox.append(t: heard.tMs, message: heard.message())
+                lastStepT = heard.tMs
+                return Int(1000 * Double(captured) / Double(Hearer.sampleRate)) - heard.tMs
+            }
+            onStep(heard, lag)
+        }
+    }
+
+    /// How far behind the microphone the service's input is, in seconds: steps not yet
+    /// heard here, and steps heard but not yet acknowledged.
+    var behindSeconds: Double {
+        lock.withLock {
+            let heardTo = failed ? 0 : lastStepT
+            let notHeard = Double(captured) / Double(Hearer.sampleRate) - Double(heardTo) / 1000
+            return max(0, notHeard - Double(Hearer.hopMs) / 1000) + Double(outbox.unsent * Hearer.hopMs) / 1000
+        }
+    }
+
+    func startMessage(streamID: String) -> String { ListenWire.startHeard(streamID: streamID) }
+
+    func ready(_ reply: ListenMessage) -> [String]? {
+        guard case .readyHeard(let t) = reply else { return nil }
+        lock.withLock { outbox.resume(serverTook: t) }
+        return []
+    }
+
+    func acknowledged(_ message: ListenMessage) {
+        if case .heardAck(let t) = message { lock.withLock { outbox.acknowledge(t) } }
+    }
+
+    func next() -> URLSessionWebSocketTask.Message? {
+        lock.withLock { outbox.next() }.map { .string($0.message) }
+    }
 }
 
 /// Hands the converter one buffer, then says there is no more for now. The converter
@@ -339,17 +594,17 @@ nonisolated final class ListenLink: @unchecked Sendable {
     private let url: URL
     private let token: String?
     private let streamID: String
-    private let capture: AudioCapture
+    private let source: any ListenSource
     private let lock = NSLock()
     private var task: URLSessionWebSocketTask?
     private var running = true
     private var runner: Task<Void, Never>?
 
-    init(url: URL, token: String?, streamID: String, capture: AudioCapture) {
+    init(url: URL, token: String?, streamID: String, source: any ListenSource) {
         self.url = url
         self.token = token
         self.streamID = streamID
-        self.capture = capture
+        self.source = source
     }
 
     func run(onState: @escaping @Sendable (ListenState, String) -> Void, onLink: @escaping @Sendable (NightRecorder.Link) -> Void) {
@@ -370,7 +625,7 @@ nonisolated final class ListenLink: @unchecked Sendable {
         }
     }
 
-    private var isRunning: Bool { lock.withLock { running } }
+    var isRunning: Bool { lock.withLock { running } }
 
     func stop() {
         let t = lock.withLock { () -> URLSessionWebSocketTask? in
@@ -405,17 +660,13 @@ nonisolated final class ListenLink: @unchecked Sendable {
             lock.withLock { if task === ws { task = nil } }
         }
         do {
-            try await ws.send(.string(ListenWire.start(streamID: streamID)))
+            try await ws.send(.string(source.startMessage(streamID: streamID)))
             // the first reply says how much it holds
             guard case .string(let first) = try await ws.receive() else { return nil }
-            switch ListenMessage.decode(first) {
-            case .ready(let have):
-                if let skip = capture.resume(serverHas: have) {
-                    try await ws.send(.string(ListenWire.skip(to: skip)))
-                }
-            case .error(let e): return e
-            default: return nil
-            }
+            let reply = ListenMessage.decode(first)
+            if case .error(let e) = reply { return e }
+            guard let answers = source.ready(reply) else { return nil }
+            for a in answers { try await ws.send(.string(a)) }
         } catch {
             if ws.closeCode.rawValue == 4401 { return "Not allowed to listen" }
             return nil
@@ -428,9 +679,8 @@ nonisolated final class ListenLink: @unchecked Sendable {
                     guard let msg = try? await ws.receive() else { return }
                     if case .string(let text) = msg {
                         switch ListenMessage.decode(text) {
-                        case .ack(let have): self.capture.acknowledge(have)
                         case .state(let s): onState(s, text)
-                        default: break
+                        case let m: self.source.acknowledged(m)
                         }
                     }
                 }
@@ -438,9 +688,9 @@ nonisolated final class ListenLink: @unchecked Sendable {
             group.addTask { [self] in
                 while self.isRunning, !Task.isCancelled {
                     var sentAny = false
-                    while let chunk = self.capture.next(max: ListenWire.sampleRate) {
+                    while let message = self.source.next() {
                         do {
-                            try await ws.send(.data(ListenWire.frame(offset: chunk.offset, samples: chunk.samples)))
+                            try await ws.send(message)
                         } catch { return }
                         sentAny = true
                     }

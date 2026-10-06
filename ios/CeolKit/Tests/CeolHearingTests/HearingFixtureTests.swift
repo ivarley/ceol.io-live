@@ -58,9 +58,11 @@ func pitchAgreement(_ a: [Double], _ b: [Double], tol: Double = 0.05) -> Double 
     return Double(ok) / Double(n)
 }
 
-// CEOL_HEARING_UNITS=all: as the phone runs them (Neural Engine, half precision)
-let models: HearingModels = try! HearingModels(
-    computeUnits: ProcessInfo.processInfo.environment["CEOL_HEARING_UNITS"] == "all" ? .all : .cpuOnly)
+// CEOL_HEARING_UNITS=ane: as the phone runs them (CPU and Neural Engine, no GPU, which
+// iOS refuses an app in the background); all: anything the Mac has
+let models: HearingModels = try! HearingModels(computeUnits: [
+    "ane": .cpuAndNeuralEngine, "all": .all,
+][ProcessInfo.processInfo.environment["CEOL_HEARING_UNITS"] ?? ""] ?? .cpuOnly)
 
 @Suite("The phone's hearing against the lab's", .serialized)
 struct HearingFixtureTests {
@@ -248,5 +250,42 @@ struct HearingFixtureTests {
         for tracker in Hearer.trackers {
             #expect(Double(same[tracker]!) / Double(max(of[tracker]!, 1)) >= 0.97, "\(tracker)")
         }
+    }
+}
+
+/// Against a running listening service (CEOL_LISTEN_URL=ws://localhost:8440/listen): the
+/// phone's "heard" messages are taken, and come back as states naming the tune.
+@Suite("Heard mode against the listening service")
+struct HeardServiceTests {
+    @Test("A clip heard here is decided there", .enabled(if: ProcessInfo.processInfo.environment["CEOL_LISTEN_URL"] != nil))
+    func againstService() async throws {
+        let clip = Clip.load("r112-reel")
+        let hearer = Hearer(models: models)
+        hearer.append(clip.pcm)
+        let heard = try hearer.readySteps()
+        let url = URL(string: ProcessInfo.processInfo.environment["CEOL_LISTEN_URL"]!)!
+        let ws = URLSession.shared.webSocketTask(with: url)
+        ws.resume()
+        let sid = UUID().uuidString
+        try await ws.send(.string(#"{"type":"start","stream_id":"\#(sid)","mode":"heard"}"#))
+        guard case .string(let ready) = try await ws.receive() else { Issue.record("no ready"); return }
+        #expect(ready.contains(#""mode": "heard""#) || ready.contains(#""mode":"heard""#))
+        var states = [[String: Any]]()
+        for h in heard {
+            try await ws.send(.string(h.message()))
+            while true {
+                guard case .string(let text) = try await ws.receive() else { continue }
+                let m = try JSONSerialization.jsonObject(with: Data(text.utf8)) as! [String: Any]
+                if m["type"] as? String == "state" { states.append(m) }
+                if m["type"] as? String == "ack" { break }
+            }
+        }
+        ws.cancel(with: .normalClosure, reason: nil)
+        #expect(states.count == heard.count)
+        let last = states.last!
+        let top = (last["top"] as! [[String: Any]]).first
+        print("service on the phone's notes: \(states.count) states, last shows \(top?["name"] ?? "-") "
+              + "\(top?["p"] ?? 0), status \(last["status"] ?? "")")
+        #expect((last["status"] as? String) == "listening")
     }
 }

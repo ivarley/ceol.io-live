@@ -7,6 +7,13 @@ one measured in spec 053; the design is
 `specs/changes/inprogress/053 files/listen-on-the-server.md`. The protocol
 is in the docstring of `listen/service.py`.
 
+Or the phone listens for itself ("heard" mode, spec 053 "Listening on the
+phone"): it runs the hearing half (CeolKit's `CeolHearing`, a port of
+`lab.tools.listen.Hearer`) and sends each 4 s step's notes and features
+instead of audio, and the service only decides. Try it without a phone:
+
+    python -m listen.client ws://localhost:8440/listen --recording 112 --heard
+
 This is the spike: one service, a shared token, no app page yet. It exists
 to measure a real instance before the native recorder is built.
 
