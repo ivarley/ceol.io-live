@@ -2633,6 +2633,22 @@ segmented blind; item 3 the follower). Open, in rough order:
   container the libraries see the host's cores, so it now holds them to the
   container's budget (lab/tools/threads.py), logs it, and each step reports its
   time by part. What Render does is known only once that is deployed.
+- **(2026-10-06) The live step on Render, measured.** Render's container sees
+  8 host cores (and CPU affinity of 8) but has a 2-CPU quota, and it ran the
+  service as two uvicorn workers (WEB_CONCURRENCY). The libraries are now held
+  to 2 threads and the service runs one worker (WEB_CONCURRENCY=1; two workers
+  doubled the models in memory, shared the 2 CPUs, and once raced each other
+  fetching the data, failing a deploy). A 4-minute real-time stream of 112,
+  one worker: a step a median 1,480 ms (was 2.0-3.2 s), states a median 2.0 s
+  after their audio, peak memory 1.8 GB. By part: PESTO 520 ms (35%), the
+  shortlist and aligner 223, the attack scan over the last 24 s 178, Basic
+  Pitch 122, PESTO's notes 116, the beat estimate over 24 s 91, the beat and
+  music-detector features 86, yin and its notes about 85. Render runs this code
+  4-6 times slower than the laptop. Levers: without PESTO live, about -640 ms
+  (bench 0.942 -> 0.937, better 3 worse 6, p 0.51); the attack scan and beat
+  estimate worked out on the new 4 s only, not the last 24 s again, about -250
+  ms and no change in results. Together about 0.6 s a step, some 15% of a CPU a
+  night, so 4-5 nights at once on this plan.
 - **(2026-10-04) Loudness, relative to the night.** Absolute loudness was taken
   out of tune-ness after a test of laptop speakers recorded through a phone,
   which says nothing about a phone on a pub table (the player's correction).
