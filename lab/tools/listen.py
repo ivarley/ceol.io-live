@@ -171,13 +171,15 @@ class Listener:
 
     # -- the causal path, a hop at a time ---------------------------------
 
-    def _track(self, t):
+    def _track(self, t, lap=None):
         a = max(0, self.tracked_to - TRACK_CONTEXT_MS)
         y = self.store.read(a, t)
         if len(y) < SR // 2:
             return
         for fe in self.frontends:
             times, f0, voiced = fe.track(y, SR)
+            if lap:
+                lap(f"track_{fe.name}")
             times = np.asarray(times, dtype=float) + a
             keep = times >= self.tracked_to
             tt, ff, vv = self.tracks[fe.name]
@@ -209,11 +211,17 @@ class Listener:
             timing[name] = round(1000 * (now - clock[0]))
             clock[0] = now
 
-        self._track(t)
-        lap("track")
+        self._track(t, lap)
         a = max(0, t - POOL_MS)
-        ctx = {fe.name: causal_notes(fe, self._frames(fe.name), self.store, a, t) for fe in self.frontends}
-        lap("notes")
+        ctx = {}
+        for fe in self.frontends:
+            ctx[fe.name] = causal_notes(fe, self._frames(fe.name), self.store, a, t)
+            lap(f"notes_{fe.name}")
+        from lab.bench.stream import _SPAN
+
+        for k in ("pulse_ms", "attacks_ms"):     # inside the notes, worked out once a step
+            if k in _SPAN.get("shared", {}):
+                timing[f"notes_{k[:-3]}"] = _SPAN["shared"][k]
         wide = t < self.widen_until
         if self.shortlist_sets is not None:
             top = 300 if wide else 100

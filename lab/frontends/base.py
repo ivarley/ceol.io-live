@@ -108,13 +108,21 @@ class FrontEnd:
             if shared is None:
                 shared = {}
             if "pulse" not in shared:
+                import time
+
+                t0 = time.perf_counter()
                 shared["pulse"] = estimate_pulse(y, sr)
+                shared["pulse_ms"] = round(1000 * (time.perf_counter() - t0))
             pulse = shared["pulse"]
             if pulse:
                 attacks = None
                 if mode == "attack":
                     if "attacks" not in shared:
+                        import time
+
+                        t0 = time.perf_counter()
                         shared["attacks"] = [t + t_offset_ms for t in attack_times_ms(y, sr)]
+                        shared["attacks_ms"] = round(1000 * (time.perf_counter() - t0))
                     attacks = shared["attacks"]
                 notes = regrid_notes(
                     notes, pulse["period_ms"], pulse["phase_ms"] + t_offset_ms,
