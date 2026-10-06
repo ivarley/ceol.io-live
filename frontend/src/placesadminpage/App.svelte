@@ -1,10 +1,11 @@
 <script>
+  // i18n-converted
   // The Places admin page (spec 055): every town, metro and festival prefix, with
   // the sessions that use it. Site admins edit names and geography, set parents
   // (Conroe inside Houston), add metros that have no sessions of their own, rename
   // slugs (paths move, old links redirect) and delete places nothing uses.
   import { untrack } from 'svelte'
-  import { SearchField } from '../lib/index.js'
+  import { SearchField, t, tn } from '../lib/index.js'
   import PlaceSheet from './PlaceSheet.svelte'
   import { matchesPlace } from './logic.js'
 
@@ -29,20 +30,20 @@
 
 <div class="places-admin">
   <div class="places-toolbar">
-    <SearchField bind:value={query} placeholder="Search places" wrapperClass="places-search-wrap" debounce={0} />
-    <button type="button" class="places-add" id="places-add" onclick={() => edit(null)}>Add a place</button>
+    <SearchField bind:value={query} placeholder={t('Search places')} wrapperClass="places-search-wrap" debounce={0} />
+    <button type="button" class="places-add" id="places-add" onclick={() => edit(null)}>{t('Add a place')}</button>
   </div>
 
-  <p class="places-count" id="places-count">{shown.length} {shown.length === 1 ? 'place' : 'places'}</p>
+  <p class="places-count" id="places-count">{tn(shown.length, '{n} place', '{n} places')}</p>
 
   <table class="places-table" id="places-table">
     <thead>
       <tr>
-        <th>Name</th>
-        <th>Address</th>
-        <th>Inside</th>
-        <th>Area</th>
-        <th class="num">Sessions</th>
+        <th>{t('Name')}</th>
+        <th>{t('Address')}</th>
+        <th>{t('Inside')}</th>
+        <th>{t('Area')}</th>
+        <th class="num">{t('Sessions')}</th>
       </tr>
     </thead>
     <tbody>
@@ -50,7 +51,7 @@
         <tr class="place-row" data-slug={p.slug} onclick={() => edit(p)}>
           <td>
             {p.name}
-            {#if p.kind === 'festival'}<span class="place-kind">Festival</span>{/if}
+            {#if p.kind === 'festival'}<span class="place-kind">{t('Festival')}</span>{/if}
           </td>
           <td><a href="/sessions/{p.slug}" onclick={(e) => e.stopPropagation()}>/{p.slug}</a></td>
           <td>{p.parent?.name || ''}</td>

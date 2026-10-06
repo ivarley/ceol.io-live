@@ -1,6 +1,7 @@
+{# i18n-converted #}
 {% extends "base.html" %}
 
-{% block title %}Admin - Merge Tunes{% endblock %}
+{% block title %}{{ _('Admin - Merge Tunes') }}{% endblock %}
 
 {% block content %}
 <div class="docs-content-inner">
@@ -10,25 +11,25 @@
 
             <section class="docs-section" id="tune-merge">
                 <div class="admin-tune-merge">
-                    <h2>Merge Tunes</h2>
-                    <p>Use this tool when thesession.org has merged two tunes. All references to the old tune will be updated to point to the new tune.</p>
+                    <h2>{{ _('Merge Tunes') }}</h2>
+                    <p>{{ _('Use this tool when thesession.org has merged two tunes. All references to the old tune will be updated to point to the new tune.') }}</p>
 
                     <!-- Input Form -->
                     <div id="input-form" class="merge-form">
                         <div class="form-row">
                             <div class="form-group">
-                                <label for="old-tune-id">Old Tune ID</label>
-                                <input type="number" id="old-tune-id" class="form-control" placeholder="e.g. 1234">
-                                <div class="form-help">The tune being retired</div>
+                                <label for="old-tune-id">{{ _('Old Tune ID') }}</label>
+                                <input type="number" id="old-tune-id" class="form-control" placeholder="{{ _('e.g. 1234') }}">
+                                <div class="form-help">{{ _('The tune being retired') }}</div>
                             </div>
                             <div class="form-group">
-                                <label for="new-tune-id">New Tune ID</label>
-                                <input type="number" id="new-tune-id" class="form-control" placeholder="e.g. 5678">
-                                <div class="form-help">The tune to merge to</div>
+                                <label for="new-tune-id">{{ _('New Tune ID') }}</label>
+                                <input type="number" id="new-tune-id" class="form-control" placeholder="{{ _('e.g. 5678') }}">
+                                <div class="form-help">{{ _('The tune to merge to') }}</div>
                             </div>
                         </div>
                         <div class="form-actions">
-                            <button id="preview-btn" class="btn btn-primary">Preview Merge</button>
+                            <button id="preview-btn" class="btn btn-primary">{{ _('Preview Merge') }}</button>
                         </div>
                     </div>
 
@@ -37,17 +38,17 @@
 
                     <!-- Preview Results -->
                     <div id="preview-results" class="preview-box" style="display: none;">
-                        <h3>Merge Preview</h3>
+                        <h3>{{ _('Merge Preview') }}</h3>
 
                         <div class="tune-comparison">
                             <div class="tune-info old-tune">
-                                <div class="tune-label">Old Tune</div>
+                                <div class="tune-label">{{ _('Old Tune') }}</div>
                                 <div class="tune-name" id="old-tune-name"></div>
                                 <div class="tune-meta" id="old-tune-meta"></div>
                             </div>
                             <div class="tune-arrow">&#8594;</div>
                             <div class="tune-info new-tune">
-                                <div class="tune-label">New Tune</div>
+                                <div class="tune-label">{{ _('New Tune') }}</div>
                                 <div class="tune-name" id="new-tune-name"></div>
                                 <div class="tune-meta" id="new-tune-meta"></div>
                             </div>
@@ -56,12 +57,12 @@
                         <div id="thesession-check" class="thesession-check" style="display: none;"></div>
                         <div id="alias-fills-note" class="alias-fills-note" style="display: none;"></div>
 
-                        <h4>Records to merge:</h4>
+                        <h4>{{ _('Records to merge:') }}</h4>
                         <table class="records-table">
                             <thead>
                                 <tr>
-                                    <th>Table</th>
-                                    <th class="text-right">Count</th>
+                                    <th>{{ _('Table') }}</th>
+                                    <th class="text-right">{{ _('Count') }}</th>
                                 </tr>
                             </thead>
                             <tbody id="records-tbody">
@@ -69,39 +70,39 @@
                         </table>
 
                         <div id="warnings-box" class="warnings-box" style="display: none;">
-                            <h4>Warnings</h4>
+                            <h4>{{ _('Warnings') }}</h4>
                             <ul id="warnings-list"></ul>
                         </div>
 
                         <div class="confirm-actions">
-                            <button id="cancel-btn" class="btn btn-secondary">Cancel</button>
-                            <button id="confirm-btn" class="btn btn-danger">Confirm Merge</button>
+                            <button id="cancel-btn" class="btn btn-secondary">{{ _('Cancel') }}</button>
+                            <button id="confirm-btn" class="btn btn-danger">{{ _('Confirm Merge') }}</button>
                         </div>
                     </div>
 
                     <!-- Success Results -->
                     <div id="success-results" class="success-box" style="display: none;">
-                        <h3>Merge Complete</h3>
+                        <h3>{{ _('Merge Complete') }}</h3>
                         <p id="success-message"></p>
 
                         <div class="results-summary" id="results-summary"></div>
 
-                        <p class="success-note">The old tune has been marked as a redirect and will not appear in searches or be re-added to the system.</p>
+                        <p class="success-note">{{ _('The old tune has been marked as a redirect and will not appear in searches or be re-added to the system.') }}</p>
 
                         <div class="success-actions">
-                            <button id="merge-another-btn" class="btn btn-primary">Merge Another</button>
-                            <a href="{{ url_for('admin_tunes') }}" class="btn btn-secondary">Back to Tunes</a>
+                            <button id="merge-another-btn" class="btn btn-primary">{{ _('Merge Another') }}</button>
+                            <a href="{{ url_for('admin_tunes') }}" class="btn btn-secondary">{{ _('Back to Tunes') }}</a>
                         </div>
                     </div>
 
                     <!-- thesession.org merge sync (spec 031) -->
                     <div class="merge-scan-section">
-                        <h2>thesession.org Sync</h2>
-                        <p>A weekly job (Mondays, after thesession.org's Sunday data-dump refresh) finds tunes that were merged or deleted upstream and applies the merges automatically. Below is the record of what each run changed.</p>
+                        <h2>{{ _('thesession.org Sync') }}</h2>
+                        <p>{{ _("A weekly job (Mondays, after thesession.org's Sunday data-dump refresh) finds tunes that were merged or deleted upstream and applies the merges automatically. Below is the record of what each run changed.") }}</p>
 
                         <div class="scan-controls">
-                            <button id="scan-start-btn" class="btn btn-primary">Run Now</button>
-                            <button id="scan-cancel-btn" class="btn btn-secondary" style="display: none;">Cancel</button>
+                            <button id="scan-start-btn" class="btn btn-primary">{{ _('Run Now') }}</button>
+                            <button id="scan-cancel-btn" class="btn btn-secondary" style="display: none;">{{ _('Cancel') }}</button>
                             <span id="scan-status-text" class="scan-status-text"></span>
                         </div>
 
@@ -582,6 +583,78 @@
 </style>
 
 <script>
+// The page's sentences, in the reader's language (spec 057). {x} tokens are filled in below.
+const MSG = {
+    enterBoth: {{ _('Please enter both old and new tune IDs.')|tojson }},
+    sameIds: {{ _('Old and new tune IDs cannot be the same.')|tojson }},
+    loading: {{ _('Loading...')|tojson }},
+    previewFailed: {{ _('Failed to preview merge.')|tojson }},
+    networkError: {{ _('Network error: {error}')|tojson }},
+    previewMerge: {{ _('Preview Merge')|tojson }},
+    merging: {{ _('Merging...')|tojson }},
+    mergeFailed: {{ _('Failed to execute merge.')|tojson }},
+    confirmMerge: {{ _('Confirm Merge')|tojson }},
+    unknownType: {{ _('Unknown type')|tojson }},
+    tuneSettingsAbc: {{ _('Tune Settings (ABC notation)')|tojson }},
+    sessionTunes: {{ _('Session Tunes')|tojson }},
+    sessionTuneAliases: {{ _('Session Tune Aliases')|tojson }},
+    sessionLogEntries: {{ _('Session Log Entries')|tojson }},
+    personalCollections: {{ _('Personal Tune Collections')|tojson }},
+    perInstrumentStatuses: {{ _('Per-Instrument Statuses')|tojson }},
+    movedDropped: {{ _('{moved} moved, {dropped} dropped')|tojson }},
+    moved: {{ _('{moved} moved')|tojson }},
+    recordingSegments: {{ _('Recording Tune Segments')|tojson }},
+    tunebookRecords: {{ js_ngettext('{n} tunebook record', '{n} tunebook records')|tojson }},
+    repertoireRecords: {{ js_ngettext('{n} session repertoire record', '{n} session repertoire records')|tojson }},
+    logEntries: {{ js_ngettext('{n} log entry', '{n} log entries')|tojson }},
+    sessionsCount: {{ js_ngettext('{n} session', '{n} sessions')|tojson }},
+    recordsCount: {{ js_ngettext('{n} record', '{n} records')|tojson }},
+    keptAndAlias: {{ _('The tunes have different names, so the old name "{name}" will be kept as the displayed name on {records}, and added as a searchable alias in {sessions}.')|tojson }},
+    aliasOnly: {{ _('The old name "{name}" will be added as a searchable alias in {sessions}.')|tojson }},
+    mergedInto: {{ _('Tune #{old} has been merged into #{new}')|tojson }},
+    tuneSettingsMerged: {{ _('Tune settings merged')|tojson }},
+    sessionTunesUpdated: {{ _('Session tunes updated')|tojson }},
+    merged: {{ _('{n} merged')|tojson }},
+    sessionAliasesUpdated: {{ _('Session tune aliases updated')|tojson }},
+    logEntriesUpdated: {{ _('Session log entries updated')|tojson }},
+    personalUpdated: {{ _('Personal tune records updated')|tojson }},
+    perInstrumentLower: {{ _('Per-instrument statuses')|tojson }},
+    segmentsUpdated: {{ _('Recording tune segments updated')|tojson }},
+    oldNameKept: {{ _('Old name preserved as alias on')|tojson }},
+    liveScreens: {{ _('Live logger screens updated')|tojson }},
+    nothingUpdated: {{ _('No records needed updating')|tojson }},
+    startFailed: {{ _('Failed to start sync run.')|tojson }},
+    cancelFailed: {{ _('Failed to cancel run.')|tojson }},
+    tuneN: {{ _('tune #{id}')|tojson }},
+    applied: {{ _('applied')|tojson }},
+    notApplied: {{ _('not applied')|tojson }},
+    imported: {{ _('imported')|tojson }},
+    alsoKnownAs: {{ _('also known as: {names}')|tojson }},
+    deletedUpstream: {{ _('deleted upstream')|tojson }},
+    deletedNote: {{ _('no longer on thesession.org · local history keeps referencing it; no action needed')|tojson }},
+    error: {{ _('error')|tojson }},
+    retried: {{ _('retried on the next run')|tojson }},
+    interrupted: {{ _('interrupted')|tojson }},
+    running: {{ _('running…')|tojson }},
+    mergesApplied: {{ js_ngettext('{n} merge applied', '{n} merges applied')|tojson }},
+    notAppliedN: {{ _('{n} not applied')|tojson }},
+    deletedUpstreamN: {{ _('{n} deleted upstream')|tojson }},
+    errorsN: {{ js_ngettext('{n} error', '{n} errors')|tojson }},
+    cancelled: {{ _('cancelled')|tojson }},
+    noChanges: {{ _('No upstream changes affecting this database.')|tojson }},
+    noSyncYet: {{ _('No sync has run yet.')|tojson }},
+    runningSince: {{ _('Running — started {when}')|tojson }},
+    progress: {{ _('{checked} / {total} checked — {merged} merged ({applied} applied), {deleted} deleted, {errors}')|tojson }},
+    lastInterrupted: {{ _('Last run was interrupted — the next run (weekly or Run Now) starts fresh.')|tojson }},
+    lastRun: {{ _('Last run {when} ({by}).')|tojson }},
+    loadFailed: {{ _('Failed to load sync record.')|tojson }},
+};
+
+// Fill {token}s in a MSG string.
+function fill(template, values) {
+    return Object.keys(values).reduce((s, k) => s.split('{' + k + '}').join(String(values[k])), template);
+}
+
 const previewBtn = document.getElementById('preview-btn');
 const cancelBtn = document.getElementById('cancel-btn');
 const confirmBtn = document.getElementById('confirm-btn');
@@ -602,17 +675,17 @@ previewBtn.addEventListener('click', async function() {
     const newTuneId = parseInt(newTuneIdInput.value);
 
     if (!oldTuneId || !newTuneId) {
-        showError('Please enter both old and new tune IDs.');
+        showError(MSG.enterBoth);
         return;
     }
 
     if (oldTuneId === newTuneId) {
-        showError('Old and new tune IDs cannot be the same.');
+        showError(MSG.sameIds);
         return;
     }
 
     previewBtn.disabled = true;
-    previewBtn.textContent = 'Loading...';
+    previewBtn.textContent = MSG.loading;
     hideError();
 
     try {
@@ -628,13 +701,13 @@ previewBtn.addEventListener('click', async function() {
             currentPreview = data;
             showPreview(data);
         } else {
-            showError(data.error || 'Failed to preview merge.');
+            showError(data.error || MSG.previewFailed);
         }
     } catch (error) {
-        showError('Network error: ' + error.message);
+        showError(fill(MSG.networkError, { error: error.message }));
     } finally {
         previewBtn.disabled = false;
-        previewBtn.textContent = 'Preview Merge';
+        previewBtn.textContent = MSG.previewMerge;
     }
 });
 
@@ -648,7 +721,7 @@ confirmBtn.addEventListener('click', async function() {
     if (!currentPreview) return;
 
     confirmBtn.disabled = true;
-    confirmBtn.textContent = 'Merging...';
+    confirmBtn.textContent = MSG.merging;
 
     try {
         const response = await fetch('/api/admin/tunes/merge', {
@@ -666,15 +739,15 @@ confirmBtn.addEventListener('click', async function() {
         if (data.success) {
             showSuccess(data);
         } else {
-            showError(data.error || 'Failed to execute merge.');
+            showError(data.error || MSG.mergeFailed);
             previewResults.style.display = 'none';
             inputForm.style.display = 'block';
         }
     } catch (error) {
-        showError('Network error: ' + error.message);
+        showError(fill(MSG.networkError, { error: error.message }));
     } finally {
         confirmBtn.disabled = false;
-        confirmBtn.textContent = 'Confirm Merge';
+        confirmBtn.textContent = MSG.confirmMerge;
     }
 });
 
@@ -701,43 +774,51 @@ function showPreview(data) {
 
     // Old tune info
     document.getElementById('old-tune-name').textContent = `#${data.old_tune.tune_id} "${data.old_tune.name}"`;
-    document.getElementById('old-tune-meta').textContent = data.old_tune.type || 'Unknown type';
+    document.getElementById('old-tune-meta').textContent = data.old_tune.type || MSG.unknownType;
 
     // New tune info
     document.getElementById('new-tune-name').textContent = `#${data.new_tune.tune_id} "${data.new_tune.name}"`;
-    document.getElementById('new-tune-meta').textContent = data.new_tune.type || 'Unknown type';
+    document.getElementById('new-tune-meta').textContent = data.new_tune.type || MSG.unknownType;
 
     // Records table
     const tbody = document.getElementById('records-tbody');
     const records = data.affected_records;
     let rows = `
-        <tr><td>Tune Settings (ABC notation)</td><td class="text-right">${records.tune_settings}</td></tr>
-        <tr><td>Session Tunes</td><td class="text-right">${records.session_tunes}</td></tr>
-        <tr><td>Session Tune Aliases</td><td class="text-right">${records.session_tune_aliases}</td></tr>
-        <tr><td>Session Log Entries</td><td class="text-right">${records.session_instance_tunes}</td></tr>
-        <tr><td>Personal Tune Collections</td><td class="text-right">${records.person_tunes}</td></tr>
+        <tr><td>${MSG.tuneSettingsAbc}</td><td class="text-right">${records.tune_settings}</td></tr>
+        <tr><td>${MSG.sessionTunes}</td><td class="text-right">${records.session_tunes}</td></tr>
+        <tr><td>${MSG.sessionTuneAliases}</td><td class="text-right">${records.session_tune_aliases}</td></tr>
+        <tr><td>${MSG.sessionLogEntries}</td><td class="text-right">${records.session_instance_tunes}</td></tr>
+        <tr><td>${MSG.personalCollections}</td><td class="text-right">${records.person_tunes}</td></tr>
     `;
     if (records.person_tune_instruments_moved || records.person_tune_instruments_dropped) {
+        const moved = records.person_tune_instruments_moved;
         const dropped = records.person_tune_instruments_dropped;
-        rows += `<tr><td>Per-Instrument Statuses</td><td class="text-right">${records.person_tune_instruments_moved}${dropped ? ` moved, ${dropped} dropped` : ''}</td></tr>`;
+        rows += `<tr><td>${MSG.perInstrumentStatuses}</td><td class="text-right">${dropped ? fill(MSG.movedDropped, { moved, dropped }) : moved}</td></tr>`;
     }
     if (records.recording_tune_segments) {
-        rows += `<tr><td>Recording Tune Segments</td><td class="text-right">${records.recording_tune_segments}</td></tr>`;
+        rows += `<tr><td>${MSG.recordingSegments}</td><td class="text-right">${records.recording_tune_segments}</td></tr>`;
     }
     tbody.innerHTML = rows;
 
     // Name preservation summary (spec 030): who keeps seeing the old name
     const fills = data.alias_fills || {};
     const fillNotes = [];
-    if (fills.person_tune_name_alias) fillNotes.push(`${fills.person_tune_name_alias} tunebook record(s)`);
-    if (fills.session_tune_alias) fillNotes.push(`${fills.session_tune_alias} session repertoire record(s)`);
-    if (fills.session_instance_tune_name) fillNotes.push(`${fills.session_instance_tune_name} log entr(ies)`);
+    if (fills.person_tune_name_alias) fillNotes.push(ceolPlural(MSG.tunebookRecords, fills.person_tune_name_alias));
+    if (fills.session_tune_alias) fillNotes.push(ceolPlural(MSG.repertoireRecords, fills.session_tune_alias));
+    if (fills.session_instance_tune_name) fillNotes.push(ceolPlural(MSG.logEntries, fills.session_instance_tune_name));
     const aliasBox = document.getElementById('alias-fills-note');
     if (data.names_differ && fillNotes.length > 0) {
-        aliasBox.textContent = `The tunes have different names, so the old name "${data.old_tune.name}" will be kept as the displayed name on ${fillNotes.join(', ')}, and added as a searchable alias in ${fills.session_tune_alias_rows} session(s).`;
+        aliasBox.textContent = fill(MSG.keptAndAlias, {
+            name: data.old_tune.name,
+            records: fillNotes.join(', '),
+            sessions: ceolPlural(MSG.sessionsCount, fills.session_tune_alias_rows || 0),
+        });
         aliasBox.style.display = 'block';
     } else if (data.names_differ) {
-        aliasBox.textContent = `The old name "${data.old_tune.name}" will be added as a searchable alias in ${fills.session_tune_alias_rows || 0} session(s).`;
+        aliasBox.textContent = fill(MSG.aliasOnly, {
+            name: data.old_tune.name,
+            sessions: ceolPlural(MSG.sessionsCount, fills.session_tune_alias_rows || 0),
+        });
         aliasBox.style.display = fills.session_tune_alias_rows ? 'block' : 'none';
     } else {
         aliasBox.style.display = 'none';
@@ -770,54 +851,55 @@ function showSuccess(data) {
     successResults.style.display = 'block';
 
     document.getElementById('success-message').textContent =
-        `Tune #${data.old_tune.tune_id} has been merged into #${data.new_tune.tune_id}`;
+        fill(MSG.mergedInto, { old: data.old_tune.tune_id, new: data.new_tune.tune_id });
 
     // Results summary
     const summary = document.getElementById('results-summary');
     const tables = data.migrated_records || {};
     let html = '';
+    const withMerged = (updated, merged) => `${updated}${merged > 0 ? ', ' + fill(MSG.merged, { n: merged }) : ''}`;
 
     if (tables.tune_setting) {
-        html += `<div class="result-item"><span>Tune settings merged</span><span>${tables.tune_setting.updated || 0}</span></div>`;
+        html += `<div class="result-item"><span>${MSG.tuneSettingsMerged}</span><span>${tables.tune_setting.updated || 0}</span></div>`;
     }
     if (tables.session_tune) {
         const updated = tables.session_tune.updated || 0;
         const merged = tables.session_tune.deleted || 0;
-        html += `<div class="result-item"><span>Session tunes updated</span><span>${updated}${merged > 0 ? `, ${merged} merged` : ''}</span></div>`;
+        html += `<div class="result-item"><span>${MSG.sessionTunesUpdated}</span><span>${withMerged(updated, merged)}</span></div>`;
     }
     if (tables.session_tune_alias) {
         const updated = tables.session_tune_alias.updated || 0;
         const deleted = tables.session_tune_alias.deleted || 0;
-        html += `<div class="result-item"><span>Session tune aliases updated</span><span>${updated}${deleted > 0 ? `, ${deleted} merged` : ''}</span></div>`;
+        html += `<div class="result-item"><span>${MSG.sessionAliasesUpdated}</span><span>${withMerged(updated, deleted)}</span></div>`;
     }
     if (tables.session_instance_tune) {
-        html += `<div class="result-item"><span>Session log entries updated</span><span>${tables.session_instance_tune.updated || 0}</span></div>`;
+        html += `<div class="result-item"><span>${MSG.logEntriesUpdated}</span><span>${tables.session_instance_tune.updated || 0}</span></div>`;
     }
     if (tables.person_tune) {
         const updated = tables.person_tune.updated || 0;
         const merged = tables.person_tune.deleted || 0;
-        html += `<div class="result-item"><span>Personal tune records updated</span><span>${updated}${merged > 0 ? `, ${merged} merged` : ''}</span></div>`;
+        html += `<div class="result-item"><span>${MSG.personalUpdated}</span><span>${withMerged(updated, merged)}</span></div>`;
     }
     if (tables.person_tune_instrument && (tables.person_tune_instrument.moved || tables.person_tune_instrument.dropped)) {
         const moved = tables.person_tune_instrument.moved || 0;
         const dropped = tables.person_tune_instrument.dropped || 0;
-        html += `<div class="result-item"><span>Per-instrument statuses</span><span>${moved} moved${dropped > 0 ? `, ${dropped} dropped` : ''}</span></div>`;
+        html += `<div class="result-item"><span>${MSG.perInstrumentLower}</span><span>${dropped > 0 ? fill(MSG.movedDropped, { moved, dropped }) : fill(MSG.moved, { moved })}</span></div>`;
     }
     if (tables.recording_tune_segment && tables.recording_tune_segment.updated) {
-        html += `<div class="result-item"><span>Recording tune segments updated</span><span>${tables.recording_tune_segment.updated}</span></div>`;
+        html += `<div class="result-item"><span>${MSG.segmentsUpdated}</span><span>${tables.recording_tune_segment.updated}</span></div>`;
     }
     const aliasTotal = (tables.person_tune ? tables.person_tune.alias_filled || 0 : 0)
         + (tables.session_tune ? tables.session_tune.alias_filled || 0 : 0)
         + (tables.session_instance_tune ? tables.session_instance_tune.name_filled || 0 : 0)
         + (tables.session_tune_alias ? tables.session_tune_alias.added || 0 : 0);
     if (aliasTotal > 0) {
-        html += `<div class="result-item"><span>Old name preserved as alias on</span><span>${aliasTotal} record(s)</span></div>`;
+        html += `<div class="result-item"><span>${MSG.oldNameKept}</span><span>${ceolPlural(MSG.recordsCount, aliasTotal)}</span></div>`;
     }
     if (data.live_events_emitted) {
-        html += `<div class="result-item"><span>Live logger screens updated</span><span>${data.live_events_emitted} record(s)</span></div>`;
+        html += `<div class="result-item"><span>${MSG.liveScreens}</span><span>${ceolPlural(MSG.recordsCount, data.live_events_emitted)}</span></div>`;
     }
 
-    summary.innerHTML = html || '<div class="result-item"><span>No records needed updating</span></div>';
+    summary.innerHTML = html || `<div class="result-item"><span>${MSG.nothingUpdated}</span></div>`;
 
     // A merge from the scan punchlist changes done-state — recompute it.
     refreshScan();
@@ -863,9 +945,9 @@ scanStartBtn.addEventListener('click', async function() {
     scanErrorBox.style.display = 'none';
     try {
         const data = await scanApi('POST', '/api/admin/tunes/merge-scan', {});
-        if (!data.success) showScanError(data.error || 'Failed to start sync run.');
+        if (!data.success) showScanError(data.error || MSG.startFailed);
     } catch (e) {
-        showScanError('Network error: ' + e.message);
+        showScanError(fill(MSG.networkError, { error: e.message }));
     } finally {
         scanStartBtn.disabled = false;
         refreshScan();
@@ -876,9 +958,9 @@ scanCancelBtn.addEventListener('click', async function() {
     scanCancelBtn.disabled = true;
     try {
         const data = await scanApi('DELETE', '/api/admin/tunes/merge-scan');
-        if (!data.success) showScanError(data.error || 'Failed to cancel run.');
+        if (!data.success) showScanError(data.error || MSG.cancelFailed);
     } catch (e) {
-        showScanError('Network error: ' + e.message);
+        showScanError(fill(MSG.networkError, { error: e.message }));
     } finally {
         scanCancelBtn.disabled = false;
         refreshScan();
@@ -891,16 +973,16 @@ function thesessionLink(id) {
 
 function renderResultRow(item) {
     if (item.result_type === 'merged') {
-        const targetName = item.target_name || `tune #${item.target_tune_id}`;
+        const targetName = item.target_name || fill(MSG.tuneN, { id: item.target_tune_id });
         const badges = [
             item.applied
-                ? '<span class="scan-badge scan-badge-local">applied</span>'
-                : '<span class="scan-badge scan-badge-import">not applied</span>',
-            item.imported ? '<span class="scan-badge scan-badge-import">imported</span>' : ''
+                ? `<span class="scan-badge scan-badge-local">${esc(MSG.applied)}</span>`
+                : `<span class="scan-badge scan-badge-import">${esc(MSG.notApplied)}</span>`,
+            item.imported ? `<span class="scan-badge scan-badge-import">${esc(MSG.imported)}</span>` : ''
         ].join('');
         const aliases = (item.target_aliases || []).filter(a => a && a !== targetName);
         let meta = esc(item.detail || '');
-        if (aliases.length) meta += ` &middot; also known as: ${esc(aliases.join(', '))}`;
+        if (aliases.length) meta += ` &middot; ${esc(fill(MSG.alsoKnownAs, { names: aliases.join(', ') }))}`;
         return `
             <div class="scan-row">
                 <div class="scan-row-main">
@@ -919,8 +1001,8 @@ function renderResultRow(item) {
             <div class="scan-row">
                 <div class="scan-row-main">
                     <div class="scan-row-title">${esc(item.tune_name)} (${thesessionLink(item.tune_id)})
-                        <span class="scan-badge scan-badge-done">deleted upstream</span></div>
-                    <div class="scan-row-meta">no longer on thesession.org &middot; local history keeps referencing it; no action needed</div>
+                        <span class="scan-badge scan-badge-done">${esc(MSG.deletedUpstream)}</span></div>
+                    <div class="scan-row-meta">${esc(MSG.deletedNote)}</div>
                 </div>
             </div>`;
     }
@@ -928,8 +1010,8 @@ function renderResultRow(item) {
         <div class="scan-row">
             <div class="scan-row-main">
                 <div class="scan-row-title">${esc(item.tune_name)} (${thesessionLink(item.tune_id)})
-                    <span class="scan-badge scan-badge-import">error</span></div>
-                <div class="scan-row-meta">${esc(item.detail || 'error')} &middot; retried on the next run</div>
+                    <span class="scan-badge scan-badge-import">${esc(MSG.error)}</span></div>
+                <div class="scan-row-meta">${esc(item.detail || MSG.error)} &middot; ${esc(MSG.retried)}</div>
             </div>
         </div>`;
 }
@@ -938,18 +1020,18 @@ function renderRun(run, idx) {
     const when = new Date(run.started_at).toLocaleString();
     let summary;
     if (run.status === 'running') {
-        summary = run.stale ? `${when} &mdash; interrupted` : `${when} &mdash; running&hellip;`;
+        summary = `${when} &mdash; ${esc(run.stale ? MSG.interrupted : MSG.running)}`;
     } else {
-        const bits = [`${run.applied_count} merge${run.applied_count === 1 ? '' : 's'} applied`];
-        if (run.merged_count > run.applied_count) bits.push(`${run.merged_count - run.applied_count} not applied`);
-        if (run.deleted_count) bits.push(`${run.deleted_count} deleted upstream`);
-        if (run.error_count) bits.push(`${run.error_count} error${run.error_count === 1 ? '' : 's'}`);
-        summary = `${when} &mdash; ${esc(run.triggered_by)} &mdash; ${bits.join(' &middot; ')}`;
-        if (run.status === 'cancelled') summary += ' &mdash; cancelled';
+        const bits = [ceolPlural(MSG.mergesApplied, run.applied_count)];
+        if (run.merged_count > run.applied_count) bits.push(fill(MSG.notAppliedN, { n: run.merged_count - run.applied_count }));
+        if (run.deleted_count) bits.push(fill(MSG.deletedUpstreamN, { n: run.deleted_count }));
+        if (run.error_count) bits.push(ceolPlural(MSG.errorsN, run.error_count));
+        summary = `${when} &mdash; ${esc(run.triggered_by)} &mdash; ${bits.map(esc).join(' &middot; ')}`;
+        if (run.status === 'cancelled') summary += ` &mdash; ${esc(MSG.cancelled)}`;
     }
     const body = run.results.length
         ? run.results.map(renderResultRow).join('')
-        : (run.status === 'running' ? '' : '<div class="scan-empty">No upstream changes affecting this database.</div>');
+        : (run.status === 'running' ? '' : `<div class="scan-empty">${esc(MSG.noChanges)}</div>`);
     return `
         <details class="sync-run"${idx === 0 ? ' open' : ''}>
             <summary>${summary}</summary>
@@ -966,25 +1048,31 @@ function renderScan(data) {
     scanCancelBtn.style.display = running ? 'inline-block' : 'none';
 
     if (!latest) {
-        scanStatusText.textContent = 'No sync has run yet.';
+        scanStatusText.textContent = MSG.noSyncYet;
         scanProgress.style.display = 'none';
         syncRecord.innerHTML = '';
         return;
     }
 
     if (running) {
-        scanStatusText.textContent = `Running — started ${new Date(latest.started_at).toLocaleString()}`;
+        scanStatusText.textContent = fill(MSG.runningSince, { when: new Date(latest.started_at).toLocaleString() });
         scanProgress.style.display = 'block';
         const pct = latest.total_count ? Math.round(100 * latest.checked_count / latest.total_count) : 0;
         scanProgressFill.style.width = Math.min(pct, 100) + '%';
-        scanProgressText.textContent =
-            `${latest.checked_count} / ${latest.total_count} checked — ${latest.merged_count} merged (${latest.applied_count} applied), ${latest.deleted_count} deleted, ${latest.error_count} error${latest.error_count === 1 ? '' : 's'}`;
+        scanProgressText.textContent = fill(MSG.progress, {
+            checked: latest.checked_count,
+            total: latest.total_count,
+            merged: latest.merged_count,
+            applied: latest.applied_count,
+            deleted: latest.deleted_count,
+            errors: ceolPlural(MSG.errorsN, latest.error_count),
+        });
     } else {
         scanProgress.style.display = 'none';
         if (latest.status === 'running' && latest.stale) {
-            scanStatusText.textContent = 'Last run was interrupted — the next run (weekly or Run Now) starts fresh.';
+            scanStatusText.textContent = MSG.lastInterrupted;
         } else {
-            scanStatusText.textContent = `Last run ${new Date(latest.started_at).toLocaleString()} (${latest.triggered_by}).`;
+            scanStatusText.textContent = fill(MSG.lastRun, { when: new Date(latest.started_at).toLocaleString(), by: latest.triggered_by });
         }
     }
 
@@ -995,7 +1083,7 @@ async function refreshScan() {
     try {
         const data = await scanApi('GET', '/api/admin/tunes/merge-scan');
         if (!data.success) {
-            showScanError(data.error || 'Failed to load sync record.');
+            showScanError(data.error || MSG.loadFailed);
             return;
         }
         renderScan(data);

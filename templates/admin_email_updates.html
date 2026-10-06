@@ -1,6 +1,7 @@
+{# i18n-converted #}
 {% extends "base.html" %}
 
-{% block title %}Admin - Email Updates{% endblock %}
+{% block title %}{{ _('Admin - Email Updates') }}{% endblock %}
 
 {% block content %}
 <div class="docs-content-inner">
@@ -9,47 +10,46 @@
             {% include 'admin_tabs.html' %}
 
             <section class="docs-section" id="email-updates">
-                <h2>Send App Updates</h2>
+                <h2>{{ _('Send App Updates') }}</h2>
                 <p>
-                    <strong>{{ recipient_count }}</strong>
-                    user{{ '' if recipient_count == 1 else 's' }} {{ 'is' if recipient_count == 1 else 'are' }} opted in to update emails.
-                    Messages are sent from ceol@ceol.io with a personalized unsubscribe link.
+                    {{ ngettext('<strong>%(num)d</strong> user is opted in to update emails.', '<strong>%(num)d</strong> users are opted in to update emails.', recipient_count) }}
+                    {{ _('Messages are sent from %(address)s with a personalized unsubscribe link.', address='ceol@ceol.io') }}
                 </p>
 
                 <form id="compose-form" onsubmit="return false;">
                     <div class="mb-3">
-                        <label for="email-subject" class="form-label">Subject</label>
+                        <label for="email-subject" class="form-label">{{ _('Subject') }}</label>
                         <input type="text" class="form-control" id="email-subject" name="subject" maxlength="200">
                     </div>
                     <div class="mb-3">
-                        <label for="email-body" class="form-label">Message</label>
+                        <label for="email-body" class="form-label">{{ _('Message') }}</label>
                         <textarea class="form-control" id="email-body" name="body_markdown" rows="12"
-                                  placeholder="# Heading&#10;&#10;What's new..."></textarea>
+                                  placeholder="{{ _('# Heading') }}&#10;&#10;{{ _("What's new...") }}"></textarea>
                         <small class="form-text text-muted">
-                            Markdown is supported (headings, <em>emphasis</em>, links, lists).
-                            The plain-text version of the email is the raw Markdown.
+                            {{ _('Markdown is supported (headings, <em>emphasis</em>, links, lists).') }}
+                            {{ _('The plain-text version of the email is the raw Markdown.') }}
                         </small>
                     </div>
                     <div class="mb-3">
-                        <button type="button" id="test-send-btn" class="btn btn-outline-primary">Send test to me</button>
+                        <button type="button" id="test-send-btn" class="btn btn-outline-primary">{{ _('Send test to me') }}</button>
                         <button type="button" id="send-btn" class="btn btn-primary">
-                            Send to {{ recipient_count }} recipient{{ '' if recipient_count == 1 else 's' }}
+                            {{ ngettext('Send to %(num)d recipient', 'Send to %(num)d recipients', recipient_count) }}
                         </button>
                     </div>
                     <div id="send-status" class="alert" style="display: none;" role="alert"></div>
                 </form>
 
-                <h3 class="mt-5">Past Messages</h3>
+                <h3 class="mt-5">{{ _('Past Messages') }}</h3>
                 {% if messages %}
                 <div style="overflow-x: auto;">
                     <table class="table">
                         <thead>
                             <tr>
-                                <th>Date</th>
-                                <th>Subject</th>
-                                <th>Sent By</th>
-                                <th>Sent</th>
-                                <th>Failed</th>
+                                <th>{{ _('Date') }}</th>
+                                <th>{{ _('Subject') }}</th>
+                                <th>{{ _('Sent By') }}</th>
+                                <th>{{ _('Sent') }}</th>
+                                <th>{{ _('Failed') }}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -79,7 +79,7 @@
                     </table>
                 </div>
                 {% else %}
-                <p class="text-muted">No messages sent yet.</p>
+                <p class="text-muted">{{ _('No messages sent yet.') }}</p>
                 {% endif %}
             </section>
         </article>
@@ -87,6 +87,17 @@
 </div>
 
 <script>
+const EMAIL_T = {
+    required: {{ _('Subject and message are both required.')|tojson }},
+    network: {{ _('Network error — please try again.')|tojson }},
+    sendingTest: {{ _('Sending test...')|tojson }},
+    testSent: {{ _('Test sent.')|tojson }},
+    testFailed: {{ _('Test send failed.')|tojson }},
+    confirmSend: {{ js_ngettext('Send this message to {n} recipient? This cannot be undone.', 'Send this message to {n} recipients? This cannot be undone.')|tojson }},
+    sending: {{ _('Sending...')|tojson }},
+    sentTo: {{ _('Sent to {sent} of {total} recipients ({failed} failed). Reloading...')|tojson }},
+    sendFailed: {{ _('Send failed.')|tojson }},
+};
 document.addEventListener('DOMContentLoaded', function() {
     const testBtn = document.getElementById('test-send-btn');
     const sendBtn = document.getElementById('send-btn');
@@ -109,7 +120,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function post(url, button, workingLabel) {
         const payload = composedMessage();
         if (!payload.subject || !payload.body_markdown) {
-            showStatus('Subject and message are both required.', false);
+            showStatus(EMAIL_T.required, false);
             return Promise.resolve(null);
         }
         const originalLabel = button.textContent;
@@ -123,7 +134,7 @@ document.addEventListener('DOMContentLoaded', function() {
             body: JSON.stringify(payload)
         })
         .then(response => response.json())
-        .catch(() => ({ success: false, error: 'Network error — please try again.' }))
+        .catch(() => ({ success: false, error: EMAIL_T.network }))
         .finally(() => {
             testBtn.disabled = false;
             sendBtn.disabled = false;
@@ -132,24 +143,25 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     testBtn.addEventListener('click', function() {
-        post('/api/admin/email-updates/test', testBtn, 'Sending test...').then(data => {
+        post('/api/admin/email-updates/test', testBtn, EMAIL_T.sendingTest).then(data => {
             if (!data) return;
-            showStatus(data.success ? (data.message || 'Test sent.') : (data.error || 'Test send failed.'), data.success);
+            showStatus(data.success ? (data.message || EMAIL_T.testSent) : (data.error || EMAIL_T.testFailed), data.success);
         });
     });
 
     sendBtn.addEventListener('click', function() {
-        if (!confirm('Send this message to ' + recipientCount + ' recipient(s)? This cannot be undone.')) {
+        if (!confirm(ceolPlural(EMAIL_T.confirmSend, recipientCount))) {
             return;
         }
-        post('/api/admin/email-updates/send', sendBtn, 'Sending...').then(data => {
+        post('/api/admin/email-updates/send', sendBtn, EMAIL_T.sending).then(data => {
             if (!data) return;
             if (data.success) {
-                showStatus('Sent to ' + data.success_count + ' of ' + data.recipient_count +
-                           ' recipients (' + data.failure_count + ' failed). Reloading...', true);
+                showStatus(EMAIL_T.sentTo.replace('{sent}', data.success_count)
+                           .replace('{total}', data.recipient_count)
+                           .replace('{failed}', data.failure_count), true);
                 setTimeout(() => window.location.reload(), 1500);
             } else {
-                showStatus(data.error || 'Send failed.', false);
+                showStatus(data.error || EMAIL_T.sendFailed, false);
             }
         });
     });

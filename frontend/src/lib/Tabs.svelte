@@ -1,4 +1,5 @@
 <script>
+  // i18n-converted
   import { Tabs as BitsTabs } from 'bits-ui'
 
   // Tabs (spec 035): THE tab engine — one horizontal strip of tabs at every width.

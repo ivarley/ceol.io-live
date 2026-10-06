@@ -152,8 +152,8 @@ ios-fixtures: ## iOS: re-capture the real API responses CeolKit's decoding tests
 # server reads. tests/unit/test_i18n_catalogs.py fails while any string lacks Irish.
 I18N_IGNORE = --ignore-dirs='venv node_modules lab spike tests frontend static ios streaming listen abc-renderer e2e scripts .git .claude'
 i18n-extract: ## i18n: extract the server's and templates' strings into translations/messages.pot
-	./venv/bin/pybabel extract -F babel.cfg $(I18N_IGNORE) -k _l -k lazy_gettext --sort-by-file --no-wrap -o translations/messages.pot .
-	./venv/bin/pybabel update -i translations/messages.pot -d translations -l ga --no-wrap --no-fuzzy-matching
+	./venv/bin/pybabel extract -F babel.cfg $(I18N_IGNORE) -k _l -k lazy_gettext -k js_ngettext:1,2 --sort-by-file --no-wrap -o translations/messages.pot .
+	./venv/bin/pybabel update -i translations/messages.pot -d translations -l ga --no-wrap --no-fuzzy-matching --ignore-obsolete
 
 i18n-compile: ## i18n: compile translations/ga/LC_MESSAGES/messages.po to the .mo the server reads
 	./venv/bin/pybabel compile -d translations -l ga --statistics

@@ -1,11 +1,13 @@
 <script>
+  // i18n-converted
   // Add-to-session-tunes pane: the same shell + deep search as the My Tunes add pane
   // (mobile slide-in / desktop split pane), but scoped to a session's repertoire —
   // tunes already in THIS session dim and sort last, and the configure phase asks
   // the session questions instead: alias ("we call this"), and under Advanced a
   // specific setting and the key the session plays it in. Bundled into the
   // sessionpage bundle as a child of its App, driven via bind:this + open().
-  import { Chevron, Chip, ServerError } from '../lib/index.js'
+  import { Chevron, Chip, ServerError, t, tn, tuneTypeName } from '../lib/index.js'
+  import { failText } from './labels.js'
   import TuneSearch from '../TuneSearch.svelte'
   import Incipit from '../Incipit.svelte'
   import { createPaneState } from './pane.svelte.js'
@@ -111,24 +113,16 @@
 
   // ---- setting field (Advanced) ----
   function parseSettingId(input) {
-    const t = (input || '').trim()
-    if (!t) return { ok: true, id: null }
-    if (/^\d+$/.test(t)) return { ok: true, id: parseInt(t, 10) }
-    if (t.includes('thesession.org')) {
-      const qm = t.match(/[?&]setting=(\d+)/)
+    const text = (input || '').trim()
+    if (!text) return { ok: true, id: null }
+    if (/^\d+$/.test(text)) return { ok: true, id: parseInt(text, 10) }
+    if (text.includes('thesession.org')) {
+      const qm = text.match(/[?&]setting=(\d+)/)
       if (qm) return { ok: true, id: parseInt(qm[1], 10) }
-      const hm = t.match(/#setting(\d+)/)
+      const hm = text.match(/#setting(\d+)/)
       if (hm) return { ok: true, id: parseInt(hm[1], 10) }
     }
     return { ok: false, id: null }
-  }
-
-  // What to show when a request fails: the server's (or our own) explanation when
-  // there is one, else a human sentence. Raw network/parse text only reaches the console.
-  function failText(e, what) {
-    console.error(`Couldn't ${what}:`, e)
-    if (e instanceof ServerError && e.message) return e.message
-    return `Couldn't ${what}. Check your connection and try again.`
   }
 
   async function submit() {
@@ -136,13 +130,13 @@
     errorMsg = ''
     const s = parseSettingId(settingRaw)
     if (!s.ok) {
-      settingError = 'Enter a setting number or paste a thesession.org URL.'
+      settingError = t('Enter a setting number or paste a thesession.org URL.')
       advancedOpen = true
       return
     }
     settingError = ''
     if (!navigator.onLine) {
-      errorMsg = 'You are offline. Session tunes can only be added online.'
+      errorMsg = t('You are offline. Session tunes can only be added online.')
       return
     }
     submitting = true
@@ -171,7 +165,7 @@
       close()
       onAdded(finalId, picked.name)
     } catch (e) {
-      errorMsg = failText(e, 'add the tune to the session')
+      errorMsg = failText(e, t('add the tune to the session'))
       submitting = false
     }
   }
@@ -179,14 +173,14 @@
 
 {#if pane.visible}
   <div class="mt-add-backdrop" class:mt-open={pane.shown} onclick={close} aria-hidden="true"></div>
-  <div class="mt-add-pane" class:mt-open={pane.shown} role="dialog" aria-label="Add a tune to this session">
+  <div class="mt-add-pane" class:mt-open={pane.shown} role="dialog" aria-label={t('Add a tune to this session')}>
     {#if !picked}
       <TuneSearch
         {config}
         variant="modal"
-        title="Search for a tune"
+        title={t('Search for a tune')}
         allowAsIs={false}
-        actionLabel="＋ Add This Tune"
+        actionLabel={t('＋ Add This Tune')}
         dimInSession={true}
         {initialQuery}
         {history}
@@ -196,15 +190,15 @@
       />
     {:else}
       <div class="deep-head">
-        <button class="mt-back" onclick={backToSearch} aria-label="Back to search"><Chevron dir="left" size={18} /></button>
-        <span class="deep-title">Add to Session</span>
-        <button class="deep-done" onclick={close}>Cancel</button>
+        <button class="mt-back" onclick={backToSearch} aria-label={t('Back to search')}><Chevron dir="left" size={18} /></button>
+        <span class="deep-title">{t('Add to Session')}</span>
+        <button class="deep-done" onclick={close}>{t('Cancel')}</button>
       </div>
       <div class="mt-config">
         <div class="deep-card mt-picked">
           <div class="deep-card-head">
             <span class="deep-name">{picked.name}</span>
-            <span class="deep-type">{picked.tune_type || ''}</span>
+            <span class="deep-type">{tuneTypeName(picked.tune_type) || ''}</span>
           </div>
           {#if picked.tune_id != null && (picked.incipit_image || picked.can_render)}
             <div class="deep-staff">
@@ -213,57 +207,57 @@
           {/if}
           <div class="deep-meta">
             {#if picked.thesession_id != null && picked.tune_id == null}
-              <Chip label="importing from thesession.org" styled={false} chipClass="deep-badge" />
+              <Chip label={t('importing from thesession.org')} styled={false} chipClass="deep-badge" />
             {/if}
             {#if picked.tunebook_count != null}
-              <span class="deep-books">{picked.tunebook_count} tunebooks</span>
+              <span class="deep-books">{tn(picked.tunebook_count, '{n} tunebook', '{n} tunebooks')}</span>
             {/if}
           </div>
-          <button class="mt-change" onclick={backToSearch}>Not this one? Back to search</button>
+          <button class="mt-change" onclick={backToSearch}>{t('Not this one? Back to search')}</button>
         </div>
 
         <div class="mt-section">
-          <label class="mt-label" for="st-add-alias">We call this (optional)</label>
+          <label class="mt-label" for="st-add-alias">{t('We call this (optional)')}</label>
           <input
             id="st-add-alias"
             class="mt-setting"
             maxlength="255"
-            placeholder="Local name for this tune, if different"
+            placeholder={t('Local name for this tune, if different')}
             bind:value={alias}
           />
         </div>
 
         <div class="mt-section">
           <button class="mt-advanced-toggle" onclick={() => (advancedOpen = !advancedOpen)}>
-            <Chevron dir={advancedOpen ? "down" : "right"} size={14} /> Advanced
+            <Chevron dir={advancedOpen ? "down" : "right"} size={14} /> {t('Advanced')}
           </button>
           {#if advancedOpen}
             <div class="mt-advanced">
-              <label class="mt-label" for="st-add-setting">Setting (optional)</label>
+              <label class="mt-label" for="st-add-setting">{t('Setting (optional)')}</label>
               <input
                 id="st-add-setting"
                 class="mt-setting"
-                placeholder="Setting number or thesession.org URL"
+                placeholder={t('Setting number or thesession.org URL')}
                 bind:value={settingRaw}
                 oninput={() => (settingError = '')}
               />
-              <p class="mt-help">If the session plays a specific setting of the tune, paste its URL or setting number.</p>
+              <p class="mt-help">{t('If the session plays a specific setting of the tune, paste its URL or setting number.')}</p>
               {#if settingError}<p class="mt-error">{settingError}</p>{/if}
-              <label class="mt-label" for="st-add-key">Key (optional)</label>
+              <label class="mt-label" for="st-add-key">{t('Key (optional)')}</label>
               <select id="st-add-key" class="mt-setting" bind:value={keyChoice}>
-                <option value="">(not specified)</option>
+                <option value="">{t('(not specified)')}</option>
                 {#each KEYS as k}
                   <option value={k}>{k}</option>
                 {/each}
               </select>
-              <p class="mt-help">The key the session typically plays this tune in.</p>
+              <p class="mt-help">{t('The key the session typically plays this tune in.')}</p>
             </div>
           {/if}
         </div>
 
         {#if errorMsg}<p class="mt-error">{errorMsg}</p>{/if}
         <button class="mt-submit" disabled={submitting} onclick={submit}>
-          {submitting ? 'Adding…' : 'Add to Session'}
+          {submitting ? t('Adding…') : t('Add to Session')}
         </button>
       </div>
     {/if}

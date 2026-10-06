@@ -9,7 +9,7 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
-import { ga, t, tn, formatDate } from '../src/lib/i18n/index.js'
+import { ga, t, tn, tc, formatDate } from '../src/lib/i18n/index.js'
 
 const SRC = join(__dirname, '..', 'src')
 
@@ -31,6 +31,7 @@ const STR = String.raw`(['"])((?:\\.|(?!\1).)*?)\1`
 const T_CALL = new RegExp(String.raw`(?<![\w.])t\(\s*` + STR, 'g')
 const TN_CALL = new RegExp(String.raw`(?<![\w.])tn\(\s*[^,]+,\s*` + STR + String.raw`\s*,\s*` + STR.replace('\\1', '\\3').replace('\\1', '\\3'), 'g')
 const unescape = (s) => s.replace(/\\(['"\\])/g, '$1')
+const TC_CALL = new RegExp(String.raw`(?<![\w.])tc\(\s*` + STR + String.raw`\s*,\s*` + STR.replace('\\1', '\\3').replace('\\1', '\\3'), 'g')
 
 function used() {
   const singles = new Map()
@@ -39,6 +40,7 @@ function used() {
     const text = readFileSync(file, 'utf8')
     const where = relative(SRC, file)
     for (const m of text.matchAll(T_CALL)) singles.set(unescape(m[2]), where)
+    for (const m of text.matchAll(TC_CALL)) singles.set(`${unescape(m[2])}|${unescape(m[4])}`, where)
     for (const m of text.matchAll(TN_CALL)) plurals.set(unescape(m[4]), where)
   }
   return { singles, plurals }
@@ -134,6 +136,13 @@ describe('t() and tn()', () => {
     window.__CEOL_LANG__ = 'ga'
     expect(t('Language')).toBe('Teanga')
     expect(t('Not in the catalog')).toBe('Not in the catalog')
+  })
+
+  it('tc() keeps one English word apart by context', () => {
+    expect(tc('area', 'Admin')).toBe('Admin')
+    window.__CEOL_LANG__ = 'ga'
+    expect(tc('area', 'Admin')).toBe('Riarachán')
+    expect(t('Admin')).toBe('Bainisteoir')
   })
 
   it('formatDate() speaks the page language', () => {

@@ -402,5 +402,13 @@
   "You're offline. Check your connection, then try again.": {
     "ga": "Tá tú as líne. Seiceáil do cheangal, ansin bain triail eile as.",
     "review": true
+  },
+  "area|Admin": {
+    "ga": "Riarachán",
+    "review": false
+  },
+  "people|Attended": {
+    "ga": "Bhí i láthair",
+    "review": true
   }
 }

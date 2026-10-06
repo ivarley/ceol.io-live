@@ -1,11 +1,12 @@
 <script>
+  // i18n-converted
   // Logs tab: session instance history table (row click opens the bundled
   // InstanceSheet — the Svelte port of the old static/js/session_instance_modal.js),
   // ?instance= deep link auto-open, and the Add Session Instance sheet
   // (suggestion-prefilled).
   let { sessionPath, locationName, load } = $props()
 
-  import { Sheet, toast, Chip, LoadError } from '../lib/index.js'
+  import { Sheet, toast, Chip, LoadError, t, formatDate } from '../lib/index.js'
   import InstanceSheet from './InstanceSheet.svelte'
   import { parseLocalDate } from '../shared/parse.js'
 
@@ -59,8 +60,8 @@
   const fmtDate = (dateStr) => {
     const date = parseLocalDate(dateStr)
     return {
-      main: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-      weekday: date.toLocaleDateString('en-US', { weekday: 'long' }),
+      main: formatDate(date, { month: 'short', day: 'numeric', year: 'numeric' }),
+      weekday: formatDate(date, { weekday: 'long' }),
     }
   }
 
@@ -125,7 +126,7 @@
     const comments = commentsValue.trim()
 
     if (!date) {
-      toast('Please enter a session date', 'error')
+      toast(t('Please enter a session date'), 'error')
       return
     }
 
@@ -151,40 +152,40 @@
           // Reload the logs content to show the new instance
           loadLogsContent()
         } else {
-          toast(data.message || "Couldn't add the session instance. Try again.", 'error')
+          toast(data.message || t("Couldn't add the session instance. Try again."), 'error')
         }
       })
       .catch((error) => {
         adding = false
         console.error('Error adding session instance:', error)
-        toast("Couldn't add the session instance. Check your connection and try again.", 'error')
+        toast(t("Couldn't add the session instance. Check your connection and try again."), 'error')
       })
   }
 </script>
 
 <section class="docs-section">
   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-    <h2 class="section-heading" style="margin-bottom: 0;">Session Instance History</h2>
+    <h2 class="section-heading" style="margin-bottom: 0;">{t('Session Instance History')}</h2>
     <button type="button" class="btn btn-primary" id="add-session-instance-btn" onclick={showAddSessionModal}>
-      Add Session Instance
+      {t('Add Session Instance')}
     </button>
   </div>
   <div id="logs-content">
     {#if loadError}
-      <LoadError id="logs-load-error" what="the session history" onRetry={loadLogsContent} retrying={reloading} />
+      <LoadError id="logs-load-error" message={t("Couldn't load the session history.")} onRetry={loadLogsContent} retrying={reloading} />
     {:else if !logs}
-      <p class="text-muted">Loading session history...</p>
+      <p class="text-muted">{t('Loading session history...')}</p>
     {:else if logs.length === 0}
-      <div class="alert alert-info">No session instances found.</div>
+      <div class="alert alert-info">{t('No session instances found.')}</div>
     {:else}
       <div class="table-responsive">
         <table class="table table-striped table-hover" id="logs-table">
           <thead>
             <tr>
-              <th>Date</th>
-              <th class="text-center">Tunes</th>
-              <th class="text-center">Players</th>
-              <th class="text-center">Status</th>
+              <th>{t('Date')}</th>
+              <th class="text-center">{t('Tunes')}</th>
+              <th class="text-center">{t('Players')}</th>
+              <th class="text-center">{t('Status')}</th>
             </tr>
           </thead>
           <tbody>
@@ -203,7 +204,7 @@
                 <td class="log-tunes text-center">{log.tune_count}</td>
                 <td class="log-attendance text-center">{log.attendance_count}</td>
                 <td class="log-status text-center">
-                  {#if log.is_cancelled}<Chip label="Cancelled" styled={false} chipClass="badge bg-danger" />{:else}<Chip label="Held" styled={false} chipClass="badge bg-success" />{/if}
+                  {#if log.is_cancelled}<Chip label={t('Cancelled')} styled={false} chipClass="badge bg-danger" />{:else}<Chip label={t('Held')} styled={false} chipClass="badge bg-success" />{/if}
                 </td>
               </tr>
             {/each}
@@ -216,43 +217,43 @@
 
 <!-- Add Session Instance Sheet (commit lives in the footer so a failed POST
      keeps the form open, like the legacy modal) -->
-<Sheet bind:open={addModalOpen} title="Add Session Instance">
+<Sheet bind:open={addModalOpen} title={t('Add Session Instance')}>
   {#if suggestError}
     <LoadError
       inline
       id="add-instance-suggest-error"
-      message="Couldn't look up the next usual date, so this is today. Check it before adding."
+      message={t("Couldn't look up the next usual date, so this is today. Check it before adding.")}
       onRetry={suggest}
       retrying={suggesting} />
   {/if}
   <div class="mb-3">
-    <label for="session-date-input" class="form-label">Session Date:</label>
+    <label for="session-date-input" class="form-label">{t('Session Date:')}</label>
     <input type="date" id="session-date-input" class="form-control" bind:value={dateValue} required />
   </div>
 
   <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
     <div class="mb-3">
-      <label for="session-start-time-input" class="form-label">Start Time:</label>
+      <label for="session-start-time-input" class="form-label">{t('Start Time:')}</label>
       <input type="time" id="session-start-time-input" class="form-control" bind:value={startTimeValue} />
     </div>
     <div class="mb-3">
-      <label for="session-end-time-input" class="form-label">End Time:</label>
+      <label for="session-end-time-input" class="form-label">{t('End Time:')}</label>
       <input type="time" id="session-end-time-input" class="form-control" bind:value={endTimeValue} />
     </div>
   </div>
 
   <div class="mb-3">
-    <label for="session-location-input" class="form-label">Location:</label>
-    <input type="text" id="session-location-input" class="form-control" placeholder="The usual: {locationName}" bind:value={locationValue} />
+    <label for="session-location-input" class="form-label">{t('Location:')}</label>
+    <input type="text" id="session-location-input" class="form-control" placeholder={t('The usual: {location}', { location: locationName })} bind:value={locationValue} />
   </div>
 
   <div class="mb-3">
-    <label for="session-comments-input" class="form-label">Comments:</label>
-    <textarea id="session-comments-input" class="form-control" placeholder="Notes about this session" rows="3" style="resize: vertical;" bind:value={commentsValue}></textarea>
+    <label for="session-comments-input" class="form-label">{t('Comments:')}</label>
+    <textarea id="session-comments-input" class="form-control" placeholder={t('Notes about this session')} rows="3" style="resize: vertical;" bind:value={commentsValue}></textarea>
   </div>
   {#snippet footer()}
     <div style="text-align: right;">
-      <button type="button" class="btn btn-primary" id="add-session-confirm-btn" onclick={addSessionInstance} disabled={adding}>{adding ? 'Adding…' : 'Add Session'}</button>
+      <button type="button" class="btn btn-primary" id="add-session-confirm-btn" onclick={addSessionInstance} disabled={adding}>{adding ? t('Adding…') : t('Add Session')}</button>
     </div>
   {/snippet}
 </Sheet>

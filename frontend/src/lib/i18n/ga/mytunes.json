@@ -1,0 +1,1084 @@
+{
+  "(attendance)": {
+    "ga": "(freastal)",
+    "review": true
+  },
+  "(instrument)": {
+    "ga": "(uirlis)",
+    "review": true
+  },
+  "(membership)": {
+    "ga": "(ballraíocht)",
+    "review": true
+  },
+  "(tunebook)": {
+    "ga": "(leabhar fonn)",
+    "review": true
+  },
+  "a curated list you set per tune. Starts empty; you add tunes to it one at a time.": {
+    "ga": "liosta a shocraíonn tú fonn ar fhonn. Tosaíonn sé folamh; cuireann tú foinn leis ceann ar cheann.",
+    "review": true
+  },
+  "Account": {
+    "ga": "Cuntas",
+    "review": true
+  },
+  "Active": {
+    "ga": "Gníomhach",
+    "review": true
+  },
+  "Add \"{name}\"": {
+    "ga": "Cuir “{name}” leis",
+    "review": true
+  },
+  "Add a tune to My Tunes": {
+    "ga": "Cuir fonn le Mo chuid fonn",
+    "review": true
+  },
+  "Add a tune to this session": {
+    "ga": "Cuir fonn leis an seisiún seo",
+    "review": true
+  },
+  "Add any notes about this tune…": {
+    "ga": "Cuir nótaí faoin bhfonn seo leis…",
+    "review": true
+  },
+  "Add as": {
+    "ga": "Cuir leis mar",
+    "review": true
+  },
+  "Add new tunes as": {
+    "ga": "Cuir foinn nua leis mar",
+    "review": true
+  },
+  "Add note": {
+    "ga": "Cuir nóta leis",
+    "review": true
+  },
+  "add the tune": {
+    "ga": "an fonn a chur leis",
+    "review": true
+  },
+  "add the tune to the session": {
+    "ga": "an fonn a chur leis an seisiún",
+    "review": true
+  },
+  "Add to Session": {
+    "ga": "Cuir leis an seisiún",
+    "review": true
+  },
+  "Add Tune #{id}": {
+    "ga": "Cuir fonn #{id} leis",
+    "review": true
+  },
+  "add {name}": {
+    "ga": "{name} a chur leis",
+    "review": true
+  },
+  "Added": {
+    "ga": "Curtha leis",
+    "review": true
+  },
+  "Added date": {
+    "ga": "Dáta curtha leis",
+    "review": true
+  },
+  "Adding {name}…": {
+    "ga": "{name} á chur leis…",
+    "review": true
+  },
+  "admin": {
+    "ga": "bainisteoir",
+    "review": true
+  },
+  "After": {
+    "ga": "Tar éis",
+    "review": true
+  },
+  "All My Instruments": {
+    "ga": "Mo chuid uirlisí go léir",
+    "review": true
+  },
+  "All My Instruments ({list})": {
+    "ga": "Mo chuid uirlisí go léir ({list})",
+    "review": true
+  },
+  "All Tune Types": {
+    "ga": "Gach cineál fonn",
+    "review": true
+  },
+  "Already in Collection": {
+    "ga": "Sa bhailiúchán cheana",
+    "review": true
+  },
+  "Already on your list": {
+    "ga": "Ar do liosta cheana",
+    "review": true
+  },
+  "Already on your list — set your setting to #{setting}": {
+    "ga": "Ar do liosta cheana — socraíodh do leagan go #{setting}",
+    "review": true
+  },
+  "At my sessions": {
+    "ga": "Ag mo sheisiúin",
+    "review": true
+  },
+  "Auto": {
+    "ga": "Uathoibríoch",
+    "review": true
+  },
+  "Back to search": {
+    "ga": "Ar ais chuig an gcuardach",
+    "review": true
+  },
+  "Before": {
+    "ga": "Roimh",
+    "review": true
+  },
+  "breadcrumb": {
+    "ga": "cosán nascleanúna",
+    "review": true
+  },
+  "Building preview…": {
+    "ga": "Réamhamharc á ullmhú…",
+    "review": true
+  },
+  "By Instrument": {
+    "ga": "De réir uirlise",
+    "review": true
+  },
+  "Change my password": {
+    "ga": "Athraigh mo phasfhocal",
+    "review": true
+  },
+  "change that instrument setting": {
+    "ga": "socrú na huirlise sin a athrú",
+    "review": true
+  },
+  "Check your connection, then try again.": {
+    "ga": "Seiceáil do cheangal, ansin bain triail eile as.",
+    "review": true
+  },
+  "containing '{search}'": {
+    "ga": "ina bhfuil '{search}'",
+    "review": true
+  },
+  "Couldn't build the merge preview.": {
+    "ga": "Níorbh fhéidir réamhamharc an chumaisc a ullmhú.",
+    "review": true
+  },
+  "Couldn't load the instruments.": {
+    "ga": "Níorbh fhéidir na huirlisí a lódáil.",
+    "review": true
+  },
+  "Couldn't load the people list.": {
+    "ga": "Níorbh fhéidir liosta na ndaoine a lódáil.",
+    "review": true
+  },
+  "Couldn't load your tunes": {
+    "ga": "Níorbh fhéidir do chuid fonn a lódáil",
+    "review": true
+  },
+  "Couldn't reach the server, so nothing was deleted. Check your connection and try again.": {
+    "ga": "Níorbh fhéidir teagmháil a dhéanamh leis an bhfreastalaí, mar sin níor scriosadh aon rud. Seiceáil do cheangal agus bain triail eile as.",
+    "review": true
+  },
+  "Couldn't refresh your tunes, so the list may be out of date. Reload the page to try again.": {
+    "ga": "Níorbh fhéidir do chuid fonn a athnuachan, mar sin d'fhéadfadh an liosta a bheith as dáta. Athlódáil an leathanach chun triail eile a bhaint as.",
+    "review": true
+  },
+  "Couldn't search the catalogue. Check your connection, then": {
+    "ga": "Níorbh fhéidir an catalóg a chuardach. Seiceáil do cheangal, ansin",
+    "review": true
+  },
+  "Couldn't update the heard count. Check your connection and try again.": {
+    "ga": "Níorbh fhéidir líon na n-uaireanta cloiste a nuashonrú. Seiceáil do cheangal agus bain triail eile as.",
+    "review": true
+  },
+  "Create a password": {
+    "ga": "Cruthaigh pasfhocal",
+    "review": true
+  },
+  "Created": {
+    "ga": "Cruthaithe",
+    "review": true
+  },
+  "Danger zone": {
+    "ga": "Limistéar contúirte",
+    "review": true
+  },
+  "Deactivate person": {
+    "ga": "Díghníomhachtaigh an duine",
+    "review": true
+  },
+  "deactivate this person": {
+    "ga": "an duine seo a dhíghníomhachtú",
+    "review": true
+  },
+  "Deactivate {name}": {
+    "ga": "Díghníomhachtaigh {name}",
+    "review": true
+  },
+  "Deactivate {name}?": {
+    "ga": "{name} a dhíghníomhachtú?",
+    "review": true
+  },
+  "Deactivating {name} will prevent them from being added to any sessions, session instances, or tune sets.": {
+    "ga": "Má dhíghníomhachtaítear {name}, ní féidir iad a chur le haon seisiún, ócáid seisiúin ná sraith fonn.",
+    "review": true
+  },
+  "Deactivating…": {
+    "ga": "Á dhíghníomhachtú…",
+    "review": true
+  },
+  "Delete Account": {
+    "ga": "Scrios an cuntas",
+    "review": true
+  },
+  "Delete account": {
+    "ga": "Scrios an cuntas",
+    "review": true
+  },
+  "Delete your account?": {
+    "ga": "Do chuntas a scriosadh?",
+    "review": true
+  },
+  "Deleting…": {
+    "ga": "Á scriosadh…",
+    "review": true
+  },
+  "Email me about updates to this app": {
+    "ga": "Seol ríomhphost chugam faoi nuashonruithe ar an aip seo",
+    "review": true
+  },
+  "Email status": {
+    "ga": "Stádas an ríomhphoist",
+    "review": true
+  },
+  "Enter a setting number or paste a thesession.org URL.": {
+    "ga": "Cuir isteach uimhir leagain nó greamaigh URL ó thesession.org.",
+    "review": true
+  },
+  "Enter your thesession.org user ID": {
+    "ga": "Cuir isteach d'aitheantas úsáideora ar thesession.org",
+    "review": true
+  },
+  "Errors encountered:": {
+    "ga": "Earráidí a tharla:",
+    "review": true
+  },
+  "Existing associations will not be affected.": {
+    "ga": "Ní dhéanfar difear do naisc atá ann cheana.",
+    "review": true
+  },
+  "Fiddle, whistle…": {
+    "ga": "Fidil, feadóg…",
+    "review": true
+  },
+  "Find it in your thesession.org profile URL:": {
+    "ga": "Tá sé in URL do phróifíle ar thesession.org:",
+    "review": true
+  },
+  "follows the tune's main status. When you mark a tune learned, it's learned on this instrument.": {
+    "ga": "leanann sé príomhstádas an fhoinn. Nuair a mharcálann tú fonn ar eolas, bíonn sé ar eolas ar an uirlis seo.",
+    "review": true
+  },
+  "Have a tunebook on thesession.org?": {
+    "ga": "An bhfuil leabhar fonn agat ar thesession.org?",
+    "review": true
+  },
+  "Heard": {
+    "ga": "Cloiste",
+    "review": true
+  },
+  "Heard at sessions:": {
+    "ga": "Cloiste ag seisiúin:",
+    "review": true
+  },
+  "Heard it again — {n} times now": {
+    "ga": {
+      "one": "Chuala tú arís é — {n} uair anois",
+      "two": "Chuala tú arís é — {n} uair anois",
+      "few": "Chuala tú arís é — {n} huaire anois",
+      "many": "Chuala tú arís é — {n} n-uaire anois",
+      "other": "Chuala tú arís é — {n} uair anois"
+    },
+    "review": true
+  },
+  "I Heard It Again": {
+    "ga": "Chuala mé arís é",
+    "review": true
+  },
+  "I Heard It Again ({n})": {
+    "ga": "Chuala mé arís é ({n})",
+    "review": true
+  },
+  "If the session plays a specific setting of the tune, paste its URL or setting number.": {
+    "ga": "Má sheinneann an seisiún leagan áirithe den fhonn, greamaigh a URL nó uimhir an leagain.",
+    "review": true
+  },
+  "If {name} exists twice in the database, merge the duplicate into this record. All tunes, attendance, memberships and attributions move to the survivor; the duplicate is deleted. This cannot be undone.": {
+    "ga": "Má tá {name} sa bhunachar faoi dhó, cumaisc an dúblach leis an taifead seo. Bogfaidh na foinn, an freastal, na ballraíochtaí agus na sannaí go léir chuig an taifead a fhanann; scriosfar an dúblach. Ní féidir é seo a chealú.",
+    "review": true
+  },
+  "importing from thesession.org": {
+    "ga": "á iompórtáil ó thesession.org",
+    "review": true
+  },
+  "Imports your thesession.org tunebook: tunes you don't have yet are added, and tunes already on your list keep their current status.": {
+    "ga": "Iompórtálann sé do leabhar fonn ó thesession.org: cuirtear leis na foinn nach bhfuil agat fós, agus coinníonn na foinn atá ar do liosta cheana a stádas reatha.",
+    "review": true
+  },
+  "in '{status}' status": {
+    "ga": "le stádas '{status}'",
+    "review": true
+  },
+  "Increment heard count": {
+    "ga": "Méadaigh líon na n-uaireanta cloiste",
+    "review": true
+  },
+  "Instruments save as you change them. Tap one to set it auto or manual, or to remove it.": {
+    "ga": "Sábháiltear na huirlisí de réir mar a athraíonn tú iad. Tapáil ceann chun é a shocrú mar uathoibríoch nó de láimh, nó chun é a bhaint.",
+    "review": true
+  },
+  "Key (optional)": {
+    "ga": "Gléas (roghnach)",
+    "review": true
+  },
+  "Large tunebooks can take a minute.": {
+    "ga": "D'fhéadfadh nóiméad a thógáil le leabhar mór fonn.",
+    "review": true
+  },
+  "Last login": {
+    "ga": "Síniú isteach deireanach",
+    "review": true
+  },
+  "Loading instruments…": {
+    "ga": "Uirlisí á lódáil…",
+    "review": true
+  },
+  "Loading more tunes...": {
+    "ga": "Tuilleadh fonn á lódáil...",
+    "review": true
+  },
+  "Loading people…": {
+    "ga": "Daoine á lódáil…",
+    "review": true
+  },
+  "Loading your tunes...": {
+    "ga": "Do chuid fonn á lódáil...",
+    "review": true
+  },
+  "Local name for this tune, if different": {
+    "ga": "Ainm áitiúil don fhonn seo, más difriúil",
+    "review": true
+  },
+  "Log Out": {
+    "ga": "Sínigh amach",
+    "review": true
+  },
+  "Manual": {
+    "ga": "De láimh",
+    "review": true
+  },
+  "Mark as heard": {
+    "ga": "Marcáil mar cloiste",
+    "review": true
+  },
+  "Member ID": {
+    "ga": "Aitheantas ball",
+    "review": true
+  },
+  "Merge people": {
+    "ga": "Cumaisc na daoine",
+    "review": true
+  },
+  "merge these people": {
+    "ga": "na daoine seo a chumasc",
+    "review": true
+  },
+  "Merge these people?": {
+    "ga": "Na daoine seo a chumasc?",
+    "review": true
+  },
+  "Merge with another person": {
+    "ga": "Cumaisc le duine eile",
+    "review": true
+  },
+  "Merge with which person?": {
+    "ga": "Cumaisc le cén duine?",
+    "review": true
+  },
+  "Merge {loser} into {winner}…": {
+    "ga": "Cumaisc {loser} le {winner}…",
+    "review": true
+  },
+  "Merged away": {
+    "ga": "Cumaiscthe ar shiúl",
+    "review": true
+  },
+  "Merge…": {
+    "ga": "Cumaisc…",
+    "review": true
+  },
+  "Merging…": {
+    "ga": "Á gcumasc…",
+    "review": true
+  },
+  "My plays": {
+    "ga": "Mo sheinm",
+    "review": true
+  },
+  "Name (a-z)": {
+    "ga": "Ainm (a-z)",
+    "review": true
+  },
+  "Never": {
+    "ga": "Riamh",
+    "review": true
+  },
+  "New Tune Records": {
+    "ga": "Taifid nua fonn",
+    "review": true
+  },
+  "no": {
+    "ga": "níl",
+    "review": true
+  },
+  "no email": {
+    "ga": "gan ríomhphost",
+    "review": true
+  },
+  "No instruments yet — add one above.": {
+    "ga": "Gan uirlisí fós — cuir ceann leis thuas.",
+    "review": true
+  },
+  "No one matches.": {
+    "ga": "Níl aon duine ag teacht leis.",
+    "review": true
+  },
+  "No tune with ID {id} found": {
+    "ga": "Níor aimsíodh fonn leis an aitheantas {id}",
+    "review": true
+  },
+  "No tunes found": {
+    "ga": "Níor aimsíodh aon fhonn",
+    "review": true
+  },
+  "No tunes {rest} found": {
+    "ga": "Níor aimsíodh aon fhonn {rest}",
+    "review": true
+  },
+  "No {types} found": {
+    "ga": "Níor aimsíodh aon fhonn den chineál {type}",
+    "review": true
+  },
+  "No {types} {rest} found": {
+    "ga": "Níor aimsíodh aon fhonn den chineál {type} {rest}",
+    "review": true
+  },
+  "None listed": {
+    "ga": "Níl aon cheann liostaithe",
+    "review": true
+  },
+  "None of your tunes match": {
+    "ga": "Níl aon cheann de do chuid fonn ag teacht leis",
+    "review": true
+  },
+  "Not a member": {
+    "ga": "Níl ina bhall",
+    "review": true
+  },
+  "Not connected to a user account.": {
+    "ga": "Gan cheangal le cuntas úsáideora.",
+    "review": true
+  },
+  "Not on your list": {
+    "ga": "Níl ar do liosta",
+    "review": true
+  },
+  "Not provided": {
+    "ga": "Níor tugadh",
+    "review": true
+  },
+  "Not subscribed": {
+    "ga": "Gan liostáil",
+    "review": true
+  },
+  "Not this one? Back to search": {
+    "ga": "Ní hé seo é? Ar ais chuig an gcuardach",
+    "review": true
+  },
+  "not tracking": {
+    "ga": "gan rianú",
+    "review": true
+  },
+  "Not verified": {
+    "ga": "Gan fíorú",
+    "review": true
+  },
+  "Nothing — the duplicate has no linked records.": {
+    "ga": "Faic — níl aon taifid nasctha ag an dúblach.",
+    "review": true
+  },
+  "Overlapping records ({n}) — merged field by field": {
+    "ga": "Taifid fhorluiteacha ({n}) — cumaiscthe réimse ar réimse",
+    "review": true
+  },
+  "pending": {
+    "ga": "ar feitheamh",
+    "review": true
+  },
+  "People merged": {
+    "ga": "Daoine cumaiscthe",
+    "review": true
+  },
+  "Played": {
+    "ga": "Seinnte",
+    "review": true
+  },
+  "Plays I attended": {
+    "ga": "Seinm a raibh mé ann",
+    "review": true
+  },
+  "Please enter a valid thesession.org user ID.": {
+    "ga": "Cuir isteach aitheantas úsáideora bailí ó thesession.org.",
+    "review": true
+  },
+  "Please fix the username issue before saving.": {
+    "ga": "Réitigh fadhb an ainm úsáideora sula sábhálann tú.",
+    "review": true
+  },
+  "Popularity": {
+    "ga": "Éileamh",
+    "review": true
+  },
+  "Profile fields inherited from the duplicate": {
+    "ga": "Réimsí próifíle a fuarthas ón dúblach",
+    "review": true
+  },
+  "Profile updated successfully": {
+    "ga": "Próifíl nuashonraithe",
+    "review": true
+  },
+  "Queued - will sync when you are back online": {
+    "ga": "Sa scuaine - sioncrónófar é nuair a bheidh tú ar líne arís",
+    "review": true
+  },
+  "Reactivate person": {
+    "ga": "Athghníomhachtaigh an duine",
+    "review": true
+  },
+  "reactivate this person": {
+    "ga": "an duine seo a athghníomhachtú",
+    "review": true
+  },
+  "Reactivate {name}": {
+    "ga": "Athghníomhachtaigh {name}",
+    "review": true
+  },
+  "Reactivate {name}?": {
+    "ga": "{name} a athghníomhachtú?",
+    "review": true
+  },
+  "Reactivating allows all of that again.": {
+    "ga": "Má athghníomhachtaítear iad, ceadaítear é sin go léir arís.",
+    "review": true
+  },
+  "Reactivating…": {
+    "ga": "Á athghníomhachtú…",
+    "review": true
+  },
+  "Remove anyway": {
+    "ga": "Bain mar sin féin",
+    "review": true
+  },
+  "Remove from profile": {
+    "ga": "Bain den phróifíl",
+    "review": true
+  },
+  "Remove instrument?": {
+    "ga": "An uirlis a bhaint?",
+    "review": true
+  },
+  "Remove this filter": {
+    "ga": "Bain an scagaire seo",
+    "review": true
+  },
+  "remove {name}": {
+    "ga": "{name} a bhaint",
+    "review": true
+  },
+  "Removing": {
+    "ga": "Má bhaineann tú",
+    "review": true
+  },
+  "Review merge": {
+    "ga": "Athbhreithnigh an cumasc",
+    "review": true
+  },
+  "save the profile": {
+    "ga": "an phróifíl a shábháil",
+    "review": true
+  },
+  "Save to my profile": {
+    "ga": "Sábháil i mo phróifíl",
+    "review": true
+  },
+  "Search name, email or username…": {
+    "ga": "Cuardaigh ainm, ríomhphost nó ainm úsáideora…",
+    "review": true
+  },
+  "Search tunes": {
+    "ga": "Cuardaigh foinn",
+    "review": true
+  },
+  "Searching the catalogue for “{query}”…": {
+    "ga": "“{query}” á chuardach sa chatalóg…",
+    "review": true
+  },
+  "Setting (optional)": {
+    "ga": "Leagan (roghnach)",
+    "review": true
+  },
+  "Setting number or thesession.org URL": {
+    "ga": "Uimhir an leagain nó URL ó thesession.org",
+    "review": true
+  },
+  "Show this tune on your list": {
+    "ga": "Taispeáin an fonn seo ar do liosta",
+    "review": true
+  },
+  "Showing first 50 — keep typing to narrow.": {
+    "ga": "An chéad 50 á dtaispeáint — lean ort ag clóscríobh chun cúngú.",
+    "review": true
+  },
+  "Showing {n} of {total} tunes": {
+    "ga": "{n} as {total} á dtaispeáint",
+    "review": true
+  },
+  "Signed in as {name}": {
+    "ga": "Sínithe isteach mar {name}",
+    "review": true
+  },
+  "SMS": {
+    "ga": "SMS",
+    "review": true
+  },
+  "Sorting downward — click for upward": {
+    "ga": "Ag sórtáil síos — cliceáil le haghaidh suas",
+    "review": true
+  },
+  "Sorting upward — click for downward": {
+    "ga": "Ag sórtáil suas — cliceáil le haghaidh síos",
+    "review": true
+  },
+  "Start Sync": {
+    "ga": "Tosaigh an sioncrónú",
+    "review": true
+  },
+  "Subscribed": {
+    "ga": "Liostáilte",
+    "review": true
+  },
+  "Successfully added \"{name}\" to your collection!": {
+    "ga": "Cuireadh “{name}” le do bhailiúchán!",
+    "review": true
+  },
+  "Survives": {
+    "ga": "Fanann",
+    "review": true
+  },
+  "Swap direction": {
+    "ga": "Malartaigh an treo",
+    "review": true
+  },
+  "Sync Again": {
+    "ga": "Sioncrónaigh arís",
+    "review": true
+  },
+  "Sync complete!": {
+    "ga": "Sioncrónú críochnaithe!",
+    "review": true
+  },
+  "Sync from TheSession.org": {
+    "ga": "Sioncrónaigh ó TheSession.org",
+    "review": true
+  },
+  "Sync it here": {
+    "ga": "Sioncrónaigh anseo é",
+    "review": true
+  },
+  "sync your tunebook": {
+    "ga": "do leabhar fonn a shioncrónú",
+    "review": true
+  },
+  "Syncing your tunes from TheSession.org…": {
+    "ga": "Do chuid fonn á sioncrónú ó TheSession.org…",
+    "review": true
+  },
+  "The key the session typically plays this tune in.": {
+    "ga": "An gléas ina seinneann an seisiún an fonn seo de ghnáth.",
+    "review": true
+  },
+  "The other account is deleted; its activity is re-attributed to the survivor.": {
+    "ga": "Scriostar an cuntas eile; sanntar a ghníomhaíocht don chuntas a fhanann.",
+    "review": true
+  },
+  "the tune": {
+    "ga": "an fonn",
+    "review": true
+  },
+  "Their login is disabled.": {
+    "ga": "Tá a síniú isteach díchumasaithe.",
+    "review": true
+  },
+  "TheSession.org ID": {
+    "ga": "Aitheantas TheSession.org",
+    "review": true
+  },
+  "TheSession.org ID:": {
+    "ga": "Aitheantas TheSession.org:",
+    "review": true
+  },
+  "They cannot be added to sessions, session instances, or tune sets.": {
+    "ga": "Ní féidir iad a chur le seisiúin, ócáidí seisiúin ná sraitheanna fonn.",
+    "review": true
+  },
+  "This also disables their login and stops all emails to their account.": {
+    "ga": "Díchumasaíonn sé seo a síniú isteach freisin agus stopann sé gach ríomhphost chuig a gcuntas.",
+    "review": true
+  },
+  "This deletes your login, your tune list and instruments, and your contact details, straight away. It can't be undone.": {
+    "ga": "Scriosann sé seo do shíniú isteach, do liosta fonn agus d'uirlisí, agus do shonraí teagmhála, láithreach. Ní féidir é a chealú.",
+    "review": true
+  },
+  "this link points at": {
+    "ga": "tagraíonn an nasc seo do",
+    "review": true
+  },
+  "This manually marks the email address as verified.": {
+    "ga": "Marcálann sé seo an seoladh ríomhphoist mar fhíoraithe de láimh.",
+    "review": true
+  },
+  "This person is deactivated.": {
+    "ga": "Tá an duine seo díghníomhachtaithe.",
+    "review": true
+  },
+  "This tune is already on your list": {
+    "ga": "Tá an fonn seo ar do liosta cheana",
+    "review": true
+  },
+  "Times heard": {
+    "ga": "Uaireanta cloiste",
+    "review": true
+  },
+  "Times logged at my sessions": {
+    "ga": "Uaireanta logáilte ag mo sheisiúin",
+    "review": true
+  },
+  "Times logged while I was there": {
+    "ga": "Uaireanta logáilte agus mé ann",
+    "review": true
+  },
+  "to confirm": {
+    "ga": "chun deimhniú",
+    "review": true
+  },
+  "Toggle sort direction": {
+    "ga": "Athraigh treo na sórtála",
+    "review": true
+  },
+  "Try adjusting your filters or add your first tune to get started!": {
+    "ga": "Athraigh do scagairí, nó cuir do chéad fhonn leis chun tosú!",
+    "review": true
+  },
+  "try again": {
+    "ga": "bain triail eile as",
+    "review": true
+  },
+  "Tunebooks": {
+    "ga": "Leabhair fonn",
+    "review": true
+  },
+  "Tunes Added": {
+    "ga": "Foinn curtha leis",
+    "review": true
+  },
+  "Tunes Fetched": {
+    "ga": "Foinn faighte",
+    "review": true
+  },
+  "Tunes on other instruments": {
+    "ga": "Foinn ar uirlisí eile",
+    "review": true
+  },
+  "Update emails": {
+    "ga": "Ríomhphoist nuashonraithe",
+    "review": true
+  },
+  "Update it?": {
+    "ga": "É a nuashonrú?",
+    "review": true
+  },
+  "Update Setting": {
+    "ga": "Nuashonraigh an leagan",
+    "review": true
+  },
+  "update your setting": {
+    "ga": "do leagan a nuashonrú",
+    "review": true
+  },
+  "Updated — reloading…": {
+    "ga": "Nuashonraithe — á athlódáil…",
+    "review": true
+  },
+  "Updating…": {
+    "ga": "Á nuashonrú…",
+    "review": true
+  },
+  "Use": {
+    "ga": "Úsáid",
+    "review": true
+  },
+  "Use a different ID": {
+    "ga": "Úsáid aitheantas eile",
+    "review": true
+  },
+  "Username": {
+    "ga": "Ainm úsáideora",
+    "review": true
+  },
+  "Verify Email": {
+    "ga": "Fíoraigh an ríomhphost",
+    "review": true
+  },
+  "Verify email": {
+    "ga": "Fíoraigh an ríomhphost",
+    "review": true
+  },
+  "verify the email": {
+    "ga": "an ríomhphost a fhíorú",
+    "review": true
+  },
+  "Verify this email address?": {
+    "ga": "An seoladh ríomhphoist seo a fhíorú?",
+    "review": true
+  },
+  "Verifying…": {
+    "ga": "Á fhíorú…",
+    "review": true
+  },
+  "View My Tunes": {
+    "ga": "Féach ar Mo chuid fonn",
+    "review": true
+  },
+  "We call this (optional)": {
+    "ga": "Tugaimidne air (roghnach)",
+    "review": true
+  },
+  "Where you play": {
+    "ga": "An áit a seinneann tú",
+    "review": true
+  },
+  "Which login account survives?": {
+    "ga": "Cén cuntas síniú isteach a fhanann?",
+    "review": true
+  },
+  "While I was there": {
+    "ga": "Agus mé ann",
+    "review": true
+  },
+  "will delete its saved status for {tunes} that you've customized away from your other instruments. Re-adding it later starts fresh on Auto. This can't be undone.": {
+    "ga": "scriosfar a stádas sábháilte do {tunes} a d'athraigh tú ó do chuid uirlisí eile. Má chuireann tú ar ais í níos déanaí, tosóidh sí as an nua ar Uathoibríoch. Ní féidir é seo a chealú.",
+    "review": true
+  },
+  "Will move to {name}": {
+    "ga": "Bogfaidh chuig {name}",
+    "review": true
+  },
+  "yes": {
+    "ga": "tá",
+    "review": true
+  },
+  "You are offline. A specific setting can only be saved online.": {
+    "ga": "Tá tú as líne. Ní féidir leagan áirithe a shábháil ach ar líne.",
+    "review": true
+  },
+  "You are offline. Session tunes can only be added online.": {
+    "ga": "Tá tú as líne. Ní féidir foinn seisiúin a chur leis ach ar líne.",
+    "review": true
+  },
+  "You are offline. Sync requires an internet connection.": {
+    "ga": "Tá tú as líne. Teastaíonn ceangal idirlín le sioncrónú.",
+    "review": true
+  },
+  "You are offline. Tunes from thesession.org can only be added online.": {
+    "ga": "Tá tú as líne. Ní féidir foinn ó thesession.org a chur leis ach ar líne.",
+    "review": true
+  },
+  "You haven't picked a setting yet.": {
+    "ga": "Níor roghnaigh tú leagan fós.",
+    "review": true
+  },
+  "You play setting": {
+    "ga": "Seinneann tú leagan",
+    "review": true
+  },
+  "Your account could not be deleted.": {
+    "ga": "Níorbh fhéidir do chuntas a scriosadh.",
+    "review": true
+  },
+  "Your name stays on the sessions you were part of, as it would for anyone a session admin adds, and the tunes logged at those sessions stay in their logs.": {
+    "ga": "Fanann d'ainm ar na seisiúin a raibh tú páirteach iontu, mar a d'fhanfadh do dhuine ar bith a chuireann bainisteoir seisiúin leis, agus fanann na foinn a logáladh ag na seisiúin sin ina gcuid logálacha.",
+    "review": true
+  },
+  "YOUR_ID": {
+    "ga": "D'AITHEANTAS",
+    "review": true
+  },
+  "{first} and {last}": {
+    "ga": "{first} agus {last}",
+    "review": true
+  },
+  "{loser} will be deleted and everything they're linked to re-attributed to {winner}. This cannot be undone.": {
+    "ga": "Scriosfar {loser} agus sannfar gach a bhfuil ceangailte leo do {winner}. Ní féidir é seo a chealú.",
+    "review": true
+  },
+  "{name}'s account": {
+    "ga": "Cuntas {name}",
+    "review": true
+  },
+  "{n} attendance records": {
+    "ga": {
+      "one": "{n} taifead freastail",
+      "two": "{n} thaifead freastail",
+      "few": "{n} thaifead freastail",
+      "many": "{n} dtaifead freastail",
+      "other": "{n} taifead freastail"
+    },
+    "review": true
+  },
+  "{n} instruments": {
+    "ga": {
+      "one": "{n} uirlis",
+      "two": "{n} uirlis",
+      "few": "{n} uirlis",
+      "many": "{n} n-uirlis",
+      "other": "{n} uirlis"
+    },
+    "review": true
+  },
+  "{n} logger colors": {
+    "ga": {
+      "one": "{n} dath logálaí",
+      "two": "{n} dhath logálaí",
+      "few": "{n} dhath logálaí",
+      "many": "{n} ndath logálaí",
+      "other": "{n} dath logálaí"
+    },
+    "review": true
+  },
+  "{n} per-instrument tune statuses": {
+    "ga": {
+      "one": "{n} stádas fonn de réir uirlise",
+      "two": "{n} stádas fonn de réir uirlise",
+      "few": "{n} stádas fonn de réir uirlise",
+      "many": "{n} stádas fonn de réir uirlise",
+      "other": "{n} stádas fonn de réir uirlise"
+    },
+    "review": true
+  },
+  "{n} recordings": {
+    "ga": {
+      "one": "{n} taifeadadh",
+      "two": "{n} thaifeadadh",
+      "few": "{n} thaifeadadh",
+      "many": "{n} dtaifeadadh",
+      "other": "{n} taifeadadh"
+    },
+    "review": true
+  },
+  "{n} referral pointers": {
+    "ga": {
+      "one": "{n} tagairt atreoraithe",
+      "two": "{n} thagairt atreoraithe",
+      "few": "{n} thagairt atreoraithe",
+      "many": "{n} dtagairt atreoraithe",
+      "other": "{n} tagairt atreoraithe"
+    },
+    "review": true
+  },
+  "{n} session memberships": {
+    "ga": {
+      "one": "{n} bhallraíocht seisiúin",
+      "two": "{n} bhallraíocht seisiúin",
+      "few": "{n} bhallraíocht seisiúin",
+      "many": "{n} mballraíocht seisiúin",
+      "other": "{n} ballraíocht seisiúin"
+    },
+    "review": true
+  },
+  "{n} sessions": {
+    "ga": {
+      "one": "{n} sheisiún",
+      "two": "{n} sheisiún",
+      "few": "{n} sheisiún",
+      "many": "{n} seisiún",
+      "other": "{n} seisiún"
+    },
+    "review": true
+  },
+  "{n} set-starter attributions": {
+    "ga": {
+      "one": "{n} sannadh tosaitheora sraithe",
+      "two": "{n} shannadh tosaitheora sraithe",
+      "few": "{n} shannadh tosaitheora sraithe",
+      "many": "{n} sannadh tosaitheora sraithe",
+      "other": "{n} sannadh tosaitheora sraithe"
+    },
+    "review": true
+  },
+  "{n} tunebook entries": {
+    "ga": {
+      "one": "{n} iontráil fonn",
+      "two": "{n} iontráil fonn",
+      "few": "{n} iontráil fonn",
+      "many": "{n} n-iontráil fonn",
+      "other": "{n} iontráil fonn"
+    },
+    "review": true
+  },
+  "{n} tunebooks": {
+    "ga": {
+      "one": "{n} leabhar fonn",
+      "two": "{n} leabhar fonn",
+      "few": "{n} leabhar fonn",
+      "many": "{n} leabhar fonn",
+      "other": "{n} leabhar fonn"
+    },
+    "review": true
+  },
+  "{on} of {n} tunes on {instrument}": {
+    "ga": {
+      "one": "{instrument}: {on} as {n} fhonn",
+      "two": "{instrument}: {on} as {n} fhonn",
+      "few": "{instrument}: {on} as {n} fhonn",
+      "many": "{instrument}: {on} as {n} bhfonn",
+      "other": "{instrument}: {on} as {n} fonn"
+    },
+    "review": true
+  },
+  "{rest}, and {last}": {
+    "ga": "{rest} agus {last}",
+    "review": true
+  },
+  "＋ Add This Tune": {
+    "ga": "＋ Cuir an fonn seo leis",
+    "review": true
+  },
+  "＋ Add to My Tunes": {
+    "ga": "＋ Cuir le Mo chuid fonn",
+    "review": true
+  }
+}

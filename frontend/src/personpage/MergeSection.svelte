@@ -1,4 +1,5 @@
 <script>
+  // i18n-converted
   // Danger-zone person merge (spec 040, system-admin only). Two-step flow in a
   // kit Sheet: pick the duplicate from a GLOBAL people list (this is admin
   // cleanup — deliberately NOT the session-scoped PersonPicker), then review
@@ -8,7 +9,7 @@
   // direction without leaving the sheet.
   let { person, personId } = $props()
 
-  import { Chevron, Dialog, Sheet, SearchField, List, Chip, LoadError, toast, toastFailure, ServerError } from '../lib/index.js'
+  import { Chevron, Dialog, Sheet, SearchField, List, Chip, LoadError, toast, toastFailure, ServerError, t, tn } from '../lib/index.js'
 
   let open = $state(false)
   let step = $state('pick') // 'pick' | 'preview'
@@ -96,7 +97,7 @@
       .catch((e) => {
         console.error('Merge preview failed:', e)
         // a server explanation is worth showing; a network/parse failure is not
-        previewError = (e instanceof ServerError && e.message) || "Couldn't build the merge preview."
+        previewError = (e instanceof ServerError && e.message) || t("Couldn't build the merge preview.")
       })
   }
 
@@ -117,7 +118,7 @@
       .then((r) => r.json())
       .then((data) => {
         if (!data.success) throw new ServerError(data.error || '')
-        toast('People merged', 'success')
+        toast(t('People merged'), 'success')
         // land on the survivor — a reload if they're this page, else navigate
         setTimeout(() => {
           if (winnerId === personId) window.location.reload()
@@ -127,7 +128,7 @@
       })
       .catch((e) => {
         busy = false
-        toastFailure('merge these people', e)
+        toastFailure(t('merge these people'), e)
         return false
       })
   }
@@ -138,22 +139,22 @@
 
   // Humanized table labels for the moves list.
   const MOVE_LABELS = {
-    person_tune: 'tunebook entries',
-    person_instrument: 'instruments',
-    person_tune_instrument: 'per-instrument tune statuses',
-    session_person: 'session memberships',
-    session_instance_person: 'attendance records',
-    session_logger_color: 'logger colors',
-    set_starter_attributions: 'set-starter attributions',
-    recordings: 'recordings',
-    referred_by_pointers: 'referral pointers',
+    person_tune: (n) => tn(n, '{n} tunebook entry', '{n} tunebook entries'),
+    person_instrument: (n) => tn(n, '{n} instrument', '{n} instruments'),
+    person_tune_instrument: (n) => tn(n, '{n} per-instrument tune status', '{n} per-instrument tune statuses'),
+    session_person: (n) => tn(n, '{n} session membership', '{n} session memberships'),
+    session_instance_person: (n) => tn(n, '{n} attendance record', '{n} attendance records'),
+    session_logger_color: (n) => tn(n, '{n} logger color', '{n} logger colors'),
+    set_starter_attributions: (n) => tn(n, '{n} set-starter attribution', '{n} set-starter attributions'),
+    recordings: (n) => tn(n, '{n} recording', '{n} recordings'),
+    referred_by_pointers: (n) => tn(n, '{n} referral pointer', '{n} referral pointers'),
   }
   const moveLines = $derived(
     !preview
       ? []
       : Object.entries(preview.moves)
           .filter(([, n]) => n > 0)
-          .map(([k, n]) => `${n} ${MOVE_LABELS[k] || k}`)
+          .map(([k, n]) => (MOVE_LABELS[k] ? MOVE_LABELS[k](n) : `${n} ${k}`))
   )
 
   // Per-collision compact diff: only fields where the three-way values differ.
@@ -169,7 +170,7 @@
     return rows
   }
   const fmt = (v) =>
-    v == null ? '—' : v === true ? 'yes' : v === false ? 'no' : String(v).slice(0, 60)
+    v == null ? '—' : v === true ? t('yes') : v === false ? t('no') : String(v).slice(0, 60)
 
   const collisionCount = $derived(
     !preview
@@ -181,23 +182,21 @@
   )
 </script>
 
-<h6 class="text-danger mt-4">Merge with another person</h6>
+<h6 class="text-danger mt-4">{t('Merge with another person')}</h6>
 <p class="text-muted">
-  If {person.name} exists twice in the database, merge the duplicate into this record. All
-  tunes, attendance, memberships and attributions move to the survivor; the duplicate is
-  deleted. This cannot be undone.
+  {t('If {name} exists twice in the database, merge the duplicate into this record. All tunes, attendance, memberships and attributions move to the survivor; the duplicate is deleted. This cannot be undone.', { name: person.name })}
 </p>
 <button type="button" class="btn btn-outline-danger" id="merge-person-btn" onclick={openSheet}>
-  Merge…
+  {t('Merge…')}
 </button>
 
-<Sheet bind:open title={step === 'pick' ? 'Merge with which person?' : 'Review merge'}>
+<Sheet bind:open title={step === 'pick' ? t('Merge with which person?') : t('Review merge')}>
   {#if step === 'pick'}
-    <SearchField bind:value={query} placeholder="Search name, email or username…" debounce={0} />
+    <SearchField bind:value={query} placeholder={t('Search name, email or username…')} debounce={0} />
     {#if peopleFailed}
-      <LoadError what="the people list" onRetry={loadPeople} />
+      <LoadError message={t("Couldn't load the people list.")} onRetry={loadPeople} />
     {:else if !people}
-      <p class="ms-empty">Loading people…</p>
+      <p class="ms-empty">{t('Loading people…')}</p>
     {:else}
       <List items={matches.slice(0, 50)} bind:active onSelect={pick}>
         {#snippet row(item)}
@@ -205,43 +204,43 @@
             <span class="ms-name">{item.name}</span>
             {#if item.username}<Chip label={item.username} />{/if}
             <span class="ms-meta">
-              {item.email || 'no email'}
-              {#if item.session_count} · {item.session_count} sessions{/if}
-              {#if item.tune_count} · {item.tune_count} tunes{/if}
+              {item.email || t('no email')}
+              {#if item.session_count} · {tn(item.session_count, '{n} session', '{n} sessions')}{/if}
+              {#if item.tune_count} · {tn(item.tune_count, '{n} tune', '{n} tunes')}{/if}
             </span>
           </span>
         {/snippet}
       </List>
       {#if matches.length === 0}
-        <p class="ms-empty">No one matches.</p>
+        <p class="ms-empty">{t('No one matches.')}</p>
       {:else if matches.length > 50}
-        <p class="ms-empty">Showing first 50 — keep typing to narrow.</p>
+        <p class="ms-empty">{t('Showing first 50 — keep typing to narrow.')}</p>
       {/if}
     {/if}
   {:else if previewError}
-    <button type="button" class="ms-back" onclick={() => (step = 'pick')}><Chevron dir="left" size={14} /> Back to list</button>
+    <button type="button" class="ms-back" onclick={() => (step = 'pick')}><Chevron dir="left" size={14} /> {t('Back to list')}</button>
     <LoadError message={previewError} onRetry={loadPreview} />
   {:else if !preview}
-    <p class="ms-empty">Building preview…</p>
+    <p class="ms-empty">{t('Building preview…')}</p>
   {:else}
-    <button type="button" class="ms-back" onclick={() => (step = 'pick')}><Chevron dir="left" size={14} /> Back to list</button>
+    <button type="button" class="ms-back" onclick={() => (step = 'pick')}><Chevron dir="left" size={14} /> {t('Back to list')}</button>
     <div class="ms-direction">
       <div class="ms-person ms-loser">
-        <span class="ms-fate">Merged away</span>
+        <span class="ms-fate">{t('Merged away')}</span>
         <strong>{preview.loser.name}</strong>
-        <span class="ms-meta">{preview.loser.email || 'no email'}</span>
+        <span class="ms-meta">{preview.loser.email || t('no email')}</span>
         {#if preview.loser.account}<Chip label={preview.loser.account.username} />{/if}
       </div>
       <div class="ms-arrow">→</div>
       <div class="ms-person ms-winner">
-        <span class="ms-fate">Survives</span>
+        <span class="ms-fate">{t('Survives')}</span>
         <strong>{preview.winner.name}</strong>
-        <span class="ms-meta">{preview.winner.email || 'no email'}</span>
+        <span class="ms-meta">{preview.winner.email || t('no email')}</span>
         {#if preview.winner.account}<Chip label={preview.winner.account.username} />{/if}
       </div>
     </div>
     <button type="button" class="btn btn-sm btn-outline-secondary ms-swap" onclick={swap}>
-      ⇄ Swap direction
+      ⇄ {t('Swap direction')}
     </button>
 
     {#if preview.warnings.length}
@@ -254,7 +253,7 @@
 
     {#if preview.accounts.needs_choice}
       <div class="ms-block ms-accounts">
-        <h6>Which login account survives?</h6>
+        <h6>{t('Which login account survives?')}</h6>
         {#each [preview.winner, preview.loser] as p}
           <label class="ms-account">
             <input
@@ -265,33 +264,32 @@
               onchange={() => (survivingUserId = p.account.user_id)}
             />
             <span
-              ><strong>{p.account.username}</strong> ({p.account.user_email}) — {p.name}'s
-              account</span
+              ><strong>{p.account.username}</strong> ({p.account.user_email}) — {t("{name}'s account", { name: p.name })}</span
             >
           </label>
         {/each}
-        <p class="ms-meta">The other account is deleted; its activity is re-attributed to the survivor.</p>
+        <p class="ms-meta">{t('The other account is deleted; its activity is re-attributed to the survivor.')}</p>
       </div>
     {/if}
 
     <div class="ms-block">
-      <h6>Will move to {preview.winner.name}</h6>
+      <h6>{t('Will move to {name}', { name: preview.winner.name })}</h6>
       {#if moveLines.length}
         <ul class="ps-3 mb-0">
           {#each moveLines as line}<li>{line}</li>{/each}
         </ul>
       {:else}
-        <p class="ms-meta mb-0">Nothing — the duplicate has no linked records.</p>
+        <p class="ms-meta mb-0">{t('Nothing — the duplicate has no linked records.')}</p>
       {/if}
     </div>
 
     {#if collisionCount}
       <div class="ms-block">
-        <h6>Overlapping records ({collisionCount}) — merged field by field</h6>
+        <h6>{t('Overlapping records ({n}) — merged field by field', { n: collisionCount })}</h6>
 
         {#each preview.collisions.person_tune as c}
           <div class="ms-collision">
-            <strong>{c.tune_name}</strong> <span class="ms-meta">(tunebook)</span>
+            <strong>{c.tune_name}</strong> <span class="ms-meta">{t('(tunebook)')}</span>
             <table class="ms-diff">
               <tbody>
                 {#each diffRows(c) as r}
@@ -311,7 +309,7 @@
 
         {#each preview.collisions.person_instrument as c}
           <div class="ms-collision">
-            <strong>{c.instrument}</strong> <span class="ms-meta">(instrument)</span>
+            <strong>{c.instrument}</strong> <span class="ms-meta">{t('(instrument)')}</span>
             <table class="ms-diff"><tbody>
               {#each diffRows(c) as r}
                 <tr><td>{r.field}</td><td>{r.winner}</td><td>{r.loser}</td><td>→ {r.merged}</td></tr>
@@ -322,7 +320,7 @@
 
         {#each preview.collisions.session_person as c}
           <div class="ms-collision">
-            <strong>{c.session_name}</strong> <span class="ms-meta">(membership)</span>
+            <strong>{c.session_name}</strong> <span class="ms-meta">{t('(membership)')}</span>
             <table class="ms-diff"><tbody>
               {#each diffRows(c) as r}
                 <tr><td>{r.field}</td><td>{r.winner}</td><td>{r.loser}</td><td>→ {r.merged}</td></tr>
@@ -333,7 +331,7 @@
 
         {#each preview.collisions.session_instance_person as c}
           <div class="ms-collision">
-            <strong>{c.session_name} · {c.date}</strong> <span class="ms-meta">(attendance)</span>
+            <strong>{c.session_name} · {c.date}</strong> <span class="ms-meta">{t('(attendance)')}</span>
             <table class="ms-diff"><tbody>
               {#each diffRows(c) as r}
                 <tr><td>{r.field}</td><td>{r.winner}</td><td>{r.loser}</td><td>→ {r.merged}</td></tr>
@@ -346,7 +344,7 @@
 
     {#if Object.keys(preview.profile.fills).length}
       <div class="ms-block">
-        <h6>Profile fields inherited from the duplicate</h6>
+        <h6>{t('Profile fields inherited from the duplicate')}</h6>
         <ul class="ps-3 mb-0">
           {#each Object.entries(preview.profile.fills) as [field, value]}
             <li>{field}: {value}</li>
@@ -364,7 +362,7 @@
         disabled={!canConfirm}
         onclick={() => (confirmOpen = true)}
       >
-        Merge {preview.loser.name} into {preview.winner.name}…
+        {t('Merge {loser} into {winner}…', { loser: preview.loser.name, winner: preview.winner.name })}
       </button>
     {/if}
   {/snippet}
@@ -372,12 +370,12 @@
 
 <Dialog
   bind:open={confirmOpen}
-  title="Merge these people?"
+  title={t('Merge these people?')}
   description={preview
-    ? `${preview.loser.name} will be deleted and everything they're linked to re-attributed to ${preview.winner.name}. This cannot be undone.`
+    ? t("{loser} will be deleted and everything they're linked to re-attributed to {winner}. This cannot be undone.", { loser: preview.loser.name, winner: preview.winner.name })
     : ''}
-  confirmLabel="Merge people"
-  busyLabel="Merging…"
+  confirmLabel={t('Merge people')}
+  busyLabel={t('Merging…')}
   destructive={true}
   onConfirm={executeMerge}
 />

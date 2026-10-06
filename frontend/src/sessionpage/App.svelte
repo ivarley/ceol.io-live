@@ -1,4 +1,5 @@
 <script>
+  // i18n-converted
   // The session-detail page view (spec 035 Step 4b) — ported behavior-for-behavior
   // from the legacy 2,400-line inline script in templates/session_detail.html.
   // The server-rendered shell keeps the page header (h1, session details, join
@@ -42,19 +43,19 @@
   // lazily when you open them, so a count derived client-side could only appear after
   // you had already gone and looked (spec 052 §B8 Stage 2).
   const tabs = $derived.by(() => {
-    const tunes = { id: 'tunes', label: 'Tunes', count: pageData.total_tunes_count }
+    const tunes = { id: 'tunes', label: t('Tunes'), count: pageData.total_tunes_count }
     const logs = {
       id: 'logs',
-      label: isFestival ? 'Sessions' : 'Logs',
+      label: isFestival ? t('Sessions') : t('Logs'),
       count: pageData.total_logs_count,
     }
-    const t = isFestival ? [logs, tunes] : [tunes, logs]
+    const list = isFestival ? [logs, tunes] : [tunes, logs]
     if (showPeopleTab) {
       // null when the viewer may not see the roster; Tabs renders nothing for null,
       // and 0 is a real count.
-      t.push({ id: 'people', label: 'People', count: pageData.total_people_count })
+      list.push({ id: 'people', label: t('People'), count: pageData.total_people_count })
     }
-    return t
+    return list
   })
 
   let activeTab = $state(ctx.activeTab || defaultTab)
@@ -72,7 +73,7 @@
   // to mount, now bundled in as a child with callback props (no window global).
   let addPane = $state(null)
 
-  import { toast, Tabs } from '../lib/index.js'
+  import { toast, Tabs, t } from '../lib/index.js'
 
   $effect(() => {
     untrack(() => {

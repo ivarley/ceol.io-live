@@ -1,11 +1,12 @@
 <script>
+  // i18n-converted
   // The profile screen: grouped rows for the person and their account, with a
   // display/edit toggle that keeps the same rows either way, the live
   // per-instrument editor (saves immediately, decoupled from the profile Save
   // button), and the admin-only verify-email / danger-zone controls.
   let { person, user, isUserProfile, personId, timezoneOptions = [], canonicalInstruments = [] } = $props()
 
-  import { Chevron, Dialog, Sheet, LoadError, toast, toastFailure, ServerError } from '../lib/index.js'
+  import { Chevron, Dialog, Sheet, LoadError, toast, toastFailure, ServerError, t, tn, instrumentName } from '../lib/index.js'
   import LanguageSetting from './LanguageSetting.svelte'
   import MergeSection from './MergeSection.svelte'
   import IdentityHeader from './IdentityHeader.svelte'
@@ -86,7 +87,7 @@
     if (saving) return
     const currentUsername = user ? username.trim() : originalUsername
     if (usernameWarning && currentUsername !== originalUsername) {
-      toast('Please fix the username issue before saving.', 'error')
+      toast(t('Please fix the username issue before saving.'), 'error')
       return
     }
 
@@ -133,18 +134,18 @@
           throw new ServerError(data.message || '')
         }
         // Instruments already saved live; just reload to show updated profile.
-        sessionStorage.setItem('personSavedMessage', 'Profile updated successfully')
+        sessionStorage.setItem('personSavedMessage', t('Profile updated successfully'))
         window.location.reload()
       })
       .catch((error) => {
         saving = false
-        toastFailure('save the profile', error)
+        toastFailure(t('save the profile'), error)
       })
   }
 
   // --- Verify email (admin flavor) -------------------------------------------
   let verifyingEmail = $state(false)
-  let verifyBtnLabel = $state('Verify Email')
+  let verifyBtnLabel = $state(t('Verify Email'))
 
   // Verifying is a decision -> kit Dialog with an explicit verb (spec 035).
   let verifyConfirmOpen = $state(false)
@@ -152,7 +153,7 @@
   // Returns the request so the confirm Dialog stays busy until it settles.
   function verifyEmail() {
     verifyingEmail = true
-    verifyBtnLabel = 'Verifying…'
+    verifyBtnLabel = t('Verifying…')
     return fetch(`/api/admin/user/${user.user_id}/verify-email`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -169,9 +170,9 @@
         }
       })
       .catch((error) => {
-        toastFailure('verify the email', error)
+        toastFailure(t('verify the email'), error)
         verifyingEmail = false
-        verifyBtnLabel = 'Verify Email'
+        verifyBtnLabel = t('Verify Email')
         return false
       })
   }
@@ -241,18 +242,22 @@
     typeaheadOpen = false
     saveInstrumentList()
       .then(loadProfileInstruments) // reload to get canonical casing
-      .catch((e) => instrumentChangeFailed(`add ${name}`, e))
+      .catch((e) => instrumentChangeFailed(t('add {name}', { name: instrumentName(name) }), e))
   }
 
   // Type-ahead against the canonical list, with an "other" (free-text) escape hatch.
   const typeaheadOptions = $derived.by(() => {
     const q = typeaheadValue.trim().toLowerCase()
     const have = new Set(profileInstruments.map((i) => i.instrument.toLowerCase()))
-    const matches = canonicalInstruments.filter((c) => c.toLowerCase().includes(q) && !have.has(c.toLowerCase()))
-    const opts = matches.map((c) => ({ value: c, label: c }))
+    // Matched on the canonical name and on the name in the page's language ("fidil").
+    const shown = (c) => instrumentName(c).toLowerCase()
+    const matches = canonicalInstruments.filter(
+      (c) => (c.toLowerCase().includes(q) || shown(c).includes(q)) && !have.has(c.toLowerCase())
+    )
+    const opts = matches.map((c) => ({ value: c, label: instrumentName(c) }))
     // "Other" escape hatch: offer to add the typed text if it isn't an exact canonical match
-    if (q && !canonicalInstruments.some((c) => c.toLowerCase() === q) && !have.has(q)) {
-      opts.push({ value: typeaheadValue.trim(), label: `Add "${typeaheadValue.trim()}"` })
+    if (q && !canonicalInstruments.some((c) => c.toLowerCase() === q || shown(c) === q) && !have.has(q)) {
+      opts.push({ value: typeaheadValue.trim(), label: t('Add "{name}"', { name: typeaheadValue.trim() }) })
     }
     return opts
   })
@@ -301,7 +306,7 @@
         if (!d || !d.success) throw new ServerError((d && d.message) || '')
         return loadProfileInstruments()
       })
-      .catch((e) => instrumentChangeFailed('change that instrument setting', e))
+      .catch((e) => instrumentChangeFailed(t('change that instrument setting'), e))
   }
 
   function removeInstrumentFromProfile() {
@@ -313,8 +318,8 @@
       // Auto wouldn't bring back — warn before losing it.
       pendingRemoveInstrument = configInstrument
       removeWarnParts = {
-        name: configInstrument,
-        tunesText: loss === 1 ? '1 tune' : loss + ' tunes',
+        name: instrumentName(configInstrument),
+        tunesText: tn(loss, '{n} tune', '{n} tunes'),
       }
       removeConfirmOpen = true
       closeInstrumentConfig()
@@ -329,7 +334,7 @@
     return saveInstrumentList()
       .then(loadProfileInstruments)
       .catch((e) => {
-        instrumentChangeFailed(`remove ${name}`, e)
+        instrumentChangeFailed(t('remove {name}', { name: instrumentName(name) }), e)
         return false
       })
   }
@@ -373,7 +378,7 @@
       .then((response) => response.json())
       .then((data) => {
         if (data.success) {
-          toggleActiveStatusHtml = { kind: 'info', text: 'Updated — reloading…' }
+          toggleActiveStatusHtml = { kind: 'info', text: t('Updated — reloading…') }
           // No toast (spec 052 §B4): the reload below is the confirmation, and it
           // destroys the toast a second after showing it.
           // Reload page to reflect new state
@@ -385,7 +390,7 @@
         }
       })
       .catch((error) => {
-        toastFailure(active ? 'reactivate this person' : 'deactivate this person', error)
+        toastFailure(active ? t('reactivate this person') : t('deactivate this person'), error)
         return false
       })
   }
@@ -410,42 +415,42 @@
   <div id="person-display" style:display={editMode ? 'none' : ''}>
     <div class="kit-group">
       <div class="kit-field kit-field-wrap">
-        <span class="kit-field-label">Instruments</span>
+        <span class="kit-field-label">{t('Instruments')}</span>
         {#if person.instruments && person.instruments.length}
-          <span class="kit-field-value" id="instruments-display">{person.instruments.join(', ')}</span>
+          <span class="kit-field-value" id="instruments-display">{person.instruments.map(instrumentName).join(', ')}</span>
         {:else}
-          <span class="kit-field-value is-empty" id="instruments-display">None listed</span>
+          <span class="kit-field-value is-empty" id="instruments-display">{t('None listed')}</span>
         {/if}
       </div>
 
       <!-- City, state and country were three rows saying one thing. -->
       <div class="kit-field">
-        <span class="kit-field-label">Location</span>
-        <span class="kit-field-value" class:is-empty={!placeLine}>{placeLine || 'Not provided'}</span>
+        <span class="kit-field-label">{t('Location')}</span>
+        <span class="kit-field-value" class:is-empty={!placeLine}>{placeLine || t('Not provided')}</span>
       </div>
 
       <div class="kit-field">
-        <span class="kit-field-label">SMS</span>
-        <span class="kit-field-value" class:is-empty={!person.sms_number}>{person.sms_number || 'Not provided'}</span>
+        <span class="kit-field-label">{t('SMS')}</span>
+        <span class="kit-field-value" class:is-empty={!person.sms_number}>{person.sms_number || t('Not provided')}</span>
       </div>
 
       <!-- Person-level email only exists for people with no account; once
            connected, the account's email (below) is the address. -->
       {#if !user}
         <div class="kit-field">
-          <span class="kit-field-label">Email</span>
-          <span class="kit-field-value" class:is-empty={!person.email}>{person.email || 'Not provided'}</span>
+          <span class="kit-field-label">{t('Email')}</span>
+          <span class="kit-field-value" class:is-empty={!person.email}>{person.email || t('Not provided')}</span>
         </div>
       {/if}
 
       <div class="kit-field">
-        <span class="kit-field-label">thesession.org</span>
+        <span class="kit-field-label">{'thesession.org'}</span>
         {#if person.thesession_user_id}
           <a class="kit-field-value pd-link" href="https://thesession.org/members/{person.thesession_user_id}" target="_blank" rel="noopener noreferrer">
             {person.thesession_user_id}
           </a>
         {:else}
-          <span class="kit-field-value is-empty">Not a member</span>
+          <span class="kit-field-value is-empty">{t('Not a member')}</span>
         {/if}
       </div>
     </div>
@@ -457,54 +462,54 @@
     <form id="person-form" onsubmit={(e) => e.preventDefault()}>
       <div class="kit-group">
         <div class="kit-field">
-          <label class="kit-field-label" for="first_name">First name</label>
+          <label class="kit-field-label" for="first_name">{t('First name')}</label>
           <input type="text" id="first_name" name="first_name" bind:value={firstName} required />
         </div>
         <div class="kit-field">
-          <label class="kit-field-label" for="last_name">Last name</label>
+          <label class="kit-field-label" for="last_name">{t('Last name')}</label>
           <input type="text" id="last_name" name="last_name" bind:value={lastName} required />
         </div>
         {#if !user}
           <div class="kit-field">
-            <label class="kit-field-label" for="email">Email</label>
+            <label class="kit-field-label" for="email">{t('Email')}</label>
             <input type="email" id="email" name="email" bind:value={email} />
           </div>
         {/if}
         <div class="kit-field">
-          <label class="kit-field-label" for="sms_number">SMS</label>
+          <label class="kit-field-label" for="sms_number">{t('SMS')}</label>
           <input type="text" id="sms_number" name="sms_number" bind:value={smsNumber} />
         </div>
       </div>
 
-      <h3 class="kit-group-head">Where you play</h3>
+      <h3 class="kit-group-head">{t('Where you play')}</h3>
       <div class="kit-group">
         <div class="kit-field">
-          <label class="kit-field-label" for="city">City</label>
+          <label class="kit-field-label" for="city">{t('City')}</label>
           <input type="text" id="city" name="city" bind:value={city} />
         </div>
         <div class="kit-field">
-          <label class="kit-field-label" for="state">State / area</label>
+          <label class="kit-field-label" for="state">{t('State / area')}</label>
           <input type="text" id="state" name="state" bind:value={stateField} />
         </div>
         <div class="kit-field">
-          <label class="kit-field-label" for="country">Country</label>
+          <label class="kit-field-label" for="country">{t('Country')}</label>
           <input type="text" id="country" name="country" bind:value={country} />
         </div>
         <div class="kit-field">
-          <label class="kit-field-label" for="thesession_user_id">thesession.org</label>
-          <input type="number" id="thesession_user_id" name="thesession_user_id" bind:value={thesessionUserId} placeholder="Member ID" />
+          <label class="kit-field-label" for="thesession_user_id">{'thesession.org'}</label>
+          <input type="number" id="thesession_user_id" name="thesession_user_id" bind:value={thesessionUserId} placeholder={t('Member ID')} />
         </div>
       </div>
 
-      <h3 class="kit-group-head">Instruments</h3>
+      <h3 class="kit-group-head">{t('Instruments')}</h3>
       <div class="kit-group">
         <div class="kit-field">
-          <label class="kit-field-label" for="instrument-typeahead">Add</label>
+          <label class="kit-field-label" for="instrument-typeahead">{t('Add')}</label>
           <span class="instrument-typeahead-wrap" bind:this={typeaheadWrap}>
             <input
               type="text"
               id="instrument-typeahead"
-              placeholder="Fiddle, whistle…"
+              placeholder={t('Fiddle, whistle…')}
               autocomplete="off"
               bind:value={typeaheadValue}
               oninput={updateTypeahead}
@@ -519,23 +524,23 @@
         </div>
         <div id="instrument-rows">
           {#if instrumentsFailed}
-            <LoadError what="the instruments" inline onRetry={loadProfileInstruments} />
+            <LoadError message={t("Couldn't load the instruments.")} inline onRetry={loadProfileInstruments} />
           {:else if !instrumentsLoaded}
-            <p class="kit-field-help">Loading instruments…</p>
+            <p class="kit-field-help">{t('Loading instruments…')}</p>
           {:else if !profileInstruments.length}
-            <p class="kit-field-help">No instruments yet — add one above.</p>
+            <p class="kit-field-help">{t('No instruments yet — add one above.')}</p>
           {:else}
             {#each profileInstruments as inst (inst.instrument)}
               <button type="button" class="kit-field instrument-row" onclick={() => openInstrumentConfig(inst.instrument)}>
-                <span class="kit-field-label">{inst.instrument}</span>
-                <span class="instrument-row-badge{inst.is_auto ? ' auto' : ''}">{inst.is_auto ? 'Auto' : 'Manual'}</span>
+                <span class="kit-field-label">{instrumentName(inst.instrument)}</span>
+                <span class="instrument-row-badge{inst.is_auto ? ' auto' : ''}">{inst.is_auto ? t('Auto') : t('Manual')}</span>
                 <Chevron class="kit-chev" />
               </button>
             {/each}
           {/if}
         </div>
       </div>
-      <p class="kit-field-help pd-inst-note">Instruments save as you change them. Tap one to set it auto or manual, or to remove it.</p>
+      <p class="kit-field-help pd-inst-note">{t('Instruments save as you change them. Tap one to set it auto or manual, or to remove it.')}</p>
     </form>
   </div>
 
@@ -544,37 +549,37 @@
   {/if}
 
   {#if user}
-    <h3 class="kit-group-head">Account</h3>
+    <h3 class="kit-group-head">{t('Account')}</h3>
 
     <div id="user-display" style:display={editMode ? 'none' : ''}>
       <div class="kit-group">
         <div class="kit-field">
-          <span class="kit-field-label">Username</span>
+          <span class="kit-field-label">{t('Username')}</span>
           <span class="kit-field-value">{user.username}</span>
         </div>
         <div class="kit-field">
-          <span class="kit-field-label">Email</span>
-          <span class="kit-field-value">{user.user_email || 'Not provided'}</span>
+          <span class="kit-field-label">{t('Email')}</span>
+          <span class="kit-field-value">{user.user_email || t('Not provided')}</span>
         </div>
         {#if !user.email_verified}
           <!-- Only worth a row when it is a problem: "verified" is the state every
                working account is in, so saying so on every visit says nothing. -->
           <div class="kit-field">
-            <span class="kit-field-label">Email status</span>
-            <span class="kit-field-value pd-warn">Not verified</span>
+            <span class="kit-field-label">{t('Email status')}</span>
+            <span class="kit-field-value pd-warn">{t('Not verified')}</span>
             {#if !isUserProfile}
               <button type="button" id="verify-email-btn" class="pd-row-action" disabled={verifyingEmail} onclick={(e) => { e.preventDefault(); verifyConfirmOpen = true }}>{verifyBtnLabel}</button>
             {/if}
           </div>
         {/if}
         <div class="kit-field">
-          <span class="kit-field-label">Time zone</span>
+          <span class="kit-field-label">{t('Time zone')}</span>
           <span class="kit-field-value">{user.timezone_display || 'UTC'}</span>
         </div>
         <div class="kit-field">
-          <span class="kit-field-label">Update emails</span>
+          <span class="kit-field-label">{t('Update emails')}</span>
           <span class="kit-field-value" class:is-empty={!user.receive_update_emails}>
-            {user.receive_update_emails ? 'Subscribed' : 'Not subscribed'}
+            {user.receive_update_emails ? t('Subscribed') : t('Not subscribed')}
           </span>
         </div>
       </div>
@@ -585,7 +590,7 @@
       {#if isUserProfile}
         <div class="kit-group">
           <a class="kit-field" href="/change-password">
-            <span class="kit-field-label">{user.has_password ? 'Change my password' : 'Create a password'}</span>
+            <span class="kit-field-label">{user.has_password ? t('Change my password') : t('Create a password')}</span>
             <Chevron class="kit-chev" />
           </a>
         </div>
@@ -595,22 +600,22 @@
            else's profile, noise on your own. -->
       <div class="kit-group">
         <button type="button" id="account-details-toggle" class="kit-field kit-disclosure" aria-expanded={detailsOpen} aria-controls="account-details" onclick={() => (detailsOpen = !detailsOpen)}>
-          <span class="kit-field-label">Details</span>
+          <span class="kit-field-label">{t('Details')}</span>
           <Chevron class="kit-chev" dir={detailsOpen ? "down" : "right"} />
         </button>
         {#if detailsOpen}
           <div id="account-details">
             <div class="kit-field">
-              <span class="kit-field-label">Status</span>
-              <span class="kit-field-value" class:pd-warn={!user.is_active}>{user.is_active ? 'Active' : 'Inactive'}</span>
+              <span class="kit-field-label">{t('Status')}</span>
+              <span class="kit-field-value" class:pd-warn={!user.is_active}>{user.is_active ? t('Active') : t('Inactive')}</span>
             </div>
             <div class="kit-field">
-              <span class="kit-field-label">Created</span>
-              <span class="kit-field-value">{fmtDateTime(user.created_at) || 'Unknown'}</span>
+              <span class="kit-field-label">{t('Created')}</span>
+              <span class="kit-field-value">{fmtDateTime(user.created_at) || t('Unknown')}</span>
             </div>
             <div class="kit-field">
-              <span class="kit-field-label">Last login</span>
-              <span class="kit-field-value" class:is-empty={!user.last_login}>{fmtDateTime(user.last_login) || 'Never'}</span>
+              <span class="kit-field-label">{t('Last login')}</span>
+              <span class="kit-field-value" class:is-empty={!user.last_login}>{fmtDateTime(user.last_login) || t('Never')}</span>
             </div>
           </div>
         {/if}
@@ -621,18 +626,18 @@
       <form id="user-form" onsubmit={(e) => e.preventDefault()}>
         <div class="kit-group">
           <div class="kit-field">
-            <label class="kit-field-label" for="username">Username</label>
+            <label class="kit-field-label" for="username">{t('Username')}</label>
             <input type="text" id="username" name="username" bind:value={username} onblur={onUsernameBlur} required />
           </div>
           {#if usernameWarning}
             <p id="username-warning" class="kit-field-help pd-warn">{usernameWarning}</p>
           {/if}
           <div class="kit-field">
-            <label class="kit-field-label" for="user_email">Email</label>
+            <label class="kit-field-label" for="user_email">{t('Email')}</label>
             <input type="email" id="user_email" name="user_email" bind:value={userEmail} />
           </div>
           <div class="kit-field">
-            <label class="kit-field-label" for="timezone">Time zone</label>
+            <label class="kit-field-label" for="timezone">{t('Time zone')}</label>
             <select id="timezone" name="timezone" bind:value={timezone}>
               {#each timezoneOptions as tz (tz.value)}
                 <option value={tz.value}>{tz.label}</option>
@@ -646,7 +651,7 @@
             <div class="kit-check-field">
               <label class="kit-check-label" for="receive_update_emails">
                 <input type="checkbox" id="receive_update_emails" name="receive_update_emails" bind:checked={receiveUpdateEmails} />
-                Email me about updates to this app
+                {t('Email me about updates to this app')}
               </label>
             </div>
           </div>
@@ -654,33 +659,33 @@
       </form>
     </div>
   {:else}
-    <h3 class="kit-group-head">Account</h3>
+    <h3 class="kit-group-head">{t('Account')}</h3>
     <div class="kit-group">
       <div class="kit-field">
-        <span class="kit-field-value is-empty pd-no-account">Not connected to a user account.</span>
+        <span class="kit-field-value is-empty pd-no-account">{t('Not connected to a user account.')}</span>
       </div>
     </div>
   {/if}
 
   <!-- Danger Zone - Admin Only -->
   {#if !isUserProfile}
-    <h3 class="kit-group-head pd-danger-head" id="danger-zone-head">Danger zone</h3>
+    <h3 class="kit-group-head pd-danger-head" id="danger-zone-head">{t('Danger zone')}</h3>
     <div class="kit-group pd-danger" id="danger-zone">
       {#if person.active}
         <p class="kit-field-help">
-          Deactivating {person.name} will prevent them from being added to any sessions, session instances, or tune sets.
-          Existing associations will not be affected.{#if user}{' '}This also disables their login and stops all emails to their account.{/if}
+          {t('Deactivating {name} will prevent them from being added to any sessions, session instances, or tune sets.', { name: person.name })}
+          {t('Existing associations will not be affected.')}{#if user}{' '}{t('This also disables their login and stops all emails to their account.')}{/if}
         </p>
         <button type="button" class="kit-field kit-field-danger" id="deactivate-person-btn" onclick={() => askTogglePersonActive(false)}>
-          <span class="kit-field-label">Deactivate {person.first_name}</span>
+          <span class="kit-field-label">{t('Deactivate {name}', { name: person.first_name })}</span>
         </button>
       {:else}
         <p class="kit-field-help">
-          <strong>This person is deactivated.</strong> They cannot be added to sessions, session instances, or tune sets.{#if user}{' '}Their login is disabled.{/if}
-          Reactivating allows all of that again.
+          <strong>{t('This person is deactivated.')}</strong> {t('They cannot be added to sessions, session instances, or tune sets.')}{#if user}{' '}{t('Their login is disabled.')}{/if}
+          {t('Reactivating allows all of that again.')}
         </p>
         <button type="button" class="kit-field" id="reactivate-person-btn" onclick={() => askTogglePersonActive(true)}>
-          <span class="kit-field-label pd-reactivate">Reactivate {person.first_name}</span>
+          <span class="kit-field-label pd-reactivate">{t('Reactivate {name}', { name: person.first_name })}</span>
         </button>
       {/if}
       <div id="toggle-active-status" style:display={toggleActiveStatusHtml ? 'block' : 'none'}>
@@ -696,7 +701,7 @@
 
 <!-- Instrument config sheet (auto/manual + remove; changes save immediately,
      so the dismiss button is labeled Done — it, scrim, and Escape just dismiss) -->
-<Sheet bind:open={configOpen} title={configInstrument || ''} cancelLabel="Done">
+<Sheet bind:open={configOpen} title={instrumentName(configInstrument) || ''} cancelLabel={t('Done')}>
   <div class="inst-config-body">
     <div class="form-check">
       <input
@@ -707,7 +712,7 @@
         value="auto"
         checked={!!(configInst && configInst.is_auto)}
         onchange={() => setInstrumentAutoFromModal(true)} />
-      <label class="form-check-label" for="inst-auto-radio"><strong>Auto</strong> — follows the tune's main status. When you mark a tune learned, it's learned on this instrument.</label>
+      <label class="form-check-label" for="inst-auto-radio"><strong>{t('Auto')}</strong> — {t("follows the tune's main status. When you mark a tune learned, it's learned on this instrument.")}</label>
     </div>
     <div class="form-check">
       <input
@@ -718,42 +723,42 @@
         value="manual"
         checked={!(configInst && configInst.is_auto)}
         onchange={() => setInstrumentAutoFromModal(false)} />
-      <label class="form-check-label" for="inst-manual-radio"><strong>Manual</strong> — a curated list you set per tune. Starts empty; you add tunes to it one at a time.</label>
+      <label class="form-check-label" for="inst-manual-radio"><strong>{t('Manual')}</strong> — {t('a curated list you set per tune. Starts empty; you add tunes to it one at a time.')}</label>
     </div>
   </div>
   {#snippet footer()}
-    <a class="pd-modal-remove" href="#remove" onclick={(e) => { e.preventDefault(); removeInstrumentFromProfile() }}>Remove from profile</a>
+    <a class="pd-modal-remove" href="#remove" onclick={(e) => { e.preventDefault(); removeInstrumentFromProfile() }}>{t('Remove from profile')}</a>
   {/snippet}
 </Sheet>
 
 <!-- Instrument removal is a destructive decision -> kit Dialog (data-loss warning) -->
 <Dialog
   bind:open={removeConfirmOpen}
-  title="Remove instrument?"
-  confirmLabel="Remove anyway"
-  busyLabel="Removing…"
+  title={t('Remove instrument?')}
+  confirmLabel={t('Remove anyway')}
+  busyLabel={t('Removing…')}
   destructive={true}
   onConfirm={confirmRemoveInstrument}
   onCancel={cancelRemoveInstrument}>
   {#if removeWarnParts}
     <p id="instrument-remove-warn" class="pd-modal-warn">
-      Removing <strong>{removeWarnParts.name}</strong> will delete its saved status for {removeWarnParts.tunesText} that you've customized away from your other instruments. Re-adding it later starts fresh on Auto. This can't be undone.
+      {t('Removing')} <strong>{removeWarnParts.name}</strong> {t("will delete its saved status for {tunes} that you've customized away from your other instruments. Re-adding it later starts fresh on Auto. This can't be undone.", { tunes: removeWarnParts.tunesText })}
     </p>
   {/if}
 </Dialog>
 
 <Dialog
   bind:open={verifyConfirmOpen}
-  title="Verify this email address?"
-  description="This manually marks the email address as verified."
-  confirmLabel="Verify email"
-  busyLabel="Verifying…"
+  title={t('Verify this email address?')}
+  description={t('This manually marks the email address as verified.')}
+  confirmLabel={t('Verify email')}
+  busyLabel={t('Verifying…')}
   onConfirm={verifyEmail} />
 
 <Dialog
   bind:open={toggleActiveOpen}
-  title={`${toggleActiveTarget ? 'Reactivate' : 'Deactivate'} ${person.name}?`}
-  confirmLabel={toggleActiveTarget ? 'Reactivate person' : 'Deactivate person'}
-  busyLabel={toggleActiveTarget ? 'Reactivating…' : 'Deactivating…'}
+  title={toggleActiveTarget ? t('Reactivate {name}?', { name: person.name }) : t('Deactivate {name}?', { name: person.name })}
+  confirmLabel={toggleActiveTarget ? t('Reactivate person') : t('Deactivate person')}
+  busyLabel={toggleActiveTarget ? t('Reactivating…') : t('Deactivating…')}
   destructive={!toggleActiveTarget}
   onConfirm={() => togglePersonActive(toggleActiveTarget)} />

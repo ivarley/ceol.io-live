@@ -1,10 +1,12 @@
 <script>
+  // i18n-converted
   // Shows a tune's incipit notation as a server-rendered PNG (the abc-renderer
   // service is the only renderer — no client-side music rendering). If the image
   // isn't cached yet, lazily (when scrolled into view) asks the incipit endpoint to
   // render + cache it in the background, then displays it.
   import { untrack } from 'svelte'
   import { fetchIncipit } from './client.js'
+  import { t } from './lib/index.js'
 
   let { config, tuneId, image = null, canRender = false } = $props()
   let src = $state(untrack(() => image)) // initial cached image; the lazy fetch fills it in if absent
@@ -35,12 +37,12 @@
 
 <div class="incipit" bind:this={el}>
   {#if src}
-    <img class="incipit-img" src={`data:image/png;base64,${src}`} alt="notation" />
+    <img class="incipit-img" src={`data:image/png;base64,${src}`} alt={t('notation')} />
   {:else if loading}
-    <span class="deep-noabc">♪ rendering…</span>
+    <span class="deep-noabc">♪ {t('rendering…')}</span>
   {:else if canRender}
     <span class="deep-noabc">♪</span>
   {:else}
-    <span class="deep-noabc">♪ no notation</span>
+    <span class="deep-noabc">♪ {t('no notation')}</span>
   {/if}
 </div>

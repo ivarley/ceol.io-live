@@ -64,6 +64,51 @@ def init_app(app):
         lang = get_locale()
         return {"lang": lang, "other_lang": "en" if lang == "ga" else "ga"}
 
+    app.jinja_env.globals["js_ngettext"] = js_ngettext
+    app.jinja_env.globals["ceol_js_strings"] = ceol_js_strings
+
+
+# The numbers whose Irish plural forms are, in order, msgstr[0..4] (Plural-Forms).
+_PLURAL_SAMPLES = (1, 2, 3, 7, 11)
+
+
+def js_ngettext(singular, plural):
+    """A count sentence for a page's inline script: its five forms, in the order
+    window.ceolPlural(forms, n) (templates/base.html) picks from. `{n}` in the strings
+    stands for the number, filled in by the script:
+
+        const TUNES = {{ js_ngettext('{n} tune', '{n} tunes') | tojson }};
+        label.textContent = ceolPlural(TUNES, count);
+
+    Extracted like ngettext (babel.cfg keywords: js_ngettext:1,2)."""
+    from flask_babel import ngettext
+
+    return [ngettext(singular, plural, n) for n in _PLURAL_SAMPLES]
+
+
+def ceol_js_strings():
+    """The strings the legacy scripts in static/js show, keyed by their English: base.html
+    puts them in window.__CEOL_T__ and each script reads T('English'). A count sentence's
+    value is its js_ngettext forms, for window.ceolPlural."""
+    from flask_babel import gettext as _
+
+    return {
+        # connection_status.js
+        "Reconnected": _("Reconnected"),
+        "Syncing your changes...": _("Syncing your changes..."),
+        "All changes synced": _("All changes synced"),
+        "You're offline": _("You're offline"),
+        "Offline": _("Offline"),
+        "Offline for {time}": _("Offline for {time}"),
+        "{n} change waiting to sync": js_ngettext(
+            "{n} change waiting to sync", "{n} changes waiting to sync"
+        ),
+        "No unsynced changes": _("No unsynced changes"),
+        # share.js
+        "QR code linking to {url}": _("QR code linking to {url}"),
+        "Copied": _("Copied"),
+    }
+
 
 def _safe_next(target):
     """A same-site path to go back to; anything else goes home."""

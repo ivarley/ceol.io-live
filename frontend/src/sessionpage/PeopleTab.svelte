@@ -1,4 +1,5 @@
 <script>
+  // i18n-converted
   /**
    * The People tab — this session's roster (spec 034).
    *
@@ -18,7 +19,8 @@
    */
   import { untrack } from 'svelte'
   import { SvelteSet } from 'svelte/reactivity'
-  import { Chip, LoadError, PersonPicker, Row, SearchField, Seg, Sheet, Toolbar, toast, toastFailure, ServerError } from '../lib/index.js'
+  import { Chip, LoadError, PersonPicker, Row, SearchField, Seg, Sheet, Toolbar, toast, ServerError, t, tn, instrumentName } from '../lib/index.js'
+  import { toastFailed } from './failure.js'
   import { normalizeQuotes } from '../shared/parse.js'
   import { filterPeople } from './logic.js'
 
@@ -48,9 +50,9 @@
   const filteredPeople = $derived(filterPeople(peopleData, currentPeopleFilter, searchQuery))
 
   const FILTERS = [
-    { id: 'members', label: 'Members' },
-    { id: 'visitors', label: 'Visitors' },
-    { id: 'archived', label: 'Archived' },
+    { id: 'members', label: t('Members') },
+    { id: 'visitors', label: t('Visitors') },
+    { id: 'archived', label: t('Archived') },
   ]
 
   // People an admin has yet to vouch for. Until they're confirmed they can't see anyone here.
@@ -117,7 +119,11 @@
       pickerOpen = false
       fetchPeople()
     } catch (e) {
-      toastFailure('add that person', e)
+      toastFailed(
+        e,
+        t("Couldn't add that person. Try again."),
+        t("Couldn't add that person. Check your connection and try again.")
+      )
     } finally {
       saving = false
     }
@@ -184,11 +190,28 @@
 
   const nameOf = (p) => `${p.first_name} ${p.last_name}`.trim()
 
-  const FIELD_WHAT = {
-    confirmed: 'change whether they are confirmed',
-    archived: 'change whether they are archived',
-    relationship: 'change their relationship to this session',
+  // What a failed save says: [the server explained it, it never got there].
+  const FIELD_FAILED = {
+    confirmed: () => [
+      t("Couldn't change whether they are confirmed. Try again."),
+      t("Couldn't change whether they are confirmed. Check your connection and try again."),
+    ],
+    archived: () => [
+      t("Couldn't change whether they are archived. Try again."),
+      t("Couldn't change whether they are archived. Check your connection and try again."),
+    ],
+    relationship: () => [
+      t("Couldn't change their relationship to this session. Try again."),
+      t("Couldn't change their relationship to this session. Check your connection and try again."),
+    ],
   }
+  const fieldFailed = (field) =>
+    FIELD_FAILED[field]
+      ? FIELD_FAILED[field]()
+      : [
+          t("Couldn't save that change. Try again."),
+          t("Couldn't save that change. Check your connection and try again."),
+        ]
 
   async function setField(personId, field, value) {
     if (detailBusy) return false
@@ -208,7 +231,7 @@
       )
       return true
     } catch (e) {
-      toastFailure(FIELD_WHAT[field] || 'save that change', e)
+      toastFailed(e, ...fieldFailed(field))
       return false
     } finally {
       detailBusy = false
@@ -222,8 +245,8 @@
     if (await setField(detailRow.person_id, 'confirmed', next)) {
       toast(
         next
-          ? `${nameOf(detailRow)} can now see this session's people and attendance.`
-          : `${nameOf(detailRow)} can no longer see this session's people.`,
+          ? t("{name} can now see this session's people and attendance.", { name: nameOf(detailRow) })
+          : t("{name} can no longer see this session's people.", { name: nameOf(detailRow) }),
         'success'
       )
     }
@@ -244,8 +267,8 @@
   }
 
   const RELATIONSHIPS = [
-    { id: 'member', label: 'Member' },
-    { id: 'visitor', label: 'Visitor' },
+    { id: 'member', label: t('Member') },
+    { id: 'visitor', label: t('Visitor') },
   ]
 
   // ---- deep link ---------------------------------------------------------------
@@ -270,7 +293,7 @@
         bind:open={filterOpen}
         activeCount={currentPeopleFilter === FILTERS[0].id ? 0 : 1}
         addId="add-person-btn"
-        addTitle="Add someone to this session"
+        addTitle={t('Add someone to this session')}
         onAdd={openAddPerson}>
         {#snippet search()}
           <SearchField
@@ -279,7 +302,7 @@
             inputClass="filter-search-input"
             wrapperClass="people-search-wrap filter-search-wrap"
             styled={false}
-            placeholder="Search people..." />
+            placeholder={t('Search people...')} />
         {/snippet}
         {#snippet filter()}
           <Seg
@@ -290,7 +313,7 @@
             styled={false}
             segClass="filter-button-group"
             optClass="filter-sort-btn"
-            aria-label="Filter people" />
+            aria-label={t('Filter people')} />
         {/snippet}
       </Toolbar>
     </div>
@@ -299,35 +322,37 @@
       <!-- Confirming is the ONLY way people-visibility is granted, so an admin needs to know
            someone is waiting on it. -->
       <p class="people-nudge">
-        {awaitingConfirmation.length}
-        {awaitingConfirmation.length === 1 ? 'person has' : 'people have'} joined and can't see
-        who plays here yet. Open them to confirm.
+        {tn(
+          awaitingConfirmation.length,
+          "{n} person has joined and can't see who plays here yet. Open them to confirm.",
+          "{n} people have joined and can't see who plays here yet. Open them to confirm."
+        )}
       </p>
     {/if}
 
     <div class="people-list" id="people-list">
       {#if !peopleLoaded}
         <div style="padding: 40px 20px; text-align: center; color: var(--text-muted, #6c757d);">
-          <i class="loading-dots">Loading people...</i>
+          <i class="loading-dots">{t('Loading people...')}</i>
         </div>
       {:else if peopleError}
-        <LoadError id="people-load-error" what="this session's people" onRetry={fetchPeople} retrying={peopleRetrying} />
+        <LoadError id="people-load-error" message={t("Couldn't load this session's people.")} onRetry={fetchPeople} retrying={peopleRetrying} />
       {:else if filteredPeople.length === 0}
         <div style="padding: 40px 20px; text-align: center; color: var(--text-muted, #6c757d);">
           <p>
             {#if searchQuery}
-              No people found matching your search
+              {t('No people found matching your search')}
             {:else if currentPeopleFilter === 'visitors'}
-              No visitors to this session yet
+              {t('No visitors to this session yet')}
             {:else if currentPeopleFilter === 'archived'}
-              Nobody archived
+              {t('Nobody archived')}
             {:else}
-              No people in this session yet
+              {t('No people in this session yet')}
             {/if}
           </p>
           {#if searchQuery}
             <button class="people-empty-add" onclick={openAddPerson}>
-              Add Someone To This Session
+              {t('Add Someone To This Session')}
             </button>
           {/if}
         </div>
@@ -355,25 +380,25 @@
                 {#if person.relationship === 'visitor' || person.archived || (!person.confirmed && person.has_user_account)}
                   <div class="person-badges">
                     {#if person.relationship === 'visitor'}
-                      <Chip label="Visitor" variant="warning" />
+                      <Chip label={t('Visitor')} variant="warning" />
                     {/if}
                     {#if person.archived}
-                      <Chip label="Archived" />
+                      <Chip label={t('Archived')} />
                     {/if}
                     {#if !person.confirmed && person.has_user_account}
-                      <Chip label="Unconfirmed" variant="warning" title="Can't see this session's people yet" />
+                      <Chip label={t('Unconfirmed')} variant="warning" title={t("Can't see this session's people yet")} />
                     {/if}
                   </div>
                 {/if}
                 <div class="person-instruments">
-                  {person.instruments && person.instruments.length > 0 ? person.instruments.join(', ') : 'No instruments listed'}
+                  {person.instruments && person.instruments.length > 0 ? person.instruments.map(instrumentName).join(', ') : t('No instruments listed')}
                 </div>
               </div>
             {/snippet}
             {#snippet trailing()}
               {#if trackAttendance}
                 <div class="person-meta">
-                  <Chip label={String(person.attendance_count || 0)} styled={false} chipClass="person-attendance-badge" title="Nights attended" />
+                  <Chip label={String(person.attendance_count || 0)} styled={false} chipClass="person-attendance-badge" title={t('Nights attended')} />
                 </div>
               {/if}
             {/snippet}
@@ -388,25 +413,25 @@
     <div id="person-detail-content">
       {#if detailLoading}
         <div style="padding: 40px 20px; text-align: center;">
-          <i class="loading-dots">Loading...</i>
+          <i class="loading-dots">{t('Loading...')}</i>
         </div>
       {:else if detailFailed || !detailPerson}
         <LoadError
           id="person-detail-load-error"
-          what="this person's details"
+          message={t("Couldn't load this person's details.")}
           onRetry={detailPersonId ? () => loadPersonDetail(detailPersonId) : null}
           retrying={detailLoading} />
       {:else}
         {#if detailPerson.person_id === currentUserId}
-          <div style="margin-bottom: 16px;"><a href="/me" class="person-detail-link">View my profile</a></div>
+          <div style="margin-bottom: 16px;"><a href="/me" class="person-detail-link">{t('View my profile')}</a></div>
         {/if}
         {#if detailPerson.has_user_account && detailPerson.person_id !== currentUserId}
-          <div style="margin-bottom: 16px;"><a href="/me/and/{detailPerson.person_id}?from={sessionPath}" class="person-detail-link">Common Tunes?</a></div>
+          <div style="margin-bottom: 16px;"><a href="/me/and/{detailPerson.person_id}?from={sessionPath}" class="person-detail-link">{t('Common Tunes?')}</a></div>
         {/if}
 
         {#if detailRow && (isSessionAdmin || detailPerson.person_id === currentUserId)}
           <div class="person-detail-section">
-            <h3>Relationship to this session</h3>
+            <h3>{t('Relationship to this session')}</h3>
             <Seg
               options={RELATIONSHIPS}
               value={detailRow.relationship}
@@ -414,11 +439,11 @@
               idAttr="data-relationship" />
             <p class="pd-hint">
               {#if detailBusyField === 'relationship'}
-                Saving…
+                {t('Saving…')}
               {:else if detailRow.relationship === 'visitor'}
-                Came here, but this isn't one of their sessions.
+                {t("Came here, but this isn't one of their sessions.")}
               {:else}
-                This is one of their sessions — its tunes count towards their stats.
+                {t('This is one of their sessions — its tunes count towards their stats.')}
               {/if}
             </p>
           </div>
@@ -426,63 +451,61 @@
 
         {#if detailRow && isSessionAdmin}
           <div class="person-detail-section">
-            <h3>Session admin</h3>
+            <h3>{t('Session admin')}</h3>
             <!-- The copy has to say what confirming DOES, at the point of click. A bare
                  "Confirmed" toggle would be an admin handing over the roster without
                  realising it. -->
             <button class="pd-action" disabled={detailBusy} onclick={toggleConfirmed}>
               {#if detailBusyField === 'confirmed'}
-                Saving…
+                {t('Saving…')}
               {:else if detailRow.confirmed}
-                Un-confirm {nameOf(detailPerson)} — they'll no longer see this session's
-                people list and attendance records
+                {t("Un-confirm {name} — they'll no longer see this session's people list and attendance records", { name: nameOf(detailPerson) })}
               {:else}
-                Confirm {nameOf(detailPerson)} — they'll be able to see this session's people
-                list and attendance records
+                {t("Confirm {name} — they'll be able to see this session's people list and attendance records", { name: nameOf(detailPerson) })}
               {/if}
             </button>
             <button class="pd-action" disabled={detailBusy} onclick={toggleArchived}>
               {#if detailBusyField === 'archived'}
-                Saving…
+                {t('Saving…')}
               {:else if detailRow.archived}
-                Restore {nameOf(detailPerson)} to the roster
+                {t('Restore {name} to the roster', { name: nameOf(detailPerson) })}
               {:else}
-                Archive {nameOf(detailPerson)} — hide them from lists (still findable by name)
+                {t('Archive {name} — hide them from lists (still findable by name)', { name: nameOf(detailPerson) })}
               {/if}
             </button>
           </div>
         {/if}
 
         <div class="person-detail-location">
-          {locationStringOf(detailPerson).length > 0 ? locationStringOf(detailPerson).join(', ') : 'No location specified'}
+          {locationStringOf(detailPerson).length > 0 ? locationStringOf(detailPerson).join(', ') : t('No location specified')}
         </div>
         <div class="person-detail-section">
-          <h3>TheSession.org</h3>
+          <h3>{'TheSession.org' /* a name, not translated */}</h3>
           {#if detailPerson.thesession_user_id}
-            <a href="https://thesession.org/members/{detailPerson.thesession_user_id}" target="_blank" class="person-detail-link">View on TheSession.org</a>
+            <a href="https://thesession.org/members/{detailPerson.thesession_user_id}" target="_blank" class="person-detail-link">{t('View on TheSession.org')}</a>
           {:else}
-            <span style="color: var(--text-muted);">Not linked</span>
+            <span style="color: var(--text-muted);">{t('Not linked')}</span>
           {/if}
         </div>
         <div class="person-detail-section">
-          <h3>Instruments</h3>
+          <h3>{t('Instruments')}</h3>
           {#if detailPerson.instruments && detailPerson.instruments.length > 0}
             <div class="person-instruments-list">
               {#each detailPerson.instruments as inst (inst)}
-                <Chip label={inst} styled={false} chipClass="person-instrument-badge" />
+                <Chip label={instrumentName(inst)} styled={false} chipClass="person-instrument-badge" />
               {/each}
             </div>
           {:else}
-            <span style="color: var(--text-muted);">No instruments listed</span>
+            <span style="color: var(--text-muted);">{t('No instruments listed')}</span>
           {/if}
         </div>
         {#if trackAttendance}
         <div class="person-detail-section">
-          <h3>Sessions Attended</h3>
+          <h3>{t('Sessions Attended')}</h3>
           {#if detailPerson.attended_instances && detailPerson.attended_instances.length > 0}
             <table class="attendance-table">
               <thead>
-                <tr><th>Date</th></tr>
+                <tr><th>{t('Date')}</th></tr>
               </thead>
               <tbody>
                 <!-- Keyed by instance id, not date: a session may legitimately run
@@ -500,7 +523,7 @@
               </tbody>
             </table>
           {:else}
-            <p style="color: var(--text-muted); margin-top: 12px;">No sessions attended yet</p>
+            <p style="color: var(--text-muted); margin-top: 12px;">{t('No sessions attended yet')}</p>
           {/if}
         </div>
         {/if}
@@ -517,7 +540,7 @@
     bind:open={pickerOpen}
     scope="session"
     mode="attendance"
-    title="Add someone to this session"
+    title={t('Add someone to this session')}
     people={peopleData}
     {canonicalInstruments}
     busy={saving}

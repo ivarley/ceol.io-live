@@ -1,6 +1,7 @@
+{# i18n-converted #}
 {% extends "base.html" %}
 
-{% block title %}Complete Your Profile - Irish Music Sessions{% endblock %}
+{% block title %}{{ _('Complete Your Profile') }} - {{ _('Irish Music Sessions') }}{% endblock %}
 
 {% block content %}
 <div class="page-wrapper">
@@ -9,7 +10,7 @@
             <div class="col-md-8 col-lg-6">
                 <div class="card mt-5">
                     <div class="card-header">
-                        <h3 class="card-title text-center mb-0">Complete Your Profile</h3>
+                        <h3 class="card-title text-center mb-0">{{ _('Complete Your Profile') }}</h3>
                     </div>
                     <div class="card-body">
                         {% with messages = get_flashed_messages(with_categories=true) %}
@@ -17,26 +18,26 @@
                                 {% for category, message in messages %}
                                     <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible" role="alert">
                                         {{ message }}
-                                        <button type="button" class="close" data-dismiss="alert" aria-label="Close" onclick="this.parentElement.style.display='none'">
-                                            <span aria-hidden="true">&times;</span>
+                                        <button type="button" class="close" data-dismiss="alert" aria-label="{{ _('Close') }}" onclick="this.parentElement.style.display='none'">
+                                            <span aria-hidden="true">×</span>
                                         </button>
                                     </div>
                                 {% endfor %}
                             {% endif %}
                         {% endwith %}
 
-                        <p class="text-muted mb-4">Help other musicians find you by completing your profile. All fields are optional.</p>
+                        <p class="text-muted mb-4">{{ _('Help other musicians find you by completing your profile. All fields are optional.') }}</p>
 
                         <form method="POST" id="profile-form" data-busy-form>
                             <!-- Name -->
                             <div class="row mb-3">
                                 <div class="col-6">
-                                    <label for="first_name" class="form-label">First Name</label>
+                                    <label for="first_name" class="form-label">{{ _('First Name') }}</label>
                                     <input type="text" class="form-control" id="first_name" name="first_name" autofocus
                                            value="{{ person.first_name if person.first_name and '@' not in person.first_name else '' }}">
                                 </div>
                                 <div class="col-6">
-                                    <label for="last_name" class="form-label">Last Name</label>
+                                    <label for="last_name" class="form-label">{{ _('Last Name') }}</label>
                                     <input type="text" class="form-control" id="last_name" name="last_name"
                                            value="{{ person.last_name or '' }}">
                                 </div>
@@ -44,26 +45,26 @@
 
                             <!-- Location -->
                             <div class="mb-3">
-                                <label class="form-label">Where do you live?</label>
+                                <label class="form-label">{{ _('Where do you live?') }}</label>
                                 <div class="row">
                                     <div class="col-md-4 mb-2">
                                         <input type="text" class="form-control" id="city" name="city"
-                                               placeholder="City" value="{{ person.city or '' }}">
+                                               placeholder="{{ _('City') }}" value="{{ person.city or '' }}">
                                     </div>
                                     <div class="col-md-4 mb-2">
                                         <input type="text" class="form-control" id="state" name="state"
-                                               placeholder="State/Province" value="{{ person.state or '' }}">
+                                               placeholder="{{ _('State/Province') }}" value="{{ person.state or '' }}">
                                     </div>
                                     <div class="col-md-4 mb-2">
                                         <input type="text" class="form-control" id="country" name="country"
-                                               placeholder="Country" value="{{ person.country or '' }}">
+                                               placeholder="{{ _('Country') }}" value="{{ person.country or '' }}">
                                     </div>
                                 </div>
                             </div>
 
                             <!-- Timezone -->
                             <div class="mb-3">
-                                <label for="timezone" class="form-label">Time Zone</label>
+                                <label for="timezone" class="form-label">{{ _('Time Zone') }}</label>
                                 <select class="form-control" id="timezone" name="timezone" style="height: auto; padding: 0.5rem 0.75rem;">
                                     {% for tz in timezones %}
                                         <option value="{{ tz.value }}" {% if tz.value == current_user.timezone %}selected{% endif %}>
@@ -71,12 +72,12 @@
                                         </option>
                                     {% endfor %}
                                 </select>
-                                <small class="form-text text-muted">Used for displaying session times</small>
+                                <small class="form-text text-muted">{{ _('Used for displaying session times') }}</small>
                             </div>
 
                             <!-- Instruments -->
                             <div class="mb-4">
-                                <label class="form-label">What instruments do you play?</label>
+                                <label class="form-label">{{ _('What instruments do you play?') }}</label>
                                 <div class="row">
                                     {% set user_instruments_lower = user_instruments | map('lower') | list %}
                                     {% for instrument in common_instruments %}
@@ -95,14 +96,14 @@
                                 </div>
                                 <div class="mt-2">
                                     <input type="text" class="form-control" id="other_instrument" name="other_instrument"
-                                           placeholder="Other instrument(s)..."
+                                           placeholder="{{ _('Other instrument(s)...') }}"
                                            value="{{ other_instruments | join(', ') if other_instruments else '' }}">
                                 </div>
                             </div>
 
                             <div class="d-grid gap-2">
-                                <button type="submit" class="btn btn-primary" data-busy-label="Saving...">Save Profile</button>
-                                <a href="{{ url_for('home') }}" class="btn btn-outline-secondary">Skip for now</a>
+                                <button type="submit" class="btn btn-primary" data-busy-label="{{ _('Saving...') }}">{{ _('Save Profile') }}</button>
+                                <a href="{{ url_for('home') }}" class="btn btn-outline-secondary">{{ _('Skip for now') }}</a>
                             </div>
                         </form>
                     </div>

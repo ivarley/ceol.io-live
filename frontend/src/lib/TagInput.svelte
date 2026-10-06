@@ -1,4 +1,5 @@
 <script>
+  // i18n-converted
   // TagInput (spec 042): a one-word-tag editor modeled on IrishTune.info's Tag-it
   // box — chips with an ✕, an input beneath, and space / enter / comma to commit
   // the current token. Backspace on an empty input removes the last chip. Tags are
@@ -7,11 +8,12 @@
   // `tags` is $bindable — the parent owns the array; this component only ever
   // reassigns it (never mutates in place) so Svelte reactivity holds.
   import Chip from './Chip.svelte'
+  import { t } from './i18n/index.js'
 
   let {
     tags = $bindable([]),
     disabled = false,
-    placeholder = 'Add tags…',
+    placeholder = t('Add tags…'),
     // Single-tag normalizer. The drawer passes logic.js's normalizeTag so the
     // client matches the server; the default here keeps standalone use sane.
     normalize = (raw) => String(raw ?? '').trim().toLowerCase().replace(/\s+/g, '-'),
@@ -71,7 +73,7 @@
   class="kit-taginput"
   class:disabled
   role="group"
-  aria-label="Tags"
+  aria-label={t('Tags')}
   onclick={focusInput}
   onfocusout={onFocusOut}
   {...rest}

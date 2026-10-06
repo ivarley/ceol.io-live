@@ -1,4 +1,5 @@
 <script>
+  // i18n-converted
   // Add-to-My-Tunes pane (mobile slide-in / desktop split pane). ONE screen past the
   // search: the deep search (TuneSearch.svelte — local catalog + thesession.org remote
   // + paste-a-URL) opens TunePreview on tap, and the preview's footer hosts the add
@@ -10,7 +11,8 @@
   import AddTuneForm from './AddTuneForm.svelte'
   import SyncPane from './SyncPane.svelte'
   import { createPaneState } from './pane.svelte.js'
-  import { ServerError } from '../lib/index.js'
+  import { ServerError, t } from '../lib/index.js'
+  import { failText } from './labels.js'
 
   // Personal flavor of the live search API (same request/response shapes).
   // offlineSearchFallback: offline, the deep search falls back to the CeolOffline
@@ -26,14 +28,6 @@
   let searchError = $state('') // quick-add failure banner (shown in the search phase)
   let quickAddBusy = false // in-flight guard: a ＋ double-tap must not double-enqueue
   let quickAdding = $state('') // name of the tune a quick add is sending, for the busy note
-
-  // What to show when a request fails: the server's (or our own) explanation when
-  // there is one, else a human sentence. Raw network/parse text only reaches the console.
-  function failText(e, what) {
-    console.error(`Couldn't ${what}:`, e)
-    if (e instanceof ServerError && e.message) return e.message
-    return `Couldn't ${what}. Check your connection and try again.`
-  }
 
   // Page callbacks (set via open()).
   let onAdded = () => {}
@@ -110,8 +104,8 @@
       if (!navigator.onLine) {
         throw new ServerError(
           target.thesession_id != null
-            ? 'You are offline. Tunes from thesession.org can only be added online.'
-            : 'You are offline. A specific setting can only be saved online.'
+            ? t('You are offline. Tunes from thesession.org can only be added online.')
+            : t('You are offline. A specific setting can only be saved online.')
         )
       }
       const res = await fetch('/api/my-tunes', {
@@ -153,7 +147,7 @@
       close()
       already ? onAlready(finalId, name, applied) : onAdded(finalId, name)
     } catch (e) {
-      searchError = failText(e, `add ${name || 'the tune'}`)
+      searchError = failText(e, name ? t('add {name}', { name }) : t('add the tune'))
     } finally {
       quickAddBusy = false
       quickAdding = ''
@@ -168,7 +162,7 @@
     }
     if (quickAddBusy) return false
     quickAddBusy = true
-    quickAdding = name || 'the tune'
+    quickAdding = name || t('the tune')
     searchError = ''
     doQuickAdd(
       { tune_id: payload.tune_id, thesession_id: payload.thesession_id ?? null, name, tune_type: payload.tune_type },
@@ -212,7 +206,7 @@
   async function updateSetting(item, data, chosenSettingId) {
     const pt = data?.person_tune
     if (!pt?.person_tune_id || chosenSettingId == null) return
-    if (!navigator.onLine) throw new ServerError('You are offline. A specific setting can only be saved online.')
+    if (!navigator.onLine) throw new ServerError(t('You are offline. A specific setting can only be saved online.'))
     await putPersonTune(pt.person_tune_id, { setting_id: chosenSettingId })
     const finalId = data?.tune_id ?? item.r.tune_id
     close()
@@ -247,7 +241,7 @@
 
 {#if pane.visible}
   <div class="mt-add-backdrop" class:mt-open={pane.shown} onclick={close} aria-hidden="true"></div>
-  <div class="mt-add-pane" class:mt-open={pane.shown} role="dialog" aria-label="Add a tune to My Tunes">
+  <div class="mt-add-pane" class:mt-open={pane.shown} role="dialog" aria-label={t('Add a tune to My Tunes')}>
     {#if syncMode}
       <SyncPane
         {thesessionUserId}
@@ -259,7 +253,7 @@
       <TuneSearch
         {config}
         variant="modal"
-        title="Search for a tune"
+        title={t('Search for a tune')}
         allowAsIs={false}
         dimOnList={true}
         {initialQuery}
@@ -269,11 +263,11 @@
         onClose={close}
       >
         {#snippet notice()}
-          {#if quickAdding}<p class="mt-search-busy" aria-live="polite">Adding {quickAdding}…</p>{/if}
+          {#if quickAdding}<p class="mt-search-busy" aria-live="polite">{t('Adding {name}…', { name: quickAdding })}</p>{/if}
           {#if searchError}<p class="mt-error mt-search-error">{searchError}</p>{/if}
           <!-- The folded-away sync page's new home: quiet one-liner, search stays primary. -->
           <button class="mt-sync-link" onclick={() => (syncMode = true)}>
-            Have a tunebook on thesession.org? <span>Sync it here</span>
+            {t('Have a tunebook on thesession.org?')} <span>{t('Sync it here')}</span>
           </button>
         {/snippet}
         {#snippet previewFooter(item, data, chosenSettingId)}

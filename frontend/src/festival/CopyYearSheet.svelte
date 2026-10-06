@@ -1,11 +1,12 @@
 <script>
+  // i18n-converted
   // "Copy to a new year" (spec 056). One form, two entry points: a year's admin
   // Details tab (source = that year) and the festival picker's "Add a year"
   // (source = the most recent year). The server copies the venue, timezone,
   // settings and the admins; this form only asks what changes: the year, its
   // dates and its name. POST /api/sessions/<source>/copy-year.
   import { untrack } from 'svelte'
-  import { Sheet } from '../lib/index.js'
+  import { Sheet, t } from '../lib/index.js'
   import { nudgeRange } from './dates.js'
 
   let {
@@ -56,10 +57,10 @@
   }
 
   function validate() {
-    if (year == null) return 'Year must be four digits, like 2026'
-    if (taken.has(year)) return `${festival.place.name} already has ${year}`
-    if (!start || !end) return 'First and last day are both required'
-    if (end < start) return "The last day can't be before the first"
+    if (year == null) return t('Year must be four digits, like 2026')
+    if (taken.has(year)) return t('{name} already has {year}', { name: festival.place.name, year })
+    if (!start || !end) return t('First and last day are both required')
+    if (end < start) return t("The last day can't be before the first")
     return ''
   }
 
@@ -78,45 +79,45 @@
         navigate(`/admin/sessions/${data.path}`)
         return
       }
-      error = data.message || data.error || "Couldn't copy the year. Try again."
+      error = data.message || data.error || t("Couldn't copy the year. Try again.")
     } catch {
-      error = "Couldn't copy the year. Check your connection and try again."
+      error = t("Couldn't copy the year. Check your connection and try again.")
     }
     saving = false
   }
 </script>
 
-<Sheet bind:open title="Copy to a new year" compact>
+<Sheet bind:open title={t('Copy to a new year')} compact>
   <form class="copy-year-form" id="copyYearForm" onsubmit={(e) => { e.preventDefault(); save() }}>
-    <p class="copy-year-from">From {festival?.place?.name} {source?.year}: venue, timezone, settings and admins.</p>
+    <p class="copy-year-from">{t('From {name} {year}: venue, timezone, settings and admins.', { name: festival?.place?.name, year: source?.year })}</p>
     <div class="kit-group">
       <div class="kit-field">
-        <label for="copyYearYear">Year</label>
+        <label for="copyYearYear">{t('Year')}</label>
         <input id="copyYearYear" type="text" inputmode="numeric" maxlength="4" value={yearText}
           oninput={(e) => setYear(e.currentTarget.value)} />
       </div>
       <div class="kit-field">
-        <label for="copyYearStart">First day</label>
+        <label for="copyYearStart">{t('First day')}</label>
         <input id="copyYearStart" type="date" bind:value={start} oninput={() => (datesEdited = true)} />
       </div>
       <div class="kit-field">
-        <label for="copyYearEnd">Last day</label>
+        <label for="copyYearEnd">{t('Last day')}</label>
         <input id="copyYearEnd" type="date" bind:value={end} oninput={() => (datesEdited = true)} />
       </div>
       <div class="kit-field">
-        <label for="copyYearName">Name</label>
+        <label for="copyYearName">{t('Name')}</label>
         <input id="copyYearName" type="text" bind:value={name} oninput={() => (nameEdited = true)} />
       </div>
       <div class="kit-field">
-        <span class="copy-year-label">Web address</span>
-        <code class="copy-year-path" id="copyYearPath">/sessions/{festival?.place?.slug}/{year ?? '…'}</code>
+        <span class="copy-year-label">{t('Web address')}</span>
+        <code class="copy-year-path" id="copyYearPath">{`/sessions/${festival?.place?.slug}/${year ?? '…'}`}</code>
       </div>
     </div>
     {#if error}
       <div class="copy-year-error" role="alert">{error}</div>
     {/if}
     <button type="submit" class="copy-year-save" id="copyYearSave" disabled={saving}>
-      {saving ? 'Copying…' : `Create ${year ?? 'year'}`}
+      {saving ? t('Copying…') : year != null ? t('Create {year}', { year }) : t('Create year')}
     </button>
   </form>
 </Sheet>

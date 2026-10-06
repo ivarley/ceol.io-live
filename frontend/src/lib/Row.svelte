@@ -1,4 +1,5 @@
 <script>
+  // i18n-converted
   // Row (spec 052 §B8 Stage 1): the list row — an optional leading slot, a
   // title with an optional subtitle, and an optional trailing slot hard against
   // the right margin. Every scrollable list on a phone is made of these: a tune

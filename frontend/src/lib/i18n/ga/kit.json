@@ -1,0 +1,652 @@
+{
+  "Remove {label}": {
+    "ga": "Bain {label}",
+    "review": true
+  },
+  "Confirm": {
+    "ga": "Deimhnigh",
+    "review": true
+  },
+  "this": {
+    "ga": "é seo",
+    "review": true
+  },
+  "Couldn't load {what}.": {
+    "ga": "Níorbh fhéidir {what} a lódáil.",
+    "review": true
+  },
+  "Retrying…": {
+    "ga": "Ag triail arís…",
+    "review": true
+  },
+  "result": {
+    "ga": "toradh",
+    "review": true
+  },
+  "Previous {label}": {
+    "ga": "{label}: an ceann roimhe",
+    "review": true
+  },
+  "{n} of {count}": {
+    "ga": "{n} as {count}",
+    "review": true
+  },
+  "Next {label}": {
+    "ga": "{label}: an chéad cheann eile",
+    "review": true
+  },
+  "Who started this set?": {
+    "ga": "Cé a thosaigh an tsraith seo?",
+    "review": true
+  },
+  "Attendance": {
+    "ga": "Tinreamh",
+    "review": true
+  },
+  "Checked in": {
+    "ga": "I láthair",
+    "review": true
+  },
+  "Not checked in": {
+    "ga": "Níl i láthair",
+    "review": true
+  },
+  "Archived": {
+    "ga": "Cartlannaithe",
+    "review": true
+  },
+  "Back to list": {
+    "ga": "Ar ais chuig an liosta",
+    "review": true
+  },
+  "First name": {
+    "ga": "Céadainm",
+    "review": true
+  },
+  "Last name": {
+    "ga": "Sloinne",
+    "review": true
+  },
+  "Email": {
+    "ga": "Ríomhphost",
+    "review": true
+  },
+  "(optional)": {
+    "ga": "(roghnach)",
+    "review": true
+  },
+  "name@example.com": {
+    "ga": "ainm@example.com",
+    "review": true
+  },
+  "If they already have an account, their email links them to it.": {
+    "ga": "Má tá cuntas acu cheana, nascfaidh a ríomhphost leis iad.",
+    "review": true
+  },
+  "Other instrument…": {
+    "ga": "Uirlis eile…",
+    "review": true
+  },
+  "Filter people…": {
+    "ga": "Scag daoine…",
+    "review": true
+  },
+  "Filter or add someone…": {
+    "ga": "Scag nó cuir duine leis…",
+    "review": true
+  },
+  "Clear": {
+    "ga": "Glan",
+    "review": true
+  },
+  "archived": {
+    "ga": "cartlannaithe",
+    "review": true
+  },
+  "visitor": {
+    "ga": "cuairteoir",
+    "review": true
+  },
+  "Check out": {
+    "ga": "Bain ón tinreamh",
+    "review": true
+  },
+  "Check out {name}": {
+    "ga": "Bain {name} ón tinreamh",
+    "review": true
+  },
+  "No one here by that name.": {
+    "ga": "Níl aon duine anseo leis an ainm sin.",
+    "review": true
+  },
+  "No one on this session's list yet.": {
+    "ga": "Níl aon duine ar liosta an tseisiúin seo fós.",
+    "review": true
+  },
+  "Add person": {
+    "ga": "Cuir duine leis",
+    "review": true
+  },
+  "Search…": {
+    "ga": "Cuardaigh…",
+    "review": true
+  },
+  "Clear search": {
+    "ga": "Glan an cuardach",
+    "review": true
+  },
+  "See all": {
+    "ga": "Féach orthu uile",
+    "review": true
+  },
+  "At a different session": {
+    "ga": "Ag seisiún eile",
+    "review": true
+  },
+  "Find a session": {
+    "ga": "Aimsigh seisiún",
+    "review": true
+  },
+  "You're not a member of any other session.": {
+    "ga": "Ní ball de sheisiún ar bith eile thú.",
+    "review": true
+  },
+  "No session matches “{query}”.": {
+    "ga": "Níl seisiún ar bith a mheaitseálann “{query}”.",
+    "review": true
+  },
+  "Add tags…": {
+    "ga": "Cuir clibeanna leis…",
+    "review": true
+  },
+  "Tags": {
+    "ga": "Clibeanna",
+    "review": true
+  },
+  "Show filters": {
+    "ga": "Taispeáin na scagairí",
+    "review": true
+  },
+  "Clear filters": {
+    "ga": "Glan na scagairí",
+    "review": true
+  },
+  "Couldn't {what}. Try again.": {
+    "ga": "Níorbh fhéidir {what}. Bain triail eile as.",
+    "review": true
+  },
+  "Couldn't {what}. Check your connection and try again.": {
+    "ga": "Níorbh fhéidir {what}. Seiceáil do cheangal agus bain triail eile as.",
+    "review": true
+  },
+  "Path is required": {
+    "ga": "Tá an seoladh riachtanach",
+    "review": true
+  },
+  "Path can't contain spaces or invisible characters": {
+    "ga": "Ní féidir spásanna ná carachtair dhofheicthe a bheith sa seoladh",
+    "review": true
+  },
+  "Path must be 255 characters or fewer": {
+    "ga": "Ní féidir níos mó ná 255 carachtar a bheith sa seoladh",
+    "review": true
+  },
+  "Path can't start or end with a slash": {
+    "ga": "Ní féidir leis an seoladh tosú ná críochnú le slais",
+    "review": true
+  },
+  "Path must have exactly two parts, a place and a name, like austin/mueller": {
+    "ga": "Caithfidh dhá chuid go díreach a bheith sa seoladh, áit agus ainm, mar shampla austin/mueller",
+    "review": true
+  },
+  "Path can't contain an empty part (//)": {
+    "ga": "Ní féidir cuid fholamh (//) a bheith sa seoladh",
+    "review": true
+  },
+  "Each part of the path must be 100 characters or fewer": {
+    "ga": "Ní féidir níos mó ná 100 carachtar a bheith i ngach cuid den seoladh",
+    "review": true
+  },
+  "Path can only contain letters, numbers, hyphens, underscores, periods and slashes": {
+    "ga": "Ní féidir ach litreacha, uimhreacha, fleiscíní, fostríoca, poncanna agus slaiseanna a bheith sa seoladh",
+    "review": true
+  },
+  "Each part of the path must contain a letter or number": {
+    "ga": "Caithfidh litir nó uimhir a bheith i ngach cuid den seoladh",
+    "review": true
+  },
+  "Session {id} is already on ceol.io.": {
+    "ga": "Tá seisiún {id} ar ceol.io cheana.",
+    "review": true
+  },
+  "Open it": {
+    "ga": "Oscail é",
+    "review": true
+  },
+  "Could not check that session. Please try again.": {
+    "ga": "Níorbh fhéidir an seisiún sin a sheiceáil. Bain triail eile as.",
+    "review": true
+  },
+  "Could not search thesession.org.": {
+    "ga": "Níorbh fhéidir thesession.org a chuardach.",
+    "review": true
+  },
+  "Could not reach thesession.org. Please try again.": {
+    "ga": "Níorbh fhéidir teacht ar thesession.org. Bain triail eile as.",
+    "review": true
+  },
+  "Could not fetch that session from thesession.org.": {
+    "ga": "Níorbh fhéidir an seisiún sin a fháil ó thesession.org.",
+    "review": true
+  },
+  "Couldn't read a schedule from \"{text}\" — set it here.": {
+    "ga": "Níorbh fhéidir sceideal a léamh as \"{text}\" — socraigh anseo é.",
+    "review": true
+  },
+  "Add a Session": {
+    "ga": "Cuir seisiún leis",
+    "review": true
+  },
+  "Session name, or a thesession.org link": {
+    "ga": "Ainm an tseisiúin, nó nasc thesession.org",
+    "review": true
+  },
+  "Search thesession.org for a session": {
+    "ga": "Cuardaigh seisiún ar thesession.org",
+    "review": true
+  },
+  "Searching thesession.org…": {
+    "ga": "Ag cuardach thesession.org…",
+    "review": true
+  },
+  "Open session {id}": {
+    "ga": "Oscail seisiún {id}",
+    "review": true
+  },
+  "Already added": {
+    "ga": "Curtha leis cheana",
+    "review": true
+  },
+  "Nothing on thesession.org matches \"{query}\".": {
+    "ga": "Níl aon rud ar thesession.org a mheaitseálann \"{query}\".",
+    "review": true
+  },
+  "Sessions come from thesession.org. Search for yours, or paste its link.": {
+    "ga": "Tagann na seisiúin ó thesession.org. Cuardaigh do sheisiún féin, nó greamaigh a nasc.",
+    "review": true
+  },
+  "Add a session manually": {
+    "ga": "Cuir seisiún leis de láimh",
+    "review": true
+  },
+  "For sessions that aren't on thesession.org": {
+    "ga": "Do sheisiúin nach bhfuil ar thesession.org",
+    "review": true
+  },
+  "Already on ceol.io": {
+    "ga": "Ar ceol.io cheana",
+    "review": true
+  },
+  "\"{name}\" is already here.": {
+    "ga": "Tá \"{name}\" anseo cheana.",
+    "review": true
+  },
+  "1st": {
+    "ga": "1ú",
+    "review": true
+  },
+  "2nd": {
+    "ga": "2ú",
+    "review": true
+  },
+  "3rd": {
+    "ga": "3ú",
+    "review": true
+  },
+  "4th": {
+    "ga": "4ú",
+    "review": true
+  },
+  "Last": {
+    "ga": "Deireanach",
+    "review": true
+  },
+  "last": {
+    "ga": "deireanach",
+    "review": true
+  },
+  "No schedule set": {
+    "ga": "Níl sceideal socraithe",
+    "review": true
+  },
+  "Select a day...": {
+    "ga": "Roghnaigh lá...",
+    "review": true
+  },
+  "{day}s from {start}-{end}": {
+    "ga": "Gach {day} ó {start} go {end}",
+    "review": true
+  },
+  "Every other {day} from {start}-{end}": {
+    "ga": "{day} gach re seachtain ó {start} go {end}",
+    "review": true
+  },
+  "Every {n} weeks on {day} from {start}-{end}": {
+    "ga": "{day} gach {n} seachtaine ó {start} go {end}",
+    "review": true
+  },
+  "Select which occurrences...": {
+    "ga": "Roghnaigh cé na cinn sa mhí...",
+    "review": true
+  },
+  "{nths} {day} from {start}-{end}": {
+    "ga": "{day} ({nths} sa mhí) ó {start} go {end}",
+    "review": true
+  },
+  "Something went wrong saving this session. Please try again.": {
+    "ga": "Chuaigh rud éigin amú agus an seisiún á shábháil. Bain triail eile as.",
+    "review": true
+  },
+  "Festival name": {
+    "ga": "Ainm na féile",
+    "review": true
+  },
+  "Year": {
+    "ga": "Bliain",
+    "review": true
+  },
+  "First day": {
+    "ga": "An chéad lá",
+    "review": true
+  },
+  "Last day": {
+    "ga": "An lá deireanach",
+    "review": true
+  },
+  "City": {
+    "ga": "Cathair",
+    "review": true
+  },
+  "State": {
+    "ga": "Stát",
+    "review": true
+  },
+  "Country": {
+    "ga": "Tír",
+    "review": true
+  },
+  "Please fill in required fields: {fields}": {
+    "ga": "Líon isteach na réimsí riachtanacha: {fields}",
+    "review": true
+  },
+  "The last day can't be before the first": {
+    "ga": "Ní féidir an lá deireanach a bheith roimh an gcéad lá",
+    "review": true
+  },
+  "Enter a thesession.org session URL (thesession.org/sessions/1234) or numeric ID": {
+    "ga": "Cuir isteach URL seisiúin thesession.org (thesession.org/sessions/1234) nó aitheantas uimhriúil",
+    "review": true
+  },
+  "Minutes before must be a whole number of minutes": {
+    "ga": "Caithfidh na nóiméid roimhe a bheith ina slánuimhir",
+    "review": true
+  },
+  "Minutes after must be a whole number of minutes": {
+    "ga": "Caithfidh na nóiméid ina dhiaidh a bheith ina slánuimhir",
+    "review": true
+  },
+  "Failed to save session": {
+    "ga": "Níorbh fhéidir an seisiún a shábháil",
+    "review": true
+  },
+  "Error saving session. Please try again.": {
+    "ga": "Earráid agus an seisiún á shábháil. Bain triail eile as.",
+    "review": true
+  },
+  "Session Details": {
+    "ga": "Sonraí an tseisiúin",
+    "review": true
+  },
+  "Its name, without a year": {
+    "ga": "A hainm, gan bliain",
+    "review": true
+  },
+  "Required": {
+    "ga": "Riachtanach",
+    "review": true
+  },
+  "Venue": {
+    "ga": "Ionad",
+    "review": true
+  },
+  "Pub or hall": {
+    "ga": "Teach tábhairne nó halla",
+    "review": true
+  },
+  "Where": {
+    "ga": "Cá háit",
+    "review": true
+  },
+  "State / area": {
+    "ga": "Stát / ceantar",
+    "review": true
+  },
+  "Address under": {
+    "ga": "Seoladh faoi",
+    "review": true
+  },
+  "Time zone": {
+    "ga": "Crios ama",
+    "review": true
+  },
+  "When": {
+    "ga": "Cathain",
+    "review": true
+  },
+  "Schedule": {
+    "ga": "Sceideal",
+    "review": true
+  },
+  "Repeats": {
+    "ga": "Athdhéanamh",
+    "review": true
+  },
+  "No schedule": {
+    "ga": "Gan sceideal",
+    "review": true
+  },
+  "Weekly": {
+    "ga": "Gach seachtain",
+    "review": true
+  },
+  "Monthly (Nth weekday)": {
+    "ga": "Gach mí (an Nú lá den tseachtain)",
+    "review": true
+  },
+  "Day": {
+    "ga": "Lá",
+    "review": true
+  },
+  "Day of week": {
+    "ga": "Lá den tseachtain",
+    "review": true
+  },
+  "Frequency": {
+    "ga": "Minicíocht",
+    "review": true
+  },
+  "Every week": {
+    "ga": "Gach seachtain",
+    "review": true
+  },
+  "Which occurrences": {
+    "ga": "Cé na cinn sa mhí",
+    "review": true
+  },
+  "Start": {
+    "ga": "Am tosaithe",
+    "review": true
+  },
+  "End": {
+    "ga": "Am críochnaithe",
+    "review": true
+  },
+  "You": {
+    "ga": "Tusa",
+    "review": true
+  },
+  "Add me as": {
+    "ga": "Cuir mé leis mar",
+    "review": true
+  },
+  "a member": {
+    "ga": "bhall",
+    "review": true
+  },
+  "a regular": {
+    "ga": "dhuine rialta",
+    "review": true
+  },
+  "an admin": {
+    "ga": "bhainisteoir",
+    "review": true
+  },
+  "Advanced": {
+    "ga": "Ardsocruithe",
+    "review": true
+  },
+  "Web address": {
+    "ga": "Seoladh gréasáin",
+    "review": true
+  },
+  "Use suggested": {
+    "ga": "Úsáid an moladh",
+    "review": true
+  },
+  "Enter the festival and a year": {
+    "ga": "Cuir isteach an fhéile agus bliain",
+    "review": true
+  },
+  "Enter a name and city first": {
+    "ga": "Cuir isteach ainm agus cathair ar dtús",
+    "review": true
+  },
+  "Venue phone": {
+    "ga": "Fón an ionaid",
+    "review": true
+  },
+  "Venue website": {
+    "ga": "Suíomh gréasáin an ionaid",
+    "review": true
+  },
+  "First met": {
+    "ga": "Ar bun ó",
+    "review": true
+  },
+  "ID or link": {
+    "ga": "Aitheantas nó nasc",
+    "review": true
+  },
+  "Links this session to its listing on thesession.org.": {
+    "ga": "Nascann sé seo an seisiún lena iontráil ar thesession.org.",
+    "review": true
+  },
+  "Regular (recurring)": {
+    "ga": "Rialta (athfhillteach)",
+    "review": true
+  },
+  "Runs between its first and last dates instead of recurring; its sessions are listed by day and may overlap.": {
+    "ga": "Bíonn sí ar siúl idir a céad lá agus a lá deireanach in ionad athfhilleadh; liostaítear a seisiúin de réir lae agus féadfaidh siad forluí.",
+    "review": true
+  },
+  "Recurs on the schedule above.": {
+    "ga": "Athfhilleann sé de réir an sceidil thuas.",
+    "review": true
+  },
+  "Active window": {
+    "ga": "Tréimhse ghníomhach",
+    "review": true
+  },
+  "Minutes before the session starts": {
+    "ga": "Nóiméid sula dtosaíonn an seisiún",
+    "review": true
+  },
+  "before": {
+    "ga": "roimhe",
+    "review": true
+  },
+  "Minutes after the session ends": {
+    "ga": "Nóiméid tar éis don seisiún críochnú",
+    "review": true
+  },
+  "after": {
+    "ga": "ina dhiaidh",
+    "review": true
+  },
+  "Minutes either side of the scheduled time that count as \"happening now\".": {
+    "ga": "Na nóiméid ar gach taobh den am sceidealta a áirítear mar \"ar siúl anois\".",
+    "review": true
+  },
+  "Show a members list": {
+    "ga": "Taispeáin liosta ball",
+    "review": true
+  },
+  "Lets session members see who else plays here.": {
+    "ga": "Feiceann baill an tseisiúin cé eile a sheinneann anseo.",
+    "review": true
+  },
+  "Record attendance": {
+    "ga": "Taifead an tinreamh",
+    "review": true
+  },
+  "Record who attends each session. Visible only to members.": {
+    "ga": "Taifead cé a fhreastalaíonn ar gach seisiún. Ní fheiceann ach baill é.",
+    "review": true
+  },
+  "Record set starters": {
+    "ga": "Taifead cé a thosaíonn sraitheanna",
+    "review": true
+  },
+  "Record who started each set. Visible only to members.": {
+    "ga": "Taifead cé a thosaigh gach sraith. Ní fheiceann ach baill é.",
+    "review": true
+  },
+  "Requires attendance.": {
+    "ga": "Tá tinreamh ag teastáil.",
+    "review": true
+  },
+  "There is already a {place}.": {
+    "ga": "Tá {place} ann cheana.",
+    "review": true
+  },
+  "Is this session there?": {
+    "ga": "An ansin atá an seisiún seo?",
+    "review": true
+  },
+  "Yes, {place}": {
+    "ga": "Sea, {place}",
+    "review": true
+  },
+  "No, a new place (/{slug})": {
+    "ga": "Ní hea, áit nua (/{slug})",
+    "review": true
+  },
+  "Use /{slug}": {
+    "ga": "Úsáid /{slug}",
+    "review": true
+  },
+  "Create session": {
+    "ga": "Cruthaigh seisiún",
+    "review": true
+  },
+  "Every {n} weeks": {
+    "ga": {
+      "one": "Gach {n} seachtain",
+      "two": "Gach {n} sheachtain",
+      "few": "Gach {n} seachtaine",
+      "many": "Gach {n} seachtaine",
+      "other": "Gach {n} seachtain"
+    },
+    "review": true
+  }
+}

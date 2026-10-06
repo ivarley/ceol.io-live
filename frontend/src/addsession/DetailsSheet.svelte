@@ -1,4 +1,5 @@
 <script>
+  // i18n-converted
   // Stage 2 of adding a session: review what came from thesession.org (or fill
   // in a session that isn't there), then commit via POST /api/add-session.
   //
@@ -16,9 +17,10 @@
   // Save is in the footer rather than a header Done: a failed save has to keep
   // the sheet open for another try, which is the kit's rule for server commits.
   import { tick } from 'svelte'
-  import { Chevron, Sheet, Seg } from '../lib/index.js'
+  import { Chevron, Sheet, Seg, t, tn, currentLang, formatDate } from '../lib/index.js'
   import { parseThesessionSessionId } from '../shared/parse.js'
   import { normalizeSessionPath } from '../shared/sessionpath.js'
+  import { sessionPathErrorText } from '../shared/sessionpathText.js'
   import { generatePath, summarizeRecurrence } from './logic.js'
 
   let {
@@ -155,26 +157,51 @@
   let startTime = $state('19:00')
   let endTime = $state('22:00')
 
-  const WEEKDAYS = [
-    { id: 'monday', label: 'Mon' },
-    { id: 'tuesday', label: 'Tue' },
-    { id: 'wednesday', label: 'Wed' },
-    { id: 'thursday', label: 'Thu' },
-    { id: 'friday', label: 'Fri' },
-    { id: 'saturday', label: 'Sat' },
-    { id: 'sunday', label: 'Sun' },
-  ]
+  // Day names come from Intl in the page's language (spec 057): 1 Jan 2024 was a Monday.
+  const WEEKDAY_IDS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+  const dayName = (id, width) => formatDate(`2024-01-0${WEEKDAY_IDS.indexOf(id) + 1}`, { weekday: width })
+  const WEEKDAYS = WEEKDAY_IDS.map((id) => ({ id, label: dayName(id, 'short') }))
   const NTH_OPTIONS = [
-    { value: 1, label: '1st' },
-    { value: 2, label: '2nd' },
-    { value: 3, label: '3rd' },
-    { value: 4, label: '4th' },
-    { value: -1, label: 'Last' },
+    { value: 1, label: t('1st') },
+    { value: 2, label: t('2nd') },
+    { value: 3, label: t('3rd') },
+    { value: 4, label: t('4th') },
+    { value: -1, label: t('Last') },
   ]
 
   const recurrence = $derived(
     summarizeRecurrence({ type: recType, weekday, frequency, which, startTime, endTime })
   )
+
+  // The summary line, in the page's language. logic.js's summary is held to the iOS
+  // fixtures and stays English; this says the same thing word for word in English
+  // (the JSON still comes from logic.js) and in Irish reads the 24-hour clock.
+  const ORDINALS = { 1: () => t('1st'), 2: () => t('2nd'), 3: () => t('3rd'), 4: () => t('4th'), '-1': () => t('last') }
+  function timeOfDay(time) {
+    const [hours, mins] = String(time || '').split(':')
+    let h = parseInt(hours)
+    if (Number.isNaN(h)) return time || ''
+    if (currentLang() === 'ga') return `${String(h).padStart(2, '0')}:${mins}`
+    const ampm = h >= 12 ? 'pm' : 'am'
+    h = h % 12 || 12
+    return mins === '00' ? `${h}${ampm}` : `${h}:${mins}${ampm}`
+  }
+  const summaryText = $derived.by(() => {
+    if (!recType) return t('No schedule set')
+    if (!weekday || !WEEKDAY_IDS.includes(weekday)) return weekday ? recurrence.summary : t('Select a day...')
+    const vars = { day: dayName(weekday, 'long'), start: timeOfDay(startTime), end: timeOfDay(endTime) }
+    if (recType === 'weekly') {
+      if (frequency === 1) return t('{day}s from {start}-{end}', vars)
+      if (frequency === 2) return t('Every other {day} from {start}-{end}', vars)
+      return t('Every {n} weeks on {day} from {start}-{end}', { ...vars, n: frequency })
+    }
+    if (recType === 'monthly_nth_weekday') {
+      if (which.length === 0) return t('Select which occurrences...')
+      const nths = which.map((n) => (ORDINALS[n] ? ORDINALS[n]() : n)).join(' & ')
+      return t('{nths} {day} from {start}-{end}', { ...vars, nths })
+    }
+    return recurrence.summary
+  })
 
   // ---- validation + save --------------------------------------------------------
   let invalidFields = $state([])
@@ -305,7 +332,7 @@
     } catch (err) {
       console.error('Error saving session:', err)
       saving = false
-      formError = 'Something went wrong saving this session. Please try again.'
+      formError = t('Something went wrong saving this session. Please try again.')
     }
   }
 
@@ -348,28 +375,28 @@
     // Path isn't listed: it's generated from name + city, so those are what a
     // person actually has to supply.
     const requiredFields = [
-      { id: 'sessionName', value: isFestival ? formData.festival_name : formData.name, label: isFestival ? 'Festival name' : 'Name' },
+      { id: 'sessionName', value: isFestival ? formData.festival_name : formData.name, label: isFestival ? t('Festival name') : t('Name') },
       ...(isFestival
         ? [
-            { id: 'festivalYear', value: /^\d{4}$/.test(festivalYear.trim()) ? festivalYear : '', label: 'Year' },
-            { id: 'festivalStart', value: festivalStart, label: 'First day' },
-            { id: 'festivalEnd', value: festivalEnd, label: 'Last day' },
+            { id: 'festivalYear', value: /^\d{4}$/.test(festivalYear.trim()) ? festivalYear : '', label: t('Year') },
+            { id: 'festivalStart', value: festivalStart, label: t('First day') },
+            { id: 'festivalEnd', value: festivalEnd, label: t('Last day') },
           ]
         : []),
-      { id: 'cityName', value: formData.city, label: 'City' },
-      { id: 'stateName', value: formData.state, label: 'State' },
-      { id: 'countryName', value: formData.country, label: 'Country' },
+      { id: 'cityName', value: formData.city, label: t('City') },
+      { id: 'stateName', value: formData.state, label: t('State') },
+      { id: 'countryName', value: formData.country, label: t('Country') },
     ]
     const missing = requiredFields.filter((f) => !f.value)
     if (missing.length > 0) {
       invalidFields = missing.map((f) => f.id)
-      formError = `Please fill in required fields: ${missing.map((f) => f.label).join(', ')}`
+      formError = t('Please fill in required fields: {fields}', { fields: missing.map((f) => f.label).join(', ') })
       await focusField(missing[0].id)
       return
     }
     if (isFestival && festivalEnd < festivalStart) {
       invalidFields = ['festivalEnd']
-      formError = "The last day can't be before the first"
+      formError = t("The last day can't be before the first")
       await focusField('festivalEnd')
       return
     }
@@ -380,7 +407,7 @@
     const { error: pathError } = normalizeSessionPath(formData.path)
     if (pathError) {
       invalidFields = ['sessionPath']
-      formError = pathError
+      formError = sessionPathErrorText(pathError)
       // A generated path can be unusable when the name and city are all
       // punctuation or non-Latin script — there's nothing to slugify. Retyping the
       // name won't help, so hand over the text box.
@@ -392,17 +419,17 @@
     // A mistyped link (or a pasted TUNE url) is worth catching before the round trip.
     if (thesessionId.trim() && thesessionRef == null) {
       invalidFields = ['thesessionId']
-      formError = 'Enter a thesession.org session URL (thesession.org/sessions/1234) or numeric ID'
+      formError = t('Enter a thesession.org session URL (thesession.org/sessions/1234) or numeric ID')
       await focusField('thesessionId')
       return
     }
-    for (const [id, minutes, label] of [
-      ['activeBufferBefore', bufferBefore, 'Minutes before'],
-      ['activeBufferAfter', bufferAfter, 'Minutes after'],
+    for (const [id, minutes, message] of [
+      ['activeBufferBefore', bufferBefore, t('Minutes before must be a whole number of minutes')],
+      ['activeBufferAfter', bufferAfter, t('Minutes after must be a whole number of minutes')],
     ]) {
       if (!/^\d+$/.test(String(minutes).trim())) {
         invalidFields = [id]
-        formError = `${label} must be a whole number of minutes`
+        formError = message
         await focusField(id)
         return
       }
@@ -432,66 +459,66 @@
           placeQuestion = { place: data.place, suggested_slug: data.suggested_slug }
         } else {
           saving = false
-          formError = data.message || data.error || 'Failed to save session'
+          formError = data.message || data.error || t('Failed to save session')
         }
       })
       .catch((error) => {
         console.error('Error:', error)
         saving = false
-        formError = 'Error saving session. Please try again.'
+        formError = t('Error saving session. Please try again.')
       })
   }
 </script>
 
-<Sheet bind:open title="Session Details" {back} {onCancel}>
+<Sheet bind:open title={t('Session Details')} {back} {onCancel}>
   <form id="sessionDetailsForm" class="as-form" onsubmit={(e) => e.preventDefault()}>
     <!-- What the session is. Name is the only thing here anyone must supply. -->
     <div class="kit-group">
       <div class="kit-field">
-        <label for="sessionName">{isFestival ? 'Festival' : 'Name'}</label>
+        <label for="sessionName">{isFestival ? t('Festival') : t('Name')}</label>
         <input type="text" id="sessionName" required bind:value={name}
-          placeholder={isFestival ? "Its name, without a year" : 'Required'}
+          placeholder={isFestival ? t('Its name, without a year') : t('Required')}
           class:is-invalid={invalidFields.includes('sessionName')}
           oninput={() => { markValid('sessionName'); festivalSlug = '' }} />
       </div>
       {#if isFestival}
         <div class="kit-field">
-          <label for="festivalYear">Year</label>
+          <label for="festivalYear">{t('Year')}</label>
           <input type="text" id="festivalYear" inputmode="numeric" maxlength="4" bind:value={festivalYear}
             class:is-invalid={invalidFields.includes('festivalYear')}
             oninput={() => markValid('festivalYear')} />
         </div>
       {/if}
       <div class="kit-field">
-        <label for="locationName">Venue</label>
-        <input type="text" id="locationName" bind:value={locationName} placeholder="Pub or hall" />
+        <label for="locationName">{t('Venue')}</label>
+        <input type="text" id="locationName" bind:value={locationName} placeholder={t('Pub or hall')} />
       </div>
     </div>
 
-    <h3 class="kit-group-head">Where</h3>
+    <h3 class="kit-group-head">{t('Where')}</h3>
     <div class="kit-group">
       <div class="kit-field">
-        <label for="cityName">City</label>
-        <input type="text" id="cityName" required bind:value={city} placeholder="Required"
+        <label for="cityName">{t('City')}</label>
+        <input type="text" id="cityName" required bind:value={city} placeholder={t('Required')}
           class:is-invalid={invalidFields.includes('cityName')}
           oninput={() => markValid('cityName')} />
       </div>
       <div class="kit-field">
-        <label for="stateName">State / area</label>
-        <input type="text" id="stateName" required bind:value={stateArea} placeholder="Required"
+        <label for="stateName">{t('State / area')}</label>
+        <input type="text" id="stateName" required bind:value={stateArea} placeholder={t('Required')}
           class:is-invalid={invalidFields.includes('stateName')}
           oninput={() => markValid('stateName')} />
       </div>
       <div class="kit-field">
-        <label for="countryName">Country</label>
-        <input type="text" id="countryName" required bind:value={country} placeholder="Required"
+        <label for="countryName">{t('Country')}</label>
+        <input type="text" id="countryName" required bind:value={country} placeholder={t('Required')}
           class:is-invalid={invalidFields.includes('countryName')}
           oninput={() => markValid('countryName')} />
       </div>
       {#if prefixes.length > 1 && !isFestival}
         <!-- A town inside a metro (spec 055): the address may use either. -->
         <div class="kit-field">
-          <label for="pathPrefix">Address under</label>
+          <label for="pathPrefix">{t('Address under')}</label>
           <select id="pathPrefix" value={prefix} onchange={(e) => (prefixChoice = e.currentTarget.value)}>
             {#each prefixes as p (p)}
               <option value={p}>/{p}/…</option>
@@ -500,7 +527,7 @@
         </div>
       {/if}
       <div class="kit-field">
-        <label for="timezone">Time zone</label>
+        <label for="timezone">{t('Time zone')}</label>
         <select id="timezone" bind:value={timezone}>
           {#each tzOptions as tz (tz.value)}
             <option value={tz.value}>{tz.label}</option>
@@ -513,23 +540,23 @@
          rather than in Advanced, and the summary reads as a sentence. -->
     {#if isFestival}
       <!-- A festival runs from a first to a last day (spec 056); it doesn't recur. -->
-      <h3 class="kit-group-head">When</h3>
+      <h3 class="kit-group-head">{t('When')}</h3>
       <div class="kit-group">
         <div class="kit-field">
-          <label for="festivalStart">First day</label>
+          <label for="festivalStart">{t('First day')}</label>
           <input type="date" id="festivalStart" bind:value={festivalStart}
             class:is-invalid={invalidFields.includes('festivalStart')}
             oninput={() => markValid('festivalStart')} />
         </div>
         <div class="kit-field">
-          <label for="festivalEnd">Last day</label>
+          <label for="festivalEnd">{t('Last day')}</label>
           <input type="date" id="festivalEnd" bind:value={festivalEnd}
             class:is-invalid={invalidFields.includes('festivalEnd')}
             oninput={() => markValid('festivalEnd')} />
         </div>
       </div>
     {:else}
-    <h3 class="kit-group-head">When</h3>
+    <h3 class="kit-group-head">{t('When')}</h3>
     <div class="kit-group">
       <div id="recurrence-section" class="recurrence-section" class:expanded={recExpanded}>
         <button
@@ -538,26 +565,26 @@
           class="kit-field kit-disclosure"
           aria-expanded={recExpanded}
           onclick={() => (recExpanded = !recExpanded)}>
-          <span class="kit-field-label">Schedule</span>
-          <span id="recurrence-summary-text" class="kit-field-value">{recurrence.summary}</span>
+          <span class="kit-field-label">{t('Schedule')}</span>
+          <span id="recurrence-summary-text" class="kit-field-value">{summaryText}</span>
           <Chevron class="kit-chev" dir={recExpanded ? "down" : "right"} />
         </button>
 
         {#if recExpanded}
           <div id="recurrence-edit" class="recurrence-edit">
             <div class="as-stack">
-              <label class="as-sub-label" for="recurrence-type">Repeats</label>
+              <label class="as-sub-label" for="recurrence-type">{t('Repeats')}</label>
               <select id="recurrence-type" class="as-wide" bind:value={recType}>
-                <option value="">No schedule</option>
-                <option value="weekly">Weekly</option>
-                <option value="monthly_nth_weekday">Monthly (Nth weekday)</option>
+                <option value="">{t('No schedule')}</option>
+                <option value="weekly">{t('Weekly')}</option>
+                <option value="monthly_nth_weekday">{t('Monthly (Nth weekday)')}</option>
               </select>
             </div>
 
             {#if recType}
               <div id="recurrence-options">
                 <div class="as-stack">
-                  <span class="as-sub-label">Day</span>
+                  <span class="as-sub-label">{t('Day')}</span>
                   <Seg
                     options={WEEKDAYS}
                     value={weekday}
@@ -567,26 +594,26 @@
                     segClass="weekday-buttons"
                     optClass="weekday-btn"
                     role="group"
-                    aria-label="Day of week" />
+                    aria-label={t('Day of week')} />
                 </div>
 
                 {#if recType === 'weekly'}
                   <div id="weekly-options" class="as-stack">
-                    <label class="as-sub-label" for="recurrence-frequency">Frequency</label>
+                    <label class="as-sub-label" for="recurrence-frequency">{t('Frequency')}</label>
                     <select
                       id="recurrence-frequency"
                       class="as-wide"
                       value={String(frequency)}
                       onchange={(e) => (frequency = parseInt(e.target.value))}>
-                      <option value="1">Every week</option>
-                      <option value="2">Every 2 weeks</option>
-                      <option value="3">Every 3 weeks</option>
-                      <option value="4">Every 4 weeks</option>
+                      <option value="1">{t('Every week')}</option>
+                      <option value="2">{tn(2, 'Every {n} week', 'Every {n} weeks')}</option>
+                      <option value="3">{tn(3, 'Every {n} week', 'Every {n} weeks')}</option>
+                      <option value="4">{tn(4, 'Every {n} week', 'Every {n} weeks')}</option>
                     </select>
                   </div>
                 {:else if recType === 'monthly_nth_weekday'}
                   <div id="monthly-options" class="as-stack">
-                    <span class="as-sub-label">Which occurrences</span>
+                    <span class="as-sub-label">{t('Which occurrences')}</span>
                     <div class="nth-checkboxes">
                       {#each NTH_OPTIONS as nth (nth.value)}
                         <label>
@@ -605,11 +632,11 @@
 
                 <div class="rec-times">
                   <div class="as-stack">
-                    <label class="as-sub-label" for="recurrence-start">Start</label>
+                    <label class="as-sub-label" for="recurrence-start">{t('Start')}</label>
                     <input type="time" id="recurrence-start" bind:value={startTime} />
                   </div>
                   <div class="as-stack">
-                    <label class="as-sub-label" for="recurrence-end">End</label>
+                    <label class="as-sub-label" for="recurrence-end">{t('End')}</label>
                     <input type="time" id="recurrence-end" bind:value={endTime} />
                   </div>
                 </div>
@@ -627,17 +654,17 @@
 
     <!-- Your own relationship to it. On by default, and the one thing here that
          decides whether you can administer the session you just created. -->
-    <h3 class="kit-group-head">You</h3>
+    <h3 class="kit-group-head">{t('You')}</h3>
     <div class="kit-group">
       <div class="kit-field add-user-control">
         <label class="kit-check-label" for="addCurrentUser">
           <input type="checkbox" id="addCurrentUser" bind:checked={addMe} />
-          Add me as
+          {t('Add me as')}
         </label>
         <select id="addCurrentUserRole" disabled={!addMe} bind:value={addMeRole}>
-          <option value="member">a member</option>
-          <option value="regular">a regular</option>
-          <option value="admin">an admin</option>
+          <option value="member">{t('a member')}</option>
+          <option value="regular">{t('a regular')}</option>
+          <option value="admin">{t('an admin')}</option>
         </select>
       </div>
     </div>
@@ -652,7 +679,7 @@
         aria-expanded={advancedOpen}
         aria-controls="advanced-section"
         onclick={() => (advancedOpen = !advancedOpen)}>
-        <span class="kit-field-label">Advanced</span>
+        <span class="kit-field-label">{t('Advanced')}</span>
         <Chevron class="kit-chev" dir={advancedOpen ? "down" : "right"} />
       </button>
     </div>
@@ -662,7 +689,7 @@
         <div class="kit-group">
           <!-- Sits after name + city because it's generated from them. -->
           <div class="kit-field as-field-path">
-            <span class="kit-field-label" id="sessionPathLabel">Web address</span>
+            <span class="kit-field-label" id="sessionPathLabel">{t('Web address')}</span>
             {#if pathIsManual}
               <span class="as-path-edit">
                 <input type="text" id="sessionPath" required bind:value={manualPath}
@@ -671,33 +698,33 @@
                   oninput={() => markValid('sessionPath')} />
                 {#if generatedPath && manualPath.trim() !== generatedPath}
                   <button type="button" class="as-path-action" id="useGeneratedPathBtn"
-                    onclick={useGeneratedPath}>Use suggested</button>
+                    onclick={useGeneratedPath}>{t('Use suggested')}</button>
                 {/if}
               </span>
             {:else}
               <span class="as-path-display" class:is-invalid={invalidFields.includes('sessionPath')}>
                 {#if generatedPath}
-                  <code id="sessionPathValue">/sessions/{generatedPath}</code>
+                  <code id="sessionPathValue">{`/sessions/${generatedPath}`}</code>
                 {:else}
-                  <span class="as-path-empty" id="sessionPathValue">{isFestival ? 'Enter the festival and a year' : 'Enter a name and city first'}</span>
+                  <span class="as-path-empty" id="sessionPathValue">{isFestival ? t('Enter the festival and a year') : t('Enter a name and city first')}</span>
                 {/if}
                 {#if !isFestival}
                   <button type="button" class="as-path-action" id="editPathBtn"
-                    onclick={startEditingPath}>Edit</button>
+                    onclick={startEditingPath}>{t('Edit')}</button>
                 {/if}
               </span>
             {/if}
           </div>
           <div class="kit-field">
-            <label for="locationPhone">Venue phone</label>
+            <label for="locationPhone">{t('Venue phone')}</label>
             <input type="text" id="locationPhone" bind:value={locationPhone} />
           </div>
           <div class="kit-field">
-            <label for="locationWebsite">Venue website</label>
+            <label for="locationWebsite">{t('Venue website')}</label>
             <input type="url" id="locationWebsite" bind:value={locationWebsite} />
           </div>
           <div class="kit-field">
-            <label for="inceptionDate">First met</label>
+            <label for="inceptionDate">{t('First met')}</label>
             <input type="date" id="inceptionDate" bind:value={inceptionDate} />
           </div>
         </div>
@@ -705,75 +732,75 @@
         <div class="kit-group">
           <!-- Seeded by the import; editable so a hand-added session can be linked too. -->
           <div class="kit-field">
-            <label for="thesessionId">thesession.org</label>
+            <label for="thesessionId">{'thesession.org'}</label>
             <input type="text" id="thesessionId" bind:value={thesessionId}
-              placeholder="ID or link"
+              placeholder={t('ID or link')}
               class:is-invalid={invalidFields.includes('thesessionId')}
               oninput={() => markValid('thesessionId')} />
           </div>
-          <p class="kit-field-help">Links this session to its listing on thesession.org.</p>
+          <p class="kit-field-help">{t('Links this session to its listing on thesession.org.')}</p>
         </div>
 
         <div class="kit-group">
           <div class="kit-field">
-            <label for="sessionType">Type</label>
+            <label for="sessionType">{t('Type')}</label>
             <select id="sessionType" bind:value={sessionType}>
-              <option value="regular">Regular (recurring)</option>
-              <option value="festival">Festival</option>
+              <option value="regular">{t('Regular (recurring)')}</option>
+              <option value="festival">{t('Festival')}</option>
             </select>
           </div>
           <p class="kit-field-help">
             {#if sessionType === 'festival'}
-              Runs between its first and last dates instead of recurring; its sessions are listed by day and may overlap.
+              {t('Runs between its first and last dates instead of recurring; its sessions are listed by day and may overlap.')}
             {:else}
-              Recurs on the schedule above.
+              {t('Recurs on the schedule above.')}
             {/if}
           </p>
         </div>
 
         <div class="kit-group">
           <div class="kit-field as-buffer-field">
-            <span class="kit-field-label" id="activeWindowLabel">Active window</span>
+            <span class="kit-field-label" id="activeWindowLabel">{t('Active window')}</span>
             <span class="as-buffer-row" aria-labelledby="activeWindowLabel">
               <input type="number" id="activeBufferBefore" min="0" max="1440" bind:value={bufferBefore}
-                aria-label="Minutes before the session starts"
+                aria-label={t('Minutes before the session starts')}
                 class:is-invalid={invalidFields.includes('activeBufferBefore')}
                 oninput={() => markValid('activeBufferBefore')} />
-              <span>before</span>
+              <span>{t('before')}</span>
               <input type="number" id="activeBufferAfter" min="0" max="1440" bind:value={bufferAfter}
-                aria-label="Minutes after the session ends"
+                aria-label={t('Minutes after the session ends')}
                 class:is-invalid={invalidFields.includes('activeBufferAfter')}
                 oninput={() => markValid('activeBufferAfter')} />
-              <span>after</span>
+              <span>{t('after')}</span>
             </span>
           </div>
-          <p class="kit-field-help">Minutes either side of the scheduled time that count as "happening now".</p>
+          <p class="kit-field-help">{t('Minutes either side of the scheduled time that count as "happening now".')}</p>
         </div>
 
         <!-- People tracking (spec 039): all on by default; the creator can opt out. -->
-        <h3 class="kit-group-head">People</h3>
+        <h3 class="kit-group-head">{t('People')}</h3>
         <div class="kit-group people-tracking-control">
           <div class="kit-check-field">
             <label class="kit-check-label" for="showPeopleList">
               <input type="checkbox" id="showPeopleList" bind:checked={showPeopleList} />
-              Show a members list
+              {t('Show a members list')}
             </label>
-            <small class="people-tracking-help">Lets session members see who else plays here.</small>
+            <small class="people-tracking-help">{t('Lets session members see who else plays here.')}</small>
           </div>
           <div class="kit-check-field">
             <label class="kit-check-label" for="trackAttendance">
               <input type="checkbox" id="trackAttendance" bind:checked={trackAttendance} />
-              Record attendance
+              {t('Record attendance')}
             </label>
-            <small class="people-tracking-help">Record who attends each session. Visible only to members.</small>
+            <small class="people-tracking-help">{t('Record who attends each session. Visible only to members.')}</small>
           </div>
           <div class="kit-check-field">
             <label class="kit-check-label" for="trackSetStarters">
               <input type="checkbox" id="trackSetStarters" bind:checked={trackSetStarters} disabled={!trackAttendance} />
-              Record set starters
+              {t('Record set starters')}
             </label>
             <small class="people-tracking-help">
-              Record who started each set. Visible only to members.{#if !trackAttendance} Requires attendance.{/if}
+              {t('Record who started each set. Visible only to members.')}{#if !trackAttendance}{' ' + t('Requires attendance.')}{/if}
             </small>
           </div>
         </div>
@@ -787,16 +814,16 @@
         {@const p = placeQuestion.place}
         <div class="as-place-question" role="alert" id="placeQuestion">
           <p>
-            There is already a {p.name}{p.area ? `, ${p.area}` : ''}{p.country ? `, ${p.country}` : ''}.
-            Is this session there?
+            {t('There is already a {place}.', { place: `${p.name}${p.area ? `, ${p.area}` : ''}${p.country ? `, ${p.country}` : ''}` })}
+            {t('Is this session there?')}
           </p>
           <button type="button" class="as-place-choice" id="placeExistingBtn"
             onclick={() => answerPlace({ place_id: p.place_id })}>
-            Yes, {p.name}{p.area ? `, ${p.area}` : ''}
+            {t('Yes, {place}', { place: `${p.name}${p.area ? `, ${p.area}` : ''}` })}
           </button>
           <button type="button" class="as-place-choice" id="placeNewBtn"
             onclick={() => answerPlace({ place_new: true })}>
-            No, a new place (/{placeQuestion.suggested_slug})
+            {t('No, a new place (/{slug})', { slug: placeQuestion.suggested_slug })}
           </button>
         </div>
       {/if}
@@ -805,7 +832,7 @@
           <p>{slugQuestion.message}.</p>
           <button type="button" class="as-place-choice" id="useSuggestedSlugBtn"
             onclick={() => { festivalSlug = slugQuestion.suggested; slugQuestion = null; save() }}>
-            Use /{slugQuestion.suggested}
+            {t('Use /{slug}', { slug: slugQuestion.suggested })}
           </button>
         </div>
       {/if}
@@ -813,7 +840,7 @@
         <div class="field-error" role="alert">{formError}</div>
       {/if}
       <button type="button" class="btn-save-session" id="saveSessionBtn" disabled={saving} onclick={save}>
-        {saving ? 'Saving…' : 'Create session'}
+        {saving ? t('Saving…') : t('Create session')}
       </button>
     </div>
   {/snippet}

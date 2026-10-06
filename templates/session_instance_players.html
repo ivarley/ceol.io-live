@@ -1,6 +1,7 @@
+{# i18n-converted #}
 {% extends "base.html" %}
 
-{% block title %}{{ session_instance.session_name }} - {{ session_instance.date }} - Players{% endblock %}
+{% block title %}{{ session_instance.session_name }} - {{ session_instance.date }} - {{ _('Players') }}{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -69,7 +70,7 @@
 
     {% if session_instance.location_override %}
     <p style="margin: 10px 0; color: var(--disabled-text); font-style: italic;">
-        <strong>Location</strong>: {{ session_instance.location_override }}
+        <strong>{{ _('Location') }}</strong>: {{ session_instance.location_override }}
     </p>
     {% endif %}
 
@@ -87,24 +88,24 @@
 
     {% if session_instance.comments %}
     <div class="session-instance-comments">
-        <h3>Notes from this session:</h3>
+        <h3>{{ _('Notes from this session:') }}</h3>
         <p>{{ session_instance.comments }}</p>
     </div>
     {% endif %}
 
     {% if session_instance.is_cancelled %}
     <div class="cancelled-message">
-        <strong>This session instance was cancelled.</strong>
+        <strong>{{ _('This session instance was cancelled.') }}</strong>
     </div>
     {% else %}
     <!-- Tab Navigation -->
     <ul class="nav nav-tabs" id="sessionTabs" role="tablist">
         <li class="nav-item">
-            <a class="nav-link" href="/sessions/{{ session_instance.session_path }}/{{ session_instance.session_instance_id }}">Tunes</a>
+            <a class="nav-link" href="/sessions/{{ session_instance.session_path }}/{{ session_instance.session_instance_id }}">{{ _('Tunes') }}</a>
         </li>
         {% if current_user.is_authenticated and (is_session_admin or can_view_people) %}
         <li class="nav-item">
-            <a class="nav-link active" href="/sessions/{{ session_instance.session_path }}/{{ session_instance.session_instance_id }}/players">Players</a>
+            <a class="nav-link active" href="/sessions/{{ session_instance.session_path }}/{{ session_instance.session_instance_id }}/players">{{ _('Players') }}</a>
         </li>
         {% endif %}
     </ul>
@@ -151,6 +152,46 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
+{# Spec 057: the attendance script's strings (src/ts/attendance.ts reads them through T()). #}
+<script>window.__CEOL_T__ = Object.assign(window.__CEOL_T__ || {}, {{ {
+    'Checked In': _('Checked In'),
+    'Change To Maybe': _('Change To Maybe'),
+    'Maybe': _('Maybe'),
+    'Change To No': _('Change To No'),
+    'Not Coming': _('Not Coming'),
+    'Change To Yes': _('Change To Yes'),
+    'Check In': _('Check In'),
+    'Error loading attendance data': _('Error loading attendance data'),
+    'No attendees yet': _('No attendees yet'),
+    'No instruments listed': _('No instruments listed'),
+    'Yes': _('Yes'),
+    'No': _('No'),
+    'Unknown': _('Unknown'),
+    'Checking In ...': _('Checking In ...'),
+    'Checked in successfully!': _('Checked in successfully!'),
+    'Error checking in': _('Error checking in'),
+    'Changing Status To {status} ...': _('Changing Status To {status} ...'),
+    'Status updated!': _('Status updated!'),
+    'Error updating status': _('Error updating status'),
+    'Attendance updated': _('Attendance updated'),
+    'Error updating attendance': _('Error updating attendance'),
+    'Search error': _('Search error'),
+    'Add a new person "{query}"': _('Add a new person "{query}"'),
+    'No instruments': _('No instruments'),
+    'Person added to attendance': _('Person added to attendance'),
+    'Error adding person': _('Error adding person'),
+    'First name is required': _('First name is required'),
+    'Last name is required': _('Last name is required'),
+    'Adding {name}...': _('Adding {name}...'),
+    '{name} added successfully': _('{name} added successfully'),
+    'Error creating person': _('Error creating person'),
+    'Attendance refreshed': _('Attendance refreshed'),
+    'Remove {name}': _('Remove {name}'),
+    'Mark this person as not attending?': _('Mark this person as not attending?'),
+    'Remove this person from this session instance? This will not affect their general session membership.': _('Remove this person from this session instance? This will not affect their general session membership.'),
+    'Person removed from session instance': _('Person removed from session instance'),
+    'Error removing person from session': _('Error removing person from session')
+} | tojson }});</script>
 <script src="{{ url_for('static', filename='js/shared/attendance.js') }}"></script>
 {% include 'modals/person_edit.html' %}
 {% endblock %}

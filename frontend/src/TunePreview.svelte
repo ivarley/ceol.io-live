@@ -1,5 +1,6 @@
 <script>
-  import { Chevron, Chip, LoadError } from './lib/index.js'
+  // i18n-converted
+  import { Chevron, Chip, LoadError, t, tuneTypeName } from './lib/index.js'
   import { untrack } from 'svelte'
   import { fly } from 'svelte/transition'
   import { tunePreview, thesessionPreview, settingImage, renderRemoteAbc } from './client.js'
@@ -20,7 +21,7 @@
     items, // combined nav list: [{r: <search result>, remote: bool}]
     index = 0, // start position
     initialSettingId = null, // a pasted URL's ?setting=/#setting deep link — land the pager there (counts as CHOSEN)
-    actionLabel = '＋ Log This Tune',
+    actionLabel = '＋ ' + t('Log This Tune'),
     footer = null, // optional snippet (item, previewData, chosenSettingId) replacing the default action button
     onAction, // (item, previewData) -> onAdd's return (false = deferred, stay open)
     onClose,
@@ -209,6 +210,9 @@
 
   // A setting counts as CHOSEN only if the user worked the pager on this tune —
   // merely opening the preview (which lands on setting 1) expresses no preference.
+  // The notation's click-to-flip hint (four buttons share it).
+  const flipTitle = $derived(size === 'full' ? t('Click to show the incipit') : t('Click to show the full tune'))
+
   const chosenSettingId = $derived(pagerTouched && setting?.setting_id != null ? setting.setting_id : null)
 
   function doAction() {
@@ -247,33 +251,33 @@
      (pane 🔍 → paste) must swap instantly, not stack two flying previews -->
 <div class="pv" in:fly={{ x: 32, duration: 180 }}>
   <div class="pv-head">
-    <button class="pv-back" onclick={onClose}><Chevron dir="left" size={14} /> Results</button>
-    <span class="pv-count">{idx + 1} of {items.length}</span>
-    <button class="pv-step" disabled={idx === 0} aria-label="Previous result" onclick={() => stepResult(-1)}><Chevron dir="left" size={16} /></button>
-    <button class="pv-step" disabled={idx >= items.length - 1} aria-label="Next result" onclick={() => stepResult(1)}><Chevron size={16} /></button>
+    <button class="pv-back" onclick={onClose}><Chevron dir="left" size={14} /> {t('Results')}</button>
+    <span class="pv-count">{t('{n} of {total}', { n: idx + 1, total: items.length })}</span>
+    <button class="pv-step" disabled={idx === 0} aria-label={t('Previous result')} onclick={() => stepResult(-1)}><Chevron dir="left" size={16} /></button>
+    <button class="pv-step" disabled={idx >= items.length - 1} aria-label={t('Next result')} onclick={() => stepResult(1)}><Chevron size={16} /></button>
   </div>
 
   <div class="pv-body">
-    <div class="pv-name">{data?.name ?? item?.r?.name ?? ''}<span class="pv-type">{data?.tune_type ?? item?.r?.tune_type ?? ''}</span></div>
+    <div class="pv-name">{data?.name ?? item?.r?.name ?? ''}<span class="pv-type">{tuneTypeName(data?.tune_type ?? item?.r?.tune_type ?? '')}</span></div>
 
     {#if loading}
       <div class="pv-skel" style="width:60%"></div>
       <div class="pv-skel" style="height:96px"></div>
       <div class="pv-skel" style="width:40%"></div>
     {:else if failed}
-      <LoadError message={`Couldn’t load tune details${item?.remote ? ' from thesession.org' : ''}.`} onRetry={() => show(idx)} />
+      <LoadError message={item?.remote ? t('Couldn’t load tune details from thesession.org.') : t('Couldn’t load tune details.')} onRetry={() => show(idx)} />
     {:else}
       <!-- The two facts that decide "is this the right tune?": our history with it
            (gold — session identity) and how common it is (accent). "in this session"
            was redundant with the play count, so it's gone. -->
       <div class="pv-facts">
         {#if data.played_here}
-          <span class="pv-fact-here">♪ Played here {data.played_here}×{data.dates?.length ? ` — last: ${data.dates.join(', ')}` : ''}</span>
+          <span class="pv-fact-here">♪ {t('Played here {n}×', { n: data.played_here })}{data.dates?.length ? ` — ${t('last: {dates}', { dates: data.dates.join(', ') })}` : ''}</span>
         {:else}
-          <span class="pv-fact-none">Not played here yet</span>
+          <span class="pv-fact-none">{t('Not played here yet')}</span>
         {/if}
-        <span class="pv-fact-pop"><b>{data.tunebook_count ?? 0}</b> tunebooks</span>
-        {#if item?.r?.on_list}<Chip label="★ on your list" styled={false} chipClass="deep-badge star" />{/if}
+        <span class="pv-fact-pop"><b>{data.tunebook_count ?? 0}</b> {t('tunebooks')}</span>
+        {#if item?.r?.on_list}<Chip label={'★ ' + t('on your list')} styled={false} chipClass="deep-badge star" />{/if}
       </div>
 
       <!-- The alias region is ALWAYS a fixed two-line box while collapsed — reserved
@@ -281,9 +285,9 @@
            pager/notation below. Only "More …" (an explicit act) may move the layout. -->
       <div class="pv-aliaswrap" class:fixed={!aliasesExpanded}>
         {#if data.aliases?.length}
-          <div class="pv-aliases" class:clamped={!aliasesExpanded} bind:this={aliasesEl}>Also known as: {data.aliases.join(', ')}</div>
+          <div class="pv-aliases" class:clamped={!aliasesExpanded} bind:this={aliasesEl}>{t('Also known as: {names}', { names: data.aliases.join(', ') })}</div>
           {#if aliasesClamped && !aliasesExpanded}
-            <button class="pv-more" onclick={() => (aliasesExpanded = true)}>More …</button>
+            <button class="pv-more" onclick={() => (aliasesExpanded = true)}>{t('More …')}</button>
           {/if}
         {/if}
       </div>
@@ -292,9 +296,9 @@
         <!-- ABOVE the notation, so paging settings never shifts this bar around
              (the notation below is the only thing that changes height) -->
         <div class="pv-setnav">
-          <button class="pv-step" disabled={setIdx === 0} aria-label="Previous setting" onclick={() => stepSetting(-1)}><Chevron dir="left" size={16} /></button>
-          <span class="pv-setlabel">Setting {setIdx + 1} of {settings.length}{setting?.setting_id != null ? ` · #${setting.setting_id}` : ''}{setting?.key ? ` · ${setting.key}` : ''}{#if setting?.setting_id != null && setting.setting_id === data.session_setting_id}<span class="pv-sesset"> · ★ this session’s</span>{/if}</span>
-          <button class="pv-step" disabled={setIdx >= settings.length - 1} aria-label="Next setting" onclick={() => stepSetting(1)}>
+          <button class="pv-step" disabled={setIdx === 0} aria-label={t('Previous setting')} onclick={() => stepSetting(-1)}><Chevron dir="left" size={16} /></button>
+          <span class="pv-setlabel">{t('Setting {n} of {total}', { n: setIdx + 1, total: settings.length })}{setting?.setting_id != null ? ` · #${setting.setting_id}` : ''}{setting?.key ? ` · ${setting.key}` : ''}{#if setting?.setting_id != null && setting.setting_id === data.session_setting_id}<span class="pv-sesset"> · ★ {t('this session’s')}</span>{/if}</span>
+          <button class="pv-step" disabled={setIdx >= settings.length - 1} aria-label={t('Next setting')} onclick={() => stepSetting(1)}>
             {#if backfilling && setIdx >= settings.length - 1}
               <!-- more settings may be on their way from thesession.org — the arrow
                    (maybe) appears when the backfill lands -->
@@ -307,32 +311,32 @@
       <div class="nb">
         {#if mode === 'abc'}
           {#if setting}
-            <button class="nb-abc" title="Click to show {size === 'full' ? 'the incipit' : 'the full tune'}" onclick={flipSize}>{size === 'full' ? setting.abc : setting.incipit_abc}</button>
+            <button class="nb-abc" title={flipTitle} onclick={flipSize}>{size === 'full' ? setting.abc : setting.incipit_abc}</button>
           {:else}
-            <div class="nb-pend"><span class="deep-noabc">♪ no notation</span></div>
+            <div class="nb-pend"><span class="deep-noabc">♪ {t('no notation')}</span></div>
           {/if}
         {:else if image}
-          <button class="nb-imgbtn" title="Click to show {size === 'full' ? 'the incipit' : 'the full tune'}" onclick={flipSize}>
-            <img src={`data:image/png;base64,${image}`} alt="notation ({size})" />
+          <button class="nb-imgbtn" title={flipTitle} onclick={flipSize}>
+            <img src={`data:image/png;base64,${image}`} alt={size === 'full' ? t('notation (full)') : t('notation (incipit)')} />
           </button>
         {:else if imgPending}
           <!-- still clickable mid-render: flip back to the cached incipit (or on to full)
                without waiting; the abandoned render finishes + caches in the background -->
-          <button class="nb-pend" title="Click to show {size === 'full' ? 'the incipit' : 'the full tune'}" onclick={flipSize}><span class="spinner"></span> rendering notation…</button>
+          <button class="nb-pend" title={flipTitle} onclick={flipSize}><span class="spinner"></span> {t('rendering notation…')}</button>
         {:else if setting}
-          <button class="nb-pend" title="Click to show {size === 'full' ? 'the incipit' : 'the full tune'}" onclick={flipSize}><span class="deep-noabc">♪ no notation image</span></button>
+          <button class="nb-pend" title={flipTitle} onclick={flipSize}><span class="deep-noabc">♪ {t('no notation image')}</span></button>
         {:else}
-          <div class="nb-pend"><span class="deep-noabc">♪ no notation</span></div>
+          <div class="nb-pend"><span class="deep-noabc">♪ {t('no notation')}</span></div>
         {/if}
         <div class="nb-foot">
-          <button class="nb-tab" class:active={mode === 'notes'} onclick={() => setMode('notes')}>notes</button>
-          <button class="nb-tab" class:active={mode === 'abc'} disabled={!setting} onclick={() => setMode('abc')}>abc</button>
-          <a class="nb-ext" href={tsUrl} target="_blank" rel="noopener">thesession</a>
+          <button class="nb-tab" class:active={mode === 'notes'} onclick={() => setMode('notes')}>{t('notes')}</button>
+          <button class="nb-tab" class:active={mode === 'abc'} disabled={!setting} onclick={() => setMode('abc')}>{t('abc')}</button>
+          <a class="nb-ext" href={tsUrl} target="_blank" rel="noopener">{t('thesession')}</a>
         </div>
       </div>
 
       {#if isRemote}
-        <div class="pv-import-note">Not in the library yet — it will be imported from thesession.org when you add it.</div>
+        <div class="pv-import-note">{t('Not in the library yet — it will be imported from thesession.org when you add it.')}</div>
       {/if}
     {/if}
   </div>

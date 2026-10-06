@@ -7,6 +7,7 @@
 import { listStatus, NOT_ON_LIST } from '../mylist.js'
 import { DEFAULT_HEARD_COUNT } from '../shared/persontune.js'
 import { pickAka } from './namematch.js'
+import { t, currentLang, formatDate } from '../lib/i18n/index.js'
 
 // Musical keys list (same order as the legacy modal's key selects)
 export const MUSICAL_KEYS = [
@@ -100,10 +101,10 @@ export function nameChain(tuneData) {
 
 /** Display name for the header: the first name in the chain that exists. */
 export function getDisplayName(tuneData, mode) {
-  if (!tuneData) return 'Unknown'
+  if (!tuneData) return t('Unknown')
   // Admin mode is untouched by 037 (see spec 036) — it names the canonical tune.
-  if (mode === 'admin') return tuneData.tune_name || 'Unknown'
-  return nameChain(tuneData).find((n) => n) || 'Unknown'
+  if (mode === 'admin') return tuneData.tune_name || t('Unknown')
+  return nameChain(tuneData).find((n) => n) || t('Unknown')
 }
 
 /**
@@ -119,23 +120,23 @@ export function getAkaName(tuneData, mode) {
 
 // --- The Session tab (spec 037) -------------------------------------------------
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-
-/** "Tue 8 Jul 2026" — parsed as local, not UTC, so the date never slips a day. */
+/** "Tue 8 Jul 2026" ("Máirt 8 Iúil 2026") — parsed as local, not UTC, so the date
+ * never slips a day. */
 function formatInstanceDate(iso) {
   const [y, m, d] = String(iso || '').split('-').map(Number)
   if (!y || !m || !d) return String(iso || '')
   const dt = new Date(y, m - 1, d)
-  return `${DAYS[dt.getDay()]} ${d} ${MONTHS[m - 1]} ${y}`
+  return `${formatDate(dt, { weekday: 'short' })} ${d} ${formatDate(dt, { month: 'short' })} ${y}`
 }
 
 /** "2:00pm" from a "14:00:00" time. */
-function formatInstanceTime(t) {
-  if (!t) return ''
-  const [hRaw, min] = String(t).split(':')
+function formatInstanceTime(time) {
+  if (!time) return ''
+  const [hRaw, min] = String(time).split(':')
   const h = Number(hRaw)
   if (Number.isNaN(h)) return ''
+  // Irish writes the 24-hour clock ("14:00").
+  if (currentLang() === 'ga') return `${String(h).padStart(2, '0')}:${min || '00'}`
   const suffix = h < 12 ? 'am' : 'pm'
   const h12 = h % 12 === 0 ? 12 : h % 12
   return `${h12}:${min || '00'}${suffix}`
@@ -170,7 +171,7 @@ export function historyScopeOptions(playedInstances, sessionName, { inSession = 
   const options = []
 
   if (inSession) {
-    options.push({ id: 'general', label: `At ${sessionName || 'this session'}`, editable: true })
+    options.push({ id: 'general', label: sessionName ? t('At {name}', { name: sessionName }) : t('At this session'), editable: true })
 
     const instances = playedInstances || []
     // Which labels would still collide once the date and venue are shown?
@@ -183,21 +184,21 @@ export function historyScopeOptions(playedInstances, sessionName, { inSession = 
       const parts = [formatInstanceDate(i.date)]
       if (i.location_override) parts.push(i.location_override)
       if (counts[`${i.date}|${i.location_override || ''}`] > 1) {
-        const t = formatInstanceTime(i.start_time)
-        if (t) parts.push(t)
+        const time = formatInstanceTime(i.start_time)
+        if (time) parts.push(time)
       }
       options.push({
         id: String(i.session_instance_id),
-        label: `… on ${parts.join(' · ')}`,
+        label: t('… on {date}', { date: parts.join(' · ') }),
         editable: true,
       })
     }
 
-    options.push({ id: OTHER_SESSION, label: 'At a different session …', editable: false })
+    options.push({ id: OTHER_SESSION, label: t('At a different session …'), editable: false })
   }
 
-  if (loggedIn) options.push({ id: 'member', label: 'All My Sessions', editable: false })
-  options.push({ id: 'all', label: 'All Sessions', editable: false })
+  if (loggedIn) options.push({ id: 'member', label: t('All My Sessions'), editable: false })
+  options.push({ id: 'all', label: t('All Sessions'), editable: false })
   return options
 }
 
@@ -227,7 +228,7 @@ export function instancePositions(playedInstances, instanceId, sessionPath, tune
   const inst = (playedInstances || []).find((i) => String(i.session_instance_id) === String(instanceId))
   if (!inst) return []
   return (inst.positions || []).map((p) => ({
-    label: `Set ${p.set_number}, tune ${p.position_in_set}`,
+    label: t('Set {set}, tune {position}', { set: p.set_number, position: p.position_in_set }),
     href: `/sessions/${sessionPath}/${inst.session_instance_id}?highlight=${p.session_instance_tune_id}&tune=${tuneId}`,
   }))
 }
@@ -297,7 +298,7 @@ export function validateSettingInput(input, expectedTuneId) {
   if (input.includes('thesession.org')) {
     const settingId = extractSettingId(input)
     if (settingId === null) {
-      return { valid: false, error: 'Could not extract setting ID from URL' }
+      return { valid: false, error: t('Could not extract setting ID from URL') }
     }
     const tuneIdMatch = input.match(/thesession\.org\/tunes\/(\d+)/)
     if (tuneIdMatch) {
@@ -308,7 +309,7 @@ export function validateSettingInput(input, expectedTuneId) {
     }
     return { valid: true, settingId: settingId }
   }
-  return { valid: false, error: 'Please enter a number or paste a valid TheSession.org URL' }
+  return { valid: false, error: t('Please enter a number or paste a valid TheSession.org URL') }
 }
 
 /** Played With scopes for the derived mode; first entry is the default.
@@ -317,17 +318,17 @@ export function validateSettingInput(input, expectedTuneId) {
 export function playedWithScopeOptions(mode, scope, loggedIn = false) {
   const mine = loggedIn
     ? [
-        { key: 'member', label: 'At My Sessions' },
-        { key: 'attended', label: 'While I Was There' },
+        { key: 'member', label: t('At My Sessions') },
+        { key: 'attended', label: t('While I Was There') },
       ]
     : []
   if ((mode === 'session' || mode === 'session_instance') && scope && scope.session) {
-    return [{ key: 'session', label: 'At This Session' }, ...mine, { key: 'all', label: 'Globally' }]
+    return [{ key: 'session', label: t('At This Session') }, ...mine, { key: 'all', label: t('Globally') }]
   }
   if (mode === 'my_tunes') {
-    return [...mine, { key: 'all', label: 'Globally' }]
+    return [...mine, { key: 'all', label: t('Globally') }]
   }
-  return [{ key: 'all', label: 'Globally' }, ...mine]
+  return [{ key: 'all', label: t('Globally') }, ...mine]
 }
 
 // --- URL param management (identical to the legacy modal) ------------------------

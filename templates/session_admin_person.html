@@ -1,3 +1,4 @@
+{# i18n-converted #}
 {% extends "base.html" %}
 
 {% block title %}{{ person.first_name }} {{ person.last_name }} - {{ session.name }}{% endblock %}
@@ -7,30 +8,30 @@
     <div class="container">
         <article class="docs-article" id="section-1">
             <!-- Session Admin Person Breadcrumb Navigation -->
-            <nav class="admin-breadcrumb" aria-label="breadcrumb">
+            <nav class="admin-breadcrumb" aria-label="{{ _('Breadcrumb') }}">
                 {% if current_user.is_system_admin %}
-                <a href="{{ url_for('admin') }}" class="breadcrumb-item">Admin</a>
-                <span class="breadcrumb-separator">&gt;&gt;</span>
-                <a href="{{ url_for('admin_sessions_list') }}" class="breadcrumb-item">Sessions</a>
+                <a href="{{ url_for('admin') }}" class="breadcrumb-item">{{ _('Admin') }}</a>
+                <span class="breadcrumb-separator">&#62;&#62;</span>
+                <a href="{{ url_for('admin_sessions_list') }}" class="breadcrumb-item">{{ _('Sessions') }}</a>
                 {% else %}
-                <a href="{{ url_for('admin_sessions_list') }}" class="breadcrumb-item">My Sessions</a>
+                <a href="{{ url_for('admin_sessions_list') }}" class="breadcrumb-item">{{ _('My Sessions') }}</a>
                 {% endif %}
-                <span class="breadcrumb-separator">&gt;&gt;</span>
+                <span class="breadcrumb-separator">&#62;&#62;</span>
                 <a href="/admin/sessions/{{ session.path }}" class="breadcrumb-item">{{ session.name }}</a>
-                <span class="breadcrumb-separator">&gt;&gt;</span>
-                <a href="/admin/sessions/{{ session_path }}/people" class="breadcrumb-item">Members</a>
-                <span class="breadcrumb-separator">&gt;&gt;</span>
+                <span class="breadcrumb-separator">&#62;&#62;</span>
+                <a href="/admin/sessions/{{ session_path }}/people" class="breadcrumb-item">{{ _('Members') }}</a>
+                <span class="breadcrumb-separator">&#62;&#62;</span>
                 <span class="breadcrumb-current">{{ person.first_name }} {{ person.last_name }}</span>
             </nav>
 
             <header class="docs-header">
                 <h1 class="docs-heading">{{ person.first_name }} {{ person.last_name }}</h1>
                 <section class="docs-intro">
-                    <p>Member details for <strong>{{ session.name }}</strong>.
+                    <p>{{ _('Member details for <strong>%(session)s</strong>.', session=session.name) }}
                     {% if from_attendance and session_instance_date and session_instance_id %}
-                        <a href="/sessions/{{ session_path }}/{{ session_instance_id }}#players">← Back to session on {{ session_instance_date }}</a>
+                        <a href="/sessions/{{ session_path }}/{{ session_instance_id }}#players">← {{ _('Back to session on %(date)s', date=session_instance_date) }}</a>
                     {% else %}
-                        <a href="/admin/sessions/{{ session_path }}/people">← Back to members list</a>
+                        <a href="/admin/sessions/{{ session_path }}/people">← {{ _('Back to members list') }}</a>
                     {% endif %}
                     </p>
                 </section>
@@ -38,7 +39,7 @@
             
             <!-- Person Information Section -->
             <section class="docs-section" id="person-info">
-                <h2 class="section-heading">Person Information</h2>
+                <h2 class="section-heading">{{ _('Person Information') }}</h2>
                 <div class="card">
                     <div class="card-body">
                         <form id="person-details-form">
@@ -49,7 +50,7 @@
                             <div class="row">
                                 <div class="col-md-6">
                                     <dl class="row">
-                                        <dt class="col-sm-4">Name:</dt>
+                                        <dt class="col-sm-4">{{ _('Name:') }}</dt>
                                         <dd class="col-sm-8">
                                             {% if person.username %}
                                                 {{ person.first_name }} {{ person.last_name }}
@@ -59,51 +60,51 @@
                                             {% endif %}
                                         </dd>
                                         
-                                        <dt class="col-sm-4">Email:</dt>
+                                        <dt class="col-sm-4">{{ _('Email:') }}</dt>
                                         <dd class="col-sm-8">
                                             {% if person.username %}
-                                                {{ person.email or 'Not provided' }}
+                                                {{ person.email or _('Not provided') }}
                                             {% else %}
-                                                <input type="email" class="form-control form-control-sm" id="email" value="{{ person.email or '' }}" placeholder="Not provided">
+                                                <input type="email" class="form-control form-control-sm" id="email" value="{{ person.email or '' }}" placeholder="{{ _('Not provided') }}">
                                             {% endif %}
                                         </dd>
                                         
-                                        <dt class="col-sm-4">SMS Number:</dt>
+                                        <dt class="col-sm-4">{{ _('SMS Number:') }}</dt>
                                         <dd class="col-sm-8">
                                             {% if person.username %}
-                                                {{ person.sms_number or 'Not provided' }}
+                                                {{ person.sms_number or _('Not provided') }}
                                             {% else %}
-                                                <input type="tel" class="form-control form-control-sm" id="sms-number" value="{{ person.sms_number or '' }}" placeholder="Not provided">
+                                                <input type="tel" class="form-control form-control-sm" id="sms-number" value="{{ person.sms_number or '' }}" placeholder="{{ _('Not provided') }}">
                                             {% endif %}
                                         </dd>
                                     </dl>
                                 </div>
                                 <div class="col-md-6">
                                     <dl class="row">
-                                        <dt class="col-sm-4">City:</dt>
+                                        <dt class="col-sm-4">{{ _('City:') }}</dt>
                                         <dd class="col-sm-8">
                                             {% if person.username %}
-                                                {{ person.city or 'Not provided' }}
+                                                {{ person.city or _('Not provided') }}
                                             {% else %}
-                                                <input type="text" class="form-control form-control-sm" id="city" value="{{ person.city or '' }}" placeholder="Not provided">
+                                                <input type="text" class="form-control form-control-sm" id="city" value="{{ person.city or '' }}" placeholder="{{ _('Not provided') }}">
                                             {% endif %}
                                         </dd>
                                         
-                                        <dt class="col-sm-4">State:</dt>
+                                        <dt class="col-sm-4">{{ _('State:') }}</dt>
                                         <dd class="col-sm-8">
                                             {% if person.username %}
-                                                {{ person.state or 'Not provided' }}
+                                                {{ person.state or _('Not provided') }}
                                             {% else %}
-                                                <input type="text" class="form-control form-control-sm" id="state" value="{{ person.state or '' }}" placeholder="Not provided">
+                                                <input type="text" class="form-control form-control-sm" id="state" value="{{ person.state or '' }}" placeholder="{{ _('Not provided') }}">
                                             {% endif %}
                                         </dd>
                                         
-                                        <dt class="col-sm-4">Country:</dt>
+                                        <dt class="col-sm-4">{{ _('Country:') }}</dt>
                                         <dd class="col-sm-8">
                                             {% if person.username %}
-                                                {{ person.country or 'Not provided' }}
+                                                {{ person.country or _('Not provided') }}
                                             {% else %}
-                                                <input type="text" class="form-control form-control-sm" id="country" value="{{ person.country or '' }}" placeholder="Not provided">
+                                                <input type="text" class="form-control form-control-sm" id="country" value="{{ person.country or '' }}" placeholder="{{ _('Not provided') }}">
                                             {% endif %}
                                         </dd>
                                     </dl>
@@ -113,7 +114,7 @@
                             <div class="row mt-3">
                                 <div class="col-12">
                                     <dl class="row">
-                                        <dt class="col-sm-2">TheSession.org ID:</dt>
+                                        <dt class="col-sm-2">{{ _('TheSession.org ID:') }}</dt>
                                         <dd class="col-sm-10">
                                             {% if person.username %}
                                                 {% if person.thesession_user_id %}
@@ -121,12 +122,12 @@
                                                         {{ person.thesession_user_id }}
                                                     </a>
                                                 {% else %}
-                                                    Not provided
+                                                    {{ _('Not provided') }}
                                                 {% endif %}
                                             {% else %}
-                                                <input type="number" class="form-control form-control-sm d-inline-block w-auto" id="thesession-user-id" value="{{ person.thesession_user_id or '' }}" placeholder="Not provided" style="width: 150px !important;">
+                                                <input type="number" class="form-control form-control-sm d-inline-block w-auto" id="thesession-user-id" value="{{ person.thesession_user_id or '' }}" placeholder="{{ _('Not provided') }}" style="width: 150px !important;">
                                                 {% if person.thesession_user_id %}
-                                                    <a href="https://thesession.org/members/{{ person.thesession_user_id }}" target="_blank" class="ms-2">View Profile</a>
+                                                    <a href="https://thesession.org/members/{{ person.thesession_user_id }}" target="_blank" class="ms-2">{{ _('View Profile') }}</a>
                                                 {% endif %}
                                             {% endif %}
                                         </dd>
@@ -138,11 +139,11 @@
                             <div class="row">
                                 <div class="col-12">
                                     <dl class="row">
-                                        <dt class="col-sm-2">User Account:</dt>
+                                        <dt class="col-sm-2">{{ _('User Account:') }}</dt>
                                         <dd class="col-sm-10">
                                             <span class="badge bg-info">{{ person.username }}</span>
                                             {% if person.is_system_admin %}
-                                            <span class="badge bg-warning">System Admin</span>
+                                            <span class="badge bg-warning">{{ _('System Admin') }}</span>
                                             {% endif %}
                                         </dd>
                                     </dl>
@@ -153,8 +154,8 @@
                             {% if not person.username %}
                             <div class="row mt-3">
                                 <div class="col-12">
-                                    <button type="button" id="save-person-details" class="btn btn-primary btn-sm">Save Changes</button>
-                                    <span class="text-muted ms-2 small">Note: This person can edit these details themselves if they create an account</span>
+                                    <button type="button" id="save-person-details" class="btn btn-primary btn-sm">{{ _('Save Changes') }}</button>
+                                    <span class="text-muted ms-2 small">{{ _('Note: This person can edit these details themselves if they create an account') }}</span>
                                 </div>
                             </div>
                             {% endif %}
@@ -167,7 +168,7 @@
             
             <!-- Session Status Section -->
             <section class="docs-section" id="session-status">
-                <h2 class="section-heading">Session Status</h2>
+                <h2 class="section-heading">{{ _('Session Status') }}</h2>
                 <div class="card">
                     <div class="card-body">
                         <form id="session-status-form">
@@ -180,48 +181,42 @@
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="mb-3">
-                                        <label class="form-label" for="relationship"><strong>Relationship</strong></label>
+                                        <label class="form-label" for="relationship"><strong>{{ _('Relationship') }}</strong></label>
                                         <select class="form-select" id="relationship">
-                                            <option value="member" {{ 'selected' if person.relationship != 'visitor' }}>Member</option>
-                                            <option value="visitor" {{ 'selected' if person.relationship == 'visitor' }}>Visitor</option>
+                                            <option value="member" {{ 'selected' if person.relationship != 'visitor' }}>{{ _('Member') }}</option>
+                                            <option value="visitor" {{ 'selected' if person.relationship == 'visitor' }}>{{ _('Visitor') }}</option>
                                         </select>
                                         <div class="form-text">
-                                            Whose session is this? A <strong>member</strong> counts this session's
-                                            tunes as their own; a <strong>visitor</strong> came, but it isn't one of
-                                            their sessions. Grants no access.
+                                            {{ _("Whose session is this? A <strong>member</strong> counts this session's tunes as their own; a <strong>visitor</strong> came, but it isn't one of their sessions. Grants no access.") }}
                                         </div>
                                     </div>
 
                                     <div class="form-check mb-3">
                                         <input class="form-check-input" type="checkbox" id="is-confirmed" {{ 'checked' if person.confirmed }}>
                                         <label class="form-check-label" for="is-confirmed">
-                                            <strong>Confirmed</strong>
+                                            <strong>{{ _('Confirmed') }}</strong>
                                         </label>
                                         <div class="form-text">
-                                            Lets them see this session's <strong>people list and attendance
-                                            records</strong>. Nothing else grants that — joining a session doesn't,
-                                            and neither does being checked in.
+                                            {{ _("Lets them see this session's <strong>people list and attendance records</strong>. Nothing else grants that — joining a session doesn't, and neither does being checked in.") }}
                                         </div>
                                     </div>
 
                                     <div class="form-check mb-3">
                                         <input class="form-check-input" type="checkbox" id="is-archived" {{ 'checked' if person.archived }}>
                                         <label class="form-check-label" for="is-archived">
-                                            <strong>Archived</strong>
+                                            <strong>{{ _('Archived') }}</strong>
                                         </label>
                                         <div class="form-text">
-                                            Hide someone who's moved away. They drop out of the default lists but
-                                            stay findable by typing their name, so nobody re-creates them as a
-                                            duplicate person.
+                                            {{ _("Hide someone who's moved away. They drop out of the default lists but stay findable by typing their name, so nobody re-creates them as a duplicate person.") }}
                                         </div>
                                     </div>
 
                                     <div class="form-check mb-3">
                                         <input class="form-check-input" type="checkbox" id="is-admin" {{ 'checked' if person.is_admin }}>
                                         <label class="form-check-label" for="is-admin">
-                                            <strong>Session Admin</strong>
+                                            <strong>{{ _('Session Admin') }}</strong>
                                         </label>
-                                        <div class="form-text">Grant admin privileges for this session</div>
+                                        <div class="form-text">{{ _('Grant admin privileges for this session') }}</div>
                                     </div>
 
                                     {# System admins only: this one hands out a tool that
@@ -233,14 +228,10 @@
                                                {{ 'checked' if person.can_manage_recordings }}
                                                {{ 'disabled' if not person.is_admin }}>
                                         <label class="form-check-label" for="can-manage-recordings">
-                                            <strong>Manage Recordings</strong>
+                                            <strong>{{ _('Manage Recordings') }}</strong>
                                         </label>
                                         <div class="form-text">
-                                            Lets them upload this session's audio and add tune timestamps to it,
-                                            from the Recordings section of any of its logs. Also lets them
-                                            <strong>delete</strong> a recording and the timestamps placed on it.
-                                            Only takes effect for a Session Admin, and applies to this session
-                                            alone.
+                                            {{ _("Lets them upload this session's audio and add tune timestamps to it, from the Recordings section of any of its logs. Also lets them <strong>delete</strong> a recording and the timestamps placed on it. Only takes effect for a Session Admin, and applies to this session alone.") }}
                                         </div>
                                     </div>
                                     {% endif %}
@@ -250,11 +241,11 @@
                                     <div class="status-badges">
                                         
                                         {% if person.gets_email_reminder %}
-                                        <span class="badge bg-success">Email Reminders</span>
+                                        <span class="badge bg-success">{{ _('Email Reminders') }}</span>
                                         {% endif %}
                                         
                                         {% if person.gets_email_followup %}
-                                        <span class="badge bg-info">Email Followups</span>
+                                        <span class="badge bg-info">{{ _('Email Followups') }}</span>
                                         {% endif %}
                                     </div>
                                 </div>
@@ -268,7 +259,7 @@
             
             <!-- Instruments Section -->
             <section class="docs-section" id="instruments">
-                <h2 class="section-heading">Instruments</h2>
+                <h2 class="section-heading">{{ _('Instruments') }}</h2>
                 <div class="card">
                     <div class="card-body">
                         <!-- Display view (shown by default) -->
@@ -282,12 +273,12 @@
                                             {% endfor %}
                                         </div>
                                     {% else %}
-                                        <p class="text-muted">No instruments specified.</p>
+                                        <p class="text-muted">{{ _('No instruments specified.') }}</p>
                                     {% endif %}
                                     {% if person.username %}
-                                        <small class="text-muted d-block mt-2">This person can edit their own instruments by logging into their account.</small>
+                                        <small class="text-muted d-block mt-2">{{ _('This person can edit their own instruments by logging into their account.') }}</small>
                                     {% else %}
-                                        <button type="button" id="edit-instruments-btn" class="btn btn-outline-primary btn-sm mt-2">Edit</button>
+                                        <button type="button" id="edit-instruments-btn" class="btn btn-outline-primary btn-sm mt-2">{{ _('Edit') }}</button>
                                     {% endif %}
                                 </div>
                             </div>
@@ -300,7 +291,7 @@
                                 <div class="col-12">
                                     <form id="instruments-form">
                                         <div class="mb-3">
-                                            <label class="form-label"><strong>Instruments</strong></label>
+                                            <label class="form-label"><strong>{{ _('Instruments') }}</strong></label>
                                             <div id="instruments-checkboxes" class="row">
                                                 {% set person_instruments_lower = person.instruments|map('lower')|list %}
                                                 {% for instrument in canonical_instruments %}
@@ -320,25 +311,25 @@
 
                                         <!-- Custom instruments section -->
                                         <div class="mb-3">
-                                            <label class="form-label"><strong>Other Instruments</strong></label>
+                                            <label class="form-label"><strong>{{ _('Other Instruments') }}</strong></label>
                                             <div id="custom-instruments">
                                                 {% set canonical_instruments_lower = canonical_instruments|map('lower')|list %}
                                                 {% for instrument in person.instruments %}
                                                     {% if instrument|lower not in canonical_instruments_lower %}
                                                         <div class="input-group mb-2 custom-instrument-row">
-                                                            <input type="text" class="form-control custom-instrument" value="{{ instrument|title }}" placeholder="Enter instrument name">
-                                                            <button class="btn btn-outline-danger remove-custom-instrument" type="button">Remove</button>
+                                                            <input type="text" class="form-control custom-instrument" value="{{ instrument|title }}" placeholder="{{ _('Enter instrument name') }}">
+                                                            <button class="btn btn-outline-danger remove-custom-instrument" type="button">{{ _('Remove') }}</button>
                                                         </div>
                                                     {% endif %}
                                                 {% endfor %}
                                             </div>
-                                            <button type="button" id="add-custom-instrument" class="btn btn-outline-primary btn-sm">Add Other Instrument</button>
+                                            <button type="button" id="add-custom-instrument" class="btn btn-outline-primary btn-sm">{{ _('Add Other Instrument') }}</button>
                                         </div>
 
                                         <div class="row">
                                             <div class="col-12">
-                                                <button type="button" id="save-instruments" class="btn btn-primary btn-sm">Save Instruments</button>
-                                                <button type="button" id="cancel-instruments" class="btn btn-outline-secondary btn-sm ms-2">Cancel</button>
+                                                <button type="button" id="save-instruments" class="btn btn-primary btn-sm">{{ _('Save Instruments') }}</button>
+                                                <button type="button" id="cancel-instruments" class="btn btn-outline-secondary btn-sm ms-2">{{ _('Cancel') }}</button>
                                             </div>
                                         </div>
 
@@ -354,20 +345,20 @@
             
             <!-- Sessions Attended Section -->
             <section class="docs-section" id="sessions-attended">
-                <h2 class="section-heading">Sessions Attended</h2>
+                <h2 class="section-heading">{{ _('Sessions Attended') }}</h2>
                 <div class="card">
                     <div class="card-body">
                         {% if attendance_history %}
-                        <p class="text-muted mb-3">{{ attendance_history|length }} session{{ 's' if attendance_history|length != 1 else '' }} attended</p>
+                        <p class="text-muted mb-3">{{ ngettext('%(num)d session attended', '%(num)d sessions attended', attendance_history|length) }}</p>
                         
                         <div class="table-responsive">
                             <table class="table table-striped">
                                 <thead>
                                     <tr>
-                                        <th>Date</th>
-                                        <th>Time</th>
-                                        <th>Status</th>
-                                        <th>Comments</th>
+                                        <th>{{ _('Date') }}</th>
+                                        <th>{{ _('Time') }}</th>
+                                        <th>{{ _('Status') }}</th>
+                                        <th>{{ _('Comments') }}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -382,16 +373,16 @@
                                             {% if attendance.start_time and attendance.end_time %}
                                                 {{ attendance.start_time }} - {{ attendance.end_time }}
                                             {% elif attendance.start_time %}
-                                                From {{ attendance.start_time }}
+                                                {{ _('From %(time)s', time=attendance.start_time) }}
                                             {% else %}
-                                                <span class="text-muted">Not specified</span>
+                                                <span class="text-muted">{{ _('Not specified') }}</span>
                                             {% endif %}
                                         </td>
                                         <td>
                                             {% if attendance.is_cancelled %}
-                                                <span class="badge bg-danger">Cancelled</span>
+                                                <span class="badge bg-danger">{{ _('Cancelled') }}</span>
                                             {% else %}
-                                                <span class="badge bg-success">Attended</span>
+                                                <span class="badge bg-success">{{ _('Attended') }}</span>
                                             {% endif %}
                                         </td>
                                         <td>{{ attendance.comments or '' }}</td>
@@ -402,7 +393,7 @@
                         </div>
                         {% else %}
                         <div class="alert alert-info">
-                            No sessions attended found for this person at this session.
+                            {{ _('No sessions attended found for this person at this session.') }}
                         </div>
                         {% endif %}
                     </div>
@@ -411,18 +402,18 @@
             
             <!-- Danger Zone Section -->
             <section class="docs-section" id="danger-zone">
-                <h2 class="section-heading text-danger">Danger Zone</h2>
+                <h2 class="section-heading text-danger">{{ _('Danger Zone') }}</h2>
                 <div class="card border-danger">
                     <div class="card-body">
-                        <h5 class="card-title text-danger">Remove Member from Session</h5>
+                        <h5 class="card-title text-danger">{{ _('Remove Member from Session') }}</h5>
                         <p class="card-text text-muted">
-                            This will remove {{ person.first_name }} {{ person.last_name }} from the session "{{ session.name }}".
+                            {{ _('This will remove %(name)s from the session "%(session)s".', name=person.first_name ~ ' ' ~ person.last_name, session=session.name) }}
                             {% if not person.username %}
-                            If this person is not associated with any other sessions and has no user account, the person record will also be deleted permanently.
+                            {{ _('If this person is not associated with any other sessions and has no user account, the person record will also be deleted permanently.') }}
                             {% endif %}
                         </p>
                         <button type="button" class="btn btn-outline-danger" id="delete-player-btn">
-                            <i class="fas fa-trash-alt me-1"></i>Remove Member
+                            <i class="fas fa-trash-alt me-1"></i>{{ _('Remove Member') }}
                         </button>
                     </div>
                 </div>
@@ -436,24 +427,24 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="delete-player-modal-label">Confirm Deletion</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <h5 class="modal-title" id="delete-player-modal-label">{{ _('Confirm Deletion') }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
             </div>
             <div class="modal-body">
-                <p><strong>Are you sure?</strong></p>
-                <p>This will permanently remove <strong>{{ person.first_name }} {{ person.last_name }}</strong> from the session "<strong>{{ session.name }}</strong>".</p>
+                <p><strong>{{ _('Are you sure?') }}</strong></p>
+                <p>{{ _('This will permanently remove <strong>%(name)s</strong> from the session "<strong>%(session)s</strong>".', name=person.first_name ~ ' ' ~ person.last_name, session=session.name) }}</p>
                 {% if not person.username %}
                 <div class="alert alert-warning">
                     <i class="fas fa-exclamation-triangle me-2"></i>
-                    <strong>Warning:</strong> Since this person has no user account and may not be associated with other sessions, their entire person record could be deleted permanently.
+                    {{ _('<strong>Warning:</strong> Since this person has no user account and may not be associated with other sessions, their entire person record could be deleted permanently.') }}
                 </div>
                 {% endif %}
-                <p class="text-muted">This action cannot be undone.</p>
+                <p class="text-muted">{{ _('This action cannot be undone.') }}</p>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ _('Cancel') }}</button>
                 <button type="button" class="btn btn-danger" id="confirm-delete-btn">
-                    <i class="fas fa-trash-alt me-1"></i>Remove Member
+                    <i class="fas fa-trash-alt me-1"></i>{{ _('Remove Member') }}
                 </button>
             </div>
         </div>
@@ -667,6 +658,38 @@ dl.row dd {
 </style>
 
 <script>
+// Spec 057: the strings this page's script shows, in the page's language.
+const M = {
+    saving: {{ _('Saving...')|tojson }},
+    updated: {{ _('{label} updated.')|tojson }},
+    failedUpdate: {{ _('Failed to update {label}')|tojson }},
+    error: {{ _('Error: {message}')|tojson }},
+    relationship: {{ _('Relationship')|tojson }},
+    confirmed: {{ _('Confirmed')|tojson }},
+    archived: {{ _('Archived')|tojson }},
+    thisPerson: {{ _('This person')|tojson }},
+    confirmPrompt: {{ _("{name} will be able to see this session's people list and attendance records. Confirm them?")|tojson }},
+    failedSave: {{ _('Failed to save')|tojson }},
+    adminUpdated: {{ _('Admin status updated successfully!')|tojson }},
+    recordingsOn: {{ _("They can now manage this session's recordings.")|tojson }},
+    recordingsOff: {{ _('Recording access removed.')|tojson }},
+    enterInstrument: {{ _('Enter instrument name')|tojson }},
+    remove: {{ _('Remove')|tojson }},
+    edit: {{ _('Edit')|tojson }},
+    savingInstruments: {{ _('Saving instruments...')|tojson }},
+    instrumentsUpdated: {{ _('Instruments updated successfully!')|tojson }},
+    noInstruments: {{ _('No instruments specified.')|tojson }},
+    failedInstruments: {{ _('Failed to update instruments')|tojson }},
+    detailsUpdated: {{ _('Person details updated successfully!')|tojson }},
+    failedDetails: {{ _('Failed to update person details')|tojson }},
+    deleting: {{ _('Deleting...')|tojson }},
+    memberRemoved: {{ _('Member successfully removed from session')|tojson }},
+    failedRemove: {{ _('Failed to remove member')|tojson }},
+    errorRemoving: {{ _('Error removing member: {message}')|tojson }},
+    removeMember: {{ _('Remove Member')|tojson }},
+};
+const errorHtml = (message) => '<div class="alert alert-danger">' + M.error.replace('{message}', message) + '</div>';
+
 document.addEventListener('DOMContentLoaded', function() {
     const saveStatus = document.getElementById('save-status');
     const savePersonDetailsBtn = document.getElementById('save-person-details');
@@ -686,7 +709,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function setField(field, value, label, revert) {
         saveStatus.style.display = 'block';
-        saveStatus.innerHTML = '<div class="alert alert-info">Saving...</div>';
+        saveStatus.innerHTML = '<div class="alert alert-info">' + M.saving + '</div>';
         fetch(`/api/sessions/${sessionPath}/people/${personId}/${field}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -694,11 +717,11 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .then(r => r.json())
         .then(data => {
-            if (!data.success) throw new Error(data.message || ('Failed to update ' + label));
-            flash(label + ' updated.', true);
+            if (!data.success) throw new Error(data.message || M.failedUpdate.replace('{label}', label));
+            flash(M.updated.replace('{label}', label), true);
         })
         .catch(err => {
-            flash('Error: ' + err.message, false);
+            flash(M.error.replace('{message}', err.message), false);
             if (revert) revert();
         });
     }
@@ -708,7 +731,7 @@ document.addEventListener('DOMContentLoaded', function() {
         let previous = relationshipSelect.value;
         relationshipSelect.addEventListener('change', function () {
             const value = this.value;
-            setField('relationship', value, 'Relationship', () => { this.value = previous; });
+            setField('relationship', value, M.relationship, () => { this.value = previous; });
             previous = value;
         });
     }
@@ -718,12 +741,12 @@ document.addEventListener('DOMContentLoaded', function() {
         isConfirmedCheckbox.addEventListener('change', function () {
             const value = this.checked;
             // Say what it does, at the point of click -- confirming hands over the roster.
-            const name = document.querySelector('h1')?.textContent.trim() || 'This person';
-            if (value && !window.confirm(name + ' will be able to see this session\'s people list and attendance records. Confirm them?')) {
+            const name = document.querySelector('h1')?.textContent.trim() || M.thisPerson;
+            if (value && !window.confirm(M.confirmPrompt.replace('{name}', name))) {
                 this.checked = false;
                 return;
             }
-            setField('confirmed', value, 'Confirmed', () => { this.checked = !value; });
+            setField('confirmed', value, M.confirmed, () => { this.checked = !value; });
         });
     }
 
@@ -731,7 +754,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (isArchivedCheckbox) {
         isArchivedCheckbox.addEventListener('change', function () {
             const value = this.checked;
-            setField('archived', value, 'Archived', () => { this.checked = !value; });
+            setField('archived', value, M.archived, () => { this.checked = !value; });
         });
     }
 
@@ -746,7 +769,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const sessionPath = document.getElementById('session-path').value;
 
         saveStatus.style.display = 'block';
-        saveStatus.innerHTML = '<div class="alert alert-info">Saving...</div>';
+        saveStatus.innerHTML = '<div class="alert alert-info">' + M.saving + '</div>';
 
         fetch(`/api/admin/sessions/${sessionPath}/people/${personId}/admin`, {
             method: 'PUT',
@@ -755,13 +778,13 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .then(response => response.json())
         .then(data => {
-            if (!data.success) { throw new Error(data.error || data.message || 'Failed to save'); }
+            if (!data.success) { throw new Error(data.error || data.message || M.failedSave); }
             saveStatus.innerHTML = '<div class="alert alert-success">' + successMessage + '</div>';
             setTimeout(() => { saveStatus.style.display = 'none'; }, 3000);
         })
         .catch(error => {
             console.error('Error saving ' + field + ':', error);
-            saveStatus.innerHTML = '<div class="alert alert-danger">Error: ' + error.message + '</div>';
+            saveStatus.innerHTML = errorHtml(error.message);
             checkbox.checked = !value;
         });
     }
@@ -774,7 +797,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // doing nothing. Its stored value is left alone: revoking and
             // restoring session-admin shouldn't quietly drop it.
             if (canRecordCheckbox) { canRecordCheckbox.disabled = !isAdmin; }
-            saveSessionPersonGrant('is_admin', isAdmin, this, 'Admin status updated successfully!');
+            saveSessionPersonGrant('is_admin', isAdmin, this, M.adminUpdated);
         });
     }
 
@@ -782,8 +805,7 @@ document.addEventListener('DOMContentLoaded', function() {
         canRecordCheckbox.addEventListener('change', function() {
             saveSessionPersonGrant(
                 'can_manage_recordings', this.checked, this,
-                this.checked ? 'They can now manage this session\'s recordings.'
-                             : 'Recording access removed.'
+                this.checked ? M.recordingsOn : M.recordingsOff
             );
         });
     }
@@ -819,9 +841,11 @@ document.addEventListener('DOMContentLoaded', function() {
             const newRow = document.createElement('div');
             newRow.className = 'input-group mb-2 custom-instrument-row';
             newRow.innerHTML = `
-                <input type="text" class="form-control custom-instrument" placeholder="Enter instrument name">
-                <button class="btn btn-outline-danger remove-custom-instrument" type="button">Remove</button>
+                <input type="text" class="form-control custom-instrument">
+                <button class="btn btn-outline-danger remove-custom-instrument" type="button"></button>
             `;
+            newRow.querySelector('.custom-instrument').placeholder = M.enterInstrument;
+            newRow.querySelector('.remove-custom-instrument').textContent = M.remove;
             customInstrumentsDiv.appendChild(newRow);
             
             // Add event listener to the remove button
@@ -858,7 +882,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Show loading state
             instrumentsSaveStatus.style.display = 'block';
-            instrumentsSaveStatus.innerHTML = '<div class="alert alert-info">Saving instruments...</div>';
+            instrumentsSaveStatus.innerHTML = '<div class="alert alert-info">' + M.savingInstruments + '</div>';
             
             // Make API call to update instruments
             fetch(`/api/person/${personId}/instruments`, {
@@ -873,7 +897,7 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    instrumentsSaveStatus.innerHTML = '<div class="alert alert-success">Instruments updated successfully!</div>';
+                    instrumentsSaveStatus.innerHTML = '<div class="alert alert-success">' + M.instrumentsUpdated + '</div>';
 
                     // Update the display view with new instruments
                     const instrumentTagsDiv = instrumentsDisplay.querySelector('.instrument-tags') || instrumentsDisplay.querySelector('.col-12');
@@ -885,7 +909,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             tagsHtml += '<span class="badge bg-info me-1 mb-1">' + titleCase + '</span>';
                         });
                         tagsHtml += '</div>';
-                        tagsHtml += '<button type="button" id="edit-instruments-btn" class="btn btn-outline-primary btn-sm mt-2">Edit</button>';
+                        tagsHtml += '<button type="button" id="edit-instruments-btn" class="btn btn-outline-primary btn-sm mt-2">' + M.edit + '</button>';
                         instrumentsDisplay.querySelector('.col-12').innerHTML = tagsHtml;
 
                         // Re-attach event listener to new edit button
@@ -895,8 +919,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         });
                     } else {
                         instrumentsDisplay.querySelector('.col-12').innerHTML =
-                            '<p class="text-muted">No instruments specified.</p>' +
-                            '<button type="button" id="edit-instruments-btn" class="btn btn-outline-primary btn-sm mt-2">Edit</button>';
+                            '<p class="text-muted">' + M.noInstruments + '</p>' +
+                            '<button type="button" id="edit-instruments-btn" class="btn btn-outline-primary btn-sm mt-2">' + M.edit + '</button>';
 
                         // Re-attach event listener to new edit button
                         document.getElementById('edit-instruments-btn').addEventListener('click', function() {
@@ -912,12 +936,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         instrumentsDisplay.style.display = 'block';
                     }, 1000);
                 } else {
-                    throw new Error(data.message || 'Failed to update instruments');
+                    throw new Error(data.message || M.failedInstruments);
                 }
             })
             .catch(error => {
                 console.error('Error updating instruments:', error);
-                instrumentsSaveStatus.innerHTML = '<div class="alert alert-danger">Error: ' + error.message + '</div>';
+                instrumentsSaveStatus.innerHTML = errorHtml(error.message);
             });
         });
     }
@@ -959,7 +983,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // Show loading state
             personSaveStatus.style.display = 'block';
-            personSaveStatus.innerHTML = '<div class="alert alert-info">Saving...</div>';
+            personSaveStatus.innerHTML = '<div class="alert alert-info">' + M.saving + '</div>';
             
             // Make API call to update person details
             fetch(`/api/admin/sessions/${sessionPath}/people/${personId}/details`, {
@@ -972,17 +996,17 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    personSaveStatus.innerHTML = '<div class="alert alert-success">Person details updated successfully!</div>';
+                    personSaveStatus.innerHTML = '<div class="alert alert-success">' + M.detailsUpdated + '</div>';
                     setTimeout(() => {
                         personSaveStatus.style.display = 'none';
                     }, 3000);
                 } else {
-                    throw new Error(data.error || 'Failed to update person details');
+                    throw new Error(data.error || M.failedDetails);
                 }
             })
             .catch(error => {
                 console.error('Error updating person details:', error);
-                personSaveStatus.innerHTML = '<div class="alert alert-danger">Error: ' + error.message + '</div>';
+                personSaveStatus.innerHTML = errorHtml(error.message);
             });
         });
     }
@@ -1017,7 +1041,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Disable button and show loading state
             confirmDeleteBtn.disabled = true;
-            confirmDeleteBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Deleting...';
+            confirmDeleteBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>' + M.deleting;
             
             try {
                 const response = await fetch(`/api/admin/sessions/${sessionPath}/people/${personId}`, {
@@ -1034,22 +1058,22 @@ document.addEventListener('DOMContentLoaded', function() {
                     deleteModal.style.display = 'none';
                     deleteModal.classList.remove('show');
                     document.body.classList.remove('modal-open');
-                    showMessage('Member successfully removed from session', 'success');
+                    showMessage(M.memberRemoved, 'success');
 
                     // Redirect back to members list after a short delay
                     setTimeout(() => {
                         window.location.href = `/admin/sessions/${sessionPath}/people`;
                     }, 1500);
                 } else {
-                    throw new Error(data.message || 'Failed to remove member');
+                    throw new Error(data.message || M.failedRemove);
                 }
             } catch (error) {
                 console.error('Delete error:', error);
-                showMessage('Error removing member: ' + error.message, 'error');
+                showMessage(M.errorRemoving.replace('{message}', error.message), 'error');
                 
                 // Reset button
                 confirmDeleteBtn.disabled = false;
-                confirmDeleteBtn.innerHTML = '<i class="fas fa-trash-alt me-1"></i>Remove Member';
+                confirmDeleteBtn.innerHTML = '<i class="fas fa-trash-alt me-1"></i>' + M.removeMember;
             }
         });
     }

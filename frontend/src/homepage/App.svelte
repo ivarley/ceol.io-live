@@ -1,4 +1,5 @@
 <script>
+  // i18n-converted
   // Home (spec 052 §B8 Stage 4). The page renders serializers.build_home_payload —
   // byte for byte the GET /api/home body — so the web Home and a native Home screen
   // are looking at one document.
@@ -11,7 +12,7 @@
   // #stat-learning, #stat-want-to-learn, .session-item, .session-name, .empty-state.
   // e2e/mobile/home.mobile.spec.ts selects on them, and Stage 0 wrote those tests
   // precisely so this migration could be checked rather than eyeballed.
-  import { Row, SectionHeader } from '../lib/index.js'
+  import { Row, SectionHeader, t, tuneTypeName } from '../lib/index.js'
   import TodayStrip from './TodayStrip.svelte'
   import {
     todaysSessions,
@@ -59,7 +60,7 @@
         tunes = []
       }
       const statusByTuneId = {}
-      for (const t of tunes) statusByTuneId[t.tune_id] = t.learn_status
+      for (const tune of tunes) statusByTuneId[tune.tune_id] = tune.learn_status
       const next = adjustedCounts({ learning, wantToLearn }, ops, statusByTuneId)
       learning = next.learning
       wantToLearn = next.wantToLearn
@@ -74,13 +75,13 @@
 </script>
 
 <div class="home-greeting">
-  Welcome back, <strong>{payload?.viewer?.first_name || 'there'}</strong>
+  {t('Welcome back,')} <strong>{payload?.viewer?.first_name || t('there')}</strong>
 </div>
 
 <TodayStrip sessions={today} />
 
 <section class="home-section" id="home-week">
-  <SectionHeader title="This week" level={2} headerClass="home-sechead">
+  <SectionHeader title={t('This week')} level={2} headerClass="home-sechead">
     {#snippet icon()}
       <svg viewBox="0 0 24 24" aria-hidden="true" class="home-icon">
         <rect x="3" y="5" width="18" height="16" rx="2" />
@@ -114,7 +115,7 @@
             <a
               class="week-open"
               href={`/sessions/${session.path}/${session.date}`}
-              aria-label={`Log for ${session.name}, ${weekSubtitle(session, todayStr)}`}
+              aria-label={t('Log for {name}, {when}', { name: session.name, when: weekSubtitle(session, todayStr) })}
             ></a>
             <div class="session-date">
               <div class="session-date-day">{dowOf(session.date)}</div>
@@ -127,22 +128,22 @@
           {#snippet trailing()}
             {#if session.date === todayStr}
               <span class="home-badge" class:live={session.is_active}>
-                {session.is_active ? 'Live' : 'Today'}
+                {session.is_active ? t('Live') : t('Today')}
               </span>
             {:else if session.log_complete_date}
-              <span class="badge-logged">Logged</span>
+              <span class="badge-logged">{t('Logged')}</span>
             {/if}
           {/snippet}
         </Row>
       {/each}
     </div>
   {:else}
-    <div class="empty-state">No sessions scheduled this week.</div>
+    <div class="empty-state">{t('No sessions scheduled this week.')}</div>
   {/if}
 </section>
 
 <section class="home-section" id="home-learning">
-  <SectionHeader title="Learning" level={2} seeAllHref="/my-tunes" headerClass="home-sechead">
+  <SectionHeader title={t('Learning')} level={2} seeAllHref="/my-tunes" headerClass="home-sechead">
     {#snippet icon()}
       <svg viewBox="0 0 24 24" aria-hidden="true" class="home-icon">
         <path d="M9 18V5l11-2v13" />
@@ -155,26 +156,26 @@
   <div class="tune-stats">
     <a href={`/my-tunes?status=learning&${MY_TUNES.split('?')[1]}`} class="tune-stat">
       <span class="tune-stat-number" id="stat-learning">{learning}</span>
-      <span class="tune-stat-label">Learning</span>
+      <span class="tune-stat-label">{t('Learning')}</span>
     </a>
     <a href={`/my-tunes?status=want+to+learn&${MY_TUNES.split('?')[1]}`} class="tune-stat">
       <span class="tune-stat-number" id="stat-want-to-learn">{wantToLearn}</span>
-      <span class="tune-stat-label">To Learn</span>
+      <span class="tune-stat-label">{t('To Learn')}</span>
     </a>
   </div>
 
   {#if suggested}
     <div class="suggested-tune">
-      <span class="label-text">{learnTotal === 0 ? 'A' : 'Another'} tune to learn:</span>
+      <span class="label-text">{learnTotal === 0 ? t('A tune to learn:') : t('Another tune to learn:')}</span>
       <a href={`/my-tunes?add=1&q=${encodeURIComponent(suggested.name)}`}>{suggested.name}</a>
-      {#if suggested.tune_type}<span class="tune-type">({suggested.tune_type})</span>{/if}
+      {#if suggested.tune_type}<span class="tune-type">({tuneTypeName(suggested.tune_type)})</span>{/if}
     </div>
   {/if}
 </section>
 
 {#if unfinished.length}
   <section class="home-section" id="home-continue">
-    <SectionHeader title="Pick up where you left off" level={2} headerClass="home-sechead">
+    <SectionHeader title={t('Pick up where you left off')} level={2} headerClass="home-sechead">
       {#snippet icon()}
         <svg viewBox="0 0 24 24" aria-hidden="true" class="home-icon">
           <path d="M12 20h9" />
@@ -189,7 +190,7 @@
           styled={false}
           rowClass="session-item"
           href={item.href}
-          subtitle={`${item.detail}${item.lastEdit ? ` · edited ${editedLabel(item.lastEdit, payload?.current_year)}` : ''}`}>
+          subtitle={`${item.detail}${item.lastEdit ? ` · ${t('edited {when}', { when: editedLabel(item.lastEdit, payload?.current_year) })}` : ''}`}>
           {#snippet lead()}
             <div class="session-date">
               <div class="session-date-day">{dowOf(item.date)}</div>

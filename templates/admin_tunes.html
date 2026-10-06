@@ -1,6 +1,7 @@
+{# i18n-converted #}
 {% extends "base.html" %}
 
-{% block title %}Admin - Tunes{% endblock %}
+{% block title %}{{ _('Admin - Tunes') }}{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/tune_detail_modal.css') }}">
@@ -17,8 +18,8 @@
                 <div class="tunes-container">
                     <div class="filters-container">
                         <div class="filter-top-row">
-                            <input type="text" id="tune-search" class="form-control tunes-search-input" placeholder="Search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
-                            <button id="filter-panel-toggle" class="filter-panel-toggle" onclick="toggleFilterPanel()" title="Show filters">
+                            <input type="text" id="tune-search" class="form-control tunes-search-input" placeholder="{{ _('Search') }}" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+                            <button id="filter-panel-toggle" class="filter-panel-toggle" onclick="toggleFilterPanel()" title="{{ _('Show filters') }}">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <line x1="4" y1="21" x2="4" y2="14"></line>
                                     <line x1="4" y1="10" x2="4" y2="3"></line>
@@ -35,22 +36,22 @@
 
                         <div id="filter-panel" class="filter-panel" style="display: none;">
                             <div class="filter-panel-row">
-                                <select id="type-filter" class="filter-panel-select" title="Tune type">
-                                    <option value="">All Tune Types</option>
+                                <select id="type-filter" class="filter-panel-select" title="{{ _('Tune type') }}">
+                                    <option value="">{{ _('All Tune Types') }}</option>
                                 </select>
                             </div>
                             <div class="filter-panel-row">
                                 <div class="filter-button-group">
-                                    <button class="filter-sort-btn active" data-sort="name" onclick="setSortMode('name')">a-z</button>
-                                    <button class="filter-sort-btn" data-sort="popularity" onclick="setSortMode('popularity')">popularity</button>
-                                    <button class="filter-sort-btn" data-sort="sessions" onclick="setSortMode('sessions')">sessions</button>
+                                    <button class="filter-sort-btn active" data-sort="name" onclick="setSortMode('name')">{{ _('a-z') }}</button>
+                                    <button class="filter-sort-btn" data-sort="popularity" onclick="setSortMode('popularity')">{{ _('popularity') }}</button>
+                                    <button class="filter-sort-btn" data-sort="sessions" onclick="setSortMode('sessions')">{{ _('sessions') }}</button>
                                 </div>
-                                <button id="sort-direction-toggle" class="filter-sort-direction-btn" onclick="toggleSortDirection()" title="Toggle sort direction">
+                                <button id="sort-direction-toggle" class="filter-sort-direction-btn" onclick="toggleSortDirection()" title="{{ _('Toggle sort direction') }}">
                                     <span id="sort-direction-icon">↑</span>
                                 </button>
                             </div>
                             <div class="filter-panel-actions">
-                                <button id="clear-filters-btn" class="filter-panel-clear-btn" onclick="clearFilters()" style="display: none;">Clear Filters</button>
+                                <button id="clear-filters-btn" class="filter-panel-clear-btn" onclick="clearFilters()" style="display: none;">{{ _('Clear Filters') }}</button>
                             </div>
                         </div>
                     </div>
@@ -60,18 +61,18 @@
                     </div>
 
                     <div id="loading" style="padding: 40px 20px; text-align: center; color: var(--text-muted, #6c757d);">
-                        <p>Loading tunes...</p>
+                        <p>{{ _('Loading tunes...') }}</p>
                     </div>
 
                     <div id="tunes-table-container" style="display: none;">
                         <table class="table table-hover" id="tunes-table">
                             <thead>
                                 <tr>
-                                    <th>Name</th>
-                                    <th>Type</th>
-                                    <th class="text-center">Sessions</th>
-                                    <th class="text-center">Tune Lists</th>
-                                    <th class="text-center">Popularity</th>
+                                    <th>{{ _('Name') }}</th>
+                                    <th>{{ _('Type') }}</th>
+                                    <th class="text-center">{{ _('Sessions') }}</th>
+                                    <th class="text-center">{{ _('Tune Lists') }}</th>
+                                    <th class="text-center">{{ _('Popularity') }}</th>
                                 </tr>
                             </thead>
                             <tbody id="tunes-tbody">
@@ -333,6 +334,16 @@
 </style>
 
 <script>
+const MSG = {
+    failed: {{ _('Failed to load tunes')|tojson }},
+    showing: {{ _('Showing {shown} of {total} tunes')|tojson }},
+    count: {{ js_ngettext('{n} tune', '{n} tunes')|tojson }},
+    none: {{ _('No tunes found')|tojson }},
+    noneMatching: {{ _('No tunes found matching "{query}"')|tojson }},
+    unknown: {{ _('Unknown')|tojson }},
+    mergedInto: {{ _('Merged into tune #{id}')|tojson }},
+};
+const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
 let allTunes = [];
 let filteredTunes = [];
 let currentFilters = {
@@ -398,12 +409,12 @@ function loadTunes() {
                 document.getElementById('tunes-table-container').style.display = 'block';
             } else {
                 console.error('Failed to load tunes:', data.error);
-                document.getElementById('loading').innerHTML = '<p style="color: #dc3545;">Failed to load tunes</p>';
+                document.getElementById('loading').innerHTML = '<p style="color: #dc3545;">' + escapeHtml(MSG.failed) + '</p>';
             }
         })
         .catch(error => {
             console.error('Error loading tunes:', error);
-            document.getElementById('loading').innerHTML = '<p style="color: #dc3545;">Failed to load tunes</p>';
+            document.getElementById('loading').innerHTML = '<p style="color: #dc3545;">' + escapeHtml(MSG.failed) + '</p>';
         });
 }
 
@@ -584,9 +595,9 @@ function renderTunes() {
     const total = allTunes.length;
     const filtered = filteredTunes.length;
     if (filtered < total) {
-        resultsCountText.textContent = `Showing ${filtered} of ${total} tunes`;
+        resultsCountText.textContent = MSG.showing.replace('{shown}', filtered).replace('{total}', total);
     } else {
-        resultsCountText.textContent = `${total} tune${total !== 1 ? 's' : ''}`;
+        resultsCountText.textContent = ceolPlural(MSG.count, total);
     }
 
     // Render table rows
@@ -594,7 +605,7 @@ function renderTunes() {
         tbody.innerHTML = `
             <tr>
                 <td colspan="5" style="padding: 40px 20px; text-align: center; color: var(--text-muted, #6c757d);">
-                    No tunes found${currentFilters.search ? ` matching "${currentFilters.search}"` : ''}
+                    ${escapeHtml(currentFilters.search ? MSG.noneMatching.replace('{query}', currentFilters.search) : MSG.none)}
                 </td>
             </tr>
         `;
@@ -604,7 +615,7 @@ function renderTunes() {
 }
 
 function createTuneRow(tune) {
-    const tuneName = tune.name || 'Unknown';
+    const tuneName = tune.name || MSG.unknown;
     const tuneType = tune.tune_type || '';
     const sessionCount = tune.session_count || 0;
     const tunelistCount = tune.tunelist_count || 0;
@@ -612,7 +623,7 @@ function createTuneRow(tune) {
     const redirectTo = tune.redirect_to_tune_id;
 
     const typeBadge = tuneType ? `<span class="tune-type-badge">${tuneType}</span>` : '<span style="color: var(--text-muted);">-</span>';
-    const redirectBadge = redirectTo ? `<span class="redirect-badge" title="Merged into tune #${redirectTo}">&#8594; #${redirectTo}</span>` : '';
+    const redirectBadge = redirectTo ? `<span class="redirect-badge" title="${escapeHtml(MSG.mergedInto.replace('{id}', redirectTo))}">&#8594; #${redirectTo}</span>` : '';
     const rowClass = redirectTo ? 'redirected-tune' : '';
 
     return `

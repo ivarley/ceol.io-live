@@ -1,4 +1,5 @@
 <script>
+  // i18n-converted
   /**
    * "Do you attend this session?" (spec 034, Change 1).
    *
@@ -11,7 +12,8 @@
    * point: people-visibility is granted by the session, never claimed by joining it. We say
    * so plainly rather than letting the missing tab be a mystery.
    */
-  import { Sheet, toast, toastFailure, ServerError } from '../lib/index.js'
+  import { Sheet, toast, ServerError, t } from '../lib/index.js'
+  import { toastFailed } from './failure.js'
 
   let { sessionPath } = $props()
 
@@ -29,13 +31,17 @@
       })
       const data = await res.json()
       if (!res.ok || !data.success) throw new ServerError(data.message || data.error)
-      toast('Added. A session admin can confirm you to show you who else plays here.', 'success')
+      toast(t('Added. A session admin can confirm you to show you who else plays here.'), 'success')
       // Membership is part of the server-rendered permissions block, so repaint from the
       // server. (We deliberately do NOT bounce to /people any more: a new joiner is
       // unconfirmed and can't see it, so that redirect would land on a 403.)
       setTimeout(() => window.location.reload(), 900)
     } catch (e) {
-      toastFailure('add you to this session', e)
+      toastFailed(
+        e,
+        t("Couldn't add you to this session. Try again."),
+        t("Couldn't add you to this session. Check your connection and try again.")
+      )
       joining = false
       open = false
     }
@@ -44,9 +50,9 @@
 
 <div class="sj">
   <p>
-    Do you attend this session?
+    {t('Do you attend this session?')}
     <button class="sj-link" onclick={() => (open = true)} disabled={joining}>
-      {joining ? 'Adding…' : 'Yes, Add Me'}
+      {joining ? t('Adding…') : t('Yes, Add Me')}
     </button>
   </p>
 </div>
@@ -57,14 +63,14 @@
   Escape silently joined you as a visitor. This has three outcomes -- local, visiting, and
   walk away -- so the two choices are buttons and Cancel means cancel.
 -->
-<Sheet bind:open title="Are you a local, or just visiting?" onCancel={() => (open = false)}>
+<Sheet bind:open title={t('Are you a local, or just visiting?')} onCancel={() => (open = false)}>
   <button class="sj-choice" onclick={() => join('member')} disabled={joining}>
-    <strong>I'm local</strong>
-    <span>This is one of my sessions. Its tunes count towards my stats and history.</span>
+    <strong>{t("I'm local")}</strong>
+    <span>{t('This is one of my sessions. Its tunes count towards my stats and history.')}</span>
   </button>
   <button class="sj-choice" onclick={() => join('visitor')} disabled={joining}>
-    <strong>Just visiting</strong>
-    <span>Record that I came, without making the session mine.</span>
+    <strong>{t('Just visiting')}</strong>
+    <span>{t('Record that I came, without making the session mine.')}</span>
   </button>
 </Sheet>
 

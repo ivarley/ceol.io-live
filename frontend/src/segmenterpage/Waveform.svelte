@@ -1,4 +1,5 @@
 <script>
+  // i18n-converted
   // Two canvases over the same precomputed envelope (spec 050).
   //
   //   overview -- the whole recording at a glance, with every placed tune drawn
@@ -8,6 +9,7 @@
   //               is what makes marking a whole night by feel possible; dragging
   //               the tape scrubs, so the finger never covers the mark point.
   import { envelopeForRange, formatTime, setColor } from './logic.js'
+  import { t } from '../lib/index.js'
 
   let {
     peaks = null,
@@ -61,7 +63,7 @@
     return out
   })
 
-  const tuneById = $derived(new Map(tunes.map((t) => [t.session_instance_tune_id, t])))
+  const tuneById = $derived(new Map(tunes.map((tune) => [tune.session_instance_tune_id, tune])))
 
   // Redraw whenever anything visible changes. Reading the props here is what
   // registers the dependency -- Svelte 5 effects track what they touch.
@@ -203,12 +205,12 @@
     // Second ticks, thinning out as you zoom out so they never become noise.
     const stepMs = zoomMs <= 10000 ? 1000 : zoomMs <= 40000 ? 5000 : zoomMs <= 180000 ? 30000 : 120000
     ctx.font = '10px SFMono-Regular, Menlo, monospace'
-    for (let t = Math.ceil(startMs / stepMs) * stepMs; t < endMs; t += stepMs) {
-      const x = msToX(t)
+    for (let tick = Math.ceil(startMs / stepMs) * stepMs; tick < endMs; tick += stepMs) {
+      const x = msToX(tick)
       ctx.fillStyle = 'rgba(255,255,255,0.18)'
       ctx.fillRect(Math.round(x), DETAIL_H - 14, 1, 14)
       ctx.fillStyle = 'rgba(255,255,255,0.4)'
-      ctx.fillText(formatTime(t), Math.round(x) + 3, DETAIL_H - 4)
+      ctx.fillText(formatTime(tick), Math.round(x) + 3, DETAIL_H - 4)
     }
 
     // The centre line: the mark point, always here.
@@ -354,7 +356,7 @@
       onwheel={detailWheel}
     ></canvas>
     {#if !peaks}
-      <div class="wf-empty">no waveform for this recording</div>
+      <div class="wf-empty">{t('no waveform for this recording')}</div>
     {/if}
   </div>
 

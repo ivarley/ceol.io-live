@@ -1,4 +1,6 @@
 <script>
+  // i18n-converted
+  import { t } from './i18n/index.js'
   // SectionHeader (spec 052 §B8 Stage 1): a section's title, an optional icon,
   // and an optional "See all" link to the full list.
   //
@@ -9,7 +11,7 @@
   let {
     title = '',
     seeAllHref = null, // set => the link renders
-    seeAllLabel = 'See all',
+    seeAllLabel = t('See all'),
     level = 2, // heading level, so a page keeps one sane outline
     styled = true,
     headerClass = '',

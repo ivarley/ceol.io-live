@@ -101,4 +101,33 @@ product owner to agree or change.
 | piano accordion | cairdín pianó | |
 | Logs (the tab, plural) | Logálacha | Plural of the agreed "logáil"; check it reads naturally. |
 | On Now | Ar siúl anois | |
+| tunebook (thesession.org) | leabhar fonn | |
+| repertoire | stór ceoil | Also "stór fonn" in one template; pick one. |
+| session instance (one night) | ócáid seisiúin | |
+| check in / checked in | marcáil i láthair / i láthair | Not "cláraigh", which is register. |
+| check out | bain ón tinreamh | |
+| attendance | tinreamh | |
+| Attended (past, people present) | bhí i láthair | The log filter "Attended" (nights I went to) is "Bhí mé ann". |
+| register | cláraigh | |
+| path / web address | seoladh / seoladh gréasáin | |
+| device | feiste | Not "gléas", which is key. |
+| sync | sioncrónaigh / sioncrónú | |
+| recording | taifeadadh (pl. taifeadtaí) | |
+| notation | nodaireacht | |
+| incipit | tús an fhoinn | |
+| tag | clib | |
+| venue | ionad | |
+| time zone | crios ama | |
+| schedule | sceideal | |
+| archived / archive | cartlannaithe / cartlannaigh | |
+| merge | cumaisc / cumasc | |
+| password | pasfhocal | |
+| email | ríomhphost | |
+| username | ainm úsáideora | |
+| account | cuntas | |
+| system admin / session admin | bainisteoir córais / bainisteoir seisiúin | |
+| set starter | tosaitheoir sraithe | |
+| live logger | logálaí beo | |
+| Live / Live now | Beo / Beo anois | |
+| the clock | 24-hour ("19:00") | Irish pages show times on the 24-hour clock. |
 

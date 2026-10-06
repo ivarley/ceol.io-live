@@ -1,4 +1,5 @@
 <script>
+  // i18n-converted
   // List (spec 035): browse-mode results (deep-search cards, ul.results).
   // ArrowUp/ArrowDown move the active row, Enter selects — and deliberately NO
   // "N of M" label: counting positions is the Pager's job (inspect mode).

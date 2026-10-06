@@ -1,6 +1,7 @@
+{# i18n-converted #}
 {% extends "base.html" %}
 
-{% block title %}Admin - Cache Settings{% endblock %}
+{% block title %}{{ _('Admin - Cache Settings') }}{% endblock %}
 
 {% block content %}
 <div class="docs-content-inner">
@@ -10,43 +11,43 @@
 
             <section class="docs-section" id="cache-settings">
                 <div class="admin-cache-settings">
-                <h2>Cache Missing Settings</h2>
-                <p>This tool caches missing tune settings from thesession.org, including ABC notation and rendered images.</p>
+                <h2>{{ _('Cache Missing Settings') }}</h2>
+                <p>{{ _('This tool caches missing tune settings from thesession.org, including ABC notation and rendered images.') }}</p>
 
                 <div class="cache-stats" id="cache-stats">
-                    <h3>Current Cache Status</h3>
-                    <div id="stats-loading">Loading statistics...</div>
+                    <h3>{{ _('Current Cache Status') }}</h3>
+                    <div id="stats-loading">{{ _('Loading statistics...') }}</div>
                     <div id="stats-content" style="display: none;">
                         <div class="stats-grid">
                             <div class="stat-item">
-                                <div class="stat-label">Total Settings</div>
+                                <div class="stat-label">{{ _('Total Settings') }}</div>
                                 <div class="stat-value" id="stat-total-settings">-</div>
                             </div>
                             <div class="stat-item">
-                                <div class="stat-label">Fully Cached</div>
+                                <div class="stat-label">{{ _('Fully Cached') }}</div>
                                 <div class="stat-value stat-success" id="stat-fully-cached">-</div>
                             </div>
                             <div class="stat-item">
-                                <div class="stat-label">Missing ABC</div>
+                                <div class="stat-label">{{ _('Missing ABC') }}</div>
                                 <div class="stat-value stat-warning" id="stat-missing-abc">-</div>
                             </div>
                             <div class="stat-item">
-                                <div class="stat-label">Missing Images</div>
+                                <div class="stat-label">{{ _('Missing Images') }}</div>
                                 <div class="stat-value stat-warning" id="stat-missing-images">-</div>
-                                <div class="stat-help">Have ABC but need image rendering</div>
+                                <div class="stat-help">{{ _('Have ABC but need image rendering') }}</div>
                             </div>
                             <div class="stat-item">
-                                <div class="stat-label">Not Yet Cached</div>
+                                <div class="stat-label">{{ _('Not Yet Cached') }}</div>
                                 <div class="stat-value stat-error" id="stat-missing-records">-</div>
-                                <div class="stat-help">Referenced but don't exist in tune_setting yet</div>
+                                <div class="stat-help">{{ _("Referenced but don't exist in tune_setting yet") }}</div>
                             </div>
                             <div class="stat-item">
-                                <div class="stat-label">Referenced Settings</div>
+                                <div class="stat-label">{{ _('Referenced Settings') }}</div>
                                 <div class="stat-value" id="stat-referenced">-</div>
-                                <div class="stat-help">Total settings used in tunebooks/sessions</div>
+                                <div class="stat-help">{{ _('Total settings used in tunebooks/sessions') }}</div>
                             </div>
                             <div class="stat-item">
-                                <div class="stat-label">Total Tunes</div>
+                                <div class="stat-label">{{ _('Total Tunes') }}</div>
                                 <div class="stat-value" id="stat-total-tunes">-</div>
                             </div>
                         </div>
@@ -54,26 +55,26 @@
                 </div>
 
                 <div class="cache-status" id="cache-status">
-                    <h3>Process Status</h3>
-                    <p id="status-text">Ready to cache missing settings.</p>
+                    <h3>{{ _('Process Status') }}</h3>
+                    <p id="status-text">{{ _('Ready to cache missing settings.') }}</p>
                 </div>
 
                 <div class="cache-controls">
                     <button id="run-cache-btn" class="btn btn-primary">
-                        Run Cache Process
+                        {{ _('Run Cache Process') }}
                     </button>
                     <button id="cancel-cache-btn" class="btn btn-secondary" style="display: none;">
-                        Cancel
+                        {{ _('Cancel') }}
                     </button>
                 </div>
 
                 <div class="cache-output" id="cache-output" style="display: none;">
-                    <h3>Output</h3>
+                    <h3>{{ _('Output') }}</h3>
                     <pre id="output-text" class="output-box"></pre>
                 </div>
 
                 <div class="cache-results" id="cache-results" style="display: none;">
-                    <h3>Results</h3>
+                    <h3>{{ _('Results') }}</h3>
                     <div id="results-summary"></div>
                 </div>
                 </div>
@@ -288,6 +289,27 @@
 </style>
 
 <script>
+const MSG = {
+    statsError: {{ _('Error loading statistics: {error}')|tojson }},
+    running: {{ _('Running cache process...')|tojson }},
+    done: {{ _('Cache process completed successfully!')|tojson }},
+    error: {{ _('Error: {error}')|tojson }},
+    cancelled: {{ _('Cancelled (process may still be running on server)')|tojson }},
+    totalProcessed: {{ _('Total processed:')|tojson }},
+    newlyCached: {{ _('Newly cached:')|tojson }},
+    fetched: {{ _('(fetched from thesession.org)')|tojson }},
+    abcUpdated: {{ _('ABC updated:')|tojson }},
+    imagesRendered: {{ _('Images rendered:')|tojson }},
+    usedCached: {{ _('(used cached ABC)')|tojson }},
+    alreadyCached: {{ _('Already cached:')|tojson }},
+    failed: {{ _('Failed:')|tojson }},
+    apiCalls: {{ _('API calls:')|tojson }},
+    apiCallsTo: {{ _('{n} to thesession.org')|tojson }},
+    time: {{ _('Time:')|tojson }},
+    minutes: {{ _('{n} minutes')|tojson }},
+    errors: {{ _('Errors:')|tojson }},
+    moreErrors: {{ js_ngettext('... and {n} more error', '... and {n} more errors')|tojson }},
+};
 let runCacheBtn = document.getElementById('run-cache-btn');
 let cancelCacheBtn = document.getElementById('cancel-cache-btn');
 let statusText = document.getElementById('status-text');
@@ -307,11 +329,11 @@ function loadStats() {
             if (data.success) {
                 displayStats(data.stats);
             } else {
-                document.getElementById('stats-loading').textContent = 'Error loading statistics: ' + data.error;
+                document.getElementById('stats-loading').textContent = MSG.statsError.replace('{error}', data.error);
             }
         })
         .catch(error => {
-            document.getElementById('stats-loading').textContent = 'Error loading statistics: ' + error.message;
+            document.getElementById('stats-loading').textContent = MSG.statsError.replace('{error}', error.message);
         });
 }
 
@@ -340,7 +362,7 @@ runCacheBtn.addEventListener('click', function() {
     cacheResults.style.display = 'none';
     resultsSummary.innerHTML = '';
 
-    statusText.textContent = 'Running cache process...';
+    statusText.textContent = MSG.running;
     statusText.className = 'running';
 
     runCacheBtn.disabled = true;
@@ -361,7 +383,7 @@ runCacheBtn.addEventListener('click', function() {
         cancelCacheBtn.style.display = 'none';
 
         if (data.success) {
-            statusText.textContent = 'Cache process completed successfully!';
+            statusText.textContent = MSG.done;
             statusText.className = 'success';
 
             // Display output
@@ -376,7 +398,7 @@ runCacheBtn.addEventListener('click', function() {
             // Reload statistics to show updated numbers
             loadStats();
         } else {
-            statusText.textContent = 'Error: ' + data.error;
+            statusText.textContent = MSG.error.replace('{error}', data.error);
             statusText.className = 'error';
             outputText.textContent = data.output || data.error;
         }
@@ -386,7 +408,7 @@ runCacheBtn.addEventListener('click', function() {
         runCacheBtn.disabled = false;
         cancelCacheBtn.style.display = 'none';
 
-        statusText.textContent = 'Error: ' + error.message;
+        statusText.textContent = MSG.error.replace('{error}', error.message);
         statusText.className = 'error';
         outputText.textContent = error.message;
     });
@@ -396,7 +418,7 @@ cancelCacheBtn.addEventListener('click', function() {
     if (currentRequest) {
         // Note: This won't actually cancel the server-side process,
         // but it will stop waiting for the response
-        statusText.textContent = 'Cancelled (process may still be running on server)';
+        statusText.textContent = MSG.cancelled;
         statusText.className = 'error';
         isRunning = false;
         runCacheBtn.disabled = false;
@@ -407,23 +429,23 @@ cancelCacheBtn.addEventListener('click', function() {
 function displayResults(results) {
     let html = '';
 
-    html += '<div class="result-stat"><strong>Total processed:</strong> ' + results.total + '</div>';
-    html += '<div class="result-stat"><strong>Newly cached:</strong> ' + results.cached + ' (fetched from thesession.org)</div>';
-    html += '<div class="result-stat"><strong>ABC updated:</strong> ' + results.abc_updated + ' (fetched from thesession.org)</div>';
-    html += '<div class="result-stat"><strong>Images rendered:</strong> ' + results.images_rendered + ' (used cached ABC)</div>';
-    html += '<div class="result-stat"><strong>Already cached:</strong> ' + results.already_cached + '</div>';
-    html += '<div class="result-stat"><strong>Failed:</strong> ' + results.failed + '</div>';
-    html += '<div class="result-stat"><strong>API calls:</strong> ' + results.api_calls + ' to thesession.org</div>';
-    html += '<div class="result-stat"><strong>Time:</strong> ' + results.time_minutes.toFixed(1) + ' minutes</div>';
+    html += '<div class="result-stat"><strong>' + MSG.totalProcessed + '</strong> ' + results.total + '</div>';
+    html += '<div class="result-stat"><strong>' + MSG.newlyCached + '</strong> ' + results.cached + ' ' + MSG.fetched + '</div>';
+    html += '<div class="result-stat"><strong>' + MSG.abcUpdated + '</strong> ' + results.abc_updated + ' ' + MSG.fetched + '</div>';
+    html += '<div class="result-stat"><strong>' + MSG.imagesRendered + '</strong> ' + results.images_rendered + ' ' + MSG.usedCached + '</div>';
+    html += '<div class="result-stat"><strong>' + MSG.alreadyCached + '</strong> ' + results.already_cached + '</div>';
+    html += '<div class="result-stat"><strong>' + MSG.failed + '</strong> ' + results.failed + '</div>';
+    html += '<div class="result-stat"><strong>' + MSG.apiCalls + '</strong> ' + MSG.apiCallsTo.replace('{n}', results.api_calls) + '</div>';
+    html += '<div class="result-stat"><strong>' + MSG.time + '</strong> ' + MSG.minutes.replace('{n}', results.time_minutes.toFixed(1)) + '</div>';
 
     if (results.errors && results.errors.length > 0) {
-        html += '<div class="result-stat" style="margin-top: 1rem;"><strong>Errors:</strong></div>';
+        html += '<div class="result-stat" style="margin-top: 1rem;"><strong>' + MSG.errors + '</strong></div>';
         html += '<ul style="margin-top: 0.5rem;">';
         results.errors.slice(0, 10).forEach(error => {
             html += '<li style="color: var(--secondary-text); font-size: 0.875rem;">' + error + '</li>';
         });
         if (results.errors.length > 10) {
-            html += '<li style="color: var(--secondary-text); font-size: 0.875rem;">... and ' + (results.errors.length - 10) + ' more errors</li>';
+            html += '<li style="color: var(--secondary-text); font-size: 0.875rem;">' + ceolPlural(MSG.moreErrors, results.errors.length - 10) + '</li>';
         }
         html += '</ul>';
     }

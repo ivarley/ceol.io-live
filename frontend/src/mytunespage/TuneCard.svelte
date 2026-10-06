@@ -4,6 +4,7 @@
 </script>
 
 <script>
+  // i18n-converted
   // One tune card. Emits the SAME markup/classes as the legacy renderer
   // (my_tunes_mobile.css + e2e selectors depend on them): a bare .tune-card on
   // desktop; on mobile a .tune-card-swipe-container wrapping the swipe action
@@ -11,8 +12,8 @@
   // `isMobile` is reactive (matchMedia in App), so rotating a tablet across the
   // 768px breakpoint re-renders the right variant — the legacy render-time
   // innerWidth check couldn't.
-  import { Chip } from '../lib/index.js'
-  import { STATUS_LABELS } from '../mylist.js'
+  import { Chip, t, tuneTypeName } from '../lib/index.js'
+  import { statusLabel } from '../mytunes/labels.js'
   import { memberPlays } from './logic.js'
 
   let {
@@ -40,11 +41,12 @@
   // A phone has room for one badge, so it shows the count the list is sorted by in
   // place of the type. A desktop row has a column for each count, so its chip is
   // always the type.
-  const chipLabel = $derived(isMobile ? typeLabel : tune.tune_type || '')
-  const chipTitle = $derived(isMobile ? typeTitle || typeLabel : tune.tune_type || '')
+  const typeName = $derived(tuneTypeName(tune.tune_type) || '')
+  const chipLabel = $derived(isMobile ? typeLabel : typeName)
+  const chipTitle = $derived(isMobile ? typeTitle || typeLabel : typeName)
   // The badge shows the page's wording ("To Learn"), never the stored value — which
   // stays 'want to learn' everywhere it's compared or sent.
-  const statusText = $derived(STATUS_LABELS[displayStatus] || displayStatus)
+  const statusText = $derived(statusLabel(displayStatus))
   const thesessionUrl = $derived(
     tune.tune_id
       ? tune.setting_id
@@ -147,16 +149,16 @@
     {#if chipLabel}<Chip label={chipLabel} styled={false} chipClass="tune-type" title={chipTitle} />{/if}
   </div>
   <div class="tune-card-header">
-    <h3 class="tune-name">{tune.tune_name || 'Unknown'}</h3>
+    <h3 class="tune-name">{tune.tune_name || t('Unknown')}</h3>
     <!-- This tune is here because its NOTATION matched, not its name — without the mark
          a notes search reads as a list of unrelated tunes. -->
-    {#if tune._abcOnly}<span class="abc-only-badge" title="Matched the notation, not the name">♪</span>{/if}
+    {#if tune._abcOnly}<span class="abc-only-badge" title={t('Matched the notation, not the name')}>♪</span>{/if}
     {#if tune.pending_sync}
       <Chip
-        label="pending"
+        label={t('pending')}
         styled={false}
         chipClass="pending-sync-badge"
-        title="Queued - will sync when you are back online"
+        title={t('Queued - will sync when you are back online')}
         style="flex:0 0 auto;white-space:nowrap;font-size:11px;font-weight:600;color:#b58900;" />
     {/if}
   </div>
@@ -170,24 +172,24 @@
   {#if !isMobile}
     <!-- Desktop only: the counts a phone can show just one of, as columns under the
          headings App renders above the list. The one the list is sorted by stands out. -->
-    <div class="tune-count tune-count-tunebooks" class:sorted={sortType === 'popularity'} title="TheSession.org tunebooks">
+    <div class="tune-count tune-count-tunebooks" class:sorted={sortType === 'popularity'} title={t('TheSession.org tunebooks')}>
       {tune.tunebook_count || 0}
     </div>
-    <div class="tune-count tune-count-plays" class:sorted={sortType === 'plays'} title="Times logged at my sessions">
+    <div class="tune-count tune-count-plays" class:sorted={sortType === 'plays'} title={t('Times logged at my sessions')}>
       {memberPlays(tune)}
     </div>
-    <div class="tune-count tune-count-heard" class:sorted={sortType === 'heard'} title="Times heard">
+    <div class="tune-count tune-count-heard" class:sorted={sortType === 'heard'} title={t('Times heard')}>
       {tune.heard_count || 0}
     </div>
   {/if}
   {#if displayStatus === 'want to learn'}
     <div class="heard-count-container">
       {#if tune.heard_count > 0}
-        <span>Heard at sessions:</span>
+        <span>{t('Heard at sessions:')}</span>
         <span class="heard-count">{tune.heard_count}</span>
         <button
           class="increment-heard-btn"
-          title="Increment heard count"
+          title={t('Increment heard count')}
           onclick={(e) => {
             e.stopPropagation()
             onincrement(tune)
@@ -195,12 +197,12 @@
       {:else}
         <button
           class="increment-heard-btn"
-          title="Mark as heard"
+          title={t('Mark as heard')}
           onclick={(e) => {
             e.stopPropagation()
             onincrement(tune)
           }}>+</button>
-        <span style="font-size: 12px;">Mark as heard</span>
+        <span style="font-size: 12px;">{t('Mark as heard')}</span>
       {/if}
     </div>
   {/if}
@@ -210,7 +212,7 @@
         href={thesessionUrl}
         target="_blank"
         class="tune-action-btn"
-        onclick={(e) => e.stopPropagation()}>View on TheSession.org</a>
+        onclick={(e) => e.stopPropagation()}>{t('View on TheSession.org')}</a>
     {/if}
   </div>
 {/snippet}

@@ -1,10 +1,12 @@
 <script>
-  import { Chip, LoadError } from './lib/index.js'
+  // i18n-converted
+  import { Chip, LoadError, t, tuneTypeName } from './lib/index.js'
+  import { pluralTypeName } from './livelabels.js'
   import { onDestroy, untrack, tick } from 'svelte'
   import { deepSearch, thesessionSearch, thesessionPreview, tunePreview } from './client.js'
   import Incipit from './Incipit.svelte'
   import TunePreview from './TunePreview.svelte'
-  import { pluralType, parseThesessionId, parseThesessionSettingId, historyStep } from './logstate.js'
+  import { parseThesessionId, parseThesessionSettingId, historyStep } from './logstate.js'
 
   // The deep-search body (spec 028): one shared component behind BOTH the mobile
   // full-screen modal and the desktop side pane, so local catalog search, the
@@ -18,9 +20,9 @@
     preferType = null, // the cursor set's type — a soft ranking preference, not a filter
     displayStatus = 'live', // gates the remote search (online-only)
     variant = 'pane', // 'modal' shows the Done header + autofocuses the field
-    title = 'Find a tune', // modal header text (the add pane says "Search for a tune")
+    title = t('Find a tune'), // modal header text (the add pane says "Search for a tune")
     allowAsIs = true, // "log as-is (unlinked)" escape — off for My Tunes (needs a catalog tune)
-    actionLabel = '＋ Log This Tune', // the preview's primary action (context-specific verb)
+    actionLabel = '＋ ' + t('Log This Tune'), // the preview's primary action (context-specific verb)
     dimOnList = false, // dim results already on the person's list (My Tunes add pane)
     dimInSession = false, // dim results already in the session's repertoire (session-tunes add pane)
     history = [], // page-local recall history (MRU, shared across pane + modal via the parent)
@@ -205,8 +207,8 @@
     if (deepMode !== next) { deepMode = next; runSearch() }
   }
   const toggleDeepFilters = () => { deepFilterOpen = !deepFilterOpen }
-  function setDeepType(t) {
-    deepType = deepType === t ? null : t
+  function setDeepType(ty) {
+    deepType = deepType === ty ? null : ty
     deepFilterOpen = false
     runSearch()
   }
@@ -304,7 +306,7 @@
     // keyed each, where a duplicate tune_id is fatal.
     const seen = new Set(deepResults.map((r) => r.tune_id))
     const r = await thesessionSearch(config, q, deepType)
-    tsResults = r.filter((t) => !seen.has(t.tune_id) && (seen.add(t.tune_id), true))
+    tsResults = r.filter((x) => !seen.has(x.tune_id) && (seen.add(x.tune_id), true))
     tsFailed = !!r.failed
     tsSearching = false
   }
@@ -339,7 +341,7 @@
     return true
   }
   function pasteThesession() {
-    if (!jumpToPasted(tsPasteUrl)) tsPasteError = 'Enter a thesession.org tune URL or numeric ID.'
+    if (!jumpToPasted(tsPasteUrl)) tsPasteError = t('Enter a thesession.org tune URL or numeric ID.')
   }
   // Runtime entry points for the long-lived PANE instance — the desktop twins of
   // mounting the modal with initialQuery / initialPreview (spec 032: on desktop the
@@ -428,7 +430,7 @@
 {#if variant === 'modal'}
   <div class="deep-head">
     <span class="deep-title">{title}</span>
-    <button class="deep-done" onclick={onClose}>Done</button>
+    <button class="deep-done" onclick={onClose}>{t('Done')}</button>
   </div>
 {/if}
 {#if notice}{@render notice()}{/if}
@@ -440,7 +442,7 @@
       aria-expanded={deepResults.length > 0}
       aria-controls="deep-results-list"
       aria-activedescendant={hl >= 0 ? `dres-${hl}` : undefined}
-      placeholder={deepMode === 'abc' ? 'Search by notes, e.g. GED or EBBA…' : deepMode === 'name' ? 'Search by name…' : 'Search by name or notes…'}
+      placeholder={deepMode === 'abc' ? t('Search by notes, e.g. GED or EBBA…') : deepMode === 'name' ? t('Search by name…') : t('Search by name or notes…')}
       bind:this={fieldEl}
       bind:value={deepQuery}
       oninput={onDeepInput}
@@ -451,10 +453,10 @@
       <!-- cancel out of search mode — same idle state an add leaves behind -->
       <!-- mousedown preventDefault keeps the field focused through the click (same as the
            composer's ×); the explicit focus covers touch, where no mousedown fires -->
-      <button class="deep-clear" title="Clear search" aria-label="Clear search" onmousedown={(e) => e.preventDefault()} onclick={() => { reset(); fieldEl?.focus() }}>×</button>
+      <button class="deep-clear" title={t('Clear search')} aria-label={t('Clear search')} onmousedown={(e) => e.preventDefault()} onclick={() => { reset(); fieldEl?.focus() }}>×</button>
     {/if}
   </div>
-  <button class="deep-filter-tab" class:active={deepFilterOpen || deepType != null || deepMode !== 'mixed'} title="Search filters" aria-label="Search filters" aria-expanded={deepFilterOpen} onclick={toggleDeepFilters}>
+  <button class="deep-filter-tab" class:active={deepFilterOpen || deepType != null || deepMode !== 'mixed'} title={t('Search filters')} aria-label={t('Search filters')} aria-expanded={deepFilterOpen} onclick={toggleDeepFilters}>
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/>
       <line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/>
@@ -466,13 +468,13 @@
 {#if deepFilterOpen}
   <div class="deep-filter-panel">
     <div class="deep-filter-modes">
-      <button class="deep-tab" class:active={deepMode === 'name'} onclick={() => setDeepMode('name')}>By name</button>
-      <button class="deep-tab" class:active={deepMode === 'abc'} onclick={() => setDeepMode('abc')}>By ABC</button>
+      <button class="deep-tab" class:active={deepMode === 'name'} onclick={() => setDeepMode('name')}>{t('By name')}</button>
+      <button class="deep-tab" class:active={deepMode === 'abc'} onclick={() => setDeepMode('abc')}>{t('By ABC')}</button>
     </div>
-    <select class="deep-type-select" aria-label="Tune type" value={deepType ?? ''} onchange={(e) => setDeepTypeSelect(e.currentTarget.value)}>
-      <option value="">Any tune type</option>
-      {#each DEEP_TYPES as t}
-        <option value={t}>{pluralType(t)}</option>
+    <select class="deep-type-select" aria-label={t('Tune type')} value={deepType ?? ''} onchange={(e) => setDeepTypeSelect(e.currentTarget.value)}>
+      <option value="">{t('Any tune type')}</option>
+      {#each DEEP_TYPES as ty}
+        <option value={ty}>{pluralTypeName(ty)}</option>
       {/each}
     </select>
   </div>
@@ -481,7 +483,7 @@
   <div class="deep-filters">
     {#if deepMode !== 'mixed'}
       <Chip
-        label={deepMode === 'abc' ? 'By ABC' : 'By name'}
+        label={deepMode === 'abc' ? t('By ABC') : t('By name')}
         dismissible
         styled={false}
         chipClass="filter-pill"
@@ -490,7 +492,7 @@
     {/if}
     {#if deepType}
       <Chip
-        label={pluralType(deepType)}
+        label={pluralTypeName(deepType)}
         dismissible
         styled={false}
         chipClass="filter-pill"
@@ -504,32 +506,32 @@
      real paste jumps on its own; this row is for a typed/edited one. -->
 {#if pastedId != null}
   {#if displayStatus === 'offline'}
-    <p class="deep-empty">You're offline — a thesession.org link can't be looked up until you reconnect.</p>
+    <p class="deep-empty">{t("You're offline — a thesession.org link can't be looked up until you reconnect.")}</p>
   {:else}
     <button class="deep-asis deep-asis-remote" onclick={() => jumpToPasted(deepQuery)}>
-      🔗 Open tune #{pastedId}{pastedSettingId != null ? ` (setting #${pastedSettingId})` : ''} from thesession.org
+      🔗 {pastedSettingId != null ? t('Open tune #{id} (setting #{setting}) from thesession.org', { id: pastedId, setting: pastedSettingId }) : t('Open tune #{id} from thesession.org', { id: pastedId })}
     </button>
   {/if}
 {:else}
   <!-- Extend the search to thesession.org (spec 026): explicit tap, online-only. Styled
        like "Log as-is" but blue; sits directly above it. -->
   {#if deepQuery.trim() && displayStatus !== 'offline' && !tsSearched}
-    <button class="deep-asis deep-asis-remote" onclick={runThesessionSearch}>🔎 Search on thesession.org for “{deepQuery.trim()}”</button>
+    <button class="deep-asis deep-asis-remote" onclick={runThesessionSearch}>🔎 {t('Search on thesession.org for “{q}”', { q: deepQuery.trim() })}</button>
   {/if}
   {#if allowAsIs && deepMode !== 'abc' && deepQuery.trim()}
-    <button class="deep-asis" onclick={deepLogAsIs}>＋ Log “{deepQuery.trim()}” as-is (unlinked)</button>
+    <button class="deep-asis" onclick={deepLogAsIs}>＋ {t('Log “{q}” as-is (unlinked)', { q: deepQuery.trim() })}</button>
   {/if}
 {/if}
 <div class="deep-results" id="deep-results-list" role="listbox" bind:this={resultsEl} ontouchstart={onResultsTouchStart} ontouchmove={onResultsTouchMove}>
   {#if deepLoading && !deepResults.length}
-    <p class="deep-empty">Searching…</p>
+    <p class="deep-empty">{t('Searching…')}</p>
   {:else if deepFailed && !deepResults.length}
-    <LoadError message="Couldn't search the tune catalog." onRetry={runSearch} />
+    <LoadError message={t("Couldn't search the tune catalog.")} onRetry={runSearch} />
   {:else if !deepResults.length}
     {#if variant === 'pane' && !deepQuery.trim()}
       <p class="deep-empty">
-        Search the tune catalog by name or ABC notes.
-        <a class="deep-empty-help" href="/help/session-tracking/live-logger" title="How to use the live logger">
+        {t('Search the tune catalog by name or ABC notes.')}
+        <a class="deep-empty-help" href="/help/session-tracking/live-logger" title={t('How to use the live logger')}>
           <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="10"></circle>
             <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
@@ -539,32 +541,34 @@
       </p>
     {:else if pastedId != null}
       <!-- A link, not a name: nothing local could match it, and the row above is the action. -->
-      <p class="deep-empty">That's a thesession.org tune link{pastedSettingId != null ? ' (with a setting)' : ''} — open it above to see the tune.</p>
+      <p class="deep-empty">{pastedSettingId != null ? t("That's a thesession.org tune link (with a setting) — open it above to see the tune.") : t("That's a thesession.org tune link — open it above to see the tune.")}</p>
     {:else}
-      <p class="deep-empty">No{deepType ? ` ${deepType.toLowerCase()}` : ''} tunes match{deepQuery.trim() ? ` “${deepQuery.trim()}”` : ''}.</p>
+      <p class="deep-empty">{deepType
+        ? (deepQuery.trim() ? t('No {type} tunes match “{q}”.', { type: tuneTypeName(deepType).toLowerCase(), q: deepQuery.trim() }) : t('No {type} tunes match.', { type: tuneTypeName(deepType).toLowerCase() }))
+        : (deepQuery.trim() ? t('No tunes match “{q}”.', { q: deepQuery.trim() }) : t('No tunes match.'))}</p>
     {/if}
   {:else}
     {#each deepResults as r, di (r.tune_id)}
       <!-- Two targets: the body opens the preview (look before you log); the ＋ rail
            adds in one tap for a tune you already recognize from the incipit. -->
       <div id="dres-{di}" class="deep-card deep-card-split" class:hl={hl === di} class:onlist={(dimOnList && r.on_list) || (dimInSession && r.in_session)} role="option" aria-selected={hl === di}>
-        <button class="deep-card-body" aria-label={`Preview ${r.name}`} onclick={() => openPreview(di)}>
+        <button class="deep-card-body" aria-label={t('Preview {name}', { name: r.name })} onclick={() => openPreview(di)}>
           <div class="deep-card-head">
             <span class="deep-name">{r.name}</span>
-            <span class="deep-type">{r.tune_type || ''}</span>
+            <span class="deep-type">{tuneTypeName(r.tune_type) || ''}</span>
           </div>
           <div class="deep-staff">
             <Incipit {config} tuneId={r.tune_id} image={r.incipit_image} canRender={r.can_render} />
           </div>
           <div class="deep-meta">
-            {#if r.abc_only}<span class="deep-badge">♪ notation</span>{/if}
-            {#if r.on_list}<span class="deep-badge star">★ on your list</span>{/if}
-            {#if r.in_session}<span class="deep-badge">in this session</span>{/if}
-            {#if r.played_here}<span class="deep-badge">played here {r.played_here}×</span>{/if}
-            <span class="deep-books">{r.tunebook_count ?? 0} tunebooks</span>
+            {#if r.abc_only}<span class="deep-badge">♪ {t('notation')}</span>{/if}
+            {#if r.on_list}<span class="deep-badge star">★ {t('on your list')}</span>{/if}
+            {#if r.in_session}<span class="deep-badge">{t('in this session')}</span>{/if}
+            {#if r.played_here}<span class="deep-badge">{t('played here {n}×', { n: r.played_here })}</span>{/if}
+            <span class="deep-books">{r.tunebook_count ?? 0} {t('tunebooks')}</span>
           </div>
         </button>
-        <button class="deep-quick" title="Add without previewing" aria-label={`Add ${r.name} without previewing`} onclick={() => pickDeep(r)}>＋</button>
+        <button class="deep-quick" title={t('Add without previewing')} aria-label={t('Add {name} without previewing', { name: r.name })} onclick={() => pickDeep(r)}>＋</button>
       </div>
     {/each}
   {/if}
@@ -573,39 +577,39 @@
 <!-- Remote results appear below the local ones once the search has been extended. -->
 {#if tsSearched}
   <div class="deep-remote">
-    <div class="deep-remote-head">From thesession.org</div>
+    <div class="deep-remote-head">{t('From thesession.org')}</div>
     {#if tsSearching}
-      <p class="deep-empty">Searching thesession.org…</p>
+      <p class="deep-empty">{t('Searching thesession.org…')}</p>
     {:else if tsFailed}
-      <LoadError message="Couldn't search thesession.org." onRetry={runThesessionSearch} />
+      <LoadError message={t("Couldn't search thesession.org.")} onRetry={runThesessionSearch} />
     {:else if !tsResults.length}
-      <p class="deep-empty">No new tunes on thesession.org for “{deepQuery.trim()}”.</p>
+      <p class="deep-empty">{t('No new tunes on thesession.org for “{q}”.', { q: deepQuery.trim() })}</p>
     {:else}
       {#each tsResults as r, ri (r.tune_id)}
         <div class="deep-card deep-card-split deep-remote-card" class:onlist={(dimOnList && r.on_list) || (dimInSession && r.in_session)}>
-          <button class="deep-card-body" aria-label={`Preview ${r.name}`} onclick={() => openPreview(deepResults.length + ri)}>
+          <button class="deep-card-body" aria-label={t('Preview {name}', { name: r.name })} onclick={() => openPreview(deepResults.length + ri)}>
             <div class="deep-card-head">
               <span class="deep-name">{r.name}</span>
-              <span class="deep-type">{r.tune_type || ''}</span>
+              <span class="deep-type">{tuneTypeName(r.tune_type) || ''}</span>
             </div>
             <div class="deep-meta">
               {#if r.alias}<span class="deep-alias">“{r.alias}”</span>{/if}
-              {#if r.is_local}<span class="deep-badge">already in library</span>{/if}
-              {#if r.in_session}<span class="deep-badge star">★ in this session</span>{/if}
-              {#if r.on_list}<span class="deep-badge star">★ on your list</span>{/if}
+              {#if r.is_local}<span class="deep-badge">{t('already in library')}</span>{/if}
+              {#if r.in_session}<span class="deep-badge star">★ {t('in this session')}</span>{/if}
+              {#if r.on_list}<span class="deep-badge star">★ {t('on your list')}</span>{/if}
             </div>
           </button>
-          <button class="deep-quick" title="Add without previewing" aria-label={`Add ${r.name} without previewing`} onclick={() => pickRemote(r)}>＋</button>
+          <button class="deep-quick" title={t('Add without previewing')} aria-label={t('Add {name} without previewing', { name: r.name })} onclick={() => pickRemote(r)}>＋</button>
         </div>
       {/each}
     {/if}
     <!-- Direct link entry, revealed once you've extended to thesession.org. -->
     <div class="deep-paste">
-      <input class="deep-paste-field" placeholder="Have a link? Paste a thesession.org URL or tune ID"
+      <input class="deep-paste-field" placeholder={t('Have a link? Paste a thesession.org URL or tune ID')}
              bind:value={tsPasteUrl}
              oninput={() => (tsPasteError = '')}
              onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); pasteThesession() } }} />
-      <button class="deep-paste-btn" disabled={!tsPasteUrl.trim()} onclick={pasteThesession}>Add</button>
+      <button class="deep-paste-btn" disabled={!tsPasteUrl.trim()} onclick={pasteThesession}>{t('Add')}</button>
     </div>
     {#if tsPasteError}<p class="deep-paste-error">{tsPasteError}</p>{/if}
   </div>

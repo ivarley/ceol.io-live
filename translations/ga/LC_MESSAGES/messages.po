@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-06 12:44+0530\n"
+"POT-Creation-Date: 2026-10-06 13:37+0530\n"
 "PO-Revision-Date: 2026-10-06 12:44+0530\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ga\n"
@@ -18,64 +18,4318 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: templates/hamburger_menu.html:21
+#: i18n.py:97
+#, review
+msgid "Reconnected"
+msgstr "Ceangailte arís"
+
+#: i18n.py:98
+#, review
+msgid "Syncing your changes..."
+msgstr "D'athruithe á sioncronú..."
+
+#: i18n.py:99
+#, review
+msgid "All changes synced"
+msgstr "Gach athrú sioncronaithe"
+
+#: i18n.py:100 templates/offline.html:30
+#, review
+msgid "You're offline"
+msgstr "Tá tú as líne"
+
+#: i18n.py:101 templates/offline.html:6
+#, review
+msgid "Offline"
+msgstr "As líne"
+
+#: i18n.py:102
+#, python-brace-format, review
+msgid "Offline for {time}"
+msgstr "As líne le {time}"
+
+#: i18n.py:104
+#, python-brace-format, review
+msgid "{n} change waiting to sync"
+msgid_plural "{n} changes waiting to sync"
+msgstr[0] "{n} athrú ag fanacht le sioncronú"
+msgstr[1] "{n} athrú ag fanacht le sioncronú"
+msgstr[2] "{n} athrú ag fanacht le sioncronú"
+msgstr[3] "{n} n-athrú ag fanacht le sioncronú"
+msgstr[4] "{n} athrú ag fanacht le sioncronú"
+
+#: i18n.py:106
+#, review
+msgid "No unsynced changes"
+msgstr "Níl aon athrú gan sioncronú"
+
+#: i18n.py:108
+#, python-brace-format, review
+msgid "QR code linking to {url}"
+msgstr "Cód QR a nascann le {url}"
+
+#: i18n.py:109
+#, review
+msgid "Copied"
+msgstr "Cóipeáilte"
+
+#: templates/about.html:4
+#, review
+msgid "About Ceol"
+msgstr "Eolas faoi Ceol"
+
+#: templates/about.html:21
+#, review
+msgid "A companion to thesession.org for players of Irish traditional music. It keeps track of the tunes you know, the sessions you play at, and what was actually played on the night."
+msgstr "Compánach le thesession.org do sheinnteoirí ceoil thraidisiúnta na hÉireann. Coinníonn sé cuntas ar na foinn atá ar eolas agat, ar na seisiúin ina seinneann tú, agus ar a seinneadh i ndáiríre ar an oíche."
+
+#: templates/about.html:28
+#, review
+msgid "Your profile"
+msgstr "Do phróifíl"
+
+#: templates/about.html:33
+#, review
+msgid "Log in or register"
+msgstr "Sínigh isteach nó cláraigh"
+
+#: templates/about.html:39
+#, review
+msgid "How Ceol works"
+msgstr "Conas a oibríonn Ceol"
+
+#: templates/about.html:47
+#, review
+msgid "where the tunes come from"
+msgstr "foinse na bhfonn"
+
+#: templates/admin_activity.html:4
+#, review
+msgid "Admin - Activity"
+msgstr "Riarachán - Gníomhaíocht"
+
+#: templates/admin_activity.html:16 templates/admin_activity.html:47
+#, review
+msgid "All"
+msgstr "Uile"
+
+#: templates/admin_activity.html:18 templates/admin_home.html:15
+#: templates/admin_tabs.html:9 templates/admin_tabs.html:36
+#: templates/admin_tabs.html:89 templates/admin_tunes.html:73
+#: templates/festival.html:3 templates/hamburger_menu.html:34
+#: templates/hamburger_menu.html:63 templates/header_nav.html:16
+#: templates/session_admin_person.html:15 templates/sessions.html:3
+#: templates/tab_bar.html:42
+msgid "Sessions"
+msgstr "Seisiúin"
+
+#: templates/admin_activity.html:20 templates/admin_home.html:17
+#: templates/admin_tabs.html:12 templates/admin_tabs.html:51
+#: templates/admin_tabs.html:98
+#, review
+msgid "People"
+msgstr "Daoine"
+
+#: templates/admin_activity.html:22 templates/admin_home.html:16
+#: templates/admin_tabs.html:10 templates/admin_tabs.html:41
+#: templates/admin_tabs.html:92 templates/hamburger_menu.html:36
+#: templates/hamburger_menu.html:65 templates/header_nav.html:21
+#: templates/header_nav.html:30 templates/my_tunes.html:3
+#: templates/session_instance_players.html:104 templates/tab_bar.html:51
+#: templates/tab_bar.html:70 templates/tunes.html:3 templates/tunes.html:5
+msgid "Tunes"
+msgstr "Foinn"
+
+#: templates/admin_activity.html:24
+#, review
+msgid "Logs"
+msgstr "Logálacha"
+
+#: templates/admin_activity.html:26
+#, review
+msgid "Logins"
+msgstr "Sínithe isteach"
+
+#: templates/admin_activity.html:36
+#, review
+msgid "Time Period"
+msgstr "Tréimhse"
+
+#: templates/admin_activity.html:38
+#, review
+msgid "Last Hour"
+msgstr "An uair dheireanach"
+
+#: templates/admin_activity.html:39
+#, review
+msgid "Last 24 Hours"
+msgstr "Na 24 uair dheireanacha"
+
+#: templates/admin_activity.html:40
+#, review
+msgid "Last Week"
+msgstr "An tseachtain seo caite"
+
+#: templates/admin_activity.html:41
+#, review
+msgid "Last Month"
+msgstr "An mhí seo caite"
+
+#: templates/admin_activity.html:45 templates/admin_activity.html:83
+#: templates/admin_activity.html:117 templates/admin_home.html:18
+#: templates/admin_tabs.html:14 templates/admin_tabs.html:61
+#: templates/admin_tabs.html:104
+#, review
+msgid "Activity"
+msgstr "Gníomhaíocht"
+
+#: templates/admin_activity.html:49 templates/admin_activity.html:83
+#, review
+msgid "Active Sessions"
+msgstr "Seisiúin ghníomhacha"
+
+#: templates/admin_activity.html:50
+#, review
+msgid "Login Success"
+msgstr "Síniú isteach rathúil"
+
+#: templates/admin_activity.html:51
+#, review
+msgid "Login Failure"
+msgstr "Síniú isteach teipthe"
+
+#: templates/admin_activity.html:52
+#, review
+msgid "Logout"
+msgstr "Síniú amach"
+
+#: templates/admin_activity.html:53
+#, review
+msgid "Password Reset"
+msgstr "Athshocrú pasfhocail"
+
+#: templates/admin_activity.html:55
+#, review
+msgid "Created"
+msgstr "Cruthaithe"
+
+#: templates/admin_activity.html:56
+#, review
+msgid "Modified"
+msgstr "Athraithe"
+
+#: templates/admin_activity.html:61 templates/admin_recordings.html:51
+#, review
+msgid "Session"
+msgstr "Seisiún"
+
+#: templates/admin_activity.html:63
+#, review
+msgid "All Sessions"
+msgstr "Gach seisiún"
+
+#: templates/admin_activity.html:70 templates/admin_activity.html:118
+#, review
+msgid "User"
+msgstr "Úsáideoir"
+
+#: templates/admin_activity.html:72
+#, review
+msgid "Search username..."
+msgstr "Cuardaigh ainm úsáideora..."
+
+#: templates/admin_activity.html:75
+#, review
+msgid "Filter"
+msgstr "Scag"
+
+#: templates/admin_activity.html:84
+#, python-format, review
+msgid "%(num)d entry"
+msgid_plural "%(num)d entries"
+msgstr[0] "%(num)d iontráil"
+msgstr[1] "%(num)d iontráil"
+msgstr[2] "%(num)d iontráil"
+msgstr[3] "%(num)d n-iontráil"
+msgstr[4] "%(num)d iontráil"
+
+#: templates/admin_activity.html:93
+#, review
+msgid "Login Time"
+msgstr "Am sínithe isteach"
+
+#: templates/admin_activity.html:94 templates/admin_activity.html:116
+#: templates/admin_sessions_list.html:26 templates/admin_tunes.html:71
+#: templates/db_test.html:15 templates/session_bulk_import.html:105
+#, review
+msgid "Name"
+msgstr "Ainm"
+
+#: templates/admin_activity.html:95 templates/auth/register.html:69
+#, review
+msgid "Username"
+msgstr "Ainm úsáideora"
+
+#: templates/admin_activity.html:96
+#, review
+msgid "Duration"
+msgstr "Fad"
+
+#: templates/admin_activity.html:97
+#, review
+msgid "IP Address"
+msgstr "Seoladh IP"
+
+#: templates/admin_activity.html:114 templates/admin_activity.html:396
+#, review
+msgid "Timestamp"
+msgstr "Stampa ama"
+
+#: templates/admin_activity.html:115 templates/admin_tunes.html:72
+#, review
+msgid "Type"
+msgstr "Cineál"
+
+#: templates/admin_activity.html:119
+#, review
+msgid "History"
+msgstr "Stair"
+
+#: templates/admin_activity.html:149
+#, review
+msgid "View history"
+msgstr "Féach ar an stair"
+
+#: templates/admin_activity.html:163
+#, review
+msgid "Activity pagination"
+msgstr "Leathanaigh na gníomhaíochta"
+
+#: templates/admin_activity.html:168
+#, review
+msgid "Previous"
+msgstr "Roimhe seo"
+
+#: templates/admin_activity.html:194 templates/auth/login.html:40
+#, review
+msgid "Next"
+msgstr "Ar aghaidh"
+
+#: templates/admin_activity.html:204
+#, review
+msgid "No Activity"
+msgstr "Gan ghníomhaíocht"
+
+#: templates/admin_activity.html:205
+#, review
+msgid "No activity found for the selected criteria."
+msgstr "Níor aimsíodh gníomhaíocht ar bith do na critéir a roghnaíodh."
+
+#: templates/admin_activity.html:218
+#, review
+msgid "Change History"
+msgstr "Stair na n-athruithe"
+
+#: templates/admin_activity.html:219 templates/auth/change_password.html:21
+#: templates/auth/forgot_password.html:21 templates/auth/login.html:21
+#: templates/auth/login.html:114 templates/auth/register.html:49
+#: templates/auth/resend_verification.html:21
+#: templates/auth/reset_password.html:21 templates/auth/set_password.html:21
+#: templates/auth/set_password.html:61 templates/auth/setup_profile.html:21
+#: templates/base.html:502 templates/home.html:73
+#: templates/modals/person_edit.html:8 templates/modals/person_edit.html:73
+#: templates/session_admin_person.html:431
+#, review
+msgid "Close"
+msgstr "Dún"
+
+#: templates/admin_activity.html:223 templates/admin_activity.html:392
+#: templates/admin_tune_merge.html:590
+#, review
+msgid "Loading..."
+msgstr "Á lódáil..."
+
+#: templates/admin_activity.html:393
+#, review
+msgid "Failed to load history"
+msgstr "Níorbh fhéidir an stair a lódáil"
+
+#: templates/admin_activity.html:394
+#, python-brace-format, review
+msgid "Error loading history: {error}"
+msgstr "Earráid agus an stair á lódáil: {error}"
+
+#: templates/admin_activity.html:395
+#, review
+msgid "No history records found."
+msgstr "Níor aimsíodh taifead staire ar bith."
+
+#: templates/admin_activity.html:397
+#, review
+msgid "Operation"
+msgstr "Oibríocht"
+
+#: templates/admin_activity.html:398
+#, review
+msgid "Changed By"
+msgstr "Athraithe ag"
+
+#: templates/admin_activity.html:399
+#, review
+msgid "System"
+msgstr "An córas"
+
+#: templates/admin_cache_settings.html:4 templates/admin_test_links.html:114
+#, review
+msgid "Admin - Cache Settings"
+msgstr "Riarachán - Socruithe taisce"
+
+#: templates/admin_cache_settings.html:14
+#, review
+msgid "Cache Missing Settings"
+msgstr "Cuir Leaganacha ar Iarraidh sa Taisce"
+
+#: templates/admin_cache_settings.html:15
+#, review
+msgid "This tool caches missing tune settings from thesession.org, including ABC notation and rendered images."
+msgstr "Cuireann an uirlis seo leaganacha fonn atá ar iarraidh ó thesession.org sa taisce, nodaireacht ABC agus íomhánna rindreáilte san áireamh."
+
+#: templates/admin_cache_settings.html:18
+#, review
+msgid "Current Cache Status"
+msgstr "Staid Reatha na Taisce"
+
+#: templates/admin_cache_settings.html:19
+#, review
+msgid "Loading statistics..."
+msgstr "Staitisticí á lódáil..."
+
+#: templates/admin_cache_settings.html:23
+#, review
+msgid "Total Settings"
+msgstr "Leaganacha san Iomlán"
+
+#: templates/admin_cache_settings.html:27
+#, review
+msgid "Fully Cached"
+msgstr "Go hIomlán sa Taisce"
+
+#: templates/admin_cache_settings.html:31
+#, review
+msgid "Missing ABC"
+msgstr "ABC ar Iarraidh"
+
+#: templates/admin_cache_settings.html:35
+#, review
+msgid "Missing Images"
+msgstr "Íomhánna ar Iarraidh"
+
+#: templates/admin_cache_settings.html:37
+#, review
+msgid "Have ABC but need image rendering"
+msgstr "ABC acu ach íomhá le rindreáil"
+
+#: templates/admin_cache_settings.html:40
+#, review
+msgid "Not Yet Cached"
+msgstr "Níl sa Taisce Fós"
+
+#: templates/admin_cache_settings.html:42
+#, review
+msgid "Referenced but don't exist in tune_setting yet"
+msgstr "Tagraítear dóibh ach níl siad in tune_setting fós"
+
+#: templates/admin_cache_settings.html:45
+#, review
+msgid "Referenced Settings"
+msgstr "Leaganacha a dTagraítear Dóibh"
+
+#: templates/admin_cache_settings.html:47
+#, review
+msgid "Total settings used in tunebooks/sessions"
+msgstr "Iomlán na leaganacha a úsáidtear i leabhair fonn/seisiúin"
+
+#: templates/admin_cache_settings.html:50
+#, review
+msgid "Total Tunes"
+msgstr "Foinn san Iomlán"
+
+#: templates/admin_cache_settings.html:58
+#, review
+msgid "Process Status"
+msgstr "Staid an Phróisis"
+
+#: templates/admin_cache_settings.html:59
+#, review
+msgid "Ready to cache missing settings."
+msgstr "Réidh chun leaganacha atá ar iarraidh a chur sa taisce."
+
+#: templates/admin_cache_settings.html:64
+#, review
+msgid "Run Cache Process"
+msgstr "Rith an Próiseas Taisce"
+
+#: templates/admin_cache_settings.html:67 templates/admin_tune_merge.html:78
+#: templates/admin_tune_merge.html:105 templates/auth/change_password.html:55
+#: templates/modals/person_edit.html:60 templates/modals/person_edit.html:115
+#: templates/session_admin_person.html:332
+#: templates/session_admin_person.html:445
+#, review
+msgid "Cancel"
+msgstr "Cealaigh"
+
+#: templates/admin_cache_settings.html:72
+#, review
+msgid "Output"
+msgstr "Aschur"
+
+#: templates/admin_cache_settings.html:77
+#, review
+msgid "Results"
+msgstr "Torthaí"
+
+#: templates/admin_cache_settings.html:293
+#, python-brace-format, review
+msgid "Error loading statistics: {error}"
+msgstr "Earráid ag lódáil staitisticí: {error}"
+
+#: templates/admin_cache_settings.html:294
+#, review
+msgid "Running cache process..."
+msgstr "An próiseas taisce ag rith..."
+
+#: templates/admin_cache_settings.html:295
+#, review
+msgid "Cache process completed successfully!"
+msgstr "D'éirigh leis an bpróiseas taisce!"
+
+#: templates/admin_cache_settings.html:296
+#, python-brace-format, review
+msgid "Error: {error}"
+msgstr "Earráid: {error}"
+
+#: templates/admin_cache_settings.html:297
+#, review
+msgid "Cancelled (process may still be running on server)"
+msgstr "Cealaithe (d'fhéadfadh an próiseas a bheith ag rith ar an bhfreastalaí fós)"
+
+#: templates/admin_cache_settings.html:298
+#, review
+msgid "Total processed:"
+msgstr "Próiseáilte san iomlán:"
+
+#: templates/admin_cache_settings.html:299
+#, review
+msgid "Newly cached:"
+msgstr "Nua sa taisce:"
+
+#: templates/admin_cache_settings.html:300
+#, review
+msgid "(fetched from thesession.org)"
+msgstr "(faighte ó thesession.org)"
+
+#: templates/admin_cache_settings.html:301
+#, review
+msgid "ABC updated:"
+msgstr "ABC nuashonraithe:"
+
+#: templates/admin_cache_settings.html:302
+#, review
+msgid "Images rendered:"
+msgstr "Íomhánna rindreáilte:"
+
+#: templates/admin_cache_settings.html:303
+#, review
+msgid "(used cached ABC)"
+msgstr "(ABC ón taisce in úsáid)"
+
+#: templates/admin_cache_settings.html:304
+#, review
+msgid "Already cached:"
+msgstr "Sa taisce cheana:"
+
+#: templates/admin_cache_settings.html:305
+#, review
+msgid "Failed:"
+msgstr "Theip:"
+
+#: templates/admin_cache_settings.html:306
+#, review
+msgid "API calls:"
+msgstr "Glaonna API:"
+
+#: templates/admin_cache_settings.html:307
+#, python-brace-format, review
+msgid "{n} to thesession.org"
+msgstr "{n} chuig thesession.org"
+
+#: templates/admin_cache_settings.html:308 templates/base.html:806
+#: templates/base.html:810
+#, review
+msgid "Time:"
+msgstr "Am:"
+
+#: templates/admin_cache_settings.html:309
+#, python-brace-format, review
+msgid "{n} minutes"
+msgstr "{n} nóiméad"
+
+#: templates/admin_cache_settings.html:310
+#, review
+msgid "Errors:"
+msgstr "Earráidí:"
+
+#: templates/admin_cache_settings.html:311
+#, python-brace-format, review
+msgid "... and {n} more error"
+msgid_plural "... and {n} more errors"
+msgstr[0] "... agus {n} earráid eile"
+msgstr[1] "... agus {n} earráid eile"
+msgstr[2] "... agus {n} earráid eile"
+msgstr[3] "... agus {n} n-earráid eile"
+msgstr[4] "... agus {n} earráid eile"
+
+#: templates/admin_email_updates.html:4
+#, review
+msgid "Admin - Email Updates"
+msgstr "Riarachán - Nuashonruithe ríomhphoist"
+
+#: templates/admin_email_updates.html:13
+#, review
+msgid "Send App Updates"
+msgstr "Seol nuashonruithe faoin aip"
+
+#: templates/admin_email_updates.html:15
+#, python-format, review
+msgid "<strong>%(num)d</strong> user is opted in to update emails."
+msgid_plural "<strong>%(num)d</strong> users are opted in to update emails."
+msgstr[0] "Tá <strong>%(num)d</strong> úsáideoir liostáilte do ríomhphoist nuashonraithe."
+msgstr[1] "Tá <strong>%(num)d</strong> úsáideoir liostáilte do ríomhphoist nuashonraithe."
+msgstr[2] "Tá <strong>%(num)d</strong> úsáideoir liostáilte do ríomhphoist nuashonraithe."
+msgstr[3] "Tá <strong>%(num)d</strong> n-úsáideoir liostáilte do ríomhphoist nuashonraithe."
+msgstr[4] "Tá <strong>%(num)d</strong> úsáideoir liostáilte do ríomhphoist nuashonraithe."
+
+#: templates/admin_email_updates.html:16
+#, python-format, review
+msgid "Messages are sent from %(address)s with a personalized unsubscribe link."
+msgstr "Seoltar teachtaireachtaí ó %(address)s le nasc pearsanta díliostála."
+
+#: templates/admin_email_updates.html:21 templates/admin_email_updates.html:49
+#, review
+msgid "Subject"
+msgstr "Ábhar"
+
+#: templates/admin_email_updates.html:25
+#, review
+msgid "Message"
+msgstr "Teachtaireacht"
+
+#: templates/admin_email_updates.html:27
+#, review
+msgid "# Heading"
+msgstr "# Ceannteideal"
+
+#: templates/admin_email_updates.html:27
+#, review
+msgid "What's new..."
+msgstr "Cad atá nua..."
+
+#: templates/admin_email_updates.html:29
+#, review
+msgid "Markdown is supported (headings, <em>emphasis</em>, links, lists)."
+msgstr "Is féidir Markdown a úsáid (ceannteidil, <em>béim</em>, naisc, liostaí)."
+
+#: templates/admin_email_updates.html:30
+#, review
+msgid "The plain-text version of the email is the raw Markdown."
+msgstr "Is é an Markdown lom leagan gnáth-théacs an ríomhphoist."
+
+#: templates/admin_email_updates.html:34
+#, review
+msgid "Send test to me"
+msgstr "Seol tástáil chugam"
+
+#: templates/admin_email_updates.html:36
+#, python-format, review
+msgid "Send to %(num)d recipient"
+msgid_plural "Send to %(num)d recipients"
+msgstr[0] "Seol chuig %(num)d faighteoir"
+msgstr[1] "Seol chuig %(num)d fhaighteoir"
+msgstr[2] "Seol chuig %(num)d fhaighteoir"
+msgstr[3] "Seol chuig %(num)d bhfaighteoir"
+msgstr[4] "Seol chuig %(num)d faighteoir"
+
+#: templates/admin_email_updates.html:42
+#, review
+msgid "Past Messages"
+msgstr "Teachtaireachtaí roimhe seo"
+
+#: templates/admin_email_updates.html:48 templates/admin_recordings.html:59
+#: templates/session_admin_person.html:358
+#, review
+msgid "Date"
+msgstr "Dáta"
+
+#: templates/admin_email_updates.html:50
+#, review
+msgid "Sent By"
+msgstr "Seolta ag"
+
+#: templates/admin_email_updates.html:51
+#, review
+msgid "Sent"
+msgstr "Seolta"
+
+#: templates/admin_email_updates.html:52
+#, review
+msgid "Failed"
+msgstr "Theip"
+
+#: templates/admin_email_updates.html:82
+#, review
+msgid "No messages sent yet."
+msgstr "Níor seoladh teachtaireacht ar bith fós."
+
+#: templates/admin_email_updates.html:91
+#, review
+msgid "Subject and message are both required."
+msgstr "Teastaíonn ábhar agus teachtaireacht araon."
+
+#: templates/admin_email_updates.html:92
+#, review
+msgid "Network error — please try again."
+msgstr "Earráid líonra — bain triail eile as."
+
+#: templates/admin_email_updates.html:93
+#, review
+msgid "Sending test..."
+msgstr "Tástáil á seoladh..."
+
+#: templates/admin_email_updates.html:94
+#, review
+msgid "Test sent."
+msgstr "Tástáil seolta."
+
+#: templates/admin_email_updates.html:95
+#, review
+msgid "Test send failed."
+msgstr "Theip ar sheoladh na tástála."
+
+#: templates/admin_email_updates.html:96
+#, python-brace-format, review
+msgid "Send this message to {n} recipient? This cannot be undone."
+msgid_plural "Send this message to {n} recipients? This cannot be undone."
+msgstr[0] "An seolfar an teachtaireacht seo chuig {n} faighteoir? Ní féidir é seo a chealú."
+msgstr[1] "An seolfar an teachtaireacht seo chuig {n} fhaighteoir? Ní féidir é seo a chealú."
+msgstr[2] "An seolfar an teachtaireacht seo chuig {n} fhaighteoir? Ní féidir é seo a chealú."
+msgstr[3] "An seolfar an teachtaireacht seo chuig {n} bhfaighteoir? Ní féidir é seo a chealú."
+msgstr[4] "An seolfar an teachtaireacht seo chuig {n} faighteoir? Ní féidir é seo a chealú."
+
+#: templates/admin_email_updates.html:97 templates/auth/forgot_password.html:37
+#: templates/auth/resend_verification.html:37
+#, review
+msgid "Sending..."
+msgstr "Á sheoladh..."
+
+#: templates/admin_email_updates.html:98
+#, python-brace-format, review
+msgid "Sent to {sent} of {total} recipients ({failed} failed). Reloading..."
+msgstr "Seolta chuig {sent} as {total} faighteoir (theip ar {failed}). Á athlódáil..."
+
+#: templates/admin_email_updates.html:99
+#, review
+msgid "Send failed."
+msgstr "Theip ar an seoladh."
+
+#: templates/admin_home.html:4 templates/admin_tabs.html:5
+#: templates/hamburger_menu.html:42 templates/session_admin_person.html:13
+msgid "Admin"
+msgstr "Riarachán"
+
+#: templates/admin_home.html:13
+#, review
+msgid "Select a section:"
+msgstr "Roghnaigh rannán:"
+
+#: templates/admin_home.html:19 templates/admin_tabs.html:15
+#: templates/admin_tabs.html:66 templates/admin_tabs.html:107
+#: templates/admin_test_links.html:13
+#, review
+msgid "Test Links"
+msgstr "Naisc Tástála"
+
+#: templates/admin_home.html:20 templates/admin_tabs.html:16
+#: templates/admin_tabs.html:71 templates/admin_tabs.html:110
+#, review
+msgid "Cache Settings"
+msgstr "Socruithe taisce"
+
+#: templates/admin_home.html:21 templates/admin_tabs.html:18
+#: templates/admin_tabs.html:81 templates/admin_tabs.html:116
+#, review
+msgid "Recordings"
+msgstr "Taifeadtaí"
+
+#: templates/admin_people.html:4 templates/admin_test_links.html:101
+#, review
+msgid "Admin - People"
+msgstr "Riarachán - Daoine"
+
+#: templates/admin_places.html:4
+#, review
+msgid "Admin - Places"
+msgstr "Riarachán - Áiteanna"
+
+#: templates/admin_recordings.html:4
+#, review
+msgid "Admin - Recordings"
+msgstr "Riarachán - Taifeadtaí"
+
+#: templates/admin_recordings.html:33
+#, review
+msgid "Upload a recording"
+msgstr "Uaslódáil taifeadadh"
+
+#: templates/admin_recordings.html:35
+#, review
+msgid "unavailable"
+msgstr "níl sé ar fáil"
+
+#: templates/admin_recordings.html:41
+#, review
+msgid "Pick the night this audio is from, choose the file, and it uploads straight to object storage. Building the waveform and the playback proxy then takes a few minutes on a long recording — the row appears immediately and fills itself in. A large backlog is still faster from the command line:"
+msgstr "Roghnaigh an oíche lena mbaineann an fhuaim seo, roghnaigh an comhad, agus uaslódálfar é díreach chuig an stóras réad. Tógann sé cúpla nóiméad ansin an tonnchruth agus an leagan seinnte a dhéanamh do thaifeadadh fada — feictear an líne láithreach agus líonann sí í féin. Is tapúla fós carn mór a dhéanamh ón líne ordaithe:"
+
+#: templates/admin_recordings.html:47
+#, python-format, review
+msgid "Uploading is unavailable: %(problem)s."
+msgstr "Níl uaslódáil ar fáil: %(problem)s."
+
+#: templates/admin_recordings.html:53
+#, review
+msgid "Choose a session…"
+msgstr "Roghnaigh seisiún…"
+
+#: templates/admin_recordings.html:61 templates/admin_recordings.html:785
+#, review
+msgid "Choose a session first"
+msgstr "Roghnaigh seisiún ar dtús"
+
+#: templates/admin_recordings.html:64
+#, review
+msgid "Audio file"
+msgstr "Comhad fuaime"
+
+#: templates/admin_recordings.html:70
+#, review
+msgid "Label"
+msgstr "Lipéad"
+
+#: templates/admin_recordings.html:71
+#, review
+msgid "Optional — defaults to the session name and date"
+msgstr "Roghnach — ainm agus dáta an tseisiúin mura dtugtar é"
+
+#: templates/admin_recordings.html:73
+#, review
+msgid "Started at"
+msgstr "Tosaithe ag"
+
+#: templates/admin_recordings.html:77
+#, review
+msgid "Optional. Wall-clock time of the very start of the file, in this browser's timezone. Only needed to line the audio up against absolute timestamps."
+msgstr "Roghnach. An t-am ar an gclog ag tús an chomhaid, i gcrios ama an bhrabhsálaí seo. Níl gá leis ach chun an fhuaim a ailíniú le stampaí ama iomlána."
+
+#: templates/admin_recordings.html:83
+#, review
+msgid "Upload"
+msgstr "Uaslódáil"
+
+#: templates/admin_recordings.html:108
+#, review
+msgid "Session recordings"
+msgstr "Taifeadtaí seisiúin"
+
+#: templates/admin_recordings.html:110
+#, review
+msgid "Audio files with tune timestamps, the training corpus for tune recognition (spec 050)."
+msgstr "Comhaid fuaime le stampaí ama na bhfonn, an corpas traenála d'aithint fonn (spec 050)."
+
+#: templates/admin_recordings.html:112
+#, python-format, review
+msgid "<strong>%(num)d</strong> recording is waiting on you."
+msgid_plural "<strong>%(num)d</strong> recordings are waiting on you."
+msgstr[0] "Tá <strong>%(num)d</strong> taifeadadh ag fanacht ort."
+msgstr[1] "Tá <strong>%(num)d</strong> thaifeadadh ag fanacht ort."
+msgstr[2] "Tá <strong>%(num)d</strong> thaifeadadh ag fanacht ort."
+msgstr[3] "Tá <strong>%(num)d</strong> dtaifeadadh ag fanacht ort."
+msgstr[4] "Tá <strong>%(num)d</strong> taifeadadh ag fanacht ort."
+
+#: templates/admin_recordings.html:114
+#, review
+msgid "Nothing is waiting on you."
+msgstr "Níl aon rud ag fanacht ort."
+
+#: templates/admin_recordings.html:119
+#, review
+msgid "No recordings imported yet."
+msgstr "Níor iompórtáladh aon taifeadadh fós."
+
+#: templates/admin_recordings.html:137
+#, python-format, review
+msgid "recording %(id)s"
+msgstr "taifeadadh %(id)s"
+
+#: templates/admin_recordings.html:165
+#, review
+msgid "anchor"
+msgstr "ancaire"
+
+#: templates/admin_recordings.html:169
+#, review
+msgid "session"
+msgstr "seisiún"
+
+#: templates/admin_recordings.html:174
+#, review
+msgid "No log yet — segmenting writes one, a tune per mark"
+msgstr "Níl logáil ann fós — scríobhann an deighilt ceann, fonn in aghaidh gach mairc"
+
+#: templates/admin_recordings.html:179 templates/admin_recordings.html:184
+#, python-format, review
+msgid "%(placed)s of %(total)s tunes placed"
+msgstr "%(placed)s as %(total)s fonn suite"
+
+#: templates/admin_recordings.html:184
+#, review
+msgid "rest isn't in this audio"
+msgstr "níl an chuid eile san fhuaim seo"
+
+#: templates/admin_recordings.html:199
+#, review
+msgid "Processing…"
+msgstr "Á phróiseáil…"
+
+#: templates/admin_recordings.html:201
+#, python-format, review
+msgid "Ingest failed: %(detail)s"
+msgstr "Theip ar an bpróiseáil: %(detail)s"
+
+#: templates/admin_recordings.html:201 templates/admin_recordings.html:797
+#, review
+msgid "no detail recorded"
+msgstr "níor taifeadadh aon sonra"
+
+#: templates/admin_recordings.html:209
+#, review
+msgid "Segment"
+msgstr "Deighil"
+
+#: templates/admin_recordings.html:209
+#, review
+msgid "Log & segment"
+msgstr "Logáil agus deighil"
+
+#: templates/admin_recordings.html:211 templates/admin_recordings.html:811
+#, review
+msgid "Retry"
+msgstr "Triail arís"
+
+#: templates/admin_recordings.html:215
+#, review
+msgid "Export"
+msgstr "Easpórtáil"
+
+#: templates/admin_recordings.html:225
+#, review
+msgid "Reopen"
+msgstr "Athoscail"
+
+#: templates/admin_recordings.html:229
+#, review
+msgid "Everything this audio contains is already placed — stop counting the rest against it"
+msgstr "Tá gach a bhfuil san fhuaim seo suite cheana — ná háirigh an chuid eile ina coinne"
+
+#: templates/admin_recordings.html:229
+#, review
+msgid "Mark done"
+msgstr "Marcáil críochnaithe"
+
+#: templates/admin_recordings.html:235 templates/admin_recordings.html:821
+#, review
+msgid "Delete"
+msgstr "Scrios"
+
+#: templates/admin_recordings.html:784
+#, review
+msgid "Loading…"
+msgstr "Á lódáil…"
+
+#: templates/admin_recordings.html:786
+#, review
+msgid "Could not load dates"
+msgstr "Níorbh fhéidir na dátaí a lódáil"
+
+#: templates/admin_recordings.html:787
+#, review
+msgid "This session has no logged nights"
+msgstr "Níl aon oíche logáilte ag an seisiún seo"
+
+#: templates/admin_recordings.html:788
+#, review
+msgid "Choose a date…"
+msgstr "Roghnaigh dáta…"
+
+#: templates/admin_recordings.html:789 templates/admin_tunes.html:340
+#: templates/common_tunes.html:330 templates/tunes.html:115
+#, python-brace-format, review
+msgid "{n} tune"
+msgid_plural "{n} tunes"
+msgstr[0] "{n} fonn"
+msgstr[1] "{n} fhonn"
+msgstr[2] "{n} fhonn"
+msgstr[3] "{n} bhfonn"
+msgstr[4] "{n} fonn"
+
+#: templates/admin_recordings.html:790
+#, python-brace-format, review
+msgid "{n} already"
+msgstr "{n} cheana"
+
+#: templates/admin_recordings.html:791
+#, python-brace-format, review
+msgid "Uploading — {done} of {total}"
+msgstr "Á uaslódáil — {done} as {total}"
+
+#: templates/admin_recordings.html:792
+#, python-brace-format, review
+msgid "Object storage rejected the upload (HTTP {status})"
+msgstr "Dhiúltaigh an stóras réad don uaslódáil (HTTP {status})"
+
+#: templates/admin_recordings.html:793
+#, review
+msgid "The upload could not reach object storage. If this is a new bucket, it most likely needs a CORS rule allowing PUT from this site: run scripts/configure_s3_cors.py --apply."
+msgstr "Níorbh fhéidir leis an uaslódáil an stóras réad a bhaint amach. Más buicéad nua é seo, is dócha go dteastaíonn riail CORS a cheadaíonn PUT ón suíomh seo: rith scripts/configure_s3_cors.py --apply."
+
+#: templates/admin_recordings.html:794
+#, review
+msgid "Lost track of that recording"
+msgstr "Cailleadh rian an taifeadta sin"
+
+#: templates/admin_recordings.html:795
+#, python-brace-format, review
+msgid "Ready — {duration}. Reloading…"
+msgstr "Réidh — {duration}. Á athlódáil…"
+
+#: templates/admin_recordings.html:796
+#, python-brace-format, review
+msgid "Processing failed: {detail}"
+msgstr "Theip ar an bpróiseáil: {detail}"
+
+#: templates/admin_recordings.html:798
+#, review
+msgid "Waiting to be picked up — the server will finish this shortly."
+msgstr "Ag fanacht le go dtógfar é — críochnóidh an freastalaí é seo go luath."
+
+#: templates/admin_recordings.html:799
+#, python-brace-format, review
+msgid "Processing — {detail}…"
+msgstr "Á phróiseáil — {detail}…"
+
+#: templates/admin_recordings.html:800
+#, review
+msgid "working"
+msgstr "ag obair"
+
+#: templates/admin_recordings.html:801
+#, review
+msgid "Preparing…"
+msgstr "Á ullmhú…"
+
+#: templates/admin_recordings.html:802
+#, review
+msgid "Could not prepare the upload"
+msgstr "Níorbh fhéidir an uaslódáil a ullmhú"
+
+#: templates/admin_recordings.html:803
+#, review
+msgid "Uploaded. Registering…"
+msgstr "Uaslódáilte. Á chlárú…"
+
+#: templates/admin_recordings.html:804
+#, review
+msgid "Could not register the recording"
+msgstr "Níorbh fhéidir an taifeadadh a chlárú"
+
+#: templates/admin_recordings.html:805
+#, review
+msgid "Uploaded — processing continues in the background. You can leave this page."
+msgstr "Uaslódáilte — leanann an phróiseáil ar aghaidh sa chúlra. Is féidir leat an leathanach seo a fhágáil."
+
+#: templates/admin_recordings.html:806
+#, python-brace-format, review
+msgid "Ingest failed: {detail}"
+msgstr "Theip ar an bpróiseáil: {detail}"
+
+#: templates/admin_recordings.html:807
+#, review
+msgid "Waiting to be picked up — "
+msgstr "Ag fanacht le go dtógfar é — "
+
+#: templates/admin_recordings.html:808
+#, review
+msgid "Processing… "
+msgstr "Á phróiseáil… "
+
+#: templates/admin_recordings.html:809
+#, review
+msgid "Retrying…"
+msgstr "Á thriail arís…"
+
+#: templates/admin_recordings.html:810
+#, review
+msgid "Could not restart processing"
+msgstr "Níorbh fhéidir an phróiseáil a atosú"
+
+#: templates/admin_recordings.html:812
+#, review
+msgid "Marking…"
+msgstr "Á mharcáil…"
+
+#: templates/admin_recordings.html:813
+#, review
+msgid "Reopening…"
+msgstr "Á athoscailt…"
+
+#: templates/admin_recordings.html:814
+#, review
+msgid "Could not update that recording"
+msgstr "Níorbh fhéidir an taifeadadh sin a nuashonrú"
+
+#: templates/admin_recordings.html:815
+#, python-brace-format, review
+msgid "Delete “{label}”?"
+msgstr "Scrios “{label}”?"
+
+#: templates/admin_recordings.html:816
+#, python-brace-format, review
+msgid "This also deletes the {n} tune placement marked on it, and removes the audio from storage."
+msgid_plural "This also deletes the {n} tune placements marked on it, and removes the audio from storage."
+msgstr[0] "Scriosann sé seo freisin an {n} fonn suite atá marcáilte air, agus baintear an fhuaim den stóras."
+msgstr[1] "Scriosann sé seo freisin an {n} fhonn suite atá marcáilte air, agus baintear an fhuaim den stóras."
+msgstr[2] "Scriosann sé seo freisin na {n} fhonn suite atá marcáilte air, agus baintear an fhuaim den stóras."
+msgstr[3] "Scriosann sé seo freisin na {n} bhfonn suite atá marcáilte air, agus baintear an fhuaim den stóras."
+msgstr[4] "Scriosann sé seo freisin na {n} fonn suite atá marcáilte air, agus baintear an fhuaim den stóras."
+
+#: templates/admin_recordings.html:817
+#, review
+msgid "Nothing has been marked on it yet. The audio is removed from storage."
+msgstr "Níl aon rud marcáilte air fós. Baintear an fhuaim den stóras."
+
+#: templates/admin_recordings.html:818
+#, review
+msgid "This cannot be undone."
+msgstr "Ní féidir é seo a chealú."
+
+#: templates/admin_recordings.html:819
+#, review
+msgid "Deleting…"
+msgstr "Á scriosadh…"
+
+#: templates/admin_recordings.html:820
+#, review
+msgid "Could not delete that recording"
+msgstr "Níorbh fhéidir an taifeadadh sin a scriosadh"
+
+#: templates/admin_sessions_list.html:4
+#, review
+msgid "Admin - Sessions"
+msgstr "Riarachán - Seisiúin"
+
+#: templates/admin_sessions_list.html:15
+#, review
+msgid "Search by name or location..."
+msgstr "Cuardaigh de réir ainm nó suímh..."
+
+#: templates/admin_sessions_list.html:16 templates/admin_test_links.html:195
+#, review
+msgid "Add Session"
+msgstr "Cuir seisiún leis"
+
+#: templates/admin_sessions_list.html:27
+#, review
+msgid "Venue"
+msgstr "Ionad"
+
+#: templates/admin_sessions_list.html:28 templates/session_bulk_import.html:108
+#: templates/session_instance_players.html:73
+#, review
+msgid "Location"
+msgstr "Suíomh"
+
+#: templates/admin_sessions_list.html:30 templates/admin_sessions_list.html:133
+#: templates/session_admin_person.html:22
+#, review
+msgid "Members"
+msgstr "Baill"
+
+#: templates/admin_sessions_list.html:31 templates/admin_sessions_list.html:143
+#, review
+msgid "Instances"
+msgstr "Ócáidí"
+
+#: templates/admin_sessions_list.html:32 templates/admin_sessions_list.html:153
+#, review
+msgid "Latest"
+msgstr "Is Déanaí"
+
+#: templates/admin_sessions_list.html:33
+#: templates/session_admin_person.html:360
+#: templates/session_bulk_import.html:110
+#, review
+msgid "Status"
+msgstr "Stádas"
+
+#: templates/admin_sessions_list.html:59 templates/admin_sessions_list.html:80
+#: templates/admin_sessions_list.html:127
+#: templates/admin_sessions_list.html:158
+#: templates/session_bulk_import.html:145
+#, review
+msgid "None"
+msgstr "Dada"
+
+#: templates/admin_sessions_list.html:85 templates/admin_sessions_list.html:104
+#, review
+msgid "Terminated"
+msgstr "Críochnaithe"
+
+#: templates/admin_sessions_list.html:87 templates/admin_sessions_list.html:106
+#, review
+msgid "Active"
+msgstr "Gníomhach"
+
+#: templates/admin_sessions_list.html:112
+#, review
+msgid "Venue:"
+msgstr "Ionad:"
+
+#: templates/admin_sessions_list.html:116 templates/base.html:818
+#: templates/session_bulk_import.html:46 templates/session_detail.html:63
+#, review
+msgid "Location:"
+msgstr "Suíomh:"
+
+#: templates/admin_sessions_list.html:169
+#, review
+msgid "No Sessions Found"
+msgstr "Níor Aimsíodh Seisiún"
+
+#: templates/admin_sessions_list.html:170
+#, review
+msgid "There are currently no session records in the system."
+msgstr "Níl aon seisiún sa chóras faoi láthair."
+
+#: templates/admin_sessions_list.html:623
+#, review
+msgid "No sessions match your search criteria."
+msgstr "Níl seisiún ar bith a fhreagraíonn do do chuardach."
+
+#: templates/admin_tabs.html:3
+#, review
+msgid "breadcrumb"
+msgstr "rian aráin"
+
+#: templates/admin_tabs.html:11 templates/admin_tabs.html:46
+#: templates/admin_tabs.html:95 templates/admin_tune_merge.html:14
+#, review
+msgid "Merge Tunes"
+msgstr "Cumasc Fonn"
+
+#: templates/admin_tabs.html:13 templates/admin_tabs.html:56
+#: templates/admin_tabs.html:101
+#, review
+msgid "Places"
+msgstr "Áiteanna"
+
+#: templates/admin_tabs.html:17 templates/admin_tabs.html:76
+#: templates/admin_tabs.html:113
+#, review
+msgid "Email Updates"
+msgstr "Nuashonruithe Ríomhphoist"
+
+#: templates/admin_tabs.html:24 templates/session_admin_person.html:17
+#, review
+msgid "My Sessions"
+msgstr "Mo sheisiúin"
+
+#: templates/admin_test_links.html:4
+#, review
+msgid "Admin - Test Links"
+msgstr "Riarachán - Naisc tástála"
+
+#: templates/admin_test_links.html:17
+#, review
+msgid "Core Pages"
+msgstr "Príomhleathanaigh"
+
+#: templates/admin_test_links.html:19
+#, review
+msgid "Home Page"
+msgstr "Leathanach baile"
+
+#: templates/admin_test_links.html:20
+#, review
+msgid "Help Page"
+msgstr "Leathanach cabhrach"
+
+#: templates/admin_test_links.html:26
+#, python-format, review
+msgid "Session Pages (%(session)s)"
+msgstr "Leathanaigh seisiúin (%(session)s)"
+
+#: templates/admin_test_links.html:28
+#, review
+msgid "Session Home"
+msgstr "Leathanach an tseisiúin"
+
+#: templates/admin_test_links.html:30 templates/admin_tune_merge.html:599
+#, review
+msgid "Session Tunes"
+msgstr "Foinn an tseisiúin"
+
+#: templates/admin_test_links.html:32
+#, review
+msgid "Add a tune to session repertoire (click +, search, link)"
+msgstr "Cuir fonn le stór an tseisiúin (cliceáil +, cuardaigh, nasc)"
+
+#: templates/admin_test_links.html:33
+#, review
+msgid "Edit tune's session-specific key setting"
+msgstr "Athraigh an gléas atá ag an bhfonn sa seisiún seo"
+
+#: templates/admin_test_links.html:34
+#, review
+msgid "Add an additional alias for a tune"
+msgstr "Cuir ainm eile le fonn"
+
+#: templates/admin_test_links.html:35
+#, review
+msgid "Remove a tune from session repertoire"
+msgstr "Bain fonn as stór an tseisiúin"
+
+#: templates/admin_test_links.html:39
+#, review
+msgid "Session People"
+msgstr "Daoine an tseisiúin"
+
+#: templates/admin_test_links.html:41
+#, review
+msgid "Add a person to the session who is in the person table (e.g., \"Siobhan Walsh\")"
+msgstr "Cuir duine atá i dtábla na ndaoine leis an seisiún (m.sh., \"Siobhan Walsh\")"
+
+#: templates/admin_test_links.html:42
+#, review
+msgid "Add a new person to the session who isn't in the person table (e.g., \"Juanita Perez\")"
+msgstr "Cuir duine nua nach bhfuil i dtábla na ndaoine leis an seisiún (m.sh., \"Juanita Perez\")"
+
+#: templates/admin_test_links.html:46
+#, review
+msgid "Session Logs"
+msgstr "Logálacha an tseisiúin"
+
+#: templates/admin_test_links.html:48
+#, review
+msgid "Add session instance"
+msgstr "Cuir oíche seisiúin leis"
+
+#: templates/admin_test_links.html:53
+#, review
+msgid "Session Tune Detail"
+msgstr "Sonraí fhonn an tseisiúin"
+
+#: templates/admin_test_links.html:55
+#, review
+msgid "Configure tune name, setting and key"
+msgstr "Socraigh ainm, leagan agus gléas an fhoinn"
+
+#: templates/admin_test_links.html:56
+#, review
+msgid "Fetch setting ABC & incipit"
+msgstr "Faigh ABC agus tús an leagain"
+
+#: templates/admin_test_links.html:62
+#, python-format, review
+msgid "Session Instance (%(date)s)"
+msgstr "Oíche seisiúin (%(date)s)"
+
+#: templates/admin_test_links.html:64
+#, review
+msgid "Type a tune name and press Enter to add to log"
+msgstr "Clóscríobh ainm foinn agus brúigh Enter chun é a chur leis an logáil"
+
+#: templates/admin_test_links.html:65
+#, review
+msgid "Click a tune pill to open detail modal"
+msgstr "Cliceáil ar phiolla foinn chun a shonraí a oscailt"
+
+#: templates/admin_test_links.html:66
+#, review
+msgid "Edit tune name/key override in modal and save"
+msgstr "Athraigh ainm/gléas an fhoinn sna sonraí agus sábháil"
+
+#: templates/admin_test_links.html:67
+#, review
+msgid "Fetch/refresh ABC notation and image for a tune"
+msgstr "Faigh/athnuaigh nodaireacht ABC agus íomhá foinn"
+
+#: templates/admin_test_links.html:68
+#, review
+msgid "Drag and drop to reorder tunes"
+msgstr "Tarraing agus scaoil chun ord na bhfonn a athrú"
+
+#: templates/admin_test_links.html:69
+#, review
+msgid "Select multiple pills (Shift+click) and delete them"
+msgstr "Roghnaigh roinnt piollaí (Shift+cliceáil) agus scrios iad"
+
+#: templates/admin_test_links.html:70
+#, review
+msgid "Use Ctrl+Z to undo, Ctrl+Y to redo"
+msgstr "Úsáid Ctrl+Z chun cealú, Ctrl+Y chun athdhéanamh"
+
+#: templates/admin_test_links.html:71
+#, review
+msgid "Copy/paste tunes with Ctrl+C/Ctrl+V"
+msgstr "Cóipeáil/greamaigh foinn le Ctrl+C/Ctrl+V"
+
+#: templates/admin_test_links.html:72
+#, review
+msgid "Click set number label to set \"Started By\" person"
+msgstr "Cliceáil ar uimhir na sraithe chun an duine a thosaigh í a shocrú"
+
+#: templates/admin_test_links.html:73
+#, review
+msgid "Mark session as complete (checkmark button)"
+msgstr "Marcáil an seisiún críochnaithe (cnaipe na tic)"
+
+#: templates/admin_test_links.html:77
+#, python-format, review
+msgid "Session Instance Players (%(date)s)"
+msgstr "Ceoltóirí na hoíche seisiúin (%(date)s)"
+
+#: templates/admin_test_links.html:79
+#, review
+msgid "Check in an existing person (search by name)"
+msgstr "Cláraigh láithreacht duine atá ann cheana (cuardaigh de réir ainm)"
+
+#: templates/admin_test_links.html:80
+#, review
+msgid "Create and check in a new person"
+msgstr "Cruthaigh duine nua agus cláraigh a láithreacht"
+
+#: templates/admin_test_links.html:81
+#, review
+msgid "Change attendance status (Yes/Maybe/No)"
+msgstr "Athraigh stádas láithreachta (Beidh/B'fhéidir/Ní bheidh)"
+
+#: templates/admin_test_links.html:82
+#, review
+msgid "Update a person's instruments for this session"
+msgstr "Nuashonraigh uirlisí duine don seisiún seo"
+
+#: templates/admin_test_links.html:83
+#, review
+msgid "Remove someone from attendance list"
+msgstr "Bain duine de liosta na láithreachta"
+
+#: templates/admin_test_links.html:91
+#, review
+msgid "Session Pages"
+msgstr "Leathanaigh seisiúin"
+
+#: templates/admin_test_links.html:92
+#, review
+msgid "No sessions found in database"
+msgstr "Níor aimsíodh seisiún ar bith sa bhunachar sonraí"
+
+#: templates/admin_test_links.html:97
+#, review
+msgid "Admin Pages"
+msgstr "Leathanaigh riaracháin"
+
+#: templates/admin_test_links.html:99
+#, review
+msgid "Admin - Dashboard"
+msgstr "Riarachán - Painéal"
+
+#: templates/admin_test_links.html:103
+#, review
+msgid "Search for a person by name"
+msgstr "Cuardaigh duine de réir ainm"
+
+#: templates/admin_test_links.html:104
+#, review
+msgid "Click a person to view their details"
+msgstr "Cliceáil ar dhuine chun a s(h)onraí a fheiceáil"
+
+#: templates/admin_test_links.html:105
+#, review
+msgid "Deactivate a person (hide from lists)"
+msgstr "Díghníomhachtaigh duine (folaigh ó liostaí é)"
+
+#: templates/admin_test_links.html:106
+#, review
+msgid "Reactivate a deactivated person"
+msgstr "Athghníomhachtaigh duine a díghníomhachtaíodh"
+
+#: templates/admin_test_links.html:109 templates/admin_tunes.html:4
+#, review
+msgid "Admin - Tunes"
+msgstr "Riarachán - Foinn"
+
+#: templates/admin_test_links.html:110
+#, review
+msgid "Admin - Active Sessions"
+msgstr "Riarachán - Seisiúin ghníomhacha"
+
+#: templates/admin_test_links.html:111
+#, review
+msgid "Admin - Login History"
+msgstr "Riarachán - Stair sínithe isteach"
+
+#: templates/admin_test_links.html:112
+#, review
+msgid "Admin - Login Sessions"
+msgstr "Riarachán - Seisiúin logála isteach"
+
+#: templates/admin_test_links.html:116
+#, review
+msgid "View cache statistics"
+msgstr "Féach ar staitisticí na taisce"
+
+#: templates/admin_test_links.html:117
+#, review
+msgid "Run cache process for missing tune images"
+msgstr "Rith an próiseas taisce d'íomhánna foinn atá in easnamh"
+
+#: templates/admin_test_links.html:120
+#, review
+msgid "Admin - Test Links (this page)"
+msgstr "Riarachán - Naisc tástála (an leathanach seo)"
+
+#: templates/admin_test_links.html:123
+#, python-format, review
+msgid "Person Details (ID: %(id)s)"
+msgstr "Sonraí duine (ID: %(id)s)"
+
+#: templates/admin_test_links.html:125
+#, review
+msgid "View person's session memberships"
+msgstr "Féach ar na seisiúin a bhfuil an duine ina b(h)all díobh"
+
+#: templates/admin_test_links.html:126
+#, review
+msgid "View person's attendance history"
+msgstr "Féach ar stair láithreachta an duine"
+
+#: templates/admin_test_links.html:127
+#, review
+msgid "View linked user account (if any)"
+msgstr "Féach ar an gcuntas úsáideora nasctha (más ann dó)"
+
+#: templates/admin_test_links.html:128
+#, review
+msgid "Toggle active/inactive status"
+msgstr "Scoránaigh an stádas gníomhach/neamhghníomhach"
+
+#: templates/admin_test_links.html:137
+#, python-format, review
+msgid "Session Admin Pages (%(session)s)"
+msgstr "Leathanaigh riaracháin an tseisiúin (%(session)s)"
+
+#: templates/admin_test_links.html:140
+#, review
+msgid "Session Admin - Details"
+msgstr "Riarachán seisiúin - Sonraí"
+
+#: templates/admin_test_links.html:142
+#, review
+msgid "Edit session name, location, timezone"
+msgstr "Athraigh ainm, suíomh agus crios ama an tseisiúin"
+
+#: templates/admin_test_links.html:143
+#, review
+msgid "Update recurrence pattern"
+msgstr "Nuashonraigh patrún an athfhillidh"
+
+#: templates/admin_test_links.html:144
+#, review
+msgid "Terminate a session (set end date)"
+msgstr "Cuir deireadh le seisiún (socraigh dáta deiridh)"
+
+#: templates/admin_test_links.html:145
+#, review
+msgid "Reactivate a terminated session"
+msgstr "Athghníomhachtaigh seisiún a bhí críochnaithe"
+
+#: templates/admin_test_links.html:149
+#, review
+msgid "Session Admin - Members"
+msgstr "Riarachán seisiúin - Baill"
+
+#: templates/admin_test_links.html:151
+#, review
+msgid "Add a new person to session membership"
+msgstr "Cuir duine nua le baill an tseisiúin"
+
+#: templates/admin_test_links.html:152
+#, review
+msgid "Toggle \"Regular\" status for a member"
+msgstr "Scoránaigh stádas \"Rialta\" do bhall"
+
+#: templates/admin_test_links.html:153
+#, review
+msgid "Grant/revoke session admin privileges"
+msgstr "Tabhair/bain cearta bainisteora seisiúin"
+
+#: templates/admin_test_links.html:154
+#, review
+msgid "Remove a person from session membership"
+msgstr "Bain duine de bhaill an tseisiúin"
+
+#: templates/admin_test_links.html:157
+#, review
+msgid "Session Admin - Logs"
+msgstr "Riarachán seisiúin - Logálacha"
+
+#: templates/admin_test_links.html:159
+#, python-format, review
+msgid "Session Person Detail (ID: %(id)s)"
+msgstr "Sonraí duine sa seisiún (ID: %(id)s)"
+
+#: templates/admin_test_links.html:166
+#, review
+msgid "User Account Pages"
+msgstr "Leathanaigh chuntais úsáideora"
+
+#: templates/admin_test_links.html:169
+#, review
+msgid "Login Page"
+msgstr "Leathanach sínithe isteach"
+
+#: templates/admin_test_links.html:171
+#, review
+msgid "Login with valid credentials (ian / password123)"
+msgstr "Sínigh isteach le dintiúir bhailí (ian / password123)"
+
+#: templates/admin_test_links.html:172
+#, review
+msgid "Login with invalid password (verify error message)"
+msgstr "Sínigh isteach le pasfhocal mícheart (deimhnigh an teachtaireacht earráide)"
+
+#: templates/admin_test_links.html:173
+#, review
+msgid "Login with non-existent username"
+msgstr "Sínigh isteach le hainm úsáideora nach ann dó"
+
+#: templates/admin_test_links.html:177
+#, review
+msgid "Register Page"
+msgstr "Leathanach clárúcháin"
+
+#: templates/admin_test_links.html:179
+#, review
+msgid "Register a new account with valid data"
+msgstr "Cláraigh cuntas nua le sonraí bailí"
+
+#: templates/admin_test_links.html:180
+#, review
+msgid "Try registering with existing username (verify error)"
+msgstr "Bain triail as clárú le hainm úsáideora atá in úsáid (deimhnigh an earráid)"
+
+#: templates/admin_test_links.html:181
+#, review
+msgid "Try registering with invalid email format"
+msgstr "Bain triail as clárú le seoladh ríomhphoist neamhbhailí"
+
+#: templates/admin_test_links.html:184 templates/auth/forgot_password.html:4
+#, review
+msgid "Forgot Password"
+msgstr "Pasfhocal dearmadta"
+
+#: templates/admin_test_links.html:186
+#, review
+msgid "My Profile"
+msgstr "Mo phróifíl"
+
+#: templates/admin_test_links.html:188
+#, review
+msgid "Update display name"
+msgstr "Nuashonraigh an t-ainm taispeána"
+
+#: templates/admin_test_links.html:189
+#, review
+msgid "Change timezone preference"
+msgstr "Athraigh an crios ama"
+
+#: templates/admin_test_links.html:190
+#, review
+msgid "Toggle dark mode preference"
+msgstr "Scoránaigh an mód dorcha"
+
+#: templates/admin_test_links.html:191
+#, review
+msgid "Update auto-save settings"
+msgstr "Nuashonraigh socruithe an uathshábhála"
+
+#: templates/admin_test_links.html:197
+#, review
+msgid "Create a new session with all fields"
+msgstr "Cruthaigh seisiún nua agus gach réimse líonta"
+
+#: templates/admin_test_links.html:198
+#, review
+msgid "Set up recurrence pattern (weekly/monthly)"
+msgstr "Socraigh patrún athfhillidh (seachtainiúil/míosúil)"
+
+#: templates/admin_test_links.html:199
+#, review
+msgid "Verify duplicate session path detection"
+msgstr "Deimhnigh go n-aimsítear cosán seisiúin dúblach"
+
+#: templates/admin_test_links.html:206
+#, review
+msgid "My Tunes Pages"
+msgstr "Leathanaigh Mo chuid fonn"
+
+#: templates/admin_test_links.html:209
+#, review
+msgid "My Tunes List"
+msgstr "Liosta Mo chuid fonn"
+
+#: templates/admin_test_links.html:211
+#, review
+msgid "Filter tunes by status (Want to Learn / Learning / Learned)"
+msgstr "Scag foinn de réir stádais (le foghlaim / á fhoghlaim / ar eolas)"
+
+#: templates/admin_test_links.html:212
+#, review
+msgid "Click a tune to view/edit details"
+msgstr "Cliceáil ar fhonn chun a shonraí a fheiceáil/a athrú"
+
+#: templates/admin_test_links.html:213
+#, review
+msgid "Change tune status (Want to Learn → Learning → Learned)"
+msgstr "Athraigh stádas foinn (le foghlaim → á fhoghlaim → ar eolas)"
+
+#: templates/admin_test_links.html:214
+#, review
+msgid "Update \"times heard\" count"
+msgstr "Nuashonraigh líon na n-uaireanta a chualathas é"
+
+#: templates/admin_test_links.html:215
+#, review
+msgid "Add/edit personal notes for a tune"
+msgstr "Cuir/athraigh nótaí pearsanta d'fhonn"
+
+#: templates/admin_test_links.html:216
+#, review
+msgid "Remove a tune from your list"
+msgstr "Bain fonn de do liosta"
+
+#: templates/admin_test_links.html:220
+#, review
+msgid "Add Tune to My Tunes"
+msgstr "Cuir fonn le Mo chuid fonn"
+
+#: templates/admin_test_links.html:222
+#, review
+msgid "Search for a tune by name"
+msgstr "Cuardaigh fonn de réir ainm"
+
+#: templates/admin_test_links.html:223
+#, review
+msgid "Add a tune from TheSession.org results"
+msgstr "Cuir fonn ó thorthaí TheSession.org leis"
+
+#: templates/admin_test_links.html:224
+#, review
+msgid "Set initial status when adding"
+msgstr "Socraigh an stádas tosaigh agus é á chur leis"
+
+#: templates/admin_test_links.html:228
+#, review
+msgid "Sync My Tunes"
+msgstr "Sioncronaigh Mo chuid fonn"
+
+#: templates/admin_test_links.html:230
+#, review
+msgid "Connect/sync with TheSession.org tunebook"
+msgstr "Nasc/sioncronaigh le leabhar fonn TheSession.org"
+
+#: templates/admin_test_links.html:231
+#, review
+msgid "Verify imported tunes appear in list"
+msgstr "Deimhnigh go bhfuil na foinn iompórtáilte ar an liosta"
+
+#: templates/admin_test_links.html:234
+#, review
+msgid "My Tunes Help"
+msgstr "Cabhair le Mo chuid fonn"
+
+#: templates/admin_test_links.html:239
+#, review
+msgid "API Endpoints (for testing)"
+msgstr "Críochphointí API (le haghaidh tástála)"
+
+#: templates/admin_test_links.html:241
+#, review
+msgid "Available sessions list"
+msgstr "Liosta na seisiún atá ar fáil"
+
+#: templates/admin_test_links.html:242
+#, review
+msgid "Sessions data"
+msgstr "Sonraí na seisiún"
+
+#: templates/admin_test_links.html:243
+#, review
+msgid "Session search"
+msgstr "Cuardach seisiún"
+
+#: templates/admin_test_links.html:244
+#, review
+msgid "Check if session exists"
+msgstr "Seiceáil an ann don seisiún"
+
+#: templates/admin_test_links.html:245
+#, review
+msgid "Tune search"
+msgstr "Cuardach fonn"
+
+#: templates/admin_test_links.html:246
+#, review
+msgid "Cache tune setting"
+msgstr "Cuir leagan foinn i dtaisce"
+
+#: templates/admin_test_links.html:247
+#, review
+msgid "Get attendees"
+msgstr "Faigh an lucht freastail"
+
+#: templates/admin_test_links.html:248
+#, review
+msgid "Check in"
+msgstr "Cláraigh láithreacht"
+
+#: templates/admin_test_links.html:249
+#, review
+msgid "Get my tunes list"
+msgstr "Faigh liosta Mo chuid fonn"
+
+#: templates/admin_test_links.html:251
+#, review
+msgid "Note: Most API endpoints require authentication and appropriate request data"
+msgstr "Nóta: Teastaíonn fíordheimhniú agus sonraí iarratais cuí ó fhormhór na gcríochphointí API"
+
+#: templates/admin_test_links.html:255
+#, review
+msgid "External Services"
+msgstr "Seirbhísí seachtracha"
+
+#: templates/admin_test_links.html:257
+#, review
+msgid "ABC Renderer - Health Check (Production)"
+msgstr "Rindreálaí ABC - Seiceáil sláinte (Táirgeadh)"
+
+#: templates/admin_test_links.html:258
+#, review
+msgid "ABC Renderer - Test Page (Production)"
+msgstr "Rindreálaí ABC - Leathanach tástála (Táirgeadh)"
+
+#: templates/admin_test_links.html:259
+#, review
+msgid "TheSession.org API - Sample Tune (Drowsy Maggie)"
+msgstr "API TheSession.org - Fonn samplach (Drowsy Maggie)"
+
+#: templates/admin_tune_merge.html:4
+#, review
+msgid "Admin - Merge Tunes"
+msgstr "Riarachán - Cumasc Fonn"
+
+#: templates/admin_tune_merge.html:15
+#, review
+msgid "Use this tool when thesession.org has merged two tunes. All references to the old tune will be updated to point to the new tune."
+msgstr "Bain úsáid as an uirlis seo nuair a chumascann thesession.org dhá fhonn. Díreofar gach tagairt don seanfhonn ar an bhfonn nua."
+
+#: templates/admin_tune_merge.html:21
+#, review
+msgid "Old Tune ID"
+msgstr "ID an tseanfhoinn"
+
+#: templates/admin_tune_merge.html:22
+#, review
+msgid "e.g. 1234"
+msgstr "m.sh. 1234"
+
+#: templates/admin_tune_merge.html:23
+#, review
+msgid "The tune being retired"
+msgstr "An fonn atá á scor"
+
+#: templates/admin_tune_merge.html:26
+#, review
+msgid "New Tune ID"
+msgstr "ID an fhoinn nua"
+
+#: templates/admin_tune_merge.html:27
+#, review
+msgid "e.g. 5678"
+msgstr "m.sh. 5678"
+
+#: templates/admin_tune_merge.html:28
+#, review
+msgid "The tune to merge to"
+msgstr "An fonn lena gcumascfar é"
+
+#: templates/admin_tune_merge.html:32 templates/admin_tune_merge.html:593
+#, review
+msgid "Preview Merge"
+msgstr "Réamhamharc ar an gCumasc"
+
+#: templates/admin_tune_merge.html:41
+#, review
+msgid "Merge Preview"
+msgstr "Réamhamharc ar an gCumasc"
+
+#: templates/admin_tune_merge.html:45
+#, review
+msgid "Old Tune"
+msgstr "Seanfhonn"
+
+#: templates/admin_tune_merge.html:51
+#, review
+msgid "New Tune"
+msgstr "Fonn Nua"
+
+#: templates/admin_tune_merge.html:60
+#, review
+msgid "Records to merge:"
+msgstr "Taifid le cumasc:"
+
+#: templates/admin_tune_merge.html:64
+#, review
+msgid "Table"
+msgstr "Tábla"
+
+#: templates/admin_tune_merge.html:65
+#, review
+msgid "Count"
+msgstr "Líon"
+
+#: templates/admin_tune_merge.html:73
+#, review
+msgid "Warnings"
+msgstr "Rabhaidh"
+
+#: templates/admin_tune_merge.html:79 templates/admin_tune_merge.html:596
+#, review
+msgid "Confirm Merge"
+msgstr "Deimhnigh an Cumasc"
+
+#: templates/admin_tune_merge.html:85
+#, review
+msgid "Merge Complete"
+msgstr "Cumasc Críochnaithe"
+
+#: templates/admin_tune_merge.html:90
+#, review
+msgid "The old tune has been marked as a redirect and will not appear in searches or be re-added to the system."
+msgstr "Marcáladh an seanfhonn mar atreorú; ní thaispeánfar i gcuardaigh é agus ní chuirfear leis an gcóras arís é."
+
+#: templates/admin_tune_merge.html:93
+#, review
+msgid "Merge Another"
+msgstr "Cumasc Eile"
+
+#: templates/admin_tune_merge.html:94
+#, review
+msgid "Back to Tunes"
+msgstr "Ar ais chuig na Foinn"
+
+#: templates/admin_tune_merge.html:100
+#, review
+msgid "thesession.org Sync"
+msgstr "Sioncrónú le thesession.org"
+
+#: templates/admin_tune_merge.html:101
+#, review
+msgid "A weekly job (Mondays, after thesession.org's Sunday data-dump refresh) finds tunes that were merged or deleted upstream and applies the merges automatically. Below is the record of what each run changed."
+msgstr "Aimsíonn jab seachtainiúil (ar an Luan, tar éis do thesession.org a dhumpáil sonraí Domhnaigh a athnuachan) foinn a cumascadh nó a scriosadh ansin, agus cuireann sé na cumaisc i bhfeidhm go huathoibríoch. Thíos tá taifead ar an méid a d'athraigh gach rith."
+
+#: templates/admin_tune_merge.html:104
+#, review
+msgid "Run Now"
+msgstr "Rith Anois"
+
+#: templates/admin_tune_merge.html:588
+#, review
+msgid "Please enter both old and new tune IDs."
+msgstr "Cuir isteach ID an tseanfhoinn agus ID an fhoinn nua araon."
+
+#: templates/admin_tune_merge.html:589
+#, review
+msgid "Old and new tune IDs cannot be the same."
+msgstr "Ní féidir leis an seanID agus an ID nua a bheith mar an gcéanna."
+
+#: templates/admin_tune_merge.html:591
+#, review
+msgid "Failed to preview merge."
+msgstr "Theip ar an réamhamharc ar an gcumasc."
+
+#: templates/admin_tune_merge.html:592
+#, python-brace-format, review
+msgid "Network error: {error}"
+msgstr "Earráid líonra: {error}"
+
+#: templates/admin_tune_merge.html:594
+#, review
+msgid "Merging..."
+msgstr "Á chumasc..."
+
+#: templates/admin_tune_merge.html:595
+#, review
+msgid "Failed to execute merge."
+msgstr "Theip ar an gcumasc."
+
+#: templates/admin_tune_merge.html:597
+#, review
+msgid "Unknown type"
+msgstr "Cineál anaithnid"
+
+#: templates/admin_tune_merge.html:598
+#, review
+msgid "Tune Settings (ABC notation)"
+msgstr "Leaganacha Fonn (nodaireacht ABC)"
+
+#: templates/admin_tune_merge.html:600
+#, review
+msgid "Session Tune Aliases"
+msgstr "Ailiasanna Fonn Seisiúin"
+
+#: templates/admin_tune_merge.html:601
+#, review
+msgid "Session Log Entries"
+msgstr "Iontrálacha Logála Seisiúin"
+
+#: templates/admin_tune_merge.html:602
+#, review
+msgid "Personal Tune Collections"
+msgstr "Bailiúcháin Phearsanta Fonn"
+
+#: templates/admin_tune_merge.html:603
+#, review
+msgid "Per-Instrument Statuses"
+msgstr "Stádais de réir Uirlise"
+
+#: templates/admin_tune_merge.html:604
+#, python-brace-format, review
+msgid "{moved} moved, {dropped} dropped"
+msgstr "{moved} bogtha, {dropped} curtha ar ceal"
+
+#: templates/admin_tune_merge.html:605
+#, python-brace-format, review
+msgid "{moved} moved"
+msgstr "{moved} bogtha"
+
+#: templates/admin_tune_merge.html:606
+#, review
+msgid "Recording Tune Segments"
+msgstr "Míreanna Fonn Taifeadta"
+
+#: templates/admin_tune_merge.html:607
+#, python-brace-format, review
+msgid "{n} tunebook record"
+msgid_plural "{n} tunebook records"
+msgstr[0] "{n} taifead leabhar fonn"
+msgstr[1] "{n} thaifead leabhar fonn"
+msgstr[2] "{n} thaifead leabhar fonn"
+msgstr[3] "{n} dtaifead leabhar fonn"
+msgstr[4] "{n} taifead leabhar fonn"
+
+#: templates/admin_tune_merge.html:608
+#, python-brace-format, review
+msgid "{n} session repertoire record"
+msgid_plural "{n} session repertoire records"
+msgstr[0] "{n} taifead ar stór fonn seisiúin"
+msgstr[1] "{n} thaifead ar stór fonn seisiúin"
+msgstr[2] "{n} thaifead ar stór fonn seisiúin"
+msgstr[3] "{n} dtaifead ar stór fonn seisiúin"
+msgstr[4] "{n} taifead ar stór fonn seisiúin"
+
+#: templates/admin_tune_merge.html:609
+#, python-brace-format, review
+msgid "{n} log entry"
+msgid_plural "{n} log entries"
+msgstr[0] "{n} iontráil logála"
+msgstr[1] "{n} iontráil logála"
+msgstr[2] "{n} iontráil logála"
+msgstr[3] "{n} n-iontráil logála"
+msgstr[4] "{n} iontráil logála"
+
+#: templates/admin_tune_merge.html:610
+#, python-brace-format, review
+msgid "{n} session"
+msgid_plural "{n} sessions"
+msgstr[0] "{n} seisiún"
+msgstr[1] "{n} sheisiún"
+msgstr[2] "{n} sheisiún"
+msgstr[3] "{n} seisiún"
+msgstr[4] "{n} seisiún"
+
+#: templates/admin_tune_merge.html:611
+#, python-brace-format, review
+msgid "{n} record"
+msgid_plural "{n} records"
+msgstr[0] "{n} taifead"
+msgstr[1] "{n} thaifead"
+msgstr[2] "{n} thaifead"
+msgstr[3] "{n} dtaifead"
+msgstr[4] "{n} taifead"
+
+#: templates/admin_tune_merge.html:612
+#, python-brace-format, review
+msgid "The tunes have different names, so the old name \"{name}\" will be kept as the displayed name on {records}, and added as a searchable alias in {sessions}."
+msgstr "Tá ainmneacha difriúla ar na foinn, mar sin coinneofar an seanainm \"{name}\" mar an t-ainm a thaispeántar ar {records}, agus cuirfear leis mar ailias inchuardaithe é i {sessions}."
+
+#: templates/admin_tune_merge.html:613
+#, python-brace-format, review
+msgid "The old name \"{name}\" will be added as a searchable alias in {sessions}."
+msgstr "Cuirfear an seanainm \"{name}\" leis mar ailias inchuardaithe i {sessions}."
+
+#: templates/admin_tune_merge.html:614
+#, python-brace-format, review
+msgid "Tune #{old} has been merged into #{new}"
+msgstr "Cumascadh fonn #{old} le #{new}"
+
+#: templates/admin_tune_merge.html:615
+#, review
+msgid "Tune settings merged"
+msgstr "Leaganacha fonn cumasctha"
+
+#: templates/admin_tune_merge.html:616
+#, review
+msgid "Session tunes updated"
+msgstr "Foinn seisiúin nuashonraithe"
+
+#: templates/admin_tune_merge.html:617
+#, python-brace-format, review
+msgid "{n} merged"
+msgstr "{n} cumasctha"
+
+#: templates/admin_tune_merge.html:618
+#, review
+msgid "Session tune aliases updated"
+msgstr "Ailiasanna fonn seisiúin nuashonraithe"
+
+#: templates/admin_tune_merge.html:619
+#, review
+msgid "Session log entries updated"
+msgstr "Iontrálacha logála seisiúin nuashonraithe"
+
+#: templates/admin_tune_merge.html:620
+#, review
+msgid "Personal tune records updated"
+msgstr "Taifid phearsanta fonn nuashonraithe"
+
+#: templates/admin_tune_merge.html:621
+#, review
+msgid "Per-instrument statuses"
+msgstr "Stádais de réir uirlise"
+
+#: templates/admin_tune_merge.html:622
+#, review
+msgid "Recording tune segments updated"
+msgstr "Míreanna fonn taifeadta nuashonraithe"
+
+#: templates/admin_tune_merge.html:623
+#, review
+msgid "Old name preserved as alias on"
+msgstr "Seanainm coinnithe mar ailias ar"
+
+#: templates/admin_tune_merge.html:624
+#, review
+msgid "Live logger screens updated"
+msgstr "Scáileáin an logálaí bheo nuashonraithe"
+
+#: templates/admin_tune_merge.html:625
+#, review
+msgid "No records needed updating"
+msgstr "Níor ghá aon taifead a nuashonrú"
+
+#: templates/admin_tune_merge.html:626
+#, review
+msgid "Failed to start sync run."
+msgstr "Theip ar thosú an tsioncrónaithe."
+
+#: templates/admin_tune_merge.html:627
+#, review
+msgid "Failed to cancel run."
+msgstr "Theip ar chealú an rite."
+
+#: templates/admin_tune_merge.html:628
+#, python-brace-format, review
+msgid "tune #{id}"
+msgstr "fonn #{id}"
+
+#: templates/admin_tune_merge.html:629
+#, review
+msgid "applied"
+msgstr "curtha i bhfeidhm"
+
+#: templates/admin_tune_merge.html:630
+#, review
+msgid "not applied"
+msgstr "gan cur i bhfeidhm"
+
+#: templates/admin_tune_merge.html:631
+#, review
+msgid "imported"
+msgstr "iompórtáilte"
+
+#: templates/admin_tune_merge.html:632
+#, python-brace-format, review
+msgid "also known as: {names}"
+msgstr "ar a dtugtar freisin: {names}"
+
+#: templates/admin_tune_merge.html:633
+#, review
+msgid "deleted upstream"
+msgstr "scriosta ar thesession.org"
+
+#: templates/admin_tune_merge.html:634
+#, review
+msgid "no longer on thesession.org · local history keeps referencing it; no action needed"
+msgstr "níl sé ar thesession.org a thuilleadh · tagraíonn an stair áitiúil dó fós; níl aon ghá le gníomh"
+
+#: templates/admin_tune_merge.html:635
+#, review
+msgid "error"
+msgstr "earráid"
+
+#: templates/admin_tune_merge.html:636
+#, review
+msgid "retried on the next run"
+msgstr "triailfear arís é ar an gcéad rith eile"
+
+#: templates/admin_tune_merge.html:637
+#, review
+msgid "interrupted"
+msgstr "briste isteach air"
+
+#: templates/admin_tune_merge.html:638
+#, review
+msgid "running…"
+msgstr "ag rith…"
+
+#: templates/admin_tune_merge.html:639
+#, python-brace-format, review
+msgid "{n} merge applied"
+msgid_plural "{n} merges applied"
+msgstr[0] "{n} chumasc curtha i bhfeidhm"
+msgstr[1] "{n} chumasc curtha i bhfeidhm"
+msgstr[2] "{n} chumasc curtha i bhfeidhm"
+msgstr[3] "{n} gcumasc curtha i bhfeidhm"
+msgstr[4] "{n} cumasc curtha i bhfeidhm"
+
+#: templates/admin_tune_merge.html:640
+#, python-brace-format, review
+msgid "{n} not applied"
+msgstr "{n} gan cur i bhfeidhm"
+
+#: templates/admin_tune_merge.html:641
+#, python-brace-format, review
+msgid "{n} deleted upstream"
+msgstr "{n} scriosta ar thesession.org"
+
+#: templates/admin_tune_merge.html:642
+#, python-brace-format, review
+msgid "{n} error"
+msgid_plural "{n} errors"
+msgstr[0] "{n} earráid"
+msgstr[1] "{n} earráid"
+msgstr[2] "{n} earráid"
+msgstr[3] "{n} n-earráid"
+msgstr[4] "{n} earráid"
+
+#: templates/admin_tune_merge.html:643
+#, review
+msgid "cancelled"
+msgstr "cealaithe"
+
+#: templates/admin_tune_merge.html:644
+#, review
+msgid "No upstream changes affecting this database."
+msgstr "Níl aon athrú ar thesession.org a bhaineann leis an mbunachar sonraí seo."
+
+#: templates/admin_tune_merge.html:645
+#, review
+msgid "No sync has run yet."
+msgstr "Níor ritheadh aon sioncrónú fós."
+
+#: templates/admin_tune_merge.html:646
+#, python-brace-format, review
+msgid "Running — started {when}"
+msgstr "Ag rith — tosaithe {when}"
+
+#: templates/admin_tune_merge.html:647
+#, python-brace-format, review
+msgid "{checked} / {total} checked — {merged} merged ({applied} applied), {deleted} deleted, {errors}"
+msgstr "{checked} / {total} seiceáilte — {merged} cumasctha ({applied} curtha i bhfeidhm), {deleted} scriosta, {errors}"
+
+#: templates/admin_tune_merge.html:648
+#, review
+msgid "Last run was interrupted — the next run (weekly or Run Now) starts fresh."
+msgstr "Briseadh isteach ar an rith deireanach — tosóidh an chéad rith eile (an ceann seachtainiúil nó Rith Anois) as an nua."
+
+#: templates/admin_tune_merge.html:649
+#, python-brace-format, review
+msgid "Last run {when} ({by})."
+msgstr "An rith deireanach {when} ({by})."
+
+#: templates/admin_tune_merge.html:650
+#, review
+msgid "Failed to load sync record."
+msgstr "Theip ar lódáil an taifid sioncrónaithe."
+
+#: templates/admin_tunes.html:21 templates/common_tunes.html:286
+#, review
+msgid "Search"
+msgstr "Cuardaigh"
+
+#: templates/admin_tunes.html:22
+#, review
+msgid "Show filters"
+msgstr "Taispeáin scagairí"
+
+#: templates/admin_tunes.html:39 templates/common_tunes.html:289
+#, review
+msgid "Tune type"
+msgstr "Cineál foinn"
+
+#: templates/admin_tunes.html:40
+#, review
+msgid "All Tune Types"
+msgstr "Gach Cineál Foinn"
+
+#: templates/admin_tunes.html:45
+#, review
+msgid "a-z"
+msgstr "a-z"
+
+#: templates/admin_tunes.html:46
+#, review
+msgid "popularity"
+msgstr "éileamh"
+
+#: templates/admin_tunes.html:47
+#, review
+msgid "sessions"
+msgstr "seisiúin"
+
+#: templates/admin_tunes.html:49
+#, review
+msgid "Toggle sort direction"
+msgstr "Athraigh treo an tsórtála"
+
+#: templates/admin_tunes.html:54
+#, review
+msgid "Clear Filters"
+msgstr "Glan na Scagairí"
+
+#: templates/admin_tunes.html:64
+#, review
+msgid "Loading tunes..."
+msgstr "Foinn á lódáil..."
+
+#: templates/admin_tunes.html:74
+#, review
+msgid "Tune Lists"
+msgstr "Liostaí Fonn"
+
+#: templates/admin_tunes.html:75
+#, review
+msgid "Popularity"
+msgstr "Éileamh"
+
+#: templates/admin_tunes.html:338
+#, review
+msgid "Failed to load tunes"
+msgstr "Níorbh fhéidir na foinn a lódáil"
+
+#: templates/admin_tunes.html:339
+#, python-brace-format, review
+msgid "Showing {shown} of {total} tunes"
+msgstr "{shown} as {total} fonn á dtaispeáint"
+
+#: templates/admin_tunes.html:341
+#, review
+msgid "No tunes found"
+msgstr "Níor aimsíodh fonn"
+
+#: templates/admin_tunes.html:342
+#, python-brace-format, review
+msgid "No tunes found matching \"{query}\""
+msgstr "Níor aimsíodh fonn a fhreagraíonn do \"{query}\""
+
+#: templates/admin_tunes.html:343 templates/common_tunes.html:331
+#: templates/session_instance_players.html:169 templates/tunes.html:111
+#, review
+msgid "Unknown"
+msgstr "Anaithnid"
+
+#: templates/admin_tunes.html:344
+#, python-brace-format, review
+msgid "Merged into tune #{id}"
+msgstr "Cumascthe le fonn #{id}"
+
+#: templates/auth/change_password.html:4 templates/auth/change_password.html:13
+#, review
+msgid "Create A Password"
+msgstr "Cruthaigh pasfhocal"
+
+#: templates/auth/change_password.html:4 templates/auth/change_password.html:13
+#: templates/auth/change_password.html:50
+#, review
+msgid "Change Password"
+msgstr "Athraigh an pasfhocal"
+
+#: templates/auth/change_password.html:30
+#, review
+msgid "Create a password for easier login. You can always log in using a link sent to your email instead."
+msgstr "Cruthaigh pasfhocal le síniú isteach níos éasca. Is féidir leat síniú isteach i gcónaí le nasc a sheoltar chuig do ríomhphost."
+
+#: templates/auth/change_password.html:36
+#, review
+msgid "Current Password"
+msgstr "Pasfhocal reatha"
+
+#: templates/auth/change_password.html:41 templates/auth/login.html:56
+#: templates/auth/register.html:79 templates/auth/set_password.html:35
+#, review
+msgid "Password"
+msgstr "Pasfhocal"
+
+#: templates/auth/change_password.html:41 templates/auth/reset_password.html:31
+#, review
+msgid "New Password"
+msgstr "Pasfhocal nua"
+
+#: templates/auth/change_password.html:43 templates/auth/register.html:81
+#: templates/auth/reset_password.html:33
+#, review
+msgid "Must be at least 8 characters long"
+msgstr "Ar a laghad 8 gcarachtar"
+
+#: templates/auth/change_password.html:46 templates/auth/register.html:84
+#: templates/auth/set_password.html:40
+#, review
+msgid "Confirm Password"
+msgstr "Deimhnigh an pasfhocal"
+
+#: templates/auth/change_password.html:46 templates/auth/reset_password.html:36
+#, review
+msgid "Confirm New Password"
+msgstr "Deimhnigh an pasfhocal nua"
+
+#: templates/auth/change_password.html:50
+#, review
+msgid "Create Password"
+msgstr "Cruthaigh pasfhocal"
+
+#: templates/auth/forgot_password.html:13 templates/auth/reset_password.html:4
+#, review
+msgid "Reset Password"
+msgstr "Athshocraigh an pasfhocal"
+
+#: templates/auth/forgot_password.html:29
+#, review
+msgid "Enter your email address and we'll send you a link to reset your password."
+msgstr "Cuir isteach do sheoladh ríomhphoist agus seolfaimid nasc chugat chun do phasfhocal a athshocrú."
+
+#: templates/auth/forgot_password.html:33
+#: templates/auth/resend_verification.html:33
+#, review
+msgid "Email Address"
+msgstr "Seoladh ríomhphoist"
+
+#: templates/auth/forgot_password.html:37
+#, review
+msgid "Send Reset Link"
+msgstr "Seol nasc athshocraithe"
+
+#: templates/auth/forgot_password.html:42
+#: templates/auth/resend_verification.html:42
+#: templates/auth/reset_password.html:45
+#, review
+msgid "Back to Login"
+msgstr "Ar ais chuig síniú isteach"
+
+#: templates/auth/login.html:4 templates/auth/login.html:13
+#, review
+msgid "Login or Register"
+msgstr "Sínigh isteach nó cláraigh"
+
+#: templates/auth/login.html:33
+#, review
+msgid "Enter your email to log in or create an account."
+msgstr "Cuir isteach do ríomhphost chun síniú isteach nó cuntas a chruthú."
+
+#: templates/auth/login.html:35
+#, review
+msgid "Email address"
+msgstr "Seoladh ríomhphoist"
+
+#: templates/auth/login.html:52
+#, review
+msgid "Change"
+msgstr "Athraigh"
+
+#: templates/auth/login.html:61
+#, review
+msgid "Login"
+msgstr "Sínigh isteach"
+
+#: templates/auth/login.html:66
+#, review
+msgid "Forgot your password?"
+msgstr "An ndearna tú dearmad ar do phasfhocal?"
+
+#: templates/auth/login.html:78
+#, review
+msgid "Check your email"
+msgstr "Féach ar do ríomhphost"
+
+#: templates/auth/login.html:79
+#, python-format, review
+msgid "We've sent a login link to %(email)s"
+msgstr "Sheolamar nasc síniú isteach chuig %(email)s"
+
+#: templates/auth/login.html:80
+#, review
+msgid "The link expires in 15 minutes."
+msgstr "Rachaidh an nasc as feidhm i gceann 15 nóiméad."
+
+#: templates/auth/login.html:81
+#, review
+msgid "Use a different email"
+msgstr "Úsáid ríomhphost eile"
+
+#: templates/auth/login.html:95
+#, python-format, review
+msgid "We don't have an account for %(email)s yet. We've sent a link to create one."
+msgstr "Níl cuntas againn do %(email)s fós. Sheolamar nasc chun ceann a chruthú."
+
+#: templates/auth/login.html:96
+#, review
+msgid "The link expires in 24 hours."
+msgstr "Rachaidh an nasc as feidhm i gceann 24 uair an chloig."
+
+#: templates/auth/login.html:97
+#, review
+msgid "Try a different email"
+msgstr "Bain triail as ríomhphost eile"
+
+#: templates/auth/login.html:97 templates/auth/register.html:110
+#, review
+msgid "Already have an account?"
+msgstr "An bhfuil cuntas agat cheana?"
+
+#: templates/auth/login.html:103
+#, review
+msgid "Having trouble?"
+msgstr "Fadhb agat?"
+
+#: templates/auth/login.html:103 templates/auth/login.html:246
+#, review
+msgid "Resend verification email"
+msgstr "Seol an ríomhphost fíoraithe arís"
+
+#: templates/auth/login.html:167
+#, review
+msgid "Please enter your email address."
+msgstr "Cuir isteach do sheoladh ríomhphoist."
+
+#: templates/auth/login.html:172
+#, review
+msgid "Please enter a valid email address."
+msgstr "Cuir isteach seoladh ríomhphoist bailí."
+
+#: templates/auth/login.html:191
+#, review
+msgid "An error occurred. Please try again."
+msgstr "Tharla earráid. Bain triail eile as."
+
+#: templates/auth/login.html:216 templates/auth/login.html:263
+#, review
+msgid "Network error. Please check your connection and try again."
+msgstr "Earráid líonra. Seiceáil do cheangal agus bain triail eile as."
+
+#: templates/auth/login.html:227
+#, review
+msgid "Please enter your password."
+msgstr "Cuir isteach do phasfhocal."
+
+#: templates/auth/login.html:248
+#, review
+msgid "Invalid email or password."
+msgstr "Ríomhphost nó pasfhocal mícheart."
+
+#: templates/auth/register.html:4
+#, review
+msgid "Register"
+msgstr "Cláraigh"
+
+#: templates/auth/register.html:41 templates/auth/register.html:105
+#, review
+msgid "Create Account"
+msgstr "Cruthaigh cuntas"
+
+#: templates/auth/register.html:60 templates/auth/setup_profile.html:35
+#: templates/modals/person_edit.html:17 templates/modals/person_edit.html:80
+#, review
+msgid "First Name"
+msgstr "Céadainm"
+
+#: templates/auth/register.html:64 templates/auth/setup_profile.html:40
+#: templates/modals/person_edit.html:22 templates/modals/person_edit.html:85
+#, review
+msgid "Last Name"
+msgstr "Sloinne"
+
+#: templates/auth/register.html:71
+#, review
+msgid "Can be your email address or a unique username"
+msgstr "Is féidir do sheoladh ríomhphoist nó ainm úsáideora uathúil a úsáid"
+
+#: templates/auth/register.html:76
+#, review
+msgid "Required for account verification and password reset"
+msgstr "Riachtanach chun an cuntas a fhíorú agus an pasfhocal a athshocrú"
+
+#: templates/auth/register.html:88 templates/auth/setup_profile.html:67
+#, review
+msgid "Time Zone"
+msgstr "Crios ama"
+
+#: templates/auth/register.html:90
+#, review
+msgid "UTC"
+msgstr "UTC"
+
+#: templates/auth/register.html:91
+#, review
+msgid "US Eastern"
+msgstr "Oirthear SAM"
+
+#: templates/auth/register.html:92
+#, review
+msgid "US Central"
+msgstr "Lár SAM"
+
+#: templates/auth/register.html:93
+#, review
+msgid "US Mountain"
+msgstr "Sléibhte SAM"
+
+#: templates/auth/register.html:94
+#, review
+msgid "US Pacific"
+msgstr "Aigéan Ciúin SAM"
+
+#: templates/auth/register.html:95
+#, review
+msgid "UK/London"
+msgstr "An Ríocht Aontaithe/Londain"
+
+#: templates/auth/register.html:96
+#, review
+msgid "Ireland/Dublin"
+msgstr "Éire/Baile Átha Cliath"
+
+#: templates/auth/register.html:97
+#, review
+msgid "France/Paris"
+msgstr "An Fhrainc/Páras"
+
+#: templates/auth/register.html:98
+#, review
+msgid "Germany/Berlin"
+msgstr "An Ghearmáin/Beirlín"
+
+#: templates/auth/register.html:99
+#, review
+msgid "Australia/Sydney"
+msgstr "An Astráil/Sydney"
+
+#: templates/auth/register.html:100
+#, review
+msgid "India Standard Time"
+msgstr "Am Caighdeánach na hIndia"
+
+#: templates/auth/register.html:101
+#, review
+msgid "Japan Standard Time"
+msgstr "Am Caighdeánach na Seapáine"
+
+#: templates/auth/register.html:105
+#, review
+msgid "Creating account..."
+msgstr "Cuntas á chruthú..."
+
+#: templates/auth/register.html:110
+#, review
+msgid "Login here"
+msgstr "Sínigh isteach anseo"
+
+#: templates/auth/resend_verification.html:4
+#: templates/auth/resend_verification.html:13
+#, review
+msgid "Resend Verification Email"
+msgstr "Seol an ríomhphost fíoraithe arís"
+
+#: templates/auth/resend_verification.html:29
+#, review
+msgid "Enter your email address and we'll send you a new verification link."
+msgstr "Cuir isteach do sheoladh ríomhphoist agus seolfaimid nasc fíoraithe nua chugat."
+
+#: templates/auth/resend_verification.html:37
+#, review
+msgid "Send Verification Email"
+msgstr "Seol ríomhphost fíoraithe"
+
+#: templates/auth/reset_password.html:13
+#, review
+msgid "Set New Password"
+msgstr "Socraigh pasfhocal nua"
+
+#: templates/auth/reset_password.html:40
+#, review
+msgid "Updating..."
+msgstr "Á nuashonrú..."
+
+#: templates/auth/reset_password.html:40
+#, review
+msgid "Update Password"
+msgstr "Nuashonraigh an pasfhocal"
+
+#: templates/auth/set_password.html:4 templates/auth/set_password.html:44
+#, review
+msgid "Set Password"
+msgstr "Socraigh pasfhocal"
+
+#: templates/auth/set_password.html:13
+#, review
+msgid "Set a Password"
+msgstr "Socraigh pasfhocal"
+
+#: templates/auth/set_password.html:31
+#, review
+msgid "Set a password for easier login next time. This is optional - you can always log in using a link sent to your email."
+msgstr "Socraigh pasfhocal le síniú isteach níos éasca an chéad uair eile. Níl sé riachtanach - is féidir leat síniú isteach i gcónaí le nasc a sheoltar chuig do ríomhphost."
+
+#: templates/auth/set_password.html:37
+#, review
+msgid "Minimum 8 characters"
+msgstr "8 gcarachtar ar a laghad"
+
+#: templates/auth/set_password.html:45
+#, review
+msgid "Continuing..."
+msgstr "Ag leanúint ar aghaidh..."
+
+#: templates/auth/set_password.html:45 templates/auth/setup_profile.html:106
+#, review
+msgid "Skip for now"
+msgstr "Scipeáil anois"
+
+#: templates/auth/set_password.html:85
+#, review
+msgid "Type a password in both boxes, or choose Skip for now."
+msgstr "Clóscríobh pasfhocal sa dá bhosca, nó roghnaigh Scipeáil anois."
+
+#: templates/auth/set_password.html:92
+#, review
+msgid "Your password needs at least 8 characters. Make it longer, or choose Skip for now."
+msgstr "Teastaíonn 8 gcarachtar ar a laghad i do phasfhocal. Déan níos faide é, nó roghnaigh Scipeáil anois."
+
+#: templates/auth/set_password.html:99
+#, review
+msgid "The two passwords don't match. Type the same password in both boxes."
+msgstr "Níl an dá phasfhocal mar an gcéanna. Clóscríobh an pasfhocal céanna sa dá bhosca."
+
+#: templates/auth/setup_profile.html:4 templates/auth/setup_profile.html:13
+#, review
+msgid "Complete Your Profile"
+msgstr "Críochnaigh do phróifíl"
+
+#: templates/auth/setup_profile.html:29
+#, review
+msgid "Help other musicians find you by completing your profile. All fields are optional."
+msgstr "Cuidigh le ceoltóirí eile tú a aimsiú trí do phróifíl a chríochnú. Níl aon réimse riachtanach."
+
+#: templates/auth/setup_profile.html:48
+#, review
+msgid "Where do you live?"
+msgstr "Cá bhfuil tú i do chónaí?"
+
+#: templates/auth/setup_profile.html:52
+#, review
+msgid "City"
+msgstr "Cathair"
+
+#: templates/auth/setup_profile.html:56
+#, review
+msgid "State/Province"
+msgstr "Stát/Cúige"
+
+#: templates/auth/setup_profile.html:60
+#, review
+msgid "Country"
+msgstr "Tír"
+
+#: templates/auth/setup_profile.html:75
+#, review
+msgid "Used for displaying session times"
+msgstr "Úsáidtear é le hamanna na seisiún a thaispeáint"
+
+#: templates/auth/setup_profile.html:80
+#, review
+msgid "What instruments do you play?"
+msgstr "Cad iad na huirlisí a sheinneann tú?"
+
+#: templates/auth/setup_profile.html:99
+#, review
+msgid "Other instrument(s)..."
+msgstr "Uirlis(í) eile..."
+
+#: templates/auth/setup_profile.html:105
+#, review
+msgid "Save Profile"
+msgstr "Sábháil an phróifíl"
+
+#: templates/auth/change_password.html:4 templates/auth/forgot_password.html:4
+#: templates/auth/login.html:4 templates/auth/register.html:4
+#: templates/auth/resend_verification.html:4
+#: templates/auth/reset_password.html:4 templates/auth/set_password.html:4
+#: templates/auth/setup_profile.html:4 templates/base.html:18
+#: templates/sessions.html:4
+#, review
+msgid "Irish Music Sessions"
+msgstr "Seisiúin Cheoil Ghaelaigh"
+
+#: templates/base.html:30
+#, review
+msgid "Track your traditional Irish music sessions and tunes"
+msgstr "Coinnigh cuntas ar do sheisiúin agus ar do chuid fonn ceoil thraidisiúnta"
+
+#: templates/base.html:404
+#, review
+msgid "logo"
+msgstr "lógó"
+
+#: templates/base.html:404
+#, review
+msgid "Traditional Irish Session Logs"
+msgstr "Logálacha Seisiún Traidisiúnta"
+
+#: templates/base.html:426
+#, review
+msgid "Connection status"
+msgstr "Stádas an cheangail"
+
+#: templates/base.html:438
+#, review
+msgid "Live session on now"
+msgstr "Seisiún beo ar siúl anois"
+
+#: templates/base.html:438
+#, review
+msgid "Live"
+msgstr "Beo"
+
+#: templates/base.html:452 templates/base.html:496
+#, review
+msgid "Share this page"
+msgstr "Comhroinn an leathanach seo"
+
+#: templates/base.html:470
+#, review
+msgid "Refresh ..."
+msgstr "Athnuaigh ..."
+
+#: templates/base.html:500
+#, review
+msgid "Copy link"
+msgstr "Cóipeáil an nasc"
+
+#: templates/base.html:501
+#, review
+msgid "Share…"
+msgstr "Comhroinn…"
+
+#: templates/base.html:616
+#, review
+msgid "A new version is available! Reload to update?"
+msgstr "Tá leagan nua ar fáil! Athlódáil chun é a nuashonrú?"
+
+#: templates/base.html:801
+#, review
+msgid "Date:"
+msgstr "Dáta:"
+
+#: templates/common_tunes.html:4 templates/common_tunes.html:267
+#, review
+msgid "Tunes In Common"
+msgstr "Foinn i bPáirt"
+
+#: templates/common_tunes.html:268
+#, python-format, review
+msgid "%(name)s and %(other)s have these tunes in common:"
+msgstr "Tá na foinn seo i bpáirt ag %(name)s agus %(other)s:"
+
+#: templates/common_tunes.html:290
+#, review
+msgid "All Types"
+msgstr "Gach cineál"
+
+#: templates/common_tunes.html:298
+#, review
+msgid "Toggle sort order"
+msgstr "Athraigh an t-ord"
+
+#: templates/common_tunes.html:308
+#, review
+msgid "No tunes in common yet"
+msgstr "Níl aon fhoinn i bpáirt fós"
+
+#: templates/common_tunes.html:309
+#, python-format, review
+msgid "You and %(name)s don't have any tunes marked as \"learned\" or \"learning\" in common."
+msgstr "Níl aon fhoinn marcáilte \"ar eolas\" nó \"á fhoghlaim\" i bpáirt agatsa agus ag %(name)s."
+
+#: templates/common_tunes.html:317 templates/tunes.html:124
+#, review
+msgid "Barndance"
+msgstr "Damhsa sciobóil"
+
+#: templates/common_tunes.html:317 templates/tunes.html:124
+#, review
+msgid "Hornpipe"
+msgstr "Cornphíopa"
+
+#: templates/common_tunes.html:318 templates/tunes.html:125
+#, review
+msgid "Jig"
+msgstr "Port"
+
+#: templates/common_tunes.html:318 templates/tunes.html:125
+#, review
+msgid "March"
+msgstr "Máirseáil"
+
+#: templates/common_tunes.html:319 templates/tunes.html:126
+#, review
+msgid "Mazurka"
+msgstr "Mazurka"
+
+#: templates/common_tunes.html:319 templates/tunes.html:126
+#, review
+msgid "Polka"
+msgstr "Polca"
+
+#: templates/common_tunes.html:320 templates/tunes.html:127
+#, review
+msgid "Reel"
+msgstr "Ríl"
+
+#: templates/common_tunes.html:320 templates/tunes.html:127
+#, review
+msgid "Slide"
+msgstr "Sleamhnán"
+
+#: templates/common_tunes.html:321 templates/tunes.html:128
+#, review
+msgid "Slip Jig"
+msgstr "Port luascach"
+
+#: templates/common_tunes.html:321 templates/tunes.html:128
+#, review
+msgid "Strathspey"
+msgstr "Strathspey"
+
+#: templates/common_tunes.html:322 templates/tunes.html:129
+#, review
+msgid "Three-Two"
+msgstr "Trí-dó"
+
+#: templates/common_tunes.html:322 templates/tunes.html:129
+#, review
+msgid "Waltz"
+msgstr "Válsa"
+
+#: templates/common_tunes.html:323 templates/tunes.html:130
+#, review
+msgid "Air"
+msgstr "Fonn mall"
+
+#: templates/common_tunes.html:329
+#, python-brace-format, review
+msgid "Showing {filtered} of {n} tune"
+msgid_plural "Showing {filtered} of {n} tunes"
+msgstr[0] "{filtered} as {n} fonn"
+msgstr[1] "{filtered} as {n} fhonn"
+msgstr[2] "{filtered} as {n} fhonn"
+msgstr[3] "{filtered} as {n} bhfonn"
+msgstr[4] "{filtered} as {n} fonn"
+
+#: templates/db_test.html:4
+#, review
+msgid "Database Test"
+msgstr "Tástáil Bunachar Sonraí"
+
+#: templates/db_test.html:8
+#, review
+msgid "Database Connection Test!"
+msgstr "Tástáil Ceangail leis an mBunachar Sonraí!"
+
+#: templates/db_test.html:9
+#, python-format, review
+msgid "Records from %(table)s:"
+msgstr "Taifid ó %(table)s:"
+
+#: templates/db_test.html:14
+#, review
+msgid "ID"
+msgstr "Aitheantas"
+
+#: templates/db_test.html:25
+#, python-format, review
+msgid "No records found in %(table)s."
+msgstr "Níor aimsíodh aon taifead in %(table)s."
+
+#: templates/db_test.html:28
+#, review
+msgid "Back to home"
+msgstr "Ar ais chuig an leathanach baile"
+
+#: templates/error.html:4
+#, review
+msgid "Something went wrong"
+msgstr "Chuaigh rud éigin amú"
+
+#: templates/error.html:9
+#, review
+msgid "Something went wrong. :("
+msgstr "Chuaigh rud éigin amú. :("
+
+#: templates/error.html:23
+#, python-format, review
+msgid "Perhaps we could interest you in something from %(shop)s, like a %(item)s?"
+msgstr "B'fhéidir go mbeadh suim agat i rud éigin ó %(shop)s, mar shampla %(item)s?"
+
+#: templates/error.html:30
+#, review
+msgid "Error illustration"
+msgstr "Léaráid earráide"
+
+#: templates/error.html:39
+#, review
+msgid "Go back home"
+msgstr "Ar ais chuig an leathanach baile"
+
+#: templates/hamburger_menu.html:22
 #, review
 msgid "Toggle menu"
 msgstr "Oscail nó dún an roghchlár"
 
-#: templates/hamburger_menu.html:33 templates/hamburger_menu.html:62
-#: templates/header_nav.html:15 templates/tab_bar.html:41
-msgid "Sessions"
-msgstr "Seisiúin"
-
-#: templates/hamburger_menu.html:35 templates/hamburger_menu.html:64
-#: templates/header_nav.html:20 templates/header_nav.html:29
-#: templates/tab_bar.html:50 templates/tab_bar.html:69
-msgid "Tunes"
-msgstr "Foinn"
-
-#: templates/hamburger_menu.html:37 templates/header_nav.html:24
-#: templates/tab_bar.html:58
+#: templates/hamburger_menu.html:38 templates/header_nav.html:25
+#: templates/tab_bar.html:59
 msgid "Me"
 msgstr "Mise"
 
-#: templates/hamburger_menu.html:41
-msgid "Admin"
-msgstr "Riarachán"
-
-#: templates/hamburger_menu.html:46 templates/hamburger_menu.html:70
+#: templates/hamburger_menu.html:47 templates/hamburger_menu.html:71
 msgid "Share"
 msgstr "Comhroinn"
 
-#: templates/hamburger_menu.html:48 templates/hamburger_menu.html:72
+#: templates/hamburger_menu.html:49 templates/hamburger_menu.html:73
 msgid "Help"
 msgstr "Cabhair"
 
-#: templates/hamburger_menu.html:52
+#: templates/hamburger_menu.html:53
 msgid "Log Out"
 msgstr "Sínigh amach"
 
-#: templates/hamburger_menu.html:56
+#: templates/hamburger_menu.html:57
 #, python-format, review
 msgid "Signed in as %(name)s."
 msgstr "Sínithe isteach mar %(name)s."
 
-#: templates/hamburger_menu.html:66 templates/header_nav.html:33
-#: templates/tab_bar.html:81
+#: templates/hamburger_menu.html:67 templates/header_nav.html:34
+#: templates/tab_bar.html:82
 msgid "About"
 msgstr "Eolas"
 
-#: templates/hamburger_menu.html:76
+#: templates/hamburger_menu.html:77 templates/home.html:96
 #, review
 msgid "Log In or Register"
 msgstr "Sínigh isteach nó cláraigh"
 
-#: templates/header_nav.html:12 templates/tab_bar.html:27
+#: templates/header_nav.html:13 templates/tab_bar.html:28
 #, review
 msgid "Main"
 msgstr "Príomhnascleanúint"
 
-#: templates/tab_bar.html:33
+#: templates/home.html:94
+#, review
+msgid "Track your tunes. Log your sessions."
+msgstr "Coinnigh cuntas ar do chuid fonn. Logáil do sheisiúin."
+
+#: templates/home.html:95
+#, review
+msgid "Keep track of tunes you know or want to learn, see what's popular in different sessions, and log what you play at your session."
+msgstr "Coinnigh cuntas ar na foinn atá ar eolas agat nó le foghlaim agat, feic cad atá coitianta i seisiúin éagsúla, agus logáil a seinneann tú ag do sheisiún."
+
+#: templates/home.html:97
+#, review
+msgid "browse sessions"
+msgstr "seisiúin a bhrabhsáil"
+
+#: templates/home.html:98
+#, python-format, review
+msgid "Don't want an account? You can still %(link)s."
+msgstr "Níl cuntas uait? Is féidir leat %(link)s fós."
+
+#: templates/live_logging.html:7
+#, review
+msgid "Live Logging"
+msgstr "Logáil Bheo"
+
+#: templates/magic.html:4
+#, review
+msgid "Magic Tunes"
+msgstr "Foinn Draíochta"
+
+#: templates/magic.html:8
+#, python-format, review
+msgid "Magic Tunes - %(type)ss"
+msgstr "Foinn Draíochta - %(type)s"
+
+#: templates/magic.html:11
+#, review
+msgid "Tune Types:"
+msgstr "Cineálacha Fonn:"
+
+#: templates/magic.html:19
+#, review
+msgid "Selected Tunes:"
+msgstr "Foinn Roghnaithe:"
+
+#: templates/magic.html:25
+#, python-format, review
+msgid "Times Played: %(count)s"
+msgstr "Líon uaireanta seinnte: %(count)s"
+
+#: templates/magic.html:30
+#, python-format, review
+msgid "No tunes found for %(type)s."
+msgstr "Níor aimsíodh aon fhonn don chineál %(type)s."
+
+#: templates/magic.html:34
+#, python-format, review
+msgid "Get another set of %(type)ss"
+msgstr "Faigh tuilleadh den chineál %(type)s"
+
+#: templates/modals/person_edit.html:7
+#, review
+msgid "Edit Person"
+msgstr "Cuir an duine in eagar"
+
+#: templates/modals/person_edit.html:37 templates/modals/person_edit.html:105
+#, review
+msgid "Other instrument..."
+msgstr "Uirlis eile..."
+
+#: templates/modals/person_edit.html:39 templates/modals/person_edit.html:107
+#, review
+msgid "Add"
+msgstr "Cuir leis"
+
+#: templates/modals/person_edit.html:45
+#, review
+msgid "Attendance Status"
+msgstr "Stádas tinrimh"
+
+#: templates/modals/person_edit.html:47
+#, review
+msgid "Yes - Attending"
+msgstr "Tá - ag freastal"
+
+#: templates/modals/person_edit.html:49
+#, review
+msgid "No - Not Attending"
+msgstr "Níl - gan freastal"
+
+#: templates/modals/person_edit.html:54
+#, review
+msgid "Comment"
+msgstr "Nóta"
+
+#: templates/modals/person_edit.html:72
+#, review
+msgid "Add New Person"
+msgstr "Cuir duine nua leis"
+
+#: templates/modals/person_edit.html:90
+#, review
+msgid "Email (optional)"
+msgstr "Ríomhphost (roghnach)"
+
+#: templates/modals/person_edit.html:116
+#, review
+msgid "Add Person"
+msgstr "Cuir an duine leis"
+
+#: templates/my_tunes.html:5
+#, review
+msgid "My Tunes - Personal Tune Collection"
+msgstr "Mo chuid fonn - Bailiúchán Pearsanta Fonn"
+
+#: templates/offline.html:31
+#, review
+msgid "This page hasn't been saved for offline use. Reconnect to load it."
+msgstr "Níor sábháladh an leathanach seo le húsáid as líne. Ceangail arís chun é a lódáil."
+
+#: templates/offline.html:32
+#, review
+msgid "Pages you've already visited and the live logger still work without a connection."
+msgstr "Oibríonn na leathanaigh a d'oscail tú cheana agus an logálaí beo gan cheangal."
+
+#: templates/offline.html:34
+#, review
+msgid "Go back"
+msgstr "Siar"
+
+#: templates/offline.html:35
+#, review
+msgid "Try again"
+msgstr "Bain triail eile as"
+
+#: templates/partials/attendance_tab.html:11
+#, review
+msgid "Search and add people..."
+msgstr "Cuardaigh agus cuir daoine leis..."
+
+#: templates/partials/attendance_tab.html:25
+#, review
+msgid "Yes:"
+msgstr "Tá:"
+
+#: templates/partials/attendance_tab.html:26
+#, review
+msgid "Maybe:"
+msgstr "B'fhéidir:"
+
+#: templates/partials/attendance_tab.html:27
+#, review
+msgid "No:"
+msgstr "Níl:"
+
+#: templates/partials/attendance_tab.html:28
+#, review
+msgid "Total:"
+msgstr "Iomlán:"
+
+#: templates/partials/attendance_tab.html:35
+#, review
+msgid "Loading attendance..."
+msgstr "An tinreamh á lódáil..."
+
+#: templates/partials/attendance_tab.html:45
+#, review
+msgid "Click to edit person details"
+msgstr "Cliceáil chun sonraí an duine a chur in eagar"
+
+#: templates/person_details.html:4
+#, python-format, review
+msgid "Profile - %(name)s"
+msgstr "Próifíl - %(name)s"
+
+#: templates/person_details.html:4
+#, python-format, review
+msgid "Person Details - %(name)s"
+msgstr "Sonraí Duine - %(name)s"
+
+#: templates/recording_segmenter.html:5
+#, python-format, review
+msgid "Segment %(label)s"
+msgstr "Deighil %(label)s"
+
+#: templates/recording_segmenter.html:5
+#, review
+msgid "recording"
+msgstr "taifeadadh"
+
+#: templates/session_admin.html:4
+#, python-format, review
+msgid "Admin - %(name)s"
+msgstr "Riarachán - %(name)s"
+
+#: templates/session_admin_person.html:11
+#, review
+msgid "Breadcrumb"
+msgstr "Conair nascleanúna"
+
+#: templates/session_admin_person.html:30
+#, python-format, review
+msgid "Member details for <strong>%(session)s</strong>."
+msgstr "Sonraí an bhaill do <strong>%(session)s</strong>."
+
+#: templates/session_admin_person.html:32
+#, python-format, review
+msgid "Back to session on %(date)s"
+msgstr "Ar ais chuig an seisiún ar %(date)s"
+
+#: templates/session_admin_person.html:34
+#, review
+msgid "Back to members list"
+msgstr "Ar ais chuig liosta na mball"
+
+#: templates/session_admin_person.html:42
+#, review
+msgid "Person Information"
+msgstr "Eolas faoin duine"
+
+#: templates/session_admin_person.html:53 templates/session_bulk_import.html:43
+#, review
+msgid "Name:"
+msgstr "Ainm:"
+
+#: templates/session_admin_person.html:63
+#, review
+msgid "Email:"
+msgstr "Ríomhphost:"
+
+#: templates/session_admin_person.html:66
+#: templates/session_admin_person.html:68
+#: templates/session_admin_person.html:75
+#: templates/session_admin_person.html:77
+#: templates/session_admin_person.html:87
+#: templates/session_admin_person.html:89
+#: templates/session_admin_person.html:96
+#: templates/session_admin_person.html:98
+#: templates/session_admin_person.html:105
+#: templates/session_admin_person.html:107
+#: templates/session_admin_person.html:125
+#: templates/session_admin_person.html:128
+#, review
+msgid "Not provided"
+msgstr "Níor tugadh"
+
+#: templates/session_admin_person.html:72
+#, review
+msgid "SMS Number:"
+msgstr "Uimhir SMS:"
+
+#: templates/session_admin_person.html:84
+#, review
+msgid "City:"
+msgstr "Cathair:"
+
+#: templates/session_admin_person.html:93
+#, review
+msgid "State:"
+msgstr "Stát:"
+
+#: templates/session_admin_person.html:102
+#, review
+msgid "Country:"
+msgstr "Tír:"
+
+#: templates/session_admin_person.html:117
+#, review
+msgid "TheSession.org ID:"
+msgstr "Aitheantas TheSession.org:"
+
+#: templates/session_admin_person.html:130
+#, review
+msgid "View Profile"
+msgstr "Féach ar an bpróifíl"
+
+#: templates/session_admin_person.html:142
+#, review
+msgid "User Account:"
+msgstr "Cuntas úsáideora:"
+
+#: templates/session_admin_person.html:146
+#, review
+msgid "System Admin"
+msgstr "Bainisteoir córais"
+
+#: templates/modals/person_edit.html:61 templates/session_admin_person.html:157
+#, review
+msgid "Save Changes"
+msgstr "Sábháil na hathruithe"
+
+#: templates/session_admin_person.html:158
+#, review
+msgid "Note: This person can edit these details themselves if they create an account"
+msgstr "Nóta: Is féidir leis an duine seo na sonraí seo a chur in eagar iad féin má chruthaíonn siad cuntas"
+
+#: templates/session_admin_person.html:171
+#, review
+msgid "Session Status"
+msgstr "Stádas sa seisiún"
+
+#: templates/session_admin_person.html:184
+#: templates/session_admin_person.html:667
+#, review
+msgid "Relationship"
+msgstr "Gaol"
+
+#: templates/session_admin_person.html:186
+#, review
+msgid "Member"
+msgstr "Ball"
+
+#: templates/session_admin_person.html:187
+#, review
+msgid "Visitor"
+msgstr "Cuairteoir"
+
+#: templates/session_admin_person.html:190
+#, review
+msgid "Whose session is this? A <strong>member</strong> counts this session's tunes as their own; a <strong>visitor</strong> came, but it isn't one of their sessions. Grants no access."
+msgstr "Cé leis an seisiún seo? Áiríonn <strong>ball</strong> foinn an tseisiúin seo mar a gcuid féin; tháinig <strong>cuairteoir</strong>, ach ní ceann dá seisiúin féin é. Ní thugann sé rochtain ar bith."
+
+#: templates/session_admin_person.html:197
+#: templates/session_admin_person.html:668
+#, review
+msgid "Confirmed"
+msgstr "Deimhnithe"
+
+#: templates/session_admin_person.html:200
+#, review
+msgid "Lets them see this session's <strong>people list and attendance records</strong>. Nothing else grants that — joining a session doesn't, and neither does being checked in."
+msgstr "Ligeann sé dóibh <strong>liosta daoine agus taifid tinrimh</strong> an tseisiúin seo a fheiceáil. Ní thugann aon rud eile é sin — ní thugann dul isteach i seisiún é, ná a bheith marcáilte i láthair."
+
+#: templates/session_admin_person.html:207
+#: templates/session_admin_person.html:669
+#, review
+msgid "Archived"
+msgstr "Cartlannaithe"
+
+#: templates/session_admin_person.html:210
+#, review
+msgid "Hide someone who's moved away. They drop out of the default lists but stay findable by typing their name, so nobody re-creates them as a duplicate person."
+msgstr "Folaigh duine a d'aistrigh as an áit. Ní bhíonn siad ar na liostaí réamhshocraithe a thuilleadh ach is féidir iad a aimsiú trína n-ainm a chlóscríobh, ionas nach gcruthaíonn aon duine arís iad mar dhuine dúblach."
+
+#: templates/session_admin_person.html:217
+#, review
+msgid "Session Admin"
+msgstr "Bainisteoir seisiúin"
+
+#: templates/session_admin_person.html:219
+#, review
+msgid "Grant admin privileges for this session"
+msgstr "Tabhair cearta bainisteora don seisiún seo"
+
+#: templates/session_admin_person.html:231
+#, review
+msgid "Manage Recordings"
+msgstr "Bainistigh taifeadtaí"
+
+#: templates/session_admin_person.html:234
+#, review
+msgid "Lets them upload this session's audio and add tune timestamps to it, from the Recordings section of any of its logs. Also lets them <strong>delete</strong> a recording and the timestamps placed on it. Only takes effect for a Session Admin, and applies to this session alone."
+msgstr "Ligeann sé dóibh fuaim an tseisiúin seo a uaslódáil agus stampaí ama na bhfonn a chur leis, ó chuid na dTaifeadtaí in aon cheann dá logálacha. Ligeann sé dóibh freisin taifeadadh agus na stampaí ama air a <strong>scriosadh</strong>. Ní bhíonn éifeacht leis ach do Bhainisteoir seisiúin, agus baineann sé leis an seisiún seo amháin."
+
+#: templates/session_admin_person.html:244
+#, review
+msgid "Email Reminders"
+msgstr "Meabhrúcháin ríomhphoist"
+
+#: templates/session_admin_person.html:248
+#, review
+msgid "Email Followups"
+msgstr "Teachtaireachtaí leantacha ríomhphoist"
+
+#: templates/modals/person_edit.html:32 templates/modals/person_edit.html:95
+#: templates/session_admin_person.html:262
+#: templates/session_admin_person.html:294
+#: templates/session_bulk_import.html:109
+#, review
+msgid "Instruments"
+msgstr "Uirlisí"
+
+#: templates/session_admin_person.html:276
+#: templates/session_admin_person.html:681
+#, review
+msgid "No instruments specified."
+msgstr "Níor sonraíodh uirlis ar bith."
+
+#: templates/session_admin_person.html:279
+#, review
+msgid "This person can edit their own instruments by logging into their account."
+msgstr "Is féidir leis an duine seo a n-uirlisí féin a chur in eagar trí shíniú isteach ina gcuntas."
+
+#: templates/session_admin_person.html:281
+#: templates/session_admin_person.html:678
+#, review
+msgid "Edit"
+msgstr "Cuir in eagar"
+
+#: templates/session_admin_person.html:314
+#, review
+msgid "Other Instruments"
+msgstr "Uirlisí eile"
+
+#: templates/session_admin_person.html:320
+#: templates/session_admin_person.html:676
+#, review
+msgid "Enter instrument name"
+msgstr "Cuir isteach ainm na huirlise"
+
+#: templates/partials/attendance_tab.html:58
+#: templates/session_admin_person.html:321
+#: templates/session_admin_person.html:677
+#, review
+msgid "Remove"
+msgstr "Bain"
+
+#: templates/session_admin_person.html:326
+#, review
+msgid "Add Other Instrument"
+msgstr "Cuir uirlis eile leis"
+
+#: templates/session_admin_person.html:331
+#, review
+msgid "Save Instruments"
+msgstr "Sábháil na huirlisí"
+
+#: templates/session_admin_person.html:348
+#, review
+msgid "Sessions Attended"
+msgstr "Seisiúin ar freastalaíodh orthu"
+
+#: templates/session_admin_person.html:352
+#, python-format, review
+msgid "%(num)d session attended"
+msgid_plural "%(num)d sessions attended"
+msgstr[0] "Freastal ar %(num)d seisiún"
+msgstr[1] "Freastal ar %(num)d sheisiún"
+msgstr[2] "Freastal ar %(num)d sheisiún"
+msgstr[3] "Freastal ar %(num)d seisiún"
+msgstr[4] "Freastal ar %(num)d seisiún"
+
+#: templates/session_admin_person.html:359
+#, review
+msgid "Time"
+msgstr "Am"
+
+#: templates/session_admin_person.html:361
+#, review
+msgid "Comments"
+msgstr "Nótaí"
+
+#: templates/session_admin_person.html:376
+#, python-format, review
+msgid "From %(time)s"
+msgstr "Ó %(time)s"
+
+#: templates/session_admin_person.html:378
+#, review
+msgid "Not specified"
+msgstr "Níor sonraíodh"
+
+#: templates/session_admin_person.html:383
+#, review
+msgid "Cancelled"
+msgstr "Curtha ar ceal"
+
+#: templates/session_admin_person.html:385
+#, review
+msgid "Attended"
+msgstr "I láthair"
+
+#: templates/session_admin_person.html:396
+#, review
+msgid "No sessions attended found for this person at this session."
+msgstr "Níor aimsíodh freastal ar bith ag an duine seo ar an seisiún seo."
+
+#: templates/session_admin_person.html:405
+#, review
+msgid "Danger Zone"
+msgstr "Limistéar contúirte"
+
+#: templates/session_admin_person.html:408
+#, review
+msgid "Remove Member from Session"
+msgstr "Bain an ball den seisiún"
+
+#: templates/session_admin_person.html:410
+#, python-format, review
+msgid "This will remove %(name)s from the session \"%(session)s\"."
+msgstr "Bainfidh sé seo %(name)s den seisiún \"%(session)s\"."
+
+#: templates/session_admin_person.html:412
+#, review
+msgid "If this person is not associated with any other sessions and has no user account, the person record will also be deleted permanently."
+msgstr "Mura bhfuil baint ag an duine seo le seisiún ar bith eile agus mura bhfuil cuntas úsáideora acu, scriosfar taifead an duine go buan freisin."
+
+#: templates/session_admin_person.html:416
+#: templates/session_admin_person.html:447
+#: templates/session_admin_person.html:689
+#, review
+msgid "Remove Member"
+msgstr "Bain an ball"
+
+#: templates/session_admin_person.html:430
+#, review
+msgid "Confirm Deletion"
+msgstr "Deimhnigh an scriosadh"
+
+#: templates/session_admin_person.html:434
+#, review
+msgid "Are you sure?"
+msgstr "An bhfuil tú cinnte?"
+
+#: templates/session_admin_person.html:435
+#, python-format, review
+msgid "This will permanently remove <strong>%(name)s</strong> from the session \"<strong>%(session)s</strong>\"."
+msgstr "Bainfidh sé seo <strong>%(name)s</strong> den seisiún \"<strong>%(session)s</strong>\" go buan."
+
+#: templates/session_admin_person.html:439
+#, review
+msgid "<strong>Warning:</strong> Since this person has no user account and may not be associated with other sessions, their entire person record could be deleted permanently."
+msgstr "<strong>Rabhadh:</strong> Ós rud é nach bhfuil cuntas úsáideora ag an duine seo agus b'fhéidir nach bhfuil baint acu le seisiúin eile, d'fhéadfaí taifead iomlán an duine a scriosadh go buan."
+
+#: templates/session_admin_person.html:442
+#, review
+msgid "This action cannot be undone."
+msgstr "Ní féidir é seo a chealú."
+
+#: templates/auth/change_password.html:50 templates/auth/set_password.html:44
+#: templates/auth/setup_profile.html:105
+#: templates/session_admin_person.html:663
+#: templates/session_bulk_import.html:152
+#, review
+msgid "Saving..."
+msgstr "Á shábháil..."
+
+#: templates/session_admin_person.html:664
+#, python-brace-format, review
+msgid "{label} updated."
+msgstr "Nuashonraíodh: {label}."
+
+#: templates/session_admin_person.html:665
+#, python-brace-format, review
+msgid "Failed to update {label}"
+msgstr "Theip ar nuashonrú: {label}"
+
+#: templates/session_admin_person.html:666
+#, python-brace-format, review
+msgid "Error: {message}"
+msgstr "Earráid: {message}"
+
+#: templates/session_admin_person.html:670
+#, review
+msgid "This person"
+msgstr "An duine seo"
+
+#: templates/session_admin_person.html:671
+#, python-brace-format, review
+msgid "{name} will be able to see this session's people list and attendance records. Confirm them?"
+msgstr "Beidh {name} in ann liosta daoine agus taifid tinrimh an tseisiúin seo a fheiceáil. An ndeimhneofar iad?"
+
+#: templates/session_admin_person.html:672
+#, review
+msgid "Failed to save"
+msgstr "Theip ar an sábháil"
+
+#: templates/session_admin_person.html:673
+#, review
+msgid "Admin status updated successfully!"
+msgstr "Nuashonraíodh stádas an bhainisteora!"
+
+#: templates/session_admin_person.html:674
+#, review
+msgid "They can now manage this session's recordings."
+msgstr "Is féidir leo taifeadtaí an tseisiúin seo a bhainistiú anois."
+
+#: templates/session_admin_person.html:675
+#, review
+msgid "Recording access removed."
+msgstr "Baineadh an rochtain ar thaifeadtaí."
+
+#: templates/session_admin_person.html:679
+#, review
+msgid "Saving instruments..."
+msgstr "Na huirlisí á sábháil..."
+
+#: templates/session_admin_person.html:680
+#, review
+msgid "Instruments updated successfully!"
+msgstr "Nuashonraíodh na huirlisí!"
+
+#: templates/session_admin_person.html:682
+#, review
+msgid "Failed to update instruments"
+msgstr "Theip ar nuashonrú na n-uirlisí"
+
+#: templates/session_admin_person.html:683
+#, review
+msgid "Person details updated successfully!"
+msgstr "Nuashonraíodh sonraí an duine!"
+
+#: templates/session_admin_person.html:684
+#, review
+msgid "Failed to update person details"
+msgstr "Theip ar nuashonrú shonraí an duine"
+
+#: templates/session_admin_person.html:685
+#, review
+msgid "Deleting..."
+msgstr "Á scriosadh..."
+
+#: templates/session_admin_person.html:686
+#, review
+msgid "Member successfully removed from session"
+msgstr "Baineadh an ball den seisiún"
+
+#: templates/session_admin_person.html:687
+#, review
+msgid "Failed to remove member"
+msgstr "Theip ar bhaint an bhaill"
+
+#: templates/session_admin_person.html:688
+#, python-brace-format, review
+msgid "Error removing member: {message}"
+msgstr "Earráid agus an ball á bhaint: {message}"
+
+#: templates/session_bulk_import.html:4
+#, python-format, review
+msgid "Bulk Import - %(session)s"
+msgstr "Iompórtáil mhórchóir - %(session)s"
+
+#: templates/session_bulk_import.html:11
+#, python-format, review
+msgid "Bulk Import Members - %(session)s"
+msgstr "Iompórtáil baill ar an mórchóir - %(session)s"
+
+#: templates/session_bulk_import.html:13
+#, review
+msgid "Import multiple members from CSV data."
+msgstr "Iompórtáil roinnt ball ó shonraí CSV."
+
+#: templates/session_bulk_import.html:13
+#, review
+msgid "← Back to Members"
+msgstr "← Ar ais chuig na baill"
+
+#: templates/session_bulk_import.html:20
+#, review
+msgid "Paste Comma-Separated Data"
+msgstr "Greamaigh sonraí scartha le camóga"
+
+#: templates/session_bulk_import.html:26
+#, review
+msgid "Need help with CSV format?"
+msgstr "Cabhair le formáid CSV?"
+
+#: templates/session_bulk_import.html:33
+#, review
+msgid "Supported CSV Formats"
+msgstr "Formáidí CSV a dtacaítear leo"
+
+#: templates/session_bulk_import.html:34
+#, review
+msgid "The system automatically detects your CSV format. You can use any of these arrangements:"
+msgstr "Aithníonn an córas formáid do CSV go huathoibríoch. Is féidir aon cheann de na leagain amach seo a úsáid:"
+
+#: templates/session_bulk_import.html:36
+#, review
+msgid "Basic:"
+msgstr "Bunúsach:"
+
+#: templates/session_bulk_import.html:36
+#, review
+msgid "Name, Email, Instruments"
+msgstr "Ainm, Ríomhphost, Uirlisí"
+
+#: templates/session_bulk_import.html:37 templates/session_bulk_import.html:55
+#, review
+msgid "With headers:"
+msgstr "Le ceannteidil:"
+
+#: templates/session_bulk_import.html:38
+#, review
+msgid "Extended:"
+msgstr "Sínte:"
+
+#: templates/session_bulk_import.html:38
+#, review
+msgid "Name, Email, Phone, City, State, Country, Instruments"
+msgstr "Ainm, Ríomhphost, Fón, Cathair, Stát, Tír, Uirlisí"
+
+#: templates/session_bulk_import.html:41
+#, review
+msgid "Field Notes:"
+msgstr "Nótaí faoi na réimsí:"
+
+#: templates/session_bulk_import.html:43
+#, review
+msgid "Can be \"First Last\" or separate First/Last columns"
+msgstr "Is féidir \"Céadainm Sloinne\" nó colúin ar leith don chéadainm/sloinne a úsáid"
+
+#: templates/session_bulk_import.html:44
+#, review
+msgid "Contact:"
+msgstr "Teagmháil:"
+
+#: templates/session_bulk_import.html:44
+#, review
+msgid "Email addresses or phone numbers are auto-detected"
+msgstr "Aithnítear seoltaí ríomhphoist nó uimhreacha fóin go huathoibríoch"
+
+#: templates/session_bulk_import.html:45
+#, review
+msgid "Instruments:"
+msgstr "Uirlisí:"
+
+#: templates/session_bulk_import.html:45
+#, review
+msgid "Comma-separated list (e.g., \"Fiddle,Flute\" or \"Guitar\")"
+msgstr "Liosta scartha le camóga (m.sh., \"Fiddle,Flute\" nó \"Guitar\")"
+
+#: templates/session_bulk_import.html:46
+#, review
+msgid "Missing city/state/country will default from session settings"
+msgstr "Tógfar cathair/stát/tír atá in easnamh ó shocruithe an tseisiúin"
+
+#: templates/session_bulk_import.html:49
+#, review
+msgid "Example CSV formats:"
+msgstr "Samplaí d'fhormáidí CSV:"
+
+#: templates/session_bulk_import.html:51
+#, review
+msgid "Simple:"
+msgstr "Simplí:"
+
+#: templates/session_bulk_import.html:66
+#, review
+msgid "CSV Data"
+msgstr "Sonraí CSV"
+
+#: templates/session_bulk_import.html:67
+#, review
+msgid "(paste from Excel, Google Sheets, or any CSV source)"
+msgstr "(greamaigh ó Excel, Google Sheets, nó foinse CSV ar bith)"
+
+#: templates/session_bulk_import.html:73
+#, review
+msgid "Paste your CSV data here..."
+msgstr "Greamaigh do shonraí CSV anseo..."
+
+#: templates/session_bulk_import.html:73
+#, review
+msgid "Example:"
+msgstr "Sampla:"
+
+#: templates/session_bulk_import.html:78
+#, review
+msgid "Clear"
+msgstr "Glan"
+
+#: templates/session_bulk_import.html:80
+#, review
+msgid "Next →"
+msgstr "Ar aghaidh →"
+
+#: templates/session_bulk_import.html:83
+#, review
+msgid "Processing..."
+msgstr "Á phróiseáil..."
+
+#: templates/session_bulk_import.html:93
+#, review
+msgid "Step 2: Review & Confirm"
+msgstr "Céim 2: Athbhreithnigh agus deimhnigh"
+
+#: templates/session_bulk_import.html:96
+#, review
+msgid "Processing Results:"
+msgstr "Torthaí na próiseála:"
+
+#: templates/auth/login.html:49 templates/auth/register.html:74
+#: templates/modals/person_edit.html:27 templates/session_bulk_import.html:106
+#, review
+msgid "Email"
+msgstr "Ríomhphost"
+
+#: templates/session_bulk_import.html:107
+#, review
+msgid "Phone"
+msgstr "Fón"
+
+#: templates/session_bulk_import.html:120
+#, review
+msgid "← Back to Edit CSV"
+msgstr "← Ar ais chun an CSV a athrú"
+
+#: templates/session_bulk_import.html:122
+#, review
+msgid "Select All"
+msgstr "Roghnaigh gach duine"
+
+#: templates/session_bulk_import.html:123
+#, review
+msgid "Select None"
+msgstr "Ná roghnaigh duine ar bith"
+
+#: templates/session_bulk_import.html:124
+#, review
+msgid "Save Selected Members"
+msgstr "Sábháil na baill roghnaithe"
+
+#: templates/session_bulk_import.html:141
+#, review
+msgid "Please enter CSV data"
+msgstr "Cuir isteach sonraí CSV"
+
+#: templates/session_bulk_import.html:142
+#, python-brace-format, review
+msgid "Error processing CSV: {error}"
+msgstr "Earráid agus an CSV á phróiseáil: {error}"
+
+#: templates/session_bulk_import.html:143
+#, python-brace-format, review
+msgid "Error processing CSV data: {error}"
+msgstr "Earráid agus na sonraí CSV á bpróiseáil: {error}"
+
+#: templates/session_bulk_import.html:144
+#, review
+msgid "No processed data found. Please start over."
+msgstr "Níor aimsíodh sonraí próiseáilte. Tosaigh arís."
+
+#: templates/session_bulk_import.html:146
+#, review
+msgid "From session defaults"
+msgstr "Ó réamhshocruithe an tseisiúin"
+
+#: templates/session_bulk_import.html:147
+#, python-brace-format, review
+msgid "Duplicate ({reason})"
+msgstr "Dúblach ({reason})"
+
+#: templates/session_bulk_import.html:148
+#, review
+msgid "New"
+msgstr "Nua"
+
+#: templates/session_bulk_import.html:149
+#, python-brace-format, review
+msgid "Found {total} entries: {new} new members, {duplicates} duplicates"
+msgstr "Iontrálacha aimsithe: {total} (baill nua: {new}, dúblacha: {duplicates})"
+
+#: templates/session_bulk_import.html:150
+#, python-brace-format, review
+msgid "Save Selected Members ({count})"
+msgstr "Sábháil na baill roghnaithe ({count})"
+
+#: templates/session_bulk_import.html:151
+#, review
+msgid "Please select at least one person to save"
+msgstr "Roghnaigh duine amháin ar a laghad le sábháil"
+
+#: templates/session_bulk_import.html:153
+#, python-brace-format, review
+msgid "Successfully saved {count} members!"
+msgstr "Baill sábháilte: {count}!"
+
+#: templates/session_bulk_import.html:154
+#, python-brace-format, review
+msgid "({count} duplicates skipped)"
+msgstr "(dúblacha scipeáilte: {count})"
+
+#: templates/session_bulk_import.html:155
+#, python-brace-format, review
+msgid "Error saving members: {error}"
+msgstr "Earráid agus na baill á sábháil: {error}"
+
+#: templates/session_detail.html:4
+#, python-format, review
+msgid "%(name)s - Irish Music Session Details"
+msgstr "%(name)s - Sonraí an tSeisiúin Cheoil"
+
+#: templates/session_detail.html:51
+#, review
+msgid "Open Today's Session Log"
+msgstr "Oscail Logáil an tSeisiúin Inniu"
+
+#: templates/session_detail.html:60
+#, review
+msgid "Admin page"
+msgstr "Leathanach riaracháin"
+
+#: templates/session_detail.html:66
+#, review
+msgid "(unlisted address)"
+msgstr "(seoladh nach bhfuil liostaithe)"
+
+#: templates/session_detail.html:66
+#, review
+msgid "Web"
+msgstr "Gréasán"
+
+#: templates/session_detail.html:69
+#, review
+msgid "Schedule:"
+msgstr "Sceideal:"
+
+#: templates/session_detail.html:77
+#, review
+msgid "About this session:"
+msgstr "Faoin seisiún seo:"
+
+#: templates/session_instance_players.html:4
+#: templates/session_instance_players.html:108
+#, review
+msgid "Players"
+msgstr "Ceoltóirí"
+
+#: templates/session_instance_players.html:91
+#, review
+msgid "Notes from this session:"
+msgstr "Nótaí ón seisiún seo:"
+
+#: templates/session_instance_players.html:98
+#, review
+msgid "This session instance was cancelled."
+msgstr "Cuireadh an seisiún seo ar ceal."
+
+#: templates/session_instance_players.html:157
+#, review
+msgid "Checked In"
+msgstr "I láthair"
+
+#: templates/session_instance_players.html:158
+#, review
+msgid "Change To Maybe"
+msgstr "Athraigh go B'fhéidir"
+
+#: templates/modals/person_edit.html:48
+#: templates/partials/attendance_tab.html:56
+#: templates/session_instance_players.html:159
+#, review
+msgid "Maybe"
+msgstr "B'fhéidir"
+
+#: templates/session_instance_players.html:160
+#, review
+msgid "Change To No"
+msgstr "Athraigh go Níl"
+
+#: templates/session_instance_players.html:161
+#, review
+msgid "Not Coming"
+msgstr "Ní thiocfaidh"
+
+#: templates/session_instance_players.html:162
+#, review
+msgid "Change To Yes"
+msgstr "Athraigh go Tá"
+
+#: templates/partials/attendance_tab.html:19
+#: templates/session_instance_players.html:163
+#, review
+msgid "Check In"
+msgstr "Marcáil i láthair"
+
+#: templates/session_instance_players.html:164
+#, review
+msgid "Error loading attendance data"
+msgstr "Earráid agus an tinreamh á lódáil"
+
+#: templates/session_instance_players.html:165
+#, review
+msgid "No attendees yet"
+msgstr "Níl aon duine i láthair fós"
+
+#: templates/session_instance_players.html:166
+#, review
+msgid "No instruments listed"
+msgstr "Níl uirlis ar bith liostaithe"
+
+#: templates/partials/attendance_tab.html:55
+#: templates/session_instance_players.html:167
+#, review
+msgid "Yes"
+msgstr "Tá"
+
+#: templates/partials/attendance_tab.html:57
+#: templates/session_instance_players.html:168
+#, review
+msgid "No"
+msgstr "Níl"
+
+#: templates/session_instance_players.html:170
+#, review
+msgid "Checking In ..."
+msgstr "Á mharcáil i láthair ..."
+
+#: templates/session_instance_players.html:171
+#, review
+msgid "Checked in successfully!"
+msgstr "Marcáladh i láthair thú!"
+
+#: templates/session_instance_players.html:172
+#, review
+msgid "Error checking in"
+msgstr "Earráid agus tú á mharcáil i láthair"
+
+#: templates/session_instance_players.html:173
+#, python-brace-format, review
+msgid "Changing Status To {status} ..."
+msgstr "An stádas á athrú go {status} ..."
+
+#: templates/session_instance_players.html:174
+#, review
+msgid "Status updated!"
+msgstr "Nuashonraíodh an stádas!"
+
+#: templates/session_instance_players.html:175
+#, review
+msgid "Error updating status"
+msgstr "Earráid agus an stádas á nuashonrú"
+
+#: templates/session_instance_players.html:176
+#, review
+msgid "Attendance updated"
+msgstr "Nuashonraíodh an tinreamh"
+
+#: templates/session_instance_players.html:177
+#, review
+msgid "Error updating attendance"
+msgstr "Earráid agus an tinreamh á nuashonrú"
+
+#: templates/session_instance_players.html:178
+#, review
+msgid "Search error"
+msgstr "Earráid chuardaigh"
+
+#: templates/session_instance_players.html:179
+#, python-brace-format, review
+msgid "Add a new person \"{query}\""
+msgstr "Cuir duine nua leis: \"{query}\""
+
+#: templates/session_instance_players.html:180
+#, review
+msgid "No instruments"
+msgstr "Gan uirlisí"
+
+#: templates/session_instance_players.html:181
+#, review
+msgid "Person added to attendance"
+msgstr "Cuireadh an duine leis an tinreamh"
+
+#: templates/session_instance_players.html:182
+#, review
+msgid "Error adding person"
+msgstr "Earráid agus an duine á chur leis"
+
+#: templates/session_instance_players.html:183
+#, review
+msgid "First name is required"
+msgstr "Tá an céadainm riachtanach"
+
+#: templates/session_instance_players.html:184
+#, review
+msgid "Last name is required"
+msgstr "Tá an sloinne riachtanach"
+
+#: templates/session_instance_players.html:185
+#, python-brace-format, review
+msgid "Adding {name}..."
+msgstr "{name} á chur leis..."
+
+#: templates/session_instance_players.html:186
+#, python-brace-format, review
+msgid "{name} added successfully"
+msgstr "Cuireadh {name} leis"
+
+#: templates/session_instance_players.html:187
+#, review
+msgid "Error creating person"
+msgstr "Earráid agus an duine á chruthú"
+
+#: templates/session_instance_players.html:188
+#, review
+msgid "Attendance refreshed"
+msgstr "Athnuadh an tinreamh"
+
+#: templates/session_instance_players.html:189
+#, python-brace-format, review
+msgid "Remove {name}"
+msgstr "Bain {name}"
+
+#: templates/session_instance_players.html:190
+#, review
+msgid "Mark this person as not attending?"
+msgstr "An marcálfar nach bhfuil an duine seo ag freastal?"
+
+#: templates/session_instance_players.html:191
+#, review
+msgid "Remove this person from this session instance? This will not affect their general session membership."
+msgstr "An mbainfear an duine seo den oíche seo den seisiún? Ní dhéanfaidh sé difear dá mballraíocht sa seisiún i gcoitinne."
+
+#: templates/session_instance_players.html:192
+#, review
+msgid "Person removed from session instance"
+msgstr "Baineadh an duine den oíche seo den seisiún"
+
+#: templates/session_instance_players.html:193
+#, review
+msgid "Error removing person from session"
+msgstr "Earráid agus an duine á bhaint den seisiún"
+
+#: templates/sessions.html:4
+#, python-format, review
+msgid "Sessions in %(place)s"
+msgstr "Seisiúin: %(place)s"
+
+#: templates/share.html:4
+#, review
+msgid "Share Ceol - Irish Music Sessions"
+msgstr "Comhroinn Ceol - Seisiúin Cheoil Ghaelaigh"
+
+#: templates/share.html:5 templates/share.html:39
+#, review
+msgid "Share Ceol"
+msgstr "Comhroinn Ceol"
+
+#: templates/share.html:41
+#, python-format, review
+msgid "This app is free to use for anyone; just visit %(link)s to get started!"
+msgstr "Tá an aip seo saor in aisce do chách; tabhair cuairt ar %(link)s chun tosú!"
+
+#: templates/share.html:44
+#, review
+msgid "Share QR Code"
+msgstr "Comhroinn an Cód QR"
+
+#: templates/share.html:45
+#, review
+msgid "Scan this QR code to visit this page:"
+msgstr "Scan an cód QR seo chun an leathanach seo a oscailt:"
+
+#: templates/share.html:47
+#, review
+msgid "QR Code"
+msgstr "Cód QR"
+
+#: templates/tab_bar.html:34
 msgid "Home"
 msgstr "Tús"
+
+#: templates/tunes.html:84
+#, review
+msgid "Search every tune by name…"
+msgstr "Cuardaigh gach fonn de réir ainm…"
+
+#: templates/tunes.html:84
+#, review
+msgid "Search tunes"
+msgstr "Cuardaigh foinn"
+
+#: templates/tunes.html:89 templates/tunes.html:116
+#, review
+msgid "Also search thesession.org"
+msgstr "Cuardaigh thesession.org freisin"
+
+#: templates/tunes.html:93
+#, python-format, review
+msgid "The %(num)d most common tunes, by how many players have them in a tunebook on %(link)s. Search to reach the rest."
+msgstr "Na %(num)d fonn is coitianta, de réir cé mhéad ceoltóir a bhfuil siad ina leabhar fonn acu ar %(link)s. Cuardaigh chun teacht ar an gcuid eile."
+
+#: templates/tunes.html:112
+#, python-brace-format, review
+msgid "{n} tunebook on thesession.org"
+msgid_plural "{n} tunebooks on thesession.org"
+msgstr[0] "{n} leabhar fonn ar thesession.org"
+msgstr[1] "{n} leabhar fonn ar thesession.org"
+msgstr[2] "{n} leabhar fonn ar thesession.org"
+msgstr[3] "{n} leabhar fonn ar thesession.org"
+msgstr[4] "{n} leabhar fonn ar thesession.org"
+
+#: templates/tunes.html:113
+#, review
+msgid "No tunes match that name."
+msgstr "Níl aon fhonn leis an ainm sin."
+
+#: templates/tunes.html:114
+#, review
+msgid "No tunes yet."
+msgstr "Níl aon fhoinn ann fós."
+
+#: templates/tunes.html:117
+#, review
+msgid "Searching thesession.org…"
+msgstr "Ag cuardach thesession.org…"
+
+#: templates/tunes.html:118
+#, review
+msgid "On thesession.org"
+msgstr "Ar thesession.org"
+
+#: templates/tunes.html:119
+#, review
+msgid "Could not reach thesession.org just now."
+msgstr "Níorbh fhéidir teacht ar thesession.org faoi láthair."
+
+#: templates/tunes.html:120
+#, review
+msgid "Nothing there that is not already above."
+msgstr "Níl aon rud ansin nach bhfuil thuas cheana."
+
+#: templates/tunes.html:121
+#, review
+msgid "Not in Ceol yet — these open on thesession.org."
+msgstr "Níl siad i gCeol fós — osclaíonn siad seo ar thesession.org."
+
+#: templates/unsubscribe.html:4
+#, review
+msgid "Unsubscribed - Irish Music Sessions"
+msgstr "Díliostáilte - Seisiúin Cheoil Ghaelaigh"
+
+#: templates/unsubscribe.html:13
+#, review
+msgid "Unsubscribed"
+msgstr "Díliostáilte"
+
+#: templates/unsubscribe.html:16
+#, review
+msgid "You've been unsubscribed from app updates."
+msgstr "Díliostáladh thú ó nuashonruithe na haipe."
+
+#: templates/unsubscribe.html:18
+#, review
+msgid "your profile"
+msgstr "do phróifíl"
+
+#: templates/unsubscribe.html:19
+#, python-format, review
+msgid "Changed your mind? You can turn updates back on any time on %(profile)s."
+msgstr "Ar athraigh tú d'intinn? Is féidir leat na nuashonruithe a chur ar siúl arís am ar bith ar %(profile)s."
 

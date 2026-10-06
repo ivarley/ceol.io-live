@@ -1,6 +1,7 @@
+{# i18n-converted #}
 {% extends "base.html" %}
 
-{% block title %}Admin - Sessions{% endblock %}
+{% block title %}{{ _('Admin - Sessions') }}{% endblock %}
 
 {% block content %}
 <div class="docs-content-inner">
@@ -11,8 +12,8 @@
             <section class="admin-section" id="sessions">
                 <!-- Search and Add Button -->
                 <div class="sessions-toolbar">
-                    <input type="text" class="form-control sessions-search-input" id="sessions-search" placeholder="Search by name or location...">
-                    <a href="/add-session?acu=false" class="btn btn-primary btn-add-session">Add Session</a>
+                    <input type="text" class="form-control sessions-search-input" id="sessions-search" placeholder="{{ _('Search by name or location...') }}">
+                    <a href="/add-session?acu=false" class="btn btn-primary btn-add-session">{{ _('Add Session') }}</a>
                 </div>
 
                 <div id="sessions-content">
@@ -22,14 +23,14 @@
                         <table class="table table-striped" id="sessions-table">
                             <thead>
                                 <tr>
-                                    <th class="sortable sorted asc" data-sort="name">Name</th>
-                                    <th class="sortable" data-sort="venue">Venue</th>
-                                    <th class="sortable" data-sort="location">Location</th>
-                                    <th class="sortable" data-sort="thesession">TheSession.org</th>
-                                    <th class="sortable" data-sort="players">Members</th>
-                                    <th class="sortable" data-sort="instances">Instances</th>
-                                    <th class="sortable" data-sort="latest">Latest</th>
-                                    <th class="sortable" data-sort="status">Status</th>
+                                    <th class="sortable sorted asc" data-sort="name">{{ _('Name') }}</th>
+                                    <th class="sortable" data-sort="venue">{{ _('Venue') }}</th>
+                                    <th class="sortable" data-sort="location">{{ _('Location') }}</th>
+                                    <th class="sortable" data-sort="thesession">{{ 'TheSession.org' }}</th>
+                                    <th class="sortable" data-sort="players">{{ _('Members') }}</th>
+                                    <th class="sortable" data-sort="instances">{{ _('Instances') }}</th>
+                                    <th class="sortable" data-sort="latest">{{ _('Latest') }}</th>
+                                    <th class="sortable" data-sort="status">{{ _('Status') }}</th>
                                 </tr>
                             </thead>
                             <tbody id="sessions-tbody">
@@ -55,7 +56,7 @@
                                                 {{ session.thesession_id }}
                                             </a>
                                         {% else %}
-                                            <span class="text-muted">None</span>
+                                            <span class="text-muted">{{ _('None') }}</span>
                                         {% endif %}
                                     </td>
                                     <td class="session-player-count">
@@ -76,14 +77,14 @@
                                         {% if session.latest_instance_display %}
                                             <span class="latest-instance-info">{{ session.latest_instance_display }}</span>
                                         {% else %}
-                                            <span class="text-muted">None</span>
+                                            <span class="text-muted">{{ _('None') }}</span>
                                         {% endif %}
                                     </td>
                                     <td class="session-status">
                                         {% if session.termination_date %}
-                                            <span class="text-danger">Terminated</span>
+                                            <span class="text-danger">{{ _('Terminated') }}</span>
                                         {% else %}
-                                            <span class="text-success">Active</span>
+                                            <span class="text-success">{{ _('Active') }}</span>
                                         {% endif %}
                                     </td>
                                 </tr>
@@ -100,36 +101,36 @@
                                 <a href="/admin/sessions/{{ session.path }}" class="session-card-title">{{ session.name }}</a>
                                 <span class="session-card-status">
                                     {% if session.termination_date %}
-                                        <span class="badge badge-danger">Terminated</span>
+                                        <span class="badge badge-danger">{{ _('Terminated') }}</span>
                                     {% else %}
-                                        <span class="badge badge-success">Active</span>
+                                        <span class="badge badge-success">{{ _('Active') }}</span>
                                     {% endif %}
                                 </span>
                             </div>
                             <div class="session-card-body">
                                 <div class="session-card-row">
-                                    <span class="session-card-label">Venue:</span>
+                                    <span class="session-card-label">{{ _('Venue:') }}</span>
                                     <span class="session-card-value">{{ session.location_name or '-' }}</span>
                                 </div>
                                 <div class="session-card-row">
-                                    <span class="session-card-label">Location:</span>
+                                    <span class="session-card-label">{{ _('Location:') }}</span>
                                     <span class="session-card-value">{{ session.location_display }}</span>
                                 </div>
                                 <div class="session-card-row">
-                                    <span class="session-card-label">TheSession.org:</span>
+                                    <span class="session-card-label">{{ 'TheSession.org' }}:</span>
                                     <span class="session-card-value">
                                         {% if session.thesession_id %}
                                             <a href="https://thesession.org/sessions/{{ session.thesession_id }}" target="_blank" rel="noopener noreferrer">
                                                 {{ session.thesession_id }}
                                             </a>
                                         {% else %}
-                                            <span class="text-muted">None</span>
+                                            <span class="text-muted">{{ _('None') }}</span>
                                         {% endif %}
                                     </span>
                                 </div>
                                 <div class="session-card-stats">
                                     <div class="session-card-stat">
-                                        <div class="session-card-stat-label">Members</div>
+                                        <div class="session-card-stat-label">{{ _('Members') }}</div>
                                         <div class="session-card-stat-value">
                                             {% if session.total_players > 0 %}
                                                 <span class="badge bg-primary">{{ session.player_count_display }}</span>
@@ -139,7 +140,7 @@
                                         </div>
                                     </div>
                                     <div class="session-card-stat">
-                                        <div class="session-card-stat-label">Instances</div>
+                                        <div class="session-card-stat-label">{{ _('Instances') }}</div>
                                         <div class="session-card-stat-value">
                                             {% if session.instance_count > 0 %}
                                                 <span class="badge bg-success">{{ session.instance_count }}</span>
@@ -149,12 +150,12 @@
                                         </div>
                                     </div>
                                     <div class="session-card-stat">
-                                        <div class="session-card-stat-label">Latest</div>
+                                        <div class="session-card-stat-label">{{ _('Latest') }}</div>
                                         <div class="session-card-stat-value">
                                             {% if session.latest_instance_display %}
                                                 {{ session.latest_instance_display }}
                                             {% else %}
-                                                <span class="text-muted">None</span>
+                                                <span class="text-muted">{{ _('None') }}</span>
                                             {% endif %}
                                         </div>
                                     </div>
@@ -165,8 +166,8 @@
                     </div>
                     {% else %}
                     <div class="alert alert-info" role="alert">
-                        <h4 class="alert-heading">No Sessions Found</h4>
-                        <p>There are currently no session records in the system.</p>
+                        <h4 class="alert-heading">{{ _('No Sessions Found') }}</h4>
+                        <p>{{ _('There are currently no session records in the system.') }}</p>
                     </div>
                     {% endif %}
                 </div>
@@ -618,7 +619,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 const noResultsDiv = document.createElement('div');
                 noResultsDiv.id = 'no-search-results';
                 noResultsDiv.className = 'alert alert-info';
-                noResultsDiv.innerHTML = '<p class="mb-0">No sessions match your search criteria.</p>';
+                noResultsDiv.innerHTML = '<p class="mb-0"></p>';
+                noResultsDiv.firstChild.textContent = {{ _('No sessions match your search criteria.')|tojson }};
                 sessionsContent.appendChild(noResultsDiv);
             }
         } else if (existingNoResults) {

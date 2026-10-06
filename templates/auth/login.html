@@ -1,6 +1,7 @@
+{# i18n-converted #}
 {% extends "base.html" %}
 
-{% block title %}Login or Register - Irish Music Sessions{% endblock %}
+{% block title %}{{ _('Login or Register') }} - {{ _('Irish Music Sessions') }}{% endblock %}
 
 {% block content %}
 <div class="page-wrapper">
@@ -9,7 +10,7 @@
             <div class="col-md-6 col-lg-4">
                 <div class="card mt-5">
                     <div class="card-header">
-                        <h3 class="card-title text-center mb-0">Login or Register</h3>
+                        <h3 class="card-title text-center mb-0">{{ _('Login or Register') }}</h3>
                     </div>
                     <div class="card-body">
                         {% with messages = get_flashed_messages(with_categories=true) %}
@@ -17,8 +18,8 @@
                                 {% for category, message in messages %}
                                     <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible" role="alert">
                                         {{ message }}
-                                        <button type="button" class="close" data-dismiss="alert" aria-label="Close" onclick="this.parentElement.style.display='none'">
-                                            <span aria-hidden="true">&times;</span>
+                                        <button type="button" class="close" data-dismiss="alert" aria-label="{{ _('Close') }}" onclick="this.parentElement.style.display='none'">
+                                            <span aria-hidden="true">×</span>
                                         </button>
                                     </div>
                                 {% endfor %}
@@ -29,14 +30,14 @@
 
                         <!-- Step 1: Email input -->
                         <div id="email-step">
-                            <p class="text-muted mb-3">Enter your email to log in or create an account.</p>
+                            <p class="text-muted mb-3">{{ _('Enter your email to log in or create an account.') }}</p>
                             <div class="mb-3">
-                                <label for="email" class="form-label">Email address</label>
+                                <label for="email" class="form-label">{{ _('Email address') }}</label>
                                 <input type="email" class="form-control" id="email" name="email" required autofocus>
                             </div>
                             <div class="d-grid">
                                 <button type="button" class="btn btn-primary" id="next-btn" onclick="checkEmail()">
-                                    <span id="next-btn-text">Next</span>
+                                    <span id="next-btn-text">{{ _('Next') }}</span>
                                     <span id="next-btn-spinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
                                 </button>
                             </div>
@@ -45,24 +46,24 @@
                         <!-- Step 2a: Password login -->
                         <div id="password-step" class="d-none">
                             <div class="mb-3">
-                                <label class="form-label text-muted">Email</label>
+                                <label class="form-label text-muted">{{ _('Email') }}</label>
                                 <div class="d-flex align-items-center">
                                     <span id="display-email" class="me-2"></span>
-                                    <button type="button" class="btn btn-link btn-sm p-0" onclick="resetForm()">Change</button>
+                                    <button type="button" class="btn btn-link btn-sm p-0" onclick="resetForm()">{{ _('Change') }}</button>
                                 </div>
                             </div>
                             <div class="mb-3">
-                                <label for="password" class="form-label">Password</label>
+                                <label for="password" class="form-label">{{ _('Password') }}</label>
                                 <input type="password" class="form-control" id="password" name="password" required>
                             </div>
                             <div class="d-grid">
                                 <button type="button" class="btn btn-primary" id="login-btn" onclick="loginWithPassword()">
-                                    <span id="login-btn-text">Login</span>
+                                    <span id="login-btn-text">{{ _('Login') }}</span>
                                     <span id="login-btn-spinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
                                 </button>
                             </div>
                             <div class="text-center mt-3">
-                                <a href="{{ url_for('forgot_password') }}">Forgot your password?</a>
+                                <a href="{{ url_for('forgot_password') }}">{{ _('Forgot your password?') }}</a>
                             </div>
                         </div>
 
@@ -74,10 +75,10 @@
                                         <path d="M0 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V4Zm2-1a1 1 0 0 0-1 1v.217l7 4.2 7-4.2V4a1 1 0 0 0-1-1H2Zm13 2.383-4.708 2.825L15 11.105V5.383Zm-.034 6.876-5.64-3.471L8 9.583l-1.326-.795-5.64 3.47A1 1 0 0 0 2 13h12a1 1 0 0 0 .966-.741ZM1 11.105l4.708-2.897L1 5.383v5.722Z"/>
                                     </svg>
                                 </div>
-                                <h5>Check your email</h5>
-                                <p class="text-muted">We've sent a login link to <strong id="magic-link-email"></strong></p>
-                                <p class="text-muted small">The link expires in 15 minutes.</p>
-                                <button type="button" class="btn btn-link" onclick="resetForm()">Use a different email</button>
+                                <h5>{{ _('Check your email') }}</h5>
+                                <p class="text-muted">{{ _('We\'ve sent a login link to %(email)s', email='<strong id="magic-link-email"></strong>'|safe) }}</p>
+                                <p class="text-muted small">{{ _('The link expires in 15 minutes.') }}</p>
+                                <button type="button" class="btn btn-link" onclick="resetForm()">{{ _('Use a different email') }}</button>
                             </div>
                         </div>
 
@@ -91,15 +92,15 @@
                                         <path d="M0 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V4Zm2-1a1 1 0 0 0-1 1v.217l7 4.2 7-4.2V4a1 1 0 0 0-1-1H2Zm13 2.383-4.708 2.825L15 11.105V5.383Zm-.034 6.876-5.64-3.471L8 9.583l-1.326-.795-5.64 3.47A1 1 0 0 0 2 13h12a1 1 0 0 0 .966-.741ZM1 11.105l4.708-2.897L1 5.383v5.722Z"/>
                                     </svg>
                                 </div>
-                                <p>We don't have an account for <strong id="registration-email"></strong> yet. We've sent a link to create one.</p>
-                                <p class="text-muted small">The link expires in 24 hours.</p>
-                                <p class="mb-0">Already have an account? <button type="button" class="btn btn-link p-0 align-baseline" onclick="resetForm()">Try a different email</button></p>
+                                <p>{{ _("We don't have an account for %(email)s yet. We've sent a link to create one.", email='<strong id="registration-email"></strong>'|safe) }}</p>
+                                <p class="text-muted small">{{ _('The link expires in 24 hours.') }}</p>
+                                <p class="mb-0">{{ _('Already have an account?') }} <button type="button" class="btn btn-link p-0 align-baseline" onclick="resetForm()">{{ _('Try a different email') }}</button></p>
                             </div>
                         </div>
 
                         <hr class="my-4">
                         <div class="text-center">
-                            <p class="text-muted small mb-0">Having trouble? <a href="{{ url_for('resend_verification') }}">Resend verification email</a></p>
+                            <p class="text-muted small mb-0">{{ _('Having trouble?') }} <a href="{{ url_for('resend_verification') }}">{{ _('Resend verification email') }}</a></p>
                         </div>
                     </div>
                 </div>
@@ -110,14 +111,15 @@
 
 <script>
 let currentEmail = '';
+const CLOSE_LABEL = {{ _('Close')|tojson }};
 
 function showAlert(message, type) {
     const container = document.getElementById('alert-container');
     container.innerHTML = `
         <div class="alert alert-${type === 'error' ? 'danger' : type} alert-dismissible" role="alert">
             ${message}
-            <button type="button" class="close" data-dismiss="alert" aria-label="Close" onclick="this.parentElement.style.display='none'">
-                <span aria-hidden="true">&times;</span>
+            <button type="button" class="close" data-dismiss="alert" aria-label="${CLOSE_LABEL}" onclick="this.parentElement.style.display='none'">
+                <span aria-hidden="true">×</span>
             </button>
         </div>
     `;
@@ -162,12 +164,12 @@ async function checkEmail() {
     const email = document.getElementById('email').value.trim();
 
     if (!email) {
-        showAlert('Please enter your email address.', 'error');
+        showAlert({{ _('Please enter your email address.')|tojson }}, 'error');
         return;
     }
 
     if (!email.includes('@') || !email.includes('.')) {
-        showAlert('Please enter a valid email address.', 'error');
+        showAlert({{ _('Please enter a valid email address.')|tojson }}, 'error');
         return;
     }
 
@@ -186,7 +188,7 @@ async function checkEmail() {
         const data = await response.json();
 
         if (!response.ok) {
-            showAlert(data.error || 'An error occurred. Please try again.', 'error');
+            showAlert(data.error || {{ _('An error occurred. Please try again.')|tojson }}, 'error');
             setButtonLoading('next-btn', false);
             return;
         }
@@ -211,7 +213,7 @@ async function checkEmail() {
 
     } catch (error) {
         console.error('Error:', error);
-        showAlert('Network error. Please check your connection and try again.', 'error');
+        showAlert({{ _('Network error. Please check your connection and try again.')|tojson }}, 'error');
     } finally {
         setButtonLoading('next-btn', false);
     }
@@ -222,7 +224,7 @@ async function loginWithPassword() {
     const password = document.getElementById('password').value;
 
     if (!password) {
-        showAlert('Please enter your password.', 'error');
+        showAlert({{ _('Please enter your password.')|tojson }}, 'error');
         return;
     }
 
@@ -241,9 +243,9 @@ async function loginWithPassword() {
 
         if (!response.ok) {
             if (data.action === 'resend_verification') {
-                showAlert(data.error + ' <a href="{{ url_for("resend_verification") }}">Resend verification email</a>', 'warning');
+                showAlert(data.error + ' <a href="{{ url_for("resend_verification") }}">' + {{ _('Resend verification email')|tojson }} + '</a>', 'warning');
             } else {
-                showAlert(data.error || 'Invalid email or password.', 'error');
+                showAlert(data.error || {{ _('Invalid email or password.')|tojson }}, 'error');
             }
             setButtonLoading('login-btn', false);
             return;
@@ -258,7 +260,7 @@ async function loginWithPassword() {
 
     } catch (error) {
         console.error('Error:', error);
-        showAlert('Network error. Please check your connection and try again.', 'error');
+        showAlert({{ _('Network error. Please check your connection and try again.')|tojson }}, 'error');
         setButtonLoading('login-btn', false);
     }
 }

@@ -59,6 +59,9 @@ test-results.xml
 
 # Translations
 *.mo
+# Spec 057: the compiled Irish catalog is committed (the deploy build may not run
+# pybabel compile); tests/unit/test_i18n_catalogs.py checks it matches the .po.
+!translations/**/*.mo
 *.pot
 
 # Django stuff:

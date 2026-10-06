@@ -76,6 +76,7 @@ def _extracted():
             "ngettext": (1, 2),
             "lazy_gettext": None,
             "_l": None,
+            "js_ngettext": (1, 2),
         },
         directory_filter=keep,
     ):
@@ -113,8 +114,12 @@ def test_every_marked_string_has_irish(catalog):
 def test_the_compiled_catalog_is_current(catalog):
     with open(MO, "rb") as f:
         compiled = read_mo(f)
-    want = {_key(m.id): m.string for m in catalog if m.id and m.string}
-    got = {_key(m.id): m.string for m in compiled if m.id}
+    # A plural's forms come back as a tuple from the .po and a list from the .mo.
+    def forms(s):
+        return tuple(s) if isinstance(s, (list, tuple)) else s
+
+    want = {_key(m.id): forms(m.string) for m in catalog if m.id and m.string}
+    got = {_key(m.id): forms(m.string) for m in compiled if m.id}
     assert got == want, "messages.mo is stale: run make i18n-compile"
 
 

@@ -1,4 +1,6 @@
 <script>
+  // i18n-converted
+  import { t } from './i18n/index.js'
   // Pager (spec 035): inspect-mode stepper — ‹ › plus "N of M" (TunePreview's
   // result/setting pagers). The "N of M" label lives HERE, never on a List.
   let {
@@ -6,7 +8,7 @@
     count = 0,
     onPrev = null, // omit to let the pager step bind:index itself
     onNext = null,
-    label = 'result', // aria context, e.g. "setting"
+    label = t('result'), // aria context, e.g. "setting"
   } = $props()
 
   function prev() {
@@ -22,9 +24,9 @@
 </script>
 
 <div class="kit-pager">
-  <button type="button" class="kit-pager-btn" aria-label="Previous {label}" disabled={index <= 0} onclick={prev}>&#8249;</button>
-  <span class="kit-pager-label">{count ? index + 1 : 0} of {count}</span>
-  <button type="button" class="kit-pager-btn" aria-label="Next {label}" disabled={index >= count - 1} onclick={next}>&#8250;</button>
+  <button type="button" class="kit-pager-btn" aria-label={t('Previous {label}', { label })} disabled={index <= 0} onclick={prev}>&#8249;</button>
+  <span class="kit-pager-label">{t('{n} of {count}', { n: count ? index + 1 : 0, count })}</span>
+  <button type="button" class="kit-pager-btn" aria-label={t('Next {label}', { label })} disabled={index >= count - 1} onclick={next}>&#8250;</button>
 </div>
 
 <style>

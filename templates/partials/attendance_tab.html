@@ -1,3 +1,4 @@
+{# i18n-converted #}
 <!-- Attendance Tab Content -->
 <div class="attendance-container">
     <div class="attendance-header mb-3">
@@ -7,7 +8,7 @@
             <div class="attendance-search">
                 <div class="input-group">
                     <input type="text" class="form-control" id="attendee-search" 
-                           placeholder="Search and add people..." 
+                           placeholder="{{ _('Search and add people...') }}" 
                            autocomplete="off">
                 </div>
                 <div id="search-results" class="search-results-dropdown"></div>
@@ -15,23 +16,23 @@
             {% elif can_view_people %}
             <div class="attendance-actions">
                 <button class="btn btn-success btn-sm" id="quick-checkin-btn" onclick="window.attendanceManagerInstance && window.attendanceManagerInstance.quickCheckin()">
-                    <i class="fas fa-check"></i> Check In
+                    <i class="fas fa-check"></i> {{ _('Check In') }}
                 </button>
             </div>
             {% endif %}
         </div>
         <div class="attendance-stats">
-            <span class="badge badge-success attendance-filter-badge" data-filter="yes" style="cursor: pointer;">Yes: <span id="yes-count">0</span></span>
-            <span class="badge badge-warning attendance-filter-badge" data-filter="maybe" style="cursor: pointer;">Maybe: <span id="maybe-count">0</span></span>
-            <span class="badge badge-danger attendance-filter-badge" data-filter="no" style="cursor: pointer;">No: <span id="no-count">0</span></span>
-            <span class="badge badge-secondary attendance-filter-badge" data-filter="" style="cursor: pointer;">Total: <span id="total-count">0</span></span>
+            <span class="badge badge-success attendance-filter-badge" data-filter="yes" style="cursor: pointer;">{{ _('Yes:') }} <span id="yes-count">0</span></span>
+            <span class="badge badge-warning attendance-filter-badge" data-filter="maybe" style="cursor: pointer;">{{ _('Maybe:') }} <span id="maybe-count">0</span></span>
+            <span class="badge badge-danger attendance-filter-badge" data-filter="no" style="cursor: pointer;">{{ _('No:') }} <span id="no-count">0</span></span>
+            <span class="badge badge-secondary attendance-filter-badge" data-filter="" style="cursor: pointer;">{{ _('Total:') }} <span id="total-count">0</span></span>
         </div>
     </div>
 
     <!-- Attendance List -->
     <div class="attendance-list" id="attendance-list">
         <div class="text-center p-3">
-            <i class="fas fa-spinner fa-spin"></i> Loading attendance...
+            <i class="fas fa-spinner fa-spin"></i> {{ _('Loading attendance...') }}
         </div>
     </div>
 </div>
@@ -41,7 +42,7 @@
     <div class="attendance-item" data-person-id="">
         <div class="attendance-info">
             {% if is_session_admin or current_user.is_system_admin %}
-            <a href="" class="person-name person-edit-link" title="Click to edit person details"></a>
+            <a href="" class="person-name person-edit-link" title="{{ _('Click to edit person details') }}"></a>
             {% else %}
             <div class="person-name"></div>
             {% endif %}
@@ -51,10 +52,10 @@
             {% if is_session_admin %}
             <div class="attendance-dropdown">
                 <select class="form-control form-control-sm attendance-status-select">
-                    <option value="yes" class="attendance-option-yes">✓ Yes</option>
-                    <option value="maybe" class="attendance-option-maybe">? Maybe</option>
-                    <option value="no" class="attendance-option-no">✗ No</option>
-                    <option value="remove" class="attendance-option-remove">🗑 Remove</option>
+                    <option value="yes" class="attendance-option-yes">✓ {{ _('Yes') }}</option>
+                    <option value="maybe" class="attendance-option-maybe">? {{ _('Maybe') }}</option>
+                    <option value="no" class="attendance-option-no">✗ {{ _('No') }}</option>
+                    <option value="remove" class="attendance-option-remove">🗑 {{ _('Remove') }}</option>
                 </select>
             </div>
             {% else %}

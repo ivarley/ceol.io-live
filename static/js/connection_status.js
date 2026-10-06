@@ -17,6 +17,14 @@
   'use strict'
   if (window.CeolConnection) return
 
+  // Spec 057: the page's language, from window.__CEOL_T__ (base.html); English otherwise.
+  function T(s) { return (window.__CEOL_T__ && window.__CEOL_T__[s]) || s }
+  function pendingText(n) {
+    var forms = window.__CEOL_T__ && window.__CEOL_T__['{n} change waiting to sync']
+    if (forms && window.ceolPlural) return window.ceolPlural(forms, n)
+    return n + ' change' + (n === 1 ? '' : 's') + ' waiting to sync'
+  }
+
   var PROBE = '/sw.js' // network-passthrough (not SW-cached) -> reflects real connectivity
   var POLL_MS = 6000
   var CAUGHT_UP_MS = 3500
@@ -86,20 +94,22 @@
     var d = dom()
     if (!d.title || !d.detail) return
     if (state === 'syncing') {
-      d.title.textContent = 'Reconnected'
-      d.detail.textContent = 'Syncing your changes...'
+      d.title.textContent = T('Reconnected')
+      d.detail.textContent = T('Syncing your changes...')
       return
     }
     if (state === 'caught-up') {
-      d.title.textContent = 'All changes synced'
+      d.title.textContent = T('All changes synced')
       d.detail.textContent = ''
       return
     }
     // offline
-    d.title.textContent = "You're offline"
-    var since = offlineSince ? 'Offline for ' + fmtDuration(Date.now() - offlineSince) : 'Offline'
+    d.title.textContent = T("You're offline")
+    var since = offlineSince
+      ? T('Offline for {time}').replace('{time}', fmtDuration(Date.now() - offlineSince))
+      : T('Offline')
     hasPending().then(function (n) {
-      var pend = n > 0 ? n + ' change' + (n === 1 ? '' : 's') + ' waiting to sync' : 'No unsynced changes'
+      var pend = n > 0 ? pendingText(n) : T('No unsynced changes')
       d.detail.textContent = since + ' - ' + pend
     })
   }

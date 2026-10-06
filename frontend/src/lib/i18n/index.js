@@ -33,6 +33,14 @@ export function t(text, vars) {
  * the one place in the interface that is deliberately not translated. */
 export const LANGUAGE_NAMES = { en: 'English', ga: 'Gaeilge' }
 
+/** `text` where one English word needs two Irish ones: the Irish is keyed
+ * "context|text" (e.g. tc('area', 'Admin') → "Riarachán", while t('Admin') is the
+ * person, "Bainisteoir"). English shows `text` unchanged. */
+export function tc(context, text, vars) {
+  const entry = currentLang() === 'ga' ? ga[`${context}|${text}`] : null
+  return fill(entry && typeof entry.ga === 'string' && entry.ga ? entry.ga : text, vars)
+}
+
 const gaPlurals = typeof Intl !== 'undefined' ? new Intl.PluralRules('ga') : null
 
 /** A count: `one` or `other` in English; in Irish the form Irish uses for `n`.
@@ -87,7 +95,8 @@ const TUNE_TYPES = {
 
 /** A tune type ("Reel") as the interface word in the page's language. */
 export function tuneTypeName(type) {
-  if (!type) return type
+  // English shows the value exactly as sent ("jig" stays "jig").
+  if (!type || currentLang() === 'en') return type
   const key = Object.keys(TUNE_TYPES).find((k) => k.toLowerCase() === String(type).toLowerCase())
   return key ? TUNE_TYPES[key]() : type
 }
@@ -112,7 +121,7 @@ const INSTRUMENTS = {
 
 /** A canonical instrument name ("Fiddle") in the page's language. */
 export function instrumentName(name) {
-  if (!name) return name
+  if (!name || currentLang() === 'en') return name
   const key = Object.keys(INSTRUMENTS).find((k) => k.toLowerCase() === String(name).toLowerCase())
   return key ? INSTRUMENTS[key]() : name
 }

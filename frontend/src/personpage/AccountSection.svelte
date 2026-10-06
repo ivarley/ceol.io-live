@@ -1,4 +1,5 @@
 <script>
+  // i18n-converted
   // The account actions, on your own profile only (spec 052 §B8 Stage 5).
   //
   // These four lived in the hamburger menu. The tab bar that replaces it has room
@@ -18,7 +19,7 @@
   // thing here you cannot take back. You confirm by typing your email, which a stray
   // tap cannot do. System admins do not see it — the server refuses them, because
   // removing an admin is another admin's decision, not a button.
-  import { Chevron, Dialog, Row, toast } from '../lib/index.js'
+  import { Chevron, Dialog, Row, toast, t, tc } from '../lib/index.js'
 
   let { isSystemAdmin = false, personName = '', userEmail = '' } = $props()
 
@@ -41,14 +42,14 @@
       })
       const json = await res.json().catch(() => ({}))
       if (!res.ok || !json.success) {
-        toast(json.error || 'Your account could not be deleted.', 'error')
+        toast(json.error || t('Your account could not be deleted.'), 'error')
         return false // keep the dialog open for a retry
       }
       // Signed out now; home shows the server's "Your account has been deleted."
       window.location.href = '/'
     } catch (e) {
       console.error('Delete account failed:', e)
-      toast("Couldn't reach the server, so nothing was deleted. Check your connection and try again.", 'error')
+      toast(t("Couldn't reach the server, so nothing was deleted. Check your connection and try again."), 'error')
       return false
     }
   }
@@ -57,12 +58,12 @@
 <section class="account-section" id="account-section">
   <div class="account-list kit-group">
     {#if isSystemAdmin}
-      <Row styled={false} rowClass="kit-field account-row" href="/admin" title="Admin" id="account-admin">
+      <Row styled={false} rowClass="kit-field account-row" href="/admin" title={tc('area', 'Admin')} id="account-admin">
         {#snippet trailing()}<Chevron class="kit-chev" />{/snippet}
       </Row>
     {/if}
 
-    <Row styled={false} rowClass="kit-field account-row" href="/help" title="Help" id="account-help">
+    <Row styled={false} rowClass="kit-field account-row" href="/help" title={t('Help')} id="account-help">
       {#snippet trailing()}<Chevron class="kit-chev" />{/snippet}
     </Row>
 
@@ -70,7 +71,7 @@
       styled={false}
       rowClass="kit-field account-row account-row-out"
       href="/logout"
-      title="Log Out"
+      title={t('Log Out')}
       id="account-logout" />
   </div>
   {#if userEmail && !isSystemAdmin}
@@ -79,33 +80,31 @@
         styled={false}
         rowClass="kit-field account-row account-row-out"
         onclick={openConfirm}
-        title="Delete Account"
+        title={t('Delete Account')}
         id="account-delete" />
     </div>
   {/if}
   {#if personName}
-    <p class="account-who">Signed in as {personName}</p>
+    <p class="account-who">{t('Signed in as {name}', { name: personName })}</p>
   {/if}
 </section>
 
 <Dialog
   bind:open={confirmOpen}
-  title="Delete your account?"
-  confirmLabel="Delete account"
-  busyLabel="Deleting…"
+  title={t('Delete your account?')}
+  confirmLabel={t('Delete account')}
+  busyLabel={t('Deleting…')}
   destructive={true}
   confirmDisabled={!matches}
   onConfirm={deleteAccount}>
   <div class="delete-body" id="account-delete-dialog">
     <p>
-      This deletes your login, your tune list and instruments, and your contact details,
-      straight away. It can't be undone.
+      {t("This deletes your login, your tune list and instruments, and your contact details, straight away. It can't be undone.")}
     </p>
     <p>
-      Your name stays on the sessions you were part of, as it would for anyone a session
-      admin adds, and the tunes logged at those sessions stay in their logs.
+      {t('Your name stays on the sessions you were part of, as it would for anyone a session admin adds, and the tunes logged at those sessions stay in their logs.')}
     </p>
-    <label for="account-delete-email">Type <strong>{userEmail}</strong> to confirm</label>
+    <label for="account-delete-email">{t('Type')} <strong>{userEmail}</strong> {t('to confirm')}</label>
     <input
       id="account-delete-email"
       class="form-control"

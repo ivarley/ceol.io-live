@@ -1,9 +1,10 @@
 <script>
+  // i18n-converted
   // People (Members) tab: session membership table with members/everyone (spec 034:
   // is_regular is gone -- the meaningful split is member vs visitor)
   // filter, name/email search (smart-quote normalized), and sortable columns.
   import { SvelteSet } from 'svelte/reactivity'
-  import { LoadError, SearchField, Dialog, toast } from '../lib/index.js'
+  import { LoadError, SearchField, Dialog, toast, t, tn, formatDate } from '../lib/index.js'
   import PersonFlags from './PersonFlags.svelte'
   import { normalizeQuotes, parseLocalDate } from '../shared/parse.js'
   import { compareValues, personSortValue } from './logic.js'
@@ -133,13 +134,18 @@
       allPeople = allPeople.map((p) => (ok.includes(p.person_id) ? { ...p, [field]: value } : p))
 
       if (ok.length === ids.length) {
-        toast(`${label}: ${ok.length} ${ok.length === 1 ? 'person' : 'people'}.`, 'success')
+        toast(tn(ok.length, '{label}: {n} person.', '{label}: {n} people.', { label }), 'success')
       } else {
         // Keep the failed ones selected, so trying again is one click.
         toast(
           ok.length
-            ? `${label}: ${ok.length} of ${ids.length} saved — ${ids.length - ok.length} failed. They're still selected; try again.`
-            : `Couldn't save that change. Check your connection and try again.`,
+            ? t("{label}: {saved} of {total} saved — {failed} failed. They're still selected; try again.", {
+                label,
+                saved: ok.length,
+                total: ids.length,
+                failed: ids.length - ok.length,
+              })
+            : t("Couldn't save that change. Check your connection and try again."),
           'error'
         )
         ok.forEach((id) => selected.delete(id))
@@ -166,11 +172,11 @@
           id="people-search"
           inputClass="form-control"
           styled={false}
-          placeholder="Search by name..." />
+          placeholder={t('Search by name...')} />
       </div>
       <div>
         <a href="/admin/sessions/{sessionPath}/bulk-import" class="btn btn-outline-primary btn-sm">
-          <i class="fas fa-upload me-1"></i>Bulk Import
+          <i class="fas fa-upload me-1"></i>{t('Bulk Import')}
         </a>
       </div>
       <div>
@@ -186,13 +192,13 @@
           class:active={selectMode}
           id="people-select-btn"
           onclick={toggleSelectMode}>
-          {selectMode ? '\u2715 Cancel' : '\u2611 Select'}
+          {selectMode ? '\u2715 ' + t('Cancel') : '\u2611 ' + t('Select')}
         </button>
       </div>
       <div class="ms-auto">
         <select class="form-select people-filter-select" id="people-filter" bind:value={filter}>
-          <option value="members">Members Only</option>
-          <option value="everyone">Everyone</option>
+          <option value="members">{t('Members Only')}</option>
+          <option value="everyone">{t('Everyone')}</option>
         </select>
       </div>
     </div>
@@ -201,33 +207,33 @@
   {#if selectMode}
     <div class="people-actions mb-3" id="people-actions">
       <span class="people-actions-count">
-        {busy ? 'Saving…' : `${selected.size} selected`}
+        {busy ? t('Saving…') : t('{n} selected', { n: selected.size })}
       </span>
       <div class="people-actions-btns">
         <button class="pa-btn pa-btn-primary" disabled={!selected.size || busy} onclick={askConfirm}>
-          Confirm
+          {t('Confirm')}
         </button>
         <button class="pa-btn" disabled={!selected.size || busy}
-          onclick={() => applyToSelected('confirmed', false, 'Un-confirmed')}>
-          Un-confirm
-        </button>
-        <span class="people-actions-sep"></span>
-        <button class="pa-btn" disabled={!selected.size || busy}
-          onclick={() => applyToSelected('archived', true, 'Archived')}>
-          Archive
-        </button>
-        <button class="pa-btn" disabled={!selected.size || busy}
-          onclick={() => applyToSelected('archived', false, 'Restored')}>
-          Restore
+          onclick={() => applyToSelected('confirmed', false, t('Un-confirmed'))}>
+          {t('Un-confirm')}
         </button>
         <span class="people-actions-sep"></span>
         <button class="pa-btn" disabled={!selected.size || busy}
-          onclick={() => applyToSelected('relationship', 'member', 'Set to member')}>
-          Member
+          onclick={() => applyToSelected('archived', true, t('Archived'))}>
+          {t('Archive')}
         </button>
         <button class="pa-btn" disabled={!selected.size || busy}
-          onclick={() => applyToSelected('relationship', 'visitor', 'Set to visitor')}>
-          Visitor
+          onclick={() => applyToSelected('archived', false, t('Restored'))}>
+          {t('Restore')}
+        </button>
+        <span class="people-actions-sep"></span>
+        <button class="pa-btn" disabled={!selected.size || busy}
+          onclick={() => applyToSelected('relationship', 'member', t('Set to member'))}>
+          {t('Member')}
+        </button>
+        <button class="pa-btn" disabled={!selected.size || busy}
+          onclick={() => applyToSelected('relationship', 'visitor', t('Set to visitor'))}>
+          {t('Visitor')}
         </button>
       </div>
     </div>
@@ -235,13 +241,13 @@
 
   <div id="people-content">
     {#if loadError}
-      <LoadError id="people-load-error" what="this session's members" onRetry={loadPeople} retrying={loading} />
+      <LoadError id="people-load-error" message={t("Couldn't load this session's members.")} onRetry={loadPeople} retrying={loading} />
     {:else if !allPeople}
-      <p class="text-muted">Loading members...</p>
+      <p class="text-muted">{t('Loading members...')}</p>
     {:else if allPeople.length === 0}
-      <div class="alert alert-info">No members found for this session.</div>
+      <div class="alert alert-info">{t('No members found for this session.')}</div>
     {:else if filteredPeople.length === 0}
-      <div class="alert alert-info">No members match the current filter.</div>
+      <div class="alert alert-info">{t('No members match the current filter.')}</div>
     {:else}
       <div class="table-responsive">
         <table class="table table-striped">
@@ -252,17 +258,17 @@
                   <input
                     type="checkbox"
                     class="form-check-input"
-                    aria-label="Select all"
+                    aria-label={t('Select all')}
                     checked={allVisibleSelected}
                     onchange={toggleAll} />
                 </th>
               {/if}
-              <th style="cursor: pointer;" onclick={() => sortPeople('name')}>Name{indicator('name')}</th>
-              <th style="cursor: pointer;" onclick={() => sortPeople('email')}>Email{indicator('email')}</th>
-              <th class="person-flags-h" title="User · Confirmed · Member · Visitor · Archived · Session admin · System admin">Status</th>
+              <th style="cursor: pointer;" onclick={() => sortPeople('name')}>{t('Name')}{indicator('name')}</th>
+              <th style="cursor: pointer;" onclick={() => sortPeople('email')}>{t('Email')}{indicator('email')}</th>
+              <th class="person-flags-h" title={t('User · Confirmed · Member · Visitor · Archived · Session admin · System admin')}>{t('Status')}</th>
               {#if trackAttendance}
-                <th style="cursor: pointer;" onclick={() => sortPeople('attendance')}>Attendance{indicator('attendance')}</th>
-                <th style="cursor: pointer;" onclick={() => sortPeople('last_attended')}>Last Attended{indicator('last_attended')}</th>
+                <th style="cursor: pointer;" onclick={() => sortPeople('attendance')}>{t('Attendance')}{indicator('attendance')}</th>
+                <th style="cursor: pointer;" onclick={() => sortPeople('last_attended')}>{t('Last Attended')}{indicator('last_attended')}</th>
               {/if}
             </tr>
           </thead>
@@ -274,7 +280,7 @@
                     <input
                       type="checkbox"
                       class="form-check-input"
-                      aria-label={`Select ${person.name}`}
+                      aria-label={t('Select {name}', { name: person.name })}
                       checked={selected.has(person.person_id)}
                       onchange={() => toggleOne(person.person_id)} />
                   </td>
@@ -284,12 +290,12 @@
                     {person.name}
                   </a>
                 </td>
-                <td class="person-email">{#if person.email}{person.email}{:else}<span class="text-muted">No email</span>{/if}</td>
+                <td class="person-email">{#if person.email}{person.email}{:else}<span class="text-muted">{t('No email')}</span>{/if}</td>
                 <td class="person-status"><PersonFlags {person} /></td>
                 {#if trackAttendance}
-                  <td class="person-attendance">{person.attendance_count} sessions</td>
+                  <td class="person-attendance">{tn(person.attendance_count, '{n} sessions', '{n} sessions')}</td>
                   <td class="person-last-attended">
-                    {#if person.last_attended}{parseLocalDate(person.last_attended).toLocaleDateString()}{:else}<span class="text-muted">Never</span>{/if}
+                    {#if person.last_attended}{formatDate(parseLocalDate(person.last_attended))}{:else}<span class="text-muted">{t('Never')}</span>{/if}
                   </td>
                 {/if}
               </tr>
@@ -304,11 +310,11 @@
 <!-- Confirming is the ONE action here that grants something, so it asks. -->
 <Dialog
   bind:open={confirmOpen}
-  title={`Confirm ${selected.size} ${selected.size === 1 ? 'person' : 'people'}?`}
-  description="They will be able to see this session's people list and attendance records."
-  confirmLabel="Confirm them"
-  busyLabel="Confirming…"
-  onConfirm={() => applyToSelected('confirmed', true, 'Confirmed')} />
+  title={tn(selected.size, 'Confirm {n} person?', 'Confirm {n} people?')}
+  description={t("They will be able to see this session's people list and attendance records.")}
+  confirmLabel={t('Confirm them')}
+  busyLabel={t('Confirming…')}
+  onConfirm={() => applyToSelected('confirmed', true, t('Confirmed'))} />
 
 <style>
   .people-select-btn {

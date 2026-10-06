@@ -1,4 +1,5 @@
 <script>
+  // i18n-converted
   /**
    * Recordings for one session instance (spec 050, schema/053).
    *
@@ -15,7 +16,7 @@
    * stage while it fills itself in.
    */
   import { onDestroy } from 'svelte'
-  import { LoadError, ServerError } from './lib/index.js'
+  import { LoadError, ServerError, t, tn } from './lib/index.js'
 
   let { sessionInstanceId, onclose } = $props()
 
@@ -28,10 +29,11 @@
 
   // What to show for a failure: our own or the server's explanation (ServerError),
   // else a human sentence. A JSON-parse or network error only reaches the console.
-  function explain(e, what) {
+  // `fallback` is the sentence shown when the server said nothing (already translated).
+  function explain(e, what, fallback) {
     console.error(`Couldn't ${what}:`, e)
     if (e instanceof ServerError && e.message) return e.message
-    return `Couldn't ${what}. Check your connection and try again.`
+    return fallback
   }
 
   // Upload form
@@ -107,11 +109,11 @@
       xhr.onload = () =>
         (xhr.status >= 200 && xhr.status < 300)
           ? resolve()
-          : reject(new ServerError(`Object storage rejected the upload (HTTP ${xhr.status})`))
+          : reject(new ServerError(t('Object storage rejected the upload (HTTP {status})', { status: xhr.status })))
       // status 0 with no body is a blocked CORS preflight, which the browser
       // refuses to describe. Name the likely cause rather than "failed".
       xhr.onerror = () => reject(new ServerError(
-        'The upload could not reach object storage. The bucket may be missing its CORS rule.'
+        t('The upload could not reach object storage. The bucket may be missing its CORS rule.')
       ))
       xhr.send(blob)
     })
@@ -133,12 +135,12 @@
       await load()
       return
     }
-    stage = data.status_detail || 'working'
+    stage = data.status_detail || t('working')
     pollTimer = setTimeout(() => pollIngest(recordingId).catch(() => {}), 3000)
   }
 
   function fail(e) {
-    error = explain(e, 'upload the recording')
+    error = explain(e, 'upload the recording', t("Couldn't upload the recording. Check your connection and try again."))
     uploading = false
     stage = ''
   }
@@ -148,7 +150,7 @@
     error = ''
     uploading = true
     progress = 0
-    stage = 'Preparing…'
+    stage = t('Preparing…')
     steps = []
     stepAt = null
 
@@ -159,9 +161,9 @@
         body: JSON.stringify({ session_instance_id: sessionInstanceId, filename: file.name })
       })
       const signed = await signRes.json()
-      if (!signRes.ok || !signed.success) throw new ServerError(signed.error || 'Could not prepare the upload')
+      if (!signRes.ok || !signed.success) throw new ServerError(signed.error || t('Could not prepare the upload'))
 
-      stage = 'Uploading…'
+      stage = t('Uploading…')
       await putToS3(signed.upload_url, signed.content_type, file)
 
       // Whatever the browser can read off the file's own metadata. Provisional:
@@ -182,7 +184,7 @@
         })
       } catch { /* not fatal — the server reads plenty the browser cannot */ }
 
-      stage = 'Registering…'
+      stage = t('Registering…')
       const createRes = await fetch('/api/recordings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -194,7 +196,7 @@
         })
       })
       const created = await createRes.json()
-      if (!createRes.ok || !created.success) throw new ServerError(created.error || 'Could not register the recording')
+      if (!createRes.ok || !created.success) throw new ServerError(created.error || t('Could not register the recording'))
 
       // Handed off. Everything after this point happens on the server whether or
       // not this tab exists, so give the form back rather than holding someone
@@ -214,11 +216,12 @@
 
   async function remove(recording) {
     const placed = recording.segment_count || 0
-    const warning = placed
-      ? `Delete “${recording.label}”?\n\nThis also deletes the ${placed} tune placement${placed === 1 ? '' : 's'}`
-        + ' marked on it, and removes the audio from storage.\n\nThis cannot be undone.'
-      : `Delete “${recording.label}”?\n\nNothing has been marked on it yet. The audio is removed from storage.`
-        + '\n\nThis cannot be undone.'
+    const warning = t('Delete “{label}”?', { label: recording.label }) + '\n\n'
+      + (placed
+        ? tn(placed, 'This also deletes the {n} tune placement marked on it, and removes the audio from storage.',
+          'This also deletes the {n} tune placements marked on it, and removes the audio from storage.')
+        : t('Nothing has been marked on it yet. The audio is removed from storage.'))
+      + '\n\n' + t('This cannot be undone.')
     if (!window.confirm(warning)) return
 
     error = ''
@@ -230,7 +233,7 @@
       if (data.storage_warning) error = data.storage_warning
       await load()
     } catch (e) {
-      error = explain(e, 'delete that recording')
+      error = explain(e, 'delete that recording', t("Couldn't delete that recording. Check your connection and try again."))
     } finally {
       busy = null
     }
@@ -245,44 +248,44 @@
       if (!data.success) throw new ServerError(data.error)
       await load()
     } catch (e) {
-      error = explain(e, 'restart processing')
+      error = explain(e, 'restart processing', t("Couldn't restart processing. Check your connection and try again."))
     } finally {
       busy = null
     }
   }
 </script>
 
-<div class="drawer-scrim" role="button" tabindex="-1" aria-label="Close"
+<div class="drawer-scrim" role="button" tabindex="-1" aria-label={t('Close')}
      onclick={onclose} onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && onclose()}></div>
 
-<div class="assign-modal rec-modal" role="dialog" aria-modal="true" aria-label="Recordings">
-  <div class="assign-head">Recordings</div>
+<div class="assign-modal rec-modal" role="dialog" aria-modal="true" aria-label={t('Recordings')}>
+  <div class="assign-head">{t('Recordings')}</div>
 
   <div class="rec-body">
     {#if loading && !recordings.length}
-      <p class="rec-empty">Loading…</p>
+      <p class="rec-empty">{t('Loading…')}</p>
     {:else if loadFailed && !recordings.length}
-      <LoadError what="the recordings" onRetry={load} />
+      <LoadError message={t("Couldn't load the recordings.")} onRetry={load} />
     {:else if !recordings.length}
-      <p class="rec-empty">No audio uploaded for this night yet.</p>
+      <p class="rec-empty">{t('No audio uploaded for this night yet.')}</p>
     {/if}
 
     {#each recordings as r (r.recording_id)}
       <div class="rec-item">
-        <div class="rec-name">{r.label || `recording ${r.recording_id}`}</div>
+        <div class="rec-name">{r.label || t('recording {id}', { id: r.recording_id })}</div>
         <div class="rec-meta">
           {#if r.status === 'ready'}
             {humanDuration(r.duration_ms)}
             {#if r.file_size_bytes}· {humanSize(r.file_size_bytes)}{/if}
-            · <b>{r.segment_count}</b> of {tuneCount} tunes placed
+            · <b>{r.segment_count}</b> {tn(tuneCount, 'of {n} tunes placed', 'of {n} tunes placed')}
             <!-- A partial recording can never reach the night's tune count
                  (schema/055). Without this the count reads as unfinished work
                  here even after it has been settled on /admin/recordings. -->
-            {#if r.segmenting_complete}&mdash; rest isn't in this audio{/if}
+            {#if r.segmenting_complete}— {t("rest isn't in this audio")}{/if}
           {:else if r.status === 'failed'}
-            <span class="rec-failed">Processing failed — {r.status_detail || 'no detail recorded'}</span>
+            <span class="rec-failed">{t('Processing failed — {detail}', { detail: r.status_detail || t('no detail recorded') })}</span>
           {:else}
-            <span class="rec-working">{r.status_detail || 'Processing…'}</span>
+            <span class="rec-working">{r.status_detail || t('Processing…')}</span>
           {/if}
         </div>
         {#if r.status !== 'ready' && watching === r.recording_id && steps.length && stepAt !== null}
@@ -299,13 +302,13 @@
         {/if}
         <div class="rec-actions">
           {#if r.status === 'ready'}
-            <a class="hx-act" href={`/admin/recordings/${r.recording_id}/segment`}>Add timestamps</a>
+            <a class="hx-act" href={`/admin/recordings/${r.recording_id}/segment`}>{t('Add timestamps')}</a>
           {:else if r.status === 'failed'}
             <button class="hx-act" disabled={busy?.id === r.recording_id} onclick={() => retry(r)}
-              >{busy?.id === r.recording_id && busy.kind === 'retry' ? 'Restarting…' : 'Retry'}</button>
+              >{busy?.id === r.recording_id && busy.kind === 'retry' ? t('Restarting…') : t('Retry')}</button>
           {/if}
           <button class="hx-act rec-danger" disabled={busy?.id === r.recording_id} onclick={() => remove(r)}
-            >{busy?.id === r.recording_id && busy.kind === 'delete' ? 'Deleting…' : 'Delete'}</button>
+            >{busy?.id === r.recording_id && busy.kind === 'delete' ? t('Deleting…') : t('Delete')}</button>
         </div>
       </div>
     {/each}
@@ -321,21 +324,20 @@
     {:else}
       {#if handedOff}
         <p class="rec-handoff">
-          Uploaded. Processing carries on in the background — you can close this
-          and come back whenever.
+          {t('Uploaded. Processing carries on in the background — you can close this and come back whenever.')}
         </p>
       {/if}
       <input type="file" accept=".mp3,.m4a,.mp4,.aac,.wav,.ogg,.opus,.flac,.webm,audio/*" onchange={pickFile} />
       {#if file}
-        <input class="rec-label" type="text" placeholder="Label (optional)" bind:value={label} />
-        <button class="hx-act rec-go" onclick={upload}>Upload {humanSize(file.size)}</button>
+        <input class="rec-label" type="text" placeholder={t('Label (optional)')} bind:value={label} />
+        <button class="hx-act rec-go" onclick={upload}>{t('Upload {size}', { size: humanSize(file.size) })}</button>
       {/if}
     {/if}
   </div>
 
   {#if error}<p class="rec-error">{error}</p>{/if}
 
-  <button class="hx-act rec-close" onclick={onclose}>Close</button>
+  <button class="hx-act rec-close" onclick={onclose}>{t('Close')}</button>
 </div>
 
 <style>

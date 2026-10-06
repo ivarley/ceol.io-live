@@ -1,7 +1,8 @@
+{# i18n-converted #}
 {% extends "base.html" %}
 {% set hide_tab_bar = true %}
 
-{% block title %}Segment {{ payload.recording.label or 'recording' }} - Ceol{% endblock %}
+{% block title %}{{ _('Segment %(label)s', label=payload.recording.label or _('recording')) }} - {{ 'Ceol' }}{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='segmenterpage/page.css') }}">

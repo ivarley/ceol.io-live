@@ -1,17 +1,18 @@
+{# i18n-converted #}
 {% extends "base.html" %}
 
-{% block title %}Database Test{% endblock %}
+{% block title %}{{ _('Database Test') }}{% endblock %}
 
 {% block content %}
 <div class="landing-page" style="display: block;">
-    <h1>Database Connection Test!</h1>
-    <p>Records from test_table:</p>
+    <h1>{{ _('Database Connection Test!') }}</h1>
+    <p>{{ _('Records from %(table)s:', table='test_table') }}</p>
     
     {% if records %}
         <table border="1">
             <tr>
-                <th>ID</th>
-                <th>Name</th>
+                <th>{{ _('ID') }}</th>
+                <th>{{ _('Name') }}</th>
             </tr>
             {% for record in records %}
             <tr>
@@ -21,9 +22,9 @@
             {% endfor %}
         </table>
     {% else %}
-        <p>No records found in test_table.</p>
+        <p>{{ _('No records found in %(table)s.', table='test_table') }}</p>
     {% endif %}
     
-    <p><a href="/">Back to home</a></p>
+    <p><a href="/">{{ _('Back to home') }}</a></p>
 </div>
 {% endblock %}

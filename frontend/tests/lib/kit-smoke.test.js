@@ -34,7 +34,7 @@ describe('kit exports', () => {
     expect(Object.keys(kit).sort()).toEqual(
       [...Object.keys(COMPONENTS), 'toast', 'toastFailure', 'ServerError',
        // spec 057: the interface language
-       't', 'tn', 'currentLang', 'LANGUAGE_NAMES', 'formatDate', 'formatNumber', 'tuneTypeName', 'instrumentName'].sort()
+       't', 'tn', 'tc', 'currentLang', 'LANGUAGE_NAMES', 'formatDate', 'formatNumber', 'tuneTypeName', 'instrumentName'].sort()
     )
   })
 

@@ -1,5 +1,7 @@
 <script>
+  // i18n-converted
   import TuneSearch from './TuneSearch.svelte'
+  import { t, tuneTypeName } from './lib/index.js'
 
   // Desktop-only persistent right pane (spec 028): the "likely next tune" suggestion on
   // top, then the shared search body — always visible instead of modal-gated. Only mounted
@@ -39,13 +41,13 @@
   {#if suggestion}
     <div class="pane-suggest">
       <div class="ps-top">
-        <span class="ps-label">→ Usually next</span>
-        <button class="ps-dismiss" title="Don't suggest this next" aria-label="Dismiss suggestion" onclick={onDismissSuggestion}>×</button>
+        <span class="ps-label">→ {t('Usually next')}</span>
+        <button class="ps-dismiss" title={t("Don't suggest this next")} aria-label={t('Dismiss suggestion')} onclick={onDismissSuggestion}>×</button>
       </div>
       <div class="ps-name">{suggestion.name}</div>
       <div class="ps-row">
-        <span class="ps-type">{suggestion.tune_type || ''}</span>
-        <button class="ps-add" onclick={() => onAddSuggestion(suggestion)}>＋ Add</button>
+        <span class="ps-type">{tuneTypeName(suggestion.tune_type) || ''}</span>
+        <button class="ps-add" onclick={() => onAddSuggestion(suggestion)}>＋ {t('Add')}</button>
       </div>
     </div>
   {/if}

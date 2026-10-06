@@ -1,4 +1,5 @@
 <script>
+  // i18n-converted
   // The My Tunes page view (spec 035 Step 2). First paint comes from the
   // server-embedded payload (window.__PAGE_DATA__ — the exact /api/my-tunes
   // shape); everything after is client-side over the same API. All the page's
@@ -14,22 +15,18 @@
     catalogueExtras,
     fetchAllTunes,
     filterAndSort,
-    noResultsMessage,
     overlayPendingOps,
     paramsFromState,
     resolveTuneInstrumentStatus,
-    resultsCountText,
     shouldSearchCatalogue,
-    sortModeLabel,
     stateFromParams,
     submitOp,
     typeBadgeLabel,
-    typeBadgeTitle,
   } from './logic.js'
-  import { STATUS_LABELS } from '../mylist.js'
+  import { statusLabel } from '../mytunes/labels.js'
 
   let { pageData = null } = $props()
-  import { Chevron, Chip, SearchField, Seg, Toolbar, toast } from '../lib/index.js'
+  import { Chevron, Chip, SearchField, Seg, Toolbar, toast, t, tn, tuneTypeName, instrumentName } from '../lib/index.js'
   import NotOnYourList from './NotOnYourList.svelte'
 
   // ---- state -----------------------------------------------------------------
@@ -99,8 +96,8 @@
   // (R2 "in my sessions' repertoire" was deliberately dropped: plays auto-enroll
   // into session_tune, so it only differed for on-list-but-never-played tunes.)
   const REL_CHIPS = [
-    { id: 'member', label: 'At my sessions' },
-    { id: 'attended', label: 'While I was there' },
+    { id: 'member', label: t('At my sessions') },
+    { id: 'attended', label: t('While I was there') },
   ]
   const relLabel = (id) => REL_CHIPS.find((c) => c.id === id)?.label || id
   const matches = $derived(visible.filter((t) => !t._instDimmed))
@@ -131,7 +128,7 @@
         // First load: the error state below says so, with a Retry. A refresh of a list
         // already on screen keeps it, but says it may be stale.
         if (allTunes.length === 0) loadFailed = true
-        else toast("Couldn't refresh your tunes, so the list may be out of date. Reload the page to try again.", 'error')
+        else toast(t("Couldn't refresh your tunes, so the list may be out of date. Reload the page to try again."), 'error')
       })
       .finally(() => {
         fetchingMore = false
@@ -192,30 +189,87 @@
   })
 
   const cap = (s) => s.replace(/\b\w/g, (c) => c.toUpperCase())
+  // A tune type as the interface word ("Reel", "Ríl"); one we don't know shows capitalised.
+  const typeName = (ty) => tuneTypeName(cap(ty))
   const typeLabelText = $derived(
-    filters.type ? cap(filters.type) : 'All Tune Types'
+    filters.type ? typeName(filters.type) : t('All Tune Types')
   )
   const instLabelText = $derived.by(() => {
-    if (filters.instrument) return filters.instrument
+    if (filters.instrument) return instrumentName(filters.instrument)
     // On desktop there's room to spell out what "all" means.
     if (!isMobile && instruments.length >= 2) {
-      const names = instruments.map((i) => i.instrument)
-      const listing =
+      const names = instruments.map((i) => instrumentName(i.instrument))
+      const last = names[names.length - 1]
+      const list =
         names.length === 2
-          ? names.join(' and ')
-          : names.slice(0, -1).join(', ') + ', and ' + names[names.length - 1]
-      return 'All My Instruments (' + listing + ')'
+          ? t('{first} and {last}', { first: names[0], last })
+          : t('{rest}, and {last}', { rest: names.slice(0, -1).join(', '), last })
+      return t('All My Instruments ({list})', { list })
     }
-    return 'All My Instruments'
+    return t('All My Instruments')
   })
+
+  // The sort modes and the count badges' meanings (logic.js holds the English, held to
+  // its fixtures for the iOS app), in the page's language.
+  const SORT_LABELS = {
+    alpha: t('Name (a-z)'),
+    popularity: t('Popularity'),
+    plays: t('My plays'),
+    attended: t('Plays I attended'),
+    heard: t('Times heard'),
+  }
+  const sortModeLabel = (id) => SORT_LABELS[id] || SORT_LABELS.alpha
+  const BADGE_TITLES = {
+    popularity: t('TheSession.org tunebooks'),
+    heard: t('Times heard'),
+    plays: t('Times logged at my sessions'),
+    attended: t('Times logged while I was there'),
+  }
+  const typeBadgeTitle = (sortType) => BADGE_TITLES[sortType] || ''
+  // The badge: the count under a count sort, else the tune type as a word (a count
+  // passes through tuneTypeName unchanged).
+  const badgeLabel = (tune, sortType) => tuneTypeName(typeBadgeLabel(tune, sortType)) || ''
+
+  // The results-count line ("42 tunes" / "Showing 3 of 42 tunes" / on-instrument
+  // form): logic.js's resultsCountText, worded in the page's language.
+  function resultsCountText(filtered, total, f) {
+    const n = filtered.length
+    if (f.instrument) {
+      const on = filtered.filter((x) => !x._instDimmed).length
+      return tn(n, '{on} of {n} tune on {instrument}', '{on} of {n} tunes on {instrument}', {
+        on,
+        instrument: instrumentName(f.instrument),
+      })
+    }
+    if (n < total) return t('Showing {n} of {total} tunes', { n, total })
+    return tn(total, '{n} tune', '{n} tunes')
+  }
+
+  // The "no tunes found" message: logic.js's noResultsMessage, worded in the page's
+  // language. {types} is the English plural ("Reels"); Irish names the type instead.
+  function noResultsMessage(f) {
+    const tuneId = f.search ? extractTuneId(f.search) : null
+    if (tuneId) return t('No tune with ID {id} found', { id: tuneId })
+    const rest = [
+      f.search ? t("containing '{search}'", { search: f.search }) : null,
+      f.status ? t("in '{status}' status", { status: statusLabel(f.status) }) : null,
+    ]
+      .filter(Boolean)
+      .join(' ')
+    if (f.type) {
+      const vars = { types: f.type.charAt(0).toUpperCase() + f.type.slice(1) + 's', type: typeName(f.type), rest }
+      return rest ? t('No {types} {rest} found', vars) : t('No {types} found', vars)
+    }
+    return rest ? t('No tunes {rest} found', { rest }) : t('No tunes found')
+  }
 
   // Active-filter pills, shown only while the panel is collapsed. They stand in for
   // controls you can't see, so status — visible at all times now — has no pill.
   const pills = $derived.by(() => {
     if (panelVisible) return []
     const out = []
-    if (filters.type) out.push({ key: 'type', label: cap(filters.type) })
-    if (filters.instrument) out.push({ key: 'instrument', label: filters.instrument })
+    if (filters.type) out.push({ key: 'type', label: typeName(filters.type) })
+    if (filters.instrument) out.push({ key: 'instrument', label: instrumentName(filters.instrument) })
     if (filters.rel) out.push({ key: 'rel', label: relLabel(filters.rel) })
     return out
   })
@@ -274,7 +328,7 @@
       })
       .catch(() => {
         replaceTune(tune.tune_id, { heard_count: oldCount })
-        toast("Couldn't update the heard count. Check your connection and try again.", 'error')
+        toast(t("Couldn't update the heard count. Check your connection and try again."), 'error')
       })
   }
 
@@ -290,7 +344,7 @@
       // only lookup key when the tune_id couldn't be resolved locally.
       ptid: personTuneId,
       scope: null,
-      tuneName: tune ? tune.tune_name : 'Loading...',
+      tuneName: tune ? tune.tune_name : t('Loading...'),
       tuneType: tune ? tune.tune_type : '',
       onSave: () => loadTunes(),
       // Filtering by an instrument means you care about per-instrument statuses,
@@ -442,13 +496,13 @@
   // ---- landing flows (?added / ?already / ?show / ?ptid / sessionStorage) -------
   function checkForSuccessMessage() {
     const params = new URLSearchParams(window.location.search)
-    if (params.has('added')) toast(`Successfully added "${params.get('added')}" to your collection!`, 'success')
+    if (params.has('added')) toast(t('Successfully added "{name}" to your collection!', { name: params.get('added') }), 'success')
     else if (params.has('already')) {
       const applied = params.get('applied')
       const heard = params.get('heard')
-      let msg = 'This tune is already on your list'
-      if (applied) msg = `Already on your list — set your setting to #${applied}`
-      else if (heard) msg = `Heard it again — ${heard} time${heard === '1' ? '' : 's'} now`
+      let msg = t('This tune is already on your list')
+      if (applied) msg = t('Already on your list — set your setting to #{setting}', { setting: applied })
+      else if (heard) msg = tn(Number(heard), 'Heard it again — {n} time now', 'Heard it again — {n} times now', { n: heard })
       toast(msg, 'info')
     }
   }
@@ -624,7 +678,7 @@
         activeCount={hasDrawerFilters ? 1 : 0}
         addId="add-tune-btn"
         addHref={addTuneHref}
-        addTitle="Add tune"
+        addTitle={t('Add tune')}
         onAdd={handleAddTuneClick}>
         {#snippet search()}
         <SearchField
@@ -633,8 +687,8 @@
           inputClass="filter-search-input"
           wrapperClass="filter-search-wrap"
           styled={false}
-          placeholder="Search"
-          title="Search tunes"
+          placeholder={t('Search')}
+          title={t('Search tunes')}
           autocomplete="off"
           autocorrect="off"
           autocapitalize="off"
@@ -652,10 +706,10 @@
         <div class="filter-status-row">
           <Seg
             options={[
-              { id: 'want to learn', label: STATUS_LABELS['want to learn'] },
-              { id: 'learning', label: STATUS_LABELS.learning },
-              { id: 'learned', label: STATUS_LABELS.learned },
-              { id: '', label: 'All' },
+              { id: 'want to learn', label: statusLabel('want to learn') },
+              { id: 'learning', label: statusLabel('learning') },
+              { id: 'learned', label: statusLabel('learned') },
+              { id: '', label: t('All') },
             ]}
             value={filters.status}
             idAttr="data-status"
@@ -676,7 +730,7 @@
          "attended"), and sorting is a pick-one. Direction is its own control because
          it is orthogonal to the field. -->
     <div class="filter-panel-row filter-sort-row">
-      <span class="filter-row-label">Sort</span>
+      <span class="filter-row-label">{t('Sort')}</span>
       <div class="inst-select sort-select" class:open={openMenu === 'sort'} id="sort-filter">
         <button
           type="button"
@@ -698,15 +752,15 @@
               onclick={() => {
                 openMenu = null
                 setSortMode(mode.id)
-              }}>{mode.label}</button>
+              }}>{sortModeLabel(mode.id)}</button>
           {/each}
         </div>
       </div>
       <button
         id="sort-direction-toggle"
         class="filter-sort-direction-btn"
-        title={sort.dir === 'desc' ? 'Sorting downward — click for upward' : 'Sorting upward — click for downward'}
-        aria-label="Toggle sort direction"
+        title={sort.dir === 'desc' ? t('Sorting downward — click for upward') : t('Sorting upward — click for downward')}
+        aria-label={t('Toggle sort direction')}
         onclick={() => (sort.dir = sort.dir === 'asc' ? 'desc' : 'asc')}>
         <span id="sort-direction-icon">{sort.dir === 'desc' ? '↓' : '↑'}</span>
       </button>
@@ -725,7 +779,7 @@
           <Chevron class="inst-select-caret" dir="down" size={14} />
         </button>
         <div class="inst-select-menu" id="type-filter-menu">
-          {#each [{ value: '', label: 'All Tune Types' }, ...tuneTypes.map((t) => ({ value: t, label: cap(t) }))] as opt (opt.value)}
+          {#each [{ value: '', label: t('All Tune Types') }, ...tuneTypes.map((ty) => ({ value: ty, label: typeName(ty) }))] as opt (opt.value)}
             <button
               type="button"
               class="inst-select-option"
@@ -753,7 +807,7 @@
             <Chevron class="inst-select-caret" dir="down" size={14} />
           </button>
           <div class="inst-select-menu" id="instrument-filter-menu">
-            {#each [{ value: '', label: 'All My Instruments' }, ...instruments.map((i) => ({ value: i.instrument, label: i.instrument }))] as opt (opt.value)}
+            {#each [{ value: '', label: t('All My Instruments') }, ...instruments.map((i) => ({ value: i.instrument, label: instrumentName(i.instrument) }))] as opt (opt.value)}
               <button
                 type="button"
                 class="inst-select-option"
@@ -772,7 +826,7 @@
          nobody asks for — the question is "what have I added since X" or "what did
          I have before X". -->
     <div class="filter-panel-row filter-date-row" id="added-date-row">
-      <span class="filter-row-label">Added</span>
+      <span class="filter-row-label">{t('Added')}</span>
       <div class="inst-select added-dir-select" class:open={openMenu === 'added'} id="added-dir">
         <button
           type="button"
@@ -781,11 +835,11 @@
             e.stopPropagation()
             openMenu = openMenu === 'added' ? null : 'added'
           }}>
-          <span id="added-dir-label">{filters.addedDir === 'before' ? 'Before' : 'After'}</span>
+          <span id="added-dir-label">{filters.addedDir === 'before' ? t('Before') : t('After')}</span>
           <Chevron class="inst-select-caret" dir="down" size={14} />
         </button>
         <div class="inst-select-menu" id="added-dir-menu">
-          {#each [{ value: 'after', label: 'After' }, { value: 'before', label: 'Before' }] as opt (opt.value)}
+          {#each [{ value: 'after', label: t('After') }, { value: 'before', label: t('Before') }] as opt (opt.value)}
             <button
               type="button"
               class="inst-select-option"
@@ -802,12 +856,12 @@
         type="date"
         id="added-date"
         class="filter-date-input"
-        aria-label="Added date"
+        aria-label={t('Added date')}
         bind:value={filters.addedDate} />
     </div>
 
     <div class="filter-panel-row filter-played-row" id="rel-filter-row">
-      <span class="filter-row-label">Played</span>
+      <span class="filter-row-label">{t('Played')}</span>
       {#each REL_CHIPS as chip (chip.id)}
         <Chip
           label={chip.label}
@@ -820,7 +874,7 @@
 
     <div class="filter-panel-actions">
       {#if hasActiveFilters}
-        <button id="clear-filters-btn" class="filter-panel-clear-btn" onclick={clearFilters}>Clear Filters</button>
+        <button id="clear-filters-btn" class="filter-panel-clear-btn" onclick={clearFilters}>{t('Clear Filters')}</button>
       {/if}
     </div>
         {/snippet}
@@ -837,7 +891,7 @@
             styled={false}
             chipClass="filter-pill"
             xClass="filter-pill-x"
-            title="Remove this filter"
+            title={t('Remove this filter')}
             onDismiss={() => removeFilterPill(pill.key)} />
         {/each}
       </div>
@@ -856,12 +910,12 @@
     <div class="tunes-grid" id="tunes-grid" style="display: grid;">
       <div class="error-state">
         <div class="error-state-icon">⚠️</div>
-        <div class="error-state-title">Couldn't load your tunes</div>
-        <div class="error-state-message">Check your connection, then try again.</div>
+        <div class="error-state-title">{t("Couldn't load your tunes")}</div>
+        <div class="error-state-message">{t('Check your connection, then try again.')}</div>
         <div class="error-state-action">
           <button class="retry-btn" disabled={fetchingMore} onclick={() => loadTunes()}>
             <span class="retry-icon">↻</span>
-            {fetchingMore ? 'Retrying…' : 'Retry'}
+            {fetchingMore ? t('Retrying…') : t('Retry')}
           </button>
         </div>
       </div>
@@ -871,10 +925,10 @@
       <div id="no-results" class="no-results">
         <!-- "No tunes found" stops being true the moment the catalogue section below
              is showing tunes. They were found; they are just not yours yet. -->
-        <h3>{catalogue.length ? 'None of your tunes match' : 'No tunes found'}</h3>
+        <h3>{catalogue.length ? t('None of your tunes match') : t('No tunes found')}</h3>
         <p id="no-results-message">
           {allTunes.length === 0 && !filters.search && !hasActiveFilters
-            ? 'Try adjusting your filters or add your first tune to get started!'
+            ? t('Try adjusting your filters or add your first tune to get started!')
             : noResultsMessage(filters)}
         </p>
         <div id="no-results-action" style="margin-top: 15px;">
@@ -886,7 +940,7 @@
             <!-- A pasted link/id that isn't on your list yet: adding it is the point, and
                  the pane resolves the same link (setting included). Clear Filters still
                  rides along when other filters could be what's hiding it. -->
-            <a href={addTuneHref} class="btn" onclick={handleAddTuneClick}>Add Tune #{searchTuneRef}</a>
+            <a href={addTuneHref} class="btn" onclick={handleAddTuneClick}>{t('Add Tune #{id}', { id: searchTuneRef })}</a>
             {#if hasActiveFilters}
               <a
                 href="#clear"
@@ -894,7 +948,7 @@
                 onclick={(e) => {
                   e.preventDefault()
                   clearFilters()
-                }}>Clear Filters</a>
+                }}>{t('Clear Filters')}</a>
             {/if}
           {:else if hasActiveFilters}
             <a
@@ -903,14 +957,14 @@
               onclick={(e) => {
                 e.preventDefault()
                 clearFilters()
-              }}>Clear Filters</a>
+              }}>{t('Clear Filters')}</a>
           {:else}
-            <a href={addTuneHref} class="btn" onclick={handleAddTuneClick}>Add Tune</a>
+            <a href={addTuneHref} class="btn" onclick={handleAddTuneClick}>{t('Add Tune')}</a>
           {/if}
         </div>
       </div>
     {:else if !loadFailed && allTunes.length === 0}
-      <div id="loading" class="loading"><p>Loading your tunes...</p></div>
+      <div id="loading" class="loading"><p>{t('Loading your tunes...')}</p></div>
     {/if}
   {:else}
     <div class="tunes-grid" id="tunes-grid" style="display: grid;">
@@ -918,10 +972,10 @@
         <!-- Desktop column headings, on the rows' own grid: badge, name, then the type
              and the three counts a phone can only show one of. -->
         <div class="tune-list-columns" aria-hidden="true">
-          <span class="tune-list-col-type">Type</span>
-          <span class="tune-list-col-num" class:sorted={sort.type === 'popularity'}>Tunebooks</span>
-          <span class="tune-list-col-num" class:sorted={sort.type === 'plays'}>My plays</span>
-          <span class="tune-list-col-num" class:sorted={sort.type === 'heard'}>Heard</span>
+          <span class="tune-list-col-type">{t('Type')}</span>
+          <span class="tune-list-col-num" class:sorted={sort.type === 'popularity'}>{t('Tunebooks')}</span>
+          <span class="tune-list-col-num" class:sorted={sort.type === 'plays'}>{t('My plays')}</span>
+          <span class="tune-list-col-num" class:sorted={sort.type === 'heard'}>{t('Heard')}</span>
         </div>
       {/if}
       {#if filters.instrument && dimmedTunes.length > 0}
@@ -931,23 +985,23 @@
             {tune}
             {isMobile}
             displayStatus={d.status}
-            typeLabel={typeBadgeLabel(tune, sort.type)}
+            typeLabel={badgeLabel(tune, sort.type)}
             typeTitle={typeBadgeTitle(sort.type)}
             sortType={sort.type}
-            onshow={(t) => showTuneDetail(t.person_tune_id)}
+            onshow={(x) => showTuneDetail(x.person_tune_id)}
             onincrement={incrementHeard} />
         {/each}
-        <div class="tune-group-heading">Tunes on other instruments</div>
+        <div class="tune-group-heading">{t('Tunes on other instruments')}</div>
         {#each dimmedTunes as tune (tune.person_tune_id)}
           {@const d = displayStatusFor(tune)}
           <TuneCard
             {tune}
             {isMobile}
             displayStatus={d.status}
-            typeLabel={typeBadgeLabel(tune, sort.type)}
+            typeLabel={badgeLabel(tune, sort.type)}
             typeTitle={typeBadgeTitle(sort.type)}
             sortType={sort.type}
-            onshow={(t) => showTuneDetail(t.person_tune_id)}
+            onshow={(x) => showTuneDetail(x.person_tune_id)}
             onincrement={incrementHeard} />
         {/each}
       {:else}
@@ -957,10 +1011,10 @@
             {tune}
             {isMobile}
             displayStatus={d.status}
-            typeLabel={typeBadgeLabel(tune, sort.type)}
+            typeLabel={badgeLabel(tune, sort.type)}
             typeTitle={typeBadgeTitle(sort.type)}
             sortType={sort.type}
-            onshow={(t) => showTuneDetail(t.person_tune_id)}
+            onshow={(x) => showTuneDetail(x.person_tune_id)}
             onincrement={incrementHeard} />
         {/each}
       {/if}
@@ -980,7 +1034,7 @@
 
   <div id="loading-more" class="loading-more" class:visible={fetchingMore && !fullTunesLoaded}>
     <span class="loading-spinner"></span>
-    <span>Loading more tunes...</span>
+    <span>{t('Loading more tunes...')}</span>
   </div>
 </div>
 

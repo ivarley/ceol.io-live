@@ -1,7 +1,8 @@
+{# i18n-converted #}
 {% extends "base.html" %}
 
-{% block title %}Share Ceol - Irish Music Sessions{% endblock %}
-{% block description %}Share Ceol{% endblock %}
+{% block title %}{{ _('Share Ceol - Irish Music Sessions') }}{% endblock %}
+{% block description %}{{ _('Share Ceol') }}{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -35,17 +36,18 @@
 
 {% block content %}
 <div class="landing-page" style="display: block;">
-    <h1>Share Ceol</h1>
-    <p>This app is free to use for anyone; just visit <a href="/">ceol.io</a> to get started!</p>
+    <h1>{{ _('Share Ceol') }}</h1>
+    {% set home_link %}<a href="/">{{ 'ceol.io' }}</a>{% endset %}
+    <p>{{ _('This app is free to use for anyone; just visit %(link)s to get started!', link=home_link) }}</p>
 
     <div style="margin: 30px 0; padding: 10px; background-color: var(--hover-bg); border-radius: 8px; border: 1px solid var(--border-color);">
-        <h3 style="margin-top: 0; padding: 0 10px;">Share QR Code</h3>
-        <p style="padding: 0 10px;">Scan this QR code to visit this page:</p>
+        <h3 style="margin-top: 0; padding: 0 10px;">{{ _('Share QR Code') }}</h3>
+        <p style="padding: 0 10px;">{{ _('Scan this QR code to visit this page:') }}</p>
         <img src="/api/qr?url={{ target_url | urlencode }}{% if person_id %}&referrer={{ person_id }}{% endif %}"
-             alt="QR Code"
+             alt="{{ _('QR Code') }}"
              style="max-width: 90%; width: 400px; display: block; margin: 15px auto; background: white; padding: 10px; border-radius: 4px;">
         <p style="font-size: 0.7em; color: var(--secondary-text); opacity: 0.4; margin: 10px 0 0 0; text-align: center; padding: 0 10px; word-break: break-all;">
-            {{ target_url }}{% if person_id %}?referrer={{ person_id }}{% endif %}
+            {{ target_url }}{% if person_id %}{{ '?referrer=' }}{{ person_id }}{% endif %}
         </p>
     </div>
 </div>

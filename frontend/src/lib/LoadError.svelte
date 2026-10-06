@@ -1,10 +1,12 @@
 <script>
+  // i18n-converted
+  import { t } from './i18n/index.js'
   // LoadError: THE failed-load state. A fetch that fills content and fails must
   // never look like real data (an empty list, "no stats", a silently-reset
   // filter) — render this where the content would be instead: "Couldn't load
   // <what>." plus a Retry that re-runs the fetch.
   let {
-    what = 'this', // noun phrase: "the logs", "your tunes"
+    what = t('this'), // noun phrase: "the logs", "your tunes" — through t(); its Irish fits "Níorbh fhéidir {what} a lódáil."
     message = '', // full override of the sentence, when "Couldn't load X." doesn't fit
     onRetry = null, // re-runs the fetch; no button when omitted
     retrying = false, // host's in-flight flag → busy label, disabled button
@@ -14,10 +16,10 @@
 </script>
 
 <div {...rest} class="kit-load-error {rest.class ?? ''}" class:inline role="alert">
-  <span class="kit-load-error-msg">{message || `Couldn't load ${what}.`}</span>
+  <span class="kit-load-error-msg">{message || t("Couldn't load {what}.", { what })}</span>
   {#if onRetry}
     <button type="button" class="kit-load-retry" onclick={() => onRetry()} disabled={retrying}>
-      {retrying ? 'Retrying…' : 'Retry'}
+      {retrying ? t('Retrying…') : t('Retry')}
     </button>
   {/if}
 </div>

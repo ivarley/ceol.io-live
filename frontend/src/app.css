@@ -2019,3 +2019,8 @@ main.wide .sidepane { grid-area: pane; overflow-y: auto; min-height: 0; }
   --primary: #65b464;
   --text-muted: #9a9aa3;
 }
+
+/* Spec 057: Irish isn't title-cased; undo the chip's capitalize in Irish. */
+html[lang="ga"] .ls-chip {
+  text-transform: none;
+}

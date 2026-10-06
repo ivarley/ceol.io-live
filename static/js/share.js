@@ -16,6 +16,9 @@
 (function () {
   'use strict'
 
+  // Spec 057: the page's language, from window.__CEOL_T__ (base.html); English otherwise.
+  function T(s) { return (window.__CEOL_T__ && window.__CEOL_T__[s]) || s }
+
   var dialog, qrImg, urlText, copyBtn, nativeBtn, lastFocus
 
   function els() {
@@ -41,7 +44,7 @@
     // app carries this button — fetching one on every page load to show it on almost
     // none of them would be a request per page for nothing.
     qrImg.src = '/api/qr?url=' + encodeURIComponent(url)
-    qrImg.alt = 'QR code linking to ' + url
+    qrImg.alt = T('QR code linking to {url}').replace('{url}', url)
 
     // The system sheet is the better answer where it exists, but it is not on every
     // browser and never on desktop Safari/Firefox, so it is an extra button rather
@@ -77,7 +80,7 @@
     var url = pageUrl()
     var done = function () {
       var was = copyBtn.textContent
-      copyBtn.textContent = 'Copied'
+      copyBtn.textContent = T('Copied')
       setTimeout(function () {
         copyBtn.textContent = was
       }, 1600)

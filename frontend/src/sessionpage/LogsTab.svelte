@@ -1,4 +1,5 @@
 <script>
+  // i18n-converted
   // The Logs tab ("Sessions" for festivals): lazy-loaded from
   // GET /api/sessions/<path>/logs on first view, rendered with the exact legacy
   // renderLogs markup (year/day sections, collapsible via the ▼/▶ toggle,
@@ -26,7 +27,7 @@
     tunePlayLinks,
   } from './logic.js'
   import { publishHeight } from './sticky.js'
-  import { LoadError, Row, SearchField, Seg, Toolbar } from '../lib/index.js'
+  import { LoadError, Row, SearchField, Seg, Toolbar, t, tn } from '../lib/index.js'
 
   let { active, session, isLoggedIn, onAddInstance } = $props()
 
@@ -37,7 +38,7 @@
   // a year list the date does.
   const titleOf = (instance) =>
     instance.location_override ||
-    (isFestival ? session.location_name || 'Session' : rowDateLabel(instance.date))
+    (isFestival ? session.location_name || t('Session') : rowDateLabel(instance.date))
 
   let loaded = $state(false)
   let loading = $state(false)
@@ -160,9 +161,9 @@
   const dropdownStatus = $derived.by(() => {
     if (selectedTune || !inputFocused || options.length > 0) return null
     if (!tuneQuery.trim()) return null
-    if (tunesLoading) return 'Loading tunes…'
+    if (tunesLoading) return t('Loading tunes…')
     if (tunesError) return null // the note below the row says it
-    return 'No tune logged here matches that'
+    return t('No tune logged here matches that')
   })
 
   // Editing the box (or the kit's clear ×) drops the selection — the filter must
@@ -274,7 +275,7 @@
 
 {#snippet tuneCountSuffix(instance)}
   {#if tuneCountOf(instance) > 0}
-    <span class="log-tune-count">({tuneCountOf(instance)} tune{tuneCountOf(instance) !== 1 ? 's' : ''} logged)</span>
+    <span class="log-tune-count">{tn(tuneCountOf(instance), '({n} tune logged)', '({n} tunes logged)')}</span>
   {/if}
 {/snippet}
 
@@ -307,7 +308,7 @@
       bind:open={filterOpen}
       activeCount={viewMode === 'logged' ? 0 : 1}
       addId={isLoggedIn ? 'add-session-btn' : null}
-      addTitle="Add a log"
+      addTitle={t('Add a log')}
       onAdd={isLoggedIn ? addClick : null}>
       {#snippet search()}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -318,7 +319,7 @@
         inputClass="filter-search-input"
         wrapperClass="filter-search-wrap"
         styled={false}
-        placeholder="Search for a tune"
+        placeholder={t('Search for a tune')}
         autocomplete="off"
         autocorrect="off"
         autocapitalize="off"
@@ -335,7 +336,7 @@
         }}
         onblur={() => (inputFocused = false)} />
       {#if dropdownOpen}
-        <ul class="logs-tune-options" id="logs-tune-options" role="listbox" aria-label="Tunes logged here">
+        <ul class="logs-tune-options" id="logs-tune-options" role="listbox" aria-label={t('Tunes logged here')}>
           {#each options as option, i (option.tune_id)}
             <li id="logs-tune-option-{i}" role="option" aria-selected={i === activeIndex}>
               <button
@@ -366,26 +367,26 @@
           segClass="filter-button-group logs-view-toggle"
           optClass="filter-sort-btn"
           role="group"
-          aria-label="Which nights to show" />
+          aria-label={t('Which nights to show')} />
       {/snippet}
     </Toolbar>
   </div>
   {#if selectedTune || tunesError}
     <div class="logs-filter-note" id="logs-filter-note">
       {#if tunesError}
-        <LoadError inline id="logs-tunes-error" what="the tune list" onRetry={retryTunes} retrying={tunesLoading} />
+        <LoadError inline id="logs-tunes-error" message={t("Couldn't load the tune list.")} onRetry={retryTunes} retrying={tunesLoading} />
       {:else if instancesError}
         <LoadError
           inline
           id="logs-filter-error"
-          message="Couldn't filter to {selectedTune.name}."
+          message={t("Couldn't filter to {name}.", { name: selectedTune.name })}
           onRetry={() => selectTune(selectedTune)}
           retrying={instancesLoading} />
       {:else if instancesLoading}
-        Filtering to {selectedTune.name}…
+        {t('Filtering to {name}…', { name: selectedTune.name })}
       {:else}
-        {view.total} log{view.total !== 1 ? 's' : ''} with {selectedTune.name}
-        <button type="button" class="logs-filter-clear" onclick={() => (tuneQuery = '')}>clear</button>
+        {tn(view.total, '{n} log with {name}', '{n} logs with {name}', { name: selectedTune.name })}
+        <button type="button" class="logs-filter-clear" onclick={() => (tuneQuery = '')}>{t('clear')}</button>
       {/if}
     </div>
   {/if}
@@ -394,17 +395,17 @@
 {#snippet emptyState()}
   <div class="logs-empty-state">
     {#if selectedTune}
-      <p>No logs with {selectedTune.name}.</p>
+      <p>{t('No logs with {name}.', { name: selectedTune.name })}</p>
     {:else}
       <p>
-        No logs yet.{#if isLoggedIn}
-          <span class="year-add-link" id="add-session-btn" onclick={addClick}>Add</span>
+        {t('No logs yet.')}{#if isLoggedIn}
+          <span class="year-add-link" id="add-session-btn" onclick={addClick}>{t('Add')}</span>
         {/if}
       </p>
       {#if totalInstances > 0}
         <p class="logs-empty-hint">
           <button type="button" class="logs-filter-clear" onclick={() => (viewMode = 'all')}>
-            Show all {totalInstances} session{totalInstances !== 1 ? 's' : ''}
+            {tn(totalInstances, 'Show all {n} session', 'Show all {n} sessions')}
           </button>
         </p>
       {/if}
@@ -415,18 +416,18 @@
 <!-- Logs Tab Content -->
 <div class="tab-content" class:active id="logs-tab">
   {#if activeError && loaded}
-    <LoadError inline id="logs-active-error" message="Couldn't check which sessions are on now." onRetry={loadActiveInstances} retrying={activeLoading} />
+    <LoadError inline id="logs-active-error" message={t("Couldn't check which sessions are on now.")} onRetry={loadActiveInstances} retrying={activeLoading} />
   {/if}
   {#if loadError}
-    <LoadError id="logs-load-error" what="the logs" onRetry={loadLogs} retrying={loading} />
+    <LoadError id="logs-load-error" message={t("Couldn't load the logs.")} onRetry={loadLogs} retrying={loading} />
   {:else if !loaded}
-    <div style="text-align: center; padding: 40px; color: var(--disabled-text);"><p>Loading logs...</p></div>
+    <div style="text-align: center; padding: 40px; color: var(--disabled-text);"><p>{t('Loading logs...')}</p></div>
   {:else if totalInstances === 0}
     <div class="past-instances">
       {#if isFestival}
-        <p><a href="#add" id="add-first-session-btn" style="color: var(--primary); text-decoration: none;" onclick={addClick}>Add your first session</a></p>
+        <p><a href="#add" id="add-first-session-btn" style="color: var(--primary); text-decoration: none;" onclick={addClick}>{t('Add your first session')}</a></p>
       {:else}
-        <p><a href="#add" id="add-session-btn" style="color: var(--primary); text-decoration: none;" onclick={addClick}>Add your first log</a></p>
+        <p><a href="#add" id="add-session-btn" style="color: var(--primary); text-decoration: none;" onclick={addClick}>{t('Add your first log')}</a></p>
       {/if}
     </div>
   {:else}
@@ -461,7 +462,7 @@
                 <h3 class="year-title logs-group-title">
                   {isFestival ? festivalDayLabel(instances[0].date) : groupKey}
                 </h3>
-                <span class="logs-group-count">{instances.length} log{instances.length !== 1 ? 's' : ''}</span>
+                <span class="logs-group-count">{tn(instances.length, '{n} log', '{n} logs')}</span>
               </div>
 
               {#if !isCollapsed}
@@ -499,7 +500,7 @@
                           <!-- The separator is an expression, not literal whitespace:
                                Svelte trims text at a block boundary, so " · " written
                                inline collapses and the two facts run together. -->
-                          {#if when}{when}{/if}{#if when && count}{' · '}{/if}{#if count}<span class="log-tune-count">{count} tune{count !== 1 ? 's' : ''} logged</span>{/if}
+                          {#if when}{when}{/if}{#if when && count}{' · '}{/if}{#if count}<span class="log-tune-count">{tn(count, '{n} tune logged', '{n} tunes logged')}</span>{/if}
                         </span>
                       </span>
                       {@render tuneHits(instance)}

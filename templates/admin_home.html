@@ -1,6 +1,7 @@
+{# i18n-converted #}
 {% extends "base.html" %}
 
-{% block title %}Admin{% endblock %}
+{% block title %}{{ _('Admin') }}{% endblock %}
 
 {% block content %}
 <div class="docs-content-inner">
@@ -9,15 +10,15 @@
             {% include 'admin_tabs.html' %}
 
             <section class="admin-section" id="admin-home">
-                <p class="admin-home-label">Select a section:</p>
+                <p class="admin-home-label">{{ _('Select a section:') }}</p>
                 <ul class="admin-home-links">
-                    <li><a href="{{ url_for('admin_sessions_list') }}">Sessions</a></li>
-                    <li><a href="{{ url_for('admin_tunes') }}">Tunes</a></li>
-                    <li><a href="{{ url_for('admin_people') }}">People</a></li>
-                    <li><a href="{{ url_for('admin_activity') }}">Activity</a></li>
-                    <li><a href="{{ url_for('admin_test_links') }}">Test Links</a></li>
-                    <li><a href="{{ url_for('admin_cache_settings') }}">Cache Settings</a></li>
-                    <li><a href="{{ url_for('admin_recordings') }}">Recordings</a></li>
+                    <li><a href="{{ url_for('admin_sessions_list') }}">{{ _('Sessions') }}</a></li>
+                    <li><a href="{{ url_for('admin_tunes') }}">{{ _('Tunes') }}</a></li>
+                    <li><a href="{{ url_for('admin_people') }}">{{ _('People') }}</a></li>
+                    <li><a href="{{ url_for('admin_activity') }}">{{ _('Activity') }}</a></li>
+                    <li><a href="{{ url_for('admin_test_links') }}">{{ _('Test Links') }}</a></li>
+                    <li><a href="{{ url_for('admin_cache_settings') }}">{{ _('Cache Settings') }}</a></li>
+                    <li><a href="{{ url_for('admin_recordings') }}">{{ _('Recordings') }}</a></li>
                 </ul>
             </section>
         </article>

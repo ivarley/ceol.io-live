@@ -1,4 +1,5 @@
 <script>
+  // i18n-converted
   // Pick one of MY sessions (spec 037) — the tune drawer's "At a different session ..."
   // row, which re-scopes the Session tab so you can see what another session you play at
   // does with the same tune.
@@ -10,6 +11,7 @@
   import Sheet from './Sheet.svelte'
   import SearchField from './SearchField.svelte'
   import List from './List.svelte'
+  import { t } from './i18n/index.js'
 
   let {
     open = $bindable(false),
@@ -17,7 +19,7 @@
     sessions = [],
     // The session already in scope; it's pointless to offer it, so it's filtered out.
     currentPath = null,
-    title = 'At a different session',
+    title = t('At a different session'),
     onSelect = () => {},
     onClose = () => {},
   } = $props()
@@ -51,7 +53,7 @@
 
 <Sheet bind:open {title} desktop="dock" onCancel={close}>
   {#if mine.length > 6}
-    <SearchField bind:value={query} placeholder="Find a session" />
+    <SearchField bind:value={query} placeholder={t('Find a session')} />
   {/if}
 
   <List items={items} bind:active onSelect={pick}>
@@ -66,9 +68,9 @@
   {#if !items.length}
     <div class="sp-empty">
       {#if !mine.length}
-        You're not a member of any other session.
+        {t("You're not a member of any other session.")}
       {:else}
-        No session matches “{query}”.
+        {t('No session matches “{query}”.', { query })}
       {/if}
     </div>
   {/if}

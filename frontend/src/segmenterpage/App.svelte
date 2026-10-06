@@ -1,4 +1,5 @@
 <script>
+  // i18n-converted
   // Recording segmenter (spec 050): put start/end timestamps on the tunes already
   // logged against a night's audio, fast enough to do a three-hour session in one
   // sitting. The output is the training corpus for tune recognition.
@@ -21,6 +22,7 @@
     timeFromHash,
     ZOOM_LEVELS,
   } from './logic.js'
+  import { t, tn } from '../lib/index.js'
 
   let { pageData = null } = $props()
 
@@ -193,7 +195,7 @@
       pendingSeekMs = ms
       currentMs = ms
     }
-    flash(`At ${formatTime(ms)}, from the link`)
+    flash(t('At {time}, from the link', { time: formatTime(ms) }))
   }
 
   onMount(() => {
@@ -204,13 +206,13 @@
     if (linked != null) {
       pendingSeekMs = linked
       currentMs = linked
-      flash(`At ${formatTime(linked)}, from the link`)
+      flash(t('At {time}, from the link', { time: formatTime(linked) }))
     } else if (resumeAt != null) {
       // Paint the waveform at the remembered spot immediately -- the peaks are
       // already here, so the tape is back in place long before the audio is.
       pendingSeekMs = resumeAt
       currentMs = resumeAt
-      flash('Back where you left off')
+      flash(t('Back where you left off'))
     }
     cursorIndex = nextUnplacedIndex(tunes, 0)
     // On a warm cache the element can already be playable before the handlers
@@ -262,7 +264,7 @@
       if (!res.ok) throw new Error(`peaks ${res.status}`)
       peaks = new Uint8Array(await res.arrayBuffer())
     } catch (err) {
-      flash(`Could not load the waveform: ${err.message}`, 'error')
+      flash(t('Could not load the waveform: {error}', { error: err.message }), 'error')
     }
   }
 
@@ -377,13 +379,18 @@
       await refreshQueued()
       await persistMirror()
       if (refused.length) {
-        flash(`Synced, but ${refused.length} mark${refused.length === 1 ? '' : 's'} could not be saved: ${refused[0].error}`, 'error')
+        flash(
+          tn(refused.length, 'Synced, but {n} mark could not be saved: {error}', 'Synced, but {n} marks could not be saved: {error}', {
+            error: refused[0].error,
+          }),
+          'error'
+        )
       } else {
         const n = detail.recording_ids?.length === 1 ? detail.cleared : null
-        flash(n ? `Synced ${n} queued mark${n === 1 ? '' : 's'}` : 'Synced your queued marks')
+        flash(n ? tn(n, 'Synced {n} queued mark', 'Synced {n} queued marks') : t('Synced your queued marks'))
       }
     } catch (err) {
-      flash(`Synced, but could not refresh the log: ${err.message}`, 'error')
+      flash(t('Synced, but could not refresh the log: {error}', { error: err.message }), 'error')
     }
   }
 
@@ -406,11 +413,11 @@
         ...local,
         [source.id]: { url: URL.createObjectURL(entry.blob), size_bytes: entry.size_bytes, saved_at: entry.saved_at },
       }
-      flash(`Saved the ${source.label} encode on this device (${mb(entry.size_bytes)} MB) — the tool now works offline`)
+      flash(t('Saved the {label} encode on this device ({n} MB) — the tool now works offline', { label: source.label, n: mb(entry.size_bytes) }))
       if (sourceId === source.id) await reloadAudioKeepingPlace()
     } catch (err) {
-      if (err?.name === 'AbortError') flash('Download cancelled')
-      else flash(`Could not save the audio: ${err.message}`, 'error')
+      if (err?.name === 'AbortError') flash(t('Download cancelled'))
+      else flash(t('Could not save the audio: {error}', { error: err.message }), 'error')
     } finally {
       download = null
     }
@@ -426,9 +433,9 @@
       local = rest
       if (id === sourceId) await reloadAudioKeepingPlace()
       URL.revokeObjectURL(held.url)
-      flash('Removed the offline copy')
+      flash(t('Removed the offline copy'))
     } catch (err) {
-      flash(`Could not remove the offline copy: ${err.message}`, 'error')
+      flash(t('Could not remove the offline copy: {error}', { error: err.message }), 'error')
     }
   }
 
@@ -462,7 +469,7 @@
   function togglePlay() {
     if (!audio) return
     if (audio.paused) {
-      audio.play().catch((err) => flash(`Playback failed: ${err.message}`, 'error'))
+      audio.play().catch((err) => flash(t('Playback failed: {error}', { error: err.message }), 'error'))
     } else {
       audio.pause()
     }
@@ -596,7 +603,7 @@
     } catch (err) {
       tunes[index] = { ...tunes[index], segment: previous }
       undoStack.pop()
-      flash(`Could not save "${tune.name}": ${err.message}`, 'error')
+      flash(t('Could not save "{name}": {error}', { name: tune.name, error: err.message }), 'error')
     }
     persistMirror()
   }
@@ -647,7 +654,13 @@
     const shift = ms - currentMs
     if (Math.abs(shift) >= 60) {
       const dir = shift > 0 ? '+' : '−'
-      flash(`${name} at ${formatTime(ms, { millis: true })} (snapped ${dir}${(Math.abs(shift) / 1000).toFixed(2)}s — S to turn off)`)
+      flash(
+        t('{name} at {time} (snapped {shift}s — S to turn off)', {
+          name,
+          time: formatTime(ms, { millis: true }),
+          shift: `${dir}${(Math.abs(shift) / 1000).toFixed(2)}`,
+        })
+      )
     }
   }
 
@@ -664,7 +677,7 @@
       targetId = best?.id ?? null
     }
     if (targetId == null) {
-      flash('No placed tune before the playhead to end.', 'info')
+      flash(t('No placed tune before the playhead to end.'), 'info')
       return
     }
     markEndAt(tunes.findIndex((t) => t.session_instance_tune_id === targetId))
@@ -674,11 +687,11 @@
     const tune = tunes[index]
     if (!tune?.segment) return
     if (currentMs <= tune.segment.start_ms) {
-      flash('The end has to come after the start.', 'error')
+      flash(t('The end has to come after the start.'), 'error')
       return
     }
     place(index, tune.segment.start_ms, currentMs)
-    flash(`Ended "${tune.name}" at ${formatTime(currentMs)}`)
+    flash(t('Ended "{name}" at {time}', { name: tune.name, time: formatTime(currentMs) }))
   }
 
   // ---- dragging a boundary ---------------------------------------------------
@@ -712,7 +725,10 @@
     }
     // Straight to `status`, not through flash(): this runs every frame of the
     // drag, and flash() would be scheduling and cancelling a timer each time.
-    status = `${tune.name} ${edge === 'start' ? 'starts' : 'ends'} ${formatTime(at, { millis: true })}`
+    status =
+      edge === 'start'
+        ? t('{name} starts {time}', { name: tune.name, time: formatTime(at, { millis: true }) })
+        : t('{name} ends {time}', { name: tune.name, time: formatTime(at, { millis: true }) })
     statusKind = 'info'
   }
 
@@ -737,7 +753,11 @@
     // the undo point, and by now that is the previewed position.
     tunes[index] = { ...tune, segment: original }
     await place(index, moved.start_ms, moved.end_ms)
-    flash(`Moved "${tune.name}" ${edge === 'start' ? 'start' : 'end'} to ${formatTime(edge === 'start' ? moved.start_ms : moved.end_ms, { millis: true })} — U to undo`)
+    flash(
+      edge === 'start'
+        ? t('Moved "{name}" start to {time} — U to undo', { name: tune.name, time: formatTime(moved.start_ms, { millis: true }) })
+        : t('Moved "{name}" end to {time} — U to undo', { name: tune.name, time: formatTime(moved.end_ms, { millis: true }) })
+    )
   }
 
   /**
@@ -783,7 +803,7 @@
       if (err?.status !== 404) {
         tunes[index] = { ...tunes[index], segment: previous }
         if (moveCursor) cursorIndex = previousCursor
-        flash(`Could not clear "${tune.name}": ${err.message}`, 'error')
+        flash(t('Could not clear "{name}": {error}', { name: tune.name, error: err.message }), 'error')
       }
     } finally {
       saving -= 1
@@ -794,7 +814,7 @@
   async function undo() {
     const step = undoStack.pop()
     if (!step) {
-      flash('Nothing to undo.', 'info')
+      flash(t('Nothing to undo.'), 'info')
       return
     }
     if (step.kind === 'log') {
@@ -802,7 +822,7 @@
       const index = tunes.findIndex((t) => t.session_instance_tune_id === step.sitId)
       if (index >= 0) await unlogAt(index, false)
       cursorIndex = step.cursor
-      flash('Undid that tune')
+      flash(t('Undid that tune'))
       return
     }
     cursorIndex = step.cursor
@@ -812,7 +832,7 @@
     } else {
       await clearAt(step.index)
     }
-    flash(`Undid "${tunes[step.index]?.name ?? 'that mark'}"`)
+    flash(t('Undid "{name}"', { name: tunes[step.index]?.name ?? t('that mark') }))
   }
 
   // ---- logging while segmenting -------------------------------------------
@@ -852,10 +872,10 @@
       cursorIndex = -1 // the next mark logs the next tune
       revealId = body.tune?.session_instance_tune_id ?? null
       undoStack.push({ kind: 'log', sitId: body.tune?.session_instance_tune_id, cursor: -1 })
-      flash(`${GAN_AINM} at ${formatTime(startMs)} — tap it in the log to name it`)
+      flash(t('{name} at {time} — tap it in the log to name it', { name: GAN_AINM, time: formatTime(startMs) }))
     } catch (err) {
       const offlineNow = err instanceof TypeError
-      flash(offlineNow ? 'Logging a new tune needs a connection.' : `Could not log a tune: ${err.message}`, 'error')
+      flash(offlineNow ? t('Logging a new tune needs a connection.') : t('Could not log a tune: {error}', { error: err.message }), 'error')
     } finally {
       saving -= 1
     }
@@ -875,9 +895,9 @@
       if (!res.ok || !body.success) throw new Error(body.error || `HTTP ${res.status}`)
       const cursorId = cursorTune?.session_instance_tune_id ?? null
       adoptTunes(body.tunes, cursorId)
-      if (moveCursor) flash(`Removed "${tune.name}" from the log`)
+      if (moveCursor) flash(t('Removed "{name}" from the log', { name: tune.name }))
     } catch (err) {
-      flash(`Could not remove "${tune.name}": ${err.message}`, 'error')
+      flash(t('Could not remove "{name}": {error}', { name: tune.name, error: err.message }), 'error')
     } finally {
       saving -= 1
     }
@@ -928,7 +948,7 @@
     pickerOpen = true
     picker.open(
       { kind: 'insert', anchorId: anchor?.session_instance_tune_id ?? null, side: where.side, newSet: !!where.newSet },
-      { preferType, title: where.newSet ? 'Start a new set with…' : 'Add a tune', actionLabel: '＋ Add This Tune' },
+      { preferType, title: where.newSet ? t('Start a new set with…') : t('Add a tune'), actionLabel: t('＋ Add This Tune') },
     )
   }
 
@@ -954,11 +974,11 @@
     adoptTunes(resBody.tunes, newId)
     revealId = newId
     undoStack.push({ kind: 'log', sitId: newId, cursor: previousCursor })
-    const name = resBody.tune?.name ?? 'that tune'
+    const name = resBody.tune?.name ?? t('that tune')
     flash(
       resBody.setting_failed
-        ? `Added "${name}" (setting not saved: ${resBody.setting_failed}) — M places it`
-        : `Added "${name}" — M places it at the playhead`,
+        ? t('Added "{name}" (setting not saved: {error}) — M places it', { name, error: resBody.setting_failed })
+        : t('Added "{name}" — M places it at the playhead', { name }),
     )
     persistMirror()
     return true
@@ -981,7 +1001,11 @@
     if (!res.ok || !body.success) throw new Error(body.error || `HTTP ${res.status}`)
     const cursorId = cursorTune?.session_instance_tune_id ?? null
     adoptTunes(body.tunes, cursorId)
-    flash(body.setting_failed ? `Named it "${body.tune?.name}" (setting not saved: ${body.setting_failed})` : `Named it "${body.tune?.name}"`)
+    flash(
+      body.setting_failed
+        ? t('Named it "{name}" (setting not saved: {error})', { name: body.tune?.name, error: body.setting_failed })
+        : t('Named it "{name}"', { name: body.tune?.name })
+    )
     persistMirror()
     return true
   }
@@ -1078,7 +1102,7 @@
       case 's':
       case 'S':
         snapEnabled = !snapEnabled
-        flash(`Onset snap ${snapEnabled ? 'on' : 'off'}`)
+        flash(snapEnabled ? t('Onset snap on') : t('Onset snap off'))
         break
       case '[':
         setSpeed(SPEEDS[Math.max(0, SPEEDS.indexOf(speed) - 1)])
@@ -1103,11 +1127,11 @@
 {#snippet audioPicker()}
   {#if audioSources.length > 1}
     <label class="sg-opt sg-opt-audio">
-      {#if !compact}audio{/if}
+      {#if !compact}{t('audio')}{/if}
       <select value={sourceId} onchange={(e) => switchSource(e.currentTarget.value)}>
         {#each audioSources as src (src.id)}
           <option value={src.id}>
-            {src.label}{src.size_bytes && !compact ? ` · ${mb(src.size_bytes)} MB` : ''}{local[src.id] ? ' ✓' : ''}
+            {src.label}{src.size_bytes && !compact ? ` · ${t('{n} MB', { n: mb(src.size_bytes) })}` : ''}{local[src.id] ? ' ✓' : ''}
           </option>
         {/each}
       </select>
@@ -1122,41 +1146,45 @@
   {#if offline && currentSource}
     {#if download}
       <span class="sg-opt sg-offline is-busy" role="status">
-        saving {download.total ? `${Math.min(99, Math.round((download.loaded / download.total) * 100))}%` : `${mb(download.loaded)} MB`}
-        <button type="button" class="sg-offline-x" onclick={() => download?.abort?.abort()} aria-label="Cancel the download">×</button>
+        {t('saving {progress}', {
+          progress: download.total
+            ? `${Math.min(99, Math.round((download.loaded / download.total) * 100))}%`
+            : t('{n} MB', { n: mb(download.loaded) }),
+        })}
+        <button type="button" class="sg-offline-x" onclick={() => download?.abort?.abort()} aria-label={t('Cancel the download')}>×</button>
       </span>
     {:else if local[sourceId]}
-      <span class="sg-opt sg-offline is-saved" title="Saved on this device ({mb(local[sourceId].size_bytes)} MB) — plays with no connection">
-        {compact ? 'saved' : 'offline ✓'}
-        <button type="button" class="sg-offline-x" onclick={() => forgetOffline()} aria-label="Remove the offline copy" title="Remove the offline copy">×</button>
+      <span class="sg-opt sg-offline is-saved" title={t('Saved on this device ({n} MB) — plays with no connection', { n: mb(local[sourceId].size_bytes) })}>
+        {compact ? t('saved') : `${t('offline')} ✓`}
+        <button type="button" class="sg-offline-x" onclick={() => forgetOffline()} aria-label={t('Remove the offline copy')} title={t('Remove the offline copy')}>×</button>
       </span>
     {:else}
       <button
         type="button"
         class="sg-opt sg-offline"
         onclick={saveOffline}
-        title="Download this encode to the device so the tool works with no connection"
-      >⤓ {compact ? 'offline' : 'save offline'}{#if currentSource.size_bytes && !compact} · {mb(currentSource.size_bytes)} MB{/if}</button>
+        title={t('Download this encode to the device so the tool works with no connection')}
+      >⤓ {compact ? t('offline') : t('save offline')}{#if currentSource.size_bytes && !compact} · {t('{n} MB', { n: mb(currentSource.size_bytes) })}{/if}</button>
     {/if}
   {/if}
 {/snippet}
 
 {#if !recording}
-  <p class="sg-error">No recording payload. Reload the page.</p>
+  <p class="sg-error">{t('No recording payload. Reload the page.')}</p>
 {:else}
   <div class="sg" bind:this={rootEl} style="--sg-top: {topOffset}px">
     <header class="sg-head">
       <div>
-        <h1>{recording.label || 'Recording'}</h1>
+        <h1>{recording.label || t('Recording')}</h1>
         <p class="sg-sub">
           <a href="/sessions/{instance.session_path}">{instance.session_name}</a>
           · {instance.date}
           · {formatTime(durationMs)}
-          {#if recording.clock_offset_ms}· offset {formatTime(recording.clock_offset_ms)}{/if}
+          {#if recording.clock_offset_ms}· {t('offset {time}', { time: formatTime(recording.clock_offset_ms) })}{/if}
         </p>
       </div>
       <div class="sg-progress">
-        <span class="sg-count"><strong>{placedCount}</strong> / {tunes.length}{#if !compact}{' placed'}{/if}</span>
+        <span class="sg-count"><strong>{placedCount}</strong> / {tunes.length}{#if !compact}{' ' + t('placed')}{/if}</span>
         <!-- Always in the DOM, merely invisible when idle. Appearing and
              disappearing on every mark rewrapped the header, which moved the
              whole page under a thumb already on its way to +15s. A dot on a
@@ -1165,8 +1193,8 @@
           class="sg-saving"
           class:is-on={saving > 0 || queued > 0}
           class:is-queued={queued > 0}
-          title={queued > 0 ? `${queued} mark${queued === 1 ? '' : 's'} waiting to sync` : 'saving'}
-        >{#if queued > 0}{compact ? `${queued}⇡` : `${queued} queued`}{:else}{compact ? '•' : 'saving…'}{/if}</span>
+          title={queued > 0 ? tn(queued, '{n} mark waiting to sync', '{n} marks waiting to sync') : t('saving')}
+        >{#if queued > 0}{compact ? `${queued}⇡` : t('{n} queued', { n: queued })}{:else}{compact ? '•' : t('saving…')}{/if}</span>
         <!-- On a phone the encode switch rides up here with the other header
              controls: down in the options row it was one more line of the
              sticky column, and it is the one option you reach for when the
@@ -1179,15 +1207,15 @@
             type="button"
             class="sg-editlog"
             onclick={editLog}
-            title="Open this night's log in edit mode — you'll come back here, at this moment in the audio"
-          >✎ {compact ? 'Fix' : 'Fix the log'}</button>
-          <a class="sg-export" href="/api/recordings/{recording.recording_id}/export" target="_blank" rel="noopener">export</a>
+            title={t("Open this night's log in edit mode — you'll come back here, at this moment in the audio")}
+          >✎ {compact ? t('Fix') : t('Fix the log')}</button>
+          <a class="sg-export" href="/api/recordings/{recording.recording_id}/export" target="_blank" rel="noopener">{t('export')}</a>
         </span>
       </div>
     </header>
 
     {#if recording.audio_error}
-      <p class="sg-error">Audio unavailable: {recording.audio_error}</p>
+      <p class="sg-error">{t('Audio unavailable: {error}', { error: recording.audio_error })}</p>
     {/if}
 
     <div class="sg-body">
@@ -1211,10 +1239,10 @@
 
         <div class="sg-clock">
           <span class="sg-time">{formatTime(currentMs, { millis: true })}</span>
-          <span class="sg-of">of {formatTime(durationMs)}</span>
+          <span class="sg-of">{t('of {time}', { time: formatTime(durationMs) })}</span>
           {#if mediaBusy}
             <span class="sg-loading">
-              {mediaState === 'loading' ? 'loading audio…' : 'buffering…'}
+              {mediaState === 'loading' ? t('loading audio…') : t('buffering…')}
             </span>
           {/if}
         </div>
@@ -1227,34 +1255,34 @@
           {#if pendingSetEndIndex != null}
             {@const ending = tunes[pendingSetEndIndex]}
             <div class="sg-next is-ending">
-              <span class="sg-next-label">end of set {ending.set_number}</span>
+              <span class="sg-next-label">{t('end of set {n}', { n: ending.set_number })}</span>
               <span class="sg-next-name">{ending.name}</span>
-              <span class="sg-next-meta">M marks where it stopped</span>
+              <span class="sg-next-meta">{t('M marks where it stopped')}</span>
             </div>
           {:else}
             <div class="sg-next" class:is-logging={!cursorTune}>
               {#if cursorTune}
-                <span class="sg-next-label">next up</span>
+                <span class="sg-next-label">{t('next up')}</span>
                 <span class="sg-next-name">{cursorTune.name}</span>
-                <span class="sg-next-meta">set {cursorTune.set_number}{cursorTune.is_set_end ? ' · last of set' : ''}</span>
+                <span class="sg-next-meta">{t('set {n}', { n: cursorTune.set_number })}{cursorTune.is_set_end ? ` · ${t('last of set')}` : ''}</span>
               {:else}
-                <span class="sg-next-label">log a tune</span>
+                <span class="sg-next-label">{t('log a tune')}</span>
                 <span class="sg-next-name">{GAN_AINM}</span>
-                <span class="sg-next-meta">M logs a new tune starting here · E ends the set</span>
+                <span class="sg-next-meta">{t('M logs a new tune starting here · E ends the set')}</span>
               {/if}
             </div>
           {/if}
         {/if}
 
         <div class="sg-controls">
-          <button type="button" onclick={() => nudge(-15000)}>−15s</button>
-          <button type="button" onclick={() => nudge(-5000)}>−5s</button>
+          <button type="button" onclick={() => nudge(-15000)}>{t('−15s')}</button>
+          <button type="button" onclick={() => nudge(-5000)}>{t('−5s')}</button>
           <button
             type="button"
             class="sg-play"
             onclick={togglePlay}
             aria-busy={mediaBusy}
-            title={mediaBusy ? 'Audio still loading' : playing ? 'Pause' : 'Play'}
+            title={mediaBusy ? t('Audio still loading') : playing ? t('Pause') : t('Play')}
           >
             {#if mediaBusy}
               <span class="sg-spinner" aria-hidden="true"></span>
@@ -1262,8 +1290,8 @@
               {playing ? '❚❚' : '▶'}
             {/if}
           </button>
-          <button type="button" onclick={() => nudge(5000)}>+5s</button>
-          <button type="button" onclick={() => nudge(15000)}>+15s</button>
+          <button type="button" onclick={() => nudge(5000)}>{t('+5s')}</button>
+          <button type="button" onclick={() => nudge(15000)}>{t('+15s')}</button>
         </div>
 
         <div class="sg-controls sg-controls-main">
@@ -1274,7 +1302,7 @@
           {#if compact}
             {@const ending = pendingSetEndIndex != null ? tunes[pendingSetEndIndex] : null}
             <div class="sg-next-inline" class:is-ending={ending != null}>
-              <span class="sg-next-label">{ending ? 'end of set' : cursorTune ? 'next up' : 'new tune'}</span>
+              <span class="sg-next-label">{ending ? t('end of set') : cursorTune ? t('next up') : t('new tune')}</span>
               <span class="sg-next-name">{(ending ?? cursorTune)?.name ?? GAN_AINM}</span>
             </div>
           {/if}
@@ -1285,7 +1313,7 @@
             class:is-logging={appendMode}
             onclick={markStart}
           >
-            {pendingSetEndIndex != null ? 'End of set' : appendMode ? 'Log a tune' : 'Mark start'}{#if !compact} <kbd>M</kbd>{/if}
+            {pendingSetEndIndex != null ? t('End of set') : appendMode ? t('Log a tune') : t('Mark start')}{#if !compact} <kbd>{'M'}</kbd>{/if}
           </button>
           <!-- The separate end key is for ending a set you have already scrolled
                past; the mark button covers the ordinary case on its own, by
@@ -1295,47 +1323,47 @@
                flips (the tool can't know a set's last tune) and this IS the
                only way to close a set. -->
           {#if !compact || appendMode}
-            <button type="button" class="sg-end" onclick={markEnd}>{compact ? 'End set' : 'End of set'}{#if !compact} <kbd>E</kbd>{/if}</button>
+            <button type="button" class="sg-end" onclick={markEnd}>{compact ? t('End set') : t('End of set')}{#if !compact} <kbd>{'E'}</kbd>{/if}</button>
           {/if}
-          <button type="button" class="sg-undo" onclick={undo} title="Undo the last mark" aria-label="Undo">
-            {#if compact}↺{:else}Undo <kbd>U</kbd>{/if}
+          <button type="button" class="sg-undo" onclick={undo} title={t('Undo the last mark')} aria-label={t('Undo')}>
+            {#if compact}↺{:else}{t('Undo')} <kbd>{'U'}</kbd>{/if}
           </button>
         </div>
 
         <div class="sg-opts">
           <label class="sg-opt">
-            speed
+            {t('speed')}
             <select value={speed} onchange={(e) => setSpeed(Number(e.currentTarget.value))}>
               {#each SPEEDS as s}<option value={s}>{s}×</option>{/each}
             </select>
           </label>
           <label class="sg-opt">
-            zoom
+            {t('zoom')}
             <select value={zoomMs} onchange={(e) => (zoomMs = Number(e.currentTarget.value))}>
-              {#each ZOOM_LEVELS as z}<option value={z}>{z / 1000}s</option>{/each}
+              {#each ZOOM_LEVELS as z}<option value={z}>{t('{n}s', { n: z / 1000 })}</option>{/each}
             </select>
           </label>
           <label class="sg-opt sg-opt-check">
             <input type="checkbox" bind:checked={snapEnabled} />
-            snap to onset
+            {t('snap to onset')}
           </label>
           {#if !compact}{@render audioPicker()}{@render offlineAudio()}{/if}
         </div>
 
         <details class="sg-keys">
-          <summary>Keyboard</summary>
+          <summary>{t('Keyboard')}</summary>
           <dl>
-            <div><dt>Space</dt><dd>play / pause</dd></div>
-            <div><dt>M · Enter</dt><dd>mark start of the next tune</dd></div>
-            <div><dt>E</dt><dd>explicit end (end of a set)</dd></div>
-            <div><dt>U · ⌫</dt><dd>undo the last mark</dd></div>
-            <div><dt>← →</dt><dd>seek 5s (⇧ 1s, ⌥ 0.2s)</dd></div>
-            <div><dt>↑ ↓</dt><dd>move the cursor in the log</dd></div>
-            <div><dt>G</dt><dd>go to the cursor tune's mark</dd></div>
-            <div><dt>− =</dt><dd>zoom out / in</dd></div>
-            <div><dt>[ ]</dt><dd>slower / faster</dd></div>
-            <div><dt>S</dt><dd>toggle onset snap</dd></div>
-            <div><dt>drag an edge</dt><dd>move a boundary in the tape (no snap — the drag is the correction)</dd></div>
+            <div><dt>{t('Space')}</dt><dd>{t('play / pause')}</dd></div>
+            <div><dt>{'M'} · {t('Enter')}</dt><dd>{t('mark start of the next tune')}</dd></div>
+            <div><dt>{'E'}</dt><dd>{t('explicit end (end of a set)')}</dd></div>
+            <div><dt>{'U'} · ⌫</dt><dd>{t('undo the last mark')}</dd></div>
+            <div><dt>← →</dt><dd>{t('seek 5s (⇧ 1s, ⌥ 0.2s)')}</dd></div>
+            <div><dt>↑ ↓</dt><dd>{t('move the cursor in the log')}</dd></div>
+            <div><dt>{'G'}</dt><dd>{t("go to the cursor tune's mark")}</dd></div>
+            <div><dt>− =</dt><dd>{t('zoom out / in')}</dd></div>
+            <div><dt>[ ]</dt><dd>{t('slower / faster')}</dd></div>
+            <div><dt>{'S'}</dt><dd>{t('toggle onset snap')}</dd></div>
+            <div><dt>{t('drag an edge')}</dt><dd>{t('move a boundary in the tape (no snap — the drag is the correction)')}</dd></div>
           </dl>
         </details>
       </section>
@@ -1395,10 +1423,10 @@
         mediaState = 'error'
         flash(
           local[sourceId]
-            ? 'The saved audio could not be played. Remove the offline copy and save it again.'
+            ? t('The saved audio could not be played. Remove the offline copy and save it again.')
             : offline
-              ? 'The audio could not be loaded. Offline, the tool needs a copy saved on this device ("save offline" while connected); online, the signed URL may have expired — reload the page.'
-              : 'The audio file could not be loaded. The signed URL may have expired — reload the page.',
+              ? t('The audio could not be loaded. Offline, the tool needs a copy saved on this device ("save offline" while connected); online, the signed URL may have expired — reload the page.')
+              : t('The audio file could not be loaded. The signed URL may have expired — reload the page.'),
           'error',
         )
       }}
@@ -1410,7 +1438,7 @@
       <div class="sg-toast" class:is-error={statusKind === 'error'} role="status" aria-live="polite">
         <span>{status}</span>
         {#if statusKind === 'error'}
-          <button type="button" class="sg-toast-x" onclick={() => (status = '')} aria-label="Dismiss">×</button>
+          <button type="button" class="sg-toast-x" onclick={() => (status = '')} aria-label={t('Dismiss')}>×</button>
         {/if}
       </div>
     {/if}

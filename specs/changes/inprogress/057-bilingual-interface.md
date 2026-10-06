@@ -1,9 +1,9 @@
 # 057: Bilingual interface (English and Irish)
 
 **Date:** 2026-10-06
-**Status:** STAGE 1 BUILT (2026-10-06): the machinery, the setting and switch, the
-tests, the CLAUDE.md rule and a draft glossary; the page chrome (header links, menu,
-tab bar) converted as the proof. The glossary was agreed the same day. Next: stage 2. The
+**Status:** STAGES 1 AND 2 (web) BUILT (2026-10-06): the machinery, the setting and
+switch, the tests, the CLAUDE.md rule, the agreed glossary, and every Svelte bundle and
+Jinja page converted. Next: iOS, then server messages, emails, help. The
 decisions are the product owner's, from a short Q&A on 2026-10-06.
 
 ## Why
@@ -81,4 +81,24 @@ And from here on, any interface work has to work in both languages.
   merged at build; a test fails if two files translate one English string two ways), a
   converted file is found by its `i18n-converted` marker rather than a list, and
   `formatDate()` / `formatNumber()` format in the page's language.
+
+## Stage 2 (the web) as built
+
+- Every Svelte component under `frontend/src` carries `i18n-converted` (the catalog
+  split into `ga/core|kit|live|tunesheet|sessions|mytunes|admin.json`, about 1,500
+  entries), and every reachable Jinja template carries `{# i18n-converted #}` (about 830
+  entries in `messages.po`). Not converted: the help pages (stage 6), the quarantined
+  pill logger (`session_instance_detail.html` and its scripts, unreachable and due for
+  deletion), and two templates no route renders.
+- `tc(context, text)` for one English word with two Irish ones, keyed `context|text`:
+  `tc('area', 'Admin')` (Riarachán) beside `t('Admin')` (Bainisteoir).
+- Fixture-held logic shared with iOS keeps its English: components translate its fixed
+  outputs through literal lookups (`livelabels.js`, `mytunes/labels.js`,
+  `shared/sessionpathText.js`), and the logger's activity lines are rebuilt in Irish
+  (`activityLine`), English unchanged.
+- Irish pages: the 24-hour clock, `formatDate` everywhere a date is shown, no title
+  case on labels (`html[lang="ga"]` overrides in base.html and app.css).
+- Legacy scripts read `window.__CEOL_T__` (base.html, from `i18n.ceol_js_strings()`).
+- Known gaps: text the server sends (stage 4) shows in English; the offline page is
+  cached in whichever language was active when the service worker stored it.
 
