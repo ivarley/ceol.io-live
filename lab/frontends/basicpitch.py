@@ -44,10 +44,16 @@ _MODEL = None
 def _model():
     global _MODEL
     if _MODEL is None:
-        from basic_pitch import ICASSP_2022_MODEL_PATH
+        import os
+
+        from basic_pitch import ICASSP_2022_MODEL_PATH, FilenameSuffix, build_icassp_2022_model_path
         from basic_pitch.inference import Model
 
-        _MODEL = Model(ICASSP_2022_MODEL_PATH)
+        path = ICASSP_2022_MODEL_PATH
+        if os.environ.get("LAB_DEVICE") == "cpu":
+            # as the listening service runs it (ONNX on a CPU), not Core ML on a Mac
+            path = build_icassp_2022_model_path(FilenameSuffix.onnx)
+        _MODEL = Model(path)
     return _MODEL
 
 

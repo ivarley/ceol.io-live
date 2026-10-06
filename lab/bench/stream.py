@@ -112,10 +112,16 @@ def night_tracks(frontends, rid, board, block_ms=60000):
     return out, store.duration_ms
 
 
+_SPAN = {}     # the latest span's audio, beat estimate and attack times, shared by the front ends
+
+
 def causal_notes(fe, track, store, a, t):
     """Notes from the frames and audio in [a, t) only: segmented, split and
     key-filtered on that span, so nothing after t shapes them, and a note
-    still sounding at t is cut off there, as it would be live."""
+    still sounding at t is cut off there, as it would be live. The span's
+    audio, beat estimate and attack times are worked out once for all the
+    front ends asking about the same span (one listener step, three
+    trackers), not once each."""
     times, f0, voiced = track
     i, j = np.searchsorted(times, a), np.searchsorted(times, t)
     if j - i < 4:
@@ -123,7 +129,11 @@ def causal_notes(fe, track, store, a, t):
     notes = fe.notes_from_track(times[i:j] - a, f0[i:j], voiced[i:j], t_offset_ms=a)
     if notes and (fe.params.get("split_repeats") or fe.params.get("min_note_eighths")
                   or fe.params.get("out_of_key_drop")):
-        notes = fe.regrid(notes, store.read(a, t), store.sr, t_offset_ms=a)
+        key = (id(store), a, t)
+        if _SPAN.get("key") != key:
+            _SPAN.clear()
+            _SPAN.update(key=key, y=store.read(a, t), shared={})
+        notes = fe.regrid(notes, _SPAN["y"], store.sr, t_offset_ms=a, shared=_SPAN["shared"])
     return notes
 
 

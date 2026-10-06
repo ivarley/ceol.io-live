@@ -165,6 +165,14 @@ def _name_tunes(models):
 
 async def _load():
     try:
+        # Before the models (and torch, numba, ONNX Runtime) load: hold every
+        # library to the CPUs the container really has, not the host's count.
+        from lab.tools.threads import limit_threads
+
+        n, seen = limit_threads()
+        state["threads"], state["cpu"] = n, seen
+        print(f"listen: threads held to {n}; cpus seen {seen}", flush=True)
+
         from lab.tools.listen import Models
 
         t0 = time.time()
@@ -230,6 +238,7 @@ async def health(request):
     return JSONResponse({"ready": state["models"] is not None, "loading": state["loading"],
                          "error": state["error"], "load_s": state["load_s"],
                          "streams": len(streams), "peak_memory_gb": round(rss_gb, 2),
+                         "threads": state.get("threads"), "cpu": state.get("cpu"),
                          "uptime_s": int(time.time() - state["started"])},
                         status_code=200 if state["models"] is not None else 503)
 

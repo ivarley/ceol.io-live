@@ -201,9 +201,19 @@ class Listener:
         from lab.bench.stream import causal_notes
 
         started = time.time()
+        clock = [time.perf_counter()]
+        timing = {}
+
+        def lap(name):
+            now = time.perf_counter()
+            timing[name] = round(1000 * (now - clock[0]))
+            clock[0] = now
+
         self._track(t)
+        lap("track")
         a = max(0, t - POOL_MS)
         ctx = {fe.name: causal_notes(fe, self._frames(fe.name), self.store, a, t) for fe in self.frontends}
+        lap("notes")
         wide = t < self.widen_until
         if self.shortlist_sets is not None:
             top = 300 if wide else 100
@@ -211,6 +221,7 @@ class Listener:
         else:
             self.scorer.pool_top, self.scorer.fallback_top = (300, 60) if wide else (100, 20)
         chunk = self.scorer.score(t, ctx)
+        lap("shortlist_align")
         from lab.analysis.tuneness import audio_features, with_evidence
 
         frames = {fe.name: self._frames(fe.name) for fe in self.frontends}
@@ -223,6 +234,8 @@ class Listener:
                 for tid in chunk["scores"]:
                     chunk["scores"][tid] -= cost.get((self.types.get(tid) or "").lower(), 0.0)
                 chunk["floor"] = min(chunk["scores"].values())
+        lap("features")
+        self.timing = timing          # each part of this step, ms: reported with the state
         with self.lock:      # a tap changes the decoder from the server's thread
             self._decide(t, chunk, wide, started)
 
@@ -252,6 +265,7 @@ class Listener:
                       "tuneness": round(1 / (1 + np.exp(-chunk.get("tune_logodds", 0.0))), 3),
                       "shown": now, "notes": chunk["n_notes"], "wide": wide,
                       "compute_ms": int(1000 * (time.time() - started)),
+                      "timing": getattr(self, "timing", None),
                       "lag_ms": self.store.duration_ms - t, "history": hist[-8:]}
         self._states.write(json.dumps({k: v for k, v in self.state.items() if k != "history"}) + "\n")
         self._states.flush()
