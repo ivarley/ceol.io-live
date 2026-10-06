@@ -2533,8 +2533,11 @@ blind tune, after the fact, has no changeover in it: next.
 being repeated.** `fold` squeezed every eighth into 110-230 ms, so a polka at
 250 ms was halved to 125 ms, a fast reel's speed: polkas measure 215-260 ms.
 The "p10 124 ms" put down to the estimator doubling was this. Church Street,
-one of the four late starts above, is a polka at about 251 ms, so that result
-is not to be trusted until the run is repeated. Fixed: each type is fitted and
+one of the four late starts above, is a polka at about 251 ms. Repeated on the
+fixed model: still 662 -> 663 named right, better 2, worse 3 (p 1). Church
+Street is no longer late (that was the bug); The Gold Ring, The Cook In The
+Kitchen and My Love Is In America still are, at changeovers. The negative
+stands. Fixed: each type is fitted and
 compared at the octave nearest its own speed, starting from the estimator's
 raw periods (`near`); refitted on ten nights, reel 153 ms, jig 166, polka 222,
 slide 148, slip jig 173, hornpipe 181.
