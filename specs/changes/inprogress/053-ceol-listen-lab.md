@@ -2615,6 +2615,24 @@ segmented blind; item 3 the follower). Open, in rough order:
   then the shape: transcription on the phone (Basic Pitch runs under Core ML)
   sending notes rather than audio, or one stream per instance, scaled with the
   sessions.
+- **(2026-10-06) Profiling the live step, first results.** On 4 minutes of
+  recording 112, Basic Pitch's on-disk cache bypassed (replays hit it; live
+  audio never does), a step takes 283 ms on the laptop as a Mac runs it (PESTO
+  on the GPU, Basic Pitch on Core ML) and 404 ms as the server runs it
+  (LAB_DEVICE=cpu: both on the CPU, Basic Pitch on ONNX). On the CPU: PESTO 192
+  ms (48%), Basic Pitch 59, the notes rebuilt from the last 24 s 53, the
+  shortlist lookups 39, yin 26, the aligner 24, the beat and music-detector
+  features 9, the decoder nothing. The beat estimate and attack times over the
+  24 s span were worked out once per regridding tracker on the same audio; now
+  once a step (76 -> 49 ms, 30 steps checked identical). The trackers without
+  PESTO, on the bench (607 segments, repertoire, 30 s): yin + Basic Pitch 0.937
+  against all three's 0.942, better 3, worse 6 (p 0.51; jigs 0.975 -> 0.961);
+  Basic Pitch + PESTO 0.934, yin + PESTO 0.928, Basic Pitch alone 0.916. So
+  PESTO is half a CPU step for half a point. Render took 2.0-3.2 s a step, 5-8
+  times the laptop's CPU figure; the service set no thread limits, and in a
+  container the libraries see the host's cores, so it now holds them to the
+  container's budget (lab/tools/threads.py), logs it, and each step reports its
+  time by part. What Render does is known only once that is deployed.
 - **(2026-10-04) Loudness, relative to the night.** Absolute loudness was taken
   out of tune-ness after a test of laptop speakers recorded through a phone,
   which says nothing about a phone on a pub table (the player's correction).
