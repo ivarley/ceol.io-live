@@ -70,6 +70,8 @@ components:
         last_name: { type: string }
         is_system_admin: { type: boolean }
         timezone: { type: string }
+        # Spec 057: the interface language, en or ga.
+        language: { type: string, enum: [en, ga] }
         email_verified: { type: boolean }
         has_password: { type: boolean }
         needs_profile_setup: { type: boolean }
@@ -129,6 +131,7 @@ components:
             email_verified: { type: boolean }
             has_password: { type: boolean }
             receive_update_emails: { type: boolean }
+            language: { type: string, enum: [en, ga] }
             created_at: { $ref: "#/components/schemas/DateTimeOrNull" }
             last_login: { $ref: "#/components/schemas/DateTimeOrNull" }
         needs_profile_setup: { type: boolean }
@@ -1270,6 +1273,7 @@ paths:
                 thesession_user_id: { type: string }
                 username: { type: string }
                 receive_update_emails: { type: boolean }
+                language: { type: string, enum: [en, ga] }
       responses:
         "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Profile" } } } }
         default: { $ref: "#/components/responses/Error" }

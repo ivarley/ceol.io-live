@@ -1,6 +1,8 @@
 <!DOCTYPE html>
-<html lang="en"> 
+<html lang="{{ lang }}">
 <head>
+    {# Spec 057: the language every bundle renders in (frontend/src/lib/i18n). #}
+    <script>window.__CEOL_LANG__ = {{ lang | tojson }};</script>
     <title>{% block title %}Irish Music Sessions{% endblock %}</title>
     
     <!-- Meta -->
@@ -139,6 +141,16 @@
         .docs-top-utilities {
             flex: 1;
         }
+
+        /* Spec 057: the visitor's English/Gaeilge switch in the header. */
+        .header-lang-switch {
+            margin: 0 8px;
+            font-size: 0.85rem;
+            color: var(--secondary-text, #aaa);
+            text-decoration: none;
+            white-space: nowrap;
+        }
+        .header-lang-switch:hover { color: var(--text-color, #e0e0e0); text-decoration: underline; }
 
         .docs-logo-wrapper {
             top: 6px !important;
@@ -384,6 +396,14 @@
                 {# Desktop links to the tab bar's destinations (hidden on phones, where
                    the tab bar itself is the navigation). #}
                 {% include 'header_nav.html' %}
+
+                {# Spec 057: a visitor's English/Gaeilge switch, at every width (the menu
+                   that carries it on desktop is hidden on phones). Signed in, the
+                   language is a profile setting on /me. #}
+                {% if not current_user.is_authenticated %}
+                <a class="header-lang-switch" href="{{ url_for('set_language', code=other_lang, next=request.full_path) }}"
+                   lang="{{ other_lang }}" hreflang="{{ other_lang }}">{{ 'Gaeilge' if other_lang == 'ga' else 'English' }}</a>
+                {% endif %}
 
                 <ul class="list-inline mx-md-3 mb-0 d-none d-lg-flex">
                     <!-- <li class="list-inline-item"><a href="#"><i class="fab fa-product-hunt fa-fw"></i></a></li> -->

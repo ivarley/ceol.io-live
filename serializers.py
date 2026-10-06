@@ -364,7 +364,7 @@ def build_person_details_payload(
         """
         SELECT user_id, username, user_email, email_verified, is_system_admin,
                is_active, created_date, timezone, hashed_password,
-               receive_update_emails
+               receive_update_emails, language
         FROM user_account
         WHERE person_id = %s
         """,
@@ -392,6 +392,7 @@ def build_person_details_payload(
             "timezone_display": get_timezone_display_name(urow["timezone"] or "UTC"),
             "has_password": urow["hashed_password"] is not None and urow["hashed_password"] != "",
             "receive_update_emails": urow["receive_update_emails"],
+            "language": urow["language"] or "en",  # spec 057
         }
 
     # Sessions this person is associated with (spec 034). `relationship` and `is_admin` are

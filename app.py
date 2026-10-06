@@ -161,6 +161,11 @@ app.add_url_rule("/mockups/<mockup>/<path:filename>", "mockup_file", mockup_file
 # Configure Flask-Login
 login_manager = LoginManager()
 login_manager.init_app(app)
+
+# Spec 057: English or Irish, per person (i18n.py).
+import i18n  # noqa: E402
+
+i18n.init_app(app)
 login_manager.login_view = "login"  # type: ignore
 login_manager.login_message = "Please log in to access this page."
 
@@ -484,6 +489,7 @@ app.add_url_rule("/api/auth/resend-verification", "auth_resend_verification", au
 app.add_url_rule("/api/auth/logout", "auth_logout", auth_logout, methods=["POST"])
 app.add_url_rule("/api/auth/set-password", "auth_set_password", auth_set_password, methods=["POST"])
 app.add_url_rule("/api/auth/web-session", "auth_web_session", auth_web_session, methods=["POST"])
+app.add_url_rule("/language/<code>", "set_language", i18n.set_language, methods=["GET"])
 app.add_url_rule("/api/me", "api_me", api_me, methods=["GET"])
 app.add_url_rule("/api/me/profile", "me_profile", me_profile, methods=["GET", "PUT"])
 app.add_url_rule("/api/me/delete-account", "delete_account_api", delete_account_api, methods=["POST"])

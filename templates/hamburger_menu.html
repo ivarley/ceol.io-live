@@ -18,7 +18,7 @@
 #}
 {% set p = request.path %}
 <div class="hamburger-menu">
-    <button class="hamburger-btn" onclick="toggleHamburgerMenu()" aria-label="Toggle menu">
+    <button class="hamburger-btn" onclick="toggleHamburgerMenu()" aria-label="{{ _('Toggle menu') }}">
         <span class="hamburger-line"></span>
         <span class="hamburger-line"></span>
         <span class="hamburger-line"></span>
@@ -30,44 +30,50 @@
                    the live logger's shell has no header links, so it keeps them. --- #}
             {% if not header_nav %}
             <a href="/sessions" class="hamburger-item"
-               {% if p.startswith('/sessions') %}aria-current="page"{% endif %}>Sessions</a>
+               {% if p.startswith('/sessions') %}aria-current="page"{% endif %}>{{ _('Sessions') }}</a>
             <a href="/my-tunes" class="hamburger-item"
-               {% if p.startswith('/my-tunes') %}aria-current="page"{% endif %}>Tunes</a>
+               {% if p.startswith('/my-tunes') %}aria-current="page"{% endif %}>{{ _('Tunes') }}</a>
             <a href="/me" class="hamburger-item"
-               {% if p == '/me' or p.startswith('/me/') %}aria-current="page"{% endif %}>Me</a>
+               {% if p == '/me' or p.startswith('/me/') %}aria-current="page"{% endif %}>{{ _('Me') }}</a>
             {% endif %}
             {% if current_user.is_system_admin %}
             <a href="/admin" class="hamburger-item"
-               {% if p.startswith('/admin') %}aria-current="page"{% endif %}>Admin</a>
+               {% if p.startswith('/admin') %}aria-current="page"{% endif %}>{{ _('Admin') }}</a>
             {% endif %}
 
             {# --- and what /me's Account section holds --------------------------- #}
             <a href="#" class="hamburger-item share-link{% if not header_nav %} hamburger-group-break{% endif %}"
-               onclick="shareCurrentPage(); return false;">Share</a>
+               onclick="shareCurrentPage(); return false;">{{ _('Share') }}</a>
             <a href="/help" class="hamburger-item"
-               {% if p.startswith('/help') %}aria-current="page"{% endif %}>Help</a>
-            <a href="/logout" class="hamburger-item hamburger-item-out">Log Out</a>
+               {% if p.startswith('/help') %}aria-current="page"{% endif %}>{{ _('Help') }}</a>
+            {# Spec 057: the other language, named in that language. #}
+            <a href="{{ url_for('set_language', code=other_lang, next=request.full_path) }}" class="hamburger-item hamburger-lang" lang="{{ other_lang }}"
+               hreflang="{{ other_lang }}">{{ 'Gaeilge' if other_lang == 'ga' else 'English' }}</a>
+            <a href="/logout" class="hamburger-item hamburger-item-out">{{ _('Log Out') }}</a>
 
             {# The same line /me ends on. Without it the menu is the one place in the app
                that never says whose account you are in. #}
-            <p class="hamburger-who">Signed in as {{ current_user.first_name }} {{ current_user.last_name[0] }}.</p>
+            <p class="hamburger-who">{{ _('Signed in as %(name)s.', name=current_user.first_name ~ ' ' ~ current_user.last_name[:1]) }}</p>
         {% else %}
             {# The signed-out tab bar is Home / Sessions / Tunes / About, and /tunes is
                the tradition's tunes rather than yours — the one that needs no account. #}
             {% if not header_nav %}
             <a href="/sessions" class="hamburger-item"
-               {% if p.startswith('/sessions') %}aria-current="page"{% endif %}>Sessions</a>
+               {% if p.startswith('/sessions') %}aria-current="page"{% endif %}>{{ _('Sessions') }}</a>
             <a href="/tunes" class="hamburger-item"
-               {% if p.startswith('/tunes') %}aria-current="page"{% endif %}>Tunes</a>
+               {% if p.startswith('/tunes') %}aria-current="page"{% endif %}>{{ _('Tunes') }}</a>
             <a href="/about" class="hamburger-item"
-               {% if p.startswith('/about') %}aria-current="page"{% endif %}>About</a>
+               {% if p.startswith('/about') %}aria-current="page"{% endif %}>{{ _('About') }}</a>
             {% endif %}
 
             <a href="#" class="hamburger-item share-link{% if not header_nav %} hamburger-group-break{% endif %}"
-               onclick="shareCurrentPage(); return false;">Share</a>
+               onclick="shareCurrentPage(); return false;">{{ _('Share') }}</a>
             <a href="/help" class="hamburger-item"
-               {% if p.startswith('/help') %}aria-current="page"{% endif %}>Help</a>
-            <a href="/login" class="hamburger-item">Log In or Register</a>
+               {% if p.startswith('/help') %}aria-current="page"{% endif %}>{{ _('Help') }}</a>
+            {# Spec 057: the other language, named in that language. #}
+            <a href="{{ url_for('set_language', code=other_lang, next=request.full_path) }}" class="hamburger-item hamburger-lang" lang="{{ other_lang }}"
+               hreflang="{{ other_lang }}">{{ 'Gaeilge' if other_lang == 'ga' else 'English' }}</a>
+            <a href="/login" class="hamburger-item">{{ _('Log In or Register') }}</a>
         {% endif %}
     </div>
 </div>

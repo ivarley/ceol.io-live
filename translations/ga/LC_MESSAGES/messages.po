@@ -1,0 +1,90 @@
+# Irish translations for PROJECT.
+# Copyright (C) 2026 ORGANIZATION
+# This file is distributed under the same license as the PROJECT project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2026-10-06 12:44+0530\n"
+"PO-Revision-Date: 2026-10-06 12:44+0530\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: ga\n"
+"Language-Team: ga <LL@li.org>\n"
+"Plural-Forms: nplurals=5; plural=(n==1 ? 0 : n==2 ? 1 : n>=3 && n<=6 ? 2 : n>=7 && n<=10 ? 3 : 4);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: templates/hamburger_menu.html:21
+#, review
+msgid "Toggle menu"
+msgstr "Oscail nó dún an roghchlár"
+
+#: templates/hamburger_menu.html:33 templates/hamburger_menu.html:62
+#: templates/header_nav.html:15 templates/tab_bar.html:41
+#, review
+msgid "Sessions"
+msgstr "Seisiúin"
+
+#: templates/hamburger_menu.html:35 templates/hamburger_menu.html:64
+#: templates/header_nav.html:20 templates/header_nav.html:29
+#: templates/tab_bar.html:50 templates/tab_bar.html:69
+#, review
+msgid "Tunes"
+msgstr "Foinn"
+
+#: templates/hamburger_menu.html:37 templates/header_nav.html:24
+#: templates/tab_bar.html:58
+#, review
+msgid "Me"
+msgstr "Mise"
+
+#: templates/hamburger_menu.html:41
+#, review
+msgid "Admin"
+msgstr "Riarachán"
+
+#: templates/hamburger_menu.html:46 templates/hamburger_menu.html:70
+#, review
+msgid "Share"
+msgstr "Comhroinn"
+
+#: templates/hamburger_menu.html:48 templates/hamburger_menu.html:72
+#, review
+msgid "Help"
+msgstr "Cabhair"
+
+#: templates/hamburger_menu.html:52
+#, review
+msgid "Log Out"
+msgstr "Logáil amach"
+
+#: templates/hamburger_menu.html:56
+#, python-format, review
+msgid "Signed in as %(name)s."
+msgstr "Logáilte isteach mar %(name)s."
+
+#: templates/hamburger_menu.html:66 templates/header_nav.html:33
+#: templates/tab_bar.html:81
+#, review
+msgid "About"
+msgstr "Eolas"
+
+#: templates/hamburger_menu.html:76
+#, review
+msgid "Log In or Register"
+msgstr "Logáil isteach nó cláraigh"
+
+#: templates/header_nav.html:12 templates/tab_bar.html:27
+#, review
+msgid "Main"
+msgstr "Príomhnascleanúint"
+
+#: templates/tab_bar.html:33
+#, review
+msgid "Home"
+msgstr "Baile"
+

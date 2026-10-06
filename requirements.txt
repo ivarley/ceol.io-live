@@ -6,6 +6,8 @@ requests
 sendgrid
 bcrypt
 Flask-Login
+# Spec 057: the interface in English and Irish (gettext catalogs in translations/).
+Flask-Babel
 email-validator
 backports.zoneinfo; python_version < "3.9"
 qrcode[pil]

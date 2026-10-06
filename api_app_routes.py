@@ -24,6 +24,7 @@ from datetime import timedelta
 
 import bcrypt
 from flask import flash, jsonify, request, session, url_for
+import i18n
 from flask_login import current_user, login_user, logout_user
 
 from api_auth import (
@@ -71,6 +72,8 @@ def user_payload(user, *, profile_incomplete=None):
         "last_name": user.last_name,
         "is_system_admin": bool(user.is_system_admin),
         "timezone": user.timezone or "UTC",
+        # Spec 057: the interface language, 'en' or 'ga'.
+        "language": i18n.user_language(user),
         "email_verified": bool(user.email_verified),
         "has_password": bool(user.has_password()),
         "needs_profile_setup": bool(profile_incomplete),
@@ -520,7 +523,7 @@ def _load_account(cur, user_id):
     cur.execute(
         """
         SELECT username, user_email, email_verified, hashed_password IS NOT NULL,
-               receive_update_emails, created_date
+               receive_update_emails, created_date, language
         FROM user_account WHERE user_id = %s
         """,
         (user_id,),
@@ -539,6 +542,7 @@ def _load_account(cur, user_id):
         "has_password": bool(row[3]),
         "receive_update_emails": bool(row[4]),
         "created_at": row[5].isoformat() if row[5] else None,
+        "language": row[6] or "en",
         "last_login": last.isoformat() if last else None,
     }
 
@@ -606,6 +610,9 @@ def me_profile():
             )
             if cur.fetchone():
                 return api_error("That username is taken", 400, "username_taken")
+        language = data.get("language")
+        if language is not None and language not in i18n.LANGUAGES:
+            return api_error("language must be 'en' or 'ga'", 400, "invalid_language")
         receive_update_emails = data.get("receive_update_emails")
         if receive_update_emails is not None and not isinstance(
             receive_update_emails, bool
@@ -662,6 +669,9 @@ def me_profile():
                     current_user.person_id,
                 ),
             )
+        if language is not None:
+            i18n.save_user_language(current_user.user_id, language)
+            current_user.language = language
         if username is not None or receive_update_emails is not None:
             save_to_history(
                 cur,

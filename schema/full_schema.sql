@@ -307,6 +307,8 @@ CREATE TABLE user_account (
     user_email VARCHAR(255) NOT NULL,
     hashed_password VARCHAR(255),  -- NULL for passwordless (magic link) users
     timezone VARCHAR(50) NOT NULL DEFAULT 'UTC',
+    -- Spec 057: the interface language, English or Irish.
+    language VARCHAR(8) NOT NULL DEFAULT 'en' CHECK (language IN ('en', 'ga')),
     is_active BOOLEAN DEFAULT TRUE,
     is_system_admin BOOLEAN DEFAULT FALSE,
     beta_live_logging BOOLEAN NOT NULL DEFAULT TRUE,  -- new live logger, now default-on for all users (spec 024)
@@ -1285,6 +1287,7 @@ CREATE TABLE user_account_history (
     user_email VARCHAR(255),
     hashed_password VARCHAR(255),
     timezone VARCHAR(50),
+    language VARCHAR(8),
     is_active BOOLEAN,
     is_system_admin BOOLEAN,
     receive_update_emails BOOLEAN,

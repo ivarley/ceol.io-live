@@ -6,6 +6,7 @@
   let { person, user, isUserProfile, personId, timezoneOptions = [], canonicalInstruments = [] } = $props()
 
   import { Chevron, Dialog, Sheet, LoadError, toast, toastFailure, ServerError } from '../lib/index.js'
+  import LanguageSetting from './LanguageSetting.svelte'
   import MergeSection from './MergeSection.svelte'
   import IdentityHeader from './IdentityHeader.svelte'
 
@@ -537,6 +538,10 @@
       <p class="kit-field-help pd-inst-note">Instruments save as you change them. Tap one to set it auto or manual, or to remove it.</p>
     </form>
   </div>
+
+  {#if user && isUserProfile}
+    <LanguageSetting language={user.language || 'en'} />
+  {/if}
 
   {#if user}
     <h3 class="kit-group-head">Account</h3>

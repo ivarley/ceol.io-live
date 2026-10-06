@@ -1,0 +1,14 @@
+{
+  "Language": {
+    "ga": "Teanga",
+    "review": true
+  },
+  "The language Ceol's screens and emails are in.": {
+    "ga": "An teanga ina bhfuil scáileáin agus ríomhphoist Cheol.",
+    "review": true
+  },
+  "Couldn't change the language. Try again.": {
+    "ga": "Níorbh fhéidir an teanga a athrú. Bain triail eile as.",
+    "review": true
+  }
+}

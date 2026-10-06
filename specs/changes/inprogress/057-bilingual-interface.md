@@ -1,8 +1,10 @@
 # 057: Bilingual interface (English and Irish)
 
 **Date:** 2026-10-06
-**Status:** SPECIFIED — not started. Decisions are the product owner's, from a short
-Q&A on 2026-10-06.
+**Status:** STAGE 1 BUILT (2026-10-06): the machinery, the setting and switch, the
+tests, the CLAUDE.md rule and a draft glossary; the page chrome (header links, menu,
+tab bar) converted as the proof. Next: the glossary agreed, then stage 2. The
+decisions are the product owner's, from a short Q&A on 2026-10-06.
 
 ## Why
 
@@ -49,3 +51,30 @@ And from here on, any interface work has to work in both languages.
    glossary, and the CLAUDE.md rule.
 2. One surface at a time, each fully translated before the next: the web, then iOS,
    then server messages, then emails, then help.
+
+## Stage 1 as built
+
+- `user_account.language` ('en' | 'ga', `schema/059_user_language.sql`), on `/api/me`
+  and `GET|PUT /api/me/profile` (`account.language`, body `language`), set on /me
+  (`personpage/LanguageSetting.svelte`, which reloads the page after saving).
+- `i18n.py`: the request's language is the profile setting, else the `ceol_lang` cookie,
+  else English. `GET /language/<en|ga>?next=` is the switch: it sets the cookie and,
+  when signed in, the profile. Flask-Babel serves `translations/ga/LC_MESSAGES/messages.po`
+  (the compiled `.mo` is committed, since the build may not run `pybabel compile`);
+  `<html lang>` and `window.__CEOL_LANG__` carry the language to the page.
+- The switch, named in the other language ("Gaeilge" / "English"): in the desktop menu
+  and, signed out, in the header at every width.
+- Svelte: `t()` / `tn()` from `frontend/src/lib` over `frontend/src/lib/i18n/ga.json`.
+  Plurals use `Intl.PluralRules('ga')`'s five forms. `LANGUAGE_NAMES` holds the one
+  deliberate non-translation.
+- Review marking: `"review": true` in ga.json, `#, review` in the .po;
+  `scripts/i18n_po.py set | approve | pending`.
+- Tests: `tests/unit/test_i18n_catalogs.py` (every `_()` string has Irish, the .mo is
+  current, converted templates have no bare English), `frontend/tests/i18n.test.js`
+  (the same for `t()`/`tn()` and converted components), and
+  `tests/integration/test_i18n_language.py` (selection and the switch).
+- Converted: `header_nav.html`, `hamburger_menu.html`, `tab_bar.html`, and
+  `LanguageSetting.svelte`.
+- Glossary: [specs/current/ui/irish-glossary.md](../../current/ui/irish-glossary.md),
+  every term "proposed" until the product owner agrees it.
+

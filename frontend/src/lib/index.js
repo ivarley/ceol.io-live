@@ -31,3 +31,5 @@ export { default as PersonPicker } from './PersonPicker.svelte'
 // Session tab. Same composed-from-the-kit shape as PersonPicker.
 export { default as SessionPicker } from './SessionPicker.svelte'
 export { toast, toastFailure, ServerError } from './toast.js'
+// Spec 057: the interface language.
+export { t, tn, currentLang, LANGUAGE_NAMES } from './i18n/index.js'

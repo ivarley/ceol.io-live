@@ -27,6 +27,7 @@ class User(UserMixin):
         auto_save_tunes=False,
         auto_save_interval=60,
         active_session=None,
+        language=None,
     ):
         self.id = str(user_id)
         self.user_id = user_id
@@ -43,6 +44,9 @@ class User(UserMixin):
         self.auto_save_interval = auto_save_interval
         self.active_session = active_session  # Dict with session instance data or None
         self.hashed_password = None  # Will be set when loading from database
+        # Spec 057: 'en' or 'ga'. get_by_id (every request) reads it; a loader that
+        # doesn't leaves None and i18n.user_language() fetches it when asked.
+        self.language = language
 
     @property
     def is_active(self):
@@ -62,7 +66,7 @@ class User(UserMixin):
                 SELECT ua.user_id, ua.person_id, ua.username, ua.is_active, ua.is_system_admin,
                        ua.timezone, ua.email_verified, p.first_name, p.last_name, ua.user_email, ua.auto_save_tunes, ua.auto_save_interval,
                        p.at_active_session_instance_id, si.session_id, si.date, si.start_time, si.end_time, si.location_override, s.name, s.path,
-                       ua.hashed_password
+                       ua.hashed_password, ua.language
                 FROM user_account ua
                 JOIN person p ON ua.person_id = p.person_id
                 LEFT JOIN session_instance si ON p.at_active_session_instance_id = si.session_instance_id
@@ -106,6 +110,7 @@ class User(UserMixin):
                 # request (GET /api/me reports it; token-authenticated requests load
                 # the user through here).
                 user.hashed_password = user_data[20]
+                user.language = user_data[21]
                 return user
             return None
         finally:

@@ -10,6 +10,17 @@ The user-facing version of this lives at `/help` (`templates/help.html`). Keep t
 
 The high level view of the system is documented in the /specs directory. Before beginning work on any task, read any specs that are relevant to the task.
 
+## Two languages (spec 057)
+
+Every string a person reads exists in English and Irish. This holds for all work, new or changed, on every surface: web pages, the iOS app, the sentences the API returns, emails and help.
+
+- **Web (Svelte):** wrap text in `t('…')` / `tn(n, 'one', 'other')` from `frontend/src/lib` and add the Irish to `frontend/src/lib/i18n/ga.json`.
+- **Server and Jinja:** wrap text in `_('…')`, then `make i18n-extract`, write the Irish in `translations/ga/LC_MESSAGES/messages.po` (`scripts/i18n_po.py set`), then `make i18n-compile`.
+- **iOS:** the String Catalog, once the app is converted (spec 057's order of work).
+- **What not to translate:** names of tunes, sessions, places and people (data), and the language names themselves.
+- **Review and terms:** Claude drafts the Irish and marks it for review (`"review": true` in ga.json, `#, review` in the .po). Use the terms in [the Irish glossary](specs/current/ui/irish-glossary.md).
+- **Enforcement:** `tests/unit/test_i18n_catalogs.py` and `frontend/tests/i18n.test.js` fail when a marked string has no Irish, and when a converted template or component still has bare English. A file joins their CONVERTED lists once it is converted.
+
 ## Quick Reference
 
 **Stack**: Flask 3.1 + PostgreSQL + Svelte 5 (interactive pages) + Jinja2 shells + Bootstrap 4.5 (legacy pages)
@@ -70,7 +81,7 @@ Internal services, microservices, background jobs
 - **Account Deletion (Feature 054)**: [Spec](specs/changes/inprogress/054-account-deletion.md) | [Data](specs/current/data/people-model.md) — `POST /api/me/delete-account`: the login and private data go at once, the name stays on rosters
 - **Places and session paths (Feature 055)**: [Spec](specs/changes/inprogress/055-places-and-session-paths.md) | [Data](specs/current/data/session-model.md) — BUILT (`places.py`, `place_routes.py`, `schema/058_places.sql`, `scripts/migrate_055_places.py`, not yet run in production): a `place` table (towns, metros, festival prefixes), paths are exactly `{place}/{name-or-year}`, the place matcher, `path_redirect`, alias/redirect resolution, place pages (`/sessions/<town>`), the Places admin page (`/admin/places`), the `place` object in session payloads and the native surface. Still to do: run the migration in production, then drop `session.city/state/country`
 - **Festival years (Feature 056)**: [Spec](specs/changes/inprogress/056-festival-years.md) — BUILT (`festivals.py`, `frontend/src/festival/`, `frontend/src/festivalpage/`): a festival is a `place` of kind festival whose years are sessions under its slug; `/sessions/<festival>` jumps to the near year or shows the picker; "Copy to a new year"; the year switcher; the sheet's festival mode; one directory row per festival
-- **Bilingual interface (Feature 057)**: [Spec](specs/changes/inprogress/057-bilingual-interface.md) — SPECIFIED: every user-facing string in English and Irish, chosen on the profile; once built, tests fail on a missing Irish string
+- **Bilingual interface (Feature 057)**: [Spec](specs/changes/inprogress/057-bilingual-interface.md) | [Glossary](specs/current/ui/irish-glossary.md) — STAGE 1 BUILT (`i18n.py`, `frontend/src/lib/i18n/`, `translations/`): the language setting and switch, both catalogs, the missing-string tests; the page chrome converted. Next: the glossary agreed, then the web, iOS, server messages, emails, help
 - **Ceol Listen lab (Feature 053)**: [Spec](specs/changes/inprogress/053-ceol-listen-lab.md) | [`lab/`](lab/README.md) — tune-recognition lab: blackboard, experts, task bench, replay harness, and `lab listen` (the detector live behind a certainty meter). Not deployed; own venv in its worktree, own tests (`make lab-test`). Next: the detector on a server fed by the native app (`053 files/listen-on-the-server.md`).
 - **Svelte UI Consolidation (Feature 035)**: [UI](specs/current/ui/svelte-pages.md) | [Spec](specs/changes/inprogress/035-svelte-ui-consolidation.md) — `/my-tunes`, `/sessions`, `/sessions/<path>`, `/me`, `/admin/people/<id>`, `/admin/sessions/<path>` migrated to Svelte shells
 
