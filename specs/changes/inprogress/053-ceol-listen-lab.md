@@ -2515,6 +2515,20 @@ tunes) and The Porthole Of The Kelp. Compute +3% a step. So the production
 design costs nothing here and needs no index per session; The Duke Of Leinster
 (112, first played that night) is still not reached.
 
+**Negative: tempo evidence step by step** (2026-10-05). Each 4 s step, each
+candidate's aligner score less its type's cost for the beat over the last
+12 s (analysis.tempo: up to 0.06, none under pulse strength 0.25; fitted
+without the night's own labels; settings fixed before the run). Nine nights
+blind, merged shortlists and key allowance, against the same without it: named
+right 662 -> 663 of 689; gained Jim Keefe's (the polka read as The Mason's
+Apron) and Da New Rigged Ship; no name lost, but four tunes still named came
+out 30-60 s late (The Gold Ring 112, The Cook In The Kitchen 2, My Love Is In
+America 4, Church Street 140; better 2, worse 4 by the start-and-name check,
+p 0.69), and a wrong The Home Ruler appeared in The Gold Ring. The 12 s beat
+window still holds the previous tune's beat at a changeover, so the new tune's
+type is charged until it clears. Not adopted. The same evidence over a whole
+blind tune, after the fact, has no changeover in it: next.
+
 **Tempo and beat grouping by tune type** (2026-10-05). Night 1 with merged
 shortlists named Jim Keefe's, a polka, as The Mason's Apron, a reel; the
 player's suggestion: track a tune's usual tempo at the session and use it.
