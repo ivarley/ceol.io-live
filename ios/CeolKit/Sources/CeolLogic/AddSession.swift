@@ -332,7 +332,7 @@ public enum AddSession {
 /// this shows the problem in the form before the round trip.
 public enum SessionPath {
     static let maxLength = 255
-    static let maxSegments = 4
+    static let pathSegments = 2 // {place}/{name-or-year}, spec 055
     static let maxSegmentLength = 100
 
     /// The trimmed path, or the sentence to show.
@@ -347,7 +347,9 @@ public enum SessionPath {
         if path.utf16.count > maxLength { return (nil, "Path must be \(maxLength) characters or fewer") }
         if path.hasPrefix("/") || path.hasSuffix("/") { return (nil, "Path can't start or end with a slash") }
         let segments = path.split(separator: "/", omittingEmptySubsequences: false)
-        if segments.count > maxSegments { return (nil, "Path can have at most \(maxSegments) slash-separated parts") }
+        if segments.count != pathSegments {
+            return (nil, "Path must have exactly two parts, a place and a name, like austin/mueller")
+        }
         for segment in segments {
             if segment.isEmpty { return (nil, "Path can't contain an empty part (//)") }
             if segment.utf16.count > maxSegmentLength {

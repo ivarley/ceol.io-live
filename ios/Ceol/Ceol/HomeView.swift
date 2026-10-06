@@ -16,6 +16,8 @@ typealias HomePayload = Components.Schemas.Home
 enum Route: Hashable {
     case session(path: String, name: String)
     case night(id: Int, title: String)
+    /// A festival as a whole (spec 056): its slug is not a session path.
+    case festival(slug: String, name: String)
 }
 
 extension HomePayload.UpcomingSessionsPayloadPayload {

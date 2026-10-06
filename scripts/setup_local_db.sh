@@ -212,7 +212,9 @@ if [ "$SEED_ONLY" = true ]; then
             user_account,
             person,
             tune,
-            session
+            session,
+            path_redirect,
+            place
         RESTART IDENTITY CASCADE;
     " > /dev/null
 

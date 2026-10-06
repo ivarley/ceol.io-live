@@ -38,8 +38,10 @@ export function normaliseCountry(country) {
  * showing too much beats hiding the one fact that placed the session.
  */
 export function locationLabel(session, viewerCountry) {
+  // The session's town (spec 055): name, area ("Texas"), country.
+  const place = session?.place
   const mine = normaliseCountry(viewerCountry)
-  const sameCountry = !!mine && normaliseCountry(session?.country) === mine
-  const parts = [session?.city, session?.state, sameCountry ? null : session?.country]
+  const sameCountry = !!mine && normaliseCountry(place?.country) === mine
+  const parts = [place?.name, place?.area, sameCountry ? null : place?.country]
   return parts.filter(Boolean).join(', ') || 'Unknown'
 }

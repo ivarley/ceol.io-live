@@ -548,11 +548,11 @@ def save_to_history(cur, table_name, operation, record_id, user_id=None):
             """
             INSERT INTO session_history
             (session_id, operation, changed_by_user_id, thesession_id, name, path, location_name,
-             location_website, location_phone, location_street, city, state, country, comments,
+             location_website, location_phone, location_street, city, state, country, place_id, comments,
              unlisted_address, initiation_date, termination_date, recurrence, created_date, last_modified_date,
              created_by_user_id, last_modified_user_id)
             SELECT session_id, %s, %s, thesession_id, name, path, location_name,
-                   location_website, location_phone, location_street, city, state, country, comments,
+                   location_website, location_phone, location_street, city, state, country, place_id, comments,
                    unlisted_address, initiation_date, termination_date, recurrence, created_date, last_modified_date,
                    created_by_user_id, last_modified_user_id
             FROM session WHERE session_id = %s

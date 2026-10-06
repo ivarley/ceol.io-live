@@ -1,0 +1,66 @@
+/* The festival picker (spec 056): a heading and one line per year. No tabs. */
+.festival-page {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.festival-heading {
+  margin: 0 0 16px;
+  font-size: 1.6rem;
+}
+
+.festival-years {
+  list-style: none;
+  margin: 0 0 20px;
+  padding: 0;
+  background: var(--input-bg, #2d2d2d);
+  border-radius: var(--r-lg, 12px);
+  overflow: hidden;
+}
+
+.festival-year + .festival-year {
+  border-top: 1px solid var(--bg-color, #1a1a1a);
+}
+
+.festival-year-link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  min-height: 44px;
+  padding: 10px 12px;
+  color: var(--text-color, #e0e0e0);
+  text-decoration: none;
+}
+
+.festival-year-link:hover {
+  background: var(--hover-bg, #3d3d3d);
+  text-decoration: none;
+  color: var(--text-color, #e0e0e0);
+}
+
+.festival-year-number {
+  font-weight: 600;
+}
+
+.festival-year-count {
+  margin-left: auto;
+  font-size: 0.85rem;
+  color: var(--secondary-text, #888);
+}
+
+.festival-empty {
+  color: var(--secondary-text, #888);
+}
+
+.festival-add-year {
+  padding: 10px 16px;
+  font: inherit;
+  font-weight: 600;
+  color: #fff;
+  background: var(--primary-fill, #4a8049);
+  border: none;
+  border-radius: var(--r, 8px);
+  cursor: pointer;
+}

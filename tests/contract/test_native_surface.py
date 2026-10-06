@@ -257,9 +257,24 @@ class TestSurfaceIsServed:
         assert not problems, "\n  ".join(problems)
 
 
+# More responses of the same operations, in their other shapes (specs 055/056): a
+# festival's resolve, a festival year's detail, a place-scoped directory. Kept out of
+# CHECKED_GETS because scripts/capture_native_fixtures.py writes one fixture per
+# schema from that list, and these would overwrite the plain ones.
+VARIANT_GETS = [
+    ("/api/resolve", "/api/resolve?path=hill-country-fest"),
+    ("/api/resolve", "/api/resolve?path=austin"),
+    ("/api/sessions/{session_path}/detail", "/api/sessions/hill-country-fest/2026/detail"),
+    ("/api/sessions/{session_path}/logs", "/api/sessions/hill-country-fest/2026/logs"),
+    ("/api/sessions/with-today-status", "/api/sessions/with-today-status?place=austin"),
+]
+
+
 class TestResponsesMatchSchemas:
     @pytest.mark.parametrize(
-        "template,url", CHECKED_GETS, ids=[t for t, _ in CHECKED_GETS]
+        "template,url",
+        CHECKED_GETS + VARIANT_GETS,
+        ids=[t for t, _ in CHECKED_GETS] + [u for _, u in VARIANT_GETS],
     )
     def test_get_response_validates(self, spec, native_client, template, url):
         op = spec["paths"][template]["get"]

@@ -9,6 +9,11 @@ info:
     fields are added, never removed or retyped, and a removal waits a deprecation
     window measured in app-store months.
 
+    One deliberate exception, taken once (specs 055 and 056, 2026-10): session
+    payloads replaced their flat `city`/`state`/`country` with the `place` object,
+    and `Resolve` gained `kind: place` (so its `session`/`instance` became optional).
+    Nobody but the owner had the app yet.
+
     tests/contract/test_native_surface.py enforces two things: every path+method
     here is a registered Flask rule, and the listed GET endpoints' live responses
     validate against these schemas. Schemas describe the REQUIRED keys and their
@@ -233,11 +238,29 @@ components:
             start: { $ref: "#/components/schemas/Date" }
             end: { $ref: "#/components/schemas/Date" }
     Resolve:
+      description: >-
+        What a ceol.io link is. `session` and `instance` come with kind session and
+        instance; kind place (a bare town or festival prefix, spec 055/056) brings
+        `place`, and for a festival also `years` (upcoming first, then newest first),
+        `current` (the year the window rule lands on, or null for the picker),
+        `latest` and `permissions.can_add_year`.
       type: object
-      required: [success, kind, session, instance]
+      required: [success, kind]
       properties:
         success: { type: boolean, const: true }
-        kind: { type: string, enum: [session, instance] }
+        kind: { type: string, enum: [session, instance, place] }
+        place: { $ref: "#/components/schemas/Place" }
+        years: { type: array, items: { $ref: "#/components/schemas/FestivalYear" } }
+        current:
+          type: [object, "null"]
+          required: [path]
+          properties:
+            path: { type: string }
+        latest: { $ref: "#/components/schemas/FestivalYear" }
+        permissions:
+          type: object
+          properties:
+            can_add_year: { type: boolean }
         session:
           type: object
           required: [session_id, path, name]
@@ -367,6 +390,48 @@ components:
         tune_id: { type: integer }
         remapped_from: { type: integer }
         heard_count: { type: [integer, "null"] }
+    Place:
+      description: >-
+        A town or metro (kind place) or a festival prefix (kind festival) — the first
+        segment of every session path (spec 055). A session's `place` is its town,
+        whichever slug its path uses. area/country are the normalized long form ("Texas",
+        "United States") and null for a festival.
+      type: object
+      required: [slug, name, kind, area, country, parent]
+      properties:
+        place_id: { type: integer }
+        slug: { type: string }
+        name: { type: string }
+        kind: { type: string, enum: [place, festival] }
+        area: { type: [string, "null"] }
+        country: { type: [string, "null"] }
+        parent:
+          type: [object, "null"]
+          required: [slug, name]
+          properties:
+            slug: { type: string }
+            name: { type: string }
+    FestivalYear:
+      description: One year of a festival (spec 056) — a session at {festival-slug}/{yyyy}.
+      type: object
+      required: [session_id, path, year, initiation_date, termination_date, logged_instances]
+      properties:
+        session_id: { type: integer }
+        path: { type: string }
+        year: { type: integer }
+        name: { type: string }
+        initiation_date: { $ref: "#/components/schemas/DateOrNull" }
+        termination_date: { $ref: "#/components/schemas/DateOrNull" }
+        logged_instances: { type: integer }
+    FestivalBlock:
+      description: >-
+        On a festival year's session payload (spec 056): the festival's place row and all
+        its years, oldest first — what the year switcher renders.
+      type: object
+      required: [place, years]
+      properties:
+        place: { $ref: "#/components/schemas/Place" }
+        years: { type: array, items: { $ref: "#/components/schemas/FestivalYear" } }
     SessionsDirectory:
       type: object
       required: [success, sessions, today]
@@ -379,15 +444,20 @@ components:
           type: array
           items:
             type: object
-            required: [session_id, name, path, city, state, country, termination_date,
+            required: [session_id, kind, name, path, termination_date,
                        recurrence, user_is_member, user_relationship, location_name, active_instances]
             properties:
               session_id: { type: integer }
+              # A festival's years are one row (spec 056): kind festival, path = the
+              # festival's slug, `years` = how many.
+              kind: { type: string, enum: [session, festival] }
               name: { type: string }
               path: { type: string }
-              city: { type: [string, "null"] }
-              state: { type: [string, "null"] }
-              country: { type: [string, "null"] }
+              # The session's town. Not in `required` so the client type is optional:
+              # a session from before spec 055's migration has none. (A `oneOf` with
+              # null is not supported by swift-openapi-generator; it drops the property.)
+              place: { $ref: "#/components/schemas/Place" }
+              years: { type: integer }
               termination_date: { $ref: "#/components/schemas/DateOrNull" }
               recurrence: { type: [string, "null"] }
               user_is_member: { type: boolean }
@@ -406,6 +476,9 @@ components:
         start_time: { $ref: "#/components/schemas/TimeOrNull" }
         end_time: { $ref: "#/components/schemas/TimeOrNull" }
         location_override: { type: [string, "null"] }
+        # The night's own session path, on a sessions-list row that gathers several
+        # sessions' nights (a festival's years).
+        path: { type: string }
     SessionDetail:
       type: object
       required: [success, session, permissions, today_in_session_tz, default_tab, active_instances, tunes, total_tunes_count,
@@ -414,7 +487,7 @@ components:
         success: { type: boolean, const: true }
         session:
           type: object
-          required: [session_id, name, path, city, state, country, recurrence, recurrence_readable,
+          required: [session_id, name, path, recurrence, recurrence_readable,
                      session_type, timezone, track_attendance, track_set_starters, show_people_list]
           properties:
             session_id: { type: integer }
@@ -422,9 +495,8 @@ components:
             name: { type: string }
             path: { type: string }
             location_name: { type: [string, "null"] }
-            city: { type: [string, "null"] }
-            state: { type: [string, "null"] }
-            country: { type: [string, "null"] }
+            # The session's town (spec 055); optional for the reason on SessionsDirectory.
+            place: { $ref: "#/components/schemas/Place" }
             initiation_date: { $ref: "#/components/schemas/DateOrNull" }
             termination_date: { $ref: "#/components/schemas/DateOrNull" }
             recurrence: { type: [string, "null"] }
@@ -464,6 +536,11 @@ components:
           description: "Members, not visitors, not archived. null when the viewer may not see the roster (can_view_people false) — distinct from 0."
         has_more_tunes: { type: boolean }
         popular_tunes: { type: array }
+        # The year switcher (spec 056): the festival and its years when this session is
+        # a festival year, null otherwise.
+        # Optional for the same generator reason; the server sends null for a session
+        # that is not a festival year.
+        festival: { $ref: "#/components/schemas/FestivalBlock" }
     SessionTune:
       description: One of a session's tunes, as its Tunes tab lists them.
       type: object
@@ -572,8 +649,13 @@ components:
                     set_number: { type: integer }
                     position_in_set: { type: integer }
     SessionLogs:
+      description: >-
+        A session's nights. A regular session groups them by year (`instances_by_year`,
+        newest first); a festival year (session_type festival) groups them by day
+        (`instances_by_day`, keyed yyyy-mm-dd, `sorted_days` earliest first) and leaves
+        the year grouping empty. Both groupings are always present.
       type: object
-      required: [success, instances_by_year, sorted_years, session_type]
+      required: [success, instances_by_year, sorted_years, instances_by_day, sorted_days, session_type]
       properties:
         success: { type: boolean, const: true }
         session_type: { type: string }
@@ -582,19 +664,27 @@ components:
           type: object
           additionalProperties:
             type: array
-            items:
-              type: object
-              required: [date, location_override, start_time, end_time, session_instance_id, tune_count]
-              properties:
-                date: { $ref: "#/components/schemas/Date" }
-                location_override: { type: [string, "null"] }
-                start_time: { $ref: "#/components/schemas/TimeOrNull" }
-                end_time: { $ref: "#/components/schemas/TimeOrNull" }
-                session_instance_id: { type: integer }
-                multiple_on_date: { type: boolean }
-                tune_count: { type: integer }
-                # Signed in: whether the viewer checked in that night (the "Attended" filter).
-                attended: { type: boolean }
+            items: { $ref: "#/components/schemas/SessionLogNight" }
+        sorted_days: { type: array, items: { $ref: "#/components/schemas/Date" } }
+        instances_by_day:
+          type: object
+          additionalProperties:
+            type: array
+            items: { $ref: "#/components/schemas/SessionLogNight" }
+    SessionLogNight:
+      description: One night in a session's Logs (a festival's Sessions) tab.
+      type: object
+      required: [date, location_override, start_time, end_time, session_instance_id, tune_count]
+      properties:
+        date: { $ref: "#/components/schemas/Date" }
+        location_override: { type: [string, "null"] }
+        start_time: { $ref: "#/components/schemas/TimeOrNull" }
+        end_time: { $ref: "#/components/schemas/TimeOrNull" }
+        session_instance_id: { type: integer }
+        multiple_on_date: { type: boolean }
+        tune_count: { type: integer }
+        # Signed in: whether the viewer checked in that night (the "Attended" filter).
+        attended: { type: boolean }
     SessionPeople:
       type: object
       required: [success, people]

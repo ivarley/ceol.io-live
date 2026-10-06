@@ -15,6 +15,7 @@ import App from './App.svelte'
 import SessionAbout from './SessionAbout.svelte'
 import SessionRole from './SessionRole.svelte'
 import SessionJoin from './SessionJoin.svelte'
+import YearSwitcher from '../festival/YearSwitcher.svelte'
 
 const pageData = window.__PAGE_DATA__
 const ctx = window.__PAGE_CTX__ || {}
@@ -23,13 +24,17 @@ const ctx = window.__PAGE_CTX__ || {}
 const band = document.getElementById('session-band')
 const details = document.getElementById('session-details')
 if (band && details) {
-  const toggle = () => {
+  const toggle = (e) => {
+    // The festival name and year switcher live in the band (spec 056): using them
+    // is not a tap on the band.
+    if (e?.target?.closest?.('a, select')) return
     const open = details.hidden
     details.hidden = !open
     band.setAttribute('aria-expanded', String(open))
   }
   band.addEventListener('click', toggle)
   band.addEventListener('keydown', (e) => {
+    if (e.target !== band) return
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault()
       toggle()
@@ -61,6 +66,15 @@ if (pageData) {
     mount(SessionRole, {
       target: roleTarget,
       props: { sessionPath: pageData.session.path, permissions },
+    })
+  }
+
+  const yearTarget = document.getElementById('festival-year-root')
+  if (yearTarget && pageData.festival) {
+    yearTarget.textContent = ''
+    mount(YearSwitcher, {
+      target: yearTarget,
+      props: { festival: pageData.festival, currentPath: pageData.session.path },
     })
   }
 

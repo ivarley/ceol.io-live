@@ -9,6 +9,7 @@
         {% elif active_tab == 'tunes' %}Tunes
         {% elif active_tab == 'merge_tunes' %}Merge Tunes
         {% elif active_tab == 'people' %}People
+        {% elif active_tab == 'places' %}Places
         {% elif active_tab == 'activity' %}Activity
         {% elif active_tab == 'test_links' %}Test Links
         {% elif active_tab == 'cache_settings' %}Cache Settings
@@ -47,6 +48,11 @@
            href="{{ url_for('admin_people') }}"
            role="tab">
             People
+        </a>
+        <a class="nav-link {{ 'active' if active_tab == 'places' else '' }}"
+           href="{{ url_for('admin_places') }}"
+           role="tab">
+            Places
         </a>
         <a class="nav-link {{ 'active' if active_tab == 'activity' else '' }}"
            href="{{ url_for('admin_activity') }}"
@@ -89,6 +95,9 @@
             </option>
             <option value="{{ url_for('admin_people') }}" {{ 'selected' if active_tab == 'people' else '' }}>
                 People
+            </option>
+            <option value="{{ url_for('admin_places') }}" {{ 'selected' if active_tab == 'places' else '' }}>
+                Places
             </option>
             <option value="{{ url_for('admin_activity') }}" {{ 'selected' if active_tab == 'activity' else '' }}>
                 Activity

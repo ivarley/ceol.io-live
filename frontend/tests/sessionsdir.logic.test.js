@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import { locationLabel, normaliseCountry } from '../src/sessionsdir/logic.js'
 
-const austin = { city: 'Austin', state: 'TX', country: 'USA' }
-const galway = { city: 'Galway', state: 'Galway', country: 'Ireland' }
+// A session's place (spec 055): its town's name, area and country.
+const at = (name, area, country) => ({ place: { name, area, country } })
+const austin = at('Austin', 'TX', 'USA')
+const galway = at('Galway', 'Galway', 'Ireland')
 
 describe('locationLabel', () => {
   it('drops the country when it is the viewer’s own', () => {
@@ -20,13 +22,13 @@ describe('locationLabel', () => {
   })
 
   it('compares countries case- and whitespace-insensitively', () => {
-    expect(locationLabel({ ...austin, country: ' usa ' }, 'USA')).toBe('Austin, TX')
+    expect(locationLabel(at('Austin', 'TX', ' usa '), 'USA')).toBe('Austin, TX')
     expect(locationLabel(austin, ' usa ')).toBe('Austin, TX')
   })
 
   it('omits parts the session does not have', () => {
-    expect(locationLabel({ city: 'Doolin', country: 'Ireland' }, 'USA')).toBe('Doolin, Ireland')
-    expect(locationLabel({ country: 'USA' }, 'USA')).toBe('Unknown')
+    expect(locationLabel(at('Doolin', null, 'Ireland'), 'USA')).toBe('Doolin, Ireland')
+    expect(locationLabel(at(null, null, 'USA'), 'USA')).toBe('Unknown')
   })
 
   it('says Unknown rather than an empty cell when nothing is known', () => {
@@ -44,7 +46,7 @@ describe('normaliseCountry', () => {
     expect(normaliseCountry('United States')).toBe('usa')
     expect(normaliseCountry('USA')).toBe('usa')
     expect(normaliseCountry('Republic of Ireland')).toBe('ireland')
-    expect(locationLabel({ city: 'Memphis', state: 'Tennessee', country: 'United States' }, 'USA')).toBe('Memphis, Tennessee')
+    expect(locationLabel(at('Memphis', 'Tennessee', 'United States'), 'USA')).toBe('Memphis, Tennessee')
   })
 
   it('treats missing as empty', () => {

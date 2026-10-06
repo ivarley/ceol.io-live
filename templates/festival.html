@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% set page_title = "Sessions" %}
+
+{% block title %}{{ place.name }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='festivalpage/page.css') }}">
+{% endblock %}
+
+{% block content %}
+{# Spec 056: /sessions/<festival> when no year is near — the festival's own page,
+   one line per year. This payload and GET /api/resolve?path=<festival> come from
+   ONE function (serializers.build_festival_payload). #}
+<script>window.__PAGE_DATA__ = {{ payload | tojson }};</script>
+<div id="festival-root">
+    <h1 class="festival-heading">{{ place.name }}</h1>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script type="module" src="{{ url_for('static', filename='festivalpage/page.js') }}"></script>
+{% endblock %}

@@ -52,11 +52,14 @@ let fetchRoutes
 function stubFetch() {
   vi.stubGlobal(
     'fetch',
-    vi.fn().mockImplementation((url) => {
+    vi.fn().mockImplementation((url, options) => {
       const u = String(url)
       const match = Object.keys(fetchRoutes).find((k) => u.includes(k))
       const body = match ? fetchRoutes[match] : { success: false, message: `no stub for ${u}` }
-      return Promise.resolve({ ok: true, json: async () => (typeof body === 'function' ? body() : body) })
+      return Promise.resolve({
+        ok: true,
+        json: async () => (typeof body === 'function' ? body(options) : body),
+      })
     })
   )
 }
@@ -74,9 +77,12 @@ beforeEach(() => {
     '/api/check-existing-session': { exists: false },
     '/api/fetch-session-data': { success: true, session_data: sessionData() },
     '/api/search-sessions': { success: true, results: [] },
-    // The GET (payload) and the POST (create) share a path; the stub keys on the
-    // path, so this body has to satisfy both readers.
-    '/api/add-session': { ...payload(), session_path: 'austin/bd-rileys' },
+    // The GET (payload) and the POST (create) share a path. The create answers
+    // with the path it saved, which (as on the server) is the one posted.
+    '/api/add-session': (options) =>
+      options?.method === 'POST'
+        ? { success: true, session_path: JSON.parse(options.body).path }
+        : { ...payload(), session_path: 'austin/bd-rileys' },
   }
   stubFetch()
   window.history.replaceState({}, '', '/sessions')
@@ -387,6 +393,10 @@ describe('add-session sheet: the details', () => {
     const type = document.querySelector('#sessionType')
     type.value = 'festival'
     await fireEvent.change(type)
+    // A festival asks for its first and last day (spec 056).
+    await waitFor(() => expect(document.querySelector('#festivalStart')).toBeTruthy())
+    await fill('#festivalStart', '2026-10-22')
+    await fill('#festivalEnd', '2026-10-25')
     await fireEvent.click(document.querySelector('#saveSessionBtn'))
 
     await waitFor(() => expect(navigate).toHaveBeenCalled())
@@ -445,11 +455,11 @@ describe('the generated web address', () => {
     await waitFor(() => expect(document.querySelector('#sessionPath')).toBeTruthy())
     expect(document.querySelector('#sessionPath').value).toBe('testville/new-session')
 
-    await fill('#sessionPath', 'somewhere-else')
+    await fill('#sessionPath', 'testville/somewhere-else')
     await fireEvent.click(document.querySelector('#saveSessionBtn'))
 
-    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/sessions/somewhere-else'))
-    expect(createdBody().path).toBe('somewhere-else')
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/sessions/testville/somewhere-else'))
+    expect(createdBody().path).toBe('testville/somewhere-else')
   })
 
   it('an override stops tracking the name, and can be handed back', async () => {
@@ -657,5 +667,182 @@ describe('add-session sheet: an imported payload is not type-guaranteed', () => 
       location_website: null, // blank after coercion -> omitted, as any blank field is
     })
     expect(document.querySelector('.session-sheet-actions .field-error')).toBeNull()
+  })
+})
+
+// Spec 055: the city text goes through the server's place matcher.
+describe('the place the session is in', () => {
+  it('goes to the path the server saved, not the one it sent', async () => {
+    fetchRoutes['/api/add-session'] = (options) =>
+      options?.method === 'POST'
+        ? { success: true, session_path: 'sf/new-session' }
+        : { ...payload(), session_path: 'austin/bd-rileys' }
+    const navigate = vi.fn()
+    await openDetails({ navigate })
+    await fillRequired()
+    await fireEvent.click(document.querySelector('#saveSessionBtn'))
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/sessions/sf/new-session'))
+  })
+
+  it('asks "did you mean" on place_ambiguous and resends with the answer', async () => {
+    let posts = 0
+    fetchRoutes['/api/add-session'] = (options) => {
+      if (options?.method !== 'POST') return { ...payload(), session_path: 'austin/bd-rileys' }
+      posts += 1
+      const body = JSON.parse(options.body)
+      if (!body.place_id && !body.place_new) {
+        return {
+          success: false,
+          code: 'place_ambiguous',
+          message: 'Did you mean Testville, Georgia?',
+          place: { place_id: 42, slug: 'testville', name: 'Testville', area: 'Georgia', country: 'United States', parent: null },
+          suggested_slug: 'testville-tx',
+        }
+      }
+      return { success: true, session_path: body.place_new ? 'testville-tx/new-session' : body.path }
+    }
+    const navigate = vi.fn()
+    await openDetails({ navigate })
+    await fillRequired()
+    await fireEvent.click(document.querySelector('#saveSessionBtn'))
+
+    await waitFor(() => expect(document.querySelector('#placeQuestion')).toBeTruthy())
+    expect(document.querySelector('#placeQuestion').textContent).toContain('Testville, Georgia')
+    expect(document.querySelector('#placeNewBtn').textContent).toContain('/testville-tx')
+    expect(navigate).not.toHaveBeenCalled()
+
+    await fireEvent.click(document.querySelector('#placeNewBtn'))
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/sessions/testville-tx/new-session'))
+    expect(posts).toBe(2)
+    const resent = JSON.parse(createCalls()[1][1].body)
+    expect(resent.place_new).toBe(true)
+  })
+
+  it('"yes" resends with the existing place', async () => {
+    fetchRoutes['/api/add-session'] = (options) => {
+      if (options?.method !== 'POST') return { ...payload(), session_path: 'austin/bd-rileys' }
+      const body = JSON.parse(options.body)
+      if (!body.place_id) {
+        return {
+          success: false,
+          code: 'place_ambiguous',
+          place: { place_id: 42, slug: 'testville', name: 'Testville', area: 'Georgia', country: 'United States', parent: null },
+          suggested_slug: 'testville-tx',
+        }
+      }
+      return { success: true, session_path: body.path }
+    }
+    const navigate = vi.fn()
+    await openDetails({ navigate })
+    await fillRequired()
+    await fireEvent.click(document.querySelector('#saveSessionBtn'))
+    await waitFor(() => expect(document.querySelector('#placeExistingBtn')).toBeTruthy())
+    await fireEvent.click(document.querySelector('#placeExistingBtn'))
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/sessions/testville/new-session'))
+    expect(JSON.parse(createCalls()[1][1].body).place_id).toBe(42)
+  })
+
+  it("the path starts with the matched town's slug", async () => {
+    fetchRoutes['/api/places/match'] = {
+      success: true, status: 'match', path_prefixes: ['sf'],
+      place: { place_id: 4, slug: 'sf', name: 'San Francisco', parent: null },
+    }
+    await openDetails()
+    await fill('#sessionName', 'Sunset')
+    await fill('#cityName', 'San Francisco')
+    await fill('#stateName', 'CA')
+    await fill('#countryName', 'USA')
+    await openAdvanced()
+    await waitFor(() =>
+      expect(document.querySelector('#sessionPathValue').textContent).toBe('/sessions/sf/sunset')
+    )
+    expect(document.querySelector('#pathPrefix')).toBeNull() // one choice, no droplist
+  })
+
+  it('a town inside a metro chooses either for its address', async () => {
+    fetchRoutes['/api/places/match'] = {
+      success: true, status: 'match', path_prefixes: ['conroe', 'houston'],
+      place: { place_id: 9, slug: 'conroe', name: 'Conroe', parent: { slug: 'houston', name: 'Houston' } },
+    }
+    const navigate = vi.fn()
+    await openDetails({ navigate })
+    await fill('#sessionName', 'The Pub')
+    await fill('#cityName', 'Conroe')
+    await fill('#stateName', 'TX')
+    await fill('#countryName', 'USA')
+    await waitFor(() => expect(document.querySelector('#pathPrefix')).toBeTruthy())
+    const select = document.querySelector('#pathPrefix')
+    expect([...select.options].map((o) => o.textContent)).toEqual(['/conroe/…', '/houston/…'])
+    select.value = 'houston'
+    await fireEvent.change(select)
+    await fireEvent.click(document.querySelector('#saveSessionBtn'))
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/sessions/houston/the-pub'))
+    expect(createdBody().path).toBe('houston/the-pub')
+  })
+})
+
+// Spec 056: a new festival is named once; its first year goes beside the name.
+describe('a new festival', () => {
+  async function festivalForm(navigate = vi.fn()) {
+    await openDetails({ navigate })
+    await fillRequired('Probe Trad Weekend')
+    await openAdvanced()
+    const type = document.querySelector('#sessionType')
+    type.value = 'festival'
+    await fireEvent.change(type)
+    await waitFor(() => expect(document.querySelector('#festivalYear')).toBeTruthy())
+    await fill('#festivalYear', '2027')
+    await fill('#festivalStart', '2027-10-21')
+    await fill('#festivalEnd', '2027-10-24')
+    return navigate
+  }
+
+  it('previews /{festival}/{year} and sends the name and year', async () => {
+    const navigate = await festivalForm()
+    expect(document.querySelector('label[for="sessionName"]').textContent).toBe('Festival')
+    expect(document.querySelector('#sessionPathValue').textContent).toBe('/sessions/probe-trad-weekend/2027')
+    expect(document.querySelector('#editPathBtn')).toBeNull()
+    await fireEvent.click(document.querySelector('#saveSessionBtn'))
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/sessions/probe-trad-weekend/2027'))
+    expect(createdBody()).toMatchObject({
+      session_type: 'festival', festival_name: 'Probe Trad Weekend', year: '2027', name: '',
+      inception_date: '2027-10-21', termination_date: '2027-10-24', recurrence: null,
+    })
+  })
+
+  it('asks for a first and last day instead of a schedule', async () => {
+    await festivalForm()
+    expect(document.querySelector('#recurrence-summary')).toBeNull()
+    await fill('#festivalEnd', '')
+    await fireEvent.click(document.querySelector('#saveSessionBtn'))
+    await waitFor(() => expect(document.querySelector('.field-error').textContent).toContain('Last day'))
+    await fill('#festivalEnd', '2027-10-20')
+    await fireEvent.click(document.querySelector('#saveSessionBtn'))
+    await waitFor(() => expect(document.querySelector('.field-error').textContent).toContain("can't be before"))
+    expect(createCalls()).toHaveLength(0)
+  })
+
+  it('a year is required', async () => {
+    await festivalForm()
+    await fill('#festivalYear', '27')
+    await fireEvent.click(document.querySelector('#saveSessionBtn'))
+    await waitFor(() => expect(document.querySelector('.field-error').textContent).toContain('Year'))
+    expect(createCalls()).toHaveLength(0)
+  })
+
+  it('a taken address offers the suggested one', async () => {
+    fetchRoutes['/api/add-session'] = (options) => {
+      if (options?.method !== 'POST') return { ...payload(), session_path: 'austin/bd-rileys' }
+      const body = JSON.parse(options.body)
+      if (!body.festival_slug) {
+        return { success: false, code: 'slug_taken', message: '"probe-trad-weekend" is already taken by Somewhere', suggested_slug: 'probe-trad-weekend-tx' }
+      }
+      return { success: true, session_path: `${body.festival_slug}/${body.year}` }
+    }
+    const navigate = await festivalForm()
+    await fireEvent.click(document.querySelector('#saveSessionBtn'))
+    await waitFor(() => expect(document.querySelector('#useSuggestedSlugBtn')).toBeTruthy())
+    await fireEvent.click(document.querySelector('#useSuggestedSlugBtn'))
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/sessions/probe-trad-weekend-tx/2027'))
   })
 })

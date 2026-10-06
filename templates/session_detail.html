@@ -26,7 +26,15 @@
            (ios/Ceol/Ceol/SessionsViews.swift). #}
         <div class="session-band" id="session-band" role="button" tabindex="0"
              aria-expanded="false" aria-controls="session-details">
+            {% if payload.festival %}
+            {# A festival year (spec 056): the festival's own name, linked to its picker,
+               and the year, which the bundle turns into a switcher when there are
+               other years. Not the year session's name ("… 2025"). #}
+            {% set this_year = payload.festival.years | selectattr('path', 'equalto', session.path) | first %}
+            <h1 class="session-title-heading"><a class="festival-title-link" href="/sessions/{{ payload.festival.place.slug }}">{{ payload.festival.place.name }}</a> <span id="festival-year-root">{{ this_year.year if this_year else '' }}</span></h1>
+            {% else %}
             <h1 class="session-title-heading">{{ session.name }}</h1>
+            {% endif %}
             <svg class="session-band-chevron" viewBox="0 0 24 24" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg>
         </div>
 
@@ -54,7 +62,7 @@
             <p><strong>Location:</strong> {{ session.location_name }}</p>
             {% endif %}
 
-            <p>{% if session.unlisted_address %}(unlisted address), {% else %}{% if session.location_street %}{{ session.location_street }}, {% endif %}{% endif %}{{ session.city }}, {{ session.state }}, {{ session.country }}{% if session.location_phone %} • {{ session.location_phone }}{% endif %}{% if session.location_website %} • <a href="{{ session.location_website }}" target="_blank">Web</a>{% endif %}{% if session.thesession_id %} • <a href="https://thesession.org/sessions/{{ session.thesession_id }}" target="_blank">thesession.org</a>{% endif %}</p>
+            <p>{% if session.unlisted_address %}(unlisted address), {% else %}{% if session.location_street %}{{ session.location_street }}, {% endif %}{% endif %}{% if session.place %}{{ session.place.name }}{% if session.place.area %}, {{ session.place.area }}{% endif %}{% if session.place.country %}, {{ session.place.country }}{% endif %}{% endif %}{% if session.location_phone %} • {{ session.location_phone }}{% endif %}{% if session.location_website %} • <a href="{{ session.location_website }}" target="_blank">Web</a>{% endif %}{% if session.thesession_id %} • <a href="https://thesession.org/sessions/{{ session.thesession_id }}" target="_blank">thesession.org</a>{% endif %}</p>
 
             {% if session.recurrence_readable %}
             <p><strong>Schedule:</strong> {{ session.recurrence_readable }}</p>

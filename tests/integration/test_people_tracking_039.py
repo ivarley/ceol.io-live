@@ -293,7 +293,7 @@ class TestWritePaths:
                 data=json.dumps(
                     {
                         "name": "Flags Default 039",
-                        "path": "test/flags-default-039",
+                        "path": "austin/flags-default-039",
                         "city": "Austin",
                         "state": "TX",
                         "country": "USA",
@@ -308,7 +308,7 @@ class TestWritePaths:
                 data=json.dumps(
                     {
                         "name": "Flags Off 039",
-                        "path": "test/flags-off-039",
+                        "path": "austin/flags-off-039",
                         "city": "Austin",
                         "state": "TX",
                         "country": "USA",
@@ -321,15 +321,15 @@ class TestWritePaths:
             assert r2.status_code in (200, 201), r2.data
         try:
             db_cursor.execute(
-                "SELECT show_people_list, track_attendance, track_set_starters FROM session WHERE path = 'test/flags-default-039'"
+                "SELECT show_people_list, track_attendance, track_set_starters FROM session WHERE path = 'austin/flags-default-039'"
             )
             assert db_cursor.fetchone() == (True, True, True)
             db_cursor.execute(
-                "SELECT track_attendance, track_set_starters FROM session WHERE path = 'test/flags-off-039'"
+                "SELECT track_attendance, track_set_starters FROM session WHERE path = 'austin/flags-off-039'"
             )
             assert db_cursor.fetchone() == (False, False)
         finally:
             db_cursor.execute(
-                "DELETE FROM session WHERE path IN ('test/flags-default-039', 'test/flags-off-039')"
+                "DELETE FROM session WHERE path IN ('austin/flags-default-039', 'austin/flags-off-039')"
             )
             db_conn.commit()

@@ -1511,3 +1511,14 @@ a.empty-log {
     font-size: 22px;
     line-height: 1;
 }
+
+/* Spec 056: a festival year's band names the festival (linked to its picker). The
+   link reads as the title, not as a link in the middle of it. */
+.session-band .festival-title-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.session-band .festival-title-link:hover {
+  text-decoration: underline;
+}

@@ -173,7 +173,7 @@ class TestSessionsAPI:
         unique_id = str(uuid.uuid4())[:8]
         session_data = {
             "name": f"New API Session {unique_id}",
-            "path": f"new-api-session-{unique_id}",
+            "path": f"houston/new-api-session-{unique_id}",
             "city": "Houston",
             "state": "TX",
             "country": "USA",
@@ -195,7 +195,7 @@ class TestSessionsAPI:
             FROM session
             WHERE path = %s
         """,
-            (f"new-api-session-{unique_id}",),
+            (f"houston/new-api-session-{unique_id}",),
         )
 
         session_record = db_cursor.fetchone()

@@ -5,7 +5,7 @@
     "normalizeSessionPath returns {path, error}: the trimmed path and null, or null and the",
     "sentence to show. Checks run in this order and the first failure is the answer:",
     "empty, invisible characters (by code point, see isInvisible), length over 255, a",
-    "leading or trailing slash, more than 4 parts, then per part: empty, over 100",
+    "leading or trailing slash, other than exactly 2 parts, then per part: empty, over 100",
     "characters, outside A-Z a-z 0-9 . _ ~ -, no letter or digit."
   ],
   "functions": {
@@ -40,8 +40,8 @@
             "value": "mueller"
           },
           "expected": {
-            "path": "mueller",
-            "error": null
+            "path": null,
+            "error": "Path must have exactly two parts, a place and a name, like austin/mueller"
           }
         },
         {
@@ -117,10 +117,10 @@
         {
           "name": "a byte-order mark",
           "input": {
-            "value": "﻿mueller"
+            "value": "﻿austin/mueller"
           },
           "expected": {
-            "path": "mueller",
+            "path": "austin/mueller",
             "error": null
           }
         },
@@ -155,13 +155,13 @@
           }
         },
         {
-          "name": "five parts",
+          "name": "three parts",
           "input": {
-            "value": "a/b/c/d/e"
+            "value": "austin/mueller/2025-10-01"
           },
           "expected": {
             "path": null,
-            "error": "Path can have at most 4 slash-separated parts"
+            "error": "Path must have exactly two parts, a place and a name, like austin/mueller"
           }
         },
         {
@@ -170,24 +170,24 @@
             "value": "a/b/c/d"
           },
           "expected": {
-            "path": "a/b/c/d",
-            "error": null
+            "path": null,
+            "error": "Path must have exactly two parts, a place and a name, like austin/mueller"
           }
         },
         {
-          "name": "an empty part",
+          "name": "an empty part is a third part",
           "input": {
             "value": "austin//mueller"
           },
           "expected": {
             "path": null,
-            "error": "Path can't contain an empty part (//)"
+            "error": "Path must have exactly two parts, a place and a name, like austin/mueller"
           }
         },
         {
           "name": "a dot",
           "input": {
-            "value": "."
+            "value": "austin/."
           },
           "expected": {
             "path": null,
@@ -237,17 +237,17 @@
         {
           "name": "a part of 100",
           "input": {
-            "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/x"
           },
           "expected": {
-            "path": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "path": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/x",
             "error": null
           }
         },
         {
           "name": "a part of 101",
           "input": {
-            "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/x"
           },
           "expected": {
             "path": null,
@@ -255,12 +255,12 @@
           }
         },
         {
-          "name": "255 long",
+          "name": "two parts of 100",
           "input": {
-            "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/ccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+            "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
           },
           "expected": {
-            "path": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/ccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "path": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
             "error": null
           }
         },

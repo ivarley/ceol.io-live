@@ -1,0 +1,49 @@
+{
+  "current": null,
+  "kind": "place",
+  "latest": {
+    "initiation_date": "2026-10-22",
+    "logged_instances": 0,
+    "name": "O'Flaherty's Irish Music Retreat 2026",
+    "path": "oflahertys/2026",
+    "session_id": 31,
+    "termination_date": "2026-10-26",
+    "year": 2026
+  },
+  "permissions": {
+    "can_add_year": false
+  },
+  "place": {
+    "area": null,
+    "country": null,
+    "kind": "festival",
+    "name": "O'Flaherty's Irish Music Retreat",
+    "parent": {
+      "name": "Midlothian",
+      "slug": "midlothian"
+    },
+    "place_id": 44,
+    "slug": "oflahertys"
+  },
+  "success": true,
+  "years": [
+    {
+      "initiation_date": "2026-10-22",
+      "logged_instances": 0,
+      "name": "O'Flaherty's Irish Music Retreat 2026",
+      "path": "oflahertys/2026",
+      "session_id": 31,
+      "termination_date": "2026-10-26",
+      "year": 2026
+    },
+    {
+      "initiation_date": "2025-10-23",
+      "logged_instances": 17,
+      "name": "O'Flaherty's Irish Music Retreat 2025",
+      "path": "oflahertys/2025",
+      "session_id": 7,
+      "termination_date": "2025-10-27",
+      "year": 2025
+    }
+  ]
+}

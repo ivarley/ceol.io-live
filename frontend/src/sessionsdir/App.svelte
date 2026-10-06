@@ -12,6 +12,10 @@
 
   let { pageData = null, isLoggedIn = false } = $props()
 
+  // A place page (spec 055): /sessions/<town-or-metro> is this list scoped to the
+  // place, under a heading that names it.
+  const scope = untrack(() => pageData?.place || null)
+
   // Filter states cycle on the toggle button; logged-out users have no "My
   // Sessions"/"Visited". 'my' is member-strict (spec 033); 'visited' shows the
   // sessions the viewer has a visitor relationship with (spec 034).
@@ -36,7 +40,8 @@
   let allSessions = $state([])
   let loaded = $state(false)
   let loadError = $state(false)
-  let filterIndex = $state(0)
+  // A place page opens on "All Active": it is about the place, not your list.
+  let filterIndex = $state(scope ? filterStates.indexOf('active') : 0)
   let rawSearch = $state('')
   // Instant client-side filter (legacy behavior): derive from the bound value.
   const searchTerm = $derived(normalizeQuotes(rawSearch.toLowerCase()))
@@ -66,7 +71,10 @@
   // yet, a failure says so with a Retry.
   function refresh() {
     retrying = loadError
-    return fetch('/api/sessions/with-today-status', { credentials: 'same-origin' })
+    const url = scope
+      ? `/api/sessions/with-today-status?place=${encodeURIComponent(scope.slug)}`
+      : '/api/sessions/with-today-status'
+    return fetch(url, { credentials: 'same-origin' })
       .then((r) => r.json())
       .then((d) => {
         if (d.success) adopt(d.sessions)
@@ -103,7 +111,7 @@
       }
       if (!passes) return false
       if (searchTerm) {
-        const location = [session.city, session.state, session.country]
+        const location = [session.place?.name, session.place?.area, session.place?.country]
           .filter(Boolean)
           .join(', ')
           .toLowerCase()
@@ -184,6 +192,26 @@
      word "Sessions" over a list of sessions was a line of chrome between you and the
      list. The "What's a session?" link went with it; the help sidebar carries it. -->
 
+{#if scope}
+  <header class="place-heading" id="place-heading">
+    <h1 class="place-name">{scope.name}</h1>
+    <p class="place-where">
+      {[scope.area, scope.country].filter(Boolean).join(', ')}
+      {#if scope.parent}
+        · in <a href="/sessions/{scope.parent.slug}">{scope.parent.name}</a>
+      {/if}
+    </p>
+    {#if scope.children?.length}
+      <p class="place-children" id="place-children">
+        Includes
+        {#each scope.children as child, i (child.slug)}
+          <a href="/sessions/{child.slug}">{child.name}</a>{i < scope.children.length - 1 ? ', ' : ''}
+        {/each}
+      </p>
+    {/if}
+  </header>
+{/if}
+
 <!-- The same toolbar as My Tunes and the session tabs: search, a filter panel, and
      "+" — one control shape for "a list you can narrow", wherever you meet it. -->
 <div class="filters-container">
@@ -255,7 +283,8 @@
               class="today-action-btn btn-goto-today"
               onclick={(e) => {
                 e.preventDefault()
-                goto(`/sessions/${session.path}/${session.active_instances[0].date}`)
+                const night = session.active_instances[0]
+                goto(`/sessions/${night.path || session.path}/${night.date}`)
               }}>On Now</button>
           {:else if session.active_instances && session.active_instances.length > 1}
             <!-- A festival can have several rooms going at once; the select is the
@@ -264,14 +293,38 @@
               class="today-action-btn btn-goto-today"
               id="dropdown-{session.session_id}"
               onclick={(e) => e.preventDefault()}
-              onchange={(e) => e.target.value && goto(`/sessions/${session.path}/${e.target.value}`)}>
+              onchange={(e) => e.target.value && goto(`/sessions/${e.target.value}`)}>
               <option value="">On Now ...</option>
               {#each session.active_instances as instance (instance.session_instance_id)}
-                <option value={instance.date}>{instanceLabel(session, instance)}</option>
+                <option value="{instance.path || session.path}/{instance.date}">{instanceLabel(session, instance)}</option>
               {/each}
             </select>
           {/if}
-          <span class="session-row-where">{locationOf(session)}</span>
+          {#if session.kind === 'festival'}
+            <span class="session-row-kind">Festival</span>
+          {/if}
+          {#if session.place && session.place.slug !== scope?.slug}
+            <!-- The row is itself a link, so the place is a link by script: it takes
+                 you to the place page (spec 055), which is how people find those. -->
+            <span
+              class="session-row-where session-row-place"
+              role="link"
+              tabindex="0"
+              data-place={session.place.slug}
+              onclick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                goto(`/sessions/${session.place.slug}`)
+              }}
+              onkeydown={(e) => {
+                if (e.key !== 'Enter') return
+                e.preventDefault()
+                e.stopPropagation()
+                goto(`/sessions/${session.place.slug}`)
+              }}>{locationOf(session)}</span>
+          {:else}
+            <span class="session-row-where">{locationOf(session)}</span>
+          {/if}
         </span>
       </a>
     {/each}

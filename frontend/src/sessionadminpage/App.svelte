@@ -11,6 +11,7 @@
   import PeopleAdminTab from './PeopleAdminTab.svelte'
   import LogsAdminTab from './LogsAdminTab.svelte'
   import CacheTab from './CacheTab.svelte'
+  import YearSwitcher from '../festival/YearSwitcher.svelte'
 
   let { pageData, ctx = {} } = $props()
 
@@ -52,6 +53,17 @@
   {/if}
 </nav>
 
+{#if pageData.festival}
+  <!-- A festival year (spec 056): the festival, linked to its picker, and its years. -->
+  <div class="festival-switcher" id="festival-switcher">
+    <a href="/sessions/{pageData.festival.place.slug}" class="festival-title-link">{pageData.festival.place.name}</a>
+    <YearSwitcher
+      festival={pageData.festival}
+      currentPath={sessionPath}
+      hrefFor={(path) => `/admin/sessions/${path}`} />
+  </div>
+{/if}
+
 <!-- Session Admin Tab Navigation: kit Tabs in navigate mode (the tabs are routes,
      so they are real links). Legacy skin classes kept.
 
@@ -72,7 +84,7 @@
 <div class="tab-content" id="session-admin-tab-content">
   <!-- Details Tab -->
   <div class="tab-pane fade {activeTab === 'details' ? 'show active' : ''}" id="details" role="tabpanel">
-    <DetailsTab {session} {sessionPath} timezoneOptions={pageData.timezone_options || []} />
+    <DetailsTab {session} {sessionPath} timezoneOptions={pageData.timezone_options || []} festival={pageData.festival} />
   </div>
 
   <!-- Tunes Tab -->

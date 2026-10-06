@@ -618,3 +618,28 @@
     color: var(--secondary-text, #6c757d);
     font-size: 14px;
 }
+
+/* Spec 056: "Copy to a new year" under a festival year's details. */
+.copy-year-entry {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color, #444);
+}
+
+.copy-year-entry p {
+  margin-bottom: 8px;
+  color: var(--secondary-text, #888);
+}
+
+.festival-switcher {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 12px;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.festival-switcher .festival-title-link {
+  color: inherit;
+}

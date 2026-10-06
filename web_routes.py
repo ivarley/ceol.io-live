@@ -162,10 +162,11 @@ def db_test():
         return _page_error()
 
 
-def sessions():
+def sessions(place=None):
     """Sessions directory (spec 035 Step 4a): a thin shell that embeds the SAME
     payload GET /api/sessions/with-today-status returns (one serializer — they
-    can't drift) and mounts the Svelte view."""
+    can't drift) and mounts the Svelte view. With `place` (a place row), the same
+    page scoped to that town or metro (spec 055 place pages)."""
     try:
         from serializers import build_sessions_directory_payload
 
@@ -177,13 +178,23 @@ def sessions():
 
         conn = get_db_connection()
         try:
-            payload = build_sessions_directory_payload(conn, user_person_id, user_timezone)
+            payload = build_sessions_directory_payload(conn, user_person_id, user_timezone, place=place)
         finally:
             conn.close()
 
-        return render_template("sessions.html", payload=payload, is_logged_in=current_user.is_authenticated)
+        return render_template(
+            "sessions.html",
+            payload=payload,
+            is_logged_in=current_user.is_authenticated,
+            place=payload.get("place"),
+        )
     except Exception:
         return _page_error()
+
+
+def _place_page(place):
+    """`/sessions/<town-or-metro>` (spec 055): the directory scoped to the place."""
+    return sessions(place=place)
 
 
 def session_tunes(session_path):
@@ -230,37 +241,94 @@ def session_logs(session_path):
     return session_handler(session_path, active_tab='logs')
 
 
+def _session_tab_suffix(active_tab=None, tune_id=None, person_id=None):
+    """The part of a session-page URL after the path, so a 301 keeps the tab."""
+    if tune_id is not None:
+        return f"/tunes/{tune_id}"
+    if person_id is not None:
+        return f"/people/{person_id}"
+    return f"/{active_tab}" if active_tab else ""
+
+
+def _festival_landing(festival, active_tab=None, tune_id=None, person_id=None):
+    """`/sessions/<festival-slug>` (spec 056): a 302 to the year the window rule
+    picks (or the only year), keeping a tab suffix; otherwise the picker."""
+    from flask import session as flask_session
+    from serializers import build_festival_payload
+
+    conn = get_db_connection()
+    try:
+        payload = build_festival_payload(
+            conn,
+            festival,
+            person_id=getattr(current_user, "person_id", None) if current_user.is_authenticated else None,
+            is_system_admin=flask_session.get("is_system_admin", False),
+        )
+    finally:
+        conn.close()
+
+    if payload["current"]:
+        target = f"/sessions/{payload['current']['path']}" + _session_tab_suffix(
+            active_tab, tune_id, person_id
+        )
+        if request.query_string:
+            target += "?" + request.query_string.decode("utf-8", "replace")
+        return redirect(target, code=302)
+
+    return render_template("festival.html", payload=payload, place=payload["place"])
+
+
 def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
     # Strip trailing slash to normalize the path
     full_path = full_path.rstrip("/")
 
-    # Check if the last part of the path looks like a date (yyyy-mm-dd) or a numeric ID
-    path_parts = full_path.split("/")
-    last_part = path_parts[-1]
-    date_pattern = r"^\d{4}-\d{2}-\d{2}$"
-    id_pattern = r"^\d+$"
+    # Spec 055 resolution: the exact path, a town/metro alias, a path_redirect, or
+    # {path}/{date-or-id} with the path itself resolved the same three ways. Every
+    # session path is exactly two parts, so a third is always an instance.
+    import places
 
-    # CRITICAL: Eagerly match full paths first (e.g., "oflahertys/2025" should be a session path, not "oflahertys" + year 2025)
-    # Determine if this looks like a session instance request
-    looks_like_instance = re.match(date_pattern, last_part) or re.match(id_pattern, last_part)
-
-    # If it looks like an instance, check if the FULL path is actually a session first
-    is_session_overview = False
-    if looks_like_instance:
+    try:
+        conn = get_db_connection()
         try:
-            conn = get_db_connection()
-            cur = conn.cursor()
-            cur.execute("SELECT session_id FROM session WHERE path = %s", (full_path,))
-            full_path_session = cur.fetchone()
-            cur.close()
+            resolved = places.resolve_session_path(conn.cursor(), full_path)
+        finally:
             conn.close()
+    except Exception:
+        return _page_error()
 
-            if full_path_session:
-                # The full path IS a session (e.g., "oflahertys/2025")
-                # Treat as session overview, not instance
-                is_session_overview = True
-        except Exception:
-            return _page_error()
+    if resolved is not None and resolved["kind"] == "place" and resolved.get("moved"):
+        target = f"/sessions/{resolved['place']['slug']}" + _session_tab_suffix(active_tab, tune_id, person_id)
+        if request.query_string:
+            target += "?" + request.query_string.decode("utf-8", "replace")
+        return redirect(target, code=301)
+
+    if resolved is not None and resolved["kind"] == "place" and resolved["place"]["kind"] == "festival":
+        return _festival_landing(resolved["place"], active_tab, tune_id, person_id)
+
+    if resolved is not None and resolved["kind"] == "place":
+        return _place_page(resolved["place"])
+
+    if resolved is None:
+        from app import render_error_page
+
+        return render_error_page(f"Session not found: {full_path}", 404)
+
+    if resolved["moved"]:
+        target = f"/sessions/{resolved['path']}"
+        if resolved["kind"] == "instance":
+            target += f"/{resolved['instance']}"
+        target += _session_tab_suffix(active_tab, tune_id, person_id)
+        if request.query_string:
+            target += "?" + request.query_string.decode("utf-8", "replace")
+        return redirect(target, code=301)
+
+    looks_like_instance = resolved["kind"] == "instance"
+    is_session_overview = not looks_like_instance
+    if looks_like_instance:
+        path_parts = [resolved["path"], resolved["instance"]]
+        last_part = resolved["instance"]
+    full_path = resolved["path"] if is_session_overview else full_path
+    date_pattern = r"^\d{4}-\d{2}-\d{2}$"
 
     # Check if this is a session instance request (by date or ID)
     if looks_like_instance and not is_session_overview:
@@ -2403,6 +2471,24 @@ def admin_people():
     finally:
         conn.close()
     return render_template("admin_people.html", payload=payload, active_tab="people")
+
+
+@login_required
+def admin_places():
+    """The Places admin page (spec 055): a thin shell embedding the SAME payload
+    GET /api/admin/places returns. System admins only."""
+    if not current_user.is_system_admin:
+        flash("You must be authorized to view this page.", "error")
+        return redirect(url_for("home"))
+
+    from serializers import build_admin_places_payload
+
+    conn = get_db_connection()
+    try:
+        payload = build_admin_places_payload(conn)
+    finally:
+        conn.close()
+    return render_template("admin_places.html", payload=payload, active_tab="places")
 
 
 @login_required

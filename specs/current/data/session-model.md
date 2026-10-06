@@ -10,18 +10,20 @@ Represents a regular music session (e.g., "Mueller Monday Night Session").
 **Key Fields**:
 - `session_id` (PK) - Unique identifier
 - `name` - Display name
-- `path` - URL-friendly identifier (e.g., "austin/mueller")
+- `path` - The session's URL: exactly `{place}/{name-or-year}` (e.g., "austin/mueller", "oflahertys/2025"); see the note below and [spec 055](../../changes/inprogress/055-places-and-session-paths.md)
+- `place_id` (FK → place) - The session's **town**, whichever slug its path uses (a Conroe session filed under `houston/…` still points at Conroe). A festival year points at the festival's town. Nullable in the database until `city`/`state`/`country` are dropped; both API write paths set it.
 - `location_name` - Location name
 - `location_street` - Street address
 - `location_website` - Venue website
 - `location_phone` - Venue phone number
-- `city`, `state`, `country` - Geographic location
+- `city`, `state`, `country` - Geographic location. Being replaced by the place (spec 055): both write paths still write them, copied from the town in the long form ("Texas", "United States"), until the serializers read geography through `place`; then they are dropped.
 - `timezone` - IANA timezone identifier (default: UTC)
 - `recurrence` - JSON pattern (see Recurrence below)
 - `session_type` - "regular" or "festival" (default: "regular"); see [spec 004](../../changes/004-session-type.md).
   A festival does not recur — `recurrence` is NULL and `initiation_date`/`termination_date` are its
   first and last day. It flips the public page (Sessions tab first, grouped by day) and its instances
-  may overlap. Seeded as session 6, `austin/hill-country-fest`, in `schema/seed_data.sql`.
+  may overlap. A festival year lives under its festival's place row (`{festival-slug}/{yyyy}`, spec 056).
+  Seeded as session 6, `hill-country-fest/2026`, in `schema/seed_data.sql`.
 - `active_buffer_minutes_before` - Minutes before session is considered active (default: 60)
 - `active_buffer_minutes_after` - Minutes after session is considered active (default: 60)
 - `auto_create_instances` - Whether to auto-create instances ahead of schedule (default: FALSE)
@@ -40,6 +42,38 @@ RFC 3986 unreserved characters, each containing at least one letter or number; n
 trailing or doubled slashes, no `.`/`..` segments, no whitespace or invisible characters.
 This exists because a production session was created with a path that was non-empty (so it passed
 the old `.strip()` check) but resolved to nothing in a browser, stranding it.
+
+Since spec 055 a path is **exactly two** segments, and `places.validate_path_for_place()` adds
+the clauses that need the database: the first segment is a `place` slug; under a festival the
+second is a 4-digit year and the session is `session_type = 'festival'`; under a town or metro the
+second is not a year and the place contains the session's town (the town itself or an ancestor).
+The client mirror and the iOS port (`ios/CeolKit/Sources/CeolLogic/AddSession.swift`) check
+characters and the two segments; the place clauses come back from the server as form errors. An
+admin save that sends the session's current path unchanged is not re-validated, so a path from
+before the rule cannot lock its session out of other edits.
+
+### `place` - Towns, metros and festival prefixes (spec 055)
+The first segment of every session path. **Location**: `schema/058_places.sql`, logic in `places.py`.
+
+- `place_id` (PK), `slug` (UNIQUE — one namespace for towns, metros and festivals)
+- `name` - "Austin", "Houston", "O'Flaherty's Irish Music Retreat". A slug need not be its name's slug (`sf` / "San Francisco").
+- `kind` - `'place'` (a town or metro) or `'festival'` (spec 056)
+- `parent_place_id` (FK → place) - a town's metro, or a festival's town; always a `kind = 'place'` row
+- `area`, `country` - normalized long form (US states spelled out; USA/US → "United States"); NULL for festivals
+- audit columns as on `session`
+
+New towns come from the **place matcher** (`places.match_place`, `GET /api/places/match`): the
+city text's slug plus normalized area and country find an existing town (also by name, for a town
+whose slug is not its name's); no match creates one; the same slug somewhere else is ambiguous and
+the add-session sheet asks "did you mean" (`409 place_ambiguous`, resubmitted with `place_id` or
+`place_new`), a new town taking a disambiguated slug (`athens-ga`, `athens-greece`).
+
+### `path_redirect` - Old paths (spec 055)
+`from_path` (PK) → `to_path`. Written by the spec 055 migration (the legacy strays) and by a path
+change on the session admin page (`places.record_redirect`, which also collapses chains and drops a
+row whose `from_path` is live again). `/sessions/<path>` resolution (`places.resolve_session_path`):
+exact path → bare place → town/metro alias (301) → redirect (301, up to 3 hops) → `{path}/{date-or-id}`
+with the path resolved the same ways.
 
 **Location**: `schema/create_session_table.sql`
 
