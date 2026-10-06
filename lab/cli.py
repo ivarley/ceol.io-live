@@ -31,6 +31,7 @@ COMMANDS = {
     "view": "lab.tools.viewer",
     "listen": "lab.tools.listen",
     "drafts": "lab.tools.drafts",
+    "coreml": "lab.tools.coreml",
 }
 
 

@@ -2649,6 +2649,33 @@ segmented blind; item 3 the follower). Open, in rough order:
   estimate worked out on the new 4 s only, not the last 24 s again, about -250
   ms and no change in results. Together about 0.6 s a step, some 15% of a CPU a
   night, so 4-5 nights at once on this plan.
+- **(2026-10-06) Listening on the phone: the plan, and the first checks.** The
+  player's direction for scaling: push to the phone what can go there, rather
+  than drop a tracker live. The split: the phone runs the three trackers, turns
+  pitch into notes, and works out the beat and the music-detector features,
+  sending a few kilobytes of notes and features each 4 s instead of 88 KB/s of
+  audio (the phone records the full audio for upload anyway; the stream was
+  only for the meter). The server keeps the shortlist over the whole corpus,
+  the aligner and the decoder, about 250 ms a step on Render with no audio work,
+  and the corpus (over a gigabyte) never goes to the phone. Checks so far:
+  - **PESTO converts to Core ML** (`python -m lab coreml`): its constant-Q
+    spectrum rebuilt on magnitudes (Core ML has no complex numbers), the
+    network as is, the roll and reduction to pitch outside the model. On 6 s of
+    112, every one of 599 frames within 0.000 semitones of PyTorch; 32 ms per
+    6 s on a Mac's Neural Engine/GPU, 66 ms Core ML on its CPU, 177 ms PyTorch
+    on its CPU (Render runs 520 ms a step).
+  - **Basic Pitch's own Core ML model** gives the same activations as the ONNX
+    model the server runs, to the last digit (30 s of 112, all 151 notes the
+    same), so the lab's Mac numbers and the server's agree too; 145 ms per 30
+    s Core ML, 198 ms ONNX, on the Mac.
+  - **To port to Swift**: yin, pitch to notes, the beat and attack estimates,
+    the key filter, grid snapping, the music-detector features, about 1,000
+    lines of Python, leaning on five librosa functions (yin, RMS, STFT, onset
+    strength, onset detection) that Accelerate covers. Floating point will not
+    match Python bit for bit, so agreement is to be checked against fixtures
+    the lab writes (audio in, notes out), with a tolerance.
+  - Still to measure: the phone's own speed, battery and heat over three hours,
+    from the app. Next: the notes-in wire for the service, and the fixtures.
 - **(2026-10-04) Loudness, relative to the night.** Absolute loudness was taken
   out of tune-ness after a test of laptop speakers recorded through a phone,
   which says nothing about a phone on a pub table (the player's correction).
