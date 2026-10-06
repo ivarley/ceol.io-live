@@ -2529,6 +2529,29 @@ window still holds the previous tune's beat at a changeover, so the new tune's
 type is charged until it clears. Not adopted. The same evidence over a whole
 blind tune, after the fact, has no changeover in it: next.
 
+**Correction (2026-10-05): the tempo model had a bug, and the run above is
+being repeated.** `fold` squeezed every eighth into 110-230 ms, so a polka at
+250 ms was halved to 125 ms, a fast reel's speed: polkas measure 215-260 ms.
+The "p10 124 ms" put down to the estimator doubling was this. Church Street,
+one of the four late starts above, is a polka at about 251 ms, so that result
+is not to be trusted until the run is repeated. Fixed: each type is fitted and
+compared at the octave nearest its own speed, starting from the estimator's
+raw periods (`near`); refitted on ten nights, reel 153 ms, jig 166, polka 222,
+slide 148, slip jig 173, hornpipe 181.
+
+**Negative: a whole-tune type check** (2026-10-05, the fixed model). Each blind
+tune's beat over 30 s from 10 s in; a tune whose type is more than 6 log-
+likelihood units below the best for that beat swapped for the listener's
+strongest candidate over its stretch whose type is within 2 (thresholds fixed
+before the run; each night's model fitted without its own labels). Offline, on
+the merged nine-night runs: named right 662 -> 652 of 689; better 1 (Jim
+Keefe's), worse 11 (p 0.006). The estimator misreads single tunes more often
+than the listener names a wrong type: polkas measured at reel speed (Farewell
+To Whiskey, The Dark Girl Dressed In Blue, about 150 ms), slides in twos
+(Bedford Cross, The Road To Lisdoonvarna), jigs in twos at 255 ms (The Black
+Rogue twice). Wrong-type names are 1 or 2 a night; misread beats are more, so
+a veto by the beat fires on good names more than bad. Not adopted.
+
 **Tempo and beat grouping by tune type** (2026-10-05). Night 1 with merged
 shortlists named Jim Keefe's, a polka, as The Mason's Apron, a reel; the
 player's suggestion: track a tune's usual tempo at the session and use it.
@@ -2539,7 +2562,7 @@ in, the beat estimator's eighth note folded into 110-230 ms:
 |---|---|---|---|
 | reel | 387 | 153 ms (144-168) | 382 / 5 |
 | jig | 252 | 166 ms (157-179) | 16 / 236 |
-| polka | 33 | 215 ms (p10 124, the estimator doubling; p90 223) | 33 / 0 |
+| polka | 33 | 215 ms (p10 124, p90 223: wrong, see the correction below; refitted, 222 ms) | 33 / 0 |
 | slide | 29 | 152 ms (133-207) | 8 / 21 |
 | slip jig | 28 | 172 ms (158-192) | 3 / 25 |
 | hornpipe | 21 | 176 ms (122-201) | 13 / 8 |

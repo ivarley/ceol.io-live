@@ -33,10 +33,25 @@ MIN_STRENGTH = 0.25       # pulse strength below this: the beat says nothing
 
 def fold(period_ms):
     """The beat estimator's eighth folded into 110-230 ms (it sometimes returns
-    the quarter, or half an eighth)."""
+    the quarter, or half an eighth). Only a first guess: a polka's eighth runs to
+    260 ms, and folding it here halves it into a reel's speed, so the model
+    compares each type at the octave nearest its own speed (`near`)."""
     while period_ms > 230:
         period_ms /= 2
     while period_ms < 110:
+        period_ms *= 2
+    return period_ms
+
+
+def near(period_ms, center_ms):
+    """The period halved or doubled until it is within a factor of sqrt(2) of
+    `center_ms`: the beat estimator's octave chosen per type. Types differ by
+    less than a factor of two (a polka's eighth is 1.4 times a reel's), so this
+    cannot turn one into another."""
+    lo, hi = center_ms / math.sqrt(2), center_ms * math.sqrt(2)
+    while period_ms > hi:
+        period_ms /= 2
+    while period_ms < lo:
         period_ms *= 2
     return period_ms
 
@@ -92,7 +107,12 @@ class TempoModel:
         for t, rs in by.items():
             if len(rs) < MIN_N:
                 continue
-            logs = np.log([fold(r["period_ms"]) for r in rs])
+            # start from the estimator's own periods, mostly in the right octave
+            # (folding first would put a polka's 250 ms at a reel's 125)
+            center = float(np.median([r["period_ms"] for r in rs]))
+            for _ in range(3):          # settle each type's octave on its own speed
+                logs = np.log([near(r["period_ms"], center) for r in rs])
+                center = float(np.exp(np.median(logs)))
             mu = float(np.median(logs))
             sd = max(MIN_SD, 1.4826 * float(np.median(np.abs(logs - mu))))
             threes = sum(r["grouping"] == 3 for r in rs)
@@ -112,7 +132,7 @@ class TempoModel:
         m = self.types.get((tune_type or "").lower())
         if m is None:
             return None
-        z = (math.log(fold(period_ms)) - m["mu"]) / m["sd"]
+        z = (math.log(near(period_ms, math.exp(m["mu"]))) - m["mu"]) / m["sd"]
         lp = -0.5 * z * z - math.log(m["sd"])
         lg = math.log(m["p3"] if grouping == 3 else 1 - m["p3"])
         return lp + lg

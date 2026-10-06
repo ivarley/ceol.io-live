@@ -1,5 +1,7 @@
 """analysis.tempo: a candidate's type against the beat heard."""
 
+import math
+
 from lab.analysis.tempo import CAP, TempoModel, fold
 
 
@@ -26,3 +28,10 @@ def test_a_weak_beat_says_nothing_and_a_night_can_be_left_out():
     assert m.penalties(166, 3, 0.05) == {}
     assert set(m.types) == {"reel"}
     assert fold(306) == 153 and fold(76.5) == 153
+
+
+def test_a_slow_polka_is_not_halved_into_a_reel():
+    m = TempoModel.fit(_rows("reel", 153, 2) + _rows("polka", 250, 2))
+    assert abs(math.exp(m.types["polka"]["mu"]) - 250) < 10
+    cost = m.penalties(252, 2, 0.5)
+    assert cost["polka"] == 0.0 and cost["reel"] > 0
