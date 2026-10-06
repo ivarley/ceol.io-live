@@ -66,3 +66,54 @@ export function formatNumber(n, options) {
   return new Intl.NumberFormat(LOCALES[currentLang()], options).format(n)
 }
 
+// Vocabulary the server sends as English values (tune.tune_type, the canonical
+// instruments in instruments.py) but which the interface shows as words. Each is a
+// literal t() here so the catalog test sees it; anything unknown shows as sent.
+const TUNE_TYPES = {
+  Barndance: () => t('Barndance'),
+  Hornpipe: () => t('Hornpipe'),
+  Jig: () => t('Jig'),
+  March: () => t('March'),
+  Mazurka: () => t('Mazurka'),
+  Polka: () => t('Polka'),
+  Reel: () => t('Reel'),
+  Slide: () => t('Slide'),
+  'Slip Jig': () => t('Slip Jig'),
+  Strathspey: () => t('Strathspey'),
+  'Three-Two': () => t('Three-Two'),
+  Waltz: () => t('Waltz'),
+  Air: () => t('Air'),
+}
+
+/** A tune type ("Reel") as the interface word in the page's language. */
+export function tuneTypeName(type) {
+  if (!type) return type
+  const key = Object.keys(TUNE_TYPES).find((k) => k.toLowerCase() === String(type).toLowerCase())
+  return key ? TUNE_TYPES[key]() : type
+}
+
+const INSTRUMENTS = {
+  Banjo: () => t('Banjo'),
+  'Bodhrán': () => t('Bodhrán'),
+  Bouzouki: () => t('Bouzouki'),
+  'Button Accordion': () => t('Button Accordion'),
+  Concertina: () => t('Concertina'),
+  Fiddle: () => t('Fiddle'),
+  Flute: () => t('Flute'),
+  Guitar: () => t('Guitar'),
+  Harp: () => t('Harp'),
+  'Low Whistle': () => t('Low Whistle'),
+  Mandolin: () => t('Mandolin'),
+  Piano: () => t('Piano'),
+  'Piano Accordion': () => t('Piano Accordion'),
+  'Uilleann Pipes': () => t('Uilleann Pipes'),
+  Whistle: () => t('Whistle'),
+}
+
+/** A canonical instrument name ("Fiddle") in the page's language. */
+export function instrumentName(name) {
+  if (!name) return name
+  const key = Object.keys(INSTRUMENTS).find((k) => k.toLowerCase() === String(name).toLowerCase())
+  return key ? INSTRUMENTS[key]() : name
+}
+

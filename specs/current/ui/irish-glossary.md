@@ -82,3 +82,23 @@ agrees it.
 | profile | próifíl | |
 | share | comhroinn | |
 | help | cabhair | |
+
+## Proposed (not yet agreed)
+
+Terms the interface needs that the first round didn't cover. Claude's draft, for the
+product owner to agree or change.
+
+| English | Irish (proposed) | Notes |
+|---|---|---|
+| march | máirseáil | |
+| mazurka | mazurka | Usually left as is. |
+| strathspey | strathspey | Scottish tune type; usually left as is. |
+| three-two | trí-dó | Often left in English; check. |
+| harp | cláirseach | |
+| low whistle | feadóg íseal | |
+| mandolin | maindilín | |
+| piano | pianó | |
+| piano accordion | cairdín pianó | |
+| Logs (the tab, plural) | Logálacha | Plural of the agreed "logáil"; check it reads naturally. |
+| On Now | Ar siúl anois | |
+
