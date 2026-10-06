@@ -10,6 +10,9 @@
 //   CeolSession sign-in: the Keychain token store, the emailed links, the auth calls.
 //   CeolLogic   the live logger's client rules (logstate, fracindex, ...), ported from
 //               the web and held to the web's own fixture files (spec 052 §B5).
+//   CeolHearing listening on the phone (spec 053): audio -> notes and features, the lab's
+//               listen.Hearer in Swift, held to fixtures the lab writes
+//               (python -m lab hearing-fixtures).
 //
 // Both inputs live in the web repo and are symlinked rather than copied, so the app
 // cannot quietly build against a stale copy of either — nor CeolLogicTests against a
@@ -27,6 +30,7 @@ let package = Package(
         .library(name: "CeolDesign", targets: ["CeolDesign"]),
         .library(name: "CeolLogic", targets: ["CeolLogic"]),
         .library(name: "CeolSession", targets: ["CeolSession"]),
+        .library(name: "CeolHearing", targets: ["CeolHearing"]),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-openapi-generator", from: "1.6.0"),
@@ -63,6 +67,12 @@ let package = Package(
         // Reads the web's own frontend/src/**/*.fixtures.json in place (see
         // FixtureRunner.swift): one set of cases, run by Vitest there and here.
         .testTarget(name: "CeolLogicTests", dependencies: ["CeolLogic"]),
+        // Listening on the phone (spec 053): the trackers (yin; PESTO and Basic Pitch as
+        // Core ML models, compiled on first use), the notes, the beat and the features.
+        .target(name: "CeolHearing", resources: [.copy("Models")]),
+        // Stage by stage against the lab, on clips of real nights (Fixtures, written by
+        // `python -m lab hearing-fixtures`).
+        .testTarget(name: "CeolHearingTests", dependencies: ["CeolHearing"], resources: [.copy("Fixtures")]),
         .testTarget(
             name: "CeolAPITests",
             dependencies: [
