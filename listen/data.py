@@ -43,10 +43,16 @@ def ensure_data():
     s3, bucket = get_s3_client(), get_s3_bucket()
     for f in missing:
         dest = os.path.join(d, f)
+        if os.path.exists(dest):          # another process fetched it meanwhile
+            continue
         os.makedirs(os.path.dirname(dest), exist_ok=True)
         print(f"listen: fetching s3://{bucket}/{PREFIX}{f}", flush=True)
-        s3.download_file(bucket, PREFIX + f, dest + ".part")
-        os.replace(dest + ".part", dest)
+        # a temporary name per process: two uvicorn workers once fetched into
+        # the same .part, and the second's rename found it gone and failed the
+        # deploy (2026-10-06)
+        part = f"{dest}.{os.getpid()}.part"
+        s3.download_file(bucket, PREFIX + f, part)
+        os.replace(part, dest)
 
 
 def upload():
