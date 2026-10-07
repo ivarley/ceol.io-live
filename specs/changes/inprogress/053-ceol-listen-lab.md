@@ -2561,8 +2561,33 @@ session works (95% of the labelled tunes are popular, and 654 of 689 named
 right is usable), but the history is worth about 1% of names and a third of
 the wrong ones. How fast a session earns it: of each night's tunes, the
 session had logged 16% in its last night, 48% in its last 4, 62% in its last
-8, 87% in its last 32 and 97% in all 200. Next: a young session (its last 8
-nights), with popular tunes as its own or as a second tier.
+8, 87% in its last 32 and 97% in all 200.
+
+**A young session, and the production rule** (2026-10-07). The same nine
+nights as a session that has logged only its last 8 nights (about 300 tunes),
+three ways, against the full history (662 named right, 39 wrong or extra) and
+a brand-new session (654, 58):
+
+| the session knows | named right / 689 | wrong or extra |
+|---|---|---|
+| its full history | 662 | 39 |
+| its last 8 nights, popular tunes a second tier (half the outside discount) | 659 | 48 |
+| its last 8 nights + popular tunes as one tier | 654 | 58 |
+| popular tunes only (brand new) | 654 | 58 |
+| its last 8 nights only | 644 | 69 |
+
+The tiered young session against a brand-new one: better 13, worse 6 (p 0.17),
+against the full history better 7, worse 17 (p 0.06). One tier changes
+nothing (a young session's tunes are nearly all popular already, and the
+union is 2,341 tunes against 2,320); the history alone is worse than knowing
+nothing, because it lacks the tunes it has not yet heard. So production's
+rule is the tiers: the session's own tunes first, popular ones second (half
+the discount of an outside tune), everything else last; a session with no
+history has popular tunes as its own. What a player can be told, from this
+one session: with no history about 95 in 100 tunes are named right; after
+about eight nights logged a sixth fewer wrong names; with a long history a
+third fewer. (`lab drafts --merged --history-nights K --popular tier`;
+`--nu-partly` is untuned at 0.5.)
 
 **Negative: tempo evidence step by step** (2026-10-05). Each 4 s step, each
 candidate's aligner score less its type's cost for the beat over the last
