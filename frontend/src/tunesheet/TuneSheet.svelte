@@ -364,7 +364,10 @@
 
   // What the notation section renders from: the played setting, or — while the
   // mismatch note's toggle is on — the viewer's own setting.
-  const notationSource = $derived(showingMyVersion && myNotation ? { ...tune, ...myNotation } : tune)
+  // (My version is mine alone: a night's own setting must not ride along with it.)
+  const notationSource = $derived(
+    showingMyVersion && myNotation ? { ...tune, ...myNotation, setting_override: null } : tune
+  )
   const notation = $derived(notationSource ? notationInfo(notationSource) : null)
   const notationView = $derived(
     notationSource ? notationDisplay(notationSource, notationMode, notationSize) : null
@@ -1553,63 +1556,50 @@
     chooserOpen = true
   }
 
-  // Where a layer's setting is written.
+  // Where a layer's setting is written. Mine goes through the tunebook op (as the iOS
+  // app's does); the session's and a night's through their own rows.
   function settingWrite(layer, tuneId, settingId) {
     if (layer.kind === 'personal') {
-      const ptid = (pts && pts.person_tune_id) || config?.ptid
-      return { endpoint: `/api/my-tunes/${ptid}`, body: { setting_id: settingId } }
+      return {
+        method: 'POST',
+        endpoint: '/api/my-tunes/ops',
+        body: { op_id: crypto.randomUUID(), type: 'set_setting', tune_id: tuneId, setting_id: settingId },
+      }
     }
     const path = sessionScope.path
     if (layer.kind === 'session') {
-      return { endpoint: `/api/sessions/${path}/tunes/${tuneId}`, body: { setting_id: settingId } }
+      return { method: 'PUT', endpoint: `/api/sessions/${path}/tunes/${tuneId}`, body: { setting_id: settingId } }
     }
     return {
+      method: 'PUT',
       endpoint: `/api/sessions/${path}/${layer.instanceId}/tunes/${tuneId}`,
       body: { setting_override: settingId },
     }
   }
 
-  // The chooser's pick: import it first if only thesession.org has it (nothing can point
-  // at a setting we don't hold), write it to the layer, then mirror it here. Resolves
-  // true when saved, which closes the chooser.
+  // The chooser's pick: write it to the layer, then mirror it here. A setting only
+  // thesession.org has is imported by the server on the way (nothing may point at a
+  // setting we don't hold); its opening bars then render on first view. Resolves true
+  // when saved, which closes the chooser.
   async function chooseSetting(setting, fullImage) {
     const layer = chooserLayer
     if (!tune || !layer) return false
-    const tuneId = tune.tune_id
-    const settingId = setting.setting_id
-    let notation = {
-      abc: setting.abc,
-      incipit_abc: setting.incipit_abc,
-      incipit_image: setting.incipit_image || null,
-      image: fullImage || null,
-      key: setting.key,
-    }
+    const { method, endpoint, body } = settingWrite(layer, tune.tune_id, setting.setting_id)
     try {
-      if (setting.remote) {
-        const res = await fetch(`/api/tunes/${tuneId}/settings/cache?setting_id=${settingId}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-        })
-        const data = await res.json()
-        if (!data.success) throw new ServerError(data.message || data.error)
-        const got = data.setting
-        notation = {
-          abc: got.abc,
-          incipit_abc: got.incipit_abc,
-          incipit_image: got.incipit_image || null,
-          image: got.image || notation.image,
-          key: got.key,
-        }
-      }
-      const { endpoint, body } = settingWrite(layer, tuneId, settingId)
       const res = await fetch(endpoint, {
-        method: 'PUT',
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
       const data = await res.json()
       if (!data.success) throw new ServerError(data.message || data.error)
-      applyChosenSetting(layer, settingId, notation)
+      applyChosenSetting(layer, setting.setting_id, {
+        abc: setting.abc,
+        incipit_abc: setting.incipit_abc,
+        incipit_image: setting.incipit_image || null,
+        image: fullImage || null,
+        key: setting.key,
+      })
       if (config?.onSave && typeof config.onSave === 'function') config.onSave(data)
       return true
     } catch (error) {
@@ -1664,7 +1654,7 @@
   }
   // Write a freshly rendered PNG back into whichever block the view is reading from.
   function patchNotationImage(settingId, field, value) {
-    if (tune && tune.setting_id === settingId) tune[field] = value
+    if (tune && (tune.setting_override || tune.setting_id) === settingId) tune[field] = value
     if (myNotation && myNotation.setting_id === settingId) myNotation = { ...myNotation, [field]: value }
   }
   async function renderMissingNotation(settingId) {
@@ -1684,7 +1674,8 @@
   $effect(() => {
     if (!visible || !loggedIn || isOffline) return
     const src = notationSource
-    const settingId = src?.setting_id
+    // The setting drawn: a night's own, else the one under it.
+    const settingId = src?.setting_override || src?.setting_id
     if (settingId == null) return
     // Only when there's something to render and nothing rendered yet.
     if (src.incipit_image || !(src.incipit_abc || src.abc)) return

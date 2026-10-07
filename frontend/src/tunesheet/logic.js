@@ -574,7 +574,8 @@ export function personTunePayload(pt) {
 export function theSessionUrl(tuneData) {
   if (!tuneData.tune_id) return ''
   const baseUrl = `https://thesession.org/tunes/${tuneData.tune_id}`
-  const settingId = tuneData.setting_id || tuneData.setting_override
+  // The setting drawn: a night's own, else the session's (or mine).
+  const settingId = tuneData.setting_override || tuneData.setting_id
   return settingId ? `${baseUrl}#setting${settingId}` : baseUrl
 }
 

@@ -1330,7 +1330,7 @@ struct NightView: View {
         }
         infoTune = TuneRef(
             id: id, name: t["name"]?.stringValue ?? "", type: t["tune_type"]?.stringValue,
-            sessionPath: b["session_path"]?.stringValue, statusKnown: false)
+            sessionPath: b["session_path"]?.stringValue, instanceID: sessionInstanceID, statusKnown: false)
     }
 
     private func playingName(_ model: NightModel) -> String {

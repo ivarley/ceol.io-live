@@ -975,6 +975,9 @@ def my_tunes_op():
                        target count, NOT a delta, so a replayed +1 can't double-count)
       - set_notes  -> UPDATE notes
       - set_tags   -> UPDATE tags                    (absolute set; normalized server-side)
+      - set_setting -> UPDATE setting_id             (absolute set; null clears; a setting
+                       only thesession.org has is imported first, so this one needs a
+                       connection unless the setting is already held)
       - remove     -> DELETE
 
     Keyed by tune_id (not the server-assigned person_tune_id) so an offline
@@ -1078,6 +1081,40 @@ def my_tunes_op():
                     """UPDATE person_tune SET tags=%s, last_modified_user_id=%s
                        WHERE person_id=%s AND tune_id=%s""",
                     (normalize_tags(data.get("tags")), user_id, person_id, tune_id),
+                )
+            elif op_type == "set_setting":
+                # The version you play (the setting chooser). Nothing may point at a
+                # setting we don't hold, so one only thesession.org has is imported.
+                setting_id = data.get("setting_id")
+                if setting_id is not None and (
+                    isinstance(setting_id, bool)
+                    or not isinstance(setting_id, int)
+                    or setting_id <= 0
+                ):
+                    return (
+                        jsonify(
+                            {
+                                "success": False,
+                                "error": _(
+                                    "setting_id must be a positive integer or null"
+                                ),
+                            }
+                        ),
+                        400,
+                    )
+                if setting_id is not None:
+                    from api_routes import TuneImportError
+                    from live_logging_routes import _ensure_setting_local
+
+                    try:
+                        _ensure_setting_local(cur, tune_id, setting_id, user_id)
+                    except TuneImportError as e:
+                        conn.rollback()
+                        return jsonify({"success": False, "error": e.message}), e.status
+                cur.execute(
+                    """UPDATE person_tune SET setting_id=%s, last_modified_user_id=%s
+                       WHERE person_id=%s AND tune_id=%s""",
+                    (setting_id, user_id, person_id, tune_id),
                 )
             elif op_type == "remove":
                 cur.execute(

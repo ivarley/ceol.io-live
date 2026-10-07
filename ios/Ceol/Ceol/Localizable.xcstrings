@@ -33,16 +33,6 @@
         }
       }
     },
-    "%@ %@": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "new",
-            "value": "%1$@ %2$@"
-          }
-        }
-      }
-    },
     "%@ / %@": {
       "localizations": {
         "en": {
@@ -2453,6 +2443,16 @@
         }
       }
     },
+    "Change Setting": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Athraigh an leagan"
+          }
+        }
+      }
+    },
     "Change my password": {
       "localizations": {
         "ga": {
@@ -2815,6 +2815,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Níorbh fhéidir an seisiún seo a fhágáil. Bain triail eile as."
+          }
+        }
+      }
+    },
+    "Couldn't load the settings of this tune.": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Níorbh fhéidir leaganacha an fhoinn seo a lódáil."
           }
         }
       }
@@ -3765,6 +3775,16 @@
         }
       }
     },
+    "I play a different version": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seinnim leagan eile"
+          }
+        }
+      }
+    },
     "I'm local": {
       "localizations": {
         "ga": {
@@ -4331,6 +4351,16 @@
         }
       }
     },
+    "Looking for settings on thesession.org…": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leaganacha á lorg ar thesession.org…"
+          }
+        }
+      }
+    },
     "Looking up the next usual date…": {
       "localizations": {
         "ga": {
@@ -4631,6 +4661,16 @@
         }
       }
     },
+    "Next setting": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "An chéad leagan eile"
+          }
+        }
+      }
+    },
     "Next tune": {
       "localizations": {
         "ga": {
@@ -4867,6 +4907,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Níl seisiún ar bith sceidealta an tseachtain seo."
+          }
+        }
+      }
+    },
+    "No settings found for this tune.": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Níor aimsíodh leagan ar bith den fhonn seo."
           }
         }
       }
@@ -5213,6 +5263,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Nodaireacht: %@"
+          }
+        }
+      }
+    },
+    "Notation for setting %lld": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nodaireacht leagan %lld"
           }
         }
       }
@@ -5789,6 +5849,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "An lá roimhe"
+          }
+        }
+      }
+    },
+    "Previous setting": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "An leagan roimhe"
           }
         }
       }
@@ -6515,6 +6585,22 @@
         }
       }
     },
+    "Setting %lld of %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Setting %1$lld of %2$lld"
+          }
+        },
+        "ga": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leagan %lld as %lld"
+          }
+        }
+      }
+    },
     "Setting (optional)": {
       "localizations": {
         "ga": {
@@ -7207,6 +7293,16 @@
         }
       }
     },
+    "This is the one in use": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seo an ceann atá in úsáid"
+          }
+        }
+      }
+    },
     "This tune is on your list as": {
       "localizations": {
         "ga": {
@@ -7617,6 +7713,16 @@
         }
       }
     },
+    "Use this setting": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Úsáid an leagan seo"
+          }
+        }
+      }
+    },
     "Username": {
       "localizations": {
         "ga": {
@@ -7777,6 +7883,26 @@
         }
       }
     },
+    "We play a different version": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seinnimid leagan eile"
+          }
+        }
+      }
+    },
+    "We played a different version on this night": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sheinneamar leagan eile an oíche seo"
+          }
+        }
+      }
+    },
     "We sent it to %@. Open the link on this iPhone and it will sign you in here.": {
       "localizations": {
         "ga": {
@@ -7853,6 +7979,36 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "An áit a seinneann tú"
+          }
+        }
+      }
+    },
+    "Which version do you play?": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cén leagan a sheinneann tú?"
+          }
+        }
+      }
+    },
+    "Which version does %@ play?": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cén leagan a sheinntear ag %@?"
+          }
+        }
+      }
+    },
+    "Which version was played that night?": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cén leagan a seinneadh an oíche sin?"
           }
         }
       }
@@ -8263,6 +8419,16 @@
         }
       }
     },
+    "in use": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "in úsáid"
+          }
+        }
+      }
+    },
     "it had already been removed": {
       "localizations": {
         "ga": {
@@ -8479,6 +8645,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Nasc nó aitheantas seisiúin thesession.org"
+          }
+        }
+      }
+    },
+    "this session": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "an seisiún seo"
           }
         }
       }

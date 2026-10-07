@@ -36,6 +36,9 @@ struct TuneRef: Identifiable, Hashable {
     var notes: String?
     /// Opened from a session's page: the sheet adds that session's plays.
     var sessionPath: String? = nil
+    /// Opened from one night's log: the sheet draws what was played that night, and
+    /// "a different version" means that night's.
+    var instanceID: Int? = nil
     /// Whether `status` is known. Opened from somewhere other than your list, the sheet
     /// reads your status from the tune's detail instead.
     var statusKnown = true
@@ -283,6 +286,7 @@ struct TuneSheet: View {
     @State private var full: UIImage?
     @State private var showFull = false
     @State private var notationFailed = false
+    @State private var chooser: SettingLayer?
 
     var body: some View {
         NavigationStack {
@@ -317,6 +321,15 @@ struct TuneSheet: View {
                     }
                 } message: {
                     Text("Its status, notes and heard count go with it.")
+                }
+                .sheet(item: $chooser) { layer in
+                    if let t = detail.value?.sessionTune {
+                        SettingChooser(
+                            tuneID: tune.id, tuneName: t.tuneName, tuneType: t.tuneType,
+                            heading: layer.heading(sessionName: sessionName(t)),
+                            current: settingInUse(layer, t)
+                        ) { await saveSetting($0, for: layer) }
+                    }
                 }
         }
         .ceolDrawer()
@@ -437,7 +450,8 @@ struct TuneSheet: View {
     private func load() async {
         do {
             let d = try await model.auth.client.getTuneDetail(
-                path: .init(tuneId: tune.id), query: .init(session: tune.sessionPath)
+                path: .init(tuneId: tune.id),
+                query: .init(session: tune.sessionPath, instance: tune.instanceID.map(String.init))
             ).ok.body.json
             if !tune.statusKnown, let mine = JSONValue(encoding: d.sessionTune.personTuneStatus),
                 mine["on_list"]?.boolValue == true
@@ -454,9 +468,18 @@ struct TuneSheet: View {
         }
     }
 
+    /// The setting the staff draws: a night's own, else the one under it.
+    private func drawnSetting(_ t: Components.Schemas.TuneDetail.SessionTunePayload) -> Int? {
+        t.settingOverride ?? t.settingId
+    }
+
     private func loadNotation(_ t: Components.Schemas.TuneDetail.SessionTunePayload) async {
         if let img = decode(t.incipitImage) {
             incipit = img
+        } else if let setting = drawnSetting(t),
+            let r = try? await model.auth.client.getSettingImage(path: .init(settingId: setting), query: .init(kind: .incipit)).ok.body.json
+        {
+            incipit = decode(r.image)
         } else if let r = try? await model.auth.client.getTuneIncipitImage(path: .init(tuneId: tune.id)).ok.body.json {
             incipit = decode(r.image)
         }
@@ -467,7 +490,7 @@ struct TuneSheet: View {
         guard full == nil else { return }
         if let img = decode(t.image) {
             full = img
-        } else if let setting = t.settingId,
+        } else if let setting = drawnSetting(t),
             let r = try? await model.auth.client.getSettingImage(path: .init(settingId: setting), query: .init(kind: .full)).ok.body.json
         {
             full = decode(r.image)
@@ -488,6 +511,20 @@ struct TuneSheet: View {
                     Text(t.tuneName).font(.ceol(size: 26, weight: .semibold, relativeTo: .title)).foregroundStyle(CeolTokens.textColor)
                 }
                 notation(t)
+                if let layer = settingLayer(t) {
+                    HStack(spacing: 10) {
+                        Text(layer.prompt).font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
+                        Spacer(minLength: 0)
+                        Button { chooser = layer } label: {
+                            Text("Change Setting").font(.ceol(size: 15, weight: .medium))
+                                .padding(.horizontal, 12).padding(.vertical, 6)
+                                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(CeolTokens.primary, lineWidth: 1))
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(CeolTokens.primary)
+                        .accessibilityIdentifier("sheet.changeSetting")
+                    }
+                }
                 yourList
                 VStack(spacing: 0) {
                     if tune.sessionPath != nil {
@@ -527,6 +564,76 @@ struct TuneSheet: View {
             }
             .padding(20)
         }
+    }
+
+    // MARK: Which version
+
+    /// Which layer "a different version" means here, or nil when this viewer can't change
+    /// it: on your list, yours; at a session, the session's (its admins); on one night,
+    /// that night's (its members, and only for a tune played that night). As the web.
+    private func settingLayer(_ t: Components.Schemas.TuneDetail.SessionTunePayload) -> SettingLayer? {
+        guard let path = tune.sessionPath else { return status != nil ? .mine : nil }
+        guard let scope = JSONValue(encoding: t.sessionScope) else { return nil }
+        if let night = tune.instanceID {
+            let played = scope["played_instances"]?.arrayValue?
+                .contains { $0["session_instance_id"]?.intValue == night } ?? false
+            return played && scope["can_edit_instance"]?.boolValue == true ? .night(path: path, instanceID: night) : nil
+        }
+        return scope["can_edit_session"]?.boolValue == true ? .session(path: path) : nil
+    }
+
+    private func sessionName(_ t: Components.Schemas.TuneDetail.SessionTunePayload) -> String {
+        JSONValue(encoding: t.sessionScope)?["session_name"]?.stringValue ?? tr("this session")
+    }
+
+    /// The setting a layer uses now. A night with no setting of its own played the session's.
+    private func settingInUse(_ layer: SettingLayer, _ t: Components.Schemas.TuneDetail.SessionTunePayload) -> Int? {
+        switch layer {
+        case .mine: return JSONValue(encoding: t.personTuneStatus)?["setting_id"]?.intValue ?? t.settingId
+        case .session: return t.settingId
+        case .night: return t.settingOverride ?? t.settingId
+        }
+    }
+
+    /// Writes the pick to its layer (the server imports a setting only thesession.org
+    /// has), then redraws the sheet. nil when saved, else what to say.
+    private func saveSetting(_ settingID: Int, for layer: SettingLayer) async -> String? {
+        let refused: String?
+        do {
+            switch layer {
+            case .mine:
+                do {
+                    try await model.applyTuneOp(.setSetting, tuneID: tune.id, settingID: settingID)
+                    refused = nil
+                } catch let f as TuneOpFailure {
+                    refused = f.message
+                }
+            case .session(let path):
+                switch try await model.auth.client.updateSessionTune(
+                    path: .init(sessionPath: path, tuneId: tune.id), body: .json(.init(settingId: settingID)))
+                {
+                case .ok: refused = nil
+                case .default(_, let e): refused = (try? e.body.json)?.message ?? tr("That wasn't saved. Try again.")
+                }
+            case .night(let path, let night):
+                switch try await model.auth.client.updateSessionInstanceTune(
+                    path: .init(sessionPath: path, dateOrId: String(night), tuneId: tune.id),
+                    body: .json(.init(settingOverride: settingID)))
+                {
+                case .ok: refused = nil
+                case .default(_, let e): refused = (try? e.body.json)?.message ?? tr("That wasn't saved. Try again.")
+                }
+            }
+        } catch {
+            return tr("Couldn't reach Ceol, so that wasn't saved. Check your connection and try again.")
+        }
+        if let refused { return refused }
+        incipit = nil
+        full = nil
+        showFull = false
+        await load()
+        onChanged()
+        return nil
     }
 
     private func stat(_ label: String, _ value: Int) -> some View {
@@ -798,6 +905,32 @@ enum TunesWords {
         case (true, false): return tr("No tunes \(rest) found")
         case (false, true): return tr("No tunes of type \(type(f.type)) found")
         case (false, false): return tr("No tunes of type \(type(f.type)) \(rest) found")
+        }
+    }
+}
+
+/// Whose setting the chooser changes: yours, a session's, or one night's.
+enum SettingLayer: Identifiable, Hashable {
+    case mine
+    case session(path: String)
+    case night(path: String, instanceID: Int)
+
+    var id: Self { self }
+
+    /// The line under the staff, beside Change Setting.
+    var prompt: String {
+        switch self {
+        case .mine: tr("I play a different version")
+        case .session: tr("We play a different version")
+        case .night: tr("We played a different version on this night")
+        }
+    }
+
+    func heading(sessionName: String) -> String {
+        switch self {
+        case .mine: tr("Which version do you play?")
+        case .session: tr("Which version does \(sessionName) play?")
+        case .night: tr("Which version was played that night?")
         }
     }
 }

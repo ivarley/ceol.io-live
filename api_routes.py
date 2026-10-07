@@ -2261,6 +2261,30 @@ def get_session_tune_detail(session_path, tune_id):
         conn.close()
 
 
+def ensure_setting_held(cur, tune_id, setting_id):
+    """Before a session or a night points at a setting, make sure we hold it.
+
+    The setting chooser pages every setting thesession.org has, so the one picked is
+    often one we've never imported; nothing may point at a setting we don't hold, or
+    the notation that made someone pick it can't be drawn. Imports the ABC only — the
+    images render on first view. Returns None, or an error response for a setting
+    thesession.org doesn't have for this tune (or can't be reached). A value that
+    isn't a number is left to the caller's own parsing to report."""
+    if setting_id is None or setting_id == "":
+        return None
+    try:
+        setting_id = int(str(setting_id).strip())
+    except (TypeError, ValueError):
+        return None
+    from live_logging_routes import _ensure_setting_local
+
+    try:
+        _ensure_setting_local(cur, tune_id, setting_id, get_current_user_id())
+    except TuneImportError as e:
+        return jsonify({"success": False, "message": e.message}), e.status
+    return None
+
+
 @api_login_required
 def update_session_tune_details(session_path, tune_id):
     """Update session-specific tune details (setting_id, key, alias, and aliases).
@@ -2360,6 +2384,13 @@ def update_session_tune_details(session_path, tune_id):
                 ),
                 403,
             )
+
+        err = ensure_setting_held(cur, tune_id, data.get("setting_id"))
+        if err:
+            conn.rollback()
+            cur.close()
+            conn.close()
+            return err
 
         # Enroll on the fly if the tune has no session_tune row (spec 037). Stating
         # "we play this in Ador here" is the strongest possible evidence the tune
@@ -13790,6 +13821,12 @@ def update_session_instance_tune_details(session_path, date_or_id, tune_id):
                         ),
                         400,
                     )
+
+        if "setting_override" in data:
+            err = ensure_setting_held(cur, tune_id, data.get("setting_override"))
+            if err:
+                conn.rollback()
+                return err
 
         # Update the session_instance_tune record - only update fields that were in the request
         if update_fields:

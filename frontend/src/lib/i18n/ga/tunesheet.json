@@ -761,58 +761,58 @@
   },
   "the settings of this tune": {
     "ga": "leaganacha an fhoinn seo",
-    "review": true
+    "review": false
   },
   "Looking for settings on thesession.org…": {
     "ga": "Leaganacha á lorg ar thesession.org…",
-    "review": true
+    "review": false
   },
   "No settings found for this tune": {
     "ga": "Níor aimsíodh leagan ar bith den fhonn seo",
-    "review": true
+    "review": false
   },
   "in use": {
     "ga": "in úsáid",
-    "review": true
+    "review": false
   },
   "This is the one in use": {
     "ga": "Seo an ceann atá in úsáid",
-    "review": true
+    "review": false
   },
   "Use this setting": {
     "ga": "Úsáid an leagan seo",
-    "review": true
+    "review": false
   },
   "I play a different version": {
     "ga": "Seinnim leagan eile",
-    "review": true
+    "review": false
   },
   "We play a different version": {
     "ga": "Seinnimid leagan eile",
-    "review": true
+    "review": false
   },
   "We played a different version on this night": {
     "ga": "Sheinneamar leagan eile an oíche seo",
-    "review": true
+    "review": false
   },
   "Which version do you play?": {
     "ga": "Cén leagan a sheinneann tú?",
-    "review": true
+    "review": false
   },
   "Which version does {name} play?": {
     "ga": "Cén leagan a sheinntear ag {name}?",
-    "review": true
+    "review": false
   },
   "Which version was played that night?": {
     "ga": "Cén leagan a seinneadh an oíche sin?",
-    "review": true
+    "review": false
   },
   "change the setting": {
     "ga": "an leagan a athrú",
-    "review": true
+    "review": false
   },
   "Change Setting": {
     "ga": "Athraigh an leagan",
-    "review": true
+    "review": false
   }
 }

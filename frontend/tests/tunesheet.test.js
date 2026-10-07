@@ -1736,7 +1736,7 @@ describe('changing the setting through the chooser', () => {
     const onSave = vi.fn()
     stubFetch([
       ['/api/tunes/601/detail', detailPayload({ tune: { tune_id: 601, setting_id: 6010 }, pts: fullPts({ setting_id: 6010 }) })],
-      ['/api/my-tunes/11', { success: true }],
+      ['/api/my-tunes/ops', { success: true }],
       ...chooserRoutes(601, [6010, 6020], [6010, 6020]),
     ])
     const { container, component } = render(TuneSheet)
@@ -1746,12 +1746,10 @@ describe('changing the setting through the chooser', () => {
 
     await fireEvent.click(container.querySelector('.notation-change-setting .change-setting-btn'))
     await pickNext()
-    await waitFor(() => expect(puts().length).toBe(1))
-    expect(puts()[0][0]).toBe('/api/my-tunes/11')
-    expect(JSON.parse(puts()[0][1].body)).toEqual({ setting_id: 6020 })
+    // Mine is a tunebook op, as in the iOS app.
+    await waitFor(() => expect(opsPosted().length).toBe(1))
+    expect(opsPosted()[0]).toMatchObject({ type: 'set_setting', tune_id: 601, setting_id: 6020 })
     await waitFor(() => expect(onSave).toHaveBeenCalled())
-    // The setting we hold needs no trip to thesession.org.
-    expect(fetchMock.mock.calls.some(([u]) => String(u).includes('/settings/cache'))).toBe(false)
     await waitFor(() => expect(container.querySelector('.abc-notation-image').src).toContain('INC-6020'))
     // ...and Configure's setting row says so.
     component.toggleConfigSection()
@@ -1793,7 +1791,7 @@ describe('changing the setting through the chooser', () => {
     expect(ro.container.querySelector('.notation-change-setting')).toBeFalsy()
   })
 
-  it('on one night: imports a setting only thesession.org has, then writes that night', async () => {
+  it('on one night: writes that night, the server importing a setting only thesession.org has', async () => {
     const night = { session_instance_id: 77, date: '2026-03-05', start_time: null, location_override: null, positions: [] }
     stubFetch([
       [
@@ -1805,10 +1803,6 @@ describe('changing the setting through the chooser', () => {
             session_scope: sessScope({ instance: 77, played_instances: [night], can_edit_instance: true }),
           },
         }),
-      ],
-      [
-        '/api/tunes/603/settings/cache',
-        { success: true, setting: { setting_id: 6220, key: 'Gmajor', abc: 'abc-6220', incipit_abc: 'inc-6220', image: 'FULL', incipit_image: 'INC' } },
       ],
       ['/api/sessions/austin/mueller/77/tunes/603', { success: true }],
       ...chooserRoutes(603, [6210], [6210, 6220]),
@@ -1823,12 +1817,11 @@ describe('changing the setting through the chooser', () => {
     await fireEvent.click(container.querySelector('.notation-change-setting .change-setting-btn'))
     await pickNext()
     await waitFor(() => expect(puts().length).toBe(1))
-    const calls = fetchMock.mock.calls.map(([u]) => String(u))
-    const cacheAt = calls.findIndex((u) => u.includes('/api/tunes/603/settings/cache?setting_id=6220'))
-    const putAt = calls.findIndex((u) => u === '/api/sessions/austin/mueller/77/tunes/603')
-    expect(cacheAt).toBeGreaterThan(-1)
-    expect(cacheAt).toBeLessThan(putAt)
+    expect(puts()[0][0]).toBe('/api/sessions/austin/mueller/77/tunes/603')
     expect(JSON.parse(puts()[0][1].body)).toEqual({ setting_override: 6220 })
-    await waitFor(() => expect(container.querySelector('.abc-notation-image').src).toContain('INC'))
+    // One round trip: no separate import call from the page.
+    expect(fetchMock.mock.calls.some(([u]) => String(u).includes('/settings/cache'))).toBe(false)
+    // The new opening bars render on first view, now that the server holds the setting.
+    await waitFor(() => expect(container.querySelector('.abc-notation-image').src).toContain('IMG-6220'))
   })
 })

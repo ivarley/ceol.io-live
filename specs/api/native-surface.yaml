@@ -365,7 +365,7 @@ components:
         op_id: { type: string, format: uuid }
         type:
           type: string
-          enum: [add, set_status, set_heard, set_notes, set_tags, remove, set_instrument_status]
+          enum: [add, set_status, set_heard, set_notes, set_tags, remove, set_instrument_status, set_setting]
         tune_id: { type: integer }
         # add (optional, default "want to learn") and set_status (required).
         learn_status: { $ref: "#/components/schemas/LearnStatus" }
@@ -375,6 +375,9 @@ components:
         notes: { type: [string, "null"] }
         # set_tags: the whole list.
         tags: { type: array, items: { type: string } }
+        # set_setting: the setting you play (null clears). One only thesession.org has
+        # is imported first, so this needs a connection unless the setting is held.
+        setting_id: { type: [integer, "null"] }
         # set_instrument_status: an instrument on your profile, and its status (null
         # removes the override).
         instrument: { type: string }
@@ -774,6 +777,30 @@ components:
               abc: { type: string }
               incipit_abc: { type: [string, "null"] }
               incipit_image: { type: [string, "null"] }
+    TheSessionTunePreview:
+      type: object
+      required: [success, tune_id]
+      properties:
+        success: { type: boolean, const: true }
+        is_local: { type: boolean }
+        tune_id: { type: integer }
+        name: { type: string }
+        tune_type: { type: [string, "null"] }
+        settings:
+          type: array
+          items:
+            type: object
+            required: [setting_id, key, abc, incipit_abc]
+            properties:
+              setting_id: { type: integer }
+              key: { type: [string, "null"] }
+              abc: { type: string }
+              incipit_abc: { type: [string, "null"] }
+    SettingSaved:
+      type: object
+      required: [success]
+      properties:
+        success: { type: boolean, const: true }
     Image:
       type: object
       required: [success, image]
@@ -806,6 +833,8 @@ components:
             # The session's own names for the tune, when the detail is session-scoped.
             aliases: { type: array, items: { type: string } }
             setting_id: { type: [integer, "null"] }
+            # A night's own setting, when the detail is scoped to one; it is what's drawn.
+            setting_override: { type: [integer, "null"] }
             setting_key: { type: [string, "null"] }
             abc: { type: [string, "null"] }
             incipit_abc: { type: [string, "null"] }
@@ -1502,15 +1531,31 @@ paths:
   /api/tunes/thesession/{thesession_id}/preview:
     get:
       operationId: getTheSessionTunePreview
-      summary: Preview a thesession.org tune not yet imported
+      summary: >-
+        Preview a thesession.org tune not yet imported. For one already on Ceol it answers
+        only {is_local, tune_id}, unless full=1, which always fetches every setting (the
+        setting chooser's list beyond the ones we hold).
       security: [{ bearer: [] }]
-      parameters: [{ name: thesession_id, in: path, required: true, schema: { type: integer } }]
-      responses: { "200": { description: ok } }
+      parameters:
+        - { name: thesession_id, in: path, required: true, schema: { type: integer } }
+        - { name: full, in: query, required: false, schema: { type: string, enum: ["1"] } }
+      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/TheSessionTunePreview" } } } } }
   /api/tunes/render-abc:
     post:
       operationId: renderAbc
       summary: Ephemeral ABC -> PNG
       security: [{ bearer: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [abc]
+              properties:
+                abc: { type: string }
+                key: { type: [string, "null"] }
+                tune_type: { type: [string, "null"] }
+                kind: { type: string, enum: [incipit, full] }
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Image" } } } } }
   /api/tunes/abc-filter:
     post:
@@ -1586,6 +1631,50 @@ paths:
                 key: { type: [string, "null"] }
       responses:
         "201": { description: added, content: { application/json: { schema: { $ref: "#/components/schemas/SessionTuneAdded" } } } }
+        default: { $ref: "#/components/responses/Error" }
+  /api/sessions/{session_path}/tunes/{tune_id}:
+    put:
+      operationId: updateSessionTune
+      summary: >-
+        What the session plays: its setting for the tune (session admins; others get 403).
+        A setting only thesession.org has is imported first; 404 when it has no such
+        setting for the tune. The web also writes alias/key here; the native client
+        documents only the setting.
+      security: [{ bearer: [] }]
+      parameters:
+        - { name: session_path, in: path, required: true, schema: { type: string } }
+        - { name: tune_id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                setting_id: { type: [integer, "null"] }
+      responses:
+        "200": { description: saved, content: { application/json: { schema: { $ref: "#/components/schemas/SettingSaved" } } } }
+        default: { $ref: "#/components/responses/Error" }
+  /api/sessions/{session_path}/{date_or_id}/tunes/{tune_id}:
+    put:
+      operationId: updateSessionInstanceTune
+      summary: >-
+        What was played on one night: its setting for the tune (any session member; 403
+        otherwise, 404 when the tune wasn't logged that night). A setting only
+        thesession.org has is imported first. null goes back to the session's setting.
+      security: [{ bearer: [] }]
+      parameters:
+        - { name: session_path, in: path, required: true, schema: { type: string } }
+        - { name: date_or_id, in: path, required: true, schema: { type: string } }
+        - { name: tune_id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                setting_override: { type: [integer, "null"] }
+      responses:
+        "200": { description: saved, content: { application/json: { schema: { $ref: "#/components/schemas/SettingSaved" } } } }
         default: { $ref: "#/components/responses/Error" }
   /api/sessions/{session_path}/people/add:
     post:
