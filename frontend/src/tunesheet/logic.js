@@ -276,42 +276,6 @@ export function getMeterForTuneType(tuneType) {
   return meterMap[(tuneType || '').toLowerCase()] || ''
 }
 
-/** Extract a setting ID from a bare number or a thesession.org URL; null if none. */
-export function extractSettingId(input) {
-  if (!input || input.trim() === '') return null
-  const trimmed = input.trim()
-  if (/^\d+$/.test(trimmed)) return parseInt(trimmed)
-  const queryMatch = trimmed.match(/[?&]setting=(\d+)/)
-  if (queryMatch) return parseInt(queryMatch[1])
-  const hashMatch = trimmed.match(/#setting(\d+)/)
-  if (hashMatch) return parseInt(hashMatch[1])
-  return null
-}
-
-/**
- * Validate a setting input (number or thesession.org URL). A URL whose tune id
- * doesn't match the current tune is silently discarded (valid, settingId null).
- */
-export function validateSettingInput(input, expectedTuneId) {
-  if (!input) return { valid: true, settingId: null }
-  if (/^\d+$/.test(input)) return { valid: true, settingId: parseInt(input) }
-  if (input.includes('thesession.org')) {
-    const settingId = extractSettingId(input)
-    if (settingId === null) {
-      return { valid: false, error: t('Could not extract setting ID from URL') }
-    }
-    const tuneIdMatch = input.match(/thesession\.org\/tunes\/(\d+)/)
-    if (tuneIdMatch) {
-      const urlTuneId = parseInt(tuneIdMatch[1])
-      if (urlTuneId !== expectedTuneId) {
-        return { valid: true, settingId: null } // wrong tune — silently discard
-      }
-    }
-    return { valid: true, settingId: settingId }
-  }
-  return { valid: false, error: t('Please enter a number or paste a valid TheSession.org URL') }
-}
-
 /** Played With scopes for the derived mode; first entry is the default.
  *  (History's Seg is gone — its scopes became the merged droplist above. Played With
  *  keeps its own: coupling it to the History scope would be over-fitting.) */

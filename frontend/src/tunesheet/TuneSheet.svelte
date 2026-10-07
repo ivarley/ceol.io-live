@@ -63,8 +63,6 @@
     historyUrl,
     instancePositions,
     initialSessionScope,
-    extractSettingId,
-    validateSettingInput,
     playedWithScopeOptions,
     tuneHref,
     updateUrlWithTune,
@@ -86,6 +84,7 @@
     tagsEqual,
   } from './logic.js'
   import { STATUSES, STATUS_LABELS } from '../mylist.js'
+  import SettingChooser from './SettingChooser.svelte'
 
   // The tune type as the server sent it in English (the pill's CSS sets its case), the
   // interface word in Irish.
@@ -135,14 +134,13 @@
   // drawer-wide one: a single button committing both would be lying about what it does.
 
   // Personal: person_tune. Rendered on EVERY surface for a tune on my list.
-  let pcFields = $state({ name_alias: '', setting: '', key: '', notes: '', tags: [] })
+  let pcFields = $state({ name_alias: '', key: '', notes: '', tags: [] })
   let pcOriginals = $state({})
-  let pcSettingError = $state('')
   let pcSaveState = $state('idle') // idle | saving | saved | error (the Configure Save button)
   // Notes & tags now live in an always-visible panel that auto-saves on blur —
   // this drives the small "Saving…/Saved" flash for that (separate from Configure).
   let autoSaveState = $state('idle') // idle | saving | saved | error
-  let pcFetchState = $state('idle') // idle | loading | ok | warn | err
+  let pcFetchState = $state('idle') // idle | loading | ok | warn | err (Generate Notation)
 
   // Session: session_tune when the droplist is on 'general', else that instance's
   // session_instance_tune. One form; the droplist picks its target, so you never see
@@ -165,11 +163,9 @@
   // The transient "You attended" beside the filter, shown by tapping a row's ✓.
   let attendedHint = $state(false)
   let attendedHintTimer = null
-  let sessFields = $state({ alias: '', setting: '', key: '' })
+  let sessFields = $state({ alias: '', key: '' })
   let sessOriginals = $state({})
-  let sessSettingError = $state('')
   let sessSaveState = $state('idle')
-  let sessFetchState = $state('idle')
   let sessFormOpen = $state(false)
 
   // Details: the same session_tune row the History form writes at 'general' scope, but
@@ -177,11 +173,9 @@
   // rather than sharing sessFields, or selecting a date in History would silently repoint
   // the fields sitting on Details. Not collapsed behind a link either — the tab exists
   // BECAUSE that link was undiscoverable.
-  let dcFields = $state({ alias: '', setting: '', key: '' })
+  let dcFields = $state({ alias: '', key: '' })
   let dcOriginals = $state({})
-  let dcSettingError = $state('')
   let dcSaveState = $state('idle')
-  let dcFetchState = $state('idle')
 
   // "At a different session ..." — re-scope the drawer to another session I'm a member
   // of, to see what THEY do with this tune.
@@ -404,27 +398,17 @@
   // DevicePixelRatio -> matchMedia, which jsdom doesn't have.
   const isOffline = $derived(!onlineNow)
 
-  const settingLabelFor = (value, originalId) => {
-    const v = (value || '').trim()
-    const same = (!v && !originalId) || extractSettingId(v) === originalId
-    return hasCachedNotation && same ? t('Refresh') : t('Fetch')
-  }
-  const pcFetchLabel = $derived(settingLabelFor(pcFields.setting, pcOriginals.setting_id || null))
-  const sessFetchLabel = $derived(settingLabelFor(sessFields.setting, sessOriginals.setting_id || null))
-  const dcFetchLabel = $derived(settingLabelFor(dcFields.setting, dcOriginals.setting_id || null))
-
   // The Configure Save button covers ONLY the fields that still batch-save behind it
-  // (name alias / setting / key). Notes and tags moved to the always-visible panel and
+  // (name alias / key; the setting saves from its chooser). Notes and tags moved to the always-visible panel and
   // auto-save on blur, so they no longer make this dirty.
   const pcDirty = $derived.by(() => {
     if (!tune || !onList) return false
     return (
       pcFields.name_alias !== pcOriginals.name_alias ||
-      extractSettingId(pcFields.setting) !== (pcOriginals.setting_id || null) ||
       pcFields.key !== pcOriginals.key
     )
   })
-  const pcSaveDisabled = $derived(!pcDirty || pcSaveState !== 'idle' || !!pcSettingError)
+  const pcSaveDisabled = $derived(!pcDirty || pcSaveState !== 'idle')
   const autoSaveLabel = $derived(
     autoSaveState === 'saving' ? t('Saving…') : autoSaveState === 'saved' ? t('Saved ✓') : autoSaveState === 'error' ? t("Couldn't save") : ''
   )
@@ -433,21 +417,19 @@
     if (!tune || !inSession) return false
     return (
       sessFields.alias !== sessOriginals.alias ||
-      extractSettingId(sessFields.setting) !== (sessOriginals.setting_id || null) ||
       sessFields.key !== sessOriginals.key
     )
   })
-  const sessSaveDisabled = $derived(!sessDirty || sessSaveState !== 'idle' || !!sessSettingError)
+  const sessSaveDisabled = $derived(!sessDirty || sessSaveState !== 'idle')
 
   const dcDirty = $derived.by(() => {
     if (!tune || !inSession) return false
     return (
       dcFields.alias !== dcOriginals.alias ||
-      extractSettingId(dcFields.setting) !== (dcOriginals.setting_id || null) ||
       dcFields.key !== dcOriginals.key
     )
   })
-  const dcSaveDisabled = $derived(!dcDirty || dcSaveState !== 'idle' || !!dcSettingError)
+  const dcSaveDisabled = $derived(!dcDirty || dcSaveState !== 'idle')
 
   const adminDirty = $derived(!!tune && adminFields.name !== adminOriginals.name)
   const adminSaveDisabled = $derived(!adminDirty || adminSaveState !== 'idle')
@@ -497,14 +479,12 @@
     }
     pcFields = {
       name_alias: pcOriginals.name_alias,
-      setting: String(pcOriginals.setting_id || ''),
       key: pcOriginals.key,
       notes: pcOriginals.notes,
       // Copy the array — TagInput reassigns pcFields.tags, and pcOriginals must
       // keep the pristine snapshot for the dirty-check.
       tags: [...pcOriginals.tags],
     }
-    pcSettingError = ''
     pcSaveState = 'idle'
     pcFetchState = 'idle'
   }
@@ -531,12 +511,9 @@
     }
     sessFields = {
       alias: sessOriginals.alias,
-      setting: String(sessOriginals.setting_id || ''),
       key: sessOriginals.key,
     }
-    sessSettingError = ''
     sessSaveState = 'idle'
-    sessFetchState = 'idle'
   }
 
   // Details config: always the session's own row (session_tune), never an instance —
@@ -550,12 +527,9 @@
     }
     dcFields = {
       alias: dcOriginals.alias,
-      setting: String(dcOriginals.setting_id || ''),
       key: dcOriginals.key,
     }
-    dcSettingError = ''
     dcSaveState = 'idle'
-    dcFetchState = 'idle'
   }
 
   function seedAdminForm() {
@@ -668,6 +642,7 @@
   export function show(rawCfg) {
     const cfg = normalizeShowConfig(rawCfg)
     config = cfg
+    chooserOpen = false
     errorRetry = null
     adding = false
     mySessionsState = 'idle'
@@ -772,6 +747,7 @@
   }
 
   export function close() {
+    chooserOpen = false
     showCls = false
     pendingHeard = 0
     removeUrlTuneParam(mode)
@@ -806,8 +782,13 @@
     if (event.target === event.currentTarget) close()
   }
 
+  // Escape inside a sheet or dialog stacked on the drawer closes only that. This runs in
+  // the capture phase, before Bits' own Escape handling closes the sheet, so the check
+  // still sees it open.
   function onKeydown(event) {
-    if (event.key === 'Escape' && visible) close()
+    if (event.key !== 'Escape' || !visible) return
+    if (chooserOpen || sessionPickerOpen || removeMyTunesOpen || removeSessionOpen) return
+    close()
   }
 
   // ---- tunebook status control ------------------------------------------------------
@@ -1024,31 +1005,6 @@
 
   // ---- configure section / save --------------------------------------------------------
 
-  // Every form has a setting input; each validates its own.
-  function validateSettingField(which) {
-    const form = which === 'session' ? sessFields : which === 'details' ? dcFields : pcFields
-    const setError = (msg) => {
-      if (which === 'session') sessSettingError = msg
-      else if (which === 'details') dcSettingError = msg
-      else pcSettingError = msg
-    }
-    const value = (form.setting || '').trim()
-    if (!value) {
-      setError('')
-      return
-    }
-    const validation = validateSettingInput(value, tune.tune_id)
-    if (!validation.valid) {
-      setError(validation.error)
-      return
-    }
-    setError('')
-    // A pasted thesession.org URL collapses to just the setting number.
-    if (validation.settingId !== null && value !== validation.settingId.toString()) {
-      form.setting = validation.settingId.toString()
-    }
-  }
-
   // ---- the setting-mismatch note ----------------------------------------------------
 
   // The staff draws what was PLAYED. When that isn't my setting, the note under it
@@ -1107,7 +1063,7 @@
 
   // ---- personal config (person_tune) ------------------------------------------------
 
-  // Configure Save: name alias / setting / key. These are read-only offline, so this
+  // Configure Save: name alias / key. These are read-only offline, so this
   // is an online-only PUT. Notes & tags are NOT here — they auto-save (autoSavePersonal).
   export function savePersonal() {
     if (!tune || !config || pcSaveDisabled || isOffline) return
@@ -1116,8 +1072,6 @@
 
     const updates = {}
     if (pcFields.name_alias !== pcOriginals.name_alias) updates.name_alias = pcFields.name_alias.trim() || null
-    const newSettingId = extractSettingId(pcFields.setting)
-    if (newSettingId !== (pcOriginals.setting_id || null)) updates.setting_id = newSettingId
     if (pcFields.key !== pcOriginals.key) updates.key = pcFields.key || null
     if (!Object.keys(updates).length) return
 
@@ -1135,7 +1089,6 @@
         // Reseed ONLY the config originals — leaving notes/tags in pcFields untouched so
         // an in-progress (or just-autosaved) edit there isn't clobbered.
         pcOriginals.name_alias = pcFields.name_alias
-        pcOriginals.setting_id = newSettingId || ''
         pcOriginals.key = pcFields.key
         if (config.onSave && typeof config.onSave === 'function') config.onSave(data)
         setTimeout(() => (pcSaveState = 'idle'), 1200)
@@ -1146,13 +1099,11 @@
       })
   }
 
-  // Cancel the Configure edits — reverts ONLY name/setting/key, never the
+  // Cancel the Configure edits — reverts ONLY name/key, never the
   // separately-auto-saved notes & tags.
   export function cancelConfigure() {
     pcFields.name_alias = pcOriginals.name_alias
-    pcFields.setting = String(pcOriginals.setting_id || '')
     pcFields.key = pcOriginals.key
-    pcSettingError = ''
     pcSaveState = 'idle'
     pcFetchState = 'idle'
   }
@@ -1221,14 +1172,11 @@
     if (!endpoint) return
 
     const updates = {}
-    const newSettingId = extractSettingId(sessFields.setting)
     if (editingInstance) {
       if (sessFields.alias !== sessOriginals.alias) updates.name = sessFields.alias.trim() || null
-      if (newSettingId !== (sessOriginals.setting_id || null)) updates.setting_override = newSettingId
       if (sessFields.key !== sessOriginals.key) updates.key_override = sessFields.key || null
     } else {
       if (sessFields.alias !== sessOriginals.alias) updates.alias = sessFields.alias.trim() || null
-      if (newSettingId !== (sessOriginals.setting_id || null)) updates.setting_id = newSettingId
       if (sessFields.key !== sessOriginals.key) updates.key = sessFields.key || null
     }
     if (!Object.keys(updates).length) return
@@ -1275,9 +1223,7 @@
     if (!tune || !config || dcSaveDisabled || !canEditSessionGeneral) return
 
     const updates = {}
-    const newSettingId = extractSettingId(dcFields.setting)
     if (dcFields.alias !== dcOriginals.alias) updates.alias = dcFields.alias.trim() || null
-    if (newSettingId !== (dcOriginals.setting_id || null)) updates.setting_id = newSettingId
     if (dcFields.key !== dcOriginals.key) updates.key = dcFields.key || null
     if (!Object.keys(updates).length) return
 
@@ -1409,7 +1355,7 @@
   // not pass blanks off as "no overrides", so a failure hides it behind a Retry.
   function loadInstanceOverrides() {
     const requested = scopeId
-    sessFields = { alias: '', setting: '', key: '' }
+    sessFields = { alias: '', key: '' }
     sessOriginals = { alias: '', setting_id: '', key: '' }
     overridesError = false
     fetch(detailUrl(tune.tune_id, { session: sessionScope.path, instance: requested }))
@@ -1425,7 +1371,6 @@
         }
         sessFields = {
           alias: sessOriginals.alias,
-          setting: String(sessOriginals.setting_id || ''),
           key: sessOriginals.key,
         }
       })
@@ -1466,67 +1411,46 @@
       })
   }
 
-  // Fetch and cache a setting from TheSession.org, persist the setting id to whichever
-  // form asked, then re-render with the fetched notation. Resolves true when notation
-  // was fetched (even if the setting-id save then warned), so generateNotation can
-  // surface failures its own way.
-  //
-  // `which` is 'personal' | 'session' | 'details' | 'none' — 'none' just caches the
-  // notation (Generate Notation for a viewer with no form to save into).
-  export function fetchSetting(which = 'personal') {
-    if (!tune) return Promise.resolve(false)
-    const usingSession = which === 'session'
-    const usingDetails = which === 'details'
-    const state = () => (usingSession ? sessFetchState : usingDetails ? dcFetchState : pcFetchState)
-    const setState = (v) =>
-      usingSession ? (sessFetchState = v) : usingDetails ? (dcFetchState = v) : (pcFetchState = v)
-    if (state() === 'loading') return Promise.resolve(false)
+  // Put a setting's notation on the staff — the abc and whichever images it has. Any
+  // "your version" view is dropped: the staff now shows what was just fetched or chosen.
+  function showNotation(n) {
+    showingMyVersion = false
+    myNotation = null
+    tune.abc = n.abc
+    tune.incipit_abc = n.incipit_abc
+    tune.image = n.image || null
+    tune.incipit_image = n.incipit_image || null
+    if (n.key !== undefined) tune.setting_key = n.key
+    notationMode = notationInfo(tune).initialMode
+    notationSize = 'incipit'
+  }
 
+  // Generate Notation: fetch and cache this tune's notation from TheSession.org, then
+  // draw it. For a tune on my list that is my setting (or, if I have none, the tune's
+  // first, which then becomes mine); otherwise it only caches the tune's first setting.
+  // Resolves true when notation was fetched (even if saving the setting then warned).
+  function fetchNotation() {
+    if (!tune || pcFetchState === 'loading') return Promise.resolve(false)
     const tuneId = tune.tune_id
-    const form = usingSession ? sessFields : usingDetails ? dcFields : pcFields
-    const settingIdValue = which === 'none' ? '' : (form.setting || '').trim()
-    setState('loading')
-
-    const feedback = (s) => {
-      setState(s)
-      setTimeout(() => {
-        if (state() === s) setState('idle')
-      }, 2000)
-    }
-
-    let apiUrl = `/api/tunes/${tuneId}/settings/cache`
+    const ptid = onList ? (pts && pts.person_tune_id) || config?.ptid : null
     const params = new URLSearchParams()
-    if (settingIdValue) {
-      const validation = validateSettingInput(settingIdValue, tuneId)
-      params.set('setting_id', String(validation.settingId || settingIdValue))
-    }
+    if (ptid && pcOriginals.setting_id) params.set('setting_id', String(pcOriginals.setting_id))
     // A signed-out viewer's authority to make this one call. Harmless to send when
     // signed in; the server prefers the session.
     if (notationToken) params.set('token', notationToken)
-    if ([...params].length) apiUrl += `?${params}`
-
-    // Where the chosen setting id gets persisted. Personal writes person_tune; session
-    // writes whichever layer the droplist points at; 'none' writes nowhere.
-    const target = () => {
-      if (which === 'none') return null
-      if (usingSession) {
-        const endpoint = sessionEndpoint()
-        if (!endpoint || !canEditSessionLayer) return null
-        return { endpoint, body: (id) => (editingInstance ? { setting_override: id } : { setting_id: id }) }
-      }
-      if (usingDetails) {
-        if (!canEditSessionGeneral) return null
-        return {
-          endpoint: `/api/sessions/${sessionScope.path}/tunes/${tuneId}`,
-          body: (id) => ({ setting_id: id }),
-        }
-      }
-      const ptid = (pts && pts.person_tune_id) || config?.ptid
-      if (!ptid) return null
-      return { endpoint: `/api/my-tunes/${ptid}`, body: (id) => ({ setting_id: id }) }
+    const query = params.toString()
+    pcFetchState = 'loading'
+    const feedback = (st) => {
+      pcFetchState = st
+      setTimeout(() => {
+        if (pcFetchState === st) pcFetchState = 'idle'
+      }, 2000)
     }
 
-    return fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+    return fetch(`/api/tunes/${tuneId}/settings/cache${query ? `?${query}` : ''}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    })
       .then((response) => response.json())
       .then((data) => {
         if (!data.success) {
@@ -1534,51 +1458,28 @@
           feedback('err')
           return false
         }
+        showNotation(data.setting)
         const fetchedSettingId = data.setting.setting_id
-        // The staff always shows what was just fetched, so drop any "my version" view.
-        showingMyVersion = false
-        myNotation = null
-        tune.abc = data.setting.abc
-        tune.incipit_abc = data.setting.incipit_abc
-        tune.image = data.setting.image
-        tune.incipit_image = data.setting.incipit_image
-        const info = notationInfo(tune)
-        notationMode = info.initialMode
-        notationSize = 'incipit'
-
-        const dest = target()
-        if (!dest) {
+        if (!ptid || fetchedSettingId === pcOriginals.setting_id) {
           feedback('ok')
           return true
         }
-        const body = dest.body(fetchedSettingId)
-        return fetch(dest.endpoint, {
+        return fetch(`/api/my-tunes/${ptid}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
+          body: JSON.stringify({ setting_id: fetchedSettingId }),
         })
           .then((response) => response.json())
           .then((saveData) => {
-            if (saveData.success) {
-              if (usingSession || usingDetails) {
-                Object.assign(tune, body)
-                seedSessionForm()
-                seedDetailsForm()
-              } else {
-                if (tune.person_tune_status) Object.assign(tune.person_tune_status, body)
-                seedPersonalForm()
-              }
-              feedback('ok')
-            } else {
-              console.error('Error saving setting_id:', saveData.error || saveData.message)
-              toast(t("Got the notation, but couldn't save the setting. Try again."), 'error')
-              feedback('warn')
-            }
+            if (!saveData.success) throw new ServerError(saveData.error || saveData.message)
+            if (pts) pts.setting_id = fetchedSettingId
+            pcOriginals.setting_id = fetchedSettingId
+            feedback('ok')
             return true
           })
           .catch((error) => {
             console.error('Error saving setting_id:', error)
-            toast(t("Got the notation, but couldn't save the setting. Check your connection and try again."), 'error')
+            toast(t("Got the notation, but couldn't save the setting. Try again."), 'error')
             feedback('warn')
             return true
           })
@@ -1588,6 +1489,160 @@
         feedback('err')
         return false
       })
+  }
+
+  // ---- the setting chooser ------------------------------------------------------------
+  // Which written version a layer plays is picked by looking at them, not by typing a
+  // setting number: the chooser pages every setting of the tune with its full notation.
+  // It opens for one layer — mine, the session's, or one night's — and the pick saves
+  // at once, on its own, like the learn status (not behind a form's Save).
+  let chooserOpen = $state(false)
+  let chooserLayer = $state(null) // {kind: 'personal' | 'session' | 'instance', instanceId?}
+
+  // The link under the staff offers the layer the drawer is looking at: on my list, my
+  // version; at a session, the session's; on one night, that night's.
+  const viewLayer = $derived.by(() => {
+    if (!tune || !loggedIn || isOffline) return null
+    if (mode === 'session_instance') {
+      const instanceId = sessionScope?.instance
+      const playedThatNight = playedInstances.some((i) => String(i.session_instance_id) === String(instanceId))
+      return playedThatNight && sessionScope?.can_edit_instance ? { kind: 'instance', instanceId } : null
+    }
+    if (mode === 'session') return sessionScope?.can_edit_session ? { kind: 'session' } : null
+    if (mode === 'my_tunes') return { kind: 'personal' }
+    return null
+  })
+  const viewLayerPrompt = $derived(
+    !viewLayer
+      ? ''
+      : viewLayer.kind === 'personal'
+        ? t('I play a different version')
+        : viewLayer.kind === 'session'
+          ? t('We play a different version')
+          : t('We played a different version on this night')
+  )
+
+  const isScopedInstance = (instanceId) => String(instanceId) === String(sessionScope?.instance ?? '')
+
+  // The setting a layer uses now — where the chooser opens, and the one it marks in use.
+  // A night with no setting of its own played the session's.
+  function layerSettingId(layer) {
+    if (!tune || !layer) return null
+    if (layer.kind === 'personal') return (pts && pts.setting_id) || (inSession ? null : tune.setting_id) || null
+    if (layer.kind === 'session') return tune.setting_id || null
+    const own = isScopedInstance(layer.instanceId)
+      ? tune.setting_override
+      : editingInstance && String(scopeId) === String(layer.instanceId)
+        ? sessOriginals.setting_id
+        : null
+    return own || tune.setting_id || null
+  }
+  const chooserHeading = $derived(
+    !chooserLayer
+      ? ''
+      : chooserLayer.kind === 'personal'
+        ? t('Which version do you play?')
+        : chooserLayer.kind === 'session'
+          ? t('Which version does {name} play?', { name: sessionLabel })
+          : t('Which version was played that night?')
+  )
+
+  export function openChooser(layer) {
+    if (!tune || !layer || isOffline) return
+    chooserLayer = layer
+    chooserOpen = true
+  }
+
+  // Where a layer's setting is written.
+  function settingWrite(layer, tuneId, settingId) {
+    if (layer.kind === 'personal') {
+      const ptid = (pts && pts.person_tune_id) || config?.ptid
+      return { endpoint: `/api/my-tunes/${ptid}`, body: { setting_id: settingId } }
+    }
+    const path = sessionScope.path
+    if (layer.kind === 'session') {
+      return { endpoint: `/api/sessions/${path}/tunes/${tuneId}`, body: { setting_id: settingId } }
+    }
+    return {
+      endpoint: `/api/sessions/${path}/${layer.instanceId}/tunes/${tuneId}`,
+      body: { setting_override: settingId },
+    }
+  }
+
+  // The chooser's pick: import it first if only thesession.org has it (nothing can point
+  // at a setting we don't hold), write it to the layer, then mirror it here. Resolves
+  // true when saved, which closes the chooser.
+  async function chooseSetting(setting, fullImage) {
+    const layer = chooserLayer
+    if (!tune || !layer) return false
+    const tuneId = tune.tune_id
+    const settingId = setting.setting_id
+    let notation = {
+      abc: setting.abc,
+      incipit_abc: setting.incipit_abc,
+      incipit_image: setting.incipit_image || null,
+      image: fullImage || null,
+      key: setting.key,
+    }
+    try {
+      if (setting.remote) {
+        const res = await fetch(`/api/tunes/${tuneId}/settings/cache?setting_id=${settingId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        })
+        const data = await res.json()
+        if (!data.success) throw new ServerError(data.message || data.error)
+        const got = data.setting
+        notation = {
+          abc: got.abc,
+          incipit_abc: got.incipit_abc,
+          incipit_image: got.incipit_image || null,
+          image: got.image || notation.image,
+          key: got.key,
+        }
+      }
+      const { endpoint, body } = settingWrite(layer, tuneId, settingId)
+      const res = await fetch(endpoint, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const data = await res.json()
+      if (!data.success) throw new ServerError(data.message || data.error)
+      applyChosenSetting(layer, settingId, notation)
+      if (config?.onSave && typeof config.onSave === 'function') config.onSave(data)
+      return true
+    } catch (error) {
+      toastFailure(t('change the setting'), error)
+      return false
+    }
+  }
+
+  // Mirror a saved pick onto the payload and the forms, and redraw the staff when it
+  // draws from the layer that changed (instance -> session -> mine, most specific wins).
+  function applyChosenSetting(layer, settingId, notation) {
+    let drawn = false
+    if (layer.kind === 'personal') {
+      if (pts) pts.setting_id = settingId
+      pcOriginals.setting_id = settingId
+      if (!inSession) {
+        tune.setting_id = settingId
+        drawn = true
+      }
+    } else if (layer.kind === 'session') {
+      tune.setting_id = settingId
+      dcOriginals.setting_id = settingId
+      if (!editingInstance) sessOriginals.setting_id = settingId
+      if (tune.session_scope) tune.session_scope.in_repertoire = true
+      drawn = !tune.setting_override
+    } else {
+      if (isScopedInstance(layer.instanceId)) {
+        tune.setting_override = settingId
+        drawn = true
+      }
+      if (editingInstance && String(scopeId) === String(layer.instanceId)) sessOriginals.setting_id = settingId
+    }
+    if (drawn) showNotation(notation)
   }
 
   // ---- lazy notation render ------------------------------------------------------
@@ -1638,12 +1693,11 @@
     untrack(() => renderMissingNotation(settingId))
   })
 
-  // "Generate Notation" (shown in the notation area when nothing is cached): the SAME
-  // action as a form's Fetch/Refresh button. It saves the setting to my list when I
-  // have one, and otherwise just caches the notation.
+  // "Generate Notation" (shown in the notation area when nothing is cached). It saves
+  // the setting to my list when I have one, and otherwise just caches the notation.
   export function generateNotation() {
-    // fetchSetting has already said what went wrong when it resolves false.
-    fetchSetting(onList ? 'personal' : 'none').then((ok) => {
+    // fetchNotation has already said what went wrong when it resolves false.
+    fetchNotation().then((ok) => {
       if (!ok) return
       // If the fetch produced a rendered image, show the dots the user asked
       // for instead of leaving them on the abc text view.
@@ -1923,7 +1977,7 @@
   const mismatchTheirs = $derived(around(t('{link} differs.', { link: MARK })))
 </script>
 
-<svelte:window onkeydown={onKeydown} />
+<svelte:window onkeydowncapture={onKeydown} />
 
 <!-- Inline display:none is a safety default (matches the legacy container partial):
      a page with its own `.modal-overlay { display: … }` rule can't reveal it. -->
@@ -2150,6 +2204,14 @@
             </button>
           </div>
         {/if}
+        {#if viewLayer}
+          <div class="notation-change-setting">
+            {viewLayerPrompt}
+            <button type="button" class="change-setting-btn" onclick={() => openChooser(viewLayer)}
+              >{t('Change Setting')}</button
+            >
+          </div>
+        {/if}
 
         <!-- The "My List" tab body: my relationship to this tune (status), plus notes,
              tags, and the Configure form. Defined as a snippet here and rendered inside
@@ -2317,41 +2379,16 @@
                     />
                   </div>
                   <div class="configure-field-group-inline">
-                    <label class="configure-label" for="setting-input">{t('I play setting:')}</label>
-                    <div class="input-with-button">
-                      <input
-                        type="text"
-                        id="setting-input"
-                        class="configure-input"
-                        autocomplete="off"
-                        autocorrect="off"
-                        autocapitalize="off"
-                        spellcheck="false"
-                        placeholder={t('e.g., 123 or paste URL')}
-                        style:border-color={pcSettingError ? '#dc3545' : ''}
-                        disabled={isOffline}
-                        bind:value={pcFields.setting}
-                        oninput={() => validateSettingField('personal')}
-                      />
+                    <div class="configure-label">{t('I play setting:')}</div>
+                    <div class="configure-value setting-value" id="setting-value">
+                      {pcOriginals.setting_id ? `#${pcOriginals.setting_id}` : '—'}
                       <button
                         type="button"
-                        class="fetch-setting-btn{pcFetchState === 'loading' ? ' fetch-setting-btn-loading' : ''}"
-                        onclick={() => fetchSetting('personal')}
-                        disabled={pcFetchState !== 'idle' || isOffline}
-                        style:background-color={pcFetchState === 'ok' ? '#28a745' : pcFetchState === 'warn' ? '#f0ad4e' : pcFetchState === 'err' ? '#dc3545' : ''}
-                        style:color={pcFetchState === 'ok' || pcFetchState === 'warn' || pcFetchState === 'err' ? 'white' : ''}
-                        title={t('Fetch setting from TheSession.org')}
+                        class="change-setting-btn"
+                        disabled={isOffline}
+                        onclick={() => openChooser({ kind: 'personal' })}>{t('Change')}</button
                       >
-                        {#if pcFetchState === 'loading'}<span class="fetch-setting-spinner"></span>
-                        {:else if pcFetchState === 'ok'}✓
-                        {:else if pcFetchState === 'warn'}⚠
-                        {:else if pcFetchState === 'err'}✗
-                        {:else}{pcFetchLabel}{/if}
-                      </button>
                     </div>
-                  </div>
-                  <div id="setting-error" class="field-error" style="display: {pcSettingError ? 'block' : 'none'};">
-                    {pcSettingError}
                   </div>
                   <div class="configure-field-group-inline">
                     <label class="configure-label" for="my-key-select">{t('I play this in:')}</label>
@@ -2467,40 +2504,16 @@
                         />
                       </div>
                       <div class="configure-field-group-inline">
-                        <label class="configure-label" for="dc-setting-input">{t('Our setting:')}</label>
-                        <div class="input-with-button">
-                          <input
-                            type="text"
-                            id="dc-setting-input"
-                            class="configure-input"
-                            autocomplete="off"
-                            autocorrect="off"
-                            autocapitalize="off"
-                            spellcheck="false"
-                            placeholder={t('e.g., 123 or paste URL')}
-                            style:border-color={dcSettingError ? '#dc3545' : ''}
-                            bind:value={dcFields.setting}
-                            oninput={() => validateSettingField('details')}
-                          />
+                        <div class="configure-label">{t('Our setting:')}</div>
+                        <div class="configure-value setting-value" id="dc-setting-value">
+                          {dcOriginals.setting_id ? `#${dcOriginals.setting_id}` : '—'}
                           <button
                             type="button"
-                            class="fetch-setting-btn{dcFetchState === 'loading' ? ' fetch-setting-btn-loading' : ''}"
-                            onclick={() => fetchSetting('details')}
-                            disabled={dcFetchState !== 'idle'}
-                            style:background-color={dcFetchState === 'ok' ? '#28a745' : dcFetchState === 'warn' ? '#f0ad4e' : dcFetchState === 'err' ? '#dc3545' : ''}
-                            style:color={dcFetchState === 'ok' || dcFetchState === 'warn' || dcFetchState === 'err' ? 'white' : ''}
-                            title={t('Fetch setting from TheSession.org')}
+                            class="change-setting-btn"
+                            disabled={isOffline}
+                            onclick={() => openChooser({ kind: 'session' })}>{t('Change')}</button
                           >
-                            {#if dcFetchState === 'loading'}<span class="fetch-setting-spinner"></span>
-                            {:else if dcFetchState === 'ok'}✓
-                            {:else if dcFetchState === 'warn'}⚠
-                            {:else if dcFetchState === 'err'}✗
-                            {:else}{dcFetchLabel}{/if}
-                          </button>
                         </div>
-                      </div>
-                      <div class="field-error" style="display: {dcSettingError ? 'block' : 'none'};">
-                        {dcSettingError}
                       </div>
                       <div class="configure-field-group-inline">
                         <label class="configure-label" for="dc-key-select">{t('We play this in:')}</label>
@@ -2681,42 +2694,20 @@
                     />
                   </div>
                   <div class="configure-field-group-inline">
-                    <label class="configure-label" for="sess-setting-input">
+                    <div class="configure-label">
                       {editingInstance ? t('We played setting:') : t('Our setting:')}
-                    </label>
-                    <div class="input-with-button">
-                      <input
-                        type="text"
-                        id="sess-setting-input"
-                        class="configure-input"
-                        autocomplete="off"
-                        autocorrect="off"
-                        autocapitalize="off"
-                        spellcheck="false"
-                        placeholder={t('e.g., 123 or paste URL')}
-                        style:border-color={sessSettingError ? '#dc3545' : ''}
-                        bind:value={sessFields.setting}
-                        oninput={() => validateSettingField('session')}
-                      />
+                    </div>
+                    <div class="configure-value setting-value" id="sess-setting-value">
+                      {sessOriginals.setting_id ? `#${sessOriginals.setting_id}` : '—'}
                       <button
                         type="button"
-                        class="fetch-setting-btn{sessFetchState === 'loading' ? ' fetch-setting-btn-loading' : ''}"
-                        onclick={() => fetchSetting('session')}
-                        disabled={sessFetchState !== 'idle'}
-                        style:background-color={sessFetchState === 'ok' ? '#28a745' : sessFetchState === 'warn' ? '#f0ad4e' : sessFetchState === 'err' ? '#dc3545' : ''}
-                        style:color={sessFetchState === 'ok' || sessFetchState === 'warn' || sessFetchState === 'err' ? 'white' : ''}
-                        title={t('Fetch setting from TheSession.org')}
+                        class="change-setting-btn"
+                        disabled={isOffline}
+                        onclick={() =>
+                          openChooser(editingInstance ? { kind: 'instance', instanceId: scopeId } : { kind: 'session' })}
+                        >{t('Change')}</button
                       >
-                        {#if sessFetchState === 'loading'}<span class="fetch-setting-spinner"></span>
-                        {:else if sessFetchState === 'ok'}✓
-                        {:else if sessFetchState === 'warn'}⚠
-                        {:else if sessFetchState === 'err'}✗
-                        {:else}{sessFetchLabel}{/if}
-                      </button>
                     </div>
-                  </div>
-                  <div class="field-error" style="display: {sessSettingError ? 'block' : 'none'};">
-                    {sessSettingError}
                   </div>
                   <div class="configure-field-group-inline">
                     <label class="configure-label" for="sess-key-select">
@@ -2939,6 +2930,18 @@
 <!-- "At a different session ..." — re-scopes the whole drawer to another session I'm a
      member of, so I can see what THEY do with this tune. Visitor sessions are excluded:
      a session you dropped into once isn't one whose repertoire you have a view on. -->
+<!-- The setting chooser: every setting of the tune, full notation, for one layer. -->
+{#if tune}
+  <SettingChooser
+    bind:open={chooserOpen}
+    tuneId={tune.tune_id}
+    tuneName={displayName}
+    tuneType={tune.tune_type || ''}
+    currentSettingId={layerSettingId(chooserLayer)}
+    heading={chooserHeading}
+    onChoose={chooseSetting} />
+{/if}
+
 <SessionPicker
   bind:open={sessionPickerOpen}
   sessions={mySessions}

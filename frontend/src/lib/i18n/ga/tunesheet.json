@@ -567,14 +567,6 @@
     "ga": "Sraith {set}, fonn {position}",
     "review": true
   },
-  "Could not extract setting ID from URL": {
-    "ga": "Níorbh fhéidir uimhir an leagain a fháil ón URL",
-    "review": true
-  },
-  "Please enter a number or paste a valid TheSession.org URL": {
-    "ga": "Cuir uimhir isteach nó greamaigh URL bailí de chuid TheSession.org",
-    "review": true
-  },
   "At My Sessions": {
     "ga": "Ag mo sheisiúin",
     "review": true
@@ -765,6 +757,62 @@
       "many": "{n} seisiún logáilte",
       "other": "{n} seisiún logáilte"
     },
+    "review": true
+  },
+  "the settings of this tune": {
+    "ga": "leaganacha an fhoinn seo",
+    "review": true
+  },
+  "Looking for settings on thesession.org…": {
+    "ga": "Leaganacha á lorg ar thesession.org…",
+    "review": true
+  },
+  "No settings found for this tune": {
+    "ga": "Níor aimsíodh leagan ar bith den fhonn seo",
+    "review": true
+  },
+  "in use": {
+    "ga": "in úsáid",
+    "review": true
+  },
+  "This is the one in use": {
+    "ga": "Seo an ceann atá in úsáid",
+    "review": true
+  },
+  "Use this setting": {
+    "ga": "Úsáid an leagan seo",
+    "review": true
+  },
+  "I play a different version": {
+    "ga": "Seinnim leagan eile",
+    "review": true
+  },
+  "We play a different version": {
+    "ga": "Seinnimid leagan eile",
+    "review": true
+  },
+  "We played a different version on this night": {
+    "ga": "Sheinneamar leagan eile an oíche seo",
+    "review": true
+  },
+  "Which version do you play?": {
+    "ga": "Cén leagan a sheinneann tú?",
+    "review": true
+  },
+  "Which version does {name} play?": {
+    "ga": "Cén leagan a sheinntear ag {name}?",
+    "review": true
+  },
+  "Which version was played that night?": {
+    "ga": "Cén leagan a seinneadh an oíche sin?",
+    "review": true
+  },
+  "change the setting": {
+    "ga": "an leagan a athrú",
+    "review": true
+  },
+  "Change Setting": {
+    "ga": "Athraigh an leagan",
     "review": true
   }
 }

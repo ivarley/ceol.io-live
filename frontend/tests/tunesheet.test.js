@@ -12,8 +12,6 @@ import { fireEvent } from '@testing-library/dom'
 import TuneSheet from '../src/tunesheet/TuneSheet.svelte'
 import {
   getTuneIdFromUrl,
-  extractSettingId,
-  validateSettingInput,
   notationDisplay,
   overlayOfflineOps,
   scopeFromUrl,
@@ -286,24 +284,6 @@ describe('scope derivation + config normalization (derived-mode refactor)', () =
     expect(detailUrl(5, null)).toBe('/api/tunes/5/detail')
     expect(detailUrl(5, { session: 'a/b' })).toBe('/api/tunes/5/detail?session=a%2Fb')
     expect(detailUrl(5, { session: 'a/b', instance: 9 })).toBe('/api/tunes/5/detail?session=a%2Fb&instance=9')
-  })
-})
-
-describe('setting input parsing', () => {
-  it('extracts ids from numbers, query params, and anchors', () => {
-    expect(extractSettingId('123')).toBe(123)
-    expect(extractSettingId('https://thesession.org/tunes/1?setting=456')).toBe(456)
-    expect(extractSettingId('https://thesession.org/tunes/1#setting789')).toBe(789)
-    expect(extractSettingId('  ')).toBeNull()
-  })
-  it('silently discards a URL for the wrong tune', () => {
-    expect(validateSettingInput('https://thesession.org/tunes/999#setting5', 101)).toEqual({
-      valid: true,
-      settingId: null,
-    })
-  })
-  it('rejects garbage with an error', () => {
-    expect(validateSettingInput('not a url', 101).valid).toBe(false)
   })
 })
 
@@ -850,7 +830,7 @@ describe('TuneSheet component', () => {
     const details = container.querySelector('#details-tab')
     expect(details.textContent).toContain('At Mueller Session')
     expect(container.querySelector('#dc-alias-input').value).toBe('The Banish')
-    expect(container.querySelector('#dc-setting-input').value).toBe('5')
+    expect(container.querySelector('#dc-setting-value').textContent).toContain('#5')
     expect(container.querySelector('#dc-key-select').value).toBe('Dmixolydian')
     // The inherit option names the SETTING's key — "as usual" is an instance's fallback,
     // and this form is never an instance.
@@ -925,7 +905,7 @@ describe('TuneSheet component', () => {
     expect(container.querySelector('#sess-key-select').value).toBe('Gmajor')
     // ...and Details is unmoved: still the session's own row.
     expect(container.querySelector('#dc-alias-input').value).toBe('The Banish')
-    expect(container.querySelector('#dc-setting-input').value).toBe('5')
+    expect(container.querySelector('#dc-setting-value').textContent).toContain('#5')
     expect(container.querySelector('#dc-key-select').value).toBe('Dmixolydian')
   })
 
@@ -1674,7 +1654,7 @@ describe('DRIFT GUARD: offline bundle parity with the API detail payload', () =>
     // The tag chips, in order — the TagInput renders one .kit-chip-body per tag.
     tags: [...c.querySelectorAll('.kit-taginput .kit-chip-body')].map((e) => norm(e.textContent)).join(','),
     nameAlias: c.querySelector('#name-alias-input')?.value,
-    settingField: c.querySelector('#setting-input')?.value,
+    settingField: c.querySelector('#setting-value')?.textContent.match(/#(\d+)/)?.[1],
     myKey: c.querySelector('#my-key-select')?.value,
     removeLink: /Remove From My Tunes/.test(c.querySelector('.tsc-action-danger')?.textContent || ''),
     // The whole Stats tab: tunebook count row (incl. "Last Updated"), list count,
@@ -1726,5 +1706,129 @@ describe('DRIFT GUARD: offline bundle parity with the API detail payload', () =>
     )
     await openConfig(offline.container)
     expect(digest(offline.container)).toEqual(onlineDigest)
+  })
+})
+
+// ---- the setting chooser's ways in -------------------------------------------------
+// The setting used to be a text box for a thesession.org setting number. Now each view
+// offers its own layer under the staff, and each form's setting row opens the chooser.
+describe('changing the setting through the chooser', () => {
+  const chooserRoutes = (tuneId, localIds, allIds) => [
+    [
+      `/api/tunes/${tuneId}/preview`,
+      { success: true, tune_id: tuneId, settings: localIds.map((id) => ({ setting_id: id, key: 'Dmajor', abc: `abc-${id}`, incipit_abc: `inc-${id}`, incipit_image: `INC-${id}` })) },
+    ],
+    [
+      `/api/tunes/thesession/${tuneId}/preview`,
+      { success: true, tune_id: tuneId, settings: allIds.map((id) => ({ setting_id: id, key: 'Gmajor', abc: `abc-${id}`, incipit_abc: `inc-${id}` })) },
+    ],
+    ['/api/tunes/settings/', (url) => ({ success: true, image: `IMG-${String(url).match(/settings\/(\d+)/)[1]}` })],
+    ['/api/tunes/render-abc', (url, opts) => ({ success: true, image: `R-${JSON.parse(opts.body).abc}` })],
+  ]
+  const puts = () => fetchMock.mock.calls.filter(([, o]) => o && o.method === 'PUT')
+  const pickNext = async () => {
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Next setting' }).disabled).toBe(false))
+    await fireEvent.click(screen.getByRole('button', { name: 'Next setting' }))
+    await fireEvent.click(screen.getByRole('button', { name: 'Use this setting' }))
+  }
+
+  it('on my list: "I play a different version" saves my setting and redraws the staff', async () => {
+    const onSave = vi.fn()
+    stubFetch([
+      ['/api/tunes/601/detail', detailPayload({ tune: { tune_id: 601, setting_id: 6010 }, pts: fullPts({ setting_id: 6010 }) })],
+      ['/api/my-tunes/11', { success: true }],
+      ...chooserRoutes(601, [6010, 6020], [6010, 6020]),
+    ])
+    const { container, component } = render(TuneSheet)
+    component.show({ tuneId: 601, onSave })
+    await waitFor(() => expect(container.querySelector('.notation-change-setting')).toBeTruthy())
+    expect(container.querySelector('.notation-change-setting').textContent).toContain('I play a different version')
+
+    await fireEvent.click(container.querySelector('.notation-change-setting .change-setting-btn'))
+    await pickNext()
+    await waitFor(() => expect(puts().length).toBe(1))
+    expect(puts()[0][0]).toBe('/api/my-tunes/11')
+    expect(JSON.parse(puts()[0][1].body)).toEqual({ setting_id: 6020 })
+    await waitFor(() => expect(onSave).toHaveBeenCalled())
+    // The setting we hold needs no trip to thesession.org.
+    expect(fetchMock.mock.calls.some(([u]) => String(u).includes('/settings/cache'))).toBe(false)
+    await waitFor(() => expect(container.querySelector('.abc-notation-image').src).toContain('INC-6020'))
+    // ...and Configure's setting row says so.
+    component.toggleConfigSection()
+    flushSync()
+    expect(container.querySelector('#setting-value').textContent).toContain('#6020')
+  })
+
+  it('at a session: "We play a different version" writes the session row, admins only', async () => {
+    const payload = (canEdit) =>
+      detailPayload({
+        tune: { tune_id: 602, setting_id: 6110, session_scope: sessScope({ can_edit_session: canEdit }) },
+        pts: fullPts({ person_tune_id: 55 }),
+      })
+    stubFetch([
+      ['/api/tunes/602/detail', payload(true)],
+      ['/api/sessions/austin/mueller/tunes/602', { success: true }],
+      ...chooserRoutes(602, [6110, 6120], [6110, 6120]),
+    ])
+    const { container, component } = render(TuneSheet)
+    component.show({ tuneId: 602, scope: { session: 'austin/mueller' } })
+    await waitFor(() => expect(container.querySelector('.notation-change-setting')).toBeTruthy())
+    expect(container.querySelector('.notation-change-setting').textContent).toContain('We play a different version')
+    expect(document.body.textContent).not.toContain('Which version does Mueller Session play?')
+
+    await fireEvent.click(container.querySelector('.notation-change-setting .change-setting-btn'))
+    expect(document.body.textContent).toContain('Which version does Mueller Session play?')
+    await pickNext()
+    await waitFor(() => expect(puts().length).toBe(1))
+    expect(puts()[0][0]).toBe('/api/sessions/austin/mueller/tunes/602')
+    expect(JSON.parse(puts()[0][1].body)).toEqual({ setting_id: 6120 })
+    await waitFor(() => expect(container.querySelector('#dc-setting-value').textContent).toContain('#6120'))
+
+    // A member who isn't an admin can't change what the session plays.
+    cleanup()
+    stubFetch([['/api/tunes/602/detail', payload(false)]])
+    const ro = render(TuneSheet)
+    ro.component.show({ tuneId: 602, scope: { session: 'austin/mueller' } })
+    await waitFor(() => expect(ro.container.querySelector('#details-tab')).toBeTruthy())
+    expect(ro.container.querySelector('.notation-change-setting')).toBeFalsy()
+  })
+
+  it('on one night: imports a setting only thesession.org has, then writes that night', async () => {
+    const night = { session_instance_id: 77, date: '2026-03-05', start_time: null, location_override: null, positions: [] }
+    stubFetch([
+      [
+        '/api/tunes/603/detail',
+        detailPayload({
+          tune: {
+            tune_id: 603,
+            setting_id: 6210,
+            session_scope: sessScope({ instance: 77, played_instances: [night], can_edit_instance: true }),
+          },
+        }),
+      ],
+      [
+        '/api/tunes/603/settings/cache',
+        { success: true, setting: { setting_id: 6220, key: 'Gmajor', abc: 'abc-6220', incipit_abc: 'inc-6220', image: 'FULL', incipit_image: 'INC' } },
+      ],
+      ['/api/sessions/austin/mueller/77/tunes/603', { success: true }],
+      ...chooserRoutes(603, [6210], [6210, 6220]),
+    ])
+    const { container, component } = render(TuneSheet)
+    component.show({ tuneId: 603, scope: { session: 'austin/mueller', instance: 77 } })
+    await waitFor(() => expect(container.querySelector('.notation-change-setting')).toBeTruthy())
+    expect(container.querySelector('.notation-change-setting').textContent).toContain(
+      'We played a different version on this night'
+    )
+
+    await fireEvent.click(container.querySelector('.notation-change-setting .change-setting-btn'))
+    await pickNext()
+    await waitFor(() => expect(puts().length).toBe(1))
+    const calls = fetchMock.mock.calls.map(([u]) => String(u))
+    const cacheAt = calls.findIndex((u) => u.includes('/api/tunes/603/settings/cache?setting_id=6220'))
+    const putAt = calls.findIndex((u) => u === '/api/sessions/austin/mueller/77/tunes/603')
+    expect(cacheAt).toBeGreaterThan(-1)
+    expect(cacheAt).toBeLessThan(putAt)
+    expect(JSON.parse(puts()[0][1].body)).toEqual({ setting_override: 6220 })
+    await waitFor(() => expect(container.querySelector('.abc-notation-image').src).toContain('INC'))
   })
 })
