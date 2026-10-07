@@ -176,7 +176,7 @@ class ChunkScorer:
     so the two loops cannot drift apart here."""
 
     def __init__(self, index, aligner, window_ms=6000, pool_top=100, keep=6, known=None,
-                 fallback_index=None, fallback_top=20, shortlists=None, preferred=None):
+                 fallback_index=None, fallback_top=20, shortlists=None, preferred=None, partly=None):
         self.index, self.aligner = index, aligner
         # Merged shortlists (spec 053, "One corpus for every session"): with
         # `shortlists` = [(only, top)], the pool is the union of each one's top
@@ -184,6 +184,10 @@ class ChunkScorer:
         # session's own, or popular ones) or None for the whole index. Tunes not
         # in `preferred` are marked "outside", as the fallback's are.
         self.shortlists, self.preferred = shortlists, preferred
+        # `partly`: a second tier (popular tunes, for a session with little history)
+        # neither outside nor the session's own; the decoder discounts them by
+        # a fraction of what it takes off an outside tune
+        self.partly = partly
         self.window_ms, self.pool_top, self.keep = window_ms, pool_top, keep
         # A tune new to the session: `known` restricts the index's pool to
         # tunes the session has played (None: all of the index), and
@@ -238,7 +242,10 @@ class ChunkScorer:
                "floor": float(min(scores.values())) if scores else 0.0,
                "n_notes": sum(len(h[0]) for h in heard)}
         if outside_of is not None:
-            out["outside"] = [k for k in scores if k not in outside_of]
+            partly = self.partly if outside_of is self.preferred else None
+            out["outside"] = [k for k in scores if k not in outside_of and not (partly and k in partly)]
+            if partly:
+                out["partly"] = [k for k in scores if k not in outside_of and k in partly]
         return out
 
 
@@ -318,7 +325,10 @@ class Decoder:
     # defaults: tuned for the 6 s window on the seven tuning nights, causal
     # features (lam 40, tau 0.45, p_switch 0.05, p_none 0.3)
     def __init__(self, lam=40.0, tau=0.45, p_switch=0.05, p_none=0.3, nu=0.0, kappa=0.0,
-                 n_settings=None, gamma=0.0):
+                 n_settings=None, gamma=0.0, nu_partly=0.0):
+        # `nu_partly`: the fraction of that a chunk's "partly" tune (the scorer's
+        # second tier) scores less
+        self.nu_partly = nu_partly
         # `nu`: a tune outside the session's repertoire (a chunk's "outside",
         # from the full-corpus fallback) scores `lam * nu` less.
         # `kappa`: a tune with many settings scores `lam * kappa * ln(n)` less,
@@ -363,6 +373,8 @@ class Decoder:
             in_pool[rows] = True
             if self.nu and c.get("outside"):
                 emit[[where[t] for t in c["outside"]]] -= self.lam * self.nu
+            if self.nu and self.nu_partly and c.get("partly"):
+                emit[[where[t] for t in c["partly"]]] -= self.lam * self.nu * self.nu_partly
             if self.kappa:
                 emit[rows] -= self.lam * self.kappa * np.log(np.fromiter(
                     (max(1, self.n_settings.get(t, 1)) for t in scores), dtype=float, count=len(scores)))

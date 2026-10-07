@@ -2515,6 +2515,30 @@ tunes) and The Porthole Of The Kelp. Compute +3% a step. So the production
 design costs nothing here and needs no index per session; The Duke Of Leinster
 (112, first played that night) is still not reached.
 
+**A brand-new session, nine nights** (2026-10-07). The same nine nights
+blind, as a session that has never logged a tune would get them (`lab drafts
+--blind --new-session`): merged shortlists with popular tunes (>= 100
+tunebooks, 2,320) in place of the session's own, and no session keys for
+following. Against the same runs with the session's history before each
+night, both drafted on today's code: named right 662 -> 654 of 689; wrong
+or extra tunes 39 -> 58; tune by tune better 2, worse 19 (p 0.0002). The
+losses split between the 31 labelled tunes under 100 tunebooks (better 0,
+worse 9, p 0.004: Din Tarrant's, The New Leaf, The Star Of Ireland, Jim
+Keefe's, Barbara Needham's, Pop Polka #2, The Ballinamore, The Bridge Of
+Athlone, The Piper On Horseback) and popular tunes (better 2, worse 10, p
+0.04). The popular ones are mostly confident confusions between look-alikes
+that the session's history had settled: Larry Redican's Mother as The Whinny
+Hills Of Leitrim (0.99, on two nights), Cooley's Delight as The Morning
+Lark, O'Connell's Trip To Parliament and The Floating Crowbar as The Spike
+Island Lasses, The New Custom House as The Broken Pledge. With 2,320 tunes
+preferred, a tune's look-alike is preferred as much as it is. So a new
+session works (95% of the labelled tunes are popular, and 654 of 689 named
+right is usable), but the history is worth about 1% of names and a third of
+the wrong ones. How fast a session earns it: of each night's tunes, the
+session had logged 16% in its last night, 48% in its last 4, 62% in its last
+8, 87% in its last 32 and 97% in all 200. Next: a young session (its last 8
+nights), with popular tunes as its own or as a second tier.
+
 **Negative: tempo evidence step by step** (2026-10-05). Each 4 s step, each
 candidate's aligner score less its type's cost for the beat over the last
 12 s (analysis.tempo: up to 0.06, none under pulse strength 0.25; fitted
