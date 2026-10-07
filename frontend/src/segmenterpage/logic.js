@@ -33,12 +33,34 @@ export function timeFromHash(hash) {
 }
 
 /**
- * A tune a machine logged that no one has checked yet: it carries the
+ * A tune a machine logged that no one has confirmed yet: it carries the
  * listener's confidence (0-99, the chance in whole percent that the name is
  * right; spec 053), where a person's own row has none and a confirmed one 100.
  */
-export function needsCheck(tune) {
+export function isGuess(tune) {
   return tune?.confidence != null && tune.confidence < 100
+}
+
+/**
+ * How sure, as shown: the nearest 10%. The stored number stays exact (the
+ * model's calibration keeps its detail); a person reads bands, and a 99 is
+ * shown as the 100 it practically is.
+ */
+export function confidenceBand(confidence) {
+  return Math.round(confidence / 10) * 10
+}
+
+/**
+ * Shown at or under this, a guess is truly uncertain: highlighted, counted,
+ * and stepped through. Over ten labelled nights the model's 90% and up were
+ * right 99-100% of the time and its 70-90% about 70% (spec 053); on night
+ * 134 the one tune shown under 90 was the one wrong name.
+ */
+export const CHECK_AT_OR_BELOW = 80
+
+/** A machine's guess uncertain enough that a person should look. */
+export function needsCheck(tune) {
+  return isGuess(tune) && confidenceBand(tune.confidence) <= CHECK_AT_OR_BELOW
 }
 
 /**

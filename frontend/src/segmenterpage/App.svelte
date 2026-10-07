@@ -15,6 +15,7 @@
   import {
     edgeLimits,
     formatTime,
+    isGuess,
     needsCheck,
     nextNeedingCheck,
     nextUnplacedIndex,
@@ -884,9 +885,9 @@
     persistMirror()
   }
 
-  // A machine's guesses (spec 053): the tunes the listener logged that nobody
-  // has confirmed or corrected yet, the filter that shows only those, and the
-  // way from one to the next.
+  // A machine's guesses (spec 053): the truly uncertain ones the listener logged
+  // (shown at 80% or under) that nobody has confirmed or corrected yet, the
+  // filter that shows only those, and the way from one to the next.
   let onlyChecks = $state(false)
   const checksLeft = $derived(tunes.filter(needsCheck).length)
 
@@ -903,7 +904,7 @@
 
   async function confirmAt(index) {
     const tune = tunes[index]
-    if (!tune || !recording || !needsCheck(tune)) return
+    if (!tune || !recording || !isGuess(tune)) return
     saving += 1
     try {
       const res = await fetch(

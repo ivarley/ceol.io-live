@@ -576,10 +576,15 @@ percent that the name is right, from a calibration model fitted on labelled
 nights, and `confidence_model`, which model said so: `POST .../segments` with
 `confidence` (0-99) and `confidence_model` makes the row `source='listen'`.
 
-The tool shows each such tune with its percent (filled amber under 70) and a ✓.
-Above the list, "N tunes need a check" with a toggle that shows only those
-tunes, and ‹ › to step from one to the next (keys N and ⇧N); C confirms the
-cursor tune. Confirm (`POST .../segments/<sit_id>/confirm`, a `set_confidence`
+The tool shows each such tune's confidence to the nearest 10% (a 99 reads
+100%; the stored number stays exact). Only a truly uncertain one, shown at 80%
+or under, is highlighted (a filled amber badge, an amber name, a ✓) and counts
+as needing a check: over ten labelled nights the model's 90% and up were right
+99-100% of the time, and on night 134 the one tune shown under 90 was the one
+wrong name (the player, 2026-10-07: "highlight just the ones that are truly
+uncertain"). Above the list, "N tunes need a check" with a toggle that shows
+only those, and ‹ › to step from one to the next (keys N and ⇧N); C confirms
+the cursor tune, and any machine's tune can be confirmed from its menu. Confirm (`POST .../segments/<sit_id>/confirm`, a `set_confidence`
 op to 100) and correcting the tune (the name, or Edit) both settle it: the
 confidence becomes 100 and the model is cleared, while the history keeps what
 the machine said, how sure, and by which model, the material the next model is

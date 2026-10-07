@@ -4,7 +4,7 @@
   // The highlighted row is the CURSOR: the tune the mark key will place. Set
   // ends are called out because those are the only tunes that need an explicit
   // end typed -- every other end is implied by the next tune's start.
-  import { formatTime, formatDuration, groupIntoSets, needsCheck, setColor } from './logic.js'
+  import { confidenceBand, formatTime, formatDuration, groupIntoSets, isGuess, needsCheck, setColor } from './logic.js'
   import { t, tuneTypeName } from '../lib/index.js'
 
   let {
@@ -117,16 +117,21 @@
             </button>
           {/if}
 
-          {#if needsCheck(tune)}
+          {#if isGuess(tune)}
             <!-- A machine logged this and nobody has said yes yet: how sure it
-                 was (the chance in 100 the name is right), and the yes. Correcting
-                 the name instead (the name, or Edit) settles it too. -->
+                 was, to the nearest 10%. Only a truly uncertain one is
+                 highlighted and offers the yes here; any guess can be confirmed
+                 from its menu, and correcting the name settles it too. -->
             <span
               class="tl-conf"
-              class:is-low={tune.confidence < 70}
-              title={t('The listener is {n}% sure this is the tune — confirm it, or tap the name to correct it', { n: tune.confidence })}
-            >{tune.confidence}%</span>
-            <button class="tl-confirm" type="button" title={t('Yes, this is the tune')} onclick={() => onconfirm(idx)}>✓</button>
+              class:is-uncertain={needsCheck(tune)}
+              title={needsCheck(tune)
+                ? t('The listener is about {n}% sure this is the tune — confirm it, or tap the name to correct it', { n: confidenceBand(tune.confidence) })
+                : t('The listener is about {n}% sure this is the tune', { n: confidenceBand(tune.confidence) })}
+            >{confidenceBand(tune.confidence)}%</span>
+            {#if needsCheck(tune)}
+              <button class="tl-confirm" type="button" title={t('Yes, this is the tune')} onclick={() => onconfirm(idx)}>✓</button>
+            {/if}
           {/if}
 
           <!-- The set-end badge is a jump once the tune is placed: the end is
@@ -182,7 +187,7 @@
                and after add a tune beside this one, unplaced, for the mark key
                to place; remove takes it out of the log (not just its time). -->
           <div class="tl-actions" role="group" aria-label={t('Edit this tune')}>
-            {#if needsCheck(tune)}
+            {#if isGuess(tune)}
               <button type="button" onclick={() => act(() => onconfirm(idx))}>✓ {t('Confirm')}</button>
             {/if}
             <button type="button" onclick={() => act(() => onname(idx))}>✎ {t('Edit')}</button>
@@ -241,10 +246,11 @@
     font-variant-numeric: tabular-nums;
     padding: 0 5px;
     border-radius: 8px;
-    border: 1px solid #e0b341;
-    color: #e0b341;
+    border: 1px solid var(--border-color, #444);
+    color: var(--disabled-text, #888);
   }
-  .tl-conf.is-low {
+  .tl-conf.is-uncertain {
+    border-color: #e0b341;
     background: #e0b341;
     color: #1a1a1a;
   }

@@ -10,6 +10,8 @@ import {
   formatTime,
   groupIntoSets,
   MIN_SEGMENT_MS,
+  confidenceBand,
+  isGuess,
   needsCheck,
   nextNeedingCheck,
   nextUnplacedIndex,
@@ -259,21 +261,28 @@ describe('timeFromHash', () => {
 describe('tunes needing a check (spec 053)', () => {
   const tunes = [
     { confidence: null }, // a person's row
-    { confidence: 62 }, // a machine's guess
+    { confidence: 62 }, // a machine's guess, truly uncertain
     { confidence: 100 }, // confirmed
-    { confidence: 97 },
+    { confidence: 97 }, // a guess, practically sure
+    { confidence: 84 }, // shown as 80: uncertain
+    { confidence: 85 }, // shown as 90: not
   ]
 
-  it('is a machine row nobody has confirmed', () => {
-    expect(tunes.map(needsCheck)).toEqual([false, true, false, true])
+  it('shows how sure in bands of 10, a 99 as 100', () => {
+    expect([99, 95, 94, 85, 84, 72, 5].map(confidenceBand)).toEqual([100, 100, 90, 90, 80, 70, 10])
+  })
+
+  it('is a guess until confirmed, and needs a check only when shown at 80% or under', () => {
+    expect(tunes.map(isGuess)).toEqual([false, true, false, true, true, true])
+    expect(tunes.map(needsCheck)).toEqual([false, true, false, false, true, false])
     expect(needsCheck(undefined)).toBe(false)
   })
 
-  it('steps forward and back, wrapping round the log', () => {
+  it('steps forward and back through the uncertain ones, wrapping round the log', () => {
     expect(nextNeedingCheck(tunes, 0)).toBe(1)
-    expect(nextNeedingCheck(tunes, 1)).toBe(3)
-    expect(nextNeedingCheck(tunes, 3)).toBe(1)
-    expect(nextNeedingCheck(tunes, 1, -1)).toBe(3)
+    expect(nextNeedingCheck(tunes, 1)).toBe(4)
+    expect(nextNeedingCheck(tunes, 4)).toBe(1)
+    expect(nextNeedingCheck(tunes, 1, -1)).toBe(4)
     expect(nextNeedingCheck([{ confidence: null }], 0)).toBe(-1)
     expect(nextNeedingCheck([], 0)).toBe(-1)
   })

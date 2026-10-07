@@ -1284,23 +1284,32 @@ describe("a machine's guesses (spec 053)", () => {
   }
   const reply = (body) => ({ ok: true, status: 200, json: async () => body })
 
-  it('marks each with how sure it was, counts them, and filters to them', async () => {
-    const { container, getByText } = render(App, { props: { pageData: guessed() } })
-    expect(container.querySelector('.tl-row[data-tune-id="1"] .tl-conf').textContent).toBe('62%')
-    expect(container.querySelector('.tl-row[data-tune-id="1"] .tl-conf').classList.contains('is-low')).toBe(true)
-    expect(container.querySelector('.tl-row[data-tune-id="3"] .tl-conf').classList.contains('is-low')).toBe(false)
-    expect(container.querySelector('.tl-row[data-tune-id="2"] .tl-conf')).toBeNull()
-    expect(getByText('2 tunes need a check')).toBeTruthy()
+  it('shows how sure in bands of 10, highlights only the uncertain, and filters to them', async () => {
+    const p = guessed()
+    p.tunes[2].confidence = 99
+    const { container, getByText } = render(App, { props: { pageData: p } })
+    const conf = (id) => container.querySelector(`.tl-row[data-tune-id="${id}"] .tl-conf`)
+    expect(conf(1).textContent).toBe('60%')
+    expect(conf(1).classList.contains('is-uncertain')).toBe(true)
+    expect(container.querySelector('.tl-row[data-tune-id="1"] .tl-confirm')).toBeTruthy()
+    expect(conf(3).textContent).toBe('100%')
+    expect(conf(3).classList.contains('is-uncertain')).toBe(false)
+    expect(container.querySelector('.tl-row[data-tune-id="3"] .tl-confirm')).toBeNull()
+    expect(conf(2)).toBeNull() // a person's row
+    expect(getByText('1 tune needs a check')).toBeTruthy()
     await fireEvent.click(container.querySelector('.sg-checks input'))
-    expect([...container.querySelectorAll('.tl-row')].map((r) => r.dataset.tuneId)).toEqual(['1', '3'])
+    expect([...container.querySelectorAll('.tl-row')].map((r) => r.dataset.tuneId)).toEqual(['1'])
   })
 
-  it('steps through them with N and confirms with C', async () => {
+  it('steps through the uncertain ones with N and confirms with C', async () => {
+    const p = guessed()
+    p.tunes[2].confidence = 74 // shown 70: uncertain too
     const after = guessed()
     after.tunes[2].confidence = 100
     global.fetch = vi.fn(async () => reply({ success: true, tunes: after.tunes }))
-    const { container, getByText } = render(App, { props: { pageData: guessed() } })
-    await fireEvent.keyDown(window, { key: 'n' }) // from the first tune, the next guess is the third
+    const { container, getByText } = render(App, { props: { pageData: p } })
+    expect(getByText('2 tunes need a check')).toBeTruthy()
+    await fireEvent.keyDown(window, { key: 'n' }) // from the first tune, the next uncertain one is the third
     expect(container.querySelector('.tl-row.is-cursor').dataset.tuneId).toBe('3')
     await fireEvent.keyDown(window, { key: 'c' })
     await waitFor(() => expect(global.fetch).toHaveBeenCalledWith('/api/recordings/7/segments/3/confirm', expect.objectContaining({ method: 'POST' })))

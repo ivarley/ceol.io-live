@@ -1577,10 +1577,6 @@
     },
     "review": true
   },
-  "The listener is {n}% sure this is the tune — confirm it, or tap the name to correct it": {
-    "ga": "Tá an t-éisteoir {n}% cinnte gurb é seo an fonn — deimhnigh é, nó tapáil an t-ainm chun é a cheartú",
-    "review": true
-  },
   "Yes, this is the tune": {
     "ga": "Is ea, seo é an fonn",
     "review": true
@@ -1621,6 +1617,14 @@
       "many": "{n} bhfonn le seiceáil",
       "other": "{n} fonn le seiceáil"
     },
+    "review": true
+  },
+  "The listener is about {n}% sure this is the tune — confirm it, or tap the name to correct it": {
+    "ga": "Tá an t-éisteoir thart ar {n}% cinnte gurb é seo an fonn — deimhnigh é, nó tapáil an t-ainm chun é a cheartú",
+    "review": true
+  },
+  "The listener is about {n}% sure this is the tune": {
+    "ga": "Tá an t-éisteoir thart ar {n}% cinnte gurb é seo an fonn",
     "review": true
   }
 }
