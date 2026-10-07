@@ -63,6 +63,14 @@ def get_locale():
     return DEFAULT
 
 
+def request_language():
+    """The language of the request in hand, for an account it creates; English outside
+    a request."""
+    from flask import has_request_context
+
+    return get_locale() if has_request_context() else DEFAULT
+
+
 def init_app(app):
     Babel(app, locale_selector=get_locale)
 

@@ -114,3 +114,42 @@ def test_the_native_app_names_its_language(client):
 
 def test_a_browsers_accept_language_is_not_followed(client):
     assert _exchange_message(client, {"Accept-Language": "ga"}) == EXPIRED_EN
+
+
+def test_the_added_person_notice_carries_each_admins_language(client):
+    """Stage 5: add-person-to-session emails each session admin in their language."""
+    from unittest.mock import patch
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        """SELECT sp.session_id FROM session_person sp
+           JOIN user_account ua ON ua.person_id = sp.person_id
+           WHERE sp.is_admin LIMIT 1"""
+    )
+    session_id = cur.fetchone()[0]
+    cur.execute(
+        """SELECT person_id FROM person WHERE person_id NOT IN
+           (SELECT person_id FROM session_person WHERE session_id = %s) LIMIT 1""",
+        (session_id,),
+    )
+    person_id = cur.fetchone()[0]
+    try:
+        with logged_in(client), patch(
+            "api_routes.send_person_added_email", return_value=True
+        ) as send:
+            resp = client.post(
+                "/api/add-person-to-session",
+                json={"person_id": person_id, "session_id": session_id},
+            )
+        assert resp.status_code == 200, resp.get_json()
+        assert send.called
+        admin = send.call_args[0][0]
+        assert admin["language"] in ("en", "ga") and admin["email"]
+    finally:
+        cur.execute(
+            "DELETE FROM session_person WHERE person_id = %s AND session_id = %s",
+            (person_id, session_id),
+        )
+        conn.commit()
+        conn.close()

@@ -10,6 +10,7 @@ from flask import (
     make_response,
     current_app,
 )
+from i18n import request_language
 from flask_babel import gettext as _
 import random
 import bcrypt
@@ -1040,8 +1041,8 @@ def register():
             cur.execute(
                 """
                 INSERT INTO user_account (person_id, username, user_email, hashed_password, timezone,
-                                        email_verified, verification_token, verification_token_expires, referred_by_person_id, created_by_user_id)
-                VALUES (%s, %s, %s, %s, %s, FALSE, %s, %s, %s, NULL)
+                                        email_verified, verification_token, verification_token_expires, referred_by_person_id, created_by_user_id, language)
+                VALUES (%s, %s, %s, %s, %s, FALSE, %s, %s, %s, NULL, %s)
                 RETURNING user_id
             """,
                 (
@@ -1053,6 +1054,7 @@ def register():
                     verification_token,
                     verification_expires,
                     referred_by_person_id,
+                    request_language(),
                 ),
             )
             result = cur.fetchone()

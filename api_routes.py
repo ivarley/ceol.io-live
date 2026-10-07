@@ -19,7 +19,7 @@ from database import (
     normalize_quotes_sql,
     check_in_person as db_check_in_person,
 )
-from email_utils import send_email_via_sendgrid, send_update_email
+from email_utils import send_person_added_email, send_update_email
 from instruments import normalize_instrument, normalize_instruments
 from session_path import normalize_session_path
 from timezone_utils import now_utc, format_datetime_with_timezone, utc_to_local
@@ -8116,7 +8116,7 @@ def add_person_to_session():
         # people — but fall back to person.email for admins with no account.
         cur.execute(
             """
-            SELECT p.first_name, p.last_name, COALESCE(ua.user_email, p.email)
+            SELECT p.first_name, p.last_name, COALESCE(ua.user_email, p.email), ua.language
             FROM person p
             JOIN session_person sp ON p.person_id = sp.person_id
             LEFT JOIN user_account ua ON ua.person_id = p.person_id
@@ -8132,7 +8132,7 @@ def add_person_to_session():
         if not session_admins:
             cur.execute(
                 """
-                SELECT p.first_name, p.last_name, ua.user_email
+                SELECT p.first_name, p.last_name, ua.user_email, ua.language
                 FROM person p
                 JOIN user_account ua ON p.person_id = ua.person_id
                 WHERE ua.is_system_admin = TRUE AND ua.user_email IS NOT NULL
@@ -8155,30 +8155,27 @@ def add_person_to_session():
                 location_parts.append(session_state)
             if session_country:
                 location_parts.append(session_country)
-            session_location = (
-                ", ".join(location_parts) if location_parts else "Unknown"
-            )
+            session_location = ", ".join(location_parts)
 
-            subject = f"New person added to session: {session_name}"
-
-            for admin_first, admin_last, admin_email in session_admins:
-                admin_name = f"{admin_first} {admin_last}"
-
-                body = f"""Hello {admin_name},
-
-{person_name} has been added to the session "{session_name}" in {session_location} as a {relationship}.
-
-Person Details:
-- Name: {person_name}
-- Email: {person_email or 'Not provided'}
-
-You can review and modify this person's role in the session admin interface: https://ceol.io/admin/sessions/{session_path}/people
-
-Best regards,
-The Ceol.io Session Management System"""
-
+            for admin_first, admin_last, admin_email, admin_language in session_admins:
                 try:
-                    send_email_via_sendgrid(admin_email, subject, body)
+                    send_person_added_email(
+                        {
+                            "name": f"{admin_first} {admin_last}",
+                            "email": admin_email,
+                            "language": admin_language,
+                        },
+                        {
+                            "name": person_name,
+                            "email": person_email,
+                            "relationship": relationship,
+                        },
+                        {
+                            "name": session_name,
+                            "location": session_location,
+                            "path": session_path,
+                        },
+                    )
                 except Exception as email_error:
                     print(f"Failed to send email to {admin_email}: {email_error}")
 

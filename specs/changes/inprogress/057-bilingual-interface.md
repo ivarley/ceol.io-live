@@ -1,9 +1,9 @@
 # 057: Bilingual interface (English and Irish)
 
 **Date:** 2026-10-06
-**Status:** STAGES 1-4 BUILT (2026-10-07): the machinery, the setting and switch, the
+**Status:** STAGES 1-5 BUILT (2026-10-07): the machinery, the setting and switch, the
 tests, the CLAUDE.md rule, the agreed glossary, every Svelte bundle and Jinja page, the
-iOS app, and the messages the server sends. Next: emails, then help. The
+iOS app, the messages the server sends, and the emails. Next: help. The
 decisions are the product owner's, from a short Q&A on 2026-10-06.
 
 ## Why
@@ -146,3 +146,17 @@ And from here on, any interface work has to work in both languages.
   logger clients; `str(e)` passthroughs; `services/thesession_sync_service.py` and
   three person-tune service messages, which callers parse by their text (fixing that
   needs error codes first); dates from `format_session_date()`, which is English-only.
+
+## Stage 5 (emails) as built
+
+- Every email is built in `email_utils.py` inside `force_locale(<recipient's
+  language>)`: the sign-in, verification and password emails from the account's
+  setting, the update emails' footer from the recipient's account (the body is the
+  admin's own text), and the "person added to your session" notice
+  (`send_person_added_email`) per admin. The registration email has no account yet,
+  so it follows the request (cookie or the app's Accept-Language).
+- A new account takes the language of the request that creates it
+  (`i18n.request_language()`), so signing up in Irish gives Irish emails from the
+  first one.
+- English is byte-identical to before. The old site name "Irish Music Sessions" is
+  still in the subjects; the Irish uses "Seisiúin Cheoil Ghaelaigh" for now.
