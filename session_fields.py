@@ -11,7 +11,10 @@ wording live here so the two can't drift.
 frontend/src/shared/parse.js (parseThesessionSessionId) — keep them in lockstep.
 """
 
+# i18n-converted
 import re
+
+from flask_babel import gettext as _
 
 SESSION_TYPES = ("regular", "festival")
 
@@ -37,9 +40,11 @@ def parse_thesession_session_id(raw):
     if raw is None:
         return None, None
     if isinstance(raw, bool):  # bool is an int subclass; never a valid id
-        return None, "Enter a thesession.org session URL or numeric ID"
+        return None, _("Enter a thesession.org session URL or numeric ID")
     if isinstance(raw, int):
-        return (raw, None) if raw > 0 else (None, "TheSession.org ID must be a positive number")
+        if raw <= 0:
+            return None, _("TheSession.org ID must be a positive number")
+        return raw, None
 
     s = str(raw).strip()
     if not s:
@@ -50,8 +55,12 @@ def parse_thesession_session_id(raw):
         return int(m.group(1)), None
     if s.isdigit():
         value = int(s)
-        return (value, None) if value > 0 else (None, "TheSession.org ID must be a positive number")
-    return None, "Enter a thesession.org session URL (thesession.org/sessions/1234) or numeric ID"
+        if value <= 0:
+            return None, _("TheSession.org ID must be a positive number")
+        return value, None
+    return None, _(
+        "Enter a thesession.org session URL (thesession.org/sessions/1234) or numeric ID"
+    )
 
 
 def normalize_session_type(raw):
@@ -62,7 +71,9 @@ def normalize_session_type(raw):
     if not value:
         return "regular", None
     if value not in SESSION_TYPES:
-        return None, f"Session type must be one of: {', '.join(SESSION_TYPES)}"
+        return None, _(
+            "Session type must be one of: %(types)s", types=", ".join(SESSION_TYPES)
+        )
     return value, None
 
 
@@ -74,13 +85,46 @@ def normalize_active_buffer(raw, label="Active window"):
     try:
         value = int(raw)
     except (TypeError, ValueError):
-        return None, f"{label} must be a whole number of minutes"
+        return None, _buffer_error(label, 0)
     # int() truncates 2.5 to 2 — a fraction of a minute is a typo, not a rounding
     # request, so say so rather than storing something the user didn't ask for.
     if float(raw) != value:
-        return None, f"{label} must be a whole number of minutes"
+        return None, _buffer_error(label, 0)
     if value < 0:
-        return None, f"{label} can't be negative"
+        return None, _buffer_error(label, 1)
     if value > MAX_ACTIVE_BUFFER_MINUTES:
-        return None, f"{label} must be {MAX_ACTIVE_BUFFER_MINUTES} minutes or fewer"
+        return None, _buffer_error(label, 2)
     return value, None
+
+
+def _buffer_error(label, problem):
+    """normalize_active_buffer's sentence for `label`, whole, so each language can
+    word it its own way. The labels the routes pass have their own sentences; any
+    other label is placed into a general one. `problem`: 0 not a whole number,
+    1 negative, 2 too large."""
+    m = MAX_ACTIVE_BUFFER_MINUTES
+    if label == "Minutes before":
+        sentences = (
+            _("Minutes before must be a whole number of minutes"),
+            _("Minutes before can't be negative"),
+            _("Minutes before must be %(max)d minutes or fewer", max=m),
+        )
+    elif label == "Minutes after":
+        sentences = (
+            _("Minutes after must be a whole number of minutes"),
+            _("Minutes after can't be negative"),
+            _("Minutes after must be %(max)d minutes or fewer", max=m),
+        )
+    elif label == "Active window":
+        sentences = (
+            _("Active window must be a whole number of minutes"),
+            _("Active window can't be negative"),
+            _("Active window must be %(max)d minutes or fewer", max=m),
+        )
+    else:
+        sentences = (
+            _("%(label)s must be a whole number of minutes", label=label),
+            _("%(label)s can't be negative", label=label),
+            _("%(label)s must be %(max)d minutes or fewer", label=label, max=m),
+        )
+    return sentences[problem]

@@ -139,7 +139,8 @@ final class AppModel {
     private var pendingLink: URL?
 
     init(server: URL = AppModel.serverURL, store: any TokenStore = KeychainTokenStore()) {
-        let client = Client.ceol(serverURL: server, clientID: ClientID.current, token: { store.token() })
+        let client = Client.ceol(
+            serverURL: server, clientID: ClientID.current, token: { store.token() }, language: { AppLanguage.code })
         auth = AuthService(client: client, store: store)
         self.server = server
         devHosts = CeolServer.production.host() == server.host() ? [] : [server.host() ?? ""]

@@ -87,3 +87,30 @@ def test_switching_while_signed_in_saves_the_profile(client, ian_language):
     cur.execute("SELECT language FROM user_account WHERE user_id = 1")
     assert cur.fetchone()[0] == "ga"
     conn.close()
+
+
+# Stage 4: the sentences the API sends back follow the request's language.
+EXPIRED_EN = "Invalid or expired link. Please request a new one."
+EXPIRED_GA = "Nasc neamhbhailí nó as feidhm. Iarr ceann nua."
+
+
+def _exchange_message(client, headers):
+    resp = client.post(
+        "/api/auth/exchange", json={"token": "no-such-token"}, headers=headers
+    )
+    assert resp.status_code == 401
+    return resp.get_json()["message"]
+
+
+def test_api_messages_follow_the_cookie(client):
+    client.set_cookie("ceol_lang", "ga")
+    assert _exchange_message(client, {}) == EXPIRED_GA
+
+
+def test_the_native_app_names_its_language(client):
+    native = {"X-Ceol-Client": "ios/1.0.0 (build 1)", "Accept-Language": "ga"}
+    assert _exchange_message(client, native) == EXPIRED_GA
+
+
+def test_a_browsers_accept_language_is_not_followed(client):
+    assert _exchange_message(client, {"Accept-Language": "ga"}) == EXPIRED_EN

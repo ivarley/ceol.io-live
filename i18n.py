@@ -53,7 +53,14 @@ def get_locale():
     except Exception:
         pass
     lang = request.cookies.get(COOKIE)
-    return lang if lang in LANGUAGES else DEFAULT
+    if lang in LANGUAGES:
+        return lang
+    # The native app names its interface language in Accept-Language, so its sign-in
+    # screens get answers in it. A browser's Accept-Language is not followed: signed out
+    # on the web is English unless the switch was used.
+    if request.headers.get("X-Ceol-Client"):
+        return request.accept_languages.best_match(LANGUAGES) or DEFAULT
+    return DEFAULT
 
 
 def init_app(app):

@@ -995,6 +995,7 @@ extension AppModel {
         var r = request
         if let token = auth.store.token() { r.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         r.setValue(ClientID.current, forHTTPHeaderField: "X-Ceol-Client")
+        r.setValue(AppLanguage.code, forHTTPHeaderField: "Accept-Language")
         return r
     }
 

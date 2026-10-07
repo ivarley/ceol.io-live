@@ -1,9 +1,9 @@
 # 057: Bilingual interface (English and Irish)
 
 **Date:** 2026-10-06
-**Status:** STAGES 1-3 BUILT (2026-10-06): the machinery, the setting and switch, the
-tests, the CLAUDE.md rule, the agreed glossary, every Svelte bundle and Jinja page, and
-the iOS app. Next: server messages, emails, help. The
+**Status:** STAGES 1-4 BUILT (2026-10-07): the machinery, the setting and switch, the
+tests, the CLAUDE.md rule, the agreed glossary, every Svelte bundle and Jinja page, the
+iOS app, and the messages the server sends. Next: emails, then help. The
 decisions are the product owner's, from a short Q&A on 2026-10-06.
 
 ## Why
@@ -123,3 +123,26 @@ And from here on, any interface work has to work in both languages.
   Bainisteoir) beside `Admin` (the menu item, Riarachán).
 - Left in English: server text (stage 4), `session_date` as the server formats it,
   data.
+
+## Stage 4 (server messages) as built
+
+- Every message a person reads from the API, `flash()` and the error pages goes
+  through `_()` (about 600 msgids), in the route modules and the helpers whose text
+  reaches a person (`places.py`, `session_path.py`, `session_fields.py`,
+  `recurrence_utils.py`, `database.py`'s attendance helpers, the person-tune, merge and
+  deletion services). A converted module carries `# i18n-converted`;
+  `tests/unit/test_i18n_catalogs.py` fails on an `api_error()` / `flash()` message or a
+  `"message"` / `"error"` value left outside `_()` (`# not-i18n` marks a literal that
+  is a code or meant for developers).
+- Sentences built from English pieces became one whole sentence per case; counts use
+  `ngettext`.
+- The native app sends its language as Accept-Language; `i18n.get_locale` follows it
+  only when X-Ceol-Client is present, so the app's sign-in errors come in its language
+  and a browser stays English until the switch is used.
+- A message built before `login_user` / `logout_user` in one request keeps the
+  earlier language (Flask-Babel caches the locale per request), so logout and account
+  deletion word their message first.
+- Left in English: codes; log lines; text saved to the database or broadcast to other
+  logger clients; `str(e)` passthroughs; `services/thesession_sync_service.py` and
+  three person-tune service messages, which callers parse by their text (fixing that
+  needs error codes first); dates from `format_session_date()`, which is English-only.

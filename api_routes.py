@@ -1,4 +1,6 @@
+# i18n-converted
 from flask import request, jsonify, session, send_file
+from flask_babel import gettext as _, ngettext
 from collections import Counter
 import requests
 import re
@@ -98,7 +100,8 @@ def is_session_member_for(cur, session_id, person_id):
 
 def instance_logging_locked(cur, session_instance_id):
     """True if the live editor owns this instance (logging_mode='live'); the classic
-    editor's tune-mutation endpoints must refuse so they can't clobber live-editor data."""
+    editor's tune-mutation endpoints must refuse so they can't clobber live-editor data.
+    """
     cur.execute(
         "SELECT logging_mode FROM session_instance WHERE session_instance_id = %s",
         (session_instance_id,),
@@ -137,7 +140,11 @@ def get_tune_detail_global(tune_id):
     The drawer derives its mode (my-tunes variant / session / instance / admin /
     read-only) from viewer + person_tune_status + session_scope, so this one
     endpoint replaces the per-context feeds the drawer used to pick between."""
-    from serializers import build_tune_detail_payload, SessionNotFound, SessionInstanceNotFound
+    from serializers import (
+        build_tune_detail_payload,
+        SessionNotFound,
+        SessionInstanceNotFound,
+    )
 
     session_path = request.args.get("session") or None
     date_or_id = request.args.get("instance") or None
@@ -152,17 +159,22 @@ def get_tune_detail_global(tune_id):
                 tune_id,
                 person_id=person_id,
                 logged_in=current_user.is_authenticated,
-                is_admin=bool(current_user.is_authenticated and current_user.is_system_admin),
+                is_admin=bool(
+                    current_user.is_authenticated and current_user.is_system_admin
+                ),
                 session_path=session_path,
                 date_or_id=date_or_id,
                 redirected_from=redirected_from,
             )
         except SessionNotFound:
-            return jsonify({"success": False, "message": "Session not found"}), 404
+            return jsonify({"success": False, "message": _("Session not found")}), 404
         except SessionInstanceNotFound:
-            return jsonify({"success": False, "message": "Session instance not found"}), 404
+            return (
+                jsonify({"success": False, "message": _("Session instance not found")}),
+                404,
+            )
         if payload is None:
-            return jsonify({"success": False, "message": "Tune not found"}), 404
+            return jsonify({"success": False, "message": _("Tune not found")}), 404
         return jsonify(payload)
     finally:
         conn.close()
@@ -201,10 +213,15 @@ def get_tune_history(tune_id):
     if scope is None and request.args.get("person") == "me":
         scope = "member"
     if scope is not None and scope not in ("member",):
-        return jsonify({"success": False, "error": f"Invalid scope: {scope}"}), 400
+        return (
+            jsonify(
+                {"success": False, "error": _("Invalid scope: %(scope)s", scope=scope)}
+            ),
+            400,
+        )
     needs_person = bool(scope) or attended_only
     if needs_person and not current_user.is_authenticated:
-        return jsonify({"success": False, "error": "Login required"}), 401
+        return jsonify({"success": False, "error": _("Login required")}), 401
 
     conn = get_db_connection()
     try:
@@ -219,12 +236,16 @@ def get_tune_history(tune_id):
             )
             pr = cur.fetchone()
             if not pr and needs_person:
-                return jsonify({"success": False, "error": "No person record"}), 403
+                return jsonify({"success": False, "error": _("No person record")}), 403
             person_id = pr[0] if pr else None
 
-        attended_pred = person_scope.attended_instance_predicate("si.session_instance_id")
+        attended_pred = person_scope.attended_instance_predicate(
+            "si.session_instance_id"
+        )
         preds = []
-        member_pred = person_scope.scope_instance_predicate(scope, "si.session_instance_id")
+        member_pred = person_scope.scope_instance_predicate(
+            scope, "si.session_instance_id"
+        )
         if member_pred:
             preds.append(member_pred)
         if attended_only:
@@ -295,45 +316,72 @@ def get_tune_history(tune_id):
 
         play_instances = []
         instance_ids = set()
-        for (session_name, s_path, date, attended, name_override, key_override, setting_override,
-             session_instance_id, session_instance_tune_id, set_number, position_in_set,
-             session_type, location_override, location_name) in rows:
+        for (
+            session_name,
+            s_path,
+            date,
+            attended,
+            name_override,
+            key_override,
+            setting_override,
+            session_instance_id,
+            session_instance_tune_id,
+            set_number,
+            position_in_set,
+            session_type,
+            location_override,
+            location_name,
+        ) in rows:
             instance_ids.add(session_instance_id)
             # full_name names the session; instance_label omits it, for the list that is
             # already scoped to one session. Both append the place at a festival, where
             # the date alone names several different rooms (spec 006).
-            labels = instance_labels(session_name, session_type, date, location_override, location_name)
-            play_instances.append({
-                "full_name": labels["full_name"],
-                "instance_label": labels["instance_label"],
-                "session_name": session_name,
-                "session_path": s_path,
-                "date": date.isoformat() if date else None,
-                "set_number": set_number,
-                "position_in_set": position_in_set,
-                "name_override": name_override,
-                "key_override": key_override,
-                "setting_id_override": setting_override,
-                "session_instance_id": session_instance_id,
-                "session_instance_tune_id": session_instance_tune_id,
-                # Was I there? Marks the night in the list, rather than only being able to
-                # hide the ones I wasn't at.
-                "attended": bool(attended),
-                # highlight= scrolls to the exact record; tune= lets the legacy
-                # page (no per-record ids client-side) highlight by tune instead.
-                "link": f"/sessions/{s_path}/{session_instance_id}"
-                        f"?highlight={session_instance_tune_id}&tune={tune_id}",
-            })
+            labels = instance_labels(
+                session_name, session_type, date, location_override, location_name
+            )
+            play_instances.append(
+                {
+                    "full_name": labels["full_name"],
+                    "instance_label": labels["instance_label"],
+                    "session_name": session_name,
+                    "session_path": s_path,
+                    "date": date.isoformat() if date else None,
+                    "set_number": set_number,
+                    "position_in_set": position_in_set,
+                    "name_override": name_override,
+                    "key_override": key_override,
+                    "setting_id_override": setting_override,
+                    "session_instance_id": session_instance_id,
+                    "session_instance_tune_id": session_instance_tune_id,
+                    # Was I there? Marks the night in the list, rather than only being able to
+                    # hide the ones I wasn't at.
+                    "attended": bool(attended),
+                    # highlight= scrolls to the exact record; tune= lets the legacy
+                    # page (no per-record ids client-side) highlight by tune instead.
+                    "link": f"/sessions/{s_path}/{session_instance_id}"
+                    f"?highlight={session_instance_tune_id}&tune={tune_id}",
+                }
+            )
 
-        return jsonify({
-            "success": True,
-            "redirected_from": redirected_from,
-            "play_instances": play_instances,
-            # limit is per-instance; flag truncation so the UI can say so
-            "truncated": len(instance_ids) >= instance_limit,
-        })
+        return jsonify(
+            {
+                "success": True,
+                "redirected_from": redirected_from,
+                "play_instances": play_instances,
+                # limit is per-instance; flag truncation so the UI can say so
+                "truncated": len(instance_ids) >= instance_limit,
+            }
+        )
     except Exception as e:
-        return jsonify({"success": False, "error": f"Error retrieving history: {str(e)}"}), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": _("Error retrieving history: %(error)s", error=str(e)),
+                }
+            ),
+            500,
+        )
     finally:
         conn.close()
 
@@ -356,9 +404,14 @@ def get_tune_played_with(tune_id):
     session_path = request.args.get("session_path") or None
     scope = request.args.get("scope") or None
     if scope is not None and scope not in ("member", "attended"):
-        return jsonify({"success": False, "error": f"Invalid scope: {scope}"}), 400
+        return (
+            jsonify(
+                {"success": False, "error": _("Invalid scope: %(scope)s", scope=scope)}
+            ),
+            400,
+        )
     if scope and not current_user.is_authenticated:
-        return jsonify({"success": False, "error": "Login required"}), 401
+        return jsonify({"success": False, "error": _("Login required")}), 401
 
     conn = get_db_connection()
     try:
@@ -373,10 +426,12 @@ def get_tune_played_with(tune_id):
             )
             pr = cur.fetchone()
             if not pr:
-                return jsonify({"success": False, "error": "No person record"}), 403
+                return jsonify({"success": False, "error": _("No person record")}), 403
             person_id = pr[0]
 
-        scope_pred = person_scope.scope_instance_predicate(scope, "si.session_instance_id")
+        scope_pred = person_scope.scope_instance_predicate(
+            scope, "si.session_instance_id"
+        )
         scope_filter = f"AND ({scope_pred})" if scope_pred else ""
 
         cur.execute(
@@ -422,13 +477,25 @@ def get_tune_played_with(tune_id):
             for row in cur.fetchall()
         ]
 
-        return jsonify({
-            "success": True,
-            "redirected_from": redirected_from,
-            "tunes": tunes,
-        })
+        return jsonify(
+            {
+                "success": True,
+                "redirected_from": redirected_from,
+                "tunes": tunes,
+            }
+        )
     except Exception as e:
-        return jsonify({"success": False, "error": f"Error retrieving played-with tunes: {str(e)}"}), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": _(
+                        "Error retrieving played-with tunes: %(error)s", error=str(e)
+                    ),
+                }
+            ),
+            500,
+        )
     finally:
         conn.close()
 
@@ -438,10 +505,13 @@ def admin_reset_logging_mode(session_instance_id):
     """System-admin only: reset an instance to the classic editor (undo the one-way lock).
     POST /api/admin/instances/<id>/logging-mode  body {mode: 'legacy'|'live'}"""
     if not current_user.is_system_admin:
-        return jsonify({"success": False, "error": "Not authorized"}), 403
+        return jsonify({"success": False, "error": _("Not authorized")}), 403
     mode = (request.get_json(silent=True) or {}).get("mode", "legacy")
     if mode not in ("legacy", "live"):
-        return jsonify({"success": False, "error": "mode must be 'legacy' or 'live'"}), 400
+        return (
+            jsonify({"success": False, "error": _("mode must be 'legacy' or 'live'")}),
+            400,
+        )
     conn = get_db_connection()
     try:
         cur = conn.cursor()
@@ -450,9 +520,18 @@ def admin_reset_logging_mode(session_instance_id):
             (mode, session_instance_id),
         )
         if cur.rowcount == 0:
-            return jsonify({"success": False, "error": "Session instance not found"}), 404
+            return (
+                jsonify({"success": False, "error": _("Session instance not found")}),
+                404,
+            )
         conn.commit()
-        return jsonify({"success": True, "session_instance_id": session_instance_id, "logging_mode": mode})
+        return jsonify(
+            {
+                "success": True,
+                "session_instance_id": session_instance_id,
+                "logging_mode": mode,
+            }
+        )
     finally:
         conn.close()
 
@@ -471,10 +550,13 @@ def admin_email_updates_test():
     POST /api/admin/email-updates/test  body {subject, body_markdown}.
     Test sends are not recorded in email_message."""
     if not current_user.is_system_admin:
-        return jsonify({"success": False, "error": "Not authorized"}), 403
+        return jsonify({"success": False, "error": _("Not authorized")}), 403
     subject, body_markdown = _get_update_email_payload()
     if not subject or not body_markdown:
-        return jsonify({"success": False, "error": "Subject and body are required"}), 400
+        return (
+            jsonify({"success": False, "error": _("Subject and body are required")}),
+            400,
+        )
 
     # Send to the account's user_email — the same address a real send would use.
     # (current_user.email is person.email, which can differ.)
@@ -490,11 +572,24 @@ def admin_email_updates_test():
         conn.close()
     to_email = row[0] if row else None
     if not to_email:
-        return jsonify({"success": False, "error": "Your account has no email address"}), 400
+        return (
+            jsonify(
+                {"success": False, "error": _("Your account has no email address")}
+            ),
+            400,
+        )
 
     if send_update_email(current_user.user_id, to_email, subject, body_markdown):
-        return jsonify({"success": True, "message": f"Test sent to {to_email}"})
-    return jsonify({"success": False, "error": "Send failed — check server logs"}), 502
+        return jsonify(
+            {
+                "success": True,
+                "message": _("Test sent to %(to_email)s", to_email=to_email),
+            }
+        )
+    return (
+        jsonify({"success": False, "error": _("Send failed — check server logs")}),
+        502,
+    )
 
 
 @api_login_required
@@ -504,10 +599,13 @@ def admin_email_updates_send():
     Records an email_message row plus one email_message_recipient row per user;
     an individual failure is recorded and skipped, never aborts the send."""
     if not current_user.is_system_admin:
-        return jsonify({"success": False, "error": "Not authorized"}), 403
+        return jsonify({"success": False, "error": _("Not authorized")}), 403
     subject, body_markdown = _get_update_email_payload()
     if not subject or not body_markdown:
-        return jsonify({"success": False, "error": "Subject and body are required"}), 400
+        return (
+            jsonify({"success": False, "error": _("Subject and body are required")}),
+            400,
+        )
 
     conn = get_db_connection()
     try:
@@ -535,7 +633,9 @@ def admin_email_updates_send():
         failure_count = 0
         for recipient_user_id, recipient_email in recipients:
             try:
-                sent = send_update_email(recipient_user_id, recipient_email, subject, body_markdown)
+                sent = send_update_email(
+                    recipient_user_id, recipient_email, subject, body_markdown
+                )
                 error_message = None if sent else "SendGrid send failed"
             except Exception as e:
                 sent = False
@@ -549,8 +649,13 @@ def admin_email_updates_send():
                 INSERT INTO email_message_recipient (email_message_id, user_id, email, status, error_message)
                 VALUES (%s, %s, %s, %s, %s)
                 """,
-                (email_message_id, recipient_user_id, recipient_email,
-                 "sent" if sent else "failed", error_message),
+                (
+                    email_message_id,
+                    recipient_user_id,
+                    recipient_email,
+                    "sent" if sent else "failed",
+                    error_message,
+                ),
             )
 
         cur.execute(
@@ -558,12 +663,14 @@ def admin_email_updates_send():
             (success_count, failure_count, email_message_id),
         )
         conn.commit()
-        return jsonify({
-            "success": True,
-            "recipient_count": len(recipients),
-            "success_count": success_count,
-            "failure_count": failure_count,
-        })
+        return jsonify(
+            {
+                "success": True,
+                "recipient_count": len(recipients),
+                "success_count": success_count,
+                "failure_count": failure_count,
+            }
+        )
     finally:
         conn.close()
 
@@ -596,7 +703,9 @@ def segment_records_into_sets(rows, type_index=None):
     return sets
 
 
-def reconcile_break_records(cur, session_instance_id, set_position_lists, audit_user_id=None):
+def reconcile_break_records(
+    cur, session_instance_id, set_position_lists, audit_user_id=None
+):
     """Delete all break rows for an instance and reinsert exactly one break per set (spec 023).
 
     `set_position_lists` is the ordered list of sets, each given as the ordered list of its
@@ -617,7 +726,9 @@ def reconcile_break_records(cur, session_instance_id, set_position_lists, audit_
     )
     for (break_id,) in cur.fetchall():
         if audit_user_id is not None:
-            save_to_history(cur, "session_instance_tune", "DELETE", break_id, user_id=audit_user_id)
+            save_to_history(
+                cur, "session_instance_tune", "DELETE", break_id, user_id=audit_user_id
+            )
         cur.execute(
             "DELETE FROM session_instance_tune WHERE session_instance_tune_id = %s",
             (break_id,),
@@ -642,7 +753,9 @@ def reconcile_break_records(cur, session_instance_id, set_position_lists, audit_
         )
         new_id = cur.fetchone()[0]
         if audit_user_id is not None:
-            save_to_history(cur, "session_instance_tune", "INSERT", new_id, user_id=audit_user_id)
+            save_to_history(
+                cur, "session_instance_tune", "INSERT", new_id, user_id=audit_user_id
+            )
     return len(sets)
 
 
@@ -652,10 +765,14 @@ def default_setting_id(cur, tune_id):
     session_tune.setting_id is always populated with this on enrollment (spec 032:
     "there is always a setting id, even if it's just the default") so the setting in
     use is visible/linkable everywhere. A session-level setting equal to the default
-    is treated as replaceable by an explicitly chosen one (see _apply_chosen_setting)."""
+    is treated as replaceable by an explicitly chosen one (see _apply_chosen_setting).
+    """
     if not tune_id:
         return None
-    cur.execute("SELECT setting_id FROM tune_setting WHERE tune_id = %s ORDER BY setting_id LIMIT 1", (tune_id,))
+    cur.execute(
+        "SELECT setting_id FROM tune_setting WHERE tune_id = %s ORDER BY setting_id LIMIT 1",
+        (tune_id,),
+    )
     row = cur.fetchone()
     return row[0] if row else None
 
@@ -672,17 +789,19 @@ def bytea_to_base64(data):
         data = data.tobytes()
     elif isinstance(data, str):
         # PostgreSQL returns bytea as hex string starting with \x
-        if data.startswith('\\x'):
+        if data.startswith("\\x"):
             data = bytes.fromhex(data[2:])
         else:
-            data = data.encode('latin1')
+            data = data.encode("latin1")
     elif not isinstance(data, bytes):
         data = bytes(data)
 
-    return base64.b64encode(data).decode('utf-8')
+    return base64.b64encode(data).decode("utf-8")
 
 
-def insert_session_instance_tune(cur, session_id, date, tune_id, setting_id, name, starts_set):
+def insert_session_instance_tune(
+    cur, session_id, date, tune_id, setting_id, name, starts_set
+):
     """
     Insert a tune into session_instance_tune with fractional indexing.
 
@@ -714,14 +833,16 @@ def insert_session_instance_tune(cur, session_id, date, tune_id, setting_id, nam
     )
     result = cur.fetchone()
     if not result:
-        raise ValueError(f"No session instance found for session_id {session_id} on date {date}")
+        raise ValueError(
+            f"No session instance found for session_id {session_id} on date {date}"
+        )
     session_instance_id = result[0]
 
     # If tune_id is provided, remap merged ids and ensure it exists in session_tune.
     # A write with a merged-away id is a stale client (spec 030): proceed against the
     # canonical tune rather than rejecting.
     if tune_id is not None:
-        tune_id, _ = follow_tune_redirect(cur, tune_id)
+        tune_id, _redirected = follow_tune_redirect(cur, tune_id)
 
         cur.execute(
             """
@@ -729,7 +850,13 @@ def insert_session_instance_tune(cur, session_id, date, tune_id, setting_id, nam
             VALUES (%s, %s, %s, NULL, NULL)
             ON CONFLICT (session_id, tune_id) DO NOTHING
             """,
-            (session_id, tune_id, setting_id if setting_id is not None else default_setting_id(cur, tune_id)),
+            (
+                session_id,
+                tune_id,
+                setting_id
+                if setting_id is not None
+                else default_setting_id(cur, tune_id),
+            ),
         )
 
     # Find the current last record in this instance (could be a tune or a break).
@@ -811,30 +938,38 @@ def render_abc_to_png(abc_notation, is_incipit=False):
         is_incipit: If True, uses minimal padding for compact rendering (default: False)
     """
     try:
-        abc_renderer_url = os.getenv('ABC_RENDERER_URL')
+        abc_renderer_url = os.getenv("ABC_RENDERER_URL")
         if not abc_renderer_url:
             print("Warning: ABC_RENDERER_URL not configured")
             return None
 
-        print(f"Calling ABC renderer with {len(abc_notation)} chars of ABC notation (isIncipit={is_incipit})")
+        print(
+            f"Calling ABC renderer with {len(abc_notation)} chars of ABC notation (isIncipit={is_incipit})"
+        )
         response = requests.post(
-            f'{abc_renderer_url}/api/render',
-            json={'abc': abc_notation, 'isIncipit': is_incipit},
-            timeout=15
+            f"{abc_renderer_url}/api/render",
+            json={"abc": abc_notation, "isIncipit": is_incipit},
+            timeout=15,
         )
 
-        print(f"ABC renderer response: status={response.status_code}, content-type={response.headers.get('content-type')}")
+        print(
+            f"ABC renderer response: status={response.status_code}, content-type={response.headers.get('content-type')}"
+        )
 
         if response.status_code == 200:
-            if response.headers.get('content-type') == 'image/png':
+            if response.headers.get("content-type") == "image/png":
                 print(f"Successfully got PNG image ({len(response.content)} bytes)")
                 return response.content
             else:
-                print(f"Unexpected content type: {response.headers.get('content-type')}")
+                print(
+                    f"Unexpected content type: {response.headers.get('content-type')}"
+                )
                 print(f"Response body: {response.text[:200]}")
                 return None
         else:
-            print(f"ABC renderer returned status {response.status_code}: {response.text[:200]}")
+            print(
+                f"ABC renderer returned status {response.status_code}: {response.text[:200]}"
+            )
             return None
 
     except requests.exceptions.RequestException as e:
@@ -843,11 +978,14 @@ def render_abc_to_png(abc_notation, is_incipit=False):
     except Exception as e:
         print(f"Unexpected error in render_abc_to_png: {e}")
         import traceback
+
         traceback.print_exc()
         return None
 
 
-def cache_default_tune_setting(tune_id, tune_data, user_id, sync=True, target_setting_id=None):
+def cache_default_tune_setting(
+    tune_id, tune_data, user_id, sync=True, target_setting_id=None
+):
     """
     Fetch and cache a setting for a tune from thesession.org.
     Creates the tune_setting record and generates PNG images for both full ABC and incipit.
@@ -875,7 +1013,9 @@ def cache_default_tune_setting(tune_id, tune_data, user_id, sync=True, target_se
     # that processes tune settings in the background.
     # ============================================================================
     if not sync:
-        print(f"[cache_default_tune_setting] Skipping tune {tune_id} - async processing not yet implemented")
+        print(
+            f"[cache_default_tune_setting] Skipping tune {tune_id} - async processing not yet implemented"
+        )
         return True, "Skipped (async not implemented)", None
 
     try:
@@ -886,7 +1026,11 @@ def cache_default_tune_setting(tune_id, tune_data, user_id, sync=True, target_se
             api_url = f"https://thesession.org/tunes/{tune_id}?format=json"
             response = requests.get(api_url, timeout=10)
             if response.status_code != 200:
-                return False, f"Failed to fetch tune data (status: {response.status_code})", None
+                return (
+                    False,
+                    f"Failed to fetch tune data (status: {response.status_code})",
+                    None,
+                )
             tune_data = response.json()
 
         # Check if settings exist in the response
@@ -896,7 +1040,9 @@ def cache_default_tune_setting(tune_id, tune_data, user_id, sync=True, target_se
         # Use the targeted setting if specified, otherwise the first (default)
         setting = None
         if target_setting_id:
-            setting = next((s for s in tune_data["settings"] if s["id"] == target_setting_id), None)
+            setting = next(
+                (s for s in tune_data["settings"] if s["id"] == target_setting_id), None
+            )
         if not setting:
             setting = tune_data["settings"][0]
         setting_id = setting["id"]
@@ -918,7 +1064,7 @@ def cache_default_tune_setting(tune_id, tune_data, user_id, sync=True, target_se
             # Check if this setting already exists
             cur.execute(
                 "SELECT setting_id FROM tune_setting WHERE setting_id = %s",
-                (setting_id,)
+                (setting_id,),
             )
             existing_setting = cur.fetchone()
 
@@ -929,14 +1075,18 @@ def cache_default_tune_setting(tune_id, tune_data, user_id, sync=True, target_se
                 return True, f"Setting {setting_id} already cached", setting_id
 
             # Insert new setting
-            cur.execute("""
+            cur.execute(
+                """
                 INSERT INTO tune_setting (setting_id, tune_id, key, abc, incipit_abc, cache_updated_date,
                                           created_by_user_id, last_modified_user_id)
                 VALUES (%s, %s, %s, %s, %s, (NOW() AT TIME ZONE 'UTC'), %s, %s)
-            """, (setting_id, tune_id, key, abc, incipit_abc, user_id, user_id))
+            """,
+                (setting_id, tune_id, key, abc, incipit_abc, user_id, user_id),
+            )
 
             # Log INSERT to history
-            cur.execute("""
+            cur.execute(
+                """
                 INSERT INTO tune_setting_history
                 (setting_id, operation, changed_by_user_id, tune_id, key, abc, image, incipit_abc,
                  incipit_image, cache_updated_date, created_date, last_modified_date,
@@ -945,7 +1095,9 @@ def cache_default_tune_setting(tune_id, tune_data, user_id, sync=True, target_se
                        incipit_image, cache_updated_date, created_date, last_modified_date,
                        created_by_user_id, last_modified_user_id
                 FROM tune_setting WHERE setting_id = %s
-            """, ('INSERT', user_id, setting_id))
+            """,
+                ("INSERT", user_id, setting_id),
+            )
 
             conn.commit()
 
@@ -955,7 +1107,7 @@ def cache_default_tune_setting(tune_id, tune_data, user_id, sync=True, target_se
 
             # Construct full ABC notation with headers for rendering
             abc_with_headers = abc
-            if not abc.startswith('X:'):
+            if not abc.startswith("X:"):
                 abc_with_headers = f"X:1\nM:4/4\nL:1/8\nK:{key if key else 'D'}\n{abc}"
 
             # Render full ABC image
@@ -964,21 +1116,26 @@ def cache_default_tune_setting(tune_id, tune_data, user_id, sync=True, target_se
             # Render incipit image
             if incipit_abc:
                 incipit_with_headers = incipit_abc
-                if not incipit_abc.startswith('X:'):
-                    incipit_with_headers = f"X:1\nM:4/4\nL:1/8\nK:{key if key else 'D'}\n{incipit_abc}"
+                if not incipit_abc.startswith("X:"):
+                    incipit_with_headers = (
+                        f"X:1\nM:4/4\nL:1/8\nK:{key if key else 'D'}\n{incipit_abc}"
+                    )
                 incipit_image = render_abc_to_png(incipit_with_headers, is_incipit=True)
 
             # Update database with images if they were generated
             if full_image or incipit_image:
-                cur.execute("""
+                cur.execute(
+                    """
                     UPDATE tune_setting
                     SET image = %s, incipit_image = %s, last_modified_date = (NOW() AT TIME ZONE 'UTC')
                     WHERE setting_id = %s
-                """, (
-                    psycopg2.Binary(full_image) if full_image else None,
-                    psycopg2.Binary(incipit_image) if incipit_image else None,
-                    setting_id
-                ))
+                """,
+                    (
+                        psycopg2.Binary(full_image) if full_image else None,
+                        psycopg2.Binary(incipit_image) if incipit_image else None,
+                        setting_id,
+                    ),
+                )
                 conn.commit()
 
             cur.close()
@@ -996,6 +1153,7 @@ def cache_default_tune_setting(tune_id, tune_data, user_id, sync=True, target_se
         return False, f"Error connecting to thesession.org: {str(e)}", None
     except Exception as e:
         import traceback
+
         traceback.print_exc()
         return False, f"Error caching tune setting: {str(e)}", None
 
@@ -1092,16 +1250,23 @@ def update_session_ajax(session_path):
     try:
         data = request.get_json()
         if not data:
-            return jsonify({"success": False, "error": "No data provided"}), 400
+            return jsonify({"success": False, "error": _("No data provided")}), 400
 
         # Validate recurrence if provided
         if "recurrence" in data and data["recurrence"]:
             is_valid, error_msg = validate_recurrence_json(data["recurrence"])
             if not is_valid:
-                return jsonify({
-                    "success": False,
-                    "error": f"Invalid recurrence pattern: {error_msg}"
-                }), 400
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "error": _(
+                                "Invalid recurrence pattern: %(error)s", error=error_msg
+                            ),
+                        }
+                    ),
+                    400,
+                )
 
         # Only some callers send a path at all (the cache and recurrence saves send
         # a partial payload) — but one that does must send a usable one. Writing a
@@ -1111,7 +1276,11 @@ def update_session_ajax(session_path):
         # The form sends the path on every save. An unchanged one is not a write, so
         # it is not re-validated: a path from before the two-part rule (spec 055)
         # must not lock its session out of every other edit.
-        if "path" in data and isinstance(data["path"], str) and data["path"].strip() == session_path:
+        if (
+            "path" in data
+            and isinstance(data["path"], str)
+            and data["path"].strip() == session_path
+        ):
             data = {k: v for k, v in data.items() if k != "path"}
         if "path" in data:
             new_path, path_error = normalize_session_path(data["path"])
@@ -1131,7 +1300,9 @@ def update_session_ajax(session_path):
 
         new_thesession_id = None
         if "thesession_id" in data:
-            new_thesession_id, ts_error = parse_thesession_session_id(data["thesession_id"])
+            new_thesession_id, ts_error = parse_thesession_session_id(
+                data["thesession_id"]
+            )
             if ts_error:
                 return jsonify({"success": False, "error": ts_error}), 400
             data = {**data, "thesession_id": new_thesession_id}
@@ -1145,7 +1316,9 @@ def update_session_ajax(session_path):
             ("active_buffer_minutes_after", "Minutes after"),
         ):
             if buffer_field in data:
-                minutes, buffer_error = normalize_active_buffer(data[buffer_field], label)
+                minutes, buffer_error = normalize_active_buffer(
+                    data[buffer_field], label
+                )
                 if buffer_error:
                     return jsonify({"success": False, "error": buffer_error}), 400
                 data = {**data, buffer_field: minutes}
@@ -1163,17 +1336,27 @@ def update_session_ajax(session_path):
         if not session_result:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "error": "Session not found"}), 404
+            return jsonify({"success": False, "error": _("Session not found")}), 404
 
         session_id, current_path, current_place_id, current_type = session_result[:4]
         current_geo = session_result[4:7]
 
         # The page that sends this is admin-only; the endpoint has to be too, or any
         # signed-in user could rename (and so re-point the URL of) any session.
-        if not is_session_admin_for(cur, session_id, getattr(current_user, "person_id", None)):
+        if not is_session_admin_for(
+            cur, session_id, getattr(current_user, "person_id", None)
+        ):
             cur.close()
             conn.close()
-            return jsonify({"success": False, "error": "Only a session admin can change this session"}), 403
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": _("Only a session admin can change this session"),
+                    }
+                ),
+                403,
+            )
 
         # The session's town (spec 055). The admin form sends city/state/country on
         # every save; only a change (or a session that has no town yet) runs the
@@ -1189,15 +1372,19 @@ def update_session_ajax(session_path):
             new_country = places.normalize_country(new_geo[2])
             old_country = places.normalize_country(current_geo[2])
             geo_changed = current_place_id is None or not (
-                (str(new_geo[0] or "").strip().casefold() == str(current_geo[0] or "").strip().casefold())
-                and places.normalize_area(new_geo[1], new_country) == places.normalize_area(current_geo[1], old_country)
+                (
+                    str(new_geo[0] or "").strip().casefold()
+                    == str(current_geo[0] or "").strip().casefold()
+                )
+                and places.normalize_area(new_geo[1], new_country)
+                == places.normalize_area(current_geo[1], old_country)
                 and new_country == old_country
             )
         else:
             geo_changed = False
         if geo_changed:
             try:
-                town, _ = places.resolve_town(
+                town, _unused = places.resolve_town(
                     cur,
                     data.get("city", current_geo[0]),
                     data.get("state", current_geo[1]),
@@ -1210,24 +1397,41 @@ def update_session_ajax(session_path):
                 match = e.match
                 cur.close()
                 conn.close()
-                return jsonify(
-                    {
-                        "success": False,
-                        "error": f"Did you mean {match['place']['name']}"
-                        f"{', ' + match['place']['area'] if match['place']['area'] else ''}? "
-                        "Places are fixed on the Places page; ask a site admin.",
-                        "code": "place_ambiguous",
-                        "place": places.place_summary(cur, match["place"]),
-                        "suggested_slug": match["slug"],
-                    }
-                ), 409
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "error": (
+                                _(
+                                    "Did you mean %(name)s, %(area)s? Places are fixed on the Places page; ask a site admin.",
+                                    name=match["place"]["name"],
+                                    area=match["place"]["area"],
+                                )
+                                if match["place"]["area"]
+                                else _(
+                                    "Did you mean %(name)s? Places are fixed on the Places page; ask a site admin.",
+                                    name=match["place"]["name"],
+                                )
+                            ),
+                            "code": "place_ambiguous",
+                            "place": places.place_summary(cur, match["place"]),
+                            "suggested_slug": match["slug"],
+                        }
+                    ),
+                    409,
+                )
             except places.PlaceError as e:
                 cur.close()
                 conn.close()
                 return jsonify({"success": False, "error": str(e)}), 400
             town_id = town["place_id"]
             # Geography is the town's from now on (spec 055 step one).
-            data = {**data, "city": town["name"], "state": town["area"], "country": town["country"]}
+            data = {
+                **data,
+                "city": town["name"],
+                "state": town["area"],
+                "country": town["country"],
+            }
 
         # The place clauses of the path rule, whenever something they depend on moves.
         # A pre-055 session whose path, type and town are all untouched is left alone.
@@ -1236,8 +1440,14 @@ def update_session_ajax(session_path):
         # Giving a pre-055 session its first town (current_place_id NULL) does not by
         # itself make its old path answer to the rule.
         town_moved = town_id != current_place_id and current_place_id is not None
-        if effective_path != current_path or effective_type != current_type or town_moved:
-            rule_error = places.validate_path_for_place(cur, effective_path, effective_type, town_id)
+        if (
+            effective_path != current_path
+            or effective_type != current_type
+            or town_moved
+        ):
+            rule_error = places.validate_path_for_place(
+                cur, effective_path, effective_type, town_id
+            )
             if rule_error:
                 cur.close()
                 conn.close()
@@ -1254,12 +1464,19 @@ def update_session_ajax(session_path):
             if collision:
                 cur.close()
                 conn.close()
-                return jsonify(
-                    {
-                        "success": False,
-                        "error": f'Path "{new_path}" is already used by "{collision[0]}"',
-                    }
-                ), 400
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "error": _(
+                                'Path "%(new_path)s" is already used by "%(other)s"',
+                                new_path=new_path,
+                                other=collision[0],
+                            ),
+                        }
+                    ),
+                    400,
+                )
 
         # One thesession.org session maps to one of ours (the create path checks the
         # same thing). Without this the admin form would happily point two sessions at
@@ -1273,12 +1490,19 @@ def update_session_ajax(session_path):
             if ts_collision:
                 cur.close()
                 conn.close()
-                return jsonify(
-                    {
-                        "success": False,
-                        "error": f'TheSession.org session {new_thesession_id} is already linked to "{ts_collision[0]}"',
-                    }
-                ), 400
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "error": _(
+                                'TheSession.org session %(new_thesession_id)s is already linked to "%(other)s"',
+                                new_thesession_id=new_thesession_id,
+                                other=ts_collision[0],
+                            ),
+                        }
+                    ),
+                    400,
+                )
 
         # Save to history before making changes
         save_to_history(
@@ -1354,9 +1578,15 @@ def update_session_ajax(session_path):
                 elif form_field == "auto_create_hours_ahead":
                     value = int(value) if value else 24
                 elif form_field == "live_cache_session_limit":
-                    value = max(0, min(2000, int(value))) if value not in (None, "") else 200
+                    value = (
+                        max(0, min(2000, int(value)))
+                        if value not in (None, "")
+                        else 200
+                    )
                 elif form_field == "live_cache_global_limit":
-                    value = max(0, min(1000, int(value))) if value not in (None, "") else 25
+                    value = (
+                        max(0, min(1000, int(value))) if value not in (None, "") else 25
+                    )
 
                 update_fields.append(f"{db_field} = %s")
                 update_values.append(value)
@@ -1368,7 +1598,10 @@ def update_session_ajax(session_path):
         if not update_fields:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "error": "No valid fields to update"}), 400
+            return (
+                jsonify({"success": False, "error": _("No valid fields to update")}),
+                400,
+            )
 
         # Add audit fields
         update_fields.append("last_modified_date = CURRENT_TIMESTAMP")
@@ -1390,11 +1623,16 @@ def update_session_ajax(session_path):
         conn.close()
 
         return jsonify(
-            {"success": True, "message": "Session details updated successfully"}
+            {"success": True, "message": _("Session details updated successfully")}
         )
 
     except Exception as e:
-        return jsonify({"success": False, "error": f"Error updating session: {str(e)}"})
+        return jsonify(
+            {
+                "success": False,
+                "error": _("Error updating session: %(error)s", error=str(e)),
+            }
+        )
 
 
 def session_tune_cache_preview(session_path):
@@ -1408,7 +1646,7 @@ def session_tune_cache_preview(session_path):
     bounds as the save path); omitted, the saved values are used. Session-admin gated.
     """
     if not current_user.is_authenticated:
-        return jsonify({"success": False, "error": "Authentication required"}), 401
+        return jsonify({"success": False, "error": _("Authentication required")}), 401
     # Imported lazily: live_logging_routes imports from this module, so a top-level
     # import would be circular.
     from live_logging_routes import compute_session_vocabulary, get_session_cache_limits
@@ -1426,7 +1664,7 @@ def session_tune_cache_preview(session_path):
         cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
         srow = cur.fetchone()
         if not srow:
-            return jsonify({"success": False, "error": "Session not found"}), 404
+            return jsonify({"success": False, "error": _("Session not found")}), 404
         session_id = srow[0]
 
         if not is_system_admin:
@@ -1436,7 +1674,10 @@ def session_tune_cache_preview(session_path):
             )
             arow = cur.fetchone()
             if not (arow and arow[0]):
-                return jsonify({"success": False, "error": "Insufficient permissions"}), 403
+                return (
+                    jsonify({"success": False, "error": _("Insufficient permissions")}),
+                    403,
+                )
 
         saved_n, saved_m = get_session_cache_limits(cur, session_id)
 
@@ -1449,19 +1690,23 @@ def session_tune_cache_preview(session_path):
         n = _clamp(request.args.get("n"), saved_n, 2000)
         m = _clamp(request.args.get("m"), saved_m, 1000)
 
-        tunes, aliases = compute_session_vocabulary(cur, session_id, n, m, include_meta=True)
+        tunes, aliases = compute_session_vocabulary(
+            cur, session_id, n, m, include_meta=True
+        )
         session_count = sum(1 for t in tunes if t["tier"] == "session")
-        return jsonify({
-            "success": True,
-            "n": n,
-            "m": m,
-            "saved_n": saved_n,
-            "saved_m": saved_m,
-            "session_count": session_count,
-            "global_count": len(tunes) - session_count,
-            "alias_count": len(aliases),
-            "tunes": tunes,
-        })
+        return jsonify(
+            {
+                "success": True,
+                "n": n,
+                "m": m,
+                "saved_n": saved_n,
+                "saved_m": saved_m,
+                "session_count": session_count,
+                "global_count": len(tunes) - session_count,
+                "alias_count": len(aliases),
+                "tunes": tunes,
+            }
+        )
     finally:
         conn.close()
 
@@ -1477,7 +1722,10 @@ def refresh_tunebook_count_ajax(session_path, tune_id):
             return jsonify(
                 {
                     "success": False,
-                    "message": f"Failed to fetch data from thesession.org (status: {response.status_code})",
+                    "message": _(
+                        "Failed to fetch data from thesession.org (status: %(status)s)",
+                        status=response.status_code,
+                    ),
                 }
             )
 
@@ -1486,7 +1734,10 @@ def refresh_tunebook_count_ajax(session_path, tune_id):
         # Check if tunebooks property exists in the response
         if "tunebooks" not in data:
             return jsonify(
-                {"success": False, "message": "No tunebooks data found in API response"}
+                {
+                    "success": False,
+                    "message": _("No tunebooks data found in API response"),
+                }
             )
 
         new_tunebook_count = data["tunebooks"]
@@ -1504,7 +1755,9 @@ def refresh_tunebook_count_ajax(session_path, tune_id):
         if not result:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Tune not found in database"})
+            return jsonify(
+                {"success": False, "message": _("Tune not found in database")}
+            )
 
         current_count = result[0]
 
@@ -1514,15 +1767,17 @@ def refresh_tunebook_count_ajax(session_path, tune_id):
                 "UPDATE tune SET tunebook_count_cached = %s, tunebook_count_cached_date = CURRENT_DATE WHERE tune_id = %s",
                 (new_tunebook_count, tune_id),
             )
-            message = (
-                f"Updated tunebook count from {current_count} to {new_tunebook_count}"
+            message = _(
+                "Updated tunebook count from %(old)s to %(new)s",
+                old=current_count,
+                new=new_tunebook_count,
             )
         else:
             cur.execute(
                 "UPDATE tune SET tunebook_count_cached_date = CURRENT_DATE WHERE tune_id = %s",
                 (tune_id,),
             )
-            message = f"Tunebook count unchanged ({current_count})"
+            message = _("Tunebook count unchanged (%(count)s)", count=current_count)
 
         conn.commit()
 
@@ -1550,12 +1805,17 @@ def refresh_tunebook_count_ajax(session_path, tune_id):
         return jsonify(
             {
                 "success": False,
-                "message": f"Error connecting to thesession.org: {str(e)}",
+                "message": _(
+                    "Error connecting to thesession.org: %(error)s", error=str(e)
+                ),
             }
         )
     except Exception as e:
         return jsonify(
-            {"success": False, "message": f"Error updating tunebook count: {str(e)}"}
+            {
+                "success": False,
+                "message": _("Error updating tunebook count: %(error)s", error=str(e)),
+            }
         )
 
 
@@ -1581,33 +1841,42 @@ def cache_tune_setting_ajax(tune_id):
         from notation_token import is_valid_for
 
         if not is_valid_for(request.args.get("token", ""), tune_id):
-            return jsonify({
-                "success": False,
-                "error": "Authentication required",
-                "code": "unauthenticated",
-            }), 401
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": _("Authentication required"),
+                        "code": "unauthenticated",
+                    }
+                ),
+                401,
+            )
     try:
         # Get optional setting_id from query parameters
-        setting_id = request.args.get('setting_id', type=int)
+        setting_id = request.args.get("setting_id", type=int)
 
         # Fetch data from thesession.org API
         api_url = f"https://thesession.org/tunes/{tune_id}?format=json"
         response = requests.get(api_url, timeout=10)
 
         if response.status_code != 200:
-            return jsonify({
-                "success": False,
-                "message": f"Failed to fetch data from thesession.org (status: {response.status_code})",
-            })
+            return jsonify(
+                {
+                    "success": False,
+                    "message": _(
+                        "Failed to fetch data from thesession.org (status: %(status)s)",
+                        status=response.status_code,
+                    ),
+                }
+            )
 
         data = response.json()
 
         # Check if settings exist in the response
         if "settings" not in data or not data["settings"]:
-            return jsonify({
-                "success": False,
-                "message": "No settings found for this tune"
-            })
+            return jsonify(
+                {"success": False, "message": _("No settings found for this tune")}
+            )
 
         settings = data["settings"]
 
@@ -1615,12 +1884,19 @@ def cache_tune_setting_ajax(tune_id):
         setting_to_cache = None
         if setting_id:
             # Look for the specific setting_id
-            setting_to_cache = next((s for s in settings if s["id"] == setting_id), None)
+            setting_to_cache = next(
+                (s for s in settings if s["id"] == setting_id), None
+            )
             if not setting_to_cache:
-                return jsonify({
-                    "success": False,
-                    "message": f"Setting {setting_id} not found for this tune"
-                })
+                return jsonify(
+                    {
+                        "success": False,
+                        "message": _(
+                            "Setting %(setting_id)s not found for this tune",
+                            setting_id=setting_id,
+                        ),
+                    }
+                )
         else:
             # Use the first setting
             setting_to_cache = settings[0]
@@ -1637,6 +1913,7 @@ def cache_tune_setting_ajax(tune_id):
 
         # Extract incipit from ABC notation
         from database import extract_abc_incipit
+
         incipit_abc = extract_abc_incipit(abc, tune_type)
 
         # Update the database
@@ -1645,8 +1922,7 @@ def cache_tune_setting_ajax(tune_id):
 
         # Check if this setting already exists
         cur.execute(
-            "SELECT setting_id FROM tune_setting WHERE setting_id = %s",
-            (setting_id,)
+            "SELECT setting_id FROM tune_setting WHERE setting_id = %s", (setting_id,)
         )
         existing_setting = cur.fetchone()
 
@@ -1654,26 +1930,43 @@ def cache_tune_setting_ajax(tune_id):
 
         if existing_setting:
             # Save to history before updating
-            save_to_history(cur, 'tune_setting', 'UPDATE', setting_id, user_id=audit_user_id)
+            save_to_history(
+                cur, "tune_setting", "UPDATE", setting_id, user_id=audit_user_id
+            )
 
             # Update existing setting
-            cur.execute("""
+            cur.execute(
+                """
                 UPDATE tune_setting
                 SET key = %s, abc = %s, incipit_abc = %s, cache_updated_date = (NOW() AT TIME ZONE 'UTC'),
                     last_modified_date = (NOW() AT TIME ZONE 'UTC'), last_modified_user_id = %s
                 WHERE setting_id = %s
-            """, (key, abc, incipit_abc, audit_user_id, setting_id))
+            """,
+                (key, abc, incipit_abc, audit_user_id, setting_id),
+            )
             action = "updated"
         else:
             # Insert new setting
-            cur.execute("""
+            cur.execute(
+                """
                 INSERT INTO tune_setting (setting_id, tune_id, key, abc, incipit_abc, cache_updated_date,
                                           created_by_user_id, last_modified_user_id)
                 VALUES (%s, %s, %s, %s, %s, (NOW() AT TIME ZONE 'UTC'), %s, %s)
-            """, (setting_id, tune_id, key, abc, incipit_abc, audit_user_id, audit_user_id))
+            """,
+                (
+                    setting_id,
+                    tune_id,
+                    key,
+                    abc,
+                    incipit_abc,
+                    audit_user_id,
+                    audit_user_id,
+                ),
+            )
 
             # Log INSERT to history (manually since record was just created)
-            cur.execute("""
+            cur.execute(
+                """
                 INSERT INTO tune_setting_history
                 (setting_id, operation, changed_by_user_id, tune_id, key, abc, image, incipit_abc,
                  incipit_image, cache_updated_date, created_date, last_modified_date,
@@ -1682,7 +1975,9 @@ def cache_tune_setting_ajax(tune_id):
                        incipit_image, cache_updated_date, created_date, last_modified_date,
                        created_by_user_id, last_modified_user_id
                 FROM tune_setting WHERE setting_id = %s
-            """, ('INSERT', audit_user_id, setting_id))
+            """,
+                ("INSERT", audit_user_id, setting_id),
+            )
             action = "cached"
 
         conn.commit()
@@ -1694,7 +1989,7 @@ def cache_tune_setting_ajax(tune_id):
         # We need to construct full ABC notation with headers for rendering
         # ABC notation needs headers (X, T, M, L, K) to render properly
         abc_with_headers = abc
-        if not abc.startswith('X:'):
+        if not abc.startswith("X:"):
             # Construct minimal headers if not present (T: title omitted to avoid text in image)
             abc_with_headers = f"X:1\nM:4/4\nL:1/8\nK:{key if key else 'D'}\n{abc}"
 
@@ -1704,31 +1999,41 @@ def cache_tune_setting_ajax(tune_id):
         # Render incipit image
         if incipit_abc:
             incipit_with_headers = incipit_abc
-            if not incipit_abc.startswith('X:'):
-                incipit_with_headers = f"X:1\nM:4/4\nL:1/8\nK:{key if key else 'D'}\n{incipit_abc}"
+            if not incipit_abc.startswith("X:"):
+                incipit_with_headers = (
+                    f"X:1\nM:4/4\nL:1/8\nK:{key if key else 'D'}\n{incipit_abc}"
+                )
             incipit_image = render_abc_to_png(incipit_with_headers, is_incipit=True)
 
         # Update database with images if they were generated
         if full_image or incipit_image:
-            print(f"Updating database with images: full_image={len(full_image) if full_image else 0} bytes, incipit_image={len(incipit_image) if incipit_image else 0} bytes")
-            cur.execute("""
+            print(
+                f"Updating database with images: full_image={len(full_image) if full_image else 0} bytes, incipit_image={len(incipit_image) if incipit_image else 0} bytes"
+            )
+            cur.execute(
+                """
                 UPDATE tune_setting
                 SET image = %s, incipit_image = %s, last_modified_date = (NOW() AT TIME ZONE 'UTC')
                 WHERE setting_id = %s
-            """, (
-                psycopg2.Binary(full_image) if full_image else None,
-                psycopg2.Binary(incipit_image) if incipit_image else None,
-                setting_id
-            ))
+            """,
+                (
+                    psycopg2.Binary(full_image) if full_image else None,
+                    psycopg2.Binary(incipit_image) if incipit_image else None,
+                    setting_id,
+                ),
+            )
             conn.commit()
             print("Database updated successfully")
 
         # Get the cached setting data
-        cur.execute("""
+        cur.execute(
+            """
             SELECT setting_id, tune_id, key, abc, incipit_abc, cache_updated_date, image, incipit_image
             FROM tune_setting
             WHERE setting_id = %s
-        """, (setting_id,))
+        """,
+            (setting_id,),
+        )
 
         cached_setting = cur.fetchone()
 
@@ -1739,29 +2044,48 @@ def cache_tune_setting_ajax(tune_id):
         image_base64 = bytea_to_base64(cached_setting[6])
         incipit_image_base64 = bytea_to_base64(cached_setting[7])
 
-        return jsonify({
-            "success": True,
-            "message": f"Successfully {action} setting {setting_id}",
-            "action": action,
-            "setting": {
-                "setting_id": cached_setting[0],
-                "tune_id": cached_setting[1],
-                "key": cached_setting[2],
-                "abc": cached_setting[3],
-                "incipit_abc": cached_setting[4],
-                "cache_updated_date": cached_setting[5].isoformat() if cached_setting[5] else None,
-                "image": image_base64,
-                "incipit_image": incipit_image_base64
+        return jsonify(
+            {
+                "success": True,
+                "message": (
+                    _(
+                        "Successfully updated setting %(setting_id)s",
+                        setting_id=setting_id,
+                    )
+                    if action == "updated"
+                    else _(
+                        "Successfully cached setting %(setting_id)s",
+                        setting_id=setting_id,
+                    )
+                ),
+                "action": action,
+                "setting": {
+                    "setting_id": cached_setting[0],
+                    "tune_id": cached_setting[1],
+                    "key": cached_setting[2],
+                    "abc": cached_setting[3],
+                    "incipit_abc": cached_setting[4],
+                    "cache_updated_date": cached_setting[5].isoformat()
+                    if cached_setting[5]
+                    else None,
+                    "image": image_base64,
+                    "incipit_image": incipit_image_base64,
+                },
             }
-        })
+        )
 
     except requests.exceptions.RequestException as e:
-        return jsonify({
-            "success": False,
-            "message": f"Error connecting to thesession.org: {str(e)}",
-        })
+        return jsonify(
+            {
+                "success": False,
+                "message": _(
+                    "Error connecting to thesession.org: %(error)s", error=str(e)
+                ),
+            }
+        )
     except Exception as e:
         import traceback
+
         print("=" * 80)
         print("ERROR in cache_tune_setting_ajax:")
         print(f"Exception type: {type(e).__name__}")
@@ -1770,16 +2094,18 @@ def cache_tune_setting_ajax(tune_id):
         traceback.print_exc()
         print("=" * 80)
 
-        if 'conn' in locals():
+        if "conn" in locals():
             try:
                 conn.rollback()
                 conn.close()
             except:
                 pass
-        return jsonify({
-            "success": False,
-            "message": f"Error caching tune setting: {str(e)}"
-        })
+        return jsonify(
+            {
+                "success": False,
+                "message": _("Error caching tune setting: %(error)s", error=str(e)),
+            }
+        )
 
 
 @api_login_required
@@ -1797,7 +2123,7 @@ def get_tune_incipit(tune_id):
         JSON with incipit_image (base64 PNG) and/or incipit_abc (text).
     """
     try:
-        setting_id = request.args.get('setting_id', type=int)
+        setting_id = request.args.get("setting_id", type=int)
 
         # First, check local cache
         conn = get_db_connection()
@@ -1806,7 +2132,7 @@ def get_tune_incipit(tune_id):
             if setting_id:
                 cur.execute(
                     "SELECT incipit_image, incipit_abc FROM tune_setting WHERE setting_id = %s",
-                    (setting_id,)
+                    (setting_id,),
                 )
             else:
                 cur.execute(
@@ -1815,7 +2141,7 @@ def get_tune_incipit(tune_id):
                        WHERE tune_id = %s
                        ORDER BY setting_id ASC
                        LIMIT 1""",
-                    (tune_id,)
+                    (tune_id,),
                 )
             row = cur.fetchone()
             if row and (row[0] or row[1]):
@@ -1830,15 +2156,22 @@ def get_tune_incipit(tune_id):
 
         # Not cached locally - fetch from thesession.org
         from database import extract_abc_incipit
+
         api_url = f"https://thesession.org/tunes/{tune_id}?format=json"
         resp = requests.get(api_url, timeout=10)
         if resp.status_code != 200:
-            return jsonify({"success": True, "incipit_image": None, "incipit_abc": None}), 200
+            return (
+                jsonify({"success": True, "incipit_image": None, "incipit_abc": None}),
+                200,
+            )
 
         data = resp.json()
         settings = data.get("settings", [])
         if not settings:
-            return jsonify({"success": True, "incipit_image": None, "incipit_abc": None}), 200
+            return (
+                jsonify({"success": True, "incipit_image": None, "incipit_abc": None}),
+                200,
+            )
 
         # Find the requested setting, or use the first one
         setting = None
@@ -1856,25 +2189,35 @@ def get_tune_incipit(tune_id):
 
         incipit_abc = extract_abc_incipit(abc, tune_type)
         if not incipit_abc:
-            return jsonify({"success": True, "incipit_image": None, "incipit_abc": None}), 200
+            return (
+                jsonify({"success": True, "incipit_image": None, "incipit_abc": None}),
+                200,
+            )
 
         result = {"success": True, "incipit_image": None, "incipit_abc": incipit_abc}
 
         # Try to render to PNG
         incipit_with_headers = incipit_abc
-        if not incipit_abc.startswith('X:'):
-            incipit_with_headers = f"X:1\nM:4/4\nL:1/8\nK:{key if key else 'D'}\n{incipit_abc}"
+        if not incipit_abc.startswith("X:"):
+            incipit_with_headers = (
+                f"X:1\nM:4/4\nL:1/8\nK:{key if key else 'D'}\n{incipit_abc}"
+            )
         incipit_image = render_abc_to_png(incipit_with_headers, is_incipit=True)
         if incipit_image:
-            result["incipit_image"] = base64.b64encode(incipit_image).decode('utf-8')
+            result["incipit_image"] = base64.b64encode(incipit_image).decode("utf-8")
 
         return jsonify(result), 200
 
     except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": f"Error fetching incipit: {str(e)}"
-        }), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": _("Error fetching incipit: %(error)s", error=str(e)),
+                }
+            ),
+            500,
+        )
 
 
 @public_api  # backs the tune-detail modal on the logged-out session Tunes tab; current_user use is personalization only
@@ -1896,18 +2239,23 @@ def get_session_tune_detail(session_path, tune_id):
                 tune_id,
                 person_id=person_id,
                 logged_in=current_user.is_authenticated,
-                is_admin=bool(current_user.is_authenticated and current_user.is_system_admin),
+                is_admin=bool(
+                    current_user.is_authenticated and current_user.is_system_admin
+                ),
                 session_path=session_path,
                 redirected_from=redirected_from,
             )
         except SessionNotFound:
-            return jsonify({"success": False, "message": "Session not found"})
+            return jsonify({"success": False, "message": _("Session not found")})
         if payload is None:
-            return jsonify({"success": False, "message": "Tune not found"})
+            return jsonify({"success": False, "message": _("Tune not found")})
         return jsonify(payload)
     except Exception as e:
         return jsonify(
-            {"success": False, "message": f"Error retrieving tune details: {str(e)}"}
+            {
+                "success": False,
+                "message": _("Error retrieving tune details: %(error)s", error=str(e)),
+            }
         )
     finally:
         conn.close()
@@ -1926,7 +2274,7 @@ def update_session_tune_details(session_path, tune_id):
     try:
         data = request.get_json()
         if not data:
-            return jsonify({"success": False, "message": "No data provided"})
+            return jsonify({"success": False, "message": _("No data provided")})
 
         # Build dynamic update - only update fields that are explicitly present in request
         update_fields = []
@@ -1948,7 +2296,7 @@ def update_session_tune_details(session_path, tune_id):
                         return jsonify(
                             {
                                 "success": False,
-                                "message": "Setting ID must be a number",
+                                "message": _("Setting ID must be a number"),
                             }
                         )
                 else:
@@ -1994,16 +2342,24 @@ def update_session_tune_details(session_path, tune_id):
         if not session_result:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Session not found"})
+            return jsonify({"success": False, "message": _("Session not found")})
 
         session_id = session_result[0]
 
         if not is_session_admin_for(cur, session_id, current_user.person_id):
             cur.close()
             conn.close()
-            return jsonify(
-                {"success": False, "message": "Only session admins can change what a session plays"}
-            ), 403
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": _(
+                            "Only session admins can change what a session plays"
+                        ),
+                    }
+                ),
+                403,
+            )
 
         # Enroll on the fly if the tune has no session_tune row (spec 037). Stating
         # "we play this in Ador here" is the strongest possible evidence the tune
@@ -2020,11 +2376,22 @@ def update_session_tune_details(session_path, tune_id):
                        (session_id, tune_id, setting_id, manually_added, created_by_user_id)
                    VALUES (%s, %s, %s, TRUE, %s)
                    ON CONFLICT (session_id, tune_id) DO NOTHING""",
-                (session_id, tune_id, default_setting_id(cur, tune_id), get_current_user_id()),
+                (
+                    session_id,
+                    tune_id,
+                    default_setting_id(cur, tune_id),
+                    get_current_user_id(),
+                ),
             )
 
         # Save to history before making changes
-        save_to_history(cur, "session_tune", "UPDATE", (session_id, tune_id), user_id=get_current_user_id())
+        save_to_history(
+            cur,
+            "session_tune",
+            "UPDATE",
+            (session_id, tune_id),
+            user_id=get_current_user_id(),
+        )
 
         # Update session_tune - only update fields that were in the request
         if update_fields:
@@ -2077,12 +2444,24 @@ def update_session_tune_details(session_path, tune_id):
                 (session_id, tune_id, alias, get_current_user_id()),
             )
             alias_id = cur.fetchone()[0]
-            save_to_history(cur, "session_tune_alias", "INSERT", alias_id, user_id=get_current_user_id())
+            save_to_history(
+                cur,
+                "session_tune_alias",
+                "INSERT",
+                alias_id,
+                user_id=get_current_user_id(),
+            )
 
         # Remove old aliases
         for alias in aliases_to_remove:
             alias_id = existing_alias_map[alias]
-            save_to_history(cur, "session_tune_alias", "DELETE", alias_id, user_id=get_current_user_id())
+            save_to_history(
+                cur,
+                "session_tune_alias",
+                "DELETE",
+                alias_id,
+                user_id=get_current_user_id(),
+            )
             cur.execute(
                 "DELETE FROM session_tune_alias WHERE session_tune_alias_id = %s",
                 (alias_id,),
@@ -2095,13 +2474,16 @@ def update_session_tune_details(session_path, tune_id):
         return jsonify(
             {
                 "success": True,
-                "message": "Tune details saved successfully",
+                "message": _("Tune details saved successfully"),
             }
         )
 
     except Exception as e:
         return jsonify(
-            {"success": False, "message": f"Error updating tune details: {str(e)}"}
+            {
+                "success": False,
+                "message": _("Error updating tune details: %(error)s", error=str(e)),
+            }
         )
 
 
@@ -2126,14 +2508,14 @@ def delete_session_tune(session_path, tune_id):
         if not session_result:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Session not found"}), 404
+            return jsonify({"success": False, "message": _("Session not found")}), 404
 
         session_id = session_result[0]
 
         # Check permissions - must be system admin or session admin
         cur.execute(
             "SELECT is_system_admin FROM user_account WHERE user_id = %s",
-            (current_user.user_id,)
+            (current_user.user_id,),
         )
         user_row = cur.fetchone()
         is_system_admin = user_row and user_row[0]
@@ -2141,7 +2523,7 @@ def delete_session_tune(session_path, tune_id):
         if not is_system_admin:
             cur.execute(
                 "SELECT is_admin FROM session_person WHERE session_id = %s AND person_id = %s",
-                (session_id, current_user.person_id)
+                (session_id, current_user.person_id),
             )
             admin_row = cur.fetchone()
             is_session_admin = admin_row and admin_row[0]
@@ -2149,7 +2531,17 @@ def delete_session_tune(session_path, tune_id):
             if not is_session_admin:
                 cur.close()
                 conn.close()
-                return jsonify({"success": False, "message": "Only session admins can remove tunes from the session"}), 403
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "message": _(
+                                "Only session admins can remove tunes from the session"
+                            ),
+                        }
+                    ),
+                    403,
+                )
 
         # Get tune name for response message
         cur.execute("SELECT name FROM tune WHERE tune_id = %s", (tune_id,))
@@ -2159,12 +2551,17 @@ def delete_session_tune(session_path, tune_id):
         # Check if tune exists in session_tune
         cur.execute(
             "SELECT tune_id FROM session_tune WHERE session_id = %s AND tune_id = %s",
-            (session_id, tune_id)
+            (session_id, tune_id),
         )
         if not cur.fetchone():
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Tune not found in this session"}), 404
+            return (
+                jsonify(
+                    {"success": False, "message": _("Tune not found in this session")}
+                ),
+                404,
+            )
 
         # Plays outrank the repertoire. The UI hides the link entirely in this case,
         # but the endpoint is reachable directly, so it's enforced here too.
@@ -2180,40 +2577,66 @@ def delete_session_tune(session_path, tune_id):
         if play_count:
             cur.close()
             conn.close()
-            return jsonify({
-                "success": False,
-                "message": (
-                    f'"{tune_name}" has been played at this session {play_count} '
-                    f'time{"s" if play_count != 1 else ""}. Remove those plays first.'
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": ngettext(
+                            '"%(tune_name)s" has been played at this session %(num)d time. Remove those plays first.',
+                            '"%(tune_name)s" has been played at this session %(num)d times. Remove those plays first.',
+                            play_count,
+                            tune_name=tune_name,
+                        ),
+                    }
                 ),
-            }), 409
+                409,
+            )
 
         # Delete associated aliases first (foreign key constraint)
         cur.execute(
             "DELETE FROM session_tune_alias WHERE session_id = %s AND tune_id = %s",
-            (session_id, tune_id)
+            (session_id, tune_id),
         )
 
         # Save to history before deleting
-        save_to_history(cur, "session_tune", "DELETE", (session_id, tune_id), user_id=get_current_user_id())
+        save_to_history(
+            cur,
+            "session_tune",
+            "DELETE",
+            (session_id, tune_id),
+            user_id=get_current_user_id(),
+        )
 
         # Delete from session_tune
         cur.execute(
             "DELETE FROM session_tune WHERE session_id = %s AND tune_id = %s",
-            (session_id, tune_id)
+            (session_id, tune_id),
         )
 
         conn.commit()
         cur.close()
         conn.close()
 
-        return jsonify({
-            "success": True,
-            "message": f'"{tune_name}" removed from session tune list'
-        })
+        return jsonify(
+            {
+                "success": True,
+                "message": _(
+                    '"%(tune_name)s" removed from session tune list',
+                    tune_name=tune_name,
+                ),
+            }
+        )
 
     except Exception as e:
-        return jsonify({"success": False, "message": f"Error removing tune: {str(e)}"}), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "message": _("Error removing tune: %(error)s", error=str(e)),
+                }
+            ),
+            500,
+        )
 
 
 @api_login_required
@@ -2222,7 +2645,7 @@ def add_session_tune(session_path):
     try:
         data = request.get_json()
         if not data:
-            return jsonify({"success": False, "error": "No data provided"}), 400
+            return jsonify({"success": False, "error": _("No data provided")}), 400
 
         tune_id = data.get("tune_id")
 
@@ -2231,11 +2654,12 @@ def add_session_tune(session_path):
         # thesession ids ARE our tune ids — and, when the tune isn't local yet, we
         # import it server-side below (the add pane's remote picks + paste-a-URL).
         from live_logging_routes import _parse_thesession_id
+
         thesession_id = _parse_thesession_id(data.get("thesession_id"))
         if not tune_id and thesession_id is not None:
             tune_id = thesession_id
         if not tune_id:
-            return jsonify({"success": False, "error": "tune_id is required"}), 400
+            return jsonify({"success": False, "error": _("tune_id is required")}), 400
 
         alias = (data.get("alias") or "").strip() or None
         setting_id = data.get("setting_id")
@@ -2247,7 +2671,10 @@ def add_session_tune(session_path):
             try:
                 parsed_setting_id = int(setting_id)
             except (ValueError, TypeError):
-                return jsonify({"success": False, "error": "Invalid setting_id"}), 400
+                return (
+                    jsonify({"success": False, "error": _("Invalid setting_id")}),
+                    400,
+                )
 
         conn = get_db_connection()
         cur = conn.cursor()
@@ -2258,21 +2685,27 @@ def add_session_tune(session_path):
         if not session_result:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "error": "Session not found"}), 404
+            return jsonify({"success": False, "error": _("Session not found")}), 404
 
         session_id = session_result[0]
 
         # Check if tune exists; a merged-away id remaps to the canonical tune
         # (spec 030) — a stale write means the merged tune, so proceed rather
         # than reject.
-        cur.execute("SELECT tune_id, redirect_to_tune_id FROM tune WHERE tune_id = %s", (tune_id,))
+        cur.execute(
+            "SELECT tune_id, redirect_to_tune_id FROM tune WHERE tune_id = %s",
+            (tune_id,),
+        )
         tune_check = cur.fetchone()
 
         remapped_from = None
         if tune_check and tune_check[1] is not None:
             remapped_from = tune_id
             tune_id = tune_check[1]
-            cur.execute("SELECT tune_id, redirect_to_tune_id FROM tune WHERE tune_id = %s", (tune_id,))
+            cur.execute(
+                "SELECT tune_id, redirect_to_tune_id FROM tune WHERE tune_id = %s",
+                (tune_id,),
+            )
             tune_check = cur.fetchone()
 
         # Check if tune exists in tune table
@@ -2282,17 +2715,29 @@ def add_session_tune(session_path):
             # setting ABC; notation images render lazily). Same helper the live logger
             # and POST /api/my-tunes use, so imports behave identically everywhere.
             from live_logging_routes import _import_tune_for_live
+
             try:
                 _import_tune_for_live(cur, tune_id, get_current_user_id())
             except TuneImportError as e:
                 conn.rollback()
                 cur.close()
                 conn.close()
-                return jsonify({
-                    "success": False,
-                    "error": f"Could not import tune from thesession.org: {e.message}",
-                }), 502
-            cur.execute("SELECT tune_id, redirect_to_tune_id FROM tune WHERE tune_id = %s", (tune_id,))
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "error": _(
+                                "Could not import tune from thesession.org: %(error)s",
+                                error=e.message,
+                            ),
+                        }
+                    ),
+                    502,
+                )
+            cur.execute(
+                "SELECT tune_id, redirect_to_tune_id FROM tune WHERE tune_id = %s",
+                (tune_id,),
+            )
             tune_check = cur.fetchone()
         if not tune_check:
             # If new_tune data provided, insert it
@@ -2318,7 +2763,7 @@ def add_session_tune(session_path):
             else:
                 cur.close()
                 conn.close()
-                return jsonify({"success": False, "error": "Tune not found"}), 404
+                return jsonify({"success": False, "error": _("Tune not found")}), 404
 
         # Check if tune already exists in session_tune
         cur.execute(
@@ -2328,7 +2773,15 @@ def add_session_tune(session_path):
         if cur.fetchone():
             cur.close()
             conn.close()
-            return jsonify({"success": False, "error": "Tune already exists in this session"}), 409
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": _("Tune already exists in this session"),
+                    }
+                ),
+                409,
+            )
 
         # No specific setting requested -> store the tune's default so the setting in
         # use is always visible/linkable (spec 032).
@@ -2346,7 +2799,13 @@ def add_session_tune(session_path):
         )
 
         # Save to history
-        save_to_history(cur, "session_tune", "INSERT", (session_id, tune_id), user_id=get_current_user_id())
+        save_to_history(
+            cur,
+            "session_tune",
+            "INSERT",
+            (session_id, tune_id),
+            user_id=get_current_user_id(),
+        )
 
         conn.commit()
         cur.close()
@@ -2363,22 +2822,44 @@ def add_session_tune(session_path):
             conn_check = get_db_connection()
             try:
                 cur_check = conn_check.cursor()
-                cur_check.execute("SELECT setting_id FROM tune_setting WHERE setting_id = %s", (parsed_setting_id,))
+                cur_check.execute(
+                    "SELECT setting_id FROM tune_setting WHERE setting_id = %s",
+                    (parsed_setting_id,),
+                )
                 setting_cached = cur_check.fetchone() is not None
             finally:
                 conn_check.close()
             if not setting_cached:
-                cache_default_tune_setting(tune_id, None, get_current_user_id(), sync=True, target_setting_id=parsed_setting_id)
+                cache_default_tune_setting(
+                    tune_id,
+                    None,
+                    get_current_user_id(),
+                    sync=True,
+                    target_setting_id=parsed_setting_id,
+                )
 
-        return jsonify({
-            "success": True,
-            "message": "Tune added to session successfully",
-            "tune_id": tune_id,
-            "remapped_from": remapped_from,
-        }), 201
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "message": _("Tune added to session successfully"),
+                    "tune_id": tune_id,
+                    "remapped_from": remapped_from,
+                }
+            ),
+            201,
+        )
 
     except Exception as e:
-        return jsonify({"success": False, "error": f"Error adding tune: {str(e)}"}), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": _("Error adding tune: %(error)s", error=str(e)),
+                }
+            ),
+            500,
+        )
 
 
 @api_login_required  # no anonymous caller found (POST/DELETE alias siblings are gated too)
@@ -2394,7 +2875,7 @@ def get_session_tune_aliases(session_path, tune_id):
         if not session_result:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Session not found"})
+            return jsonify({"success": False, "message": _("Session not found")})
 
         session_id = session_result[0]
 
@@ -2422,7 +2903,10 @@ def get_session_tune_aliases(session_path, tune_id):
 
     except Exception as e:
         return jsonify(
-            {"success": False, "message": f"Error retrieving aliases: {str(e)}"}
+            {
+                "success": False,
+                "message": _("Error retrieving aliases: %(error)s", error=str(e)),
+            }
         )
 
 
@@ -2430,10 +2914,10 @@ def get_session_tune_aliases(session_path, tune_id):
 def add_session_tune_alias(session_path, tune_id):
     """Add a new alias for a tune in a session"""
     if not request.json:
-        return jsonify({"success": False, "message": "No JSON data provided"})
+        return jsonify({"success": False, "message": _("No JSON data provided")})
     alias = request.json.get("alias", "").strip()
     if not alias:
-        return jsonify({"success": False, "message": "Please enter an alias"})
+        return jsonify({"success": False, "message": _("Please enter an alias")})
 
     # Normalize the alias
     normalized_alias = normalize_quotes(alias)
@@ -2448,7 +2932,7 @@ def add_session_tune_alias(session_path, tune_id):
         if not session_result:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Session not found"})
+            return jsonify({"success": False, "message": _("Session not found")})
 
         session_id = session_result[0]
 
@@ -2469,7 +2953,10 @@ def add_session_tune_alias(session_path, tune_id):
             return jsonify(
                 {
                     "success": False,
-                    "message": f'Alias "{normalized_alias}" already exists in this session',
+                    "message": _(
+                        'Alias "%(normalized_alias)s" already exists in this session',
+                        normalized_alias=normalized_alias,
+                    ),
                 }
             )
 
@@ -2490,7 +2977,10 @@ def add_session_tune_alias(session_path, tune_id):
             return jsonify(
                 {
                     "success": False,
-                    "message": f'Alias "{normalized_alias}" already exists as a session tune alias',
+                    "message": _(
+                        'Alias "%(normalized_alias)s" already exists as a session tune alias',
+                        normalized_alias=normalized_alias,
+                    ),
                 }
             )
 
@@ -2506,7 +2996,7 @@ def add_session_tune_alias(session_path, tune_id):
 
         result = cur.fetchone()
         if not result:
-            return jsonify({"success": False, "message": "Failed to create alias"})
+            return jsonify({"success": False, "message": _("Failed to create alias")})
         new_id, created_date = result
 
         conn.commit()
@@ -2516,7 +3006,10 @@ def add_session_tune_alias(session_path, tune_id):
         return jsonify(
             {
                 "success": True,
-                "message": f'Alias "{normalized_alias}" added successfully',
+                "message": _(
+                    'Alias "%(normalized_alias)s" added successfully',
+                    normalized_alias=normalized_alias,
+                ),
                 "alias": {
                     "id": new_id,
                     "alias": normalized_alias,
@@ -2526,7 +3019,12 @@ def add_session_tune_alias(session_path, tune_id):
         )
 
     except Exception as e:
-        return jsonify({"success": False, "message": f"Error adding alias: {str(e)}"})
+        return jsonify(
+            {
+                "success": False,
+                "message": _("Error adding alias: %(error)s", error=str(e)),
+            }
+        )
 
 
 @api_login_required
@@ -2542,7 +3040,7 @@ def delete_session_tune_alias(session_path, tune_id, alias_id):
         if not session_result:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Session not found"})
+            return jsonify({"success": False, "message": _("Session not found")})
 
         session_id = session_result[0]
 
@@ -2560,7 +3058,7 @@ def delete_session_tune_alias(session_path, tune_id, alias_id):
         if not alias_info:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Alias not found"})
+            return jsonify({"success": False, "message": _("Alias not found")})
 
         alias_name = alias_info[0]
 
@@ -2576,18 +3074,28 @@ def delete_session_tune_alias(session_path, tune_id, alias_id):
         if cur.rowcount == 0:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Alias not found"})
+            return jsonify({"success": False, "message": _("Alias not found")})
 
         conn.commit()
         cur.close()
         conn.close()
 
         return jsonify(
-            {"success": True, "message": f'Alias "{alias_name}" deleted successfully'}
+            {
+                "success": True,
+                "message": _(
+                    'Alias "%(alias_name)s" deleted successfully', alias_name=alias_name
+                ),
+            }
         )
 
     except Exception as e:
-        return jsonify({"success": False, "message": f"Error deleting alias: {str(e)}"})
+        return jsonify(
+            {
+                "success": False,
+                "message": _("Error deleting alias: %(error)s", error=str(e)),
+            }
+        )
 
 
 @api_login_required
@@ -2595,7 +3103,7 @@ def add_session_instance_ajax(session_path):
     # Failures carry a 4xx/5xx status (they were all 200 with success: false). The web
     # reads the body's success either way; a native client reads the status.
     if not request.json:
-        return jsonify({"success": False, "message": "No JSON data provided"}), 400
+        return jsonify({"success": False, "message": _("No JSON data provided")}), 400
     date = request.json.get("date", "").strip()
     start_time = (
         request.json.get("start_time", "").strip()
@@ -2620,7 +3128,10 @@ def add_session_instance_ajax(session_path):
     cancelled = request.json.get("cancelled", False)
 
     if not date:
-        return jsonify({"success": False, "message": "Please enter a session date"}), 400
+        return (
+            jsonify({"success": False, "message": _("Please enter a session date")}),
+            400,
+        )
 
     try:
         conn = get_db_connection()
@@ -2635,7 +3146,7 @@ def add_session_instance_ajax(session_path):
         if not session_result:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Session not found"}), 404
+            return jsonify({"success": False, "message": _("Session not found")}), 404
 
         session_id, session_location_name = session_result
 
@@ -2651,7 +3162,16 @@ def add_session_instance_ajax(session_path):
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING session_instance_id
         """,
-            (session_id, date, start_time, end_time, location_override, cancelled, comments, get_current_user_id()),
+            (
+                session_id,
+                date,
+                start_time,
+                end_time,
+                location_override,
+                cancelled,
+                comments,
+                get_current_user_id(),
+            ),
         )
 
         session_instance_result = cur.fetchone()
@@ -2659,14 +3179,25 @@ def add_session_instance_ajax(session_path):
             cur.close()
             conn.close()
             return (
-                jsonify({"success": False, "message": "Failed to create session instance"}),
+                jsonify(
+                    {
+                        "success": False,
+                        "message": _("Failed to create session instance"),
+                    }
+                ),
                 500,
             )
 
         session_instance_id = session_instance_result[0]
 
         # Save the newly created session instance to history
-        save_to_history(cur, "session_instance", "INSERT", session_instance_id, user_id=get_current_user_id())
+        save_to_history(
+            cur,
+            "session_instance",
+            "INSERT",
+            session_instance_id,
+            user_id=get_current_user_id(),
+        )
 
         conn.commit()
         cur.close()
@@ -2675,7 +3206,9 @@ def add_session_instance_ajax(session_path):
         return jsonify(
             {
                 "success": True,
-                "message": f"Session instance for {date} created successfully!",
+                "message": _(
+                    "Session instance for %(date)s created successfully!", date=date
+                ),
                 "session_instance_id": session_instance_id,
                 "date": date,
             }
@@ -2686,7 +3219,9 @@ def add_session_instance_ajax(session_path):
             jsonify(
                 {
                     "success": False,
-                    "message": f"Failed to create session instance: {str(e)}",
+                    "message": _(
+                        "Failed to create session instance: %(error)s", error=str(e)
+                    ),
                 }
             ),
             500,
@@ -2702,6 +3237,7 @@ def get_next_session_instance_suggestion_ajax(session_path):
     try:
         from datetime import datetime, timedelta
         from recurrence_utils import SessionRecurrence
+
         try:
             from zoneinfo import ZoneInfo
         except ImportError:
@@ -2723,7 +3259,7 @@ def get_next_session_instance_suggestion_ajax(session_path):
         if not session_result:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Session not found"})
+            return jsonify({"success": False, "message": _("Session not found")})
 
         session_id, recurrence_json, session_timezone = session_result
 
@@ -2731,24 +3267,28 @@ def get_next_session_instance_suggestion_ajax(session_path):
         if not recurrence_json:
             cur.close()
             conn.close()
-            return jsonify({
-                "success": True,
-                "date": datetime.now().date().isoformat(),
-                "start_time": None,
-                "end_time": None
-            })
+            return jsonify(
+                {
+                    "success": True,
+                    "date": datetime.now().date().isoformat(),
+                    "start_time": None,
+                    "end_time": None,
+                }
+            )
 
         # Parse recurrence pattern
         try:
-            tz = ZoneInfo(session_timezone or 'UTC')
+            tz = ZoneInfo(session_timezone or "UTC")
             session_recurrence = SessionRecurrence(recurrence_json)
         except (ValueError, TypeError) as e:
             cur.close()
             conn.close()
-            return jsonify({
-                "success": False,
-                "message": f"Invalid recurrence pattern: {str(e)}"
-            })
+            return jsonify(
+                {
+                    "success": False,
+                    "message": _("Invalid recurrence pattern: %(error)s", error=str(e)),
+                }
+            )
 
         # Get occurrences for the next 90 days
         today = datetime.now(tz).date()
@@ -2761,22 +3301,27 @@ def get_next_session_instance_suggestion_ajax(session_path):
         if not occurrences:
             cur.close()
             conn.close()
-            return jsonify({
-                "success": True,
-                "date": datetime.now().date().isoformat(),
-                "start_time": None,
-                "end_time": None
-            })
+            return jsonify(
+                {
+                    "success": True,
+                    "date": datetime.now().date().isoformat(),
+                    "start_time": None,
+                    "end_time": None,
+                }
+            )
 
         # Check which instances already exist
         occurrence_dates = [occ[0].date() for occ in occurrences]
-        placeholders = ','.join(['%s'] * len(occurrence_dates))
+        placeholders = ",".join(["%s"] * len(occurrence_dates))
 
-        cur.execute(f"""
+        cur.execute(
+            f"""
             SELECT date, start_time, end_time
             FROM session_instance
             WHERE session_id = %s AND date IN ({placeholders})
-        """, [session_id] + occurrence_dates)
+        """,
+            [session_id] + occurrence_dates,
+        )
 
         existing_instances = {}
         for row in cur.fetchall():
@@ -2806,36 +3351,44 @@ def get_next_session_instance_suggestion_ajax(session_path):
                 )
                 if not time_exists:
                     # Date exists but different time - this is the next one
-                    return jsonify({
+                    return jsonify(
+                        {
+                            "success": True,
+                            "date": occ_date.isoformat(),
+                            "start_time": occ_start_time.strftime("%H:%M"),
+                            "end_time": occ_end_time.strftime("%H:%M"),
+                        }
+                    )
+            else:
+                # Date doesn't exist at all - this is the next one
+                return jsonify(
+                    {
                         "success": True,
                         "date": occ_date.isoformat(),
                         "start_time": occ_start_time.strftime("%H:%M"),
-                        "end_time": occ_end_time.strftime("%H:%M")
-                    })
-            else:
-                # Date doesn't exist at all - this is the next one
-                return jsonify({
-                    "success": True,
-                    "date": occ_date.isoformat(),
-                    "start_time": occ_start_time.strftime("%H:%M"),
-                    "end_time": occ_end_time.strftime("%H:%M")
-                })
+                        "end_time": occ_end_time.strftime("%H:%M"),
+                    }
+                )
 
         # No non-existent occurrences found in next 90 days
         # Return the first occurrence anyway
         first_start_dt, first_end_dt = occurrences[0]
-        return jsonify({
-            "success": True,
-            "date": first_start_dt.date().isoformat(),
-            "start_time": first_start_dt.time().strftime("%H:%M"),
-            "end_time": first_end_dt.time().strftime("%H:%M")
-        })
+        return jsonify(
+            {
+                "success": True,
+                "date": first_start_dt.date().isoformat(),
+                "start_time": first_start_dt.time().strftime("%H:%M"),
+                "end_time": first_end_dt.time().strftime("%H:%M"),
+            }
+        )
 
     except Exception as e:
-        return jsonify({
-            "success": False,
-            "message": f"Failed to get suggestion: {str(e)}"
-        })
+        return jsonify(
+            {
+                "success": False,
+                "message": _("Failed to get suggestion: %(error)s", error=str(e)),
+            }
+        )
 
 
 @api_login_required
@@ -2847,7 +3400,7 @@ def update_session_instance_ajax(session_path, date_or_id):
     import re
 
     if not request.json:
-        return jsonify({"success": False, "message": "No JSON data provided"})
+        return jsonify({"success": False, "message": _("No JSON data provided")})
     new_date = request.json.get("date", "").strip()
     start_time = (
         request.json.get("start_time", "").strip()
@@ -2872,7 +3425,7 @@ def update_session_instance_ajax(session_path, date_or_id):
     cancelled = request.json.get("cancelled", False)
 
     if not new_date:
-        return jsonify({"success": False, "message": "Please enter a session date"})
+        return jsonify({"success": False, "message": _("Please enter a session date")})
 
     try:
         conn = get_db_connection()
@@ -2887,7 +3440,7 @@ def update_session_instance_ajax(session_path, date_or_id):
         if not session_result:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Session not found"})
+            return jsonify({"success": False, "message": _("Session not found")})
 
         session_id, session_location_name = session_result
 
@@ -2923,7 +3476,9 @@ def update_session_instance_ajax(session_path, date_or_id):
         if not instance_result:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Session instance not found"})
+            return jsonify(
+                {"success": False, "message": _("Session instance not found")}
+            )
 
         session_instance_id = instance_result[0]
 
@@ -2933,7 +3488,13 @@ def update_session_instance_ajax(session_path, date_or_id):
             location_override = location
 
         # Save current state to history before update
-        save_to_history(cur, "session_instance", "UPDATE", session_instance_id, user_id=get_current_user_id())
+        save_to_history(
+            cur,
+            "session_instance",
+            "UPDATE",
+            session_instance_id,
+            user_id=get_current_user_id(),
+        )
 
         # Update the session instance
         cur.execute(
@@ -2942,7 +3503,15 @@ def update_session_instance_ajax(session_path, date_or_id):
             SET date = %s, start_time = %s, end_time = %s, location_override = %s, is_cancelled = %s, comments = %s
             WHERE session_instance_id = %s
         """,
-            (new_date, start_time, end_time, location_override, cancelled, comments, session_instance_id),
+            (
+                new_date,
+                start_time,
+                end_time,
+                location_override,
+                cancelled,
+                comments,
+                session_instance_id,
+            ),
         )
 
         conn.commit()
@@ -2950,14 +3519,16 @@ def update_session_instance_ajax(session_path, date_or_id):
         conn.close()
 
         return jsonify(
-            {"success": True, "message": "Session instance updated successfully!"}
+            {"success": True, "message": _("Session instance updated successfully!")}
         )
 
     except Exception as e:
         return jsonify(
             {
                 "success": False,
-                "message": f"Failed to update session instance: {str(e)}",
+                "message": _(
+                    "Failed to update session instance: %(error)s", error=str(e)
+                ),
             }
         )
 
@@ -2974,7 +3545,7 @@ def delete_session_instance_ajax(session_path, date_or_id):
         if not session_result:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Session not found"})
+            return jsonify({"success": False, "message": _("Session not found")})
 
         session_id = session_result[0]
 
@@ -2991,13 +3562,21 @@ def delete_session_instance_ajax(session_path, date_or_id):
         if not instance_result:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Session instance not found"})
+            return jsonify(
+                {"success": False, "message": _("Session instance not found")}
+            )
 
         session_instance_id = instance_result[0]
 
         # Save to history before deletion
         audit_user_id = get_current_user_id()
-        save_to_history(cur, "session_instance", "DELETE", session_instance_id, user_id=audit_user_id)
+        save_to_history(
+            cur,
+            "session_instance",
+            "DELETE",
+            session_instance_id,
+            user_id=audit_user_id,
+        )
 
         # Get all session_instance_tune records to save to history before deletion
         cur.execute(
@@ -3011,7 +3590,13 @@ def delete_session_instance_ajax(session_path, date_or_id):
 
         # Save each tune record to history before deletion
         for tune_record in tune_records:
-            save_to_history(cur, "session_instance_tune", "DELETE", tune_record[0], user_id=audit_user_id)
+            save_to_history(
+                cur,
+                "session_instance_tune",
+                "DELETE",
+                tune_record[0],
+                user_id=audit_user_id,
+            )
 
         # Get all session_instance_person records to save to history before deletion
         cur.execute(
@@ -3026,7 +3611,13 @@ def delete_session_instance_ajax(session_path, date_or_id):
         # Save each person record to history before deletion
         # record_id should be a tuple (session_instance_id, person_id)
         for person_record in person_records:
-            save_to_history(cur, "session_instance_person", "DELETE", person_record, user_id=audit_user_id)
+            save_to_history(
+                cur,
+                "session_instance_person",
+                "DELETE",
+                person_record,
+                user_id=audit_user_id,
+            )
 
         # Delete session_instance_person records first (attendance)
         cur.execute(
@@ -3059,29 +3650,38 @@ def delete_session_instance_ajax(session_path, date_or_id):
         return jsonify(
             {
                 "success": True,
-                "message": f"Session instance for {date_or_id} deleted successfully!",
+                "message": _(
+                    "Session instance for %(date)s deleted successfully!",
+                    date=date_or_id,
+                ),
             }
         )
 
     except Exception as e:
         # Rollback on error
-        if 'conn' in locals():
+        if "conn" in locals():
             conn.rollback()
-            if 'cur' in locals():
+            if "cur" in locals():
                 cur.close()
             conn.close()
 
         # Log the full error for debugging
         import traceback
+
         error_details = traceback.format_exc()
         print(f"Error deleting session instance: {error_details}")
 
-        return jsonify(
-            {
-                "success": False,
-                "message": f"Failed to delete session instance: {str(e)}",
-            }
-        ), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "message": _(
+                        "Failed to delete session instance: %(error)s", error=str(e)
+                    ),
+                }
+            ),
+            500,
+        )
 
 
 @api_login_required
@@ -3097,7 +3697,7 @@ def mark_session_log_complete_ajax(session_path, date_or_id):
         if not session_result:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Session not found"})
+            return jsonify({"success": False, "message": _("Session not found")})
 
         session_id = session_result[0]
 
@@ -3106,7 +3706,9 @@ def mark_session_log_complete_ajax(session_path, date_or_id):
         if not session_instance_id:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Session instance not found"})
+            return jsonify(
+                {"success": False, "message": _("Session instance not found")}
+            )
 
         # Check current log_complete_date
         cur.execute(
@@ -3123,7 +3725,7 @@ def mark_session_log_complete_ajax(session_path, date_or_id):
             return jsonify(
                 {
                     "success": False,
-                    "message": "Session log is already marked as complete",
+                    "message": _("Session log is already marked as complete"),
                 }
             )
 
@@ -3138,7 +3740,13 @@ def mark_session_log_complete_ajax(session_path, date_or_id):
         )
 
         # Record in history table
-        save_to_history(cur, "session_instance", "UPDATE", session_instance_id, user_id=get_current_user_id())
+        save_to_history(
+            cur,
+            "session_instance",
+            "UPDATE",
+            session_instance_id,
+            user_id=get_current_user_id(),
+        )
 
         conn.commit()
         cur.close()
@@ -3147,7 +3755,7 @@ def mark_session_log_complete_ajax(session_path, date_or_id):
         return jsonify(
             {
                 "success": True,
-                "message": "This session log has been marked as complete.",
+                "message": _("This session log has been marked as complete."),
             }
         )
 
@@ -3155,7 +3763,9 @@ def mark_session_log_complete_ajax(session_path, date_or_id):
         return jsonify(
             {
                 "success": False,
-                "message": f"Failed to mark session log complete: {str(e)}",
+                "message": _(
+                    "Failed to mark session log complete: %(error)s", error=str(e)
+                ),
             }
         )
 
@@ -3173,7 +3783,7 @@ def mark_session_log_incomplete_ajax(session_path, date_or_id):
         if not session_result:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Session not found"})
+            return jsonify({"success": False, "message": _("Session not found")})
 
         session_id = session_result[0]
 
@@ -3182,7 +3792,9 @@ def mark_session_log_incomplete_ajax(session_path, date_or_id):
         if not session_instance_id:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Session instance not found"})
+            return jsonify(
+                {"success": False, "message": _("Session instance not found")}
+            )
 
         # Check current log_complete_date
         cur.execute(
@@ -3197,7 +3809,10 @@ def mark_session_log_incomplete_ajax(session_path, date_or_id):
             cur.close()
             conn.close()
             return jsonify(
-                {"success": False, "message": "Session log is not marked as complete"}
+                {
+                    "success": False,
+                    "message": _("Session log is not marked as complete"),
+                }
             )
 
         # Mark the session log as incomplete
@@ -3211,7 +3826,13 @@ def mark_session_log_incomplete_ajax(session_path, date_or_id):
         )
 
         # Record in history table
-        save_to_history(cur, "session_instance", "UPDATE", session_instance_id, user_id=get_current_user_id())
+        save_to_history(
+            cur,
+            "session_instance",
+            "UPDATE",
+            session_instance_id,
+            user_id=get_current_user_id(),
+        )
 
         conn.commit()
         cur.close()
@@ -3220,7 +3841,7 @@ def mark_session_log_incomplete_ajax(session_path, date_or_id):
         return jsonify(
             {
                 "success": True,
-                "message": "This session log has been marked as not complete.",
+                "message": _("This session log has been marked as not complete."),
             }
         )
 
@@ -3228,7 +3849,10 @@ def mark_session_log_incomplete_ajax(session_path, date_or_id):
         return jsonify(
             {
                 "success": False,
-                "message": f"Failed to mark session log as not complete: {str(e)}",
+                "message": _(
+                    "Failed to mark session log as not complete: %(error)s",
+                    error=str(e),
+                ),
             }
         )
 
@@ -3259,10 +3883,10 @@ def get_top_tunes():
 @public_api  # backs the /add-session page, which has no @login_required (only the final POST /api/add-session is gated) — TODO tighten?
 def check_existing_session_ajax():
     if not request.json:
-        return jsonify({"success": False, "message": "No JSON data provided"}), 400
+        return jsonify({"success": False, "message": _("No JSON data provided")}), 400
     session_id = request.json.get("session_id")
     if not session_id:
-        return jsonify({"success": False, "message": "Session ID is required"}), 400
+        return jsonify({"success": False, "message": _("Session ID is required")}), 400
 
     try:
         conn = get_db_connection()
@@ -3283,16 +3907,27 @@ def check_existing_session_ajax():
             return jsonify({"exists": False})
 
     except Exception as e:
-        return jsonify({"success": False, "message": f"Database error: {str(e)}"}), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "message": _("Database error: %(error)s", error=str(e)),
+                }
+            ),
+            500,
+        )
 
 
 @public_api  # backs the /add-session page, which has no @login_required (only the final POST /api/add-session is gated) — TODO tighten?
 def search_sessions_ajax():
     if not request.json:
-        return jsonify({"success": False, "message": "No JSON data provided"}), 400
+        return jsonify({"success": False, "message": _("No JSON data provided")}), 400
     search_query = request.json.get("query")
     if not isinstance(search_query, str) or not search_query.strip():
-        return jsonify({"success": False, "message": "Search query is required"}), 400
+        return (
+            jsonify({"success": False, "message": _("Search query is required")}),
+            400,
+        )
 
     try:
         # Search sessions on thesession.org API (perpage=50 is the max allowed)
@@ -3309,7 +3944,10 @@ def search_sessions_ajax():
                 jsonify(
                     {
                         "success": False,
-                        "message": f"Failed to search sessions (status: {response.status_code})",
+                        "message": _(
+                            "Failed to search sessions (status: %(status)s)",
+                            status=response.status_code,
+                        ),
                     }
                 ),
                 502,
@@ -3379,7 +4017,9 @@ def search_sessions_ajax():
             jsonify(
                 {
                     "success": False,
-                    "message": f"Error connecting to TheSession.org: {str(e)}",
+                    "message": _(
+                        "Error connecting to TheSession.org: %(error)s", error=str(e)
+                    ),
                 }
             ),
             502,
@@ -3387,7 +4027,12 @@ def search_sessions_ajax():
     except Exception as e:
         return (
             jsonify(
-                {"success": False, "message": f"Error processing search results: {str(e)}"}
+                {
+                    "success": False,
+                    "message": _(
+                        "Error processing search results: %(error)s", error=str(e)
+                    ),
+                }
             ),
             500,
         )
@@ -3435,11 +4080,11 @@ def _thesession_ref_id(value):
 @public_api  # backs the /add-session page, which has no @login_required (only the final POST /api/add-session is gated) — TODO tighten?
 def fetch_session_data_ajax():
     if not request.json:
-        return jsonify({"success": False, "message": "No JSON data provided"}), 400
+        return jsonify({"success": False, "message": _("No JSON data provided")}), 400
     # An id, not text: it goes into the thesession.org URL's path.
     session_id = _thesession_ref_id(request.json.get("session_id"))
     if session_id is None:
-        return jsonify({"success": False, "message": "Session ID is required"}), 400
+        return jsonify({"success": False, "message": _("Session ID is required")}), 400
 
     try:
         # Fetch data from thesession.org API
@@ -3448,7 +4093,12 @@ def fetch_session_data_ajax():
 
         if response.status_code == 404:
             return (
-                jsonify({"success": False, "message": "Session not found on TheSession.org"}),
+                jsonify(
+                    {
+                        "success": False,
+                        "message": _("Session not found on TheSession.org"),
+                    }
+                ),
                 404,
             )
         elif response.status_code != 200:
@@ -3456,7 +4106,10 @@ def fetch_session_data_ajax():
                 jsonify(
                     {
                         "success": False,
-                        "message": f"Failed to fetch session data (status: {response.status_code})",
+                        "message": _(
+                            "Failed to fetch session data (status: %(status)s)",
+                            status=response.status_code,
+                        ),
                     }
                 ),
                 502,
@@ -3517,7 +4170,9 @@ def fetch_session_data_ajax():
             jsonify(
                 {
                     "success": False,
-                    "message": f"Error connecting to TheSession.org: {str(e)}",
+                    "message": _(
+                        "Error connecting to TheSession.org: %(error)s", error=str(e)
+                    ),
                 }
             ),
             502,
@@ -3525,7 +4180,12 @@ def fetch_session_data_ajax():
     except Exception as e:
         return (
             jsonify(
-                {"success": False, "message": f"Error processing session data: {str(e)}"}
+                {
+                    "success": False,
+                    "message": _(
+                        "Error processing session data: %(error)s", error=str(e)
+                    ),
+                }
             ),
             500,
         )
@@ -3535,12 +4195,25 @@ def fetch_session_data_ajax():
 # dates and name come from the form; thesession_id, recurrence and the audit
 # columns are deliberately not here.
 _COPY_YEAR_COLUMNS = (
-    "session_type", "place_id", "city", "state", "country",
-    "location_name", "location_street", "location_website", "location_phone",
-    "timezone", "comments", "unlisted_address",
-    "active_buffer_minutes_before", "active_buffer_minutes_after",
-    "live_cache_session_limit", "live_cache_global_limit",
-    "show_people_list", "track_attendance", "track_set_starters",
+    "session_type",
+    "place_id",
+    "city",
+    "state",
+    "country",
+    "location_name",
+    "location_street",
+    "location_website",
+    "location_phone",
+    "timezone",
+    "comments",
+    "unlisted_address",
+    "active_buffer_minutes_before",
+    "active_buffer_minutes_after",
+    "live_cache_session_limit",
+    "live_cache_global_limit",
+    "show_people_list",
+    "track_attendance",
+    "track_set_starters",
 )
 
 
@@ -3560,43 +4233,86 @@ def copy_festival_year(session_path):
     data = request.get_json(silent=True) or {}
     year = str(data.get("year") or "").strip()
     if not re.match(r"^\d{4}$", year):
-        return jsonify({"success": False, "message": "Year must be four digits, like 2026"}), 400
+        return (
+            jsonify(
+                {"success": False, "message": _("Year must be four digits, like 2026")}
+            ),
+            400,
+        )
     try:
         start = _dt.date.fromisoformat(str(data.get("initiation_date") or ""))
         end = _dt.date.fromisoformat(str(data.get("termination_date") or ""))
     except ValueError:
-        return jsonify({"success": False, "message": "First and last day are both required"}), 400
+        return (
+            jsonify(
+                {"success": False, "message": _("First and last day are both required")}
+            ),
+            400,
+        )
     if end < start:
-        return jsonify({"success": False, "message": "The last day can't be before the first"}), 400
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "message": _("The last day can't be before the first"),
+                }
+            ),
+            400,
+        )
 
     conn = get_db_connection()
     try:
         cur = conn.cursor()
         cur.execute(
-            "SELECT session_id, session_type FROM session WHERE path = %s", (session_path,)
+            "SELECT session_id, session_type FROM session WHERE path = %s",
+            (session_path,),
         )
         source = cur.fetchone()
         if not source:
-            return jsonify({"success": False, "message": "Session not found"}), 404
+            return jsonify({"success": False, "message": _("Session not found")}), 404
         source_id, source_type = source
         user_id = get_current_user_id()
         person_id = getattr(current_user, "person_id", None)
         if not is_session_admin_for(cur, source_id, person_id):
-            return jsonify({"success": False, "message": "Only an admin of this year can copy it"}), 403
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": _("Only an admin of this year can copy it"),
+                    }
+                ),
+                403,
+            )
 
         festival = festivals.festival_of_path(cur, session_path)
         if festival is None or source_type != "festival":
             return (
-                jsonify({"success": False, "message": "Only a festival year can be copied to a new year",
-                         "code": "not_festival"}),
+                jsonify(
+                    {
+                        "success": False,
+                        "message": _(
+                            "Only a festival year can be copied to a new year"
+                        ),
+                        "code": "not_festival",
+                    }
+                ),
                 400,
             )
         new_path = f"{festival['slug']}/{year}"
         cur.execute("SELECT 1 FROM session WHERE path = %s", (new_path,))
         if cur.fetchone():
             return (
-                jsonify({"success": False, "message": f"{festival['name']} already has {year}",
-                         "code": "year_exists"}),
+                jsonify(
+                    {
+                        "success": False,
+                        "message": _(
+                            "%(festival)s already has %(year)s",
+                            festival=festival["name"],
+                            year=year,
+                        ),
+                        "code": "year_exists",
+                    }
+                ),
                 400,
             )
         name = str(data.get("name") or "").strip() or f"{festival['name']} {year}"
@@ -3636,7 +4352,9 @@ def copy_festival_year(session_path):
                 """,
                 (new_id, admin_id, user_id),
             )
-            save_to_history(cur, "session_person", "INSERT", (new_id, admin_id), user_id=user_id)
+            save_to_history(
+                cur, "session_person", "INSERT", (new_id, admin_id), user_id=user_id
+            )
 
         conn.commit()
         return jsonify({"success": True, "path": new_path}), 201
@@ -3691,7 +4409,7 @@ def match_place_ajax():
 def add_session_ajax():
     data = request.json
     if not data:
-        return jsonify({"success": False, "message": "No JSON data provided"}), 400
+        return jsonify({"success": False, "message": _("No JSON data provided")}), 400
 
     # Same coercion the admin update uses (session_fields), so a session can be created
     # with the values the admin form can later edit — including a thesession.org link
@@ -3711,7 +4429,11 @@ def add_session_ajax():
     # the session name follow from them. Everything else names the session and
     # sends the path the sheet generated.
     festival_name = data.get("festival_name")
-    is_new_festival = session_type == "festival" and isinstance(festival_name, str) and festival_name.strip()
+    is_new_festival = (
+        session_type == "festival"
+        and isinstance(festival_name, str)
+        and festival_name.strip()
+    )
     if is_new_festival:
         required_fields = ["festival_name", "year", "city", "state", "country"]
     else:
@@ -3724,9 +4446,17 @@ def add_session_ajax():
         if isinstance(value, int) and not isinstance(value, bool) and field == "year":
             value = str(value)
         if not isinstance(value, str) or not value.strip():
-            label = field.replace("_", " ").capitalize()
+            required_messages = {
+                "festival_name": _("Festival name is required"),
+                "year": _("Year is required"),
+                "name": _("Name is required"),
+                "path": _("Path is required"),
+                "city": _("City is required"),
+                "state": _("State is required"),
+                "country": _("Country is required"),
+            }
             return (
-                jsonify({"success": False, "message": f"{label} is required"}),
+                jsonify({"success": False, "message": required_messages[field]}),
                 400,
             )
 
@@ -3735,22 +4465,62 @@ def add_session_ajax():
         festival_name = festival_name.strip()
         year = str(data["year"]).strip()
         if not re.match(r"^\d{4}$", year):
-            return jsonify({"success": False, "message": "Year must be four digits, like 2026"}), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": _("Year must be four digits, like 2026"),
+                    }
+                ),
+                400,
+            )
         festival_slug = places.slugify(data.get("festival_slug") or festival_name)
         if not festival_slug:
-            return jsonify({"success": False, "message": "Festival name must contain a letter or number"}), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": _("Festival name must contain a letter or number"),
+                    }
+                ),
+                400,
+            )
         session_name = (data.get("name") or "").strip() or f"{festival_name} {year}"
         # A festival year runs from its first to its last day (spec 056); it does
         # not recur. Both are optional here and editable on the admin page.
         import datetime as _dt
 
         try:
-            first_day = _dt.date.fromisoformat(data["inception_date"]) if data.get("inception_date") else None
-            last_day = _dt.date.fromisoformat(data["termination_date"]) if data.get("termination_date") else None
+            first_day = (
+                _dt.date.fromisoformat(data["inception_date"])
+                if data.get("inception_date")
+                else None
+            )
+            last_day = (
+                _dt.date.fromisoformat(data["termination_date"])
+                if data.get("termination_date")
+                else None
+            )
         except (TypeError, ValueError):
-            return jsonify({"success": False, "message": "Enter the first and last day as dates"}), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": _("Enter the first and last day as dates"),
+                    }
+                ),
+                400,
+            )
         if first_day and last_day and last_day < first_day:
-            return jsonify({"success": False, "message": "The last day can't be before the first"}), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": _("The last day can't be before the first"),
+                    }
+                ),
+                400,
+            )
         raw_path = f"{festival_slug}/{year}"
     else:
         session_name = data["name"]
@@ -3789,7 +4559,7 @@ def add_session_ajax():
         # The session's town (spec 055): the adder's pick from a "did you mean", or
         # the matcher's answer for the city text, creating the town if it is new.
         try:
-            town, _ = places.resolve_town(
+            town, _unused = places.resolve_town(
                 cur,
                 data["city"],
                 data["state"],
@@ -3817,10 +4587,17 @@ def add_session_ajax():
             festival = places.get_place_by_slug(cur, festival_slug)
             if festival is None:
                 places.create_place(
-                    cur, festival_slug, festival_name, "festival", town["place_id"],
+                    cur,
+                    festival_slug,
+                    festival_name,
+                    "festival",
+                    town["place_id"],
                     user_id=get_current_user_id(),
                 )
-            elif not (festival["kind"] == "festival" and festival["parent_place_id"] == town["place_id"]):
+            elif not (
+                festival["kind"] == "festival"
+                and festival["parent_place_id"] == town["place_id"]
+            ):
                 return refuse(
                     f'"{festival_slug}" is already taken by {festival["name"]}',
                     409,
@@ -3830,9 +4607,13 @@ def add_session_ajax():
                     ),
                 )
         else:
-            new_path = places.rewrite_generated_prefix(cur, new_path, data["city"], town)
+            new_path = places.rewrite_generated_prefix(
+                cur, new_path, data["city"], town
+            )
 
-        rule_error = places.validate_path_for_place(cur, new_path, session_type, town["place_id"])
+        rule_error = places.validate_path_for_place(
+            cur, new_path, session_type, town["place_id"]
+        )
         if rule_error:
             return refuse(rule_error, 400)
 
@@ -3862,7 +4643,9 @@ def add_session_ajax():
         # attendance — turning attendance off forces starters off, matching the CHECK.
         show_people_list = bool(data.get("show_people_list", True))
         track_attendance = bool(data.get("track_attendance", True))
-        track_set_starters = bool(data.get("track_set_starters", True)) and track_attendance
+        track_set_starters = (
+            bool(data.get("track_set_starters", True)) and track_attendance
+        )
         # city/state/country are still written, from the town, until the serializers
         # read geography through the place (spec 055 step one).
         cur.execute(
@@ -3910,17 +4693,29 @@ def add_session_ajax():
         if not session_result:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Failed to create session"}), 500
+            return (
+                jsonify({"success": False, "message": _("Failed to create session")}),
+                500,
+            )
 
         session_id = session_result[0]
 
         # Save the newly created session to history
-        save_to_history(cur, "session", "INSERT", session_id, user_id=get_current_user_id())
+        save_to_history(
+            cur, "session", "INSERT", session_id, user_id=get_current_user_id()
+        )
 
         # Optionally add the creating user as a member of the session
         user_id = get_current_user_id()
-        add_current_user = data.get("add_current_user", True)  # Default to True for backwards compatibility
-        if add_current_user and user_id and hasattr(current_user, 'person_id') and current_user.person_id:
+        add_current_user = data.get(
+            "add_current_user", True
+        )  # Default to True for backwards compatibility
+        if (
+            add_current_user
+            and user_id
+            and hasattr(current_user, "person_id")
+            and current_user.person_id
+        ):
             role = data.get("add_current_user_role", "admin")  # Default to admin
             # Spec 034: whoever creates a session is by definition a confirmed member of it.
             # The only axis the caller still chooses is whether they're also an admin.
@@ -3931,10 +4726,14 @@ def add_session_ajax():
                     (session_id, person_id, relationship, confirmed, archived, is_admin, created_by_user_id)
                 VALUES (%s, %s, 'member', TRUE, FALSE, %s, %s)
                 """,
-                (session_id, current_user.person_id, is_admin, user_id)
+                (session_id, current_user.person_id, is_admin, user_id),
             )
             save_to_history(
-                cur, "session_person", "INSERT", (session_id, current_user.person_id), user_id=user_id
+                cur,
+                "session_person",
+                "INSERT",
+                (session_id, current_user.person_id),
+                user_id=user_id,
             )
 
         conn.commit()
@@ -3944,14 +4743,22 @@ def add_session_ajax():
         return jsonify(
             {
                 "success": True,
-                "message": f'Session "{session_name}" created successfully!',
+                "message": _(
+                    'Session "%(session_name)s" created successfully!',
+                    session_name=session_name,
+                ),
                 "session_path": new_path,
             }
         )
 
     except Exception as e:
         return (
-            jsonify({"success": False, "message": f"Failed to create session: {str(e)}"}),
+            jsonify(
+                {
+                    "success": False,
+                    "message": _("Failed to create session: %(error)s", error=str(e)),
+                }
+            ),
             500,
         )
 
@@ -3959,16 +4766,16 @@ def add_session_ajax():
 @api_login_required
 def add_tune_ajax(session_path, date):
     if not request.json:
-        return jsonify({"success": False, "message": "No JSON data provided"})
+        return jsonify({"success": False, "message": _("No JSON data provided")})
     tune_names_input = request.json.get("tune_name", "").strip()
     if not tune_names_input:
-        return jsonify({"success": False, "message": "Please enter tune name(s)"})
+        return jsonify({"success": False, "message": _("Please enter tune name(s)")})
 
     # Parse newline-separated sets, with comma-separated tune names within each set
     lines = [line.strip() for line in tune_names_input.split("\n") if line.strip()]
 
     if not lines:
-        return jsonify({"success": False, "message": "Please enter tune name(s)"})
+        return jsonify({"success": False, "message": _("Please enter tune name(s)")})
 
     try:
         conn = get_db_connection()
@@ -3980,7 +4787,7 @@ def add_tune_ajax(session_path, date):
         if not session_result:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Session not found"})
+            return jsonify({"success": False, "message": _("Session not found")})
 
         session_id = session_result[0]
 
@@ -4046,9 +4853,13 @@ def add_tune_ajax(session_path, date):
                     conn.close()
 
                     if total_tunes_added == 1:
-                        message = "Tune added to existing set successfully!"
+                        message = _("Tune added to existing set successfully!")
                     else:
-                        message = f"{total_tunes_added} tunes added to existing set successfully!"
+                        message = ngettext(
+                            "%(num)d tune added to existing set successfully!",
+                            "%(num)d tunes added to existing set successfully!",
+                            total_tunes_added,
+                        )
 
                     return jsonify({"success": True, "message": message})
             # If no existing tunes, fall through to normal processing (treat as if no delimiter)
@@ -4077,7 +4888,9 @@ def add_tune_ajax(session_path, date):
         if not tune_sets:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Please enter tune name(s)"})
+            return jsonify(
+                {"success": False, "message": _("Please enter tune name(s)")}
+            )
 
         # Process each set of tunes
         total_tunes_added = 0
@@ -4122,17 +4935,28 @@ def add_tune_ajax(session_path, date):
         conn.close()
 
         if len(tune_sets) == 1 and len(tune_sets[0]) == 1:
-            message = "Tune added successfully!"
+            message = _("Tune added successfully!")
         elif len(tune_sets) == 1:
-            message = f"Set of {len(tune_sets[0])} tunes added successfully!"
+            message = ngettext(
+                "Set of %(num)d tune added successfully!",
+                "Set of %(num)d tunes added successfully!",
+                len(tune_sets[0]),
+            )
         else:
-            message = f"{total_tunes_added} tunes in {len(tune_sets)} sets added successfully!"
+            message = _(
+                "%(num)s tunes in %(sets)s sets added successfully!",
+                num=total_tunes_added,
+                sets=len(tune_sets),
+            )
 
         return jsonify({"success": True, "message": message})
 
     except Exception as e:
         return jsonify(
-            {"success": False, "message": f"Failed to add tune(s): {str(e)}"}
+            {
+                "success": False,
+                "message": _("Failed to add tune(s): %(error)s", error=str(e)),
+            }
         )
 
 
@@ -4163,7 +4987,7 @@ def delete_tune_ajax(session_instance_tune_id):
         if not tune_info:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Tune not found"})
+            return jsonify({"success": False, "message": _("Tune not found")})
 
         (tune_name,) = tune_info
 
@@ -4174,13 +4998,23 @@ def delete_tune_ajax(session_instance_tune_id):
         )
         _sii_row = cur.fetchone()
         if _sii_row and instance_logging_locked(cur, _sii_row[0]):
-            cur.close(); conn.close()
-            return jsonify({"success": False, "locked": True, "message": LEGACY_LOCKED_MSG}), 409
+            cur.close()
+            conn.close()
+            return (
+                jsonify(
+                    {"success": False, "locked": True, "message": LEGACY_LOCKED_MSG}
+                ),
+                409,
+            )
 
         # Save to history before making changes
         audit_user_id = get_current_user_id()
         save_to_history(
-            cur, "session_instance_tune", "DELETE", session_instance_tune_id, user_id=audit_user_id
+            cur,
+            "session_instance_tune",
+            "DELETE",
+            session_instance_tune_id,
+            user_id=audit_user_id,
         )
 
         # Set boundaries are explicit break records (spec 023), so deleting a tune no longer
@@ -4204,13 +5038,18 @@ def delete_tune_ajax(session_instance_tune_id):
         return jsonify(
             {
                 "success": True,
-                "message": f"{tune_name} deleted from the set.",
+                "message": _(
+                    "%(tune_name)s deleted from the set.", tune_name=tune_name
+                ),
             }
         )
 
     except Exception as e:
         return jsonify(
-            {"success": False, "message": f"Failed to delete tune: {str(e)}"}
+            {
+                "success": False,
+                "message": _("Failed to delete tune: %(error)s", error=str(e)),
+            }
         )
 
 
@@ -4233,25 +5072,32 @@ def _fetch_thesession_tune(tune_id):
         api_url = f"https://thesession.org/tunes/{tune_id}?format=json"
         response = requests.get(api_url, timeout=10)
     except requests.exceptions.Timeout:
-        raise TuneImportError("Timeout connecting to thesession.org", 504)
+        raise TuneImportError(_("Timeout connecting to thesession.org"), 504)
     except requests.exceptions.RequestException as e:
-        raise TuneImportError(f"Error connecting to thesession.org: {e}", 502)
+        raise TuneImportError(
+            _("Error connecting to thesession.org: %(error)s", error=e), 502
+        )
 
     if response.status_code == 404:
-        raise TuneImportError(f"Tune #{tune_id} not found on thesession.org", 404)
+        raise TuneImportError(
+            _("Tune #%(tune_id)s not found on thesession.org", tune_id=tune_id), 404
+        )
     elif response.status_code != 200:
         raise TuneImportError(
-            f"Failed to fetch tune data from thesession.org (status: {response.status_code})",
+            _(
+                "Failed to fetch tune data from thesession.org (status: %(status)s)",
+                status=response.status_code,
+            ),
             502,
         )
 
     try:
         data = response.json()
     except ValueError:
-        raise TuneImportError("Invalid tune data received from thesession.org", 502)
+        raise TuneImportError(_("Invalid tune data received from thesession.org"), 502)
 
     if "name" not in data or "type" not in data:
-        raise TuneImportError("Invalid tune data received from thesession.org", 502)
+        raise TuneImportError(_("Invalid tune data received from thesession.org"), 502)
 
     return data
 
@@ -4294,13 +5140,13 @@ def link_tune_ajax(session_path, date_or_id):
     Accepts either date (YYYY-MM-DD) or session_instance_id as the second URL parameter.
     """
     if not request.json:
-        return jsonify({"success": False, "message": "No JSON data provided"})
+        return jsonify({"success": False, "message": _("No JSON data provided")})
     tune_input = request.json.get("tune_id", "").strip()
     tune_name = normalize_quotes(request.json.get("tune_name", "").strip())
     session_instance_tune_id = request.json.get("session_instance_tune_id")
 
     if not tune_input or not tune_name or session_instance_tune_id is None:
-        return jsonify({"success": False, "message": "Missing required parameters"})
+        return jsonify({"success": False, "message": _("Missing required parameters")})
 
     # Parse tune ID and setting ID from input
     # Check if it's a URL with setting
@@ -4315,7 +5161,9 @@ def link_tune_ajax(session_path, date_or_id):
         tune_id = tune_input
         setting_id = None
     else:
-        return jsonify({"success": False, "message": "Invalid tune ID or URL format"})
+        return jsonify(
+            {"success": False, "message": _("Invalid tune ID or URL format")}
+        )
 
     try:
         conn = get_db_connection()
@@ -4327,7 +5175,7 @@ def link_tune_ajax(session_path, date_or_id):
         if not session_result:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Session not found"})
+            return jsonify({"success": False, "message": _("Session not found")})
 
         session_id = session_result[0]
 
@@ -4336,12 +5184,16 @@ def link_tune_ajax(session_path, date_or_id):
         if not session_instance_id:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Session instance not found"})
+            return jsonify(
+                {"success": False, "message": _("Session instance not found")}
+            )
 
         # A merged-away id remaps to the canonical tune BEFORE any other processing
         # (spec 030): a stale link means the merged tune, so proceed rather than reject.
         remapped_from = None
-        cur.execute("SELECT redirect_to_tune_id FROM tune WHERE tune_id = %s", (tune_id,))
+        cur.execute(
+            "SELECT redirect_to_tune_id FROM tune WHERE tune_id = %s", (tune_id,)
+        )
         tune_redirect_check = cur.fetchone()
         if tune_redirect_check and tune_redirect_check[0] is not None:
             remapped_from = int(tune_id)
@@ -4373,7 +5225,13 @@ def link_tune_ajax(session_path, date_or_id):
                 tune_type_result = tune_meta[1]
 
             # Save history before update
-            save_to_history(cur, "session_instance_tune", "UPDATE", session_instance_tune_id, user_id=get_current_user_id())
+            save_to_history(
+                cur,
+                "session_instance_tune",
+                "UPDATE",
+                session_instance_tune_id,
+                user_id=get_current_user_id(),
+            )
 
             # Tune already in session_tune, just update session_instance_tune.
             # Use setting_id as setting_override if provided. name is override-only:
@@ -4386,15 +5244,31 @@ def link_tune_ajax(session_path, date_or_id):
                 SET tune_id = %s, name = %s, setting_override = %s, last_modified_user_id = %s
                 WHERE session_instance_tune_id = %s
             """,
-                (tune_id, normalize_override_name(cur, session_id, tune_id, tune_name),
-                 setting_id, get_current_user_id(), session_instance_tune_id),
+                (
+                    tune_id,
+                    normalize_override_name(cur, session_id, tune_id, tune_name),
+                    setting_id,
+                    get_current_user_id(),
+                    session_instance_tune_id,
+                ),
             )
 
-            setting_msg = f" with setting #{setting_id}" if setting_id else ""
-            message = f'Linked "{tune_name}" to existing tune in session{setting_msg}'
+            if setting_id:
+                message = _(
+                    'Linked "%(tune_name)s" to existing tune in session with setting #%(setting_id)s',
+                    tune_name=tune_name,
+                    setting_id=setting_id,
+                )
+            else:
+                message = _(
+                    'Linked "%(tune_name)s" to existing tune in session',
+                    tune_name=tune_name,
+                )
         else:
             # Check if tune exists in tune table (redirect already checked above)
-            cur.execute("SELECT name, tune_type FROM tune WHERE tune_id = %s", (tune_id,))
+            cur.execute(
+                "SELECT name, tune_type FROM tune WHERE tune_id = %s", (tune_id,)
+            )
             tune_exists = cur.fetchone()
 
             if tune_exists:
@@ -4412,10 +5286,22 @@ def link_tune_ajax(session_path, date_or_id):
                 )
 
                 # Save the newly inserted record to history
-                save_to_history(cur, "session_tune", "INSERT", (session_id, tune_id), user_id=get_current_user_id())
+                save_to_history(
+                    cur,
+                    "session_tune",
+                    "INSERT",
+                    (session_id, tune_id),
+                    user_id=get_current_user_id(),
+                )
 
                 # Save history before update
-                save_to_history(cur, "session_instance_tune", "UPDATE", session_instance_tune_id, user_id=get_current_user_id())
+                save_to_history(
+                    cur,
+                    "session_instance_tune",
+                    "UPDATE",
+                    session_instance_tune_id,
+                    user_id=get_current_user_id(),
+                )
 
                 # Update session_instance_tune
                 cur.execute(
@@ -4427,8 +5313,17 @@ def link_tune_ajax(session_path, date_or_id):
                     (tune_id, get_current_user_id(), session_instance_tune_id),
                 )
 
-                setting_msg = f" with setting #{setting_id}" if setting_id else ""
-                message = f'Added "{tune_name}" to session and linked{setting_msg}'
+                if setting_id:
+                    message = _(
+                        'Added "%(tune_name)s" to session and linked with setting #%(setting_id)s',
+                        tune_name=tune_name,
+                        setting_id=setting_id,
+                    )
+                else:
+                    message = _(
+                        'Added "%(tune_name)s" to session and linked',
+                        tune_name=tune_name,
+                    )
             else:
                 # Tune doesn't exist in our database — import it from thesession.org.
                 try:
@@ -4458,11 +5353,21 @@ def link_tune_ajax(session_path, date_or_id):
 
                 # Save the newly inserted session_tune to history
                 save_to_history(
-                    cur, "session_tune", "INSERT", (session_id, tune_id), user_id=get_current_user_id()
+                    cur,
+                    "session_tune",
+                    "INSERT",
+                    (session_id, tune_id),
+                    user_id=get_current_user_id(),
                 )
 
                 # Update session_instance_tune
-                save_to_history(cur, "session_instance_tune", "UPDATE", session_instance_tune_id, user_id=get_current_user_id())
+                save_to_history(
+                    cur,
+                    "session_instance_tune",
+                    "UPDATE",
+                    session_instance_tune_id,
+                    user_id=get_current_user_id(),
+                )
                 cur.execute(
                     """
                     UPDATE session_instance_tune
@@ -4472,24 +5377,40 @@ def link_tune_ajax(session_path, date_or_id):
                     (tune_id, get_current_user_id(), session_instance_tune_id),
                 )
 
-                setting_msg = f" with setting #{setting_id}" if setting_id else ""
-                message = f'Fetched "{tune_name_from_api}" from thesession.org and added to session{setting_msg}'
+                if setting_id:
+                    message = _(
+                        'Fetched "%(tune_name)s" from thesession.org and added to session with setting #%(setting_id)s',
+                        tune_name=tune_name_from_api,
+                        setting_id=setting_id,
+                    )
+                else:
+                    message = _(
+                        'Fetched "%(tune_name)s" from thesession.org and added to session',
+                        tune_name=tune_name_from_api,
+                    )
 
         conn.commit()
         cur.close()
         conn.close()
 
-        return jsonify({
-            "success": True,
-            "message": message,
-            "tune_id": int(tune_id),
-            "tune_name": tune_name_canonical,
-            "tune_type": tune_type_result,
-            "remapped_from": remapped_from,
-        })
+        return jsonify(
+            {
+                "success": True,
+                "message": message,
+                "tune_id": int(tune_id),
+                "tune_name": tune_name_canonical,
+                "tune_type": tune_type_result,
+                "remapped_from": remapped_from,
+            }
+        )
 
     except Exception as e:
-        return jsonify({"success": False, "message": f"Failed to link tune: {str(e)}"})
+        return jsonify(
+            {
+                "success": False,
+                "message": _("Failed to link tune: %(error)s", error=str(e)),
+            }
+        )
 
 
 @api_login_required  # zero callers found in templates/, static/js/, frontend/src/ — gated by default
@@ -4513,7 +5434,10 @@ def get_session_tunes_ajax(session_path, date):
         if not session_instance:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "error": "Session instance not found"}), 404
+            return (
+                jsonify({"success": False, "error": _("Session instance not found")}),
+                404,
+            )
 
         session_instance_id = session_instance[0]
 
@@ -4558,7 +5482,15 @@ def get_session_tunes_ajax(session_path, date):
         return jsonify({"success": True, "tune_sets": sets})
 
     except Exception as e:
-        return jsonify({"success": False, "error": f"Failed to get tunes: {str(e)}"}), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": _("Failed to get tunes: %(error)s", error=str(e)),
+                }
+            ),
+            500,
+        )
 
 
 def get_session_people_list(session_path):
@@ -4574,7 +5506,7 @@ def get_session_people_list(session_path):
     because archived means "not in the default list", never "unfindable".
     """
     if not current_user.is_authenticated:
-        return jsonify({"success": False, "message": "Authentication required"}), 401
+        return jsonify({"success": False, "message": _("Authentication required")}), 401
 
     from serializers import load_session_people
 
@@ -4587,7 +5519,7 @@ def get_session_people_list(session_path):
         if not session_result:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Session not found"}), 404
+            return jsonify({"success": False, "message": _("Session not found")}), 404
 
         session_id = session_result[0]
 
@@ -4595,17 +5527,25 @@ def get_session_people_list(session_path):
         if not user_person_id:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "User not linked to person"}), 403
+            return (
+                jsonify({"success": False, "message": _("User not linked to person")}),
+                403,
+            )
 
         if not can_view_session_people(cur, session_id, user_person_id):
             cur.close()
             conn.close()
-            return jsonify(
-                {
-                    "success": False,
-                    "message": "A session admin needs to confirm you before you can see this session's people.",
-                }
-            ), 403
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": _(
+                            "A session admin needs to confirm you before you can see this session's people."
+                        ),
+                    }
+                ),
+                403,
+            )
 
         cur.close()
         people = load_session_people(conn, session_id)
@@ -4614,7 +5554,15 @@ def get_session_people_list(session_path):
         return jsonify({"success": True, "people": people})
 
     except Exception as e:
-        return jsonify({"success": False, "message": f"Failed to get people: {str(e)}"}), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "message": _("Failed to get people: %(error)s", error=str(e)),
+                }
+            ),
+            500,
+        )
 
 
 @api_login_required
@@ -4648,7 +5596,7 @@ def get_session_person_detail(session_path, person_id):
     """
     # Check authentication
     if not current_user.is_authenticated:
-        return jsonify({"success": False, "message": "Authentication required"}), 401
+        return jsonify({"success": False, "message": _("Authentication required")}), 401
 
     try:
         conn = get_db_connection()
@@ -4659,25 +5607,38 @@ def get_session_person_detail(session_path, person_id):
         session_result = cur.fetchone()
 
         if not session_result:
-            return jsonify({"success": False, "message": "Session not found"}), 404
+            return jsonify({"success": False, "message": _("Session not found")}), 404
 
         session_id = session_result[0]
 
         # The People tab's own gate (spec 034): confirmed or a session admin. Membership
         # alone is not enough -- anyone can join a session, and an unconfirmed member
         # cannot see its list, so must not read the people on it one id at a time.
-        user_person_id = getattr(current_user, 'person_id', None)
+        user_person_id = getattr(current_user, "person_id", None)
         if not can_view_session_people(cur, session_id, user_person_id):
-            return jsonify({"success": False, "message": "Not allowed to see this session's people"}), 403
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": _("Not allowed to see this session's people"),
+                    }
+                ),
+                403,
+            )
 
         # And only someone on THIS session's list: the sheet is about them here, and a
         # person elsewhere on Ceol is not this session's to show.
         cur.execute(
             "SELECT 1 FROM session_person WHERE session_id = %s AND person_id = %s",
-            (session_id, person_id)
+            (session_id, person_id),
         )
         if not cur.fetchone():
-            return jsonify({"success": False, "message": "Person not found in this session"}), 404
+            return (
+                jsonify(
+                    {"success": False, "message": _("Person not found in this session")}
+                ),
+                404,
+            )
 
         # Fetch person details with attendance
         cur.execute(
@@ -4712,25 +5673,25 @@ def get_session_person_detail(session_path, person_id):
             WHERE p.person_id = %s
             GROUP BY p.person_id, p.first_name, p.last_name, p.city, p.state, p.country, p.thesession_user_id, u.user_id
             """,
-            (session_id, person_id)
+            (session_id, person_id),
         )
 
         person_row = cur.fetchone()
 
         if not person_row:
-            return jsonify({"success": False, "message": "Person not found"}), 404
+            return jsonify({"success": False, "message": _("Person not found")}), 404
 
         person = {
-            'person_id': person_row[0],
-            'first_name': person_row[1],
-            'last_name': person_row[2],
-            'city': person_row[3],
-            'state': person_row[4],
-            'country': person_row[5],
-            'thesession_user_id': person_row[6],
-            'has_user_account': person_row[7],
-            'instruments': person_row[8] if person_row[8] else [],
-            'attended_instances': person_row[9] if person_row[9] else []
+            "person_id": person_row[0],
+            "first_name": person_row[1],
+            "last_name": person_row[2],
+            "city": person_row[3],
+            "state": person_row[4],
+            "country": person_row[5],
+            "thesession_user_id": person_row[6],
+            "has_user_account": person_row[7],
+            "instruments": person_row[8] if person_row[8] else [],
+            "attended_instances": person_row[9] if person_row[9] else [],
         }
 
         cur.close()
@@ -4739,7 +5700,17 @@ def get_session_person_detail(session_path, person_id):
         return jsonify({"success": True, "person": person})
 
     except Exception as e:
-        return jsonify({"success": False, "message": f"Failed to get person details: {str(e)}"}), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "message": _(
+                        "Failed to get person details: %(error)s", error=str(e)
+                    ),
+                }
+            ),
+            500,
+        )
 
 
 @api_login_required
@@ -4766,24 +5737,40 @@ def add_person_to_session_people_tab(session_path):
     Roster-adds are always members; `visitor` arises from check-in, not from here.
     """
     if not current_user.is_authenticated:
-        return jsonify({"success": False, "message": "Authentication required"}), 401
+        return jsonify({"success": False, "message": _("Authentication required")}), 401
 
     try:
         data = request.get_json()
         if not data:
-            return jsonify({"success": False, "message": "No data provided"}), 400
+            return jsonify({"success": False, "message": _("No data provided")}), 400
 
-        first_name = data.get('first_name', '').strip()
-        last_name = data.get('last_name', '').strip()
-        email = data.get('email', '').strip() if data.get('email') else None
-        instruments = data.get('instruments', [])
-        thesession_user_id = data.get('thesession_user_id')
-        relationship = data.get('relationship', 'member')
-        if relationship not in ('member', 'visitor'):
-            return jsonify({"success": False, "message": "relationship must be 'member' or 'visitor'"}), 400
+        first_name = data.get("first_name", "").strip()
+        last_name = data.get("last_name", "").strip()
+        email = data.get("email", "").strip() if data.get("email") else None
+        instruments = data.get("instruments", [])
+        thesession_user_id = data.get("thesession_user_id")
+        relationship = data.get("relationship", "member")
+        if relationship not in ("member", "visitor"):
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": _("relationship must be 'member' or 'visitor'"),
+                    }
+                ),
+                400,
+            )
 
         if not first_name or not last_name:
-            return jsonify({"success": False, "message": "First name and last name are required"}), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": _("First name and last name are required"),
+                    }
+                ),
+                400,
+            )
 
         conn = get_db_connection()
         cur = conn.cursor()
@@ -4791,15 +5778,26 @@ def add_person_to_session_people_tab(session_path):
         cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
         session_result = cur.fetchone()
         if not session_result:
-            return jsonify({"success": False, "message": "Session not found"}), 404
+            return jsonify({"success": False, "message": _("Session not found")}), 404
         session_id = session_result[0]
 
-        user_person_id = getattr(current_user, 'person_id', None)
+        user_person_id = getattr(current_user, "person_id", None)
         if not user_person_id:
-            return jsonify({"success": False, "message": "User not linked to person"}), 403
+            return (
+                jsonify({"success": False, "message": _("User not linked to person")}),
+                403,
+            )
 
         if not can_view_session_people(cur, session_id, user_person_id):
-            return jsonify({"success": False, "message": "Not allowed to manage this session's people"}), 403
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": _("Not allowed to manage this session's people"),
+                    }
+                ),
+                403,
+            )
 
         # The adder vouches only if they are an admin of this session.
         confirmed = is_session_admin_for(cur, session_id, user_person_id)
@@ -4823,19 +5821,37 @@ def add_person_to_session_people_tab(session_path):
             if existing:
                 person_id, active = existing
                 if not active:
-                    return jsonify({
-                        "success": False,
-                        "message": f"{first_name} {last_name} is deactivated and cannot be added to sessions",
-                    }), 400
+                    return (
+                        jsonify(
+                            {
+                                "success": False,
+                                "message": _(
+                                    "%(first_name)s %(last_name)s is deactivated and cannot be added to sessions",
+                                    first_name=first_name,
+                                    last_name=last_name,
+                                ),
+                            }
+                        ),
+                        400,
+                    )
                 cur.execute(
                     "SELECT 1 FROM session_person WHERE session_id = %s AND person_id = %s",
                     (session_id, person_id),
                 )
                 if cur.fetchone():
-                    return jsonify({
-                        "success": False,
-                        "message": f"{first_name} {last_name} is already in this session",
-                    }), 400
+                    return (
+                        jsonify(
+                            {
+                                "success": False,
+                                "message": _(
+                                    "%(first_name)s %(last_name)s is already in this session",
+                                    first_name=first_name,
+                                    last_name=last_name,
+                                ),
+                            }
+                        ),
+                        400,
+                    )
 
         if person_id is None:
             cur.execute(
@@ -4844,7 +5860,13 @@ def add_person_to_session_people_tab(session_path):
                 VALUES (%s, %s, %s, %s, %s)
                 RETURNING person_id
                 """,
-                (first_name, last_name, email, thesession_user_id, get_current_user_id()),
+                (
+                    first_name,
+                    last_name,
+                    email,
+                    thesession_user_id,
+                    get_current_user_id(),
+                ),
             )
             person_id = cur.fetchone()[0]
 
@@ -4866,22 +5888,41 @@ def add_person_to_session_people_tab(session_path):
             """,
             (session_id, person_id, relationship, confirmed, get_current_user_id()),
         )
-        save_to_history(cur, "session_person", "INSERT", (session_id, person_id),
-                        user_id=get_current_user_id())
+        save_to_history(
+            cur,
+            "session_person",
+            "INSERT",
+            (session_id, person_id),
+            user_id=get_current_user_id(),
+        )
 
         conn.commit()
         cur.close()
         conn.close()
 
-        return jsonify({
-            "success": True,
-            "person_id": person_id,
-            "confirmed": confirmed,
-            "message": f"{first_name} {last_name} added to session",
-        })
+        return jsonify(
+            {
+                "success": True,
+                "person_id": person_id,
+                "confirmed": confirmed,
+                "message": _(
+                    "%(first_name)s %(last_name)s added to session",
+                    first_name=first_name,
+                    last_name=last_name,
+                ),
+            }
+        )
 
     except Exception as e:
-        return jsonify({"success": False, "message": f"Failed to add person: {str(e)}"}), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "message": _("Failed to add person: %(error)s", error=str(e)),
+                }
+            ),
+            500,
+        )
 
 
 @api_login_required
@@ -4891,7 +5932,7 @@ def move_set_ajax(session_path, date):
     direction = data.get("direction")  # 'up' or 'down'
 
     if not session_instance_tune_id or not direction or direction not in ["up", "down"]:
-        return jsonify({"success": False, "message": "Invalid parameters"})
+        return jsonify({"success": False, "message": _("Invalid parameters")})
 
     try:
         conn = get_db_connection()
@@ -4912,7 +5953,9 @@ def move_set_ajax(session_path, date):
         if not session_instance:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Session instance not found"})
+            return jsonify(
+                {"success": False, "message": _("Session instance not found")}
+            )
 
         session_instance_id = session_instance[0]
 
@@ -4931,7 +5974,7 @@ def move_set_ajax(session_path, date):
         if not all_records:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "No tunes found"})
+            return jsonify({"success": False, "message": _("No tunes found")})
 
         # Group tunes into sets to identify set boundaries. Break records delimit sets and
         # are dropped here; they are re-derived after the move (positions change).
@@ -4948,18 +5991,20 @@ def move_set_ajax(session_path, date):
         if target_set_index == -1:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Tune set not found"})
+            return jsonify({"success": False, "message": _("Tune set not found")})
 
         # Check if move is possible
         if direction == "up" and target_set_index == 0:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Cannot move first set up"})
+            return jsonify({"success": False, "message": _("Cannot move first set up")})
 
         if direction == "down" and target_set_index == len(sets) - 1:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Cannot move last set down"})
+            return jsonify(
+                {"success": False, "message": _("Cannot move last set down")}
+            )
 
         # Save to history before making changes - only for the moving set
         audit_user_id = get_current_user_id()
@@ -4990,10 +6035,14 @@ def move_set_ajax(session_path, date):
             for i, tune in enumerate(target_set):
                 if i == len(target_set) - 1:
                     # Last tune in set: position between current and after_position
-                    new_position = generate_position_between(current_pos, after_position)
+                    new_position = generate_position_between(
+                        current_pos, after_position
+                    )
                 else:
                     # Generate position, leaving room for remaining tunes
-                    new_position = generate_position_between(current_pos, after_position)
+                    new_position = generate_position_between(
+                        current_pos, after_position
+                    )
                 cur.execute(
                     """
                     UPDATE session_instance_tune
@@ -5056,20 +6105,35 @@ def move_set_ajax(session_path, date):
         )
         position_by_id = {row[0]: row[1] for row in cur.fetchall()}
         set_position_lists = [
-            sorted(position_by_id[tune[1]] for tune in tune_set) for tune_set in new_order
+            sorted(position_by_id[tune[1]] for tune in tune_set)
+            for tune_set in new_order
         ]
-        reconcile_break_records(cur, session_instance_id, set_position_lists, audit_user_id)
+        reconcile_break_records(
+            cur, session_instance_id, set_position_lists, audit_user_id
+        )
 
         conn.commit()
         cur.close()
         conn.close()
 
         return jsonify(
-            {"success": True, "message": f"Set moved {direction} successfully"}
+            {
+                "success": True,
+                "message": (
+                    _("Set moved up successfully")
+                    if direction == "up"
+                    else _("Set moved down successfully")
+                ),
+            }
         )
 
     except Exception as e:
-        return jsonify({"success": False, "message": f"Failed to move set: {str(e)}"})
+        return jsonify(
+            {
+                "success": False,
+                "message": _("Failed to move set: %(error)s", error=str(e)),
+            }
+        )
 
 
 @api_login_required
@@ -5078,8 +6142,12 @@ def move_tune_ajax(session_path, date):
     session_instance_tune_id = data.get("session_instance_tune_id")
     direction = data.get("direction")  # 'left' or 'right'
 
-    if not session_instance_tune_id or not direction or direction not in ["left", "right"]:
-        return jsonify({"success": False, "message": "Invalid parameters"})
+    if (
+        not session_instance_tune_id
+        or not direction
+        or direction not in ["left", "right"]
+    ):
+        return jsonify({"success": False, "message": _("Invalid parameters")})
 
     try:
         conn = get_db_connection()
@@ -5100,7 +6168,9 @@ def move_tune_ajax(session_path, date):
         if not session_instance:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Session instance not found"})
+            return jsonify(
+                {"success": False, "message": _("Session instance not found")}
+            )
 
         session_instance_id = session_instance[0]
 
@@ -5121,12 +6191,17 @@ def move_tune_ajax(session_path, date):
 
         # Find the target tune by session_instance_tune_id
         target_tune_index = next(
-            (i for i, rec in enumerate(all_records) if rec[1] == session_instance_tune_id), -1
+            (
+                i
+                for i, rec in enumerate(all_records)
+                if rec[1] == session_instance_tune_id
+            ),
+            -1,
         )
         if target_tune_index == -1:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Tune not found"})
+            return jsonify({"success": False, "message": _("Tune not found")})
 
         target_tune = all_records[target_tune_index]
 
@@ -5136,7 +6211,7 @@ def move_tune_ajax(session_path, date):
                 cur.close()
                 conn.close()
                 return jsonify(
-                    {"success": False, "message": "Cannot move first tune left"}
+                    {"success": False, "message": _("Cannot move first tune left")}
                 )
 
             prev_tune = all_records[target_tune_index - 1]
@@ -5148,17 +6223,25 @@ def move_tune_ajax(session_path, date):
                 return jsonify(
                     {
                         "success": False,
-                        "message": "Cannot move tune left across set boundary",
+                        "message": _("Cannot move tune left across set boundary"),
                     }
                 )
 
             # Save to history
             audit_user_id = get_current_user_id()
             save_to_history(
-                cur, "session_instance_tune", "UPDATE", target_tune[1], user_id=audit_user_id
+                cur,
+                "session_instance_tune",
+                "UPDATE",
+                target_tune[1],
+                user_id=audit_user_id,
             )
             save_to_history(
-                cur, "session_instance_tune", "UPDATE", prev_tune[1], user_id=audit_user_id
+                cur,
+                "session_instance_tune",
+                "UPDATE",
+                prev_tune[1],
+                user_id=audit_user_id,
             )
 
             # Swap order positions with the previous tune
@@ -5186,7 +6269,7 @@ def move_tune_ajax(session_path, date):
                 cur.close()
                 conn.close()
                 return jsonify(
-                    {"success": False, "message": "Cannot move last tune right"}
+                    {"success": False, "message": _("Cannot move last tune right")}
                 )
 
             next_tune = all_records[target_tune_index + 1]
@@ -5198,17 +6281,25 @@ def move_tune_ajax(session_path, date):
                 return jsonify(
                     {
                         "success": False,
-                        "message": "Cannot move tune right across set boundary",
+                        "message": _("Cannot move tune right across set boundary"),
                     }
                 )
 
             # Save to history
             audit_user_id = get_current_user_id()
             save_to_history(
-                cur, "session_instance_tune", "UPDATE", target_tune[1], user_id=audit_user_id
+                cur,
+                "session_instance_tune",
+                "UPDATE",
+                target_tune[1],
+                user_id=audit_user_id,
             )
             save_to_history(
-                cur, "session_instance_tune", "UPDATE", next_tune[1], user_id=audit_user_id
+                cur,
+                "session_instance_tune",
+                "UPDATE",
+                next_tune[1],
+                user_id=audit_user_id,
             )
 
             # Swap order positions with the next tune
@@ -5235,11 +6326,23 @@ def move_tune_ajax(session_path, date):
         conn.close()
 
         return jsonify(
-            {"success": True, "message": f"Tune moved {direction} successfully"}
+            {
+                "success": True,
+                "message": (
+                    _("Tune moved left successfully")
+                    if direction == "left"
+                    else _("Tune moved right successfully")
+                ),
+            }
         )
 
     except Exception as e:
-        return jsonify({"success": False, "message": f"Failed to move tune: {str(e)}"})
+        return jsonify(
+            {
+                "success": False,
+                "message": _("Failed to move tune: %(error)s", error=str(e)),
+            }
+        )
 
 
 @api_login_required
@@ -5249,7 +6352,7 @@ def add_tunes_to_set_ajax(session_path, date):
     reference_session_instance_tune_id = data.get("reference_session_instance_tune_id")
 
     if not tune_names_input or reference_session_instance_tune_id is None:
-        return jsonify({"success": False, "message": "Missing required parameters"})
+        return jsonify({"success": False, "message": _("Missing required parameters")})
 
     # Parse comma-separated tune names
     tune_names = [
@@ -5259,7 +6362,7 @@ def add_tunes_to_set_ajax(session_path, date):
     ]
 
     if not tune_names:
-        return jsonify({"success": False, "message": "Please enter tune name(s)"})
+        return jsonify({"success": False, "message": _("Please enter tune name(s)")})
 
     try:
         conn = get_db_connection()
@@ -5271,7 +6374,7 @@ def add_tunes_to_set_ajax(session_path, date):
         if not session_result:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Session not found"})
+            return jsonify({"success": False, "message": _("Session not found")})
 
         session_id = session_result[0]
 
@@ -5304,22 +6407,29 @@ def add_tunes_to_set_ajax(session_path, date):
         conn.close()
 
         if total_tunes_added == 1:
-            message = "Tune added to set successfully!"
+            message = _("Tune added to set successfully!")
         else:
-            message = f"{total_tunes_added} tunes added to set successfully!"
+            message = ngettext(
+                "%(num)d tune added to set successfully!",
+                "%(num)d tunes added to set successfully!",
+                total_tunes_added,
+            )
 
         return jsonify({"success": True, "message": message})
 
     except Exception as e:
         return jsonify(
-            {"success": False, "message": f"Failed to add tunes to set: {str(e)}"}
+            {
+                "success": False,
+                "message": _("Failed to add tunes to set: %(error)s", error=str(e)),
+            }
         )
 
 
 @api_login_required
 def edit_tune_ajax(session_path, date):
     if not request.json:
-        return jsonify({"success": False, "message": "No JSON data provided"})
+        return jsonify({"success": False, "message": _("No JSON data provided")})
     session_instance_tune_id = request.json.get("session_instance_tune_id")
     new_name = normalize_quotes(request.json.get("new_name", "").strip())
     original_name = request.json.get("original_name", "").strip()
@@ -5332,7 +6442,7 @@ def edit_tune_ajax(session_path, date):
     )
 
     if session_instance_tune_id is None or not new_name:
-        return jsonify({"success": False, "message": "Missing required parameters"})
+        return jsonify({"success": False, "message": _("Missing required parameters")})
 
     try:
         conn = get_db_connection()
@@ -5344,7 +6454,7 @@ def edit_tune_ajax(session_path, date):
         if not session_result:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Session not found"})
+            return jsonify({"success": False, "message": _("Session not found")})
 
         session_id = session_result[0]
 
@@ -5363,7 +6473,7 @@ def edit_tune_ajax(session_path, date):
         if not result:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Tune not found"})
+            return jsonify({"success": False, "message": _("Tune not found")})
 
         (
             session_instance_id,
@@ -5374,7 +6484,11 @@ def edit_tune_ajax(session_path, date):
 
         # Save to history before making changes
         save_to_history(
-            cur, "session_instance_tune", "UPDATE", session_instance_tune_id, user_id=get_current_user_id()
+            cur,
+            "session_instance_tune",
+            "UPDATE",
+            session_instance_tune_id,
+            user_id=get_current_user_id(),
         )
 
         if current_tune_id:
@@ -5396,9 +6510,16 @@ def edit_tune_ajax(session_path, date):
                     ),
                 )
 
-                message = f'Updated tune display name to "{new_name}"'
                 if setting_id:
-                    message += f" with setting #{setting_id}"
+                    message = _(
+                        'Updated tune display name to "%(new_name)s" with setting #%(setting_id)s',
+                        new_name=new_name,
+                        setting_id=setting_id,
+                    )
+                else:
+                    message = _(
+                        'Updated tune display name to "%(new_name)s"', new_name=new_name
+                    )
             else:
                 # Convert to name-only tune
                 cur.execute(
@@ -5407,10 +6528,17 @@ def edit_tune_ajax(session_path, date):
                     SET tune_id = NULL, name = %s, setting_override = NULL, key_override = %s, last_modified_user_id = %s
                     WHERE session_instance_tune_id = %s
                 """,
-                    (new_name, key_override, get_current_user_id(), session_instance_tune_id),
+                    (
+                        new_name,
+                        key_override,
+                        get_current_user_id(),
+                        session_instance_tune_id,
+                    ),
                 )
 
-                message = f'Converted to unlinked tune: "{new_name}"'
+                message = _(
+                    'Converted to unlinked tune: "%(new_name)s"', new_name=new_name
+                )
         else:
             # This is a name-only tune - update the name and try to link it
             # First, try to find a matching tune
@@ -5426,10 +6554,15 @@ def edit_tune_ajax(session_path, date):
                     SET tune_id = %s, name = NULL, key_override = %s, last_modified_user_id = %s
                     WHERE session_instance_tune_id = %s
                 """,
-                    (tune_id_match, key_override, get_current_user_id(), session_instance_tune_id),
+                    (
+                        tune_id_match,
+                        key_override,
+                        get_current_user_id(),
+                        session_instance_tune_id,
+                    ),
                 )
 
-                message = f'Linked tune to "{final_name}"'
+                message = _('Linked tune to "%(final_name)s"', final_name=final_name)
 
                 conn.commit()
                 cur.close()
@@ -5452,13 +6585,24 @@ def edit_tune_ajax(session_path, date):
                     SET name = %s, key_override = %s, last_modified_user_id = %s
                     WHERE session_instance_tune_id = %s
                 """,
-                    (new_name, key_override, get_current_user_id(), session_instance_tune_id),
+                    (
+                        new_name,
+                        key_override,
+                        get_current_user_id(),
+                        session_instance_tune_id,
+                    ),
                 )
 
                 if error_message:
-                    message = f'Updated to "{new_name}" - {error_message}'
+                    message = _(
+                        'Updated to "%(new_name)s" - %(error)s',
+                        new_name=new_name,
+                        error=error_message,
+                    )
                 else:
-                    message = f'Updated tune name to "{new_name}"'
+                    message = _(
+                        'Updated tune name to "%(new_name)s"', new_name=new_name
+                    )
 
                 conn.commit()
                 cur.close()
@@ -5473,13 +6617,18 @@ def edit_tune_ajax(session_path, date):
         return jsonify({"success": True, "message": message})
 
     except Exception as e:
-        return jsonify({"success": False, "message": f"Failed to edit tune: {str(e)}"})
+        return jsonify(
+            {
+                "success": False,
+                "message": _("Failed to edit tune: %(error)s", error=str(e)),
+            }
+        )
 
 
 def get_session_players_ajax(session_path):
     """Get all players associated with a session"""
     if not current_user.is_authenticated:
-        return jsonify({"success": False, "error": "Authentication required"}), 401
+        return jsonify({"success": False, "error": _("Authentication required")}), 401
 
     # Check if current user is a system admin or session admin
     try:
@@ -5488,7 +6637,7 @@ def get_session_players_ajax(session_path):
 
         cur.execute(
             "SELECT is_system_admin FROM user_account WHERE user_id = %s",
-            (current_user.user_id,)
+            (current_user.user_id,),
         )
         user_row = cur.fetchone()
         is_system_admin = user_row and user_row[0]
@@ -5497,7 +6646,7 @@ def get_session_players_ajax(session_path):
         cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
         session_result = cur.fetchone()
         if not session_result:
-            return jsonify({"error": "Session not found"}), 404
+            return jsonify({"error": _("Session not found")}), 404
 
         session_id = session_result[0]
 
@@ -5506,12 +6655,17 @@ def get_session_players_ajax(session_path):
             cur.execute(
                 """SELECT sp.is_admin FROM session_person sp
                    WHERE sp.session_id = %s AND sp.person_id = %s""",
-                (session_id, current_user.person_id)
+                (session_id, current_user.person_id),
             )
             admin_row = cur.fetchone()
             is_session_admin = admin_row and admin_row[0]
             if not is_session_admin:
-                return jsonify({"success": False, "message": "Insufficient permissions"}), 403
+                return (
+                    jsonify(
+                        {"success": False, "message": _("Insufficient permissions")}
+                    ),
+                    403,
+                )
 
         # Get session players with person details and attendance stats
         cur.execute(
@@ -5581,7 +6735,12 @@ def get_session_players_ajax(session_path):
         return jsonify({"players": players})
 
     except Exception as e:
-        return jsonify({"error": f"Failed to get session members: {str(e)}"}), 500
+        return (
+            jsonify(
+                {"error": _("Failed to get session members: %(error)s", error=str(e))}
+            ),
+            500,
+        )
 
 
 @public_api  # serves the session detail Logs tab, which is public for logged-out viewers
@@ -5595,7 +6754,7 @@ def get_session_logs_ajax(session_path):
         cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
         session_result = cur.fetchone()
         if not session_result:
-            return jsonify({"error": "Session not found"}), 404
+            return jsonify({"error": _("Session not found")}), 404
 
         session_id = session_result[0]
 
@@ -5645,13 +6804,18 @@ def get_session_logs_ajax(session_path):
         return jsonify({"logs": logs})
 
     except Exception as e:
-        return jsonify({"error": f"Failed to get session logs: {str(e)}"}), 500
+        return (
+            jsonify(
+                {"error": _("Failed to get session logs: %(error)s", error=str(e))}
+            ),
+            500,
+        )
 
 
 def get_session_tunes_grid_ajax(session_path):
     """Get all tunes played at a session with statistics for the admin tunes grid"""
     if not current_user.is_authenticated:
-        return jsonify({"success": False, "error": "Authentication required"}), 401
+        return jsonify({"success": False, "error": _("Authentication required")}), 401
 
     # Check if current user is a system admin or session admin
     try:
@@ -5660,7 +6824,7 @@ def get_session_tunes_grid_ajax(session_path):
 
         cur.execute(
             "SELECT is_system_admin FROM user_account WHERE user_id = %s",
-            (current_user.user_id,)
+            (current_user.user_id,),
         )
         user_row = cur.fetchone()
         is_system_admin = user_row and user_row[0]
@@ -5669,7 +6833,7 @@ def get_session_tunes_grid_ajax(session_path):
         cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
         session_result = cur.fetchone()
         if not session_result:
-            return jsonify({"success": False, "error": "Session not found"}), 404
+            return jsonify({"success": False, "error": _("Session not found")}), 404
 
         session_id = session_result[0]
 
@@ -5678,12 +6842,15 @@ def get_session_tunes_grid_ajax(session_path):
             cur.execute(
                 """SELECT sp.is_admin FROM session_person sp
                    WHERE sp.session_id = %s AND sp.person_id = %s""",
-                (session_id, current_user.person_id)
+                (session_id, current_user.person_id),
             )
             admin_row = cur.fetchone()
             is_session_admin = admin_row and admin_row[0]
             if not is_session_admin:
-                return jsonify({"success": False, "error": "Insufficient permissions"}), 403
+                return (
+                    jsonify({"success": False, "error": _("Insufficient permissions")}),
+                    403,
+                )
 
         # Get all unique tunes that have been played at this session
         # along with session_tune settings if they exist, play counts, and tunebook stats
@@ -5766,7 +6933,15 @@ def get_session_tunes_grid_ajax(session_path):
         return jsonify({"success": True, "tunes": tunes})
 
     except Exception as e:
-        return jsonify({"success": False, "error": f"Failed to get session tunes: {str(e)}"}), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": _("Failed to get session tunes: %(error)s", error=str(e)),
+                }
+            ),
+            500,
+        )
 
 
 @api_admin_or_self_required
@@ -5815,7 +6990,12 @@ def get_person_attendance_ajax(person_id):
     except Exception as e:
         return (
             jsonify(
-                {"success": False, "error": f"Failed to get attendance data: {str(e)}"}
+                {
+                    "success": False,
+                    "error": _(
+                        "Failed to get attendance data: %(error)s", error=str(e)
+                    ),
+                }
             ),
             500,
         )
@@ -5883,7 +7063,10 @@ def get_person_logins_ajax(person_id):
     except Exception as e:
         return (
             jsonify(
-                {"success": False, "error": f"Failed to get login history: {str(e)}"}
+                {
+                    "success": False,
+                    "error": _("Failed to get login history: %(error)s", error=str(e)),
+                }
             ),
             500,
         )
@@ -5902,8 +7085,8 @@ def get_person_tunes_stats(person_id):
         cur = conn.cursor()
 
         # Get optional date range filters
-        start_date = request.args.get('start_date')
-        end_date = request.args.get('end_date')
+        start_date = request.args.get("start_date")
+        end_date = request.args.get("end_date")
 
         # Build date filter clause
         date_filter = ""
@@ -5931,7 +7114,9 @@ def get_person_tunes_stats(person_id):
             tuple(date_params),
         )
         row = cur.fetchone()
-        total_tunes, learned, learning, bookmarked, earliest_date, latest_date = row if row else (0, 0, 0, 0, None, None)
+        total_tunes, learned, learning, bookmarked, earliest_date, latest_date = (
+            row if row else (0, 0, 0, 0, None, None)
+        )
 
         # Get counts by tune type (for the filter dropdown)
         cur.execute(
@@ -5949,7 +7134,7 @@ def get_person_tunes_stats(person_id):
         )
         by_type = {}
         for type_row in cur.fetchall():
-            by_type[type_row[0] or 'Unknown'] = type_row[1]
+            by_type[type_row[0] or "Unknown"] = type_row[1]
 
         # Get detailed breakdown by type and status (for filtering)
         cur.execute(
@@ -5970,12 +7155,12 @@ def get_person_tunes_stats(person_id):
         )
         by_type_detailed = {}
         for row in cur.fetchall():
-            tune_type = row[0] or 'Unknown'
+            tune_type = row[0] or "Unknown"
             by_type_detailed[tune_type] = {
-                'total': row[1],
-                'learned': row[2],
-                'learning': row[3],
-                'bookmarked': row[4]
+                "total": row[1],
+                "learned": row[2],
+                "learning": row[3],
+                "bookmarked": row[4],
             }
 
         cur.close()
@@ -5992,9 +7177,13 @@ def get_person_tunes_stats(person_id):
                     "by_type": by_type,
                     "by_type_detailed": by_type_detailed,
                     "date_range": {
-                        "earliest": earliest_date.strftime('%Y-%m-%d') if earliest_date else None,
-                        "latest": latest_date.strftime('%Y-%m-%d') if latest_date else None,
-                    }
+                        "earliest": earliest_date.strftime("%Y-%m-%d")
+                        if earliest_date
+                        else None,
+                        "latest": latest_date.strftime("%Y-%m-%d")
+                        if latest_date
+                        else None,
+                    },
                 },
             }
         )
@@ -6002,7 +7191,12 @@ def get_person_tunes_stats(person_id):
     except Exception as e:
         return (
             jsonify(
-                {"success": False, "error": f"Failed to get tune statistics: {str(e)}"}
+                {
+                    "success": False,
+                    "error": _(
+                        "Failed to get tune statistics: %(error)s", error=str(e)
+                    ),
+                }
             ),
             500,
         )
@@ -6023,13 +7217,16 @@ def get_person_tunes_list(person_id):
         page = max(1, int(request.args.get("page", 1)))
         per_page = min(2000, max(1, int(request.args.get("per_page", 2000))))
     except ValueError:
-        return jsonify({"success": False, "error": "Invalid pagination parameter"}), 400
+        return (
+            jsonify({"success": False, "error": _("Invalid pagination parameter")}),
+            400,
+        )
     learn_status = request.args.get("learn_status")
     if learn_status and learn_status not in ("want to learn", "learning", "learned"):
-        return jsonify({"success": False, "error": "Invalid learn_status"}), 400
+        return jsonify({"success": False, "error": _("Invalid learn_status")}), 400
     sort = request.args.get("sort", "alpha-asc")
     if sort not in VALID_PERSON_TUNE_SORTS:
-        return jsonify({"success": False, "error": "Invalid sort"}), 400
+        return jsonify({"success": False, "error": _("Invalid sort")}), 400
     search = request.args.get("search", "").strip()
 
     conn = get_db_connection()
@@ -6067,10 +7264,10 @@ def get_person_logged_tunes(person_id):
     try:
         limit = min(2000, max(1, int(request.args.get("limit", 1000))))
     except ValueError:
-        return jsonify({"success": False, "error": "Invalid limit"}), 400
+        return jsonify({"success": False, "error": _("Invalid limit")}), 400
     view = request.args.get("view", "detail")
     if view not in ("detail", "summary"):
-        return jsonify({"success": False, "error": "Invalid view"}), 400
+        return jsonify({"success": False, "error": _("Invalid view")}), 400
 
     conn = get_db_connection()
     try:
@@ -6175,13 +7372,15 @@ def check_username_availability():
         )  # To exclude current user from check
 
         if not username:
-            return jsonify({"available": False, "message": "Username cannot be empty"})
+            return jsonify(
+                {"available": False, "message": _("Username cannot be empty")}
+            )
 
         if len(username) < 3:
             return jsonify(
                 {
                     "available": False,
-                    "message": "Username must be at least 3 characters long",
+                    "message": _("Username must be at least 3 characters long"),
                 }
             )
 
@@ -6196,7 +7395,8 @@ def check_username_availability():
             )
         else:
             cur.execute(
-                "SELECT user_id FROM user_account WHERE LOWER(username) = LOWER(%s)", (username,)
+                "SELECT user_id FROM user_account WHERE LOWER(username) = LOWER(%s)",
+                (username,),
             )
 
         existing_user = cur.fetchone()
@@ -6204,14 +7404,17 @@ def check_username_availability():
         conn.close()
 
         if existing_user:
-            return jsonify({"available": False, "message": "Username already taken"})
+            return jsonify({"available": False, "message": _("Username already taken")})
         else:
-            return jsonify({"available": True, "message": "Username is available"})
+            return jsonify({"available": True, "message": _("Username is available")})
 
     except Exception as e:
         return (
             jsonify(
-                {"available": False, "message": f"Error checking username: {str(e)}"}
+                {
+                    "available": False,
+                    "message": _("Error checking username: %(error)s", error=str(e)),
+                }
             ),
             500,
         )
@@ -6222,12 +7425,15 @@ def update_person_details(person_id):
     """Update person and user details. Profile owner or system admin only."""
     try:
         if not current_user.is_system_admin and current_user.person_id != person_id:
-            return jsonify({"success": False, "message": "Not authorized"}), 403
+            return jsonify({"success": False, "message": _("Not authorized")}), 403
 
         data = request.get_json()
 
         if not person_id:
-            return jsonify({"success": False, "message": "Person ID is required"}), 400
+            return (
+                jsonify({"success": False, "message": _("Person ID is required")}),
+                400,
+            )
 
         conn = get_db_connection()
         cur = conn.cursor()
@@ -6235,7 +7441,9 @@ def update_person_details(person_id):
         # Update person details
         person_data = data.get("person", {})
         if person_data:
-            save_to_history(cur, "person", "UPDATE", person_id, user_id=get_current_user_id())
+            save_to_history(
+                cur, "person", "UPDATE", person_id, user_id=get_current_user_id()
+            )
             cur.execute(
                 """
                 UPDATE person
@@ -6273,7 +7481,10 @@ def update_person_details(person_id):
                 conn.close()
                 return (
                     jsonify(
-                        {"success": False, "message": "User account does not match this person"}
+                        {
+                            "success": False,
+                            "message": _("User account does not match this person"),
+                        }
                     ),
                     403,
                 )
@@ -6290,7 +7501,7 @@ def update_person_details(person_id):
                     conn.close()
                     return (
                         jsonify(
-                            {"success": False, "message": "Username already taken"}
+                            {"success": False, "message": _("Username already taken")}
                         ),
                         400,
                     )
@@ -6306,7 +7517,9 @@ def update_person_details(person_id):
             # share one active status, controlled only by the person deactivate/
             # reactivate action (toggle_person_active). Setting it from this form
             # would let a routine profile save silently flip login access.
-            save_to_history(cur, "user_account", "UPDATE", user_id, user_id=get_current_user_id())
+            save_to_history(
+                cur, "user_account", "UPDATE", user_id, user_id=get_current_user_id()
+            )
             cur.execute(
                 """
                 UPDATE user_account
@@ -6329,12 +7542,15 @@ def update_person_details(person_id):
         cur.close()
         conn.close()
 
-        return jsonify({"success": True, "message": "Details updated successfully"})
+        return jsonify({"success": True, "message": _("Details updated successfully")})
 
     except Exception as e:
         return (
             jsonify(
-                {"success": False, "message": f"Failed to update details: {str(e)}"}
+                {
+                    "success": False,
+                    "message": _("Failed to update details: %(error)s", error=str(e)),
+                }
             ),
             500,
         )
@@ -6345,7 +7561,12 @@ def admin_verify_email(user_id):
     """Admin endpoint to manually verify a user's email"""
     # Check if current user is system admin
     if not current_user.is_system_admin:
-        return jsonify({"success": False, "message": "Unauthorized. Admin access required."}), 403
+        return (
+            jsonify(
+                {"success": False, "message": _("Unauthorized. Admin access required.")}
+            ),
+            403,
+        )
 
     try:
         conn = get_db_connection()
@@ -6365,14 +7586,17 @@ def admin_verify_email(user_id):
         if not user_data:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "User not found"}), 404
+            return jsonify({"success": False, "message": _("User not found")}), 404
 
         user_id_db, username, email_verified = user_data
 
         if email_verified:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Email is already verified"}), 400
+            return (
+                jsonify({"success": False, "message": _("Email is already verified")}),
+                400,
+            )
 
         # Mark email as verified and clear token
         save_to_history(
@@ -6393,15 +7617,23 @@ def admin_verify_email(user_id):
         cur.close()
         conn.close()
 
-        return jsonify({
-            "success": True,
-            "message": f"Email verified successfully for user '{username}'"
-        })
+        return jsonify(
+            {
+                "success": True,
+                "message": _(
+                    "Email verified successfully for user '%(username)s'",
+                    username=username,
+                ),
+            }
+        )
 
     except Exception as e:
         return (
             jsonify(
-                {"success": False, "message": f"Failed to verify email: {str(e)}"}
+                {
+                    "success": False,
+                    "message": _("Failed to verify email: %(error)s", error=str(e)),
+                }
             ),
             500,
         )
@@ -6430,16 +7662,24 @@ def toggle_person_active(person_id):
     """
     # Check if current user is system admin
     if not current_user.is_system_admin:
-        return jsonify({"success": False, "message": "Unauthorized. Admin access required."}), 403
+        return (
+            jsonify(
+                {"success": False, "message": _("Unauthorized. Admin access required.")}
+            ),
+            403,
+        )
 
     try:
         data = request.get_json()
         if data is None:
-            return jsonify({"success": False, "message": "No data provided"}), 400
+            return jsonify({"success": False, "message": _("No data provided")}), 400
 
         active = data.get("active")
         if active is None:
-            return jsonify({"success": False, "message": "'active' field is required"}), 400
+            return (
+                jsonify({"success": False, "message": _("'active' field is required")}),
+                400,
+            )
 
         conn = get_db_connection()
         cur = conn.cursor()
@@ -6461,9 +7701,15 @@ def toggle_person_active(person_id):
         if not person_row:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Person not found"}), 404
+            return jsonify({"success": False, "message": _("Person not found")}), 404
 
-        first_name, last_name, current_active, account_user_id, account_active = person_row
+        (
+            first_name,
+            last_name,
+            current_active,
+            account_user_id,
+            account_active,
+        ) = person_row
         person_name = f"{first_name} {last_name}"
 
         # "Already X" only when nothing needs changing — for a connected person that
@@ -6471,16 +7717,32 @@ def toggle_person_active(person_id):
         person_matches = current_active == active
         account_matches = account_user_id is None or account_active == active
         if person_matches and account_matches:
-            status_word = "active" if active else "deactivated"
             cur.close()
             conn.close()
-            return jsonify({
-                "success": False,
-                "message": f"{person_name} is already {status_word}"
-            }), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": (
+                            _(
+                                "%(person_name)s is already active",
+                                person_name=person_name,
+                            )
+                            if active
+                            else _(
+                                "%(person_name)s is already deactivated",
+                                person_name=person_name,
+                            )
+                        ),
+                    }
+                ),
+                400,
+            )
 
         # Save to history before update
-        save_to_history(cur, "person", "UPDATE", person_id, user_id=get_current_user_id())
+        save_to_history(
+            cur, "person", "UPDATE", person_id, user_id=get_current_user_id()
+        )
 
         # Update the person's active status
         cur.execute(
@@ -6494,7 +7756,13 @@ def toggle_person_active(person_id):
 
         # Keep the connected account's login status in lockstep.
         if account_user_id is not None:
-            save_to_history(cur, "user_account", "UPDATE", account_user_id, user_id=get_current_user_id())
+            save_to_history(
+                cur,
+                "user_account",
+                "UPDATE",
+                account_user_id,
+                user_id=get_current_user_id(),
+            )
             cur.execute(
                 """
                 UPDATE user_account
@@ -6508,18 +7776,32 @@ def toggle_person_active(person_id):
         cur.close()
         conn.close()
 
-        action_word = "reactivated" if active else "deactivated"
-        return jsonify({
-            "success": True,
-            "message": f"{person_name} has been {action_word}",
-            "active": active
-        })
+        return jsonify(
+            {
+                "success": True,
+                "message": (
+                    _("%(person_name)s has been reactivated", person_name=person_name)
+                    if active
+                    else _(
+                        "%(person_name)s has been deactivated", person_name=person_name
+                    )
+                ),
+                "active": active,
+            }
+        )
 
     except Exception as e:
-        return jsonify({
-            "success": False,
-            "message": f"Failed to update person status: {str(e)}"
-        }), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "message": _(
+                        "Failed to update person status: %(error)s", error=str(e)
+                    ),
+                }
+            ),
+            500,
+        )
 
 
 @api_admin_or_self_required
@@ -6535,7 +7817,7 @@ def get_available_sessions_for_person(person_id):
         )
         person_row = cur.fetchone()
         if not person_row:
-            return jsonify({"success": False, "message": "Person not found"}), 404
+            return jsonify({"success": False, "message": _("Person not found")}), 404
 
         person_city, person_state, person_country = person_row
 
@@ -6608,7 +7890,12 @@ def get_available_sessions_for_person(person_id):
 
     except Exception as e:
         return (
-            jsonify({"success": False, "message": f"Failed to get sessions: {str(e)}"}),
+            jsonify(
+                {
+                    "success": False,
+                    "message": _("Failed to get sessions: %(error)s", error=str(e)),
+                }
+            ),
             500,
         )
 
@@ -6697,7 +7984,10 @@ def search_sessions_for_person(person_id):
     except Exception as e:
         return (
             jsonify(
-                {"success": False, "message": f"Failed to search sessions: {str(e)}"}
+                {
+                    "success": False,
+                    "message": _("Failed to search sessions: %(error)s", error=str(e)),
+                }
             ),
             500,
         )
@@ -6715,7 +8005,12 @@ def add_person_to_session():
         relationship = data.get("relationship", "member")
         if relationship not in ("member", "visitor"):
             return (
-                jsonify({"success": False, "message": "relationship must be 'member' or 'visitor'"}),
+                jsonify(
+                    {
+                        "success": False,
+                        "message": _("relationship must be 'member' or 'visitor'"),
+                    }
+                ),
                 400,
             )
 
@@ -6724,7 +8019,7 @@ def add_person_to_session():
                 jsonify(
                     {
                         "success": False,
-                        "message": "Person ID and Session ID are required",
+                        "message": _("Person ID and Session ID are required"),
                     }
                 ),
                 400,
@@ -6741,7 +8036,10 @@ def add_person_to_session():
         if cur.fetchone():
             return (
                 jsonify(
-                    {"success": False, "message": "Person is already in this session"}
+                    {
+                        "success": False,
+                        "message": _("Person is already in this session"),
+                    }
                 ),
                 400,
             )
@@ -6758,13 +8056,24 @@ def add_person_to_session():
         )
         person_row = cur.fetchone()
         if not person_row:
-            return jsonify({"success": False, "message": "Person not found"}), 404
+            return jsonify({"success": False, "message": _("Person not found")}), 404
 
         person_first_name, person_last_name, person_email, person_active = person_row
         person_name = f"{person_first_name} {person_last_name}"
 
         if not person_active:
-            return jsonify({"success": False, "message": f"{person_name} is deactivated and cannot be added to sessions"}), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": _(
+                            "%(person_name)s is deactivated and cannot be added to sessions",
+                            person_name=person_name,
+                        ),
+                    }
+                ),
+                400,
+            )
 
         cur.execute(
             "SELECT name, city, state, country, path FROM session WHERE session_id = %s",
@@ -6772,7 +8081,7 @@ def add_person_to_session():
         )
         session_row = cur.fetchone()
         if not session_row:
-            return jsonify({"success": False, "message": "Session not found"}), 404
+            return jsonify({"success": False, "message": _("Session not found")}), 404
 
         (
             session_name,
@@ -6794,8 +8103,13 @@ def add_person_to_session():
         """,
             (person_id, session_id, relationship, get_current_user_id()),
         )
-        save_to_history(cur, "session_person", "INSERT", (session_id, person_id),
-                        user_id=get_current_user_id())
+        save_to_history(
+            cur,
+            "session_person",
+            "INSERT",
+            (session_id, person_id),
+            user_id=get_current_user_id(),
+        )
 
         # Get session admins for email notification. Prefer the account email
         # (user_account.user_email) — person.email is being retired for connected
@@ -6871,7 +8185,19 @@ The Ceol.io Session Management System"""
         return jsonify(
             {
                 "success": True,
-                "message": f"{person_name} has been added to {session_name} as a {relationship}",
+                "message": (
+                    _(
+                        "%(person_name)s has been added to %(session_name)s as a member",
+                        person_name=person_name,
+                        session_name=session_name,
+                    )
+                    if relationship == "member"
+                    else _(
+                        "%(person_name)s has been added to %(session_name)s as a visitor",
+                        person_name=person_name,
+                        session_name=session_name,
+                    )
+                ),
             }
         )
 
@@ -6880,7 +8206,9 @@ The Ceol.io Session Management System"""
             jsonify(
                 {
                     "success": False,
-                    "message": f"Failed to add person to session: {str(e)}",
+                    "message": _(
+                        "Failed to add person to session: %(error)s", error=str(e)
+                    ),
                 }
             ),
             500,
@@ -6902,14 +8230,22 @@ def validate_thesession_entity():
                 if "/members/" in user_input:
                     thesession_id = int(user_input.split("/members/")[-1].split("/")[0])
                 elif "/sessions/" in user_input:
-                    thesession_id = int(user_input.split("/sessions/")[-1].split("/")[0])
+                    thesession_id = int(
+                        user_input.split("/sessions/")[-1].split("/")[0]
+                    )
                 else:
                     return jsonify(
-                        {"success": False, "message": "Invalid TheSession.org URL format"}
+                        {
+                            "success": False,
+                            "message": _("Invalid TheSession.org URL format"),
+                        }
                     )
             except ValueError:
                 return jsonify(
-                    {"success": False, "message": "Invalid TheSession.org URL format"}
+                    {
+                        "success": False,
+                        "message": _("Invalid TheSession.org URL format"),
+                    }
                 )
         elif user_input.isdigit():
             thesession_id = int(user_input)
@@ -6917,7 +8253,7 @@ def validate_thesession_entity():
             return jsonify(
                 {
                     "success": False,
-                    "message": "Please enter a valid name or TheSession.org URL/ID",
+                    "message": _("Please enter a valid name or TheSession.org URL/ID"),
                 }
             )
 
@@ -6937,7 +8273,13 @@ def validate_thesession_entity():
             return jsonify(
                 {
                     "success": False,
-                    "message": f"A person with TheSession.org ID {thesession_id} already exists: {first_name} {last_name} (Person ID: {person_id})",
+                    "message": _(
+                        "A person with TheSession.org ID %(thesession_id)s already exists: %(first_name)s %(last_name)s (Person ID: %(person_id)s)",
+                        thesession_id=thesession_id,
+                        first_name=first_name,
+                        last_name=last_name,
+                        person_id=person_id,
+                    ),
                 }
             )
 
@@ -6949,7 +8291,10 @@ def validate_thesession_entity():
                 return jsonify(
                     {
                         "success": False,
-                        "message": f"TheSession.org user ID {thesession_id} not found",
+                        "message": _(
+                            "TheSession.org user ID %(thesession_id)s not found",
+                            thesession_id=thesession_id,
+                        ),
                     }
                 )
 
@@ -6958,7 +8303,9 @@ def validate_thesession_entity():
                 return jsonify(
                     {
                         "success": False,
-                        "message": "Unable to retrieve user name from TheSession.org",
+                        "message": _(
+                            "Unable to retrieve user name from TheSession.org"
+                        ),
                     }
                 )
 
@@ -6987,13 +8334,20 @@ def validate_thesession_entity():
             return jsonify(
                 {
                     "success": False,
-                    "message": f"Error connecting to TheSession.org: {str(e)}",
+                    "message": _(
+                        "Error connecting to TheSession.org: %(error)s", error=str(e)
+                    ),
                 }
             )
 
     except Exception as e:
         return (
-            jsonify({"success": False, "message": f"Error validating user: {str(e)}"}),
+            jsonify(
+                {
+                    "success": False,
+                    "message": _("Error validating user: %(error)s", error=str(e)),
+                }
+            ),
             500,
         )
 
@@ -7006,7 +8360,7 @@ def parse_person_name():
         full_name = data.get("name", "").strip()
 
         if not full_name:
-            return jsonify({"success": False, "message": "Name cannot be empty"})
+            return jsonify({"success": False, "message": _("Name cannot be empty")})
 
         # Parse name into first and last
         name_parts = full_name.split()
@@ -7028,7 +8382,12 @@ def parse_person_name():
 
     except Exception as e:
         return (
-            jsonify({"success": False, "message": f"Error parsing name: {str(e)}"}),
+            jsonify(
+                {
+                    "success": False,
+                    "message": _("Error parsing name: %(error)s", error=str(e)),
+                }
+            ),
             500,
         )
 
@@ -7044,7 +8403,10 @@ def create_new_person():
         last_name = data.get("last_name", "").strip()
 
         if not first_name:
-            return jsonify({"success": False, "message": "First name is required"}), 400
+            return (
+                jsonify({"success": False, "message": _("First name is required")}),
+                400,
+            )
 
         # Optional fields
         email = data.get("email", "").strip() or None
@@ -7084,7 +8446,9 @@ def create_new_person():
 
             result = cur.fetchone()
             if not result:
-                return jsonify({"success": False, "message": "Failed to create person"})
+                return jsonify(
+                    {"success": False, "message": _("Failed to create person")}
+                )
             person_id = result[0]
 
             # Save to history after INSERT (we now have person_id)
@@ -7101,8 +8465,13 @@ def create_new_person():
                 """,
                     (person_id, session_id, audit_user_id),
                 )
-                save_to_history(cur, "session_person", "INSERT", (session_id, person_id),
-                                user_id=audit_user_id)
+                save_to_history(
+                    cur,
+                    "session_person",
+                    "INSERT",
+                    (session_id, person_id),
+                    user_id=audit_user_id,
+                )
 
             conn.commit()
 
@@ -7120,9 +8489,19 @@ def create_new_person():
             conn.close()
 
             # Create success message
-            message = f"{first_name} {last_name} has been created successfully"
             if session_name:
-                message += f' and added to session "{session_name}"'
+                message = _(
+                    '%(first_name)s %(last_name)s has been created successfully and added to session "%(session_name)s"',
+                    first_name=first_name,
+                    last_name=last_name,
+                    session_name=session_name,
+                )
+            else:
+                message = _(
+                    "%(first_name)s %(last_name)s has been created successfully",
+                    first_name=first_name,
+                    last_name=last_name,
+                )
 
             return jsonify(
                 {"success": True, "message": message, "person_id": person_id}
@@ -7134,7 +8513,10 @@ def create_new_person():
             conn.close()
             return (
                 jsonify(
-                    {"success": False, "message": f"Database error: {str(db_error)}"}
+                    {
+                        "success": False,
+                        "message": _("Database error: %(error)s", error=str(db_error)),
+                    }
                 ),
                 500,
             )
@@ -7142,7 +8524,10 @@ def create_new_person():
     except Exception as e:
         return (
             jsonify(
-                {"success": False, "message": f"Failed to create person: {str(e)}"}
+                {
+                    "success": False,
+                    "message": _("Failed to create person: %(error)s", error=str(e)),
+                }
             ),
             500,
         )
@@ -7193,7 +8578,12 @@ def get_available_sessions():
 
     except Exception as e:
         return (
-            jsonify({"success": False, "message": f"Failed to get sessions: {str(e)}"}),
+            jsonify(
+                {
+                    "success": False,
+                    "message": _("Failed to get sessions: %(error)s", error=str(e)),
+                }
+            ),
             500,
         )
 
@@ -7215,7 +8605,7 @@ def _set_session_person_field(session_path, person_id, column, value, *, admin_o
         cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
         row = cur.fetchone()
         if not row:
-            return jsonify({"success": False, "message": "Session not found"}), 404
+            return jsonify({"success": False, "message": _("Session not found")}), 404
         session_id = row[0]
 
         actor_person_id = getattr(current_user, "person_id", None)
@@ -7227,11 +8617,19 @@ def _set_session_person_field(session_path, person_id, column, value, *, admin_o
         else:
             allowed = is_admin or is_self
         if not allowed:
-            return jsonify({"success": False, "message": "Insufficient permissions"}), 403
+            return (
+                jsonify({"success": False, "message": _("Insufficient permissions")}),
+                403,
+            )
 
         # History BEFORE the update -- it snapshots the pre-change row.
-        save_to_history(cur, "session_person", "UPDATE", (session_id, person_id),
-                        user_id=get_current_user_id())
+        save_to_history(
+            cur,
+            "session_person",
+            "UPDATE",
+            (session_id, person_id),
+            user_id=get_current_user_id(),
+        )
 
         cur.execute(
             f"""
@@ -7244,7 +8642,12 @@ def _set_session_person_field(session_path, person_id, column, value, *, admin_o
         )
         if cur.rowcount == 0:
             conn.rollback()
-            return jsonify({"success": False, "message": "Person not found in this session"}), 404
+            return (
+                jsonify(
+                    {"success": False, "message": _("Person not found in this session")}
+                ),
+                404,
+            )
 
         conn.commit()
         return jsonify({"success": True, column: value})
@@ -7271,7 +8674,15 @@ def set_session_person_relationship(session_path, person_id):
     data = request.get_json() or {}
     relationship = data.get("relationship")
     if relationship not in ("member", "visitor"):
-        return jsonify({"success": False, "message": "relationship must be 'member' or 'visitor'"}), 400
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "message": _("relationship must be 'member' or 'visitor'"),
+                }
+            ),
+            400,
+        )
     return _set_session_person_field(
         session_path, person_id, "relationship", relationship, admin_only=False
     )
@@ -7317,11 +8728,14 @@ def update_session_player_admin_status(session_path, person_id):
     try:
         cur.execute(
             "SELECT is_system_admin FROM user_account WHERE user_id = %s",
-            (current_user.user_id,)
+            (current_user.user_id,),
         )
         user_row = cur.fetchone()
         if not user_row or not user_row[0]:
-            return jsonify({"success": False, "message": "Insufficient permissions"}), 403
+            return (
+                jsonify({"success": False, "message": _("Insufficient permissions")}),
+                403,
+            )
 
         data = request.get_json() or {}
 
@@ -7338,13 +8752,13 @@ def update_session_player_admin_status(session_path, person_id):
             # revoking and restoring session-admin doesn't silently lose it.
             updates["can_manage_recordings"] = bool(data.get("can_manage_recordings"))
         if not updates:
-            return jsonify({"success": False, "message": "Nothing to update"}), 400
+            return jsonify({"success": False, "message": _("Nothing to update")}), 400
 
         # Get session ID first
         cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
         session_result = cur.fetchone()
         if not session_result:
-            return jsonify({"success": False, "error": "Session not found"}), 404
+            return jsonify({"success": False, "error": _("Session not found")}), 404
 
         session_id = session_result[0]
 
@@ -7370,7 +8784,7 @@ def update_session_player_admin_status(session_path, person_id):
         if cur.rowcount == 0:
             return (
                 jsonify(
-                    {"success": False, "error": "Person not found in this session"}
+                    {"success": False, "error": _("Person not found in this session")}
                 ),
                 404,
             )
@@ -7390,42 +8804,49 @@ def update_session_player_details(session_path, person_id):
     """Update person details for session admins"""
     conn = get_db_connection()
     cur = conn.cursor()
-    
+
     try:
         # Check if current user is a system admin or session admin
         cur.execute(
             "SELECT is_system_admin FROM user_account WHERE user_id = %s",
-            (current_user.user_id,)
+            (current_user.user_id,),
         )
         user_row = cur.fetchone()
         is_system_admin = user_row and user_row[0]
-        
+
         # If not system admin, check if they're a session admin
         is_session_admin = False
         if not is_system_admin:
-            cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
+            cur.execute(
+                "SELECT session_id FROM session WHERE path = %s", (session_path,)
+            )
             session_result = cur.fetchone()
             if not session_result:
-                return jsonify({"success": False, "error": "Session not found"}), 404
-            
+                return jsonify({"success": False, "error": _("Session not found")}), 404
+
             session_id = session_result[0]
             cur.execute(
                 """SELECT sp.is_admin FROM session_person sp 
                    WHERE sp.session_id = %s AND sp.person_id = %s""",
-                (session_id, current_user.person_id)
+                (session_id, current_user.person_id),
             )
             admin_row = cur.fetchone()
             is_session_admin = admin_row and admin_row[0]
-        
+
         if not is_system_admin and not is_session_admin:
-            return jsonify({"success": False, "message": "Insufficient permissions"}), 403
+            return (
+                jsonify({"success": False, "message": _("Insufficient permissions")}),
+                403,
+            )
 
         # Get session ID if we don't have it yet
-        if 'session_id' not in locals():
-            cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
+        if "session_id" not in locals():
+            cur.execute(
+                "SELECT session_id FROM session WHERE path = %s", (session_path,)
+            )
             session_result = cur.fetchone()
             if not session_result:
-                return jsonify({"success": False, "error": "Session not found"}), 404
+                return jsonify({"success": False, "error": _("Session not found")}), 404
             session_id = session_result[0]
 
         # Check if person has a linked user account
@@ -7433,23 +8854,33 @@ def update_session_player_details(session_path, person_id):
             """SELECT p.person_id, u.user_id FROM person p 
                LEFT JOIN user_account u ON p.person_id = u.person_id 
                WHERE p.person_id = %s""",
-            (person_id,)
+            (person_id,),
         )
         person_row = cur.fetchone()
         if not person_row:
-            return jsonify({"success": False, "error": "Person not found"}), 404
-        
+            return jsonify({"success": False, "error": _("Person not found")}), 404
+
         has_user_account = person_row[1] is not None
 
         data = request.get_json()
-        
+
         # If person has user account, only allow updating regular status
         if has_user_account:
             # Spec 034: relationship replaces is_regular. (This UPDATE is duplicated in the
             # has-account / no-account branches of this one function -- change both.)
-            if 'relationship' in data:
-                if data['relationship'] not in ('member', 'visitor'):
-                    return jsonify({"success": False, "message": "relationship must be 'member' or 'visitor'"}), 400
+            if "relationship" in data:
+                if data["relationship"] not in ("member", "visitor"):
+                    return (
+                        jsonify(
+                            {
+                                "success": False,
+                                "message": _(
+                                    "relationship must be 'member' or 'visitor'"
+                                ),
+                            }
+                        ),
+                        400,
+                    )
                 # History BEFORE the update -- it snapshots the pre-change row.
                 save_to_history(
                     cur,
@@ -7461,21 +8892,35 @@ def update_session_player_details(session_path, person_id):
                 cur.execute(
                     """UPDATE session_person SET relationship = %s, last_modified_user_id = %s
                        WHERE session_id = %s AND person_id = %s""",
-                    (data['relationship'], get_current_user_id(), session_id, person_id)
+                    (
+                        data["relationship"],
+                        get_current_user_id(),
+                        session_id,
+                        person_id,
+                    ),
                 )
         else:
             # Person doesn't have user account - allow updating additional fields
             updates = []
             params = []
-            
+
             # Fields that can be updated for non-user accounts
-            editable_fields = ['first_name', 'last_name', 'email', 'sms_number', 'city', 'state', 'country', 'thesession_user_id']
-            
+            editable_fields = [
+                "first_name",
+                "last_name",
+                "email",
+                "sms_number",
+                "city",
+                "state",
+                "country",
+                "thesession_user_id",
+            ]
+
             for field in editable_fields:
                 if field in data:
                     updates.append(f"{field} = %s")
                     params.append(data[field])
-            
+
             if updates:
                 updates.append("last_modified_date = NOW()")
                 updates.append("last_modified_user_id = %s")
@@ -7499,9 +8944,19 @@ def update_session_player_details(session_path, person_id):
 
             # Spec 034: relationship replaces is_regular. (This UPDATE is duplicated in the
             # has-account / no-account branches of this one function -- change both.)
-            if 'relationship' in data:
-                if data['relationship'] not in ('member', 'visitor'):
-                    return jsonify({"success": False, "message": "relationship must be 'member' or 'visitor'"}), 400
+            if "relationship" in data:
+                if data["relationship"] not in ("member", "visitor"):
+                    return (
+                        jsonify(
+                            {
+                                "success": False,
+                                "message": _(
+                                    "relationship must be 'member' or 'visitor'"
+                                ),
+                            }
+                        ),
+                        400,
+                    )
                 # History BEFORE the update -- it snapshots the pre-change row.
                 save_to_history(
                     cur,
@@ -7513,7 +8968,12 @@ def update_session_player_details(session_path, person_id):
                 cur.execute(
                     """UPDATE session_person SET relationship = %s, last_modified_user_id = %s
                        WHERE session_id = %s AND person_id = %s""",
-                    (data['relationship'], get_current_user_id(), session_id, person_id)
+                    (
+                        data["relationship"],
+                        get_current_user_id(),
+                        session_id,
+                        person_id,
+                    ),
                 )
 
         conn.commit()
@@ -7532,42 +8992,55 @@ def delete_session_player(session_path, person_id):
     """Delete a player from a session and potentially the person record if orphaned"""
     conn = get_db_connection()
     cur = conn.cursor()
-    
+
     try:
         # Check if current user is a system admin or session admin
         cur.execute(
             "SELECT is_system_admin FROM user_account WHERE user_id = %s",
-            (current_user.user_id,)
+            (current_user.user_id,),
         )
         user_row = cur.fetchone()
         is_system_admin = user_row and user_row[0]
-        
+
         # If not system admin, check if they're a session admin
         is_session_admin = False
         if not is_system_admin:
-            cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
+            cur.execute(
+                "SELECT session_id FROM session WHERE path = %s", (session_path,)
+            )
             session_result = cur.fetchone()
             if not session_result:
-                return jsonify({"success": False, "message": "Session not found"}), 404
-            
+                return (
+                    jsonify({"success": False, "message": _("Session not found")}),
+                    404,
+                )
+
             session_id = session_result[0]
             cur.execute(
                 """SELECT sp.is_admin FROM session_person sp 
                    WHERE sp.session_id = %s AND sp.person_id = %s""",
-                (session_id, current_user.person_id)
+                (session_id, current_user.person_id),
             )
             admin_row = cur.fetchone()
             is_session_admin = admin_row and admin_row[0]
-        
+
         if not is_system_admin and not is_session_admin:
-            return jsonify({"success": False, "message": "Insufficient permissions"}), 403
+            return (
+                jsonify({"success": False, "message": _("Insufficient permissions")}),
+                403,
+            )
 
         # Get session ID if we don't have it yet
-        if 'session_id' not in locals():
-            cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
+        if "session_id" not in locals():
+            cur.execute(
+                "SELECT session_id FROM session WHERE path = %s", (session_path,)
+            )
             session_result = cur.fetchone()
             if not session_result:
-                return jsonify({"success": False, "message": "Session not found"}), 404
+                return (
+                    jsonify({"success": False, "message": _("Session not found")}),
+                    404,
+                )
             session_id = session_result[0]
 
         # Check if person exists and get info about user account
@@ -7575,21 +9048,26 @@ def delete_session_player(session_path, person_id):
             """SELECT p.person_id, u.user_id FROM person p 
                LEFT JOIN user_account u ON p.person_id = u.person_id 
                WHERE p.person_id = %s""",
-            (person_id,)
+            (person_id,),
         )
         person_row = cur.fetchone()
         if not person_row:
-            return jsonify({"success": False, "message": "Person not found"}), 404
-        
+            return jsonify({"success": False, "message": _("Person not found")}), 404
+
         has_user_account = person_row[1] is not None
 
         # Check if person is actually in this session
         cur.execute(
             "SELECT 1 FROM session_person WHERE session_id = %s AND person_id = %s",
-            (session_id, person_id)
+            (session_id, person_id),
         )
         if not cur.fetchone():
-            return jsonify({"success": False, "message": "Person is not in this session"}), 404
+            return (
+                jsonify(
+                    {"success": False, "message": _("Person is not in this session")}
+                ),
+                404,
+            )
 
         # If person has no user account, check if they should be deleted entirely BEFORE we delete from session_person
         person_deleted = False
@@ -7598,7 +9076,7 @@ def delete_session_player(session_path, person_id):
             # Check if person is associated with any other sessions (excluding this one)
             cur.execute(
                 "SELECT COUNT(*) FROM session_person WHERE person_id = %s AND session_id != %s",
-                (person_id, session_id)
+                (person_id, session_id),
             )
             result = cur.fetchone()
             other_sessions_count = result[0] if result else 0
@@ -7606,7 +9084,7 @@ def delete_session_player(session_path, person_id):
         # Remove from session_person table
         cur.execute(
             "DELETE FROM session_person WHERE session_id = %s AND person_id = %s",
-            (session_id, person_id)
+            (session_id, person_id),
         )
         # TODO: Add session_person history tracking
 
@@ -7616,26 +9094,22 @@ def delete_session_player(session_path, person_id):
                WHERE person_id = %s AND session_instance_id IN (
                    SELECT session_instance_id FROM session_instance WHERE session_id = %s
                )""",
-            (person_id, session_id)
+            (person_id, session_id),
         )
         # TODO: Add session_instance_person history tracking with proper record_id tuple
 
         # Complete the orphan cleanup if needed
         if not has_user_account and other_sessions_count == 0:
             # No other session associations - delete the person record entirely
-            
+
             # First delete person_instrument records
             cur.execute(
-                "DELETE FROM person_instrument WHERE person_id = %s",
-                (person_id,)
+                "DELETE FROM person_instrument WHERE person_id = %s", (person_id,)
             )
             # TODO: Add person_instrument history tracking with proper record_id tuple
-            
+
             # Then delete the person record
-            cur.execute(
-                "DELETE FROM person WHERE person_id = %s",
-                (person_id,)
-            )
+            cur.execute("DELETE FROM person WHERE person_id = %s", (person_id,))
             save_to_history(
                 cur,
                 "person",
@@ -7646,13 +9120,15 @@ def delete_session_player(session_path, person_id):
             person_deleted = True
 
         conn.commit()
-        
+
         response_data = {"success": True}
         if person_deleted:
-            response_data["message"] = "Member removed from session and person record deleted (no other session associations)"
+            response_data[
+                "message"
+            ] = "Member removed from session and person record deleted (no other session associations)"
         else:
             response_data["message"] = "Member successfully removed from session"
-            
+
         return jsonify(response_data)
 
     except Exception as e:
@@ -7675,10 +9151,12 @@ def leave_session_membership(session_path):
 
     try:
         # Get session ID
-        cur.execute("SELECT session_id, name FROM session WHERE path = %s", (session_path,))
+        cur.execute(
+            "SELECT session_id, name FROM session WHERE path = %s", (session_path,)
+        )
         session_result = cur.fetchone()
         if not session_result:
-            return jsonify({"success": False, "message": "Session not found"}), 404
+            return jsonify({"success": False, "message": _("Session not found")}), 404
 
         session_id, session_name = session_result
         person_id = current_user.person_id
@@ -7686,23 +9164,36 @@ def leave_session_membership(session_path):
         # Check if user is actually a member of this session
         cur.execute(
             "SELECT 1 FROM session_person WHERE session_id = %s AND person_id = %s",
-            (session_id, person_id)
+            (session_id, person_id),
         )
         if not cur.fetchone():
-            return jsonify({"success": False, "message": "You are not a member of this session"}), 404
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": _("You are not a member of this session"),
+                    }
+                ),
+                404,
+            )
 
         # Remove from session_person table only (preserves attendance history)
         cur.execute(
             "DELETE FROM session_person WHERE session_id = %s AND person_id = %s",
-            (session_id, person_id)
+            (session_id, person_id),
         )
 
         conn.commit()
 
-        return jsonify({
-            "success": True,
-            "message": f"You have been removed from {session_name}"
-        })
+        return jsonify(
+            {
+                "success": True,
+                "message": _(
+                    "You have been removed from %(session_name)s",
+                    session_name=session_name,
+                ),
+            }
+        )
 
     except Exception as e:
         conn.rollback()
@@ -7717,7 +9208,7 @@ def terminate_session(session_path):
     """Set the termination date for a session"""
     # Check if user is system admin
     if not current_user.is_system_admin:
-        return jsonify({"success": False, "error": "Unauthorized"}), 403
+        return jsonify({"success": False, "error": _("Unauthorized")}), 403
 
     try:
         data = request.get_json()
@@ -7725,7 +9216,7 @@ def terminate_session(session_path):
 
         if not termination_date:
             return (
-                jsonify({"success": False, "error": "Termination date is required"}),
+                jsonify({"success": False, "error": _("Termination date is required")}),
                 400,
             )
 
@@ -7736,7 +9227,7 @@ def terminate_session(session_path):
         cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
         session_result = cur.fetchone()
         if not session_result:
-            return jsonify({"success": False, "error": "Session not found"}), 404
+            return jsonify({"success": False, "error": _("Session not found")}), 404
 
         session_id = session_result[0]
 
@@ -7751,7 +9242,10 @@ def terminate_session(session_path):
         )
 
         if cur.rowcount == 0:
-            return jsonify({"success": False, "error": "Failed to update session"}), 404
+            return (
+                jsonify({"success": False, "error": _("Failed to update session")}),
+                404,
+            )
 
         # Save to history
         save_to_history(
@@ -7777,7 +9271,7 @@ def reactivate_session(session_path):
     """Clear the termination date for a session to reactivate it"""
     # Check if user is system admin
     if not current_user.is_system_admin:
-        return jsonify({"success": False, "error": "Unauthorized"}), 403
+        return jsonify({"success": False, "error": _("Unauthorized")}), 403
 
     try:
         conn = get_db_connection()
@@ -7787,7 +9281,7 @@ def reactivate_session(session_path):
         cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
         session_result = cur.fetchone()
         if not session_result:
-            return jsonify({"success": False, "error": "Session not found"}), 404
+            return jsonify({"success": False, "error": _("Session not found")}), 404
 
         session_id = session_result[0]
 
@@ -7802,7 +9296,10 @@ def reactivate_session(session_path):
         )
 
         if cur.rowcount == 0:
-            return jsonify({"success": False, "error": "Failed to update session"}), 404
+            return (
+                jsonify({"success": False, "error": _("Failed to update session")}),
+                404,
+            )
 
         # Save to history
         save_to_history(
@@ -7845,12 +9342,14 @@ def match_tune_core(cur, session_id, tune_name, previous_tune_type=None, limit=5
         return {
             "matched": True,
             "exact_match": True,
-            "results": [{
-                "tune_id": tune_id,
-                "tune_name": final_name,
-                "tune_type": row[0] if row else None,
-                "in_session_tune": bool(row[1]) if row else False,
-            }],
+            "results": [
+                {
+                    "tune_id": tune_id,
+                    "tune_name": final_name,
+                    "tune_type": row[0] if row else None,
+                    "in_session_tune": bool(row[1]) if row else False,
+                }
+            ],
         }
 
     # Wildcard candidate list. Split into two branches so the catalog-wide name search is
@@ -7897,11 +9396,24 @@ def match_tune_core(cur, session_id, tune_name, previous_tune_type=None, limit=5
                  LOWER(unaccent(c.display_name)) ASC
         LIMIT %s
         """,
-        (session_id, like_pattern, session_id, like_pattern,
-         previous_tune_type, session_id, session_id, limit),
+        (
+            session_id,
+            like_pattern,
+            session_id,
+            like_pattern,
+            previous_tune_type,
+            session_id,
+            session_id,
+            limit,
+        ),
     )
     results = [
-        {"tune_id": m[0], "tune_name": m[1], "tune_type": m[2], "in_session_tune": bool(m[5])}
+        {
+            "tune_id": m[0],
+            "tune_name": m[1],
+            "tune_type": m[2],
+            "in_session_tune": bool(m[5]),
+        }
         for m in cur.fetchall()
     ]
     return {"matched": len(results) == 1, "exact_match": False, "results": results}
@@ -7918,13 +9430,13 @@ def match_tune_ajax(session_path, date_or_id):
     (matching is session-scoped, not instance-scoped).
     """
     if not request.json:
-        return jsonify({"success": False, "message": "No JSON data provided"})
+        return jsonify({"success": False, "message": _("No JSON data provided")})
     tune_name = normalize_quotes(request.json.get("tune_name", "").strip())
     previous_tune_type = request.json.get(
         "previous_tune_type", None
     )  # For preferencing matching tune types in sets
     if not tune_name:
-        return jsonify({"success": False, "message": "Please provide a tune name"})
+        return jsonify({"success": False, "message": _("Please provide a tune name")})
 
     try:
         conn = get_db_connection()
@@ -7936,10 +9448,12 @@ def match_tune_ajax(session_path, date_or_id):
         if not session_result:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Session not found"})
+            return jsonify({"success": False, "message": _("Session not found")})
 
         # Shared matcher (also used by the live logger) so results are identical.
-        result = match_tune_core(cur, session_result[0], tune_name, previous_tune_type, limit=5)
+        result = match_tune_core(
+            cur, session_result[0], tune_name, previous_tune_type, limit=5
+        )
         cur.close()
         conn.close()
         return jsonify({"success": True, **result})
@@ -7959,7 +9473,10 @@ def test_match_tune_ajax(session_path, date):
 
     if not tune_name:
         return jsonify(
-            {"success": False, "message": "Please provide a tune_name query parameter"}
+            {
+                "success": False,
+                "message": _("Please provide a tune_name query parameter"),
+            }
         )
 
     try:
@@ -7971,7 +9488,7 @@ def test_match_tune_ajax(session_path, date):
         session_result = cur.fetchone()
 
         if not session_result:
-            return jsonify({"success": False, "message": "Session not found"})
+            return jsonify({"success": False, "message": _("Session not found")})
 
         session_id = session_result[0]
 
@@ -8018,15 +9535,33 @@ def ensure_tune_exists_in_table(cur, tune_id, user_provided_name):
         response = requests.get(api_url, timeout=10)
 
         if response.status_code == 404:
-            return False, f"Tune #{tune_id} not found on thesession.org", None, None
+            return (
+                False,
+                _("Tune #%(tune_id)s not found on thesession.org", tune_id=tune_id),
+                None,
+                None,
+            )
         elif response.status_code != 200:
-            return False, f"Failed to fetch tune data from thesession.org (status: {response.status_code})", None, None
+            return (
+                False,
+                _(
+                    "Failed to fetch tune data from thesession.org (status: %(status)s)",
+                    status=response.status_code,
+                ),
+                None,
+                None,
+            )
 
         data = response.json()
 
         # Extract required fields
         if "name" not in data or "type" not in data:
-            return False, "Invalid tune data received from thesession.org", None, None
+            return (
+                False,
+                _("Invalid tune data received from thesession.org"),
+                None,
+                None,
+            )
 
         tune_name_from_api = data["name"]
         tune_type = data["type"].title()  # Convert to title case
@@ -8042,11 +9577,19 @@ def ensure_tune_exists_in_table(cur, tune_id, user_provided_name):
                 INSERT INTO tune (tune_id, name, tune_type, tunebook_count_cached, tunebook_count_cached_date, created_by_user_id)
                 VALUES (%s, %s, %s, %s, CURRENT_DATE, %s)
             """,
-                (tune_id, tune_name_from_api, tune_type, tunebook_count, get_current_user_id()),
+                (
+                    tune_id,
+                    tune_name_from_api,
+                    tune_type,
+                    tunebook_count,
+                    get_current_user_id(),
+                ),
             )
 
             # Save the newly inserted tune to history
-            save_to_history(cur, "tune", "INSERT", tune_id, user_id=get_current_user_id())
+            save_to_history(
+                cur, "tune", "INSERT", tune_id, user_id=get_current_user_id()
+            )
             new_tune_inserted = True
 
             # NOTE: Setting caching is NOT done here because we haven't committed yet.
@@ -8054,29 +9597,64 @@ def ensure_tune_exists_in_table(cur, tune_id, user_provided_name):
 
         except Exception as insert_error:
             # Check if this was a duplicate key error (race condition - someone else inserted it)
-            if "duplicate key" in str(insert_error).lower() or "already exists" in str(insert_error).lower():
+            if (
+                "duplicate key" in str(insert_error).lower()
+                or "already exists" in str(insert_error).lower()
+            ):
                 # Someone else inserted it, that's fine - just get the name they used
                 cur.execute("SELECT name FROM tune WHERE tune_id = %s", (tune_id,))
                 existing_tune = cur.fetchone()
                 if existing_tune:
                     tune_name_from_api = existing_tune[0]
                 else:
-                    return False, f"Race condition error inserting tune {tune_id}", None, None
+                    return (
+                        False,
+                        _(
+                            "Race condition error inserting tune %(tune_id)s",
+                            tune_id=tune_id,
+                        ),
+                        None,
+                        None,
+                    )
             else:
                 # Some other database error
-                return False, f"Database error inserting tune {tune_id}: {str(insert_error)}", None, None
+                return (
+                    False,
+                    _(
+                        "Database error inserting tune %(tune_id)s: %(error)s",
+                        tune_id=tune_id,
+                        error=str(insert_error),
+                    ),
+                    None,
+                    None,
+                )
 
         # Determine if we need to use an alias
         alias_needed = user_provided_name and user_provided_name != tune_name_from_api
         # Return api_data only if we inserted a new tune (so caller can cache settings after commit)
-        return True, None, user_provided_name if alias_needed else None, data if new_tune_inserted else None
+        return (
+            True,
+            None,
+            user_provided_name if alias_needed else None,
+            data if new_tune_inserted else None,
+        )
 
     except requests.exceptions.Timeout:
-        return False, "Timeout connecting to thesession.org", None, None
+        return False, _("Timeout connecting to thesession.org"), None, None
     except requests.exceptions.RequestException as e:
-        return False, f"Error connecting to thesession.org: {str(e)}", None, None
+        return (
+            False,
+            _("Error connecting to thesession.org: %(error)s", error=str(e)),
+            None,
+            None,
+        )
     except Exception as e:
-        return False, f"Error processing tune data: {str(e)}", None, None
+        return (
+            False,
+            _("Error processing tune data: %(error)s", error=str(e)),
+            None,
+            None,
+        )
 
 
 @api_login_required
@@ -8099,7 +9677,7 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
         if not session_result:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Session not found"})
+            return jsonify({"success": False, "message": _("Session not found")})
 
         session_id = session_result[0]
 
@@ -8108,14 +9686,22 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
         if not session_instance_id:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Session instance not found"})
+            return jsonify(
+                {"success": False, "message": _("Session instance not found")}
+            )
 
         # One-way lock (spec 024 beta): refuse if the live editor owns this instance —
         # this bulk save hard-deletes rows absent from its set and emits no events, which
         # would silently destroy live-editor data.
         if instance_logging_locked(cur, session_instance_id):
-            cur.close(); conn.close()
-            return jsonify({"success": False, "locked": True, "message": LEGACY_LOCKED_MSG}), 409
+            cur.close()
+            conn.close()
+            return (
+                jsonify(
+                    {"success": False, "locked": True, "message": LEGACY_LOCKED_MSG}
+                ),
+                409,
+            )
 
         # Get all existing tunes for this session instance. Break records are reconciled
         # separately (they have no stable client identity), so only diff tune rows here.
@@ -8191,9 +9777,15 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
 
         # Validate and ensure all linked tunes exist in the tune table
         # This handles the race condition where tunes were linked but may not exist yet
-        tunes_to_add_to_session = {}  # Dict to track unique tunes we need to add to session_tune table (tune_id -> alias_name)
-        aliases_to_create = []  # Track aliases we need to add to session_tune_alias table
-        new_tunes_to_cache = []  # Track newly inserted tunes that need setting cache after commit
+        tunes_to_add_to_session = (
+            {}
+        )  # Dict to track unique tunes we need to add to session_tune table (tune_id -> alias_name)
+        aliases_to_create = (
+            []
+        )  # Track aliases we need to add to session_tune_alias table
+        new_tunes_to_cache = (
+            []
+        )  # Track newly inserted tunes that need setting cache after commit
 
         for new_tune in new_tunes:
             tune_id = new_tune.get("tune_id")
@@ -8203,19 +9795,36 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
                 # A merged-away id remaps to the canonical tune (spec 030): a stale
                 # save means the merged tune, so proceed rather than reject the batch.
                 # The user-provided name rides along, preserving the displayed name.
-                cur.execute("SELECT redirect_to_tune_id FROM tune WHERE tune_id = %s", (tune_id,))
+                cur.execute(
+                    "SELECT redirect_to_tune_id FROM tune WHERE tune_id = %s",
+                    (tune_id,),
+                )
                 redirect_check = cur.fetchone()
                 if redirect_check and redirect_check[0] is not None:
                     tune_id = redirect_check[0]
                     new_tune["tune_id"] = tune_id
 
                 # Ensure tune exists in tune table, get alias info and API data for new tunes
-                success, error_message, alias_name, new_tune_api_data = ensure_tune_exists_in_table(cur, tune_id, user_provided_name)
+                (
+                    success,
+                    error_message,
+                    alias_name,
+                    new_tune_api_data,
+                ) = ensure_tune_exists_in_table(cur, tune_id, user_provided_name)
 
                 if not success:
                     cur.close()
                     conn.close()
-                    return jsonify({"success": False, "message": f"Failed to validate tune #{tune_id}: {error_message}"})
+                    return jsonify(
+                        {
+                            "success": False,
+                            "message": _(
+                                "Failed to validate tune #%(tune_id)s: %(error)s",
+                                tune_id=tune_id,
+                                error=error_message,
+                            ),
+                        }
+                    )
 
                 # Track new tunes that need setting cache after commit
                 if new_tune_api_data:
@@ -8224,7 +9833,7 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
                 # Check if tune needs to be added to session_tune table
                 cur.execute(
                     "SELECT tune_id FROM session_tune WHERE session_id = %s AND tune_id = %s",
-                    (session_id, tune_id)
+                    (session_id, tune_id),
                 )
                 if not cur.fetchone():
                     # Use dict to automatically deduplicate if same tune appears multiple times
@@ -8238,7 +9847,7 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
                         SELECT session_tune_alias_id FROM session_tune_alias
                         WHERE session_id = %s AND alias = %s
                         """,
-                        (session_id, alias_name)
+                        (session_id, alias_name),
                     )
                     existing_alias = cur.fetchone()
 
@@ -8252,17 +9861,22 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
                             SELECT tune_id FROM session_tune_alias
                             WHERE session_tune_alias_id = %s
                             """,
-                            (existing_alias[0],)
+                            (existing_alias[0],),
                         )
                         existing_tune_id = cur.fetchone()
                         if existing_tune_id and existing_tune_id[0] != tune_id:
                             # Alias exists but points to a different tune - this is an error
                             cur.close()
                             conn.close()
-                            return jsonify({
-                                "success": False,
-                                "message": f"Alias '{alias_name}' already exists for a different tune in this session"
-                            })
+                            return jsonify(
+                                {
+                                    "success": False,
+                                    "message": _(
+                                        "Alias '%(alias_name)s' already exists for a different tune in this session",
+                                        alias_name=alias_name,
+                                    ),
+                                }
+                            )
 
         # Begin transaction
         cur.execute("BEGIN")
@@ -8283,11 +9897,19 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
                     )
                     # Only save to history and count modification if row was actually inserted
                     if cur.rowcount > 0:
-                        save_to_history(cur, "session_tune", "INSERT", (session_id, tune_id), user_id=get_current_user_id())
+                        save_to_history(
+                            cur,
+                            "session_tune",
+                            "INSERT",
+                            (session_id, tune_id),
+                            user_id=get_current_user_id(),
+                        )
                         modifications += 1
                 except Exception as e:
                     # Log the error but continue - this shouldn't fail the entire save
-                    print(f"Warning: Failed to insert tune {tune_id} into session_tune: {str(e)}")
+                    print(
+                        f"Warning: Failed to insert tune {tune_id} into session_tune: {str(e)}"
+                    )
                     # If it's already there, that's fine; if it's a different error, we'll catch it in the outer try-except
 
             # Add any new aliases to session_tune_alias table
@@ -8318,25 +9940,33 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
                     # Existing tune - use order_position from database
                     existing = existing_by_id[sit_id]
                     remaining_tune_ids.add(sit_id)
-                    processed_tunes.append({
-                        **new_tune,
-                        "order_position": existing[4],  # Get order_position from DB
-                        "is_new": False,
-                    })
+                    processed_tunes.append(
+                        {
+                            **new_tune,
+                            "order_position": existing[4],  # Get order_position from DB
+                            "is_new": False,
+                        }
+                    )
                 else:
                     # New tune - will generate order_position based on neighbors
-                    processed_tunes.append({
-                        **new_tune,
-                        "order_position": None,  # Will be calculated
-                        "is_new": True,
-                    })
+                    processed_tunes.append(
+                        {
+                            **new_tune,
+                            "order_position": None,  # Will be calculated
+                            "is_new": True,
+                        }
+                    )
 
             # Check if existing tunes have been reordered
             # If existing positions are not in sorted order, we need to rebalance
             MAX_POSITION_LENGTH = 32
             needs_rebalance = False
 
-            existing_positions = [t["order_position"] for t in processed_tunes if not t.get("is_new", False)]
+            existing_positions = [
+                t["order_position"]
+                for t in processed_tunes
+                if not t.get("is_new", False)
+            ]
             if existing_positions != sorted(existing_positions):
                 # Existing tunes were reordered - must regenerate all positions
                 needs_rebalance = True
@@ -8361,7 +9991,9 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
 
                     # Look forward for next position (only from existing tunes)
                     for j in range(idx + 1, len(processed_tunes)):
-                        if processed_tunes[j]["order_position"] and not processed_tunes[j].get("is_new", False):
+                        if processed_tunes[j]["order_position"] and not processed_tunes[
+                            j
+                        ].get("is_new", False):
                             next_position = processed_tunes[j]["order_position"]
                             break
 
@@ -8372,10 +10004,14 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
                         # Make sure it's still less than next_position
                         if next_position and new_position >= next_position:
                             # Fall back to bisect if append would exceed next
-                            new_position = generate_position_between(prev_position, next_position)
+                            new_position = generate_position_between(
+                                prev_position, next_position
+                            )
                     else:
                         # First new tune in a sequence - bisect between existing positions
-                        new_position = generate_position_between(prev_position, next_position)
+                        new_position = generate_position_between(
+                            prev_position, next_position
+                        )
 
                     # Check if position is too long - if so, we need to rebalance all positions
                     if len(new_position) > MAX_POSITION_LENGTH:
@@ -8402,7 +10038,9 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
                 # so a redundant copy neither persists nor reads as a change — else
                 # every legacy save would rewrite all linked rows and their history.
                 if tune["tune_id"]:
-                    tune["name"] = normalize_override_name(cur, session_id, tune["tune_id"], tune["name"])
+                    tune["name"] = normalize_override_name(
+                        cur, session_id, tune["tune_id"], tune["name"]
+                    )
 
                 if tune["is_new"]:
                     # Insert new record with generated order_position
@@ -8426,7 +10064,13 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
                     result = cur.fetchone()
                     if result:
                         new_id = result[0]
-                        save_to_history(cur, "session_instance_tune", "INSERT", new_id, user_id=get_current_user_id())
+                        save_to_history(
+                            cur,
+                            "session_instance_tune",
+                            "INSERT",
+                            new_id,
+                            user_id=get_current_user_id(),
+                        )
                         modifications += 1
                 else:
                     # Existing tune - check what needs updating
@@ -8441,7 +10085,11 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
 
                     if data_changed or position_changed:
                         save_to_history(
-                            cur, "session_instance_tune", "UPDATE", sit_id, user_id=get_current_user_id()
+                            cur,
+                            "session_instance_tune",
+                            "UPDATE",
+                            sit_id,
+                            user_id=get_current_user_id(),
                         )
 
                         if position_changed:
@@ -8484,7 +10132,13 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
             # Delete tunes that are no longer in the list
             for existing in existing_tunes:
                 if existing[0] not in remaining_tune_ids:
-                    save_to_history(cur, "session_instance_tune", "DELETE", existing[0], user_id=get_current_user_id())
+                    save_to_history(
+                        cur,
+                        "session_instance_tune",
+                        "DELETE",
+                        existing[0],
+                        user_id=get_current_user_id(),
+                    )
                     cur.execute(
                         """
                         DELETE FROM session_instance_tune
@@ -8498,8 +10152,12 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
             # positions (interior breaks plus a trailing break that closes the last set).
             sets_positions = {}
             for tune in processed_tunes:
-                sets_positions.setdefault(tune["set_idx"], []).append(tune["order_position"])
-            set_position_lists = [sorted(positions) for positions in sets_positions.values()]
+                sets_positions.setdefault(tune["set_idx"], []).append(
+                    tune["order_position"]
+                )
+            set_position_lists = [
+                sorted(positions) for positions in sets_positions.values()
+            ]
             reconcile_break_records(
                 cur, session_instance_id, set_position_lists, get_current_user_id()
             )
@@ -8540,33 +10198,41 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
             #       started_by_person_id, last_name, first_name, order_position, session_instance_tune_id)
             tune_sets = []
             for tune_set in segment_records_into_sets(updated_tunes, type_index=0):
-                tune_sets.append([
+                tune_sets.append(
                     [
-                        tune_idx > 0,   # continues_set (synthesized)
-                        row[1],   # tune_id
-                        row[2],   # tune_name
-                        row[3] or '',   # setting
-                        row[4] or '',   # tune_type
-                        row[5],   # started_by_person_id
-                        row[6],   # last_name
-                        row[7],   # first_name
-                        row[8],   # order_position
-                        row[9],   # session_instance_tune_id
+                        [
+                            tune_idx > 0,  # continues_set (synthesized)
+                            row[1],  # tune_id
+                            row[2],  # tune_name
+                            row[3] or "",  # setting
+                            row[4] or "",  # tune_type
+                            row[5],  # started_by_person_id
+                            row[6],  # last_name
+                            row[7],  # first_name
+                            row[8],  # order_position
+                            row[9],  # session_instance_tune_id
+                        ]
+                        for tune_idx, row in enumerate(tune_set)
                     ]
-                    for tune_idx, row in enumerate(tune_set)
-                ])
+                )
 
             cur.close()
             conn.close()
 
             # Cache settings for any newly inserted tunes (must happen after commit)
             for tune_id, api_data in new_tunes_to_cache:
-                cache_default_tune_setting(tune_id, api_data, get_current_user_id(), sync=True)
+                cache_default_tune_setting(
+                    tune_id, api_data, get_current_user_id(), sync=True
+                )
 
             return jsonify(
                 {
                     "success": True,
-                    "message": f"Session saved successfully ({modifications} modifications)",
+                    "message": ngettext(
+                        "Session saved successfully (%(num)d modification)",
+                        "Session saved successfully (%(num)d modifications)",
+                        modifications,
+                    ),
                     "modifications": modifications,
                     "tune_sets": tune_sets,  # Return updated tunes for frontend sync
                     "rebalanced": needs_rebalance,  # True if positions were regenerated
@@ -8583,7 +10249,10 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
         if "conn" in locals():
             conn.close()
         return jsonify(
-            {"success": False, "message": f"Failed to save session: {str(e)}"}
+            {
+                "success": False,
+                "message": _("Failed to save session: %(error)s", error=str(e)),
+            }
         )
 
 
@@ -8592,13 +10261,16 @@ def update_auto_save_preference():
     try:
         # Check if user is logged in
         if not current_user.is_authenticated:
-            return jsonify({"success": False, "error": "User not authenticated"}), 401
+            return (
+                jsonify({"success": False, "error": _("User not authenticated")}),
+                401,
+            )
 
         # Get the preference value from request
         data = request.get_json()
         auto_save = data.get("auto_save", False)
         auto_save_interval = data.get("auto_save_interval", 60)
-        
+
         # Validate interval value
         if auto_save_interval not in [10, 30, 60]:
             auto_save_interval = 60
@@ -8618,7 +10290,13 @@ def update_auto_save_preference():
             (auto_save, auto_save_interval, current_user.user_id),
         )
 
-        save_to_history(cur, "user_account", "UPDATE", current_user.user_id, user_id=current_user.user_id)
+        save_to_history(
+            cur,
+            "user_account",
+            "UPDATE",
+            current_user.user_id,
+            user_id=current_user.user_id,
+        )
 
         cur.close()
         conn.commit()
@@ -8627,7 +10305,7 @@ def update_auto_save_preference():
         return jsonify(
             {
                 "success": True,
-                "message": "Auto-save preference updated",
+                "message": _("Auto-save preference updated"),
                 "auto_save": auto_save,
                 "auto_save_interval": auto_save_interval,
             }
@@ -8640,6 +10318,7 @@ def update_auto_save_preference():
 
 
 # Session Attendance API Endpoints
+
 
 def can_view_attendance(session_instance_id, user_person_id):
     """May this user see who was at this instance? (spec 034)
@@ -8689,24 +10368,38 @@ def get_session_attendees(session_instance_id):
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-        
+
         # First verify session instance exists (before checking permissions)
-        cur.execute("SELECT session_id FROM session_instance WHERE session_instance_id = %s", (session_instance_id,))
+        cur.execute(
+            "SELECT session_id FROM session_instance WHERE session_instance_id = %s",
+            (session_instance_id,),
+        )
         session_result = cur.fetchone()
         if not session_result:
-            return jsonify({"success": False, "error": "Session instance not found"}), 404
-        
-        user_person_id = current_user.person_id if hasattr(current_user, 'person_id') else None
-        
+            return (
+                jsonify({"success": False, "error": _("Session instance not found")}),
+                404,
+            )
+
+        user_person_id = (
+            current_user.person_id if hasattr(current_user, "person_id") else None
+        )
+
         # Check permissions
         if not can_view_attendance(session_instance_id, user_person_id):
-            return jsonify({"success": False, "error": "Not authorized to view attendance"}), 403
-        
+            return (
+                jsonify(
+                    {"success": False, "error": _("Not authorized to view attendance")}
+                ),
+                403,
+            )
+
         session_id = session_result[0]
-        
+
         # Get all attendees who have been explicitly added to this session instance
         # Don't pre-populate with regulars - only show those who have actually been added
-        cur.execute("""
+        cur.execute(
+            """
             SELECT DISTINCT
                 p.person_id,
                 p.first_name,
@@ -8723,67 +10416,80 @@ def get_session_attendees(session_instance_id):
             WHERE sip.session_instance_id = %s
             GROUP BY p.person_id, p.first_name, p.last_name, sip.attendance, sip.comment, sp.relationship, sp.is_admin
             ORDER BY p.first_name, p.last_name
-        """, (session_id, session_instance_id))
+        """,
+            (session_id, session_instance_id),
+        )
 
         attendees_data = cur.fetchall()
         attendees = []
 
         for row in attendees_data:
-            person_id, first_name, last_name, attendance, comment, relationship, is_admin, instruments = row
-            attendees.append({
-                'person_id': person_id,
-                'first_name': first_name,
-                'last_name': last_name,
-                'display_name': f"{first_name} {last_name[0]}" if last_name else first_name,
-                'instruments': instruments or [],
-                'attendance': attendance,
-                'relationship': relationship,
-                'is_admin': is_admin,
-                'comment': comment
-            })
+            (
+                person_id,
+                first_name,
+                last_name,
+                attendance,
+                comment,
+                relationship,
+                is_admin,
+                instruments,
+            ) = row
+            attendees.append(
+                {
+                    "person_id": person_id,
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "display_name": f"{first_name} {last_name[0]}"
+                    if last_name
+                    else first_name,
+                    "instruments": instruments or [],
+                    "attendance": attendance,
+                    "relationship": relationship,
+                    "is_admin": is_admin,
+                    "comment": comment,
+                }
+            )
 
         # Return empty for regulars since we're not pre-populating
         regulars = []
-        
+
         # Combine all attendees for disambiguation
         all_attendees = regulars + attendees
-        
+
         # Handle display name disambiguation
         display_name_counts = {}
         for attendee in all_attendees:
-            display_name = attendee['display_name']
+            display_name = attendee["display_name"]
             if display_name in display_name_counts:
                 display_name_counts[display_name].append(attendee)
             else:
                 display_name_counts[display_name] = [attendee]
-        
+
         # Apply disambiguation to duplicates
         for display_name, attendees_with_name in display_name_counts.items():
             if len(attendees_with_name) > 1:
                 # Sort by person_id for consistent disambiguation
-                attendees_with_name.sort(key=lambda x: x['person_id'])
+                attendees_with_name.sort(key=lambda x: x["person_id"])
                 for i, attendee in enumerate(attendees_with_name):
                     # Add person_id for disambiguation
-                    attendee['display_name'] = f"{attendee['first_name']} {attendee['last_name'][0]} (#{attendee['person_id']})"
-        
+                    attendee[
+                        "display_name"
+                    ] = f"{attendee['first_name']} {attendee['last_name'][0]} (#{attendee['person_id']})"
+
         # Remove temporary fields used for disambiguation
         for attendee in all_attendees:
-            attendee.pop('first_name', None)
-            attendee.pop('last_name', None)
-        
+            attendee.pop("first_name", None)
+            attendee.pop("last_name", None)
+
         cur.close()
         conn.close()
-        
-        return jsonify({
-            "success": True,
-            "data": {
-                "regulars": regulars,
-                "attendees": attendees
-            }
-        })
-        
+
+        return jsonify(
+            {"success": True, "data": {"regulars": regulars, "attendees": attendees}}
+        )
+
     except Exception as e:
-        if 'conn' in locals():
+        if "conn" in locals():
             conn.close()
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -8792,75 +10498,111 @@ def get_session_attendees(session_instance_id):
 def check_in_person(session_instance_id):
     """
     Check a person into a session instance or update their attendance status.
-    
+
     Expected JSON payload:
     {
         "person_id": int,
         "attendance": "yes" | "maybe" | "no",
         "comment": "optional comment"
     }
-    
+
     Returns JSON response with success status.
     """
     try:
         data = request.get_json()
         if not data:
-            return jsonify({"success": False, "message": "No JSON data provided"}), 400
-        
-        person_id = data.get('person_id')
-        attendance = data.get('attendance')
-        comment = data.get('comment', '')
-        
+            return (
+                jsonify({"success": False, "message": _("No JSON data provided")}),
+                400,
+            )
+
+        person_id = data.get("person_id")
+        attendance = data.get("attendance")
+        comment = data.get("comment", "")
+
         # Validate required fields
         if not person_id or not attendance:
-            return jsonify({"success": False, "message": "person_id and attendance are required"}), 400
-        
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": _("person_id and attendance are required"),
+                    }
+                ),
+                400,
+            )
+
         # Validate attendance value
-        valid_attendance = ['yes', 'maybe', 'no']
+        valid_attendance = ["yes", "maybe", "no"]
         if attendance not in valid_attendance:
-            return jsonify({"success": False, "message": f"attendance must be one of: {valid_attendance}"}), 400
-        
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": _(
+                            "attendance must be one of: %(values)s",
+                            values=valid_attendance,
+                        ),
+                    }
+                ),
+                400,
+            )
+
         # Get database connection
         conn = get_db_connection()
         cur = conn.cursor()
-        
+
         # Check if session instance exists
         cur.execute(
             "SELECT session_id FROM session_instance WHERE session_instance_id = %s",
-            (session_instance_id,)
+            (session_instance_id,),
         )
-        
+
         result = cur.fetchone()
         if not result:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Session instance not found"}), 404
-        
+            return (
+                jsonify({"success": False, "message": _("Session instance not found")}),
+                404,
+            )
+
         session_id = result[0]
-        
+
         # Check if person exists and is active
         cur.execute(
             "SELECT person_id, first_name, last_name, active FROM person WHERE person_id = %s",
-            (person_id,)
+            (person_id,),
         )
 
         person_result = cur.fetchone()
         if not person_result:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Person not found"}), 404
+            return jsonify({"success": False, "message": _("Person not found")}), 404
 
         person_active = person_result[3]
         if not person_active:
             person_name = f"{person_result[1]} {person_result[2]}"
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": f"{person_name} is deactivated and cannot be checked in"}), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": _(
+                            "%(person_name)s is deactivated and cannot be checked in",
+                            person_name=person_name,
+                        ),
+                    }
+                ),
+                400,
+            )
 
         # Permission check - need to verify user can manage this person's attendance
         current_user_id = current_user.user_id
         current_person_id = current_user.person_id
-        
+
         # Get current user's admin status for this session
         cur.execute(
             """
@@ -8868,13 +10610,13 @@ def check_in_person(session_instance_id):
             FROM session_person 
             WHERE session_id = %s AND person_id = %s
             """,
-            (session_id, current_person_id)
+            (session_id, current_person_id),
         )
-        
+
         user_session_record = cur.fetchone()
         is_session_member = user_session_record is not None
         is_system_admin = current_user.is_system_admin
-        is_self_checkin = (person_id == current_person_id)
+        is_self_checkin = person_id == current_person_id
 
         # Permission rules:
         # - System admins can manage anyone
@@ -8883,12 +10625,22 @@ def check_in_person(session_instance_id):
         if not (is_system_admin or is_session_member or is_self_checkin):
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Insufficient permissions to manage this person's attendance"}), 403
-        
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": _(
+                            "Insufficient permissions to manage this person's attendance"
+                        ),
+                    }
+                ),
+                403,
+            )
+
         # Close the connection since we'll use the database function
         cur.close()
         conn.close()
-        
+
         # Call the database function to handle the actual database operations
         success, message, action = db_check_in_person(
             session_instance_id,
@@ -8897,17 +10649,18 @@ def check_in_person(session_instance_id):
             comment,
             user_id=current_user_id,
         )
-        
+
         if not success:
             return jsonify({"success": False, "message": message}), 500
-        
+
         # Get full attendee information for response (as per test contract)
         conn = get_db_connection()
         cur = conn.cursor()
-        
+
         try:
             # Get person details and instruments
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT p.person_id, p.first_name, p.last_name, p.email,
                        COALESCE(sp.relationship, 'visitor') as relationship,
                        COALESCE(
@@ -8919,34 +10672,51 @@ def check_in_person(session_instance_id):
                 LEFT JOIN person_instrument pi ON p.person_id = pi.person_id
                 WHERE p.person_id = %s
                 GROUP BY p.person_id, p.first_name, p.last_name, p.email, sp.relationship
-            """, (session_id, person_id))
-            
+            """,
+                (session_id, person_id),
+            )
+
             attendee_data = cur.fetchone()
             if not attendee_data:
-                return jsonify({"success": False, "message": "Person not found"}), 404
-            
+                return (
+                    jsonify({"success": False, "message": _("Person not found")}),
+                    404,
+                )
+
             # Format display name
             first_name, last_name = attendee_data[1], attendee_data[2]
             display_name = f"{first_name} {last_name}".strip()
-            
-            return jsonify({
-                "success": True,
-                "message": f"Successfully {action} attendance for {display_name}",
-                "data": {
-                    "person_id": attendee_data[0],
-                    "display_name": display_name,
-                    "instruments": list(attendee_data[5]),
-                    "attendance": attendance,
-                    "relationship": attendee_data[4]
+
+            return jsonify(
+                {
+                    "success": True,
+                    "message": (
+                        _(
+                            "Successfully added attendance for %(name)s",
+                            name=display_name,
+                        )
+                        if action == "added"
+                        else _(
+                            "Successfully updated attendance for %(name)s",
+                            name=display_name,
+                        )
+                    ),
+                    "data": {
+                        "person_id": attendee_data[0],
+                        "display_name": display_name,
+                        "instruments": list(attendee_data[5]),
+                        "attendance": attendance,
+                        "relationship": attendee_data[4],
+                    },
                 }
-            })
-            
+            )
+
         finally:
             cur.close()
             conn.close()
-            
+
     except Exception as e:
-        if 'conn' in locals():
+        if "conn" in locals():
             conn.close()
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -8955,42 +10725,60 @@ def check_in_person(session_instance_id):
 def create_person_with_instruments():
     """
     Create a new person with associated instruments.
-    
+
     Expected JSON payload:
     {
         "first_name": "string",
-        "last_name": "string", 
+        "last_name": "string",
         "email": "string (optional)",
         "instruments": ["instrument1", "instrument2", ...]
     }
-    
+
     Returns JSON response with person data and display name.
     """
     try:
         data = request.get_json()
         if not data:
-            return jsonify({"success": False, "message": "No JSON data provided"}), 400
-        
-        first_name = data.get('first_name', '').strip()
-        last_name = data.get('last_name', '').strip()
-        email = data.get('email', '').strip() or None
-        instruments = data.get('instruments', [])
-        
+            return (
+                jsonify({"success": False, "message": _("No JSON data provided")}),
+                400,
+            )
+
+        first_name = data.get("first_name", "").strip()
+        last_name = data.get("last_name", "").strip()
+        email = data.get("email", "").strip() or None
+        instruments = data.get("instruments", [])
+
         # Validate required fields
         if not first_name or not last_name:
-            return jsonify({"success": False, "message": "first_name and last_name are required"}), 400
-        
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": _("first_name and last_name are required"),
+                    }
+                ),
+                400,
+            )
+
         # Validate email format if provided
         if email:
             import re
-            email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+
+            email_pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
             if not re.match(email_pattern, email):
-                return jsonify({"success": False, "message": "Invalid email format"}), 400
-        
+                return (
+                    jsonify({"success": False, "message": _("Invalid email format")}),
+                    400,
+                )
+
         # Validate instruments list
         if not isinstance(instruments, list):
-            return jsonify({"success": False, "message": "instruments must be a list"}), 400
-        
+            return (
+                jsonify({"success": False, "message": _("instruments must be a list")}),
+                400,
+            )
+
         # Canonicalize casing/aliases and de-dupe against one shared vocabulary
         normalized_instruments = normalize_instruments(
             [i for i in instruments if isinstance(i, str)]
@@ -8999,16 +10787,19 @@ def create_person_with_instruments():
         # Check if user has admin permissions (system admin can create people anywhere)
         conn = get_db_connection()
         cur = conn.cursor()
-        
+
         # Check if current user is a system admin
         cur.execute(
             "SELECT is_system_admin FROM user_account WHERE user_id = %s",
-            (current_user.user_id,)
+            (current_user.user_id,),
         )
         user_row = cur.fetchone()
         if not user_row or not user_row[0]:
-            return jsonify({"success": False, "message": "Insufficient permissions"}), 403
-        
+            return (
+                jsonify({"success": False, "message": _("Insufficient permissions")}),
+                403,
+            )
+
         # Check if person with same name already exists (for display name disambiguation)
         cur.execute(
             """
@@ -9016,14 +10807,14 @@ def create_person_with_instruments():
             FROM person 
             WHERE LOWER(first_name) = LOWER(%s) AND LOWER(last_name) = LOWER(%s)
             """,
-            (first_name, last_name)
+            (first_name, last_name),
         )
-        
+
         existing_people = cur.fetchall()
-        
+
         # Begin transaction
         cur.execute("BEGIN")
-        
+
         try:
             # Insert person
             cur.execute(
@@ -9032,18 +10823,14 @@ def create_person_with_instruments():
                 VALUES (%s, %s, %s, (NOW() AT TIME ZONE 'UTC'), %s)
                 RETURNING person_id
                 """,
-                (first_name, last_name, email, current_user.user_id)
+                (first_name, last_name, email, current_user.user_id),
             )
 
             person_id = cur.fetchone()[0]
 
             # Log person creation to history
             save_to_history(
-                cur,
-                'person',
-                'INSERT',
-                person_id,
-                user_id=current_user.user_id
+                cur, "person", "INSERT", person_id, user_id=current_user.user_id
             )
 
             # Insert instruments
@@ -9053,54 +10840,62 @@ def create_person_with_instruments():
                     INSERT INTO person_instrument (person_id, instrument, created_date, created_by_user_id)
                     VALUES (%s, %s, (NOW() AT TIME ZONE 'UTC'), %s)
                     """,
-                    (person_id, instrument, current_user.user_id)
+                    (person_id, instrument, current_user.user_id),
                 )
 
                 # Log instrument creation to history
                 save_to_history(
                     cur,
-                    'person_instrument',
-                    'INSERT',
+                    "person_instrument",
+                    "INSERT",
                     (person_id, instrument),
-                    user_id=current_user.user_id
+                    user_id=current_user.user_id,
                 )
-            
+
             # Commit transaction
             cur.execute("COMMIT")
-            
+
             # Generate display name (with disambiguation if needed)
             base_name = f"{first_name} {last_name}"
             display_name = base_name
-            
+
             # If there are existing people with same name, add email or ID for disambiguation
             if existing_people:
                 if email:
                     display_name = f"{base_name} ({email})"
                 else:
                     display_name = f"{base_name} (#{person_id})"
-            
+
             cur.close()
             conn.close()
-            
-            return jsonify({
-                "success": True,
-                "message": f"Successfully created person: {display_name}",
-                "data": {
-                    "person_id": person_id,
-                    "first_name": first_name,
-                    "last_name": last_name,
-                    "email": email,
-                    "display_name": display_name,
-                    "instruments": normalized_instruments
-                }
-            }), 201
-            
+
+            return (
+                jsonify(
+                    {
+                        "success": True,
+                        "message": _(
+                            "Successfully created person: %(display_name)s",
+                            display_name=display_name,
+                        ),
+                        "data": {
+                            "person_id": person_id,
+                            "first_name": first_name,
+                            "last_name": last_name,
+                            "email": email,
+                            "display_name": display_name,
+                            "instruments": normalized_instruments,
+                        },
+                    }
+                ),
+                201,
+            )
+
         except Exception as e:
             cur.execute("ROLLBACK")
             raise e
-            
+
     except Exception as e:
-        if 'conn' in locals():
+        if "conn" in locals():
             conn.close()
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -9109,32 +10904,32 @@ def create_person_with_instruments():
 def get_person_instruments(person_id):
     """
     Get all instruments for a specific person.
-    
+
     Returns JSON response with list of instruments.
     """
     try:
         # Get database connection
         conn = get_db_connection()
         cur = conn.cursor()
-        
+
         # Check if person exists
         cur.execute(
             "SELECT person_id, first_name, last_name FROM person WHERE person_id = %s",
-            (person_id,)
+            (person_id,),
         )
-        
+
         person_result = cur.fetchone()
         if not person_result:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Person not found"}), 404
-        
+            return jsonify({"success": False, "message": _("Person not found")}), 404
+
         # Permission check - can user view this person's instruments?
         current_user_id = current_user.user_id
         current_person_id = current_user.person_id
         is_system_admin = current_user.is_system_admin
-        is_self_view = (person_id == current_person_id)
-        
+        is_self_view = person_id == current_person_id
+
         # For viewing instruments, allow:
         # - System admins to view anyone's instruments
         # - Users to view their own instruments
@@ -9142,8 +10937,18 @@ def get_person_instruments(person_id):
         if not (is_system_admin or is_self_view):
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Insufficient permissions to view this person's instruments"}), 403
-        
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": _(
+                            "Insufficient permissions to view this person's instruments"
+                        ),
+                    }
+                ),
+                403,
+            )
+
         # Get person's instruments (+ auto/manual flag + how much per-tune data would
         # be lost by removing each one). A removal loses data when it has override rows
         # that re-adding the instrument on Auto would NOT reproduce:
@@ -9168,11 +10973,11 @@ def get_person_instruments(person_id):
             GROUP BY pi.instrument, pi.is_auto
             ORDER BY pi.instrument
             """,
-            (person_id,)
+            (person_id,),
         )
 
         instrument_results = cur.fetchall()
-        instruments = [row[0] for row in instrument_results]           # names (back-compat)
+        instruments = [row[0] for row in instrument_results]  # names (back-compat)
         instruments_detail = [
             {"instrument": row[0], "is_auto": row[1], "removal_loss_count": row[2]}
             for row in instrument_results
@@ -9184,19 +10989,21 @@ def get_person_instruments(person_id):
         # Get person's name for response
         person_name = f"{person_result[1]} {person_result[2]}"
 
-        return jsonify({
-            "success": True,
-            "data": instruments,
-            "instruments": instruments_detail,
-            "meta": {
-                "person_id": person_id,
-                "person_name": person_name,
-                "instrument_count": len(instruments)
+        return jsonify(
+            {
+                "success": True,
+                "data": instruments,
+                "instruments": instruments_detail,
+                "meta": {
+                    "person_id": person_id,
+                    "person_name": person_name,
+                    "instrument_count": len(instruments),
+                },
             }
-        })
-        
+        )
+
     except Exception as e:
-        if 'conn' in locals():
+        if "conn" in locals():
             conn.close()
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -9205,25 +11012,31 @@ def get_person_instruments(person_id):
 def update_person_instruments(person_id):
     """
     Update all instruments for a specific person.
-    
+
     Expected JSON payload:
     {
         "instruments": ["instrument1", "instrument2", ...]
     }
-    
+
     Returns JSON response with updated instrument list.
     """
     try:
         data = request.get_json()
         if not data:
-            return jsonify({"success": False, "message": "No JSON data provided"}), 400
-        
-        instruments = data.get('instruments', [])
-        
+            return (
+                jsonify({"success": False, "message": _("No JSON data provided")}),
+                400,
+            )
+
+        instruments = data.get("instruments", [])
+
         # Validate instruments list
         if not isinstance(instruments, list):
-            return jsonify({"success": False, "message": "instruments must be a list"}), 400
-        
+            return (
+                jsonify({"success": False, "message": _("instruments must be a list")}),
+                400,
+            )
+
         # Canonicalize casing/aliases and de-dupe against one shared vocabulary
         normalized_instruments = normalize_instruments(
             [i for i in instruments if isinstance(i, str)]
@@ -9236,21 +11049,21 @@ def update_person_instruments(person_id):
         # Check if person exists
         cur.execute(
             "SELECT person_id, first_name, last_name FROM person WHERE person_id = %s",
-            (person_id,)
+            (person_id,),
         )
-        
+
         person_result = cur.fetchone()
         if not person_result:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Person not found"}), 404
-        
+            return jsonify({"success": False, "message": _("Person not found")}), 404
+
         # Permission check - can user manage this person's instruments?
         current_user_id = current_user.user_id
         current_person_id = current_user.person_id
         is_system_admin = current_user.is_system_admin
-        is_self_update = (person_id == current_person_id)
-        
+        is_self_update = person_id == current_person_id
+
         # For instrument management, allow:
         # - System admins to manage anyone
         # - Users to manage their own instruments
@@ -9258,21 +11071,31 @@ def update_person_instruments(person_id):
         if not (is_system_admin or is_self_update):
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Insufficient permissions to manage this person's instruments"}), 403
-        
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": _(
+                            "Insufficient permissions to manage this person's instruments"
+                        ),
+                    }
+                ),
+                403,
+            )
+
         # Get existing instruments for comparison
         cur.execute(
             "SELECT instrument FROM person_instrument WHERE person_id = %s",
-            (person_id,)
+            (person_id,),
         )
-        
+
         existing_results = cur.fetchall()
         existing_instruments = set(row[0] for row in existing_results)
         new_instruments = set(normalized_instruments)
-        
+
         # Begin transaction
         cur.execute("BEGIN")
-        
+
         try:
             # Remove instruments no longer in the list
             instruments_to_remove = existing_instruments - new_instruments
@@ -9280,15 +11103,15 @@ def update_person_instruments(person_id):
                 # Log removal to history (must be called before DELETE)
                 save_to_history(
                     cur,
-                    'person_instrument',
-                    'DELETE',
+                    "person_instrument",
+                    "DELETE",
                     (person_id, instrument),
-                    user_id=current_user_id
+                    user_id=current_user_id,
                 )
 
                 cur.execute(
                     "DELETE FROM person_instrument WHERE person_id = %s AND instrument = %s",
-                    (person_id, instrument)
+                    (person_id, instrument),
                 )
 
                 # Removing an instrument also drops its per-tune override rows (nothing
@@ -9296,19 +11119,19 @@ def update_person_instruments(person_id):
                 # before deleting so the removal is auditable and reversible.
                 cur.execute(
                     "SELECT tune_id FROM person_tune_instrument WHERE person_id = %s AND instrument = %s",
-                    (person_id, instrument)
+                    (person_id, instrument),
                 )
                 for (override_tune_id,) in cur.fetchall():
                     save_to_history(
                         cur,
-                        'person_tune_instrument',
-                        'DELETE',
+                        "person_tune_instrument",
+                        "DELETE",
                         (person_id, override_tune_id, instrument),
-                        user_id=current_user_id
+                        user_id=current_user_id,
                     )
                 cur.execute(
                     "DELETE FROM person_tune_instrument WHERE person_id = %s AND instrument = %s",
-                    (person_id, instrument)
+                    (person_id, instrument),
                 )
 
             # Add new instruments
@@ -9319,48 +11142,54 @@ def update_person_instruments(person_id):
                     INSERT INTO person_instrument (person_id, instrument, created_date, created_by_user_id)
                     VALUES (%s, %s, (NOW() AT TIME ZONE 'UTC'), %s)
                     """,
-                    (person_id, instrument, current_user_id)
+                    (person_id, instrument, current_user_id),
                 )
 
                 # Log addition to history
                 save_to_history(
                     cur,
-                    'person_instrument',
-                    'INSERT',
+                    "person_instrument",
+                    "INSERT",
                     (person_id, instrument),
-                    user_id=current_user_id
+                    user_id=current_user_id,
                 )
-            
+
             # Commit transaction
             cur.execute("COMMIT")
-            
+
             # Get person's name for response
             person_name = f"{person_result[1]} {person_result[2]}"
-            
+
             cur.close()
             conn.close()
-            
-            return jsonify({
-                "success": True,
-                "message": f"Successfully updated instruments for {person_name}",
-                "data": {
-                    "person_id": person_id,
-                    "person_name": person_name,
-                    "instruments": sorted(normalized_instruments),
-                    "changes": {
-                        "added": sorted(list(instruments_to_add)),
-                        "removed": sorted(list(instruments_to_remove)),
-                        "total_changes": len(instruments_to_add) + len(instruments_to_remove)
-                    }
+
+            return jsonify(
+                {
+                    "success": True,
+                    "message": _(
+                        "Successfully updated instruments for %(person_name)s",
+                        person_name=person_name,
+                    ),
+                    "data": {
+                        "person_id": person_id,
+                        "person_name": person_name,
+                        "instruments": sorted(normalized_instruments),
+                        "changes": {
+                            "added": sorted(list(instruments_to_add)),
+                            "removed": sorted(list(instruments_to_remove)),
+                            "total_changes": len(instruments_to_add)
+                            + len(instruments_to_remove),
+                        },
+                    },
                 }
-            })
-            
+            )
+
         except Exception as e:
             cur.execute("ROLLBACK")
             raise e
-            
+
     except Exception as e:
-        if 'conn' in locals():
+        if "conn" in locals():
             conn.close()
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -9379,9 +11208,20 @@ def set_person_instrument_auto(person_id):
         instrument = (data.get("instrument") or "").strip()
         is_auto = data.get("is_auto")
         if not instrument or not isinstance(is_auto, bool):
-            return jsonify({"success": False, "message": "instrument and boolean is_auto are required"}), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": _("instrument and boolean is_auto are required"),
+                    }
+                ),
+                400,
+            )
         if not (current_user.is_system_admin or person_id == current_user.person_id):
-            return jsonify({"success": False, "message": "Insufficient permissions"}), 403
+            return (
+                jsonify({"success": False, "message": _("Insufficient permissions")}),
+                403,
+            )
         conn = get_db_connection()
         cur = conn.cursor()
         try:
@@ -9390,7 +11230,15 @@ def set_person_instrument_auto(person_id):
                 (is_auto, person_id, instrument),
             )
             if cur.rowcount == 0:
-                return jsonify({"success": False, "message": "Instrument not found for this person"}), 404
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "message": _("Instrument not found for this person"),
+                        }
+                    ),
+                    404,
+                )
             conn.commit()
         finally:
             cur.close()
@@ -9404,40 +11252,43 @@ def set_person_instrument_auto(person_id):
 def remove_person_attendance(session_instance_id, person_id):
     """
     Remove a person from a session instance attendance list.
-    
+
     Returns JSON response with success status.
     """
     try:
         # Get database connection
         conn = get_db_connection()
         cur = conn.cursor()
-        
+
         # Check if session instance exists
         cur.execute(
             "SELECT session_id FROM session_instance WHERE session_instance_id = %s",
-            (session_instance_id,)
+            (session_instance_id,),
         )
-        
+
         result = cur.fetchone()
         if not result:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Session instance not found"}), 404
-        
+            return (
+                jsonify({"success": False, "message": _("Session instance not found")}),
+                404,
+            )
+
         session_id = result[0]
-        
+
         # Check if person exists
         cur.execute(
             "SELECT person_id, first_name, last_name FROM person WHERE person_id = %s",
-            (person_id,)
+            (person_id,),
         )
-        
+
         person_result = cur.fetchone()
         if not person_result:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Person not found"}), 404
-        
+            return jsonify({"success": False, "message": _("Person not found")}), 404
+
         # Check if attendance record exists
         cur.execute(
             """
@@ -9445,19 +11296,29 @@ def remove_person_attendance(session_instance_id, person_id):
             FROM session_instance_person 
             WHERE session_instance_id = %s AND person_id = %s
             """,
-            (session_instance_id, person_id)
+            (session_instance_id, person_id),
         )
-        
+
         existing_record = cur.fetchone()
         if not existing_record:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Person is not currently attending this session instance"}), 404
-        
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": _(
+                            "Person is not currently attending this session instance"
+                        ),
+                    }
+                ),
+                404,
+            )
+
         # Permission check - need to verify user can manage this person's attendance
         current_user_id = current_user.user_id
         current_person_id = current_user.person_id
-        
+
         # Get current user's admin status for this session
         cur.execute(
             """
@@ -9465,13 +11326,13 @@ def remove_person_attendance(session_instance_id, person_id):
             FROM session_person 
             WHERE session_id = %s AND person_id = %s
             """,
-            (session_id, current_person_id)
+            (session_id, current_person_id),
         )
-        
+
         user_session_record = cur.fetchone()
         is_session_member = user_session_record is not None
         is_system_admin = current_user.is_system_admin
-        is_self_removal = (person_id == current_person_id)
+        is_self_removal = person_id == current_person_id
 
         # Permission rules:
         # - System admins can remove anyone
@@ -9480,36 +11341,54 @@ def remove_person_attendance(session_instance_id, person_id):
         if not (is_system_admin or is_session_member or is_self_removal):
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Insufficient permissions to remove this person from attendance"}), 403
-        
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": _(
+                            "Insufficient permissions to remove this person from attendance"
+                        ),
+                    }
+                ),
+                403,
+            )
+
         # Close the connection since we'll use the database function that manages its own connection
         cur.close()
         conn.close()
-        
+
         # Use the database function that handles session_person management
         from database import remove_person_attendance as db_remove_person_attendance
-        success, message, previous_data = db_remove_person_attendance(session_instance_id, person_id, current_user_id)
-        
+
+        success, message, previous_data = db_remove_person_attendance(
+            session_instance_id, person_id, current_user_id
+        )
+
         if success:
             # Get person's name for response
             person_name = f"{person_result[1]} {person_result[2]}"
-            
-            return jsonify({
-                "success": True,
-                "message": f"Successfully removed {person_name} from attendance",
-                "data": {
-                    "person_id": person_id,
-                    "person_name": person_name,
-                    "session_instance_id": session_instance_id,
-                    "previous_attendance": previous_data['attendance'],
-                    "previous_comment": previous_data['comment']
+
+            return jsonify(
+                {
+                    "success": True,
+                    "message": _(
+                        "Successfully removed %(person_name)s from attendance",
+                        person_name=person_name,
+                    ),
+                    "data": {
+                        "person_id": person_id,
+                        "person_name": person_name,
+                        "session_instance_id": session_instance_id,
+                        "previous_attendance": previous_data["attendance"],
+                        "previous_comment": previous_data["comment"],
+                    },
                 }
-            })
+            )
         else:
             return jsonify({"success": False, "message": message}), 500
-            
+
     except Exception as e:
-        if 'conn' in locals():
+        if "conn" in locals():
             conn.close()
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -9518,50 +11397,66 @@ def remove_person_attendance(session_instance_id, person_id):
 def search_session_people(session_id):
     """
     Search for people associated with a session.
-    
+
     Query parameters:
     - q: Search query (name to search for)
     - limit: Maximum number of results (default 20, max 100)
-    
+
     Returns JSON response with list of people matching the search.
     """
     try:
-        search_query = request.args.get('q', '').strip()
-        limit = min(int(request.args.get('limit', 20)), 100)
-        
+        search_query = request.args.get("q", "").strip()
+        limit = min(int(request.args.get("limit", 20)), 100)
+
         # Validate search query
         if not search_query:
-            return jsonify({"success": False, "message": "Search query 'q' parameter is required"}), 400
-        
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": _("Search query 'q' parameter is required"),
+                    }
+                ),
+                400,
+            )
+
         if len(search_query) < 2:
-            return jsonify({"success": False, "message": "Search query must be at least 2 characters"}), 400
-        
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": _("Search query must be at least 2 characters"),
+                    }
+                ),
+                400,
+            )
+
         # Get database connection
         conn = get_db_connection()
         cur = conn.cursor()
-        
+
         # Check if session exists
         cur.execute(
-            "SELECT session_id, name FROM session WHERE session_id = %s",
-            (session_id,)
+            "SELECT session_id, name FROM session WHERE session_id = %s", (session_id,)
         )
-        
+
         session_result = cur.fetchone()
         if not session_result:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Session not found"}), 404
-        
+            return jsonify({"success": False, "message": _("Session not found")}), 404
+
         # Permission check - can user search people in this session?
         current_person_id = current_user.person_id
         is_system_admin = current_user.is_system_admin
-        
+
         # For searching session people, allow:
         # - System admins to search any session
         # - Users who are associated with the session (regular, admin, or have attended)
         if not is_system_admin:
             # Check if user is associated with this session
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT 1 FROM (
                     -- Check if user is regular/admin for this session
                     SELECT 1 FROM session_person 
@@ -9574,14 +11469,26 @@ def search_session_people(session_id):
                     JOIN session_instance si ON sip.session_instance_id = si.session_instance_id
                     WHERE si.session_id = %s AND sip.person_id = %s
                 ) AS user_associated
-            """, (session_id, current_person_id, session_id, current_person_id))
-            
+            """,
+                (session_id, current_person_id, session_id, current_person_id),
+            )
+
             user_associated = cur.fetchone()
             if not user_associated:
                 cur.close()
                 conn.close()
-                return jsonify({"success": False, "message": "Insufficient permissions to search people in this session"}), 403
-        
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "message": _(
+                                "Insufficient permissions to search people in this session"
+                            ),
+                        }
+                    ),
+                    403,
+                )
+
         # People associated with THIS session (roster or past attendance). Never a global
         # person search -- see spec 034.
         # Spec 034: "regulars first" is computed from attendance now, not a stored flag.
@@ -9648,8 +11555,16 @@ def search_session_people(session_id):
                 display_name
             LIMIT %s
             """,
-            (session_id, session_id, session_id, search_pattern, search_pattern, search_pattern,
-             session_id, limit)
+            (
+                session_id,
+                session_id,
+                session_id,
+                search_pattern,
+                search_pattern,
+                search_pattern,
+                session_id,
+                limit,
+            ),
         )
 
         results = cur.fetchall()
@@ -9657,38 +11572,51 @@ def search_session_people(session_id):
         # Format results
         people = []
         for row in results:
-            person_id, first_name, last_name, email, relationship, is_session_admin, instruments, display_name = row
+            (
+                person_id,
+                first_name,
+                last_name,
+                email,
+                relationship,
+                is_session_admin,
+                instruments,
+                display_name,
+            ) = row
 
-            people.append({
-                'person_id': person_id,
-                'first_name': first_name,
-                'last_name': last_name,
-                'email': email,
-                'display_name': display_name,
-                'relationship': relationship,
-                'is_session_admin': is_session_admin or False,
-                'instruments': list(instruments) if instruments else []
-            })
-        
+            people.append(
+                {
+                    "person_id": person_id,
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "email": email,
+                    "display_name": display_name,
+                    "relationship": relationship,
+                    "is_session_admin": is_session_admin or False,
+                    "instruments": list(instruments) if instruments else [],
+                }
+            )
+
         cur.close()
         conn.close()
-        
-        return jsonify({
-            "success": True,
-            "data": people,
-            "meta": {
-                "session_id": session_id,
-                "session_name": session_result[1],
-                "search_query": search_query,
-                "result_count": len(people),
-                "limit": limit
+
+        return jsonify(
+            {
+                "success": True,
+                "data": people,
+                "meta": {
+                    "session_id": session_id,
+                    "session_name": session_result[1],
+                    "search_query": search_query,
+                    "result_count": len(people),
+                    "limit": limit,
+                },
             }
-        })
-        
+        )
+
     except ValueError:
-        return jsonify({"success": False, "message": "Invalid limit parameter"}), 400
+        return jsonify({"success": False, "message": _("Invalid limit parameter")}), 400
     except Exception as e:
-        if 'conn' in locals():
+        if "conn" in locals():
             conn.close()
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -9705,29 +11633,29 @@ def get_session_people(session_id):
         # Get database connection
         conn = get_db_connection()
         cur = conn.cursor()
-        
+
         # Check if session exists
         cur.execute(
-            "SELECT session_id, name FROM session WHERE session_id = %s",
-            (session_id,)
+            "SELECT session_id, name FROM session WHERE session_id = %s", (session_id,)
         )
-        
+
         session_result = cur.fetchone()
         if not session_result:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Session not found"}), 404
-        
+            return jsonify({"success": False, "message": _("Session not found")}), 404
+
         # Permission check - can user access this session?
         current_person_id = current_user.person_id
         is_system_admin = current_user.is_system_admin
-        
+
         # For accessing session people, allow:
         # - System admins to access any session
         # - Users who are associated with the session (regular, admin, or have attended)
         if not is_system_admin:
             # Check if user is associated with this session
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT 1 FROM (
                     -- Check if user is regular/admin for this session
                     SELECT 1 FROM session_person 
@@ -9740,14 +11668,26 @@ def get_session_people(session_id):
                     JOIN session_instance si ON sip.session_instance_id = si.session_instance_id
                     WHERE si.session_id = %s AND sip.person_id = %s
                 ) AS user_associated
-            """, (session_id, current_person_id, session_id, current_person_id))
-            
+            """,
+                (session_id, current_person_id, session_id, current_person_id),
+            )
+
             user_associated = cur.fetchone()
             if not user_associated:
                 cur.close()
                 conn.close()
-                return jsonify({"success": False, "message": "Insufficient permissions to access people in this session"}), 403
-        
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "message": _(
+                                "Insufficient permissions to access people in this session"
+                            ),
+                        }
+                    ),
+                    403,
+                )
+
         # Get all people associated with this session
         cur.execute(
             """
@@ -9806,7 +11746,7 @@ def get_session_people(session_id):
                 COALESCE(ar.lifetime_count, 0) DESC,
                 display_name
             """,
-            (session_id, session_id, session_id, session_id)
+            (session_id, session_id, session_id, session_id),
         )
 
         results = cur.fetchall()
@@ -9814,201 +11754,241 @@ def get_session_people(session_id):
         # Format results
         people = []
         for row in results:
-            person_id, first_name, last_name, email, relationship, is_session_admin, instruments, display_name = row
+            (
+                person_id,
+                first_name,
+                last_name,
+                email,
+                relationship,
+                is_session_admin,
+                instruments,
+                display_name,
+            ) = row
 
-            people.append({
-                'person_id': person_id,
-                'first_name': first_name,
-                'last_name': last_name,
-                'email': email,
-                'display_name': display_name,
-                'relationship': relationship,
-                'is_session_admin': is_session_admin or False,
-                'instruments': list(instruments) if instruments else []
-            })
-        
+            people.append(
+                {
+                    "person_id": person_id,
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "email": email,
+                    "display_name": display_name,
+                    "relationship": relationship,
+                    "is_session_admin": is_session_admin or False,
+                    "instruments": list(instruments) if instruments else [],
+                }
+            )
+
         cur.close()
         conn.close()
-        
-        return jsonify({
-            "success": True,
-            "data": people,
-            "meta": {
-                "session_id": session_id,
-                "session_name": session_result[1],
-                "result_count": len(people)
+
+        return jsonify(
+            {
+                "success": True,
+                "data": people,
+                "meta": {
+                    "session_id": session_id,
+                    "session_name": session_result[1],
+                    "result_count": len(people),
+                },
             }
-        })
-        
+        )
+
     except Exception as e:
-        if 'conn' in locals():
+        if "conn" in locals():
             conn.close()
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-
-def parse_csv_data(csv_data, session_city=None, session_state=None, session_country=None):
+def parse_csv_data(
+    csv_data, session_city=None, session_state=None, session_country=None
+):
     """
     Parse CSV data and return processed person records.
-    
+
     Supports various CSV formats with optional headers.
     Auto-detects columns based on content.
-    
+
     Args:
         csv_data: Raw CSV string
         session_city: Default city from session
         session_state: Default state from session
         session_country: Default country from session
-        
+
     Returns:
         List of person dictionaries with detected fields
     """
     import csv
     import io
     import re
-    
+
     if not csv_data or not csv_data.strip():
-        raise ValueError("CSV data is empty")
-    
-    lines = csv_data.strip().split('\n')
+        raise ValueError(_("CSV data is empty"))
+
+    lines = csv_data.strip().split("\n")
     if not lines:
-        raise ValueError("CSV data is empty")
-    
+        raise ValueError(_("CSV data is empty"))
+
     reader = csv.reader(lines)
     rows = list(reader)
-    
+
     if not rows:
-        raise ValueError("CSV data is empty")
-    
+        raise ValueError(_("CSV data is empty"))
+
     # Detect if first row is header by checking for typical header words
-    header_words = {'first', 'last', 'name', 'email', 'phone', 'sms', 'city', 'state', 'country', 'regular', 'instrument'}
-    first_row_lower = [col.lower().replace(' ', '').replace('_', '') for col in rows[0]]
-    has_header = any(word in ' '.join(first_row_lower) for word in header_words)
-    
+    header_words = {
+        "first",
+        "last",
+        "name",
+        "email",
+        "phone",
+        "sms",
+        "city",
+        "state",
+        "country",
+        "regular",
+        "instrument",
+    }
+    first_row_lower = [col.lower().replace(" ", "").replace("_", "") for col in rows[0]]
+    has_header = any(word in " ".join(first_row_lower) for word in header_words)
+
     processed_people = []
     data_rows = rows[1:] if has_header else rows
     headers = rows[0] if has_header else None
-    
+
     if not data_rows:
-        raise ValueError("No data rows found after header")
-    
+        raise ValueError(_("No data rows found after header"))
+
     for row_idx, row in enumerate(data_rows):
         if not row or all(not cell.strip() for cell in row):
             continue  # Skip empty rows
-        
+
         try:
-            person = parse_csv_row(row, headers, session_city, session_state, session_country)
+            person = parse_csv_row(
+                row, headers, session_city, session_state, session_country
+            )
             if person:
                 processed_people.append(person)
         except Exception as e:
-            raise ValueError(f"Error parsing row {row_idx + (2 if has_header else 1)}: {str(e)}")
-    
+            raise ValueError(
+                _(
+                    "Error parsing row %(row)s: %(error)s",
+                    row=row_idx + (2 if has_header else 1),
+                    error=str(e),
+                )
+            )
+
     if not processed_people:
-        raise ValueError("No valid person records found in CSV data")
-    
+        raise ValueError(_("No valid person records found in CSV data"))
+
     return processed_people
 
 
-def parse_csv_row(row, headers, session_city=None, session_state=None, session_country=None):
+def parse_csv_row(
+    row, headers, session_city=None, session_state=None, session_country=None
+):
     """Parse a single CSV row into a person dictionary."""
     import re
-    
+
     if not row:
         return None
-    
+
     person = {
-        'first_name': '',
-        'last_name': '',
-        'email': None,
-        'sms_number': None,
-        'city': session_city,
-        'state': session_state,
-        'country': session_country,
-        'instruments': [],
+        "first_name": "",
+        "last_name": "",
+        "email": None,
+        "sms_number": None,
+        "city": session_city,
+        "state": session_state,
+        "country": session_country,
+        "instruments": [],
     }
-    
+
     if headers:
         # Parse with headers
         for i, value in enumerate(row):
             if i >= len(headers):
                 break
-                
-            header = headers[i].lower().replace(' ', '').replace('_', '')
+
+            header = headers[i].lower().replace(" ", "").replace("_", "")
             value = value.strip()
-            
+
             if not value:
                 continue
-                
-            if 'firstname' in header or header == 'first':
-                person['first_name'] = value
-            elif 'lastname' in header or header == 'last':
-                person['last_name'] = value
-            elif header in ['name', 'fullname']:
+
+            if "firstname" in header or header == "first":
+                person["first_name"] = value
+            elif "lastname" in header or header == "last":
+                person["last_name"] = value
+            elif header in ["name", "fullname"]:
                 # Split full name at last space
                 parts = value.strip().split()
                 if parts:
-                    person['last_name'] = parts[-1]
-                    person['first_name'] = ' '.join(parts[:-1]) if len(parts) > 1 else parts[0]
-            elif 'email' in header:
+                    person["last_name"] = parts[-1]
+                    person["first_name"] = (
+                        " ".join(parts[:-1]) if len(parts) > 1 else parts[0]
+                    )
+            elif "email" in header:
                 if is_email(value):
-                    person['email'] = value.lower()
-            elif 'sms' in header or 'phone' in header:
+                    person["email"] = value.lower()
+            elif "sms" in header or "phone" in header:
                 if is_phone_number(value):
-                    person['sms_number'] = value
-            elif 'city' in header:
-                person['city'] = value
-            elif 'state' in header:
-                person['state'] = value
-            elif 'country' in header:
-                person['country'] = value
-            elif 'instrument' in header:
+                    person["sms_number"] = value
+            elif "city" in header:
+                person["city"] = value
+            elif "state" in header:
+                person["state"] = value
+            elif "country" in header:
+                person["country"] = value
+            elif "instrument" in header:
                 instruments = parse_instruments(value)
-                person['instruments'] = instruments
+                person["instruments"] = instruments
     else:
         # Parse without headers - auto-detect based on content
         used_indices = set()
-        
+
         # First, try to identify name (first 1-2 columns that don't look like email/phone)
         name_found = False
         for i, value in enumerate(row[:3]):  # Check first 3 columns for name
             value = value.strip()
-            
+
             # If first column is empty, this indicates a malformed CSV
             if i == 0 and not value:
-                raise ValueError("First column appears to be name but is empty")
-            
+                raise ValueError(_("First column appears to be name but is empty"))
+
             if not value or i in used_indices:
                 continue
-                
+
             if not is_email(value) and not is_phone_number(value):
                 if not name_found:
                     # This looks like a name - split at last space
                     parts = value.split()
                     if parts:
-                        person['last_name'] = parts[-1]
-                        person['first_name'] = ' '.join(parts[:-1]) if len(parts) > 1 else parts[0]
+                        person["last_name"] = parts[-1]
+                        person["first_name"] = (
+                            " ".join(parts[:-1]) if len(parts) > 1 else parts[0]
+                        )
                         used_indices.add(i)
                         name_found = True
                         break
-        
+
         # Look for email
         for i, value in enumerate(row):
             if i in used_indices:
                 continue
             if is_email(value.strip()):
-                person['email'] = value.strip().lower()
+                person["email"] = value.strip().lower()
                 used_indices.add(i)
                 break
-        
+
         # Look for phone number
         for i, value in enumerate(row):
             if i in used_indices:
                 continue
             if is_phone_number(value.strip()):
-                person['sms_number'] = value.strip()
+                person["sms_number"] = value.strip()
                 used_indices.add(i)
                 break
-        
+
         # Remaining columns are likely instruments
         instruments = []
         for i, value in enumerate(row):
@@ -10017,15 +11997,17 @@ def parse_csv_row(row, headers, session_city=None, session_state=None, session_c
             value = value.strip()
             if value:
                 instruments.extend(parse_instruments(value))
-        
-        person['instruments'] = instruments
-    
+
+        person["instruments"] = instruments
+
     # Validate required fields
-    if not person['first_name'] or not person['last_name']:
-        raise ValueError("Name is required (either separate first/last name fields or full name)")
-    
+    if not person["first_name"] or not person["last_name"]:
+        raise ValueError(
+            _("Name is required (either separate first/last name fields or full name)")
+        )
+
     # Clean and canonicalize instruments against one shared vocabulary
-    person['instruments'] = normalize_instruments(person['instruments'])
+    person["instruments"] = normalize_instruments(person["instruments"])
 
     return person
 
@@ -10033,46 +12015,52 @@ def parse_csv_row(row, headers, session_city=None, session_state=None, session_c
 def is_email(value):
     """Check if a value looks like an email address."""
     import re
-    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+
+    email_pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
     return bool(re.match(email_pattern, value))
 
 
 def is_phone_number(value):
     """Check if a value looks like a phone number."""
     import re
+
     # Match various phone number formats
-    phone_pattern = r'^[\+]?[\d\s\-\(\)\.]{10,}$'
-    return bool(re.match(phone_pattern, value)) and len(re.sub(r'[\s\-\(\)\.]', '', value)) >= 10
+    phone_pattern = r"^[\+]?[\d\s\-\(\)\.]{10,}$"
+    return (
+        bool(re.match(phone_pattern, value))
+        and len(re.sub(r"[\s\-\(\)\.]", "", value)) >= 10
+    )
 
 
 def parse_instruments(value):
     """Parse instrument string into list of instruments."""
     if not value:
         return []
-    
+
     # Handle quoted comma-separated lists
     import re
+
     if value.startswith('"') and value.endswith('"'):
         value = value[1:-1]
-    
+
     # Split on commas and clean up
-    instruments = [inst.strip() for inst in value.split(',') if inst.strip()]
+    instruments = [inst.strip() for inst in value.split(",") if inst.strip()]
     return instruments
 
 
 def find_duplicate_person(person_data, session_id):
     """
     Find if person already exists based on email, phone, or name within session.
-    
+
     Returns: (is_duplicate, existing_person_id, duplicate_reason)
     """
     conn = get_db_connection()
     cur = conn.cursor()
-    
+
     try:
         # First check by email (exact match) — against person.email (accountless)
         # or the account email, since person.email is nulled once connected.
-        if person_data.get('email'):
+        if person_data.get("email"):
             cur.execute(
                 """
                 SELECT p.person_id
@@ -10081,26 +12069,26 @@ def find_duplicate_person(person_data, session_id):
                 WHERE p.email = %s OR LOWER(ua.user_email) = LOWER(%s)
                 LIMIT 1
                 """,
-                (person_data['email'], person_data['email'])
+                (person_data["email"], person_data["email"]),
             )
             result = cur.fetchone()
             if result:
                 cur.close()
                 conn.close()
                 return True, result[0], "email"
-        
+
         # Then check by SMS number (exact match)
-        if person_data.get('sms_number'):
+        if person_data.get("sms_number"):
             cur.execute(
                 "SELECT person_id FROM person WHERE sms_number = %s",
-                (person_data['sms_number'],)
+                (person_data["sms_number"],),
             )
             result = cur.fetchone()
             if result:
                 cur.close()
                 conn.close()
                 return True, result[0], "phone"
-        
+
         # Finally check by name within this session
         cur.execute(
             """
@@ -10111,111 +12099,129 @@ def find_duplicate_person(person_data, session_id):
             AND LOWER(p.first_name) = LOWER(%s) 
             AND LOWER(p.last_name) = LOWER(%s)
             """,
-            (session_id, person_data['first_name'], person_data['last_name'])
+            (session_id, person_data["first_name"], person_data["last_name"]),
         )
         result = cur.fetchone()
         if result:
             cur.close()
             conn.close()
             return True, result[0], "name"
-        
+
         cur.close()
         conn.close()
         return False, None, None
-        
+
     except Exception:
         cur.close()
         conn.close()
         return False, None, None
 
 
-@api_login_required  
+@api_login_required
 def bulk_import_preprocess_session(session_id):
     """
     First stage of bulk import: preprocess CSV data and return preview.
-    
+
     POST /api/session/{session_id}/bulk-import/preprocess
-    
+
     Expected JSON payload:
     {
         "csv_data": "CSV string with person data"
     }
-    
+
     Returns processed people with duplicate detection.
     """
-    if request.method != 'POST':
-        return jsonify({"success": False, "message": "Only POST method allowed"}), 405
-    
+    if request.method != "POST":
+        return (
+            jsonify({"success": False, "message": _("Only POST method allowed")}),
+            405,
+        )
+
     try:
-        # Check permissions - must be system admin 
+        # Check permissions - must be system admin
         conn = get_db_connection()
         cur = conn.cursor()
-        
+
         cur.execute(
             "SELECT is_system_admin FROM user_account WHERE user_id = %s",
-            (current_user.user_id,)
+            (current_user.user_id,),
         )
         user_row = cur.fetchone()
         if not user_row or not user_row[0]:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Insufficient permissions"}), 403
-        
+            return (
+                jsonify({"success": False, "message": _("Insufficient permissions")}),
+                403,
+            )
+
         # Check if session exists and get location data
         cur.execute(
             "SELECT session_id, name, city, state, country FROM session WHERE session_id = %s",
-            (session_id,)
+            (session_id,),
         )
         session_result = cur.fetchone()
         if not session_result:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Session not found"}), 404
-        
+            return jsonify({"success": False, "message": _("Session not found")}), 404
+
         session_city = session_result[2]
-        session_state = session_result[3] 
+        session_state = session_result[3]
         session_country = session_result[4]
-        
+
         cur.close()
         conn.close()
-        
+
         # Get CSV data from request
         data = request.get_json()
         if data is None:
-            return jsonify({"success": False, "message": "No JSON data provided"}), 400
-        
-        csv_data = data.get('csv_data', '').strip()
+            return (
+                jsonify({"success": False, "message": _("No JSON data provided")}),
+                400,
+            )
+
+        csv_data = data.get("csv_data", "").strip()
         if not csv_data:
-            return jsonify({"success": False, "message": "csv_data field is required"}), 400
-        
+            return (
+                jsonify({"success": False, "message": _("csv_data field is required")}),
+                400,
+            )
+
         # Parse CSV data
         try:
-            processed_people = parse_csv_data(csv_data, session_city, session_state, session_country)
+            processed_people = parse_csv_data(
+                csv_data, session_city, session_state, session_country
+            )
         except ValueError as e:
             return jsonify({"success": False, "message": str(e)}), 400
-        
+
         # Check for duplicates
         for person in processed_people:
-            is_duplicate, existing_id, reason = find_duplicate_person(person, session_id)
-            person['is_duplicate'] = is_duplicate
+            is_duplicate, existing_id, reason = find_duplicate_person(
+                person, session_id
+            )
+            person["is_duplicate"] = is_duplicate
             if is_duplicate:
-                person['existing_person_id'] = existing_id
-                person['duplicate_reason'] = reason
-        
-        return jsonify({
-            "success": True,
-            "processed_people": processed_people,
-            "session_info": {
-                "session_id": session_id,
-                "name": session_result[1],
-                "city": session_city,
-                "state": session_state,
-                "country": session_country
+                person["existing_person_id"] = existing_id
+                person["duplicate_reason"] = reason
+
+        return jsonify(
+            {
+                "success": True,
+                "processed_people": processed_people,
+                "session_info": {
+                    "session_id": session_id,
+                    "name": session_result[1],
+                    "city": session_city,
+                    "state": session_state,
+                    "country": session_country,
+                },
             }
-        })
-        
+        )
+
     except Exception as e:
-        if 'conn' in locals():
+        if "conn" in locals():
             conn.close()
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -10224,74 +12230,98 @@ def bulk_import_preprocess_session(session_id):
 def bulk_import_save_session(session_id):
     """
     Second stage of bulk import: save processed people to database.
-    
+
     POST /api/session/{session_id}/bulk-import/save
-    
+
     Expected JSON payload:
     {
         "processed_people": [array of processed person objects]
     }
-    
+
     Creates new people and associated session_person records.
     """
-    if request.method != 'POST':
-        return jsonify({"success": False, "message": "Only POST method allowed"}), 405
-    
+    if request.method != "POST":
+        return (
+            jsonify({"success": False, "message": _("Only POST method allowed")}),
+            405,
+        )
+
     try:
         # Check permissions - must be system admin
         conn = get_db_connection()
         cur = conn.cursor()
-        
+
         cur.execute(
             "SELECT is_system_admin FROM user_account WHERE user_id = %s",
-            (current_user.user_id,)
+            (current_user.user_id,),
         )
         user_row = cur.fetchone()
         if not user_row or not user_row[0]:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Insufficient permissions"}), 403
-        
+            return (
+                jsonify({"success": False, "message": _("Insufficient permissions")}),
+                403,
+            )
+
         # Check if session exists
         cur.execute(
-            "SELECT session_id FROM session WHERE session_id = %s",
-            (session_id,)
+            "SELECT session_id FROM session WHERE session_id = %s", (session_id,)
         )
         session_result = cur.fetchone()
         if not session_result:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Session not found"}), 404
-        
+            return jsonify({"success": False, "message": _("Session not found")}), 404
+
         # Get processed people from request
         data = request.get_json()
         if data is None:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "No JSON data provided"}), 400
-        
-        processed_people = data.get('processed_people', [])
+            return (
+                jsonify({"success": False, "message": _("No JSON data provided")}),
+                400,
+            )
+
+        processed_people = data.get("processed_people", [])
         if not processed_people:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "processed_people field is required"}), 400
-        
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": _("processed_people field is required"),
+                    }
+                ),
+                400,
+            )
+
         if not isinstance(processed_people, list):
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "processed_people must be an array"}), 400
-        
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": _("processed_people must be an array"),
+                    }
+                ),
+                400,
+            )
+
         created_count = 0
         skipped_count = 0
         created_people = []
-        
+
         # Begin transaction
         cur.execute("BEGIN")
-        
+
         try:
             for person_data in processed_people:
                 # Skip duplicates
-                if person_data.get('is_duplicate', False):
+                if person_data.get("is_duplicate", False):
                     skipped_count += 1
                     continue
 
@@ -10303,36 +12333,43 @@ def bulk_import_save_session(session_id):
                     RETURNING person_id
                     """,
                     (
-                        person_data.get('first_name', '').strip(),
-                        person_data.get('last_name', '').strip(),
-                        person_data.get('email'),
-                        person_data.get('sms_number'),
-                        person_data.get('city'),
-                        person_data.get('state'),
-                        person_data.get('country'),
-                        current_user.user_id
-                    )
+                        person_data.get("first_name", "").strip(),
+                        person_data.get("last_name", "").strip(),
+                        person_data.get("email"),
+                        person_data.get("sms_number"),
+                        person_data.get("city"),
+                        person_data.get("state"),
+                        person_data.get("country"),
+                        current_user.user_id,
+                    ),
                 )
 
                 person_id = cur.fetchone()[0]
 
                 # Log person creation
-                save_to_history(cur, 'person', 'INSERT', person_id, user_id=current_user.user_id)
+                save_to_history(
+                    cur, "person", "INSERT", person_id, user_id=current_user.user_id
+                )
 
                 # Create instruments (canonicalized against one shared vocabulary)
-                instruments = normalize_instruments(person_data.get('instruments', []))
+                instruments = normalize_instruments(person_data.get("instruments", []))
                 for instrument in instruments:
                     cur.execute(
                         """
                         INSERT INTO person_instrument (person_id, instrument, created_date, created_by_user_id)
                         VALUES (%s, %s, (NOW() AT TIME ZONE 'UTC'), %s)
                         """,
-                        (person_id, instrument, current_user.user_id)
+                        (person_id, instrument, current_user.user_id),
                     )
 
                     # Log instrument creation
-                    save_to_history(cur, 'person_instrument', 'INSERT',
-                                  (person_id, instrument), user_id=current_user.user_id)
+                    save_to_history(
+                        cur,
+                        "person_instrument",
+                        "INSERT",
+                        (person_id, instrument),
+                        user_id=current_user.user_id,
+                    )
 
                 # Create session_person record. A bulk import is an admin populating their
                 # own roster -- a deliberate vouch -- so these land confirmed (spec 034).
@@ -10342,45 +12379,67 @@ def bulk_import_save_session(session_id):
                         (session_id, person_id, relationship, confirmed, archived, created_date, created_by_user_id)
                     VALUES (%s, %s, 'member', TRUE, FALSE, (NOW() AT TIME ZONE 'UTC'), %s)
                     """,
-                    (session_id, person_id, current_user.user_id)
+                    (session_id, person_id, current_user.user_id),
                 )
 
                 # Log session_person creation
-                save_to_history(cur, 'session_person', 'INSERT',
-                              (session_id, person_id), user_id=current_user.user_id)
-                
+                save_to_history(
+                    cur,
+                    "session_person",
+                    "INSERT",
+                    (session_id, person_id),
+                    user_id=current_user.user_id,
+                )
+
                 created_count += 1
-                created_people.append({
-                    "person_id": person_id,
-                    "first_name": person_data.get('first_name', ''),
-                    "last_name": person_data.get('last_name', ''),
-                    "email": person_data.get('email'),
-                    "instruments": instruments,
-                    "relationship": "member"
-                })
-            
+                created_people.append(
+                    {
+                        "person_id": person_id,
+                        "first_name": person_data.get("first_name", ""),
+                        "last_name": person_data.get("last_name", ""),
+                        "email": person_data.get("email"),
+                        "instruments": instruments,
+                        "relationship": "member",
+                    }
+                )
+
             # Commit transaction
             cur.execute("COMMIT")
-            
+
             cur.close()
             conn.close()
-            
-            return jsonify({
-                "success": True,
-                "message": f"Successfully imported {created_count} people ({skipped_count} skipped as duplicates)",
-                "created_count": created_count,
-                "skipped_count": skipped_count,
-                "created_people": created_people
-            })
+
+            return jsonify(
+                {
+                    "success": True,
+                    "message": ngettext(
+                        "Successfully imported %(num)d person (%(skipped)s skipped as duplicates)",
+                        "Successfully imported %(num)d people (%(skipped)s skipped as duplicates)",
+                        created_count,
+                        skipped=skipped_count,
+                    ),
+                    "created_count": created_count,
+                    "skipped_count": skipped_count,
+                    "created_people": created_people,
+                }
+            )
 
         except Exception as e:
             cur.execute("ROLLBACK")
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": f"Error saving people: {str(e)}"}), 500
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": _("Error saving people: %(error)s", error=str(e)),
+                    }
+                ),
+                500,
+            )
 
     except Exception as e:
-        if 'conn' in locals():
+        if "conn" in locals():
             conn.close()
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -10400,8 +12459,8 @@ def get_sessions_with_today_status():
         user_person_id = None
         user_timezone = "UTC"
         if current_user.is_authenticated:
-            user_person_id = getattr(current_user, 'person_id', None)
-            user_timezone = getattr(current_user, 'timezone', None) or "UTC"
+            user_person_id = getattr(current_user, "person_id", None)
+            user_timezone = getattr(current_user, "timezone", None) or "UTC"
 
         # The whole response body comes from the shared serializer; the /sessions
         # page shell embeds the same function's output, so they can't drift.
@@ -10415,15 +12474,17 @@ def get_sessions_with_today_status():
             if slug:
                 place = places.get_place_by_slug(conn.cursor(), slug)
                 if place is None or place["kind"] != "place":
-                    return jsonify({"success": False, "error": "No such place"}), 404
-            payload = build_sessions_directory_payload(conn, user_person_id, user_timezone, place=place)
+                    return jsonify({"success": False, "error": _("No such place")}), 404
+            payload = build_sessions_directory_payload(
+                conn, user_person_id, user_timezone, place=place
+            )
         finally:
             conn.close()
 
         return jsonify(payload)
 
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 @api_login_required  # creates data; only reference is the orphaned templates/session_select_action.html (rendered by nothing)
@@ -10454,7 +12515,7 @@ def create_or_get_today_session_instance(session_path):
         if not session_result:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Session not found"}), 404
+            return jsonify({"success": False, "message": _("Session not found")}), 404
 
         session_id, session_name, session_timezone = session_result
 
@@ -10474,14 +12535,16 @@ def create_or_get_today_session_instance(session_path):
         if existing_instance:
             cur.close()
             conn.close()
-            return jsonify({
-                "success": True,
-                "session_instance_id": existing_instance[0],
-                "created": False,
-                "date": today.isoformat(),
-                "session_name": session_name,
-                "session_path": session_path
-            })
+            return jsonify(
+                {
+                    "success": True,
+                    "session_instance_id": existing_instance[0],
+                    "created": False,
+                    "date": today.isoformat(),
+                    "session_name": session_name,
+                    "session_path": session_path,
+                }
+            )
 
         # Create new session instance for today
         cur.execute(
@@ -10497,28 +12560,44 @@ def create_or_get_today_session_instance(session_path):
         if not new_instance:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Failed to create session instance"}), 500
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": _("Failed to create session instance"),
+                    }
+                ),
+                500,
+            )
 
         session_instance_id = new_instance[0]
 
         # Save to history
-        save_to_history(cur, "session_instance", "INSERT", session_instance_id, user_id=get_current_user_id())
+        save_to_history(
+            cur,
+            "session_instance",
+            "INSERT",
+            session_instance_id,
+            user_id=get_current_user_id(),
+        )
 
         conn.commit()
         cur.close()
         conn.close()
 
-        return jsonify({
-            "success": True,
-            "session_instance_id": session_instance_id,
-            "created": True,
-            "date": today.isoformat(),
-            "session_name": session_name,
-            "session_path": session_path
-        })
+        return jsonify(
+            {
+                "success": True,
+                "session_instance_id": session_instance_id,
+                "created": True,
+                "date": today.isoformat(),
+                "session_name": session_name,
+                "session_path": session_path,
+            }
+        )
 
     except Exception as e:
-        if 'conn' in locals():
+        if "conn" in locals():
             conn.close()
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -10536,19 +12615,19 @@ def generate_qr_code(session_id=None):
     """
     try:
         # Check if URL parameter is provided (new behavior)
-        target_url = request.args.get('url')
-        referrer = request.args.get('referrer')
+        target_url = request.args.get("url")
+        referrer = request.args.get("referrer")
 
         if target_url:
             # New behavior: use provided URL with optional referrer
             qr_url = target_url
             if referrer:
                 # Add referrer parameter to URL
-                separator = '&' if '?' in qr_url else '?'
+                separator = "&" if "?" in qr_url else "?"
                 qr_url = f"{qr_url}{separator}referrer={referrer}"
         else:
             # Backwards compatibility: use session_id logic
-            base_url = request.host_url.rstrip('/')
+            base_url = request.host_url.rstrip("/")
             if session_id and session_id != 0:
                 qr_url = f"{base_url}/register?session_id={session_id}"
             else:
@@ -10569,10 +12648,10 @@ def generate_qr_code(session_id=None):
 
         # Save to BytesIO buffer
         img_io = BytesIO()
-        img.save(img_io, 'PNG')
+        img.save(img_io, "PNG")
         img_io.seek(0)
 
-        return send_file(img_io, mimetype='image/png', as_attachment=False)
+        return send_file(img_io, mimetype="image/png", as_attachment=False)
 
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
@@ -10597,11 +12676,13 @@ def get_session_active_instance(session_id):
 
         active_instance_ids = get_session_active_instances(session_id)
 
-        return jsonify({
-            "success": True,
-            "active_instance_ids": active_instance_ids,
-            "session_id": session_id
-        })
+        return jsonify(
+            {
+                "success": True,
+                "active_instance_ids": active_instance_ids,
+                "session_id": session_id,
+            }
+        )
 
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
@@ -10635,14 +12716,21 @@ def get_person_active_session(person_id):
 
         # Convert date/time objects to strings for JSON serialization
         if active_session:
-            active_session['date'] = active_session['date'].isoformat() if active_session['date'] else None
-            active_session['start_time'] = active_session['start_time'].isoformat() if active_session['start_time'] else None
-            active_session['end_time'] = active_session['end_time'].isoformat() if active_session['end_time'] else None
+            active_session["date"] = (
+                active_session["date"].isoformat() if active_session["date"] else None
+            )
+            active_session["start_time"] = (
+                active_session["start_time"].isoformat()
+                if active_session["start_time"]
+                else None
+            )
+            active_session["end_time"] = (
+                active_session["end_time"].isoformat()
+                if active_session["end_time"]
+                else None
+            )
 
-        return jsonify({
-            "success": True,
-            "active_session": active_session
-        })
+        return jsonify({"success": True, "active_session": active_session})
 
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
@@ -10673,14 +12761,15 @@ def get_admin_tunes():
     """
     # Check if user is system admin
     if not current_user.is_system_admin:
-        return jsonify({"success": False, "error": "Unauthorized"}), 403
+        return jsonify({"success": False, "error": _("Unauthorized")}), 403
 
     conn = get_db_connection()
     try:
         cur = conn.cursor()
 
         # Get all tunes with counts
-        cur.execute("""
+        cur.execute(
+            """
             SELECT
                 t.tune_id,
                 t.name,
@@ -10703,24 +12792,24 @@ def get_admin_tunes():
                 GROUP BY tune_id
             ) tunelist_counts ON t.tune_id = tunelist_counts.tune_id
             ORDER BY t.name
-        """)
+        """
+        )
 
         tunes = []
         for row in cur.fetchall():
-            tunes.append({
-                "tune_id": row[0],
-                "name": row[1],
-                "tune_type": row[2],
-                "session_count": row[3],
-                "tunelist_count": row[4],
-                "tunebook_count_cached": row[5] or 0,
-                "redirect_to_tune_id": row[6]
-            })
+            tunes.append(
+                {
+                    "tune_id": row[0],
+                    "name": row[1],
+                    "tune_type": row[2],
+                    "session_count": row[3],
+                    "tunelist_count": row[4],
+                    "tunebook_count_cached": row[5] or 0,
+                    "redirect_to_tune_id": row[6],
+                }
+            )
 
-        return jsonify({
-            "success": True,
-            "tunes": tunes
-        })
+        return jsonify({"success": True, "tunes": tunes})
 
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
@@ -10748,15 +12837,15 @@ def update_admin_tune(tune_id):
     """
     # Check if user is system admin
     if not current_user.is_system_admin:
-        return jsonify({"success": False, "error": "Unauthorized"}), 403
+        return jsonify({"success": False, "error": _("Unauthorized")}), 403
 
     data = request.get_json()
     if not data or "name" not in data:
-        return jsonify({"success": False, "error": "Missing name field"}), 400
+        return jsonify({"success": False, "error": _("Missing name field")}), 400
 
     name = data["name"].strip()
     if not name:
-        return jsonify({"success": False, "error": "Name cannot be empty"}), 400
+        return jsonify({"success": False, "error": _("Name cannot be empty")}), 400
 
     conn = get_db_connection()
     try:
@@ -10766,30 +12855,26 @@ def update_admin_tune(tune_id):
         cur.execute("SELECT name FROM tune WHERE tune_id = %s", (tune_id,))
         tune_row = cur.fetchone()
         if not tune_row:
-            return jsonify({"success": False, "error": "Tune not found"}), 404
+            return jsonify({"success": False, "error": _("Tune not found")}), 404
 
         old_name = tune_row[0]
 
         # Save to history before update
-        save_to_history(
-            cur,
-            "tune",
-            "UPDATE",
-            tune_id,
-            user_id=get_current_user_id()
-        )
+        save_to_history(cur, "tune", "UPDATE", tune_id, user_id=get_current_user_id())
 
         # Update the tune name
         cur.execute(
             "UPDATE tune SET name = %s, last_modified_date = CURRENT_TIMESTAMP, last_modified_user_id = %s WHERE tune_id = %s",
-            (name, get_current_user_id(), tune_id)
+            (name, get_current_user_id(), tune_id),
         )
         conn.commit()
 
-        return jsonify({
-            "success": True,
-            "message": f"Updated tune name to '{name}'"
-        })
+        return jsonify(
+            {
+                "success": True,
+                "message": _("Updated tune name to '%(name)s'", name=name),
+            }
+        )
 
     except Exception as e:
         conn.rollback()
@@ -10815,7 +12900,7 @@ def refresh_admin_tune_tunebook_count(tune_id):
     """
     # Check if user is system admin
     if not current_user.is_system_admin:
-        return jsonify({"success": False, "error": "Unauthorized"}), 403
+        return jsonify({"success": False, "error": _("Unauthorized")}), 403
 
     conn = get_db_connection()
     try:
@@ -10823,12 +12908,11 @@ def refresh_admin_tune_tunebook_count(tune_id):
 
         # Check if tune exists and get current count
         cur.execute(
-            "SELECT tunebook_count_cached FROM tune WHERE tune_id = %s",
-            (tune_id,)
+            "SELECT tunebook_count_cached FROM tune WHERE tune_id = %s", (tune_id,)
         )
         tune_row = cur.fetchone()
         if not tune_row:
-            return jsonify({"success": False, "error": "Tune not found"}), 404
+            return jsonify({"success": False, "error": _("Tune not found")}), 404
 
         old_count = tune_row[0] or 0
 
@@ -10850,34 +12934,52 @@ def refresh_admin_tune_tunebook_count(tune_id):
                         last_modified_date = CURRENT_TIMESTAMP
                     WHERE tune_id = %s
                     """,
-                    (new_count, tune_id)
+                    (new_count, tune_id),
                 )
                 conn.commit()
 
                 # Get the cached date for response
                 cur.execute(
                     "SELECT tunebook_count_cached_date FROM tune WHERE tune_id = %s",
-                    (tune_id,)
+                    (tune_id,),
                 )
                 cached_date = cur.fetchone()[0].isoformat()
 
-                return jsonify({
-                    "success": True,
-                    "old_count": old_count,
-                    "new_count": new_count,
-                    "cached_date": cached_date
-                })
+                return jsonify(
+                    {
+                        "success": True,
+                        "old_count": old_count,
+                        "new_count": new_count,
+                        "cached_date": cached_date,
+                    }
+                )
             else:
-                return jsonify({
-                    "success": False,
-                    "error": f"TheSession.org returned status {response.status_code}"
-                }), 500
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "error": _(
+                                "TheSession.org returned status %(status)s",
+                                status=response.status_code,
+                            ),
+                        }
+                    ),
+                    500,
+                )
 
         except requests.RequestException as e:
-            return jsonify({
-                "success": False,
-                "error": f"Failed to fetch from TheSession.org: {str(e)}"
-            }), 500
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": _(
+                            "Failed to fetch from TheSession.org: %(error)s",
+                            error=str(e),
+                        ),
+                    }
+                ),
+                500,
+            )
 
     except Exception as e:
         conn.rollback()
@@ -10941,21 +13043,37 @@ def merge_tune():
     """
     # Check if user is system admin
     if not current_user.is_system_admin:
-        return jsonify({"success": False, "error": "Unauthorized"}), 403
+        return jsonify({"success": False, "error": _("Unauthorized")}), 403
 
     data = request.get_json()
     if not data:
-        return jsonify({"success": False, "error": "Request body required"}), 400
+        return jsonify({"success": False, "error": _("Request body required")}), 400
 
     old_tune_id = data.get("old_tune_id")
     new_tune_id = data.get("new_tune_id")
     confirm = data.get("confirm", False)
 
     if not old_tune_id or not new_tune_id:
-        return jsonify({"success": False, "error": "Both old_tune_id and new_tune_id are required"}), 400
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": _("Both old_tune_id and new_tune_id are required"),
+                }
+            ),
+            400,
+        )
 
     if old_tune_id == new_tune_id:
-        return jsonify({"success": False, "error": "old_tune_id and new_tune_id cannot be the same"}), 400
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": _("old_tune_id and new_tune_id cannot be the same"),
+                }
+            ),
+            400,
+        )
 
     conn = get_db_connection()
     try:
@@ -10964,28 +13082,47 @@ def merge_tune():
         # Fetch old tune info
         cur.execute(
             "SELECT tune_id, name, tune_type, redirect_to_tune_id FROM tune WHERE tune_id = %s",
-            (old_tune_id,)
+            (old_tune_id,),
         )
         old_tune_row = cur.fetchone()
         if not old_tune_row:
-            return jsonify({"success": False, "error": f"Tune {old_tune_id} not found"}), 404
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": _(
+                            "Tune %(old_tune_id)s not found", old_tune_id=old_tune_id
+                        ),
+                    }
+                ),
+                404,
+            )
 
         if old_tune_row[3] is not None:
-            return jsonify({
-                "success": False,
-                "error": f"Tune {old_tune_id} is already a redirect to tune {old_tune_row[3]}"
-            }), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": _(
+                            "Tune %(old_tune_id)s is already a redirect to tune %(target_id)s",
+                            old_tune_id=old_tune_id,
+                            target_id=old_tune_row[3],
+                        ),
+                    }
+                ),
+                400,
+            )
 
         old_tune = {
             "tune_id": old_tune_row[0],
             "name": old_tune_row[1],
-            "type": old_tune_row[2]
+            "type": old_tune_row[2],
         }
 
         # Fetch new tune info
         cur.execute(
             "SELECT tune_id, name, tune_type, redirect_to_tune_id FROM tune WHERE tune_id = %s",
-            (new_tune_id,)
+            (new_tune_id,),
         )
         new_tune_row = cur.fetchone()
 
@@ -10998,55 +13135,105 @@ def merge_tune():
                 try:
                     ts_data = _fetch_thesession_tune(new_tune_id)
                 except TuneImportError as e:
-                    return jsonify({
-                        "success": False,
-                        "error": f"Tune {new_tune_id} is not in the local database and could not be fetched from thesession.org: {e.message}"
-                    }), e.status
-                new_tune = {"tune_id": new_tune_id, "name": ts_data["name"], "type": ts_data["type"].title()}
+                    return (
+                        jsonify(
+                            {
+                                "success": False,
+                                "error": _(
+                                    "Tune %(new_tune_id)s is not in the local database and could not be fetched from thesession.org: %(error)s",
+                                    new_tune_id=new_tune_id,
+                                    error=e.message,
+                                ),
+                            }
+                        ),
+                        e.status,
+                    )
+                new_tune = {
+                    "tune_id": new_tune_id,
+                    "name": ts_data["name"],
+                    "type": ts_data["type"].title(),
+                }
             else:
                 from live_logging_routes import _import_tune_for_live
+
                 try:
-                    imported_name, imported_type = _import_tune_for_live(cur, new_tune_id, current_user.user_id)
+                    imported_name, imported_type = _import_tune_for_live(
+                        cur, new_tune_id, current_user.user_id
+                    )
                 except TuneImportError as e:
                     conn.rollback()
-                    return jsonify({
-                        "success": False,
-                        "error": f"Could not import tune {new_tune_id} from thesession.org: {e.message}"
-                    }), e.status
-                new_tune = {"tune_id": new_tune_id, "name": imported_name, "type": imported_type}
+                    return (
+                        jsonify(
+                            {
+                                "success": False,
+                                "error": _(
+                                    "Could not import tune %(new_tune_id)s from thesession.org: %(error)s",
+                                    new_tune_id=new_tune_id,
+                                    error=e.message,
+                                ),
+                            }
+                        ),
+                        e.status,
+                    )
+                new_tune = {
+                    "tune_id": new_tune_id,
+                    "name": imported_name,
+                    "type": imported_type,
+                }
             will_import = True
         else:
             if new_tune_row[3] is not None:
-                return jsonify({
-                    "success": False,
-                    "error": f"Tune {new_tune_id} is a redirect to tune {new_tune_row[3]} - cannot redirect to a redirect"
-                }), 400
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "error": _(
+                                "Tune %(new_tune_id)s is a redirect to tune %(target_id)s - cannot redirect to a redirect",
+                                new_tune_id=new_tune_id,
+                                target_id=new_tune_row[3],
+                            ),
+                        }
+                    ),
+                    400,
+                )
 
             new_tune = {
                 "tune_id": new_tune_row[0],
                 "name": new_tune_row[1],
-                "type": new_tune_row[2]
+                "type": new_tune_row[2],
             }
 
         # Count affected records
-        cur.execute("SELECT COUNT(*) FROM tune_setting WHERE tune_id = %s", (old_tune_id,))
+        cur.execute(
+            "SELECT COUNT(*) FROM tune_setting WHERE tune_id = %s", (old_tune_id,)
+        )
         tune_settings_count = cur.fetchone()[0]
 
-        cur.execute("SELECT COUNT(*) FROM session_tune WHERE tune_id = %s", (old_tune_id,))
+        cur.execute(
+            "SELECT COUNT(*) FROM session_tune WHERE tune_id = %s", (old_tune_id,)
+        )
         session_tunes_count = cur.fetchone()[0]
 
-        cur.execute("SELECT COUNT(*) FROM session_tune_alias WHERE tune_id = %s", (old_tune_id,))
+        cur.execute(
+            "SELECT COUNT(*) FROM session_tune_alias WHERE tune_id = %s", (old_tune_id,)
+        )
         session_tune_aliases_count = cur.fetchone()[0]
 
-        cur.execute("SELECT COUNT(*) FROM session_instance_tune WHERE tune_id = %s", (old_tune_id,))
+        cur.execute(
+            "SELECT COUNT(*) FROM session_instance_tune WHERE tune_id = %s",
+            (old_tune_id,),
+        )
         session_instance_tunes_count = cur.fetchone()[0]
 
-        cur.execute("SELECT COUNT(*) FROM person_tune WHERE tune_id = %s", (old_tune_id,))
+        cur.execute(
+            "SELECT COUNT(*) FROM person_tune WHERE tune_id = %s", (old_tune_id,)
+        )
         person_tunes_count = cur.fetchone()[0]
 
         # Per-instrument overrides split by fate (spec 030): clean-move parents carry
         # theirs along (FK ON UPDATE CASCADE); conflict-deleted parents drop theirs.
-        cur.execute("""
+        cur.execute(
+            """
             SELECT COUNT(*) FILTER (WHERE NOT EXISTS (
                        SELECT 1 FROM person_tune pt2
                        WHERE pt2.person_id = pti.person_id AND pt2.tune_id = %s)),
@@ -11055,7 +13242,9 @@ def merge_tune():
                        WHERE pt2.person_id = pti.person_id AND pt2.tune_id = %s))
             FROM person_tune_instrument pti
             WHERE pti.tune_id = %s
-        """, (new_tune_id, new_tune_id, old_tune_id))
+        """,
+            (new_tune_id, new_tune_id, old_tune_id),
+        )
         instrument_moved_count, instrument_dropped_count = cur.fetchone()
 
         # Segments reach their tune through session_instance_tune since schema/049,
@@ -11082,20 +13271,26 @@ def merge_tune():
             "session_tune_alias_rows": 0,
         }
         if names_differ:
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT COUNT(*) FROM person_tune pt
                 WHERE pt.tune_id = %s AND pt.name_alias IS NULL
                   AND NOT EXISTS (SELECT 1 FROM person_tune pt2
                                   WHERE pt2.person_id = pt.person_id AND pt2.tune_id = %s)
-            """, (old_tune_id, new_tune_id))
+            """,
+                (old_tune_id, new_tune_id),
+            )
             alias_fills["person_tune_name_alias"] = cur.fetchone()[0]
 
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT COUNT(*) FROM session_tune st
                 WHERE st.tune_id = %s AND st.alias IS NULL
                   AND NOT EXISTS (SELECT 1 FROM session_tune st2
                                   WHERE st2.session_id = st.session_id AND st2.tune_id = %s)
-            """, (old_tune_id, new_tune_id))
+            """,
+                (old_tune_id, new_tune_id),
+            )
             alias_fills["session_tune_alias"] = cur.fetchone()[0]
 
             cur.execute(
@@ -11104,41 +13299,54 @@ def merge_tune():
             )
             alias_fills["session_instance_tune_name"] = cur.fetchone()[0]
 
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT COUNT(DISTINCT session_id) FROM (
                     SELECT session_id FROM session_tune WHERE tune_id = %s
                     UNION
                     SELECT session_id FROM session_tune_alias WHERE tune_id = %s
                 ) s
-            """, (old_tune_id, old_tune_id))
+            """,
+                (old_tune_id, old_tune_id),
+            )
             alias_fills["session_tune_alias_rows"] = cur.fetchone()[0]
 
         # Check for conflicts (records that will be merged/deleted)
         warnings = []
 
-        cur.execute("""
+        cur.execute(
+            """
             SELECT COUNT(*) FROM session_tune st1
             WHERE st1.tune_id = %s
             AND EXISTS (
                 SELECT 1 FROM session_tune st2
                 WHERE st2.session_id = st1.session_id AND st2.tune_id = %s
             )
-        """, (old_tune_id, new_tune_id))
+        """,
+            (old_tune_id, new_tune_id),
+        )
         session_tune_conflicts = cur.fetchone()[0]
         if session_tune_conflicts > 0:
-            warnings.append(f"{session_tune_conflicts} session_tune record(s) will be merged (session already has new tune)")
+            warnings.append(
+                f"{session_tune_conflicts} session_tune record(s) will be merged (session already has new tune)"
+            )
 
-        cur.execute("""
+        cur.execute(
+            """
             SELECT COUNT(*) FROM person_tune pt1
             WHERE pt1.tune_id = %s
             AND EXISTS (
                 SELECT 1 FROM person_tune pt2
                 WHERE pt2.person_id = pt1.person_id AND pt2.tune_id = %s
             )
-        """, (old_tune_id, new_tune_id))
+        """,
+            (old_tune_id, new_tune_id),
+        )
         person_tune_conflicts = cur.fetchone()[0]
         if person_tune_conflicts > 0:
-            warnings.append(f"{person_tune_conflicts} person_tune record(s) will be merged (person already has new tune)")
+            warnings.append(
+                f"{person_tune_conflicts} person_tune record(s) will be merged (person already has new tune)"
+            )
 
         if not confirm:
             # Verify the redirect against thesession.org (spec 030 #8): the merge we
@@ -11151,55 +13359,65 @@ def merge_tune():
 
             if will_import:
                 warnings.append(
-                    f'Tune {new_tune_id} is not in the local database - it will be imported '
+                    f"Tune {new_tune_id} is not in the local database - it will be imported "
                     f'from thesession.org as "{new_tune["name"]}" when the merge is confirmed.'
                 )
 
-            return jsonify({
-                "success": True,
-                "preview": True,
-                "old_tune": old_tune,
-                "new_tune": new_tune,
-                "will_import": will_import,
-                "names_differ": names_differ,
-                "affected_records": {
-                    "tune_settings": tune_settings_count,
-                    "session_tunes": session_tunes_count,
-                    "session_tune_aliases": session_tune_aliases_count,
-                    "session_instance_tunes": session_instance_tunes_count,
-                    "person_tunes": person_tunes_count,
-                    "person_tune_instruments_moved": instrument_moved_count,
-                    "person_tune_instruments_dropped": instrument_dropped_count,
-                    "recording_tune_segments": recording_segments_count
-                },
-                "alias_fills": alias_fills,
-                "thesession_check": thesession_check,
-                "warnings": warnings
-            })
+            return jsonify(
+                {
+                    "success": True,
+                    "preview": True,
+                    "old_tune": old_tune,
+                    "new_tune": new_tune,
+                    "will_import": will_import,
+                    "names_differ": names_differ,
+                    "affected_records": {
+                        "tune_settings": tune_settings_count,
+                        "session_tunes": session_tunes_count,
+                        "session_tune_aliases": session_tune_aliases_count,
+                        "session_instance_tunes": session_instance_tunes_count,
+                        "person_tunes": person_tunes_count,
+                        "person_tune_instruments_moved": instrument_moved_count,
+                        "person_tune_instruments_dropped": instrument_dropped_count,
+                        "recording_tune_segments": recording_segments_count,
+                    },
+                    "alias_fills": alias_fills,
+                    "thesession_check": thesession_check,
+                    "warnings": warnings,
+                }
+            )
 
         # Shared apply sequence (also used by the weekly sync): capture the log
         # rows live-logger clients may have open, run merge_tune_ids, then emit
         # change_tune events so connected screens relink in place (spec 030 #6).
-        result, events_emitted = _apply_tune_merge(cur, old_tune_id, new_tune_id, current_user.user_id)
+        result, events_emitted = _apply_tune_merge(
+            cur, old_tune_id, new_tune_id, current_user.user_id
+        )
 
         conn.commit()
 
-        return jsonify({
-            "success": True,
-            "message": f"Migrated tune {old_tune_id} → {new_tune_id}",
-            "old_tune": old_tune,
-            "new_tune": new_tune,
-            "imported_target": will_import,
-            "migrated_records": result.get("tables_updated", {}),
-            "total_records_affected": result.get("total_records_affected", 0),
-            "live_events_emitted": events_emitted
-        })
+        return jsonify(
+            {
+                "success": True,
+                "message": _(
+                    "Migrated tune %(old_tune_id)s → %(new_tune_id)s",
+                    old_tune_id=old_tune_id,
+                    new_tune_id=new_tune_id,
+                ),
+                "old_tune": old_tune,
+                "new_tune": new_tune,
+                "imported_target": will_import,
+                "migrated_records": result.get("tables_updated", {}),
+                "total_records_affected": result.get("total_records_affected", 0),
+                "live_events_emitted": events_emitted,
+            }
+        )
 
     except psycopg2.Error as e:
         conn.rollback()
         error_msg = str(e)
         # Extract the actual error message from PostgreSQL
-        if hasattr(e, 'pgerror') and e.pgerror:
+        if hasattr(e, "pgerror") and e.pgerror:
             error_msg = e.pgerror
         return jsonify({"success": False, "error": error_msg}), 500
     except Exception as e:
@@ -11223,7 +13441,7 @@ def start_merge_scan():
     cron performs. 409 if a run is already going with a fresh heartbeat.
     """
     if not current_user.is_system_admin:
-        return jsonify({"success": False, "error": "Unauthorized"}), 403
+        return jsonify({"success": False, "error": _("Unauthorized")}), 403
 
     from services.tune_merge_scan_service import create_run, start_scan_thread
 
@@ -11232,7 +13450,12 @@ def start_merge_scan():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
     if scan_id is None:
-        return jsonify({"success": False, "error": "A sync run is already in progress."}), 409
+        return (
+            jsonify(
+                {"success": False, "error": _("A sync run is already in progress.")}
+            ),
+            409,
+        )
     start_scan_thread(scan_id)
     return jsonify({"success": True, "scan_id": scan_id})
 
@@ -11247,7 +13470,7 @@ def get_merge_scan():
     persist across runs, so this is the durable history the admin page shows.
     """
     if not current_user.is_system_admin:
-        return jsonify({"success": False, "error": "Unauthorized"}), 403
+        return jsonify({"success": False, "error": _("Unauthorized")}), 403
 
     from services.tune_merge_scan_service import HEARTBEAT_STALE_SECONDS
 
@@ -11305,21 +13528,33 @@ def get_merge_scan():
                 """,
                 (list(runs.keys()),),
             )
-            for (scan_id, tune_id, tune_name, result_type, target_tune_id,
-                 target_name, target_aliases, detail, applied_at, checked_at) in cur.fetchall():
-                runs[scan_id]["results"].append({
-                    "tune_id": tune_id,
-                    "tune_name": tune_name,
-                    "result_type": result_type,
-                    "target_tune_id": target_tune_id,
-                    "target_name": target_name,
-                    "target_aliases": target_aliases or [],
-                    "detail": detail,
-                    "applied": applied_at is not None,
-                    "applied_at": applied_at.isoformat() if applied_at else None,
-                    "imported": bool(detail and "target imported" in detail),
-                    "checked_at": checked_at.isoformat() if checked_at else None,
-                })
+            for (
+                scan_id,
+                tune_id,
+                tune_name,
+                result_type,
+                target_tune_id,
+                target_name,
+                target_aliases,
+                detail,
+                applied_at,
+                checked_at,
+            ) in cur.fetchall():
+                runs[scan_id]["results"].append(
+                    {
+                        "tune_id": tune_id,
+                        "tune_name": tune_name,
+                        "result_type": result_type,
+                        "target_tune_id": target_tune_id,
+                        "target_name": target_name,
+                        "target_aliases": target_aliases or [],
+                        "detail": detail,
+                        "applied": applied_at is not None,
+                        "applied_at": applied_at.isoformat() if applied_at else None,
+                        "imported": bool(detail and "target imported" in detail),
+                        "checked_at": checked_at.isoformat() if checked_at else None,
+                    }
+                )
 
         return jsonify({"success": True, "runs": run_order})
 
@@ -11338,7 +13573,7 @@ def cancel_merge_scan():
     next iteration and exits; results collected so far stay visible.
     """
     if not current_user.is_system_admin:
-        return jsonify({"success": False, "error": "Unauthorized"}), 403
+        return jsonify({"success": False, "error": _("Unauthorized")}), 403
 
     conn = get_db_connection()
     try:
@@ -11354,7 +13589,10 @@ def cancel_merge_scan():
         cancelled = cur.fetchone()
         conn.commit()
         if not cancelled:
-            return jsonify({"success": False, "error": "No running scan to cancel."}), 404
+            return (
+                jsonify({"success": False, "error": _("No running scan to cancel.")}),
+                404,
+            )
         return jsonify({"success": True, "scan_id": cancelled[0]})
     except Exception as e:
         conn.rollback()
@@ -11366,6 +13604,7 @@ def cancel_merge_scan():
 # ============================================================================
 # Session Instance Tune Detail Endpoints
 # ============================================================================
+
 
 @public_api  # backs the tune-detail modal on logged-out session-instance pages; current_user use is personalization only
 def get_session_instance_tune_detail(session_path, date_or_id, tune_id):
@@ -11387,10 +13626,12 @@ def get_session_instance_tune_detail(session_path, date_or_id, tune_id):
         cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
         if not cur.fetchone():
             combined_path = f"{session_path}/{date_or_id}"
-            cur.execute("SELECT session_id FROM session WHERE path = %s", (combined_path,))
+            cur.execute(
+                "SELECT session_id FROM session WHERE path = %s", (combined_path,)
+            )
             if cur.fetchone():
                 return get_session_tune_detail(combined_path, tune_id)
-            return jsonify({"success": False, "message": "Session not found"}), 404
+            return jsonify({"success": False, "message": _("Session not found")}), 404
 
         tune_id, redirected_from = follow_tune_redirect(cur, tune_id)
         person_id = current_user.person_id if current_user.is_authenticated else None
@@ -11400,22 +13641,35 @@ def get_session_instance_tune_detail(session_path, date_or_id, tune_id):
                 tune_id,
                 person_id=person_id,
                 logged_in=current_user.is_authenticated,
-                is_admin=bool(current_user.is_authenticated and current_user.is_system_admin),
+                is_admin=bool(
+                    current_user.is_authenticated and current_user.is_system_admin
+                ),
                 session_path=session_path,
                 date_or_id=date_or_id,
                 redirected_from=redirected_from,
             )
         except SessionNotFound:
-            return jsonify({"success": False, "message": "Session not found"}), 404
+            return jsonify({"success": False, "message": _("Session not found")}), 404
         except SessionInstanceNotFound:
-            return jsonify({"success": False, "message": "Session instance not found"}), 404
+            return (
+                jsonify({"success": False, "message": _("Session instance not found")}),
+                404,
+            )
         if payload is None:
-            return jsonify({"success": False, "message": "Tune not found"}), 404
+            return jsonify({"success": False, "message": _("Tune not found")}), 404
         return jsonify(payload)
     except Exception as e:
-        return jsonify(
-            {"success": False, "message": f"Error retrieving tune details: {str(e)}"}
-        ), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "message": _(
+                        "Error retrieving tune details: %(error)s", error=str(e)
+                    ),
+                }
+            ),
+            500,
+        )
     finally:
         conn.close()
 
@@ -11437,7 +13691,7 @@ def update_session_instance_tune_details(session_path, date_or_id, tune_id):
     try:
         data = request.get_json()
         if not data:
-            return jsonify({"success": False, "message": "No data provided"}), 400
+            return jsonify({"success": False, "message": _("No data provided")}), 400
 
         conn = get_db_connection()
         cur = conn.cursor()
@@ -11446,14 +13700,17 @@ def update_session_instance_tune_details(session_path, date_or_id, tune_id):
         cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
         session_result = cur.fetchone()
         if not session_result:
-            return jsonify({"success": False, "message": "Session not found"}), 404
+            return jsonify({"success": False, "message": _("Session not found")}), 404
 
         session_id = session_result[0]
 
         # Get session_instance_id
         session_instance_id = get_session_instance_id(cur, session_id, date_or_id)
         if not session_instance_id:
-            return jsonify({"success": False, "message": "Session instance not found"}), 404
+            return (
+                jsonify({"success": False, "message": _("Session instance not found")}),
+                404,
+            )
 
         # Any session member may edit all three fields on a specific instance (spec
         # 037). This is a record of what happened in a room they were in — not the
@@ -11461,7 +13718,7 @@ def update_session_instance_tune_details(session_path, date_or_id, tune_id):
         # update_session_tune_details. Before 037 a non-admin member could set only
         # setting_override.
         if not is_session_member_for(cur, session_id, current_user.person_id):
-            return jsonify({"success": False, "message": "Unauthorized"}), 403
+            return jsonify({"success": False, "message": _("Unauthorized")}), 403
 
         # Check if this tune exists in this session instance
         cur.execute(
@@ -11473,12 +13730,22 @@ def update_session_instance_tune_details(session_path, date_or_id, tune_id):
             (session_instance_id, tune_id),
         )
         if not cur.fetchone():
-            return jsonify({"success": False, "message": "Tune not found in this session instance"}), 404
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": _("Tune not found in this session instance"),
+                    }
+                ),
+                404,
+            )
 
         # Build dynamic update - only update fields that are explicitly present in request
         update_fields = []
         update_values = []
-        updated_records = []  # returned to the caller so a live logger can patch its rows
+        updated_records = (
+            []
+        )  # returned to the caller so a live logger can patch its rows
 
         # Handle name if present in request
         if "name" in data:
@@ -11517,7 +13784,15 @@ def update_session_instance_tune_details(session_path, date_or_id, tune_id):
                     update_fields.append("setting_override = %s")
                     update_values.append(int(setting_raw))
                 except (ValueError, TypeError):
-                    return jsonify({"success": False, "message": "Invalid setting_override value"}), 400
+                    return (
+                        jsonify(
+                            {
+                                "success": False,
+                                "message": _("Invalid setting_override value"),
+                            }
+                        ),
+                        400,
+                    )
 
         # Update the session_instance_tune record - only update fields that were in the request
         if update_fields:
@@ -11544,13 +13819,16 @@ def update_session_instance_tune_details(session_path, date_or_id, tune_id):
             # not have to wait for its edit to make the round trip through the feed.
             try:
                 from live_logging_routes import emit_change_tune, _reselect
+
                 cur.execute(
                     "SELECT session_instance_tune_id FROM session_instance_tune "
                     "WHERE session_instance_id = %s AND tune_id = %s AND record_type = 'tune' AND deleted = FALSE",
                     (session_instance_id, tune_id),
                 )
                 for (rid,) in cur.fetchall():
-                    emit_change_tune(cur, session_instance_id, rid, get_current_user_id())
+                    emit_change_tune(
+                        cur, session_instance_id, rid, get_current_user_id()
+                    )
                     updated_records.append(_reselect(cur, rid))
             except Exception as e:
                 print(f"live broadcast (change_tune) failed: {e}")
@@ -11558,19 +13836,29 @@ def update_session_instance_tune_details(session_path, date_or_id, tune_id):
         conn.commit()
         conn.close()
 
-        return jsonify({
-            "success": True,
-            "message": "Tune details updated successfully",
-            "records": updated_records,
-        })
+        return jsonify(
+            {
+                "success": True,
+                "message": _("Tune details updated successfully"),
+                "records": updated_records,
+            }
+        )
 
     except Exception as e:
-        if 'conn' in locals():
+        if "conn" in locals():
             conn.rollback()
             conn.close()
-        return jsonify(
-            {"success": False, "message": f"Error updating tune details: {str(e)}"}
-        ), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "message": _(
+                        "Error updating tune details: %(error)s", error=str(e)
+                    ),
+                }
+            ),
+            500,
+        )
 
 
 @api_login_required
@@ -11588,7 +13876,7 @@ def update_set_started_by(session_instance_id, set_index):
     try:
         data = request.get_json()
         if data is None:
-            return jsonify({"success": False, "message": "No data provided"}), 400
+            return jsonify({"success": False, "message": _("No data provided")}), 400
 
         person_id = data.get("person_id")
         # Allow null/None to clear the value
@@ -11601,11 +13889,14 @@ def update_set_started_by(session_instance_id, set_index):
         # Verify session instance exists and get session_id
         cur.execute(
             "SELECT session_id FROM session_instance WHERE session_instance_id = %s",
-            (session_instance_id,)
+            (session_instance_id,),
         )
         session_result = cur.fetchone()
         if not session_result:
-            return jsonify({"success": False, "message": "Session instance not found"}), 404
+            return (
+                jsonify({"success": False, "message": _("Session instance not found")}),
+                404,
+            )
 
         session_id = session_result[0]
 
@@ -11613,18 +13904,32 @@ def update_set_started_by(session_instance_id, set_index):
         if person_id is not None:
             cur.execute(
                 "SELECT first_name, last_name, active FROM person WHERE person_id = %s",
-                (person_id,)
+                (person_id,),
             )
             person_result = cur.fetchone()
             if not person_result:
                 cur.close()
                 conn.close()
-                return jsonify({"success": False, "message": "Person not found"}), 404
+                return (
+                    jsonify({"success": False, "message": _("Person not found")}),
+                    404,
+                )
             if not person_result[2]:  # active is False
                 person_name = f"{person_result[0]} {person_result[1]}"
                 cur.close()
                 conn.close()
-                return jsonify({"success": False, "message": f"{person_name} is deactivated and cannot be set as 'Started By'"}), 400
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "message": _(
+                                "%(person_name)s is deactivated and cannot be set as 'Started By'",
+                                person_name=person_name,
+                            ),
+                        }
+                    ),
+                    400,
+                )
 
         # Check if user has permission to edit this session (must be a session member)
         if not current_user.is_system_admin:
@@ -11637,7 +13942,7 @@ def update_set_started_by(session_instance_id, set_index):
             )
             is_session_member = cur.fetchone()
             if not is_session_member:
-                return jsonify({"success": False, "message": "Unauthorized"}), 403
+                return jsonify({"success": False, "message": _("Unauthorized")}), 403
 
         # Get all tunes for this session instance ordered by order_position
         cur.execute(
@@ -11652,14 +13957,24 @@ def update_set_started_by(session_instance_id, set_index):
         tunes = cur.fetchall()
 
         if not tunes:
-            return jsonify({"success": False, "message": "No tunes found"}), 404
+            return jsonify({"success": False, "message": _("No tunes found")}), 404
 
         # Group tunes into sets by break records
         sets = segment_records_into_sets(tunes, type_index=1)
 
         # Validate set_index
         if set_index < 0 or set_index >= len(sets):
-            return jsonify({"success": False, "message": f"Invalid set index: {set_index}"}), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": _(
+                            "Invalid set index: %(set_index)s", set_index=set_index
+                        ),
+                    }
+                ),
+                400,
+            )
 
         # Get the tune IDs in the specified set
         target_set = sets[set_index]
@@ -11678,19 +13993,34 @@ def update_set_started_by(session_instance_id, set_index):
         conn.commit()
         conn.close()
 
-        return jsonify({
-            "success": True,
-            "message": f"Updated {len(tune_ids)} tunes in set {set_index}",
-            "updated_count": len(tune_ids)
-        })
+        return jsonify(
+            {
+                "success": True,
+                "message": ngettext(
+                    "Updated %(num)d tune in set %(set_index)s",
+                    "Updated %(num)d tunes in set %(set_index)s",
+                    len(tune_ids),
+                    set_index=set_index,
+                ),
+                "updated_count": len(tune_ids),
+            }
+        )
 
     except Exception as e:
-        if 'conn' in locals():
+        if "conn" in locals():
             conn.rollback()
             conn.close()
-        return jsonify(
-            {"success": False, "message": f"Error updating set started_by: {str(e)}"}
-        ), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "message": _(
+                        "Error updating set started_by: %(error)s", error=str(e)
+                    ),
+                }
+            ),
+            500,
+        )
 
 
 @api_login_required
@@ -11704,7 +14034,7 @@ def get_admin_tune_detail(tune_id):
     """
     # Check if user is system admin
     if not current_user.is_system_admin:
-        return jsonify({"success": False, "error": "Unauthorized"}), 403
+        return jsonify({"success": False, "error": _("Unauthorized")}), 403
 
     try:
         conn = get_db_connection()
@@ -11724,7 +14054,7 @@ def get_admin_tune_detail(tune_id):
         tune_info = cur.fetchone()
 
         if not tune_info:
-            return jsonify({"success": False, "message": "Tune not found"}), 404
+            return jsonify({"success": False, "message": _("Tune not found")}), 404
 
         tune_name, tune_type, tunebook_count, tunebook_count_cached_date = tune_info
 
@@ -11779,9 +14109,7 @@ def get_admin_tune_detail(tune_id):
         global_play_count = play_count_result[0] if play_count_result else 0
 
         # How many people have this tune on their Ceol.io tune list
-        cur.execute(
-            "SELECT COUNT(*) FROM person_tune WHERE tune_id = %s", (tune_id,)
-        )
+        cur.execute("SELECT COUNT(*) FROM person_tune WHERE tune_id = %s", (tune_id,))
         person_list_result = cur.fetchone()
         person_list_count = person_list_result[0] if person_list_result else 0
 
@@ -11821,9 +14149,18 @@ def get_admin_tune_detail(tune_id):
         )
 
     except Exception as e:
-        return jsonify(
-            {"success": False, "message": f"Error retrieving tune details: {str(e)}"}
-        ), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "message": _(
+                        "Error retrieving tune details: %(error)s", error=str(e)
+                    ),
+                }
+            ),
+            500,
+        )
+
 
 # ========================================
 # Admin Cache Settings
@@ -11840,7 +14177,7 @@ def run_cache_settings():
 
     # Check if user is system admin
     if not current_user.is_system_admin:
-        return jsonify({"success": False, "error": "Unauthorized"}), 403
+        return jsonify({"success": False, "error": _("Unauthorized")}), 403
 
     try:
         # Get the project root directory
@@ -11853,14 +14190,14 @@ def run_cache_settings():
         # Prepare environment - force production ABC renderer
         env = os.environ.copy()
         # Always use production ABC renderer (don't inherit old localhost value)
-        env['ABC_RENDERER_URL'] = 'https://abc-renderer.onrender.com'
+        env["ABC_RENDERER_URL"] = "https://abc-renderer.onrender.com"
 
         result = subprocess.run(
             ["python3", script_path, "--skip-defaults"],
             capture_output=True,
             text=True,
             timeout=300,  # 5 minute timeout
-            env=env
+            env=env,
         )
 
         elapsed_time = time.time() - start_time
@@ -11877,7 +14214,7 @@ def run_cache_settings():
             "failed": 0,
             "api_calls": 0,
             "time_minutes": elapsed_time / 60,
-            "errors": []
+            "errors": [],
         }
 
         # Extract stats from output using regex
@@ -11917,35 +14254,39 @@ def run_cache_settings():
                 stats["api_calls"] = int(match.group(1))
 
         # Extract errors
-        errors_section = re.search(r"Errors \((\d+)\):(.*?)(?=\n\n|\Z)", output, re.DOTALL)
+        errors_section = re.search(
+            r"Errors \((\d+)\):(.*?)(?=\n\n|\Z)", output, re.DOTALL
+        )
         if errors_section:
             error_lines = errors_section.group(2).strip().split("\n")
-            stats["errors"] = [line.strip().lstrip("- ") for line in error_lines if line.strip().startswith("-")]
+            stats["errors"] = [
+                line.strip().lstrip("- ")
+                for line in error_lines
+                if line.strip().startswith("-")
+            ]
 
         if result.returncode == 0:
-            return jsonify({
-                "success": True,
-                "output": output,
-                "results": stats
-            })
+            return jsonify({"success": True, "output": output, "results": stats})
         else:
-            return jsonify({
-                "success": False,
-                "error": "Script failed",
-                "output": output,
-                "results": stats
-            }), 500
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": _("Script failed"),
+                        "output": output,
+                        "results": stats,
+                    }
+                ),
+                500,
+            )
 
     except subprocess.TimeoutExpired:
-        return jsonify({
-            "success": False,
-            "error": "Script timed out after 5 minutes"
-        }), 500
+        return (
+            jsonify({"success": False, "error": _("Script timed out after 5 minutes")}),
+            500,
+        )
     except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 @api_login_required
@@ -11953,14 +14294,15 @@ def get_cache_settings_stats():
     """Get statistics about cached tune settings"""
     # Check if user is system admin
     if not current_user.is_system_admin:
-        return jsonify({"success": False, "error": "Unauthorized"}), 403
+        return jsonify({"success": False, "error": _("Unauthorized")}), 403
 
     try:
         conn = get_db_connection()
         cur = conn.cursor()
 
         # Get statistics about cached settings
-        cur.execute("""
+        cur.execute(
+            """
             SELECT 
                 COUNT(*) as total_settings,
                 COUNT(CASE WHEN abc IS NOT NULL AND abc != '' THEN 1 END) as has_abc,
@@ -11970,12 +14312,14 @@ def get_cache_settings_stats():
                 COUNT(CASE WHEN abc IS NULL OR abc = '' THEN 1 END) as missing_abc,
                 COUNT(CASE WHEN (abc IS NOT NULL AND abc != '') AND (image IS NULL OR incipit_image IS NULL) THEN 1 END) as missing_images
             FROM tune_setting
-        """)
-        
+        """
+        )
+
         result = cur.fetchone()
-        
+
         # Get count of referenced settings (from person_tune, session_tune, session_instance_tune)
-        cur.execute("""
+        cur.execute(
+            """
             SELECT COUNT(DISTINCT setting_id) as referenced_settings
             FROM (
                 SELECT setting_id FROM person_tune WHERE setting_id IS NOT NULL
@@ -11984,11 +14328,13 @@ def get_cache_settings_stats():
                 UNION
                 SELECT setting_override as setting_id FROM session_instance_tune WHERE setting_override IS NOT NULL
             ) as all_settings
-        """)
+        """
+        )
         referenced_result = cur.fetchone()
 
         # Get count of referenced settings that don't exist in tune_setting yet
-        cur.execute("""
+        cur.execute(
+            """
             SELECT COUNT(DISTINCT all_refs.setting_id) as missing_records
             FROM (
                 SELECT setting_id FROM person_tune WHERE setting_id IS NOT NULL
@@ -11999,7 +14345,8 @@ def get_cache_settings_stats():
             ) as all_refs
             LEFT JOIN tune_setting ts ON all_refs.setting_id = ts.setting_id
             WHERE ts.setting_id IS NULL
-        """)
+        """
+        )
         missing_records_result = cur.fetchone()
 
         # Get count of tunes
@@ -12019,7 +14366,7 @@ def get_cache_settings_stats():
             "missing_images": result[6],
             "referenced_settings": referenced_result[0],
             "missing_records": missing_records_result[0],
-            "total_tunes": tune_count
+            "total_tunes": tune_count,
         }
 
         return jsonify({"success": True, "stats": stats})
@@ -12053,13 +14400,13 @@ def get_session_logs(session_path):
         # Get session ID and type
         cur.execute(
             "SELECT session_id, session_type FROM session WHERE path = %s",
-            (session_path,)
+            (session_path,),
         )
         session_result = cur.fetchone()
         if not session_result:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Session not found"}), 404
+            return jsonify({"success": False, "message": _("Session not found")}), 404
 
         session_id = session_result[0]
         session_type = session_result[1] or "regular"
@@ -12115,16 +14462,18 @@ def get_session_logs(session_path):
                 day_key = date.isoformat()  # Convert to ISO string for JSON
                 if day_key not in instances_by_day:
                     instances_by_day[day_key] = []
-                instances_by_day[day_key].append({
-                    'date': date.isoformat(),
-                    'location_override': instance[1],
-                    'start_time': instance[2].isoformat() if instance[2] else None,
-                    'end_time': instance[3].isoformat() if instance[3] else None,
-                    'session_instance_id': instance[4],
-                    'multiple_on_date': instance[5] > 1,
-                    'tune_count': instance[6],
-                    'attended': bool(instance[7]),
-                })
+                instances_by_day[day_key].append(
+                    {
+                        "date": date.isoformat(),
+                        "location_override": instance[1],
+                        "start_time": instance[2].isoformat() if instance[2] else None,
+                        "end_time": instance[3].isoformat() if instance[3] else None,
+                        "session_instance_id": instance[4],
+                        "multiple_on_date": instance[5] > 1,
+                        "tune_count": instance[6],
+                        "attended": bool(instance[7]),
+                    }
+                )
         else:
             # For regular sessions, group by year and include time info
             for instance in past_instances:
@@ -12132,43 +14481,51 @@ def get_session_logs(session_path):
                 year = date.year
                 if year not in instances_by_year:
                     instances_by_year[year] = []
-                instances_by_year[year].append({
-                    'date': date.isoformat(),
-                    'location_override': instance[1],
-                    'start_time': instance[2].isoformat() if instance[2] else None,
-                    'end_time': instance[3].isoformat() if instance[3] else None,
-                    'session_instance_id': instance[4],
-                    'multiple_on_date': instance[5] > 1,
-                    'tune_count': instance[6],
-                    'attended': bool(instance[7]),
-                })
+                instances_by_year[year].append(
+                    {
+                        "date": date.isoformat(),
+                        "location_override": instance[1],
+                        "start_time": instance[2].isoformat() if instance[2] else None,
+                        "end_time": instance[3].isoformat() if instance[3] else None,
+                        "session_instance_id": instance[4],
+                        "multiple_on_date": instance[5] > 1,
+                        "tune_count": instance[6],
+                        "attended": bool(instance[7]),
+                    }
+                )
 
         # Sort instances within each group by start_time
         for day_key in instances_by_day:
             instances_by_day[day_key].sort(
-                key=lambda x: x['start_time'] if x['start_time'] else ''
+                key=lambda x: x["start_time"] if x["start_time"] else ""
             )
 
         for year in instances_by_year:
             instances_by_year[year].sort(
-                key=lambda x: (x['date'], x['start_time'] if x['start_time'] else ''),
-                reverse=True
+                key=lambda x: (x["date"], x["start_time"] if x["start_time"] else ""),
+                reverse=True,
             )
 
         # Sort years in descending order (for regular sessions)
-        sorted_years = sorted(instances_by_year.keys(), reverse=True) if instances_by_year else []
+        sorted_years = (
+            sorted(instances_by_year.keys(), reverse=True) if instances_by_year else []
+        )
 
         # Sort days in ascending order for festivals (chronological)
-        sorted_days = sorted(instances_by_day.keys(), reverse=False) if instances_by_day else []
+        sorted_days = (
+            sorted(instances_by_day.keys(), reverse=False) if instances_by_day else []
+        )
 
-        return jsonify({
-            "success": True,
-            "instances_by_year": instances_by_year,
-            "sorted_years": sorted_years,
-            "instances_by_day": instances_by_day,
-            "sorted_days": sorted_days,
-            "session_type": session_type
-        })
+        return jsonify(
+            {
+                "success": True,
+                "instances_by_year": instances_by_year,
+                "sorted_years": sorted_years,
+                "instances_by_day": instances_by_day,
+                "sorted_days": sorted_days,
+                "session_type": session_type,
+            }
+        )
 
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
@@ -12197,7 +14554,7 @@ def get_session_logged_tunes(session_path):
         if not session_result:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Session not found"}), 404
+            return jsonify({"success": False, "message": _("Session not found")}), 404
         session_id = session_result[0]
 
         cur.execute(
@@ -12257,7 +14614,7 @@ def get_session_tune_log_instances(session_path, tune_id):
         if not session_result:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Session not found"}), 404
+            return jsonify({"success": False, "message": _("Session not found")}), 404
         session_id = session_result[0]
 
         cur.execute(
@@ -12310,22 +14667,27 @@ def get_session_tune_log_instances(session_path, tune_id):
             if instance_id not in by_instance:
                 by_instance[instance_id] = []
                 order.append(instance_id)
-            by_instance[instance_id].append({
-                "session_instance_tune_id": sit_id,
-                "name": name,
-                "set_number": set_number,
-                "position_in_set": position_in_set,
-            })
+            by_instance[instance_id].append(
+                {
+                    "session_instance_tune_id": sit_id,
+                    "name": name,
+                    "set_number": set_number,
+                    "position_in_set": position_in_set,
+                }
+            )
         cur.close()
         conn.close()
 
-        return jsonify({
-            "success": True,
-            "session_instance_ids": order,
-            "instances": [
-                {"session_instance_id": i, "positions": by_instance[i]} for i in order
-            ],
-        })
+        return jsonify(
+            {
+                "success": True,
+                "session_instance_ids": order,
+                "instances": [
+                    {"session_instance_id": i, "positions": by_instance[i]}
+                    for i in order
+                ],
+            }
+        )
 
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
@@ -12345,7 +14707,11 @@ def get_session_detail(session_path):
         from serializers import build_session_detail_payload
         from flask import session as flask_session
 
-        person_id = getattr(current_user, 'person_id', None) if current_user.is_authenticated else None
+        person_id = (
+            getattr(current_user, "person_id", None)
+            if current_user.is_authenticated
+            else None
+        )
 
         conn = get_db_connection()
         try:
@@ -12360,7 +14726,7 @@ def get_session_detail(session_path):
             conn.close()
 
         if payload is None:
-            return jsonify({"success": False, "message": "Session not found"}), 404
+            return jsonify({"success": False, "message": _("Session not found")}), 404
         return jsonify(payload)
 
     except Exception as e:
@@ -12380,10 +14746,15 @@ def get_session_tunes_remaining(session_path):
         conn = get_db_connection()
         try:
             cur = conn.cursor()
-            cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
+            cur.execute(
+                "SELECT session_id FROM session WHERE path = %s", (session_path,)
+            )
             session_result = cur.fetchone()
             if not session_result:
-                return jsonify({"success": False, "message": "Session not found"}), 404
+                return (
+                    jsonify({"success": False, "message": _("Session not found")}),
+                    404,
+                )
 
             # Same shape as the embedded first page: logged-in viewers also get
             # the per-tune attended_play_count (spec 033 R4) their filter needs.
@@ -12396,14 +14767,13 @@ def get_session_tunes_remaining(session_path):
                 pr = cur.fetchone()
                 person_id = pr[0] if pr else None
 
-            tunes_list = load_session_tunes(conn, session_result[0], offset=20, person_id=person_id)
+            tunes_list = load_session_tunes(
+                conn, session_result[0], offset=20, person_id=person_id
+            )
         finally:
             conn.close()
 
-        return jsonify({
-            "success": True,
-            "tunes": tunes_list
-        })
+        return jsonify({"success": True, "tunes": tunes_list})
 
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
@@ -12426,14 +14796,22 @@ def join_session(session_path):
         relationship = data.get("relationship", "member")
         if relationship not in ("member", "visitor"):
             return (
-                jsonify({"success": False, "message": "relationship must be 'member' or 'visitor'"}),
+                jsonify(
+                    {
+                        "success": False,
+                        "message": _("relationship must be 'member' or 'visitor'"),
+                    }
+                ),
                 400,
             )
 
         # Get user's person_id
-        user_person_id = getattr(current_user, 'person_id', None)
+        user_person_id = getattr(current_user, "person_id", None)
         if not user_person_id:
-            return jsonify({"success": False, "message": "User not linked to person"}), 403
+            return (
+                jsonify({"success": False, "message": _("User not linked to person")}),
+                403,
+            )
 
         conn = get_db_connection()
         cur = conn.cursor()
@@ -12444,19 +14822,24 @@ def join_session(session_path):
         if not session_result:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Session not found"}), 404
+            return jsonify({"success": False, "message": _("Session not found")}), 404
 
         session_id = session_result[0]
 
         # Check if already a member
         cur.execute(
             "SELECT 1 FROM session_person WHERE session_id = %s AND person_id = %s",
-            (session_id, user_person_id)
+            (session_id, user_person_id),
         )
         if cur.fetchone():
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Already a member of this session"}), 400
+            return (
+                jsonify(
+                    {"success": False, "message": _("Already a member of this session")}
+                ),
+                400,
+            )
 
         # Unconfirmed, always. See the docstring.
         cur.execute(
@@ -12465,7 +14848,7 @@ def join_session(session_path):
                 (session_id, person_id, relationship, confirmed, archived, is_admin, created_by_user_id)
             VALUES (%s, %s, %s, FALSE, FALSE, FALSE, %s)
             """,
-            (session_id, user_person_id, relationship, get_current_user_id())
+            (session_id, user_person_id, relationship, get_current_user_id()),
         )
         save_to_history(
             cur,
@@ -12482,32 +14865,67 @@ def join_session(session_path):
         return jsonify(
             {
                 "success": True,
-                "message": "Successfully joined session",
+                "message": _("Successfully joined session"),
                 "relationship": relationship,
                 "confirmed": False,
             }
         )
 
     except Exception as e:
-        return jsonify({"success": False, "message": f"Failed to join session: {str(e)}"}), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "message": _("Failed to join session: %(error)s", error=str(e)),
+                }
+            ),
+            500,
+        )
 
 
 # History table mapping for drill-down
 HISTORY_TABLE_MAP = {
-    'session': ('session_history', 'session_id', ['name', 'path', 'city', 'state']),
-    'session_instance': ('session_instance_history', 'session_instance_id', ['date', 'comments', 'is_cancelled']),
-    'tune': ('tune_history', 'tune_id', ['name', 'tune_type']),
-    'tune_setting': ('tune_setting_history', 'setting_id', ['key', 'abc']),
-    'session_tune': ('session_tune_history', 'session_id', ['alias', 'key']),  # composite key
-    'session_tune_alias': ('session_tune_alias_history', 'session_tune_alias_id', ['alias']),
-    'session_instance_tune': ('session_instance_tune_history', 'session_instance_tune_id', ['name']),
-    'person': ('person_history', 'person_id', ['first_name', 'last_name', 'email']),
-    'user_account': ('user_account_history', 'user_id', ['username', 'is_active']),
-    'person_instrument': ('person_instrument_history', 'person_id', ['instrument']),  # composite key
-    'person_tune': ('person_tune_history', 'person_id', ['status']),  # composite key
-    'session_person': ('session_person_history', 'session_id',
-                       ['relationship', 'confirmed', 'archived', 'is_admin']),  # composite key
-    'session_instance_person': ('session_instance_person_history', 'session_instance_id', ['attendance', 'comment']),  # composite key
+    "session": ("session_history", "session_id", ["name", "path", "city", "state"]),
+    "session_instance": (
+        "session_instance_history",
+        "session_instance_id",
+        ["date", "comments", "is_cancelled"],
+    ),
+    "tune": ("tune_history", "tune_id", ["name", "tune_type"]),
+    "tune_setting": ("tune_setting_history", "setting_id", ["key", "abc"]),
+    "session_tune": (
+        "session_tune_history",
+        "session_id",
+        ["alias", "key"],
+    ),  # composite key
+    "session_tune_alias": (
+        "session_tune_alias_history",
+        "session_tune_alias_id",
+        ["alias"],
+    ),
+    "session_instance_tune": (
+        "session_instance_tune_history",
+        "session_instance_tune_id",
+        ["name"],
+    ),
+    "person": ("person_history", "person_id", ["first_name", "last_name", "email"]),
+    "user_account": ("user_account_history", "user_id", ["username", "is_active"]),
+    "person_instrument": (
+        "person_instrument_history",
+        "person_id",
+        ["instrument"],
+    ),  # composite key
+    "person_tune": ("person_tune_history", "person_id", ["status"]),  # composite key
+    "session_person": (
+        "session_person_history",
+        "session_id",
+        ["relationship", "confirmed", "archived", "is_admin"],
+    ),  # composite key
+    "session_instance_person": (
+        "session_instance_person_history",
+        "session_instance_id",
+        ["attendance", "comment"],
+    ),  # composite key
 }
 
 
@@ -12516,33 +14934,43 @@ def api_admin_history(entity_type, entity_id):
     from flask_login import current_user
 
     if not current_user.is_authenticated or not current_user.is_system_admin:
-        return jsonify({"success": False, "error": "Unauthorized"}), 403
+        return jsonify({"success": False, "error": _("Unauthorized")}), 403
 
     if entity_type not in HISTORY_TABLE_MAP:
-        return jsonify({"success": False, "error": f"Unknown entity type: {entity_type}"}), 400
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": _(
+                        "Unknown entity type: %(entity_type)s", entity_type=entity_type
+                    ),
+                }
+            ),
+            400,
+        )
 
-    history_table, id_column, _ = HISTORY_TABLE_MAP[entity_type]
+    history_table, id_column, _unused = HISTORY_TABLE_MAP[entity_type]
 
     conn = get_db_connection()
     try:
         cur = conn.cursor()
 
         # Handle composite keys (contain /)
-        if '/' in entity_id:
-            parts = entity_id.split('/')
-            if entity_type == 'session_tune':
+        if "/" in entity_id:
+            parts = entity_id.split("/")
+            if entity_type == "session_tune":
                 where_clause = "session_id = %s AND tune_id = %s"
                 params = [int(parts[0]), int(parts[1])]
-            elif entity_type == 'person_instrument':
+            elif entity_type == "person_instrument":
                 where_clause = "person_id = %s AND instrument = %s"
                 params = [int(parts[0]), parts[1]]
-            elif entity_type == 'person_tune':
+            elif entity_type == "person_tune":
                 where_clause = "person_id = %s AND tune_id = %s"
                 params = [int(parts[0]), int(parts[1])]
-            elif entity_type == 'session_person':
+            elif entity_type == "session_person":
                 where_clause = "session_id = %s AND person_id = %s"
                 params = [int(parts[0]), int(parts[1])]
-            elif entity_type == 'session_instance_person':
+            elif entity_type == "session_instance_person":
                 where_clause = "session_instance_id = %s AND person_id = %s"
                 params = [int(parts[0]), int(parts[1])]
             else:
@@ -12569,12 +14997,16 @@ def api_admin_history(entity_type, entity_id):
         history = []
         for row in cur.fetchall():
             changed_at, operation, changed_by_user_id, username = row
-            history.append({
-                'changed_at': changed_at.strftime('%Y-%m-%d %H:%M:%S') if changed_at else None,
-                'operation': operation,
-                'changed_by_user_id': changed_by_user_id,
-                'changed_by': username or 'System',
-            })
+            history.append(
+                {
+                    "changed_at": changed_at.strftime("%Y-%m-%d %H:%M:%S")
+                    if changed_at
+                    else None,
+                    "operation": operation,
+                    "changed_by_user_id": changed_by_user_id,
+                    "changed_by": username or "System",
+                }
+            )
 
         return jsonify({"success": True, "history": history})
 
@@ -12587,6 +15019,7 @@ def api_admin_history(entity_type, entity_id):
 # ============================================================================
 # Tune Copy/Bulk Operations
 # ============================================================================
+
 
 @api_login_required
 def get_user_admin_sessions():
@@ -12611,11 +15044,16 @@ def get_user_admin_sessions():
         # Get person_id from current user
         cur.execute(
             "SELECT person_id FROM user_account WHERE user_id = %s",
-            (current_user.user_id,)
+            (current_user.user_id,),
         )
         person_row = cur.fetchone()
         if not person_row:
-            return jsonify({"success": False, "error": "User's person record not found"}), 404
+            return (
+                jsonify(
+                    {"success": False, "error": _("User's person record not found")}
+                ),
+                404,
+            )
 
         person_id = person_row[0]
 
@@ -12628,16 +15066,12 @@ def get_user_admin_sessions():
             WHERE sp.person_id = %s AND sp.is_admin = TRUE
             ORDER BY s.name
             """,
-            (person_id,)
+            (person_id,),
         )
 
         sessions = []
         for row in cur.fetchall():
-            sessions.append({
-                "session_id": row[0],
-                "name": row[1],
-                "path": row[2]
-            })
+            sessions.append({"session_id": row[0], "name": row[1], "path": row[2]})
 
         return jsonify({"success": True, "sessions": sessions})
 
@@ -12673,7 +15107,7 @@ def copy_tunes_to_destination():
     """
     data = request.get_json()
     if not data:
-        return jsonify({"success": False, "error": "No data provided"}), 400
+        return jsonify({"success": False, "error": _("No data provided")}), 400
 
     tune_ids = data.get("tune_ids", [])
     destination_type = data.get("destination_type")
@@ -12681,19 +15115,38 @@ def copy_tunes_to_destination():
     learn_status = data.get("learn_status", "want to learn")
 
     if not tune_ids:
-        return jsonify({"success": False, "error": "No tunes selected"}), 400
+        return jsonify({"success": False, "error": _("No tunes selected")}), 400
 
     if destination_type not in ["my_tunes", "session"]:
-        return jsonify({"success": False, "error": "Invalid destination type"}), 400
+        return jsonify({"success": False, "error": _("Invalid destination type")}), 400
 
     if destination_type == "session" and not destination_session_path:
-        return jsonify({"success": False, "error": "Session path is required for session destination"}), 400
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": _("Session path is required for session destination"),
+                }
+            ),
+            400,
+        )
 
     # Validate learn_status for my_tunes
     if destination_type == "my_tunes":
         valid_statuses = ["want to learn", "learning", "learned"]
         if learn_status not in valid_statuses:
-            return jsonify({"success": False, "error": f"learn_status must be one of: {', '.join(valid_statuses)}"}), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": _(
+                            "learn_status must be one of: %(values)s",
+                            values=", ".join(valid_statuses),
+                        ),
+                    }
+                ),
+                400,
+            )
 
     conn = get_db_connection()
     try:
@@ -12702,11 +15155,16 @@ def copy_tunes_to_destination():
         # Get person_id from current user
         cur.execute(
             "SELECT person_id FROM user_account WHERE user_id = %s",
-            (current_user.user_id,)
+            (current_user.user_id,),
         )
         person_row = cur.fetchone()
         if not person_row:
-            return jsonify({"success": False, "error": "User's person record not found"}), 404
+            return (
+                jsonify(
+                    {"success": False, "error": _("User's person record not found")}
+                ),
+                404,
+            )
 
         person_id = person_row[0]
 
@@ -12723,7 +15181,7 @@ def copy_tunes_to_destination():
                 # Check if tune already exists in person_tune
                 cur.execute(
                     "SELECT person_tune_id FROM person_tune WHERE person_id = %s AND tune_id = %s",
-                    (person_id, tune_id)
+                    (person_id, tune_id),
                 )
                 if cur.fetchone():
                     skipped_count += 1
@@ -12735,16 +15193,24 @@ def copy_tunes_to_destination():
                     INSERT INTO person_tune (person_id, tune_id, learn_status, heard_count, created_by_user_id)
                     VALUES (%s, %s, %s, 1, %s)
                     """,
-                    (person_id, tune_id, learn_status, get_current_user_id())
+                    (person_id, tune_id, learn_status, get_current_user_id()),
                 )
                 copied_count += 1
 
         else:  # destination_type == "session"
             # Get session_id and verify user is admin
-            cur.execute("SELECT session_id, name FROM session WHERE path = %s", (destination_session_path,))
+            cur.execute(
+                "SELECT session_id, name FROM session WHERE path = %s",
+                (destination_session_path,),
+            )
             session_result = cur.fetchone()
             if not session_result:
-                return jsonify({"success": False, "error": "Destination session not found"}), 404
+                return (
+                    jsonify(
+                        {"success": False, "error": _("Destination session not found")}
+                    ),
+                    404,
+                )
 
             session_id, session_name = session_result
             destination_name = session_name
@@ -12754,17 +15220,27 @@ def copy_tunes_to_destination():
             if not current_user.is_system_admin:
                 cur.execute(
                     "SELECT is_admin FROM session_person WHERE session_id = %s AND person_id = %s",
-                    (session_id, person_id)
+                    (session_id, person_id),
                 )
                 admin_row = cur.fetchone()
                 if not admin_row or not admin_row[0]:
-                    return jsonify({"success": False, "error": "You must be an admin of the destination session"}), 403
+                    return (
+                        jsonify(
+                            {
+                                "success": False,
+                                "error": _(
+                                    "You must be an admin of the destination session"
+                                ),
+                            }
+                        ),
+                        403,
+                    )
 
             for tune_id in tune_ids:
                 # Check if tune already exists in session_tune
                 cur.execute(
                     "SELECT tune_id FROM session_tune WHERE session_id = %s AND tune_id = %s",
-                    (session_id, tune_id)
+                    (session_id, tune_id),
                 )
                 if cur.fetchone():
                     skipped_count += 1
@@ -12776,28 +15252,47 @@ def copy_tunes_to_destination():
                     INSERT INTO session_tune (session_id, tune_id, manually_added, created_by_user_id)
                     VALUES (%s, %s, TRUE, %s)
                     """,
-                    (session_id, tune_id, get_current_user_id())
+                    (session_id, tune_id, get_current_user_id()),
                 )
 
                 # Save to history
-                save_to_history(cur, "session_tune", "INSERT", (session_id, tune_id), user_id=get_current_user_id())
+                save_to_history(
+                    cur,
+                    "session_tune",
+                    "INSERT",
+                    (session_id, tune_id),
+                    user_id=get_current_user_id(),
+                )
 
                 copied_count += 1
 
         conn.commit()
 
         # Build message
-        message = f"Copied {copied_count} tune{'s' if copied_count != 1 else ''} to {destination_name}."
+        message = ngettext(
+            "Copied %(num)d tune to %(destination)s.",
+            "Copied %(num)d tunes to %(destination)s.",
+            copied_count,
+            destination=destination_name,
+        )
         if skipped_count > 0:
-            message += f" ({skipped_count} tune{'s' if skipped_count != 1 else ''} skipped because it was already there.)"
+            # Two whole sentences, each translated on its own.
+            skipped = ngettext(
+                "(%(num)d tune skipped because it was already there.)",
+                "(%(num)d tunes skipped because it was already there.)",
+                skipped_count,
+            )
+            message = f"{message} {skipped}"
 
-        return jsonify({
-            "success": True,
-            "copied_count": copied_count,
-            "skipped_count": skipped_count,
-            "message": message,
-            "redirect_url": redirect_url
-        })
+        return jsonify(
+            {
+                "success": True,
+                "copied_count": copied_count,
+                "skipped_count": skipped_count,
+                "message": message,
+                "redirect_url": redirect_url,
+            }
+        )
 
     except Exception as e:
         conn.rollback()
@@ -12828,7 +15323,7 @@ def get_person_details_api(person_id=None):
         if is_user_profile:
             person_id = current_user.person_id
         elif not current_user.is_system_admin:
-            return jsonify({"success": False, "error": "Admin access required"}), 403
+            return jsonify({"success": False, "error": _("Admin access required")}), 403
 
         conn = get_db_connection()
         try:
@@ -12836,13 +15331,14 @@ def get_person_details_api(person_id=None):
                 conn,
                 person_id,
                 is_user_profile=is_user_profile,
-                is_system_admin=current_user.is_authenticated and current_user.is_system_admin,
+                is_system_admin=current_user.is_authenticated
+                and current_user.is_system_admin,
             )
         finally:
             conn.close()
 
         if payload is None:
-            return jsonify({"success": False, "message": "Person not found"}), 404
+            return jsonify({"success": False, "message": _("Person not found")}), 404
         return jsonify(payload)
 
     except Exception as e:
@@ -12864,7 +15360,7 @@ def get_session_admin_detail(session_path):
         from web_routes import _check_session_admin_access
 
         if not _check_session_admin_access(session_path):
-            return jsonify({"success": False, "error": "Admin access required"}), 403
+            return jsonify({"success": False, "error": _("Admin access required")}), 403
 
         conn = get_db_connection()
         try:
@@ -12873,7 +15369,7 @@ def get_session_admin_detail(session_path):
             conn.close()
 
         if payload is None:
-            return jsonify({"success": False, "message": "Session not found"}), 404
+            return jsonify({"success": False, "message": _("Session not found")}), 404
         return jsonify(payload)
 
     except Exception as e:
@@ -12921,11 +15417,11 @@ def merge_people():
     )
 
     if not current_user.is_system_admin:
-        return jsonify({"success": False, "error": "Unauthorized"}), 403
+        return jsonify({"success": False, "error": _("Unauthorized")}), 403
 
     data = request.get_json()
     if not data:
-        return jsonify({"success": False, "error": "Request body required"}), 400
+        return jsonify({"success": False, "error": _("Request body required")}), 400
 
     loser_id = data.get("loser_person_id")
     winner_id = data.get("winner_person_id")
@@ -12933,9 +15429,17 @@ def merge_people():
     surviving_user_id = data.get("surviving_user_id")
 
     if not loser_id or not winner_id:
-        return jsonify(
-            {"success": False, "error": "Both loser_person_id and winner_person_id are required"}
-        ), 400
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": _(
+                        "Both loser_person_id and winner_person_id are required"
+                    ),
+                }
+            ),
+            400,
+        )
 
     conn = get_db_connection()
     try:
@@ -12944,7 +15448,11 @@ def merge_people():
             return jsonify(preview)
 
         result = execute_merge(
-            conn, loser_id, winner_id, current_user.user_id, surviving_user_id=surviving_user_id
+            conn,
+            loser_id,
+            winner_id,
+            current_user.user_id,
+            surviving_user_id=surviving_user_id,
         )
         conn.commit()
         return jsonify(result)
@@ -12970,7 +15478,7 @@ def get_admin_people_api():
         from serializers import build_admin_people_payload
 
         if not current_user.is_system_admin:
-            return jsonify({"success": False, "error": "Admin access required"}), 403
+            return jsonify({"success": False, "error": _("Admin access required")}), 403
 
         conn = get_db_connection()
         try:

@@ -27,10 +27,12 @@ becomes a way to reach another session's audio. Only the cross-session surfaces
 (the site-wide index, the session picker behind it) remain system-admin only.
 """
 
+# i18n-converted
 import base64
 import datetime
 
 from flask import jsonify, request, Response
+from flask_babel import gettext as _
 from flask_login import current_user
 
 from api_auth import api_login_required
@@ -45,7 +47,7 @@ def _admin_gate():
     recording uses _session_gate below.
     """
     if not current_user.is_system_admin:
-        return jsonify({"success": False, "error": "Admin access required"}), 403
+        return jsonify({"success": False, "error": _("Admin access required")}), 403
     return None
 
 
@@ -102,11 +104,19 @@ def _recording_gate(cur, recording_id):
     endpoints is already an admin of SOMETHING and hiding the difference would
     only make a misconfigured permission look like a missing recording.
     """
-    session_id, _ = _session_of_recording(cur, recording_id)
+    session_id, _unused = _session_of_recording(cur, recording_id)
     if session_id is None:
-        return jsonify({"success": False, "error": "Recording not found"}), 404
+        return jsonify({"success": False, "error": _("Recording not found")}), 404
     if not can_manage_recordings(cur, session_id):
-        return jsonify({"success": False, "error": "You can't manage this session's recordings"}), 403
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": _("You can't manage this session's recordings"),
+                }
+            ),
+            403,
+        )
     return None
 
 
@@ -114,9 +124,20 @@ def _instance_gate(cur, session_instance_id):
     """Same, for endpoints addressed by session instance rather than recording."""
     session_id = _session_of_instance(cur, session_instance_id)
     if session_id is None:
-        return jsonify({"success": False, "error": "Session instance not found"}), 404
+        return (
+            jsonify({"success": False, "error": _("Session instance not found")}),
+            404,
+        )
     if not can_manage_recordings(cur, session_id):
-        return jsonify({"success": False, "error": "You can't manage this session's recordings"}), 403
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": _("You can't manage this session's recordings"),
+                }
+            ),
+            403,
+        )
     return None
 
 
@@ -127,7 +148,9 @@ def _int_or_none(payload, key):
     try:
         return int(payload[key])
     except (TypeError, ValueError):
-        raise ValueError(f"{key} must be an integer number of milliseconds")
+        raise ValueError(
+            _("%(key)s must be an integer number of milliseconds", key=key)
+        )
 
 
 # Audio types the browser can hand us. The list is not about what ffmpeg can
@@ -172,7 +195,10 @@ def create_recording_upload_url():
     try:
         session_instance_id = int(payload.get("session_instance_id"))
     except (TypeError, ValueError):
-        return jsonify({"success": False, "error": "session_instance_id is required"}), 400
+        return (
+            jsonify({"success": False, "error": _("session_instance_id is required")}),
+            400,
+        )
 
     # Permission first, exactly as POST /api/recordings does it. Whether this
     # deployment has object storage configured is not something to tell someone
@@ -193,24 +219,37 @@ def create_recording_upload_url():
         # Verbatim: the message names the missing environment variables, and
         # anything that reshapes it (.capitalize(), say) turns AWS_S3_BUCKET into
         # aws_s3_bucket and throws away the only actionable part.
-        return jsonify({"success": False, "error": f"Uploads are unavailable — {problem}"}), 503
-
-    filename = (payload.get("filename") or "").strip()
-    if not filename:
-        return jsonify({"success": False, "error": "filename is required"}), 400
-
-    extension = os.path.splitext(filename)[1].lower()
-    if extension not in _UPLOAD_MIME_BY_EXTENSION:
         return (
             jsonify(
                 {
                     "success": False,
-                    "error": f"{extension or 'That file'} isn't an audio type this accepts "
-                             f"({', '.join(sorted(_UPLOAD_MIME_BY_EXTENSION))})",
+                    "error": _(
+                        "Uploads are unavailable — %(problem)s", problem=problem
+                    ),
                 }
             ),
-            400,
+            503,
         )
+
+    filename = (payload.get("filename") or "").strip()
+    if not filename:
+        return jsonify({"success": False, "error": _("filename is required")}), 400
+
+    extension = os.path.splitext(filename)[1].lower()
+    if extension not in _UPLOAD_MIME_BY_EXTENSION:
+        accepted = ", ".join(sorted(_UPLOAD_MIME_BY_EXTENSION))
+        if extension:
+            refusal = _(
+                "%(extension)s isn't an audio type this accepts (%(accepted)s)",
+                extension=extension,
+                accepted=accepted,
+            )
+        else:
+            refusal = _(
+                "That file isn't an audio type this accepts (%(accepted)s)",
+                accepted=accepted,
+            )
+        return jsonify({"success": False, "error": refusal}), 400
     # The extension decides, not the browser's guess: Content-Type is signed into
     # the URL, so it has to match byte for byte what the client then sends, and
     # the client is told which value to use rather than asked.
@@ -253,27 +292,50 @@ def create_recording():
     try:
         session_instance_id = int(payload.get("session_instance_id"))
     except (TypeError, ValueError):
-        return jsonify({"success": False, "error": "session_instance_id is required"}), 400
+        return (
+            jsonify({"success": False, "error": _("session_instance_id is required")}),
+            400,
+        )
 
     storage_key = (payload.get("storage_key") or "").strip()
     if not storage_key:
-        return jsonify({"success": False, "error": "storage_key is required"}), 400
+        return jsonify({"success": False, "error": _("storage_key is required")}), 400
     # Only keys this app minted. Signing is admin-gated anyway, but it keeps a
     # typo from attaching some unrelated object in the bucket to a session.
     if not storage_key.startswith("recordings/"):
-        return jsonify({"success": False, "error": "That isn't an upload key from this app"}), 400
+        return (
+            jsonify(
+                {"success": False, "error": _("That isn't an upload key from this app")}
+            ),
+            400,
+        )
 
     started_at = None
     if payload.get("started_at"):
         try:
-            started_at = datetime.datetime.fromisoformat(str(payload["started_at"]).replace("Z", "+00:00"))
+            started_at = datetime.datetime.fromisoformat(
+                str(payload["started_at"]).replace("Z", "+00:00")
+            )
         except ValueError:
-            return jsonify({"success": False, "error": "started_at must be an ISO-8601 timestamp"}), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": _("started_at must be an ISO-8601 timestamp"),
+                    }
+                ),
+                400,
+            )
         if started_at.tzinfo is None:
             # Same rule the CLI importer enforces: without an offset the anchor
             # is ambiguous, and being wrong by a timezone silently misaligns
             # every absolute timestamp in the export.
-            return jsonify({"success": False, "error": "started_at needs a UTC offset"}), 400
+            return (
+                jsonify(
+                    {"success": False, "error": _("started_at needs a UTC offset")}
+                ),
+                400,
+            )
 
     try:
         person_id = _int_or_none(payload, "person_id")
@@ -284,7 +346,9 @@ def create_recording():
     import os
 
     label = (payload.get("label") or "").strip() or None
-    mime_type = _UPLOAD_MIME_BY_EXTENSION.get(os.path.splitext(storage_key)[1].lower(), "audio/mpeg")
+    mime_type = _UPLOAD_MIME_BY_EXTENSION.get(
+        os.path.splitext(storage_key)[1].lower(), "audio/mpeg"
+    )
 
     conn = get_db_connection()
     try:
@@ -310,7 +374,17 @@ def create_recording():
         except Exception as exc:
             return jsonify({"success": False, "error": str(exc)}), 503
         if size is None:
-            return jsonify({"success": False, "error": "That upload didn't finish — nothing is stored under that key"}), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": _(
+                            "That upload didn't finish — nothing is stored under that key"
+                        ),
+                    }
+                ),
+                400,
+            )
 
         if not label:
             label = f"{instance[1]} {instance[0]}"
@@ -337,14 +411,23 @@ def create_recording():
             RETURNING recording_id
             """,
             (
-                session_instance_id, person_id, label, storage_key, mime_type,
+                session_instance_id,
+                person_id,
+                label,
+                storage_key,
+                mime_type,
                 # Provisional: whatever the browser read off the file's metadata,
                 # or 1ms when it could not. Ingest replaces it with the container's
                 # own duration, and `status` is what tells anyone reading this row
                 # not to trust it yet.
                 max(1, provisional_duration or 1),
-                size, is_anchor, started_at, (payload.get("notes") or "").strip() or None,
-                DETAIL_QUEUED, user_id, user_id,
+                size,
+                is_anchor,
+                started_at,
+                (payload.get("notes") or "").strip() or None,
+                DETAIL_QUEUED,
+                user_id,
+                user_id,
             ),
         )
         recording_id = cur.fetchone()[0]
@@ -379,7 +462,11 @@ def get_recording_status(recording_id):
     because "processing" with nobody processing is exactly the state that used to
     leave people watching a spinner for two hours.
     """
-    from services.recording_ingest import HEARTBEAT_STALE_SECONDS, INGEST_STEPS, step_index_for
+    from services.recording_ingest import (
+        HEARTBEAT_STALE_SECONDS,
+        INGEST_STEPS,
+        step_index_for,
+    )
 
     conn = get_db_connection()
     try:
@@ -402,7 +489,7 @@ def get_recording_status(recording_id):
         conn.close()
 
     if not row:
-        return jsonify({"success": False, "error": "Recording not found"}), 404
+        return jsonify({"success": False, "error": _("Recording not found")}), 404
 
     # No heartbeat at all means nobody has started yet ('queued'), which is not
     # stale -- it is waiting, and the sweeper will take it.
@@ -445,7 +532,11 @@ def reprocess_recording(recording_id):
     different event from the sweeper looping, and should get a full budget rather
     than inheriting an exhausted one.
     """
-    from services.recording_ingest import DETAIL_QUEUED, HEARTBEAT_STALE_SECONDS, start_ingest
+    from services.recording_ingest import (
+        DETAIL_QUEUED,
+        HEARTBEAT_STALE_SECONDS,
+        start_ingest,
+    )
 
     conn = get_db_connection()
     try:
@@ -460,13 +551,25 @@ def reprocess_recording(recording_id):
         )
         row = cur.fetchone()
         if not row:
-            return jsonify({"success": False, "error": "Recording not found"}), 404
+            return jsonify({"success": False, "error": _("Recording not found")}), 404
 
         # Refuse to stack a second transcode on top of a live one. "Live" is now
         # a heartbeat rather than a guess at how long a run should take, so this
         # says yes within 90 seconds of a run dying instead of two hours.
-        if row[0] == "processing" and row[1] is not None and float(row[1]) <= HEARTBEAT_STALE_SECONDS:
-            return jsonify({"success": False, "error": "That recording is already being processed"}), 409
+        if (
+            row[0] == "processing"
+            and row[1] is not None
+            and float(row[1]) <= HEARTBEAT_STALE_SECONDS
+        ):
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": _("That recording is already being processed"),
+                    }
+                ),
+                409,
+            )
 
         cur.execute(
             "UPDATE recording SET status = 'queued', status_detail = %s, "
@@ -478,7 +581,9 @@ def reprocess_recording(recording_id):
         conn.close()
 
     start_ingest(recording_id, get_current_user_id())
-    return jsonify({"success": True, "recording_id": recording_id, "status": "processing"})
+    return jsonify(
+        {"success": True, "recording_id": recording_id, "status": "processing"}
+    )
 
 
 # A night's meter log is one state every 4 s of audio plus the taps: about 1 MB for
@@ -508,7 +613,9 @@ def recording_listen_log(recording_id):
         denied = _recording_gate(cur, recording_id)
         if denied:
             return denied
-        cur.execute("SELECT storage_key FROM recording WHERE recording_id = %s", (recording_id,))
+        cur.execute(
+            "SELECT storage_key FROM recording WHERE recording_id = %s", (recording_id,)
+        )
         storage_key = cur.fetchone()[0]
     finally:
         conn.close()
@@ -520,14 +627,19 @@ def recording_listen_log(recording_id):
         except RuntimeError as exc:
             return jsonify({"success": False, "error": str(exc)}), 503
         if body is None:
-            return jsonify({"success": False, "error": "No meter log for this recording"}), 404
+            return (
+                jsonify(
+                    {"success": False, "error": _("No meter log for this recording")}
+                ),
+                404,
+            )
         return Response(body, mimetype="application/x-ndjson")
 
     body = request.get_data(cache=False)
     if not body:
-        return jsonify({"success": False, "error": "The log is empty"}), 400
+        return jsonify({"success": False, "error": _("The log is empty")}), 400
     if len(body) > _LISTEN_LOG_MAX_BYTES:
-        return jsonify({"success": False, "error": "The log is too large"}), 413
+        return jsonify({"success": False, "error": _("The log is too large")}), 413
     try:
         rec.put_text_object(key, body)
     except RuntimeError as exc:
@@ -564,9 +676,16 @@ def set_recording_segmenting_complete(recording_id):
         payload = request.get_json(silent=True) or {}
         complete = payload.get("complete", True)
         if not isinstance(complete, bool):
-            return jsonify({"success": False, "error": "complete must be true or false"}), 400
+            return (
+                jsonify(
+                    {"success": False, "error": _("complete must be true or false")}
+                ),
+                400,
+            )
 
-        save_to_history(cur, "recording", "UPDATE", recording_id, user_id=get_current_user_id())
+        save_to_history(
+            cur, "recording", "UPDATE", recording_id, user_id=get_current_user_id()
+        )
         # The timestamp is cleared on the way back down rather than left as a
         # record of a decision that has been withdrawn: "when was this declared
         # finished" has no answer for something that is not.
@@ -580,7 +699,9 @@ def set_recording_segmenting_complete(recording_id):
     finally:
         conn.close()
 
-    return jsonify({"success": True, "recording_id": recording_id, "segmenting_complete": complete})
+    return jsonify(
+        {"success": True, "recording_id": recording_id, "segmenting_complete": complete}
+    )
 
 
 @api_login_required
@@ -615,7 +736,7 @@ def delete_recording(recording_id):
         )
         row = cur.fetchone()
         if not row:
-            return jsonify({"success": False, "error": "Recording not found"}), 404
+            return jsonify({"success": False, "error": _("Recording not found")}), 404
         storage_key, stream_key, label = row
 
         user_id = get_current_user_id()
@@ -626,7 +747,9 @@ def delete_recording(recording_id):
         )
         segment_ids = [r[0] for r in cur.fetchall()]
         for segment_id in segment_ids:
-            save_to_history(cur, "recording_tune_segment", "DELETE", segment_id, user_id)
+            save_to_history(
+                cur, "recording_tune_segment", "DELETE", segment_id, user_id
+            )
 
         save_to_history(cur, "recording", "DELETE", recording_id, user_id)
         # The segments go with it via ON DELETE CASCADE (schema/049); their
@@ -636,7 +759,9 @@ def delete_recording(recording_id):
     finally:
         conn.close()
 
-    failures = rec.delete_stored_objects(storage_key, stream_key, rec.listen_log_key(storage_key))
+    failures = rec.delete_stored_objects(
+        storage_key, stream_key, rec.listen_log_key(storage_key)
+    )
 
     return jsonify(
         {
@@ -645,9 +770,13 @@ def delete_recording(recording_id):
             "label": label,
             "segments_deleted": len(segment_ids),
             "storage_warning": (
-                "The recording is deleted, but its audio could not be removed from storage: "
-                + "; ".join(reason for _, reason in failures)
-            ) if failures else None,
+                _(
+                    "The recording is deleted, but its audio could not be removed from storage: %(reasons)s",
+                    reasons="; ".join(reason for _key, reason in failures),
+                )
+            )
+            if failures
+            else None,
         }
     )
 
@@ -718,7 +847,7 @@ def get_recording_segmenter(recording_id):
         conn.close()
 
     if payload is None:
-        return jsonify({"success": False, "error": "Recording not found"}), 404
+        return jsonify({"success": False, "error": _("Recording not found")}), 404
     return jsonify(payload)
 
 
@@ -737,15 +866,23 @@ def get_recording_peaks(recording_id):
         denied = _recording_gate(cur, recording_id)
         if denied:
             return denied
-        cur.execute("SELECT peaks, peaks_hz FROM recording WHERE recording_id = %s", (recording_id,))
+        cur.execute(
+            "SELECT peaks, peaks_hz FROM recording WHERE recording_id = %s",
+            (recording_id,),
+        )
         row = cur.fetchone()
     finally:
         conn.close()
 
     if not row:
-        return jsonify({"success": False, "error": "Recording not found"}), 404
+        return jsonify({"success": False, "error": _("Recording not found")}), 404
     if not row[0]:
-        return jsonify({"success": False, "error": "This recording has no waveform yet"}), 404
+        return (
+            jsonify(
+                {"success": False, "error": _("This recording has no waveform yet")}
+            ),
+            404,
+        )
 
     data = base64.b64decode(row[0])
     resp = Response(data, mimetype="application/octet-stream")
@@ -774,11 +911,17 @@ def put_recording_segment(recording_id, session_instance_tune_id):
         return jsonify({"success": False, "error": str(exc)}), 400
 
     if start_ms is None:
-        return jsonify({"success": False, "error": "start_ms is required"}), 400
+        return jsonify({"success": False, "error": _("start_ms is required")}), 400
     if start_ms < 0:
-        return jsonify({"success": False, "error": "start_ms cannot be negative"}), 400
+        return (
+            jsonify({"success": False, "error": _("start_ms cannot be negative")}),
+            400,
+        )
     if end_ms is not None and end_ms <= start_ms:
-        return jsonify({"success": False, "error": "end_ms must be after start_ms"}), 400
+        return (
+            jsonify({"success": False, "error": _("end_ms must be after start_ms")}),
+            400,
+        )
 
     conn = get_db_connection()
     try:
@@ -794,7 +937,7 @@ def put_recording_segment(recording_id, session_instance_tune_id):
         )
         rec = cur.fetchone()
         if not rec:
-            return jsonify({"success": False, "error": "Recording not found"}), 404
+            return jsonify({"success": False, "error": _("Recording not found")}), 404
         instance_id, duration_ms = rec[0], int(rec[1])
 
         # While ingest runs, duration_ms is the browser's provisional guess
@@ -802,10 +945,26 @@ def put_recording_segment(recording_id, session_instance_tune_id):
         # number that is about to change. Refuse rather than accept a mark whose
         # validity depends on a value in flight.
         if rec[2] != "ready":
-            return jsonify({"success": False, "error": "That recording is still being processed"}), 409
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": _("That recording is still being processed"),
+                    }
+                ),
+                409,
+            )
 
         if start_ms > duration_ms:
-            return jsonify({"success": False, "error": "start_ms is past the end of the recording"}), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": _("start_ms is past the end of the recording"),
+                    }
+                ),
+                400,
+            )
 
         # The tune must belong to the instance this recording covers. Without this
         # check a stray id would happily attach a tune from another night.
@@ -816,13 +975,37 @@ def put_recording_segment(recording_id, session_instance_tune_id):
         )
         sit = cur.fetchone()
         if not sit:
-            return jsonify({"success": False, "error": "Tune not found"}), 404
+            return jsonify({"success": False, "error": _("Tune not found")}), 404
         if sit[0] != instance_id:
-            return jsonify({"success": False, "error": "That tune belongs to a different session instance"}), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": _("That tune belongs to a different session instance"),
+                    }
+                ),
+                400,
+            )
         if sit[1] == "break":
-            return jsonify({"success": False, "error": "That record is a set break, not a tune"}), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": _("That record is a set break, not a tune"),
+                    }
+                ),
+                400,
+            )
         if sit[2]:
-            return jsonify({"success": False, "error": "That tune has been deleted from the log"}), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": _("That tune has been deleted from the log"),
+                    }
+                ),
+                400,
+            )
 
         user_id = get_current_user_id()
 
@@ -834,7 +1017,9 @@ def put_recording_segment(recording_id, session_instance_tune_id):
         existing = cur.fetchone()
 
         if existing:
-            save_to_history(cur, "recording_tune_segment", "UPDATE", existing[0], user_id)
+            save_to_history(
+                cur, "recording_tune_segment", "UPDATE", existing[0], user_id
+            )
             cur.execute(
                 "UPDATE recording_tune_segment SET start_ms = %s, end_ms = %s, last_modified_user_id = %s "
                 "WHERE recording_tune_segment_id = %s",
@@ -847,10 +1032,19 @@ def put_recording_segment(recording_id, session_instance_tune_id):
                 "INSERT INTO recording_tune_segment "
                 "(recording_id, session_instance_tune_id, start_ms, end_ms, created_by_user_id, last_modified_user_id) "
                 "VALUES (%s, %s, %s, %s, %s, %s) RETURNING recording_tune_segment_id",
-                (recording_id, session_instance_tune_id, start_ms, end_ms, user_id, user_id),
+                (
+                    recording_id,
+                    session_instance_tune_id,
+                    start_ms,
+                    end_ms,
+                    user_id,
+                    user_id,
+                ),
             )
             segment_id = cur.fetchone()[0]
-            save_to_history(cur, "recording_tune_segment", "INSERT", segment_id, user_id)
+            save_to_history(
+                cur, "recording_tune_segment", "INSERT", segment_id, user_id
+            )
             created = True
 
         conn.commit()
@@ -903,16 +1097,33 @@ def _recording_for_logging(cur, recording_id):
     )
     rec = cur.fetchone()
     if not rec:
-        return None, (jsonify({"success": False, "error": "Recording not found"}), 404)
+        return None, (
+            jsonify({"success": False, "error": _("Recording not found")}),
+            404,
+        )
     if rec[3] != "ready":
-        return None, (jsonify({"success": False, "error": "That recording is still being processed"}), 409)
+        return None, (
+            jsonify(
+                {
+                    "success": False,
+                    "error": _("That recording is still being processed"),
+                }
+            ),
+            409,
+        )
     return (rec[0], rec[1], int(rec[2])), None
 
 
 def _tunes_response(conn, recording_id, instance_id, session_id, **extra):
     from serializers import load_recording_tunes
 
-    return jsonify({"success": True, "tunes": load_recording_tunes(conn, recording_id, instance_id, session_id), **extra})
+    return jsonify(
+        {
+            "success": True,
+            "tunes": load_recording_tunes(conn, recording_id, instance_id, session_id),
+            **extra,
+        }
+    )
 
 
 def _placement_for_new_tune(cur, recording_id, instance_id, start_ms):
@@ -928,7 +1139,9 @@ def _placement_for_new_tune(cur, recording_id, instance_id, start_ms):
     """
     from live_logging_routes import _live_records_in_order
 
-    records = _live_records_in_order(cur, instance_id)  # (id, record_type, order_position)
+    records = _live_records_in_order(
+        cur, instance_id
+    )  # (id, record_type, order_position)
     cur.execute(
         "SELECT session_instance_tune_id, start_ms, end_ms FROM recording_tune_segment WHERE recording_id = %s",
         (recording_id,),
@@ -941,7 +1154,7 @@ def _placement_for_new_tune(cur, recording_id, instance_id, start_ms):
         if rtype != "tune" or seg is None:
             continue
         if seg[0] == start_ms:
-            raise ValueError("A tune already starts at that moment")
+            raise ValueError(_("A tune already starts at that moment"))
         if seg[0] < start_ms and (anchor is None or seg[0] > anchor[1]):
             anchor = (rid, seg[0], seg[1])
 
@@ -956,7 +1169,11 @@ def _placement_for_new_tune(cur, recording_id, instance_id, start_ms):
     idx = next(i for i, r in enumerate(records) if r[0] == anchor_id)
     following = records[idx + 1] if idx + 1 < len(records) else None
     if following is not None and following[1] == "break":
-        return following[0], None, False  # the break is already there; open the next set
+        return (
+            following[0],
+            None,
+            False,
+        )  # the break is already there; open the next set
     return anchor_id, None, True
 
 
@@ -1010,14 +1227,29 @@ def log_recording_tune(recording_id):
     # Placed from the audio unless the caller said where in the log it goes. A
     # body that says nothing at all -- no mark, no anchor, no tune -- is a mistake,
     # not a request to append a placeholder.
-    from_audio = start_ms is not None and after_id is None and before_id is None and not new_set
-    placed_in_log = after_id is not None or before_id is not None or new_set or tune_id is not None or ts_id is not None or name
+    from_audio = (
+        start_ms is not None and after_id is None and before_id is None and not new_set
+    )
+    placed_in_log = (
+        after_id is not None
+        or before_id is not None
+        or new_set
+        or tune_id is not None
+        or ts_id is not None
+        or name
+    )
     if start_ms is None and not placed_in_log:
-        return jsonify({"success": False, "error": "start_ms is required"}), 400
+        return jsonify({"success": False, "error": _("start_ms is required")}), 400
     if start_ms is not None and start_ms < 0:
-        return jsonify({"success": False, "error": "start_ms cannot be negative"}), 400
+        return (
+            jsonify({"success": False, "error": _("start_ms cannot be negative")}),
+            400,
+        )
     if end_ms is not None and (start_ms is None or end_ms <= start_ms):
-        return jsonify({"success": False, "error": "end_ms must be after start_ms"}), 400
+        return (
+            jsonify({"success": False, "error": _("end_ms must be after start_ms")}),
+            400,
+        )
 
     conn = get_db_connection()
     try:
@@ -1030,14 +1262,26 @@ def log_recording_tune(recording_id):
             return err
         instance_id, session_id, duration_ms = info
         if start_ms is not None and start_ms > duration_ms:
-            return jsonify({"success": False, "error": "start_ms is past the end of the recording"}), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": _("start_ms is past the end of the recording"),
+                    }
+                ),
+                400,
+            )
 
         user_id = get_current_user_id()
-        break_before_new = False  # a break in front of the new tune (after-anchor / append)
+        break_before_new = (
+            False  # a break in front of the new tune (after-anchor / append)
+        )
         break_before_id = None  # a break in front of this row, i.e. after the new tune (before-anchor)
         if from_audio:
             try:
-                after_id, before_id, break_before_new = _placement_for_new_tune(cur, recording_id, instance_id, start_ms)
+                after_id, before_id, break_before_new = _placement_for_new_tune(
+                    cur, recording_id, instance_id, start_ms
+                )
             except ValueError as exc:
                 return jsonify({"success": False, "error": str(exc)}), 409
         else:
@@ -1050,7 +1294,15 @@ def log_recording_tune(recording_id):
                     (anchor, instance_id),
                 )
                 if not cur.fetchone():
-                    return jsonify({"success": False, "error": "That row is no longer in the log"}), 404
+                    return (
+                        jsonify(
+                            {
+                                "success": False,
+                                "error": _("That row is no longer in the log"),
+                            }
+                        ),
+                        404,
+                    )
             if new_set:
                 if before_id is not None:
                     break_before_id = before_id
@@ -1061,7 +1313,12 @@ def log_recording_tune(recording_id):
         # unlinked, the typed name -- the same reading PUT .../tune gives it. With
         # nothing at all it is the tool's placeholder, sent with no_match because
         # thesession.org has real tunes called Gan Ainm.
-        data = {"source": "segmenter", "no_merge": True, "after_record_id": after_id, "before_record_id": before_id}
+        data = {
+            "source": "segmenter",
+            "no_merge": True,
+            "after_record_id": after_id,
+            "before_record_id": before_id,
+        }
         if tune_id is not None:
             data["tune_id"] = int(tune_id)
             data["name"] = name or None
@@ -1075,12 +1332,26 @@ def log_recording_tune(recording_id):
             data["setting_id"] = payload["setting_id"]
 
         try:
-            _eid, _typ, added = apply_live_op(cur, instance_id, "add_tune", data, user_id)
+            _eid, _typ, added = apply_live_op(
+                cur, instance_id, "add_tune", data, user_id
+            )
             record_id = added["record"]["session_instance_tune_id"]
             if break_before_new and _has_live_row_before(cur, instance_id, record_id):
-                apply_live_op(cur, instance_id, "set_break", {"action": "insert", "before_record_id": record_id}, user_id)
+                apply_live_op(
+                    cur,
+                    instance_id,
+                    "set_break",
+                    {"action": "insert", "before_record_id": record_id},
+                    user_id,
+                )
             elif break_before_id is not None:
-                apply_live_op(cur, instance_id, "set_break", {"action": "insert", "before_record_id": break_before_id}, user_id)
+                apply_live_op(
+                    cur,
+                    instance_id,
+                    "set_break",
+                    {"action": "insert", "before_record_id": break_before_id},
+                    user_id,
+                )
         except OpRejected as r:
             conn.rollback()
             return jsonify({"success": False, "error": r.message}), 409
@@ -1092,12 +1363,17 @@ def log_recording_tune(recording_id):
                 "VALUES (%s, %s, %s, %s, %s, %s) RETURNING recording_tune_segment_id",
                 (recording_id, record_id, start_ms, end_ms, user_id, user_id),
             )
-            save_to_history(cur, "recording_tune_segment", "INSERT", cur.fetchone()[0], user_id)
+            save_to_history(
+                cur, "recording_tune_segment", "INSERT", cur.fetchone()[0], user_id
+            )
         conn.commit()
 
         resp = _tunes_response(conn, recording_id, instance_id, session_id)
         body = resp.get_json()
-        body["tune"] = next((t for t in body["tunes"] if t["session_instance_tune_id"] == record_id), None)
+        body["tune"] = next(
+            (t for t in body["tunes"] if t["session_instance_tune_id"] == record_id),
+            None,
+        )
         if added.get("setting_failed"):
             body["setting_failed"] = added["setting_failed"]
         if added.get("import_failed"):
@@ -1117,8 +1393,13 @@ def set_recording_tune(recording_id, session_instance_tune_id):
     typed name); setting_id records the setting chosen in the preview.
     """
     from live_logging_routes import (
-        OpRejected, TuneImportError, _maybe_apply_chosen_setting, _parse_thesession_id,
-        _tune_from_thesession, apply_live_op, emit_change_tune,
+        OpRejected,
+        TuneImportError,
+        _maybe_apply_chosen_setting,
+        _parse_thesession_id,
+        _tune_from_thesession,
+        apply_live_op,
+        emit_change_tune,
     )
 
     payload = request.get_json(silent=True) or {}
@@ -1126,7 +1407,10 @@ def set_recording_tune(recording_id, session_instance_tune_id):
     tune_id = payload.get("tune_id")
     ts_id = _parse_thesession_id(payload.get("thesession_id"))
     if tune_id is None and ts_id is None and not name:
-        return jsonify({"success": False, "error": "A tune or a name is required"}), 400
+        return (
+            jsonify({"success": False, "error": _("A tune or a name is required")}),
+            400,
+        )
 
     conn = get_db_connection()
     try:
@@ -1144,9 +1428,17 @@ def set_recording_tune(recording_id, session_instance_tune_id):
         )
         sit = cur.fetchone()
         if not sit or sit[0] != instance_id or sit[2]:
-            return jsonify({"success": False, "error": "Tune not found"}), 404
+            return jsonify({"success": False, "error": _("Tune not found")}), 404
         if sit[1] != "tune":
-            return jsonify({"success": False, "error": "That record is a set break, not a tune"}), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": _("That record is a set break, not a tune"),
+                    }
+                ),
+                400,
+            )
 
         user_id = get_current_user_id()
         try:
@@ -1163,7 +1455,9 @@ def set_recording_tune(recording_id, session_instance_tune_id):
             else:
                 change["unlink"] = True
             apply_live_op(cur, instance_id, "change_tune", change, user_id)
-            applied, failed = _maybe_apply_chosen_setting(cur, session_id, tune_id, session_instance_tune_id, payload, user_id)
+            applied, failed = _maybe_apply_chosen_setting(
+                cur, session_id, tune_id, session_instance_tune_id, payload, user_id
+            )
             if applied:
                 emit_change_tune(cur, instance_id, session_instance_tune_id, user_id)
         except TuneImportError as exc:
@@ -1177,7 +1471,14 @@ def set_recording_tune(recording_id, session_instance_tune_id):
         from serializers import load_recording_tunes
 
         tunes = load_recording_tunes(conn, recording_id, instance_id, session_id)
-        tune = next((t for t in tunes if t["session_instance_tune_id"] == session_instance_tune_id), None)
+        tune = next(
+            (
+                t
+                for t in tunes
+                if t["session_instance_tune_id"] == session_instance_tune_id
+            ),
+            None,
+        )
         body = {"success": True, "tune": tune, "tunes": tunes}
         if failed:
             body["setting_failed"] = failed
@@ -1208,7 +1509,7 @@ def unlog_recording_tune(recording_id, session_instance_tune_id):
         )
         sit = cur.fetchone()
         if not sit or sit[0] != instance_id or sit[2]:
-            return jsonify({"success": False, "error": "Tune not found"}), 404
+            return jsonify({"success": False, "error": _("Tune not found")}), 404
         user_id = get_current_user_id()
         cur.execute(
             "SELECT recording_tune_segment_id FROM recording_tune_segment "
@@ -1218,9 +1519,18 @@ def unlog_recording_tune(recording_id, session_instance_tune_id):
         seg = cur.fetchone()
         if seg:
             save_to_history(cur, "recording_tune_segment", "DELETE", seg[0], user_id)
-            cur.execute("DELETE FROM recording_tune_segment WHERE recording_tune_segment_id = %s", (seg[0],))
+            cur.execute(
+                "DELETE FROM recording_tune_segment WHERE recording_tune_segment_id = %s",
+                (seg[0],),
+            )
         try:
-            apply_live_op(cur, instance_id, "remove_tune", {"record_id": session_instance_tune_id}, user_id)
+            apply_live_op(
+                cur,
+                instance_id,
+                "remove_tune",
+                {"record_id": session_instance_tune_id},
+                user_id,
+            )
         except OpRejected as r:
             conn.rollback()
             return jsonify({"success": False, "error": r.message}), 409
@@ -1246,10 +1556,18 @@ def delete_recording_segment(recording_id, session_instance_tune_id):
         )
         row = cur.fetchone()
         if not row:
-            return jsonify({"success": False, "error": "No segment for that tune"}), 404
+            return (
+                jsonify({"success": False, "error": _("No segment for that tune")}),
+                404,
+            )
 
-        save_to_history(cur, "recording_tune_segment", "DELETE", row[0], get_current_user_id())
-        cur.execute("DELETE FROM recording_tune_segment WHERE recording_tune_segment_id = %s", (row[0],))
+        save_to_history(
+            cur, "recording_tune_segment", "DELETE", row[0], get_current_user_id()
+        )
+        cur.execute(
+            "DELETE FROM recording_tune_segment WHERE recording_tune_segment_id = %s",
+            (row[0],),
+        )
         conn.commit()
     finally:
         conn.close()
@@ -1321,7 +1639,7 @@ def download_recording_segment(recording_id, session_instance_tune_id):
         conn.close()
 
     if not row:
-        return jsonify({"success": False, "error": "No segment for that tune"}), 404
+        return jsonify({"success": False, "error": _("No segment for that tune")}), 404
 
     suffix = os.path.splitext(row["storage_key"])[1].lower() or ".m4a"
     mime = _UPLOAD_MIME_BY_EXTENSION.get(suffix, "application/octet-stream")
@@ -1338,15 +1656,27 @@ def download_recording_segment(recording_id, session_instance_tune_id):
         source = generate_presigned_url(row["storage_key"])
         with tempfile.TemporaryDirectory() as tmp:
             dest = os.path.join(tmp, f"segment{suffix}")
-            slice_segment(source, int(row["start_ms"]), int(row["resolved_end_ms"]), dest)
+            slice_segment(
+                source, int(row["start_ms"]), int(row["resolved_end_ms"]), dest
+            )
             with open(dest, "rb") as fh:
                 data = fh.read()
     except Exception as exc:
         # The temp dir is gone by now either way; read it into memory first so the
         # response can outlive it.
-        return jsonify({"success": False, "error": f"Could not cut that tune: {exc}"}), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": _("Could not cut that tune: %(error)s", error=exc),
+                }
+            ),
+            500,
+        )
 
-    return send_file(BytesIO(data), mimetype=mime, as_attachment=True, download_name=download_name)
+    return send_file(
+        BytesIO(data), mimetype=mime, as_attachment=True, download_name=download_name
+    )
 
 
 @api_login_required
@@ -1403,7 +1733,7 @@ def export_recording_segments(recording_id):
         )
         rec = cur.fetchone()
         if not rec:
-            return jsonify({"success": False, "error": "Recording not found"}), 404
+            return jsonify({"success": False, "error": _("Recording not found")}), 404
 
         cur.execute(
             """
@@ -1430,7 +1760,9 @@ def export_recording_segments(recording_id):
             "duration_ms": int(r["resolved_end_ms"]) - int(r["start_ms"]),
             "end_is_explicit": r["end_is_explicit"],
             "instance_start_ms": int(r["instance_start_ms"]),
-            "absolute_start": r["absolute_start"].isoformat() if r["absolute_start"] else None,
+            "absolute_start": r["absolute_start"].isoformat()
+            if r["absolute_start"]
+            else None,
         }
         for r in rows
     ]

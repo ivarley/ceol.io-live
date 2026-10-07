@@ -5,9 +5,11 @@ endpoints must return 401 JSON on missing auth — never flask_login's
 @login_required, which 302-redirects to the HTML login page.
 """
 
+# i18n-converted  (spec 057: every message a person reads goes through _())
 from functools import wraps
 
 from flask import jsonify
+from flask_babel import gettext as _
 from flask_login import current_user
 
 
@@ -16,12 +18,19 @@ def api_login_required(f):
     Decorator for API endpoints that require authentication.
     Returns JSON error response instead of redirecting to login page.
     """
+
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if not current_user.is_authenticated:
-            return jsonify({"success": False, "error": "Authentication required"}), 401
+            return (
+                jsonify({"success": False, "error": _("Authentication required")}),
+                401,
+            )
         return f(*args, **kwargs)
-    decorated_function._auth_required = True  # machine-checkable marker (test_api_auth_coverage)
+
+    decorated_function._auth_required = (
+        True  # machine-checkable marker (test_api_auth_coverage)
+    )
     return decorated_function
 
 
@@ -41,16 +50,23 @@ def public_api(f):
 def api_admin_or_self_required(f):
     """For person-scoped endpoints (first arg/kwarg `person_id`): the caller must
     be authenticated AND either a system admin or that person. 401/403 JSON."""
+
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if not current_user.is_authenticated:
-            return jsonify({"success": False, "error": "Authentication required"}), 401
+            return (
+                jsonify({"success": False, "error": _("Authentication required")}),
+                401,
+            )
         person_id = kwargs.get("person_id", args[0] if args else None)
         is_self = getattr(current_user, "person_id", None) == person_id
         if not (current_user.is_system_admin or is_self):
-            return jsonify({"success": False, "error": "Not authorized"}), 403
+            return jsonify({"success": False, "error": _("Not authorized")}), 403
         return f(*args, **kwargs)
-    decorated_function._auth_required = True  # machine-checkable marker (test_api_auth_coverage)
+
+    decorated_function._auth_required = (
+        True  # machine-checkable marker (test_api_auth_coverage)
+    )
     return decorated_function
 
 
@@ -116,7 +132,7 @@ def normalize_error_body(body, status):
     if msg is None:
         msg = body.get("reason") if isinstance(body.get("reason"), str) else None
     if msg is None:
-        msg = "Request failed"
+        msg = _("Request failed")
     if body.get("success") is not False:
         body["success"] = False
         changed = True
@@ -151,7 +167,7 @@ def parse_client_header(value):
     if not raw:
         return {"platform": "web", "version": None, "raw": None}
     head = raw.split()[0]
-    platform, _, version = head.partition("/")
+    platform, _sep, version = head.partition("/")
     platform = platform.lower() or "web"
     return {"platform": platform, "version": version or None, "raw": raw}
 

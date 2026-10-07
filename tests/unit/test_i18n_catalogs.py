@@ -11,6 +11,7 @@ A drafted string still flagged `review` counts as present; `scripts/i18n_po.py p
 lists those. Adding a string: `make i18n-extract`, write its Irish, `make i18n-compile`.
 """
 
+import ast
 import os
 import re
 
@@ -54,7 +55,9 @@ def _converted_templates():
                 path = os.path.join(dirpath, f)
                 with open(path, encoding="utf-8") as fh:
                     if MARKER in fh.read():
-                        names.append(os.path.relpath(path, os.path.join(ROOT, "templates")))
+                        names.append(
+                            os.path.relpath(path, os.path.join(ROOT, "templates"))
+                        )
     return sorted(names)
 
 
@@ -114,6 +117,7 @@ def test_every_marked_string_has_irish(catalog):
 def test_the_compiled_catalog_is_current(catalog):
     with open(MO, "rb") as f:
         compiled = read_mo(f)
+
     # A plural's forms come back as a tuple from the .po and a list from the .mo.
     def forms(s):
         return tuple(s) if isinstance(s, (list, tuple)) else s
@@ -142,7 +146,9 @@ def _bare_english(html):
 
 
 def test_the_chrome_is_converted():
-    assert {"header_nav.html", "hamburger_menu.html", "tab_bar.html"} <= set(CONVERTED_TEMPLATES)
+    assert {"header_nav.html", "hamburger_menu.html", "tab_bar.html"} <= set(
+        CONVERTED_TEMPLATES
+    )
 
 
 @pytest.mark.parametrize("name", CONVERTED_TEMPLATES)
@@ -150,3 +156,75 @@ def test_converted_templates_have_no_bare_english(name):
     with open(os.path.join(ROOT, "templates", name), encoding="utf-8") as f:
         left = _bare_english(f.read())
     assert not left, f"{name}: English outside _(): {left}"
+
+
+# Python modules whose messages to a person go through _(): those carrying the marker
+# `# i18n-converted`. Checked: the message given to api_error() or flash(), and the
+# "message" / "error" value of a dict literal. A literal that is not text for a person
+# (a code, a log line) carries `# not-i18n` on its line.
+MESSAGE_KEYS = {"message", "error"}
+
+
+def _converted_modules():
+    names = []
+    for dirpath, dirs, files in os.walk(ROOT):
+        dirs[:] = [d for d in dirs if d not in IGNORE and not d.startswith(".")]
+        for f in files:
+            if f.endswith(".py"):
+                path = os.path.join(dirpath, f)
+                with open(path, encoding="utf-8") as fh:
+                    if re.search(r"^# i18n-converted", fh.read(), re.M):
+                        names.append(os.path.relpath(path, ROOT))
+    return sorted(names)
+
+
+CONVERTED_MODULES = _converted_modules()
+
+
+def _is_english(node):
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return bool(re.search(r"[A-Za-z]{2}", node.value))
+    if isinstance(node, ast.JoinedStr):
+        return any(_is_english(v) for v in node.values)
+    if isinstance(node, ast.BinOp):  # "..." + x, "..." % x
+        return _is_english(node.left) or _is_english(node.right)
+    if isinstance(node, ast.IfExp):
+        return _is_english(node.body) or _is_english(node.orelse)
+    return False
+
+
+def _bare_messages(source):
+    lines = source.splitlines()
+    found = []
+
+    def flag(node):
+        if _is_english(node) and "not-i18n" not in lines[node.lineno - 1]:
+            found.append(f"line {node.lineno}: {ast.unparse(node)[:80]}")
+
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Call):
+            name = getattr(node.func, "id", None) or getattr(node.func, "attr", None)
+            if name in ("api_error", "flash") and node.args:
+                flag(node.args[0])
+            for kw in node.keywords:
+                if name == "api_error" and kw.arg == "message":
+                    flag(kw.value)
+        elif isinstance(node, ast.Dict):
+            for k, v in zip(node.keys, node.values):
+                if isinstance(k, ast.Constant) and k.value in MESSAGE_KEYS:
+                    flag(v)
+    return found
+
+
+def test_the_message_check_catches_bare_english():
+    src = 'api_error("Session not found", 404)\nreturn {"message": f"Added {n}"}\n'
+    assert len(_bare_messages(src)) == 2
+    ok = 'api_error(_("Session not found"), 404)\nx = {"error": "bad"}  # not-i18n\n'
+    assert _bare_messages(ok) == []
+
+
+@pytest.mark.parametrize("name", CONVERTED_MODULES)
+def test_converted_modules_have_no_bare_messages(name):
+    with open(os.path.join(ROOT, name), encoding="utf-8") as fh:
+        found = _bare_messages(fh.read())
+    assert not found, f"{name}: messages without _():\n  " + "\n  ".join(found)

@@ -17,8 +17,11 @@ client in frontend/src/shared/sessionpath.js and in the iOS app
 (ios/CeolKit/Sources/CeolLogic/AddSession.swift) — keep all three in lockstep.
 """
 
+# i18n-converted
 import re
 import unicodedata
+
+from flask_babel import gettext as _
 
 MAX_PATH_LENGTH = 255  # session.path is VARCHAR(255)
 PATH_SEGMENTS = 2  # {place}/{name-or-year}, spec 055
@@ -52,20 +55,20 @@ def normalize_session_path(value):
     None and a message suitable for showing to the user.
     """
     if not isinstance(value, str):
-        return None, "Path is required"
+        return None, _("Path is required")
 
     path = value.strip(_JS_TRIM)
     if not path:
-        return None, "Path is required"
+        return None, _("Path is required")
 
     if any(unicodedata.category(ch) in _INVISIBLE_CATEGORIES for ch in path):
-        return None, "Path can't contain spaces or invisible characters"
+        return None, _("Path can't contain spaces or invisible characters")
 
     if len(path) > MAX_PATH_LENGTH:
-        return None, f"Path must be {MAX_PATH_LENGTH} characters or fewer"
+        return None, _("Path must be %(max)d characters or fewer", max=MAX_PATH_LENGTH)
 
     if path.startswith("/") or path.endswith("/"):
-        return None, "Path can't start or end with a slash"
+        return None, _("Path can't start or end with a slash")
 
     # Spec 055: exactly `{place}/{name-or-year}`. Whether the first part names a
     # real place, and what the second may be under it, needs the database:
@@ -74,25 +77,32 @@ def normalize_session_path(value):
     if len(segments) != PATH_SEGMENTS:
         return (
             None,
-            "Path must have exactly two parts, a place and a name, like austin/mueller",
+            _(
+                "Path must have exactly two parts, a place and a name, like austin/mueller"
+            ),
         )
 
     for segment in segments:
         if not segment:
-            return None, "Path can't contain an empty part (//)"
+            return None, _("Path can't contain an empty part (//)")
         if len(segment) > MAX_SEGMENT_LENGTH:
             return (
                 None,
-                f"Each part of the path must be {MAX_SEGMENT_LENGTH} characters or fewer",
+                _(
+                    "Each part of the path must be %(max)d characters or fewer",
+                    max=MAX_SEGMENT_LENGTH,
+                ),
             )
         if not _SEGMENT_ALLOWED.match(segment):
             return (
                 None,
-                "Path can only contain letters, numbers, hyphens, underscores, "
-                "periods and slashes",
+                _(
+                    "Path can only contain letters, numbers, hyphens, underscores, "
+                    "periods and slashes"
+                ),
             )
         # Kills "." and ".." segments, which a browser resolves away entirely.
         if not _HAS_ALPHANUMERIC.search(segment):
-            return None, "Each part of the path must contain a letter or number"
+            return None, _("Each part of the path must contain a letter or number")
 
     return path, None

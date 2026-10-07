@@ -15,7 +15,10 @@ uses. This module holds everything about that rule that needs the database:
 Every function takes a cursor and leaves committing to the caller.
 """
 
+# i18n-converted
 import re
+
+from flask_babel import gettext as _
 
 # A session's second path segment under a festival prefix is a year; under a town it
 # must not look like one (spec 055 "The rule").
@@ -249,7 +252,7 @@ def match_place(cur, city, area=None, country=None):
             **result,
             "status": "invalid",
             "slug": None,
-            "error": "City must contain a letter or number",
+            "error": _("City must contain a letter or number"),
         }
 
     def same_geography(p):
@@ -341,7 +344,7 @@ def resolve_town(
         except (TypeError, ValueError):
             place = None
         if not place or place["kind"] != "place":
-            raise PlaceError("That place no longer exists")
+            raise PlaceError(_("That place no longer exists"))
         return place, False
 
     match = match_place(cur, city, area, country)
@@ -374,36 +377,48 @@ def validate_path_for_place(cur, path, session_type, town_place_id):
     `path` has already passed normalize_session_path. Returns an error sentence, or
     None when the path is allowed."""
     if path.count("/") != 1:
-        return (
+        return _(
             "Path must have exactly two parts, a place and a name, like austin/mueller"
         )
     prefix, second = path.split("/", 1)
     place = get_place_by_slug(cur, prefix)
     if place is None:
-        return (
-            f'The first part of the path must be a place; there is no place "{prefix}"'
+        return _(
+            'The first part of the path must be a place; there is no place "%(prefix)s"',
+            prefix=prefix,
         )
     if place["kind"] == "festival":
         if session_type != "festival":
-            return f'"{prefix}" is a festival; only its years can live under it'
+            return _(
+                '"%(prefix)s" is a festival; only its years can live under it',
+                prefix=prefix,
+            )
         if not _YEAR.match(second):
-            return f'Under the festival "{prefix}" the second part of the path is a year, like {prefix}/2026'
+            return _(
+                'Under the festival "%(prefix)s" the second part of the path is a year, like %(prefix)s/2026',
+                prefix=prefix,
+            )
         return None
     if session_type == "festival":
-        return "A festival's path is its own name and a year, like oflahertys/2026"
+        return _("A festival's path is its own name and a year, like oflahertys/2026")
     if _YEAR.match(second):
-        return (
+        return _(
             "The second part of the path can't be a year; that shape is for festivals"
         )
     if town_place_id is None:
-        return "The session needs a city before its path can be checked"
+        return _("The session needs a city before its path can be checked")
     if not place_contains(cur, place["place_id"], town_place_id):
         town = get_place(cur, town_place_id)
-        return (
-            f"The path must start with the session's town or an area containing it "
-            f'({", ".join(path_prefixes(cur, town_place_id))}), not "{prefix}"'
-            if town
-            else f'The path must start with the session\'s town, not "{prefix}"'
+        if town:
+            return _(
+                "The path must start with the session's town or an area containing it "
+                '(%(prefixes)s), not "%(prefix)s"',
+                prefixes=", ".join(path_prefixes(cur, town_place_id)),
+                prefix=prefix,
+            )
+        return _(
+            'The path must start with the session\'s town, not "%(prefix)s"',
+            prefix=prefix,
         )
     return None
 
@@ -457,7 +472,7 @@ def _alias(cur, path):
 def _redirect(cur, path):
     """Spec 055 resolution step 4: follow path_redirect up to MAX_REDIRECT_HOPS."""
     current = path
-    for _ in range(MAX_REDIRECT_HOPS):
+    for _hop in range(MAX_REDIRECT_HOPS):
         cur.execute(
             "SELECT to_path FROM path_redirect WHERE from_path = %s", (current,)
         )
@@ -579,17 +594,17 @@ def check_new_slug(cur, slug, place_id=None):
     """An error sentence for a slug a site admin types, or None. Stricter than a
     path segment: lowercase letters, digits and single hyphens."""
     if not slug:
-        return "A slug is required"
+        return _("A slug is required")
     if len(slug) > 100:
-        return "A slug must be 100 characters or fewer"
+        return _("A slug must be 100 characters or fewer")
     if not _SLUG.match(slug):
-        return "A slug is lowercase letters, numbers and hyphens, like east-durham"
+        return _("A slug is lowercase letters, numbers and hyphens, like east-durham")
     if _YEAR.match(slug):
-        return "A slug can't be a year"
+        return _("A slug can't be a year")
     cur.execute("SELECT place_id FROM place WHERE slug = %s", (slug,))
     row = cur.fetchone()
     if row and row[0] != place_id:
-        return f'"{slug}" is already taken'
+        return _('"%(slug)s" is already taken', slug=slug)
     return None
 
 
@@ -599,13 +614,17 @@ def check_parent(cur, place, parent_id):
         return None
     parent = get_place(cur, parent_id)
     if parent is None:
-        return "That parent doesn't exist"
+        return _("That parent doesn't exist")
     if parent["kind"] != "place":
-        return "A parent must be a town or metro, not a festival"
+        return _("A parent must be a town or metro, not a festival")
     if place is not None and any(
         p["place_id"] == place["place_id"] for p in place_ancestors(cur, parent_id)
     ):
-        return f"{parent['name']} is inside {place['name']}, so it can't contain it"
+        return _(
+            "%(parent)s is inside %(place)s, so it can't contain it",
+            parent=parent["name"],
+            place=place["name"],
+        )
     return None
 
 
@@ -615,13 +634,13 @@ def update_place(cur, place, name, area, country, parent_id, user_id=None):
     place until they are dropped (spec 055 step one). Returns an error or None."""
     name = _clean(name)
     if not name:
-        return "A name is required"
+        return _("A name is required")
     error = check_parent(cur, place, parent_id)
     if error:
         return error
     if place["kind"] == "festival":
         if parent_id is None:
-            return "A festival needs the town it happens in"
+            return _("A festival needs the town it happens in")
         area_n = country_n = None
     else:
         country_n = normalize_country(country)
@@ -662,7 +681,7 @@ def rename_slug(cur, place, new_slug, user_id=None):
     if error:
         return error, []
     if sessions_under_slug(cur, new_slug):
-        return f'Sessions already use "{new_slug}/…" paths', []
+        return _('Sessions already use "%(slug)s/…" paths', slug=new_slug), []
     cur.execute(
         """UPDATE place SET slug = %s, last_modified_date = (NOW() AT TIME ZONE 'UTC'),
                   last_modified_user_id = %s WHERE place_id = %s""",
@@ -691,14 +710,18 @@ def delete_place(cur, place):
     in_town = cur.fetchone()[0]
     under = len(sessions_under_slug(cur, place["slug"]))
     if in_town or under:
-        return f"{place['name']} has sessions; move them first"
+        return _("%(name)s has sessions; move them first", name=place["name"])
     cur.execute(
         "SELECT name FROM place WHERE parent_place_id = %s ORDER BY name",
         (place["place_id"],),
     )
     children = [r[0] for r in cur.fetchall()]
     if children:
-        return f"{place['name']} contains {', '.join(children)}; move those first"
+        return _(
+            "%(name)s contains %(children)s; move those first",
+            name=place["name"],
+            children=", ".join(children),
+        )
     cur.execute("DELETE FROM path_redirect WHERE from_path = %s", (place["slug"],))
     cur.execute("DELETE FROM place WHERE place_id = %s", (place["place_id"],))
     return None

@@ -1,3 +1,4 @@
+# i18n-converted  (spec 057: every message a person reads goes through _())
 from flask import (
     render_template,
     request,
@@ -9,6 +10,7 @@ from flask import (
     make_response,
     current_app,
 )
+from flask_babel import gettext as _
 import random
 import bcrypt
 from flask_login import login_user, logout_user, login_required, current_user
@@ -64,7 +66,7 @@ def _page_error():
     from app import render_error_page
 
     current_app.logger.exception("page render failed")
-    return render_error_page("Something went wrong loading this page.", 500)
+    return render_error_page(_("Something went wrong loading this page."), 500)
 
 
 def home():
@@ -173,12 +175,14 @@ def sessions(place=None):
         user_person_id = None
         user_timezone = "UTC"
         if current_user.is_authenticated:
-            user_person_id = getattr(current_user, 'person_id', None)
-            user_timezone = getattr(current_user, 'timezone', None) or "UTC"
+            user_person_id = getattr(current_user, "person_id", None)
+            user_timezone = getattr(current_user, "timezone", None) or "UTC"
 
         conn = get_db_connection()
         try:
-            payload = build_sessions_directory_payload(conn, user_person_id, user_timezone, place=place)
+            payload = build_sessions_directory_payload(
+                conn, user_person_id, user_timezone, place=place
+            )
         finally:
             conn.close()
 
@@ -199,7 +203,7 @@ def _place_page(place):
 
 def session_tunes(session_path):
     """Show session detail page with tunes tab active."""
-    return session_handler(session_path, active_tab='tunes')
+    return session_handler(session_path, active_tab="tunes")
 
 
 def _resolve_tune_redirect(tune_id):
@@ -209,7 +213,9 @@ def _resolve_tune_redirect(tune_id):
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-        cur.execute("SELECT redirect_to_tune_id FROM tune WHERE tune_id = %s", (tune_id,))
+        cur.execute(
+            "SELECT redirect_to_tune_id FROM tune WHERE tune_id = %s", (tune_id,)
+        )
         row = cur.fetchone()
         cur.close()
         conn.close()
@@ -223,22 +229,22 @@ def session_tune_info(session_path, tune_id):
     redirect_to = _resolve_tune_redirect(tune_id)
     if redirect_to:
         return redirect(f"/sessions/{session_path}/tunes/{redirect_to}", code=301)
-    return session_handler(session_path, active_tab='tunes', tune_id=tune_id)
+    return session_handler(session_path, active_tab="tunes", tune_id=tune_id)
 
 
 def session_people(session_path):
     """Show session detail page with people tab active."""
-    return session_handler(session_path, active_tab='people')
+    return session_handler(session_path, active_tab="people")
 
 
 def session_person_detail(session_path, person_id):
     """Show session detail page with people tab active and person modal open."""
-    return session_handler(session_path, active_tab='people', person_id=person_id)
+    return session_handler(session_path, active_tab="people", person_id=person_id)
 
 
 def session_logs(session_path):
     """Show session detail page with logs tab active."""
-    return session_handler(session_path, active_tab='logs')
+    return session_handler(session_path, active_tab="logs")
 
 
 def _session_tab_suffix(active_tab=None, tune_id=None, person_id=None):
@@ -261,7 +267,9 @@ def _festival_landing(festival, active_tab=None, tune_id=None, person_id=None):
         payload = build_festival_payload(
             conn,
             festival,
-            person_id=getattr(current_user, "person_id", None) if current_user.is_authenticated else None,
+            person_id=getattr(current_user, "person_id", None)
+            if current_user.is_authenticated
+            else None,
             is_system_admin=flask_session.get("is_system_admin", False),
         )
     finally:
@@ -297,12 +305,18 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
         return _page_error()
 
     if resolved is not None and resolved["kind"] == "place" and resolved.get("moved"):
-        target = f"/sessions/{resolved['place']['slug']}" + _session_tab_suffix(active_tab, tune_id, person_id)
+        target = f"/sessions/{resolved['place']['slug']}" + _session_tab_suffix(
+            active_tab, tune_id, person_id
+        )
         if request.query_string:
             target += "?" + request.query_string.decode("utf-8", "replace")
         return redirect(target, code=301)
 
-    if resolved is not None and resolved["kind"] == "place" and resolved["place"]["kind"] == "festival":
+    if (
+        resolved is not None
+        and resolved["kind"] == "place"
+        and resolved["place"]["kind"] == "festival"
+    ):
         return _festival_landing(resolved["place"], active_tab, tune_id, person_id)
 
     if resolved is not None and resolved["kind"] == "place":
@@ -311,7 +325,7 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
     if resolved is None:
         from app import render_error_page
 
-        return render_error_page(f"Session not found: {full_path}", 404)
+        return render_error_page(_("Session not found: %(path)s", path=full_path), 404)
 
     if resolved["moved"]:
         target = f"/sessions/{resolved['path']}"
@@ -441,7 +455,8 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
                 # Get attendees for the started-by dropdown
                 session_id = session_instance[8]
                 session_instance_id = session_instance[3]
-                cur.execute("""
+                cur.execute(
+                    """
                     SELECT DISTINCT
                         p.person_id,
                         p.first_name,
@@ -450,22 +465,25 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
                     JOIN session_instance_person sip ON p.person_id = sip.person_id
                     WHERE sip.session_instance_id = %s
                     ORDER BY p.first_name, p.last_name
-                """, (session_instance_id,))
+                """,
+                    (session_instance_id,),
+                )
 
                 attendees_data = cur.fetchall()
                 attendees_list = []
                 for row in attendees_data:
                     person_id, first_name, last_name = row
-                    display_name = f"{first_name} {last_name[0]}" if last_name else first_name
-                    attendees_list.append({
-                        'person_id': person_id,
-                        'display_name': display_name
-                    })
+                    display_name = (
+                        f"{first_name} {last_name[0]}" if last_name else first_name
+                    )
+                    attendees_list.append(
+                        {"person_id": person_id, "display_name": display_name}
+                    )
 
                 # Handle display name disambiguation
                 display_name_counts = {}
                 for attendee in attendees_list:
-                    dn = attendee['display_name']
+                    dn = attendee["display_name"]
                     if dn in display_name_counts:
                         display_name_counts[dn].append(attendee)
                     else:
@@ -473,9 +491,11 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
 
                 for dn, attendees_with_name in display_name_counts.items():
                     if len(attendees_with_name) > 1:
-                        attendees_with_name.sort(key=lambda x: x['person_id'])
+                        attendees_with_name.sort(key=lambda x: x["person_id"])
                         for attendee in attendees_with_name:
-                            attendee['display_name'] = f"{dn} (#{attendee['person_id']})"
+                            attendee[
+                                "display_name"
+                            ] = f"{dn} (#{attendee['person_id']})"
 
                 cur.close()
                 conn.close()
@@ -509,9 +529,11 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
 
                     # Spec 034: seeing this session's people requires the session to have
                     # vouched for you (confirmed), not merely to have joined it.
-                    user_person_id = getattr(current_user, 'person_id', None)
+                    user_person_id = getattr(current_user, "person_id", None)
                     if user_person_id:
-                        can_view_people = is_session_confirmed(user_person_id, session_instance[8])
+                        can_view_people = is_session_confirmed(
+                            user_person_id, session_instance[8]
+                        )
 
                 resp = make_response(
                     render_template(
@@ -534,9 +556,17 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
                 from app import render_error_page
 
                 if is_date_based:
-                    error_msg = f"Session instance not found: {session_path} on {last_part}"
+                    error_msg = _(
+                        "Session instance not found: %(path)s on %(date)s",
+                        path=session_path,
+                        date=last_part,
+                    )
                 else:
-                    error_msg = f"Session instance not found: ID {last_part} for session {session_path}"
+                    error_msg = _(
+                        "Session instance not found: ID %(id)s for session %(path)s",
+                        id=last_part,
+                        path=session_path,
+                    )
                 return render_error_page(error_msg, 404)
         except Exception:
             return _page_error()
@@ -554,7 +584,9 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
             from serializers import build_session_detail_payload
 
             user_person_id = (
-                getattr(current_user, "person_id", None) if current_user.is_authenticated else None
+                getattr(current_user, "person_id", None)
+                if current_user.is_authenticated
+                else None
             )
 
             conn = get_db_connection()
@@ -572,7 +604,9 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
             if payload is None:
                 from app import render_error_page
 
-                return render_error_page(f"Session not found: {session_path}", 404)
+                return render_error_page(
+                    _("Session not found: %(path)s", path=session_path), 404
+                )
 
             return render_template(
                 "session_detail.html",
@@ -624,9 +658,12 @@ def session_instance_players(full_path):
                 cur.close()
                 conn.close()
                 from app import render_error_page
+
                 return render_error_page(
-                    f"Players tab requires a specific session instance. Please select a date from the session page.",
-                    400
+                    _(
+                        "Players tab requires a specific session instance. Please select a date from the session page."
+                    ),
+                    400,
                 )
 
         if is_date_based:
@@ -687,14 +724,14 @@ def session_instance_players(full_path):
 
                 is_session_admin = flask_session.get(
                     "is_system_admin", False
-                ) or session_instance[8] in flask_session.get(
-                    "admin_session_ids", []
-                )
+                ) or session_instance[8] in flask_session.get("admin_session_ids", [])
 
                 # Spec 034: confirmed, not merely a member.
-                user_person_id = getattr(current_user, 'person_id', None)
+                user_person_id = getattr(current_user, "person_id", None)
                 if user_person_id:
-                    can_view_people = is_session_confirmed(user_person_id, session_instance[8])
+                    can_view_people = is_session_confirmed(
+                        user_person_id, session_instance[8]
+                    )
 
             cur.close()
             conn.close()
@@ -711,9 +748,17 @@ def session_instance_players(full_path):
             from app import render_error_page
 
             if is_date_based:
-                error_msg = f"Session instance not found: {session_path} on {last_part}"
+                error_msg = _(
+                    "Session instance not found: %(path)s on %(date)s",
+                    path=session_path,
+                    date=last_part,
+                )
             else:
-                error_msg = f"Session instance not found: ID {last_part} for session {session_path}"
+                error_msg = _(
+                    "Session instance not found: ID %(id)s for session %(path)s",
+                    id=last_part,
+                    path=session_path,
+                )
             return render_error_page(error_msg, 404)
     except Exception:
         return _page_error()
@@ -778,7 +823,7 @@ def help_page():
 
 def share_page():
     # Get the target URL from query parameter (the page to share)
-    target_url = request.args.get("url", request.host_url.rstrip('/'))
+    target_url = request.args.get("url", request.host_url.rstrip("/"))
 
     # Get current user's person_id if authenticated
     person_id = None
@@ -819,17 +864,17 @@ def help_live_logger():
 # Release notes months, most recent first. Single source of truth shared by
 # the index page and the per-month detail pages.
 RELEASE_NOTES_MONTHS = [
-    ('2026-07', 'July 2026'),
-    ('2026-06', 'June 2026'),
-    ('2026-03', 'March 2026'),
-    ('2026-02', 'February 2026'),
-    ('2026-01', 'January 2026'),
-    ('2025-12', 'December 2025'),
-    ('2025-11', 'November 2025'),
-    ('2025-10', 'October 2025'),
-    ('2025-09', 'September 2025'),
-    ('2025-08', 'August 2025'),
-    ('2025-07', 'July 2025'),
+    ("2026-07", "July 2026"),
+    ("2026-06", "June 2026"),
+    ("2026-03", "March 2026"),
+    ("2026-02", "February 2026"),
+    ("2026-01", "January 2026"),
+    ("2025-12", "December 2025"),
+    ("2025-11", "November 2025"),
+    ("2025-10", "October 2025"),
+    ("2025-09", "September 2025"),
+    ("2025-08", "August 2025"),
+    ("2025-07", "July 2025"),
 ]
 
 
@@ -839,7 +884,9 @@ def help_release_notes_index():
 
 def help_release_notes(month):
     month_name = dict(RELEASE_NOTES_MONTHS).get(month, month)
-    return render_template("help_release_notes.html", month=month, month_name=month_name)
+    return render_template(
+        "help_release_notes.html", month=month, month_name=month_name
+    )
 
 
 def register():
@@ -862,23 +909,23 @@ def register():
         # Validation
         if not username or not password or not first_name or not last_name or not email:
             flash(
-                "Username, password, first name, last name, and email are required.",
+                _("Username, password, first name, last name, and email are required."),
                 "error",
             )
             return render_template("auth/register.html")
 
         if password != confirm_password:
-            flash("Passwords do not match.", "error")
+            flash(_("Passwords do not match."), "error")
             return render_template("auth/register.html")
 
         if len(password) < 8:
-            flash("Password must be at least 8 characters long.", "error")
+            flash(_("Password must be at least 8 characters long."), "error")
             return render_template("auth/register.html")
 
         # Check if username already exists
         existing_user = User.get_by_username(username)
         if existing_user:
-            flash("Username already exists. Please choose a different one.", "error")
+            flash(_("Username already exists. Please choose a different one."), "error")
             return render_template("auth/register.html")
 
         # Check if an account already uses this email. user_account.user_email is
@@ -887,7 +934,9 @@ def register():
         # this guard (not the person.email match) is what blocks duplicate accounts.
         if User.get_by_email(email):
             flash(
-                "Email address already registered with a user account. Please try logging in or use password reset if needed.",
+                _(
+                    "Email address already registered with a user account. Please try logging in or use password reset if needed."
+                ),
                 "error",
             )
             return render_template("auth/register.html")
@@ -901,26 +950,32 @@ def register():
             # Get person details if email exists
             cur.execute(
                 "SELECT person_id, first_name, last_name FROM person WHERE email = %s",
-                (email,)
+                (email,),
             )
             person_result = cur.fetchone()
 
             if person_result:
-                existing_person_id, existing_first_name, existing_last_name = person_result
+                (
+                    existing_person_id,
+                    existing_first_name,
+                    existing_last_name,
+                ) = person_result
                 existing_person = {
-                    'person_id': existing_person_id,
-                    'first_name': existing_first_name,
-                    'last_name': existing_last_name
+                    "person_id": existing_person_id,
+                    "first_name": existing_first_name,
+                    "last_name": existing_last_name,
                 }
 
                 # Check if this person already has a user account
                 cur.execute(
                     "SELECT user_id FROM user_account WHERE person_id = %s",
-                    (existing_person_id,)
+                    (existing_person_id,),
                 )
                 if cur.fetchone():
                     flash(
-                        "Email address already registered with a user account. Please try logging in or use password reset if needed.",
+                        _(
+                            "Email address already registered with a user account. Please try logging in or use password reset if needed."
+                        ),
                         "error",
                     )
                     return render_template("auth/register.html")
@@ -936,8 +991,10 @@ def register():
             if existing_person_id:
                 # Use existing person and update their name if different
                 person_id = existing_person_id
-                if (first_name != existing_person['first_name'] or
-                    last_name != existing_person['last_name']):
+                if (
+                    first_name != existing_person["first_name"]
+                    or last_name != existing_person["last_name"]
+                ):
                     # Update person's name to match registration (no user logged in yet)
                     save_to_history(
                         cur,
@@ -952,7 +1009,7 @@ def register():
                         SET first_name = %s, last_name = %s, last_modified_date = %s, last_modified_user_id = NULL
                         WHERE person_id = %s
                         """,
-                        (first_name, last_name, now_utc(), person_id)
+                        (first_name, last_name, now_utc(), person_id),
                     )
             else:
                 # Create new person record (no user yet during registration)
@@ -966,7 +1023,7 @@ def register():
                 )
                 result = cur.fetchone()
                 if not result:
-                    flash("Failed to create person record", "error")
+                    flash(_("Failed to create person record"), "error")
                     return redirect(url_for("register"))
                 person_id = result[0]
 
@@ -978,7 +1035,7 @@ def register():
             verification_expires = now_utc() + timedelta(hours=24)
 
             # Get referrer from session if present
-            referred_by_person_id = session.get('referred_by_person_id')
+            referred_by_person_id = session.get("referred_by_person_id")
 
             cur.execute(
                 """
@@ -1000,7 +1057,7 @@ def register():
             )
             result = cur.fetchone()
             if not result:
-                flash("Failed to create user account", "error")
+                flash(_("Failed to create user account"), "error")
                 return redirect(url_for("register"))
             user_id = result[0]
 
@@ -1016,7 +1073,9 @@ def register():
 
             # Now connected: user_account.user_email holds this address; retire the
             # person-level email (its only role was matching this person pre-account).
-            cur.execute("UPDATE person SET email = NULL WHERE person_id = %s", (person_id,))
+            cur.execute(
+                "UPDATE person SET email = NULL WHERE person_id = %s", (person_id,)
+            )
 
             conn.commit()
 
@@ -1031,12 +1090,16 @@ def register():
             )
             if send_verification_email(user, verification_token):
                 flash(
-                    "Registration successful! Please check your email to verify your account before logging in.",
+                    _(
+                        "Registration successful! Please check your email to verify your account before logging in."
+                    ),
                     "success",
                 )
             else:
                 flash(
-                    "Registration successful, but failed to send verification email. Please contact support.",
+                    _(
+                        "Registration successful, but failed to send verification email. Please contact support."
+                    ),
                     "warning",
                 )
 
@@ -1045,7 +1108,7 @@ def register():
         except Exception as e:
             conn.rollback()
             print(f"Registration error: {str(e)}")
-            flash("Registration failed. Please try again.", "error")
+            flash(_("Registration failed. Please try again."), "error")
             return render_template("auth/register.html")
         finally:
             conn.close()
@@ -1080,7 +1143,7 @@ def login():
                 user_agent,
                 failure_reason="MISSING_CREDENTIALS",
             )
-            flash("Username and password are required.", "error")
+            flash(_("Username and password are required."), "error")
             return render_template("auth/login.html")
 
         user = User.get_by_username(username)
@@ -1095,7 +1158,9 @@ def login():
                     failure_reason="EMAIL_NOT_VERIFIED",
                 )
                 flash(
-                    "Please verify your email address before logging in. Check your email for a verification link.",
+                    _(
+                        "Please verify your email address before logging in. Check your email for a verification link."
+                    ),
                     "warning",
                 )
                 return render_template("auth/login.html")
@@ -1169,7 +1234,7 @@ def login():
                 user_agent,
                 failure_reason=failure_reason,
             )
-            flash("Invalid username or password.", "error")
+            flash(_("Invalid username or password."), "error")
 
     return render_template("auth/login.html")
 
@@ -1215,6 +1280,10 @@ def logout():
             session_id=db_session_id,
         )
 
+    # In the language of the person logging out: once logged out, the request's
+    # language falls back to the cookie (i18n.get_locale), which may be unset.
+    logged_out = _("You have been logged out.")
+
     # Clear all session data first
     session.clear()
 
@@ -1222,7 +1291,7 @@ def logout():
     logout_user()
 
     # Set flash message after clearing the session
-    flash("You have been logged out.", "info")
+    flash(logged_out, "info")
 
     # Create response with cache control headers and explicitly clear cookies
     response = redirect(url_for("home"))
@@ -1249,17 +1318,17 @@ def check_email_api():
       and account are only created when that link is clicked (verify_email).
     """
     if not request.is_json:
-        return jsonify({"error": "JSON request required"}), 400
+        return jsonify({"error": _("JSON request required")}), 400
 
     data = request.get_json()
     email = data.get("email", "").strip().lower()
 
     if not email:
-        return jsonify({"error": "Email address is required"}), 400
+        return jsonify({"error": _("Email address is required")}), 400
 
     # Basic email validation
     if "@" not in email or "." not in email:
-        return jsonify({"error": "Please enter a valid email address"}), 400
+        return jsonify({"error": _("Please enter a valid email address")}), 400
 
     # Get client info for logging
     ip_address = request.environ.get(
@@ -1275,16 +1344,27 @@ def check_email_api():
     if user:
         # User exists
         if not user.is_active:
-            return jsonify({"error": "This account has been deactivated. Please contact support.",
-                            "code": "account_inactive"}), 403
+            return (
+                jsonify(
+                    {
+                        "error": _(
+                            "This account has been deactivated. Please contact support."
+                        ),
+                        "code": "account_inactive",
+                    }
+                ),
+                403,
+            )
 
         if user.has_password():
             # User has password - prompt for password login
-            return jsonify({
-                "action": "password_login",
-                "email": email,
-                "message": "Enter your password to log in"
-            })
+            return jsonify(
+                {
+                    "action": "password_login",
+                    "email": email,
+                    "message": _("Enter your password to log in"),
+                }
+            )
         else:
             # User has no password - send magic link
             token = generate_login_token()
@@ -1315,11 +1395,13 @@ def check_email_api():
                 user_agent,
             )
 
-            return jsonify({
-                "action": "magic_link_sent",
-                "email": email,
-                "message": "Check your email for a login link"
-            })
+            return jsonify(
+                {
+                    "action": "magic_link_sent",
+                    "email": email,
+                    "message": _("Check your email for a login link"),
+                }
+            )
     else:
         # No account. Nothing is created until the emailed link is clicked, so a
         # mistyped address leaves only a pending row behind (migration 056).
@@ -1336,24 +1418,28 @@ def check_email_api():
             user_agent,
         )
 
-        return jsonify({
-            "action": "registration_started",
-            "email": email,
-            "message": "We don't have an account for this email yet. We've sent a link to create one."
-        })
+        return jsonify(
+            {
+                "action": "registration_started",
+                "email": email,
+                "message": _(
+                    "We don't have an account for this email yet. We've sent a link to create one."
+                ),
+            }
+        )
 
 
 def login_password_api():
     """API endpoint for email + password login"""
     if not request.is_json:
-        return jsonify({"error": "JSON request required"}), 400
+        return jsonify({"error": _("JSON request required")}), 400
 
     data = request.get_json()
     email = data.get("email", "").strip().lower()
     password = data.get("password", "")
 
     if not email or not password:
-        return jsonify({"error": "Email and password are required"}), 400
+        return jsonify({"error": _("Email and password are required")}), 400
 
     # Get client info for logging
     ip_address = request.environ.get(
@@ -1374,7 +1460,7 @@ def login_password_api():
             user_agent,
             failure_reason="USER_NOT_FOUND",
         )
-        return jsonify({"error": "Invalid email or password"}), 401
+        return jsonify({"error": _("Invalid email or password")}), 401
 
     if not user.is_active:
         log_login_event(
@@ -1385,7 +1471,15 @@ def login_password_api():
             user_agent,
             failure_reason="ACCOUNT_INACTIVE",
         )
-        return jsonify({"error": "This account has been deactivated", "code": "account_inactive"}), 403
+        return (
+            jsonify(
+                {
+                    "error": _("This account has been deactivated"),
+                    "code": "account_inactive",
+                }
+            ),
+            403,
+        )
 
     if not user.check_password(password):
         log_login_event(
@@ -1396,7 +1490,7 @@ def login_password_api():
             user_agent,
             failure_reason="INVALID_PASSWORD",
         )
-        return jsonify({"error": "Invalid email or password"}), 401
+        return jsonify({"error": _("Invalid email or password")}), 401
 
     if not user.email_verified:
         log_login_event(
@@ -1408,11 +1502,16 @@ def login_password_api():
             failure_reason="EMAIL_NOT_VERIFIED",
         )
         # A code of its own, so the app can tell this from a deactivated account (also 403).
-        return jsonify({
-            "error": "Please verify your email address first",
-            "action": "resend_verification",
-            "code": "email_not_verified",
-        }), 403
+        return (
+            jsonify(
+                {
+                    "error": _("Please verify your email address first"),
+                    "action": "resend_verification",
+                    "code": "email_not_verified",
+                }
+            ),
+            403,
+        )
 
     # Successful login. establish_session (api_app_routes) records the session the
     # way every login path does; a native caller (X-Ceol-Client: ios/...) gets a
@@ -1447,11 +1546,11 @@ def login_with_token(token):
             user_agent,
             failure_reason="INVALID_LOGIN_TOKEN",
         )
-        flash("Invalid or expired login link. Please request a new one.", "error")
+        flash(_("Invalid or expired login link. Please request a new one."), "error")
         return redirect(url_for("login"))
 
     if not user.is_active:
-        flash("This account has been deactivated.", "error")
+        flash(_("This account has been deactivated."), "error")
         return redirect(url_for("login"))
 
     # Clear the login token. Clicking an emailed link proves the address, so an
@@ -1525,7 +1624,7 @@ def login_with_token(token):
     if not user.has_password():
         return redirect(url_for("set_password_optional"))
 
-    flash("You have been logged in.", "success")
+    flash(_("You have been logged in."), "success")
     return redirect(url_for("home"))
 
 
@@ -1546,14 +1645,18 @@ def set_password_optional():
         if password:
             if len(password) < 8:
                 flash(
-                    "Your password needs at least 8 characters. Make it longer, or choose Skip for now.",
+                    _(
+                        "Your password needs at least 8 characters. Make it longer, or choose Skip for now."
+                    ),
                     "error",
                 )
                 return render_template("auth/set_password.html")
 
             if password != confirm_password:
                 flash(
-                    "The two passwords don't match. Type the same password in both boxes.",
+                    _(
+                        "The two passwords don't match. Type the same password in both boxes."
+                    ),
                     "error",
                 )
                 return render_template("auth/set_password.html")
@@ -1567,7 +1670,11 @@ def set_password_optional():
             try:
                 cur = conn.cursor()
                 save_to_history(
-                    cur, "user_account", "UPDATE", current_user.user_id, user_id=current_user.user_id
+                    cur,
+                    "user_account",
+                    "UPDATE",
+                    current_user.user_id,
+                    user_id=current_user.user_id,
                 )
                 cur.execute(
                     """
@@ -1575,13 +1682,21 @@ def set_password_optional():
                     SET hashed_password = %s, last_modified_date = %s, last_modified_user_id = %s
                     WHERE user_id = %s
                 """,
-                    (hashed_password, now_utc(), current_user.user_id, current_user.user_id),
+                    (
+                        hashed_password,
+                        now_utc(),
+                        current_user.user_id,
+                        current_user.user_id,
+                    ),
                 )
                 conn.commit()
             finally:
                 conn.close()
 
-            flash("Password set successfully! You can use it to log in next time.", "success")
+            flash(
+                _("Password set successfully! You can use it to log in next time."),
+                "success",
+            )
 
         # Check if profile setup is needed
         if _needs_profile_setup(current_user.person_id):
@@ -1613,14 +1728,18 @@ def setup_profile():
             (current_user.person_id,),
         )
         person_row = cur.fetchone()
-        person = {
-            "person_id": person_row[0],
-            "first_name": person_row[1],
-            "last_name": person_row[2],
-            "city": person_row[3],
-            "state": person_row[4],
-            "country": person_row[5],
-        } if person_row else {}
+        person = (
+            {
+                "person_id": person_row[0],
+                "first_name": person_row[1],
+                "last_name": person_row[2],
+                "city": person_row[3],
+                "state": person_row[4],
+                "country": person_row[5],
+            }
+            if person_row
+            else {}
+        )
 
         # Get user's current instruments
         cur.execute(
@@ -1631,7 +1750,9 @@ def setup_profile():
 
         # Separate common instruments from other instruments (case-insensitive)
         common_instruments_lower = [i.lower() for i in COMMON_INSTRUMENTS]
-        other_instruments = [i for i in user_instruments if i.lower() not in common_instruments_lower]
+        other_instruments = [
+            i for i in user_instruments if i.lower() not in common_instruments_lower
+        ]
 
         if request.method == "POST":
             first_name = request.form.get("first_name", "").strip()
@@ -1652,7 +1773,11 @@ def setup_profile():
 
             # Update person record
             save_to_history(
-                cur, "person", "UPDATE", current_user.person_id, user_id=current_user.user_id
+                cur,
+                "person",
+                "UPDATE",
+                current_user.person_id,
+                user_id=current_user.user_id,
             )
             cur.execute(
                 """
@@ -1666,12 +1791,25 @@ def setup_profile():
                     last_modified_user_id = %s
                 WHERE person_id = %s
             """,
-                (first_name, last_name, city, state, country, now_utc(), current_user.user_id, current_user.person_id),
+                (
+                    first_name,
+                    last_name,
+                    city,
+                    state,
+                    country,
+                    now_utc(),
+                    current_user.user_id,
+                    current_user.person_id,
+                ),
             )
 
             # Update user timezone
             save_to_history(
-                cur, "user_account", "UPDATE", current_user.user_id, user_id=current_user.user_id
+                cur,
+                "user_account",
+                "UPDATE",
+                current_user.user_id,
+                user_id=current_user.user_id,
             )
             cur.execute(
                 """
@@ -1699,34 +1837,100 @@ def setup_profile():
                     )
 
             conn.commit()
-            flash("Profile updated!", "success")
+            flash(_("Profile updated!"), "success")
             return redirect(url_for("home"))
 
         # Build timezone options
         timezone_options = [
             {"value": "UTC", "display": get_timezone_display_with_offset("UTC")},
-            {"value": "America/New_York", "display": get_timezone_display_with_offset("America/New_York")},
-            {"value": "America/Chicago", "display": get_timezone_display_with_offset("America/Chicago")},
-            {"value": "America/Denver", "display": get_timezone_display_with_offset("America/Denver")},
-            {"value": "America/Los_Angeles", "display": get_timezone_display_with_offset("America/Los_Angeles")},
-            {"value": "America/Anchorage", "display": get_timezone_display_with_offset("America/Anchorage")},
-            {"value": "Pacific/Honolulu", "display": get_timezone_display_with_offset("Pacific/Honolulu")},
-            {"value": "America/Toronto", "display": get_timezone_display_with_offset("America/Toronto")},
-            {"value": "America/Vancouver", "display": get_timezone_display_with_offset("America/Vancouver")},
-            {"value": "America/Phoenix", "display": get_timezone_display_with_offset("America/Phoenix")},
-            {"value": "Europe/London", "display": get_timezone_display_with_offset("Europe/London")},
-            {"value": "Europe/Dublin", "display": get_timezone_display_with_offset("Europe/Dublin")},
-            {"value": "Europe/Paris", "display": get_timezone_display_with_offset("Europe/Paris")},
-            {"value": "Europe/Berlin", "display": get_timezone_display_with_offset("Europe/Berlin")},
-            {"value": "Europe/Rome", "display": get_timezone_display_with_offset("Europe/Rome")},
-            {"value": "Europe/Madrid", "display": get_timezone_display_with_offset("Europe/Madrid")},
-            {"value": "Europe/Amsterdam", "display": get_timezone_display_with_offset("Europe/Amsterdam")},
-            {"value": "Australia/Sydney", "display": get_timezone_display_with_offset("Australia/Sydney")},
-            {"value": "Australia/Melbourne", "display": get_timezone_display_with_offset("Australia/Melbourne")},
-            {"value": "Australia/Perth", "display": get_timezone_display_with_offset("Australia/Perth")},
-            {"value": "Pacific/Auckland", "display": get_timezone_display_with_offset("Pacific/Auckland")},
-            {"value": "Asia/Tokyo", "display": get_timezone_display_with_offset("Asia/Tokyo")},
-            {"value": "Asia/Singapore", "display": get_timezone_display_with_offset("Asia/Singapore")},
+            {
+                "value": "America/New_York",
+                "display": get_timezone_display_with_offset("America/New_York"),
+            },
+            {
+                "value": "America/Chicago",
+                "display": get_timezone_display_with_offset("America/Chicago"),
+            },
+            {
+                "value": "America/Denver",
+                "display": get_timezone_display_with_offset("America/Denver"),
+            },
+            {
+                "value": "America/Los_Angeles",
+                "display": get_timezone_display_with_offset("America/Los_Angeles"),
+            },
+            {
+                "value": "America/Anchorage",
+                "display": get_timezone_display_with_offset("America/Anchorage"),
+            },
+            {
+                "value": "Pacific/Honolulu",
+                "display": get_timezone_display_with_offset("Pacific/Honolulu"),
+            },
+            {
+                "value": "America/Toronto",
+                "display": get_timezone_display_with_offset("America/Toronto"),
+            },
+            {
+                "value": "America/Vancouver",
+                "display": get_timezone_display_with_offset("America/Vancouver"),
+            },
+            {
+                "value": "America/Phoenix",
+                "display": get_timezone_display_with_offset("America/Phoenix"),
+            },
+            {
+                "value": "Europe/London",
+                "display": get_timezone_display_with_offset("Europe/London"),
+            },
+            {
+                "value": "Europe/Dublin",
+                "display": get_timezone_display_with_offset("Europe/Dublin"),
+            },
+            {
+                "value": "Europe/Paris",
+                "display": get_timezone_display_with_offset("Europe/Paris"),
+            },
+            {
+                "value": "Europe/Berlin",
+                "display": get_timezone_display_with_offset("Europe/Berlin"),
+            },
+            {
+                "value": "Europe/Rome",
+                "display": get_timezone_display_with_offset("Europe/Rome"),
+            },
+            {
+                "value": "Europe/Madrid",
+                "display": get_timezone_display_with_offset("Europe/Madrid"),
+            },
+            {
+                "value": "Europe/Amsterdam",
+                "display": get_timezone_display_with_offset("Europe/Amsterdam"),
+            },
+            {
+                "value": "Australia/Sydney",
+                "display": get_timezone_display_with_offset("Australia/Sydney"),
+            },
+            {
+                "value": "Australia/Melbourne",
+                "display": get_timezone_display_with_offset("Australia/Melbourne"),
+            },
+            {
+                "value": "Australia/Perth",
+                "display": get_timezone_display_with_offset("Australia/Perth"),
+            },
+            {
+                "value": "Pacific/Auckland",
+                "display": get_timezone_display_with_offset("Pacific/Auckland"),
+            },
+            {
+                "value": "Asia/Tokyo",
+                "display": get_timezone_display_with_offset("Asia/Tokyo"),
+            },
+            {
+                "value": "Asia/Singapore",
+                "display": get_timezone_display_with_offset("Asia/Singapore"),
+            },
         ]
 
         return render_template(
@@ -1747,7 +1951,7 @@ def forgot_password():
         email = request.form.get("email", "").strip()
 
         if not email:
-            flash("Email address is required.", "error")
+            flash(_("Email address is required."), "error")
             return render_template("auth/forgot_password.html")
 
         # Find user by email
@@ -1800,17 +2004,20 @@ def forgot_password():
                 # Send reset email
                 if send_password_reset_email(user, token):
                     flash(
-                        "Password reset instructions have been sent to your email.",
+                        _("Password reset instructions have been sent to your email."),
                         "info",
                     )
                 else:
                     flash(
-                        "Failed to send reset email. Please try again later.", "error"
+                        _("Failed to send reset email. Please try again later."),
+                        "error",
                     )
             else:
                 # Don't reveal whether email exists
                 flash(
-                    "If an account with that email exists, password reset instructions have been sent.",
+                    _(
+                        "If an account with that email exists, password reset instructions have been sent."
+                    ),
                     "info",
                 )
 
@@ -1828,15 +2035,15 @@ def reset_password(token):
         confirm_password = request.form.get("confirm_password", "")
 
         if not password or not confirm_password:
-            flash("Both password fields are required.", "error")
+            flash(_("Both password fields are required."), "error")
             return render_template("auth/reset_password.html", token=token)
 
         if password != confirm_password:
-            flash("Passwords do not match.", "error")
+            flash(_("Passwords do not match."), "error")
             return render_template("auth/reset_password.html", token=token)
 
         if len(password) < 8:
-            flash("Password must be at least 8 characters long.", "error")
+            flash(_("Password must be at least 8 characters long."), "error")
             return render_template("auth/reset_password.html", token=token)
 
         # Verify token and update password
@@ -1895,10 +2102,12 @@ def reset_password(token):
                     user_data[0], username, "PASSWORD_RESET", ip_address, user_agent
                 )
 
-                flash("Password has been reset successfully. Please log in.", "success")
+                flash(
+                    _("Password has been reset successfully. Please log in."), "success"
+                )
                 return redirect(url_for("login"))
             else:
-                flash("Invalid or expired reset token.", "error")
+                flash(_("Invalid or expired reset token."), "error")
                 return redirect(url_for("forgot_password"))
 
         finally:
@@ -1918,7 +2127,7 @@ def reset_password(token):
             (token, now_utc()),
         )
         if not cur.fetchone():
-            flash("Invalid or expired reset token.", "error")
+            flash(_("Invalid or expired reset token."), "error")
             return redirect(url_for("forgot_password"))
     finally:
         conn.close()
@@ -1940,26 +2149,36 @@ def change_password():
         # Only require current password if user has one
         if user_has_password:
             if not current_password or not new_password or not confirm_password:
-                flash("All password fields are required.", "error")
-                return render_template("auth/change_password.html", has_password=user_has_password)
+                flash(_("All password fields are required."), "error")
+                return render_template(
+                    "auth/change_password.html", has_password=user_has_password
+                )
         else:
             if not new_password or not confirm_password:
-                flash("Password fields are required.", "error")
-                return render_template("auth/change_password.html", has_password=user_has_password)
+                flash(_("Password fields are required."), "error")
+                return render_template(
+                    "auth/change_password.html", has_password=user_has_password
+                )
 
         if new_password != confirm_password:
-            flash("New passwords do not match.", "error")
-            return render_template("auth/change_password.html", has_password=user_has_password)
+            flash(_("New passwords do not match."), "error")
+            return render_template(
+                "auth/change_password.html", has_password=user_has_password
+            )
 
         if len(new_password) < 8:
-            flash("Password must be at least 8 characters long.", "error")
-            return render_template("auth/change_password.html", has_password=user_has_password)
+            flash(_("Password must be at least 8 characters long."), "error")
+            return render_template(
+                "auth/change_password.html", has_password=user_has_password
+            )
 
         # Verify current password only if user has one
         if user_has_password:
             if not user or not user.check_password(current_password):
-                flash("Current password is incorrect.", "error")
-                return render_template("auth/change_password.html", has_password=user_has_password)
+                flash(_("Current password is incorrect."), "error")
+                return render_template(
+                    "auth/change_password.html", has_password=user_has_password
+                )
 
         # Update password
         conn = get_db_connection()
@@ -1981,14 +2200,19 @@ def change_password():
                 SET hashed_password = %s, last_modified_date = %s, last_modified_user_id = %s
                 WHERE user_id = %s
             """,
-                (hashed_password, now_utc(), current_user.user_id, current_user.user_id),
+                (
+                    hashed_password,
+                    now_utc(),
+                    current_user.user_id,
+                    current_user.user_id,
+                ),
             )
             conn.commit()
 
             if user_has_password:
-                flash("Password changed successfully.", "success")
+                flash(_("Password changed successfully."), "success")
             else:
-                flash("Password created successfully.", "success")
+                flash(_("Password created successfully."), "success")
             return redirect(url_for("home"))
 
         finally:
@@ -2036,7 +2260,7 @@ def _login_after_verification(user, ip_address, user_agent):
 
     cleanup_expired_sessions()
 
-    flash("Email verified! Welcome to Irish Music Sessions.", "success")
+    flash(_("Email verified! Welcome to Irish Music Sessions."), "success")
 
     # Passwordless: offer a password next (then profile setup, see
     # set_password_optional).
@@ -2071,8 +2295,10 @@ def verify_email(token):
         # The address got an account some other way after this link was sent.
         # Nothing new is created; send them to log in with the account they have.
         flash(
-            "There's already an account for this email address. "
-            "Enter the address below to log in.",
+            _(
+                "There's already an account for this email address. "
+                "Enter the address below to log in."
+            ),
             "info",
         )
         return redirect(url_for("login"))
@@ -2097,9 +2323,7 @@ def verify_email(token):
             user_id = user_data[0]
 
             # Mark email as verified and clear token
-            save_to_history(
-                cur, "user_account", "UPDATE", user_id, user_id=None
-            )
+            save_to_history(cur, "user_account", "UPDATE", user_id, user_id=None)
             cur.execute(
                 """
                 UPDATE user_account
@@ -2115,7 +2339,9 @@ def verify_email(token):
             conn.commit()
         else:
             flash(
-                "This link is invalid or has expired. Enter your email below and we'll send a new one.",
+                _(
+                    "This link is invalid or has expired. Enter your email below and we'll send a new one."
+                ),
                 "error",
             )
             return redirect(url_for("resend_verification"))
@@ -2127,7 +2353,7 @@ def verify_email(token):
     if user and user.is_active:
         return _login_after_verification(user, ip_address, user_agent)
 
-    flash("Email verified successfully! You can now log in.", "success")
+    flash(_("Email verified successfully! You can now log in."), "success")
     return redirect(url_for("login"))
 
 
@@ -2136,7 +2362,7 @@ def resend_verification():
         email = request.form.get("email", "").strip()
 
         if not email:
-            flash("Email address is required.", "error")
+            flash(_("Email address is required."), "error")
             return render_template("auth/resend_verification.html")
 
         conn = get_db_connection()
@@ -2190,11 +2416,12 @@ def resend_verification():
                 )
                 if send_verification_email(user, verification_token):
                     flash(
-                        "Verification email sent! Please check your email.", "success"
+                        _("Verification email sent! Please check your email."),
+                        "success",
                     )
                 else:
                     flash(
-                        "Failed to send verification email. Please try again later.",
+                        _("Failed to send verification email. Please try again later."),
                         "error",
                     )
             elif has_pending_registration(email):
@@ -2202,18 +2429,24 @@ def resend_verification():
                 # expired): refresh it and send it again. Still no account.
                 if send_registration_email(email, start_pending_registration(email)):
                     flash(
-                        "We've sent a new link. Check your email to create your account.",
+                        _(
+                            "We've sent a new link. Check your email to create your account."
+                        ),
                         "success",
                     )
                 else:
                     flash(
-                        "Failed to send the email. Please try again in a few minutes.",
+                        _(
+                            "Failed to send the email. Please try again in a few minutes."
+                        ),
                         "error",
                     )
             else:
                 # Don't reveal whether email exists or is already verified
                 flash(
-                    "If an unverified account with that email exists, a verification email has been sent.",
+                    _(
+                        "If an unverified account with that email exists, a verification email has been sent."
+                    ),
                     "info",
                 )
 
@@ -2233,7 +2466,7 @@ def unsubscribe_updates(token):
     if user_id is None:
         from app import render_error_page
 
-        return render_error_page("This unsubscribe link is not valid.", 404)
+        return render_error_page(_("This unsubscribe link is not valid."), 404)
 
     conn = get_db_connection()
     try:
@@ -2251,7 +2484,7 @@ def unsubscribe_updates(token):
             conn.rollback()
             from app import render_error_page
 
-            return render_error_page("This unsubscribe link is not valid.", 404)
+            return render_error_page(_("This unsubscribe link is not valid."), 404)
         conn.commit()
     finally:
         conn.close()
@@ -2265,7 +2498,7 @@ def unsubscribe_updates(token):
 def admin():
     # Check if user is system admin
     if not current_user.is_system_admin:
-        flash("You must be authorized to view this page.", "error")
+        flash(_("You must be authorized to view this page."), "error")
         return redirect(url_for("home"))
 
     return render_template("admin_home.html")
@@ -2278,7 +2511,7 @@ def admin_sessions_list():
     admin_session_ids = session.get("admin_session_ids", [])
 
     if not is_system_admin and not admin_session_ids:
-        flash("You must be authorized to view this page.", "error")
+        flash(_("You must be authorized to view this page."), "error")
         return redirect(url_for("home"))
 
     conn = get_db_connection()
@@ -2342,7 +2575,7 @@ def admin_sessions_list():
             # Session admins only see sessions they admin
             cur.execute(
                 base_query + " WHERE s.session_id = ANY(%s) ORDER BY s.name",
-                (admin_session_ids,)
+                (admin_session_ids,),
             )
 
         sessions = []
@@ -2379,7 +2612,9 @@ def admin_sessions_list():
                 location_parts.append(state)
             if country:
                 location_parts.append(country)
-            location_display = ", ".join(location_parts) if location_parts else "Unknown"
+            location_display = (
+                ", ".join(location_parts) if location_parts else "Unknown"
+            )
 
             # Format player count display like "65 (12 members)". Spec 034: the roster's
             # meaningful split is member-vs-visitor, not the old is_regular flag.
@@ -2420,7 +2655,9 @@ def admin_sessions_list():
                 }
             )
 
-        return render_template("admin_sessions_list.html", sessions=sessions, active_tab="sessions_list")
+        return render_template(
+            "admin_sessions_list.html", sessions=sessions, active_tab="sessions_list"
+        )
 
     finally:
         conn.close()
@@ -2429,11 +2666,9 @@ def admin_sessions_list():
 @login_required
 def admin_login_sessions():
     """Redirect old active logins URL to Activity page with active sessions filter"""
-    return redirect(url_for(
-        "admin_activity",
-        category="logins",
-        activity_type="ACTIVE_SESSIONS"
-    ))
+    return redirect(
+        url_for("admin_activity", category="logins", activity_type="ACTIVE_SESSIONS")
+    )
 
 
 @login_required
@@ -2444,13 +2679,15 @@ def admin_login_history():
     event_type = request.args.get("event_type", "")
     username = request.args.get("username", "")
 
-    return redirect(url_for(
-        "admin_activity",
-        category="logins",
-        hours=hours,
-        activity_type=event_type,
-        user=username
-    ))
+    return redirect(
+        url_for(
+            "admin_activity",
+            category="logins",
+            hours=hours,
+            activity_type=event_type,
+            user=username,
+        )
+    )
 
 
 @login_required
@@ -2460,7 +2697,7 @@ def admin_people():
     drift). Search/sort and the add-person wizard live in the Svelte bundle."""
     # Check if user is system admin
     if not current_user.is_system_admin:
-        flash("You must be authorized to view this page.", "error")
+        flash(_("You must be authorized to view this page."), "error")
         return redirect(url_for("home"))
 
     from serializers import build_admin_people_payload
@@ -2478,7 +2715,7 @@ def admin_places():
     """The Places admin page (spec 055): a thin shell embedding the SAME payload
     GET /api/admin/places returns. System admins only."""
     if not current_user.is_system_admin:
-        flash("You must be authorized to view this page.", "error")
+        flash(_("You must be authorized to view this page."), "error")
         return redirect(url_for("home"))
 
     from serializers import build_admin_places_payload
@@ -2496,7 +2733,7 @@ def admin_tunes():
     """Admin tunes page - shows all tunes with counts"""
     # Check if user is system admin
     if not current_user.is_system_admin:
-        flash("You must be authorized to view this page.", "error")
+        flash(_("You must be authorized to view this page."), "error")
         return redirect(url_for("home"))
 
     return render_template("admin_tunes.html", active_tab="tunes")
@@ -2507,7 +2744,7 @@ def admin_tune_detail(tune_id):
     """Admin tune detail page - shows tunes list with specific tune modal open"""
     # Check if user is system admin
     if not current_user.is_system_admin:
-        flash("You must be authorized to view this page.", "error")
+        flash(_("You must be authorized to view this page."), "error")
         return redirect(url_for("home"))
 
     redirect_to = _resolve_tune_redirect(tune_id)
@@ -2522,7 +2759,7 @@ def admin_tune_merge():
     """Admin tune merge page - merge tune references when thesession.org merges tunes"""
     # Check if user is system admin
     if not current_user.is_system_admin:
-        flash("You must be authorized to view this page.", "error")
+        flash(_("You must be authorized to view this page."), "error")
         return redirect(url_for("home"))
 
     return render_template("admin_tune_merge.html", active_tab="merge_tunes")
@@ -2533,7 +2770,7 @@ def admin_test_links():
     """Admin test links page with sample URLs for testing"""
     # Check if user is system admin
     if not current_user.is_system_admin:
-        flash("You must be authorized to view this page.", "error")
+        flash(_("You must be authorized to view this page."), "error")
         return redirect(url_for("home"))
 
     conn = get_db_connection()
@@ -2627,7 +2864,7 @@ def admin_cache_settings():
     """Admin cache settings page - run cache process for missing tune settings"""
     # Check if user is system admin
     if not current_user.is_system_admin:
-        flash("You must be authorized to view this page.", "error")
+        flash(_("You must be authorized to view this page."), "error")
         return redirect(url_for("home"))
 
     return render_template("admin_cache_settings.html", active_tab="cache_settings")
@@ -2637,7 +2874,7 @@ def admin_cache_settings():
 def admin_email_updates():
     """Admin screen to compose and send app update emails (spec 027)."""
     if not current_user.is_system_admin:
-        flash("You must be authorized to view this page.", "error")
+        flash(_("You must be authorized to view this page."), "error")
         return redirect(url_for("home"))
 
     conn = get_db_connection()
@@ -2717,7 +2954,7 @@ def person_details(person_id=None):
     else:
         # Admin view - check if user is system admin
         if not current_user.is_system_admin:
-            flash("You must be authorized to view this page.", "error")
+            flash(_("You must be authorized to view this page."), "error")
             return redirect(url_for("home"))
 
     conn = get_db_connection()
@@ -2726,7 +2963,8 @@ def person_details(person_id=None):
             conn,
             person_id,
             is_user_profile=is_user_profile,
-            is_system_admin=current_user.is_authenticated and current_user.is_system_admin,
+            is_system_admin=current_user.is_authenticated
+            and current_user.is_system_admin,
         )
     finally:
         conn.close()
@@ -2734,7 +2972,7 @@ def person_details(person_id=None):
     if payload is None:
         from app import render_error_page
 
-        return render_error_page("Person not found.", 404)
+        return render_error_page(_("Person not found."), 404)
 
     return render_template(
         "person_details.html",
@@ -2795,6 +3033,7 @@ def _get_session_data(session_path):
         }
 
         from serializers import recurrence_readable
+
         session_data["recurrence_readable"] = recurrence_readable(session_row[14])
 
         return session_data
@@ -2829,7 +3068,7 @@ def _check_session_admin_access(session_path):
         cur.execute(
             """SELECT sp.is_admin FROM session_person sp
                WHERE sp.session_id = %s AND sp.person_id = %s""",
-            (session_id, current_user.person_id)
+            (session_id, current_user.person_id),
         )
         admin_row = cur.fetchone()
         return admin_row and admin_row[0]
@@ -2847,7 +3086,7 @@ def _render_session_admin(session_path, active_tab):
 
     # Check if user is system admin or session admin
     if not _check_session_admin_access(session_path):
-        flash("You must be authorized to view this page.", "error")
+        flash(_("You must be authorized to view this page."), "error")
         return redirect(url_for("home"))
 
     conn = get_db_connection()
@@ -2859,7 +3098,7 @@ def _render_session_admin(session_path, active_tab):
     if payload is None:
         from app import render_error_page
 
-        return render_error_page("Session not found", 404)
+        return render_error_page(_("Session not found"), 404)
 
     return render_template(
         "session_admin.html",
@@ -2906,7 +3145,7 @@ def session_admin_person(session_path, person_id):
     """Session admin person details page"""
     # Check if user is system admin or session admin
     if not _check_session_admin_access(session_path):
-        flash("You must be authorized to view this page.", "error")
+        flash(_("You must be authorized to view this page."), "error")
         return redirect(url_for("home"))
 
     conn = get_db_connection()
@@ -2918,7 +3157,7 @@ def session_admin_person(session_path, person_id):
         if not session_data:
             from app import render_error_page
 
-            return render_error_page("Session not found", 404)
+            return render_error_page(_("Session not found"), 404)
 
         session_id = session_data["session_id"]
 
@@ -2956,7 +3195,7 @@ def session_admin_person(session_path, person_id):
         if not person_row:
             from app import render_error_page
 
-            return render_error_page("Person not found in this session", 404)
+            return render_error_page(_("Person not found in this session"), 404)
 
         person_data = {
             "person_id": person_row[0],
@@ -2990,7 +3229,7 @@ def session_admin_person(session_path, person_id):
             WHERE person_id = %s 
             ORDER BY instrument
             """,
-            (person_id,)
+            (person_id,),
         )
         person_data["instruments"] = [row[0] for row in cur.fetchall()]
 
@@ -3028,15 +3267,15 @@ def session_admin_person(session_path, person_id):
             )
 
         # Check if coming from attendance tab
-        from_attendance = request.args.get('from') == 'attendance'
-        instance_id = request.args.get('instance_id')
+        from_attendance = request.args.get("from") == "attendance"
+        instance_id = request.args.get("instance_id")
         session_instance_date = None
-        
+
         if from_attendance and instance_id:
             # Get the session instance date for the breadcrumb
             cur.execute(
                 "SELECT date FROM session_instance WHERE session_instance_id = %s",
-                (instance_id,)
+                (instance_id,),
             )
             instance_row = cur.fetchone()
             if instance_row:
@@ -3056,29 +3295,31 @@ def session_admin_person(session_path, person_id):
     finally:
         conn.close()
 
+
 @login_required
 def session_admin_bulk_import(session_path):
     """Session admin bulk import page - supports both CSV input and preview steps"""
     # Check if user is system admin only (per API design)
     if not current_user.is_system_admin:
-        flash("You must be authorized to view this page.", "error")
+        flash(_("You must be authorized to view this page."), "error")
         return redirect(url_for("home"))
 
     session_data = _get_session_data(session_path)
     if not session_data:
         from app import render_error_page
-        return render_error_page("Session not found", 404)
+
+        return render_error_page(_("Session not found"), 404)
 
     # Get step from query parameter, default to 'input'
-    step = request.args.get('step', 'input')
-    if step not in ['input', 'preview']:
-        step = 'input'
+    step = request.args.get("step", "input")
+    if step not in ["input", "preview"]:
+        step = "input"
 
     return render_template(
         "session_bulk_import.html",
         session=session_data,
         session_path=session_path,
-        step=step
+        step=step,
     )
 
 
@@ -3089,6 +3330,7 @@ def my_tunes():
     drift) and mounts the Svelte view. Filtering/sorting is client-side; the
     embed is always the default sort, and the client re-sorts from URL params."""
     from serializers import build_my_tunes_payload
+
     conn = get_db_connection()
     try:
         payload = build_my_tunes_payload(conn, current_user.person_id)
@@ -3123,12 +3365,15 @@ def common_tunes(person_id):
         cur = conn.cursor()
 
         # Get the other person's details
-        cur.execute("""
+        cur.execute(
+            """
             SELECT p.person_id, p.first_name, p.last_name,
                    EXISTS(SELECT 1 FROM user_account WHERE person_id = p.person_id) as has_account
             FROM person p
             WHERE p.person_id = %s
-        """, (person_id,))
+        """,
+            (person_id,),
+        )
 
         other_person = cur.fetchone()
 
@@ -3136,26 +3381,33 @@ def common_tunes(person_id):
             cur.close()
             conn.close()
             from app import render_error_page
-            return render_error_page("Person not found", 404)
+
+            return render_error_page(_("Person not found"), 404)
 
         # Check if the other person has a user account
         if not other_person[3]:  # has_account
             cur.close()
             conn.close()
             from app import render_error_page
-            return render_error_page("This person does not have a user account", 404)
+
+            return render_error_page(_("This person does not have a user account"), 404)
 
         other_person_name = f"{other_person[1]} {other_person[2]}"
 
         # Get current user's name
-        cur.execute("""
+        cur.execute(
+            """
             SELECT first_name, last_name
             FROM person
             WHERE person_id = %s
-        """, (current_user.person_id,))
+        """,
+            (current_user.person_id,),
+        )
 
         current_person = cur.fetchone()
-        current_person_name = f"{current_person[0]} {current_person[1]}" if current_person else "You"
+        current_person_name = (
+            f"{current_person[0]} {current_person[1]}" if current_person else "You"
+        )
 
         # Where you came from, so the page can offer a real way back (spec 052 §B17).
         # It used to be `javascript:history.back()`, which has nothing to go back to
@@ -3187,7 +3439,8 @@ def common_tunes(person_id):
     except Exception as e:
         print(f"Error in common_tunes: {e}")
         from app import render_error_page
-        return render_error_page("Error loading page", 500)
+
+        return render_error_page(_("Error loading page"), 500)
 
 
 def add_session_tune_page(session_path):
@@ -3203,13 +3456,20 @@ def add_session_tune_page(session_path):
 
 # Category to entity type mapping for activity view
 ACTIVITY_CATEGORIES = {
-    'all': None,  # No filter
-    'sessions': ['session', 'session_tune', 'session_tune_alias', 'session_person'],
-    'people': ['person', 'user_account', 'person_instrument', 'person_tune',
-               'person_tune_instrument', 'session_person', 'session_instance_person'],
-    'tunes': ['tune', 'tune_setting', 'session_tune', 'session_tune_alias'],
-    'logs': ['session_instance', 'session_instance_tune', 'session_instance_person'],
-    'logins': ['login'],
+    "all": None,  # No filter
+    "sessions": ["session", "session_tune", "session_tune_alias", "session_person"],
+    "people": [
+        "person",
+        "user_account",
+        "person_instrument",
+        "person_tune",
+        "person_tune_instrument",
+        "session_person",
+        "session_instance_person",
+    ],
+    "tunes": ["tune", "tune_setting", "session_tune", "session_tune_alias"],
+    "logs": ["session_instance", "session_instance_tune", "session_instance_person"],
+    "logins": ["login"],
 }
 
 
@@ -3217,7 +3477,7 @@ ACTIVITY_CATEGORIES = {
 def admin_activity():
     """Admin activity view - unified feed of site activity"""
     if not current_user.is_system_admin:
-        flash("You must be authorized to view this page.", "error")
+        flash(_("You must be authorized to view this page."), "error")
         return redirect(url_for("home"))
 
     # Get filter parameters
@@ -3236,14 +3496,18 @@ def admin_activity():
         cur = conn.cursor()
 
         # Special handling for Active Sessions view
-        if activity_type_filter == 'ACTIVE_SESSIONS':
+        if activity_type_filter == "ACTIVE_SESSIONS":
             # Query active sessions from user_session table
             where_conditions = ["us.expires_at > %s"]
             params = [now_utc()]
 
             if user_filter:
-                where_conditions.append("(u.username ILIKE %s OR p.first_name ILIKE %s OR p.last_name ILIKE %s)")
-                params.extend([f"%{user_filter}%", f"%{user_filter}%", f"%{user_filter}%"])
+                where_conditions.append(
+                    "(u.username ILIKE %s OR p.first_name ILIKE %s OR p.last_name ILIKE %s)"
+                )
+                params.extend(
+                    [f"%{user_filter}%", f"%{user_filter}%", f"%{user_filter}%"]
+                )
 
             where_clause = " AND ".join(where_conditions)
 
@@ -3281,13 +3545,21 @@ def admin_activity():
 
             activity_items = []
             for row in cur.fetchall():
-                (user_id, username, first_name, last_name, created_date, last_accessed, ip_address) = row
+                (
+                    user_id,
+                    username,
+                    first_name,
+                    last_name,
+                    created_date,
+                    last_accessed,
+                    ip_address,
+                ) = row
 
                 # Calculate duration
                 login_duration = now_utc() - created_date
                 days = login_duration.days
                 hours, remainder = divmod(login_duration.seconds, 3600)
-                minutes, _ = divmod(remainder, 60)
+                minutes, _secs = divmod(remainder, 60)
 
                 if days > 0:
                     duration_str = f"{days}d {hours}h {minutes}m"
@@ -3296,19 +3568,21 @@ def admin_activity():
                 else:
                     duration_str = f"{minutes}m"
 
-                activity_items.append({
-                    'activity_date': created_date,
-                    'entity_type': 'active_session',
-                    'entity_id': user_id,
-                    'activity_type': 'ACTIVE',
-                    'user_id': user_id,
-                    'entity_name': f"{first_name} {last_name}",
-                    'entity_path': None,
-                    'username': username,
-                    'duration': duration_str,
-                    'ip_address': ip_address or 'Unknown',
-                    'last_accessed': last_accessed,
-                })
+                activity_items.append(
+                    {
+                        "activity_date": created_date,
+                        "entity_type": "active_session",
+                        "entity_id": user_id,
+                        "activity_type": "ACTIVE",
+                        "user_id": user_id,
+                        "entity_name": f"{first_name} {last_name}",
+                        "entity_path": None,
+                        "username": username,
+                        "duration": duration_str,
+                        "ip_address": ip_address or "Unknown",
+                        "last_accessed": last_accessed,
+                    }
+                )
         else:
             # Standard activity query
             # Build WHERE conditions
@@ -3318,7 +3592,7 @@ def admin_activity():
             # Category filter
             if category in ACTIVITY_CATEGORIES and ACTIVITY_CATEGORIES[category]:
                 entity_types = ACTIVITY_CATEGORIES[category]
-                placeholders = ','.join(['%s'] * len(entity_types))
+                placeholders = ",".join(["%s"] * len(entity_types))
                 where_conditions.append(f"ra.entity_type IN ({placeholders})")
                 params.extend(entity_types)
 
@@ -3383,24 +3657,30 @@ def admin_activity():
                     username,
                 ) = row
 
-                activity_items.append({
-                    'activity_date': activity_date,
-                    'entity_type': entity_type,
-                    'entity_id': entity_id,
-                    'activity_type': activity_type,
-                    'user_id': user_id,
-                    'entity_name': entity_name,
-                    'entity_path': entity_path,
-                    'username': username or 'System',
-                })
+                activity_items.append(
+                    {
+                        "activity_date": activity_date,
+                        "entity_type": entity_type,
+                        "entity_id": entity_id,
+                        "activity_type": activity_type,
+                        "user_id": user_id,
+                        "entity_name": entity_name,
+                        "entity_path": entity_path,
+                        "username": username or "System",
+                    }
+                )
 
         # Get list of sessions for filter dropdown
-        cur.execute("""
+        cur.execute(
+            """
             SELECT session_id, name, path
             FROM session
             ORDER BY name
-        """)
-        sessions = [{'session_id': r[0], 'name': r[1], 'path': r[2]} for r in cur.fetchall()]
+        """
+        )
+        sessions = [
+            {"session_id": r[0], "name": r[1], "path": r[2]} for r in cur.fetchall()
+        ]
 
         # Pagination calculations
         total_pages = (total_count + per_page - 1) // per_page
@@ -3463,10 +3743,24 @@ def live_logging_screen(session_instance_id):
         )
         row = cur.fetchone()
         if not row:
-            return render_template("error.html", error_message="Session instance not found"), 404
-        (session_path, session_id, instance_date, track_attendance,
-         track_set_starters, instance_active, instance_name,
-         instance_start, instance_end, session_type) = row
+            return (
+                render_template(
+                    "error.html", error_message=_("Session instance not found")
+                ),
+                404,
+            )
+        (
+            session_path,
+            session_id,
+            instance_date,
+            track_attendance,
+            track_set_starters,
+            instance_active,
+            instance_name,
+            instance_start,
+            instance_end,
+            session_type,
+        ) = row
 
         # Who may upload/timestamp this session's audio (schema/053). Resolved here so
         # the header can decide whether the Recordings row exists at first paint; every
@@ -3526,7 +3820,9 @@ def live_logging_screen(session_instance_id):
             "person_id": current_user.person_id,
             "first_name": current_user.first_name,
             "last_name": current_user.last_name,
-        } if can_edit else None,
+        }
+        if can_edit
+        else None,
     )
 
 
@@ -3540,7 +3836,7 @@ def admin_recordings():
     serializers.build_admin_recordings_payload for why.
     """
     if not current_user.is_system_admin:
-        flash("You must be authorized to view this page.", "error")
+        flash(_("You must be authorized to view this page."), "error")
         return redirect(url_for("home"))
 
     from recording import check_configured
@@ -3557,7 +3853,9 @@ def admin_recordings():
         # has since stopped running is exactly the sort of thing being backfilled.
         cur = conn.cursor()
         cur.execute("SELECT session_id, name, path FROM session ORDER BY name")
-        sessions = [{"session_id": r[0], "name": r[1], "path": r[2]} for r in cur.fetchall()]
+        sessions = [
+            {"session_id": r[0], "name": r[1], "path": r[2]} for r in cur.fetchall()
+        ]
     finally:
         conn.close()
 
@@ -3598,10 +3896,12 @@ def segment_recording(recording_id):
         )
         found = cur.fetchone()
         if found and not can_manage_recordings(cur, found[0]):
-            flash("You must be authorized to view this page.", "error")
+            flash(_("You must be authorized to view this page."), "error")
             return redirect(url_for("home"))
 
-        payload = build_recording_segmenter_payload(conn, recording_id) if found else None
+        payload = (
+            build_recording_segmenter_payload(conn, recording_id) if found else None
+        )
     finally:
         conn.close()
 
@@ -3611,13 +3911,17 @@ def segment_recording(recording_id):
     def _back():
         if current_user.is_system_admin:
             return redirect(url_for("admin_recordings"))
-        instance_id = payload["session_instance"]["session_instance_id"] if payload else None
+        instance_id = (
+            payload["session_instance"]["session_instance_id"] if payload else None
+        )
         if instance_id:
-            return redirect(url_for("live_logging_screen", session_instance_id=instance_id))
+            return redirect(
+                url_for("live_logging_screen", session_instance_id=instance_id)
+            )
         return redirect(url_for("home"))
 
     if payload is None:
-        flash("That recording doesn't exist.", "error")
+        flash(_("That recording doesn't exist."), "error")
         return _back()
 
     # Ingest fills in the waveform and the true duration minutes after the row
@@ -3628,13 +3932,24 @@ def segment_recording(recording_id):
     status = payload["recording"].get("status")
     if status and status != "ready":
         if status == "failed":
+            detail = payload["recording"].get("status_detail") or _(
+                "no detail recorded"
+            )
             flash(
-                f"That recording could not be processed ({payload['recording'].get('status_detail') or 'no detail recorded'}). "
-                "Retry it from the list.",
+                _(
+                    "That recording could not be processed (%(detail)s). "
+                    "Retry it from the list.",
+                    detail=detail,
+                ),
                 "error",
             )
         else:
-            flash("That recording is still being processed — its waveform isn't ready yet.", "error")
+            flash(
+                _(
+                    "That recording is still being processed — its waveform isn't ready yet."
+                ),
+                "error",
+            )
         return redirect(url_for("admin_recordings"))
 
     return render_template("recording_segmenter.html", payload=payload)

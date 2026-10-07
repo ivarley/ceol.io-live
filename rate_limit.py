@@ -21,6 +21,7 @@ Postgres table on the hot path of every search keystroke, which is a worse trade
 for the problem.
 """
 
+# i18n-converted  (spec 057: every message a person reads goes through _())
 import os
 import threading
 import time
@@ -28,6 +29,7 @@ from collections import deque
 from functools import wraps
 
 from flask import jsonify, request
+from flask_babel import gettext as _
 from flask_login import current_user
 
 # (scope, key) -> deque[float] of the request times still inside the window.
@@ -145,7 +147,9 @@ def rate_limited(limit: int, per: float, scope: str):
                 response = jsonify(
                     {
                         "success": False,
-                        "error": "Too many requests to thesession.org. Try again shortly.",
+                        "error": _(
+                            "Too many requests to thesession.org. Try again shortly."
+                        ),
                         "code": "rate_limited",
                     }
                 )

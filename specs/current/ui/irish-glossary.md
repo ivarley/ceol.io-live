@@ -135,5 +135,18 @@ product owner to agree or change.
 | connecting / reconnecting | ag ceangal / ag athcheangal | iOS live status. |
 | sort / sort and filter | sórtáil / sórtáil agus scag | |
 | every other week | gach re seachtain | Schedule summaries. |
+| ID | aitheantas | Server messages. |
+| redirect | atreorú / atreoraíonn | |
+| cache | taisce / cuir sa taisce | |
+| token | comhartha | |
+| request | iarratas | |
+| field | réimse | |
+| parameter | paraiméadar | Developer-facing messages. |
+| deactivated / reactivated | díghníomhachtaithe / athghníomhachtaíodh | |
+| parent place | máthairáit | |
+| metro | cathair | |
+| recording segment | mír | Segmenter. |
+| timestamp | stampa ama | |
+| Irish Music Sessions (old site name) | Seisiúin Cheoil Ghaelaigh | In two old messages; maybe should say "Ceol". |
 | the clock | 24-hour ("19:00") | Irish pages show times on the 24-hour clock. |
 
