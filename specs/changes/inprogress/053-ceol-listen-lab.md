@@ -2815,6 +2815,17 @@ segmented blind; item 3 the follower). Open, in rough order:
   hiding the repertoire: names right with the repertoire, with the whole corpus
   and no prior, and with tunebook tiers, the threshold and penalty swept on
   the labels. It will flatter a session that plays many obscure tunes.
+- **A second opinion over the whole tune** (to do, 2026-10-07; see the entry
+  of that name above). After drafting, look each drafted tune up again over
+  its whole stretch (three trackers, the whole corpus, the aligner on a
+  300-tune shortlist, as the bench does), with the neighbouring tunes' type as
+  a preference ("contiguous music between two polkas is very unlikely to be a
+  reel"), and change the name only where the second opinion disagrees
+  clearly. One case so far (night 132, Sord Cholmcille: first by 0.540 to
+  0.532 over its labelled span, 25th over its first 30 s). Measure on every
+  labelled night (nine, 136, 134, 132): names fixed against names broken. The
+  second opinion agreeing or not is also a candidate feature for the
+  confidence model (version 2, refitted with 132 and 134).
 - **Too short to be a tune:** a minimum duration before a detection counts,
   the player's rule for melodic noodling, which tune-ness leaves at 50-70%
   of its chunks.
