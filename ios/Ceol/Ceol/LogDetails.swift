@@ -37,11 +37,11 @@ struct LogDetailsSheet: View {
                         Text(whenLabel(meta)).foregroundStyle(CeolTokens.textColor)
                     }
                     row("Name", meta["instance_name"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 } ?? unnamed) {
-                        Button(meta["instance_name"]?.stringValue?.isEmpty == false ? "Rename" : "Name it") { editingName = true }
+                        Button(meta["instance_name"]?.stringValue?.isEmpty == false ? tr("Rename") : tr("Name it")) { editingName = true }
                             .accessibilityIdentifier("details.name")
                     }
                     row("Tunes", tuneSummary) { EmptyView() }
-                    row("Status", complete ? "✓ Marked complete" : "Still logging") {
+                    row("Status", complete ? tr("✓ Marked complete") : tr("Still logging")) {
                         if complete {
                             Button("Re-open") { confirmReopen = true }.accessibilityIdentifier("details.reopen")
                         } else {
@@ -63,7 +63,7 @@ struct LogDetailsSheet: View {
                         .accessibilityIdentifier("details.notes")
                     if notes != (meta["notes"]?.stringValue ?? "") {
                         HStack {
-                            Button(notesSaving ? "Saving…" : "Save") {
+                            Button(notesSaving ? tr("Saving…") : tr("Save")) {
                                 notesSaving = true
                                 Task {
                                     let r = await model.metaOp("edit_notes", ["notes": .string(notes)], label: "notes")
@@ -89,7 +89,7 @@ struct LogDetailsSheet: View {
                             app.openSession(path: path, name: model.night?["session_name"]?.stringValue ?? "")
                         } label: {
                             HStack {
-                                Text(model.night?["session_name"]?.stringValue ?? "The session").foregroundStyle(CeolTokens.textColor)
+                                Text(model.night?["session_name"]?.stringValue ?? tr("The session")).foregroundStyle(CeolTokens.textColor)
                                 Spacer()
                                 Image(systemName: "chevron.right").foregroundStyle(CeolTokens.textMuted)
                             }
@@ -123,23 +123,23 @@ struct LogDetailsSheet: View {
 
     /// A weekly session's unnamed night is "the usual"; at a festival there is no usual.
     private var unnamed: String {
-        model.night?["session_type"]?.stringValue == "festival" ? "Unnamed" : "The usual"
+        model.night?["session_type"]?.stringValue == "festival" ? tr("Unnamed") : tr("The usual")
     }
 
     private var tuneSummary: String {
         guard let log = model.log else { return "" }
         let sets = LogState.segmentByBreaks(log.ordered)
         let n = sets.reduce(0) { $0 + $1.tunes.count }
-        if n == 0 { return "None yet" }
-        return "\(n) tune\(n == 1 ? "" : "s") in \(sets.count) set\(sets.count == 1 ? "" : "s")"
+        if n == 0 { return tr("None yet") }
+        return tr("\(liveTunes(n)) in \(liveSets(sets.count))")
     }
 
     private func whenLabel(_ meta: [String: JSONValue]) -> String {
-        let when = HomeRules.instanceTimeLabel(start: meta["start_time"]?.stringValue, end: meta["end_time"]?.stringValue)
+        let when = liveTimeLabel(start: meta["start_time"]?.stringValue, end: meta["end_time"]?.stringValue)
         return (meta["session_date"]?.stringValue ?? "—") + (when.isEmpty ? "" : " · \(when)")
     }
 
-    private func row(_ key: String, _ value: String, @ViewBuilder action: () -> some View) -> some View {
+    private func row(_ key: LocalizedStringKey, _ value: String, @ViewBuilder action: () -> some View) -> some View {
         HStack {
             Text(key).foregroundStyle(CeolTokens.textMuted).frame(width: 70, alignment: .leading)
             Text(value).foregroundStyle(CeolTokens.textColor).lineLimit(2)
@@ -192,7 +192,7 @@ struct DateEditor: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(saving ? "Saving…" : confirm ? "Save anyway" : "Save") { Task { await save() } }
+                    Button(saving ? tr("Saving…") : confirm ? tr("Save anyway") : tr("Save")) { Task { await save() } }
                         .disabled(saving)
                         .accessibilityIdentifier("date.save")
                 }
@@ -281,7 +281,7 @@ struct NameEditor: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(saving ? "Saving…" : "Save") {
+                    Button(saving ? tr("Saving…") : tr("Save")) {
                         saving = true
                         Task {
                             let next = name.trimmingCharacters(in: .whitespaces)

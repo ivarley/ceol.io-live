@@ -22,6 +22,10 @@ final class AppModel {
 
     private(set) var phase: Phase = .launching
     private(set) var user: User?
+    /// The interface language, "en" or "ga" (spec 057): the profile's, remembered across
+    /// launches. The app root's locale follows it.
+    private(set) var language: String = AppLanguage.code
+    private var started = false
     /// The tab on screen; a screen can move you to another (Home's "See all" -> Tunes).
     var tab: AppTab = .home
     /// The Sessions tab's stack. Home opens sessions and nights here, in the Sessions
@@ -153,6 +157,9 @@ final class AppModel {
     // MARK: - Launch
 
     func start() async {
+        // Once per launch, whatever re-runs the view's task.
+        guard !started else { return }
+        started = true
         #if DEBUG
             // Test hooks (UI tests, manual runs): -CeolResetSession YES starts signed out
             // (Keychain items survive a reinstall on the simulator); -CeolOpenURL <url>
@@ -196,9 +203,16 @@ final class AppModel {
 
     private func enter(_ user: User, next: SignedIn.Next?) {
         self.user = user
+        setLanguage(user.language?.rawValue)
         phase = user.needsProfileSetup || next == .setupProfile ? .profileSetup : .signedIn
         // a recording's upload left half-way when the app last went away
         recordings.resume(app: self)
+    }
+
+    /// The interface language changed (sign-in, or the Me screen's setting).
+    func setLanguage(_ code: String?) {
+        AppLanguage.set(code)
+        language = AppLanguage.code
     }
 
     /// Profile setup saved: reload who we are and carry on.
@@ -227,14 +241,14 @@ final class AppModel {
             linkError = Self.message(for: failure)
         } catch {
             if phase != .signedIn { phase = .signedOut }
-            linkError = "Couldn't reach Ceol to open that link. Check your connection and tap it again."
+            linkError = tr("Couldn't reach Ceol to open that link. Check your connection and tap it again.")
         }
     }
 
     static func message(for failure: AuthFailure) -> String {
         switch failure.code {
         case "invalid_token":
-            return "That link has expired or was already used. Enter your email below and we'll send a new one."
+            return tr("That link has expired or was already used. Enter your email below and we'll send a new one.")
         default:
             return failure.message
         }
@@ -253,7 +267,7 @@ final class AppModel {
     func accountDeleted() {
         NightStore.clearAll()
         user = nil
-        notice = "Your account has been deleted."
+        notice = tr("Your account has been deleted.")
         phase = .signedOut
     }
 }

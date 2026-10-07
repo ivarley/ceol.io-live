@@ -18,6 +18,9 @@
 // The audio arrives on a real-time thread, so AudioCapture is nonisolated: a tap block
 // made inside a main-actor type would be main-actor isolated and trap off the main
 // thread under Swift 6.
+//
+// i18n-converted (spec 057): the messages we set are in the app's language; a refusal
+// the listening service sends is shown as it comes. The meter log is not translated.
 
 @preconcurrency import AVFoundation
 import CeolLogic
@@ -89,14 +92,14 @@ final class NightRecorder {
     /// Asks for the microphone, starts the engine, the file and the stream.
     func start() async {
         guard await AVAudioApplication.requestRecordPermission() else {
-            error = "Ceol needs the microphone to record. Allow it in Settings."
+            error = tr("Ceol needs the microphone to record. Allow it in Settings.")
             stopped = true
             return
         }
         do {
             try capture.start()
         } catch {
-            self.error = "Couldn't start recording: \(error.localizedDescription)"
+            self.error = tr("Couldn't start recording: \(error.localizedDescription)")
             stopped = true
             return
         }
@@ -277,7 +280,7 @@ nonisolated final class AudioCapture: @unchecked Sendable {
         let input = engine.inputNode
         let inFormat = input.outputFormat(forBus: 0)
         guard inFormat.sampleRate > 0, let conv = AVAudioConverter(from: inFormat, to: outFormat) else {
-            throw NSError(domain: "Ceol", code: 1, userInfo: [NSLocalizedDescriptionKey: "No microphone input"])
+            throw NSError(domain: "Ceol", code: 1, userInfo: [NSLocalizedDescriptionKey: tr("No microphone input")])
         }
         converter = conv
         input.installTap(onBus: 0, bufferSize: 4096, format: inFormat) { [weak self] buffer, _ in
@@ -417,7 +420,7 @@ nonisolated final class ListenLink: @unchecked Sendable {
             default: return nil
             }
         } catch {
-            if ws.closeCode.rawValue == 4401 { return "Not allowed to listen" }
+            if ws.closeCode.rawValue == 4401 { return tr("Not allowed to listen") }
             return nil
         }
         onLink(.live)

@@ -123,6 +123,8 @@ ios-test: ## iOS: CeolKit tests on the Mac (no simulator), then the app's tests 
 	cd ios/CeolKit && swift test
 	xcodebuild -project ios/Ceol/Ceol.xcodeproj -scheme Ceol -destination '$(IOS_SIM)' \
 		-derivedDataPath $(IOS_DERIVED) -skipPackagePluginValidation -only-testing:CeolTests test
+	# Spec 057: every string the build extracts has Irish (in the catalog or ios/Ceol/i18n-ga).
+	./venv/bin/python scripts/ios_strings.py missing --derived $(IOS_DERIVED)
 
 ios-build: ## iOS: build the app for the simulator
 	xcodebuild -project ios/Ceol/Ceol.xcodeproj -scheme Ceol -destination 'generic/platform=iOS Simulator' \
@@ -142,6 +144,10 @@ ios-ui-test: ## iOS: sign-in UI tests in the simulator, against a local server (
 	TEST_RUNNER_CEOL_TEST_DELETE_TOKEN=$$DELETE_TOKEN TEST_RUNNER_CEOL_TEST_DELETE_EMAIL=ios-delete-$$$$@example.com \
 	xcodebuild -project ios/Ceol/Ceol.xcodeproj -scheme Ceol -destination '$(IOS_SIM)' \
 		-derivedDataPath $(IOS_DERIVED) -skipPackagePluginValidation -only-testing:CeolUITests test
+
+ios-strings: ios-build ## iOS: sync the String Catalog from a build, then apply the Irish in ios/Ceol/i18n-ga (spec 057)
+	./venv/bin/python scripts/ios_strings.py sync --derived $(IOS_DERIVED)
+	./venv/bin/python scripts/ios_strings.py apply
 
 ios-fixtures: ## iOS: re-capture the real API responses CeolKit's decoding tests read (seeded local DB)
 	./venv/bin/python scripts/capture_native_fixtures.py

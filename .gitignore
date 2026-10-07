@@ -177,6 +177,8 @@ ios/CeolKit/.swiftpm/
 # iOS build output from `make ios-test` / `make ios-build`
 ios/.derived/
 ios/.derived-release/
+# Spec 057: per-agent build folders for the String Catalog work.
+ios/.derived-i18n-*/
 # a debug build for a phone, installed with devicectl
 ios/.derived-device/
 

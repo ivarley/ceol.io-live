@@ -56,7 +56,7 @@ struct SessionsView: View {
         NavigationStack(path: $model.sessionsPath) {
             Loaded(state: state, retry: load) { payload in list(payload) }
                 .background(CeolTokens.bgColor)
-                .ceolRootBar("Sessions", sharePath: "/sessions")
+                .ceolRootBar(tr("Sessions"), sharePath: "/sessions")
                 .modifier(SessionDestinations())
                 .sheet(isPresented: $filtering) {
                     SessionsFilterSheet(
@@ -101,11 +101,11 @@ struct SessionsView: View {
         List {
             VStack(alignment: .leading, spacing: 8) {
                 SearchRow(
-                    text: $search, prompt: "Search by name or location…", fieldID: "sessions.search",
-                    onAdd: { adding = true }, addID: "sessions.add", addLabel: "Add a session",
+                    text: $search, prompt: tr("Search by name or location…"), fieldID: "sessions.search",
+                    onAdd: { adding = true }, addID: "sessions.add", addLabel: tr("Add a session"),
                     onFilter: { filtering = true },
                     filterCount: (filter != .mine ? 1 : 0) + (sort != .name ? 1 : 0) + (country.isEmpty ? 0 : 1))
-                Text("\(shown.count) \(filter.countNoun)").font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
+                Text(SessionsL10n.sessionsCount(shown.count, filter)).font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
             }
             .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 8, trailing: 16))
             .listRowBackground(CeolTokens.bgColor)
@@ -124,16 +124,16 @@ struct SessionsView: View {
                             Button {
                                 // A festival row gathers its years' nights: each says whose it is.
                                 model.sessionsPath.append(.session(path: night.path ?? s.path, name: s.name))
-                                model.sessionsPath.append(.night(id: night.sessionInstanceId, title: "\(s.name) · Tonight"))
+                                model.sessionsPath.append(.night(id: night.sessionInstanceId, title: tr("\(s.name) · Tonight")))
                             } label: {
-                                Pill(text: "On Now", style: .filled, color: CeolTokens.primaryFill)
+                                Pill(text: tr("On Now"), style: .filled, color: CeolTokens.primaryFill)
                             }
                             .buttonStyle(.borderless)
                             .accessibilityLabel("\(s.name) is on now: open tonight's log")
                         }
-                        Text(SessionsRules.locationLabel(
+                        Text(SessionsL10n.location(SessionsRules.locationLabel(
                             city: s.place?.name, state: s.place?.area, country: s.place?.country,
-                            viewerCountry: payload.viewerCountry))
+                            viewerCountry: payload.viewerCountry)))
                             .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted).lineLimit(1)
                     }
                 }
@@ -171,7 +171,17 @@ struct SessionDetailView: View {
     let path: String
     let name: String
 
-    enum Tab: String, CaseIterable { case tunes = "Tunes", logs = "Logs", people = "People" }
+    enum Tab: String, CaseIterable {
+        case tunes = "Tunes", logs = "Logs", people = "People"
+
+        var label: String {
+            switch self {
+            case .tunes: tr("Tunes")
+            case .logs: tr("Logs")
+            case .people: tr("People")
+            }
+        }
+    }
 
     @State private var state: LoadState<SessionDetailPayload> = .loading
     @State private var tab: Tab = .tunes
@@ -263,13 +273,13 @@ struct SessionDetailView: View {
             }
             .sheet(isPresented: $filteringLogs) {
                 SessionTabFilterSheet(
-                    label: "Show",
-                    options: SessionPage.LogView.options(signedIn: state.value?.permissions.isLoggedIn == true).map { ($0, $0.label) },
+                    label: tr("Show"),
+                    options: SessionPage.LogView.options(signedIn: state.value?.permissions.isLoggedIn == true).map { ($0, SessionsL10n.label($0)) },
                     selection: $logView, initial: .logged, oneLine: true)
             }
             .sheet(isPresented: $filteringPeople) {
                 SessionTabFilterSheet(
-                    label: "Show", options: SessionPage.PeopleView.allCases.map { ($0, $0.label) },
+                    label: tr("Show"), options: SessionPage.PeopleView.allCases.map { ($0, SessionsL10n.label($0)) },
                     selection: $peopleView, initial: .members)
             }
             .sheet(isPresented: $addingTune) {
@@ -305,7 +315,7 @@ struct SessionDetailView: View {
             .sheet(isPresented: $addingNight) {
                 AddNightView(path: path, usualVenue: state.value?.session.locationName) { id, date in
                     logs = .loading
-                    newNight = NewNight(id: id, title: "\(name) · \(HomeRules.shortDate(date, currentYear: nil))")
+                    newNight = NewNight(id: id, title: "\(name) · \(SessionsL10n.shortDate(date))")
                     Task { await load() }
                 }
             }
@@ -394,7 +404,7 @@ struct SessionDetailView: View {
             guard chosenTune == t else { return }
             var positions: [Int: [String]] = [:]
             for night in r.instances {
-                positions[night.sessionInstanceId] = night.positions.map { "Set \($0.setNumber), tune \($0.positionInSet)" }
+                positions[night.sessionInstanceId] = night.positions.map { tr("Set \($0.setNumber), tune \($0.positionInSet)") }
             }
             tuneNights = .loaded(TuneNights(ids: Set(r.sessionInstanceIds), positions: positions))
         } catch {
@@ -451,12 +461,12 @@ struct SessionDetailView: View {
                 }
                 // The one thing you came for mid-session: tonight's log.
                 ForEach(d.activeInstances, id: \.sessionInstanceId) { night in
-                    NavigationLink(value: Route.night(id: night.sessionInstanceId, title: "\(d.session.name) · Tonight")) {
+                    NavigationLink(value: Route.night(id: night.sessionInstanceId, title: tr("\(d.session.name) · Tonight"))) {
                         HStack(spacing: 12) {
                             Image(systemName: "dot.radiowaves.left.and.right").foregroundStyle(CeolTokens.primary)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("On now").font(.ceol(size: 17, weight: .semibold)).foregroundStyle(CeolTokens.textColor)
-                                Text(HomeRules.instanceTimeLabel(start: night.startTime, end: night.endTime))
+                                Text(SessionsL10n.timeRange(start: night.startTime, end: night.endTime))
                                     .font(.ceol(size: 14)).foregroundStyle(CeolTokens.textMuted)
                             }
                             Spacer()
@@ -475,7 +485,7 @@ struct SessionDetailView: View {
                 }
                 .padding(.horizontal, 20)
                 VStack(spacing: 0) {
-                    UnderlineTabs(items: tabs.map { ($0, festival && $0 == .logs ? "Sessions" : $0.rawValue, count($0, d)) },
+                    UnderlineTabs(items: tabs.map { ($0, festival && $0 == .logs ? tr("Sessions") : $0.label, count($0, d)) },
                                   selection: $tab)
                     switch tab {
                     case .tunes: tunes(d)
@@ -509,9 +519,10 @@ struct SessionDetailView: View {
         let s = d.session
         VStack(alignment: .leading, spacing: 10) {
             if let relationship = d.permissions.relationship {
+                let role = d.permissions.isSessionAdmin ? SessionsL10n.adminRole : relationship == "visitor" ? tr("Visitor") : tr("Member")
                 Button { editingRole = true } label: {
                     Pill(
-                        text: d.permissions.isSessionAdmin ? "Admin" : relationship == "visitor" ? "Visitor" : "Member",
+                        text: role,
                         style: .filled,
                         color: relationship == "visitor" && !d.permissions.isSessionAdmin
                             ? Color(red: 0.55, green: 0.45, blue: 0.15) : CeolTokens.primaryFill,
@@ -519,10 +530,10 @@ struct SessionDetailView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("session.role")
-                .accessibilityLabel("You're \(d.permissions.isSessionAdmin ? "Admin" : relationship == "visitor" ? "Visitor" : "Member")")
+                .accessibilityLabel("You're \(role)")
             }
             if let venue = s.locationName, !venue.isEmpty {
-                labelled("Location", venue)
+                labelled(tr("Location:"), venue)
             }
             // The session's town (spec 055): its name, area and country.
             let place = [s.locationStreet, s.place?.name, s.place?.area, s.place?.country]
@@ -538,11 +549,11 @@ struct SessionDetailView: View {
                 .font(.ceol(size: 16))
             }
             if let schedule = s.recurrenceReadable, !schedule.isEmpty {
-                labelled("Schedule", schedule)
+                labelled(tr("Schedule:"), schedule)
             }
             if let about = s.comments, !about.isEmpty {
                 VStack(alignment: .leading, spacing: 2) {
-                    labelled("About this session", about).lineLimit(aboutOpen ? nil : 2)
+                    labelled(tr("About this session:"), about).lineLimit(aboutOpen ? nil : 2)
                     Button(aboutOpen ? "less" : "more …") { aboutOpen.toggle() }
                         .font(.ceol(size: 16)).foregroundStyle(CeolTokens.primary)
                         .frame(maxWidth: .infinity, alignment: .trailing)
@@ -559,7 +570,7 @@ struct SessionDetailView: View {
     }
 
     private func labelled(_ label: String, _ value: String) -> Text {
-        (Text("\(label): ").font(.ceol(size: 16, weight: .semibold)) + Text(value).font(.ceol(size: 16)))
+        (Text(verbatim: "\(label) ").font(.ceol(size: 16, weight: .semibold)) + Text(value).font(.ceol(size: 16)))
             .foregroundStyle(CeolTokens.textColor)
     }
 
@@ -574,12 +585,12 @@ struct SessionDetailView: View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 8) {
                 SearchRow(
-                    text: $tuneSearch, prompt: "Search by name or notes", fieldID: "session.tunes.search",
+                    text: $tuneSearch, prompt: tr("Search by name or notes"), fieldID: "session.tunes.search",
                     onAdd: d.permissions.isLoggedIn ? {
                         searchingTunes = false
                         addingTune = true
                     } : nil,
-                    addID: "session.addTune", addLabel: "Add a tune to this session",
+                    addID: "session.addTune", addLabel: tr("Add a tune to this session"),
                     focused: $searchingTunes,
                     // The keyboard would otherwise stay up over the drawer.
                     onFilter: {
@@ -638,6 +649,15 @@ struct SessionDetailView: View {
         }
     }
 
+    /// The People tab with no one under the filter.
+    private var noPeople: String {
+        switch peopleView {
+        case .members: tr("No members.")
+        case .visitors: tr("No visitors.")
+        case .archived: tr("No archived.")
+        }
+    }
+
     /// Your status for a tune, under the filter's instrument; nil until your tunebook loads.
     private var myStatus: ((Int) -> String)? {
         guard tuneFilters.myStatus != .off, let tunebook else { return nil }
@@ -646,10 +666,10 @@ struct SessionDetailView: View {
     }
 
     private func tunesCountText(shown: Int, loaded: Int, total: Int) -> String {
-        if tuneFilters.myStatus != .off && tunebook == nil && !tunebookFailed { return "Loading your tunebook…" }
-        if remainingFailed { return "Showing \(shown) of the first \(loaded) of \(total) tunes" }
-        if allTunes == nil && loaded < total { return "Loading all tunes… (\(loaded)/\(total))" }
-        return SessionPage.resultsCountLabel(shown, loaded)
+        if tuneFilters.myStatus != .off && tunebook == nil && !tunebookFailed { return tr("Loading your tunebook…") }
+        if remainingFailed { return tr("Showing \(shown) of the first \(loaded) of \(total) tunes") }
+        if allTunes == nil && loaded < total { return tr("Loading all tunes… (\(loaded)/\(total))") }
+        return SessionsL10n.resultsCount(shown, loaded)
     }
 
     @ViewBuilder private func logsSection(_ d: SessionDetailPayload) -> some View {
@@ -669,7 +689,9 @@ struct SessionDetailView: View {
                 logsSearch(d)
                 Hairline()
                 if years.isEmpty && (chosenTune == nil || tuneNights?.value != nil) {
-                    Text(chosenTune == nil && logView != .all ? "No \(logView.rawValue) nights." : "No nights found.")
+                    Text(chosenTune == nil && logView != .all
+                         ? (logView == .attended ? tr("No attended nights.") : tr("No logged nights."))
+                         : tr("No nights found."))
                         .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
                         .frame(maxWidth: .infinity)
                         .padding(24)
@@ -678,8 +700,9 @@ struct SessionDetailView: View {
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
                         Text(group.title).font(.ceol(size: festival ? 20 : 24, weight: .semibold, relativeTo: .title2))
                             .foregroundStyle(CeolTokens.textColor)
-                        let noun = festival ? "session" : "log"
-                        Text(group.nights.count == 1 ? "1 \(noun)" : "\(group.nights.count) \(noun)s").font(.ceol(size: 16))
+                        let n = group.nights.count
+                        Text(festival ? (n == 1 ? tr("1 session") : tr("\(n) sessions"))
+                                      : (n == 1 ? tr("1 log") : tr("\(n) logs"))).font(.ceol(size: 16))
                             .foregroundStyle(CeolTokens.textMuted)
                     }
                     .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 8)
@@ -688,21 +711,21 @@ struct SessionDetailView: View {
                         // At a festival a night is named by its session (the room, the leader),
                         // and its day is the group's header; elsewhere the date names it.
                         let title = festival
-                            ? (night.locationOverride ?? d.session.locationName ?? "Session")
+                            ? (night.locationOverride ?? d.session.locationName ?? tr("Session"))
                             : longDay(night.date)
                         NavigationLink(value: Route.night(
                             id: night.sessionInstanceId,
-                            title: festival ? title : "\(d.session.name) · \(HomeRules.shortDate(night.date, currentYear: nil))")) {
+                            title: festival ? title : "\(d.session.name) · \(SessionsL10n.shortDate(night.date))")) {
                             HStack(spacing: 14) {
                                 if !festival {
-                                    DateBlock(weekday: HomeRules.dayOfWeek(night.date), day: HomeRules.dayOfMonth(night.date),
+                                    DateBlock(weekday: SessionsL10n.weekdayShort(night.date), day: HomeRules.dayOfMonth(night.date),
                                               color: CeolTokens.textMuted)
                                 }
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(title).font(.ceol(size: 18, weight: .medium))
                                         .foregroundStyle(CeolTokens.primary)
-                                    Text([HomeRules.instanceTimeLabel(start: night.startTime, end: night.endTime),
-                                          night.tuneCount == 1 ? "1 tune logged" : "\(night.tuneCount) tunes logged"]
+                                    Text([SessionsL10n.timeRange(start: night.startTime, end: night.endTime),
+                                          night.tuneCount == 1 ? tr("1 tune logged") : tr("\(night.tuneCount) tunes logged")]
                                         .filter { !$0.isEmpty }.joined(separator: " · "))
                                         .font(.ceol(size: 14)).foregroundStyle(CeolTokens.textMuted)
                                     // Searched for a tune: where it came round that night.
@@ -752,9 +775,9 @@ struct SessionDetailView: View {
         let suggestions = chosenTune == nil ? SessionPage.matchLoggedTunes(loggedTunes ?? [], query: logSearch) : []
         VStack(alignment: .leading, spacing: 8) {
             SearchRow(
-                text: $logSearch, prompt: "Search for a tune", fieldID: "logs.search",
+                text: $logSearch, prompt: tr("Search for a tune"), fieldID: "logs.search",
                 onAdd: d.permissions.isLoggedIn ? { addingNight = true } : nil,
-                addID: "session.addNight", addLabel: "Add a night",
+                addID: "session.addNight", addLabel: tr("Add a night"),
                 focused: $searchingLogs,
                 onFilter: {
                     searchingLogs = false
@@ -792,7 +815,7 @@ struct SessionDetailView: View {
                         Button("Retry") { Task { await choose(t) } }.font(.ceol(size: 14))
                     }
                 case .loaded(let n):
-                    Text(n.ids.count == 1 ? "1 night with \(t.name)" : "\(n.ids.count) nights with \(t.name)")
+                    Text(n.ids.count == 1 ? tr("1 night with \(t.name)") : tr("\(n.ids.count) nights with \(t.name)"))
                         .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
                 default:
                     ProgressView()
@@ -834,19 +857,19 @@ struct SessionDetailView: View {
             VStack(alignment: .leading, spacing: 0) {
                 VStack(alignment: .leading, spacing: 8) {
                     SearchRow(
-                        text: $peopleSearch, prompt: "Search people…", fieldID: "people.search",
+                        text: $peopleSearch, prompt: tr("Search people…"), fieldID: "people.search",
                         onAdd: {
                             searchingPeople = false
                             addingPerson = true
                         },
-                        addID: "session.addPerson", addLabel: "Add someone to this session",
+                        addID: "session.addPerson", addLabel: tr("Add someone to this session"),
                         focused: $searchingPeople,
                         onFilter: {
                             searchingPeople = false
                             filteringPeople = true
                         },
                         filterCount: peopleView == .members ? 0 : 1)
-                    Text(shown.count == 1 ? "1 person" : "\(shown.count) people")
+                    Text(shown.count == 1 ? tr("1 person") : tr("\(shown.count) people"))
                         .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
                 }
                 .padding(.horizontal, 16).padding(.vertical, 10)
@@ -861,7 +884,7 @@ struct SessionDetailView: View {
                     Hairline()
                 }
                 if shown.isEmpty {
-                    Text(peopleSearch.isEmpty ? "No \(peopleView.rawValue)." : "No one found.")
+                    Text(peopleSearch.isEmpty ? noPeople : tr("No one found."))
                         .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
                         .frame(maxWidth: .infinity)
                         .padding(24)
@@ -871,27 +894,30 @@ struct SessionDetailView: View {
     }
 }
 
-/// A festival day's header, "Friday, October 23" from "2026-10-23".
+/// A festival day's header, "Friday, October 23" from "2026-10-23" (in Irish, the
+/// language's own order: "Dé hAoine 23 Deireadh Fómhair").
 func festivalDay(_ date: String) -> String {
-    let parse = DateFormatter()
-    parse.locale = Locale(identifier: "en_US_POSIX")
-    parse.dateFormat = "yyyy-MM-dd"
-    guard let d = parse.date(from: date) else { return date }
-    let out = DateFormatter()
-    out.locale = Locale(identifier: "en_US_POSIX")
-    out.dateFormat = "EEEE, MMMM d"
-    return out.string(from: d)
+    dayHeader(date, english: "EEEE, MMMM d", template: "EEEEMMMMd")
 }
 
 /// "Tuesday, Jan 27" from "2026-01-27".
 func longDay(_ date: String) -> String {
+    dayHeader(date, english: "EEEE, MMM d", template: "EEEEMMMd")
+}
+
+private func dayHeader(_ date: String, english: String, template: String) -> String {
     let parse = DateFormatter()
     parse.locale = Locale(identifier: "en_US_POSIX")
     parse.dateFormat = "yyyy-MM-dd"
     guard let d = parse.date(from: date) else { return date }
     let out = DateFormatter()
-    out.locale = Locale(identifier: "en_US_POSIX")
-    out.dateFormat = "EEEE, MMM d"
+    if AppLanguage.code == "ga" {
+        out.locale = AppLanguage.locale
+        out.setLocalizedDateFormatFromTemplate(template)
+    } else {
+        out.locale = Locale(identifier: "en_US_POSIX")
+        out.dateFormat = english
+    }
     return out.string(from: d)
 }
 
@@ -903,17 +929,17 @@ private struct PersonRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(person.displayName).font(.ceol(size: 18, weight: .medium)).foregroundStyle(CeolTokens.textColor)
                 if !person.instruments.isEmpty {
-                    Text(person.instruments.joined(separator: ", ")).font(.ceol(size: 14)).foregroundStyle(CeolTokens.textMuted)
+                    Text(person.instruments.map(SessionsL10n.instrument).joined(separator: ", ")).font(.ceol(size: 14)).foregroundStyle(CeolTokens.textMuted)
                 }
             }
             Spacer()
             // A search reaches everyone, so say who's a visitor or has gone.
             if person.archived == true {
-                Pill(text: "Archived", size: 12)
+                Pill(text: tr("Archived"), size: 12)
             } else if person.relationship == "visitor" {
-                Pill(text: "Visitor", style: .filled, color: Color(red: 0.55, green: 0.45, blue: 0.15), size: 12)
+                Pill(text: tr("Visitor"), style: .filled, color: Color(red: 0.55, green: 0.45, blue: 0.15), size: 12)
             }
-            if person.isAdmin { Pill(text: "Admin", style: .filled, color: CeolTokens.primaryFill, size: 12) }
+            if person.isAdmin { Pill(text: SessionsL10n.adminRole, style: .filled, color: CeolTokens.primaryFill, size: 12) }
         }
     }
 }
@@ -1117,7 +1143,7 @@ struct NightView: View {
                         Text(name).font(.ceol(size: 15, weight: .semibold)).foregroundStyle(CeolTokens.textColor)
                     }
                     HStack(alignment: .firstTextBaseline) {
-                        Text([log.meta["session_date"]?.stringValue, tuneCount == 0 ? nil : "\(tuneCount) tune\(tuneCount == 1 ? "" : "s") in \(sets.count) set\(sets.count == 1 ? "" : "s")"]
+                        Text([log.meta["session_date"]?.stringValue, tuneCount == 0 ? nil : tally(tunes: tuneCount, sets: sets.count)]
                             .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
                             .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
                         Spacer(minLength: 4)
@@ -1179,7 +1205,7 @@ struct NightView: View {
                     ForEach(Array(sets.enumerated()), id: \.offset) { i, set in
                         let first = set.tunes.first?.recordID
                         SetCard(
-                            label: LogState.setLabel(set.tunes), starter: trackStarters ? setStarter(set.tunes) : nil,
+                            label: SessionsL10n.setLabel(LogState.setLabel(set.tunes)), starter: trackStarters ? setStarter(set.tunes) : nil,
                             onLabelTap: { withAnimation(.easeOut(duration: 0.15)) { openTray = openTray == first ? nil : first } },
                             play: model.player.queueFor(set.tunes).isEmpty
                                 ? nil : (model.player.setIsPlaying(set.tunes), { model.player.toggleSet(set.tunes) })
@@ -1193,7 +1219,7 @@ struct NightView: View {
                                 // Tap a tune for its details, as on the web; ▶ where it has audio.
                                 HStack(spacing: 0) {
                                     Button { openInfo(t, b) } label: {
-                                        Text(t["name"]?.stringValue ?? "Unknown tune")
+                                        Text(t["name"]?.stringValue ?? tr("Unknown tune"))
                                             .font(.ceol(size: 19))
                                             .foregroundStyle(CeolTokens.textColor)
                                             .multilineTextAlignment(.leading)
@@ -1216,7 +1242,7 @@ struct NightView: View {
                             }
                         }
                         .accessibilityElement(children: .contain)
-                        .accessibilityLabel("Set \(i + 1) · \(LogState.setLabel(set.tunes))")
+                        .accessibilityLabel("Set \(i + 1) · \(SessionsL10n.setLabel(LogState.setLabel(set.tunes)))")
                     }
                     if log.meta["log_complete"] == true {
                         Text("✓ This session has been fully logged").font(.ceol(size: 16, weight: .medium))
@@ -1284,6 +1310,12 @@ struct NightView: View {
         .refreshable { await model.start() }
     }
 
+    /// "12 tunes in 4 sets".
+    private func tally(tunes: Int, sets: Int) -> String {
+        if sets == 1 { return tunes == 1 ? tr("1 tune in 1 set") : tr("\(tunes) tunes in 1 set") }
+        return tr("\(tunes) tunes in \(sets) sets")
+    }
+
     /// As the web logger: starters only where the session tracks them, which needs
     /// attendance too (spec 039).
     private func trackStarters(_ b: JSONValue?) -> Bool {
@@ -1293,7 +1325,7 @@ struct NightView: View {
     /// A tune's details; a tune logged as text has none yet, and says so (the web's words).
     private func openInfo(_ t: LogRecord, _ b: JSONValue) {
         guard let id = t["tune_id"]?.intValue else {
-            model?.say("Logged as text — link it to a catalog tune to see details, notation, and stats.")
+            model?.say(tr("Logged as text — link it to a catalog tune to see details, notation, and stats."))
             return
         }
         infoTune = TuneRef(
@@ -1302,8 +1334,8 @@ struct NightView: View {
     }
 
     private func playingName(_ model: NightModel) -> String {
-        guard let id = model.player.playingID else { return "Playing" }
-        return model.log?.records.first { $0.recordID == id }?["name"]?.stringValue ?? "Playing"
+        guard let id = model.player.playingID else { return tr("Playing") }
+        return model.log?.records.first { $0.recordID == id }?["name"]?.stringValue ?? tr("Playing")
     }
 
     private func closeSearch() {
@@ -1325,10 +1357,10 @@ struct LiveStatusPill: View {
     var body: some View {
         let (label, color): (String?, Color) =
             switch status {
-            case .live: ("Live", CeolTokens.primary)
-            case .connecting: ("Connecting", CeolTokens.textMuted)
-            case .reconnecting: ("Reconnecting", CeolTokens.warning)
-            case .offline: ("Offline", CeolTokens.textMuted)
+            case .live: (tr("Live"), CeolTokens.primary)
+            case .connecting: (tr("Connecting"), CeolTokens.textMuted)
+            case .reconnecting: (tr("Reconnecting"), CeolTokens.warning)
+            case .offline: (tr("Offline"), CeolTokens.textMuted)
             case .finished: (nil, .clear)
             }
         if let label {
@@ -1365,5 +1397,163 @@ extension SessionsPayload.SessionsPayloadPayload {
         .init(name: name, city: place?.name, state: place?.area, country: place?.country,
               terminationDate: terminationDate,
               isMember: userIsMember, relationship: userRelationship)
+    }
+}
+
+// MARK: - Words the logic gives in English (spec 057)
+//
+// CeolLogic is held to the web's fixtures, so its labels stay English there; these put
+// them in the app's language where a screen shows them. English is byte-for-byte what
+// the logic returns.
+
+enum SessionsL10n {
+    static var irish: Bool { AppLanguage.code == "ga" }
+
+    /// "Admin" as a person's role here (a session admin: "bainisteoir"), not the Admin
+    /// menu item ("Riarachán"), so it has a key of its own.
+    static var adminRole: String {
+        String(localized: "Admin (a session's)", defaultValue: "Admin", bundle: AppLanguage.bundle, locale: AppLanguage.locale)
+    }
+
+    private static func ymd(_ s: String) -> Date? {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = .current
+        f.dateFormat = "yyyy-MM-dd"
+        return f.date(from: s)
+    }
+
+    private static func format(_ date: Date, _ template: String) -> String {
+        let f = DateFormatter()
+        f.locale = AppLanguage.locale
+        f.timeZone = .current
+        f.setLocalizedDateFormatFromTemplate(template)
+        return f.string(from: date)
+    }
+
+    /// "Sep 16" (HomeRules.shortDate with no year), in the app's language.
+    static func shortDate(_ date: String) -> String {
+        guard irish else { return HomeRules.shortDate(date, currentYear: nil) }
+        return ymd(date).map { format($0, "MMMd") } ?? ""
+    }
+
+    /// "Tue", for a row's date block.
+    static func weekdayShort(_ date: String) -> String {
+        guard irish else { return HomeRules.dayOfWeek(date) }
+        return ymd(date).map { format($0, "EEE") } ?? ""
+    }
+
+    /// A night's times: "7:00pm-10:00pm" in English; Irish pages use the 24-hour clock.
+    static func timeRange(start: String?, end: String?) -> String {
+        guard irish else { return HomeRules.instanceTimeLabel(start: start, end: end) }
+        guard let start, !start.isEmpty else { return "" }
+        if let end, !end.isEmpty { return "\(start.prefix(5))–\(end.prefix(5))" }
+        return "\(start.prefix(5)) – ?"
+    }
+
+    /// A tune type as a chip or choice shows it ("Reel"); the words are TunesWords'.
+    static func typeName(_ type: String) -> String { TunesWords.type(type.capitalized) }
+
+    /// A set's label from LogState.setLabel ("Reels", "Mixed", "Unknown").
+    static func setLabel(_ label: String) -> String {
+        guard irish else { return label }
+        switch label.lowercased() {
+        case "jigs": return tr("Jigs")
+        case "reels": return tr("Reels")
+        case "slip jigs": return tr("Slip Jigs")
+        case "hornpipes": return tr("Hornpipes")
+        case "polkas": return tr("Polkas")
+        case "slides": return tr("Slides")
+        case "waltzes": return tr("Waltzes")
+        case "barndances": return tr("Barndances")
+        case "airs": return tr("Airs")
+        case "marches": return tr("Marches")
+        case "mazurkas": return tr("Mazurkas")
+        case "strathspeys": return tr("Strathspeys")
+        case "three-twos": return tr("Three-Twos")
+        case "mixed": return tr("Mixed")
+        case "unknown": return tr("Unknown")
+        default: return label
+        }
+    }
+
+    /// An instrument name (stored in Title Case); one Ceol doesn't know stays as written.
+    static func instrument(_ name: String) -> String { TunesWords.instrument(name) }
+
+    /// The sessions list's tally ("3 sessions in your list"), as SessionsRules words it.
+    static func sessionsCount(_ n: Int, _ filter: SessionsRules.Filter) -> String {
+        switch filter {
+        case .mine: tr("\(n) sessions in your list")
+        case .visited: tr("\(n) sessions you've visited")
+        case .active: tr("\(n) active sessions")
+        case .all: tr("\(n) sessions")
+        case .inactive: tr("\(n) inactive sessions")
+        }
+    }
+
+    static func label(_ f: SessionsRules.Filter) -> String {
+        switch f {
+        case .mine: tr("My Sessions")
+        case .visited: tr("Visited")
+        case .active: tr("All Active")
+        case .all: tr("All")
+        case .inactive: tr("Inactive")
+        }
+    }
+
+    static func label(_ s: SessionsRules.Sort) -> String {
+        switch s {
+        case .name: tr("Name")
+        case .place: tr("Place")
+        case .onNow: tr("On now first")
+        }
+    }
+
+    static func label(_ v: SessionPage.LogView) -> String {
+        switch v {
+        case .all: tr("All")
+        case .logged: tr("Logged")
+        case .attended: tr("Attended")
+        }
+    }
+
+    static func label(_ v: SessionPage.PeopleView) -> String {
+        switch v {
+        case .members: tr("Members")
+        case .visitors: tr("Visitors")
+        case .archived: tr("Archived")
+        }
+    }
+
+    static func label(_ s: SessionPage.MyStatus) -> String {
+        switch s {
+        case .off: tr("Off")
+        case .all: tr("Show my status")
+        case .notOnList: tr("Not on my list")
+        case .wantToLearn: tr("Want to learn")
+        case .learning: tr("Learning")
+        case .learned: tr("Learned")
+        }
+    }
+
+    static func label(_ m: SessionPage.SortMode) -> String {
+        switch m {
+        case .alpha: tr("Name")
+        case .session: tr("Popularity Here")
+        case .everywhere: tr("Popularity Anywhere")
+        }
+    }
+
+    /// The My Tunes sort modes (MyTunesList.sortModes).
+    static func myTunesSortLabel(_ id: String) -> String { TunesWords.sortMode(id) }
+
+    /// SessionsRules.locationLabel, whose "Unknown" is the only word it adds.
+    static func location(_ label: String) -> String { label == "Unknown" ? tr("Unknown") : label }
+
+    /// SessionPage.resultsCountLabel.
+    static func resultsCount(_ filtered: Int, _ total: Int) -> String {
+        if filtered < total { return tr("Showing \(filtered) of \(total) tunes") }
+        return total == 1 ? tr("1 tune") : tr("\(total) tunes")
     }
 }

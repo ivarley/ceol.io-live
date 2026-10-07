@@ -1,9 +1,9 @@
 # 057: Bilingual interface (English and Irish)
 
 **Date:** 2026-10-06
-**Status:** STAGES 1 AND 2 (web) BUILT (2026-10-06): the machinery, the setting and
-switch, the tests, the CLAUDE.md rule, the agreed glossary, and every Svelte bundle and
-Jinja page converted. Next: iOS, then server messages, emails, help. The
+**Status:** STAGES 1-3 BUILT (2026-10-06): the machinery, the setting and switch, the
+tests, the CLAUDE.md rule, the agreed glossary, every Svelte bundle and Jinja page, and
+the iOS app. Next: server messages, emails, help. The
 decisions are the product owner's, from a short Q&A on 2026-10-06.
 
 ## Why
@@ -102,3 +102,24 @@ And from here on, any interface work has to work in both languages.
 - Known gaps: text the server sends (stage 4) shows in English; the offline page is
   cached in whichever language was active when the service worker stored it.
 
+
+## Stage 3 (iOS) as built
+
+- `ios/Ceol/Ceol/L10n.swift`: `AppLanguage` (the profile's language, remembered in
+  UserDefaults so launch starts in it) and `tr()` for text that isn't a SwiftUI literal.
+  The root sets `\.locale` from it; ContentView rebuilds the screens (`.id`) when it
+  changes, below the launch task so a change doesn't re-run launch. Signing in applies
+  the account's language; the Me screen sets it (`PUT /api/me/profile`).
+- `Localizable.xcstrings` (about 790 strings, `ga` in knownRegions) is synced from the
+  build's extracted strings. The Irish lives in `ios/Ceol/i18n-ga/{core,tunes,sessions,live}.json`,
+  applied as `needs_review` by `scripts/ios_strings.py` (`make ios-strings`).
+  `make ios-test` fails when an extracted string has no Irish
+  (`ios_strings.py missing`); `tests/unit/test_ios_strings.py` covers the script.
+- Plurals: keys with one integer argument get Irish's five forms; English singulars
+  are separate keys ("1 tune" / "%lld tunes").
+- CeolKit's fixture-held logic keeps its English; the views translate its outputs
+  (`TunesWords`, `HomeText`, `SessionsL10n`, `logLabelName`, `liveActivityLine`).
+- One English word with two Irish ones: `Admin (a session's)` (defaultValue "Admin",
+  Bainisteoir) beside `Admin` (the menu item, Riarachán).
+- Left in English: server text (stage 4), `session_date` as the server formats it,
+  data.

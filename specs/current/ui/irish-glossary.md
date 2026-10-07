@@ -129,5 +129,11 @@ product owner to agree or change.
 | set starter | tosaitheoir sraithe | |
 | live logger | logálaí beo | |
 | Live / Live now | Beo / Beo anois | |
+| log details | sonraí na logála | iOS. |
+| insert / insertion point | cuir isteach / pointe ionsáite | iOS logger. |
+| queued (changes waiting to sync) | sa scuaine | iOS logger. |
+| connecting / reconnecting | ag ceangal / ag athcheangal | iOS live status. |
+| sort / sort and filter | sórtáil / sórtáil agus scag | |
+| every other week | gach re seachtain | Schedule summaries. |
 | the clock | 24-hour ("19:00") | Irish pages show times on the 24-hour clock. |
 

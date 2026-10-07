@@ -45,7 +45,7 @@ struct PresenceAvatars: View {
                 .background(Color.player(p["arrival_seq"]?.intValue ?? 0), in: Capsule())
                 .opacity(away ? 0.4 : 1)
                 .saturation(away ? 0.65 : 1)
-                .accessibilityLabel(name + (away ? " (away)" : devices > 1 ? " (\(devices) devices)" : ""))
+                .accessibilityLabel(name + (away ? " " + tr("(away)") : devices > 1 ? " " + tr("(\(devices) devices)") : ""))
             }
         }
         .accessibilityElement(children: .contain)
@@ -63,9 +63,9 @@ struct NightPeopleDetails: View {
             if !model.roster.isEmpty {
                 let here = model.roster.filter { $0["away"] != true }.compactMap { $0["name"]?.stringValue }
                 let away = model.roster.filter { $0["away"] == true }.compactMap { $0["name"]?.stringValue }
-                row("Logging") {
-                    (Text(here.isEmpty ? "No one right now" : here.joined(separator: ", "))
-                        + Text(away.isEmpty ? "" : " · away: \(away.joined(separator: ", "))").foregroundColor(CeolTokens.textMuted.opacity(0.75)))
+                row(tr("Logging")) {
+                    (Text(here.isEmpty ? tr("No one right now") : here.joined(separator: ", "))
+                        + Text(away.isEmpty ? "" : " · " + tr("away: \(away.joined(separator: ", "))")).foregroundColor(CeolTokens.textMuted.opacity(0.75)))
                         .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textColor)
                 }
             }
@@ -79,7 +79,7 @@ struct NightPeopleDetails: View {
                                 .font(.ceol(size: 14, weight: .semibold)).foregroundStyle(CeolTokens.primary)
                                 .accessibilityIdentifier("attendance.manage")
                         }
-                        Text(checkedIn.isEmpty ? "No one checked in yet" : checkedIn.compactMap { $0["display_name"]?.stringValue }.joined(separator: ", "))
+                        Text(checkedIn.isEmpty ? tr("No one checked in yet") : checkedIn.compactMap { $0["display_name"]?.stringValue }.joined(separator: ", "))
                             .font(.ceol(size: 15)).foregroundStyle(checkedIn.isEmpty ? CeolTokens.textMuted : CeolTokens.textColor)
                     }
                 }
@@ -90,12 +90,12 @@ struct NightPeopleDetails: View {
 
     /// "Attended" for a night gone by, "Attending" otherwise.
     private var attendingLabel: String {
-        guard let d = model.night?["instance_date"]?.stringValue else { return "Attending" }
+        guard let d = model.night?["instance_date"]?.stringValue else { return tr("Attending") }
         let f = DateFormatter()
         f.calendar = Calendar(identifier: .gregorian)
         f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "yyyy-MM-dd"
-        return d < f.string(from: Date()) ? "Attended" : "Attending"
+        return d < f.string(from: Date()) ? tr("Attended") : tr("Attending")
     }
 
     private func row(_ key: String, @ViewBuilder _ value: () -> some View) -> some View {
@@ -118,7 +118,7 @@ struct TypingLine: View {
                 return line + Text(i > 0 ? ", " : "")
                     + Text(t["name"]?.stringValue ?? "").bold().foregroundColor(.player(t["arrival_seq"]?.intValue ?? 0))
             }
-            + Text(others.count == 1 ? " is typing…" : " are typing…")
+            + (others.count == 1 ? Text(" is typing…") : Text(" are typing…"))
         }
     }
 }
@@ -176,9 +176,9 @@ struct PersonPicker: View {
 
     private var title: String {
         switch mode {
-        case .attendance: "Attendance"
-        case .starter: "Who started this set?"
-        case .assign: "Sets started by…"
+        case .attendance: tr("Attendance")
+        case .starter: tr("Who started this set?")
+        case .assign: tr("Sets started by…")
         }
     }
 
@@ -196,7 +196,7 @@ struct PersonPicker: View {
             if !model.peopleLoaded {
                 ProgressView().frame(maxWidth: .infinity)
             } else if tiers.here.isEmpty && (assign || (tiers.roster.isEmpty && tiers.archived.isEmpty)) {
-                Text(assign ? "No one checked in yet." : q.isEmpty ? "No one on this session's list yet." : "No one here by that name.")
+                Text(assign ? tr("No one checked in yet.") : q.isEmpty ? tr("No one on this session's list yet.") : tr("No one here by that name."))
                     .foregroundStyle(CeolTokens.textMuted)
             }
             if !tiers.here.isEmpty {
@@ -211,7 +211,7 @@ struct PersonPicker: View {
                 }
                 if !q.isEmpty {
                     Button { creating = true } label: {
-                        (Text("＋ Add ") + Text(q).bold()).foregroundStyle(CeolTokens.primary)
+                        Text("＋ Add \(Text(q).bold())").foregroundStyle(CeolTokens.primary)
                     }
                     .accessibilityIdentifier("people.add")
                 }
@@ -219,7 +219,7 @@ struct PersonPicker: View {
         }
         .scrollContentBackground(.hidden)
         .background(CeolTokens.drawerBg)
-        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: assign ? "Filter players…" : "Filter or add someone…")
+        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: assign ? tr("Filter players…") : tr("Filter or add someone…"))
         .autocorrectionDisabled()
     }
 
@@ -231,8 +231,8 @@ struct PersonPicker: View {
                 HStack(spacing: 8) {
                     Text(p["display_name"]?.stringValue ?? "").foregroundStyle(CeolTokens.textColor)
                         .italic(tier == .archived)
-                    if p["archived"] == true { Pill(text: "archived") }
-                    if p["relationship"] == "visitor" { Pill(text: "visitor") }
+                    if p["archived"] == true { Pill(text: tr("archived")) }
+                    if p["relationship"] == "visitor" { Pill(text: tr("visitor")) }
                     Spacer()
                     if case .starter(_, let current) = mode, current == NightModel.starterName(p) {
                         Image(systemName: "checkmark").foregroundStyle(CeolTokens.primary)
@@ -323,7 +323,7 @@ struct NewPersonForm: View {
                 FlowLayout(spacing: 6) {
                     ForEach(canonical + chosen.filter { c in !canonical.contains { $0.lowercased() == c.lowercased() } }, id: \.self) { i in
                         let on = chosen.contains(i)
-                        Button(i) { if on { chosen.removeAll { $0 == i } } else { chosen.append(i) } }
+                        Button(instrumentName(i)) { if on { chosen.removeAll { $0 == i } } else { chosen.append(i) } }
                             .font(.ceol(size: 14))
                             .foregroundStyle(on ? .white : CeolTokens.textColor)
                             .padding(.horizontal, 10).padding(.vertical, 5)
@@ -346,7 +346,7 @@ struct NewPersonForm: View {
         .toolbar {
             // Always in reach, as the web's footer button is.
             ToolbarItem(placement: .confirmationAction) {
-                Button(busy ? "Adding…" : "Add person") {
+                Button(busy ? tr("Adding…") : tr("Add person")) {
                     busy = true
                     failure = nil
                     Task {
@@ -358,7 +358,7 @@ struct NewPersonForm: View {
                             onDone(p)
                         } catch {
                             busy = false
-                            failure = (error as? LocalizedError)?.errorDescription ?? "That person wasn't added. Try again."
+                            failure = (error as? LocalizedError)?.errorDescription ?? tr("That person wasn't added. Try again.")
                         }
                     }
                 }

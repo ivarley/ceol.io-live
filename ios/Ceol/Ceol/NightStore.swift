@@ -10,6 +10,8 @@
 //
 // One file per night, one for the match cache, in Application Support. Signing out
 // clears it all: it's this account's data.
+//
+// i18n-converted (spec 057): nothing here is shown to people.
 
 import CeolLogic
 import Foundation

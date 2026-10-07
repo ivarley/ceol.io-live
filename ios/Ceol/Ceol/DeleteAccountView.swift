@@ -74,7 +74,7 @@ struct DeleteAccountView: View {
         } catch let f as AuthFailure {
             error = f.message
         } catch {
-            self.error = "Couldn't reach Ceol, so nothing was deleted. Check your connection and try again."
+            self.error = tr("Couldn't reach Ceol, so nothing was deleted. Check your connection and try again.")
         }
     }
 }

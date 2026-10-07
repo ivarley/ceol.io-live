@@ -10,6 +10,8 @@
 //     CeolLogic.Segments (resolveSegments, playbackStep), held to the web's fixtures.
 //   - The stream is the small proxy encode; HD switches to the master, keeping your place.
 //   - The link is presigned and expires: a failure asks for a fresh one, once.
+//
+// i18n-converted (spec 057).
 
 import AVFoundation
 import CeolLogic
@@ -242,7 +244,7 @@ final class NightPlayer {
 
     private func retry() async {
         guard !urlRetried else {
-            error = "Audio unavailable"
+            error = tr("Audio unavailable")
             return
         }
         urlRetried = true

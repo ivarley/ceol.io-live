@@ -15,6 +15,10 @@
 //      the audio. If that fails it is tried again the next time the app starts.
 //
 // The CAF stays until the upload is confirmed; Delete removes a recording by hand.
+//
+// i18n-converted (spec 057): the messages we set are in the app's language; the
+// server's own `error` is shown as it comes (a later stage), and the label sent with a
+// recording ("… (Ceol app)") is data on the server, so stays English.
 
 import AVFoundation
 import CeolLogic
@@ -144,7 +148,7 @@ final class RecordingStore {
         do {
             encodedURL = try await Task.detached { try AudioEncode.encode(source, into: dir, name: id) }.value
         } catch {
-            return fail(id, "Couldn't prepare the file: \(error.localizedDescription)")
+            return fail(id, tr("Couldn't prepare the file: \(error.localizedDescription)"))
         }
         r.uploadName = encodedURL.lastPathComponent
         // 2. a signed upload
@@ -155,7 +159,7 @@ final class RecordingStore {
         guard status == 200, let put = body["upload_url"]?.stringValue.flatMap(URL.init(string:)),
             let key = body["storage_key"]?.stringValue, let type = body["content_type"]?.stringValue
         else {
-            return fail(id, body["error"]?.stringValue ?? (status == 0 ? "Offline — try again later" : "The server refused the upload (\(status))"))
+            return fail(id, body["error"]?.stringValue ?? (status == 0 ? tr("Offline — try again later") : tr("The server refused the upload (\(status))")))
         }
         r.storageKey = key
         r.phase = .uploading
@@ -188,7 +192,7 @@ final class RecordingStore {
                 // the object isn't there after all: upload again
                 return await upload(id)
             }
-            return fail(id, reply["error"]?.stringValue ?? (status == 0 ? "Offline — will finish later" : "The server said \(status)"))
+            return fail(id, reply["error"]?.stringValue ?? (status == 0 ? tr("Offline — will finish later") : tr("The server said \(status)")))
         }
         r.recordingID = recordingID
         r.phase = .uploaded
@@ -331,9 +335,9 @@ nonisolated final class UploadSession: NSObject, URLSessionTaskDelegate, @unchec
         guard let id = task.taskDescription else { return }
         let status = (task.response as? HTTPURLResponse)?.statusCode ?? 0
         if let error {
-            onDone(id, "Upload stopped: \(error.localizedDescription)")
+            onDone(id, tr("Upload stopped: \(error.localizedDescription)"))
         } else if !(200..<300).contains(status) {
-            onDone(id, "S3 refused the upload (\(status))")
+            onDone(id, tr("S3 refused the upload (\(status))"))
         } else {
             onDone(id, nil)
         }

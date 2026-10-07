@@ -5,6 +5,9 @@
 //
 // The search field reaches the whole catalogue as on the web: your matching tunes
 // first, then "Not on your list" from the server's catalogue search (name or notation).
+//
+// i18n-converted (spec 057): fixed text is localized; tune types, instruments, statuses
+// and the list's counts are translated here (TunesWords), CeolLogic's English untouched.
 
 import CeolAPI
 import CeolDesign
@@ -56,7 +59,7 @@ struct TunesView: View {
         NavigationStack {
             Loaded(state: state, retry: load) { payload in list(payload) }
                 .background(CeolTokens.bgColor)
-                .ceolRootBar("Tunes", sharePath: model.tunesStatus.map { "/my-tunes?status=\($0.rawValue.replacingOccurrences(of: " ", with: "+"))" } ?? "/my-tunes")
+                .ceolRootBar(tr("Tunes"), sharePath: model.tunesStatus.map { "/my-tunes?status=\($0.rawValue.replacingOccurrences(of: " ", with: "+"))" } ?? "/my-tunes")
                 .task(id: search) { await searchCatalogue() }
                 // The search keyboard would otherwise stay up over the sheet.
                 .onChange(of: open) { _, tune in if tune != nil { searching = false } }
@@ -89,7 +92,7 @@ struct TunesView: View {
         } catch let f as TuneOpFailure {
             failure = f.message
         } catch {
-            failure = "That wasn't saved. Try again."
+            failure = tr("That wasn't saved. Try again.")
         }
     }
 
@@ -133,20 +136,20 @@ struct TunesView: View {
                 // The web's toolbar: search (your list, then the catalogue below it),
                 // sort and filter, and + to add a tune.
                 SearchRow(
-                    text: $search, prompt: "Search", fieldID: "tunes.search",
-                    onAdd: { adding = true }, addID: "tunes.add", addLabel: "Add a tune",
+                    text: $search, prompt: tr("Search"), fieldID: "tunes.search",
+                    onAdd: { adding = true }, addID: "tunes.add", addLabel: tr("Add a tune"),
                     focused: $searching,
                     onFilter: { filtering = true },
                     filterCount: filters.activeCount + (sort == MyTunesList.Sort() ? 0 : 1))
                 Picker("Status", selection: Binding(get: { model.tunesStatus }, set: { model.tunesStatus = $0 })) {
-                    ForEach(MyTunesRules.Status.allCases, id: \.self) { Text($0.label).tag(Optional($0)) }
+                    ForEach(MyTunesRules.Status.allCases, id: \.self) { Text(TunesWords.status($0.rawValue)).tag(Optional($0)) }
                     Text("All").tag(MyTunesRules.Status?.none)
                 }
                 .pickerStyle(.segmented)
                 HStack {
-                    Text(MyTunesList.resultsCountText(rows, total: payload.tunes.count, filters: f))
+                    Text(TunesWords.resultsCount(rows, total: payload.tunes.count, filters: f))
                     if sort.type != "alpha" || sort.descending {
-                        Text("· \(MyTunesList.sortModeLabel(sort.type)) \(sort.descending ? "↓" : "↑")")
+                        Text("· \(TunesWords.sortMode(sort.type)) \(sort.descending ? "↓" : "↑")")
                     }
                 }
                 .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
@@ -159,7 +162,7 @@ struct TunesView: View {
                 let t = byID[e.tuneID]
                 if i == firstDimmed {
                     // The web's heading between the tunes on the instrument and the rest.
-                    Text("Not on \(filters.instrument)").font(.ceol(size: 13, weight: .semibold)).textCase(.uppercase)
+                    Text("Not on \(TunesWords.instrument(filters.instrument))").font(.ceol(size: 13, weight: .semibold)).textCase(.uppercase)
                         .tracking(0.8).foregroundStyle(CeolTokens.textMuted)
                         .listRowInsets(EdgeInsets(top: 18, leading: 16, bottom: 4, trailing: 16))
                         .listRowBackground(CeolTokens.bgColor)
@@ -171,7 +174,7 @@ struct TunesView: View {
                 } label: {
                     TuneRow(
                         name: e.name, type: MyTunesList.typeBadgeLabel(e, sortType: sort.type), status: e.status,
-                        note: row.abcOnly ? "♪ notes match" : nil, typeIsCount: sort.type != "alpha")
+                        note: row.abcOnly ? tr("♪ notes match") : nil, typeIsCount: sort.type != "alpha")
                 }
                 .buttonStyle(.plain)
                 .opacity(row.dimmed ? 0.45 : 1)
@@ -185,7 +188,7 @@ struct TunesView: View {
                 }
             }
             if rows.isEmpty && catalogue.isEmpty {
-                Text(payload.tunes.isEmpty ? "No tunes here yet." : MyTunesList.noResultsMessage(f))
+                Text(payload.tunes.isEmpty ? tr("No tunes here yet.") : TunesWords.noResults(f))
                     .font(.ceol(size: 16)).foregroundStyle(CeolTokens.textMuted)
                     .listRowBackground(CeolTokens.bgColor).listRowSeparator(.hidden)
             }
@@ -203,7 +206,7 @@ struct TunesView: View {
                     Button {
                         open = TuneRef(id: r.tuneId, name: r.name, type: r.tuneType)
                     } label: {
-                        TuneRow(name: r.name, type: r.tuneType, status: nil, note: r.abcOnly ? "♪ notes match" : nil)
+                        TuneRow(name: r.name, type: r.tuneType, status: nil, note: r.abcOnly ? tr("♪ notes match") : nil)
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("catalogue.row")
@@ -249,7 +252,7 @@ private struct TuneRow: View {
             if typeIsCount, let type {
                 CountBox(count: Int(type) ?? 0)
             } else if let type, !type.isEmpty {
-                TypeChip(label: type, size: 15)
+                TypeChip(label: TunesWords.type(type), size: 15)
             }
         }
         .padding(.vertical, 3)
@@ -334,7 +337,7 @@ struct TuneSheet: View {
         } catch let f as TuneOpFailure {
             failure = f.message
         } catch {
-            failure = "That wasn't saved. Try again."
+            failure = tr("That wasn't saved. Try again.")
         }
         return false
     }
@@ -372,7 +375,7 @@ struct TuneSheet: View {
     @ViewBuilder private var yourList: some View {
         let current = status.flatMap(MyTunesRules.Status.init(rawValue:))
         VStack(spacing: 14) {
-            Text(current == nil ? "Add this tune to your list as" : "This tune is on your list as")
+            Text(current == nil ? tr("Add this tune to your list as") : tr("This tune is on your list as"))
                 .font(.ceol(size: 17)).foregroundStyle(CeolTokens.textColor)
                 .frame(maxWidth: .infinity, alignment: .leading)
             HStack(spacing: 0) {
@@ -381,7 +384,7 @@ struct TuneSheet: View {
                     Button {
                         Task { if current == nil { await add(s) } else if !on { await setStatus(s) } }
                     } label: {
-                        Text(s.label).font(.ceol(size: 16, weight: on ? .semibold : .medium))
+                        Text(TunesWords.status(s.rawValue)).font(.ceol(size: 16, weight: on ? .semibold : .medium))
                             .foregroundStyle(current == nil ? CeolTokens.primary : .white)
                             .frame(maxWidth: .infinity, minHeight: 42)
                             .background(on ? CeolTokens.primaryFill : .clear)
@@ -402,7 +405,7 @@ struct TuneSheet: View {
             .clipShape(RoundedRectangle(cornerRadius: 6))
             if current == .wantToLearn {
                 Stepper(value: Binding(get: { heard }, set: { n in Task { await setHeard(n) } }), in: 0...999) {
-                    Text("Heard it \(heard == 1 ? "once" : "\(heard) times")").font(.ceol(size: 16)).foregroundStyle(.white)
+                    (heard == 1 ? Text("Heard it once") : Text("Heard it \(heard) times")).font(.ceol(size: 16)).foregroundStyle(.white)
                 }
                 .accessibilityIdentifier("sheet.heard")
             }
@@ -481,22 +484,22 @@ struct TuneSheet: View {
             VStack(alignment: .leading, spacing: 18) {
                 // The web's header: the type chip beside the name, the key under it.
                 HStack(spacing: 12) {
-                    if let type = t.tuneType { TypeChip(label: type, size: 16) }
+                    if let type = t.tuneType { TypeChip(label: TunesWords.type(type), size: 16) }
                     Text(t.tuneName).font(.ceol(size: 26, weight: .semibold, relativeTo: .title)).foregroundStyle(CeolTokens.textColor)
                 }
                 notation(t)
                 yourList
                 VStack(spacing: 0) {
                     if tune.sessionPath != nil {
-                        stat("Played at this session", t.timesPlayed)
+                        stat(tr("Played at this session"), t.timesPlayed)
                         Hairline()
                     }
-                    stat("At sessions on Ceol", t.globalPlayCount)
+                    stat(tr("At sessions on Ceol"), t.globalPlayCount)
                     Hairline()
-                    stat("Sessions that play it", t.sessionCount)
+                    stat(tr("Sessions that play it"), t.sessionCount)
                     if let books = t.tunebookCount {
                         Hairline()
-                        stat("TheSession.org tunebooks", books)
+                        stat(tr("TheSession.org tunebooks"), books)
                     }
                     if let key = t.settingKey {
                         Hairline()
@@ -511,7 +514,7 @@ struct TuneSheet: View {
                         .foregroundStyle(CeolTokens.textMuted)
                 }
                 HStack {
-                    Link("TheSession.org", destination: URL(string: "https://thesession.org/tunes/\(t.tuneId)")!)
+                    Link(destination: URL(string: "https://thesession.org/tunes/\(t.tuneId)")!) { Text(verbatim: "TheSession.org") }
                         .font(.ceol(size: 16)).foregroundStyle(CeolTokens.primary)
                     Spacer()
                     if status != nil {
@@ -550,8 +553,8 @@ struct TuneSheet: View {
             }
             if t.abc != nil {
                 HStack(spacing: 22) {
-                    notationTab("Opening bars", on: !showFull) { showFull = false }
-                    notationTab("Whole tune", on: showFull) {
+                    notationTab(tr("Opening bars"), on: !showFull) { showFull = false }
+                    notationTab(tr("Whole tune"), on: showFull) {
                         showFull = true
                         Task { await loadFull(t) }
                     }
@@ -599,7 +602,7 @@ struct AddTuneSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                SearchRow(text: $query, prompt: "Tune name, notes, or a link", fieldID: "addTune.query", focused: $focused)
+                SearchRow(text: $query, prompt: tr("Tune name, notes, or a link"), fieldID: "addTune.query", focused: $focused)
                     .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 10, trailing: 16))
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
@@ -624,7 +627,7 @@ struct AddTuneSheet: View {
                         Button {
                             open = TuneRef(id: r.tuneId, name: r.name, type: r.tuneType, statusKnown: false)
                         } label: {
-                            TuneRow(name: r.name, type: r.tuneType, status: nil, note: r.abcOnly ? "♪ notes match" : nil)
+                            TuneRow(name: r.name, type: r.tuneType, status: nil, note: r.abcOnly ? tr("♪ notes match") : nil)
                         }
                         .buttonStyle(.plain)
                         // Already yours: dimmed, and still opens.
@@ -694,7 +697,107 @@ struct AddTuneSheet: View {
         } catch let f as TuneOpFailure {
             failure = f.message
         } catch {
-            failure = "That wasn't saved. Try again."
+            failure = tr("That wasn't saved. Try again.")
+        }
+    }
+}
+
+// MARK: - The list's words, in the app's language
+
+/// Tune types, instruments and statuses are interface words: Irish here, English as the
+/// server sends them. CeolLogic's built sentences stay its English; in Irish they are
+/// built again here from the same parts.
+enum TunesWords {
+    static func type(_ t: String) -> String {
+        guard AppLanguage.code == "ga" else { return t }
+        switch t.lowercased() {
+        case "reel": return tr("Reel")
+        case "jig": return tr("Jig")
+        case "slip jig": return tr("Slip Jig")
+        case "hornpipe": return tr("Hornpipe")
+        case "polka": return tr("Polka")
+        case "slide": return tr("Slide")
+        case "waltz": return tr("Waltz")
+        case "barndance": return tr("Barndance")
+        case "march": return tr("March")
+        case "mazurka": return tr("Mazurka")
+        case "strathspey": return tr("Strathspey")
+        case "three-two": return tr("Three-Two")
+        case "air", "slow air": return tr("Air")
+        default: return t
+        }
+    }
+
+    static func instrument(_ name: String) -> String {
+        guard AppLanguage.code == "ga" else { return name }
+        switch name.lowercased() {
+        case "fiddle": return tr("Fiddle")
+        case "whistle", "tin whistle": return tr("Whistle")
+        case "flute": return tr("Flute")
+        case "uilleann pipes": return tr("Uilleann Pipes")
+        case "concertina": return tr("Concertina")
+        case "button accordion": return tr("Button Accordion")
+        case "banjo": return tr("Banjo")
+        case "guitar": return tr("Guitar")
+        case "bouzouki": return tr("Bouzouki")
+        case "bodhrán", "bodhran": return tr("Bodhrán")
+        case "harp": return tr("Harp")
+        case "low whistle": return tr("Low Whistle")
+        case "mandolin": return tr("Mandolin")
+        case "piano": return tr("Piano")
+        case "piano accordion": return tr("Piano Accordion")
+        default: return name
+        }
+    }
+
+    /// A stored status ("want to learn", "learning", "learned").
+    static func status(_ stored: String) -> String {
+        switch stored {
+        case "learned": tr("Learned")
+        case "learning": tr("Learning")
+        case "want to learn": tr("To Learn")
+        default: stored
+        }
+    }
+
+    static func sortMode(_ id: String) -> String {
+        guard AppLanguage.code == "ga" else { return MyTunesList.sortModeLabel(id) }
+        switch id {
+        case "popularity": return tr("Popularity")
+        case "plays": return tr("My plays")
+        case "attended": return tr("Plays I attended")
+        case "heard": return tr("Times heard")
+        default: return tr("Name (a-z)")
+        }
+    }
+
+    private static func tunes(_ n: Int) -> String { n == 1 ? tr("1 tune") : tr("\(n) tunes") }
+
+    /// MyTunesList.resultsCountText, in Irish when the app is.
+    static func resultsCount(_ rows: [MyTunesList.Row], total: Int, filters: MyTunesList.Filters) -> String {
+        guard AppLanguage.code == "ga" else { return MyTunesList.resultsCountText(rows, total: total, filters: filters) }
+        let n = rows.count
+        if !filters.instrument.isEmpty {
+            let on = rows.filter { !$0.dimmed }.count
+            return tr("\(on) of \(tunes(n)) on \(instrument(filters.instrument))")
+        }
+        if n < total { return tr("Showing \(n) of \(total) tunes") }
+        return tunes(total)
+    }
+
+    /// MyTunesList.noResultsMessage, in Irish when the app is.
+    static func noResults(_ f: MyTunesList.Filters) -> String {
+        guard AppLanguage.code == "ga" else { return MyTunesList.noResultsMessage(f) }
+        if !f.search.isEmpty, let id = MyTunesRules.extractTuneID(f.search) { return tr("No tune with ID \(String(id)) found") }
+        var parts: [String] = []
+        if !f.search.isEmpty { parts.append(tr("containing '\(f.search)'")) }
+        if !f.status.isEmpty { parts.append(tr("in '\(status(f.status))' status")) }
+        let rest = parts.joined(separator: " ")
+        switch (f.type.isEmpty, rest.isEmpty) {
+        case (true, true): return tr("No tunes found")
+        case (true, false): return tr("No tunes \(rest) found")
+        case (false, true): return tr("No tunes of type \(type(f.type)) found")
+        case (false, false): return tr("No tunes of type \(type(f.type)) \(rest) found")
         }
     }
 }

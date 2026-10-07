@@ -86,7 +86,7 @@ struct EditableLog: View {
             ForEach(Array(segments.enumerated()), id: \.offset) { si, seg in
                 let first = seg.tunes[0].recordID!
                 SetCard(
-                    label: LogState.setLabel(seg.tunes), starter: trackStarters ? setStarter(seg.tunes) : nil,
+                    label: logLabelName(LogState.setLabel(seg.tunes)), starter: trackStarters ? setStarter(seg.tunes) : nil,
                     onLabelTap: { withAnimation(.easeOut(duration: 0.15)) { openTray = openTray == first ? nil : first } },
                     play: model.selecting || model.player.queueFor(seg.tunes).isEmpty
                         ? nil : (model.player.setIsPlaying(seg.tunes), { model.player.toggleSet(seg.tunes) }),
@@ -97,7 +97,7 @@ struct EditableLog: View {
                             tunes: seg.tunes, trackStarters: trackStarters, timeZone: timeZone,
                             onPickStarter: { pickingStarterFor = seg.tunes })
                     }
-                    seam(.before(first), label: "＋ start of set", active: active)
+                    seam(.before(first), label: tr("＋ start of set"), active: active)
                     ForEach(Array(seg.tunes.enumerated()), id: \.element) { ti, t in
                         let id = t.recordID!
                         if model.selecting {
@@ -116,18 +116,18 @@ struct EditableLog: View {
                             dropStrip("end-new")
                         } else if !t["_temp"].isTruthy {
                             seam(.after(id), label: "＋", active: active,
-                                 pill: ti < seg.tunes.count - 1 ? ("Split", { model.split(after: id) }) : nil)
+                                 pill: ti < seg.tunes.count - 1 ? SeamPill(title: tr("Split"), id: "split") { model.split(after: id) } : nil)
                         }
                     }
                 }
                 if si < segments.count - 1, let brk = seg.breakAfter {
                     let next = segments[si + 1].tunes[0].recordID!
-                    seam(.newSet(next), label: "＋ new set", active: active, tall: true,
-                         pill: ("Join", { model.join(breakID: brk, at: .newSet(next)) }))
+                    seam(.newSet(next), label: tr("＋ new set"), active: active, tall: true,
+                         pill: SeamPill(title: tr("Join"), id: "join") { model.join(breakID: brk, at: .newSet(next)) })
                 }
             }
             if !segments.isEmpty && !endIsOpen {
-                seam(.end, label: "＋ new set", active: active, tall: true, hint: "NEW SET")
+                seam(.end, label: tr("＋ new set"), active: active, tall: true, hint: tr("NEW SET"))
             }
         }
         .onPreferenceChange(SeamFrames.self) { frames = $0 }
@@ -188,7 +188,7 @@ struct EditableLog: View {
 
     private func seam(
         _ cursor: Cursor, label: String, active: Cursor?, tall: Bool = false, hint: String? = nil,
-        pill: (String, () -> Void)? = nil
+        pill: SeamPill? = nil
     ) -> some View {
         let key = LogState.seamKey(for: cursor)
         return Group {
@@ -209,7 +209,7 @@ struct EditableLog: View {
     /// A drag-only zone: a new set at the very top, or below an open end.
     private func dropStrip(_ key: String) -> some View {
         let shown = model.drag?.started == true && model.drag?.targets.contains(where: { $0.key == key }) == true
-        return DropSeam(state: shown ? dropState(key) : .idle, tall: true, newSet: true, label: shown ? "new set" : nil)
+        return DropSeam(state: shown ? dropState(key) : .idle, tall: true, newSet: true, label: shown ? tr("new set") : nil)
             .opacity(shown ? 1 : 0)
             .background(frameReporter(key))
             .accessibilityHidden(!shown)
@@ -239,8 +239,9 @@ struct EditableLog: View {
                 let targets = Selection.dropTargets(log.ordered, segments: segments, endIsOpen: endIsOpen, block: block.recordIDs)
                 let label =
                     block.tuneIDs.count == 1
-                    ? (log.records.first { $0.recordID == id }?["name"]?.stringValue ?? "1 tune")
-                    : "\(block.tuneIDs.count) tunes" + (block.setCount > 1 ? " in \(block.setCount) sets" : "")
+                    ? (log.records.first { $0.recordID == id }?["name"]?.stringValue ?? liveTunes(1))
+                    : block.setCount > 1
+                        ? tr("\(liveTunes(block.tuneIDs.count)) in \(liveSets(block.setCount))") : liveTunes(block.tuneIDs.count)
                 model.drag = LogDrag(block: block, targets: targets, label: label, start: p, location: p)
                 startTicker()
             }
@@ -322,6 +323,38 @@ struct EditableLog: View {
     }
 }
 
+/// A seam's Split or Join: the word shown, and the identifier tests find it by.
+struct SeamPill {
+    let title: String
+    let id: String
+    let action: () -> Void
+}
+
+/// A label LogState produced (a pluralized type "Reels", "Mixed", "Unknown") in the
+/// app's language, as the web's livelabels.js labelName. LogState is held to the web's
+/// fixtures, so its English stays as it is; anything not listed shows as returned.
+nonisolated func logLabelName(_ label: String) -> String {
+    guard AppLanguage.code == "ga" else { return label }
+    return switch label.lowercased() {
+    case "barndances": tr("Barndances")
+    case "hornpipes": tr("Hornpipes")
+    case "jigs": tr("Jigs")
+    case "marches": tr("Marches")
+    case "mazurkas": tr("Mazurkas")
+    case "polkas": tr("Polkas")
+    case "reels": tr("Reels")
+    case "slides": tr("Slides")
+    case "slip jigs": tr("Slip Jigs")
+    case "strathspeys": tr("Strathspeys")
+    case "three-twos": tr("Three-Twos")
+    case "waltzes": tr("Waltzes")
+    case "airs": tr("Airs")
+    case "mixed": tr("Mixed")
+    case "unknown": tr("Unknown")
+    default: label
+    }
+}
+
 /// A log row's scroll id, for bringing a selected row into view.
 func rowScrollID(_ id: RecordID) -> String { "row-\(id)" }
 
@@ -376,7 +409,7 @@ struct SelectRow: View {
 
     var body: some View {
         let unlinked = !record["tune_id"].isTruthy
-        let name = record["name"]?.stringValue ?? record["tune_id"]?.intValue.map { "#\($0)" } ?? "(unnamed)"
+        let name = record["name"]?.stringValue ?? record["tune_id"]?.intValue.map { "#\($0)" } ?? tr("(unnamed)")
         HStack(spacing: 8) {
             Text(name)
                 .font(.ceol(size: 19))
@@ -433,7 +466,7 @@ struct SetTray: View {
                     key("Started by")
                     let name = setStarter(tunes)
                     if let onPickStarter {
-                        Button(name ?? "Not set", action: onPickStarter)
+                        Button(name ?? tr("Not set"), action: onPickStarter)
                             .font(.ceol(size: 14, weight: .semibold))
                             .foregroundStyle(name == nil ? CeolTokens.textMuted : CeolTokens.primary)
                             .padding(.horizontal, 12).padding(.vertical, 4)
@@ -442,7 +475,7 @@ struct SetTray: View {
                             .buttonStyle(.plain)
                             .accessibilityIdentifier("tray.starter")
                     } else {
-                        Text(name ?? "Not set").font(.ceol(size: 14, weight: .semibold)).foregroundStyle(CeolTokens.textMuted)
+                        Text(name ?? tr("Not set")).font(.ceol(size: 14, weight: .semibold)).foregroundStyle(CeolTokens.textMuted)
                     }
                 }
             }
@@ -459,7 +492,7 @@ struct SetTray: View {
         .padding(.bottom, 6)
     }
 
-    private func key(_ text: String) -> some View {
+    private func key(_ text: LocalizedStringKey) -> some View {
         Text(text).font(.ceol(size: 14)).foregroundStyle(CeolTokens.textMuted).frame(width: 84, alignment: .leading)
     }
 }
@@ -480,12 +513,13 @@ func loggedInfo(_ tunes: [LogRecord], timeZone: TimeZone?) -> String? {
     guard !names.isEmpty || latest != nil else { return nil }
     let when = latest.map { d -> String in
         let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US")
+        f.locale = AppLanguage.locale
         f.timeZone = timeZone ?? .current
-        f.dateFormat = "h:mm a"
+        // Irish on the 24-hour clock ("21:42"), as the web.
+        f.dateFormat = AppLanguage.code == "ga" ? "HH:mm" : "h:mm a"
         return f.string(from: d)
     }
-    return [names.isEmpty ? "someone" : names.joined(separator: ", "), when].compactMap { $0 }.joined(separator: " · ")
+    return [names.isEmpty ? tr("someone") : names.joined(separator: ", "), when].compactMap { $0 }.joined(separator: " · ")
 }
 
 /// ISO dates as the server sends them (with or without fractions or a zone).
@@ -527,19 +561,19 @@ struct SelectionBar: View {
             .foregroundStyle(CeolTokens.primary)
             .buttonStyle(.plain)
             HStack(spacing: 8) {
-                action("Copy", enabled: !model.picked.isEmpty) { model.copyPicked() }
-                action("Paste", enabled: true) { model.paste() }
-                action("Delete", enabled: !model.picked.isEmpty, danger: true) {
+                action("Copy", id: "copy", enabled: !model.picked.isEmpty) { model.copyPicked() }
+                action("Paste", id: "paste", enabled: true) { model.paste() }
+                action("Delete", id: "delete", enabled: !model.picked.isEmpty, danger: true) {
                     withAnimation(.easeOut(duration: 0.2)) { model.deletePicked() }
                 }
-                if trackStarters { action("Assign", enabled: !model.picked.isEmpty, action: onAssign) }
+                if trackStarters { action("Assign", id: "assign", enabled: !model.picked.isEmpty, action: onAssign) }
             }
         }
         .padding(.horizontal, 16).padding(.vertical, 10)
         .background(CeolTokens.bgColor)
     }
 
-    private func action(_ title: String, enabled: Bool, danger: Bool = false, action: @escaping () -> Void) -> some View {
+    private func action(_ title: LocalizedStringKey, id: String, enabled: Bool, danger: Bool = false, action: @escaping () -> Void) -> some View {
         Button(title, action: action)
             .font(.ceol(size: 15, weight: .semibold))
             .foregroundStyle(danger ? CeolTokens.danger : CeolTokens.primary)
@@ -548,7 +582,7 @@ struct SelectionBar: View {
             .opacity(enabled ? 1 : 0.4)
             .disabled(!enabled)
             .buttonStyle(.plain)
-            .accessibilityIdentifier("select.\(title.lowercased())")
+            .accessibilityIdentifier("select.\(id)")
     }
 }
 
@@ -563,7 +597,7 @@ struct LogToasts: View {
             }
             if let u = model.undoable {
                 HStack {
-                    Text("Deleted \(u.count) tune\(u.count == 1 ? "" : "s")").foregroundStyle(CeolTokens.textColor)
+                    (u.count == 1 ? Text("Deleted 1 tune") : Text("Deleted \(u.count) tunes")).foregroundStyle(CeolTokens.textColor)
                     Spacer()
                     Button("Undo") { withAnimation { model.undoDelete() } }
                         .font(.ceol(size: 15, weight: .semibold)).foregroundStyle(CeolTokens.primary)
@@ -597,7 +631,7 @@ struct Seam: View {
     let isActive: Bool
     var tall = false
     var hint: String? = nil
-    var pill: (String, () -> Void)? = nil
+    var pill: SeamPill? = nil
     let onTap: () -> Void
 
     var body: some View {
@@ -605,13 +639,13 @@ struct Seam: View {
         HStack(spacing: 8) {
             line
             if isActive, let pill {
-                Button(pill.0, action: pill.1)
+                Button(pill.title, action: pill.action)
                     .font(.ceol(size: 12, weight: .bold))
                     .foregroundStyle(CeolTokens.insertInk)
                     .padding(.horizontal, 10).padding(.vertical, 4)
                     .background(CeolTokens.insert, in: Capsule())
                     .buttonStyle(.plain)
-                    .accessibilityIdentifier("seam.\(pill.0.lowercased())")
+                    .accessibilityIdentifier("seam.\(pill.id)")
             }
         }
         // Thin, as the web's; the cursor's own seam grows to hold its Split or Join.
@@ -637,7 +671,7 @@ struct Seam: View {
         .onTapGesture(perform: onTap)
         .accessibilityElement(children: .ignore)
         .accessibilityAddTraits(.isButton)
-        .accessibilityLabel(isActive ? "Insertion point" : label.replacingOccurrences(of: "＋", with: "Insert").trimmingCharacters(in: .whitespaces))
+        .accessibilityLabel(isActive ? tr("Insertion point") : label.replacingOccurrences(of: "＋", with: tr("Insert")).trimmingCharacters(in: .whitespaces))
         .accessibilityIdentifier(isActive ? "seam.active" : "seam")
     }
 }
@@ -671,7 +705,7 @@ struct EditableRow: View {
     var body: some View {
         let unlinked = !record["tune_id"].isTruthy
         let low = !record["_temp"].isTruthy && (record["confidence"]?.intValue).map { $0 <= 70 } ?? false
-        let name = record["name"]?.stringValue ?? record["tune_id"]?.intValue.map { "#\($0)" } ?? "(unnamed)"
+        let name = record["name"]?.stringValue ?? record["tune_id"]?.intValue.map { "#\($0)" } ?? tr("(unnamed)")
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 6) {
                 Text(name)
@@ -733,10 +767,10 @@ struct EditableRow: View {
                 }
             }
             .overlay(alignment: .topTrailing) {
-                if selected && !record["_temp"].isTruthy { insertPill("↑", "Insert above", onInsertAbove).offset(y: -10) }
+                if selected && !record["_temp"].isTruthy { insertPill("↑", tr("Insert above"), id: "row.insertAbove", onInsertAbove).offset(y: -10) }
             }
             .overlay(alignment: .bottomTrailing) {
-                if selected && !record["_temp"].isTruthy { insertPill("↓", "Insert below", onInsertBelow).offset(y: 10) }
+                if selected && !record["_temp"].isTruthy { insertPill("↓", tr("Insert below"), id: "row.insertBelow", onInsertBelow).offset(y: 10) }
             }
             .zIndex(1)
             .contentShape(Rectangle())
@@ -746,10 +780,10 @@ struct EditableRow: View {
             .accessibilityAction(named: "Remove", onRemove)
             if selected {
                 HStack(spacing: 6) {
-                    if record["tune_id"].isTruthy { action("ⓘ Info", onInfo) }
-                    if low { action("✓ Confirm", onConfirm) }
-                    action("✎ Edit", onEdit)
-                    action("🗑 Remove", onRemove, danger: true)
+                    if record["tune_id"].isTruthy { action("ⓘ Info", id: "info", onInfo) }
+                    if low { action("✓ Confirm", id: "confirm", onConfirm) }
+                    action("✎ Edit", id: "edit", onEdit)
+                    action("🗑 Remove", id: "remove", onRemove, danger: true)
                 }
                 .padding(.top, 14).padding(.bottom, 8).padding(.horizontal, 2)
             }
@@ -784,7 +818,7 @@ struct EditableRow: View {
         .sensoryFeedback(.impact(weight: .medium), trigger: dx <= -Self.removeAt)
     }
 
-    private func insertPill(_ glyph: String, _ label: String, _ tap: @escaping () -> Void) -> some View {
+    private func insertPill(_ glyph: String, _ label: String, id: String, _ tap: @escaping () -> Void) -> some View {
         Button(glyph, action: tap)
             .font(.ceol(size: 12, weight: .bold))
             .foregroundStyle(CeolTokens.insertInk)
@@ -793,10 +827,10 @@ struct EditableRow: View {
             .buttonStyle(.plain)
             .padding(.trailing, 10)
             .accessibilityLabel(label)
-            .accessibilityIdentifier(label == "Insert above" ? "row.insertAbove" : "row.insertBelow")
+            .accessibilityIdentifier(id)
     }
 
-    private func action(_ title: String, _ tap: @escaping () -> Void, danger: Bool = false) -> some View {
+    private func action(_ title: LocalizedStringKey, id: String, _ tap: @escaping () -> Void, danger: Bool = false) -> some View {
         Button(title, action: tap)
             .font(.ceol(size: 14))
             .foregroundStyle(danger ? CeolTokens.danger : CeolTokens.textColor)
@@ -804,7 +838,7 @@ struct EditableRow: View {
             .background(Color(red: 0.125, green: 0.125, blue: 0.165), in: RoundedRectangle(cornerRadius: 7))
             .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(CeolTokens.borderColor, lineWidth: 1))
             .buttonStyle(.plain)
-            .accessibilityIdentifier("row.\(title.split(separator: " ").last!.lowercased())")
+            .accessibilityIdentifier("row.\(id)")
     }
 }
 
@@ -879,7 +913,7 @@ struct LogComposer: View {
             }
             if c.editingID != nil {
                 HStack(spacing: 8) {
-                    (Text("Editing ") + Text(c.editingName).bold() + Text(" — pick a match, or type a new name"))
+                    Text("Editing \(Text(c.editingName).bold()) — pick a match, or type a new name")
                         .font(.ceol(size: 14)).foregroundStyle(CeolTokens.textColor)
                     Spacer(minLength: 4)
                     // The whole catalogue, or thesession.org, for the tune being edited.
@@ -919,7 +953,7 @@ struct LogComposer: View {
                 .background(CeolTokens.headerBg, in: RoundedRectangle(cornerRadius: 8))
                 .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(c.ambiguous ? CeolTokens.danger : CeolTokens.borderColor, lineWidth: 1))
                 let canLog = c.editingID != nil || c.ambiguous || !trimmed.isEmpty
-                Button(c.editingID != nil ? "Save" : "Log", action: commit)
+                Button(c.editingID != nil ? tr("Save") : tr("Log"), action: commit)
                     .font(.ceol(size: 16, weight: .semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 18).frame(height: 46)
@@ -943,9 +977,9 @@ struct LogComposer: View {
     @ViewBuilder private var trailing: some View {
         let c = model.composer
         if c.editingID != nil {
-            outline("Cancel", id: "edit.cancel") { c.cancelEdit() }
+            outline(tr("Cancel"), id: "edit.cancel") { c.cancelEdit() }
         } else if !trimmed.isEmpty && c.resolving == nil {
-            outline("Search", id: "log.search", color: CeolTokens.info, action: onDeepSearch)
+            outline(tr("Search"), id: "log.search", color: CeolTokens.info, action: onDeepSearch)
         } else if trimmed.isEmpty && model.atClosedSetEnd && model.selected == nil && c.resolving == nil {
             // At the end of a set that's already closed: done with it, back to the end.
             Button("End set") { model.leaveSeam() }
@@ -965,7 +999,7 @@ struct LogComposer: View {
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("log.endSet")
             } else {
-                outline("Done", id: "log.done", action: onDone)
+                outline(tr("Done"), id: "log.done", action: onDone)
             }
         }
     }
@@ -984,12 +1018,12 @@ struct LogComposer: View {
 
     private var prompt: String {
         let c = model.composer
-        if c.resolving != nil { return c.ambiguous ? "Pick one above" : "Resolving…" }
-        if c.editingID != nil { return "Re-pick or rename this tune…" }
+        if c.resolving != nil { return c.ambiguous ? tr("Pick one above") : tr("Resolving…") }
+        if c.editingID != nil { return tr("Re-pick or rename this tune…") }
         switch model.cursor {
-        case .end: return "Tune name"
-        case .newSet: return "Tune name — starts a new set"
-        default: return "Tune name — goes at the yellow line"
+        case .end: return tr("Tune name")
+        case .newSet: return tr("Tune name — starts a new set")
+        default: return tr("Tune name — goes at the yellow line")
         }
     }
 
@@ -1063,10 +1097,10 @@ struct Suggestions: View {
     @ViewBuilder private func view(_ item: Item, _ c: LogComposerModel) -> some View {
         switch item {
         case .theSession(let id):
-            row(title: "Tune #\(id) from thesession.org", detail: nil, id: "suggest.thesession") { c.logTheSession(id) }
+            row(title: tr("Tune #\(id) from thesession.org"), detail: nil, id: "suggest.thesession") { c.logTheSession(id) }
         case .next(let next):
             HStack(spacing: 0) {
-                row(title: next.name, detail: ["usually next", next.tuneType].compactMap { $0 }.joined(separator: " · "),
+                row(title: next.name, detail: [tr("usually next"), next.tuneType.map(tuneTypeName)].compactMap { $0 }.joined(separator: " · "),
                     bold: true, id: "suggest.next") { c.pick(next.json) }
                 Button { model.dismissLikelyNext() } label: {
                     Image(systemName: "xmark").font(.system(size: 13)).foregroundStyle(CeolTokens.textMuted).frame(width: 40, height: 40)
@@ -1075,15 +1109,15 @@ struct Suggestions: View {
             }
         case .result(let t):
             let detail = [
-                t["tune_type"]?.stringValue, t["in_session_tune"] == true ? "in session" : nil,
-                t["abc"] == true ? "♪ notation" : nil,
+                t["tune_type"]?.stringValue.map(tuneTypeName), t["in_session_tune"] == true ? tr("in session") : nil,
+                t["abc"] == true ? tr("♪ notation") : nil,
             ].compactMap { $0 }.joined(separator: " · ")
             row(title: t["name"]?.stringValue ?? "", detail: detail.isEmpty ? nil : detail, id: "suggest.row") { c.pick(t) }
         case .noMatch:
             Text("No tunes match your search").font(.ceol(size: 14)).foregroundStyle(CeolTokens.textMuted)
                 .frame(maxWidth: .infinity, alignment: .leading).padding(12)
         case .asIs(let text):
-            row(title: "Log “\(text)” as typed", detail: nil, id: "suggest.asIs", color: CeolTokens.primary) { c.logAsIs() }
+            row(title: tr("Log “\(text)” as typed"), detail: nil, id: "suggest.asIs", color: CeolTokens.primary) { c.logAsIs() }
         }
     }
 
@@ -1112,7 +1146,8 @@ struct QueuedBanner: View {
 
     var body: some View {
         let n = model.queuedCount
-        Text("⏳ \(n) change\(n == 1 ? "" : "s") queued — \(model.status == .live ? "syncing…" : "offline")")
+        let state = model.status == .live ? tr("syncing…") : tr("offline")
+        ((n == 1 ? Text("⏳ 1 change queued") : Text("⏳ \(n) changes queued")) + Text(verbatim: " — \(state)"))
             .font(.ceol(size: 14)).foregroundStyle(CeolTokens.warning)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 12).padding(.vertical, 8)
@@ -1136,7 +1171,9 @@ struct ReviewSheet: View {
                         Text("\(item.what) — \(item.why)").font(.ceol(size: 15)).foregroundStyle(CeolTokens.textColor)
                     }
                 } header: {
-                    Text("\(items.count) change\(items.count == 1 ? "" : "s") you made offline couldn’t be applied when you reconnected — usually because someone else changed the same tune first.")
+                    (items.count == 1
+                        ? Text("1 change you made offline couldn’t be applied when you reconnected — usually because someone else changed the same tune first.")
+                        : Text("\(items.count) changes you made offline couldn’t be applied when you reconnected — usually because someone else changed the same tune first."))
                         .font(.ceol(size: 14)).foregroundStyle(CeolTokens.textMuted).textCase(nil)
                 }
             }

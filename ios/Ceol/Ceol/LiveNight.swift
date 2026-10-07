@@ -408,7 +408,7 @@ final class NightModel {
         revealCursor += 1
         enqueue(r.ops)
         if let target = r.mergedInto {
-            let name = target["name"]?.stringValue ?? payload["name"]?.stringValue ?? "that tune"
+            let name = target["name"]?.stringValue ?? payload["name"]?.stringValue ?? tr("that tune")
             mergedSeq += 1
             let seq = mergedSeq
             merged = (name, payload)
@@ -590,7 +590,7 @@ final class NightModel {
         lastCopy = copy
         UIPasteboard.general.string = copy.text
         let tunes = copy.rich.reduce(0) { $0 + $1.count }
-        say("Copied \(tunes) tune\(tunes == 1 ? "" : "s") in \(copy.rich.count) set\(copy.rich.count == 1 ? "" : "s")")
+        say(tr("Copied \(liveTunes(tunes)) in \(liveSets(copy.rich.count))"))
     }
 
     /// Paste at the cursor: our own last copy with its links, the old logger's JSON,
@@ -600,14 +600,14 @@ final class NightModel {
         guard let plan = Selection.parseClipboard(text, lastCopy: lastCopy) ?? lastCopy.map({ (.internal, $0.rich) }),
             !plan.sets.isEmpty, var l = log
         else {
-            say("Nothing to paste")
+            say(tr("Nothing to paste"))
             return
         }
         let ops = l.paste(plan.sets, at: cursor)
         log = l
         enqueue(ops)
         let tunes = plan.sets.reduce(0) { $0 + $1.count }
-        say("Pasted \(tunes) tune\(tunes == 1 ? "" : "s") in \(plan.sets.count) set\(plan.sets.count == 1 ? "" : "s")")
+        say(tr("Pasted \(liveTunes(tunes)) in \(liveSets(plan.sets.count))"))
     }
 
     /// Who started a set (nil clears it).
@@ -626,7 +626,7 @@ final class NightModel {
         for set in sets { setStarter(of: set.tunes, person: person) }
         let n = sets.count
         let name = person?["display_name"]?.stringValue ?? ""
-        say(person == nil ? "Cleared the starter on \(n) set\(n == 1 ? "" : "s")" : "Assigned \(n) set\(n == 1 ? "" : "s") to \(name)")
+        say(person == nil ? tr("Cleared the starter on \(liveSets(n))") : tr("Assigned \(liveSets(n)) to \(name)"))
     }
 
     /// "Sarah O": the web's starterAbbrev.
@@ -641,7 +641,7 @@ final class NightModel {
     private func noteRemote(_ d: JSONValue) {
         let actor = d["actor"]?["person_id"]?.intValue
         let color = actor.flatMap { a in roster.first { $0["person_id"]?.intValue == a }?["arrival_seq"]?.intValue }
-        if let text = People.activityText(d, me: me, viewing: !editing) {
+        if let text = liveActivityLine(d, me: me, viewing: !editing) {
             activitySeq += 1
             let item = Activity(id: activitySeq, text: text, color: color)
             activities = Array((activities + [item]).suffix(People.maxActivity))
@@ -722,17 +722,30 @@ final class NightModel {
         do {
             let (code, answer) = try await app.postJSON("/api/live/instances/\(instanceID)/ops", body: .object(body))
             if code != 200 {
-                return (nil, answer["message"]?.stringValue ?? answer["error"]?.stringValue ?? "That didn't save.")
+                return (nil, answer["message"]?.stringValue ?? answer["error"]?.stringValue ?? tr("That didn't save."))
             }
             if answer["rejected"].isTruthy || answer["success"] == false {
-                return (answer, answer["message"]?.stringValue ?? answer["reason"]?.stringValue ?? "That didn't save.")
+                return (answer, answer["message"]?.stringValue ?? answer["reason"]?.stringValue ?? tr("That didn't save."))
             }
             var patched = answer
             if case .object(var o) = patched, o["op_type"] == nil { o["op_type"] = .string(type); patched = .object(o) }
             for (k, v) in LogState.metaChanges(patched) { log?.meta[k] = v }
             return (answer, nil)
         } catch {
-            return (nil, "You're offline — \(label) needs a connection.")
+            return (nil, Self.offlineMessage(label))
+        }
+    }
+
+    /// "You're offline — … needs a connection." for a metaOp's label, whole sentences so
+    /// each reads right in Irish.
+    private static func offlineMessage(_ label: String) -> String {
+        switch label {
+        case "marking complete": tr("You're offline — marking complete needs a connection.")
+        case "re-opening": tr("You're offline — re-opening needs a connection.")
+        case "notes": tr("You're offline — notes need a connection.")
+        case "changing the date": tr("You're offline — changing the date needs a connection.")
+        case "naming this log": tr("You're offline — naming this log needs a connection.")
+        default: tr("You're offline — this needs a connection.")
         }
     }
 
@@ -787,14 +800,30 @@ final class NightModel {
         do {
             let (code, answer) = try await app.postJSON("/api/live/instances/\(instanceID)/ops", body: .object(body))
             if code != 200 || answer["success"] == false {
-                notice = answer["message"]?.stringValue ?? answer["error"]?.stringValue ?? "\(label) didn't work."
+                notice = answer["message"]?.stringValue ?? answer["error"]?.stringValue ?? Self.attendanceFailed(label)
                 return nil
             }
             await loadPeople()
             return answer["person"]
         } catch {
-            notice = "You're offline — \(label.lowercased()) needs a connection."
+            notice = Self.attendanceOffline(label)
             return nil
+        }
+    }
+
+    private static func attendanceFailed(_ label: String) -> String {
+        switch label {
+        case "Check in": tr("Check in didn't work.")
+        case "Remove": tr("Remove didn't work.")
+        default: tr("Add person didn't work.")
+        }
+    }
+
+    private static func attendanceOffline(_ label: String) -> String {
+        switch label {
+        case "Check in": tr("You're offline — check in needs a connection.")
+        case "Remove": tr("You're offline — remove needs a connection.")
+        default: tr("You're offline — add person needs a connection.")
         }
     }
 
@@ -876,7 +905,7 @@ final class NightModel {
                 // Its row never reached the server (that add was refused): nothing to send.
                 log?.rollback(opID)
                 outbox.removeFirst()
-                if op.queued { flushRejects.append(reviewItem(op, why: "the tune it changed was never saved")) }
+                if op.queued { flushRejects.append(reviewItem(op, why: tr("the tune it changed was never saved"))) }
                 continue
             }
             do {
@@ -890,7 +919,7 @@ final class NightModel {
                     }
                 } else {
                     log?.rollback(opID)
-                    notice = answer["message"]?.stringValue ?? answer["error"]?.stringValue ?? "That change wasn't saved."
+                    notice = answer["message"]?.stringValue ?? answer["error"]?.stringValue ?? tr("That change wasn't saved.")
                 }
                 settleCursor()
             } catch {
@@ -903,7 +932,7 @@ final class NightModel {
         sender = nil
         if outbox.isEmpty {
             if !flushRejects.isEmpty { review = flushRejects }
-            if synced > 0 { say("↻ \(synced) synced") }
+            if synced > 0 { say(tr("↻ \(synced) synced")) }
             flushRejects = []
             synced = 0
             saveNow()
@@ -913,9 +942,9 @@ final class NightModel {
     /// The web's reconciliation wording (RECONCILE_VERB / RECONCILE_REASON).
     private func reviewItem(_ op: PendingOp, why: String) -> ReviewItem {
         let verbs = [
-            "add_tune": "Add", "change_tune": "Edit", "remove_tune": "Remove", "set_break": "Set break",
-            "set_confidence": "Confirm", "attribute_set_starter": "Set starter", "edit_notes": "Edit notes",
-            "move_tunes": "Move", "remove_tunes": "Bulk remove", "restore_tunes": "Restore",
+            "add_tune": tr("Add"), "change_tune": tr("Edit"), "remove_tune": tr("Remove"), "set_break": tr("Set break"),
+            "set_confidence": tr("Confirm"), "attribute_set_starter": tr("Set starter"), "edit_notes": tr("Edit notes"),
+            "move_tunes": tr("Move"), "remove_tunes": tr("Bulk remove"), "restore_tunes": tr("Restore"),
         ]
         let verb = verbs[op.opType] ?? op.opType
         let name = op.label ?? op.prev.first?["name"]?.stringValue
@@ -924,8 +953,8 @@ final class NightModel {
 
     static func reason(_ answer: JSONValue) -> String? {
         switch answer["reason"]?.stringValue {
-        case "target_deleted", "target_removed": "it had already been removed"
-        case "not_found": "it no longer exists"
+        case "target_deleted", "target_removed": tr("it had already been removed")
+        case "not_found": tr("it no longer exists")
         default: answer["message"]?.stringValue ?? answer["reason"]?.stringValue
         }
     }
@@ -1003,4 +1032,76 @@ extension AppModel {
         streamingURL = url
         return url
     }
+}
+
+// MARK: - Spec 057: the live logger's words in the app's language
+
+/// "1 tune" / "3 tunes".
+func liveTunes(_ n: Int) -> String { n == 1 ? tr("1 tune") : tr("\(n) tunes") }
+
+/// "1 set" / "3 sets".
+func liveSets(_ n: Int) -> String { n == 1 ? tr("1 set") : tr("\(n) sets") }
+
+/// Someone else's change, said in a line. English is People.activityText's output
+/// unchanged (it's held to the web's fixtures); in Irish the same sentence is built here,
+/// verb first, as the web's livelabels.js irishActivity does.
+func liveActivityLine(_ d: JSONValue, me: Int?, viewing: Bool) -> String? {
+    guard let english = People.activityText(d, me: me, viewing: viewing) else { return nil }
+    guard AppLanguage.code == "ga" else { return english }
+    return irishActivity(d) ?? english
+}
+
+private func irishActivity(_ d: JSONValue) -> String? {
+    let actor = d["actor"]?["name"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 } ?? tr("Someone")
+    let rec = d["record"]
+    let tune = rec?["name"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 }
+        ?? (rec?["tune_id"].isTruthy == true ? "#\(rec?["tune_id"]?.intValue.map(String.init) ?? "")" : tr("a tune"))
+    let person = d["person"].isTruthy ? (d["person"]?["display_name"]?.stringValue ?? "") : nil
+    func count(_ key: String) -> Int { d[key]?.arrayValue?.count ?? 0 }
+    switch d["op_type"]?.stringValue {
+    case "add_tune": return tr("\(actor) added \(tune)")
+    case "corroborate": return tr("\(actor) also logged \(tune)")
+    case "change_tune": return tr("\(actor) edited \(tune)")
+    case "remove_tune": return tr("\(actor) removed \(tune)")
+    case "move_tunes": return tr("\(actor) moved \(liveTunes(count("moved_ids")))")
+    case "remove_tunes": return tr("\(actor) removed \(liveTunes(count("records")))")
+    case "restore_tunes": return tr("\(actor) restored \(liveTunes(count("records")))")
+    case "set_break": return d["removed"].isTruthy ? tr("\(actor) removed a break") : tr("\(actor) ended a set")
+    case "attribute_set_starter":
+        return person.map { tr("\(actor) set \($0) as starting a set") } ?? tr("\(actor) cleared a set starter")
+    case "set_confidence": return tr("\(actor) confirmed \(tune)")
+    case "attendance_add": return person.map { tr("\(actor) checked in \($0)") } ?? tr("\(actor) updated attendance")
+    case "attendance_create_person": return person.map { tr("\(actor) added \($0)") } ?? tr("\(actor) added a player")
+    case "attendance_remove": return person.map { tr("\(actor) checked out \($0)") } ?? tr("\(actor) updated attendance")
+    case "edit_notes": return tr("\(actor) edited the notes")
+    case "set_date":
+        let movedDate = !d["previous_date"].isNullish && d["date"] != d["previous_date"]
+        let movedTimes =
+            (d["start_time"] != nil && d["start_time"] != d["previous_start_time"])
+            || (d["end_time"] != nil && d["end_time"] != d["previous_end_time"])
+        let time = liveTimeLabel(start: d["start_time"]?.stringValue, end: d["end_time"]?.stringValue)
+        let date = d["session_date"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 }
+        if movedDate && movedTimes, let date, !time.isEmpty { return tr("\(actor) re-dated this log to \(date), \(time)") }
+        if movedDate, let date { return tr("\(actor) re-dated this log to \(date)") }
+        if movedTimes { return time.isEmpty ? tr("\(actor) cleared this log's time") : tr("\(actor) set this log's time to \(time)") }
+        return tr("\(actor) re-dated this log")
+    case "set_name":
+        if let name = d["instance_name"]?.stringValue, !name.isEmpty { return tr("\(actor) named this log \"\(name)\"") }
+        return tr("\(actor) cleared this log's name")
+    default: return nil
+    }
+}
+
+/// A night's times ("7:00pm-10:00pm"): HomeRules' English as it is; in Irish on the
+/// 24-hour clock ("19:00-22:00"), as the web's formatTime.
+func liveTimeLabel(start: String?, end: String?) -> String {
+    guard AppLanguage.code == "ga" else { return HomeRules.instanceTimeLabel(start: start, end: end) }
+    guard let start, !start.isEmpty else { return "" }
+    func hhmm(_ t: String) -> String {
+        let parts = t.split(separator: ":")
+        guard parts.count >= 2, let h = Int(parts[0]) else { return t }
+        return (h < 10 ? "0" : "") + "\(h):" + parts[1]
+    }
+    if let end, !end.isEmpty { return hhmm(start) + "-" + hhmm(end) }
+    return hhmm(start) + " - ?"
 }

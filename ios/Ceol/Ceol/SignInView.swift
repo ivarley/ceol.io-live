@@ -55,7 +55,7 @@ struct SignInView: View {
     private var header: some View {
         Section {
             VStack(alignment: .leading, spacing: 6) {
-                Text("Ceol").font(.ceol(.largeTitle, weight: .semibold)).foregroundStyle(CeolTokens.primary)
+                Text(verbatim: "Ceol").font(.ceol(.largeTitle, weight: .semibold)).foregroundStyle(CeolTokens.primary)
                 Text("The tunes you know, the sessions you play, and what gets played there.")
                     .font(.ceol(.subheadline)).foregroundStyle(CeolTokens.textMuted)
             }
@@ -76,7 +76,7 @@ struct SignInView: View {
                 .focused($focused)
                 .onSubmit { Task { await checkEmail() } }
                 .accessibilityIdentifier("signin.email")
-            Button { Task { await checkEmail() } } label: { progressLabel("Continue") }
+            Button { Task { await checkEmail() } } label: { progressLabel(tr("Continue")) }
                 .disabled(email.trimmingCharacters(in: .whitespaces).isEmpty)
                 .accessibilityIdentifier("signin.continue")
         } footer: {
@@ -94,11 +94,11 @@ struct SignInView: View {
                 .focused($focused)
                 .onSubmit { Task { await login(email) } }
                 .accessibilityIdentifier("signin.password")
-            Button { Task { await login(email) } } label: { progressLabel("Sign in") }
+            Button { Task { await login(email) } } label: { progressLabel(tr("Sign in")) }
                 .disabled(password.isEmpty)
                 .accessibilityIdentifier("signin.submit")
             if unverified {
-                Button(resent ? "Sent. Check your email." : "Send the confirmation email again") {
+                Button(resent ? tr("Sent. Check your email.") : tr("Send the confirmation email again")) {
                     Task { await resend(email) }
                 }
                 .disabled(resent)
@@ -110,13 +110,13 @@ struct SignInView: View {
 
     private func sentStep(_ email: String, _ message: String, _ registration: Bool) -> some View {
         Section {
-            Label(registration ? "Check your email to create your account" : "Check your email",
+            Label(registration ? tr("Check your email to create your account") : tr("Check your email"),
                   systemImage: "envelope")
                 .font(.ceol(.headline))
             Text(message)
             Text("We sent it to \(email). Open the link on this iPhone and it will sign you in here.")
                 .font(.ceol(.footnote)).foregroundStyle(CeolTokens.textMuted)
-            Button(resent ? "Sent again." : "Send it again") {
+            Button(resent ? tr("Sent again.") : tr("Send it again")) {
                 Task {
                     await checkEmail(again: email)
                     resent = true
@@ -188,7 +188,7 @@ struct SignInView: View {
         } catch let f as AuthFailure {
             error = AppModel.message(for: f)
         } catch {
-            self.error = "Couldn't reach Ceol. Check your connection and try again."
+            self.error = tr("Couldn't reach Ceol. Check your connection and try again.")
         }
     }
 }

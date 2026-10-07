@@ -3,6 +3,8 @@
 // stays usable; tap it for the certainty meter, the listening service's top five with
 // ten-segment bars, where a tap on a name says "this is it" and "None of these" sends
 // it looking again. The model is NightRecorder.
+//
+// i18n-converted (spec 057). Tune names, and the night's title, are data.
 
 import CeolDesign
 import CeolLogic
@@ -36,18 +38,18 @@ extension NightRecorder {
     /// The bar's one line: what it thinks right now.
     var headline: String {
         if let error { return error }
-        guard let s = state else { return "Listening…" }
-        if s.notATune { return "Not a tune right now" }
-        if let c = s.shownCandidate ?? s.top.first { return c.name ?? "Tune \(c.tuneID)" }
-        return "Listening…"
+        guard let s = state else { return tr("Listening…") }
+        if s.notATune { return tr("Not a tune right now") }
+        if let c = s.shownCandidate ?? s.top.first { return c.name ?? tr("Tune \(c.tuneID)") }
+        return tr("Listening…")
     }
 
     var linkText: String {
         switch link {
-        case .connecting: "Connecting to the listener…"
-        case .live: behind > 8 ? "Catching up, \(Int(behind)) s behind" : "Listening"
-        case .reconnecting: "Offline — still recording, will catch up"
-        case .unavailable(let why): "Listener unavailable (\(why)) — still recording"
+        case .connecting: tr("Connecting to the listener…")
+        case .live: behind > 8 ? tr("Catching up, \(Int(behind)) s behind") : tr("Listening")
+        case .reconnecting: tr("Offline — still recording, will catch up")
+        case .unavailable(let why): tr("Listener unavailable (\(why)) — still recording")
         }
     }
 
@@ -252,9 +254,9 @@ struct ListenMeterView: View {
         let confirmed = recorder.confirmed == c.tuneID
         return HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(c.name ?? "Tune \(c.tuneID)").font(.ceol(size: 18, weight: .semibold))
+                Text(c.name ?? tr("Tune \(c.tuneID)")).font(.ceol(size: 18, weight: .semibold))
                     .foregroundStyle(CeolTokens.textColor).multilineTextAlignment(.leading)
-                Text([c.type, c.outside ? "new to this session" : nil, "\(Int((c.p * 100).rounded()))%"]
+                Text([c.type.map(TunesWords.type), c.outside ? tr("new to this session") : nil, "\(Int((c.p * 100).rounded()))%"]
                     .compactMap { $0 }.joined(separator: " · "))
                     .font(.ceol(size: 12)).foregroundStyle(CeolTokens.textMuted)
             }
@@ -274,7 +276,7 @@ struct ListenMeterView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Shown so far").font(.ceol(size: 13, weight: .semibold)).foregroundStyle(CeolTokens.textMuted)
                 ForEach(Array(h.reversed().enumerated()), id: \.offset) { _, s in
-                    Text("\(Segments.formatClock(Double(s.fromMs))) · \(s.name ?? "Tune \(s.tuneID)")")
+                    Text(verbatim: "\(Segments.formatClock(Double(s.fromMs))) · \(s.name ?? tr("Tune \(s.tuneID)"))")
                         .font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
                 }
             }
@@ -294,7 +296,7 @@ struct RecordNightButton: View {
         Button {
             if recordingThis { app.recorder?.showingMeter = true } else { app.startRecording(instanceID: instanceID, title: title) }
         } label: {
-            Label(recordingThis ? "Recording" : "Record", systemImage: recordingThis ? "record.circle.fill" : "record.circle")
+            Label(recordingThis ? tr("Recording") : tr("Record"), systemImage: recordingThis ? "record.circle.fill" : "record.circle")
                 .foregroundStyle(recordingThis ? CeolTokens.danger : CeolTokens.textColor)
         }
         .accessibilityIdentifier("night.record")
@@ -306,13 +308,13 @@ struct RecordNightButton: View {
 extension LocalRecording {
     var statusText: String {
         switch phase {
-        case .recording: "Recording"
-        case .ready: "Not uploaded yet"
-        case .converting: "Preparing the file…"
-        case .uploading: "Uploading…"
-        case .confirming: "Finishing the upload…"
-        case .uploaded: "Uploaded — open it in the segmenter"
-        case .failed: error ?? "Upload failed"
+        case .recording: tr("Recording")
+        case .ready: tr("Not uploaded yet")
+        case .converting: tr("Preparing the file…")
+        case .uploading: tr("Uploading…")
+        case .confirming: tr("Finishing the upload…")
+        case .uploaded: tr("Uploaded — open it in the segmenter")
+        case .failed: error ?? tr("Upload failed")
         }
     }
 }
@@ -366,7 +368,7 @@ struct RecordingsView: View {
                         if let p = store.progress[r.id] { ProgressView(value: p).tint(CeolTokens.primary) }
                         HStack(spacing: 16) {
                             if [.ready, .failed].contains(r.phase), app.recorder?.recordingID != r.id {
-                                Button(r.phase == .failed ? "Retry upload" : "Upload") { Task { await store.upload(r.id) } }
+                                Button(r.phase == .failed ? tr("Retry upload") : tr("Upload")) { Task { await store.upload(r.id) } }
                                     .accessibilityIdentifier("recordings.upload")
                             }
                             if [.ready, .failed, .uploaded].contains(r.phase), app.recorder?.recordingID != r.id {
@@ -393,8 +395,8 @@ struct RecordingsView: View {
                     deleting = nil
                 }
             } message: {
-                Text(deleting?.phase == .uploaded ? "It is on the server; this only frees the space here."
-                     : "It hasn't been uploaded: this is the only copy.")
+                Text(deleting?.phase == .uploaded ? tr("It is on the server; this only frees the space here.")
+                     : tr("It hasn't been uploaded: this is the only copy."))
             }
         }
         .preferredColorScheme(.dark)
@@ -405,6 +407,6 @@ struct RecordingsView: View {
         let length = seconds >= 3600 ? String(format: "%d:%02d:%02d", seconds / 3600, seconds / 60 % 60, seconds % 60)
             : String(format: "%d:%02d", seconds / 60, seconds % 60)
         let mb = Double(store.bytes(r)) / 1_000_000
-        return "\(r.startedAt.formatted(date: .abbreviated, time: .shortened)) · \(length) · \(String(format: "%.0f MB", mb))"
+        return "\(localizedDate(r.startedAt, Date.FormatStyle(date: .abbreviated, time: .shortened))) · \(length) · \(String(format: "%.0f MB", mb))"
     }
 }

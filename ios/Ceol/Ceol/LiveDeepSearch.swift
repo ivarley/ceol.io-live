@@ -30,7 +30,7 @@ struct DeepSearchSheet: View {
     let scope: TuneSearchScope
     let initialQuery: String
     let preferType: String?
-    var title = "Find a tune"
+    var title = tr("Find a tune")
     /// Offer to log the text as typed (the logger only).
     var allowAsIs = true
     /// Close after a pick; off when the pick leads on to a next step in the same sheet.
@@ -79,12 +79,12 @@ struct DeepSearchSheet: View {
                     }
                     if !q.isEmpty {
                         if remote == nil && mode != .abc {
-                            wide("🔎 Search on thesession.org for “\(q)”", color: CeolTokens.info, id: "deep.thesession") {
+                            wide(tr("🔎 Search on thesession.org for “\(q)”"), color: CeolTokens.info, id: "deep.thesession") {
                                 Task { await searchTheSession(q) }
                             }
                         }
                         if allowAsIs && mode != .abc {
-                            wide("＋ Log “\(q)” as typed (unlinked)", color: CeolTokens.primary, id: "deep.asIs") {
+                            wide(tr("＋ Log “\(q)” as typed (unlinked)"), color: CeolTokens.primary, id: "deep.asIs") {
                                 pick(["name": .string(q)])
                             }
                         }
@@ -147,9 +147,9 @@ struct DeepSearchSheet: View {
 
     private var prompt: String {
         switch mode {
-        case .abc: "Search by notes, e.g. GED or EBBA…"
-        case .name: "Search by name…"
-        case .mixed: "Search by name or notes…"
+        case .abc: tr("Search by notes, e.g. GED or EBBA…")
+        case .name: tr("Search by name…")
+        case .mixed: tr("Search by name or notes…")
         }
     }
 
@@ -163,9 +163,9 @@ struct DeepSearchSheet: View {
             .pickerStyle(.segmented)
             Menu {
                 Button("Any type") { type = nil }
-                ForEach(Self.types, id: \.self) { t in Button(LogState.pluralType(t)?.capitalized ?? t) { type = t } }
+                ForEach(Self.types, id: \.self) { t in Button(Self.typeLabel(t)) { type = t } }
             } label: {
-                Text(type.flatMap { LogState.pluralType($0)?.capitalized } ?? "Any type")
+                Text(type.map(Self.typeLabel) ?? tr("Any type"))
                     .font(.ceol(size: 14)).foregroundStyle(type == nil ? CeolTokens.textMuted : CeolTokens.primary)
                     .padding(.horizontal, 10).frame(height: 32)
                     .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(CeolTokens.borderColor, lineWidth: 1))
@@ -194,10 +194,12 @@ struct DeepSearchSheet: View {
                     DeepIncipit(app: app, tuneID: id, base64: r["incipit_image"]?.stringValue, canRender: r["can_render"] == true)
                 }
                 let badges = [
-                    r["abc_only"] == true ? "♪ notation" : nil, r["on_list"] == true ? "★ on your list" : nil,
-                    r["in_session"] == true ? "in this session" : nil,
-                    r["played_here"]?.intValue.flatMap { $0 > 0 ? "played here \($0)×" : nil },
-                    remote ? (r["alias"]?.stringValue).map { "aka \($0)" } : "\(r["tunebook_count"]?.intValue ?? 0) tunebooks",
+                    r["abc_only"] == true ? tr("♪ notation") : nil, r["on_list"] == true ? tr("★ on your list") : nil,
+                    r["in_session"] == true ? tr("in this session") : nil,
+                    r["played_here"]?.intValue.flatMap { $0 > 0 ? tr("played here \($0)×") : nil },
+                    remote
+                        ? (r["alias"]?.stringValue).map { tr("aka \($0)") }
+                        : Self.tunebooks(r["tunebook_count"]?.intValue ?? 0),
                 ].compactMap { $0 }
                 if !badges.isEmpty {
                     Text(badges.joined(separator: " · ")).font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
@@ -212,6 +214,15 @@ struct DeepSearchSheet: View {
         .buttonStyle(.plain)
         .accessibilityIdentifier(remote ? "deep.remote" : "deep.result")
     }
+
+    /// "Reels" in the type menu: LogState's plural, capitalized, in the app's language.
+    private static func typeLabel(_ t: String) -> String {
+        let plural = LogState.pluralType(t)?.capitalized ?? t
+        return logLabelName(plural)
+    }
+
+    /// "12 tunebooks" (English has always said "1 tunebooks" too); Irish has its plural forms.
+    private static func tunebooks(_ n: Int) -> String { tr("\(n) tunebooks") }
 
     private func wide(_ title: String, color: Color, id: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {

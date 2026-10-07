@@ -80,7 +80,7 @@ struct ProfileSetupView: View {
                                 if instruments.contains(name) { instruments.remove(name) } else { instruments.insert(name) }
                             } label: {
                                 HStack {
-                                    Text(name).foregroundStyle(CeolTokens.textColor)
+                                    Text(instrumentName(name)).foregroundStyle(CeolTokens.textColor)
                                     Spacer()
                                     if instruments.contains(name) {
                                         Image(systemName: "checkmark").foregroundStyle(CeolTokens.primary)
@@ -103,7 +103,7 @@ struct ProfileSetupView: View {
             }
             .scrollContentBackground(.hidden)
             .background(CeolTokens.bgColor)
-            .navigationTitle(editing ? "Edit profile" : "Your profile")
+            .navigationTitle(editing ? tr("Edit profile") : tr("Your profile"))
             .navigationBarTitleDisplayMode(editing ? .inline : .automatic)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -150,7 +150,7 @@ struct ProfileSetupView: View {
             thesession = p.profile.thesessionUserId.map(String.init) ?? ""
             loaded = p
         } catch {
-            self.error = "Couldn't load your profile. Check your connection and try again."
+            self.error = tr("Couldn't load your profile. Check your connection and try again.")
         }
     }
 
@@ -168,7 +168,7 @@ struct ProfileSetupView: View {
                     thesessionUserId: editing ? trimmed(thesession) : nil,
                     username: editing && !trimmed(username).isEmpty ? trimmed(username) : nil))
             if saved.needsProfileSetup {
-                error = "That's not quite everything: a first and last name, and somewhere you play."
+                error = tr("That's not quite everything: a first and last name, and somewhere you play.")
             } else {
                 await model.profileSaved()
                 onSaved()
@@ -177,7 +177,7 @@ struct ProfileSetupView: View {
         } catch let f as AuthFailure {
             error = f.message
         } catch {
-            self.error = "Couldn't save. Check your connection and try again."
+            self.error = tr("Couldn't save. Check your connection and try again.")
         }
     }
 }
