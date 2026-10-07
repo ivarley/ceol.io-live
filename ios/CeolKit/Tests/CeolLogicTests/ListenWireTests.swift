@@ -5,6 +5,13 @@ import Testing
 
 @Suite("The listening service's wire")
 struct ListenWireTests {
+    @Test("The start names the night, so the service can prefer its session's tunes")
+    func startNamesTheNight() {
+        let with = ListenWire.start(streamID: "s", instanceID: 42)
+        #expect(with.contains(#""instance_id":42"#) && with.contains(#""stream_id":"s""#))
+        #expect(!ListenWire.start(streamID: "s").contains("instance_id"))
+    }
+
     @Test("A frame is the offset as a little-endian UInt64, then 16-bit little-endian samples")
     func frame() {
         let data = ListenWire.frame(offset: 0x0102, samples: [1, -2][...])

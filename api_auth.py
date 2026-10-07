@@ -6,9 +6,10 @@ endpoints must return 401 JSON on missing auth — never flask_login's
 """
 
 # i18n-converted  (spec 057: every message a person reads goes through _())
+import os
 from functools import wraps
 
-from flask import jsonify
+from flask import jsonify, request
 from flask_babel import gettext as _
 from flask_login import current_user
 
@@ -45,6 +46,31 @@ def public_api(f):
     """
     f._public_api = True
     return f
+
+
+def api_service_required(env_var):
+    """For an endpoint only another of Ceol's own services calls (the listening
+    service claiming and reporting its background work, spec 053): it presents
+    `Authorization: Bearer <the shared secret in env_var>`, set on both
+    services. Unset on this one, the endpoint refuses everyone. 401 otherwise,
+    in the API's own envelope."""
+
+    def wrap(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            import hmac
+
+            secret = os.environ.get(env_var, "")
+            given = request.headers.get("Authorization", "")
+            given = given[7:].strip() if given.lower().startswith("bearer ") else ""
+            if not secret or not hmac.compare_digest(given.encode(), secret.encode()):
+                return api_error(_("Authentication required"), 401)
+            return f(*args, **kwargs)
+
+        decorated_function._auth_required = True  # test_api_auth_coverage
+        return decorated_function
+
+    return wrap
 
 
 def api_admin_or_self_required(f):

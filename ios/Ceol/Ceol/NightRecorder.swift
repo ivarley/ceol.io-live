@@ -81,7 +81,8 @@ final class NightRecorder {
         self.fileURL = fileURL
         capture = AudioCapture(fileURL: fileURL)
         let streamID = UUID().uuidString
-        streamLink = ListenLink(url: listenURL, token: token, streamID: streamID, capture: capture)
+        streamLink = ListenLink(url: listenURL, token: token, streamID: streamID, instanceID: instanceID,
+                                capture: capture)
         meterLog = MeterLog(url: meterLogURL, since: startedAt)
         meterLog.write("app", ListenWire.event("begin", [
             "instance_id": instanceID, "stream_id": streamID, "recording": recordingID,
@@ -342,16 +343,18 @@ nonisolated final class ListenLink: @unchecked Sendable {
     private let url: URL
     private let token: String?
     private let streamID: String
+    private let instanceID: Int
     private let capture: AudioCapture
     private let lock = NSLock()
     private var task: URLSessionWebSocketTask?
     private var running = true
     private var runner: Task<Void, Never>?
 
-    init(url: URL, token: String?, streamID: String, capture: AudioCapture) {
+    init(url: URL, token: String?, streamID: String, instanceID: Int, capture: AudioCapture) {
         self.url = url
         self.token = token
         self.streamID = streamID
+        self.instanceID = instanceID
         self.capture = capture
     }
 
@@ -408,7 +411,7 @@ nonisolated final class ListenLink: @unchecked Sendable {
             lock.withLock { if task === ws { task = nil } }
         }
         do {
-            try await ws.send(.string(ListenWire.start(streamID: streamID)))
+            try await ws.send(.string(ListenWire.start(streamID: streamID, instanceID: instanceID)))
             // the first reply says how much it holds
             guard case .string(let first) = try await ws.receive() else { return nil }
             switch ListenMessage.decode(first) {

@@ -119,6 +119,7 @@ All core tables have `*_history` tables tracking INSERT/UPDATE/DELETE. See [Hist
 - `024_session_event.sql` / `024_live_logging_delta.sql` / `025_session_local_cache_limits.sql` - Live logging (Feature 024)
 - `058_places.sql` + `scripts/migrate_055_places.py` - Places and session paths (spec 055)
 - `060_log_confidence_model.sql` - which calibration model made a machine-logged tune's confidence (spec 053)
+- `061_listen_job.sql` - the listening service's background jobs: finding a night's tunes from its recording (spec 053)
 
 ## Procedures
 

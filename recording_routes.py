@@ -1188,6 +1188,128 @@ def _has_live_row_before(cur, instance_id, record_id):
     return cur.fetchone() is not None
 
 
+class LogTuneError(Exception):
+    """Logging a tune into a night was refused: the message, and the HTTP status."""
+
+    def __init__(self, message, status):
+        super().__init__(message)
+        self.message, self.status = message, status
+
+
+def log_tune(
+    cur,
+    recording_id,
+    instance_id,
+    user_id,
+    *,
+    start_ms=None,
+    end_ms=None,
+    after_id=None,
+    before_id=None,
+    new_set=False,
+    from_audio=False,
+    tune_id=None,
+    ts_id=None,
+    name="",
+    setting_id=None,
+    confidence=None,
+    confidence_model=None,
+):
+    """Log one tune into the night (and place it, given `start_ms`): the body of
+    POST /api/recordings/<id>/segments, shared with the listening service's
+    found tunes (listen_job_routes). Validation of the request is the caller's.
+    -> (session_instance_tune_id, the add_tune op's result); raises
+    LogTuneError, leaving the caller to roll back."""
+    from live_logging_routes import OpRejected, apply_live_op
+
+    break_before_new = False  # a break in front of the new tune (after-anchor / append)
+    break_before_id = (
+        None  # a break in front of this row, i.e. after the new tune (before-anchor)
+    )
+    if from_audio:
+        try:
+            after_id, before_id, break_before_new = _placement_for_new_tune(
+                cur, recording_id, instance_id, start_ms
+            )
+        except ValueError as exc:
+            raise LogTuneError(str(exc), 409)
+    else:
+        for anchor in (after_id, before_id):
+            if anchor is None:
+                continue
+            cur.execute(
+                "SELECT 1 FROM session_instance_tune WHERE session_instance_tune_id = %s "
+                "AND session_instance_id = %s AND deleted = FALSE",
+                (anchor, instance_id),
+            )
+            if not cur.fetchone():
+                raise LogTuneError(_("That row is no longer in the log"), 404)
+        if new_set:
+            if before_id is not None:
+                break_before_id = before_id
+            else:
+                break_before_new = True
+
+    # The tune's identity, if the caller knows it. A bare name is "log as-is":
+    # unlinked, the typed name -- the same reading PUT .../tune gives it. With
+    # nothing at all it is the tool's placeholder, sent with no_match because
+    # thesession.org has real tunes called Gan Ainm.
+    data = {
+        "source": "segmenter" if confidence is None else "listen",
+        "no_merge": True,
+        "after_record_id": after_id,
+        "before_record_id": before_id,
+    }
+    if tune_id is not None:
+        data["tune_id"] = int(tune_id)
+        data["name"] = name or None
+    elif ts_id is not None:
+        data["thesession_id"] = ts_id
+        data["name"] = name or None
+    else:
+        data["name"] = name or GAN_AINM
+        data["no_match"] = True
+    if setting_id is not None:
+        data["setting_id"] = setting_id
+    if confidence is not None:
+        data["confidence"] = int(round(confidence))
+        data["confidence_model"] = confidence_model.strip()
+
+    try:
+        _eid, _typ, added = apply_live_op(cur, instance_id, "add_tune", data, user_id)
+        record_id = added["record"]["session_instance_tune_id"]
+        if break_before_new and _has_live_row_before(cur, instance_id, record_id):
+            apply_live_op(
+                cur,
+                instance_id,
+                "set_break",
+                {"action": "insert", "before_record_id": record_id},
+                user_id,
+            )
+        elif break_before_id is not None:
+            apply_live_op(
+                cur,
+                instance_id,
+                "set_break",
+                {"action": "insert", "before_record_id": break_before_id},
+                user_id,
+            )
+    except OpRejected as r:
+        raise LogTuneError(r.message, 409)
+
+    if start_ms is not None:
+        cur.execute(
+            "INSERT INTO recording_tune_segment "
+            "(recording_id, session_instance_tune_id, start_ms, end_ms, created_by_user_id, last_modified_user_id) "
+            "VALUES (%s, %s, %s, %s, %s, %s) RETURNING recording_tune_segment_id",
+            (recording_id, record_id, start_ms, end_ms, user_id, user_id),
+        )
+        save_to_history(
+            cur, "recording_tune_segment", "INSERT", cur.fetchone()[0], user_id
+        )
+    return record_id, added
+
+
 @api_login_required
 def log_recording_tune(recording_id):
     """POST /api/recordings/<id>/segments -- log a new tune into this night.
@@ -1215,7 +1337,7 @@ def log_recording_tune(recording_id):
     Returns the whole tune list (`tunes`) plus the new row (`tune`): an insert
     can renumber every set after it.
     """
-    from live_logging_routes import OpRejected, _parse_thesession_id, apply_live_op
+    from live_logging_routes import _parse_thesession_id
 
     payload = request.get_json(silent=True) or {}
     try:
@@ -1311,102 +1433,28 @@ def log_recording_tune(recording_id):
             )
 
         user_id = get_current_user_id()
-        break_before_new = (
-            False  # a break in front of the new tune (after-anchor / append)
-        )
-        break_before_id = None  # a break in front of this row, i.e. after the new tune (before-anchor)
-        if from_audio:
-            try:
-                after_id, before_id, break_before_new = _placement_for_new_tune(
-                    cur, recording_id, instance_id, start_ms
-                )
-            except ValueError as exc:
-                return jsonify({"success": False, "error": str(exc)}), 409
-        else:
-            for anchor in (after_id, before_id):
-                if anchor is None:
-                    continue
-                cur.execute(
-                    "SELECT 1 FROM session_instance_tune WHERE session_instance_tune_id = %s "
-                    "AND session_instance_id = %s AND deleted = FALSE",
-                    (anchor, instance_id),
-                )
-                if not cur.fetchone():
-                    return (
-                        jsonify(
-                            {
-                                "success": False,
-                                "error": _("That row is no longer in the log"),
-                            }
-                        ),
-                        404,
-                    )
-            if new_set:
-                if before_id is not None:
-                    break_before_id = before_id
-                else:
-                    break_before_new = True
-
-        # The tune's identity, if the caller knows it. A bare name is "log as-is":
-        # unlinked, the typed name -- the same reading PUT .../tune gives it. With
-        # nothing at all it is the tool's placeholder, sent with no_match because
-        # thesession.org has real tunes called Gan Ainm.
-        data = {
-            "source": "segmenter" if confidence is None else "listen",
-            "no_merge": True,
-            "after_record_id": after_id,
-            "before_record_id": before_id,
-        }
-        if tune_id is not None:
-            data["tune_id"] = int(tune_id)
-            data["name"] = name or None
-        elif ts_id is not None:
-            data["thesession_id"] = ts_id
-            data["name"] = name or None
-        else:
-            data["name"] = name or GAN_AINM
-            data["no_match"] = True
-        if payload.get("setting_id") is not None:
-            data["setting_id"] = payload["setting_id"]
-        if confidence is not None:
-            data["confidence"] = int(round(confidence))
-            data["confidence_model"] = confidence_model.strip()
-
         try:
-            _eid, _typ, added = apply_live_op(
-                cur, instance_id, "add_tune", data, user_id
+            record_id, added = log_tune(
+                cur,
+                recording_id,
+                instance_id,
+                user_id,
+                start_ms=start_ms,
+                end_ms=end_ms,
+                after_id=after_id,
+                before_id=before_id,
+                new_set=new_set,
+                from_audio=from_audio,
+                tune_id=tune_id,
+                ts_id=ts_id,
+                name=name,
+                setting_id=payload.get("setting_id"),
+                confidence=confidence,
+                confidence_model=confidence_model,
             )
-            record_id = added["record"]["session_instance_tune_id"]
-            if break_before_new and _has_live_row_before(cur, instance_id, record_id):
-                apply_live_op(
-                    cur,
-                    instance_id,
-                    "set_break",
-                    {"action": "insert", "before_record_id": record_id},
-                    user_id,
-                )
-            elif break_before_id is not None:
-                apply_live_op(
-                    cur,
-                    instance_id,
-                    "set_break",
-                    {"action": "insert", "before_record_id": break_before_id},
-                    user_id,
-                )
-        except OpRejected as r:
+        except LogTuneError as e:
             conn.rollback()
-            return jsonify({"success": False, "error": r.message}), 409
-
-        if start_ms is not None:
-            cur.execute(
-                "INSERT INTO recording_tune_segment "
-                "(recording_id, session_instance_tune_id, start_ms, end_ms, created_by_user_id, last_modified_user_id) "
-                "VALUES (%s, %s, %s, %s, %s, %s) RETURNING recording_tune_segment_id",
-                (recording_id, record_id, start_ms, end_ms, user_id, user_id),
-            )
-            save_to_history(
-                cur, "recording_tune_segment", "INSERT", cur.fetchone()[0], user_id
-            )
+            return jsonify({"success": False, "error": e.message}), e.status
         conn.commit()
 
         resp = _tunes_response(conn, recording_id, instance_id, session_id)

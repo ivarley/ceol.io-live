@@ -169,7 +169,7 @@
                 {formatDuration(seg.endMs - seg.startMs)}{seg.explicitEnd ? '' : '~'}
               </span>
             </button>
-            {#if tune.source === 'segmenter'}
+            {#if tune.source === 'segmenter' || tune.source === 'listen'}
               <!-- The tool logged this tune itself; unplacing it would leave a
                    nameless row with no time, which is nothing. Taking it back
                    out of the log is what × means here. -->

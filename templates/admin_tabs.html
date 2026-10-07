@@ -16,6 +16,7 @@
         {% elif active_tab == 'cache_settings' %}{{ _('Cache Settings') }}
         {% elif active_tab == 'email_updates' %}{{ _('Email Updates') }}
         {% elif active_tab == 'recordings' %}{{ _('Recordings') }}
+        {% elif active_tab == 'listen_jobs' %}{{ _('Listening jobs') }}
         {% endif %}
     </span>
     {% endif %}
@@ -80,6 +81,11 @@
            role="tab">
             {{ _('Recordings') }}
         </a>
+        <a class="nav-link {{ 'active' if active_tab == 'listen_jobs' else '' }}"
+           href="{{ url_for('admin_listen_jobs_page') }}"
+           role="tab">
+            {{ _('Listening jobs') }}
+        </a>
     </div>
 
     <!-- Mobile Dropdown Navigation -->
@@ -114,6 +120,9 @@
             </option>
             <option value="{{ url_for('admin_recordings') }}" {{ 'selected' if active_tab == 'recordings' else '' }}>
                 {{ _('Recordings') }}
+            </option>
+            <option value="{{ url_for('admin_listen_jobs_page') }}" {{ 'selected' if active_tab == 'listen_jobs' else '' }}>
+                {{ _('Listening jobs') }}
             </option>
         </select>
     </div>

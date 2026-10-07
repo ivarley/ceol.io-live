@@ -931,6 +931,37 @@ CREATE TABLE recording_tune_segment (
     last_modified_user_id INTEGER
 );
 
+-- Background work for the listening service (schema 061; spec 053
+-- "053 files/find-tunes-on-the-server.md"): finding a night's tunes from its
+-- recording, queued by an admin, run by the listening service after live
+-- listening.
+CREATE TABLE listen_job (
+    listen_job_id         SERIAL PRIMARY KEY,
+    kind                  VARCHAR(16) NOT NULL DEFAULT 'find_tunes',
+    recording_id          INTEGER NOT NULL REFERENCES recording(recording_id) ON DELETE CASCADE,
+    requested_by_user_id  INTEGER REFERENCES user_account(user_id) ON DELETE SET NULL,
+    status                VARCHAR(16) NOT NULL DEFAULT 'queued',
+    phase                 VARCHAR(16),
+    progress              REAL,
+    heard_ms              INTEGER,
+    total_ms              INTEGER,
+    worker                VARCHAR(64),
+    heartbeat_at          TIMESTAMPTZ,
+    attempts              SMALLINT NOT NULL DEFAULT 0,
+    queued_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    started_at            TIMESTAMPTZ,
+    finished_at           TIMESTAMPTZ,
+    running_s             REAL NOT NULL DEFAULT 0,
+    paused_s              REAL NOT NULL DEFAULT 0,
+    result                JSONB,
+    error                 TEXT,
+    CONSTRAINT listen_job_status CHECK (status IN ('queued', 'running', 'paused', 'done', 'failed', 'cancelled')),
+    CONSTRAINT listen_job_kind CHECK (kind IN ('find_tunes'))
+);
+CREATE INDEX idx_listen_job_queue ON listen_job (status, queued_at);
+CREATE UNIQUE INDEX uq_listen_job_active_recording
+    ON listen_job (recording_id) WHERE status IN ('queued', 'running', 'paused');
+
 -- One tune is placed at most once per recording. (The same tune played twice in
 -- a night is two session_instance_tune rows, so this does not get in the way.)
 ALTER TABLE recording_tune_segment

@@ -12,6 +12,7 @@
   import Waveform from './Waveform.svelte'
   import TuneList from './TuneList.svelte'
   import TunePicker from './TunePicker.svelte'
+  import FindTunes from './FindTunes.svelte'
   import {
     edgeLimits,
     formatTime,
@@ -627,7 +628,7 @@
     // tool logged that tune itself, nothing is known about what follows it, and
     // the next mark is far more often the next tune of the SAME set than the
     // end. The End-set button (E) is the explicit way to close it.
-    if (prev === tunes.length - 1 && tune.source === 'segmenter') return null
+    if (prev === tunes.length - 1 && (tune.source === 'segmenter' || tune.source === 'listen')) return null
     return prev
   })
 
@@ -900,6 +901,21 @@
     }
     cursorIndex = i
     jumpToCursor()
+  }
+
+  /** The tunes the listening service found are in: adopt the log as the server has it. */
+  async function reloadTunes() {
+    if (!recording) return
+    try {
+      const res = await fetch(`/api/recordings/${recording.recording_id}/segmenter`, { credentials: 'same-origin', cache: 'no-store' })
+      const body = await res.json()
+      if (!res.ok || !body.success) throw new Error(body.error || `HTTP ${res.status}`)
+      adoptTunes(body.tunes, cursorTune?.session_instance_tune_id ?? null)
+      baseGeneratedAt = body.generated_at ?? baseGeneratedAt
+      await persistMirror()
+    } catch (err) {
+      flash(t('Could not reload the log: {error}', { error: err.message }), 'error')
+    }
   }
 
   async function confirmAt(index) {
@@ -1422,6 +1438,15 @@
       </section>
 
       <section class="sg-right">
+        {#if recording}
+          <FindTunes
+            recordingId={recording.recording_id}
+            tunesCount={tunes.length}
+            listenCount={tunes.filter(isGuess).length}
+            onfound={reloadTunes}
+            ontunes={(list) => adoptTunes(list, cursorTune?.session_instance_tune_id ?? null)}
+          />
+        {/if}
         {#if checksLeft || onlyChecks}
           <!-- The listener's guesses still to check: show only those, and step
                through them (N / ⇧N), confirming (C) or correcting each. -->

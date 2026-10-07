@@ -27,8 +27,13 @@ public enum ListenWire {
         return data
     }
 
-    public static func start(streamID: String) -> String {
-        json(["type": "start", "stream_id": streamID, "sample_rate": sampleRate])
+    /// Start (or resume) a stream. With the night, the service prefers the tunes its
+    /// session has logged before (spec 053, the tiers), asking the web app with this
+    /// device's token.
+    public static func start(streamID: String, instanceID: Int? = nil) -> String {
+        var object: [String: Any] = ["type": "start", "stream_id": streamID, "sample_rate": sampleRate]
+        if let instanceID { object["instance_id"] = instanceID }
+        return json(object)
     }
 
     public static func skip(to offset: Int) -> String { json(["type": "skip", "to": offset]) }

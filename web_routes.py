@@ -3921,6 +3921,30 @@ def admin_recordings():
 
 
 @login_required
+def admin_listen_jobs_page():
+    """The listening service's background work (spec 053, "053 files/find-
+    tunes-on-the-server.md"): every job, what it is doing, how long it waited,
+    ran and was paused for live listening. A plain Jinja page, as
+    /admin/recordings is; it reloads itself while anything is waiting or
+    running."""
+    if not current_user.is_system_admin:
+        flash(_("You must be authorized to view this page."), "error")
+        return redirect(url_for("home"))
+    from listen_job_routes import ACTIVE, list_jobs
+
+    conn = get_db_connection()
+    try:
+        jobs = list_jobs(conn)
+    finally:
+        conn.close()
+    return render_template(
+        "admin_listen_jobs.html",
+        jobs=jobs,
+        any_active=any(j["status"] in ACTIVE for j in jobs),
+    )
+
+
+@login_required
 def segment_recording(recording_id):
     """The audio segmenter (spec 050): a thin shell embedding the SAME payload
     GET /api/recordings/<id>/segmenter returns, mounting the Svelte tool.

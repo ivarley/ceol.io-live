@@ -1626,5 +1626,129 @@
   "The listener is about {n}% sure this is the tune": {
     "ga": "Tá an t-éisteoir thart ar {n}% cinnte gurb é seo an fonn",
     "review": true
+  },
+  "Could not reload the log: {error}": {
+    "ga": "Níorbh fhéidir an logáil a athlódáil: {error}",
+    "review": true
+  },
+  "{n} s": {
+    "ga": "{n} s",
+    "review": true
+  },
+  "{m} min {s} s": {
+    "ga": "{m} nóim {s} s",
+    "review": true
+  },
+  "{h} h {m} min": {
+    "ga": "{h} u {m} nóim",
+    "review": true
+  },
+  "fetching the recording": {
+    "ga": "an taifeadadh á fháil",
+    "review": true
+  },
+  "listening": {
+    "ga": "ag éisteacht",
+    "review": true
+  },
+  "following the sets": {
+    "ga": "na sraitheanna á leanúint",
+    "review": true
+  },
+  "putting the tunes in": {
+    "ga": "na foinn á gcur isteach",
+    "review": true
+  },
+  "starting": {
+    "ga": "ag tosú",
+    "review": true
+  },
+  "Nothing is logged for this night yet.": {
+    "ga": "Níl aon rud logáilte don oíche seo fós.",
+    "review": true
+  },
+  "Find the tunes automatically": {
+    "ga": "Aimsigh na foinn go huathoibríoch",
+    "review": true
+  },
+  "The listening service hears the whole recording and logs what it finds; you check the ones it is unsure of.": {
+    "ga": "Éisteann an tseirbhís éisteachta leis an taifeadadh ar fad agus logálann sí a n-aimsíonn sí; seiceálann tusa na cinn nach bhfuil sí cinnte díobh.",
+    "review": true
+  },
+  "Waiting to start": {
+    "ga": "Ag fanacht le tosú",
+    "review": true
+  },
+  "waited {time}": {
+    "ga": "d'fhan {time}",
+    "review": true
+  },
+  "Paused while a night is being listened to live": {
+    "ga": "Ar sos fad atá oíche á héisteacht beo",
+    "review": true
+  },
+  "Finding the tunes: {phase}": {
+    "ga": "Na foinn á n-aimsiú: {phase}",
+    "review": true
+  },
+  "running {time}": {
+    "ga": "ag rith {time}",
+    "review": true
+  },
+  "paused {time}": {
+    "ga": "ar sos {time}",
+    "review": true
+  },
+  "took {time}": {
+    "ga": "thóg sé {time}",
+    "review": true
+  },
+  "Remove what it logged": {
+    "ga": "Bain a logáil sé",
+    "review": true
+  },
+  "Couldn't find the tunes: {error}": {
+    "ga": "Níorbh fhéidir na foinn a aimsiú: {error}",
+    "review": true
+  },
+  "{n} jobs ahead": {
+    "ga": {
+      "one": "{n} jab romhat",
+      "two": "{n} jab romhat",
+      "few": "{n} jab romhat",
+      "many": "{n} jab romhat",
+      "other": "{n} jab romhat"
+    },
+    "review": true
+  },
+  "Found {n} tunes": {
+    "ga": {
+      "one": "Aimsíodh {n} fhonn",
+      "two": "Aimsíodh {n} fhonn",
+      "few": "Aimsíodh {n} fhonn",
+      "many": "Aimsíodh {n} bhfonn",
+      "other": "Aimsíodh {n} fonn"
+    },
+    "review": true
+  },
+  "in {n} sets": {
+    "ga": {
+      "one": "i {n} sraith",
+      "two": "i {n} shraith",
+      "few": "i {n} sraith",
+      "many": "i {n} sraith",
+      "other": "i {n} sraith"
+    },
+    "review": true
+  },
+  "{n} need a check": {
+    "ga": {
+      "one": "{n} fhonn le seiceáil",
+      "two": "{n} fhonn le seiceáil",
+      "few": "{n} fhonn le seiceáil",
+      "many": "{n} bhfonn le seiceáil",
+      "other": "{n} fonn le seiceáil"
+    },
+    "review": true
   }
 }

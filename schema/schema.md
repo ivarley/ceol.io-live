@@ -77,6 +77,8 @@ The database will be a Postgres database. The basic entities in my model will be
     - start_ms - required
     - end_ms - **nullable, and the nullability is the point**: the next tune's start implies the previous tune's end, so an explicit end is only recorded at the end of a set. NULL means "runs until the next segment starts", never "unknown".
 
+- **listen_job** - Background work for the listening service (schema 061, spec 053 `053 files/find-tunes-on-the-server.md`): an admin asks the segmenter to find a night's tunes from its recording; the listening service claims the job, reports its phase and progress (its heartbeat), pauses while a night is listened to live, and posts the tunes, which go into the night as `source='listen'` with their confidence. status `queued` | `running` | `paused` | `done` | `failed` | `cancelled`; one active job per recording; `running_s` / `paused_s` with `queued_at` / `started_at` / `finished_at` are the times the page and `/admin/listen-jobs` show; a held job silent for two minutes goes back to the queue (at most three attempts).
+
 - **recording_tune_segment_resolved** (view) - Every segment with its end resolved (implicit ends become the next segment's start; a trailing implicit end becomes the end of the file) and its tune identified. This is the shape the ML training corpus is cut from.
 
 ## People

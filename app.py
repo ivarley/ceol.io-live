@@ -41,6 +41,19 @@ from place_routes import (
     get_admin_places,
     update_admin_place,
 )
+from listen_job_routes import (
+    admin_listen_jobs,
+    cancel_listen_job,
+    claim_listen_job,
+    get_find_tunes,
+    instance_known_tunes,
+    listen_job_fail,
+    listen_job_progress,
+    listen_job_result,
+    retry_listen_job,
+    start_find_tunes,
+    undo_find_tunes,
+)
 from recording_routes import (
     get_recording_segmenter,
     get_recording_peaks,
@@ -1738,6 +1751,11 @@ app.add_url_rule(
     admin_recordings,
 )
 app.add_url_rule(
+    "/admin/listen-jobs",
+    "admin_listen_jobs_page",
+    admin_listen_jobs_page,
+)
+app.add_url_rule(
     "/admin/recordings/<int:recording_id>/segment",
     "segment_recording",
     segment_recording,
@@ -1852,6 +1870,74 @@ app.add_url_rule(
     "/api/session-instances/<int:session_instance_id>/recordings",
     "get_instance_recordings",
     get_instance_recordings,
+    methods=["GET"],
+)
+# Background work for the listening service, and the session's own tunes for
+# live listening (spec 053, "053 files/find-tunes-on-the-server.md").
+app.add_url_rule(
+    "/api/recordings/<int:recording_id>/find-tunes",
+    "start_find_tunes",
+    start_find_tunes,
+    methods=["POST"],
+)
+app.add_url_rule(
+    "/api/recordings/<int:recording_id>/find-tunes",
+    "get_find_tunes",
+    get_find_tunes,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/recordings/<int:recording_id>/find-tunes/undo",
+    "undo_find_tunes",
+    undo_find_tunes,
+    methods=["POST"],
+)
+app.add_url_rule(
+    "/api/listen-jobs/<int:job_id>/cancel",
+    "cancel_listen_job",
+    cancel_listen_job,
+    methods=["POST"],
+)
+app.add_url_rule(
+    "/api/listen-jobs/<int:job_id>/retry",
+    "retry_listen_job",
+    retry_listen_job,
+    methods=["POST"],
+)
+app.add_url_rule(
+    "/api/admin/listen-jobs",
+    "admin_listen_jobs",
+    admin_listen_jobs,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/listen-jobs/claim",
+    "claim_listen_job",
+    claim_listen_job,
+    methods=["POST"],
+)
+app.add_url_rule(
+    "/api/listen-jobs/<int:job_id>/progress",
+    "listen_job_progress",
+    listen_job_progress,
+    methods=["POST"],
+)
+app.add_url_rule(
+    "/api/listen-jobs/<int:job_id>/result",
+    "listen_job_result",
+    listen_job_result,
+    methods=["POST"],
+)
+app.add_url_rule(
+    "/api/listen-jobs/<int:job_id>/fail",
+    "listen_job_fail",
+    listen_job_fail,
+    methods=["POST"],
+)
+app.add_url_rule(
+    "/api/session-instances/<int:session_instance_id>/known-tunes",
+    "instance_known_tunes",
+    instance_known_tunes,
     methods=["GET"],
 )
 # Playback: the read side of the segmenter's work, for the session-instance page.
