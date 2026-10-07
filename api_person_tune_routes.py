@@ -7,7 +7,7 @@ including CRUD operations, learning status updates, and heard count tracking.
 
 # i18n-converted
 
-from flask import request, jsonify
+from flask import jsonify, make_response, request
 from flask_babel import gettext as _
 from flask_login import current_user
 from typing import Optional, Dict, Any
@@ -23,6 +23,7 @@ from database import (
     ABC_MATCH_SQL,
     abc_search_terms,
 )
+import os
 import threading
 import base64
 
@@ -46,6 +47,7 @@ thesession_sync_service = ThesessionSyncService()
 
 
 from api_auth import api_error, api_login_required, public_api
+from services import person_scope
 
 
 def get_user_person_id() -> int:
@@ -1827,6 +1829,63 @@ def get_popular_tunes():
         )
 
 
+# The bundle's two queries, shared with its version tag (_offline_bundle_etag).
+BUNDLE_TUNES_SQL = """
+    SELECT pt.person_tune_id, pt.tune_id, t.name, t.tune_type,
+           pt.learn_status, pt.heard_count, pt.notes, pt.name_alias,
+           pt.setting_id, pt.key, pt.tags, pt.learned_date,
+           t.tunebook_count_cached, t.tunebook_count_cached_date,
+           ts.incipit_abc, ts.incipit_image, ts.key AS setting_key,
+           gp.n AS global_play_count, plc.n AS person_list_count
+    FROM person_tune pt
+    JOIN tune t ON t.tune_id = pt.tune_id
+    LEFT JOIN LATERAL (
+        SELECT incipit_abc, incipit_image, key
+        FROM tune_setting ts2
+        WHERE ts2.tune_id = pt.tune_id
+          AND (pt.setting_id IS NULL OR ts2.setting_id = pt.setting_id)
+        ORDER BY (ts2.setting_id = pt.setting_id) DESC, ts2.setting_id ASC
+        LIMIT 1
+    ) ts ON TRUE
+    LEFT JOIN LATERAL (
+        SELECT COUNT(*) AS n FROM session_instance_tune sit
+        WHERE sit.tune_id = pt.tune_id AND sit.deleted = FALSE
+    ) gp ON TRUE
+    LEFT JOIN LATERAL (
+        SELECT COUNT(*) AS n FROM person_tune p2 WHERE p2.tune_id = pt.tune_id
+    ) plc ON TRUE
+    WHERE pt.person_id = %s
+    ORDER BY t.name ASC
+"""
+
+# Popular tunes carry incipit notation too, so a popular tune added offline
+# still shows its dots/ABC in the drawer.
+BUNDLE_POPULAR_SQL = """
+    SELECT t.tune_id, t.name, t.tune_type,
+           t.tunebook_count_cached, t.tunebook_count_cached_date,
+           ts.incipit_abc, ts.incipit_image, ts.key AS setting_key,
+           gp.n AS global_play_count, plc.n AS person_list_count
+    FROM tune t
+    LEFT JOIN LATERAL (
+        SELECT incipit_abc, incipit_image, key
+        FROM tune_setting ts2
+        WHERE ts2.tune_id = t.tune_id
+        ORDER BY ts2.setting_id ASC
+        LIMIT 1
+    ) ts ON TRUE
+    LEFT JOIN LATERAL (
+        SELECT COUNT(*) AS n FROM session_instance_tune sit
+        WHERE sit.tune_id = t.tune_id AND sit.deleted = FALSE
+    ) gp ON TRUE
+    LEFT JOIN LATERAL (
+        SELECT COUNT(*) AS n FROM person_tune p2 WHERE p2.tune_id = t.tune_id
+    ) plc ON TRUE
+    WHERE t.redirect_to_tune_id IS NULL
+    ORDER BY t.tunebook_count_cached DESC NULLS LAST, t.name ASC
+    LIMIT 100
+"""
+
+
 # One bundle build at a time per worker process. An admin's bundle is ~11 MB of JSON
 # built in memory (incipit images as base64), and on 2026-10-07 a browser waking with
 # eleven ceol.io tabs open asked for eleven at once and the 512 MB instance was
@@ -1836,19 +1895,84 @@ _OFFLINE_BUNDLE_BUILDS = threading.BoundedSemaphore(1)
 OFFLINE_BUNDLE_WAIT_S = 20
 
 
+# Bump when the bundle's shape changes without its data changing, so every
+# browser's copy goes stale. A deploy's commit (RENDER_GIT_COMMIT) does it too.
+BUNDLE_FORMAT = "1"
+
+
+def _offline_bundle_etag(conn, person_id):
+    """The bundle's version, computed by Postgres without building the bundle: a hash
+    of the very queries the bundle runs (incipit images included, hashed in the
+    database, so they never reach Python), plus the person's instrument overrides,
+    instruments and play counts, the bundle format and the deployed commit. Any change
+    to anything the bundle carries changes it; no "last modified" column is trusted."""
+    cur = conn.cursor()
+    cur.execute("SELECT tune_id FROM person_tune WHERE person_id = %s", (person_id,))
+    tune_ids = [r[0] for r in cur.fetchall()]
+
+    def rows_hash(sql):
+        return (
+            "(SELECT string_agg(md5(q::text), ',' ORDER BY md5(q::text)) FROM ("
+            + sql
+            + ") q)"
+        )
+
+    cur.execute(
+        "SELECT md5(concat_ws('|', "
+        + rows_hash(BUNDLE_TUNES_SQL.replace("%s", "%(person_id)s"))
+        + ", "
+        + rows_hash(BUNDLE_POPULAR_SQL)
+        + ", "
+        + rows_hash(
+            "SELECT tune_id, instrument, status FROM person_tune_instrument"
+            " WHERE person_id = %(person_id)s"
+        )
+        + ", "
+        + rows_hash(
+            "SELECT instrument, is_auto FROM person_instrument"
+            " WHERE person_id = %(person_id)s"
+        )
+        + ", "
+        + rows_hash(person_scope.person_tune_play_counts_sql())
+        + "))",
+        {"person_id": person_id, "tune_ids": tune_ids},
+    )
+    data = cur.fetchone()[0]
+    commit = os.environ.get("RENDER_GIT_COMMIT", "dev")[:12]
+    return f"{data}-{BUNDLE_FORMAT}-{commit}"
+
+
 @person_tune_login_required
 def get_offline_bundle():
-    if not _OFFLINE_BUNDLE_BUILDS.acquire(timeout=OFFLINE_BUNDLE_WAIT_S):
-        return api_error(
-            _("The offline copy is busy; try again shortly."),
-            503,
-            "offline_bundle_busy",
-            retry_after=30,
-        )
+    """GET /api/offline/bundle, with a version tag: a browser that sends the tag of
+    the copy it holds (If-None-Match) gets a 304 and nothing is built."""
+    person_id = get_user_person_id()
+    conn = get_db_connection()
     try:
-        return _build_offline_bundle()
+        etag = _offline_bundle_etag(conn, person_id)
     finally:
-        _OFFLINE_BUNDLE_BUILDS.release()
+        conn.close()
+    if request.if_none_match.contains_weak(etag):
+        resp = make_response("", 304)
+    else:
+        if not _OFFLINE_BUNDLE_BUILDS.acquire(timeout=OFFLINE_BUNDLE_WAIT_S):
+            return api_error(
+                _("The offline copy is busy; try again shortly."),
+                503,
+                "offline_bundle_busy",
+                retry_after=30,
+            )
+        try:
+            resp = make_response(_build_offline_bundle())
+        finally:
+            _OFFLINE_BUNDLE_BUILDS.release()
+        if resp.status_code != 200:
+            return resp
+    resp.set_etag(etag)
+    # The page keeps its own copy (IndexedDB) and sends the tag itself; the browser's
+    # HTTP cache needn't hold a second 11 MB one.
+    resp.headers["Cache-Control"] = "private, no-store"
+    return resp
 
 
 def _build_offline_bundle():
@@ -1872,36 +1996,7 @@ def _build_offline_bundle():
         conn = get_db_connection()
         try:
             cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-            cur.execute(
-                """
-                SELECT pt.person_tune_id, pt.tune_id, t.name, t.tune_type,
-                       pt.learn_status, pt.heard_count, pt.notes, pt.name_alias,
-                       pt.setting_id, pt.key, pt.tags, pt.learned_date,
-                       t.tunebook_count_cached, t.tunebook_count_cached_date,
-                       ts.incipit_abc, ts.incipit_image, ts.key AS setting_key,
-                       gp.n AS global_play_count, plc.n AS person_list_count
-                FROM person_tune pt
-                JOIN tune t ON t.tune_id = pt.tune_id
-                LEFT JOIN LATERAL (
-                    SELECT incipit_abc, incipit_image, key
-                    FROM tune_setting ts2
-                    WHERE ts2.tune_id = pt.tune_id
-                      AND (pt.setting_id IS NULL OR ts2.setting_id = pt.setting_id)
-                    ORDER BY (ts2.setting_id = pt.setting_id) DESC, ts2.setting_id ASC
-                    LIMIT 1
-                ) ts ON TRUE
-                LEFT JOIN LATERAL (
-                    SELECT COUNT(*) AS n FROM session_instance_tune sit
-                    WHERE sit.tune_id = pt.tune_id AND sit.deleted = FALSE
-                ) gp ON TRUE
-                LEFT JOIN LATERAL (
-                    SELECT COUNT(*) AS n FROM person_tune p2 WHERE p2.tune_id = pt.tune_id
-                ) plc ON TRUE
-                WHERE pt.person_id = %s
-                ORDER BY t.name ASC
-                """,
-                (person_id,),
-            )
+            cur.execute(BUNDLE_TUNES_SQL, (person_id,))
             # The person's instrument list is per-person, not per-tune; embed it in
             # each entry so the drawer's offline path reads one self-contained record.
             instruments = load_person_instruments(conn, person_id)
@@ -1948,32 +2043,7 @@ def _build_offline_bundle():
             # Popular tunes carry incipit notation too, so a popular tune added offline
             # still shows its dots/ABC in the drawer — plus the same stats fields, so
             # the drawer's not-on-list (Add) view renders the stats it shows online.
-            cur.execute(
-                """
-                SELECT t.tune_id, t.name, t.tune_type,
-                       t.tunebook_count_cached, t.tunebook_count_cached_date,
-                       ts.incipit_abc, ts.incipit_image, ts.key AS setting_key,
-                       gp.n AS global_play_count, plc.n AS person_list_count
-                FROM tune t
-                LEFT JOIN LATERAL (
-                    SELECT incipit_abc, incipit_image, key
-                    FROM tune_setting ts2
-                    WHERE ts2.tune_id = t.tune_id
-                    ORDER BY ts2.setting_id ASC
-                    LIMIT 1
-                ) ts ON TRUE
-                LEFT JOIN LATERAL (
-                    SELECT COUNT(*) AS n FROM session_instance_tune sit
-                    WHERE sit.tune_id = t.tune_id AND sit.deleted = FALSE
-                ) gp ON TRUE
-                LEFT JOIN LATERAL (
-                    SELECT COUNT(*) AS n FROM person_tune p2 WHERE p2.tune_id = t.tune_id
-                ) plc ON TRUE
-                WHERE t.redirect_to_tune_id IS NULL
-                ORDER BY t.tunebook_count_cached DESC NULLS LAST, t.name ASC
-                LIMIT 100
-                """
-            )
+            cur.execute(BUNDLE_POPULAR_SQL)
             popular = [
                 {
                     "tune_id": r["tune_id"],

@@ -135,17 +135,37 @@
         if (!force && Date.now() - last < SYNC_MIN_MS) return
         if (typeof navigator !== 'undefined' && navigator.onLine === false) return
         syncing = true
-        return fetch('/api/offline/bundle', { credentials: 'same-origin' })
-          .then(function (r) { return r.ok ? r.json() : null })
-          .then(function (d) {
-            if (!d || !d.success) return
-            return replaceStore(TUNES, d.tunes)
-              .then(function () { return replaceStore(POPULAR, d.popular) })
-              .then(function () { return tx([META], 'readwrite', function (t) { t.objectStore(META).put({ key: 'synced_at', value: Date.now() }) }) })
-          })
+        // Send the version of the copy we hold; the server answers 304 when it is still
+        // current and builds nothing. no-store: IndexedDB is our copy, so the browser's
+        // HTTP cache needn't keep another.
+        return getOne(META, 'etag').then(function (held) {
+          var headers = held && held.value ? { 'If-None-Match': held.value } : {}
+          return fetch('/api/offline/bundle', { credentials: 'same-origin', cache: 'no-store', headers: headers })
+            .then(function (r) {
+              if (r.status === 304) return markSynced(held.value)
+              if (!r.ok) return
+              var etag = r.headers && r.headers.get ? r.headers.get('ETag') : null
+              return r.json().then(function (d) {
+                if (!d || !d.success) return
+                return replaceStore(TUNES, d.tunes)
+                  .then(function () { return replaceStore(POPULAR, d.popular) })
+                  .then(function () { return markSynced(etag) })
+              })
+            })
+        })
       })
       .catch(function () {})
       .then(function () { syncing = false })
+  }
+
+  // Record a completed sync, and the version of the copy now held (null: none known).
+  function markSynced(etag) {
+    return tx([META], 'readwrite', function (t) {
+      var store = t.objectStore(META)
+      store.put({ key: 'synced_at', value: Date.now() })
+      if (etag) store.put({ key: 'etag', value: etag })
+      else store.delete('etag')
+    })
   }
 
   // A tune (with incipit notation) by catalog id — from the tunebook first, else popular.

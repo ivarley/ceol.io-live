@@ -105,3 +105,37 @@ describe('CeolOffline.sync across tabs', () => {
     expect(fetch).toHaveBeenCalledTimes(1)
   })
 })
+
+// The bundle carries a version (ETag). The next sync sends it back; a 304 means the copy
+// held is current, so nothing is downloaded or rewritten.
+describe('CeolOffline.sync with a version', () => {
+  const bundle = (tunes, etag) => ({
+    ok: true, status: 200,
+    headers: { get: (h) => (h === 'ETag' ? etag : null) },
+    json: async () => ({ success: true, tunes, popular: [] }),
+  })
+
+  it('sends the version it holds, and keeps its copy on a 304', async () => {
+    fetch.mockClear()
+    fetch.mockResolvedValueOnce(bundle([TUNE({ tune_id: 7, name: 'Kesh' })], '"v1"'))
+    await CeolOffline.sync(true)
+
+    fetch.mockResolvedValueOnce({ ok: false, status: 304, headers: { get: () => null } })
+    await CeolOffline.sync(true)
+
+    const [, opts] = fetch.mock.calls[1]
+    expect(opts.headers['If-None-Match']).toBe('"v1"')
+    expect(opts.cache).toBe('no-store')
+    expect((await CeolOffline.getTunes()).map((t) => t.tune_id)).toEqual([7])
+  })
+
+  it('replaces its copy and its version when the bundle changed', async () => {
+    fetch.mockClear()
+    fetch.mockResolvedValueOnce(bundle([TUNE({ tune_id: 8, name: 'Banshee' })], '"v2"'))
+    await CeolOffline.sync(true)
+    fetch.mockResolvedValueOnce({ ok: false, status: 304, headers: { get: () => null } })
+    await CeolOffline.sync(true)
+    expect(fetch.mock.calls[1][1].headers['If-None-Match']).toBe('"v2"')
+    expect((await CeolOffline.getTunes()).map((t) => t.tune_id)).toEqual([8])
+  })
+})
