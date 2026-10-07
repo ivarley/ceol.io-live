@@ -384,6 +384,15 @@ drag can't be ambiguous about which of two coincident things it moves. Dragging
 a start that another tune ends into therefore moves their shared edge, which is
 what it looks like it does.
 
+Except across a set break. There the coincident start and implicit end are two
+edges that have not been pulled apart yet — one set stops, there is talk or
+tuning, the next set starts — so the handle splits on the first movement:
+dragging it later moves the next set's start and pins the previous set's end
+where it was (made explicit); dragging it earlier pulls the previous set's end
+back and leaves the start alone. Either way a gap opens and both edges are
+handles from then on. A start moved this way is saved as two writes (the pinned
+end first) and undone as one step.
+
 Three decisions worth keeping:
 
 - **The drag is local until it is dropped.** A PUT per animation frame would be

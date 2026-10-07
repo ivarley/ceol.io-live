@@ -15,6 +15,8 @@
   import FindTunes from './FindTunes.svelte'
   import {
     edgeLimits,
+    MIN_SEGMENT_MS,
+    setBreakBefore,
     formatTime,
     isGuess,
     needsCheck,
@@ -121,6 +123,7 @@
 
   const durationMs = $derived(recording?.duration_ms ?? 0)
   const segments = $derived(resolveSegments(tunes, durationMs))
+  const setOf = $derived(new Map(tunes.map((t) => [t.session_instance_tune_id, t.set_number])))
   const placedCount = $derived(tunes.filter((t) => t.segment).length)
   const cursorTune = $derived(cursorIndex >= 0 ? tunes[cursorIndex] ?? null : null)
   // Logging from the audio: the mark key writes a new tune into the log.
@@ -601,6 +604,7 @@
     // whole point of the tool. A failed write rolls it back and says so.
     tunes[index] = { ...tune, segment: { ...(previous ?? {}), start_ms: Math.round(startMs), end_ms: endMs == null ? null : Math.round(endMs) } }
     undoStack.push({ index, previous, cursor: cursorIndex })
+    let ok = true
     try {
       const saved = await save(tune, startMs, endMs)
       tunes[index] = { ...tunes[index], segment: saved }
@@ -608,8 +612,10 @@
       tunes[index] = { ...tunes[index], segment: previous }
       undoStack.pop()
       flash(t('Could not save "{name}": {error}', { name: tune.name, error: err.message }), 'error')
+      ok = false
     }
     persistMirror()
+    return ok
   }
 
   /**
@@ -672,11 +678,16 @@
     // Ends the tune under the playhead. Falls back to the last tune placed
     // before now, so it still works when the playhead has drifted past a set's
     // last tune into the chatter -- exactly when you reach for this key.
+    //
+    // A playhead sitting right on a tune's start (within MIN_SEGMENT_MS) can't
+    // mean that tune -- it would end as it begins. It means the tune before,
+    // whose end is being marked at the boundary between them.
     let targetId = soundingId
+    if (targetId != null && currentMs - segments.get(targetId).startMs < MIN_SEGMENT_MS) targetId = null
     if (targetId == null) {
       let best = null
       for (const [id, seg] of segments) {
-        if (seg.startMs <= currentMs && (!best || seg.startMs > best.startMs)) best = { id, startMs: seg.startMs }
+        if (seg.startMs + MIN_SEGMENT_MS <= currentMs && (!best || seg.startMs > best.startMs)) best = { id, startMs: seg.startMs }
       }
       targetId = best?.id ?? null
     }
@@ -711,6 +722,10 @@
   // The segment as it stood before this drag began. Kept so the save records the
   // right "previous" for undo, and so a failed write rolls back to where the
   // edge actually was rather than to the last previewed position.
+  //
+  // `pinned` is set when the drag moves a start across a set break: the previous
+  // set's implicit end would otherwise follow it, so that end is fixed where it
+  // was (made explicit) for the length of the drag, and saved with it.
   let edgeDrag = null
 
   function previewEdge(id, edge, ms) {
@@ -718,7 +733,14 @@
     const tune = tunes[index]
     if (!tune?.segment) return
     if (!edgeDrag || edgeDrag.index !== index || edgeDrag.edge !== edge) {
-      edgeDrag = { index, edge, original: tune.segment }
+      edgeDrag = { index, edge, original: tune.segment, pinned: null }
+      const prevId = edge === 'start' ? setBreakBefore(segments, setOf, id) : null
+      if (prevId != null) {
+        const prevIndex = tunes.findIndex((t) => t.session_instance_tune_id === prevId)
+        const prev = tunes[prevIndex]
+        edgeDrag.pinned = { index: prevIndex, original: prev.segment }
+        tunes[prevIndex] = { ...prev, segment: { ...prev.segment, end_ms: tune.segment.start_ms } }
+      }
     }
     const limits = edgeLimits(segments, id, edge, durationMs)
     if (!limits) return
@@ -747,8 +769,16 @@
     const index = held.index
     const moved = tunes[index]?.segment
     const original = held.original
-    if (!moved) return
+    const pinned = held.pinned
+    const unpin = () => {
+      if (pinned) tunes[pinned.index] = { ...tunes[pinned.index], segment: pinned.original }
+    }
+    if (!moved) {
+      unpin()
+      return
+    }
     if (moved.start_ms === original.start_ms && moved.end_ms === original.end_ms) {
+      unpin()
       status = ''
       return
     }
@@ -756,7 +786,22 @@
     // Put the original back before saving: place() reads the current segment as
     // the undo point, and by now that is the previewed position.
     tunes[index] = { ...tune, segment: original }
-    await place(index, moved.start_ms, moved.end_ms)
+    if (pinned) {
+      // The previous set's end first, so it never follows the start, even for a
+      // moment. Both writes are one gesture, so they are one undo.
+      const pinnedEnd = tunes[pinned.index].segment.end_ms
+      unpin()
+      if (!(await place(pinned.index, pinned.original.start_ms, pinnedEnd))) return
+      const pinStep = undoStack.pop()
+      if (!(await place(index, moved.start_ms, moved.end_ms))) {
+        await place(pinned.index, pinned.original.start_ms, pinned.original.end_ms)
+        undoStack.pop()
+        return
+      }
+      undoStack.push({ kind: 'pair', steps: [pinStep, undoStack.pop()] })
+    } else {
+      await place(index, moved.start_ms, moved.end_ms)
+    }
     flash(
       edge === 'start'
         ? t('Moved "{name}" start to {time} — U to undo', { name: tune.name, time: formatTime(moved.start_ms, { millis: true }) })
@@ -829,14 +874,22 @@
       flash(t('Undid that tune'))
       return
     }
+    // A pair (a start moved across a set break, and the end it left behind) is
+    // undone last write first.
+    const steps = step.kind === 'pair' ? [...step.steps].reverse() : [step]
+    for (const one of steps) await undoPlacement(one)
+    flash(t('Undid "{name}"', { name: tunes[steps[0].index]?.name ?? t('that mark') }))
+  }
+
+  async function undoPlacement(step) {
     cursorIndex = step.cursor
     if (step.previous) {
-      await place(step.index, step.previous.start_ms, step.previous.end_ms)
-      undoStack.pop() // place() pushed its own entry; the undo itself isn't undoable
+      // place() pushes its own entry; the undo itself isn't undoable. A failed
+      // place() has already taken its entry back off.
+      if (await place(step.index, step.previous.start_ms, step.previous.end_ms)) undoStack.pop()
     } else {
       await clearAt(step.index)
     }
-    flash(t('Undid "{name}"', { name: tunes[step.index]?.name ?? t('that mark') }))
   }
 
   // ---- logging while segmenting -------------------------------------------

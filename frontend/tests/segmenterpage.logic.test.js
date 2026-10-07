@@ -5,6 +5,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   edgeLimits,
+  setBreakBefore,
   envelopeForRange,
   formatDuration,
   formatTime,
@@ -237,6 +238,39 @@ describe('edgeLimits', () => {
 
   it('has nothing to say about a tune that is not placed', () => {
     expect(edgeLimits(resolved(), 99, 'start', 60000)).toBeNull()
+  })
+})
+
+describe('setBreakBefore', () => {
+  // A start that coincides with the previous tune's implicit end is one edge
+  // inside a set, and two edges across a set break.
+  const seg = (startMs, endMs, explicitEnd) => ({ startMs, endMs, explicitEnd, gapAfterMs: 0 })
+  const resolved = () =>
+    new Map([
+      [1, seg(10000, 20000, false)],
+      [2, seg(20000, 30000, false)],
+      [3, seg(30000, 40000, true)],
+      [4, seg(45000, 60000, false)],
+    ])
+
+  it('names the previous tune when its implicit end closes another set', () => {
+    const sets = new Map([[1, 1], [2, 2], [3, 2], [4, 3]])
+    expect(setBreakBefore(resolved(), sets, 2)).toBe(1)
+  })
+
+  it('is null inside a set, where the edge is shared', () => {
+    const sets = new Map([[1, 1], [2, 1], [3, 1], [4, 1]])
+    expect(setBreakBefore(resolved(), sets, 2)).toBeNull()
+  })
+
+  it('is null after an explicit end, which already has its own handle', () => {
+    const sets = new Map([[1, 1], [2, 2], [3, 2], [4, 3]])
+    expect(setBreakBefore(resolved(), sets, 4)).toBeNull()
+  })
+
+  it('is null for the first placed tune', () => {
+    const sets = new Map([[1, 1], [2, 2], [3, 2], [4, 3]])
+    expect(setBreakBefore(resolved(), sets, 1)).toBeNull()
   })
 })
 

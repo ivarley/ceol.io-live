@@ -202,6 +202,30 @@ export function edgeLimits(resolved, id, edge, durationMs) {
 }
 
 /**
+ * The tune whose implicit end a start handle carries across a set break, or null.
+ *
+ * Inside a set, an implicit end and the next start are one edge: the tunes run
+ * into each other, and moving that start moves both. Across a set break there
+ * are really two edges that happen to coincide until someone separates them --
+ * one set stops, there is talk or tuning, another set starts. The tape offers
+ * that start as a split edge: the first way it is dragged decides which of the
+ * two moves, and the other stays put.
+ *
+ * `setOf` maps session_instance_tune_id -> set_number.
+ */
+export function setBreakBefore(resolved, setOf, id) {
+  const order = [...resolved.entries()].sort((a, b) => a[1].startMs - b[1].startMs)
+  const i = order.findIndex(([tuneId]) => tuneId === id)
+  if (i <= 0) return null
+  const [prevId, prev] = order[i - 1]
+  if (prev.explicitEnd) return null
+  const prevSet = setOf.get(prevId)
+  const mySet = setOf.get(id)
+  if (prevSet == null || mySet == null || prevSet === mySet) return null
+  return prevId
+}
+
+/**
  * Reduce the envelope to one bar per pixel column.
  * Returns a Float32Array of 0..1 heights, length `width`.
  */
