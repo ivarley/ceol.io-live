@@ -35,6 +35,10 @@ MODEL_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "configs",
 SAME_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "configs", "same_tunes.json")
 NAMES = ("belief_logit", "belief_low_logit", "shown_frac", "log_length", "log_tunebooks", "outside", "tuneness")
 EPS = 1e-4
+# A machine's tune needs a person's check under this: shown to the nearest 10%,
+# 80% or under (the segmenter's CHECK_AT_OR_BELOW, spec 050 "A machine's
+# guesses"; the player's call on night 134).
+CHECK_UNDER = 85
 
 
 def _logit(p):

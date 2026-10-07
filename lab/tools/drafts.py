@@ -338,7 +338,30 @@ def held_note_end(notes, lo_ms, hi_ms):
     return best
 
 
-def refine_ends(rid, drafts, log=print):
+def _night_audio(rid, audio):
+    """(store, sha1) for a recording: `audio` as given (the listening service
+    passes its own), else the lab's prepared file."""
+    from lab.audio.chunks import AudioStore
+
+    if audio is not None:
+        return audio
+    with open(os.path.join(paths.recording_dir(rid), "mono22k.sha1")) as f:
+        sha = f.read().strip()
+    store = AudioStore(paths.wav_path(rid))
+    store.clock_ms = store.duration_ms
+    return store, sha
+
+
+def _board(board):
+    """A transcription cache: the one given, else the lab's own board."""
+    import contextlib
+
+    from lab.board.board import Board
+
+    return contextlib.nullcontext(board) if board is not None else Board()
+
+
+def refine_ends(rid, drafts, log=print, audio=None, board=None):
     """Each set's end from its last held note. The meter's end (the last 4 s
     step that heard a tune) is where to look: from 6 s before it to 2 s after,
     the end of the last note held at least HELD_MS with no new note for
@@ -351,18 +374,13 @@ def refine_ends(rid, drafts, log=print):
     p = 0.0001; every night better. RING_OUT_MS is the median over those ends
     (leave-one-night-out gives the same counts); HELD_MS and QUIET_MS were
     chosen among a few on the same ends."""
-    from lab.audio.chunks import AudioStore
     from lab.bench.retrieval import transcribe_segment
-    from lab.board.board import Board
     from lab.frontends import get_frontend
 
     fe = get_frontend("basic_pitch")
-    with open(os.path.join(paths.recording_dir(rid), "mono22k.sha1")) as f:
-        sha = f.read().strip()
-    store = AudioStore(paths.wav_path(rid))
-    store.clock_ms = store.duration_ms
+    store, sha = _night_audio(rid, audio)
     moved = 0
-    with Board() as board:
+    with _board(board) as board:
         for d in drafts:
             if d["end_ms"] is None:
                 continue
@@ -462,31 +480,34 @@ FOLLOW_LEAD_MS = 90000    # a set's span for following: from this long before it
 FOLLOW_TAIL_MS = 30000    # ... to this long after its drafted end
 
 
-def follow_drafts(rid, manifest, drafts, log=print, session_keys=True):
+def follow_drafts(rid, manifest, drafts, log=print, session_keys=True, audio=None, board=None, keys=None,
+                  progress=None):
     """Each set's starts from score following (analysis.follow), in place of
     the meter's: the drafts give the sets, the tunes in order and each set's
     rough span; following finds where each tune starts, the one ending and
     the next beginning decided together. Set ends stay the meter's (where the
     music stops), which following does worse. A set with a tune that has no
     readable setting keeps the meter's starts. The meter's start is kept on
-    each draft as `meter_start_ms`."""
+    each draft as `meter_start_ms`.
+
+    The listening service passes `audio` (store, sha1), a `board`, and `keys`
+    ({tune_id: the session's key}) in place of what the lab reads by `rid`;
+    `progress(sets done, sets)` is told after each set."""
     from lab.analysis.follow import follow_span
     from lab.analysis.form import played_forms
-    from lab.audio.chunks import AudioStore
-    from lab.board.board import Board
 
     duration = int(manifest["recording"]["duration_ms"])
     forms = played_forms({d["tune_id"] for d in drafts if d["tune_id"]})
     # the key the session plays each tune in; a new session knows none
-    keys = {r["tune_id"]: r.get("key") for r in manifest.get("repertoire", [])} if session_keys else {}
-    with open(os.path.join(paths.recording_dir(rid), "mono22k.sha1")) as f:
-        sha = f.read().strip()
-    store = AudioStore(paths.wav_path(rid))
-    store.clock_ms = store.duration_ms
+    if keys is None:
+        keys = {r["tune_id"]: r.get("key") for r in manifest.get("repertoire", [])} if session_keys else {}
+    store, sha = _night_audio(rid, audio)
     prev_end = 0
-    with Board() as board:
+    with _board(board) as board:
         sets_seen = sorted({d["set"] for d in drafts})
-        for k in sets_seen:
+        for n_done, k in enumerate(sets_seen):
+            if progress:
+                progress(n_done, len(sets_seen))
             rows = [d for d in drafts if d["set"] == k]
             for d in rows:
                 d["meter_start_ms"] = d["start_ms"]

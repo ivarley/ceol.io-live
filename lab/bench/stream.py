@@ -32,6 +32,7 @@ Three steps, kept apart so the expensive one is done once:
 import math
 import os
 import pickle
+import threading
 import time
 from collections import defaultdict
 
@@ -112,7 +113,29 @@ def night_tracks(frontends, rid, board, block_ms=60000):
     return out, store.duration_ms
 
 
-_SPAN = {}     # the latest span's audio, beat estimate and attack times, shared by the front ends
+class _SpanCache(threading.local):
+    """The latest span's audio, beat estimate and attack times, shared by the
+    front ends; per thread, because listeners step in threads of their own
+    (the listening service's streams and its background jobs), and one
+    module-wide dict let one listener's step read another's audio."""
+
+    def __init__(self):
+        self.d = {}
+
+    def get(self, k, default=None):
+        return self.d.get(k, default)
+
+    def clear(self):
+        self.d.clear()
+
+    def update(self, *a, **k):
+        self.d.update(*a, **k)
+
+    def __getitem__(self, k):
+        return self.d[k]
+
+
+_SPAN = _SpanCache()
 
 
 def causal_notes(fe, track, store, a, t):

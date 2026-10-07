@@ -11,8 +11,12 @@ measured.
 
 One WebSocket per stream, at /listen:
 
-  client -> {"type": "start", "stream_id": "<uuid>", "sample_rate": 22050}
-            (the same stream_id again after a reconnect resumes the stream)
+  client -> {"type": "start", "stream_id": "<uuid>", "sample_rate": 22050,
+             "instance_id": <the night, optional>}
+            (the same stream_id again after a reconnect resumes the stream).
+            With the night, the listener prefers the session's own tunes (those
+            logged before it, from the web app with the caller's token), then
+            popular ones, then the rest (spec 053, the tiers)
   server -> {"type": "ready", "stream_id", "have": <samples received>}
   client -> binary: 8-byte little-endian uint64 sample offset, then 16-bit
             little-endian mono PCM at 22050 Hz. Chunks may repeat or arrive
@@ -33,13 +37,22 @@ service's own LISTEN_TOKEN (the test client), or a Ceol app token belonging
 to a system admin, checked by asking the web app's /api/me (CEOL_API_URL)
 and cached for ten minutes, so this service needs no database credentials.
 
+Background work (spec 053, "053 files/find-tunes-on-the-server.md"): with
+LISTEN_JOB_TOKEN set (the same secret as the web app's), the service asks the
+app for queued jobs whenever no stream is open, and finds a night's tunes from
+its recording, one job at a time. Live listening comes first: while a stream
+is open the job waits between steps, and says so. /health shows the job.
+
 Run locally:  uvicorn listen.service:app --port 8440
 """
 
 import asyncio
 import json
 import os
+import shutil
+import socket
 import struct
+import subprocess
 import tempfile
 import time
 from contextlib import asynccontextmanager
@@ -56,7 +69,8 @@ STREAM_DIR = os.environ.get("LISTEN_STREAM_DIR") or os.path.join(tempfile.gettem
 IDLE_S = 300            # a stream nobody has sent to for this long is closed
 KEEP_S = 120            # audio held in memory per stream
 
-state = {"models": None, "loading": True, "error": None, "started": time.time(), "load_s": None}
+NU_PARTLY = 0.5         # a popular tune's discount, as a fraction of an outside tune's (spec 053)
+state = {"models": None, "loading": True, "error": None, "started": time.time(), "load_s": None, "job": None}
 streams = {}            # stream_id -> Stream
 
 
@@ -64,13 +78,17 @@ class Stream:
     """One listening phone: a Listener, the next sample expected, chunks that
     arrived ahead of a gap, and the socket currently attached (if any)."""
 
-    def __init__(self, stream_id):
+    def __init__(self, stream_id, session_tunes=None):
         from lab.tools.listen import Listener
 
         self.id = stream_id
         self.dir = os.path.join(STREAM_DIR, stream_id)
         os.makedirs(self.dir, exist_ok=True)
-        self.listener = Listener(self.dir, models=state["models"], audio_name="audio.flac", keep_s=KEEP_S)
+        models = state["models"]
+        self.listener = Listener(self.dir, models=models, audio_name="audio.flac", keep_s=KEEP_S,
+                                 session_tunes=session_tunes or None, second_tier=models.popular,
+                                 nu_partly=NU_PARTLY)
+        self.known_tunes = len(session_tunes or ())
         self.have = 0                 # contiguous samples taken
         self.ahead = {}               # offset -> samples, waiting for a gap to fill
         self.socket = None
@@ -176,7 +194,8 @@ async def _load():
         from lab.tools.listen import Models
 
         t0 = time.time()
-        models = await asyncio.to_thread(Models)
+        # one whole-corpus index for every session, its own tunes preferred
+        models = await asyncio.to_thread(Models, 0, True)
         _name_tunes(models)
         state["models"] = models
         state["load_s"] = round(time.time() - t0, 1)
@@ -191,7 +210,7 @@ async def lifespan(app):
     from listen.data import ensure_data
 
     await asyncio.to_thread(ensure_data)
-    tasks = [asyncio.create_task(_load()), asyncio.create_task(_sweep())]
+    tasks = [asyncio.create_task(_load()), asyncio.create_task(_sweep()), asyncio.create_task(_jobs())]
     yield
     for t in tasks:
         t.cancel()
@@ -221,13 +240,202 @@ def _app_token_allowed(token):
 
 
 async def _authorised(scope_headers, query):
+    """-> (allowed, the caller's Ceol app token or None)."""
     auth = dict(scope_headers).get(b"authorization", b"").decode()
     token = auth[7:].strip() if auth.lower().startswith("bearer ") else (query.get("token") or "")
     if not TOKEN and not token:
-        return True                   # local development
+        return True, None             # local development
     if TOKEN and token == TOKEN:
-        return True
-    return bool(token) and await asyncio.to_thread(_app_token_allowed, token)
+        return True, None
+    ok = bool(token) and await asyncio.to_thread(_app_token_allowed, token)
+    return ok, token if ok else None
+
+
+def _known_tunes(instance_id, token):
+    """The tune ids the night's session logged before it (the web app's
+    /api/session-instances/<id>/known-tunes), or None if it cannot say."""
+    import urllib.request
+
+    try:
+        req = urllib.request.Request(f"{CEOL_API_URL}/api/session-instances/{int(instance_id)}/known-tunes",
+                                     headers={"Authorization": f"Bearer {token}", "X-Ceol-Client": "listen"})
+        with urllib.request.urlopen(req, timeout=15) as r:
+            return [int(t) for t in json.loads(r.read()).get("tune_ids", [])]
+    except Exception as e:
+        print(f"listen: no known tunes for instance {instance_id}: {e!r}", flush=True)
+        return None
+
+
+# --------------------------------------------------------------------------- #
+# Background work: finding a night's tunes (spec 053)
+# --------------------------------------------------------------------------- #
+
+JOB_TOKEN = os.environ.get("LISTEN_JOB_TOKEN", "")
+JOB_POLL_S = 20
+JOB_REPORT_S = 5
+WORKER = f"{socket.gethostname()}-{os.getpid()}"
+
+
+LIVE_GRACE_S = 30
+
+
+def _live():
+    """Is a night being listened to? A stream with a phone attached, or one that
+    sent audio in the last LIVE_GRACE_S (a phone between reconnects); not one
+    left behind by a phone that went away, which the sweep closes later."""
+    now = time.time()
+    return any(s.socket is not None or now - s.last_seen < LIVE_GRACE_S for s in list(streams.values()))
+
+
+def _app(path, body):
+    """POST to the web app as this service (LISTEN_JOB_TOKEN). -> the JSON reply."""
+    import urllib.request
+
+    req = urllib.request.Request(f"{CEOL_API_URL}{path}", data=json.dumps(body).encode(), method="POST",
+                                 headers={"Authorization": f"Bearer {JOB_TOKEN}", "Content-Type": "application/json",
+                                          "X-Ceol-Client": "listen"})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        return json.loads(r.read())
+
+
+def _ffmpeg():
+    exe = shutil.which("ffmpeg")
+    if exe:
+        return exe
+    import imageio_ffmpeg
+
+    return imageio_ffmpeg.get_ffmpeg_exe()
+
+
+def _fetch_audio(url, work):
+    """The recording, decoded to 22,050 Hz mono 16-bit WAV. -> its path."""
+    import urllib.request
+
+    src = os.path.join(work, "master")
+    with urllib.request.urlopen(url, timeout=120) as r, open(src, "wb") as f:
+        shutil.copyfileobj(r, f, 1 << 20)
+    wav = os.path.join(work, "mono22k.wav")
+    subprocess.run([_ffmpeg(), "-v", "error", "-y", "-i", src, "-ac", "1", "-ar", str(SR), "-c:a", "pcm_s16le", wav],
+                   check=True, timeout=3600)
+    os.remove(src)
+    return wav
+
+
+class _Job:
+    """One job's state as the service holds it, shared by its worker thread and
+    the reporter: where it has got to, and the time it has spent waiting for
+    live listening."""
+
+    def __init__(self, job):
+        self.job = job
+        self.id = job["listen_job_id"]
+        self.phase, self.progress, self.heard_ms = "fetching", 0.0, 0
+        self.stop = False
+        self.started = time.time()
+        self.paused_since = None
+        self.paused_s = 0.0
+
+    def pause(self):
+        """True while live listening has the service; counts the time."""
+        live = _live()
+        now = time.time()
+        if live and self.paused_since is None:
+            self.paused_since = now
+        elif not live and self.paused_since is not None:
+            self.paused_s += now - self.paused_since
+            self.paused_since = None
+        return live
+
+    def paused_total(self):
+        return self.paused_s + (time.time() - self.paused_since if self.paused_since else 0.0)
+
+    def report(self):
+        paused = self.paused_since is not None
+        return {"worker": WORKER, "status": "paused" if paused else "running", "phase": self.phase,
+                "progress": round(self.progress, 4), "heard_ms": self.heard_ms,
+                "running_s": round(time.time() - self.started - self.paused_total(), 1),
+                "paused_s": round(self.paused_total(), 1)}
+
+    def on_progress(self, phase, done, total):
+        self.phase = phase
+        self.progress = done / total if total else 0.0
+        if phase == "listening":
+            self.heard_ms = done
+
+
+def _work(j):
+    """The job, start to finish, in a worker thread. -> find_tunes' result."""
+    from lab.tools.find_tunes import find_tunes
+
+    work = tempfile.mkdtemp(prefix=f"job-{j.id}-")
+    try:
+        wav = _fetch_audio(j.job["audio_url"], work)
+        keys = {int(k): v for k, v in (j.job.get("keys") or {}).items()}
+        return find_tunes(wav, state["models"], j.job.get("session_tunes") or None, keys,
+                          progress=j.on_progress, pause=j.pause, cancelled=lambda: j.stop,
+                          log=lambda msg: print(f"listen job {j.id}: {msg}", flush=True), nu_partly=NU_PARTLY)
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
+async def _run_job(job):
+    from lab.tools.find_tunes import Cancelled
+
+    j = _Job(job)
+    state["job"] = {"listen_job_id": j.id, "recording_id": job.get("recording_id"), **j.report()}
+    print(f"listen: job {j.id} (recording {job.get('recording_id')}) started", flush=True)
+
+    async def reporter():
+        while True:
+            await asyncio.sleep(JOB_REPORT_S)
+            j.pause()                     # keeps the paused clock right between steps too
+            body = j.report()
+            state["job"] = {"listen_job_id": j.id, "recording_id": job.get("recording_id"), **body}
+            try:
+                reply = await asyncio.to_thread(_app, f"/api/listen-jobs/{j.id}/progress", body)
+                if reply.get("stop"):
+                    j.stop = True
+            except Exception as e:
+                print(f"listen: job {j.id} progress not sent: {e!r}", flush=True)
+
+    rep = asyncio.create_task(reporter())
+    try:
+        out = await asyncio.to_thread(_work, j)
+        keep = ("tune_id", "name", "start_ms", "end_ms", "p_right", "set", "first_in_set", "outside")
+        body = {**j.report(), "drafts": [{k: d.get(k) for k in keep} for d in out["drafts"]],
+                "confidence_model": out["confidence_model"], "summary": out["summary"]}
+        await asyncio.to_thread(_app, f"/api/listen-jobs/{j.id}/result", body)
+        print(f"listen: job {j.id} done: {out['summary']}", flush=True)
+    except Cancelled:
+        print(f"listen: job {j.id} cancelled", flush=True)
+    except Exception as e:
+        print(f"listen: job {j.id} failed: {e!r}", flush=True)
+        retry = isinstance(e, (OSError, subprocess.SubprocessError))   # fetching or decoding
+        try:
+            await asyncio.to_thread(_app, f"/api/listen-jobs/{j.id}/fail",
+                                    {**j.report(), "error": repr(e)[:2000], "retry": retry})
+        except Exception:
+            pass
+    finally:
+        rep.cancel()
+        state["job"] = None
+
+
+async def _jobs():
+    """Ask for work whenever the models are loaded and nothing is live."""
+    if not JOB_TOKEN:
+        return
+    while True:
+        await asyncio.sleep(JOB_POLL_S)
+        if state["models"] is None or _live():
+            continue
+        try:
+            job = (await asyncio.to_thread(_app, "/api/listen-jobs/claim", {"worker": WORKER})).get("job")
+        except Exception as e:
+            print(f"listen: no job claimed: {e!r}", flush=True)
+            continue
+        if job:
+            await _run_job(job)
 
 
 async def health(request):
@@ -238,13 +446,14 @@ async def health(request):
     return JSONResponse({"ready": state["models"] is not None, "loading": state["loading"],
                          "error": state["error"], "load_s": state["load_s"],
                          "streams": len(streams), "peak_memory_gb": round(rss_gb, 2),
-                         "threads": state.get("threads"), "cpu": state.get("cpu"),
+                         "threads": state.get("threads"), "cpu": state.get("cpu"), "job": state["job"],
                          "uptime_s": int(time.time() - state["started"])},
                         status_code=200 if state["models"] is not None else 503)
 
 
 async def listen(ws: WebSocket):
-    if not await _authorised(ws.scope.get("headers", []), dict(ws.query_params)):
+    allowed, app_token = await _authorised(ws.scope.get("headers", []), dict(ws.query_params))
+    if not allowed:
         await ws.close(code=4401)
         return
     await ws.accept()
@@ -280,11 +489,15 @@ async def listen(ws: WebSocket):
                     continue
                 stream = streams.get(sid)
                 if stream is None:
-                    stream = Stream(sid)
+                    known = None
+                    if m.get("instance_id") and app_token:
+                        known = await asyncio.to_thread(_known_tunes, m["instance_id"], app_token)
+                    stream = Stream(sid, known)
                     streams[sid] = stream
                     asyncio.create_task(_step_loop(stream))
                 stream.socket = ws
-                await _send(ws, {"type": "ready", "stream_id": sid, "have": stream.have})
+                await _send(ws, {"type": "ready", "stream_id": sid, "have": stream.have,
+                                 "known_tunes": stream.known_tunes})
             elif kind == "skip" and stream is not None:
                 stream.skip_to(int(m.get("to", 0)))
                 await _send(ws, {"type": "ack", "have": stream.have})
