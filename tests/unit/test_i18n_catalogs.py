@@ -247,6 +247,38 @@ def test_every_help_page_has_an_irish_twin(name):
     english = open(os.path.join(ROOT, "templates", name), encoding="utf-8").read()
     irish = open(twin, encoding="utf-8").read()
     months = re.findall(r"month == '(\d{4}-\d{2})'", english)
-    assert months == re.findall(r"month == '(\d{4}-\d{2})'", irish), (
-        f"templates/ga/{name} doesn't have the same release-notes months"
-    )
+    assert months == re.findall(
+        r"month == '(\d{4}-\d{2})'", irish
+    ), f"templates/ga/{name} doesn't have the same release-notes months"
+
+
+def _gettext_inside_fstrings(source):
+    """_() called inside an f-string: Babel's extractor skips it, so the string never
+    reaches the catalog and shows in English on an Irish page."""
+    found = []
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.JoinedStr):
+            for part in ast.walk(node):
+                if isinstance(part, ast.Call):
+                    name = getattr(part.func, "id", None)
+                    if name in ("_", "gettext", "ngettext", "lazy_gettext"):
+                        found.append(f"line {part.lineno}")
+    return found
+
+
+def test_the_fstring_check_catches_it():
+    assert _gettext_inside_fstrings("x = f\"{_('Hello')} {name}\"\n") == ["line 1"]
+    assert _gettext_inside_fstrings('h = _("Hello")\nx = f"{h} {name}"\n') == []
+
+
+def test_no_gettext_inside_fstrings():
+    bad = []
+    for dirpath, dirs, files in os.walk(ROOT):
+        dirs[:] = [d for d in dirs if d not in IGNORE and not d.startswith(".")]
+        for f in files:
+            if f.endswith(".py"):
+                path = os.path.join(dirpath, f)
+                with open(path, encoding="utf-8") as fh:
+                    for where in _gettext_inside_fstrings(fh.read()):
+                        bad.append(f"{os.path.relpath(path, ROOT)} {where}")
+    assert not bad, "_() inside an f-string is never extracted:\n  " + "\n  ".join(bad)

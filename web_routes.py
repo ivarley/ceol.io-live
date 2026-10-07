@@ -2280,7 +2280,7 @@ def _login_after_verification(user, ip_address, user_agent):
 
     cleanup_expired_sessions()
 
-    flash(_("Email verified! Welcome to Irish Music Sessions."), "success")
+    flash(_("Email verified! Welcome to Ceol."), "success")
 
     # Passwordless: offer a password next (then profile setup, see
     # set_password_optional).

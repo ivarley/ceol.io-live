@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-07 10:27+0530\n"
+"POT-Creation-Date: 2026-10-07 10:33+0530\n"
 "PO-Revision-Date: 2026-10-06 12:44+0530\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ga\n"
@@ -2054,104 +2054,240 @@ msgstr "Nuashonraíodh na huirlisí"
 msgid "Successfully removed person from attendance"
 msgstr "Baineadh an duine ón tinreamh"
 
-#: email_utils.py:124
+#: email_utils.py:128
 #, review
-msgid "Password Reset Request - Irish Music Sessions"
-msgstr "Iarratas ar phasfhocal nua - Seisiúin Cheoil Ghaelaigh"
+msgid "Password Reset Request - Ceol"
+msgstr "Iarratas ar phasfhocal nua - Ceol"
 
-#: email_utils.py:126
+#: email_utils.py:129
+#, review
+msgid "To reset your password, visit the following link:"
+msgstr "Chun do phasfhocal a athshocrú, oscail an nasc seo:"
+
+#: email_utils.py:130
+#, review
+msgid "Password Reset Request"
+msgstr "Iarratas ar phasfhocal nua"
+
+#: email_utils.py:131
+#, review
+msgid "To reset your password, click the following link:"
+msgstr "Chun do phasfhocal a athshocrú, cliceáil an nasc seo:"
+
+#: email_utils.py:132
+#, review
+msgid "Reset Your Password"
+msgstr "Athshocraigh do phasfhocal"
+
+#: email_utils.py:134
 #, review
 msgid "If you did not make this request, please ignore this email and no changes will be made."
 msgstr "Mura ndearna tú an t-iarratas seo, déan neamhaird den ríomhphost seo agus ní athrófar faic."
 
-#: email_utils.py:128
+#: email_utils.py:136
 #, review
 msgid "This link will expire in 1 hour."
 msgstr "Rachaidh an nasc seo as feidhm i gceann uair an chloig."
 
-#: email_utils.py:165
+#: email_utils.py:174
 #, review
-msgid "Verify Your Email Address - Irish Music Sessions"
-msgstr "Fíoraigh do sheoladh ríomhphoist - Seisiúin Cheoil Ghaelaigh"
+msgid "Verify Your Email Address - Ceol"
+msgstr "Fíoraigh do sheoladh ríomhphoist - Ceol"
 
-#: email_utils.py:166
+#: email_utils.py:175
 #, review
-msgid "Welcome to Irish Music Sessions!"
-msgstr "Fáilte go Seisiúin Cheoil Ghaelaigh!"
+msgid "Welcome to Ceol!"
+msgstr "Fáilte go Ceol!"
 
-#: email_utils.py:167
+#: email_utils.py:177
+#, review
+msgid "Please click the following link to verify your email address and activate your account:"
+msgstr "Cliceáil an nasc seo chun do sheoladh ríomhphoist a fhíorú agus do chuntas a ghníomhachtú:"
+
+#: email_utils.py:180
+#, review
+msgid "Thank you for registering with us. Please verify your email address to activate your account."
+msgstr "Go raibh maith agat as clárú. Fíoraigh do sheoladh ríomhphoist chun do chuntas a ghníomhachtú."
+
+#: email_utils.py:182
+#, review
+msgid "Verify Email Address"
+msgstr "Fíoraigh an seoladh ríomhphoist"
+
+#: email_utils.py:184 email_utils.py:240 email_utils.py:291
+#, review
+msgid "If the button doesn't work, copy and paste this link into your browser:"
+msgstr "Mura n-oibríonn an cnaipe, cóipeáil an nasc seo agus greamaigh i do bhrabhsálaí é:"
+
+#: email_utils.py:186
 #, review
 msgid "If you did not create this account, please ignore this email."
 msgstr "Mura ndearna tú an cuntas seo, déan neamhaird den ríomhphost seo."
 
-#: email_utils.py:168 email_utils.py:214
+#: email_utils.py:187 email_utils.py:244
 #, review
 msgid "This link will expire in 24 hours."
 msgstr "Rachaidh an nasc seo as feidhm i gceann 24 uair an chloig."
 
-#: email_utils.py:210
+#: email_utils.py:230
 #, review
-msgid "Create your account - Irish Music Sessions"
-msgstr "Cruthaigh do chuntas - Seisiúin Cheoil Ghaelaigh"
+msgid "Create your account - Ceol"
+msgstr "Cruthaigh do chuntas - Ceol"
 
-#: email_utils.py:212
+#: email_utils.py:232
+#, review
+msgid "Someone, hopefully you, asked to create a Ceol account with this email address."
+msgstr "D'iarr duine éigin, tusa tá súil againn, cuntas Ceol a chruthú leis an seoladh ríomhphoist seo."
+
+#: email_utils.py:234
+#, review
+msgid "Click this link to create your account and log in:"
+msgstr "Cliceáil an nasc seo chun do chuntas a chruthú agus síniú isteach:"
+
+#: email_utils.py:235
+#, review
+msgid "Create your Ceol account"
+msgstr "Cruthaigh do chuntas Ceol"
+
+#: email_utils.py:237
+#, review
+msgid "Someone, hopefully you, asked to create an account with this email address."
+msgstr "D'iarr duine éigin, tusa tá súil againn, cuntas a chruthú leis an seoladh ríomhphoist seo."
+
+#: email_utils.py:239
+#, review
+msgid "Create my account"
+msgstr "Cruthaigh mo chuntas"
+
+#: email_utils.py:242
 #, review
 msgid "If this wasn't you, ignore this email. No account is created unless the link is clicked."
 msgstr "Murab tusa a bhí ann, déan neamhaird den ríomhphost seo. Ní chruthaítear cuntas mura gcliceáiltear an nasc."
 
-#: email_utils.py:254
+#: email_utils.py:285
 #, review
-msgid "Your Login Link - Irish Music Sessions"
-msgstr "Do nasc síniú isteach - Seisiúin Cheoil Ghaelaigh"
+msgid "Your Login Link - Ceol"
+msgstr "Do nasc síniú isteach - Ceol"
 
-#: email_utils.py:255
+#: email_utils.py:286
+#, review
+msgid "Click this link to log in to Ceol:"
+msgstr "Cliceáil an nasc seo chun síniú isteach i gCeol:"
+
+#: email_utils.py:287
+#, review
+msgid "Log In to Ceol"
+msgstr "Sínigh isteach i gCeol"
+
+#: email_utils.py:288
+#, review
+msgid "Click the button below to log in:"
+msgstr "Cliceáil an cnaipe thíos chun síniú isteach:"
+
+#: email_utils.py:289
+#, review
+msgid "Log In"
+msgstr "Sínigh isteach"
+
+#: email_utils.py:293
 #, review
 msgid "This link will expire in 15 minutes."
 msgstr "Rachaidh an nasc seo as feidhm i gceann 15 nóiméad."
 
-#: email_utils.py:256
+#: email_utils.py:294
 #, review
 msgid "If you did not request this login link, please ignore this email."
 msgstr "Mura ndearna tú an nasc síniú isteach seo a iarraidh, déan neamhaird den ríomhphost seo."
 
-#: email_utils.py:292 templates/admin_tunes.html:343
+#: email_utils.py:332 templates/admin_tunes.html:343
 #: templates/common_tunes.html:331 templates/session_instance_players.html:169
 #: templates/tunes.html:111
 #, review
 msgid "Unknown"
 msgstr "Anaithnid"
 
-#: email_utils.py:293
+#: email_utils.py:333
 #, python-format, review
 msgid "New person added to session: %(session)s"
 msgstr "Duine nua curtha leis an seisiún: %(session)s"
 
-#: email_utils.py:297
+#: email_utils.py:337
 #, python-format, review
 msgid "%(person)s has been added to the session \"%(session)s\" in %(location)s as a member."
 msgstr "Cuireadh %(person)s leis an seisiún \"%(session)s\" in %(location)s mar bhall."
 
-#: email_utils.py:302
+#: email_utils.py:342
 #, python-format, review
 msgid "%(person)s has been added to the session \"%(session)s\" in %(location)s as a visitor."
 msgstr "Cuireadh %(person)s leis an seisiún \"%(session)s\" in %(location)s mar chuairteoir."
 
-#: email_utils.py:307
+#: email_utils.py:347
 #, python-format, review
 msgid "%(person)s has been added to the session \"%(session)s\" in %(location)s as a %(relationship)s."
 msgstr "Cuireadh %(person)s leis an seisiún \"%(session)s\" in %(location)s (%(relationship)s)."
 
-#: email_utils.py:357
+#: email_utils.py:351
+#, python-format, review
+msgid "Hello %(name)s,"
+msgstr "Dia duit, %(name)s,"
+
+#: email_utils.py:352
+#, review
+msgid "Person Details:"
+msgstr "Sonraí an duine:"
+
+#: email_utils.py:353
+#, python-format, review
+msgid "Name: %(name)s"
+msgstr "Ainm: %(name)s"
+
+#: email_utils.py:354
+#, python-format, review
+msgid "Email: %(email)s"
+msgstr "Ríomhphost: %(email)s"
+
+#: email_utils.py:354 templates/session_admin_person.html:66
+#: templates/session_admin_person.html:68
+#: templates/session_admin_person.html:75
+#: templates/session_admin_person.html:77
+#: templates/session_admin_person.html:87
+#: templates/session_admin_person.html:89
+#: templates/session_admin_person.html:96
+#: templates/session_admin_person.html:98
+#: templates/session_admin_person.html:105
+#: templates/session_admin_person.html:107
+#: templates/session_admin_person.html:125
+#: templates/session_admin_person.html:128
+#, review
+msgid "Not provided"
+msgstr "Níor tugadh"
+
+#: email_utils.py:356
+#, python-format, review
+msgid "You can review and modify this person's role in the session admin interface: %(url)s"
+msgstr "Is féidir leat ról an duine seo a fheiceáil agus a athrú i riarachán an tseisiúin: %(url)s"
+
+#: email_utils.py:359
+#, review
+msgid "Best regards,"
+msgstr "Le gach dea-ghuí,"
+
+#: email_utils.py:360
+#, review
+msgid "The Ceol.io Session Management System"
+msgstr "Córas bainistíochta seisiún Ceol.io"
+
+#: email_utils.py:407
 #, review
 msgid "You're receiving this because you opted in to updates on ceol.io."
 msgstr "Tá sé seo á fháil agat mar gur roghnaigh tú nuashonruithe ó ceol.io."
 
-#: email_utils.py:359
+#: email_utils.py:409
 #, review
 msgid "Unsubscribe"
 msgstr "Díliostáil"
 
-#: email_utils.py:360
+#: email_utils.py:410
 #, python-format, review
 msgid "Unsubscribe: %(url)s"
 msgstr "Díliostáil: %(url)s"
@@ -3826,6 +3962,12 @@ msgstr "Á phróiseáil…"
 msgid "Ingest failed: %(detail)s"
 msgstr "Theip ar an bpróiseáil: %(detail)s"
 
+#: templates/admin_recordings.html:201 templates/admin_recordings.html:797
+#: web_routes.py:3956
+#, review
+msgid "no detail recorded"
+msgstr "níor taifeadadh aon sonra"
+
 #: templates/admin_recordings.html:209
 #, review
 msgid "Segment"
@@ -5299,6 +5441,16 @@ msgstr "Cruthaigh pasfhocal"
 msgid "Change Password"
 msgstr "Athraigh an pasfhocal"
 
+#: templates/auth/change_password.html:4 templates/auth/forgot_password.html:4
+#: templates/auth/login.html:4 templates/auth/register.html:4
+#: templates/auth/resend_verification.html:4
+#: templates/auth/reset_password.html:4 templates/auth/set_password.html:4
+#: templates/auth/setup_profile.html:4 templates/base.html:18
+#: templates/sessions.html:4
+#, review
+msgid "Irish Music Sessions"
+msgstr "Seisiúin Cheoil Ghaelaigh"
+
 #: templates/auth/change_password.html:30
 #, review
 msgid "Create a password for easier login. You can always log in using a link sent to your email instead."
@@ -5342,6 +5494,14 @@ msgstr "Deimhnigh an pasfhocal nua"
 msgid "Create Password"
 msgstr "Cruthaigh pasfhocal"
 
+#: templates/auth/change_password.html:50 templates/auth/set_password.html:44
+#: templates/auth/setup_profile.html:105
+#: templates/session_admin_person.html:663
+#: templates/session_bulk_import.html:152
+#, review
+msgid "Saving..."
+msgstr "Á shábháil..."
+
 #: templates/auth/forgot_password.html:13 templates/auth/reset_password.html:4
 #, review
 msgid "Reset Password"
@@ -5384,6 +5544,12 @@ msgstr "Cuir isteach do ríomhphost chun síniú isteach nó cuntas a chruthú."
 #, review
 msgid "Email address"
 msgstr "Seoladh ríomhphoist"
+
+#: templates/auth/login.html:49 templates/auth/register.html:74
+#: templates/modals/person_edit.html:27 templates/session_bulk_import.html:106
+#, review
+msgid "Email"
+msgstr "Ríomhphost"
 
 #: templates/auth/login.html:52
 #, review
@@ -5653,6 +5819,16 @@ msgstr "Scipeáil anois"
 msgid "Type a password in both boxes, or choose Skip for now."
 msgstr "Clóscríobh pasfhocal sa dá bhosca, nó roghnaigh Scipeáil anois."
 
+#: templates/auth/set_password.html:92 web_routes.py:1669
+#, review
+msgid "Your password needs at least 8 characters. Make it longer, or choose Skip for now."
+msgstr "Teastaíonn 8 gcarachtar ar a laghad i do phasfhocal. Déan níos faide é, nó roghnaigh Scipeáil anois."
+
+#: templates/auth/set_password.html:99 web_routes.py:1678
+#, review
+msgid "The two passwords don't match. Type the same password in both boxes."
+msgstr "Níl an dá phasfhocal mar an gcéanna. Clóscríobh an pasfhocal céanna sa dá bhosca."
+
 #: templates/auth/setup_profile.html:4 templates/auth/setup_profile.html:13
 #, review
 msgid "Complete Your Profile"
@@ -5702,16 +5878,6 @@ msgstr "Uirlis(í) eile..."
 #, review
 msgid "Save Profile"
 msgstr "Sábháil an phróifíl"
-
-#: templates/auth/change_password.html:4 templates/auth/forgot_password.html:4
-#: templates/auth/login.html:4 templates/auth/register.html:4
-#: templates/auth/resend_verification.html:4
-#: templates/auth/reset_password.html:4 templates/auth/set_password.html:4
-#: templates/auth/setup_profile.html:4 templates/base.html:18
-#: templates/sessions.html:4
-#, review
-msgid "Irish Music Sessions"
-msgstr "Seisiúin Cheoil Ghaelaigh"
 
 #: templates/base.html:30
 #, review
@@ -6091,6 +6257,14 @@ msgstr "Faigh tuilleadh den chineál %(type)s"
 msgid "Edit Person"
 msgstr "Cuir an duine in eagar"
 
+#: templates/modals/person_edit.html:32 templates/modals/person_edit.html:95
+#: templates/session_admin_person.html:262
+#: templates/session_admin_person.html:294
+#: templates/session_bulk_import.html:109
+#, review
+msgid "Instruments"
+msgstr "Uirlisí"
+
 #: templates/modals/person_edit.html:37 templates/modals/person_edit.html:105
 #, review
 msgid "Other instrument..."
@@ -6111,6 +6285,13 @@ msgstr "Stádas tinrimh"
 msgid "Yes - Attending"
 msgstr "Tá - ag freastal"
 
+#: templates/modals/person_edit.html:48
+#: templates/partials/attendance_tab.html:56
+#: templates/session_instance_players.html:159
+#, review
+msgid "Maybe"
+msgstr "B'fhéidir"
+
 #: templates/modals/person_edit.html:49
 #, review
 msgid "No - Not Attending"
@@ -6120,6 +6301,11 @@ msgstr "Níl - gan freastal"
 #, review
 msgid "Comment"
 msgstr "Nóta"
+
+#: templates/modals/person_edit.html:61 templates/session_admin_person.html:157
+#, review
+msgid "Save Changes"
+msgstr "Sábháil na hathruithe"
 
 #: templates/modals/person_edit.html:72
 #, review
@@ -6166,6 +6352,12 @@ msgstr "Bain triail eile as"
 msgid "Search and add people..."
 msgstr "Cuardaigh agus cuir daoine leis..."
 
+#: templates/partials/attendance_tab.html:19
+#: templates/session_instance_players.html:163
+#, review
+msgid "Check In"
+msgstr "Marcáil i láthair"
+
 #: templates/partials/attendance_tab.html:25
 #, review
 msgid "Yes:"
@@ -6195,6 +6387,25 @@ msgstr "An tinreamh á lódáil..."
 #, review
 msgid "Click to edit person details"
 msgstr "Cliceáil chun sonraí an duine a chur in eagar"
+
+#: templates/partials/attendance_tab.html:55
+#: templates/session_instance_players.html:167
+#, review
+msgid "Yes"
+msgstr "Tá"
+
+#: templates/partials/attendance_tab.html:57
+#: templates/session_instance_players.html:168
+#, review
+msgid "No"
+msgstr "Níl"
+
+#: templates/partials/attendance_tab.html:58
+#: templates/session_admin_person.html:321
+#: templates/session_admin_person.html:677
+#, review
+msgid "Remove"
+msgstr "Bain"
 
 #: templates/person_details.html:4
 #, python-format, review
@@ -6256,22 +6467,6 @@ msgstr "Ainm:"
 msgid "Email:"
 msgstr "Ríomhphost:"
 
-#: templates/session_admin_person.html:66
-#: templates/session_admin_person.html:68
-#: templates/session_admin_person.html:75
-#: templates/session_admin_person.html:77
-#: templates/session_admin_person.html:87
-#: templates/session_admin_person.html:89
-#: templates/session_admin_person.html:96
-#: templates/session_admin_person.html:98
-#: templates/session_admin_person.html:105
-#: templates/session_admin_person.html:107
-#: templates/session_admin_person.html:125
-#: templates/session_admin_person.html:128
-#, review
-msgid "Not provided"
-msgstr "Níor tugadh"
-
 #: templates/session_admin_person.html:72
 #, review
 msgid "SMS Number:"
@@ -6311,11 +6506,6 @@ msgstr "Cuntas úsáideora:"
 #, review
 msgid "System Admin"
 msgstr "Bainisteoir córais"
-
-#: templates/modals/person_edit.html:61 templates/session_admin_person.html:157
-#, review
-msgid "Save Changes"
-msgstr "Sábháil na hathruithe"
 
 #: templates/session_admin_person.html:158
 #, review
@@ -6400,14 +6590,6 @@ msgstr "Meabhrúcháin ríomhphoist"
 msgid "Email Followups"
 msgstr "Teachtaireachtaí leantacha ríomhphoist"
 
-#: templates/modals/person_edit.html:32 templates/modals/person_edit.html:95
-#: templates/session_admin_person.html:262
-#: templates/session_admin_person.html:294
-#: templates/session_bulk_import.html:109
-#, review
-msgid "Instruments"
-msgstr "Uirlisí"
-
 #: templates/session_admin_person.html:276
 #: templates/session_admin_person.html:681
 #, review
@@ -6435,13 +6617,6 @@ msgstr "Uirlisí eile"
 #, review
 msgid "Enter instrument name"
 msgstr "Cuir isteach ainm na huirlise"
-
-#: templates/partials/attendance_tab.html:58
-#: templates/session_admin_person.html:321
-#: templates/session_admin_person.html:677
-#, review
-msgid "Remove"
-msgstr "Bain"
 
 #: templates/session_admin_person.html:326
 #, review
@@ -6554,14 +6729,6 @@ msgstr "<strong>Rabhadh:</strong> Ós rud é nach bhfuil cuntas úsáideora ag a
 #, review
 msgid "This action cannot be undone."
 msgstr "Ní féidir é seo a chealú."
-
-#: templates/auth/change_password.html:50 templates/auth/set_password.html:44
-#: templates/auth/setup_profile.html:105
-#: templates/session_admin_person.html:663
-#: templates/session_bulk_import.html:152
-#, review
-msgid "Saving..."
-msgstr "Á shábháil..."
 
 #: templates/session_admin_person.html:664
 #, python-brace-format, review
@@ -6808,12 +6975,6 @@ msgstr "Céim 2: Athbhreithnigh agus deimhnigh"
 msgid "Processing Results:"
 msgstr "Torthaí na próiseála:"
 
-#: templates/auth/login.html:49 templates/auth/register.html:74
-#: templates/modals/person_edit.html:27 templates/session_bulk_import.html:106
-#, review
-msgid "Email"
-msgstr "Ríomhphost"
-
 #: templates/session_bulk_import.html:107
 #, review
 msgid "Phone"
@@ -6965,13 +7126,6 @@ msgstr "I láthair"
 msgid "Change To Maybe"
 msgstr "Athraigh go B'fhéidir"
 
-#: templates/modals/person_edit.html:48
-#: templates/partials/attendance_tab.html:56
-#: templates/session_instance_players.html:159
-#, review
-msgid "Maybe"
-msgstr "B'fhéidir"
-
 #: templates/session_instance_players.html:160
 #, review
 msgid "Change To No"
@@ -6987,12 +7141,6 @@ msgstr "Ní thiocfaidh"
 msgid "Change To Yes"
 msgstr "Athraigh go Tá"
 
-#: templates/partials/attendance_tab.html:19
-#: templates/session_instance_players.html:163
-#, review
-msgid "Check In"
-msgstr "Marcáil i láthair"
-
 #: templates/session_instance_players.html:164
 #, review
 msgid "Error loading attendance data"
@@ -7007,18 +7155,6 @@ msgstr "Níl aon duine i láthair fós"
 #, review
 msgid "No instruments listed"
 msgstr "Níl uirlis ar bith liostaithe"
-
-#: templates/partials/attendance_tab.html:55
-#: templates/session_instance_players.html:167
-#, review
-msgid "Yes"
-msgstr "Tá"
-
-#: templates/partials/attendance_tab.html:57
-#: templates/session_instance_players.html:168
-#, review
-msgid "No"
-msgstr "Níl"
 
 #: templates/session_instance_players.html:170
 #, review
@@ -7419,16 +7555,6 @@ msgstr "Tá an nasc síniú isteach neamhbhailí nó imithe as feidhm. Iarr cean
 msgid "You have been logged in."
 msgstr "Síníodh isteach thú."
 
-#: templates/auth/set_password.html:92 web_routes.py:1669
-#, review
-msgid "Your password needs at least 8 characters. Make it longer, or choose Skip for now."
-msgstr "Teastaíonn 8 gcarachtar ar a laghad i do phasfhocal. Déan níos faide é, nó roghnaigh Scipeáil anois."
-
-#: templates/auth/set_password.html:99 web_routes.py:1678
-#, review
-msgid "The two passwords don't match. Type the same password in both boxes."
-msgstr "Níl an dá phasfhocal mar an gcéanna. Clóscríobh an pasfhocal céanna sa dá bhosca."
-
 #: web_routes.py:1717
 #, review
 msgid "Password set successfully! You can use it to log in next time."
@@ -7506,8 +7632,8 @@ msgstr "Cruthaíodh an pasfhocal."
 
 #: web_routes.py:2283
 #, review
-msgid "Email verified! Welcome to Irish Music Sessions."
-msgstr "Fíoraíodh an ríomhphost! Fáilte go Seisiúin Cheoil Ghaelaigh."
+msgid "Email verified! Welcome to Ceol."
+msgstr "Fíoraíodh an ríomhphost! Fáilte go Ceol."
 
 #: web_routes.py:2319
 #, review
@@ -7577,12 +7703,6 @@ msgstr "Earráid agus an leathanach á lódáil"
 #, review
 msgid "That recording doesn't exist."
 msgstr "Níl an taifeadadh sin ann."
-
-#: templates/admin_recordings.html:201 templates/admin_recordings.html:797
-#: web_routes.py:3956
-#, review
-msgid "no detail recorded"
-msgstr "níor taifeadadh aon sonra"
 
 #: web_routes.py:3960
 #, python-format, review

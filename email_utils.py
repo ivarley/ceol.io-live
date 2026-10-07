@@ -113,6 +113,10 @@ def _button(url, label):
     )
 
 
+# Every _() here is a plain call, never inside an f-string: Babel's extractor doesn't
+# look inside f-strings, so such a string would never reach the catalog.
+
+
 def send_password_reset_email(user, token):
     logger.info(
         f"Initiating password reset email - User: {user.username}, Email: {user.email}"
@@ -121,12 +125,17 @@ def send_password_reset_email(user, token):
     reset_url = url_for("reset_password", token=token, _external=True)
 
     with force_locale(_recipient_language(user)):
-        subject = _("Password Reset Request - Irish Music Sessions")
+        subject = _("Password Reset Request - Ceol")
+        visit = _("To reset your password, visit the following link:")
+        heading = _("Password Reset Request")
+        click = _("To reset your password, click the following link:")
+        link = _("Reset Your Password")
         ignore = _(
             "If you did not make this request, please ignore this email and no changes will be made."
         )
         expires = _("This link will expire in 1 hour.")
-        body_text = f"""{_("To reset your password, visit the following link:")}
+
+    body_text = f"""{visit}
 {reset_url}
 
 {ignore}
@@ -134,10 +143,10 @@ def send_password_reset_email(user, token):
 {expires}
 """
 
-        body_html = f"""
-    <h2>{_("Password Reset Request")}</h2>
-    <p>{_("To reset your password, click the following link:")}</p>
-    <p><a href="{reset_url}">{_("Reset Your Password")}</a></p>
+    body_html = f"""
+    <h2>{heading}</h2>
+    <p>{click}</p>
+    <p><a href="{reset_url}">{link}</a></p>
     <p>{ignore}</p>
     <p><strong>{expires}</strong></p>
     """
@@ -162,13 +171,24 @@ def send_verification_email(user, token):
     verification_url = url_for("verify_email", token=token, _external=True)
 
     with force_locale(_recipient_language(user)):
-        subject = _("Verify Your Email Address - Irish Music Sessions")
-        welcome = _("Welcome to Irish Music Sessions!")
+        subject = _("Verify Your Email Address - Ceol")
+        welcome = _("Welcome to Ceol!")
+        click = _(
+            "Please click the following link to verify your email address and activate your account:"
+        )
+        thanks = _(
+            "Thank you for registering with us. Please verify your email address to activate your account."
+        )
+        button = _("Verify Email Address")
+        paste = _(
+            "If the button doesn't work, copy and paste this link into your browser:"
+        )
         ignore = _("If you did not create this account, please ignore this email.")
         expires = _("This link will expire in 24 hours.")
-        body_text = f"""{welcome}
 
-{_("Please click the following link to verify your email address and activate your account:")}
+    body_text = f"""{welcome}
+
+{click}
 {verification_url}
 
 {ignore}
@@ -176,11 +196,11 @@ def send_verification_email(user, token):
 {expires}
 """
 
-        body_html = f"""
+    body_html = f"""
     <h2>{welcome}</h2>
-    <p>{_("Thank you for registering with us. Please verify your email address to activate your account.")}</p>
-    {_button(verification_url, _("Verify Email Address"))}
-    <p>{_("If the button doesn't work, copy and paste this link into your browser:")}</p>
+    <p>{thanks}</p>
+    {_button(verification_url, button)}
+    <p>{paste}</p>
     <p>{verification_url}</p>
     <p>{ignore}</p>
     <p><strong>{expires}</strong></p>
@@ -207,14 +227,25 @@ def send_registration_email(email, token):
 
     verification_url = url_for("verify_email", token=token, _external=True)
 
-    subject = _("Create your account - Irish Music Sessions")
+    subject = _("Create your account - Ceol")
+    asked = _(
+        "Someone, hopefully you, asked to create a Ceol account with this email address."
+    )
+    click = _("Click this link to create your account and log in:")
+    heading = _("Create your Ceol account")
+    asked_short = _(
+        "Someone, hopefully you, asked to create an account with this email address."
+    )
+    button = _("Create my account")
+    paste = _("If the button doesn't work, copy and paste this link into your browser:")
     ignore = _(
         "If this wasn't you, ignore this email. No account is created unless the link is clicked."
     )
     expires = _("This link will expire in 24 hours.")
-    body_text = f"""{_("Someone, hopefully you, asked to create an Irish Music Sessions account with this email address.")}
 
-{_("Click this link to create your account and log in:")}
+    body_text = f"""{asked}
+
+{click}
 {verification_url}
 
 {ignore}
@@ -223,10 +254,10 @@ def send_registration_email(email, token):
 """
 
     body_html = f"""
-    <h2>{_("Create your Irish Music Sessions account")}</h2>
-    <p>{_("Someone, hopefully you, asked to create an account with this email address.")}</p>
-    {_button(verification_url, _("Create my account"))}
-    <p>{_("If the button doesn't work, copy and paste this link into your browser:")}</p>
+    <h2>{heading}</h2>
+    <p>{asked_short}</p>
+    {_button(verification_url, button)}
+    <p>{paste}</p>
     <p>{verification_url}</p>
     <p>{ignore}</p>
     <p><strong>{expires}</strong></p>
@@ -251,10 +282,18 @@ def send_login_link_email(user, token):
     login_url = url_for("login_with_token", token=token, _external=True)
 
     with force_locale(_recipient_language(user)):
-        subject = _("Your Login Link - Irish Music Sessions")
+        subject = _("Your Login Link - Ceol")
+        click = _("Click this link to log in to Ceol:")
+        heading = _("Log In to Ceol")
+        below = _("Click the button below to log in:")
+        button = _("Log In")
+        paste = _(
+            "If the button doesn't work, copy and paste this link into your browser:"
+        )
         expires = _("This link will expire in 15 minutes.")
         ignore = _("If you did not request this login link, please ignore this email.")
-        body_text = f"""{_("Click this link to log in to Irish Music Sessions:")}
+
+    body_text = f"""{click}
 {login_url}
 
 {expires}
@@ -262,11 +301,11 @@ def send_login_link_email(user, token):
 {ignore}
 """
 
-        body_html = f"""
-    <h2>{_("Log In to Irish Music Sessions")}</h2>
-    <p>{_("Click the button below to log in:")}</p>
-    {_button(login_url, _("Log In"))}
-    <p>{_("If the button doesn't work, copy and paste this link into your browser:")}</p>
+    body_html = f"""
+    <h2>{heading}</h2>
+    <p>{below}</p>
+    {_button(login_url, button)}
+    <p>{paste}</p>
     <p>{login_url}</p>
     <p><strong>{expires}</strong></p>
     <p>{ignore}</p>
@@ -288,6 +327,7 @@ def send_person_added_email(admin, person, session):
     """Tell a session's admin that someone was added to it, in the admin's language.
     `admin`: dict(name, email, language); `person`: dict(name, email, relationship);
     `session`: dict(name, location, path). An empty location reads "Unknown"."""
+    review_url = f"https://ceol.io/admin/sessions/{session['path']}/people"
     with force_locale(admin.get("language") or "en"):
         location = session["location"] or _("Unknown")
         subject = _("New person added to session: %(session)s", session=session["name"])
@@ -308,19 +348,29 @@ def send_person_added_email(admin, person, session):
                 relationship=person["relationship"],
                 **args,
             )
-        review_url = f"https://ceol.io/admin/sessions/{session['path']}/people"
-        body = f"""{_("Hello %(name)s,", name=admin["name"])}
+        hello = _("Hello %(name)s,", name=admin["name"])
+        details = _("Person Details:")
+        name_line = _("Name: %(name)s", name=person["name"])
+        email_line = _("Email: %(email)s", email=person["email"] or _("Not provided"))
+        review = _(
+            "You can review and modify this person's role in the session admin interface: %(url)s",
+            url=review_url,
+        )
+        regards = _("Best regards,")
+        signature = _("The Ceol.io Session Management System")
+
+    body = f"""{hello}
 
 {added}
 
-{_("Person Details:")}
-- {_("Name: %(name)s", name=person["name"])}
-- {_("Email: %(email)s", email=person["email"] or _("Not provided"))}
+{details}
+- {name_line}
+- {email_line}
 
-{_("You can review and modify this person's role in the session admin interface: %(url)s", url=review_url)}
+{review}
 
-{_("Best regards,")}
-{_("The Ceol.io Session Management System")}"""
+{regards}
+{signature}"""
     return send_email_via_sendgrid(admin["email"], subject, body)
 
 

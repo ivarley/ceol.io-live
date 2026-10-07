@@ -31,15 +31,17 @@ def _sent_login_email(language):
 
 def test_an_english_account_gets_english():
     to, subject, text, html = _sent_login_email("en")
-    assert subject == "Your Login Link - Irish Music Sessions"
+    assert subject == "Your Login Link - Ceol"
     assert "This link will expire in 15 minutes." in text
     assert ">Log In</a>" in html
 
 
 def test_an_irish_account_gets_irish_whatever_the_request():
     to, subject, text, html = _sent_login_email("ga")
-    assert subject != "Your Login Link - Irish Music Sessions"
-    assert "15" in text and "expire" not in text
+    assert subject != "Your Login Link - Ceol"
+    assert "15" in text
+    for english in ("Click", "expire", "ignore", "Log In", "button"):
+        assert english not in text and english not in html, english
     assert (
         "https://ceol.io/auth/login/t" in text
         and "https://ceol.io/auth/login/t" in html
@@ -62,3 +64,5 @@ def test_the_admin_notice_is_in_the_admins_language(relationship):
     assert f"in Unknown as a {relationship}." in en_args[2]
     assert ga_args[1] != en_args[1] and "Mueller" in ga_args[1]
     assert "austin/mueller" in ga_args[2]
+    for english in ("Hello", "Person Details", "Best regards", "review and modify"):
+        assert english not in ga_args[2], english

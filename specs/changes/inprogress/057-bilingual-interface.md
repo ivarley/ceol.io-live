@@ -160,8 +160,8 @@ And from here on, any interface work has to work in both languages.
 - A new account takes the language of the request that creates it
   (`i18n.request_language()`), so signing up in Irish gives Irish emails from the
   first one.
-- English is byte-identical to before. The old site name "Irish Music Sessions" is
-  still in the subjects; the Irish uses "Seisiúin Cheoil Ghaelaigh" for now.
+- The emails say "Ceol" (the old name "Irish Music Sessions" is gone from them).
+  No `_()` sits inside an f-string: Babel doesn't extract those, so a test fails on one.
 
 ## Stage 6 (help) as built
 
