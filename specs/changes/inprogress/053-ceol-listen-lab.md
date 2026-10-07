@@ -2499,6 +2499,62 @@ corpus, the session's own tunes, and, with no history, popular ones. The cost is
 the aligner's, the bulk of the live step: up to 600-900 candidates against
 300; the sizes are to trade against the profiling.
 
+**Merged shortlists in the listener** (2026-10-05). The listener's pool from
+one whole-corpus index: the corpus's top 100 a step and the session's own
+tunes' top 100 (a restricted lookup; the tunes logged before the night, as a
+live system would know them), tunes outside the session's discounted as the
+fallback's were. Nine nights blind (112, 1-5, 138-140), key allowance on,
+against the repertoire shortlist on the same code: named right 662 and 662 of
+689, extra wrong tunes 5 and 5; tune by tune better 6, worse 2 (p 0.29). Gained
+The Gold Ring (112, where The Bucks Of Oranmore had been), Martin Wynne's #1,
+The Maid Behind The Bar, The Peeler's Jacket, Music For A Found Harmonium, The
+Piper On Horseback (first played that night); lost Jim Keefe's (first played
+that night, a polka named as The Mason's Apron, a reel; the repertoire
+shortlist had it only because today's repertoire includes the night's own
+tunes) and The Porthole Of The Kelp. Compute +3% a step. So the production
+design costs nothing here and needs no index per session; The Duke Of Leinster
+(112, first played that night) is still not reached.
+
+**Negative: tempo evidence step by step** (2026-10-05). Each 4 s step, each
+candidate's aligner score less its type's cost for the beat over the last
+12 s (analysis.tempo: up to 0.06, none under pulse strength 0.25; fitted
+without the night's own labels; settings fixed before the run). Nine nights
+blind, merged shortlists and key allowance, against the same without it: named
+right 662 -> 663 of 689; gained Jim Keefe's (the polka read as The Mason's
+Apron) and Da New Rigged Ship; no name lost, but four tunes still named came
+out 30-60 s late (The Gold Ring 112, The Cook In The Kitchen 2, My Love Is In
+America 4, Church Street 140; better 2, worse 4 by the start-and-name check,
+p 0.69), and a wrong The Home Ruler appeared in The Gold Ring. The 12 s beat
+window still holds the previous tune's beat at a changeover, so the new tune's
+type is charged until it clears. Not adopted. The same evidence over a whole
+blind tune, after the fact, has no changeover in it: next.
+
+**Correction (2026-10-05): the tempo model had a bug, and the run above is
+being repeated.** `fold` squeezed every eighth into 110-230 ms, so a polka at
+250 ms was halved to 125 ms, a fast reel's speed: polkas measure 215-260 ms.
+The "p10 124 ms" put down to the estimator doubling was this. Church Street,
+one of the four late starts above, is a polka at about 251 ms. Repeated on the
+fixed model: still 662 -> 663 named right, better 2, worse 3 (p 1). Church
+Street is no longer late (that was the bug); The Gold Ring, The Cook In The
+Kitchen and My Love Is In America still are, at changeovers. The negative
+stands. Fixed: each type is fitted and
+compared at the octave nearest its own speed, starting from the estimator's
+raw periods (`near`); refitted on ten nights, reel 153 ms, jig 166, polka 222,
+slide 148, slip jig 173, hornpipe 181.
+
+**Negative: a whole-tune type check** (2026-10-05, the fixed model). Each blind
+tune's beat over 30 s from 10 s in; a tune whose type is more than 6 log-
+likelihood units below the best for that beat swapped for the listener's
+strongest candidate over its stretch whose type is within 2 (thresholds fixed
+before the run; each night's model fitted without its own labels). Offline, on
+the merged nine-night runs: named right 662 -> 652 of 689; better 1 (Jim
+Keefe's), worse 11 (p 0.006). The estimator misreads single tunes more often
+than the listener names a wrong type: polkas measured at reel speed (Farewell
+To Whiskey, The Dark Girl Dressed In Blue, about 150 ms), slides in twos
+(Bedford Cross, The Road To Lisdoonvarna), jigs in twos at 255 ms (The Black
+Rogue twice). Wrong-type names are 1 or 2 a night; misread beats are more, so
+a veto by the beat fires on good names more than bad. Not adopted.
+
 **Tempo and beat grouping by tune type** (2026-10-05). Night 1 with merged
 shortlists named Jim Keefe's, a polka, as The Mason's Apron, a reel; the
 player's suggestion: track a tune's usual tempo at the session and use it.
@@ -2509,7 +2565,7 @@ in, the beat estimator's eighth note folded into 110-230 ms:
 |---|---|---|---|
 | reel | 387 | 153 ms (144-168) | 382 / 5 |
 | jig | 252 | 166 ms (157-179) | 16 / 236 |
-| polka | 33 | 215 ms (p10 124, the estimator doubling; p90 223) | 33 / 0 |
+| polka | 33 | 215 ms (p10 124, p90 223: wrong, see the correction below; refitted, 222 ms) | 33 / 0 |
 | slide | 29 | 152 ms (133-207) | 8 / 21 |
 | slip jig | 28 | 172 ms (158-192) | 3 / 25 |
 | hornpipe | 21 | 176 ms (122-201) | 13 / 8 |
@@ -2559,6 +2615,24 @@ segmented blind; item 3 the follower). Open, in rough order:
   then the shape: transcription on the phone (Basic Pitch runs under Core ML)
   sending notes rather than audio, or one stream per instance, scaled with the
   sessions.
+- **(2026-10-06) Profiling the live step, first results.** On 4 minutes of
+  recording 112, Basic Pitch's on-disk cache bypassed (replays hit it; live
+  audio never does), a step takes 283 ms on the laptop as a Mac runs it (PESTO
+  on the GPU, Basic Pitch on Core ML) and 404 ms as the server runs it
+  (LAB_DEVICE=cpu: both on the CPU, Basic Pitch on ONNX). On the CPU: PESTO 192
+  ms (48%), Basic Pitch 59, the notes rebuilt from the last 24 s 53, the
+  shortlist lookups 39, yin 26, the aligner 24, the beat and music-detector
+  features 9, the decoder nothing. The beat estimate and attack times over the
+  24 s span were worked out once per regridding tracker on the same audio; now
+  once a step (76 -> 49 ms, 30 steps checked identical). The trackers without
+  PESTO, on the bench (607 segments, repertoire, 30 s): yin + Basic Pitch 0.937
+  against all three's 0.942, better 3, worse 6 (p 0.51; jigs 0.975 -> 0.961);
+  Basic Pitch + PESTO 0.934, yin + PESTO 0.928, Basic Pitch alone 0.916. So
+  PESTO is half a CPU step for half a point. Render took 2.0-3.2 s a step, 5-8
+  times the laptop's CPU figure; the service set no thread limits, and in a
+  container the libraries see the host's cores, so it now holds them to the
+  container's budget (lab/tools/threads.py), logs it, and each step reports its
+  time by part. What Render does is known only once that is deployed.
 - **(2026-10-04) Loudness, relative to the night.** Absolute loudness was taken
   out of tune-ness after a test of laptop speakers recorded through a phone,
   which says nothing about a phone on a pub table (the player's correction).

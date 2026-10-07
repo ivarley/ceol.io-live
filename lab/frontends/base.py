@@ -85,12 +85,16 @@ class FrontEnd:
     def note_params(self):
         return {k: self.params[k] for k in self.NOTE_PARAMS if k in self.params}
 
-    def regrid(self, notes, y, sr, t_offset_ms=0):
+    def regrid(self, notes, y, sr, t_offset_ms=0, shared=None):
         """Split fused repeats, if this front end is configured to.
 
         Needs the audio, which the note step does not, so it is a separate
         call: the pitch track is cached and the grid is derived from the same
         span of audio that produced it.
+
+        `shared`: a dict for this span of audio, holding its beat estimate and
+        attack times once worked out, so several front ends regridding the same
+        span (the listener's trackers, every step) work them out once.
         """
         mode = self.params.get("split_repeats")
         min_eighths = self.params.get("min_note_eighths")
@@ -101,11 +105,25 @@ class FrontEnd:
         from lab.frontends.grid import regrid_notes
 
         if mode or min_eighths:
-            pulse = estimate_pulse(y, sr)
+            if shared is None:
+                shared = {}
+            if "pulse" not in shared:
+                import time
+
+                t0 = time.perf_counter()
+                shared["pulse"] = estimate_pulse(y, sr)
+                shared["pulse_ms"] = round(1000 * (time.perf_counter() - t0))
+            pulse = shared["pulse"]
             if pulse:
                 attacks = None
                 if mode == "attack":
-                    attacks = [t + t_offset_ms for t in attack_times_ms(y, sr)]
+                    if "attacks" not in shared:
+                        import time
+
+                        t0 = time.perf_counter()
+                        shared["attacks"] = [t + t_offset_ms for t in attack_times_ms(y, sr)]
+                        shared["attacks_ms"] = round(1000 * (time.perf_counter() - t0))
+                    attacks = shared["attacks"]
                 notes = regrid_notes(
                     notes, pulse["period_ms"], pulse["phase_ms"] + t_offset_ms,
                     attacks_ms=attacks, mode=mode,

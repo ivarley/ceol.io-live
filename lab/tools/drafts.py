@@ -531,7 +531,22 @@ def _fmt(ms):
     return f"{s // 3600}:{s // 60 % 60:02d}:{s % 60:02d}"
 
 
-def replay(rid, out_path, log=print, transpose=0):
+def session_tunes_before(rid):
+    """The tunes the recording's session had logged before the recording's
+    night, from the session's history (lab pull): what a live system would know
+    then. None without a history."""
+    with open(paths.manifest_path(rid)) as f:
+        rec = json.load(f)["recording"]
+    path = os.path.join(paths.data("sessions", str(rec["session_id"])), "logged_order.json")
+    if not os.path.exists(path):
+        return None
+    with open(path) as f:
+        rows = json.load(f)["rows"]
+    night = str(rec["date"])[:10]
+    return {r["tune_id"] for r in rows if r["record_type"] == "tune" and r["tune_id"] and r["date"] < night}
+
+
+def replay(rid, out_path, log=print, transpose=0, merged=False, tempo=False):
     """The listener (lab listen, the service's) run over a recording's audio
     offline, for a night recorded without the phone's meter: its states written
     as a meter log (dir "in"; at_ms is the audio time, there being no screen),
@@ -543,7 +558,21 @@ def replay(rid, out_path, log=print, transpose=0):
 
     from lab.tools.listen import HOP_MS as STEP, Listener, Models
 
-    li = Listener(tempfile.mkdtemp(prefix=f"replay-{rid}-"), models=Models(transpose=transpose), keep_s=120)
+    session = session_tunes_before(rid) if merged else None
+    if merged:
+        log(f"merged shortlists: {len(session) if session else 'no'} tunes known to the session before the night"
+            + ("" if session else ", so popular tunes"))
+    model = None
+    if tempo:
+        from lab.analysis.tempo import TempoModel, load_measurements
+
+        # fitted without this recording's own labels, so a labelled night is not scored on itself
+        model = TempoModel.fit(load_measurements(), exclude_rids={rid})
+        counts = ", ".join(f"{t} ({v['n']})" for t, v in sorted(model.types.items()))
+        log(f"tempo evidence from labelled tunes by type: {counts}")
+    li = Listener(tempfile.mkdtemp(prefix=f"replay-{rid}-"),
+                  models=Models(transpose=transpose, merged=merged, tempo=model),
+                  keep_s=120, session_tunes=session)
     part = out_path + ".part"
     started = time.time()
     with open(part, "w") as out:
@@ -575,6 +604,12 @@ def add_parser(sub):
     p.add_argument("--blind", action="store_true",
                    help="the night was never logged: infer its log from the audio too (implies --replay "
                         "unless there is a meter log); --apply then logs the tunes as well as placing them")
+    p.add_argument("--merged", action="store_true",
+                   help="replay with merged shortlists (the whole corpus + the session's tunes logged before "
+                        "the night, or popular tunes without any); kept as replay-states-merged.jsonl")
+    p.add_argument("--tempo", action="store_true",
+                   help="replay with tempo evidence (a candidate's type against the beat heard), fitted "
+                        "without the recording's own labels; kept as replay-states-...-tempo.jsonl")
     p.add_argument("--no-fifths", action="store_true",
                    help="replay without the key allowance (a tune played a fifth or two from every "
                         "setting's key); the replay with it is kept as replay-states-fifths.jsonl")
@@ -619,10 +654,11 @@ def main(args):
         # for about 20% more compute, which a replay can spare and the live
         # service, near real time on Render, cannot yet.
         fifths = not args.no_fifths
-        log = os.path.join(paths.recording_dir(rid),
-                           "replay-states-fifths.jsonl" if fifths else "replay-states.jsonl")
+        name = ("replay-states" + ("-fifths" if fifths else "") + ("-merged" if args.merged else "")
+                + ("-tempo" if args.tempo else "") + ".jsonl")
+        log = os.path.join(paths.recording_dir(rid), name)
         if not os.path.exists(log):
-            replay(rid, log, transpose="fifths" if fifths else 0)
+            replay(rid, log, transpose="fifths" if fifths else 0, merged=args.merged, tempo=args.tempo)
     states, _, logged = load_log(log)
     names = {r["tune_id"]: r["name"] for r in manifest.get("repertoire", [])}
     if args.blind:

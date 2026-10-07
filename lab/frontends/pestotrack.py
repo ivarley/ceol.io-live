@@ -36,7 +36,10 @@ def _model(name, sr):
 
     key = (name, sr)
     if key not in _MODELS:
-        device = "mps" if torch.backends.mps.is_available() else "cpu"
+        import os
+
+        # LAB_DEVICE=cpu: as the listening service runs it, not on a Mac's GPU
+        device = "mps" if torch.backends.mps.is_available() and os.environ.get("LAB_DEVICE") != "cpu" else "cpu"
         _MODELS[key] = (pesto.load_model(name, step_size=10.0, sampling_rate=sr).to(device), device)
     return _MODELS[key]
 

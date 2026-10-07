@@ -101,7 +101,7 @@ class Models:
     whole corpus's index (the fallback), the aligner's sequences, the
     tune-ness model. About 3 GB, most of it the corpus and PyTorch."""
 
-    def __init__(self, transpose=0):
+    def __init__(self, transpose=0, merged=False, tempo=None):
         from lab.analysis.tuneness import TunenessModel
         from lab.bench.retrieval import Aligner
         from lab.corpus.index import Index
@@ -117,10 +117,22 @@ class Models:
                                transpose=transpose)
         self.tuneness = TunenessModel.load()
         self.n_settings = {t: len(v) for t, v in self.aligner.sequences.by_tune.items()}
+        # merged shortlists (spec 053, "One corpus for every session"): every
+        # session shortlists from the whole corpus, and from its own tunes or,
+        # having none, from the popular ones (>= 100 thesession.org tunebooks)
+        self.merged = merged
+        # tempo evidence (analysis.tempo.TempoModel), or None
+        self.tempo = tempo
+        self.popular = None
+        if merged:
+            from lab.corpus.index import candidate_tune_ids
+
+            self.popular = candidate_tune_ids("popular")
 
 
 class Listener:
-    def __init__(self, out_dir, models=None, rule_out_s=30.0, audio_name="audio.wav", keep_s=None):
+    def __init__(self, out_dir, models=None, rule_out_s=30.0, audio_name="audio.wav", keep_s=None,
+                 session_tunes=None):
         from lab.bench.stream import ChunkScorer, Decoder
 
         m = models or Models()
@@ -128,9 +140,17 @@ class Listener:
         self.store = LiveStore(os.path.join(out_dir, audio_name), keep_s=keep_s)
         self.frontends = m.frontends
         self.names, self.types = m.names, m.types
+        self.tempo = m.tempo
         # the follower's live configuration (lab/configs/follower.json)
-        self.scorer = ChunkScorer(m.index, m.aligner, window_ms=6000, fallback_index=m.fallback,
-                                  fallback_top=20)
+        if m.merged:
+            own = set(session_tunes) if session_tunes else m.popular
+            self.shortlist_sets = own
+            self.scorer = ChunkScorer(m.fallback, m.aligner, window_ms=6000,
+                                      shortlists=[(None, 100), (own, 100)], preferred=own)
+        else:
+            self.shortlist_sets = None
+            self.scorer = ChunkScorer(m.index, m.aligner, window_ms=6000, fallback_index=m.fallback,
+                                      fallback_top=20)
         # tune-ness (spec, "Is this a tune at all?") and the charge on hubs
         self.tuneness = m.tuneness
         self.decoder = Decoder(nu=0.05, gamma=self.tuneness.meta["gamma"],
@@ -151,13 +171,15 @@ class Listener:
 
     # -- the causal path, a hop at a time ---------------------------------
 
-    def _track(self, t):
+    def _track(self, t, lap=None):
         a = max(0, self.tracked_to - TRACK_CONTEXT_MS)
         y = self.store.read(a, t)
         if len(y) < SR // 2:
             return
         for fe in self.frontends:
             times, f0, voiced = fe.track(y, SR)
+            if lap:
+                lap(f"track_{fe.name}")
             times = np.asarray(times, dtype=float) + a
             keep = times >= self.tracked_to
             tt, ff, vv = self.tracks[fe.name]
@@ -181,16 +203,47 @@ class Listener:
         from lab.bench.stream import causal_notes
 
         started = time.time()
-        self._track(t)
+        clock = [time.perf_counter()]
+        timing = {}
+
+        def lap(name):
+            now = time.perf_counter()
+            timing[name] = round(1000 * (now - clock[0]))
+            clock[0] = now
+
+        self._track(t, lap)
         a = max(0, t - POOL_MS)
-        ctx = {fe.name: causal_notes(fe, self._frames(fe.name), self.store, a, t) for fe in self.frontends}
+        ctx = {}
+        for fe in self.frontends:
+            ctx[fe.name] = causal_notes(fe, self._frames(fe.name), self.store, a, t)
+            lap(f"notes_{fe.name}")
+        from lab.bench.stream import _SPAN
+
+        for k in ("pulse_ms", "attacks_ms"):     # inside the notes, worked out once a step
+            if k in _SPAN.get("shared", {}):
+                timing[f"notes_{k[:-3]}"] = _SPAN["shared"][k]
         wide = t < self.widen_until
-        self.scorer.pool_top, self.scorer.fallback_top = (300, 60) if wide else (100, 20)
+        if self.shortlist_sets is not None:
+            top = 300 if wide else 100
+            self.scorer.shortlists = [(None, top), (self.shortlist_sets, top)]
+        else:
+            self.scorer.pool_top, self.scorer.fallback_top = (300, 60) if wide else (100, 20)
         chunk = self.scorer.score(t, ctx)
+        lap("shortlist_align")
         from lab.analysis.tuneness import audio_features, with_evidence
 
         frames = {fe.name: self._frames(fe.name) for fe in self.frontends}
-        chunk["tune_logodds"] = self.tuneness.logodds(with_evidence(audio_features(self.store, t, frames), chunk))
+        feats = audio_features(self.store, t, frames)
+        chunk["tune_logodds"] = self.tuneness.logodds(with_evidence(feats, chunk))
+        if self.tempo is not None and chunk["scores"]:
+            # each candidate's cost for the beat heard, by its type (analysis.tempo)
+            cost = self.tempo.penalties(feats.get("period_ms"), feats.get("grouping"), feats.get("pulse_strength"))
+            if cost:
+                for tid in chunk["scores"]:
+                    chunk["scores"][tid] -= cost.get((self.types.get(tid) or "").lower(), 0.0)
+                chunk["floor"] = min(chunk["scores"].values())
+        lap("features")
+        self.timing = timing          # each part of this step, ms: reported with the state
         with self.lock:      # a tap changes the decoder from the server's thread
             self._decide(t, chunk, wide, started)
 
@@ -220,6 +273,7 @@ class Listener:
                       "tuneness": round(1 / (1 + np.exp(-chunk.get("tune_logodds", 0.0))), 3),
                       "shown": now, "notes": chunk["n_notes"], "wide": wide,
                       "compute_ms": int(1000 * (time.time() - started)),
+                      "timing": getattr(self, "timing", None),
                       "lag_ms": self.store.duration_ms - t, "history": hist[-8:]}
         self._states.write(json.dumps({k: v for k, v in self.state.items() if k != "history"}) + "\n")
         self._states.flush()

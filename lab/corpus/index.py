@@ -141,8 +141,12 @@ class Index:
             return 0.0
         return math.log(self.n_tunes / df)
 
-    def lookup(self, intervals, top_k=20):
+    def lookup(self, intervals, top_k=20, only=None):
         """Vote over a query interval sequence. Returns ranked candidate dicts.
+
+        `only`: a set of tune ids to rank among, the rest ignored. One whole-
+        corpus index then serves any session: its own tunes are a lookup with
+        `only`, not an index of their own that goes stale as it grows.
 
         Each n-gram contributes its idf to every tune that contains it, so a
         scale run (in thousands of tunes) counts for almost nothing while a
@@ -169,6 +173,8 @@ class Index:
                 continue
             seen = set()
             for tune_id, setting_id in self.postings.get(g, ()):
+                if only is not None and tune_id not in only:
+                    continue
                 if tune_id not in seen:   # once per tune, however many settings
                     seen.add(tune_id)
                     scores[tune_id] += w * mult

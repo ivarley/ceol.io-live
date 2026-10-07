@@ -93,6 +93,14 @@ async def run(args):
                     await asyncio.sleep(1)
             finally:
                 rd.cancel()
+    parts = {}
+    for _, _, m in states[2:]:          # the first steps pay for warming up
+        for k, v in (m.get("timing") or {}).items():
+            parts.setdefault(k, []).append(v)
+        parts.setdefault("step", []).append(m.get("compute_ms") or 0)
+    if parts:
+        print("time a step, by part (ms): " + ", ".join(
+            f"{k} median {np.median(v):.0f} worst {max(v):.0f}" for k, v in parts.items()))
     lags = [lag for _, lag, _ in states]
     if lags:
         print(f"{len(states)} states; arrived after their audio was sent: median {np.median(lags):.1f}s, "
