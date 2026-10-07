@@ -110,8 +110,25 @@
 
   var syncing = false
   // Pull the bundle and mirror it locally. Skips if synced recently or offline.
+  //
+  // One tab at a time: every open tab runs this on load and on 'online', so a laptop
+  // waking with many ceol.io tabs fired them all at once, each asking the server for
+  // the whole bundle (2026-10-07: eleven tabs, an admin's ~11 MB bundle each, and the
+  // server ran out of memory). A tab that finds another already syncing skips; the
+  // synced_at check inside the lock then stops tabs that come next.
   function sync(force) {
     if (syncing) return Promise.resolve()
+    if (typeof navigator !== 'undefined' && navigator.locks && navigator.locks.request) {
+      return navigator.locks
+        .request('ceol-offline-sync', { ifAvailable: true }, function (lock) {
+          return lock ? syncNow(force) : null
+        })
+        .catch(function () {})
+    }
+    return syncNow(force)
+  }
+
+  function syncNow(force) {
     return getOne(META, 'synced_at')
       .then(function (m) {
         var last = m ? m.value : 0

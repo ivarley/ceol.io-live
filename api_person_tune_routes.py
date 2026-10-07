@@ -23,6 +23,7 @@ from database import (
     ABC_MATCH_SQL,
     abc_search_terms,
 )
+import threading
 import base64
 
 
@@ -44,7 +45,7 @@ person_tune_service = PersonTuneService()
 thesession_sync_service = ThesessionSyncService()
 
 
-from api_auth import api_login_required, public_api
+from api_auth import api_error, api_login_required, public_api
 
 
 def get_user_person_id() -> int:
@@ -1826,8 +1827,31 @@ def get_popular_tunes():
         )
 
 
+# One bundle build at a time per worker process. An admin's bundle is ~11 MB of JSON
+# built in memory (incipit images as base64), and on 2026-10-07 a browser waking with
+# eleven ceol.io tabs open asked for eleven at once and the 512 MB instance was
+# OOM-killed. Builds now queue; one that waits too long gets a quick 503, which the
+# client's sync ignores (it retries on a later page load).
+_OFFLINE_BUNDLE_BUILDS = threading.BoundedSemaphore(1)
+OFFLINE_BUNDLE_WAIT_S = 20
+
+
 @person_tune_login_required
 def get_offline_bundle():
+    if not _OFFLINE_BUNDLE_BUILDS.acquire(timeout=OFFLINE_BUNDLE_WAIT_S):
+        return api_error(
+            _("The offline copy is busy; try again shortly."),
+            503,
+            "offline_bundle_busy",
+            retry_after=30,
+        )
+    try:
+        return _build_offline_bundle()
+    finally:
+        _OFFLINE_BUNDLE_BUILDS.release()
+
+
+def _build_offline_bundle():
     """
     GET /api/offline/bundle
 

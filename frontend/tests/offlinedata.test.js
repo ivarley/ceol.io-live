@@ -5,7 +5,7 @@
 //
 // Offline notation matching is INCIPIT-ONLY — the bundle carries `incipit_abc`, never
 // the full setting ABC — which is why hits are flagged `abc_scope: 'incipit'`.
-import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest'
 
 const TUNE = (over) => ({
   tune_id: 1, name: 'Drowsy Maggie', tune_type: 'Reel', tunebook_count: 100,
@@ -78,5 +78,30 @@ describe('CeolOffline.searchTunes', () => {
   it('does not notation-match below the shared minimum length', async () => {
     await seed([TUNE({ name: 'Other', incipit_abc: '|:E2BE dEBE|' })])
     expect(await CeolOffline.searchTunes('e2', 10)).toHaveLength(0)
+  })
+})
+
+// A laptop waking with many ceol.io tabs fires sync() in all of them at once; only the
+// tab holding the cross-tab lock may fetch the bundle (2026-10-07 out-of-memory).
+describe('CeolOffline.sync across tabs', () => {
+  afterEach(() => {
+    delete navigator.locks
+  })
+
+  it('skips the fetch when another tab holds the sync lock', async () => {
+    navigator.locks = { request: vi.fn(async (_name, _opts, cb) => cb(null)) }
+    fetch.mockClear()
+    await CeolOffline.sync(true)
+    expect(navigator.locks.request).toHaveBeenCalledWith(
+      'ceol-offline-sync', { ifAvailable: true }, expect.any(Function))
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it('fetches when it gets the lock', async () => {
+    navigator.locks = { request: vi.fn(async (_name, _opts, cb) => cb({ name: 'ceol-offline-sync' })) }
+    fetch.mockClear()
+    fetch.mockResolvedValue({ ok: true, json: async () => ({ success: true, tunes: [], popular: [] }) })
+    await CeolOffline.sync(true)
+    expect(fetch).toHaveBeenCalledTimes(1)
   })
 })
