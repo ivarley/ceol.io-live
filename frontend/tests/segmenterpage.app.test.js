@@ -1272,3 +1272,39 @@ describe('a link to a moment', () => {
     await waitFor(() => expect(container.querySelector('.sg-time').textContent).toMatch(/^3:30/))
   })
 })
+
+describe("a machine's guesses (spec 053)", () => {
+  const guessed = () => {
+    const p = payload()
+    p.tunes[0].confidence = 62
+    p.tunes[0].source = 'listen'
+    p.tunes[2].confidence = 91
+    p.tunes[2].source = 'listen'
+    return p
+  }
+  const reply = (body) => ({ ok: true, status: 200, json: async () => body })
+
+  it('marks each with how sure it was, counts them, and filters to them', async () => {
+    const { container, getByText } = render(App, { props: { pageData: guessed() } })
+    expect(container.querySelector('.tl-row[data-tune-id="1"] .tl-conf').textContent).toBe('62%')
+    expect(container.querySelector('.tl-row[data-tune-id="1"] .tl-conf').classList.contains('is-low')).toBe(true)
+    expect(container.querySelector('.tl-row[data-tune-id="3"] .tl-conf').classList.contains('is-low')).toBe(false)
+    expect(container.querySelector('.tl-row[data-tune-id="2"] .tl-conf')).toBeNull()
+    expect(getByText('2 tunes need a check')).toBeTruthy()
+    await fireEvent.click(container.querySelector('.sg-checks input'))
+    expect([...container.querySelectorAll('.tl-row')].map((r) => r.dataset.tuneId)).toEqual(['1', '3'])
+  })
+
+  it('steps through them with N and confirms with C', async () => {
+    const after = guessed()
+    after.tunes[2].confidence = 100
+    global.fetch = vi.fn(async () => reply({ success: true, tunes: after.tunes }))
+    const { container, getByText } = render(App, { props: { pageData: guessed() } })
+    await fireEvent.keyDown(window, { key: 'n' }) // from the first tune, the next guess is the third
+    expect(container.querySelector('.tl-row.is-cursor').dataset.tuneId).toBe('3')
+    await fireEvent.keyDown(window, { key: 'c' })
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledWith('/api/recordings/7/segments/3/confirm', expect.objectContaining({ method: 'POST' })))
+    await waitFor(() => expect(container.querySelector('.tl-row[data-tune-id="3"] .tl-conf')).toBeNull())
+    expect(getByText('1 tune needs a check')).toBeTruthy()
+  })
+})

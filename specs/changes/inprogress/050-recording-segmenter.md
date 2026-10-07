@@ -568,6 +568,24 @@ tune so a break lands on each side) and the tune's identity from TuneSearch's
 payload; with neither a mark nor an anchor the body is rejected. An unlinked
 row keeps its one-tap flow — naming it is the one thing it needs — and its `×`.
 
+### A machine's guesses (spec 053)
+
+The listener can log a night itself (`lab drafts --blind --apply` today; the live
+logger later). Each tune it logs carries `confidence`, the chance in whole
+percent that the name is right, from a calibration model fitted on labelled
+nights, and `confidence_model`, which model said so: `POST .../segments` with
+`confidence` (0-99) and `confidence_model` makes the row `source='listen'`.
+
+The tool shows each such tune with its percent (filled amber under 70) and a ✓.
+Above the list, "N tunes need a check" with a toggle that shows only those
+tunes, and ‹ › to step from one to the next (keys N and ⇧N); C confirms the
+cursor tune. Confirm (`POST .../segments/<sit_id>/confirm`, a `set_confidence`
+op to 100) and correcting the tune (the name, or Edit) both settle it: the
+confidence becomes 100 and the model is cleared, while the history keeps what
+the machine said, how sure, and by which model, the material the next model is
+fitted on. Times are not part of the check: a start or end is corrected by
+moving it, as ever.
+
 ### Offline
 
 The tool is used where the audio was made: a pub, a back room, a car on the way
@@ -637,9 +655,10 @@ segmenter until both have synced — the two queues are independent by design.
 | `GET /api/recordings/<id>/peaks` | the envelope as raw bytes, cached |
 | `PUT /api/recordings/<id>/segments/<sit_id>` | place or move a tune (upsert) |
 | `DELETE /api/recordings/<id>/segments/<sit_id>` | unplace a tune |
-| `POST /api/recordings/<id>/segments` | log a new tune: at a mark (`start_ms`), or beside a row / as a new set (`after_record_id`, `before_record_id`, `new_set`), optionally identified (TuneSearch's payload); returns the whole list |
+| `POST /api/recordings/<id>/segments` | log a new tune: at a mark (`start_ms`), or beside a row / as a new set (`after_record_id`, `before_record_id`, `new_set`), optionally identified (TuneSearch's payload), optionally a machine's (`confidence`, `confidence_model`); returns the whole list |
 | `PUT /api/recordings/<id>/segments/<sit_id>/tune` | say which tune it was, or change it (TuneSearch's payload) |
 | `POST /api/recordings/<id>/segments/<sit_id>/unlog` | take a tune out of the log, and its placement with it |
+| `POST /api/recordings/<id>/segments/<sit_id>/confirm` | yes, a machine's guess is the tune: confidence 100 (spec 053) |
 | `GET /api/recordings/<id>/export` | the resolved slice list |
 | `GET /api/session-instances/<id>/recordings` | recordings + progress |
 

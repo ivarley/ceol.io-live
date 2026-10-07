@@ -1206,6 +1206,12 @@ def log_recording_tune(recording_id):
     Either way the body may name the tune with TuneSearch's own payload
     (`tune_id`, or `thesession_id` to import, or a bare `name` for as-is, plus a
     chosen `setting_id`); without one it is logged unidentified ("Gan Ainm").
+
+    A machine logging what it heard (the listener's drafts, spec 053) adds
+    `confidence`, the chance in whole percent that the name is right (0-99:
+    100 is a person's word), and `confidence_model`, the calibration model that
+    worked it out. Such a row is `source='listen'` and shows as needing a check
+    until someone confirms or corrects it.
     Returns the whole tune list (`tunes`) plus the new row (`tune`): an insert
     can renumber every set after it.
     """
@@ -1223,6 +1229,38 @@ def log_recording_tune(recording_id):
     tune_id = payload.get("tune_id")
     ts_id = _parse_thesession_id(payload.get("thesession_id"))
     new_set = bool(payload.get("new_set"))
+    confidence = payload.get("confidence")
+    confidence_model = payload.get("confidence_model")
+    if confidence is not None:
+        if (
+            isinstance(confidence, bool)
+            or not isinstance(confidence, (int, float))
+            or not 0 <= confidence <= 99
+        ):
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": _("confidence must be a whole percent from 0 to 99"),
+                    }
+                ),
+                400,
+            )
+        if (
+            not isinstance(confidence_model, str)
+            or not 0 < len(confidence_model.strip()) <= 32
+        ):
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": _(
+                            "confidence needs the confidence_model that made it"
+                        ),
+                    }
+                ),
+                400,
+            )
 
     # Placed from the audio unless the caller said where in the log it goes. A
     # body that says nothing at all -- no mark, no anchor, no tune -- is a mistake,
@@ -1314,7 +1352,7 @@ def log_recording_tune(recording_id):
         # nothing at all it is the tool's placeholder, sent with no_match because
         # thesession.org has real tunes called Gan Ainm.
         data = {
-            "source": "segmenter",
+            "source": "segmenter" if confidence is None else "listen",
             "no_merge": True,
             "after_record_id": after_id,
             "before_record_id": before_id,
@@ -1330,6 +1368,9 @@ def log_recording_tune(recording_id):
             data["no_match"] = True
         if payload.get("setting_id") is not None:
             data["setting_id"] = payload["setting_id"]
+        if confidence is not None:
+            data["confidence"] = int(round(confidence))
+            data["confidence_model"] = confidence_model.strip()
 
         try:
             _eid, _typ, added = apply_live_op(
@@ -1530,6 +1571,46 @@ def unlog_recording_tune(recording_id, session_instance_tune_id):
                 "remove_tune",
                 {"record_id": session_instance_tune_id},
                 user_id,
+            )
+        except OpRejected as r:
+            conn.rollback()
+            return jsonify({"success": False, "error": r.message}), 409
+        conn.commit()
+        return _tunes_response(conn, recording_id, instance_id, session_id)
+    finally:
+        conn.close()
+
+
+@api_login_required
+def confirm_recording_tune(recording_id, session_instance_tune_id):
+    """POST /api/recordings/<id>/segments/<sit_id>/confirm -- "yes, that's the
+    tune": a machine's guess (`confidence` under 100) becomes a person's word,
+    as the live logger's Confirm does (a `set_confidence` op to 100, which also
+    records the corroboration and clears `confidence_model`). Correcting the
+    tune instead (PUT .../tune) settles it the same way."""
+    from live_logging_routes import OpRejected, apply_live_op
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        denied = _recording_gate(cur, recording_id)
+        if denied:
+            return denied
+        instance_id, session_id = _session_of_recording(cur, recording_id)[::-1]
+        cur.execute(
+            "SELECT session_instance_id, deleted FROM session_instance_tune WHERE session_instance_tune_id = %s",
+            (session_instance_tune_id,),
+        )
+        sit = cur.fetchone()
+        if not sit or sit[0] != instance_id or sit[1]:
+            return jsonify({"success": False, "error": _("Tune not found")}), 404
+        try:
+            apply_live_op(
+                cur,
+                instance_id,
+                "set_confidence",
+                {"record_id": session_instance_tune_id, "confidence": 100},
+                get_current_user_id(),
             )
         except OpRejected as r:
             conn.rollback()

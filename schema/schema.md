@@ -60,6 +60,7 @@ The database will be a Postgres database. The basic entities in my model will be
     - key_override - optional field meaning that this instance of playing the tune was in a different key from the key on the tune record / session_tune record.
     - setting_override - in case this instance of playing the tune differs from that which is mapped as the standard for this session.
     - started_by_person_id - foreign key to person table, optional, indicates which person started the set (applies to all tunes in the set)
+    - source / confidence / confidence_model - who wrote the row ('human', 'segmenter', or 'listen' for a machine that logged what it heard) and, for a machine, the chance in whole percent that the name is right and which calibration model said so (schema 060, spec 053). Confirm or a person's correction makes the confidence 100 and clears the model; under 100 is a tune waiting for a person's check. NULL confidence is a person's own entry.
 
 - **recording** - One audio file covering some or all of one session instance (spec 050). Many recordings can cover one instance (several phones, or one phone that stopped and restarted), so they share an instance timeline: exactly one recording per instance carries `is_clock_anchor` and its t=0 IS the instance's zero point; every other recording states `clock_offset_ms`, how far after that zero point its own t=0 falls. Attributes:
     - storage_key - the S3 object key; playback is via a presigned URL, which supports range requests so a 3-hour file can be scrubbed without downloading it

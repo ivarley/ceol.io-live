@@ -32,6 +32,28 @@ export function timeFromHash(hash) {
   return Number.isFinite(seconds) ? Math.round(seconds * 1000) : null
 }
 
+/**
+ * A tune a machine logged that no one has checked yet: it carries the
+ * listener's confidence (0-99, the chance in whole percent that the name is
+ * right; spec 053), where a person's own row has none and a confirmed one 100.
+ */
+export function needsCheck(tune) {
+  return tune?.confidence != null && tune.confidence < 100
+}
+
+/**
+ * The next tune needing a check after `from` (`step` 1) or before it (`step`
+ * -1), wrapping round the log; -1 if none does.
+ */
+export function nextNeedingCheck(tunes, from, step = 1) {
+  const n = tunes.length
+  for (let k = 1; k <= n; k++) {
+    const i = (((from + step * k) % n) + n) % n
+    if (needsCheck(tunes[i])) return i
+  }
+  return -1
+}
+
 /** Index of the first tune with no segment, at or after `from`. -1 if none. */
 export function nextUnplacedIndex(tunes, from = 0) {
   for (let i = Math.max(0, from); i < tunes.length; i++) {

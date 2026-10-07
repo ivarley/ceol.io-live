@@ -4,7 +4,7 @@
   // The highlighted row is the CURSOR: the tune the mark key will place. Set
   // ends are called out because those are the only tunes that need an explicit
   // end typed -- every other end is implied by the next tune's start.
-  import { formatTime, formatDuration, groupIntoSets, setColor } from './logic.js'
+  import { formatTime, formatDuration, groupIntoSets, needsCheck, setColor } from './logic.js'
   import { t, tuneTypeName } from '../lib/index.js'
 
   let {
@@ -18,6 +18,8 @@
     onunlog = () => {}, // take a tune out of the log altogether (spec 050)
     oninsert = () => {}, // (index, 'before' | 'after'): add a tune next to this one
     onnewset = () => {}, // (index | null): open a new set after this tune's set
+    onconfirm = () => {}, // (index): yes, a machine's guess is the tune (spec 053)
+    onlyChecks = false, // show only the tunes a machine logged that nobody has checked
     revealId = null, // a tune to scroll into view (a row just logged from the audio)
   } = $props()
 
@@ -38,7 +40,13 @@
     fn()
   }
 
-  const sets = $derived(groupIntoSets(tunes))
+  // With "needs a check" on, only those tunes, under their sets' headings; a set
+  // with none of them goes altogether.
+  const sets = $derived(
+    groupIntoSets(tunes)
+      .map((set) => (onlyChecks ? { ...set, tunes: set.tunes.filter(needsCheck) } : set))
+      .filter((set) => set.tunes.length),
+  )
   const indexById = $derived(new Map(tunes.map((tune, i) => [tune.session_instance_tune_id, i])))
   const cursorId = $derived(tunes[cursorIndex]?.session_instance_tune_id ?? null)
 
@@ -79,6 +87,7 @@
           class:is-placed={!!seg}
           class:is-pending={!!tune.segment?.pending}
           class:has-menu={tune.session_instance_tune_id === menuId}
+          class:needs-check={needsCheck(tune)}
           data-tune-id={tune.session_instance_tune_id}
         >
           {#if tune.tune_id == null}
@@ -106,6 +115,18 @@
               <span class="tl-name">{tune.name}</span>
               {#if tune.tune_type}<span class="tl-type">{tuneTypeName(tune.tune_type)}</span>{/if}
             </button>
+          {/if}
+
+          {#if needsCheck(tune)}
+            <!-- A machine logged this and nobody has said yes yet: how sure it
+                 was (the chance in 100 the name is right), and the yes. Correcting
+                 the name instead (the name, or Edit) settles it too. -->
+            <span
+              class="tl-conf"
+              class:is-low={tune.confidence < 70}
+              title={t('The listener is {n}% sure this is the tune — confirm it, or tap the name to correct it', { n: tune.confidence })}
+            >{tune.confidence}%</span>
+            <button class="tl-confirm" type="button" title={t('Yes, this is the tune')} onclick={() => onconfirm(idx)}>✓</button>
           {/if}
 
           <!-- The set-end badge is a jump once the tune is placed: the end is
@@ -161,6 +182,9 @@
                and after add a tune beside this one, unplaced, for the mark key
                to place; remove takes it out of the log (not just its time). -->
           <div class="tl-actions" role="group" aria-label={t('Edit this tune')}>
+            {#if needsCheck(tune)}
+              <button type="button" onclick={() => act(() => onconfirm(idx))}>✓ {t('Confirm')}</button>
+            {/if}
             <button type="button" onclick={() => act(() => onname(idx))}>✎ {t('Edit')}</button>
             <button type="button" onclick={() => act(() => oninsert(idx, 'before'))}>＋ {t('Before')}</button>
             <button type="button" onclick={() => act(() => oninsert(idx, 'after'))}>＋ {t('After')}</button>
@@ -178,6 +202,10 @@
       onclick={() => act(() => onnewset(indexById.get(set.tunes[set.tunes.length - 1].session_instance_tune_id)))}
     >＋ {t('new set')}</button>
   {/each}
+
+  {#if onlyChecks && tunes.length && !sets.length}
+    <p class="tl-empty">{t('Every tune here has been checked.')}</p>
+  {/if}
 
   {#if !tunes.length}
     <p class="tl-empty">{t('This session instance has no logged tunes, so there is nothing to place.')}</p>
@@ -206,6 +234,31 @@
     top: 0;
     background: var(--bg-color, #1a1a1a);
     z-index: 1;
+  }
+  .tl-conf {
+    flex: none;
+    font-size: 0.72rem;
+    font-variant-numeric: tabular-nums;
+    padding: 0 5px;
+    border-radius: 8px;
+    border: 1px solid #e0b341;
+    color: #e0b341;
+  }
+  .tl-conf.is-low {
+    background: #e0b341;
+    color: #1a1a1a;
+  }
+  .tl-confirm {
+    flex: none;
+    background: none;
+    border: 1px solid var(--border-color, #444);
+    border-radius: 5px;
+    color: var(--text-color, #e0e0e0);
+    padding: 0 6px;
+    cursor: pointer;
+  }
+  .tl .tl-row.needs-check .tl-name {
+    color: #e0b341;
   }
   .tl-swatch {
     width: 9px;

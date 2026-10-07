@@ -15,6 +15,8 @@
   import {
     edgeLimits,
     formatTime,
+    needsCheck,
+    nextNeedingCheck,
     nextUnplacedIndex,
     resolveSegments,
     snapToOnset,
@@ -882,6 +884,44 @@
     persistMirror()
   }
 
+  // A machine's guesses (spec 053): the tunes the listener logged that nobody
+  // has confirmed or corrected yet, the filter that shows only those, and the
+  // way from one to the next.
+  let onlyChecks = $state(false)
+  const checksLeft = $derived(tunes.filter(needsCheck).length)
+
+  /** Put the cursor on the next (or previous) tune needing a check, and go to it. */
+  function jumpToCheck(step = 1) {
+    const i = nextNeedingCheck(tunes, cursorIndex >= 0 ? cursorIndex : step > 0 ? -1 : tunes.length, step)
+    if (i < 0) {
+      flash(t('Every tune here has been checked.'))
+      return
+    }
+    cursorIndex = i
+    jumpToCursor()
+  }
+
+  async function confirmAt(index) {
+    const tune = tunes[index]
+    if (!tune || !recording || !needsCheck(tune)) return
+    saving += 1
+    try {
+      const res = await fetch(
+        `/api/recordings/${recording.recording_id}/segments/${tune.session_instance_tune_id}/confirm`,
+        { method: 'POST', credentials: 'same-origin' },
+      )
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok || !body.success) throw new Error(body.error || `HTTP ${res.status}`)
+      adoptTunes(body.tunes, cursorTune?.session_instance_tune_id ?? null)
+      flash(t('Confirmed "{name}"', { name: tune.name }))
+    } catch (err) {
+      flash(t('Could not confirm "{name}": {error}', { name: tune.name, error: err.message }), 'error')
+    } finally {
+      saving -= 1
+    }
+    persistMirror()
+  }
+
   async function unlogAt(index, moveCursor = true) {
     const tune = tunes[index]
     if (!tune || !recording) return
@@ -1113,6 +1153,16 @@
       case 'g':
       case 'G':
         jumpToCursor()
+        break
+      case 'n':
+        jumpToCheck(1)
+        break
+      case 'N':
+        jumpToCheck(-1)
+        break
+      case 'c':
+      case 'C':
+        if (cursorIndex >= 0) confirmAt(cursorIndex)
         break
       default:
         handled = false
@@ -1360,6 +1410,8 @@
             <div><dt>← →</dt><dd>{t('seek 5s (⇧ 1s, ⌥ 0.2s)')}</dd></div>
             <div><dt>↑ ↓</dt><dd>{t('move the cursor in the log')}</dd></div>
             <div><dt>{'G'}</dt><dd>{t("go to the cursor tune's mark")}</dd></div>
+            <div><dt>{'N'} · ⇧{'N'}</dt><dd>{t('next / previous tune needing a check')}</dd></div>
+            <div><dt>{'C'}</dt><dd>{t('confirm the cursor tune')}</dd></div>
             <div><dt>− =</dt><dd>{t('zoom out / in')}</dd></div>
             <div><dt>[ ]</dt><dd>{t('slower / faster')}</dd></div>
             <div><dt>{'S'}</dt><dd>{t('toggle onset snap')}</dd></div>
@@ -1369,6 +1421,18 @@
       </section>
 
       <section class="sg-right">
+        {#if checksLeft || onlyChecks}
+          <!-- The listener's guesses still to check: show only those, and step
+               through them (N / ⇧N), confirming (C) or correcting each. -->
+          <div class="sg-checks">
+            <label>
+              <input type="checkbox" bind:checked={onlyChecks} />
+              {tn(checksLeft, '{n} tune needs a check', '{n} tunes need a check')}
+            </label>
+            <button type="button" title={t('Previous tune needing a check')} onclick={() => jumpToCheck(-1)} disabled={!checksLeft}>‹</button>
+            <button type="button" title={t('Next tune needing a check')} onclick={() => jumpToCheck(1)} disabled={!checksLeft}>›</button>
+          </div>
+        {/if}
         <TuneList
           {tunes}
           {segments}
@@ -1378,6 +1442,8 @@
           onclear={(i) => clearAt(i, true)}
           onname={openPicker}
           onunlog={(i) => unlogAt(i)}
+          onconfirm={(i) => confirmAt(i)}
+          {onlyChecks}
           oninsert={(i, side) => openInsertPicker({ index: i, side })}
           onnewset={(i) => openInsertPicker({ index: i, side: 'after', newSet: true })}
           {revealId}
@@ -1641,6 +1707,29 @@
     display: flex;
     flex-direction: column;
     min-height: 0;
+  }
+  .sg-checks {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85rem;
+    color: #e0b341;
+    padding: 2px 2px 6px;
+  }
+  .sg-checks label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin: 0;
+    flex: 1;
+    cursor: pointer;
+  }
+  .sg-checks button {
+    background: none;
+    border: 1px solid var(--border-color, #444);
+    border-radius: 5px;
+    color: var(--text-color, #e0e0e0);
+    padding: 0 8px;
   }
   .sg-right :global(.tl) {
     flex: 1 1 auto;

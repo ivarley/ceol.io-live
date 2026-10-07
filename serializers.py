@@ -2081,7 +2081,7 @@ def _load_instance_tune_log(conn, session_instance_id: int, session_id: int) -> 
         """
         SELECT sit.session_instance_tune_id, sit.tune_id, sit.record_type, sit.order_position,
                COALESCE(sit.name, st.alias, t.name) AS display_name,
-               t.tune_type, sit.source
+               t.tune_type, sit.source, sit.confidence, sit.confidence_model
         FROM session_instance_tune sit
         LEFT JOIN tune t ON t.tune_id = sit.tune_id
         LEFT JOIN session_tune st ON st.tune_id = sit.tune_id AND st.session_id = %s
@@ -2116,6 +2116,11 @@ def _load_instance_tune_log(conn, session_instance_id: int, session_id: int) -> 
                 # (spec 050 "Logging while segmenting"); the tool treats those
                 # differently from a log someone wrote down on the night.
                 "source": row["source"],
+                # How sure a machine was that this is the tune (0-99, schema 060's
+                # model), 100 once a person confirmed it, None when a person logged it.
+                # Under 100: the segmenter asks for a check.
+                "confidence": row["confidence"],
+                "confidence_model": row["confidence_model"],
                 "segment": None,
             }
         )

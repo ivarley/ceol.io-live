@@ -104,7 +104,8 @@ _RECORD_COLS = (
     "sit.session_instance_tune_id, sit.tune_id, sit.name, sit.order_position, sit.record_type, "
     "sit.source, sit.confidence, sit.deleted, sit.started_by_person_id, sit.key_override, "
     "sit.setting_override, t.tune_type, sit.inserted_timestamp, cp.first_name, "
-    "sp.first_name, sp.last_name, cp.person_id, slc.color, st.alias, t.name, cp.last_name"
+    "sp.first_name, sp.last_name, cp.person_id, slc.color, st.alias, t.name, cp.last_name, "
+    "sit.confidence_model"
 )
 # LEFT JOIN tune (type/name), the creating user -> person (who logged it, for the per-set
 # "Logged by X · time" tray AND the per-row logger color tint), the started-by person
@@ -141,6 +142,8 @@ def _record_to_dict(row):
         "record_type": row[4],
         "source": row[5],
         "confidence": row[6],
+        # which calibration model made `confidence` (schema 060); None when a person set it
+        "confidence_model": row[21],
         "deleted": row[7],
         "started_by_person_id": row[8],
         "key_override": row[9],
@@ -392,7 +395,8 @@ def _corroborate(cur, session_instance_id, target_id, data, user_id):
     distinct_corroborators = cur.fetchone()[0]
     save_to_history(cur, "session_instance_tune", "UPDATE", target_id, user_id=user_id)
     cur.execute(
-        "UPDATE session_instance_tune SET confidence = 100, last_modified_user_id = %s WHERE session_instance_tune_id = %s",
+        "UPDATE session_instance_tune SET confidence = 100, confidence_model = NULL, last_modified_user_id = %s "
+        "WHERE session_instance_tune_id = %s",
         (user_id, target_id),
     )
     return {
@@ -760,6 +764,8 @@ def _handle_add_tune(cur, session_instance_id, data, user_id):
 
     source = data.get("source") or "human"
     confidence = data.get("confidence")
+    # which model made a machine's confidence (schema 060); a person's add has none
+    confidence_model = data.get("confidence_model") if confidence is not None else None
 
     # Duplicate-in-open-set collapses into a corroboration of the earliest row:
     # by tune_id when linked, else by identical raw name when matching fully failed.
@@ -795,9 +801,9 @@ def _handle_add_tune(cur, session_instance_id, data, user_id):
         """
         INSERT INTO session_instance_tune (
             session_instance_id, tune_id, name, order_position, record_type,
-            source, confidence, logged_timestamp, client_device_id,
+            source, confidence, confidence_model, logged_timestamp, client_device_id,
             inserted_timestamp, created_by_user_id, last_modified_user_id
-        ) VALUES (%s, %s, %s, %s, 'tune', %s, %s, %s, %s, (NOW() AT TIME ZONE 'UTC'), %s, %s)
+        ) VALUES (%s, %s, %s, %s, 'tune', %s, %s, %s, %s, %s, (NOW() AT TIME ZONE 'UTC'), %s, %s)
         RETURNING session_instance_tune_id
         """,
         (
@@ -807,6 +813,7 @@ def _handle_add_tune(cur, session_instance_id, data, user_id):
             new_position,
             source,
             confidence,
+            confidence_model,
             data.get("logged_timestamp"),
             data.get("client_device_id"),
             user_id,
@@ -939,6 +946,13 @@ def _handle_change_tune(cur, session_instance_id, data, user_id):
         params += [data["setting_override"]]
     if not sets:
         raise OpRejected("invalid", _("change_tune had no fields to change."))
+    # A person saying which tune this is settles a machine's guess: the row is
+    # theirs now, verified (as Confirm does), and no longer needs a check.
+    if "tune_id" in data or "name" in data or data.get("unlink"):
+        sets += [
+            "confidence = CASE WHEN confidence IS NULL THEN NULL ELSE 100 END",
+            "confidence_model = NULL",
+        ]
 
     save_to_history(cur, "session_instance_tune", "UPDATE", record_id, user_id=user_id)
     sets += ["last_modified_user_id = %s"]
@@ -979,7 +993,8 @@ def _handle_set_confidence(cur, session_instance_id, data, user_id):
 
     save_to_history(cur, "session_instance_tune", "UPDATE", record_id, user_id=user_id)
     cur.execute(
-        "UPDATE session_instance_tune SET confidence = %s, last_modified_user_id = %s WHERE session_instance_tune_id = %s",
+        "UPDATE session_instance_tune SET confidence = %s, confidence_model = NULL, last_modified_user_id = %s "
+        "WHERE session_instance_tune_id = %s",
         (confidence, user_id, record_id),
     )
     # The actor corroborates this record (§H30); keyed by user, person derived.

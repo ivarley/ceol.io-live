@@ -1576,5 +1576,51 @@
       "other": "{n} marc ag fanacht le sioncrónú"
     },
     "review": true
+  },
+  "The listener is {n}% sure this is the tune — confirm it, or tap the name to correct it": {
+    "ga": "Tá an t-éisteoir {n}% cinnte gurb é seo an fonn — deimhnigh é, nó tapáil an t-ainm chun é a cheartú",
+    "review": true
+  },
+  "Yes, this is the tune": {
+    "ga": "Is ea, seo é an fonn",
+    "review": true
+  },
+  "Every tune here has been checked.": {
+    "ga": "Seiceáladh gach fonn anseo.",
+    "review": true
+  },
+  "Confirmed \"{name}\"": {
+    "ga": "Deimhníodh \"{name}\"",
+    "review": true
+  },
+  "Could not confirm \"{name}\": {error}": {
+    "ga": "Níorbh fhéidir \"{name}\" a dheimhniú: {error}",
+    "review": true
+  },
+  "next / previous tune needing a check": {
+    "ga": "an chéad fhonn eile / an fonn roimhe atá le seiceáil",
+    "review": true
+  },
+  "confirm the cursor tune": {
+    "ga": "deimhnigh fonn an chúrsóra",
+    "review": true
+  },
+  "Previous tune needing a check": {
+    "ga": "An fonn roimhe seo atá le seiceáil",
+    "review": true
+  },
+  "Next tune needing a check": {
+    "ga": "An chéad fhonn eile atá le seiceáil",
+    "review": true
+  },
+  "{n} tunes need a check": {
+    "ga": {
+      "one": "{n} fhonn le seiceáil",
+      "two": "{n} fhonn le seiceáil",
+      "few": "{n} fhonn le seiceáil",
+      "many": "{n} bhfonn le seiceáil",
+      "other": "{n} fonn le seiceáil"
+    },
+    "review": true
   }
 }

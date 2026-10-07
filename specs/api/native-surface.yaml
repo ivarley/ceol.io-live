@@ -830,6 +830,9 @@ components:
         source: { type: [string, "null"] }
         # 0-100, how sure an automatic source was; the live logger writes 100.
         confidence: { type: [integer, "null"] }
+        # which calibration model made a machine's `confidence` (spec 053, schema 060);
+        # null when a person logged or confirmed the tune
+        confidence_model: { type: [string, "null"] }
         deleted: { type: boolean }
         started_by_person_id: { type: [integer, "null"] }
         # Who started the set, as the log shows it ("Sarah O").

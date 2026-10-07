@@ -687,6 +687,7 @@ CREATE TABLE session_instance_tune (
     -- with no later migration; human ops never write played_*.
     source VARCHAR(16) NOT NULL DEFAULT 'human',
     confidence SMALLINT,            -- 0..100; NULL = definite human entry
+    confidence_model VARCHAR(32),   -- which calibration model made `confidence` (060); NULL = a person
     played_start TIMESTAMPTZ,       -- audio-only
     played_end TIMESTAMPTZ,         -- audio-only
     logged_timestamp TIMESTAMPTZ,   -- client-asserted log time
@@ -1101,6 +1102,7 @@ CREATE TABLE session_instance_tune_history (
     started_by_person_id INTEGER,
     source VARCHAR(16),
     confidence SMALLINT,
+    confidence_model VARCHAR(32),
     played_start TIMESTAMPTZ,
     played_end TIMESTAMPTZ,
     logged_timestamp TIMESTAMPTZ,

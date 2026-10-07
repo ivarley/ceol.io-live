@@ -10,6 +10,8 @@ import {
   formatTime,
   groupIntoSets,
   MIN_SEGMENT_MS,
+  needsCheck,
+  nextNeedingCheck,
   nextUnplacedIndex,
   resolveSegments,
   snapToOnset,
@@ -251,5 +253,28 @@ describe('timeFromHash', () => {
     for (const h of ['', '#', '#top', '#t=', '#t=1:2:3:4', '#t=1::2', '#t=abc', null]) {
       expect(timeFromHash(h)).toBeNull()
     }
+  })
+})
+
+describe('tunes needing a check (spec 053)', () => {
+  const tunes = [
+    { confidence: null }, // a person's row
+    { confidence: 62 }, // a machine's guess
+    { confidence: 100 }, // confirmed
+    { confidence: 97 },
+  ]
+
+  it('is a machine row nobody has confirmed', () => {
+    expect(tunes.map(needsCheck)).toEqual([false, true, false, true])
+    expect(needsCheck(undefined)).toBe(false)
+  })
+
+  it('steps forward and back, wrapping round the log', () => {
+    expect(nextNeedingCheck(tunes, 0)).toBe(1)
+    expect(nextNeedingCheck(tunes, 1)).toBe(3)
+    expect(nextNeedingCheck(tunes, 3)).toBe(1)
+    expect(nextNeedingCheck(tunes, 1, -1)).toBe(3)
+    expect(nextNeedingCheck([{ confidence: null }], 0)).toBe(-1)
+    expect(nextNeedingCheck([], 0)).toBe(-1)
   })
 })

@@ -633,3 +633,67 @@ def test_logging_endpoints_require_the_recording_grant(client, authenticated_use
         assert client.post(f"/api/recordings/{REC_ID}/segments", json={"start_ms": 1}).status_code == 403
         assert client.put(f"/api/recordings/{REC_ID}/segments/{sit}/tune", json={"name": "x"}).status_code == 403
         assert client.post(f"/api/recordings/{REC_ID}/segments/{sit}/unlog").status_code == 403
+
+
+# --------------------------------------------------------------------------- #
+# 5. A machine's guesses (spec 053): confidence, Confirm, and corrections
+# --------------------------------------------------------------------------- #
+
+
+def test_a_machines_tune_carries_its_confidence_and_model_until_a_person_confirms_it(
+    client, admin_user, committed_recording, db_cursor
+):
+    """The listener's drafts log a tune with how sure they are (0-99) and which
+    model said so: source 'listen'. Confirm makes it a person's word: 100, no
+    model, a corroboration -- and the history keeps what the machine said."""
+    with admin_user:
+        client.put(f"/api/recordings/{REC_ID}/segments/{committed_recording['D']}", json={"start_ms": 100000})
+        resp, body = _insert(client, start_ms=130000, tune_id=95110, confidence=62, confidence_model="listen-1")
+        assert resp.status_code == 201, body
+        new = body["tune"]
+        assert (new["source"], new["confidence"], new["confidence_model"]) == ("listen", 62, "listen-1")
+        sit = new["session_instance_tune_id"]
+        # A person's own rows have none
+        assert all(t["confidence"] is None for t in body["tunes"] if t["session_instance_tune_id"] != sit)
+
+        resp = client.post(f"/api/recordings/{REC_ID}/segments/{sit}/confirm")
+        assert resp.status_code == 200, resp.get_json()
+        tune = next(t for t in resp.get_json()["tunes"] if t["session_instance_tune_id"] == sit)
+        assert (tune["confidence"], tune["confidence_model"]) == (100, None)
+
+    db_cursor.execute(
+        "SELECT confidence, confidence_model FROM session_instance_tune_history "
+        "WHERE session_instance_tune_id = %s ORDER BY 1 NULLS LAST",
+        (sit,),
+    )
+    assert (62, "listen-1") in db_cursor.fetchall()
+    db_cursor.execute("SELECT COUNT(*) FROM corroboration WHERE record_id = %s", (sit,))
+    assert db_cursor.fetchone()[0] == 1
+
+
+def test_correcting_a_machines_tune_settles_it_and_a_persons_tune_stays_a_persons(
+    client, admin_user, committed_recording
+):
+    """Saying which tune it really is (PUT .../tune) is a person's word too: the
+    guess becomes 100 with no model. A row a person logged keeps no confidence."""
+    with admin_user:
+        client.put(f"/api/recordings/{REC_ID}/segments/{committed_recording['D']}", json={"start_ms": 100000})
+        _, body = _insert(client, start_ms=130000, tune_id=95110, confidence=40, confidence_model="listen-1")
+        sit = body["tune"]["session_instance_tune_id"]
+        resp = client.put(f"/api/recordings/{REC_ID}/segments/{sit}/tune", json={"tune_id": 95111, "name": "Bravo Jig"})
+        assert resp.status_code == 200, resp.get_json()
+        tune = resp.get_json()["tune"]
+        assert (tune["tune_id"], tune["confidence"], tune["confidence_model"]) == (95111, 100, None)
+
+        mine = committed_recording["A"]
+        resp = client.put(f"/api/recordings/{REC_ID}/segments/{mine}/tune", json={"tune_id": 95112, "name": "Charlie Polka"})
+        assert resp.status_code == 200, resp.get_json()
+        assert resp.get_json()["tune"]["confidence"] is None
+
+
+def test_a_confidence_must_be_a_percent_under_100_with_its_model(client, admin_user, committed_recording):
+    with admin_user:
+        for bad in ({"confidence": 100, "confidence_model": "listen-1"}, {"confidence": -1, "confidence_model": "x"},
+                    {"confidence": "high", "confidence_model": "x"}, {"confidence": 50}):
+            resp, body = _insert(client, start_ms=200000, tune_id=95110, **bad)
+            assert resp.status_code == 400, (bad, body)

@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-07 17:24+0530\n"
+"POT-Creation-Date: 2026-10-07 18:12+0530\n"
 "PO-Revision-Date: 2026-10-06 12:44+0530\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ga\n"
@@ -105,9 +105,9 @@ msgstr "Theip ar an iarratas"
 #: api_person_tune_routes.py:66 api_person_tune_routes.py:341 api_routes.py:177
 #: api_routes.py:2251 api_routes.py:2766 api_routes.py:4990 api_routes.py:6204
 #: api_routes.py:6476 api_routes.py:12855 api_routes.py:12912
-#: api_routes.py:13656 api_routes.py:14054 live_logging_routes.py:1949
-#: live_logging_routes.py:2593 recording_routes.py:978 recording_routes.py:1431
-#: recording_routes.py:1512
+#: api_routes.py:13656 api_routes.py:14054 live_logging_routes.py:1964
+#: live_logging_routes.py:2608 recording_routes.py:978 recording_routes.py:1472
+#: recording_routes.py:1553 recording_routes.py:1606
 #, review
 msgid "Tune not found"
 msgstr "Níor aimsíodh an fonn"
@@ -408,7 +408,7 @@ msgstr "Earráid agus na foinn choiteanna á bhfáil: %(error)s"
 #: api_routes.py:13649 api_routes.py:13700 api_routes.py:14406
 #: api_routes.py:14554 api_routes.py:14614 api_routes.py:14726
 #: api_routes.py:14752 api_routes.py:14822 api_routes.py:15369
-#: live_logging_routes.py:3224 web_routes.py:3149 web_routes.py:3208
+#: live_logging_routes.py:3239 web_routes.py:3149 web_routes.py:3208
 #: web_routes.py:3359
 #, review
 msgid "Session not found"
@@ -418,10 +418,10 @@ msgstr "Níor aimsíodh an seisiún"
 #: api_routes.py:3710 api_routes.py:3796 api_routes.py:5188 api_routes.py:5438
 #: api_routes.py:5957 api_routes.py:6172 api_routes.py:9687 api_routes.py:10377
 #: api_routes.py:10563 api_routes.py:11271 api_routes.py:13652
-#: api_routes.py:13708 api_routes.py:13894 live_logging_routes.py:1826
-#: live_logging_routes.py:1938 live_logging_routes.py:2038
-#: live_logging_routes.py:2442 live_logging_routes.py:2888
-#: live_logging_routes.py:3175 live_logging_routes.py:3219
+#: api_routes.py:13708 api_routes.py:13894 live_logging_routes.py:1841
+#: live_logging_routes.py:1953 live_logging_routes.py:2053
+#: live_logging_routes.py:2457 live_logging_routes.py:2903
+#: live_logging_routes.py:3190 live_logging_routes.py:3234
 #: recording_routes.py:128 web_routes.py:3796
 #, review
 msgid "Session instance not found"
@@ -2004,32 +2004,32 @@ msgstr "Teastaíonn rochtain bhainisteora"
 msgid "Both loser_person_id and winner_person_id are required"
 msgstr "Tá loser_person_id agus winner_person_id araon riachtanach"
 
-#: app.py:208
+#: app.py:209
 #, review
 msgid "Please log in to access this page."
 msgstr "Sínigh isteach chun an leathanach seo a oscailt."
 
-#: app.py:1909
+#: app.py:1916
 #, review
 msgid "Page not found. The session you're looking for might have ended, or the URL might be incorrect."
 msgstr "Níor aimsíodh an leathanach. B'fhéidir go bhfuil an seisiún atá uait thart, nó go bhfuil an seoladh gréasáin mícheart."
 
-#: app.py:1925
+#: app.py:1932
 #, review
 msgid "You don't have permission to access this page. You might need to log in or contact an admin."
 msgstr "Níl cead agat an leathanach seo a oscailt. B'fhéidir go gcaithfidh tú síniú isteach nó dul i dteagmháil le bainisteoir."
 
-#: app.py:1941
+#: app.py:1948
 #, review
 msgid "You must be logged in to access this page. Please log in and try again."
 msgstr "Caithfidh tú a bheith sínithe isteach chun an leathanach seo a oscailt. Sínigh isteach agus bain triail eile as."
 
-#: app.py:1957
+#: app.py:1964
 #, review
 msgid "A server error occurred. Our team has been notified and will look into this issue."
 msgstr "Tharla earráid fhreastalaí. Cuireadh ár bhfoireann ar an eolas agus féachfaidh siad isteach air."
 
-#: app.py:1976
+#: app.py:1983
 #, python-format, review
 msgid "An unexpected error occurred: %(error)s"
 msgstr "Tharla earráid gan choinne: %(error)s"
@@ -2352,162 +2352,162 @@ msgstr "Cód QR a nascann le {url}"
 msgid "Copied"
 msgstr "Cóipeáilte"
 
-#: live_logging_routes.py:319 live_logging_routes.py:847
+#: live_logging_routes.py:322 live_logging_routes.py:854
 #, review
 msgid "That record no longer exists."
 msgstr "Níl an iontráil sin ann a thuilleadh."
 
-#: live_logging_routes.py:321
+#: live_logging_routes.py:324
 #, review
 msgid "That tune was removed by someone else."
 msgstr "Bhain duine eile an fonn sin."
 
-#: live_logging_routes.py:323
+#: live_logging_routes.py:326
 #, review
 msgid "That record is a set break."
 msgstr "Briseadh sraithe is ea an iontráil sin."
 
-#: live_logging_routes.py:585
+#: live_logging_routes.py:589
 #, python-format, review
 msgid "Setting #%(setting)s not found on thesession.org for tune #%(tune)s"
 msgstr "Níor aimsíodh leagan #%(setting)s ar thesession.org don fhonn #%(tune)s"
 
-#: live_logging_routes.py:682
+#: live_logging_routes.py:686
 #, review
 msgid "add_tune requires tune_id, name, or thesession_id."
 msgstr "Teastaíonn tune_id, name nó thesession_id ó add_tune."
 
-#: live_logging_routes.py:876
+#: live_logging_routes.py:883
 #, review
 msgid "That isn't a thesession.org tune."
 msgstr "Ní fonn de chuid thesession.org é sin."
 
-#: live_logging_routes.py:941
+#: live_logging_routes.py:948
 #, review
 msgid "change_tune had no fields to change."
 msgstr "Ní raibh aon réimse le hathrú ag change_tune."
 
-#: live_logging_routes.py:1053
+#: live_logging_routes.py:1068
 #, review
 msgid "That record is not a set break."
 msgstr "Ní briseadh sraithe í an iontráil sin."
 
-#: live_logging_routes.py:1065
+#: live_logging_routes.py:1080
 #, python-format, review
 msgid "unknown set_break action '%(action)s'."
 msgstr "Gníomh set_break anaithnid '%(action)s'."
 
-#: live_logging_routes.py:1123
+#: live_logging_routes.py:1138
 #, review
 msgid "That isn't a valid time (expected HH:MM)."
 msgstr "Ní am bailí é sin (bain úsáid as HH:MM)."
 
-#: live_logging_routes.py:1154
+#: live_logging_routes.py:1169
 #, review
 msgid "That isn't a valid date (expected YYYY-MM-DD)."
 msgstr "Ní dáta bailí é sin (bain úsáid as YYYY-MM-DD)."
 
-#: live_logging_routes.py:1166 live_logging_routes.py:1243
+#: live_logging_routes.py:1181 live_logging_routes.py:1258
 #, review
 msgid "This session log no longer exists."
 msgstr "Níl an logáil seisiúin seo ann a thuilleadh."
 
-#: live_logging_routes.py:1204
+#: live_logging_routes.py:1219
 #, python-format, review
 msgid "This session already has a log dated %(date)s."
 msgstr "Tá logáil ag an seisiún seo cheana dar dáta %(date)s."
 
-#: live_logging_routes.py:1235
+#: live_logging_routes.py:1250
 #, review
 msgid "That name is too long (255 characters max)."
 msgstr "Tá an t-ainm sin rófhada (255 carachtar ar a mhéad)."
 
-#: live_logging_routes.py:1337
+#: live_logging_routes.py:1352
 #, review
 msgid "move_tunes requires a non-empty record_ids list."
 msgstr "Teastaíonn liosta record_ids nach bhfuil folamh ó move_tunes."
 
-#: live_logging_routes.py:1343
+#: live_logging_routes.py:1358
 #, review
 msgid "The drop target is inside the moved block."
 msgstr "Tá an sprioc scaoilte laistigh den bhloc a bogadh."
 
-#: live_logging_routes.py:1358
+#: live_logging_routes.py:1373
 #, review
 msgid "None of those tunes exist any more."
 msgstr "Níl aon cheann de na foinn sin ann a thuilleadh."
 
-#: live_logging_routes.py:1485
+#: live_logging_routes.py:1500
 #, review
 msgid "remove_tunes requires a non-empty record_ids list."
 msgstr "Teastaíonn liosta record_ids nach bhfuil folamh ó remove_tunes."
 
-#: live_logging_routes.py:1494
+#: live_logging_routes.py:1509
 #, review
 msgid "Breaks can't be removed this way."
 msgstr "Ní féidir bristeacha a bhaint ar an mbealach seo."
 
-#: live_logging_routes.py:1526
+#: live_logging_routes.py:1541
 #, review
 msgid "restore_tunes requires a non-empty record_ids list."
 msgstr "Teastaíonn liosta record_ids nach bhfuil folamh ó restore_tunes."
 
-#: live_logging_routes.py:1614
+#: live_logging_routes.py:1629
 #, review
 msgid "attendance_add requires person_id."
 msgstr "Teastaíonn person_id ó attendance_add."
 
-#: live_logging_routes.py:1633
+#: live_logging_routes.py:1648
 #, review
 msgid "attendance_remove requires person_id."
 msgstr "Teastaíonn person_id ó attendance_remove."
 
-#: live_logging_routes.py:1647
+#: live_logging_routes.py:1662
 #, review
 msgid "attendance_create_person requires first_name."
 msgstr "Teastaíonn first_name ó attendance_create_person."
 
-#: live_logging_routes.py:1723
+#: live_logging_routes.py:1738
 #, review
 msgid "This session isn't tracking attendance."
 msgstr "Níl an seisiún seo ag coinneáil tinrimh."
 
-#: live_logging_routes.py:1729
+#: live_logging_routes.py:1744
 #, review
 msgid "This session isn't tracking set starters."
 msgstr "Níl an seisiún seo ag coinneáil tosaitheoirí sraithe."
 
-#: live_logging_routes.py:1746 live_logging_routes.py:1807
+#: live_logging_routes.py:1761 live_logging_routes.py:1822
 #, python-format, review
 msgid "unknown op_type '%(op_type)s'"
 msgstr "op_type anaithnid '%(op_type)s'"
 
-#: live_logging_routes.py:1816
+#: live_logging_routes.py:1831
 #, review
 msgid "op_id must be a UUID"
 msgstr "Caithfidh op_id a bheith ina UUID"
 
-#: live_logging_routes.py:2484
+#: live_logging_routes.py:2499
 #, python-format, review
 msgid "thesession.org returned %(status)s"
 msgstr "D'fhreagair thesession.org le %(status)s"
 
-#: live_logging_routes.py:2490
+#: live_logging_routes.py:2505
 #, review
 msgid "Could not reach thesession.org"
 msgstr "Níorbh fhéidir teacht ar thesession.org"
 
-#: live_logging_routes.py:2835
+#: live_logging_routes.py:2850
 #, review
 msgid "abc is required"
 msgstr "Tá abc riachtanach"
 
-#: live_logging_routes.py:2837
+#: live_logging_routes.py:2852
 #, review
 msgid "abc too long"
 msgstr "Tá an abc rófhada"
 
-#: live_logging_routes.py:3212
+#: live_logging_routes.py:3227
 #, review
 msgid "instance must be an id"
 msgstr "Caithfidh instance a bheith ina aitheantas"
@@ -2649,7 +2649,7 @@ msgstr "An iomarca iarratas chuig thesession.org. Bain triail eile as ar ball be
 
 #: recording_routes.py:109 recording_routes.py:492 recording_routes.py:554
 #: recording_routes.py:739 recording_routes.py:850 recording_routes.py:878
-#: recording_routes.py:940 recording_routes.py:1101 recording_routes.py:1736
+#: recording_routes.py:940 recording_routes.py:1101 recording_routes.py:1817
 #, review
 msgid "Recording not found"
 msgstr "Níor aimsíodh an taifeadadh"
@@ -2749,17 +2749,17 @@ msgstr "Scriosadh an taifeadadh, ach níorbh fhéidir a fhuaim a bhaint den stó
 msgid "This recording has no waveform yet"
 msgstr "Níl tonnchruth ag an taifeadadh seo fós"
 
-#: recording_routes.py:914 recording_routes.py:1242
+#: recording_routes.py:914 recording_routes.py:1280
 #, review
 msgid "start_ms is required"
 msgstr "Tá start_ms riachtanach"
 
-#: recording_routes.py:917 recording_routes.py:1245
+#: recording_routes.py:917 recording_routes.py:1283
 #, review
 msgid "start_ms cannot be negative"
 msgstr "Ní féidir le start_ms a bheith diúltach"
 
-#: recording_routes.py:922 recording_routes.py:1250
+#: recording_routes.py:922 recording_routes.py:1288
 #, review
 msgid "end_ms must be after start_ms"
 msgstr "Caithfidh end_ms a bheith i ndiaidh start_ms"
@@ -2769,7 +2769,7 @@ msgstr "Caithfidh end_ms a bheith i ndiaidh start_ms"
 msgid "That recording is still being processed"
 msgstr "Tá an taifeadadh sin fós á phróiseáil"
 
-#: recording_routes.py:963 recording_routes.py:1269
+#: recording_routes.py:963 recording_routes.py:1307
 #, review
 msgid "start_ms is past the end of the recording"
 msgstr "Tá start_ms thar dheireadh an taifeadta"
@@ -2779,7 +2779,7 @@ msgstr "Tá start_ms thar dheireadh an taifeadta"
 msgid "That tune belongs to a different session instance"
 msgstr "Baineann an fonn sin le hócáid seisiúin eile"
 
-#: recording_routes.py:994 recording_routes.py:1437
+#: recording_routes.py:994 recording_routes.py:1478
 #, review
 msgid "That record is a set break, not a tune"
 msgstr "Briseadh sraithe is ea an iontráil sin, ní fonn"
@@ -2794,22 +2794,32 @@ msgstr "Scriosadh an fonn sin ón logáil"
 msgid "A tune already starts at that moment"
 msgstr "Tosaíonn fonn ag an nóiméad sin cheana"
 
-#: recording_routes.py:1301
+#: recording_routes.py:1244
+#, review
+msgid "confidence must be a whole percent from 0 to 99"
+msgstr "caithfidh muinín a bheith ina céatadán slán ó 0 go 99"
+
+#: recording_routes.py:1258
+#, review
+msgid "confidence needs the confidence_model that made it"
+msgstr "teastaíonn an confidence_model a rinne í ón muinín"
+
+#: recording_routes.py:1339
 #, review
 msgid "That row is no longer in the log"
 msgstr "Níl an iontráil sin sa logáil a thuilleadh"
 
-#: recording_routes.py:1411
+#: recording_routes.py:1452
 #, review
 msgid "A tune or a name is required"
 msgstr "Tá fonn nó ainm riachtanach"
 
-#: recording_routes.py:1560 recording_routes.py:1642
+#: recording_routes.py:1641 recording_routes.py:1723
 #, review
 msgid "No segment for that tune"
 msgstr "Níl mír ag an bhfonn sin"
 
-#: recording_routes.py:1671
+#: recording_routes.py:1752
 #, python-format, review
 msgid "Could not cut that tune: %(error)s"
 msgstr "Níorbh fhéidir an fonn sin a ghearradh: %(error)s"

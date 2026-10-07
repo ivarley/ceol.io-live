@@ -49,6 +49,7 @@ from recording_routes import (
     log_recording_tune,
     set_recording_tune,
     unlog_recording_tune,
+    confirm_recording_tune,
     get_instance_recordings,
     get_instance_audio,
     download_recording_segment,
@@ -1833,6 +1834,12 @@ app.add_url_rule(
     "/api/recordings/<int:recording_id>/segments/<int:session_instance_tune_id>/unlog",
     "unlog_recording_tune",
     unlog_recording_tune,
+    methods=["POST"],
+)
+app.add_url_rule(
+    "/api/recordings/<int:recording_id>/segments/<int:session_instance_tune_id>/confirm",
+    "confirm_recording_tune",
+    confirm_recording_tune,
     methods=["POST"],
 )
 app.add_url_rule(
