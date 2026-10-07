@@ -2540,6 +2540,43 @@ the segmenter asks for a check on every one under 100. Refitting with more
 labelled nights is a new version; a stored confidence keeps the version that
 made it.
 
+**Following, profiled and made faster** (2026-10-07). Following set starts
+(`follow_drafts`) is the slow part of drafting a night, and the part a server
+would run with no caches. Profiled on night 134 with an empty transcription
+cache and the models on the CPU: 9.5 s a set, of which Basic Pitch
+re-transcribing the set 71% (its note-making alone 40%: the library's
+"melodia trick" scanned the whole frames-by-pitches matrix for the loudest
+energy left before every note it followed, 570,741 scans on six sets), the
+Viterbi 17% and the tempo map 9%. Two exact changes: the melodia trick sorts
+the candidates once (energy is only ever zeroed, so the loudest left is the
+first not yet zeroed; the library's notes on random activations, tied ones
+and five minutes of 112, 2.17 s -> 0.06 s), and the Viterbi's slot-by-slot
+step is compiled with numba (the same path as the loop on 25 random sets).
+Old against new on 134 and 132, each with an empty cache: every start the
+same; 36 -> 19 s and 16 -> 9 s with warm models. What is left on 134: the tempo
+map 12.5 s, the Viterbi 3.7 s, transcription (cached here; about 2.3 s a set
+uncached). Not adopted: the tempo map reading one onset envelope for the whole
+span instead of one per window (`pulse.SHARED_ONSET`, off), about 8 s a night
+faster but starts within 1 s 600 -> 596 of 744 on ten nights (better 9, worse
+13, p 0.52); no harm measured, no reason to take it. The larger lever, not
+yet tried: reusing the listener's own transcription instead of transcribing
+each set again.
+
+**A second opinion over the whole tune** (2026-10-07, one case). Night 132,
+checked by the player: 22 of 23 named right; the one wrong, drafted as
+Cregg's Pipes (a reel) between two polkas at 3%, was Sord Cholmcille (8549,
+23 tunebooks, never played at the session), played cleanly. The listener led
+with it only for its last 16 s (0.98-1.00), after a minute of The Pigeon On
+The Gate, Paudeen O'Rafferty and Cregg's Pipes, and drafting took the longest
+run. Looked up over its whole stretch as the bench does (three trackers, the
+whole corpus, the aligner on a 300-tune shortlist) it comes first, narrowly:
+0.540 against a march's 0.532 over the labelled span, 0.545 against a polka's
+0.525 over the drafted one; over its first 30 s it is 25th. To measure: a
+second-opinion pass over each drafted tune's whole stretch, with the
+neighbours' tune type as a preference (the player: "contiguous music between
+two polkas, so it's very unlikely to be a reel"), wrong names fixed against
+right ones broken on every labelled night.
+
 **Night 134, logged by the listener and checked** (2026-10-07). A 1.9-hour
 night never logged, never tuned on: the listener over its audio (merged
 shortlists, the session's history before the night), drafted blind, applied

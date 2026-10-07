@@ -41,8 +41,111 @@ FRAME_MS = 10.0
 _MODEL = None
 
 
+def output_to_notes_polyphonic(frames, onsets, onset_thresh, frame_thresh, min_note_len, infer_onsets,
+                               max_freq, min_freq, melodia_trick=True, energy_tol=11):
+    """basic_pitch.note_creation.output_to_notes_polyphonic, the same notes in
+    the same order, faster. Its "melodia trick" looked for the loudest energy
+    left with a full scan of the frames-by-pitches matrix before every note it
+    followed: 570,741 scans for six sets of night 134, 19 of following's 57 s.
+    Energy is only ever zeroed, never raised, so the loudest cell left is the
+    first cell of a list sorted once (loudest first, the matrix's order among
+    equals, as argmax takes them) that has not yet been zeroed. Installed in
+    place of the library's by `_model` (test_trackers checks it gives the
+    library's notes)."""
+    import scipy.signal
+    from basic_pitch.note_creation import MAX_FREQ_IDX, MIDI_OFFSET, constrain_frequency, get_infered_onsets
+
+    n_frames = frames.shape[0]
+    onsets, frames = constrain_frequency(onsets, frames, max_freq, min_freq)
+    if infer_onsets:
+        onsets = get_infered_onsets(onsets, frames)
+    peak_thresh_mat = np.zeros(onsets.shape)
+    peaks = scipy.signal.argrelmax(onsets, axis=0)
+    peak_thresh_mat[peaks] = onsets[peaks]
+    onset_idx = np.where(peak_thresh_mat >= onset_thresh)
+    onset_time_idx = onset_idx[0][::-1]
+    onset_freq_idx = onset_idx[1][::-1]
+    remaining_energy = np.zeros(frames.shape)
+    remaining_energy[:, :] = frames[:, :]
+    note_events = []
+    for note_start_idx, freq_idx in zip(onset_time_idx, onset_freq_idx):
+        if note_start_idx >= n_frames - 1:
+            continue
+        i = note_start_idx + 1
+        k = 0
+        while i < n_frames - 1 and k < energy_tol:
+            if remaining_energy[i, freq_idx] < frame_thresh:
+                k += 1
+            else:
+                k = 0
+            i += 1
+        i -= k
+        if i - note_start_idx <= min_note_len:
+            continue
+        remaining_energy[note_start_idx:i, freq_idx] = 0
+        if freq_idx < MAX_FREQ_IDX:
+            remaining_energy[note_start_idx:i, freq_idx + 1] = 0
+        if freq_idx > 0:
+            remaining_energy[note_start_idx:i, freq_idx - 1] = 0
+        amplitude = np.mean(frames[note_start_idx:i, freq_idx])
+        note_events.append((note_start_idx, i, freq_idx + MIDI_OFFSET, amplitude))
+
+    if melodia_trick:
+        n_bins = remaining_energy.shape[1]
+        flat = remaining_energy.ravel()
+        cand = np.flatnonzero(flat > frame_thresh)
+        order = cand[np.lexsort((cand, -flat[cand]))]    # loudest first; equals in matrix order
+        for cell in order:
+            i_mid, freq_idx = divmod(int(cell), n_bins)
+            if not remaining_energy[i_mid, freq_idx] > frame_thresh:
+                continue                                 # zeroed by a note followed since
+            remaining_energy[i_mid, freq_idx] = 0
+            i = i_mid + 1
+            k = 0
+            while i < n_frames - 1 and k < energy_tol:
+                if remaining_energy[i, freq_idx] < frame_thresh:
+                    k += 1
+                else:
+                    k = 0
+                remaining_energy[i, freq_idx] = 0
+                if freq_idx < MAX_FREQ_IDX:
+                    remaining_energy[i, freq_idx + 1] = 0
+                if freq_idx > 0:
+                    remaining_energy[i, freq_idx - 1] = 0
+                i += 1
+            i_end = i - 1 - k
+            i = i_mid - 1
+            k = 0
+            while i > 0 and k < energy_tol:
+                if remaining_energy[i, freq_idx] < frame_thresh:
+                    k += 1
+                else:
+                    k = 0
+                remaining_energy[i, freq_idx] = 0
+                if freq_idx < MAX_FREQ_IDX:
+                    remaining_energy[i, freq_idx + 1] = 0
+                if freq_idx > 0:
+                    remaining_energy[i, freq_idx - 1] = 0
+                i -= 1
+            i_start = i + 1 + k
+            if i_end - i_start <= min_note_len:
+                continue
+            amplitude = np.mean(frames[i_start:i_end, freq_idx])
+            note_events.append((i_start, i_end, freq_idx + MIDI_OFFSET, amplitude))
+    return note_events
+
+
+def _install_fast_notes():
+    import basic_pitch.note_creation as nc
+
+    if getattr(nc.output_to_notes_polyphonic, "__module__", "") != __name__:
+        nc._library_output_to_notes_polyphonic = nc.output_to_notes_polyphonic
+        nc.output_to_notes_polyphonic = output_to_notes_polyphonic
+
+
 def _model():
     global _MODEL
+    _install_fast_notes()
     if _MODEL is None:
         import os
 
