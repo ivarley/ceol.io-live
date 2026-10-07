@@ -32,6 +32,7 @@ COMMANDS = {
     "listen": "lab.tools.listen",
     "drafts": "lab.tools.drafts",
     "coreml": "lab.tools.coreml",
+    "confidence": "lab.analysis.confidence",
 }
 
 

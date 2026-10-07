@@ -2515,6 +2515,31 @@ tunes) and The Porthole Of The Kelp. Compute +3% a step. So the production
 design costs nothing here and needs no index per session; The Duke Of Leinster
 (112, first played that night) is still not reached.
 
+**Confidence that means what it says** (2026-10-07). The listener will log
+tunes itself, so each logged tune needs the chance it is right, shown where a
+person checks it. The decoder's belief is not that chance: of the tunes it
+held at 0.99 or more, 0.8% were wrong, and the 108 wrong or extra tunes of ten
+nights' blind drafts (nine nights and 136, with the session's history and as a
+new session; 1,581 tunes) mostly sat at 0.7-1.0. `analysis.confidence` fits a
+logistic model on each drafted tune's belief (median and 10th percentile while
+shown), how steadily it was shown, its length, its tunebook count, whether it
+is outside the session and the stretch's tune-ness, against the labels
+(thesession.org duplicates counted as one, `lab/configs/same_tunes.json`).
+Scored leaving each night out, it is honest where it matters: said under 50%,
+14% right (99 tunes); 50-70%, 57% (21); 70-90%, 70% against 82% said (37, the
+one band a little overconfident); 90-97%, 100% (43); 97-99%, 97% (102); 99% and
+over, 100% (1,279). Brier 0.018 against belief's 0.051. Under 70 it flags 120
+tunes holding 94 of the 108 wrong ones (belief under 0.7 flagged 17). Length
+and belief carry most of it; popular tunes come out slightly less sure (their
+look-alikes are popular too) and tunes outside the session slightly more
+(what reaches the log from outside has beaten the session's own). Model 1 is
+`lab/configs/confidence.json`; drafts carry each tune's features and `p_right`
+(0-99), and `--apply` sends them as the log row's `confidence` with
+`confidence_model` "listen-1" (schema 060, spec 050 "A machine's guesses"), so
+the segmenter asks for a check on every one under 100. Refitting with more
+labelled nights is a new version; a stored confidence keeps the version that
+made it.
+
 **A brand-new session, nine nights** (2026-10-07). The same nine nights
 blind, as a session that has never logged a tune would get them (`lab drafts
 --blind --new-session`): merged shortlists with popular tunes (>= 100

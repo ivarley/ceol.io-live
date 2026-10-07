@@ -633,6 +633,7 @@ def add_parser(sub):
                    help="with --merged: popular tunes as well as the session's own, either as its own "
                         "(union) or as a second tier (tier, discounted by --nu-partly of an outside tune's)")
     p.add_argument("--nu-partly", type=float, default=0.5)
+    p.add_argument("--out", help="write the drafts here instead of the recording's drafts.json")
     p.add_argument("--tempo", action="store_true",
                    help="replay with tempo evidence (a candidate's type against the beat heard), fitted "
                         "without the recording's own labels; kept as replay-states-...-tempo.jsonl")
@@ -660,8 +661,22 @@ def main(args):
             raise SystemExit(f"the saved drafts were made {'with' if saved.get('blind') else 'without'} "
                              f"--blind; apply them the same way")
         drafts = saved["drafts"]
+        if args.blind and all("features" in d for d in drafts):
+            # the chance each is right by the model as it is now, which may be
+            # newer than the drafts (analysis.confidence)
+            from lab.analysis.confidence import ConfidenceModel
+
+            try:
+                model = ConfidenceModel.load()
+                for d in drafts:
+                    d["p_right"] = model.percent(d["features"])
+                saved["confidence_version"] = model.version
+                print(f"confidence from model {model.version}")
+            except OSError:
+                print("no confidence model yet (lab/configs/confidence.json): the tunes go in without one")
         print(f"applying the saved drafts: {len(drafts)} tunes in {max(d['set'] for d in drafts)} sets")
-        return apply_log(rid, drafts, args) if args.blind else apply(rid, drafts, args)
+        return (apply_log(rid, drafts, args, saved.get("confidence_version")) if args.blind
+                else apply(rid, drafts, args))
     if args.apply:
         # ask for the password now, not after minutes of replaying and following
         _signed_in(args)
@@ -708,10 +723,23 @@ def main(args):
         drafts = tidy(drafts)
     if os.path.exists(paths.wav_path(rid)):
         drafts = tidy(refine_ends(rid, drafts)) if args.blind else refine_ends(rid, drafts)
-    out = os.path.join(paths.recording_dir(rid), "drafts.json")
+    # each tune's features, and the chance it is right (analysis.confidence)
+    from lab.analysis.confidence import ConfidenceModel, features
+
+    features(drafts, states, int(manifest["recording"]["duration_ms"]))
+    model = None
+    try:
+        model = ConfidenceModel.load()
+    except OSError:
+        pass
+    for d in drafts:
+        d["p_right"] = model.percent(d["features"]) if model else None
+    out = args.out or os.path.join(paths.recording_dir(rid), "drafts.json")
     with open(out, "w") as f:
         json.dump({"recording_id": rid, "followed": not args.no_follow, "blind": args.blind,
                    "rules": {"in_set_lead_ms": IN_SET_LEAD_MS, "tuneness": TUNE},
+                   "states_log": os.path.basename(log),
+                   "confidence_version": model.version if model else None,
                    "drafts": drafts}, f, indent=1)
 
     set_no = 0
@@ -733,7 +761,7 @@ def main(args):
         print(f"blind: {len(low)} tunes named with a median belief under 0.5 (check these first): "
               + ", ".join(f"{_fmt(d['start_ms'])} {d['name']}" for d in low[:12]))
     if args.apply:
-        return apply_log(rid, drafts, args) if args.blind else apply(rid, drafts, args)
+        return apply_log(rid, drafts, args, model.version if model else None) if args.blind else apply(rid, drafts, args)
     return 0
 
 
@@ -758,7 +786,7 @@ def _signed_in(args):
     return s
 
 
-def apply_log(rid, drafts, args):
+def apply_log(rid, drafts, args, version=None):
     """Log a blind night's tunes and place them, in one pass: each tune posted
     in time order to POST /api/recordings/<id>/segments with its start (and,
     for a set's last tune, its end). The server puts each new tune after the
@@ -779,6 +807,11 @@ def apply_log(rid, drafts, args):
         for d in sorted(drafts, key=lambda d: d["start_ms"]):
             body = {"start_ms": int(d["start_ms"]), "end_ms": d["end_ms"]}
             body["thesession_id" if d.get("outside") else "tune_id"] = d["tune_id"]
+            if d.get("p_right") is not None and version is not None:
+                # the chance it is right, and which model said so (schema 060): the
+                # segmenter shows it as needing a check until someone confirms it
+                body["confidence"] = int(d["p_right"])
+                body["confidence_model"] = f"listen-{version}"
             r = s.post(f"{base}/api/recordings/{rid}/segments", json=body)
             if r.ok:
                 done += 1
