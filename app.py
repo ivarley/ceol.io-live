@@ -523,6 +523,9 @@ app.add_url_rule("/add-session", "add_session", add_session)
 app.add_url_rule("/tunes", "tunes_page", tunes_page)
 app.add_url_rule("/about", "about_page", about_page)
 app.add_url_rule("/help", "help_page", help_page)
+app.add_url_rule(
+    "/irish-glossary-review", "irish_glossary_review", irish_glossary_review
+)
 app.add_url_rule("/help/sessions", "help_sessions", help_sessions)
 app.add_url_rule("/help/offline", "help_offline", help_offline)
 app.add_url_rule("/help/my-tunes", "help_my_tunes", help_my_tunes)

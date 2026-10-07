@@ -174,3 +174,12 @@ def test_help_pages_come_in_both_languages(client, url):
     assert irish.status_code == 200
     assert _lang_of(irish.get_data(as_text=True)) == "ga"
     assert irish.data != english.data
+
+
+def test_the_glossary_review_page_needs_no_sign_in_and_isnt_indexed(client):
+    resp = client.get("/irish-glossary-review")
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert 'name="robots" content="noindex' in html
+    assert "<td>fonn (pl. foinn)</td>" in html
+    assert "This file is also the page" not in html and "spec 057" not in html

@@ -17,7 +17,10 @@ import bcrypt
 from flask_login import login_user, logout_user, login_required, current_user
 import datetime
 from datetime import date, timedelta
+import os
 import re
+
+import markdown
 from urllib.parse import urlencode
 
 # Import from local modules
@@ -816,6 +819,31 @@ def about_page():
     becomes a link to your profile rather than to the login page.
     """
     return render_template("about.html")
+
+
+GLOSSARY_FILE = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "specs",
+    "current",
+    "ui",
+    "irish-glossary.md",
+)
+
+
+def irish_glossary_review():
+    """The Irish glossary for a native speaker to review (spec 057): unlinked, no
+    sign-in, not indexed. Rendered from the repo's glossary so the two never drift; the
+    paragraph addressed to repo readers is left out."""
+    with open(GLOSSARY_FILE, encoding="utf-8") as f:
+        text = f.read()
+    text = re.sub(r"\nThis file is also the page[^\n]*(\n[^\n]+)*\n", "\n", text)
+    text = text.replace(" (spec 057)", "", 1)
+    html = markdown.markdown(text, extensions=["tables"])
+    # Wide tables scroll sideways on a phone instead of widening the page.
+    html = html.replace("<table>", '<div class="table-wrap"><table>').replace(
+        "</table>", "</table></div>"
+    )
+    return render_template("irish_glossary_review.html", glossary=html)
 
 
 def help_page():
