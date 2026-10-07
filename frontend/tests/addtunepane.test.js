@@ -2,6 +2,7 @@
 // link: the ?setting=/#setting deep link must ride the add all the way to the POST,
 // and a tune that turns out to be already on the list must not silently swallow it.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import AddTuneApp from '../src/mytunes/AddTuneApp.svelte' // static: loading it per test can outrun the hook timeout
 import { render, waitFor, fireEvent } from '@testing-library/svelte'
 
 const SETTINGS = [
@@ -42,12 +43,10 @@ vi.mock('../src/client.js', () => ({
 
 const PASTED = 'https://thesession.org/tunes/8006#setting29513'
 
-let AddTuneApp
 beforeEach(async () => {
   vi.clearAllMocks()
   delete window.MyTunesOffline
   personTune = null
-  AddTuneApp = (await import('../src/mytunes/AddTuneApp.svelte')).default
 })
 
 const btn = (label) =>
