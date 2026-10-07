@@ -1,0 +1,101 @@
+{% extends "help_base.html" %}
+
+{% set page_title = "Mo liosta fonn" %}
+{% set page_description = "Conas an ghné Mo chuid fonn a úsáid" %}
+{% set active_page = "my-tunes" %}
+
+{% block help_content %}
+<h1>Mo liosta fonn</h1>
+
+<p>Ligeann an leathanach <strong>Mo chuid fonn</strong> duit súil a choinneáil ar na foinn atá á bhfoghlaim agat nó ar mhaith leat a fhoghlaim. Smaoinigh air mar do leabharlann phearsanta fonn a chabhraíonn leat do chuid foghlama a eagrú.</p>
+
+<h2>Foinn a chur leis</h2>
+
+<p>Cliceáil an cnaipe <strong>+</strong> chun fonn nua a chur le do bhailiúchán:</p>
+<ul>
+    <li><strong>Cuardaigh</strong> de réir ainm nó de réir nótaí ABC — an chatalóg ar dtús, agus TheSession.org
+        d'fhoinn nach bhfuil inti fós (is féidir leat URL nó aitheantas fonn ó TheSession.org a ghreamú freisin)</li>
+    <li><strong>Réamhamharc sula gcuireann tú leis é</strong> - Tapáil toradh chun a nodaireacht a fheiceáil agus
+        dul trína leaganacha; nó úsáid an <strong>＋</strong> ar an toradh chun é a chur leis le tapáil amháin</li>
+    <li>Roghnaigh an stádas ag a dtosóidh sé (<strong>Le foghlaim</strong>, <strong>Á fhoghlaim</strong>,
+        nó <strong>Ar eolas</strong>) agus cuir nóta leis más mian leat</li>
+</ul>
+
+<h2>Sioncrónú ó TheSession.org</h2>
+
+<p>Má choinníonn tú leabhar fonn ar TheSession.org, is féidir leat é a iompórtáil: oscail an pána chun fonn a chur leis agus
+lean an nasc <strong>"An bhfuil leabhar fonn agat ar thesession.org? Sioncrónaigh anseo é"</strong>. Beidh
+d'aitheantas úsáideora TheSession.org de dhíth ort (tá sé i URL do phróifíle ansin); cuireann an sioncrónú leis
+aon fhoinn nach bhfuil agat cheana, ag stádas a roghnaíonn tú.</p>
+
+<h2>Do dhul chun cinn a rianú</h2>
+
+<p>Taispeánann gach fonn do stádas foghlama reatha le suaitheantas daite:</p>
+<ul>
+    <li><strong>Le foghlaim</strong> - Foinn ar do liosta mianta</li>
+    <li><strong>Á fhoghlaim</strong> - Foinn atá á gcleachtadh agat faoi láthair</li>
+    <li><strong>Ar eolas</strong> - Foinn atá go maith agat</li>
+</ul>
+
+<h2>Rianú de réir uirlise</h2>
+
+<p>Má sheinneann tú níos mó ná uirlis amháin, is féidir leat stádas foinn a rianú ar leith ar gach ceann. Oscail radharc sonraí an fhoinn agus cliceáil <strong>De réir uirlise</strong> ar rialtán an stádais chun ró a thaispeáint do gach uirlis. Taispeánann an príomhrialtán an stádas is <strong>faide chun cinn</strong> atá agat ar do chuid uirlisí go léir; is féidir gach ró uirlise a shocrú go neamhspleách — áisiúil nuair atá ríl go daingean agat ar an mbainseó ach í fós <em>á foghlaim</em> ar an gconsairtín.</p>
+
+<p>Bíonn gach uirlis <strong>Uathoibríoch</strong> nó <strong>De láimh</strong>, agus socraítear é sin ar do leathanach <strong>Próifíl</strong>:</p>
+<ul>
+    <li><strong>Uathoibríoch</strong> - leanann sé príomhstádas an fhoinn. Marcáil fonn ar eolas agus beidh sé ar eolas ar an uirlis seo go huathoibríoch. Coigeartaigh fonn ar leith má tá sé níos deacra ar an uirlis seo.</li>
+    <li><strong>De láimh</strong> - liosta roghnaithe a thógann tú fonn ar fhonn. Tosaíonn sé folamh; ní chuireann foinn a mharcáil ar eolas go ginearálta leis.</li>
+</ul>
+
+<p>Má bhaineann tú uirlis de do phróifíl a bhfuil stádais shaincheaptha fonn aici, iarrfar ort é a dheimhniú ar dtús, mar ní féidir na sonraí sábháilte sin a fháil ar ais tríd an uirlis a chur leis arís.</p>
+
+<h2>Líon na n-uaireanta cloiste <span class="feature-badge">Fón póca</span></h2>
+
+<p>D'fhoinn atá marcáilte "Le foghlaim," is féidir leat a rianú cé chomh minic a chloiseann tú iad ag seisiúin. Ar fhóin phóca, svaidhpeáil ar dheis ar chárta fonn ar bith chun líon na n-uaireanta cloiste a mhéadú go tapa. Cabhraíonn sé seo leat a shocrú cé na foinn le foghlaim ar dtús, de réir cé chomh minic a sheinntear iad.</p>
+
+<h2>Scagadh agus sórtáil</h2>
+
+<p>Tá cnaipí an <strong>stádais</strong> faoin mbosca cuardaigh; tá gach rud eile sa
+phainéal scagairí taobh thiar den chnaipe sleamhnán:</p>
+<ul>
+    <li><strong>Cuardaigh</strong> - Aimsigh foinn de réir ainm, de réir do chuid nótaí orthu, nó de réir
+        <strong>nótaí</strong> an fhoinn — clóscríobh cúpla barra in ABC (m.sh. "GED BED") agus aimseoidh sé na foinn
+        a bhfuil siad ina nodaireacht, marcáilte le ♪</li>
+    <li><strong>Stádas</strong> - Le foghlaim, Á fhoghlaim, Ar eolas, nó Gach ceann. Tá sé seo
+        os cionn an phainéil scagairí seachas istigh ann, ionas go bhfuil sé i gcónaí tapáil amháin uait</li>
+    <li><strong>Sórtáil</strong> - De réir aibítre, éilimh, cé chomh minic a sheinn <em>tusa</em> é
+        ("Mo sheinm"), cé chomh minic a seinneadh é ar oícheanta a raibh tú ann, nó líon na n-uaireanta cloiste — gach ceann
+        acu le scorán suas/síos</li>
+    <li><strong>Ag mo sheisiúin</strong> / <strong>Agus mé ann</strong> - Cúngaigh
+        go dtí na foinn a sheinntear i ndáiríre san áit a seinneann tú</li>
+    <li><strong>Scagaire cineáil</strong> - Ná taispeáin ach poirt, ríleanna, cornphíopaí, srl.</li>
+    <li><strong>Scagaire uirlise</strong> - Taispeáin na stádais d'uirlis amháin a sheinneann tú</li>
+</ul>
+
+<p>Taispeántar na scagairí gníomhacha mar philleanna beaga os cionn an liosta — tapáil an × ar philiúr chun an scagaire sin
+amháin a bhaint.</p>
+
+<h2>Foinn a chur in eagar</h2>
+
+<p>Tapáil fonn chun a radharc sonraí a oscailt, áit ar féidir leat:</p>
+<ul>
+    <li>Do stádas foghlama a nuashonrú (go ginearálta, nó de réir uirlise)</li>
+    <li>An nodaireacht a fheiceáil, agus aistriú idir na barraí tosaigh agus an fonn iomlán</li>
+    <li>Líon na n-uaireanta cloiste a choigeartú</li>
+    <li><strong>Socraigh</strong> do leagan pearsanta féin den fhonn: an t-ainm a thugann tú air, an
+        leagan a sheinneann tú, an gléas, agus do chuid nótaí</li>
+    <li>Brabhsáil a <strong>Stair</strong> (gach oíche ar logáladh é, le naisc chuig na
+        logálacha sin), a <strong>Sonraí</strong>, agus <strong>Seinnte le</strong> (na foinn is minice
+        a chuirtear i sraith leis)</li>
+    <li><strong>Éist leis an bhfonn</strong> - Oscail é in ABC Tools chun é a sheinm</li>
+</ul>
+
+<h2>Leideanna chun foinn a fhoghlaim</h2>
+
+<ul>
+    <li>Tosaigh leis na foinn a bhfuil líon ard uaireanta cloiste acu - seinntear iad seo go minic ag seisiúin</li>
+    <li>Dírigh ar na cineálacha fonn is coitianta ar dtús: is ríleanna agus poirt formhór stór ceoil na seisiún</li>
+    <li>Úsáid an tsórtáil de réir éilimh chun a fheiceáil cé na foinn is minice a sheinntear ar fud na seisiún go léir</li>
+    <li>Cuir nótaí leis chun cuimhneamh ar phasáistí casta nó ar leaganacha eile</li>
+</ul>
+{% endblock %}

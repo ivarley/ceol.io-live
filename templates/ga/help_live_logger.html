@@ -1,0 +1,179 @@
+{% extends "help_base.html" %}
+
+{% set page_title = "An logálaí beo" %}
+{% set page_description = "Foinn a logáil i bhfíor-am le linn seisiúin" %}
+{% set active_page = "live-logger" %}
+
+{% block help_content %}
+<h1>An logálaí beo</h1>
+
+<p>Is é an logálaí beo an scáileán a úsáideann tú chun foinn a thaifeadadh <em>le linn</em> seisiúin. Tá sé déanta
+d'fhón ar do ghlúin i dteach tábhairne glórach: clóscríobh cúpla litir agus meaitseálann an fonn láithreach,
+sábháiltear gach rud de réir a chéile (níl aon chnaipe sábhála ann), agus coinníonn sé ag obair nuair nach
+n-oibríonn an Wi-Fi.</p>
+
+<p>Tá sé <strong>il-úsáideora</strong> freisin: is féidir le roinnt daoine an seisiún céanna a logáil ag an am céanna, agus
+feiceann gach duine athruithe na ndaoine eile beo.</p>
+
+<h2>Conas teacht air</h2>
+
+<p>Oscail logáil seisiúin ón gcluaisín <strong>Logálacha</strong> sa seisiún (nó ón aicearra "lean ort ag logáil" ar an
+leathanach baile do logáil atá leathdhéanta agat). Taispeánann an ceanntásc ainm an tseisiúin
+agus an dáta — tapáil é chun sonraí na logála a oscailt: an dáta, an tinreamh, na taifeadtaí, na nótaí,
+an rialtán "marcáil críochnaithe", agus an bealach ar ais chuig leathanach an tseisiúin féin.</p>
+
+<h2>Foinn a logáil</h2>
+
+<ul>
+    <li><strong>Clóscríobh ainm foinn</strong> sa bhosca ag an mbun. Taispeántar na meaitseálacha láithreach agus tú
+        ag clóscríobh — tapáil ceann, nó brúigh Enter chun an chéad mheaitseáil a ghlacadh.</li>
+    <li><strong>An chéad fhonn eile is dóichí</strong> - Nuair atá tú ag deireadh sraithe, molann an logálaí
+        an fonn a thagann ina dhiaidh de ghnáth i sraitheanna an tseisiúin seo. Tapáil é chun é a logáil, nó an × chun
+        an moladh a dhíbhe.</li>
+    <li><strong>Críochnaigh an tsraith</strong> - Tapáil an cnaipe buí <strong>Críochnaigh an tsraith</strong> nuair a
+        chríochnaíonn an tsraith. Tosaíonn an chéad fhonn eile a logálann tú sraith nua.</li>
+    <li><strong>Is cuma faoi ainmneacha gan mheaitseáil</strong> - Mura meaitseálann ainm aon rud, roghnaigh
+        <em>Logáil “…” mar atá</em>. Sábháiltear é mar théacs, agus is féidir leatsa (nó le duine ar bith eile) é a nascadh le
+        fonn ceart níos déanaí.</li>
+    <li><strong>Greamaigh oíche iomlán</strong> - Greamaigh téacs sa bhosca iontrála: scarann camóga
+        foinn laistigh de shraith, tosaíonn bristeacha líne sraitheanna nua. Meaitseáiltear gach ainm díreach mar a bheadh
+        sé clóscríofa agat.</li>
+</ul>
+
+<h2>Cuardach níos doimhne</h2>
+
+<p>Mura n-aimsíonn an mheaitseáil thapa d'fhonn, tapáil <strong>Cuardaigh 🔍</strong> (nó an 🔍 ar aon
+toradh tapa chun féachaint air níos géire ar dtús). Is féidir leis an gcuardach iomlán:</p>
+
+<ul>
+    <li>An chatalóg a chuardach <strong>de réir ainm nó de réir nótaí ABC</strong> (m.sh. clóscríobh "GED" chun
+        fonn a aimsiú de réir a nótaí tosaigh), le scagaire cineál foinn</li>
+    <li><strong>thesession.org</strong> a chuardach d'fhoinn nach bhfuil sa chatalóg fós</li>
+    <li>Iompórtáil ó <strong>URL nó aitheantas fonn thesession.org</strong> a ghreamaítear</li>
+</ul>
+
+<p>Osclaíonn tapáil ar thoradh <strong>réamhamharc</strong>: an nodaireacht iomlán, leaganacha eile ar féidir leat
+dul tríothu, ainmneacha eile, agus cé chomh minic a seinneadh é ag an seisiún seo. Úsáid na saigheada chun
+iarrthóirí a chur i gcomparáid, ansin deimhnigh chun é a logáil — nó úsáid an <strong>＋</strong> ar chárta an toraidh
+chun an réamhamharc a scipeáil agus é a chur leis le tapáil amháin. Má théann tú go leagan áirithe sa réamhamharc,
+sábháiltear an leagan sin leis an bhfonn.</p>
+
+<h2>Rudaí a cheartú</h2>
+
+<p>Tapáil ró foinn chun é a roghnú, agus taispeántar a ghníomhartha:</p>
+
+<ul>
+    <li><strong>ⓘ Eolas</strong> - Oscail tarraiceán sonraí an fhoinn (nodaireacht, stádas do liosta,
+        stair, staitisticí)</li>
+    <li><strong>✎ Cuir in eagar</strong> - Roghnaigh an mheaitseáil arís, athainmnigh, nó bain an nasc</li>
+    <li><strong>🗑 Bain</strong> - Scrios an fonn ón logáil</li>
+    <li><strong>↑ / ↓</strong> - Cuir fonn isteach os cionn nó faoin gceann seo</li>
+</ul>
+
+<p>Is téacs amháin iad na rónna atá marcáilte <strong>⚠ gan nasc</strong> — cuir in eagar iad chun iad a nascadh le fonn
+sa chatalóg. Idir foinn agus sraitheanna feicfidh tú uamanna le pilleanna <strong>Scoilt</strong> agus
+<strong>Ceangail</strong> chun sraitheanna a atheagrú san áit a bhfuil siad.</p>
+
+<p>Lipéadaítear sraitheanna de réir cineál foinn ("Ríleanna", "Poirt", nó "Measctha"). Tapáil an lipéad chun tráidire na
+sraithe a oscailt, a thaispeánann cé a logáil í agus — má rianaíonn do sheisiún tosaitheoirí sraithe — rialtán
+<strong>Tosaithe ag</strong> chun a nótáil cé a chuir tús léi.</p>
+
+<h2>Ag logáil le chéile</h2>
+
+<ul>
+    <li>Taispeánann <strong>ciorcail láithreachta</strong> sa cheanntásc cé atá ar an logáil faoi láthair, de réir
+        a gcuid inisealacha. Faigheann gach duine dath, agus tá imir ar na foinn de réir cé a chuir leis iad.</li>
+    <li>Fógraíonn tóstaí an rud a dhéanann daoine eile ("Chuir Mary The Silver Spear leis"), agus feicfidh tú athruithe
+        ag teacht san áit láithreach.</li>
+    <li>Má logálann beirt an fonn céanna sa tsraith chéanna ag beagnach an t-am céanna, cumascann an logálaí
+        iad agus insíonn sé duit (is féidir leat an dá cheann a choinneáil má seinneadh faoi dhó é i ndáiríre).</li>
+    <li>Ligeann an ceanntásc leathnaithe duit <strong>nótaí an tseisiúin</strong> a chur in eagar agus — má rianaíonn do sheisiún
+        an tinreamh — a fheiceáil agus <strong>a bhainistiú cé atá i láthair</strong>.</li>
+</ul>
+
+<h2>Fonn a aimsiú sa logáil</h2>
+
+<p>Scrollaigh go dtí barr an liosta ar fad chun an <strong>barra scagaire</strong> anuas a nochtadh.
+Scagann clóscríobh an logáil beo go dtí na sraitheanna ina bhfuil fonn a mheaitseálann, agus aibhsítear an mheaitseáil.
+Tapáil <strong>Críochnaigh an cuardach</strong> chun é a ghlanadh. Oibríonn sé seo sa mhód amhairc agus ar logálacha
+críochnaithe freisin.</p>
+
+<h2>Mód roghnúcháin</h2>
+
+<p>Cuireann an cnaipe <strong>☑</strong> ar an mbarra scagaire sa mhód roghnúcháin thú. Tapáil rónna chun iad a roghnú
+(nó úsáid <em>Roghnaigh iad ar fad</em>), ansin úsáid an barra ag an mbun:</p>
+
+<ul>
+    <li><strong>Cóipeáil / Greamaigh</strong> - Bog foinn idir áiteanna, nó cóipeáil sraith mar ghnáth-théacs
+        ar féidir leat a ghreamú áit ar bith (línte = sraitheanna, camóga = foinn)</li>
+    <li><strong>Scrios</strong> - Bain go leor ag an am céanna, le tósta Cealaigh é</li>
+    <li><strong>Sann</strong> - Socraigh an duine "tosaithe ag" do na sraitheanna roghnaithe</li>
+    <li><strong>⠿ barra tarraingthe</strong> - Tarraing roghnúchán go háit nua; taispeántar limistéir scaoilte ag na
+        huamanna, lena n-áirítear limistéir "sraith nua" ag na foircinn</li>
+</ul>
+
+<h2>Aibhsiú mo liosta (★)</h2>
+
+<p>Dathaíonn an cnaipe <strong>★</strong> ar an mbarra scagaire gach fonn sa logáil de réir
+<em>do</em> stádais foghlama (ar eolas / á fhoghlaim / le foghlaim / níl ar do liosta) — áisiúil
+chun a fheiceáil cé na foinn ón oíche anocht ba chóir duit a fhoghlaim ar dtús. Má sheinneann tú níos mó ná uirlis amháin
+is féidir leat é a theorannú go ceann amháin. Fad atá sé ar siúl, faigheann an mód roghnúcháin cnaipe <strong>Mo liosta</strong>
+chun na foinn roghnaithe go léir a chur le do liosta ag stádas a roghnaíonn tú.</p>
+
+<h2>Mód amhairc agus logáil a chríochnú</h2>
+
+<p>Tapáil <strong>Déanta</strong> nuair a chríochnaíonn tú ag logáil chun aistriú go dtí an mód amhairc, nach féidir a athrú; tapáil
+<strong>✎ Cuir an logáil in eagar</strong> chun dul ar ais. Sa mhód amhairc is féidir leat brabhsáil, scagadh, sonraí na bhfonn a oscailt,
+agus cóipeáil — gan aon bhaol go mbogfá an logáil de thimpiste. Nuair atá an oíche logáilte go hiomlán, úsáid
+<strong>Marcáil críochnaithe</strong> sa cheanntásc leathnaithe; folaíonn logáil chríochnaithe na
+rialtáin eagarthóireachta (agus is féidir í a athoscailt níos déanaí más gá).</p>
+
+<h2>Ar ríomhaire</h2>
+
+<p>Ar scáileáin níos leithne cuireann an logálaí an dara pána leis ina bhfuil cuardach na bhfonn le feiceáil i gcónaí agus
+an moladh "ina dhiaidh de ghnáth", agus oibríonn gach rud ón méarchlár:</p>
+
+<ul>
+    <li><strong>Clóscríobh</strong> chun cuardach; logálann <strong>Enter</strong> an chéad mheaitseáil;
+        siúlann <strong>↑ / ↓</strong> trí liosta na meaitseálacha</li>
+    <li>Bogann <strong>↑ / ↓</strong> (gan aon rud i bhfócas) an cúrsóir ionsáite tríd an
+        logáil; scoilteann nó ceanglaíonn <strong>Enter</strong> sraitheanna ag an gcúrsóir, nó críochnaíonn sé an tsraith ag an
+        deireadh beo; léimeann <strong>Spás</strong> ar ais go dtí an bosca iontrála</li>
+    <li>Léimeann <strong>/</strong> go dtí an pána cuardaigh ó áit ar bith</li>
+    <li>Oibríonn <strong>Cmd/Ctrl+C, V, A</strong> agus <strong>Delete</strong> sa mhód roghnúcháin</li>
+    <li>Sa chuardach: taispeánann <strong>Enter</strong> réamhamharc, deimhníonn <strong>Enter</strong> arís é,
+        cuireann <strong>Cmd/Ctrl+Enter</strong> leis gan réamhamharc, téann <strong>← / →</strong> trí
+        na torthaí, téann <strong>Esc</strong> siar</li>
+</ul>
+
+<h2>Ag obair as líne</h2>
+
+<p>Coinníonn an logálaí ag obair nuair a thiteann an comhartha. Sábháiltear athruithe ar d'fheiste agus marcáiltear
+<em>as líne</em> iad ar an ró; taispeánann meirge cé mhéad atá sa scuaine, agus sioncrónaítear gach rud
+go huathoibríoch nuair a cheanglaíonn tú arís. Insíonn an <strong>ponc ceangail</strong> (ar barr ar dheis) an
+scéal: glas = beo, oráiste = as líne le hathruithe sa scuaine, ag bíogadh = ag athcheangal/ag sioncrónú. Tapáil
+é le haghaidh sonraí — cá fhad atá tú as líne, cad atá sa scuaine, agus cén freastalaí nach féidir a shroicheadh
+má tá rud éigin cearr. Ar an ócáid annamh nach féidir athrú as líne a chur i bhfeidhm tar éis
+athcheangail (de ghnáth toisc gur chuir duine eile an fonn céanna in eagar ar dtús), taispeánann an logálaí duit
+go díreach cé na hathruithe nár fhan.</p>
+
+<p>Féach <a href="/help/offline">Ag obair as líne</a> chun a fheiceáil conas a oibríonn an chuid eile den aip gan
+cheangal.</p>
+
+<h2>Logáil a léamh gan chuntas</h2>
+
+<p>Tá logálacha seisiún poiblí. Is féidir le duine ar bith dáta seisiúin a oscailt agus a léamh cad a seinneadh, sraith
+ar shraith — níl cuntas de dhíth. Is <strong>le léamh amháin</strong> an radharc sin: níl bosca iontrála ann agus
+níl aon rud faoi dhaoine (cé a bhí i láthair, cé a logáil cad é, cé a thosaigh sraith) — is do
+bhaill an tseisiúin é sin. Fad atá seisiún ar siúl i ndáiríre, nuashonraítear an radharc poiblí beo
+de réir mar a logáiltear foinn; nuair atá sé thart, is leathanach statach é.</p>
+
+<h2>Logálaí eile a roghnú</h2>
+
+<p>Is é an logálaí beo a gheobhaidh tú de réir réamhshocraithe — oscail dáta seisiúin ar bith agus beidh tú ann. Tá an
+sean-eagarthóir pillíní ann fós faoi láthair, ach is é an t-aon bhealach chun é a bhaint amach ná é a roghnú ar do
+<a href="/me">leathanach próifíle</a>: féach ar <strong>Logálaí fonn</strong> faoi Eolas an
+chuntais agus roghnaigh <strong>Úsáid an t-eagarthóir clasaiceach</strong>. Cuireann an socrú céanna ar ais
+thú. Mura bhfuil rud éigin ag obair duit sa logálaí beo, déan teagmháil linn le do thoil — tá an
+t-eagarthóir clasaiceach ag imeacht.</p>
+{% endblock %}

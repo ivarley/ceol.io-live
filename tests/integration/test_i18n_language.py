@@ -153,3 +153,24 @@ def test_the_added_person_notice_carries_each_admins_language(client):
         )
         conn.commit()
         conn.close()
+
+
+HELP_URLS = [
+    "/help",
+    "/help/sessions",
+    "/help/offline",
+    "/help/my-tunes",
+    "/help/release-notes",
+    "/help/release-notes/2026-07",
+]
+
+
+@pytest.mark.parametrize("url", HELP_URLS)
+def test_help_pages_come_in_both_languages(client, url):
+    english = client.get(url, follow_redirects=True)
+    assert english.status_code == 200
+    client.set_cookie("ceol_lang", "ga")
+    irish = client.get(url, follow_redirects=True)
+    assert irish.status_code == 200
+    assert _lang_of(irish.get_data(as_text=True)) == "ga"
+    assert irish.data != english.data

@@ -203,6 +203,7 @@ login_manager.init_app(app)
 import i18n  # noqa: E402
 
 i18n.init_app(app)
+app.jinja_env.globals["release_note_months"] = release_note_months  # help sidebar
 login_manager.login_view = "login"  # type: ignore
 login_manager.login_message = lazy_gettext("Please log in to access this page.")
 # Flask-Login flashes login_message into the session cookie, which needs a plain str:

@@ -228,3 +228,25 @@ def test_converted_modules_have_no_bare_messages(name):
     with open(os.path.join(ROOT, name), encoding="utf-8") as fh:
         found = _bare_messages(fh.read())
     assert not found, f"{name}: messages without _():\n  " + "\n  ".join(found)
+
+
+# Prose pages written once per language (i18n.localized): each English help page has
+# an Irish twin at templates/ga/<name>. A new help page, or a new release-notes month,
+# needs its Irish in the same change.
+HELP_PAGES = sorted(
+    f
+    for f in os.listdir(os.path.join(ROOT, "templates"))
+    if f.startswith("help") and f.endswith(".html") and f != "help_base.html"
+)
+
+
+@pytest.mark.parametrize("name", HELP_PAGES)
+def test_every_help_page_has_an_irish_twin(name):
+    twin = os.path.join(ROOT, "templates", "ga", name)
+    assert os.path.exists(twin), f"templates/ga/{name} is missing"
+    english = open(os.path.join(ROOT, "templates", name), encoding="utf-8").read()
+    irish = open(twin, encoding="utf-8").read()
+    months = re.findall(r"month == '(\d{4}-\d{2})'", english)
+    assert months == re.findall(r"month == '(\d{4}-\d{2})'", irish), (
+        f"templates/ga/{name} doesn't have the same release-notes months"
+    )

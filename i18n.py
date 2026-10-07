@@ -71,6 +71,15 @@ def request_language():
     return get_locale() if has_request_context() else DEFAULT
 
 
+def localized(template):
+    """A prose page written once per language (the help pages): templates/ga/<name>
+    on an Irish request, else the English page. render_template takes the list and
+    uses the first that exists."""
+    if get_locale() == "ga":
+        return [f"ga/{template}", template]
+    return template
+
+
 def init_app(app):
     Babel(app, locale_selector=get_locale)
 

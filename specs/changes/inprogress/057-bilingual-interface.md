@@ -1,9 +1,11 @@
 # 057: Bilingual interface (English and Irish)
 
 **Date:** 2026-10-06
-**Status:** STAGES 1-5 BUILT (2026-10-07): the machinery, the setting and switch, the
-tests, the CLAUDE.md rule, the agreed glossary, every Svelte bundle and Jinja page, the
-iOS app, the messages the server sends, and the emails. Next: help. The
+**Status:** BUILT (2026-10-07), all six stages: the machinery, the setting and switch,
+the tests, the CLAUDE.md rule, the agreed glossary, every Svelte bundle and Jinja page,
+the iOS app, the messages the server sends, the emails, and the help pages. The drafted
+Irish awaits the product owner's review (`scripts/i18n_po.py pending`, `"review": true`,
+iOS `needs_review`). The
 decisions are the product owner's, from a short Q&A on 2026-10-06.
 
 ## Why
@@ -160,3 +162,15 @@ And from here on, any interface work has to work in both languages.
   first one.
 - English is byte-identical to before. The old site name "Irish Music Sessions" is
   still in the subjects; the Irish uses "Seisiúin Cheoil Ghaelaigh" for now.
+
+## Stage 6 (help) as built
+
+- Help prose is written once per language: `templates/help_x.html` and its Irish twin
+  `templates/ga/help_x.html`; the routes render `i18n.localized(name)`, which picks the
+  twin on an Irish request. The frame (`help_base.html`, the sidebar) uses `_()`.
+- Release-notes month labels come from `web_routes.release_note_months()` in the page's
+  language ("Iúil 2026"), for both the sidebar and the index.
+- `tests/unit/test_i18n_catalogs.py` fails when a help page has no Irish twin or the
+  twins' release-notes months differ.
+- The tune sheet's "Stats" tab is "Details" now; the English help said "Stats", fixed in
+  both languages.

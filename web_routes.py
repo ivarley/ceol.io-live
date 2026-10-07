@@ -10,13 +10,13 @@ from flask import (
     make_response,
     current_app,
 )
-from i18n import request_language
-from flask_babel import gettext as _
+from i18n import localized, request_language
+from flask_babel import format_date, gettext as _
 import random
 import bcrypt
 from flask_login import login_user, logout_user, login_required, current_user
 import datetime
-from datetime import timedelta
+from datetime import date, timedelta
 import re
 from urllib.parse import urlencode
 
@@ -819,7 +819,7 @@ def about_page():
 
 
 def help_page():
-    return render_template("help.html")
+    return render_template(localized("help.html"))
 
 
 def share_page():
@@ -835,31 +835,31 @@ def share_page():
 
 
 def help_my_tunes():
-    return render_template("help_my_tunes.html")
+    return render_template(localized("help_my_tunes.html"))
 
 
 def help_sessions():
-    return render_template("help_sessions.html")
+    return render_template(localized("help_sessions.html"))
 
 
 def help_offline():
-    return render_template("help_offline.html")
+    return render_template(localized("help_offline.html"))
 
 
 def help_session_tunes():
-    return render_template("help_session_tunes.html")
+    return render_template(localized("help_session_tunes.html"))
 
 
 def help_session_logs():
-    return render_template("help_session_logs.html")
+    return render_template(localized("help_session_logs.html"))
 
 
 def help_session_members():
-    return render_template("help_session_members.html")
+    return render_template(localized("help_session_members.html"))
 
 
 def help_live_logger():
-    return render_template("help_live_logger.html")
+    return render_template(localized("help_live_logger.html"))
 
 
 # Release notes months, most recent first. Single source of truth shared by
@@ -879,14 +879,32 @@ RELEASE_NOTES_MONTHS = [
 ]
 
 
+def _release_month_name(month):
+    """ "July 2026" / "Iúil 2026": the month in the page's language."""
+    try:
+        return format_date(date.fromisoformat(month + "-01"), "LLLL yyyy")
+    except ValueError:
+        return month
+
+
+def release_note_months():
+    """(key, label) for each release-notes month, newest first, in the page's language.
+    The help sidebar reads it (a template global set in app.py)."""
+    return [(m, _release_month_name(m)) for m, _name in RELEASE_NOTES_MONTHS]
+
+
 def help_release_notes_index():
-    return render_template("help_release_notes_index.html", months=RELEASE_NOTES_MONTHS)
+    return render_template(
+        localized("help_release_notes_index.html"), months=release_note_months()
+    )
 
 
 def help_release_notes(month):
-    month_name = dict(RELEASE_NOTES_MONTHS).get(month, month)
+    month_name = (
+        _release_month_name(month) if month in dict(RELEASE_NOTES_MONTHS) else month
+    )
     return render_template(
-        "help_release_notes.html", month=month, month_name=month_name
+        localized("help_release_notes.html"), month=month, month_name=month_name
     )
 
 
