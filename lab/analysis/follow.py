@@ -131,7 +131,111 @@ def _emissions(heard, form):
 def follow(heard, chains, n_tunes):
     """The best path. -> per slot (state, position): state -1 before the set,
     n_tunes after it, else the tune index; position -1 outside a tune; plus
-    the setting chosen for each tune."""
+    the setting chosen for each tune.
+
+    The slot-by-slot step is compiled (`_steps`, numba): `follow_reference`
+    did it in Python, 17 of following's 33 s on night 134. The same sums in
+    the same order and the same tie-breaks (the first of the highest), so
+    the same path (test_follow)."""
+    T = len(heard)
+    C = len(chains)
+    L = max(len(c.form) for c in chains)
+    lengths = np.array([len(c.form) for c in chains], dtype=np.int64)
+    emit = np.zeros((C, T, L))
+    for i, c in enumerate(chains):
+        emit[i, :, :len(c.form)] = _emissions(heard, c.form)
+    tune_of = np.array([c.tune for c in chains], dtype=np.int64)
+    exit_pen = np.full((C, L), CHANGE + OFF_END)
+    for i, c in enumerate(chains):
+        exit_pen[i, len(c.form) - c.last_bar:len(c.form)] = CHANGE
+        exit_pen[i, len(c.form):] = np.inf
+    V, back, enter_from, post_from, post = _steps(emit, lengths, tune_of, exit_pen, n_tunes)
+    return _trace(V, back, enter_from, post_from, post, chains, tune_of, lengths, L, n_tunes, T)
+
+
+_STEPS = None
+
+
+def _steps(emit, lengths, tune_of, exit_pen, n_tunes):
+    global _STEPS
+    if _STEPS is None:
+        import numba
+
+        _STEPS = numba.njit(cache=True)(_steps_py)
+    return _STEPS(emit, lengths, tune_of, exit_pen, n_tunes)
+
+
+def _steps_py(emit, lengths, tune_of, exit_pen, n_tunes):
+    """`follow_reference`'s loop over slots, written element by element."""
+    C, T, L = emit.shape
+    V = np.full((C, L), NEG)
+    newV = np.empty((C, L))
+    pre, post = 0.0, NEG
+    back = np.zeros((T, C, L), dtype=np.int8)
+    enter_from = np.full((T, n_tunes), -1, dtype=np.int64)
+    post_from = np.full(T, -2, dtype=np.int64)
+    best_exit = np.empty(n_tunes)
+    best_exit_at = np.empty(n_tunes, dtype=np.int64)
+    for t in range(T):
+        for k in range(n_tunes):
+            best_exit[k] = NEG
+            best_exit_at[k] = -1
+        for i in range(C):
+            n = lengths[i]
+            # the chain's best exit: the first position with the highest
+            jbest, vbest = 0, NEG if 0 < n else NEG
+            vbest = V[i, 0] - exit_pen[i, 0] if 0 < n else NEG
+            for j in range(1, L):
+                v = V[i, j] - exit_pen[i, j] if j < n else NEG
+                if v > vbest:
+                    jbest, vbest = j, v
+            k = tune_of[i]
+            if vbest > best_exit[k]:
+                best_exit[k] = vbest
+                best_exit_at[k] = i * L + jbest
+        for i in range(C):
+            n = lengths[i]
+            for j in range(L):
+                if j < n:
+                    a = V[i, (j - 1) % n]
+                    b = V[i, (j - 2) % n] - SKIP
+                else:
+                    a = NEG
+                    b = NEG
+                c = V[i, j] - STAY
+                # argmax over (advance, skip, stay): the first of the highest
+                ch, best = 0, a
+                if b > best:
+                    ch, best = 1, b
+                if c > best:
+                    ch, best = 2, c
+                newV[i, j] = best
+                back[t, i, j] = ch
+        for i in range(C):
+            k = tune_of[i]
+            src = pre - ENTER if k == 0 else best_exit[k - 1]
+            if src > newV[i, 0]:
+                newV[i, 0] = src
+                back[t, i, 0] = 3
+                enter_from[t, k] = -1 if k == 0 else best_exit_at[k - 1]
+        for i in range(C):
+            n = lengths[i]
+            for j in range(L):
+                V[i, j] = newV[i, j] + emit[i, t, j] if j < n else NEG
+        out = best_exit[n_tunes - 1] - LEAVE + CHANGE
+        if post >= out:
+            post = post + NOISE
+            post_from[t] = -1
+        else:
+            post = out + NOISE
+            post_from[t] = best_exit_at[n_tunes - 1]
+        pre = pre + NOISE
+    return V, back, enter_from, post_from, post
+
+
+def follow_reference(heard, chains, n_tunes):
+    """`follow` as first written, a loop over the chains at every slot: kept
+    as the reference the vectorised `follow` is tested against."""
     T = len(heard)
     C = len(chains)
     L = max(len(c.form) for c in chains)
@@ -192,6 +296,10 @@ def follow(heard, chains, n_tunes):
             post, post_from[t] = out + NOISE, best_exit_at[n_tunes - 1]
         pre = pre + NOISE
         V = newV
+    return _trace(V, back, enter_from, post_from, post, chains, tune_of, lengths, L, n_tunes, T)
+
+
+def _trace(V, back, enter_from, post_from, post, chains, tune_of, lengths, L, n_tunes, T):
     # trace back
     path_state = np.full(T, -1, dtype=np.int64)
     path_pos = np.full(T, -1, dtype=np.int64)

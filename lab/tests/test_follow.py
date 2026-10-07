@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from lab.analysis.follow import Chain, boundaries, follow, heard_slots, slot_grid
+from lab.analysis.follow import Chain, boundaries, follow, follow_reference, heard_slots, slot_grid
 
 
 def _tune(seed, n=64):
@@ -43,3 +43,25 @@ def test_a_tune_the_session_plays_in_its_own_key_is_moved_there():
     (written,) = chains_for(0, [(1, "Amixolydian", form)])
     (moved,) = chains_for(0, [(1, "Amixolydian", form)], session_key="Dmixolydian")
     assert moved.shift == 5 and list(moved.form[:3]) == [(p + 5) % 12 for p in written.form[:3]]
+
+
+def test_the_vectorised_path_is_the_loops_path():
+    """`follow` steps every chain at once; `follow_reference` loops over them.
+    Random sets of two to four tunes, several settings and keys each, heard
+    with noise and gaps: the same path, positions and settings."""
+    rng = np.random.default_rng(11)
+    for trial in range(25):
+        n_tunes = int(rng.integers(2, 5))
+        chains, heard = [], []
+        for k in range(n_tunes):
+            for s in range(int(rng.integers(1, 4))):
+                n = int(rng.integers(24, 64))
+                form = rng.integers(-1, 12, n).astype(np.int8)
+                chains.append(Chain(tune=k, setting_id=100 * k + s, form=form, last_bar=8))
+            played = chains[-1].form
+            heard += list(np.tile(played, 2)[: int(rng.integers(30, 90))])
+        heard = np.array([-1] * 10 + heard + [-1] * 10, dtype=np.int8)
+        noisy = np.where(rng.random(len(heard)) < 0.15, rng.integers(-1, 12, len(heard)), heard).astype(np.int8)
+        a = follow(noisy, chains, n_tunes)
+        b = follow_reference(noisy, chains, n_tunes)
+        assert np.array_equal(a[0], b[0]) and np.array_equal(a[1], b[1]) and a[2] == b[2], trial

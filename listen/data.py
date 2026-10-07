@@ -1,6 +1,8 @@
 """The data the listening service needs that is not in the repo: the session's
 repertoire index, the whole corpus's index and the aligner's sequences, built
-by the lab (`lab index`, `corpus.sequences`), about 76 MB. Kept in the
+by the lab (`lab index`, `corpus.sequences`), about 76 MB; and since
+2026-10-07 the popular tunes (a session's second tier) and thesession.org's
+dump (`tunes.csv`, 18 MB, for following a found set), about 95 MB in all. Kept in the
 recordings bucket under LISTEN_DATA_PREFIX and fetched at start into
 LAB_DATA_DIR when not already there. The tune-ness model is in the repo
 (lab/configs/tuneness.json).
@@ -20,6 +22,10 @@ FILES = [
     "index/all-n6-folded-p2i2.pkl",
     "index/all-n6-folded-p2i2.meta.json",
     "index/sequences-all-p2-v1.pkl",
+    # the popular tunes, a session's second tier (spec 053, the tiers)
+    "corpus/tune_popularity.csv",
+    # thesession.org's dump, for following a found set's tunes (find_tunes)
+    "corpus/tunes.csv",
 ]
 PREFIX = os.environ.get("LISTEN_DATA_PREFIX", "listen-data/v1/")
 

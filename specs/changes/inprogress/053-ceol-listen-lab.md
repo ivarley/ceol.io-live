@@ -2515,6 +2515,129 @@ tunes) and The Porthole Of The Kelp. Compute +3% a step. So the production
 design costs nothing here and needs no index per session; The Duke Of Leinster
 (112, first played that night) is still not reached.
 
+**Confidence that means what it says** (2026-10-07). The listener will log
+tunes itself, so each logged tune needs the chance it is right, shown where a
+person checks it. The decoder's belief is not that chance: of the tunes it
+held at 0.99 or more, 0.8% were wrong, and the 108 wrong or extra tunes of ten
+nights' blind drafts (nine nights and 136, with the session's history and as a
+new session; 1,581 tunes) mostly sat at 0.7-1.0. `analysis.confidence` fits a
+logistic model on each drafted tune's belief (median and 10th percentile while
+shown), how steadily it was shown, its length, its tunebook count, whether it
+is outside the session and the stretch's tune-ness, against the labels
+(thesession.org duplicates counted as one, `lab/configs/same_tunes.json`).
+Scored leaving each night out, it is honest where it matters: said under 50%,
+14% right (99 tunes); 50-70%, 57% (21); 70-90%, 70% against 82% said (37, the
+one band a little overconfident); 90-97%, 100% (43); 97-99%, 97% (102); 99% and
+over, 100% (1,279). Brier 0.018 against belief's 0.051. Under 70 it flags 120
+tunes holding 94 of the 108 wrong ones (belief under 0.7 flagged 17). Length
+and belief carry most of it; popular tunes come out slightly less sure (their
+look-alikes are popular too) and tunes outside the session slightly more
+(what reaches the log from outside has beaten the session's own). Model 1 is
+`lab/configs/confidence.json`; drafts carry each tune's features and `p_right`
+(0-99), and `--apply` sends them as the log row's `confidence` with
+`confidence_model` "listen-1" (schema 060, spec 050 "A machine's guesses"), so
+the segmenter asks for a check on every one under 100. Refitting with more
+labelled nights is a new version; a stored confidence keeps the version that
+made it.
+
+**Following, profiled and made faster** (2026-10-07). Following set starts
+(`follow_drafts`) is the slow part of drafting a night, and the part a server
+would run with no caches. Profiled on night 134 with an empty transcription
+cache and the models on the CPU: 9.5 s a set, of which Basic Pitch
+re-transcribing the set 71% (its note-making alone 40%: the library's
+"melodia trick" scanned the whole frames-by-pitches matrix for the loudest
+energy left before every note it followed, 570,741 scans on six sets), the
+Viterbi 17% and the tempo map 9%. Two exact changes: the melodia trick sorts
+the candidates once (energy is only ever zeroed, so the loudest left is the
+first not yet zeroed; the library's notes on random activations, tied ones
+and five minutes of 112, 2.17 s -> 0.06 s), and the Viterbi's slot-by-slot
+step is compiled with numba (the same path as the loop on 25 random sets).
+Old against new on 134 and 132, each with an empty cache: every start the
+same; 36 -> 19 s and 16 -> 9 s with warm models. What is left on 134: the tempo
+map 12.5 s, the Viterbi 3.7 s, transcription (cached here; about 2.3 s a set
+uncached). Not adopted: the tempo map reading one onset envelope for the whole
+span instead of one per window (`pulse.SHARED_ONSET`, off), about 8 s a night
+faster but starts within 1 s 600 -> 596 of 744 on ten nights (better 9, worse
+13, p 0.52); no harm measured, no reason to take it. The larger lever, not
+yet tried: reusing the listener's own transcription instead of transcribing
+each set again.
+
+**A second opinion over the whole tune** (2026-10-07, one case). Night 132,
+checked by the player: 22 of 23 named right; the one wrong, drafted as
+Cregg's Pipes (a reel) between two polkas at 3%, was Sord Cholmcille (8549,
+23 tunebooks, never played at the session), played cleanly. The listener led
+with it only for its last 16 s (0.98-1.00), after a minute of The Pigeon On
+The Gate, Paudeen O'Rafferty and Cregg's Pipes, and drafting took the longest
+run. Looked up over its whole stretch as the bench does (three trackers, the
+whole corpus, the aligner on a 300-tune shortlist) it comes first, narrowly:
+0.540 against a march's 0.532 over the labelled span, 0.545 against a polka's
+0.525 over the drafted one; over its first 30 s it is 25th. To measure: a
+second-opinion pass over each drafted tune's whole stretch, with the
+neighbours' tune type as a preference (the player: "contiguous music between
+two polkas, so it's very unlikely to be a reel"), wrong names fixed against
+right ones broken on every labelled night.
+
+**Night 134, logged by the listener and checked** (2026-10-07). A 1.9-hour
+night never logged, never tuned on: the listener over its audio (merged
+shortlists, the session's history before the night), drafted blind, applied
+to the log with model 1's confidence, then checked by the player in the
+segmenter. 43 of 44 named right; the one wrong, The Boy In The Gap for The
+Piper On Horseback, was the only tune under 95% (72%). Starts within 3 s for
+40 of the 44; four 13-22 s off (Music For A Found Harmonium +21.5 s; Cronin's
+and Coleman's Cross +13 s, two of the three sets following could not read;
+Moll Roe -12.8 s). The player's call from it: confidence shown in bands of 10,
+a 99 as 100, and only the truly uncertain (shown at 80% or under) highlighted
+and counted (spec 050, "A machine's guesses").
+
+**A brand-new session, nine nights** (2026-10-07). The same nine nights
+blind, as a session that has never logged a tune would get them (`lab drafts
+--blind --new-session`): merged shortlists with popular tunes (>= 100
+tunebooks, 2,320) in place of the session's own, and no session keys for
+following. Against the same runs with the session's history before each
+night, both drafted on today's code: named right 662 -> 654 of 689; wrong
+or extra tunes 39 -> 58; tune by tune better 2, worse 19 (p 0.0002). The
+losses split between the 31 labelled tunes under 100 tunebooks (better 0,
+worse 9, p 0.004: Din Tarrant's, The New Leaf, The Star Of Ireland, Jim
+Keefe's, Barbara Needham's, Pop Polka #2, The Ballinamore, The Bridge Of
+Athlone, The Piper On Horseback) and popular tunes (better 2, worse 10, p
+0.04). The popular ones are mostly confident confusions between look-alikes
+that the session's history had settled: Larry Redican's Mother as The Whinny
+Hills Of Leitrim (0.99, on two nights), Cooley's Delight as The Morning
+Lark, O'Connell's Trip To Parliament and The Floating Crowbar as The Spike
+Island Lasses, The New Custom House as The Broken Pledge. With 2,320 tunes
+preferred, a tune's look-alike is preferred as much as it is. So a new
+session works (95% of the labelled tunes are popular, and 654 of 689 named
+right is usable), but the history is worth about 1% of names and a third of
+the wrong ones. How fast a session earns it: of each night's tunes, the
+session had logged 16% in its last night, 48% in its last 4, 62% in its last
+8, 87% in its last 32 and 97% in all 200.
+
+**A young session, and the production rule** (2026-10-07). The same nine
+nights as a session that has logged only its last 8 nights (about 300 tunes),
+three ways, against the full history (662 named right, 39 wrong or extra) and
+a brand-new session (654, 58):
+
+| the session knows | named right / 689 | wrong or extra |
+|---|---|---|
+| its full history | 662 | 39 |
+| its last 8 nights, popular tunes a second tier (half the outside discount) | 659 | 48 |
+| its last 8 nights + popular tunes as one tier | 654 | 58 |
+| popular tunes only (brand new) | 654 | 58 |
+| its last 8 nights only | 644 | 69 |
+
+The tiered young session against a brand-new one: better 13, worse 6 (p 0.17),
+against the full history better 7, worse 17 (p 0.06). One tier changes
+nothing (a young session's tunes are nearly all popular already, and the
+union is 2,341 tunes against 2,320); the history alone is worse than knowing
+nothing, because it lacks the tunes it has not yet heard. So production's
+rule is the tiers: the session's own tunes first, popular ones second (half
+the discount of an outside tune), everything else last; a session with no
+history has popular tunes as its own. What a player can be told, from this
+one session: with no history about 95 in 100 tunes are named right; after
+about eight nights logged a sixth fewer wrong names; with a long history a
+third fewer. (`lab drafts --merged --history-nights K --popular tier`;
+`--nu-partly` is untuned at 0.5.)
+
 **Negative: tempo evidence step by step** (2026-10-05). Each 4 s step, each
 candidate's aligner score less its type's cost for the beat over the last
 12 s (analysis.tempo: up to 0.06, none under pulse strength 0.25; fitted
@@ -2633,6 +2756,49 @@ segmented blind; item 3 the follower). Open, in rough order:
   container the libraries see the host's cores, so it now holds them to the
   container's budget (lab/tools/threads.py), logs it, and each step reports its
   time by part. What Render does is known only once that is deployed.
+- **(2026-10-06) The live step on Render, measured.** Render's container sees
+  8 host cores (and CPU affinity of 8) but has a 2-CPU quota, and it ran the
+  service as two uvicorn workers (WEB_CONCURRENCY). The libraries are now held
+  to 2 threads and the service runs one worker (WEB_CONCURRENCY=1; two workers
+  doubled the models in memory, shared the 2 CPUs, and once raced each other
+  fetching the data, failing a deploy). A 4-minute real-time stream of 112,
+  one worker: a step a median 1,480 ms (was 2.0-3.2 s), states a median 2.0 s
+  after their audio, peak memory 1.8 GB. By part: PESTO 520 ms (35%), the
+  shortlist and aligner 223, the attack scan over the last 24 s 178, Basic
+  Pitch 122, PESTO's notes 116, the beat estimate over 24 s 91, the beat and
+  music-detector features 86, yin and its notes about 85. Render runs this code
+  4-6 times slower than the laptop. Levers: without PESTO live, about -640 ms
+  (bench 0.942 -> 0.937, better 3 worse 6, p 0.51); the attack scan and beat
+  estimate worked out on the new 4 s only, not the last 24 s again, about -250
+  ms and no change in results. Together about 0.6 s a step, some 15% of a CPU a
+  night, so 4-5 nights at once on this plan.
+- **(2026-10-06) Listening on the phone: the plan, and the first checks.** The
+  player's direction for scaling: push to the phone what can go there, rather
+  than drop a tracker live. The split: the phone runs the three trackers, turns
+  pitch into notes, and works out the beat and the music-detector features,
+  sending a few kilobytes of notes and features each 4 s instead of 88 KB/s of
+  audio (the phone records the full audio for upload anyway; the stream was
+  only for the meter). The server keeps the shortlist over the whole corpus,
+  the aligner and the decoder, about 250 ms a step on Render with no audio work,
+  and the corpus (over a gigabyte) never goes to the phone. Checks so far:
+  - **PESTO converts to Core ML** (`python -m lab coreml`): its constant-Q
+    spectrum rebuilt on magnitudes (Core ML has no complex numbers), the
+    network as is, the roll and reduction to pitch outside the model. On 6 s of
+    112, every one of 599 frames within 0.000 semitones of PyTorch; 32 ms per
+    6 s on a Mac's Neural Engine/GPU, 66 ms Core ML on its CPU, 177 ms PyTorch
+    on its CPU (Render runs 520 ms a step).
+  - **Basic Pitch's own Core ML model** gives the same activations as the ONNX
+    model the server runs, to the last digit (30 s of 112, all 151 notes the
+    same), so the lab's Mac numbers and the server's agree too; 145 ms per 30
+    s Core ML, 198 ms ONNX, on the Mac.
+  - **To port to Swift**: yin, pitch to notes, the beat and attack estimates,
+    the key filter, grid snapping, the music-detector features, about 1,000
+    lines of Python, leaning on five librosa functions (yin, RMS, STFT, onset
+    strength, onset detection) that Accelerate covers. Floating point will not
+    match Python bit for bit, so agreement is to be checked against fixtures
+    the lab writes (audio in, notes out), with a tolerance.
+  - Still to measure: the phone's own speed, battery and heat over three hours,
+    from the app. Next: the notes-in wire for the service, and the fixtures.
 - **(2026-10-04) Loudness, relative to the night.** Absolute loudness was taken
   out of tune-ness after a test of laptop speakers recorded through a phone,
   which says nothing about a phone on a pub table (the player's correction).
@@ -2649,6 +2815,17 @@ segmented blind; item 3 the follower). Open, in rough order:
   hiding the repertoire: names right with the repertoire, with the whole corpus
   and no prior, and with tunebook tiers, the threshold and penalty swept on
   the labels. It will flatter a session that plays many obscure tunes.
+- **A second opinion over the whole tune** (to do, 2026-10-07; see the entry
+  of that name above). After drafting, look each drafted tune up again over
+  its whole stretch (three trackers, the whole corpus, the aligner on a
+  300-tune shortlist, as the bench does), with the neighbouring tunes' type as
+  a preference ("contiguous music between two polkas is very unlikely to be a
+  reel"), and change the name only where the second opinion disagrees
+  clearly. One case so far (night 132, Sord Cholmcille: first by 0.540 to
+  0.532 over its labelled span, 25th over its first 30 s). Measure on every
+  labelled night (nine, 136, 134, 132): names fixed against names broken. The
+  second opinion agreeing or not is also a candidate feature for the
+  confidence model (version 2, refitted with 132 and 134).
 - **Too short to be a tune:** a minimum duration before a detection counts,
   the player's rule for melodic noodling, which tune-ness leaves at 50-70%
   of its chunks.

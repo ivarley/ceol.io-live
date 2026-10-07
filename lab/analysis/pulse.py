@@ -140,7 +140,11 @@ def estimate_pulse(y, sr, hop=HOP):
     half or in thirds. Then the grid, which is the beat divided by whichever
     won.
     """
-    onset = onset_envelope(y, sr, hop=hop)
+    return pulse_from_onset(onset_envelope(y, sr, hop=hop), sr, hop=hop)
+
+
+def pulse_from_onset(onset, sr, hop=HOP):
+    """`estimate_pulse` from an onset envelope already worked out."""
     if onset.size < 64:
         return None
     ac = _autocorrelation(onset)
@@ -279,7 +283,15 @@ def attack_times_ms(y, sr, hop=HOP, delta=0.06):
     return np.asarray(frames, dtype=float) * hop * 1000.0 / sr
 
 
-def tempo_map(y, sr, window_s=20.0, hop_s=10.0, hop=HOP):
+# tempo_map's windows read slices of one onset envelope over the whole span
+# rather than each working its own out (the span's audio three times over).
+# Not the same numbers: an envelope's floor is 80 dB under its loudest frame,
+# the span's rather than the window's, and the frames at a window's edges see
+# the audio beyond it. Measured before being made the default (spec 053).
+SHARED_ONSET = False
+
+
+def tempo_map(y, sr, window_s=20.0, hop_s=10.0, hop=HOP, shared_onset=None):
     """How the eighth note changes through a span -> {t_ms, period_ms, grouping}.
 
     One estimate for a whole segment is both blunt and, on at least one reel,
@@ -298,7 +310,9 @@ def tempo_map(y, sr, window_s=20.0, hop_s=10.0, hop=HOP):
     `strength` is each window's pulse strength, so a caller can tell a window
     of music from one of chat between tunes, whose "tempo" is noise.
     """
-    whole = estimate_pulse(y, sr, hop=hop)
+    shared = SHARED_ONSET if shared_onset is None else shared_onset
+    env = onset_envelope(y, sr, hop=hop) if shared else None
+    whole = pulse_from_onset(env, sr, hop=hop) if shared else estimate_pulse(y, sr, hop=hop)
     if not whole:
         return None
     n = y.size
@@ -309,7 +323,10 @@ def tempo_map(y, sr, window_s=20.0, hop_s=10.0, hop=HOP):
     while start < n:
         end = min(n, start + width)
         if end - start >= int(4.0 * sr):
-            local = estimate_pulse(y[start:end], sr, hop=hop)
+            if shared:
+                local = pulse_from_onset(env[start // hop:end // hop], sr, hop=hop)
+            else:
+                local = estimate_pulse(y[start:end], sr, hop=hop)
             if local:
                 # A window that disagrees by a factor is an octave error, not
                 # a tempo change; fold it back rather than letting it bend the

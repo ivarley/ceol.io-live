@@ -96,3 +96,51 @@ def test_pesto_band_is_applied_at_the_note_step():
     notes = fe.notes_from_track(times, f0, np.ones(60))
     assert [n["midi"] % 12 for n in notes] == [2]
     assert "fmin" not in fe.note_params() and "fmin" not in fe.track_params()
+
+
+def test_basic_pitch_note_making_sorted_once_gives_the_librarys_notes():
+    """frontends.basicpitch.output_to_notes_polyphonic, the melodia trick with
+    one sort instead of a scan per note, against basic_pitch's own: the same
+    notes in the same order, on random activations (some with ties) and on
+    the model's output for a minute of a night when the audio is here."""
+    import numpy as np
+    import pytest
+
+    pytest.importorskip("basic_pitch")
+    from basic_pitch import note_creation as nc
+
+    from lab.frontends.basicpitch import output_to_notes_polyphonic as fast
+
+    library = getattr(nc, "_library_output_to_notes_polyphonic", nc.output_to_notes_polyphonic)
+    kw = dict(onset_thresh=0.5, frame_thresh=0.3, min_note_len=5, infer_onsets=True, max_freq=1400.0,
+              min_freq=160.0, melodia_trick=True)
+    rng = np.random.default_rng(3)
+    cases = []
+    for quantise in (None, 0.05):
+        frames = np.clip(rng.normal(0.25, 0.2, (600, 88)), 0, 1)
+        onsets = np.clip(rng.normal(0.2, 0.2, (600, 88)), 0, 1)
+        if quantise:
+            frames, onsets = np.round(frames / quantise) * quantise, np.round(onsets / quantise) * quantise
+        cases.append((frames.astype(np.float32), onsets.astype(np.float32)))
+    try:
+        import soundfile as sf
+
+        from lab import paths
+        from lab.frontends.basicpitch import _model
+
+        y, _ = sf.read(paths.wav_path(112), start=22050 * 1500, frames=22050 * 60, dtype="float32")
+        import tempfile
+
+        from basic_pitch.inference import run_inference
+
+        with tempfile.NamedTemporaryFile(suffix=".wav") as f:
+            sf.write(f.name, y, 22050)
+            out = run_inference(f.name, _model())
+        cases.append((out["note"], out["onset"]))
+    except Exception:
+        pass
+    for frames, onsets in cases:
+        a = library(frames.copy(), onsets.copy(), **kw)
+        b = fast(frames.copy(), onsets.copy(), **kw)
+        assert [tuple(map(float, e)) for e in a] == [tuple(map(float, e)) for e in b]
+        assert len(a) > 5

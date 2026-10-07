@@ -132,7 +132,7 @@ class Models:
 
 class Listener:
     def __init__(self, out_dir, models=None, rule_out_s=30.0, audio_name="audio.wav", keep_s=None,
-                 session_tunes=None):
+                 session_tunes=None, second_tier=None, nu_partly=0.0):
         from lab.bench.stream import ChunkScorer, Decoder
 
         m = models or Models()
@@ -144,9 +144,14 @@ class Listener:
         # the follower's live configuration (lab/configs/follower.json)
         if m.merged:
             own = set(session_tunes) if session_tunes else m.popular
-            self.shortlist_sets = own
+            # `second_tier` (popular tunes, for a session with a short history):
+            # shortlisted with the session's own, discounted by `nu_partly` of
+            # an outside tune's discount
+            partly = (set(second_tier) - own) if second_tier else None
+            self.shortlist_sets = own | partly if partly else own
             self.scorer = ChunkScorer(m.fallback, m.aligner, window_ms=6000,
-                                      shortlists=[(None, 100), (own, 100)], preferred=own)
+                                      shortlists=[(None, 100), (self.shortlist_sets, 100)], preferred=own,
+                                      partly=partly)
         else:
             self.shortlist_sets = None
             self.scorer = ChunkScorer(m.index, m.aligner, window_ms=6000, fallback_index=m.fallback,
@@ -154,7 +159,7 @@ class Listener:
         # tune-ness (spec, "Is this a tune at all?") and the charge on hubs
         self.tuneness = m.tuneness
         self.decoder = Decoder(nu=0.05, gamma=self.tuneness.meta["gamma"],
-                               kappa=self.tuneness.meta["kappa"], n_settings=m.n_settings)
+                               kappa=self.tuneness.meta["kappa"], n_settings=m.n_settings, nu_partly=nu_partly)
         self.decoder.reset()
         self.tracks = {fe.name: ([], [], []) for fe in self.frontends}
         self.frames_keep_ms = None if keep_s is None else 60000
