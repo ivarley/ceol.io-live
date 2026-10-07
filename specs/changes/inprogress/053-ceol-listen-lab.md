@@ -2540,6 +2540,18 @@ the segmenter asks for a check on every one under 100. Refitting with more
 labelled nights is a new version; a stored confidence keeps the version that
 made it.
 
+**Night 134, logged by the listener and checked** (2026-10-07). A 1.9-hour
+night never logged, never tuned on: the listener over its audio (merged
+shortlists, the session's history before the night), drafted blind, applied
+to the log with model 1's confidence, then checked by the player in the
+segmenter. 43 of 44 named right; the one wrong, The Boy In The Gap for The
+Piper On Horseback, was the only tune under 95% (72%). Starts within 3 s for
+40 of the 44; four 13-22 s off (Music For A Found Harmonium +21.5 s; Cronin's
+and Coleman's Cross +13 s, two of the three sets following could not read;
+Moll Roe -12.8 s). The player's call from it: confidence shown in bands of 10,
+a 99 as 100, and only the truly uncertain (shown at 80% or under) highlighted
+and counted (spec 050, "A machine's guesses").
+
 **A brand-new session, nine nights** (2026-10-07). The same nine nights
 blind, as a session that has never logged a tune would get them (`lab drafts
 --blind --new-session`): merged shortlists with popular tunes (>= 100
