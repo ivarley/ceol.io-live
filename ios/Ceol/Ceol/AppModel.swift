@@ -170,6 +170,12 @@ final class AppModel {
                 NightStore.clearAll()
             }
             if let s = UserDefaults.standard.string(forKey: "CeolOpenURL"), let url = URL(string: s) { pendingLink = url }
+            // -CeolTab me: start on that tab (screenshots of one screen).
+            if let t = UserDefaults.standard.string(forKey: "CeolTab"),
+               let start = AppTab.allCases.first(where: { "\($0)" == t })
+            {
+                tab = start
+            }
         #endif
         // An obsolete build is told so before anything else. If the server can't be
         // reached, launch anyway: being offline is not a reason to lock the app.

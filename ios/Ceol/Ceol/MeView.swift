@@ -83,16 +83,16 @@ struct MeView: View {
                 HStack(alignment: .center, spacing: 16) {
                     InitialsAvatar(first: profile.firstName, last: profile.lastName)
                     VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 10) {
-                            Text("\(profile.firstName) \(profile.lastName)")
-                                .font(.ceol(size: 24, weight: .semibold, relativeTo: .title2))
-                                .foregroundStyle(CeolTokens.textColor)
-                                .accessibilityIdentifier("me.name")
-                            if user?.isSystemAdmin == true {
-                                Text("ADMIN").font(.ceolItalic(size: 12)).tracking(0.8)
-                                    .padding(.horizontal, 10).padding(.vertical, 3)
-                                    .background(CeolTokens.primaryFill, in: Capsule())
-                                    .foregroundStyle(.white)
+                        // The badge sits beside the name when both fit, else under it, so a
+                        // long name or a long badge ("BAINISTEOIR") never breaks a word.
+                        ViewThatFits(in: .horizontal) {
+                            HStack(spacing: 10) {
+                                nameText("\(profile.firstName) \(profile.lastName)").lineLimit(1)
+                                adminBadge(user)
+                            }
+                            VStack(alignment: .leading, spacing: 4) {
+                                nameText("\(profile.firstName) \(profile.lastName)").fixedSize(horizontal: false, vertical: true)
+                                adminBadge(user)
                             }
                         }
                         let line = [user.map { "@\($0.username)" }, place.isEmpty ? nil : place].compactMap { $0 }
@@ -103,6 +103,7 @@ struct MeView: View {
                     Spacer(minLength: 4)
                     Button("Edit") { editing = true }
                         .font(.ceol(size: 17, weight: .medium)).foregroundStyle(CeolTokens.primary)
+                        .lineLimit(1).fixedSize()
                         .accessibilityIdentifier("me.edit")
                 }
                 KitGroup {
@@ -224,6 +225,24 @@ struct MeView: View {
 
     /// Instruments on one line; when they don't fit, "Banjo, +2 more", and a tap shows
     /// them all.
+    private func nameText(_ name: String) -> some View {
+        // A name is data: shown as entered, never looked up in the catalog.
+        Text(verbatim: name)
+            .font(.ceol(size: 24, weight: .semibold, relativeTo: .title2))
+            .foregroundStyle(CeolTokens.textColor)
+            .accessibilityIdentifier("me.name")
+    }
+
+    @ViewBuilder private func adminBadge(_ user: User?) -> some View {
+        if user?.isSystemAdmin == true {
+            Text("ADMIN").font(.ceolItalic(size: 12)).tracking(0.8)
+                .lineLimit(1).fixedSize()
+                .padding(.horizontal, 10).padding(.vertical, 3)
+                .background(CeolTokens.primaryFill, in: Capsule())
+                .foregroundStyle(.white)
+        }
+    }
+
     @ViewBuilder private func instrumentsRow(_ instruments: [String]) -> some View {
         if instruments.isEmpty {
             KitRow(tr("Instruments"), value: tr("None yet"), muted: true)
