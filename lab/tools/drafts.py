@@ -476,6 +476,171 @@ def tidy(drafts):
     return drafts
 
 
+UNSURE_UNDER = 85        # p_right under this is shown at 80% or under: unsure (analysis.confidence.CHECK_UNDER)
+RUN_GAP_MS = 2000        # back to back: the next tune starts within this of the last one's end
+UNSURE_PIECE_MS = 45000  # an unsure piece shorter than this is absorbed into its run (a fragment, not a tune)
+
+
+def consolidate_unsure(drafts, states, duration_ms, model, log=print, min_piece_ms=UNSURE_PIECE_MS,
+                       naming="longest"):
+    """The player's rule (2026-10-08): a confident name stands, at once; but
+    unsure ones (shown at 80% or under) must not flip-flop. A run of back-to-
+    back unsure tunes in one set, with no break between them, is one tune whose
+    name is the best guess over the whole run: the tune with the most belief
+    summed over every step in it, not whichever name flickered last. Needs
+    each draft's p_right (from `model`); the merged tune's features and
+    p_right are worked out again. -> drafts.
+
+    `min_piece_ms`: only a piece shorter than this is absorbed into its run;
+    two longer unsure tunes side by side are a real changeover and stay apart
+    (None: every unsure run becomes one tune). `naming`: "longest" (the
+    longest piece's name) or "mass" (the most belief over the merged stretch).
+
+    Measured on thirteen labelled nights (spec 053, "Unsure runs as one
+    tune"): pieces under 45 s, the longest piece's name: wrong or extra tunes
+    55 -> 40, tunes to check 84 -> 64, labelled tunes named right 883 -> 881
+    (fixed 0, lost 2: Jackson's and The Bunch Of Green Rushes, real tunes played
+    once through, under 45 s); every unsure run merged by belief lost 4."""
+    from lab.analysis.confidence import features
+
+    ds = sorted(drafts, key=lambda d: d["start_ms"])
+    ends = {}
+    for i, d in enumerate(ds):
+        nxt = ds[i + 1]["start_ms"] if i + 1 < len(ds) else duration_ms
+        ends[id(d)] = min(d["end_ms"] or nxt, nxt)
+    unsure = [(d.get("p_right") is not None and d["p_right"] < UNSURE_UNDER) for d in ds]
+    out, i, merged = [], 0, 0
+    while i < len(ds):
+        j = i
+        while (unsure[i] and j + 1 < len(ds) and unsure[j + 1] and ds[j + 1]["set"] == ds[i]["set"]
+               and ds[j + 1]["start_ms"] - ends[id(ds[j])] < RUN_GAP_MS):
+            j += 1
+        if j == i:
+            out.append(ds[i])
+            i += 1
+            continue
+        run = ds[i:j + 1]
+        if min_piece_ms is None:
+            groups = [run]
+        else:
+            # each long piece is a tune; a short one joins the long piece before it
+            # (or, leading the run, the one after); a run of short pieces is one tune
+            long_at = [k for k, d in enumerate(run) if ends[id(d)] - d["start_ms"] >= min_piece_ms]
+            if not long_at:
+                groups = [run]
+            else:
+                groups = []
+                for n, k in enumerate(long_at):
+                    lo = 0 if n == 0 else k
+                    hi = long_at[n + 1] if n + 1 < len(long_at) else len(run)
+                    groups.append(run[lo:hi])
+        for run in groups:
+            if len(run) == 1:
+                out.append(run[0])
+                continue
+            m = self_merge(run, ends, states, naming)
+            log(f"unsure run of {len(run)} at {_fmt(run[0]['start_ms'])} "
+                f"({', '.join(d['name'] or '?' for d in run)}) -> {m['name']}")
+            out.append(m)
+            merged += len(run) - 1
+        i = j + 1
+    if merged:
+        # the merged tunes' confidence, over their whole stretch
+        features(out, states, duration_ms)
+        for d in out:
+            d["p_right"] = model.percent(d["features"]) if model else None
+    return out
+
+
+def prefer_set_type(drafts, states, duration_ms, model, log=print):
+    """The player's rule (2026-10-08): an unsure tune of the wrong type for its
+    set is heavily penalised. A set's type is what its confident tunes agree
+    on; an unsure tune (p_right under UNSURE_UNDER) of another type is renamed
+    to the tune of the set's type the listener believed most over its stretch,
+    from the candidates it weighed. Nothing to go by (no confident tune, or
+    confident ones of different types), or no candidate of the set's type: the
+    tune stands. -> drafts, p_right worked out again where any changed.
+
+    Thirteen labelled nights, from their saved states: 6 unsure tunes renamed,
+    all of them wrong before; 3 right after (two Mason's Aprons in sets of
+    reels, Monaghan's for Rip The Calico); none right before made wrong.
+    Labelled tunes named right 883 -> 884."""
+    from lab.analysis.confidence import features
+
+    ds = sorted(drafts, key=lambda d: d["start_ms"])
+    ends = {}
+    for i, d in enumerate(ds):
+        nxt = ds[i + 1]["start_ms"] if i + 1 < len(ds) else duration_ms
+        ends[id(d)] = min(d["end_ms"] or nxt, nxt)
+    low = lambda t: (t or "").lower()  # noqa
+    changed = 0
+    for d in ds:
+        if d.get("p_right") is None or d["p_right"] >= UNSURE_UNDER:
+            continue
+        sure = {low(x.get("type")) for x in ds if x is not d and x["set"] == d["set"]
+                and (x.get("p_right") or 0) >= UNSURE_UNDER and x.get("type")}
+        if len(sure) != 1:
+            continue
+        want = sure.pop()
+        if low(d.get("type")) == want:
+            continue
+        a, b = d["start_ms"], ends[id(d)]
+        mass, info = {}, {}
+        for st in states:
+            if a < st["t_ms"] <= b:
+                for c in st.get("top") or []:
+                    if low(c.get("type")) == want:
+                        mass[c["tune_id"]] = mass.get(c["tune_id"], 0.0) + c["p"]
+                        info.setdefault(c["tune_id"], c)
+        if not mass:
+            continue
+        best = max(mass, key=mass.get)
+        c = info[best]
+        ps = [next((x["p"] for x in st.get("top") or [] if x["tune_id"] == best), 0.0)
+              for st in states if a < st["t_ms"] <= b]
+        shown = [st["t_ms"] for st in states if a < st["t_ms"] <= b and st.get("shown") == best]
+        log(f"{_fmt(a)} {d['name']} ({d.get('type')}) in a set of {want}s -> {c.get('name')}")
+        d.update(tune_id=best, name=c.get("name", d["name"]), type=c.get("type"), outside=bool(c.get("outside")),
+                 conf=round(float(sorted(ps)[len(ps) // 2]), 4) if ps else 0.0,
+                 first_shown_ms=shown[0] if shown else None, last_shown_ms=shown[-1] if shown else None,
+                 how=d.get("how", "") + f", renamed to the set's type ({want})")
+        changed += 1
+    if changed:
+        features(ds, states, duration_ms)
+        for d in ds:
+            d["p_right"] = model.percent(d["features"]) if model else None
+    return ds
+
+
+def self_merge(run, ends, states, naming):
+    """One tune for a run of unsure drafts (consolidate_unsure)."""
+    a, b = run[0]["start_ms"], ends[id(run[-1])]
+    mass, info = {}, {}
+    for st in states:
+        if a < st["t_ms"] <= b:
+            for c in st.get("top") or []:
+                mass[c["tune_id"]] = mass.get(c["tune_id"], 0.0) + c["p"]
+                info.setdefault(c["tune_id"], c)
+    if naming == "longest":
+        longest = max(run, key=lambda d: ends[id(d)] - d["start_ms"])
+        best = longest["tune_id"]
+        info.setdefault(best, {"name": longest["name"], "type": longest.get("type"),
+                               "outside": longest.get("outside")})
+    else:
+        best = max(mass, key=mass.get) if mass else run[0]["tune_id"]
+    shown = [st["t_ms"] for st in states if a < st["t_ms"] <= b and st.get("shown") == best]
+    ps = [next((c["p"] for c in st.get("top") or [] if c["tune_id"] == best), 0.0)
+          for st in states if a < st["t_ms"] <= b]
+    m = dict(run[0])
+    m["conf"] = round(float(sorted(ps)[len(ps) // 2]), 4) if ps else 0.0
+    c = info.get(best, {})
+    m.update(tune_id=best, name=c.get("name", m["name"]), type=c.get("type", m.get("type")),
+             outside=bool(c.get("outside", m.get("outside"))), end_ms=run[-1]["end_ms"],
+             first_shown_ms=shown[0] if shown else None, last_shown_ms=shown[-1] if shown else None,
+             how=m.get("how", "") + f", one of {len(run)} unsure merged")
+    return m
+
+
 FOLLOW_LEAD_MS = 90000    # a set's span for following: from this long before its first tune was shown
 FOLLOW_TAIL_MS = 30000    # ... to this long after its drafted end
 
@@ -627,6 +792,16 @@ def replay(rid, out_path, log=print, transpose=0, merged=False, tempo=False, new
     os.replace(part, out_path)
 
 
+def _excluded_suffix():
+    """A replay's states depend on the settings left out of matching
+    (corpus.exclusions): a replay made with them is kept apart from one made
+    without."""
+    from lab.corpus.exclusions import excluded_settings
+
+    n = len(excluded_settings())
+    return f"-x{n}" if n else ""
+
+
 def add_parser(sub):
     p = sub.add_parser("drafts", help="draft a recording's segments from the phone's meter log")
     p.add_argument("recording", type=int)
@@ -722,7 +897,7 @@ def main(args):
                 + ("-tempo" if args.tempo else "") + ("-new" if args.new_session else "")
                 + (f"-h{args.history_nights}" if args.history_nights else "")
                 + (f"-pop{args.popular}" if args.popular else "")
-                + (f"{args.nu_partly:g}" if args.popular == "tier" else "") + ".jsonl")
+                + (f"{args.nu_partly:g}" if args.popular == "tier" else "") + _excluded_suffix() + ".jsonl")
         log = os.path.join(paths.recording_dir(rid), name)
         if not os.path.exists(log):
             replay(rid, log, transpose="fifths" if fifths else 0, merged=args.merged, tempo=args.tempo,
@@ -755,6 +930,12 @@ def main(args):
         pass
     for d in drafts:
         d["p_right"] = model.percent(d["features"]) if model else None
+    if args.blind and model:
+        dur = int(manifest["recording"]["duration_ms"])
+        # an unsure tune of the wrong type for its set takes the set's type
+        # (prefer_set_type); then unsure names do not flip-flop (consolidate_unsure)
+        drafts = prefer_set_type(drafts, states, dur, model)
+        drafts = tidy(consolidate_unsure(drafts, states, dur, model))
     out = args.out or os.path.join(paths.recording_dir(rid), "drafts.json")
     with open(out, "w") as f:
         json.dump({"recording_id": rid, "followed": not args.no_follow, "blind": args.blind,

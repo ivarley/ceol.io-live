@@ -261,7 +261,9 @@ class Index:
         idx.meta = d["meta"]
         idx.meta["file"] = path
         idx.meta["sha1"] = file_sha1(path)
-        return idx
+        from lab.corpus.exclusions import apply_to_index
+
+        return apply_to_index(idx)
 
 
 def file_sha1(path, block=1 << 20):

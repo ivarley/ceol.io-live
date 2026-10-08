@@ -82,3 +82,50 @@ def test_a_blind_tune_following_squeezes_to_nothing_is_dropped():
                          row(100000, 200000, False, "next")], log=lambda *_: None)
     assert [d["name"] for d in out] == ["real", "next"]
     assert out[0]["first_in_set"]           # it opens the set the squeezed one opened
+
+
+def test_unsure_names_do_not_flip_flop_but_real_tunes_and_sure_ones_stand():
+    """consolidate_unsure: in one set, a short unsure piece is absorbed into its
+    unsure run under the longest piece's name; two long unsure tunes side by side
+    stay two; a confident tune is never merged."""
+    from lab.tools.drafts import consolidate_unsure
+
+    class Model:
+        def percent(self, f):
+            return 50
+
+    def d(t0, t1, tid, p, s=1):
+        return {"start_ms": t0, "end_ms": t1, "tune_id": tid, "name": f"T{tid}", "p_right": p, "set": s,
+                "first_in_set": False, "conf": 0.5, "outside": False}
+
+    states = [{"t_ms": t, "top": [{"tune_id": 1, "p": 0.6, "name": "T1"}], "shown": 1, "tuneness": 1.0}
+              for t in range(4000, 400000, 4000)]
+    drafts = [d(0, None, 1, 60), d(90000, None, 2, 40), d(110000, None, 3, 30),   # 90 s, then 20 s, 20 s pieces
+              d(130000, None, 4, 70), d(230000, None, 5, 99), d(330000, 400000, 6, 60)]
+    out = consolidate_unsure(drafts, states, 400000, Model(), log=lambda *a: None)
+    assert [x["tune_id"] for x in out] == [1, 4, 5, 6]
+    assert out[0]["end_ms"] is None and "merged" in out[0]["how"]
+
+
+def test_an_unsure_tune_of_the_wrong_type_takes_its_sets_type():
+    """prefer_set_type: a set of confident reels; an unsure jig among them is
+    renamed to the reel the listener believed most over its stretch; a set with
+    nothing confident to go by is left alone."""
+    from lab.tools.drafts import prefer_set_type
+
+    class Model:
+        def percent(self, f):
+            return 50
+
+    def d(t0, tid, typ, p, s=1):
+        return {"start_ms": t0, "end_ms": None, "tune_id": tid, "name": f"T{tid}", "type": typ, "p_right": p,
+                "set": s, "first_in_set": False, "conf": 0.5, "outside": False}
+
+    states = [{"t_ms": t, "shown": 2, "tuneness": 1.0,
+               "top": [{"tune_id": 2, "p": 0.6, "type": "jig", "name": "T2"},
+                       {"tune_id": 9, "p": 0.3, "type": "reel", "name": "T9"}]} for t in range(4000, 600000, 4000)]
+    drafts = [d(0, 1, "reel", 99), d(100000, 2, "jig", 40), d(200000, 3, "reel", 95),
+              d(300000, 4, "jig", 40, s=2), d(400000, 5, "reel", 40, s=2)]
+    out = prefer_set_type(drafts, states, 600000, Model(), log=lambda *a: None)
+    assert [x["tune_id"] for x in out] == [1, 9, 3, 4, 5]
+    assert out[1]["type"] == "reel" and "set's type" in out[1]["how"]
