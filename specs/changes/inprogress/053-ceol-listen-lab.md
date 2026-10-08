@@ -2540,6 +2540,25 @@ the segmenter asks for a check on every one under 100. Refitting with more
 labelled nights is a new version; a stored confidence keeps the version that
 made it.
 
+**Negative: a second opinion over whole stretches** (2026-10-08). After
+drafting, look tunes up again over their stretch as the bench does (three
+trackers, the whole corpus, the aligner on a 300-tune shortlist; at most the
+middle 90 s, since whole sets at once took hours). A: each tune under 85%
+renamed to the second opinion's choice, its neighbours' type preferred when
+they agree. B: a run of back-to-back tunes in one set holding one under 85%
+merged into one tune when the whole matched at least as well as its best
+part. On the nights it was meant for and an easy one (112, 115, 132),
+labelled tunes named right, against the drafts: A fixed 2 (Sord Cholmcille
+on 132, one on 115) and broke 3 (two on 112, one on 115); B fixed none and
+broke 8 (six on 112, two on 115), swallowing real tunes into their
+neighbours and not repairing 115's Tuttle's, whose whole stretch did not
+match Tuttle's better than its pieces matched their wrong names. Stopped
+there: on the stretches the listener is unsure of, the bench's lookup is no
+better a judge than the listener. Also neutral: confidence model version 2,
+refitted with 132, 134 and 115 (1,735 tunes, 119 wrong), the same flags and
+catches as version 1 on those nights (Brier 0.0507 against 0.0506 on 115);
+version 1 kept.
+
 **Night 115, the first found on the server, and a harder night** (2026-10-08).
 The first "find the tunes" job in production (recording 115, 3 h 25 min,
 2025-07-24): 84 min listening on Render (2.4x real time), 8 min following 40
@@ -2836,8 +2855,8 @@ segmented blind; item 3 the follower). Open, in rough order:
   hiding the repertoire: names right with the repertoire, with the whole corpus
   and no prior, and with tunebook tiers, the threshold and penalty swept on
   the labels. It will flatter a session that plays many obscure tunes.
-- **A second opinion over the whole tune** (to do, 2026-10-07; see the entry
-  of that name above). After drafting, look each drafted tune up again over
+- **A second opinion over the whole tune** (tried 2026-10-08: negative, see
+  "Negative: a second opinion over whole stretches"; what was planned:) After drafting, look each drafted tune up again over
   its whole stretch (three trackers, the whole corpus, the aligner on a
   300-tune shortlist, as the bench does), with the neighbouring tunes' type as
   a preference ("contiguous music between two polkas is very unlikely to be a
