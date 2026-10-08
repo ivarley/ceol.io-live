@@ -2540,6 +2540,27 @@ the segmenter asks for a check on every one under 100. Refitting with more
 labelled nights is a new version; a stored confidence keeps the version that
 made it.
 
+**Unsure runs as one tune** (2026-10-08). The player: "the 'makes a new
+tune at each change' is super annoying to deal with after the fact. High
+confidence should name as quick as it can, but anything 80% or below should
+resist flip-flopping and should make its best guess over the entire span
+rather than splitting it up." `drafts.consolidate_unsure`, after each tune's
+confidence: in one set, a run of back-to-back unsure tunes (p_right under 85,
+shown at 80% or under; under 2 s apart) has its short pieces (under 45 s)
+absorbed into the long piece before them (or after, leading the run), and
+takes the longest piece's name; two long unsure tunes side by side stay two (a
+real changeover); a confident tune is never touched. From the saved states,
+thirteen labelled nights: wrong or extra tunes 55 -> 40, tunes to check 84 ->
+64, labelled tunes named right 883 -> 881 of 918 (fixed 0, lost 2, p 0.5: both
+real tunes played once through, under 45 s, Jackson's on 112 and The Bunch Of
+Green Rushes on 5). Merging every unsure run whole, named by the most belief
+over it, lost 4 (two real tunes side by side merged, Michael Creamer's and The
+Sailor's Bonnet, Liz Kelly's and Scarce O' Tatties); pieces under 30 s lost 1
+but left 45 wrong. Adopted (blind drafting and the server's job): no names
+gained, a quarter less to clean up, which is what the player asked for. The
+pieces are often The Mason's Apron (three times on 139, once on 140, twice on
+115), a tune the listener falls back on when unsure: to look at.
+
 **Negative: a second opinion over whole stretches** (2026-10-08). After
 drafting, look tunes up again over their stretch as the bench does (three
 trackers, the whole corpus, the aligner on a 300-tune shortlist; at most the

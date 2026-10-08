@@ -67,7 +67,8 @@ def find_tunes(wav_path, models, session_tunes=None, keys=None, progress=None, p
     from lab.analysis.confidence import CHECK_UNDER, ConfidenceModel, features
     from lab.audio.chunks import AudioStore
     from lab.board.board import Board
-    from lab.tools.drafts import drop_squeezed, follow_drafts, infer_log, join_sets, refine_ends, tidy
+    from lab.tools.drafts import (consolidate_unsure, drop_squeezed, follow_drafts, infer_log, join_sets,
+                                  refine_ends, tidy)
     from lab.tools.listen import HOP_MS, Listener
 
     progress = progress or (lambda *a: None)
@@ -137,6 +138,9 @@ def find_tunes(wav_path, models, session_tunes=None, keys=None, progress=None, p
         log("find tunes: no confidence model; the tunes go in without one")
     for d in drafts:
         d["p_right"] = model.percent(d["features"]) if model else None
+    if model:
+        # unsure names do not flip-flop: a run of them is one tune
+        drafts = tidy(consolidate_unsure(drafts, states, duration, model, log=log))
     progress(FINISHING, 1, 1)
     return {
         "drafts": drafts,
