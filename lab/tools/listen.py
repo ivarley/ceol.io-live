@@ -132,7 +132,7 @@ class Models:
 
 class Listener:
     def __init__(self, out_dir, models=None, rule_out_s=30.0, audio_name="audio.wav", keep_s=None,
-                 session_tunes=None, second_tier=None, nu_partly=0.0):
+                 session_tunes=None, second_tier=None, nu_partly=0.0, drop_release_s=None):
         from lab.bench.stream import ChunkScorer, Decoder
 
         m = models or Models()
@@ -166,6 +166,11 @@ class Listener:
         self.tracked_to = 0
         self.next_t = HOP_MS
         self.rule_out_s = rule_out_s
+        # the player's idea (2026-10-08): a tune held at full belief whose belief
+        # then drops has ended (or its set has); let it go at once, for this
+        # long, as a "none of these" tap does, rather than wait for it to fade
+        self.drop_release_s = drop_release_s
+        self._held, self._held_steps = None, 0
         self.banned = {}          # tune -> until (ms of audio)
         self.widen_until = 0
         self.state = {"status": "waiting for audio", "t_ms": 0, "top": [], "none": 1.0, "history": []}
@@ -266,6 +271,8 @@ class Listener:
         if self.scorer.pinned and shown not in self.scorer.pinned:
             self.scorer.pinned = set()
         belief = self.decoder.belief(8)
+        if self.drop_release_s:
+            self._watch_drop(t, dict(belief), NONE)
         none = next((p for s, p in belief if s == NONE), 0.0)
         top = [{"tune_id": int(s), "name": self.names.get(s), "type": self.types.get(s),
                 "p": round(p, 4), "outside": s in set(chunk.get("outside", []))}
@@ -282,6 +289,31 @@ class Listener:
                       "lag_ms": self.store.duration_ms - t, "history": hist[-8:]}
         self._states.write(json.dumps({k: v for k, v in self.state.items() if k != "history"}) + "\n")
         self._states.flush()
+
+    HELD_P, HELD_MS, DROP_P = 0.99, 40000, 0.9
+
+    def _watch_drop(self, t, belief, none_state):
+        """A tune held at HELD_P or more for HELD_MS whose belief falls under
+        DROP_P has ended: ruled out for drop_release_s. Over thirteen labelled
+        nights such a drop was a changeover 59% of the time, a set's end 38%,
+        and mid-tune 3% (26 of 817); it came at 89% of the changeovers."""
+        if self._held is not None:
+            p = belief.get(self._held, 0.0)
+            if p >= self.HELD_P:
+                self._held_steps += 1
+                return
+            if p < self.DROP_P:
+                if self._held_steps * HOP_MS >= self.HELD_MS:
+                    gone = self._held
+                    self.decoder.rule_out([gone])
+                    self.banned[gone] = t + int(self.drop_release_s * 1000)
+                    self.widen_until = t + int(self.drop_release_s * 1000)
+                self._held, self._held_steps = None, 0
+            return
+        for s, p in belief.items():
+            if s != none_state and p >= self.HELD_P:
+                self._held, self._held_steps = s, 1
+                break
 
     def run(self):
         while self.running:

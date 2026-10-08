@@ -739,7 +739,7 @@ def session_tunes_before(rid, last_nights=None):
 
 
 def replay(rid, out_path, log=print, transpose=0, merged=False, tempo=False, new_session=False,
-           history_nights=None, popular=None, nu_partly=0.0):
+           history_nights=None, popular=None, nu_partly=0.0, drop_release_s=None):
     """The listener (lab listen, the service's) run over a recording's audio
     offline, for a night recorded without the phone's meter: its states written
     as a meter log (dir "in"; at_ms is the audio time, there being no screen),
@@ -773,7 +773,8 @@ def replay(rid, out_path, log=print, transpose=0, merged=False, tempo=False, new
         log(f"tempo evidence from labelled tunes by type: {counts}")
     li = Listener(tempfile.mkdtemp(prefix=f"replay-{rid}-"),
                   models=Models(transpose=transpose, merged=merged, tempo=model),
-                  keep_s=120, session_tunes=session, second_tier=second, nu_partly=nu_partly)
+                  keep_s=120, session_tunes=session, second_tier=second, nu_partly=nu_partly,
+                  drop_release_s=drop_release_s)
     part = out_path + ".part"
     started = time.time()
     with open(part, "w") as out:
@@ -830,6 +831,9 @@ def add_parser(sub):
                         "(union) or as a second tier (tier, discounted by --nu-partly of an outside tune's)")
     p.add_argument("--nu-partly", type=float, default=0.5)
     p.add_argument("--out", help="write the drafts here instead of the recording's drafts.json")
+    p.add_argument("--drop-release", type=float,
+                   help="replay letting go of a tune held at full belief, for this many seconds, once its belief "
+                        "drops (Listener drop_release_s)")
     p.add_argument("--tempo", action="store_true",
                    help="replay with tempo evidence (a candidate's type against the beat heard), fitted "
                         "without the recording's own labels; kept as replay-states-...-tempo.jsonl")
@@ -880,7 +884,8 @@ def main(args):
     with open(paths.manifest_path(rid)) as f:
         manifest = json.load(f)
     log = os.path.join(paths.recording_dir(rid), "listen-states.jsonl")
-    if args.blind and (args.new_session or args.history_nights or args.popular or not os.path.exists(log)):
+    if args.blind and (args.new_session or args.history_nights or args.popular or args.drop_release
+                       or not os.path.exists(log)):
         args.replay = True
     if args.replay or not os.path.exists(log):
         if not args.replay:
@@ -897,12 +902,13 @@ def main(args):
                 + ("-tempo" if args.tempo else "") + ("-new" if args.new_session else "")
                 + (f"-h{args.history_nights}" if args.history_nights else "")
                 + (f"-pop{args.popular}" if args.popular else "")
-                + (f"{args.nu_partly:g}" if args.popular == "tier" else "") + _excluded_suffix() + ".jsonl")
+                + (f"{args.nu_partly:g}" if args.popular == "tier" else "") + _excluded_suffix()
+                + (f"-drop{args.drop_release:g}" if args.drop_release else "") + ".jsonl")
         log = os.path.join(paths.recording_dir(rid), name)
         if not os.path.exists(log):
             replay(rid, log, transpose="fifths" if fifths else 0, merged=args.merged, tempo=args.tempo,
                    new_session=args.new_session, history_nights=args.history_nights, popular=args.popular,
-                   nu_partly=args.nu_partly if args.popular == "tier" else 0.0)
+                   nu_partly=args.nu_partly if args.popular == "tier" else 0.0, drop_release_s=args.drop_release)
     states, _, logged = load_log(log)
     names = {r["tune_id"]: r["name"] for r in manifest.get("repertoire", [])}
     if args.blind:
