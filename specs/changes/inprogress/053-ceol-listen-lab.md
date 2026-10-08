@@ -2540,6 +2540,20 @@ the segmenter asks for a check on every one under 100. Refitting with more
 labelled nights is a new version; a stored confidence keeps the version that
 made it.
 
+**An unsure tune takes its set's type** (2026-10-08). The player: use the
+tune type, "in particular to heavily penalize the wrong type if confidence is
+low". `drafts.prefer_set_type`, before the run-merging: a set's type is what
+its confident tunes (85% and up) agree on; an unsure tune of another type is
+renamed to the tune of the set's type the listener believed most over its
+stretch (from the candidates it weighed); nothing to go by, or no candidate of
+that type, and it stands. From the saved states, thirteen labelled nights: 6
+renamed, every one wrong before; 3 right after (The Mason's Apron in a set of
+reels as The Rolling Waves on 139 and as The Cock And The Hen on 140; Monaghan's
+as Rip The Calico on 115), none right before made wrong. With the run-merging:
+labelled tunes named right 883 -> 882 of 918 (merging alone 881), wrong or
+extra tunes 55 -> 39, to check 84 -> 64. Adopted with it (blind drafting and
+the server's job).
+
 **Unsure runs as one tune** (2026-10-08). The player: "the 'makes a new
 tune at each change' is super annoying to deal with after the fact. High
 confidence should name as quick as it can, but anything 80% or below should

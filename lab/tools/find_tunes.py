@@ -68,7 +68,7 @@ def find_tunes(wav_path, models, session_tunes=None, keys=None, progress=None, p
     from lab.audio.chunks import AudioStore
     from lab.board.board import Board
     from lab.tools.drafts import (consolidate_unsure, drop_squeezed, follow_drafts, infer_log, join_sets,
-                                  refine_ends, tidy)
+                                  prefer_set_type, refine_ends, tidy)
     from lab.tools.listen import HOP_MS, Listener
 
     progress = progress or (lambda *a: None)
@@ -139,7 +139,9 @@ def find_tunes(wav_path, models, session_tunes=None, keys=None, progress=None, p
     for d in drafts:
         d["p_right"] = model.percent(d["features"]) if model else None
     if model:
+        # an unsure tune of the wrong type for its set takes the set's type; then
         # unsure names do not flip-flop: a run of them is one tune
+        drafts = prefer_set_type(drafts, states, duration, model, log=log)
         drafts = tidy(consolidate_unsure(drafts, states, duration, model, log=log))
     progress(FINISHING, 1, 1)
     return {
