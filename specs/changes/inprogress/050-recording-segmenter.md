@@ -427,18 +427,26 @@ The left column is sticky above the tune list, so its height *is* the list's
 height — and at full size it filled a phone screen on its own. The header and
 the top of the tape, where the drag handles live, could only be seen by
 scrolling the list back to the very top, which then left room for about two
-tunes. The phone layout (under 900px) is that column giving back ~110px, a
-quarter of it:
+tunes. The phone layout (under 900px) keeps only what marking needs above the
+log — about 310px of it, down from about 500:
 
-- both canvases are a quarter shorter — the tape is read across, not up;
+- the header is one line: the playhead time (so the clock has no row of its
+  own), the placed count, the saving dot, and a ⋯ button. Everything that is
+  not marking waits behind that button: the title and session line, the audio
+  source and the offline copy, Fix and export, speed, zoom and snap, and the
+  "Find the tunes" panel (except on an empty night, where the log has room for
+  it). Opening it pushes the tape down; it is for setting up, not for marking.
+  While the panel is closed, a job that is waiting, running or paused shows as
+  a thin bar just above the mark row, which opens the panel when tapped;
+- both canvases are about half height (92px and 28px) — the tape is read
+  across, not up;
 - the "next up" banner folds into the mark button's own row and drops the set
   number, since the list two inches below already says which set this is;
 - the separate <kbd>E</kbd> button goes. The mark button already covers the
   ordinary case by switching to "End of set" the moment a set's last tune is
   placed, and a whole row for the rarer of the two is a row the list wants
   more. Ending a set you have already scrolled past is a keyboard job now;
-- Undo becomes an icon, and the encode switch moves up beside Fix and export,
-  where "placed" and "the log" give up their words to make room.
+- Undo becomes an icon, and the transport and mark rows are a little shorter.
 
 The breakpoint is read synchronously at init and then followed with a
 `matchMedia` listener, so the tape is never drawn tall and re-drawn short on

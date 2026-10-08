@@ -37,11 +37,11 @@
   // drag starts -- two marks a second apart are two pixels apart at 3-hour zoom.
   let hotEdge = $state(null)
 
-  // A quarter shorter on a phone. Both canvases sit in a sticky column above
+  // Roughly half height on a phone. Both canvases sit in a sticky column above
   // the tune list, so every pixel here is a pixel the list does not get -- and
   // neither view loses anything at this size: the tape is read across, not up.
-  const OVERVIEW_H = $derived(compact ? 42 : 56)
-  const DETAIL_H = $derived(compact ? 126 : 168)
+  const OVERVIEW_H = $derived(compact ? 28 : 56)
+  const DETAIL_H = $derived(compact ? 92 : 168)
   // Grab tolerance. Touch gets far more of it: a fingertip is nowhere near as
   // precise as a cursor, and a 2px line is not a touch target.
   const EDGE_GRAB_PX = 6

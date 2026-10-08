@@ -104,6 +104,11 @@
   let compact = $state(
     typeof window !== 'undefined' && window.matchMedia ? window.matchMedia(COMPACT_QUERY).matches : false,
   )
+  // Phone: everything that is not marking -- the title, the audio source, the
+  // offline copy, Fix and export, speed, zoom and snap, finding the tunes --
+  // waits behind one button, so the tape, the transport and the mark row are
+  // all that stand above the log.
+  let moreOpen = $state(false)
 
   // How much chrome sits above the tool -- the site's fixed header plus the
   // page padding. The phone layout gives the tape and the controls the top of
@@ -1293,7 +1298,7 @@
   <p class="sg-error">{t('No recording payload. Reload the page.')}</p>
 {:else}
   <div class="sg" bind:this={rootEl} style="--sg-top: {topOffset}px">
-    <header class="sg-head">
+    {#snippet title()}
       <div>
         <h1>{recording.label || t('Recording')}</h1>
         <p class="sg-sub">
@@ -1303,36 +1308,103 @@
           {#if recording.clock_offset_ms}· {t('offset {time}', { time: formatTime(recording.clock_offset_ms) })}{/if}
         </p>
       </div>
-      <div class="sg-progress">
-        <span class="sg-count"><strong>{placedCount}</strong> / {tunes.length}{#if !compact}{' ' + t('placed')}{/if}</span>
-        <!-- Always in the DOM, merely invisible when idle. Appearing and
-             disappearing on every mark rewrapped the header, which moved the
-             whole page under a thumb already on its way to +15s. A dot on a
-             phone, where the word would cost the header a line of its own. -->
-        <span
-          class="sg-saving"
-          class:is-on={saving > 0 || queued > 0}
-          class:is-queued={queued > 0}
-          title={queued > 0 ? tn(queued, '{n} mark waiting to sync', '{n} marks waiting to sync') : t('saving')}
-        >{#if queued > 0}{compact ? `${queued}⇡` : t('{n} queued', { n: queued })}{:else}{compact ? '•' : t('saving…')}{/if}</span>
-        <!-- On a phone the encode switch rides up here with the other header
-             controls: down in the options row it was one more line of the
-             sticky column, and it is the one option you reach for when the
-             connection changes rather than while marking. -->
-        {#if compact}{@render audioPicker()}{@render offlineAudio()}{/if}
-        <!-- Fix and export travel together: when the phone header wraps, they
-             move to the next row as a pair rather than stranding "export". -->
-        <span class="sg-actions">
-          <button
-            type="button"
-            class="sg-editlog"
-            onclick={editLog}
-            title={t("Open this night's log in edit mode — you'll come back here, at this moment in the audio")}
-          >✎ {compact ? t('Fix') : t('Fix the log')}</button>
-          <a class="sg-export" href="/api/recordings/{recording.recording_id}/export" target="_blank" rel="noopener">{t('export')}</a>
-        </span>
+    {/snippet}
+    {#snippet count()}
+      <span class="sg-count"><strong>{placedCount}</strong> / {tunes.length}{#if !compact}{' ' + t('placed')}{/if}</span>
+      <!-- Always in the DOM, merely invisible when idle. Appearing and
+           disappearing on every mark rewrapped the header, which moved the
+           whole page under a thumb already on its way to +15s. A dot on a
+           phone, where the word would cost the header room it doesn't have. -->
+      <span
+        class="sg-saving"
+        class:is-on={saving > 0 || queued > 0}
+        class:is-queued={queued > 0}
+        title={queued > 0 ? tn(queued, '{n} mark waiting to sync', '{n} marks waiting to sync') : t('saving')}
+      >{#if queued > 0}{compact ? `${queued}⇡` : t('{n} queued', { n: queued })}{:else}{compact ? '•' : t('saving…')}{/if}</span>
+    {/snippet}
+    {#snippet actions()}
+      <!-- Fix and export travel together, so a wrap never strands "export". -->
+      <span class="sg-actions">
+        <button
+          type="button"
+          class="sg-editlog"
+          onclick={editLog}
+          title={t("Open this night's log in edit mode — you'll come back here, at this moment in the audio")}
+        >✎ {t('Fix the log')}</button>
+        <a class="sg-export" href="/api/recordings/{recording.recording_id}/export" target="_blank" rel="noopener">{t('export')}</a>
+      </span>
+    {/snippet}
+    {#snippet opts()}
+      <div class="sg-opts">
+        <label class="sg-opt">
+          {t('speed')}
+          <select value={speed} onchange={(e) => setSpeed(Number(e.currentTarget.value))}>
+            {#each SPEEDS as s}<option value={s}>{s}×</option>{/each}
+          </select>
+        </label>
+        <label class="sg-opt">
+          {t('zoom')}
+          <select value={zoomMs} onchange={(e) => (zoomMs = Number(e.currentTarget.value))}>
+            {#each ZOOM_LEVELS as z}<option value={z}>{t('{n}s', { n: z / 1000 })}</option>{/each}
+          </select>
+        </label>
+        <label class="sg-opt sg-opt-check">
+          <input type="checkbox" bind:checked={snapEnabled} />
+          {t('snap to onset')}
+        </label>
+        {#if !compact}{@render audioPicker()}{@render offlineAudio()}{/if}
       </div>
-    </header>
+    {/snippet}
+    {#snippet findTunes(variant = 'panel')}
+      <FindTunes
+        {variant}
+        onopen={() => (moreOpen = true)}
+        recordingId={recording.recording_id}
+        tunesCount={tunes.length}
+        listenCount={tunes.filter(isGuess).length}
+        onfound={reloadTunes}
+        ontunes={(list) => adoptTunes(list, cursorTune?.session_instance_tune_id ?? null)}
+      />
+    {/snippet}
+
+    {#if compact}
+      <!-- Phone: one line. Where the playhead is, how far through the night,
+           and the way to everything else. -->
+      <header class="sg-bar">
+        <span class="sg-time">{formatTime(currentMs, { millis: true })}</span>
+        <span class="sg-of">/ {formatTime(durationMs)}</span>
+        <span class="sg-bar-count">{@render count()}</span>
+        <button
+          type="button"
+          class="sg-more-toggle"
+          class:is-open={moreOpen}
+          aria-expanded={moreOpen}
+          aria-label={moreOpen ? t('Hide the other controls') : t('Show the other controls')}
+          title={moreOpen ? t('Hide the other controls') : t('Show the other controls')}
+          onclick={() => (moreOpen = !moreOpen)}
+        >⋯</button>
+      </header>
+      {#if moreOpen}
+        <div class="sg-more">
+          {@render title()}
+          <div class="sg-more-row">
+            {@render audioPicker()}{@render offlineAudio()}
+            {@render actions()}
+          </div>
+          {@render opts()}
+          <!-- An empty night shows this over the (empty) log instead. -->
+          {#if tunes.length}{@render findTunes()}{/if}
+        </div>
+      {/if}
+    {:else}
+      <header class="sg-head">
+        {@render title()}
+        <div class="sg-progress">
+          {@render count()}
+          {@render actions()}
+        </div>
+      </header>
+    {/if}
 
     {#if recording.audio_error}
       <p class="sg-error">{t('Audio unavailable: {error}', { error: recording.audio_error })}</p>
@@ -1357,6 +1429,7 @@
           onedgecommit={commitEdge}
         />
 
+        {#if !compact}
         <div class="sg-clock">
           <span class="sg-time">{formatTime(currentMs, { millis: true })}</span>
           <span class="sg-of">{t('of {time}', { time: formatTime(durationMs) })}</span>
@@ -1366,6 +1439,7 @@
             </span>
           {/if}
         </div>
+        {/if}
 
         <!-- Which tune the mark key will place, and in which of its two modes.
              Its own band on a desktop; on a phone it is folded into the mark
@@ -1414,6 +1488,9 @@
           <button type="button" onclick={() => nudge(15000)}>{t('+15s')}</button>
         </div>
 
+        <!-- Phone, ⋯ closed: a running "Find the tunes" job as a thin bar. -->
+        {#if compact && !moreOpen && tunes.length}{@render findTunes('bar')}{/if}
+
         <div class="sg-controls sg-controls-main">
           <!-- Phone: the banner's job rides on the button's own row. Whose turn
                it is matters as much as the button does, and side by side they
@@ -1450,25 +1527,7 @@
           </button>
         </div>
 
-        <div class="sg-opts">
-          <label class="sg-opt">
-            {t('speed')}
-            <select value={speed} onchange={(e) => setSpeed(Number(e.currentTarget.value))}>
-              {#each SPEEDS as s}<option value={s}>{s}×</option>{/each}
-            </select>
-          </label>
-          <label class="sg-opt">
-            {t('zoom')}
-            <select value={zoomMs} onchange={(e) => (zoomMs = Number(e.currentTarget.value))}>
-              {#each ZOOM_LEVELS as z}<option value={z}>{t('{n}s', { n: z / 1000 })}</option>{/each}
-            </select>
-          </label>
-          <label class="sg-opt sg-opt-check">
-            <input type="checkbox" bind:checked={snapEnabled} />
-            {t('snap to onset')}
-          </label>
-          {#if !compact}{@render audioPicker()}{@render offlineAudio()}{/if}
-        </div>
+        {#if !compact}{@render opts()}{/if}
 
         <details class="sg-keys">
           <summary>{t('Keyboard')}</summary>
@@ -1491,15 +1550,7 @@
       </section>
 
       <section class="sg-right">
-        {#if recording}
-          <FindTunes
-            recordingId={recording.recording_id}
-            tunesCount={tunes.length}
-            listenCount={tunes.filter(isGuess).length}
-            onfound={reloadTunes}
-            ontunes={(list) => adoptTunes(list, cursorTune?.session_instance_tune_id ?? null)}
-          />
-        {/if}
+        {#if !compact || !tunes.length}{@render findTunes()}{/if}
         {#if checksLeft || onlyChecks}
           <!-- The listener's guesses still to check: show only those, and step
                through them (N / ⇧N), confirming (C) or correcting each. -->
@@ -2024,6 +2075,7 @@
   @media (max-width: 900px) {
     .sg-body {
       grid-template-columns: minmax(0, 1fr);
+      gap: 8px;
     }
     .sg-left {
       position: sticky;
@@ -2038,40 +2090,87 @@
     .sg-keys {
       display: none;
     }
-    /* On a phone the controls get a row of their own under the title rather
-       than squeezing in beside it, and that row wraps between controls,
-       never inside one: count and queue on the left, the encode switch and
-       the offline copy in the middle, Fix and export pushed to the right. */
-    .sg-head {
-      gap: 4px;
+    /* The one-line bar that replaces the header: the playhead, the count,
+       and the button that opens everything else. */
+    .sg-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 6px;
+      min-height: 34px;
     }
-    .sg-progress {
-      flex: 1 0 100%;
+    .sg-bar .sg-time {
+      font-size: 1.2rem;
+    }
+    .sg-bar-count {
+      margin-left: auto;
+      display: inline-flex;
+      align-items: baseline;
+      gap: 6px;
+      font-size: 0.8rem;
+      color: var(--disabled-text, #888);
+    }
+    .sg-bar-count strong {
+      color: var(--text-color, #e0e0e0);
+    }
+    .sg-more-toggle {
+      min-width: 44px;
+      min-height: 34px;
+      background: var(--header-bg, #2d2d2d);
+      color: var(--text-color, #e0e0e0);
+      border: 1px solid var(--border-color, #444);
+      border-radius: 6px;
+      font-size: 1.1rem;
+      line-height: 1;
+      cursor: pointer;
+    }
+    .sg-more-toggle.is-open {
+      border-color: var(--warning, #f5c842);
+      color: var(--warning, #f5c842);
+    }
+    /* Everything that isn't marking. It pushes the tape down while open, which
+       is fine: it is open for setting up, not for marking. */
+    .sg-more {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 10px;
+      margin-bottom: 8px;
+      border: 1px solid var(--border-color, #444);
+      border-radius: 8px;
+      background: var(--header-bg, #2d2d2d);
+    }
+    .sg-more h1 {
+      font-size: 1.05rem;
+      margin: 0;
+    }
+    .sg-more-row {
+      display: flex;
       flex-wrap: wrap;
       align-items: center;
-      gap: 6px 8px;
+      gap: 8px;
       font-size: 0.8rem;
+      color: var(--disabled-text, #888);
     }
-    .sg-progress .sg-opt-audio select {
-      margin-left: 0;
-      padding: 2px 3px;
-      font-size: 0.75rem;
-      max-width: 118px;
-    }
-    .sg-progress .sg-actions {
+    .sg-more-row .sg-actions {
       margin-left: auto;
     }
-    .sg-progress .sg-offline {
-      padding: 2px 5px;
-      font-size: 0.75rem;
-      gap: 3px;
+    .sg-more-row .sg-opt-audio select {
+      margin-left: 4px;
+      max-width: 140px;
     }
-    .sg-progress .sg-actions {
-      gap: 8px;
+    .sg-controls {
+      gap: 5px;
+      margin-bottom: 6px;
     }
-    .sg-editlog {
-      padding: 4px 8px;
-      min-height: 28px;
+    .sg-controls button {
+      min-height: 40px;
+    }
+    .sg-controls-main {
+      margin-bottom: 0;
+    }
+    .sg-controls-main button {
+      min-height: 46px;
     }
     /* Undo is an icon here: it is one of three things competing for a row that
        also has to hold the mark button and whose turn it is. */

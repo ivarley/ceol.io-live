@@ -15,6 +15,11 @@
     listenCount = 0, // tunes the listener logged that nobody has confirmed yet
     onfound = () => {}, // the job finished: reload the log
     ontunes = () => {}, // (tunes): the log after an undo
+    // 'panel' is the whole thing. 'bar' is the phone's stand-in while the panel
+    // is tucked away behind the ⋯ button: a thin progress line, shown only while
+    // a job is waiting, running or paused, that opens the panel when tapped.
+    variant = 'panel',
+    onopen = () => {},
   } = $props()
 
   const POLL_MS = 5000
@@ -99,7 +104,19 @@
   )
 </script>
 
-{#if show}
+{#if variant === 'bar'}
+  {#if allowed && job && ACTIVE.includes(job.status)}
+    {@const label =
+      job.status === 'queued'
+        ? t('Waiting to start')
+        : job.status === 'paused'
+          ? t('Paused while a night is being listened to live')
+          : `${t('Finding the tunes: {phase}', { phase: phaseLabel(job.phase) })} ${percent}%`}
+    <button type="button" class="ft-thin" class:is-paused={job.status !== 'running'} onclick={onopen} aria-label={label} title={label}>
+      <span class="ft-bar"><span style="width:{job.status === 'queued' ? 0 : percent}%"></span></span>
+    </button>
+  {/if}
+{:else if show}
   <div class="ft" class:is-active={job && ACTIVE.includes(job.status)}>
     {#if !job || job.status === 'cancelled' || (job.status === 'done' && tunesCount === 0)}
       <p class="ft-line">{t('Nothing is logged for this night yet.')}</p>
@@ -177,9 +194,29 @@
     border-radius: 3px;
     overflow: hidden;
   }
-  .ft-bar div {
+  .ft-bar div,
+  .ft-bar span {
+    display: block;
     height: 100%;
     background: #e0b341;
+  }
+  /* The bar form: 4px to look at, a taller strip to tap. */
+  .ft-thin {
+    display: block;
+    width: 100%;
+    padding: 4px 0;
+    margin: 0 0 2px;
+    background: none;
+    border: 0;
+    cursor: pointer;
+  }
+  .ft-thin .ft-bar {
+    display: block;
+    height: 4px;
+    border-radius: 2px;
+  }
+  .ft-thin.is-paused .ft-bar span {
+    opacity: 0.5;
   }
   .ft button {
     background: none;

@@ -774,10 +774,10 @@ describe('phone layout', () => {
     return render(App, { props: { pageData } })
   }
 
-  it('shrinks both canvases by a quarter', () => {
+  it('shrinks both canvases to about half', () => {
     const { container } = phone()
-    expect(container.querySelector('.wf-detail canvas').style.height).toBe('126px')
-    expect(container.querySelector('.wf-overview canvas').style.height).toBe('42px')
+    expect(container.querySelector('.wf-detail canvas').style.height).toBe('92px')
+    expect(container.querySelector('.wf-overview canvas').style.height).toBe('28px')
   })
 
   it('keeps them full size on a desktop', () => {
@@ -823,12 +823,43 @@ describe('phone layout', () => {
     expect(inline.textContent).not.toContain('set 1')
   })
 
-  it('moves the encode switch into the header and shortens what shares the line', () => {
+  it('puts the header on one line: the playhead, the count and a button for the rest', () => {
     const { container } = phone()
-    expect(container.querySelector('.sg-progress .sg-opt-audio')).toBeTruthy()
-    expect(container.querySelector('.sg-opts .sg-opt-audio')).toBeNull()
-    expect(container.querySelector('.sg-progress').textContent).not.toContain('placed')
-    expect(container.querySelector('.sg-editlog').textContent.trim()).toBe('✎ Fix')
+    const bar = container.querySelector('.sg-bar')
+    expect(bar.querySelector('.sg-time')).toBeTruthy()
+    expect(bar.querySelector('.sg-count').textContent).not.toContain('placed')
+    // The clock has moved up into the bar, so it has no row of its own.
+    expect(container.querySelector('.sg-clock')).toBeNull()
+    // Everything that isn't marking waits behind the button.
+    expect(container.querySelector('h1')).toBeNull()
+    expect(container.querySelector('.sg-opts')).toBeNull()
+    expect(container.querySelector('.sg-opt-audio')).toBeNull()
+    expect(container.querySelector('.sg-editlog')).toBeNull()
+  })
+
+  it('opens the other controls from that button, and closes them again', async () => {
+    const { container } = phone()
+    const toggle = container.querySelector('.sg-more-toggle')
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+
+    await fireEvent.click(toggle)
+    const more = container.querySelector('.sg-more')
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(more.querySelector('h1')).toBeTruthy()
+    expect(more.querySelector('.sg-opts')).toBeTruthy()
+    expect(more.querySelector('.sg-opt-audio')).toBeTruthy()
+    expect(more.querySelector('.sg-editlog')).toBeTruthy()
+
+    await fireEvent.click(toggle)
+    expect(container.querySelector('.sg-more')).toBeNull()
+  })
+
+  it('keeps the full header on a desktop', () => {
+    const { container } = desktop()
+    expect(container.querySelector('.sg-bar')).toBeNull()
+    expect(container.querySelector('.sg-head h1')).toBeTruthy()
+    expect(container.querySelector('.sg-clock')).toBeTruthy()
+    expect(container.querySelector('.sg-opts .sg-opt-audio')).toBeTruthy()
   })
 
   it('follows a rotation or a resize without a reload', async () => {

@@ -1750,5 +1750,13 @@
       "other": "{n} fonn le seiceáil"
     },
     "review": true
+  },
+  "Show the other controls": {
+    "ga": "Taispeáin na rialtáin eile",
+    "review": true
+  },
+  "Hide the other controls": {
+    "ga": "Folaigh na rialtáin eile",
+    "review": true
   }
 }

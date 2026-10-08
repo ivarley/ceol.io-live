@@ -72,3 +72,26 @@ describe('finding the tunes', () => {
     await waitFor(() => expect(global.fetch).toHaveBeenCalledWith('/api/listen-jobs/5/retry', expect.objectContaining({ method: 'POST' })))
   })
 })
+
+describe('the phone bar', () => {
+  // On a phone the panel waits behind the ⋯ button; a job in flight still shows,
+  // as a thin bar over the mark row that opens the panel.
+  it('shows a running job as a thin bar that opens the panel', async () => {
+    global.fetch = vi.fn(async () => reply({ success: true, job: job({ status: 'running', phase: 'listening', heard_ms: 150000 }) }))
+    const onopen = vi.fn()
+    const { container } = render(FindTunes, { props: { recordingId: 7, tunesCount: 4, listenCount: 4, variant: 'bar', onopen } })
+    await waitFor(() => expect(container.querySelector('.ft-thin')).toBeTruthy())
+    expect(container.querySelector('.ft')).toBeNull() // not the panel
+    expect(container.querySelector('.ft-thin .ft-bar span').style.width).toBe('25%')
+    expect(container.querySelector('.ft-thin').getAttribute('aria-label')).toBe('Finding the tunes: listening 25%')
+    await fireEvent.click(container.querySelector('.ft-thin'))
+    expect(onopen).toHaveBeenCalled()
+  })
+
+  it('shows nothing once the job is done', async () => {
+    global.fetch = vi.fn(async () => reply({ success: true, job: job({ status: 'done', result: { logged: 4, sets: 2 } }) }))
+    const { container } = render(FindTunes, { props: { recordingId: 7, tunesCount: 4, listenCount: 4, variant: 'bar' } })
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled())
+    expect(container.querySelector('.ft-thin')).toBeNull()
+  })
+})
