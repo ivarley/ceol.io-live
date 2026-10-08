@@ -2557,8 +2557,14 @@ as-another kind: The Sailor's Bonnet, The Porthole Of The Kelp, The New Custom
 House, The Bunch Of Green Rushes twice; broken 3 on the hard nights,
 Mulqueen's and Da New Rigged Ship on 139, Mickey Chewing Bubblegum on 115;
 p 0.73); wrong or extra 42 -> 47; to check 65 -> 69; starts unchanged (687 ->
-684 within 1 s). Not adopted at 60 s; a shorter release next, so a mid-tune
-dip shuts the right tune out only briefly.
+684 within 1 s). Not adopted at 60 s. At 20 s, same nights and steps:
+named right 882 -> 884 (fixed 3: The Porthole Of The Kelp, The Bunch Of Green
+Rushes twice; broken 1: Da New Rigged Ship on 139; p 0.62); wrong or extra
+42 -> 44; to check 65 -> 69; starts 687 -> 684 within 1 s. Two more named
+against two more extras and four more to check, and neither length is
+distinguishable from chance: not adopted; `drop_release_s` stays, off by
+default. The shown-but-drafted-as-another misses are not mostly a held tune
+refusing to let go.
 
 **Settings that match everything** (2026-10-08). The Mason's Apron was the
 commonest wrong name over thirteen labelled nights (8 times, right once), and
