@@ -2135,7 +2135,8 @@
   function openDrawer(r) {
     selectedId = null
     if (!r.tune_id) {
-      notice = t('Logged as text — link it to a catalog tune to see details, notation, and stats.')
+      // Information, not a problem: it clears itself like the other passing messages.
+      flashNotice(t('Logged as text — link it to a catalog tune to see details, notation, and stats.'))
       return
     }
     if (!window.TuneDetailModal) return
@@ -3790,7 +3791,7 @@
   {/if}
 
   <div class="feed-msgs">
-    {#if notice}<div class="notice" role="button" tabindex="0" onclick={() => (notice = '')} onkeydown={(e) => activate(e, () => (notice = ''))}>{notice}</div>{/if}
+    {#if notice}<div class="notice" role="button" tabindex="0" onclick={() => (notice = '')} onkeydown={(e) => activate(e, () => (notice = ''))}><span class="notice-text">{notice}</span><span class="notice-x" aria-hidden="true">×</span></div>{/if}
     {#if queuedCount > 0}
       <p class="offline-banner">
         ⏳ {displayStatus === 'offline' ? tn(queuedCount, '{n} change queued — offline', '{n} changes queued — offline') : tn(queuedCount, '{n} change queued, syncing…', '{n} changes queued, syncing…')}
