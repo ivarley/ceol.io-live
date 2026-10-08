@@ -33,6 +33,7 @@ COMMANDS = {
     "drafts": "lab.tools.drafts",
     "coreml": "lab.tools.coreml",
     "confidence": "lab.analysis.confidence",
+    "exclusions": "lab.corpus.exclusions",
 }
 
 

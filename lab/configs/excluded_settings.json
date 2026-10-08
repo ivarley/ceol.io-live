@@ -1,0 +1,96 @@
+{
+ "about": "thesession.org settings left out of matching: pages of variations, at least 800 notes and 6 times their tune's median setting, which match almost anything (lab/corpus/exclusions.py, spec 053 'Settings that match everything'). Asked for by the player for The Mason's Apron (2026-10-08), the commonest wrong name over thirteen nights.",
+ "settings": [
+  {
+   "setting_id": 12549,
+   "tune_id": 74,
+   "name": "Mason's Apron, The",
+   "type": "reel",
+   "why": "1593 notes, 12.1x its tune's median setting"
+  },
+  {
+   "setting_id": 12550,
+   "tune_id": 74,
+   "name": "Mason's Apron, The",
+   "type": "reel",
+   "why": "1571 notes, 11.9x its tune's median setting"
+  },
+  {
+   "setting_id": 18740,
+   "tune_id": 7198,
+   "name": "Old Morpeth Rant, The",
+   "type": "reel",
+   "why": "1098 notes, 10.3x its tune's median setting"
+  },
+  {
+   "setting_id": 52340,
+   "tune_id": 1951,
+   "name": "Tullochgorum",
+   "type": "strathspey",
+   "why": "1018 notes, 10.2x its tune's median setting"
+  },
+  {
+   "setting_id": 13191,
+   "tune_id": 373,
+   "name": "Connie The Soldier",
+   "type": "jig",
+   "why": "958 notes, 10.0x its tune's median setting"
+  },
+  {
+   "setting_id": 12559,
+   "tune_id": 75,
+   "name": "Miss McLeod's",
+   "type": "reel",
+   "why": "1053 notes, 8.7x its tune's median setting"
+  },
+  {
+   "setting_id": 56465,
+   "tune_id": 496,
+   "name": "Glen Of Aherlow, The",
+   "type": "reel",
+   "why": "1024 notes, 8.6x its tune's median setting"
+  },
+  {
+   "setting_id": 13533,
+   "tune_id": 560,
+   "name": "Tarbolton, The",
+   "type": "reel",
+   "why": "1108 notes, 8.1x its tune's median setting"
+  },
+  {
+   "setting_id": 24762,
+   "tune_id": 7033,
+   "name": "Reel Of Tulloch, The",
+   "type": "strathspey",
+   "why": "1036 notes, 8.0x its tune's median setting"
+  },
+  {
+   "setting_id": 40706,
+   "tune_id": 754,
+   "name": "Bonnie Kate",
+   "type": "reel",
+   "why": "922 notes, 7.2x its tune's median setting"
+  },
+  {
+   "setting_id": 42744,
+   "tune_id": 74,
+   "name": "Mason's Apron, The",
+   "type": "reel",
+   "why": "896 notes, 6.8x its tune's median setting"
+  },
+  {
+   "setting_id": 15711,
+   "tune_id": 2344,
+   "name": "Madame Bonaparte",
+   "type": "hornpipe",
+   "why": "1165 notes, 6.4x its tune's median setting"
+  },
+  {
+   "setting_id": 46582,
+   "tune_id": 49,
+   "name": "Harvest Home, The",
+   "type": "hornpipe",
+   "why": "835 notes, 6.3x its tune's median setting"
+  }
+ ]
+}

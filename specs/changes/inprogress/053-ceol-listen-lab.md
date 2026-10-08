@@ -2540,6 +2540,28 @@ the segmenter asks for a check on every one under 100. Refitting with more
 labelled nights is a new version; a stored confidence keeps the version that
 made it.
 
+**Settings that match everything** (2026-10-08). The Mason's Apron was the
+commonest wrong name over thirteen labelled nights (8 times, right once), and
+two of its 35 settings on thesession.org are pages of variations, about 1,600
+notes against a usual 120 (12549, 12550). The player asked for them to be
+left out. Across the corpus, 13 settings are at least 800 notes and 6 times
+their tune's median: The Mason's Apron (three), The Tarbolton and Bonnie Kate
+(both wrong names over noodling on 136), Miss McLeod's, The Harvest Home,
+Connie The Soldier and others. `corpus.exclusions` drops them from the n-gram
+index and the aligner's sequences as those load (the built files and the
+service's data stay as they are; `lab/configs/excluded_settings.json`, each
+with its reason; `python -m lab exclusions` lists the rule's candidates).
+Replayed on all thirteen nights (2.4 hours of audio among them had one of the
+13 tunes as a candidate, so a targeted replay would have saved little), each
+side through the same final steps: labelled tunes named right 882 and 882 of
+918, none fixed or broken; wrong or extra tunes 39 -> 42; to check 64 -> 65.
+The Mason's Apron as a wrong name straight from the listener 8 -> 3 (the
+once it was played still right), but the stretches it took went to other
+wrong names, and the set-type rule had already put most of it right
+downstream: the long settings were where an unsure listener landed, not why
+it was unsure. Kept, as the player asked and at no cost in names; not a
+measured gain.
+
 **An unsure tune takes its set's type** (2026-10-08). The player: use the
 tune type, "in particular to heavily penalize the wrong type if confidence is
 low". `drafts.prefer_set_type`, before the run-merging: a set's type is what

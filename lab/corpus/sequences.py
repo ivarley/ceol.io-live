@@ -70,11 +70,13 @@ class TuneSequences:
     @classmethod
     def load(cls, candidate_set="repertoire"):
         path = cls.path(candidate_set)
+        from lab.corpus.exclusions import apply_to_sequences
+
         if os.path.exists(path):
             with open(path, "rb") as f:
-                return cls(pickle.load(f))
+                return cls(apply_to_sequences(pickle.load(f)))
         seqs = cls.build(candidate_set)
         paths.ensure_dir(os.path.dirname(path))
         with open(path, "wb") as f:
             pickle.dump(seqs.by_tune, f)
-        return seqs
+        return cls(apply_to_sequences(seqs.by_tune))
