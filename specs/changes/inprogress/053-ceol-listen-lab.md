@@ -2540,6 +2540,27 @@ the segmenter asks for a check on every one under 100. Refitting with more
 labelled nights is a new version; a stored confidence keeps the version that
 made it.
 
+**Night 115, the first found on the server, and a harder night** (2026-10-08).
+The first "find the tunes" job in production (recording 115, 3 h 25 min,
+2025-07-24): 84 min listening on Render (2.4x real time), 8 min following 40
+sets, no pauses; 87 tunes logged, 18 flagged. Checked by the player: 78 of the
+87 right; the 9 wrong all among the 18 flagged, but so were 9 right ones (The
+Humours Of Whiskey at 6%, Wissahickon Drive at 4%), and one wrong was given
+83% (The Sailor's Bonnet as The Mason's Apron, 90 s). Re-run locally the job
+gives the same 87 and 18 exactly; the settings before the tiers give the same
+78 and 9, so the tiers are not the cause, nor history (98% of the night's
+tunes logged before it). The recording is harder to hear: inside labelled
+tunes the listener's top tune was under 0.9 in 11.7% of steps, against 4.3%
+on 112 (three weeks earlier) and 3.6% on 136; 3 dB quieter than 112, nothing
+clipped. Six of the nine mistakes are one tune cut into pieces, each named
+something else (Tuttle's as three tunes; Rip The Calico's last 30 s; 24 s
+inside Wissahickon Drive; 5 s before Franc A'Phoill); three are whole tunes
+misnamed (Mac's Fancy, played off its written key, as The Star Of Munster;
+The Donegal Lancers as Jack Rowe; The Sailor's Bonnet). To do: refit the
+confidence model (version 2) with 115, 134 and 132, the first harder night
+among them; and the second opinion over a whole stretch of continuous music
+(see "Still open"), which is what the cut-up tunes need.
+
 **Following, profiled and made faster** (2026-10-07). Following set starts
 (`follow_drafts`) is the slow part of drafting a night, and the part a server
 would run with no caches. Profiled on night 134 with an empty transcription
