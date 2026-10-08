@@ -2540,6 +2540,26 @@ the segmenter asks for a check on every one under 100. Refitting with more
 labelled nights is a new version; a stored confidence keeps the version that
 made it.
 
+**Letting go when belief drops** (2026-10-08). Of the 36 labelled tunes still
+not named right over thirteen nights, 13 had been shown at some point but were
+drafted as another; the next biggest groups: 8 a candidate never shown, 6 not
+heard as a tune (quiet, talk), 6 never a candidate (first time, or Mac's
+Fancy off its key), 3 under 45 s. The player's idea: a tune that was 100%
+and drops has changed; stop hearing it. Measured as a signal on the saved
+states: a tune held at 0.99 or more for 40 s whose belief falls under 0.9 is
+a changeover 59% of the time, a set's end 38%, mid-tune 3% (26 of 817), and
+such a drop comes at 89% of changeovers (held only 12 s: 8% mid-tune).
+`Listener(drop_release_s=)`: on such a drop the tune is ruled out for that
+long, as a "none of these" tap does. Replayed on all thirteen nights at 60 s,
+against the same with the long settings left out, through the same final
+steps: named right 882 -> 884 of 918 (fixed 5, all of the shown-but-drafted-
+as-another kind: The Sailor's Bonnet, The Porthole Of The Kelp, The New Custom
+House, The Bunch Of Green Rushes twice; broken 3 on the hard nights,
+Mulqueen's and Da New Rigged Ship on 139, Mickey Chewing Bubblegum on 115;
+p 0.73); wrong or extra 42 -> 47; to check 65 -> 69; starts unchanged (687 ->
+684 within 1 s). Not adopted at 60 s; a shorter release next, so a mid-tune
+dip shuts the right tune out only briefly.
+
 **Settings that match everything** (2026-10-08). The Mason's Apron was the
 commonest wrong name over thirteen labelled nights (8 times, right once), and
 two of its 35 settings on thesession.org are pages of variations, about 1,600
