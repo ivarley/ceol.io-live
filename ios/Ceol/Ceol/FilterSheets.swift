@@ -10,7 +10,7 @@
 //
 // A session's tabs: the web's /sessions/<path> panels (SessionPage). Tunes: type, sort,
 // nights I attended, and my tunebook status; Logs: logged, attended or all; People:
-// members, visitors or archived.
+// members, visitors or archived, and a sort (the web's pane, row for row).
 
 import CeolDesign
 import CeolLogic
@@ -339,5 +339,103 @@ struct SessionTabFilterSheet<ID: Hashable>: View {
             }
         }
         .ceolDrawer([.medium])
+    }
+}
+
+/// The People tab's drawer, laid out as the web's pane is: who to show, then the order
+/// (a mode and a direction). Without attendance there is nothing to sort by but the
+/// name, so the Sort row goes.
+struct SessionPeopleFilterSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var view: SessionPage.PeopleView
+    @Binding var sort: SessionPage.PeopleSort
+    let trackAttendance: Bool
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    SegmentedSection(
+                        label: tr("Show"), options: SessionPage.PeopleView.allCases.map { ($0, SessionsL10n.label($0)) },
+                        selection: $view, id: "filters.show")
+                    if trackAttendance {
+                        SortSection(
+                            options: SessionPage.PeopleSortMode.allCases.map { ($0, SessionsL10n.label($0)) },
+                            mode: Binding(get: { sort.mode }, set: { mode in
+                                if mode != sort.mode { sort = .init(mode: mode) }
+                            }),
+                            descending: $sort.descending)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(20)
+            }
+            .background(CeolTokens.drawerBg)
+            .navigationTitle("Sort & filter")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Clear") {
+                        view = .members
+                        sort = .init()
+                    }
+                    .disabled(view == .members && sort == .init())
+                    .accessibilityIdentifier("filters.clear")
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }.accessibilityIdentifier("filters.done")
+                }
+            }
+        }
+        .ceolDrawer([.medium])
+    }
+}
+
+/// A labelled one-line choice.
+struct SegmentedSection<ID: Hashable>: View {
+    let label: String
+    let options: [(id: ID, label: String)]
+    @Binding var selection: ID
+    var id = "filters.segment"
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(label.uppercased()).font(.ceol(size: 12, weight: .semibold)).tracking(0.8)
+                .foregroundStyle(CeolTokens.textMuted)
+            Picker(label, selection: $selection) {
+                ForEach(options, id: \.id) { Text($0.label).tag($0.id) }
+            }
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier(id)
+        }
+    }
+}
+
+/// SORT: the modes on one line and a direction beside them, as the web's panes have it.
+struct SortSection<Mode: Hashable>: View {
+    let options: [(id: Mode, label: String)]
+    @Binding var mode: Mode
+    @Binding var descending: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("SORT").font(.ceol(size: 12, weight: .semibold)).tracking(0.8).foregroundStyle(CeolTokens.textMuted)
+            HStack(spacing: 10) {
+                Picker("Sort", selection: $mode) {
+                    ForEach(options, id: \.id) { Text($0.label).tag($0.id) }
+                }
+                .pickerStyle(.segmented)
+                .accessibilityIdentifier("filters.sort")
+                Button { descending.toggle() } label: {
+                    Image(systemName: descending ? "arrow.down" : "arrow.up")
+                        .font(.system(size: 15, weight: .medium)).foregroundStyle(CeolTokens.textColor)
+                        .frame(width: 40, height: 32)
+                        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(CeolTokens.borderColor, lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(descending ? Text("Sorting downward") : Text("Sorting upward"))
+                .accessibilityIdentifier("filters.direction")
+            }
+        }
     }
 }

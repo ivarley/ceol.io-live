@@ -38,7 +38,6 @@ struct SessionPersonSheet: View {
     /// Which change is saving ("relationship", "confirmed", "archived").
     @State private var saving: String?
     @State private var failure: String?
-    @State private var page: WebPage?
 
     private var isMe: Bool { model.user?.personId == row.personId }
     private var name: String { "\(row.firstName) \(row.lastName)".trimmingCharacters(in: .whitespaces) }
@@ -56,7 +55,6 @@ struct SessionPersonSheet: View {
                 }
         }
         .ceolDrawer([.medium, .large])
-        .sheet(item: $page) { SafariView(url: $0.url).ignoresSafeArea() }
         .task {
             relationship = row.relationship
             confirmed = row.confirmed
@@ -144,9 +142,17 @@ struct SessionPersonSheet: View {
             .font(.ceol(size: 16)).foregroundStyle(CeolTokens.primary)
             .accessibilityIdentifier("person.profile")
         } else if p.hasUserAccount {
-            Button("Common Tunes?") { Task { await openCommonTunes() } }
-                .font(.ceol(size: 16)).foregroundStyle(CeolTokens.primary)
-                .accessibilityIdentifier("person.commonTunes")
+            // The tunes you both have, in the app (the web's /me/and/<id>).
+            NavigationLink {
+                CommonTunesView(personID: row.personId, name: name)
+            } label: {
+                HStack(spacing: 6) {
+                    Text("Tunes in common")
+                    Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold))
+                }
+            }
+            .font(.ceol(size: 16)).foregroundStyle(CeolTokens.primary)
+            .accessibilityIdentifier("person.commonTunes")
         }
     }
 
@@ -299,15 +305,6 @@ struct SessionPersonSheet: View {
             await onChanged()
         } catch {
             failure = tr("Couldn't reach Ceol, so nothing changed. Check your connection and try again.")
-        }
-    }
-
-    /// The tunes you both have, on the web, signed in.
-    private func openCommonTunes() async {
-        do {
-            page = WebPage(url: try await model.auth.webSession(next: "/me/and/\(row.personId)?from=\(path)"))
-        } catch {
-            failure = tr("Couldn't open Common Tunes. Check your connection and try again.")
         }
     }
 }

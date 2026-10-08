@@ -2584,6 +2584,7 @@
       }
     },
     "Common Tunes?": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -2829,6 +2830,16 @@
         }
       }
     },
+    "Couldn't load the tunes you have in common.": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Níorbh fhéidir na foinn atá i bpáirt agaibh a lódáil."
+          }
+        }
+      }
+    },
     "Couldn't load this": {
       "localizations": {
         "ga": {
@@ -2870,6 +2881,7 @@
       }
     },
     "Couldn't open Common Tunes. Check your connection and try again.": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -3825,6 +3837,16 @@
         }
       }
     },
+    "In %lld tunebooks": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "I %lld leabhar fonn"
+          }
+        }
+      }
+    },
     "Inactive": {
       "localizations": {
         "ga": {
@@ -4041,6 +4063,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Deireanach"
+          }
+        }
+      }
+    },
+    "Last here": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "An uair dheireanach anseo"
           }
         }
       }
@@ -4641,6 +4673,16 @@
         }
       }
     },
+    "Neither of you has a tune the other has marked learned or learning.": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Níl fonn ar bith ar eolas nó á fhoghlaim agaibh beirt."
+          }
+        }
+      }
+    },
     "New here? Enter your email and we'll send you a link to create your account.": {
       "localizations": {
         "ga": {
@@ -4697,6 +4739,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Oícheanta i láthair"
+          }
+        }
+      }
+    },
+    "Nights attended: %lld": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Oícheanta i láthair: %lld"
           }
         }
       }
@@ -5001,6 +5053,16 @@
         }
       }
     },
+    "No tunes in common yet": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Níl aon fhoinn i bpáirt fós"
+          }
+        }
+      }
+    },
     "No tunes logged yet": {
       "localizations": {
         "ga": {
@@ -5163,6 +5225,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Níl ar %@"
+          }
+        }
+      }
+    },
+    "Not on Ceol": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Gan a bheith ar Cheol"
           }
         }
       }
@@ -5793,6 +5865,16 @@
         }
       }
     },
+    "Popular": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Éileamh"
+          }
+        }
+      }
+    },
     "Popularity": {
       "localizations": {
         "ga": {
@@ -5999,6 +6081,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Ríleanna"
+          }
+        }
+      }
+    },
+    "Regulars": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Gnáthsheinnteoirí"
           }
         }
       }
@@ -6339,6 +6431,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Cuardaigh na foinn ar Ceol de réir ainm, de réir na nótaí (\"GED BED\"), nó greamaigh nasc thesession.org."
+          }
+        }
+      }
+    },
+    "Search tunes…": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Cuardaigh foinn…"
           }
         }
       }
@@ -7533,6 +7635,26 @@
         }
       }
     },
+    "Tunes In Common": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Foinn i bPáirt"
+          }
+        }
+      }
+    },
+    "Tunes in common": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Foinn i bpáirt"
+          }
+        }
+      }
+    },
     "Type": {
       "localizations": {
         "ga": {
@@ -8059,6 +8181,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Freastalaím, cuir leis mé"
+          }
+        }
+      }
+    },
+    "You and %@ both know or are learning these.": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tá na foinn seo ar eolas agat féin agus ag %@, nó á bhfoghlaim agaibh."
           }
         }
       }

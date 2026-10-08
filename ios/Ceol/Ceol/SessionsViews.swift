@@ -224,6 +224,7 @@ struct SessionDetailView: View {
     // People.
     @State private var peopleSearch = ""
     @State private var peopleView = SessionPage.PeopleView.members
+    @State private var peopleSort = SessionPage.PeopleSort()
     @State private var filteringPeople = false
 
     /// Your tunebook, for the Tunes tab's status filter.
@@ -278,9 +279,8 @@ struct SessionDetailView: View {
                     selection: $logView, initial: .logged, oneLine: true)
             }
             .sheet(isPresented: $filteringPeople) {
-                SessionTabFilterSheet(
-                    label: tr("Show"), options: SessionPage.PeopleView.allCases.map { ($0, SessionsL10n.label($0)) },
-                    selection: $peopleView, initial: .members)
+                SessionPeopleFilterSheet(
+                    view: $peopleView, sort: $peopleSort, trackAttendance: state.value?.session.trackAttendance ?? true)
             }
             .sheet(isPresented: $addingTune) {
                 AddSessionTuneSheet(path: path, initialQuery: tuneSearch) { _, name in
@@ -847,13 +847,19 @@ struct SessionDetailView: View {
             }
             .padding(24)
         case .loaded(let p):
-            let shown = SessionPage.filterPeople(
-                p.people.map {
-                    SessionPage.Person(name: "\($0.firstName) \($0.lastName)", instruments: $0.instruments,
-                                       relationship: $0.relationship, archived: $0.archived ?? false)
-                },
-                view: peopleView, search: peopleSearch
+            let trackAttendance = state.value?.session.trackAttendance ?? true
+            // Without attendance the only order is the name (as on the web).
+            let sort = trackAttendance ? peopleSort : SessionPage.PeopleSort(mode: .name)
+            let rows = p.people.map {
+                SessionPage.Person(name: "\($0.firstName) \($0.lastName)", instruments: $0.instruments,
+                                   relationship: $0.relationship, archived: $0.archived ?? false,
+                                   recentAttendanceCount: $0.recentAttendanceCount ?? 0,
+                                   attendanceCount: $0.attendanceCount ?? 0, lastAttended: $0.lastAttended)
+            }
+            let shown = SessionPage.sortPeople(
+                rows, SessionPage.filterPeople(rows, view: peopleView, search: peopleSearch), by: sort
             ).map { p.people[$0] }
+            let filterCount = (peopleView == .members ? 0 : 1) + (trackAttendance && peopleSort != .init() ? 1 : 0)
             VStack(alignment: .leading, spacing: 0) {
                 VStack(alignment: .leading, spacing: 8) {
                     SearchRow(
@@ -868,7 +874,7 @@ struct SessionDetailView: View {
                             searchingPeople = false
                             filteringPeople = true
                         },
-                        filterCount: peopleView == .members ? 0 : 1)
+                        filterCount: filterCount)
                     Text(shown.count == 1 ? tr("1 person") : tr("\(shown.count) people"))
                         .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
                 }
@@ -876,10 +882,12 @@ struct SessionDetailView: View {
                 Hairline()
                 ForEach(shown, id: \.personId) { person in
                     Button { openPerson = PersonRef(id: person.personId) } label: {
-                        PersonRow(person: person).padding(.horizontal, 16).padding(.vertical, 10)
+                        PersonRow(person: person, trackAttendance: trackAttendance, showLastHere: sort.mode == .last)
+                            .padding(.horizontal, 16).padding(.vertical, 10)
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .accessibilityValue(person.hasUserAccount == true ? Text("On Ceol") : Text("Not on Ceol"))
                     .accessibilityIdentifier("session.person")
                     Hairline()
                 }
@@ -923,9 +931,21 @@ private func dayHeader(_ date: String, english: String, template: String) -> Str
 
 private struct PersonRow: View {
     let person: SessionPeoplePayload.PeoplePayloadPayload
+    let trackAttendance: Bool
+    /// Sorted by the last night, the row says which night it was (else how many).
+    let showLastHere: Bool
+
+    private var onCeol: Bool { person.hasUserAccount == true }
 
     var body: some View {
         HStack(spacing: 12) {
+            // Coloured when they're on Ceol, as on the web: only they can be confirmed,
+            // or have tunes in common with you.
+            Image(systemName: "person.crop.circle.fill")
+                .font(.system(size: 28))
+                .foregroundStyle(onCeol ? CeolTokens.primary : CeolTokens.textMuted.opacity(0.6))
+                // Said after the name, as the row's value (see peopleSection).
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(person.displayName).font(.ceol(size: 18, weight: .medium)).foregroundStyle(CeolTokens.textColor)
                 if !person.instruments.isEmpty {
@@ -940,6 +960,21 @@ private struct PersonRow: View {
                 Pill(text: tr("Visitor"), style: .filled, color: Color(red: 0.55, green: 0.45, blue: 0.15), size: 12)
             }
             if person.isAdmin { Pill(text: SessionsL10n.adminRole, style: .filled, color: CeolTokens.primaryFill, size: 12) }
+            if trackAttendance {
+                if showLastHere {
+                    Text(person.lastAttended.map { SessionsL10n.shortDate($0) } ?? "—")
+                        .font(.ceol(size: 14)).foregroundStyle(CeolTokens.textMuted)
+                        .accessibilityLabel(Text("Last here"))
+                } else {
+                    Text("\(person.attendanceCount ?? 0)")
+                        .font(.ceol(size: 14, weight: .semibold)).monospacedDigit()
+                        .foregroundStyle(CeolTokens.textMuted)
+                        .frame(minWidth: 26)
+                        .padding(.vertical, 3)
+                        .background(CeolTokens.borderColor.opacity(0.6), in: RoundedRectangle(cornerRadius: 5))
+                        .accessibilityLabel(Text("Nights attended: \(person.attendanceCount ?? 0)"))
+                }
+            }
         }
     }
 }
@@ -1515,6 +1550,14 @@ enum SessionsL10n {
         case .all: tr("All")
         case .logged: tr("Logged")
         case .attended: tr("Attended")
+        }
+    }
+
+    static func label(_ m: SessionPage.PeopleSortMode) -> String {
+        switch m {
+        case .regular: tr("Regulars")
+        case .last: tr("Last here")
+        case .name: tr("Name")
         }
     }
 

@@ -222,12 +222,79 @@ public enum SessionPage {
         public var instruments: [String]
         public var relationship: String?
         public var archived: Bool
-        public init(name: String, instruments: [String], relationship: String?, archived: Bool) {
+        /// Nights here in the last six months, and ever.
+        public var recentAttendanceCount: Int
+        public var attendanceCount: Int
+        /// The last night they came ("YYYY-MM-DD"), nil if never.
+        public var lastAttended: String?
+        public init(name: String, instruments: [String], relationship: String?, archived: Bool,
+                    recentAttendanceCount: Int = 0, attendanceCount: Int = 0, lastAttended: String? = nil) {
             self.name = name
             self.instruments = instruments
             self.relationship = relationship
             self.archived = archived
+            self.recentAttendanceCount = recentAttendanceCount
+            self.attendanceCount = attendanceCount
+            self.lastAttended = lastAttended
         }
+    }
+
+    /// The People tab's sorts (logic.js sortPeople). Regulars is the server's own order:
+    /// the most nights in the last six months, then the most ever.
+    public enum PeopleSortMode: String, CaseIterable, Sendable {
+        case regular, last, name
+        /// Each starts the way it reads best: the most, the latest, A to Z.
+        public var defaultDescending: Bool { self != .name }
+    }
+
+    public struct PeopleSort: Equatable, Sendable {
+        public var mode: PeopleSortMode
+        public var descending: Bool
+        public init(mode: PeopleSortMode = .regular, descending: Bool? = nil) {
+            self.mode = mode
+            self.descending = descending ?? mode.defaultDescending
+        }
+    }
+
+    /// `indices` (into `people`) in the sort's order. Someone never checked in goes last
+    /// under Last here whichever way it runs; ties read A to Z either way.
+    public static func sortPeople(_ people: [Person], _ indices: [Int], by sort: PeopleSort) -> [Int] {
+        let flip = sort.descending ? -1 : 1
+        func name(_ p: Person) -> String { JSText.trim(p.name).lowercased() }
+        func byName(_ a: Person, _ b: Person) -> Int {
+            switch name(a).compare(name(b), locale: Locale(identifier: "en")) {
+            case .orderedAscending: -1
+            case .orderedDescending: 1
+            case .orderedSame: 0
+            }
+        }
+        func byCounts(_ a: Person, _ b: Person) -> Int {
+            if a.recentAttendanceCount != b.recentAttendanceCount { return a.recentAttendanceCount < b.recentAttendanceCount ? -1 : 1 }
+            if a.attendanceCount != b.attendanceCount { return a.attendanceCount < b.attendanceCount ? -1 : 1 }
+            return 0
+        }
+        func order(_ a: Person, _ b: Person) -> Int {
+            switch sort.mode {
+            case .name:
+                return flip * byName(a, b)
+            case .last:
+                switch (a.lastAttended, b.lastAttended) {
+                case (nil, nil): return byName(a, b)
+                case (nil, _): return 1
+                case (_, nil): return -1
+                case let (x?, y?) where x != y: return flip * (x < y ? -1 : 1)
+                default: break
+                }
+            case .regular: break
+            }
+            let c = flip * byCounts(a, b)
+            return c != 0 ? c : byName(a, b)
+        }
+        // Stable, as Array.sort in JS is.
+        return indices.enumerated().sorted { l, r in
+            let c = order(people[l.element], people[r.element])
+            return c != 0 ? c < 0 : l.offset < r.offset
+        }.map(\.element)
     }
 
     /// The indices of the people shown. Archived is its own view across members and

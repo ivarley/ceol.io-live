@@ -19,10 +19,10 @@
    */
   import { untrack } from 'svelte'
   import { SvelteSet } from 'svelte/reactivity'
-  import { Chip, LoadError, PersonPicker, Row, SearchField, Seg, Sheet, Toolbar, toast, ServerError, t, tn, instrumentName } from '../lib/index.js'
+  import { Chip, LoadError, PersonPicker, Row, SearchField, Seg, Sheet, Toolbar, toast, ServerError, t, tn, instrumentName, formatDate } from '../lib/index.js'
   import { toastFailed } from './failure.js'
   import { normalizeQuotes } from '../shared/parse.js'
-  import { filterPeople } from './logic.js'
+  import { filterPeople, sortPeople, PEOPLE_SORT_DEFAULT_DIR } from './logic.js'
 
   let {
     active,
@@ -45,9 +45,41 @@
   let currentPeopleFilter = $state('members') // 'members' | 'visitors' | 'archived'
   let searchText = $state('')
   let filterOpen = $state(false) // the toolbar's filter panel
+  // Regulars is the order the server sends; the other two are re-sorts of it. Without
+  // attendance there is nothing to sort by but the name, so the Sort row goes.
+  const DEFAULT_SORT = { type: 'regular', dir: 'desc' }
+  let sort = $state({ ...DEFAULT_SORT })
 
   const searchQuery = $derived(normalizeQuotes(searchText.toLowerCase().trim()))
-  const filteredPeople = $derived(filterPeople(peopleData, currentPeopleFilter, searchQuery))
+  const filteredPeople = $derived(
+    sortPeople(filterPeople(peopleData, currentPeopleFilter, searchQuery), trackAttendance ? sort : { type: 'name', dir: 'asc' })
+  )
+  const sortIsDefault = $derived(sort.type === DEFAULT_SORT.type && sort.dir === DEFAULT_SORT.dir)
+  const activeFilterCount = $derived(
+    (currentPeopleFilter === FILTERS[0].id ? 0 : 1) + (trackAttendance && !sortIsDefault ? 1 : 0)
+  )
+
+  const SORTS = [
+    { id: 'regular', label: t('Regulars') },
+    { id: 'last', label: t('Last here') },
+    { id: 'name', label: t('Name') },
+  ]
+
+  // A new mode starts the way it reads best (the most, the latest, A to Z).
+  function setSortMode(type) {
+    sort = type === sort.type ? sort : { type, dir: PEOPLE_SORT_DEFAULT_DIR[type] }
+  }
+
+  function clearFilters() {
+    currentPeopleFilter = FILTERS[0].id
+    sort = { ...DEFAULT_SORT }
+  }
+
+  // "Oct 1" this year, "Oct 1, 2025" before it.
+  function lastHere(date) {
+    const thisYear = date.slice(0, 4) === String(new Date().getFullYear())
+    return formatDate(date, thisYear ? { month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric', year: 'numeric' })
+  }
 
   const FILTERS = [
     { id: 'members', label: t('Members') },
@@ -291,7 +323,8 @@
         toolbarClass="filter-top-row"
         buttonClass="filter-panel-toggle"
         bind:open={filterOpen}
-        activeCount={currentPeopleFilter === FILTERS[0].id ? 0 : 1}
+        activeCount={activeFilterCount}
+        onClear={activeFilterCount > 0 ? clearFilters : null}
         addId="add-person-btn"
         addTitle={t('Add someone to this session')}
         onAdd={openAddPerson}>
@@ -305,15 +338,45 @@
             placeholder={t('Search people...')} />
         {/snippet}
         {#snippet filter()}
-          <Seg
-            options={FILTERS}
-            value={currentPeopleFilter}
-            onSelect={(id) => (currentPeopleFilter = id)}
-            idAttr="data-people-filter"
-            styled={false}
-            segClass="filter-button-group"
-            optClass="filter-sort-btn"
-            aria-label={t('Filter people')} />
+          <!-- Labelled rows, in the order the app's sheet has them: who, then the order. -->
+          <div class="people-pane">
+            <div class="people-pane-row">
+              <span class="people-pane-label" id="people-show-label">{t('Show')}</span>
+              <Seg
+                options={FILTERS}
+                value={currentPeopleFilter}
+                onSelect={(id) => (currentPeopleFilter = id)}
+                idAttr="data-people-filter"
+                styled={false}
+                segClass="filter-button-group"
+                optClass="filter-sort-btn"
+                aria-labelledby="people-show-label" />
+            </div>
+            {#if trackAttendance}
+              <div class="people-pane-row">
+                <span class="people-pane-label" id="people-sort-label">{t('Sort')}</span>
+                <div class="people-pane-sort">
+                  <Seg
+                    options={SORTS}
+                    value={sort.type}
+                    onSelect={setSortMode}
+                    idAttr="data-people-sort"
+                    styled={false}
+                    segClass="filter-button-group"
+                    optClass="filter-sort-btn"
+                    aria-labelledby="people-sort-label" />
+                  <button
+                    id="people-sort-direction"
+                    class="filter-sort-direction-btn"
+                    title={t('Toggle sort direction')}
+                    aria-label={sort.dir === 'desc' ? t('Sorting downward') : t('Sorting upward')}
+                    onclick={() => (sort = { ...sort, dir: sort.dir === 'asc' ? 'desc' : 'asc' })}>
+                    {sort.dir === 'desc' ? '↓' : '↑'}
+                  </button>
+                </div>
+              </div>
+            {/if}
+          </div>
         {/snippet}
       </Toolbar>
     </div>
@@ -368,8 +431,13 @@
             rowClass="person-row{person.archived ? ' archived' : ''}"
             onclick={() => showPersonDetail(person.person_id)}>
             {#snippet lead()}
-              <div class="person-icon {person.has_user_account ? 'has-account' : 'no-account'}">
-                <i class="fa fa-user-circle"></i>
+              <!-- Coloured when they're on Ceol: only they can be confirmed, or have
+                   tunes in common with you. -->
+              <div
+                class="person-icon {person.has_user_account ? 'has-account' : 'no-account'}"
+                title={person.has_user_account ? t('On Ceol') : t('Not on Ceol')}>
+                <i class="fa fa-user-circle" aria-hidden="true"></i>
+                <span class="sr-only">{person.has_user_account ? t('On Ceol') : t('Not on Ceol')}</span>
               </div>
             {/snippet}
             {#snippet body()}
@@ -398,7 +466,12 @@
             {#snippet trailing()}
               {#if trackAttendance}
                 <div class="person-meta">
-                  <Chip label={String(person.attendance_count || 0)} styled={false} chipClass="person-attendance-badge" title={t('Nights attended')} />
+                  <!-- Sorted by the last night, the row says which night it was. -->
+                  {#if sort.type === 'last'}
+                    <span class="person-last-here" title={t('Last here')}>{person.last_attended ? lastHere(person.last_attended) : '—'}</span>
+                  {:else}
+                    <Chip label={String(person.attendance_count || 0)} styled={false} chipClass="person-attendance-badge" title={t('Nights attended')} />
+                  {/if}
                 </div>
               {/if}
             {/snippet}
@@ -426,7 +499,7 @@
           <div style="margin-bottom: 16px;"><a href="/me" class="person-detail-link">{t('View my profile')}</a></div>
         {/if}
         {#if detailPerson.has_user_account && detailPerson.person_id !== currentUserId}
-          <div style="margin-bottom: 16px;"><a href="/me/and/{detailPerson.person_id}?from={sessionPath}" class="person-detail-link">{t('Common Tunes?')}</a></div>
+          <div style="margin-bottom: 16px;"><a href="/me/and/{detailPerson.person_id}?from={sessionPath}" class="person-detail-link">{t('Tunes in common')}</a></div>
         {/if}
 
         {#if detailRow && (isSessionAdmin || detailPerson.person_id === currentUserId)}
@@ -559,6 +632,23 @@
     font-size: 0.86rem;
   }
   .person-row.archived { opacity: 0.55; }
+  .people-pane { display: flex; flex-direction: column; gap: 10px; }
+  .people-pane-row { display: flex; flex-direction: column; gap: 6px; }
+  .people-pane-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .people-pane-sort { display: flex; gap: 8px; align-items: stretch; }
+  .people-pane-sort :global(.filter-button-group) { flex: 1; }
+  .people-pane :global(.filter-button-group .filter-sort-btn) { flex: 1; }
+  .person-last-here { font-size: 0.86rem; color: var(--text-muted); white-space: nowrap; }
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+  }
   .person-badges { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 2px; }
   .pd-hint { font-size: 0.82rem; color: var(--text-muted, #6c757d); margin: 8px 0 0; }
   .pd-action {

@@ -711,11 +711,30 @@ components:
               confirmed: { type: boolean }
               archived: { type: boolean }
               is_admin: { type: boolean }
+              # On Ceol (a login), not only a name on the roster: only they can be
+              # confirmed, or have tunes in common with you.
+              has_user_account: { type: boolean }
               attending: { type: boolean }
               # How often they come (the attendance picker orders by these).
               attendance_count: { type: integer }
               recent_attendance_count: { type: integer }
               last_attended: { type: [string, "null"] }
+    CommonTunes:
+      type: object
+      required: [success, tunes, count]
+      properties:
+        success: { type: boolean, const: true }
+        count: { type: integer }
+        tunes:
+          type: array
+          items:
+            type: object
+            required: [tune_id, tune_name, tune_type, tunebook_count]
+            properties:
+              tune_id: { type: integer }
+              tune_name: { type: string }
+              tune_type: { type: [string, "null"] }
+              tunebook_count: { type: integer }
     TuneSearch:
       type: object
       required: [success, tunes, count]
@@ -1359,6 +1378,21 @@ paths:
       requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/MyTunesOp" } } } }
       responses:
         "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/MyTunesOpResult" } } } }
+        default: { $ref: "#/components/responses/Error" }
+  /api/my-tunes/common/{other_person_id}:
+    get:
+      operationId: getCommonTunes
+      summary: >-
+        The tunes you and another person both have as learned or learning, A to Z by
+        default. Someone with no tunebook (or no login) has none in common.
+      security: [{ bearer: [] }]
+      parameters:
+        - { name: other_person_id, in: path, required: true, schema: { type: integer } }
+        - { name: search, in: query, required: false, schema: { type: string } }
+        - { name: tune_type, in: query, required: false, schema: { type: string } }
+        - { name: sort, in: query, required: false, schema: { type: string, enum: [alpha-asc, alpha-desc, popularity-desc] } }
+      responses:
+        "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/CommonTunes" } } } }
         default: { $ref: "#/components/responses/Error" }
   /api/offline/bundle:
     get:

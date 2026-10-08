@@ -333,3 +333,36 @@ export function filterPeople(peopleData, currentFilter, searchQuery) {
   }
   return filtered
 }
+
+/**
+ * People-tab sorts. `regular` is the server's own order (who has come most in the last
+ * six months, then most ever), so the default leaves the list as it arrived. `last` is
+ * the night they last came; someone never checked in goes last whichever way it runs.
+ * `name` is first name, then last.
+ *
+ * `dir` is 'desc' or 'asc'. Each mode starts the way you'd want it (PEOPLE_SORT_DEFAULT_DIR):
+ * the most and the latest first, names A to Z.
+ */
+export const PEOPLE_SORTS = ['regular', 'last', 'name']
+export const PEOPLE_SORT_DEFAULT_DIR = { regular: 'desc', last: 'desc', name: 'asc' }
+
+const personName = (p) => `${p.first_name || ''} ${p.last_name || ''}`.trim().toLowerCase()
+const byName = (a, b) => personName(a).localeCompare(personName(b))
+const byCounts = (a, b) =>
+  (a.recent_attendance_count || 0) - (b.recent_attendance_count || 0) ||
+  (a.attendance_count || 0) - (b.attendance_count || 0)
+
+export function sortPeople(people, sort) {
+  const flip = sort.dir === 'asc' ? 1 : -1
+  return [...people].sort((a, b) => {
+    if (sort.type === 'name') return flip * byName(a, b)
+    if (sort.type === 'last') {
+      if (!a.last_attended !== !b.last_attended) return a.last_attended ? -1 : 1
+      if (!a.last_attended) return byName(a, b)
+      const byDate = flip * (a.last_attended || '').localeCompare(b.last_attended || '')
+      if (byDate) return byDate
+    }
+    // Ties read A to Z whichever way the counts run.
+    return flip * byCounts(a, b) || byName(a, b)
+  })
+}

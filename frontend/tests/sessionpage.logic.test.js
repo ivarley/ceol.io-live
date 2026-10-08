@@ -10,6 +10,7 @@ import {
   filterAndSortTunes,
   filterInstanceGroups,
   filterPeople,
+  sortPeople,
   instanceTimeLabel,
   instanceUrlId,
   isEmptyLog,
@@ -285,6 +286,44 @@ describe('people helpers', () => {
   it('searches over name and instruments', () => {
     expect(filterPeople(people, 'members', 'flute').map((p) => p.person_id)).toEqual([2])
     expect(filterPeople(people, 'members', 'malone').map((p) => p.person_id)).toEqual([1])
+  })
+})
+
+describe('sortPeople', () => {
+  const person = (id, first, recent, ever, last) => ({
+    person_id: id,
+    first_name: first,
+    last_name: 'X',
+    recent_attendance_count: recent,
+    attendance_count: ever,
+    last_attended: last,
+  })
+  const people = [
+    person(1, 'Cara', 2, 10, '2026-09-01'),
+    person(2, 'Aoife', 5, 6, '2026-10-01'),
+    person(3, 'Brian', 2, 10, null),
+    person(4, 'Dara', 0, 0, null),
+  ]
+  const ids = (sort) => sortPeople(people, sort).map((p) => p.person_id)
+
+  it('regular: recent nights, then all nights, ties A to Z either way', () => {
+    expect(ids({ type: 'regular', dir: 'desc' })).toEqual([2, 3, 1, 4])
+    expect(ids({ type: 'regular', dir: 'asc' })).toEqual([4, 3, 1, 2])
+  })
+
+  it('last: the latest night first; never checked in goes last both ways', () => {
+    expect(ids({ type: 'last', dir: 'desc' })).toEqual([2, 1, 3, 4])
+    expect(ids({ type: 'last', dir: 'asc' })).toEqual([1, 2, 3, 4])
+  })
+
+  it('name: first name then last', () => {
+    expect(ids({ type: 'name', dir: 'asc' })).toEqual([2, 3, 1, 4])
+    expect(ids({ type: 'name', dir: 'desc' })).toEqual([4, 1, 3, 2])
+  })
+
+  it('leaves the list it was given alone', () => {
+    sortPeople(people, { type: 'name', dir: 'asc' })
+    expect(people.map((p) => p.person_id)).toEqual([1, 2, 3, 4])
   })
 })
 

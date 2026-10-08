@@ -159,13 +159,24 @@ final class CeolUITests: XCTestCase {
         snapshot("session logs filter")
         app.buttons["filters.done"].tap()
 
-        // People: the search, and members / visitors / archived behind the filter.
+        // People: the search, and members / visitors / archived and the sort behind the
+        // filter. Each row says whether they're on Ceol.
         app.buttons.containing(NSPredicate(format: "label BEGINSWITH 'People'")).firstMatch.tap()
         XCTAssertTrue(app.textFields["people.search"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier == 'session.person' AND value == 'On Ceol'")).firstMatch.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier == 'session.person' AND value == 'Not on Ceol'")).firstMatch.exists)
+        snapshot("session people")
         app.buttons["people.search.filter"].tap()
         XCTAssertTrue(app.buttons["Visitors"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Regulars"].exists)
+        app.buttons["Name"].tap()
         snapshot("session people filter")
         app.buttons["filters.done"].tap()
+        // Sorted by name, Aisling Burke leads the members.
+        let first = app.buttons.matching(identifier: "session.person").firstMatch
+        XCTAssertTrue(first.waitForExistence(timeout: 5))
+        XCTAssertTrue(first.label.hasPrefix("Aisling Burke"), first.label)
+        snapshot("session people by name")
     }
 
     /// A session's + buttons: a tune onto its list (from the catalogue, with the name the
@@ -264,6 +275,39 @@ final class CeolUITests: XCTestCase {
         night.tap()
         XCTAssertTrue(app.buttons["night.header"].waitForExistence(timeout: 15))
         snapshot("person's night")
+    }
+
+    /// Someone on Ceol: their sheet leads to the tunes you both have, filtered and opened
+    /// in the app.
+    @MainActor
+    func testTunesInCommon() throws {
+        let app = launch()
+        signIn(app)
+        app.buttons["tab.sessions"].firstMatch.tap()
+        let mueller = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Mueller Session'")).firstMatch
+        XCTAssertTrue(mueller.waitForExistence(timeout: 10))
+        mueller.tap()
+        app.buttons.containing(NSPredicate(format: "label BEGINSWITH 'People'")).firstMatch.tap()
+        let sarah = app.buttons.matching(NSPredicate(format: "identifier == 'session.person' AND label BEGINSWITH \"Sarah O'Connor\"")).firstMatch
+        XCTAssertTrue(sarah.waitForExistence(timeout: 10))
+        sarah.tap()
+
+        let common = app.buttons["person.commonTunes"]
+        XCTAssertTrue(common.waitForExistence(timeout: 10))
+        common.tap()
+        XCTAssertTrue(app.staticTexts["common.count"].waitForExistence(timeout: 10))
+        let tunes = app.buttons.matching(identifier: "common.tune")
+        XCTAssertTrue(tunes.firstMatch.waitForExistence(timeout: 5))
+        snapshot("tunes in common")
+
+        let search = app.textFields["common.search"]
+        search.tap()
+        search.typeText("maggie")
+        XCTAssertEqual(tunes.count, 1)
+        snapshot("tunes in common searched")
+        tunes.firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["Drowsy Maggie"].firstMatch.waitForExistence(timeout: 10))
+        snapshot("tune in common")
     }
 
     /// Phase 3c: the Tunes tab, a tune's sheet, and the catalogue below your matches.

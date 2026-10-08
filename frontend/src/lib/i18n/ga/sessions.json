@@ -239,8 +239,8 @@
     "ga": "Féach ar mo phróifíl",
     "review": true
   },
-  "Common Tunes?": {
-    "ga": "Foinn i bpáirt?",
+  "Tunes in common": {
+    "ga": "Foinn i bpáirt",
     "review": true
   },
   "Relationship to this session": {
@@ -987,6 +987,34 @@
       "many": "{placed} as {n} bhfonn curtha",
       "other": "{placed} as {n} fonn curtha"
     },
+    "review": true
+  },
+  "Show": {
+    "ga": "Taispeáin",
+    "review": true
+  },
+  "Regulars": {
+    "ga": "Gnáthsheinnteoirí",
+    "review": true
+  },
+  "Last here": {
+    "ga": "An uair dheireanach anseo",
+    "review": true
+  },
+  "On Ceol": {
+    "ga": "Ar Cheol",
+    "review": true
+  },
+  "Not on Ceol": {
+    "ga": "Gan a bheith ar Cheol",
+    "review": true
+  },
+  "Sorting downward": {
+    "ga": "Ag sórtáil anuas",
+    "review": true
+  },
+  "Sorting upward": {
+    "ga": "Ag sórtáil aníos",
     "review": true
   }
 }
