@@ -2540,6 +2540,72 @@ the segmenter asks for a check on every one under 100. Refitting with more
 labelled nights is a new version; a stored confidence keeps the version that
 made it.
 
+**Letting go when belief drops** (2026-10-08). Of the 36 labelled tunes still
+not named right over thirteen nights, 13 had been shown at some point but were
+drafted as another; the next biggest groups: 8 a candidate never shown, 6 not
+heard as a tune (quiet, talk), 6 never a candidate (first time, or Mac's
+Fancy off its key), 3 under 45 s. The player's idea: a tune that was 100%
+and drops has changed; stop hearing it. Measured as a signal on the saved
+states: a tune held at 0.99 or more for 40 s whose belief falls under 0.9 is
+a changeover 59% of the time, a set's end 38%, mid-tune 3% (26 of 817), and
+such a drop comes at 89% of changeovers (held only 12 s: 8% mid-tune).
+`Listener(drop_release_s=)`: on such a drop the tune is ruled out for that
+long, as a "none of these" tap does. Replayed on all thirteen nights at 60 s,
+against the same with the long settings left out, through the same final
+steps: named right 882 -> 884 of 918 (fixed 5, all of the shown-but-drafted-
+as-another kind: The Sailor's Bonnet, The Porthole Of The Kelp, The New Custom
+House, The Bunch Of Green Rushes twice; broken 3 on the hard nights,
+Mulqueen's and Da New Rigged Ship on 139, Mickey Chewing Bubblegum on 115;
+p 0.73); wrong or extra 42 -> 47; to check 65 -> 69; starts unchanged (687 ->
+684 within 1 s). Not adopted at 60 s. At 20 s, same nights and steps:
+named right 882 -> 884 (fixed 3: The Porthole Of The Kelp, The Bunch Of Green
+Rushes twice; broken 1: Da New Rigged Ship on 139; p 0.62); wrong or extra
+42 -> 44; to check 65 -> 69; starts 687 -> 684 within 1 s. Two more named
+against two more extras and four more to check, and neither length is
+distinguishable from chance: not adopted; `drop_release_s` stays, off by
+default. The shown-but-drafted-as-another misses are not mostly a held tune
+refusing to let go.
+
+**"The tune may have changed" on the meter** (2026-10-08). The player wants
+the meter, live, to go quickly from "I'm hearing X" to "the tune may have
+changed, I'm listening for what it is". Measured on the saved states of the
+thirteen labelled nights, at the changeovers inside sets where the old tune
+was at 99% or more just before (477 to 505 of them by rule): today the meter
+claims the old tune until 9 s after the new one's marked start (median; 90%
+by 15 s) and names the new one at 11 s (22 s), and there is no state between
+the two. The listener's belief in the old tune falls under 90% at 7 s, about
+the step the meter lets go: most of the wait is the 6 s window and a step
+every 4 s, not the meter holding on.
+
+- *A state between.* The listener's state gains `changing`
+  (`ChangeWatch`). First rule ("held"): shown at 99% for 40 s, then under
+  95%. The meter stops claiming the old tune at 7 s (90% by 11 s); the new one
+  is named when it was; "may have changed" inside tunes 3.4 times an hour.
+- *The player's AND* (adopted, rule "rounds"): the tune has been at 99%, has
+  gone round 1.8 times or more since it was shown (time over the beat the
+  listener hears, times the tune's eighths per round, `form.RoundLengths`,
+  the median over its settings), and its belief falls under 80%. 8 s (75% by
+  10 s, 90% by 13 s), new tune named unchanged, 0.8 an hour inside tunes,
+  against 3.4. Under 95% instead of 80%: 7 s (11 s), 2.3 an hour. How many
+  times a tune went round (counted from its marked start): 3 times 354 of
+  477, twice 35, 4 times 36, others 52; a rule wanting nearly 3 rounds (2.8)
+  never fires on about 1 change in 9.
+- *Following the held tune* (forward scores only, its settings plus a way
+  out, the beat from the whole stretch, so a little flattered): the way out
+  wins at a median 2.8 s (75% by 5.4 s, 90% by 13.5 s), never within 30 s on
+  42 of 477, false alarms 6.1 an hour in the 45 s before a change. Fast when
+  it locks on, but it misses about 1 in 10; with 1.8 rounds it is 3.0 s
+  median, 90% by 15.5 s, 34 never, 2.1 an hour. Not adopted: it would need
+  the follower live, and the rounds rule has a fifth of its false alarms.
+- *A step every 2 s* (`Listener(hop_ms=2000)`, the decoder's lam and p_switch
+  halved so a second counts the same; six nights): the old tune let go at 10
+  s against 9, the new one named at 11 s against 12; with the rounds rule 9 s
+  against 8, 1.5 an hour against 0.9. No gain for twice the compute; the
+  step stays 4 s.
+
+The meter shows it on the lab page and on the phone ("The tune may have
+changed (was X). Listening for what it is…"), once the service runs this.
+
 **Settings that match everything** (2026-10-08). The Mason's Apron was the
 commonest wrong name over thirteen labelled nights (8 times, right once), and
 two of its 35 settings on thesession.org are pages of variations, about 1,600
