@@ -128,11 +128,81 @@ class Models:
             from lab.corpus.index import candidate_tune_ids
 
             self.popular = candidate_tune_ids("popular")
+        # eighths per round of each tune, for the meter's count of rounds played
+        # (ChangeWatch); without the dump every tune counts by time instead
+        from lab.analysis.form import RoundLengths
+
+        try:
+            self.round_lengths = RoundLengths()
+        except OSError:
+            self.round_lengths = lambda tune_id: None
+
+
+class ChangeWatch:
+    """The meter's "the tune may have changed": the tune shown is no longer
+    claimed, until its belief is back at FULL or another tune is shown.
+
+    rule "rounds" (`rounds`, a RoundLengths): the tune has been at FULL since
+    it was shown, has gone round ROUNDS times or more (time since it was
+    shown, over the beat heard times its eighths per round), and its belief
+    falls under DOUBT. A tune with no readable setting counts as having gone
+    round once it has been shown HELD_MS. The player's idea (2026-10-08): a
+    tune played through and then doubted has almost surely changed.
+
+    rule "held" (`rounds` None): at FULL for HELD_MS, then under HELD_DOUBT."""
+
+    FULL, DOUBT, ROUNDS = 0.99, 0.8, 1.8
+    HELD_MS, HELD_DOUBT = 40000, 0.95
+
+    def __init__(self, rounds=None):
+        self.rounds = rounds
+        self.tune = self.changing = None
+        self.changing_since = None
+
+    def _reset(self, tune, t):
+        self.tune, self.since, self.last_t = tune, t, t
+        self.full_since, self.gone_round, self.period = None, 0.0, None
+        self.changing = None
+
+    def step(self, t, belief, shown, none, period_ms=None):
+        """One state in: `belief` {tune: p}, the tune `shown` (None for
+        none), the belief in "not a tune", the beat heard (ms, or None).
+        -> the tune that may have changed, or None."""
+        from lab.analysis.follow import eighth
+
+        if none > 0.5 or shown is None:
+            self.tune = self.changing = None
+            return None
+        if shown != self.tune:
+            self._reset(shown, t)
+        if period_ms:
+            self.period = eighth(period_ms)
+        per_round = self.rounds(shown) if self.rounds is not None else None
+        if per_round and self.period:
+            self.gone_round += (t - self.last_t) / (self.period * per_round)
+        self.last_t = t
+        p = belief.get(shown, 0.0)
+        if p >= self.FULL:
+            self.changing = None
+            if self.full_since is None:
+                self.full_since = t
+            return None
+        if self.changing is not None or self.full_since is None:
+            return self.changing
+        if self.rounds is None:
+            doubted = p < self.HELD_DOUBT and t - self.full_since >= self.HELD_MS
+        else:
+            played = self.gone_round >= self.ROUNDS if per_round else t - self.since >= self.HELD_MS
+            doubted = p < self.DOUBT and played
+        if doubted:
+            self.changing, self.changing_since = shown, t
+        return self.changing
 
 
 class Listener:
     def __init__(self, out_dir, models=None, rule_out_s=30.0, audio_name="audio.wav", keep_s=None,
-                 session_tunes=None, second_tier=None, nu_partly=0.0, drop_release_s=None, hop_ms=HOP_MS):
+                 session_tunes=None, second_tier=None, nu_partly=0.0, drop_release_s=None, hop_ms=HOP_MS,
+                 change_rule="rounds"):
         from lab.bench.stream import ChunkScorer, Decoder
 
         m = models or Models()
@@ -176,7 +246,8 @@ class Listener:
         # long, as a "none of these" tap does, rather than wait for it to fade
         self.drop_release_s = drop_release_s
         self._held, self._held_steps = None, 0
-        self._steady, self._steady_since, self._changing = None, 0, None   # _watch_change
+        self.change_watch = ChangeWatch(
+            rounds=getattr(m, "round_lengths", lambda tune_id: None) if change_rule == "rounds" else None)
         self.banned = {}          # tune -> until (ms of audio)
         self.widen_until = 0
         self.state = {"status": "waiting for audio", "t_ms": 0, "top": [], "none": 1.0, "history": []}
@@ -250,6 +321,7 @@ class Listener:
 
         frames = {fe.name: self._frames(fe.name) for fe in self.frontends}
         feats = audio_features(self.store, t, frames)
+        self._period_ms = feats.get("period_ms")       # the beat, for counting rounds (ChangeWatch)
         chunk["tune_logodds"] = self.tuneness.logodds(with_evidence(feats, chunk))
         if self.tempo is not None and chunk["scores"]:
             # each candidate's cost for the beat heard, by its type (analysis.tempo)
@@ -285,47 +357,20 @@ class Listener:
                for s, p in belief if s != NONE and s not in self.banned][:5]
         hist = self.state["history"]
         now = None if shown == NONE else int(shown)
-        changing = self._watch_change(t, dict(belief), now, none)
+        changing = self.change_watch.step(t, dict(belief), now, none, getattr(self, "_period_ms", None))
         if now is not None and (not hist or hist[-1]["tune_id"] != now):
             hist.append({"tune_id": now, "name": self.names.get(now), "from_ms": t})
         self.state = {"status": "listening", "t_ms": t, "top": top, "none": round(none, 4),
                       "tuneness": round(1 / (1 + np.exp(-chunk.get("tune_logodds", 0.0))), 3),
                       "shown": now, "notes": chunk["n_notes"], "wide": wide,
                       "changing": None if changing is None else
-                      {"tune_id": int(changing), "name": self.names.get(changing), "since_ms": self._changing_since},
+                      {"tune_id": int(changing), "name": self.names.get(changing),
+                       "since_ms": self.change_watch.changing_since},
                       "compute_ms": int(1000 * (time.time() - started)),
                       "timing": getattr(self, "timing", None),
                       "lag_ms": self.store.duration_ms - t, "history": hist[-8:]}
         self._states.write(json.dumps({k: v for k, v in self.state.items() if k != "history"}) + "\n")
         self._states.flush()
-
-    STEADY_P, STEADY_MS, DOUBT_P = 0.99, 40000, 0.95
-
-    def _watch_change(self, t, belief, shown, none):
-        """The meter's "may have changed": a tune shown at STEADY_P or more for
-        STEADY_MS whose belief falls under DOUBT_P is no longer claimed, until
-        it is back at STEADY_P or another is shown. Over thirteen labelled
-        nights (the saved states) the meter stopped claiming the old tune at a
-        changeover 7 s after it (median; 90% by 11 s) rather than 9 s (15 s),
-        for 2.6 "may have changed" an hour inside tunes."""
-        if none > 0.5 or shown is None:
-            self._steady = self._changing = None
-            return None
-        p = belief.get(shown, 0.0)
-        if self._changing is not None:
-            if shown != self._changing:
-                self._steady = self._changing = None
-            elif p >= self.STEADY_P:
-                self._changing = None
-            return self._changing
-        if p >= self.STEADY_P:
-            if self._steady != shown:
-                self._steady, self._steady_since = shown, t
-        elif self._steady == shown and p < self.DOUBT_P and t - self._steady_since >= self.STEADY_MS:
-            self._changing, self._changing_since = shown, t
-        elif self._steady != shown:
-            self._steady = None
-        return self._changing
 
     HELD_P, HELD_MS, DROP_P = 0.99, 40000, 0.9
 

@@ -94,21 +94,19 @@ def test_confirm_and_rule_out():
     assert d.belief(1)[0][0] == 99
 
 
-def test_meter_says_the_tune_may_have_changed():
-    """Listener._watch_change: a tune held at 99% for 40 s whose belief falls
-    under 95% is no longer claimed, until it is back at 99% or another is shown."""
-    import types
+def test_meter_says_the_tune_may_have_changed_when_held_then_doubted():
+    """ChangeWatch, rule "held": a tune at 99% for 40 s whose belief falls
+    under 95% is no longer claimed, until it is back at 99% or another is
+    shown."""
+    from lab.tools.listen import ChangeWatch
 
-    from lab.tools.listen import Listener
-
-    w = types.SimpleNamespace(_steady=None, _steady_since=0, _changing=None, STEADY_P=Listener.STEADY_P,
-                              STEADY_MS=Listener.STEADY_MS, DOUBT_P=Listener.DOUBT_P)
+    w = ChangeWatch()
 
     def at(t, p, shown=7, none=0.0, other=None):
         belief = {7: p}
         if other:
             belief[other] = 1 - p
-        return Listener._watch_change(w, t, belief, shown, none)
+        return w.step(t, belief, shown, none)
 
     for t in range(0, 44000, 4000):
         assert at(t, 0.995) is None
@@ -117,11 +115,34 @@ def test_meter_says_the_tune_may_have_changed():
     assert at(52000, 0.995) is None            # back: claimed again
     assert at(56000, 0.6) == 7
     assert at(60000, 0.4, shown=9, other=9) is None   # another shown: the meter names it
-    # a dip in a tune held only briefly says nothing
-    w._steady, w._changing = None, None
-    assert at(100000, 0.995) is None
-    assert at(104000, 0.8) is None             # held 4 s only
-    # "not a tune" ends it
-    w._steady, w._steady_since, w._changing = 7, 0, None
-    assert at(50000, 0.9) == 7
-    assert at(54000, 0.2, none=0.8) is None
+    assert at(64000, 0.995) is None
+    assert at(68000, 0.8) is None              # a new tune, held 4 s only
+    assert at(72000, 0.2, none=0.8) is None    # "not a tune" ends it
+
+
+def test_meter_says_the_tune_may_have_changed_once_played_round_and_doubted():
+    """ChangeWatch, rule "rounds": a tune at 99% that has gone round 1.8 times
+    (time over the beat times its eighths per round) and falls under 80%."""
+    from lab.tools.listen import ChangeWatch
+
+    w = ChangeWatch(rounds=lambda tune: {7: 100}.get(tune))   # 100 eighths a round
+    period = 200                                             # ms an eighth: 20 s a round
+
+    def at(t, p, shown=7):
+        return w.step(t, {shown: p}, shown, 0.0, period)
+
+    assert at(0, 0.995) is None
+    assert at(30000, 0.7) is None              # 1.5 rounds: a dip mid-tune says nothing
+    assert at(34000, 0.85) is None
+    assert at(36000, 0.995) is None
+    assert at(40000, 0.7) == 7                 # 2 rounds, doubted
+    assert at(44000, 0.9) == 7                 # until back at 99%
+    assert at(48000, 0.995) is None
+    # a tune with no readable setting counts by time: 40 s
+    assert at(52000, 0.995, shown=9) is None
+    assert at(80000, 0.7, shown=9) is None
+    assert at(96000, 0.7, shown=9) == 9
+    # the beat folded to an eighth: a quarter-note period counts the same
+    w2 = ChangeWatch(rounds=lambda tune: 100)
+    w2.step(0, {7: 0.995}, 7, 0.0, 400)
+    assert w2.step(40000, {7: 0.7}, 7, 0.0, 400) == 7
