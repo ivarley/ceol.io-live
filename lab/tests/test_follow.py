@@ -65,3 +65,20 @@ def test_the_vectorised_path_is_the_loops_path():
         a = follow(noisy, chains, n_tunes)
         b = follow_reference(noisy, chains, n_tunes)
         assert np.array_equal(a[0], b[0]) and np.array_equal(a[1], b[1]) and a[2] == b[2], trial
+
+
+def test_a_stretch_fits_the_tune_played_better_than_another():
+    """span_fit: the tune heard, entered mid-form and gone round, against
+    another tune; silence and noise either side cost nothing."""
+    from lab.analysis.follow import span_fit
+
+    rng = np.random.default_rng(3)
+    a = Chain(tune=0, setting_id=1, form=rng.integers(0, 12, 64).astype(np.int8), last_bar=8)
+    b = Chain(tune=0, setting_id=2, form=rng.integers(0, 12, 64).astype(np.int8), last_bar=8)
+    played = np.concatenate([a.form[20:], a.form, a.form[:10]])          # from the middle, round once more
+    heard = np.concatenate([np.full(15, -1), rng.integers(0, 12, 10), played, np.full(15, -1)]).astype(np.int8)
+    fa, fb = span_fit(heard, [a]), span_fit(heard, [b])
+    assert fa > 150 > fb
+    assert abs(span_fit(np.full(40, -1, dtype=np.int8), [a])) < 1e-9
+    # every setting is tried: the tune with the right one among others fits as well
+    assert span_fit(heard, [b, a]) == fa

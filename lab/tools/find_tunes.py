@@ -68,7 +68,7 @@ def find_tunes(wav_path, models, session_tunes=None, keys=None, progress=None, p
     from lab.audio.chunks import AudioStore
     from lab.board.board import Board
     from lab.tools.drafts import (consolidate_unsure, drop_squeezed, follow_drafts, infer_log, join_sets,
-                                  prefer_set_type, refine_ends, tidy)
+                                  judge_drafts, prefer_set_type, refine_ends, tidy)
     from lab.tools.listen import HOP_MS, Listener
 
     progress = progress or (lambda *a: None)
@@ -127,8 +127,6 @@ def find_tunes(wav_path, models, session_tunes=None, keys=None, progress=None, p
         progress(FINISHING, 0, 1)
         drafts = tidy(join_sets(tidy(drop_squeezed(tidy(drafts), log=log)), log=log))
         drafts = tidy(refine_ends(None, drafts, log=log, audio=audio, board=board))
-    store.close()
-    shutil.rmtree(work, ignore_errors=True)
 
     features(drafts, states, duration)
     model = None
@@ -143,6 +141,13 @@ def find_tunes(wav_path, models, session_tunes=None, keys=None, progress=None, p
         # unsure names do not flip-flop: a run of them is one tune
         drafts = prefer_set_type(drafts, states, duration, model, log=log)
         drafts = tidy(consolidate_unsure(drafts, states, duration, model, log=log))
+        # then each stretch is judged by following its candidates
+        checkpoint()
+        with Board(os.path.join(work, "board.sqlite")) as board:
+            drafts = judge_drafts(None, drafts, states, duration, model, log=log, audio=audio, board=board,
+                                  keys=keys or {})
+    store.close()
+    shutil.rmtree(work, ignore_errors=True)    # the audio's copy and the transcriptions
     progress(FINISHING, 1, 1)
     return {
         "drafts": drafts,
