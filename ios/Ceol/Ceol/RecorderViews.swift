@@ -40,6 +40,7 @@ extension NightRecorder {
         if let error { return error }
         guard let s = state else { return tr("Listening…") }
         if s.notATune { return tr("Not a tune right now") }
+        if s.mayHaveChanged { return tr("The tune may have changed…") }
         if let c = s.shownCandidate ?? s.top.first { return c.name ?? tr("Tune \(c.tuneID)") }
         return tr("Listening…")
     }
@@ -108,7 +109,7 @@ struct RecorderBar: View {
                         .foregroundStyle(CeolTokens.textMuted)
                 }
                 Spacer(minLength: 4)
-                if let s = recorder.state, !s.notATune, let c = s.shownCandidate ?? s.top.first {
+                if let s = recorder.state, !s.notATune, !s.mayHaveChanged, let c = s.shownCandidate ?? s.top.first {
                     CertaintyBar(p: c.p, cell: 5, height: 14)
                 }
                 Image(systemName: "chevron.up").font(.system(size: 12)).foregroundStyle(CeolTokens.textMuted)
@@ -195,7 +196,8 @@ struct ListenMeterView: View {
                 }
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
-                    Text("Listening for the tune to end or a new tune to start…")
+                    Text(state?.mayHaveChanged == true ? tr("The tune may have changed. Listening for what it is…")
+                        : tr("Listening for the tune to end or a new tune to start…"))
                         .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
                 }
                 Button("Not this one? Show the others") { recorder.unconfirm() }
@@ -203,6 +205,14 @@ struct ListenMeterView: View {
                     .accessibilityIdentifier("meter.unconfirm")
             }
         } else {
+            if let was = state?.changing, state?.mayHaveChanged == true {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("The tune may have changed (was \(was.name ?? tr("Tune \(was.tuneID)"))). Listening for what it is…")
+                        .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
+                }
+                .accessibilityIdentifier("meter.changing")
+            }
             if state?.notATune == true {
                 Text("Probably not a tune right now (\(Int(((state?.none ?? 0) * 100).rounded()))%)")
                     .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
@@ -224,7 +234,7 @@ struct ListenMeterView: View {
                 let weak = Array(top.filter { $0.p < Self.lowBelief }.prefix(Self.lowShown))
                 VStack(spacing: 8) {
                     ForEach(strong) { c in
-                        Button { recorder.tapThis(c.tuneID) } label: { row(c, shown: c.tuneID == state?.shown) }
+                        Button { recorder.tapThis(c.tuneID) } label: { row(c, shown: c.tuneID == state?.shown && state?.mayHaveChanged != true) }
                             .buttonStyle(.plain)
                             .accessibilityIdentifier("meter.tune")
                     }

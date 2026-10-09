@@ -175,6 +175,15 @@ public struct ListenState: Decodable, Sendable, Equatable {
         enum CodingKeys: String, CodingKey { case tuneID = "tune_id", name, fromMs = "from_ms" }
     }
 
+    /// The tune that was shown, at full belief, and has lost its hold: the tune
+    /// may have changed, and the meter is listening for what it is now.
+    public struct Changing: Decodable, Sendable, Equatable {
+        public let tuneID: Int
+        public internal(set) var name: String?
+        public let sinceMs: Int
+        enum CodingKeys: String, CodingKey { case tuneID = "tune_id", name, sinceMs = "since_ms" }
+    }
+
     /// ms of audio this state is about.
     public let tMs: Int
     public internal(set) var top: [Candidate]
@@ -185,11 +194,13 @@ public struct ListenState: Decodable, Sendable, Equatable {
     /// The tune the decoder would display, if any.
     public let shown: Int?
     public internal(set) var history: [Shown]
+    /// Set while the tune may have changed (absent from an older service).
+    public internal(set) var changing: Changing?
     public let status: String
     public let computeMs: Int?
 
     enum CodingKeys: String, CodingKey {
-        case tMs = "t_ms", top, none, tuneness, shown, history, status, computeMs = "compute_ms"
+        case tMs = "t_ms", top, none, tuneness, shown, history, changing, status, computeMs = "compute_ms"
     }
 
     public init(from decoder: any Decoder) throws {
@@ -200,6 +211,7 @@ public struct ListenState: Decodable, Sendable, Equatable {
         tuneness = try c.decodeIfPresent(Double.self, forKey: .tuneness)
         shown = try c.decodeIfPresent(Int.self, forKey: .shown)
         history = try c.decodeIfPresent([Shown].self, forKey: .history) ?? []
+        changing = try c.decodeIfPresent(Changing.self, forKey: .changing)
         status = try c.decodeIfPresent(String.self, forKey: .status) ?? ""
         computeMs = try c.decodeIfPresent(Int.self, forKey: .computeMs)
     }
@@ -211,6 +223,7 @@ public struct ListenState: Decodable, Sendable, Equatable {
         var s = self
         for i in s.top.indices { s.top[i].name = name(s.top[i].tuneID) ?? s.top[i].name }
         for i in s.history.indices { s.history[i].name = name(s.history[i].tuneID) ?? s.history[i].name }
+        if let c = s.changing { s.changing?.name = name(c.tuneID) ?? c.name }
         return s
     }
 
@@ -218,6 +231,8 @@ public struct ListenState: Decodable, Sendable, Equatable {
     public var shownCandidate: Candidate? { top.first { $0.tuneID == shown } }
     /// It is more sure that nothing is being played as a tune than that anything is.
     public var notATune: Bool { none > 0.5 }
+    /// The tune shown may have changed: no tune is claimed until the meter hears which.
+    public var mayHaveChanged: Bool { changing != nil && !notATune }
 }
 
 /// A message from the service, by its "type".

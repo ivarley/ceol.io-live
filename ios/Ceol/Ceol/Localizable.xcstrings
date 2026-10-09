@@ -7325,6 +7325,36 @@
         }
       }
     },
+    "The tune may have changed (was %@). Listening for what it is…": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "B'fhéidir gur athraigh an fonn (%@ a bhí ann). Ag éisteacht le fáil amach cén fonn atá ann…"
+          }
+        }
+      }
+    },
+    "The tune may have changed. Listening for what it is…": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "B'fhéidir gur athraigh an fonn. Ag éisteacht le fáil amach cén fonn atá ann…"
+          }
+        }
+      }
+    },
+    "The tune may have changed…": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "B'fhéidir gur athraigh an fonn…"
+          }
+        }
+      }
+    },
     "The tunes you know, the sessions you play, and what gets played there.": {
       "localizations": {
         "ga": {
