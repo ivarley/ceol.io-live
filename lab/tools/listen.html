@@ -85,6 +85,10 @@ function render() {
   const top = state.top || [];
   if (state.none > 0.5) {
     $("now").innerHTML = "Probably not a tune right now (" + Math.round(state.none * 100) + "%)";
+  } else if (state.changing) {
+    // the tune shown has lost its hold: it may have changed (Listener._watch_change)
+    $("now").innerHTML = "The tune may have changed (was <b>" + (state.changing.name || state.changing.tune_id) +
+      "</b>), listening for what it is…";
   } else if (state.shown != null) {
     const t = top.find((x) => x.tune_id === state.shown);
     $("now").innerHTML = "Showing <b>" + (t ? t.name : state.shown) + "</b>";
@@ -95,7 +99,7 @@ function render() {
     $("rows").innerHTML = '<div class="empty">Listening…</div>';
   } else {
     $("rows").innerHTML = top.map((t) =>
-      '<button class="row' + (t.tune_id === state.shown ? " shown" : "") + (t.tune_id === confirmed ? " confirmed" : "") +
+      '<button class="row' + (t.tune_id === state.shown && !state.changing ? " shown" : "") + (t.tune_id === confirmed ? " confirmed" : "") +
       '" data-id="' + t.tune_id + '">' +
       '<div><div class="name">' + t.name + "</div>" +
       '<div class="meta">' + (t.type || "") + (t.outside ? " · new to this session" : "") + " · " +

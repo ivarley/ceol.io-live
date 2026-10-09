@@ -739,7 +739,7 @@ def session_tunes_before(rid, last_nights=None):
 
 
 def replay(rid, out_path, log=print, transpose=0, merged=False, tempo=False, new_session=False,
-           history_nights=None, popular=None, nu_partly=0.0, drop_release_s=None):
+           history_nights=None, popular=None, nu_partly=0.0, drop_release_s=None, hop_ms=None):
     """The listener (lab listen, the service's) run over a recording's audio
     offline, for a night recorded without the phone's meter: its states written
     as a meter log (dir "in"; at_ms is the audio time, there being no screen),
@@ -774,7 +774,8 @@ def replay(rid, out_path, log=print, transpose=0, merged=False, tempo=False, new
     li = Listener(tempfile.mkdtemp(prefix=f"replay-{rid}-"),
                   models=Models(transpose=transpose, merged=merged, tempo=model),
                   keep_s=120, session_tunes=session, second_tier=second, nu_partly=nu_partly,
-                  drop_release_s=drop_release_s)
+                  drop_release_s=drop_release_s, hop_ms=hop_ms or STEP)
+    STEP = li.hop_ms
     part = out_path + ".part"
     started = time.time()
     with open(part, "w") as out:
