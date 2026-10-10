@@ -75,6 +75,8 @@ final class AppModel {
 
     /// The recordings on this phone, and their uploads (RecordingStore).
     let recordings = RecordingStore()
+    /// The file the phone decides from when it listens offline, kept current.
+    let deciderData = DeciderRefresher()
 
     /// Start recording a night (stopping any other first), and open the meter.
     func startRecording(instanceID: Int, title: String) {
@@ -199,6 +201,7 @@ final class AppModel {
         phase = user.needsProfileSetup || next == .setupProfile ? .profileSetup : .signedIn
         // a recording's upload left half-way when the app last went away
         recordings.resume(app: self)
+        deciderData.start(app: self)
     }
 
     /// Profile setup saved: reload who we are and carry on.

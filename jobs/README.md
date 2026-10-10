@@ -158,3 +158,27 @@ What runs where:
 3. **Test edge cases with time simulation**
 4. **Dry run against production:** `python3 jobs/test_active_sessions.py --prod-db --dry-run`
 5. **Deploy and monitor**
+
+### publish_decider_data.py
+**Weekly rebuild of the phone's decider file** (spec 053, "Listening on the phone,
+offline") — riding along on `check_active_sessions.py` in the same way, after the
+merge sync. The app decides what tune is playing on the phone itself, from a 16 MB
+file built from thesession.org's corpus (`lab/corpus/decider_file.py`); this
+downloads the week's dump, rebuilds the file with the default session's
+repertoire from the database, and publishes it to the recordings bucket for the
+app to fetch (`services/decider_data_service.py`, `GET /api/listen/decider-data`).
+
+The gate is the published manifest's `checked_at`: due once a week from Monday
+07:00 UTC, an hour after the merge sync's window, and a missed Monday is caught
+up at the next run. An unchanged week (the same dump, repertoire and
+configuration) builds nothing and only records the check. A build takes about 40 s
+and 180 MB on a laptop; standard library only.
+
+**Needs the `AWS_*` variables** (the web service's values) on the cron service,
+which it does not have yet: without them it skips itself quietly. By hand:
+
+```bash
+python3 jobs/publish_decider_data.py           # rebuild and publish now, if anything changed
+python3 jobs/publish_decider_data.py --force   # publish even if nothing has
+```
+

@@ -1,10 +1,12 @@
 """Deciding on the phone (spec 053, "Listening on the phone, offline").
 
 The phone already hears for itself (CeolKit's CeolHearing); this is what it
-needs to decide too, with no connection: `listen.Listener.decide` and the
-data it reads, in a form Swift can map straight from a file.
+needs to decide too, with no connection: `listen.Listener.decide` and the data
+it reads, in a file Swift maps (`lab.corpus.decider_file`, which documents it).
 
-    python -m lab decider export                  # -> lab/data/index/decider-v1.bin
+    python -m lab decider export              # from the lab's tunes.csv -> lab/data/index/decider-v1.bin
+    python -m lab decider export --from-index # from the index the listener loads (for the fixtures)
+    python -m lab decider publish             # build from the newest dump and publish it for the app
     python -m lab decider fixtures --out ios/CeolKit/Tests/CeolDecidingTests/Fixtures
 
 The listening service's live configuration only (`Models()` as the service
@@ -15,44 +17,24 @@ corpus's postings restricted to the session's tunes, with its document
 frequencies counted over those tunes (checked equal, posting for posting, to
 the built one, 2026-10-10), so a session's repertoire is a list of tune ids.
 
-The file, little-endian throughout:
-
-    "CEOLDEC1", u32 version, u32 section count, then per section u64 offset
-    and u64 element count; each section starts on an 8-byte boundary.
-
-     0 meta       utf-8 JSON: the configuration and provenance (below)
-     1 tune_ids   i32 per tune, ascending; a tune's position is its index
-     2 gram_count i32 per tune: distinct n-grams across its settings
-     3 gram_keys  u32 per n-gram, ascending: sum((step + 6) * 12**i)
-     4 post_off   u32, n_grams + 1: each n-gram's tunes in `postings`
-     5 postings   u16 tune indexes, ascending within an n-gram
-     6 repertoire u16 tune indexes: the default session's tunes
-     7 set_off    u32, n_tunes + 1: each tune's settings in `seq_off`
-     8 seq_off    u32, n_settings + 1: each setting's symbols
-     9 symbols    i8 pitch classes, the "notes" reading (sequences.TuneSequences)
-    10 name_off   u32, n_tunes + 1
-    11 names      utf-8
-    12 type_off   u32, n_tunes + 1
-    13 types      utf-8
-
-A tune's postings are per tune, not per setting: the lookup counts each tune
-once per n-gram however many of its settings hold it, and the setting it
-would name is not used live.
+Two ways to the same file. From the dump is what production publishes every
+week (jobs/publish_decider_data.py), built in one pass with the standard
+library. From the index packs the pickles `listen.Models` loads, so the file
+and the fixtures (made by the listener with those) are about the same corpus:
+the lab's index is rebuilt only deliberately, and the dump it came from is
+usually not the newest. The two are held equal on the same dump by
+lab/tests/test_decider_file.py.
 """
 
 import copy
 import json
 import os
-import struct
 import tempfile
-import time
+from array import array
 
 import numpy as np
 
-VERSION = 1
-MAGIC = b"CEOLDEC1"
-SECTIONS = ("meta", "tune_ids", "gram_count", "gram_keys", "post_off", "postings", "repertoire",
-            "set_off", "seq_off", "symbols", "name_off", "names", "type_off", "types")
+from lab.corpus import decider_file as D
 
 # fixtures: (name, recording, start seconds, seconds, taps). A tap comes after
 # the step it names (its index), as a person answering the state on screen:
@@ -68,114 +50,60 @@ CLIPS = (
 def default_path():
     from lab import paths
 
-    return os.path.join(paths.index_dir(), f"decider-v{VERSION}.bin")
+    return os.path.join(paths.index_dir(), f"decider-v{D.FORMAT_VERSION}.bin")
 
 
-def gram_key(g):
-    return sum((v + 6) * 12 ** i for i, v in enumerate(g))
-
-
-def listener_config():
-    """What `Listener` and the service fix that the decider needs, read from
-    the code rather than restated, so a change there shows up here."""
-    import inspect
-
-    from lab.bench.stream import ChunkScorer, Decoder
-    from lab.tools import listen
-
-    sig = inspect.signature(listen.Listener.__init__)
-    dec = {k: v.default for k, v in inspect.signature(Decoder.__init__).parameters.items()
-           if v.default is not inspect.Parameter.empty and k != "n_settings"}
-    scorer = {k: v.default for k, v in inspect.signature(ChunkScorer.__init__).parameters.items()
-              if k in ("keep",)}
-    return {"hop_ms": listen.HOP_MS, "pool_ms": listen.POOL_MS, "window_ms": 6000,
-            "keep": scorer["keep"], "pool_top": 100, "fallback_top": 20, "wide_pool_top": 300,
-            "wide_fallback_top": 60, "rule_out_s": sig.parameters["rule_out_s"].default,
-            "chunk_notes": 24, "decoder": {**dec, "nu": 0.05}, "frontends": ["yin", "basic_pitch", "pesto"]}
-
-
-def export(path=None):
-    from lab.analysis.tuneness import NAMES, TunenessModel
+def export_from_index(path):
+    """The file from the lab's built index and sequences: what the listening
+    service and the fixtures' listener decide with."""
     from lab.corpus.index import Index
     from lab.corpus.sequences import TuneSequences
 
-    path = path or default_path()
-    t0 = time.time()
     a = Index.load("all", n=6, fold_octaves=True)
     rep = Index.load("repertoire", n=6, fold_octaves=True)
     seqs = TuneSequences.load("all")
-    tune = sorted(set(a.tune_names) | set(seqs.by_tune))
-    if len(tune) >= 1 << 16:
-        raise SystemExit(f"{len(tune)} tunes: postings are u16, widen them")
-    at = {t: i for i, t in enumerate(tune)}
+    postings = {}
+    for g, v in a.postings.items():
+        postings[D.gram_key(g)] = array("i", (t for t, _ in v))
+    by_tune = {t: [bytes(int(x) % 256 for x in plain) for _, _, plain in v] for t, v in seqs.by_tune.items()}
+    source = {"index_sha1": a.meta["sha1"], "repertoire_index_sha1": rep.meta["sha1"],
+              "index_built_at": a.meta.get("built_at"), "parser_version": a.meta.get("parser_version")}
+    return D.write(path, a.tune_names, a.tune_types, postings, by_tune, set(rep.tune_names), source)
 
-    keys = sorted(a.postings, key=gram_key)
-    post_off, postings = [0], []
-    for g in keys:
-        postings.extend(sorted({at[t] for t, _ in a.postings[g]}))
-        post_off.append(len(postings))
-    set_off, seq_off, symbols = [0], [0], []
-    for t in tune:
-        for _, _, plain in seqs.by_tune.get(t, []):
-            symbols.extend(int(x) for x in plain)
-            seq_off.append(len(symbols))
-        set_off.append(len(seq_off) - 1)
 
-    def strings(values):
-        off, buf = [0], bytearray()
-        for v in values:
-            buf += (v or "").encode()
-            off.append(len(buf))
-        return np.array(off, "<u4"), np.frombuffer(bytes(buf), np.uint8)
+def export(path=None, from_index=False):
+    from lab import paths
+    from lab.corpus.index import candidate_tune_ids
 
-    name_off, names = strings(a.tune_names.get(t) for t in tune)
-    type_off, types = strings(a.tune_types.get(t) for t in tune)
-    tm = TunenessModel.load()
-    meta = {
-        "version": VERSION, "n": a.n, "fold_octaves": a.fold_octaves, "n_tunes": a.n_tunes,
-        "repertoire_n_tunes": rep.n_tunes, "built_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
-        "index": {k: a.meta.get(k) for k in ("parser_version", "index_version", "n_grams", "built_at", "sha1")},
-        "repertoire_index": {k: rep.meta.get(k) for k in ("n_tunes", "built_at", "sha1")},
-        "sequences": {"version": TuneSequences.VERSION, "reading": "notes", "path": os.path.basename(
-            TuneSequences.path("all"))},
-        "tuneness": {"names": list(NAMES), "coef": tm.coef.tolist(), "intercept": tm.intercept,
-                     "median": tm.median.tolist(), "mu": tm.mu.tolist(), "sd": tm.sd.tolist(),
-                     "gamma": tm.meta["gamma"], "kappa": tm.meta["kappa"], "fitted": tm.meta.get("fitted")},
-        "listener": listener_config(),
-    }
-    arrays = {
-        "meta": np.frombuffer(json.dumps(meta, separators=(",", ":")).encode(), np.uint8),
-        "tune_ids": np.array(tune, "<i4"),
-        "gram_count": np.array([a.tune_gram_count.get(t, 0) for t in tune], "<i4"),
-        "gram_keys": np.array([gram_key(g) for g in keys], "<u4"),
-        "post_off": np.array(post_off, "<u4"),
-        "postings": np.array(postings, "<u2"),
-        "repertoire": np.array(sorted(at[t] for t in rep.tune_names), "<u2"),
-        "set_off": np.array(set_off, "<u4"),
-        "seq_off": np.array(seq_off, "<u4"),
-        "symbols": np.array(symbols, "i1"),
-        "name_off": name_off, "names": names, "type_off": type_off, "types": types,
-    }
-    head = len(MAGIC) + 8 + 16 * len(SECTIONS)
-    offsets, at_byte = [], (head + 7) // 8 * 8
-    for name in SECTIONS:
-        offsets.append(at_byte)
-        at_byte = (at_byte + arrays[name].nbytes + 7) // 8 * 8
-    tmp = path + ".part"
-    with open(tmp, "wb") as f:
-        f.write(MAGIC + struct.pack("<II", VERSION, len(SECTIONS)))
-        for name, off in zip(SECTIONS, offsets):
-            f.write(struct.pack("<QQ", off, len(arrays[name])))
-        for name, off in zip(SECTIONS, offsets):
-            f.write(b"\0" * (off - f.tell()))
-            f.write(arrays[name].tobytes())
-    os.replace(tmp, path)
-    sizes = {k: v.nbytes for k, v in arrays.items()}
-    print(f"{path}: {os.path.getsize(path) / 1e6:.1f} MB in {time.time() - t0:.1f}s; "
-          f"{len(tune)} tunes, {len(keys)} n-grams, {len(postings)} postings, "
-          f"{len(seq_off) - 1} settings, {len(symbols)} symbols, repertoire {len(arrays['repertoire'])}")
-    print("  by section (MB): " + ", ".join(f"{k} {v / 1e6:.2f}" for k, v in sizes.items() if v > 1e5))
+    path = path or default_path()
+    if from_index:
+        meta = export_from_index(path)
+    else:
+        meta = D.build(paths.tunes_csv_path(), candidate_tune_ids("repertoire"), path, progress=True)
+    f = meta["file"]
+    print(f"{path}: {f['bytes'] / 1e6:.1f} MB; {meta['n_tunes']} tunes, {f['n_grams']} n-grams, "
+          f"{f['postings']} postings, {meta['sequences']['settings']} settings, {f['symbols']} symbols, "
+          f"repertoire {meta['repertoire_n_tunes']}; sha256 {f['sha256'][:12]}")
     return path
+
+
+def publish(force=False, csv_path=None):
+    """Build from the newest dump (or `csv_path`) with production's repertoire
+    and publish, as the weekly cron does. Reads production's database and
+    writes to the recordings bucket: lab/.env's credentials."""
+    import psycopg2
+
+    from lab.env import prod_database_url
+    from services import decider_data_service as dd
+
+    conn = psycopg2.connect(prod_database_url())
+    try:
+        conn.set_session(readonly=True)
+        outcome, m = dd.rebuild_and_publish(conn, csv_path=csv_path, force=force)
+    finally:
+        conn.close()
+    print(f"{outcome}: s3://.../{m['key']}, {m['bytes'] / 1e6:.1f} MB, built {m['built_at']}, "
+          f"{m['source'].get('n_tunes')} tunes, repertoire {m['source'].get('repertoire_n_tunes')}")
 
 
 # -- fixtures ------------------------------------------------------------------
@@ -243,15 +171,23 @@ def fixture(models, name, rec, start_s, seconds, taps):
                 lst.tap("none", None, shown)
                 done_taps.append({"after": i, "action": "none", "shown": shown})
     lst.close()
-    return {"name": name, "recording": rec, "start_s": start_s, "taps": done_taps, "steps": steps}
+    # the index decided with: the Swift tests need the file packed from the same one
+    return {"name": name, "recording": rec, "start_s": start_s, "index_sha1": models.fallback.meta["sha1"],
+            "taps": done_taps, "steps": steps}
 
 
 def add_parser(sub):
     p = sub.add_parser("decider", help="deciding on the phone: its data file, its fixtures (spec 053)")
     s = p.add_subparsers(dest="what", required=True)
     e = s.add_parser("export", help="the decider's data in one file the phone maps")
-    e.add_argument("--out", help=f"default: lab/data/index/decider-v{VERSION}.bin")
+    e.add_argument("--out", help=f"default: lab/data/index/decider-v{D.FORMAT_VERSION}.bin")
+    e.add_argument("--from-index", action="store_true",
+                   help="pack the lab's built index (what the listener and the fixtures use), not the dump")
     e.set_defaults(func=main_export)
+    u = s.add_parser("publish", help="build from the newest dump and publish it for the app (as the cron does)")
+    u.add_argument("--force", action="store_true", help="publish even if nothing it is built from has changed")
+    u.add_argument("--csv", help="build from this tunes.csv instead of downloading the dump")
+    u.set_defaults(func=main_publish)
     f = s.add_parser("fixtures", help="fixtures holding the phone's deciding to the lab's")
     f.add_argument("--out", required=True)
     f.add_argument("--only", help="one clip by name")
@@ -259,7 +195,12 @@ def add_parser(sub):
 
 
 def main_export(args):
-    export(args.out)
+    export(args.out, from_index=args.from_index)
+    return 0
+
+
+def main_publish(args):
+    publish(force=args.force, csv_path=args.csv)
     return 0
 
 

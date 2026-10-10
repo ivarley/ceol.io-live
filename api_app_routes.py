@@ -12,6 +12,8 @@ can render a screen, and nothing a page already serves.
   Universal Link never re-implements web_routes.session_handler's path rules.
 - POST /api/auth/web-session — app -> web handoff for admin/help (mints a one-time
   login link).
+- GET /api/listen/decider-data — the newest file the phone decides from when it
+  listens offline (spec 053), and a short-lived link to it.
 
 Every handler here returns JSON only; the cookie is set only when the caller is the
 web (api_auth.is_native_client() false). A native caller gets a Bearer token — the
@@ -786,6 +788,36 @@ def app_config():
             },
         }
     )
+
+
+# ---------------------------------------------------------------------------
+# GET /api/listen/decider-data — the phone's decider file (spec 053)
+# ---------------------------------------------------------------------------
+
+
+@api_login_required
+def listen_decider_data():
+    """The newest decider file in the format the app reads (`?format=`, default 1),
+    published weekly from thesession.org's dump (services/decider_data_service.py,
+    jobs/publish_decider_data.py): its SHA-256, size, build time and a link valid
+    for `expires_in` seconds. `available: false` when none is published, or object
+    storage isn't configured here (local development, tests)."""
+    from recording import check_configured
+    from services import decider_data_service as dd
+
+    try:
+        fmt = int(request.args.get("format", "1"))
+    except ValueError:
+        return api_error("format must be a whole number", 400, code="bad_format")
+    if check_configured():
+        return jsonify({"success": True, "format": fmt, "available": False})
+    try:
+        offer = dd.offer(fmt)
+    except Exception as e:  # storage down: the app keeps the file it has and asks later
+        return api_error(
+            f"the decider data could not be read: {e}", 503, code="storage_unavailable"
+        )
+    return jsonify({"success": True, **offer})
 
 
 # ---------------------------------------------------------------------------

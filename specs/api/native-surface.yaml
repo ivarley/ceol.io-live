@@ -157,6 +157,18 @@ components:
             version: { type: [string, "null"] }
         server_version: { type: [string, "null"] }
         features: { type: object, additionalProperties: { type: boolean } }
+    DeciderData:
+      type: object
+      required: [success, format, available]
+      properties:
+        success: { type: boolean, const: true }
+        format: { type: integer }
+        available: { type: boolean }
+        sha256: { type: string }
+        bytes: { type: integer }
+        built_at: { type: string, description: "UTC, ISO 8601 (YYYY-MM-DDTHH:MM:SSZ)" }
+        url: { type: string }
+        expires_in: { type: integer }
     Home:
       type: object
       required: [success, learning_count, want_to_learn_count, suggested_tune,
@@ -1846,6 +1858,22 @@ paths:
       security: [{ bearer: [] }]
       parameters: [{ name: recording_id, in: path, required: true, schema: { type: integer } }]
       responses: { "200": { description: ok } }
+  /api/listen/decider-data:
+    get:
+      operationId: getDeciderData
+      summary: The newest file the phone decides from when it listens offline (spec 053)
+      description: >-
+        Rebuilt weekly from thesession.org's dump. `url` is a presigned GET valid for
+        `expires_in` seconds; check the download against `sha256`. `available` is false
+        when none is published in this format. Errors: bad_format (400),
+        storage_unavailable (503: keep the file you have, ask later).
+      security: [{ bearer: [] }]
+      parameters:
+        - { name: format, in: query, required: false, schema: { type: integer, default: 1 },
+            description: "The file format the client reads (CeolDeciding's Corpus.version)." }
+      responses:
+        "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/DeciderData" } } } }
+        default: { $ref: "#/components/responses/Error" }
   /api/session-instances/{session_instance_id}/audio:
     get:
       operationId: getInstanceAudio

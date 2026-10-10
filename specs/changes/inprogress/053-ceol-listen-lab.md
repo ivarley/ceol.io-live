@@ -2798,6 +2798,61 @@ segmented blind; item 3 the follower). Open, in rough order:
     (needs the tune list to come down with the session, ahead of the night);
     and each lab change to the decider ported and its fixtures passing
     before it reaches the phone.
+- **(2026-10-10) The phone's decider file, kept current.** The corpus grows
+  every week, so the file the phone decides from is rebuilt from each Sunday
+  dump and the app fetches a newer one when it has a connection, instead of
+  waiting for an app release.
+  - **Built from the dump in one pass** (`lab/corpus/decider_file.py`):
+    the standard library only (the cron has no numpy), streaming the dump
+    setting by setting, about 40 s and 180 MB on the laptop. It holds what
+    `Index` (all, n=6, folded) and `TuneSequences` hold built the lab's
+    way from the same dump: identical, section for section, over the whole
+    dump (55,428 settings), and on a 3,000-setting sample in the lab's
+    tests (`test_decider_file.py`, which also holds the restated listener
+    configuration to the listener's code). The lab's `decider export`
+    builds this way by default; `--from-index` packs the index the
+    listening service and the fixtures use, which is usually from an older
+    dump (the lab reindexes only deliberately), and the Swift fixture tests
+    take only a file packed from the index they were decided with
+    (`index_sha1`), skipping otherwise.
+  - **Published** (`services/decider_data_service.py`) to the recordings
+    bucket per file format: `listen-data/decider/v1/<sha256>.bin`, then
+    `manifest.json` naming it, written last. The manifest carries a hash of
+    everything the file is built from (the dump, the repertoire, the
+    configuration, the builder and parser versions), so an unchanged week is
+    seen before building and only `checked_at` moves.
+  - **Weekly**, riding along on the active-sessions cron after the merge
+    sync (`jobs/publish_decider_data.py`): due from Monday 07:00 UTC until
+    this week's check is recorded, so a missed Monday is caught up. The
+    default repertoire comes fresh from the database: the tunes of every
+    session with a segmented recording, as the lab's repertoire index takes
+    them (1,294 now, against the lab index's 1,280). The cron service needs
+    the AWS variables, which it lacks; until then it skips itself.
+    `python -m lab decider publish` does the same by hand from the lab
+    (production's database read-only, the bucket written).
+  - **Offered** by `GET /api/listen/decider-data?format=1` (native
+    surface, contract-tested): the current file's SHA-256, size, build time
+    and a presigned link valid an hour; `available: false` when none is
+    published or storage isn't configured.
+  - **In the app** (`DeciderRefresher`): when there is a connection (not
+    Low Data Mode), at most every 12 hours, not while a night is being
+    recorded, it asks; if the file offered is newer than the one it has, it
+    downloads it, and CeolDeciding's `DeciderData.install` puts it in place
+    only once its size and SHA-256 are the ones offered and it opens as a
+    decider file this app reads. `Corpus.shipped` is the newer of the
+    fetched copy and the one built in. A night already listening keeps the
+    file it started with (it stays mapped through the replacement); the
+    meter log records which file each stream decides from.
+  - Checked: the builder against the lab's build (whole dump), the publish
+    logic against a fake bucket (file before manifest, an unchanged week,
+    a truncated dump refused, the weekly gate), one real rebuild from the
+    live GitHub dump into a fake bucket (23,325 tunes, 40 s, unchanged on a
+    second run), the endpoint in the native-surface contract, install in
+    CeolKit (a wrong checksum, a wrong size and a file that is not a decider
+    file each leave nothing installed; a file held open survives its
+    replacement), the app's tests in the simulator. Not yet run against the
+    real bucket, from the cron, or on an iPhone.
+
 - **(2026-10-04) Loudness, relative to the night.** Absolute loudness was taken
   out of tune-ness after a test of laptop speakers recorded through a phone,
   which says nothing about a phone on a pub table (the player's correction).

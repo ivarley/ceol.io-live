@@ -137,6 +137,9 @@ final class NightRecorder {
         }
         let log = meterLog
         let deciding = PhoneDeciding.corpus.map(PhoneDeciding.init)
+        if let deciding {
+            meterLog.write("app", ListenWire.event("decider", ["built_at": deciding.builtAt]))
+        }
         let h = PhoneHearing(
             sends: deciding == nil,
             onStep: { heard, lagMs in
@@ -618,8 +621,11 @@ nonisolated protocol Listening: AnyObject, Sendable {
 /// own, and its state comes back as the service's "state" message would, so the meter
 /// and its log cannot tell the difference. No network at all.
 nonisolated final class PhoneDeciding: Listening, @unchecked Sendable {
-    /// The decider's data, mapped once for the app's life; nil if the app has none.
-    static let corpus: Corpus? = Corpus.shipped.flatMap { try? Corpus(contentsOf: $0) }
+    /// The decider's data as it is now (the newest of the copy built in and one fetched
+    /// since, DeciderRefresher), mapped afresh for each stream: a night keeps the file it
+    /// started with, and a newer one fetched meanwhile is the next night's. Nil if the
+    /// app has none.
+    static var corpus: Corpus? { Corpus.shipped.flatMap { try? Corpus(contentsOf: $0) } }
 
     private let queue = DispatchQueue(label: "io.ceol.deciding", qos: .userInitiated)
     private let lock = NSLock()
@@ -627,6 +633,9 @@ nonisolated final class PhoneDeciding: Listening, @unchecked Sendable {
     private var onState: (@Sendable (ListenState, String) -> Void)?
     private let corpus: Corpus
     private var decider: Decider?                    // touched only on `queue`
+
+    /// When the corpus this stream decides from was built.
+    var builtAt: String { corpus.builtAt }
 
     init(corpus: Corpus) {
         self.corpus = corpus

@@ -35,6 +35,7 @@ SPEC_PATH = os.path.join(
 # (documented path template, concrete URL to call against the seeded DB)
 CHECKED_GETS = [
     ("/api/app-config", "/api/app-config"),
+    ("/api/listen/decider-data", "/api/listen/decider-data"),
     ("/api/add-session", "/api/add-session"),
     ("/api/me", "/api/me"),
     ("/api/me/profile", "/api/me/profile"),

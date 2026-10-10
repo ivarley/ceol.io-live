@@ -4,9 +4,11 @@
 // the lab's listener did with them: the shortlist, the tunes aligned and their scores,
 // tune-ness, the decoder's belief and the state the service would send.
 //
-// The corpus file is not in the repo (16 MB, rebuilt with the corpus): CEOL_DECIDER_DATA
-// names it, else LAB_DATA_DIR/index/decider-v1.bin, else this worktree's lab/data, else
-// the copy the app ships (Sources/CeolDeciding/Data). The tests are skipped without it.
+// The corpus file is not in the repo (16 MB, rebuilt with the corpus), and it must be
+// the one packed from the index the fixtures were decided with (`python -m lab decider
+// export --from-index`): CEOL_DECIDER_DATA names it, else LAB_DATA_DIR/index/
+// decider-v1.bin, else this worktree's lab/data, else the copy the app ships
+// (Sources/CeolDeciding/Data). The tests are skipped without one.
 
 import Foundation
 import Testing
@@ -14,6 +16,17 @@ import Testing
 @testable import CeolDeciding
 import CeolHearing
 
+/// The index the fixtures were decided with (the lab's, by its SHA-1).
+let fixturesIndex: String? = {
+    let dir = Bundle.module.url(forResource: "Fixtures", withExtension: nil)!
+    guard let data = try? Data(contentsOf: dir.appendingPathComponent("r112-reel.json")),
+        let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    else { return nil }
+    return obj["index_sha1"] as? String
+}()
+
+/// The first corpus file found that was packed from that same index: a file built from
+/// a newer dump decides about a different corpus, and would fail for that reason alone.
 let corpusURL: URL? = {
     let env = ProcessInfo.processInfo.environment
     var candidates = [String]()
@@ -21,8 +34,11 @@ let corpusURL: URL? = {
     if let d = env["LAB_DATA_DIR"] { candidates.append("\(d)/index/decider-v1.bin") }
     let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../../../lab/data")
     candidates.append(root.appendingPathComponent("index/decider-v1.bin").standardized.path)
-    if let shipped = Corpus.shipped { candidates.append(shipped.path) }
-    return candidates.first { FileManager.default.fileExists(atPath: $0) }.map(URL.init(fileURLWithPath:))
+    if let b = Corpus.bundled { candidates.append(b.path) }
+    return candidates.lazy.map(URL.init(fileURLWithPath:)).first { url in
+        guard let c = try? Corpus(contentsOf: url) else { return false }
+        return (c.meta["source"] as? [String: Any])?["index_sha1"] as? String == fixturesIndex
+    }
 }()
 
 let corpus: Corpus? = corpusURL.flatMap { try? Corpus(contentsOf: $0) }
@@ -48,7 +64,7 @@ struct DecideClip {
 
 func ints(_ x: Any?) -> [Int] { (x as? [NSNumber] ?? []).map(\.intValue) }
 
-@Suite("The phone's deciding against the lab's", .serialized, .enabled(if: corpus != nil, "no decider-v1.bin"))
+@Suite("The phone's deciding against the lab's", .serialized, .enabled(if: corpus != nil, "no decider-v1.bin packed from the fixtures' index"))
 struct DecidingFixtureTests {
     @Test("Every step: the same shortlist, the same scores, the same state", arguments: DecideClip.names)
     func steps(_ name: String) throws {

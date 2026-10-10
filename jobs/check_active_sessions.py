@@ -16,6 +16,9 @@ fifteen minutes costs one MAX() and does nothing 671 times out of 672. It goes
 LAST, and deliberately: it takes minutes when it does fire, and Render will not
 start the next run of a cron while this one is still going. Session activation
 is the time-sensitive half and has already finished by then.
+
+The weekly rebuild of the phone's decider file (spec 053; jobs/publish_decider_data.py)
+rides along after it the same way, from Monday 07:00 UTC.
 """
 
 import sys
@@ -33,6 +36,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from active_session_manager import update_active_sessions, auto_create_scheduled_instances
 from jobs.sync_thesession_merges import run_weekly_if_due
+from jobs import publish_decider_data
 
 # Configure logging
 logging.basicConfig(
@@ -108,6 +112,15 @@ def main():
         run_weekly_if_due()
     except Exception as e:
         logger.error(f"Fatal error during piggybacked merge sync: {e}", exc_info=True)
+        has_errors = True
+
+    # The phone's decider file (spec 053), rebuilt from the week's dump once the
+    # merge sync has had its window. Same arrangement: gated on its own, errors
+    # kept to itself.
+    try:
+        publish_decider_data.run_weekly_if_due()
+    except Exception as e:
+        logger.error(f"Fatal error during piggybacked decider data publish: {e}", exc_info=True)
         has_errors = True
 
     # Exit with error code if there were errors

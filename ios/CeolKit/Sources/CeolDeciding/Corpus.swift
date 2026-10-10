@@ -117,18 +117,25 @@ public final class Corpus: @unchecked Sendable {
 
     deinit { munmap(base, length) }
 
-    /// Where the app finds the file: a copy fetched since (Application Support/CeolDeciding),
-    /// else the one it was built with (Data/decider-v1.bin), else none, and the phone
+    /// When the lab built it, UTC ("YYYY-MM-DDTHH:MM:SSZ"; the lab's older files say
+    /// local time without the Z). Newer files sort later.
+    public var builtAt: String { meta["built_at"] as? String ?? "" }
+
+    /// The copy the app was built with (Data/decider-v1.bin), if any.
+    public static var bundled: URL? {
+        Bundle.module.url(forResource: "decider-v\(version)", withExtension: "bin", subdirectory: "Data")
+    }
+
+    /// Where the app finds the file: whichever is newer of a copy fetched since
+    /// (DeciderData.fetchedURL) and the one it was built with; none, and the phone
     /// decides on Ceol's server.
     public static var shipped: URL? {
-        let name = "decider-v\(version).bin"
-        let fm = FileManager.default
-        if let support = try? fm.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil,
-                                     create: false) {
-            let fetched = support.appendingPathComponent("CeolDeciding/\(name)")
-            if fm.fileExists(atPath: fetched.path) { return fetched }
+        let found = [DeciderData.fetchedURL, bundled].compactMap { url -> (URL, String)? in
+            guard let url, FileManager.default.fileExists(atPath: url.path),
+                let c = try? Corpus(contentsOf: url) else { return nil }
+            return (url, c.builtAt)
         }
-        return Bundle.module.url(forResource: name, withExtension: nil, subdirectory: "Data")
+        return found.max { $0.1 < $1.1 }?.0
     }
 
     /// The file's size: what it costs on disk, and at most what it maps.
@@ -194,11 +201,14 @@ public struct Repertoire: Sendable {
     let df: [UInt16]
 
     public init(_ tuneIDs: some Sequence<Int>, in corpus: Corpus) {
+        // only the tunes the corpus has, as an index built from them would count
         var member = [Bool](repeating: false, count: corpus.tuneCount)
         var ids = Set<Int>()
         for t in tuneIDs {
-            ids.insert(t)
-            if let i = corpus.index(of: t) { member[i] = true }
+            if let i = corpus.index(of: t) {
+                member[i] = true
+                ids.insert(t)
+            }
         }
         var df = [UInt16](repeating: 0, count: corpus.gramCount)
         for g in 0..<corpus.gramCount {
