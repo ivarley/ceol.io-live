@@ -129,6 +129,29 @@ struct RecorderBar: View {
     }
 }
 
+/// Two people facing each other, talking in turn: each one's sound waves come into the
+/// space between them, one and then the other ("No tune playing").
+struct Conversation: View {
+    @State private var talker = 0
+
+    var body: some View {
+        HStack(spacing: 2) {
+            Image(systemName: "person.wave.2.fill")
+                .symbolEffect(.variableColor.iterative, options: .repeating, isActive: talker == 0)
+            Image(systemName: "person.wave.2.fill")
+                .scaleEffect(x: -1, y: 1)
+                .symbolEffect(.variableColor.iterative, options: .repeating, isActive: talker == 1)
+        }
+        .accessibilityHidden(true)
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1.8))
+                talker = 1 - talker
+            }
+        }
+    }
+}
+
 /// The certainty meter: what it thinks right now, from the last few seconds.
 struct ListenMeterView: View {
     let recorder: NightRecorder
@@ -230,9 +253,7 @@ struct ListenMeterView: View {
         case .noTune(let none):
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Image(systemName: "person.2.wave.2.fill")
-                        .font(.system(size: 26)).foregroundStyle(CeolTokens.textMuted)
-                        .symbolEffect(.variableColor.iterative.reversing, options: .repeating)
+                    Conversation().font(.system(size: 26)).foregroundStyle(CeolTokens.textMuted)
                     Text("No tune playing").font(.ceol(size: 24, weight: .semibold)).foregroundStyle(CeolTokens.textColor)
                     Text(verbatim: "\(Int((none * 100).rounded()))%")
                         .font(.ceol(size: 14)).foregroundStyle(CeolTokens.textMuted)
