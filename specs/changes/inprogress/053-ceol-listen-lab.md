@@ -3211,6 +3211,27 @@ segmented blind; item 3 the follower). Open, in rough order:
     the endpoint's two errors in `translations/ga`), for the product owner's
     review with the rest.
 
+- **(2026-10-10) The meter confirms by itself at 100%.** The player's
+  request: once the tune shown reaches what the meter shows as 100% (belief
+  0.995 or more), the app says "this is it" itself, exactly as a tap does (the
+  listener confirms and pins it; the tune is logged to the night), marked
+  `auto` in the meter log and in its "logged" event, which `lab drafts`
+  places as "auto", not "tap". A switch on the meter turns it off ("Log a
+  tune by itself at 100%", on by default, remembered). Tapping a confirmed
+  tune offers two answers, replacing "Not this one? Show the others":
+  - **Wrong tune:** the row that confirming added comes back out of the night
+    (by its temporary id until the server answers; nothing is removed when the
+    tune merged into a row already there), the listener rules the tune out and
+    looks wider ("none of these" for that one tune), and the meter never logs
+    it by itself again that night.
+  - **Tune changed:** the row stays; the listener lets go of the tune at once
+    by the same rule-out, rather than waiting for its belief to fade, and the
+    meter shows "the tune may have changed (was …)" until another tune or
+    nothing is shown. A tune logged from the phone is not logged by itself
+    again for ten minutes.
+  Both go to the listener as the existing "none" tap (with `why` for the log),
+  so the service and the phone's decider need nothing new.
+
 - **(2026-10-04) Loudness, relative to the night.** Absolute loudness was taken
   out of tune-ness after a test of laptop speakers recorded through a phone,
   which says nothing about a phone on a pub table (the player's correction).

@@ -4343,6 +4343,16 @@
         }
       }
     },
+    "Log a tune by itself at 100%": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Logáil fonn leis féin ag 100%"
+          }
+        }
+      }
+    },
     "Log details": {
       "localizations": {
         "ga": {
@@ -5370,6 +5380,7 @@
       }
     },
     "Not this one? Show the others": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -7265,6 +7276,16 @@
         }
       }
     },
+    "Tap the tune if it's wrong or has changed.": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tapáil an fonn má tá sé mícheart nó má d'athraigh sé."
+          }
+        }
+      }
+    },
     "That change wasn't saved.": {
       "localizations": {
         "ga": {
@@ -7671,6 +7692,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Fonn %lld"
+          }
+        }
+      }
+    },
+    "Tune changed": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "D'athraigh an fonn"
           }
         }
       }
@@ -8271,6 +8302,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "An fonn ar fad"
+          }
+        }
+      }
+    },
+    "Wrong tune": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Fonn mícheart"
           }
         }
       }

@@ -380,3 +380,48 @@ struct LiveEditingTests {
         #expect(names(live) == ["B"])
     }
 }
+
+/// The meter's "Wrong tune" takes back the row "this is it" logged: by its temporary id
+/// before the server answers (the removal queues behind the add), by the server's after.
+@Suite("Taking back a logged tune")
+struct TakeBackTests {
+    private func tune(_ id: Int, _ pos: String, tuneID: Int, name: String) -> JSONValue {
+        ["session_instance_tune_id": JSONValue(id), "order_position": .string(pos), "record_type": "tune",
+         "name": .string(name), "tune_id": JSONValue(tuneID), "deleted": false]
+    }
+
+    @Test("a new row: removed by its temporary id, or by the server's once answered")
+    func newRow() throws {
+        var log = LiveLog(records: [tune(1, "a1", tuneID: 27, name: "Drowsy Maggie")], lastEventID: 5)
+        let r = log.logTune(["tune_id": 452, "name": "Fred Finn's"], at: .end, opID: "op1")
+        #expect(r.mergedInto == nil)
+        let temp = RecordID.temp("temp-op1")
+        #expect(log.ordered.contains { $0.recordID == temp })
+
+        // before an answer: the removal names the temporary row, and is sent with the real id
+        var early = log
+        let removed = early.remove(early.resolve(temp))
+        let op = try #require(removed)
+        #expect(!early.ordered.contains { $0.recordID == temp })
+        #expect(op.body["record_id"] == .string("temp-op1"))
+        let sent = LogState.remapAnchors(op.body, tempToReal: ["temp-op1": 77])
+        #expect(sent.payload["record_id"] == 77 && !sent.skip)
+
+        // after an answer: the temporary id leads to the server's row
+        log.settlePending("op1", with: ["record": tune(77, "a2", tuneID: 452, name: "Fred Finn's")])
+        _ = log.apply(["op_type": "add_tune", "event_id": 6, "record": tune(77, "a2", tuneID: 452, name: "Fred Finn's")])
+        #expect(log.resolve(temp) == .server(77))
+        let target = log.resolve(temp)
+        let gone = log.remove(target)
+        #expect(gone != nil)
+        #expect(!log.ordered.contains { $0["tune_id"] == 452 })
+    }
+
+    @Test("a tune the open set already has merges: no row of its own to take back")
+    func merged() {
+        var log = LiveLog(records: [tune(1, "a1", tuneID: 452, name: "Fred Finn's")], lastEventID: 5)
+        let r = log.logTune(["tune_id": 452, "name": "Fred Finn's"], at: .end, opID: "op2")
+        #expect(r.mergedInto != nil)
+        #expect(!log.ordered.contains { $0.recordID == .temp("temp-op2") })
+    }
+}

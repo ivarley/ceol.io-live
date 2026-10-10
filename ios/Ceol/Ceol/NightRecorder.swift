@@ -106,6 +106,29 @@ final class NightRecorder {
     @ObservationIgnored private weak var app: AppModel?
     /// The tune "this is it" last logged, so a second tap doesn't log it twice.
     private(set) var logged: Int?
+    /// The row that logging added (nil when it merged into a row already there), so
+    /// "Wrong tune" can take it back out.
+    @ObservationIgnored private var loggedRow: RecordID?
+    /// Tunes a person said were wrong tonight: the meter never logs them by itself again.
+    @ObservationIgnored private var wrongTunes: Set<Int> = []
+    /// When each tune was last logged from here: not logged by itself again for a while,
+    /// so a tune said to have changed doesn't come straight back.
+    @ObservationIgnored private var loggedAt: [Int: Date] = [:]
+    /// A person said the tune has changed: shown as "may have changed" until the
+    /// listener shows another tune (or nothing).
+    private(set) var changedFrom: (tuneID: Int, name: String?)?
+    /// Whether the meter logs a tune by itself at 100%: the switch on the meter,
+    /// remembered for the next night (on unless turned off).
+    var selfConfirms: Bool = UserDefaults.standard.object(forKey: "SelfConfirm") as? Bool ?? true {
+        didSet {
+            guard selfConfirms != oldValue else { return }
+            UserDefaults.standard.set(selfConfirms, forKey: "SelfConfirm")
+            meterLog.write("app", ListenWire.event("self_confirm", ["on": selfConfirms, "t_ms": state?.tMs ?? 0]))
+        }
+    }
+    /// How sure the meter must be to log a tune by itself: what it shows as 100%.
+    nonisolated static let selfConfirmAt = 0.995
+    nonisolated static let relogAfter: TimeInterval = 600
 
     init(instanceID: Int, title: String, recordingID: String, fileURL: URL, meterLogURL: URL, listenURL: URL,
          token: String?, listenWhere: ListenWhere = .preferred, app: AppModel? = nil) {
@@ -124,6 +147,7 @@ final class NightRecorder {
             "instance_id": instanceID, "stream_id": streamID, "recording": recordingID,
             "started_at": ISO8601DateFormatter().string(from: startedAt), "listen": listenWhere.rawValue,
             "decide": listenWhere == .phone && PhoneDeciding.corpus != nil ? "phone" : "server",
+            "self_confirm": UserDefaults.standard.object(forKey: "SelfConfirm") as? Bool ?? true,
         ]))
         streamLink = ListenLink(url: listenURL, token: token, streamID: streamID, instanceID: instanceID,
                                 source: capture)
@@ -175,6 +199,7 @@ final class NightRecorder {
         listenWhere = place
         state = nil
         confirmed = nil
+        changedFrom = nil
         let streamID = UUID().uuidString
         capture.resetOutbox()
         meterLog.write("app", ListenWire.event("listen", [
@@ -277,11 +302,61 @@ final class NightRecorder {
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
-    func tapThis(_ tuneID: Int) {
+    func tapThis(_ tuneID: Int, auto: Bool = false) {
         confirmed = tuneID
         confirmedAfterMs = state?.tMs ?? 0
-        send(ListenWire.tapThis(tuneID: tuneID, shown: state?.top.map(\.tuneID) ?? []))
-        logToNight(tuneID)
+        changedFrom = nil
+        send(ListenWire.tapThis(tuneID: tuneID, shown: state?.top.map(\.tuneID) ?? [], auto: auto))
+        logToNight(tuneID, auto: auto)
+    }
+
+    /// The meter is sure (100%): it says "this is it" itself, as a person would, and the
+    /// tune is logged. Not a tune said to be wrong tonight, nor one logged from here in
+    /// the last ten minutes.
+    private func selfConfirm(_ s: ListenState) {
+        guard selfConfirms else { return }
+        if let t = Self.selfConfirmTune(s, confirmed: confirmed, wrong: wrongTunes, loggedAt: loggedAt, now: Date()) {
+            tapThis(t, auto: true)
+        }
+    }
+
+    /// The tune to confirm by itself in this state, if any (see `selfConfirm`).
+    nonisolated static func selfConfirmTune(_ s: ListenState, confirmed: Int?, wrong: Set<Int>, loggedAt: [Int: Date],
+                                            now: Date) -> Int? {
+        guard confirmed == nil, !s.notATune, !s.mayHaveChanged, let c = s.shownCandidate,
+            c.p >= selfConfirmAt, !wrong.contains(c.tuneID),
+            now.timeIntervalSince(loggedAt[c.tuneID] ?? .distantPast) >= relogAfter
+        else { return nil }
+        return c.tuneID
+    }
+
+    /// "Wrong tune": the confirmed tune isn't what's playing. Its row comes back out of the
+    /// night, the listener rules it out and looks wider (as "None of these" does), and the
+    /// meter won't log it by itself again tonight.
+    func wrongTune() {
+        guard let c = confirmed else { return }
+        if logged == c, let row = loggedRow { night?.removeLogged(row) }
+        if logged == c {
+            logged = nil
+            loggedRow = nil
+            loggedAt[c] = nil
+        }
+        wrongTunes.insert(c)
+        confirmed = nil
+        send(ListenWire.tapNone(shown: [c], why: "wrong"))
+        meterLog.write("app", ListenWire.event("wrong_tune", ["tune_id": c, "t_ms": state?.tMs ?? 0]))
+    }
+
+    /// "Tune changed": the confirmed tune was right and has ended. It stays logged; the
+    /// listener lets go of it at once (ruled out for a while, a wider search) instead of
+    /// waiting for its belief to fade, and the meter says so meanwhile.
+    func tuneChanged() {
+        guard let c = confirmed else { return }
+        let name = state?.top.first { $0.tuneID == c }?.name
+        changedFrom = (c, name)
+        confirmed = nil
+        send(ListenWire.tapNone(shown: [c], why: "changed"))
+        meterLog.write("app", ListenWire.event("tune_changed", ["tune_id": c, "t_ms": state?.tMs ?? 0]))
     }
 
     /// Nothing is being played as a tune and the night's last set is still open (it has a
@@ -308,23 +383,18 @@ final class NightRecorder {
     /// thesession.org id, as the composer logs a pasted thesession link. Only the id is
     /// sent; the name (as the meter shows it, received) is the row's label until the
     /// server answers.
-    private func logToNight(_ tuneID: Int) {
+    private func logToNight(_ tuneID: Int, auto: Bool = false) {
         guard logged != tuneID, let night, night.log != nil else { return }
         let c = state?.top.first { $0.tuneID == tuneID }
         let name: JSONValue = c?.name.map(JSONValue.string) ?? .null
         if c?.outside == true {
-            night.logTune(["thesession_id": JSONValue(tuneID), "name": name], at: .end)
+            loggedRow = night.logTune(["thesession_id": JSONValue(tuneID), "name": name], at: .end)
         } else {
-            night.logTune(["tune_id": JSONValue(tuneID), "name": name], at: .end)
+            loggedRow = night.logTune(["tune_id": JSONValue(tuneID), "name": name], at: .end)
         }
         logged = tuneID
-        meterLog.write("app", ListenWire.event("logged", ["tune_id": tuneID, "outside": c?.outside == true]))
-    }
-
-    /// Back to the alternatives after a wrong "this is it" (the service keeps listening).
-    func unconfirm() {
-        confirmed = nil
-        meterLog.write("app", ListenWire.event("unconfirm", ["t_ms": state?.tMs ?? 0]))
+        loggedAt[tuneID] = Date()
+        meterLog.write("app", ListenWire.event("logged", ["tune_id": tuneID, "outside": c?.outside == true, "auto": auto]))
     }
 
     func tapNone() {
@@ -337,6 +407,9 @@ final class NightRecorder {
         state = vocab.map { v in s.named { v.byID[$0]?.displayName } } ?? s
         // the service has moved on (a new tune, or nothing playing): the meter again
         if let c = confirmed, s.tMs > confirmedAfterMs + 4000, s.shown != c || s.notATune { confirmed = nil }
+        // a tune said to have changed: until the listener shows another, or nothing
+        if let was = changedFrom, s.notATune || (s.shown != nil && s.shown != was.tuneID) { changedFrom = nil }
+        selfConfirm(state ?? s)
     }
 
     /// A phone call or another app's audio stops the engine; when it ends, start again.

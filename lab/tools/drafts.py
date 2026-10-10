@@ -171,7 +171,8 @@ def draft(states, logged, logged_order, duration_ms, names=None):
             continue                       # its row was deleted
         t = audio_time_of(states, ev["at_ms"])
         if t is not None:
-            by_id[mine[0]]["_anchor"], by_id[mine[0]]["how"] = t, "tap"
+            # "auto": the meter logged it itself at 100%, not a person's tap
+            by_id[mine[0]]["_anchor"], by_id[mine[0]]["how"] = t, "auto" if ev.get("auto") else "tap"
         last_id = mine[0]
     # a tapped row moved by hand to where its tap cannot be: placed as by hand
     for i, d in enumerate(rows):

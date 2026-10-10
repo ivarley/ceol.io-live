@@ -399,26 +399,30 @@ final class NightModel {
 
     /// Log a tune at a cursor (the current one unless a placeholder captured another):
     /// {tune_id, name, tune_type}, {name} for the server to match, or {thesession_id}. A
-    /// tune the open set already has merges into it, with "Keep both" offered.
-    func logTune(_ payload: [String: JSONValue], at: Cursor? = nil) {
-        guard var l = log else { return }
+    /// tune the open set already has merges into it, with "Keep both" offered. Returns
+    /// the new row's id (temporary until the server answers: `removeLogged` follows it),
+    /// or nil when it merged into a row already there.
+    @discardableResult
+    func logTune(_ payload: [String: JSONValue], at: Cursor? = nil) -> RecordID? {
+        guard var l = log else { return nil }
         selected = nil
         let at = at ?? cursor
-        let r = l.logTune(payload, at: at)
+        let opID = LiveLog.newOpID()
+        let r = l.logTune(payload, at: at, opID: opID)
         log = l
         if cursor == at { cursor = r.cursor }
         revealCursor += 1
         enqueue(r.ops)
-        if let target = r.mergedInto {
-            let name = target["name"]?.stringValue ?? payload["name"]?.stringValue ?? tr("that tune")
-            mergedSeq += 1
-            let seq = mergedSeq
-            merged = (name, payload)
-            Task { [weak self] in
-                try? await Task.sleep(for: .seconds(7))
-                if self?.mergedSeq == seq { self?.merged = nil }
-            }
+        guard let target = r.mergedInto else { return .temp("temp-\(opID)") }
+        let name = target["name"]?.stringValue ?? payload["name"]?.stringValue ?? tr("that tune")
+        mergedSeq += 1
+        let seq = mergedSeq
+        merged = (name, payload)
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(7))
+            if self?.mergedSeq == seq { self?.merged = nil }
         }
+        return nil
     }
 
     /// "Keep both": log the merged tune again as its own row at the end.
@@ -515,6 +519,14 @@ final class NightModel {
         guard let op = l.join(breakID: breakID) else { return }
         log = l
         enqueue([op])
+    }
+
+    /// Take back a row `logTune` added, by the id it returned: the server's id once it
+    /// has answered. Offline, the removal queues behind the add and is sent with the
+    /// real id.
+    func removeLogged(_ id: RecordID) {
+        guard let l = log else { return }
+        remove(l.resolve(id))
     }
 
     func remove(_ id: RecordID) {

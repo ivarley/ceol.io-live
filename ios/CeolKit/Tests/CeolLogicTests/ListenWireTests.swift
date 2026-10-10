@@ -118,6 +118,9 @@ struct ListenWireTests {
     func taps() {
         #expect(ListenWire.tapThis(tuneID: 91, shown: [91, 514]) == #"{"action":"this","shown":[91,514],"tune_id":91,"type":"tap"}"#)
         #expect(ListenWire.tapNone(shown: [91]) == #"{"action":"none","shown":[91],"type":"tap"}"#)
+        #expect(ListenWire.tapThis(tuneID: 91, shown: [91], auto: true)
+                == #"{"action":"this","auto":true,"shown":[91],"tune_id":91,"type":"tap"}"#)
+        #expect(ListenWire.tapNone(shown: [91], why: "wrong") == #"{"action":"none","shown":[91],"type":"tap","why":"wrong"}"#)
     }
 
     @Test("A meter-log line wraps the message as it came, on one line, with when and which way")

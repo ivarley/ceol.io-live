@@ -247,6 +247,10 @@ which. Added 2026-10-10, not yet reviewed.
 | Not listening — still recording | Gan éisteacht — fós ag taifeadadh | Shown when the phone's listening has stopped but the recording goes on. |
 | Couldn't start listening on this phone: … | Níorbh fhéidir éisteacht a thosú ar an bhfón seo: … | The rest is the phone's own error message. |
 | Listening on this phone stopped: … | Stop an éisteacht ar an bhfón seo: … | |
+| Log a tune by itself at 100% | Logáil fonn leis féin ag 100% | A switch on the meter: when it is sure of a tune, it logs it without a tap. |
+| Wrong tune | Fonn mícheart | A choice after tapping a tune the meter confirmed: it wasn't that tune. |
+| Tune changed | D'athraigh an fonn | The other choice: it was that tune, and it has ended. |
+| Tap the tune if it's wrong or has changed. | Tapáil an fonn má tá sé mícheart nó má d'athraigh sé. | Under a confirmed tune. |
 | the decider (the part that names the tune) | an cinnteoir | Only in a server error: "Níorbh fhéidir sonraí an chinnteora a léamh" (the decider data could not be read). Developer-facing; a plainer word is welcome. |
 | format (of a file) | formáid | "Ní mór don fhormáid a bheith ina slánuimhir" (format must be a whole number). Developer-facing. |
 

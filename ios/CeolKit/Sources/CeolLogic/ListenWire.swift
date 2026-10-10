@@ -55,14 +55,22 @@ public enum ListenWire {
 
     public static func stop() -> String { json(["type": "stop"]) }
 
-    /// "This is it": the tune a person says is playing.
-    public static func tapThis(tuneID: Int, shown: [Int]) -> String {
-        json(["type": "tap", "action": "this", "tune_id": tuneID, "shown": shown])
+    /// "This is it": the tune a person says is playing. `auto`: the meter said it for
+    /// them, the tune having reached 100% (the listener treats it the same; the meter
+    /// log keeps which).
+    public static func tapThis(tuneID: Int, shown: [Int], auto: Bool = false) -> String {
+        var object: [String: Any] = ["type": "tap", "action": "this", "tune_id": tuneID, "shown": shown]
+        if auto { object["auto"] = true }
+        return json(object)
     }
 
     /// "None of these": rules the shown names out for a while and widens the search.
-    public static func tapNone(shown: [Int]) -> String {
-        json(["type": "tap", "action": "none", "shown": shown])
+    /// `why`: "wrong" (a confirmed tune was the wrong one) or "changed" (it has ended),
+    /// for the meter log; the listener treats each as "none of these" for that tune.
+    public static func tapNone(shown: [Int], why: String? = nil) -> String {
+        var object: [String: Any] = ["type": "tap", "action": "none", "shown": shown]
+        if let why { object["why"] = why }
+        return json(object)
     }
 
     // MARK: The meter log

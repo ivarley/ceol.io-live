@@ -132,6 +132,8 @@ struct ListenMeterView: View {
     let onStop: () -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var confirmingStop = false
+    /// The confirmed tune was tapped: "Wrong tune" or "Tune changed".
+    @State private var correcting = false
 
     var body: some View {
         NavigationStack {
@@ -148,6 +150,7 @@ struct ListenMeterView: View {
                     }
                     Text(recorder.linkText).font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
                     listenWhere
+                    selfConfirmSwitch
                     if let error = recorder.hearingError ?? recorder.error {
                         Text(error).font(.ceol(size: 14)).foregroundStyle(CeolTokens.danger)
                     }
@@ -194,6 +197,16 @@ struct ListenMeterView: View {
         }
     }
 
+    /// Whether a tune the meter is sure of (100%) is logged without a tap: kept for the
+    /// next night.
+    private var selfConfirmSwitch: some View {
+        Toggle(isOn: Binding(get: { recorder.selfConfirms }, set: { recorder.selfConfirms = $0 })) {
+            Text("Log a tune by itself at 100%").font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
+        }
+        .tint(CeolTokens.primaryFill)
+        .accessibilityIdentifier("meter.selfConfirm")
+    }
+
     /// Names under this belief are greyed, and only a couple of them shown: in practice
     /// the right one comes up to full almost at once, or in one step.
     static let lowBelief = 0.05
@@ -202,10 +215,20 @@ struct ListenMeterView: View {
     @ViewBuilder private var candidates: some View {
         let state = recorder.state
         if let c = recorder.confirmed {
-            // "This is it": just that tune, until the service moves on.
+            // "This is it" (tapped, or the meter sure at 100%): just that tune, until the
+            // listener moves on. Tapping it says it was wrong, or has ended.
             let candidate = state?.top.first { $0.tuneID == c }
             VStack(alignment: .leading, spacing: 10) {
-                if let candidate { row(candidate, shown: true) }
+                if let candidate {
+                    Button { correcting = true } label: { row(candidate, shown: true) }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("meter.confirmed")
+                        .confirmationDialog(candidate.name ?? tr("Tune \(candidate.tuneID)"), isPresented: $correcting,
+                                            titleVisibility: .visible) {
+                            Button("Wrong tune", role: .destructive) { recorder.wrongTune() }
+                            Button("Tune changed") { recorder.tuneChanged() }
+                        }
+                }
                 if recorder.logged == c {
                     Label("Logged to the night", systemImage: "checkmark")
                         .font(.ceol(size: 13, weight: .semibold)).foregroundStyle(CeolTokens.success)
@@ -216,12 +239,18 @@ struct ListenMeterView: View {
                         : tr("Listening for the tune to end or a new tune to start…"))
                         .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
                 }
-                Button("Not this one? Show the others") { recorder.unconfirm() }
-                    .font(.ceol(size: 13)).buttonStyle(.borderless)
-                    .accessibilityIdentifier("meter.unconfirm")
+                Text("Tap the tune if it's wrong or has changed.")
+                    .font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
             }
         } else {
-            if let was = state?.changing, state?.mayHaveChanged == true {
+            if let was = recorder.changedFrom {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("The tune may have changed (was \(was.name ?? tr("Tune \(was.tuneID)"))). Listening for what it is…")
+                        .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
+                }
+                .accessibilityIdentifier("meter.changing")
+            } else if let was = state?.changing, state?.mayHaveChanged == true {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
                     Text("The tune may have changed (was \(was.name ?? tr("Tune \(was.tuneID)"))). Listening for what it is…")
