@@ -29,21 +29,24 @@ struct Chunk {
     var scores: [Double]
     var floor: Double
     var outside: Set<Int>
+    /// The second tier's tunes among those scored (popular, not the session's own).
+    var partly: [Int] = []
     var nNotes: Int
     var tuneLogodds: Double
 }
 
 struct TuneDecoder {
-    var lam = 40.0, tau = 0.45, pSwitch = 0.05, pNone = 0.3, nu = 0.0, kappa = 0.0, gamma = 0.0
+    var lam = 40.0, tau = 0.45, pSwitch = 0.05, pNone = 0.3, nu = 0.0, kappa = 0.0, gamma = 0.0, nuPartly = 0.0
     var nSettings: (Int) -> Int = { _ in 1 }
 
     private(set) var ids: [Int] = [notATune]
     private var at: [Int: Int] = [notATune: 0]
     private(set) var log: [Double] = [0]
 
-    init(lam: Double, tau: Double, pSwitch: Double, pNone: Double, nu: Double, kappa: Double, gamma: Double) {
+    init(lam: Double, tau: Double, pSwitch: Double, pNone: Double, nu: Double, kappa: Double, gamma: Double,
+         nuPartly: Double = 0) {
         (self.lam, self.tau, self.pSwitch, self.pNone) = (lam, tau, pSwitch, pNone)
-        (self.nu, self.kappa, self.gamma) = (nu, kappa, gamma)
+        (self.nu, self.kappa, self.gamma, self.nuPartly) = (nu, kappa, gamma, nuPartly)
     }
 
     mutating func reset() {
@@ -69,6 +72,10 @@ struct TuneDecoder {
             inPool[r] = true
         }
         if nu != 0 { for t in c.outside { emit[at[t]!] -= lam * nu } }
+        // a second-tier tune: a fraction of an outside tune's discount
+        if nu != 0, nuPartly != 0 {
+            for t in c.partly { if let r = at[t] { emit[r] -= lam * nu * nuPartly } }
+        }
         if kappa != 0 {
             for t in c.tunes { emit[at[t]!] -= lam * kappa * Foundation.log(Double(max(1, nSettings(t)))) }
         }

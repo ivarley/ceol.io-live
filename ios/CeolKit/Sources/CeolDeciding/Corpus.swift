@@ -19,9 +19,9 @@ public enum CorpusError: Error, CustomStringConvertible {
 }
 
 public final class Corpus: @unchecked Sendable {
-    public static let version = 1
-    static let sections = ["meta", "tune_ids", "gram_count", "gram_keys", "post_off", "postings", "repertoire",
-                           "set_off", "seq_off", "symbols", "name_off", "names", "type_off", "types"]
+    public static let version = 2
+    static let sections = ["meta", "tune_ids", "gram_count", "gram_keys", "post_off", "postings", "popular",
+                           "rounds", "set_off", "seq_off", "symbols", "name_off", "names", "type_off", "types"]
 
     /// The file's configuration and provenance (its "meta" section).
     public let meta: [String: Any]
@@ -30,14 +30,16 @@ public final class Corpus: @unchecked Sendable {
     public let nTunes: Int
     public let tuneCount: Int
     public let gramCount: Int
-    /// The default session's tunes, by tune id (the lab's repertoire index).
-    public let defaultRepertoire: [Int]
+    /// thesession.org's popular tunes (at least 100 tunebooks), by tune id: a session's
+    /// second tier, and its first when its own are not known.
+    public let popular: Set<Int>
 
     let tuneIDs: UnsafePointer<Int32>
     let tuneGramCount: UnsafePointer<Int32>
     let gramKeys: UnsafePointer<UInt32>
     let postOff: UnsafePointer<UInt32>
     let postings: UnsafePointer<UInt16>
+    let rounds: UnsafePointer<Float32>
     let setOff: UnsafePointer<UInt32>
     let seqOff: UnsafePointer<UInt32>
     let symbols: UnsafePointer<Int8>
@@ -90,7 +92,8 @@ public final class Corpus: @unchecked Sendable {
                     as? [String: Any]
             else { throw CorpusError.notADecider("meta is not an object") }
             let ids = try section("tune_ids", Int32.self)
-            let rep = try section("repertoire", UInt16.self)
+            let pop = try section("popular", UInt16.self)
+            rounds = try section("rounds", Float32.self)
             tuneGramCount = try section("gram_count", Int32.self)
             gramKeys = try section("gram_keys", UInt32.self)
             postOff = try section("post_off", UInt32.self)
@@ -108,7 +111,7 @@ public final class Corpus: @unchecked Sendable {
             nTunes = meta["n_tunes"] as? Int ?? 0
             tuneCount = at["tune_ids"]!.count
             gramCount = at["gram_keys"]!.count
-            defaultRepertoire = (0..<at["repertoire"]!.count).map { Int(ids[Int(rep[$0])]) }
+            popular = Set((0..<at["popular"]!.count).map { Int(ids[Int(pop[$0])]) })
         } catch {
             munmap(p, len)
             throw error
@@ -121,7 +124,7 @@ public final class Corpus: @unchecked Sendable {
     /// local time without the Z). Newer files sort later.
     public var builtAt: String { meta["built_at"] as? String ?? "" }
 
-    /// The copy the app was built with (Data/decider-v1.bin), if any.
+    /// The copy the app was built with (Data/decider-v2.bin), if any.
     public static var bundled: URL? {
         Bundle.module.url(forResource: "decider-v\(version)", withExtension: "bin", subdirectory: "Data")
     }
@@ -159,6 +162,14 @@ public final class Corpus: @unchecked Sendable {
 
     public func type(of tuneID: Int) -> String? { index(of: tuneID).flatMap { string(types, typeOff, $0) } }
 
+    /// Eighths in one time through a tune as played (the median over its settings), or
+    /// nil if none could be read (lab: analysis.form.RoundLengths).
+    public func roundLength(of tuneID: Int) -> Double? {
+        guard let i = index(of: tuneID) else { return nil }
+        let v = Double(rounds[i])
+        return v > 0 ? v : nil
+    }
+
     /// How many settings the aligner holds for a tune.
     public func settingCount(of tuneID: Int) -> Int {
         guard let i = index(of: tuneID) else { return 0 }
@@ -189,36 +200,20 @@ public final class Corpus: @unchecked Sendable {
     }
 }
 
-/// A session's tunes: the lab's repertoire index, as a restriction of the whole
-/// corpus's. Its idf counts only these tunes, as an index built from them would.
-public struct Repertoire: Sendable {
+/// A set of tunes to shortlist among, as the corpus's positions.
+public struct TuneSet: Sendable {
     public let tuneIDs: Set<Int>
-    /// The tunes the idf divides by (the repertoire index's `n_tunes`).
-    let size: Int
-    /// By tune position: in the repertoire.
+    /// By tune position: in the set.
     let member: [Bool]
-    /// By n-gram: how many of these tunes hold it.
-    let df: [UInt16]
 
     public init(_ tuneIDs: some Sequence<Int>, in corpus: Corpus) {
-        // only the tunes the corpus has, as an index built from them would count
         var member = [Bool](repeating: false, count: corpus.tuneCount)
-        var ids = Set<Int>()
-        for t in tuneIDs {
-            if let i = corpus.index(of: t) {
-                member[i] = true
-                ids.insert(t)
-            }
-        }
-        var df = [UInt16](repeating: 0, count: corpus.gramCount)
-        for g in 0..<corpus.gramCount {
-            var c = 0
-            for t in corpus.tunes(holding: g) where member[Int(t)] { c += 1 }
-            df[g] = UInt16(clamping: c)
-        }
+        let ids = Set(tuneIDs)
+        for t in ids { if let i = corpus.index(of: t) { member[i] = true } }
         self.tuneIDs = ids
-        self.size = ids.count
         self.member = member
-        self.df = df
     }
+
+    public func contains(_ tuneID: Int) -> Bool { tuneIDs.contains(tuneID) }
+    public var isEmpty: Bool { tuneIDs.isEmpty }
 }

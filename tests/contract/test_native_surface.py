@@ -36,6 +36,10 @@ SPEC_PATH = os.path.join(
 CHECKED_GETS = [
     ("/api/app-config", "/api/app-config"),
     ("/api/listen/decider-data", "/api/listen/decider-data"),
+    (
+        "/api/session-instances/{session_instance_id}/known-tunes",
+        "/api/session-instances/1/known-tunes",
+    ),
     ("/api/add-session", "/api/add-session"),
     ("/api/me", "/api/me"),
     ("/api/me/profile", "/api/me/profile"),

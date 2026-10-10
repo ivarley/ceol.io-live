@@ -163,6 +163,8 @@ final class NightModel {
         }
         path.start(queue: .main)
         await connect()
+        // the session's own tunes, kept for listening on the phone with no signal later
+        if status != .offline { Task { [app, instanceID] in await KnownTunes.refresh(instanceID, app: app) } }
     }
 
     /// The phone has a network again: reconnect if we're not live.

@@ -834,14 +834,16 @@ def listen_decider_data():
     try:
         fmt = int(request.args.get("format", "1"))
     except ValueError:
-        return api_error("format must be a whole number", 400, code="bad_format")
+        return api_error(_("format must be a whole number"), 400, code="bad_format")
     if check_configured():
         return jsonify({"success": True, "format": fmt, "available": False})
     try:
         offer = dd.offer(fmt)
     except Exception as e:  # storage down: the app keeps the file it has and asks later
         return api_error(
-            f"the decider data could not be read: {e}", 503, code="storage_unavailable"
+            _("The decider data could not be read: %(error)s", error=str(e)),
+            503,
+            code="storage_unavailable",
         )
     return jsonify({"success": True, **offer})
 

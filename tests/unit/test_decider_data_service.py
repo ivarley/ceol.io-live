@@ -69,7 +69,7 @@ def test_publish_writes_the_file_before_the_manifest(s3, tmp_path):
         "built_at": "2026-10-12T07:16:00Z",
         "inputs_sha256": "in",
         "n_tunes": 23400,
-        "repertoire_n_tunes": 1294,
+        "popular_n_tunes": 3300,
         "source": {"tunes_csv_sha256": "csv"},
         "file": {"sha256": "abc123", "bytes": 21},
     }
@@ -97,7 +97,7 @@ def test_the_app_is_offered_the_current_file(s3, tmp_path):
             "built_at": "2026-10-12T07:16:00Z",
             "inputs_sha256": "in",
             "n_tunes": 1,
-            "repertoire_n_tunes": 0,
+            "popular_n_tunes": 0,
             "source": {},
             "file": {"sha256": "abc", "bytes": 10},
         },
@@ -108,33 +108,42 @@ def test_the_app_is_offered_the_current_file(s3, tmp_path):
     assert dd.offer(2) == {"format": 2, "available": False}
 
 
+def popularity(tmp_path, books):
+    p = tmp_path / "tune_popularity.csv"
+    p.write_text(
+        "name,tune_id,tunebooks\n" + "".join(f'"T",{t},{n}\n' for t, n in books.items())
+    )
+    return str(p)
+
+
 def test_an_unchanged_week_builds_nothing(s3, tmp_path, monkeypatch):
     csv = tmp_path / "tunes.csv"
     csv.write_text(
         "tune_id,setting_id,name,type,meter,mode,abc,date,username\n"
         "1,1,A Reel,reel,4/4,Dmajor,DEFG ABcd|edcB AGFE|DEFG ABcd|edcB A2 d2|,2020,x\n"
     )
-    monkeypatch.setattr(dd, "default_repertoire", lambda conn: [1])
     monkeypatch.setattr(dd, "MIN_TUNES", 1)
-    outcome, first = dd.rebuild_and_publish(None, csv_path=str(csv))
+    pop = popularity(tmp_path, {1: 500})
+    outcome, first = dd.rebuild_and_publish(csv_path=str(csv), popularity_path=pop)
     assert outcome == "published"
     s3.order.clear()
-    outcome, again = dd.rebuild_and_publish(None, csv_path=str(csv))
+    outcome, again = dd.rebuild_and_publish(csv_path=str(csv), popularity_path=pop)
     assert outcome == "unchanged" and again["sha256"] == first["sha256"]
     # only the check recorded
-    assert s3.order == ["listen-data/decider/v1/manifest.json"]
-    monkeypatch.setattr(dd, "default_repertoire", lambda conn: [1, 2])
-    outcome, _ = dd.rebuild_and_publish(None, csv_path=str(csv))
+    assert s3.order == ["listen-data/decider/v2/manifest.json"]
+    pop = popularity(tmp_path, {1: 50})  # no longer popular: a different file
+    outcome, _ = dd.rebuild_and_publish(csv_path=str(csv), popularity_path=pop)
     assert outcome == "published"
 
 
-def test_a_truncated_dump_is_not_published(s3, tmp_path, monkeypatch):
+def test_a_truncated_dump_is_not_published(s3, tmp_path):
     csv = tmp_path / "tunes.csv"
     csv.write_text(
         "tune_id,setting_id,name,type,meter,mode,abc,date,username\n"
         "1,1,A Reel,reel,4/4,Dmajor,DEFG ABcd|edcB AGFE|,2020,x\n"
     )
-    monkeypatch.setattr(dd, "default_repertoire", lambda conn: [1])
     with pytest.raises(RuntimeError, match="not publishing"):
-        dd.rebuild_and_publish(None, csv_path=str(csv))
+        dd.rebuild_and_publish(
+            csv_path=str(csv), popularity_path=popularity(tmp_path, {1: 500})
+        )
     assert s3.objects == {}

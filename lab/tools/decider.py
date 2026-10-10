@@ -4,18 +4,17 @@ The phone already hears for itself (CeolKit's CeolHearing); this is what it
 needs to decide too, with no connection: `listen.Listener.decide` and the data
 it reads, in a file Swift maps (`lab.corpus.decider_file`, which documents it).
 
-    python -m lab decider export              # from the lab's tunes.csv -> lab/data/index/decider-v1.bin
+    python -m lab decider export              # from the lab's tunes.csv -> lab/data/index/decider-v2.bin
     python -m lab decider export --from-index # from the index the listener loads (for the fixtures)
     python -m lab decider publish             # build from the newest dump and publish it for the app
     python -m lab decider fixtures --out ios/CeolKit/Tests/CeolDecidingTests/Fixtures
 
-The listening service's live configuration only (`Models()` as the service
-builds it): the session's repertoire index with the whole corpus as the
-fallback, the aligner on the "notes" reading in the written key, tune-ness,
-no tempo evidence. The repertoire index is not shipped: it is the whole
-corpus's postings restricted to the session's tunes, with its document
-frequencies counted over those tunes (checked equal, posting for posting, to
-the built one, 2026-10-10), so a session's repertoire is a list of tune ids.
+The listening service's live configuration only (`Models(merged=True)` and a
+stream's `Listener` as listen/service.py builds them): shortlists from the
+whole corpus and from the session's own tunes with the popular ones as a
+second tier, the aligner on the "notes" reading in the written key,
+tune-ness, the decoder, "may have changed" by rounds, no tempo evidence. The
+session's own tunes come with the night, not in the file.
 
 Two ways to the same file. From the dump is what production publishes every
 week (jobs/publish_decider_data.py), built in one pass with the standard
@@ -36,15 +35,18 @@ import numpy as np
 
 from lab.corpus import decider_file as D
 
-# fixtures: (name, recording, start seconds, seconds, taps). A tap comes after
-# the step it names (its index), as a person answering the state on screen:
-# "this" names the state's second candidate (so it overrides the decoder),
-# "none" rules out what is shown.
+# fixtures: (name, recording, start seconds, seconds, taps, the session's own
+# tunes). A tap comes after the step it names (its index), as a person answering
+# the state on screen: "this" names the state's second candidate (so it
+# overrides the decoder), "none" rules out what is shown. Own tunes "session":
+# the session's tune list from the recording's manifest; None: unknown, so the
+# popular tunes stand in, as for a session with no history.
 CLIPS = (
-    ("r112-reel", 112, 1500, 240, []),
-    ("r137-talk", 137, 900, 240, [{"after": 24, "action": "none"}]),
-    ("r143-jig", 143, 2400, 240, [{"after": 8, "action": "this"}]),
+    ("r112-reel", 112, 1500, 240, [], "session"),
+    ("r137-talk", 137, 900, 240, [{"after": 24, "action": "none"}], None),
+    ("r143-jig", 143, 2400, 240, [{"after": 8, "action": "this"}], "session"),
 )
+NU_PARTLY = 0.5     # listen/service.py's
 
 
 def default_path():
@@ -54,56 +56,51 @@ def default_path():
 
 
 def export_from_index(path):
-    """The file from the lab's built index and sequences: what the listening
-    service and the fixtures' listener decide with."""
-    from lab.corpus.index import Index
+    """The file from the lab's built index and sequences, and the popular tunes
+    and round lengths as `listen.Models` reads them: what the listening service
+    and the fixtures' listener decide with."""
+    from lab.analysis.form import RoundLengths
+    from lab.corpus.index import Index, candidate_tune_ids
     from lab.corpus.sequences import TuneSequences
 
     a = Index.load("all", n=6, fold_octaves=True)
-    rep = Index.load("repertoire", n=6, fold_octaves=True)
     seqs = TuneSequences.load("all")
+    popular = candidate_tune_ids("popular")
+    lengths = RoundLengths()
+    rounds = {t: n for t in a.tune_names if (n := lengths(t))}
     postings = {}
     for g, v in a.postings.items():
         postings[D.gram_key(g)] = array("i", (t for t, _ in v))
     by_tune = {t: [bytes(int(x) % 256 for x in plain) for _, _, plain in v] for t, v in seqs.by_tune.items()}
-    source = {"index_sha1": a.meta["sha1"], "repertoire_index_sha1": rep.meta["sha1"],
-              "index_built_at": a.meta.get("built_at"), "parser_version": a.meta.get("parser_version")}
-    return D.write(path, a.tune_names, a.tune_types, postings, by_tune, set(rep.tune_names), source)
+    source = {"index_sha1": a.meta["sha1"], "index_built_at": a.meta.get("built_at"),
+              "parser_version": a.meta.get("parser_version")}
+    return D.write(path, a.tune_names, a.tune_types, postings, by_tune, popular, rounds, source)
 
 
 def export(path=None, from_index=False):
     from lab import paths
-    from lab.corpus.index import candidate_tune_ids
 
     path = path or default_path()
     if from_index:
         meta = export_from_index(path)
     else:
-        meta = D.build(paths.tunes_csv_path(), candidate_tune_ids("repertoire"), path, progress=True)
+        meta = D.build(paths.tunes_csv_path(), paths.data("corpus/tune_popularity.csv"), path, progress=True)
     f = meta["file"]
     print(f"{path}: {f['bytes'] / 1e6:.1f} MB; {meta['n_tunes']} tunes, {f['n_grams']} n-grams, "
           f"{f['postings']} postings, {meta['sequences']['settings']} settings, {f['symbols']} symbols, "
-          f"repertoire {meta['repertoire_n_tunes']}; sha256 {f['sha256'][:12]}")
+          f"popular {meta['popular_n_tunes']}, round lengths {meta['rounds_n_tunes']}; sha256 {f['sha256'][:12]}")
     return path
 
 
-def publish(force=False, csv_path=None):
-    """Build from the newest dump (or `csv_path`) with production's repertoire
-    and publish, as the weekly cron does. Reads production's database and
-    writes to the recordings bucket: lab/.env's credentials."""
-    import psycopg2
-
-    from lab.env import prod_database_url
+def publish(force=False):
+    """Build from the newest dump and publish, as the weekly cron does. Writes
+    to the recordings bucket: lab/.env's credentials."""
+    import lab.env  # noqa: F401  (the AWS credentials)
     from services import decider_data_service as dd
 
-    conn = psycopg2.connect(prod_database_url())
-    try:
-        conn.set_session(readonly=True)
-        outcome, m = dd.rebuild_and_publish(conn, csv_path=csv_path, force=force)
-    finally:
-        conn.close()
+    outcome, m = dd.rebuild_and_publish(force=force)
     print(f"{outcome}: s3://.../{m['key']}, {m['bytes'] / 1e6:.1f} MB, built {m['built_at']}, "
-          f"{m['source'].get('n_tunes')} tunes, repertoire {m['source'].get('repertoire_n_tunes')}")
+          f"{m['source'].get('n_tunes')} tunes, popular {m['source'].get('popular_n_tunes')}")
 
 
 # -- fixtures ------------------------------------------------------------------
@@ -130,14 +127,23 @@ def _r(x, nd=12):
     return float(round(x, nd))
 
 
-def fixture(models, name, rec, start_s, seconds, taps):
+def session_tunes(rec):
+    """The session's tune list for a recording, from its manifest (lab pull)."""
+    from lab import paths
+
+    with open(paths.manifest_path(rec)) as f:
+        return sorted({r["tune_id"] for r in json.load(f)["repertoire"] if r["tune_id"]})
+
+
+def fixture(models, name, rec, start_s, seconds, taps, own=None):
     """One clip: each step's heard message, what the decider made of it on the
     way (the pool, the tunes aligned and their scores, tune-ness) and the
     state, with the taps a person made between steps."""
     from lab.tools.listen import Listener, unpack_heard
 
     msgs = _heard_messages(rec, start_s, seconds)
-    lst = Listener(tempfile.mkdtemp(), models=models, audio=False)
+    lst = Listener(tempfile.mkdtemp(), models=models, audio=False, session_tunes=own,
+                   second_tier=models.popular, nu_partly=NU_PARTLY)
     seen = {}
     step = lst.decoder.step
 
@@ -156,7 +162,8 @@ def fixture(models, name, rec, start_s, seconds, taps):
         steps.append({
             "heard": msg, "pool": list(lst.scorer.recent[-1]), "tunes": list(lst.scorer.last_tunes),
             "scores": {str(k): _r(v) for k, v in c["scores"].items()}, "floor": _r(c["floor"]),
-            "outside": sorted(c.get("outside", [])), "n_notes": c["n_notes"],
+            "outside": sorted(c.get("outside", [])), "partly": sorted(c.get("partly", [])),
+            "n_notes": c["n_notes"],
             "tune_logodds": _r(c["tune_logodds"]),
             "belief": [[int(s), _r(p, 15)] for s, p in lst.decoder.belief(len(lst.decoder._ids))
                        if p > 1e-12],
@@ -173,7 +180,7 @@ def fixture(models, name, rec, start_s, seconds, taps):
     lst.close()
     # the index decided with: the Swift tests need the file packed from the same one
     return {"name": name, "recording": rec, "start_s": start_s, "index_sha1": models.fallback.meta["sha1"],
-            "taps": done_taps, "steps": steps}
+            "session_tunes": own, "taps": done_taps, "steps": steps}
 
 
 def add_parser(sub):
@@ -186,7 +193,6 @@ def add_parser(sub):
     e.set_defaults(func=main_export)
     u = s.add_parser("publish", help="build from the newest dump and publish it for the app (as the cron does)")
     u.add_argument("--force", action="store_true", help="publish even if nothing it is built from has changed")
-    u.add_argument("--csv", help="build from this tunes.csv instead of downloading the dump")
     u.set_defaults(func=main_publish)
     f = s.add_parser("fixtures", help="fixtures holding the phone's deciding to the lab's")
     f.add_argument("--out", required=True)
@@ -200,7 +206,7 @@ def main_export(args):
 
 
 def main_publish(args):
-    publish(force=args.force, csv_path=args.csv)
+    publish(force=args.force)
     return 0
 
 
@@ -208,11 +214,11 @@ def main_fixtures(args):
     from lab.tools.listen import Models
 
     os.makedirs(args.out, exist_ok=True)
-    models = Models()
-    for name, rec, start, seconds, taps in CLIPS:
+    models = Models(0, True)            # as listen/service.py loads them
+    for name, rec, start, seconds, taps, own in CLIPS:
         if args.only and name != args.only:
             continue
-        fx = fixture(models, name, rec, start, seconds, taps)
+        fx = fixture(models, name, rec, start, seconds, taps, session_tunes(rec) if own == "session" else None)
         path = os.path.join(args.out, f"{name}.json")
         with open(path, "w") as f:
             json.dump(fx, f, separators=(",", ":"))

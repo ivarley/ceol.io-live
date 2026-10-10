@@ -1,13 +1,17 @@
 // Deciding on the phone (spec 053, "Listening on the phone, offline"): the lab's
-// listen.Listener.decide, so a phone that hears for itself (CeolHearing) can name the
-// tune with no connection. Every 4 s, from what was heard over the last 24 s:
+// listen.Listener.decide as the listening service runs it, so a phone that hears for
+// itself (CeolHearing) can name the tune with no connection. Every 4 s, from what was
+// heard over the last 24 s:
 //
-//   the shortlist   the session's tunes the n-grams like best (100; 300 once a person
-//                   has said "none of these"), and the whole corpus's best 20 (60);
+//   the shortlist   the whole corpus's tunes the n-grams like best (100; 300 once a
+//                   person has said "none of these"), and as many from the session's
+//                   own tunes and the popular ones (the second tier), merged;
 //   the aligner     each shortlisted tune, and those of the last six steps, against
 //                   the newest 6 s of notes;
 //   tune-ness       how much the last seconds sound like a tune at all;
-//   the decoder     one step of belief, and the state the listening service would send.
+//   the decoder     one step of belief, a tune outside the session's own discounted
+//                   (a popular one by half as much), and the state the service would
+//                   send, "the tune may have changed" included.
 //
 // Held to the lab by fixtures it writes (`python -m lab decider fixtures`): the same
 // heard messages in, the same shortlist, scores and state out.
@@ -16,7 +20,11 @@ import Foundation
 
 public final class Decider {
     public let corpus: Corpus
-    public let repertoire: Repertoire
+    /// The session's own tunes (the popular ones when they are not known), the second
+    /// tier (popular, not its own), and the two together, shortlisted among.
+    public let own: Set<Int>
+    let partly: Set<Int>
+    let shortlistSet: TuneSet
     let lookup: Lookup
     let aligner: Aligner
     var decoder: TuneDecoder
@@ -24,7 +32,8 @@ public final class Decider {
     let config: [String: Any]
     let frontends: [String]
 
-    let windowMs, keep, poolTop, fallbackTop, widePoolTop, wideFallbackTop, ruleOutMs: Int
+    let windowMs, keep, shortlistTop, wideShortlistTop, ruleOutMs: Int
+    var changeWatch: ChangeWatch
 
     // the scorer's memory
     var recent: [[Int]] = []
@@ -39,22 +48,25 @@ public final class Decider {
                                                     "none": 1.0, "history": [Any]()]
     /// What the last step saw on the way, for the fixtures and the meter log.
     public private(set) var last: (pool: [Int], tunes: [Int], scores: [Int: Double], floor: Double,
-                                   outside: [Int], nNotes: Int, tuneLogodds: Double)?
+                                   outside: [Int], partly: [Int], nNotes: Int, tuneLogodds: Double)?
 
-    /// `repertoire`: the session's tunes; nil is the default session's (the lab's).
-    public init(corpus: Corpus, repertoire: [Int]? = nil) {
+    /// `sessionTunes`: the tunes the session logged before this night (GET
+    /// /api/session-instances/<id>/known-tunes); nil or none, and the popular tunes stand
+    /// in, as the listening service does.
+    public init(corpus: Corpus, sessionTunes: [Int]? = nil) {
         self.corpus = corpus
-        self.repertoire = Repertoire(repertoire ?? corpus.defaultRepertoire, in: corpus)
+        let own = (sessionTunes?.isEmpty ?? true) ? corpus.popular : Set(sessionTunes!)
+        self.own = own
+        partly = corpus.popular.subtracting(own)
+        shortlistSet = TuneSet(own.union(partly), in: corpus)
         lookup = Lookup(corpus)
         let cfg = corpus.meta["listener"] as? [String: Any] ?? [:]
         config = cfg
         func int(_ k: String, _ d: Int) -> Int { (cfg[k] as? NSNumber)?.intValue ?? d }
         windowMs = int("window_ms", 6000)
         keep = int("keep", 6)
-        poolTop = int("pool_top", 100)
-        fallbackTop = int("fallback_top", 20)
-        widePoolTop = int("wide_pool_top", 300)
-        wideFallbackTop = int("wide_fallback_top", 60)
+        shortlistTop = int("shortlist_top", 100)
+        wideShortlistTop = int("wide_shortlist_top", 300)
         ruleOutMs = Int(((cfg["rule_out_s"] as? NSNumber)?.doubleValue ?? 30) * 1000)
         frontends = cfg["frontends"] as? [String] ?? ["yin", "basic_pitch", "pesto"]
         aligner = Aligner(corpus: corpus, chunk: int("chunk_notes", 24))
@@ -62,9 +74,13 @@ public final class Decider {
         let d = cfg["decoder"] as? [String: Any] ?? [:]
         func dbl(_ k: String, _ v: Double) -> Double { (d[k] as? NSNumber)?.doubleValue ?? v }
         decoder = TuneDecoder(lam: dbl("lam", 40), tau: dbl("tau", 0.45), pSwitch: dbl("p_switch", 0.05),
-                          pNone: dbl("p_none", 0.3), nu: dbl("nu", 0.05), kappa: tuneness.kappa,
-                          gamma: tuneness.gamma)
+                              pNone: dbl("p_none", 0.3), nu: dbl("nu", 0.05), kappa: tuneness.kappa,
+                              gamma: tuneness.gamma, nuPartly: dbl("nu_partly", 0.5))
         decoder.nSettings = { [corpus] t in corpus.settingCount(of: t) }
+        let w = cfg["change_watch"] as? [String: Any] ?? [:]
+        func cw(_ k: String, _ v: Double) -> Double { (w[k] as? NSNumber)?.doubleValue ?? v }
+        changeWatch = ChangeWatch(full: cw("full", 0.99), doubt: cw("doubt", 0.8), rounds: cw("rounds", 1.8),
+                                  heldMs: cw("held_ms", 40000), roundLength: { [corpus] t in corpus.roundLength(of: t) })
     }
 
     /// One step from a heard message's parts: each tracker's notes over the last 24 s,
@@ -78,15 +94,16 @@ public final class Decider {
         let wide = t < widenUntil
         let ctx = frontends.map { notes[$0] ?? [] }
 
-        // the shortlist: the session's tunes, then the whole corpus's best not among them
+        // the shortlist: the whole corpus's best, then the session's own and the
+        // popular ones' best not among them
         let steps = ctx.map { intervals($0) }
-        let top = wide ? widePoolTop : poolTop, fbTop = wide ? wideFallbackTop : fallbackTop
-        var pool = fuse(steps.map { lookup.lookup($0, top: top, within: repertoire) }).prefix(top)
-            .map { corpus.tuneID(at: $0.tune) }
-        var inPool = Set(pool)
-        for r in fuse(steps.map { lookup.lookup($0, top: fbTop) }).prefix(fbTop) {
-            let id = corpus.tuneID(at: r.tune)
-            if inPool.insert(id).inserted { pool.append(id) }
+        let top = wide ? wideShortlistTop : shortlistTop
+        var pool = [Int](), inPool = Set<Int>()
+        for only in [nil, shortlistSet] as [TuneSet?] {
+            for r in fuse(steps.map { lookup.lookup($0, top: top, only: only) }).prefix(top) {
+                let id = corpus.tuneID(at: r.tune)
+                if inPool.insert(id).inserted { pool.append(id) }
+            }
         }
 
         // the aligner, on this step's pool and the last few steps'
@@ -99,7 +116,8 @@ public final class Decider {
         var scores = (queries.isEmpty || tunes.isEmpty) ? [Double]() : aligner.scores(tunes, queries)
         var scored = scores.isEmpty ? [] : tunes
         let nNotes = heard.reduce(0) { $0 + $1.count }
-        var outside = scored.filter { !repertoire.tuneIDs.contains($0) }
+        var outside = scored.filter { !own.contains($0) && !partly.contains($0) }
+        let partlyScored = partly.isEmpty ? [] : scored.filter { !own.contains($0) && partly.contains($0) }
 
         // tune-ness, with the aligner's own evidence
         let sorted = scores.sorted(by: >) + [0, 0]
@@ -119,10 +137,13 @@ public final class Decider {
             outside = outside.filter { banned[$0] == nil }
             floor = scores.min() ?? 0
         }
-        last = (pool, tunes, Dictionary(uniqueKeysWithValues: zip(scored, scores)), floor, outside, nNotes, logodds)
+        last = (pool, tunes, Dictionary(uniqueKeysWithValues: zip(scored, scores)), floor, outside, partlyScored,
+                nNotes, logodds)
 
+        // (the second tier is not filtered for what was ruled out: as the lab's)
         let shown = decoder.step(Chunk(tMs: t, tunes: scored, scores: scores, floor: floor,
-                                       outside: Set(outside), nNotes: nNotes, tuneLogodds: logodds))
+                                       outside: Set(outside), partly: partlyScored, nNotes: nNotes,
+                                       tuneLogodds: logodds))
         // a confirmed tune is held while the decoder agrees, and let go once it moves on
         if !pinned.isEmpty && !pinned.contains(shown) { pinned = [] }
         let belief = decoder.belief(8)
@@ -134,12 +155,20 @@ public final class Decider {
                  "p": pyRound(b.p, 4), "outside": out.contains(b.state)]
             }
         let now: Int? = shown == notATune ? nil : shown
+        var byState = [Int: Double]()
+        for b in belief { byState[b.state] = b.p }
+        let changing = changeWatch.step(t, belief: byState, shown: now, none: none,
+                                        periodMs: (features["period_ms"] ?? nil))
         if let now, (history.last?["tune_id"] as? Int) != now {
             history.append(["tune_id": now, "name": corpus.name(of: now) as Any, "from_ms": t])
         }
         state = ["status": "listening", "t_ms": t, "top": topList, "none": pyRound(none, 4),
                  "tuneness": pyRound(1 / (1 + exp(-logodds)), 3), "shown": now as Any, "notes": nNotes,
-                 "wide": wide, "compute_ms": Int(1000 * Date().timeIntervalSince(started)),
+                 "wide": wide,
+                 "changing": changing.map { c in
+                     ["tune_id": c, "name": corpus.name(of: c) as Any, "since_ms": changeWatch.changingSince as Any]
+                 } as Any,
+                 "compute_ms": Int(1000 * Date().timeIntervalSince(started)),
                  "lag_ms": self.heardMs - t, "history": Array(history.suffix(8))]
         return state
     }

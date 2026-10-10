@@ -3174,6 +3174,43 @@ segmented blind; item 3 the follower). Open, in rough order:
     replacement), the app's tests in the simulator. Not yet run against the
     real bucket, from the cron, or on an iPhone.
 
+- **(2026-10-10) The phone decides as the service now does.** Merging
+  production into the phone-listening branch brought the listening service's
+  newer decision path (merged shortlists with the session's own tunes first and
+  the popular ones as a second tier, `nu_partly` 0.5, the hop, "may have
+  changed" by rounds, the excluded settings); the phone's decider now follows
+  it rather than the older single-repertoire one.
+  - **The split, re-applied.** Production's `Listener` gained the
+    `Hearer`/`decide` split again (`audio=False`, `step_heard`); the service's
+    streams take both a mode and the session's known tunes, and the app sends
+    the night's instance in heard mode too, so a heard stream prefers the
+    session's own tunes as an audio one does.
+  - **File format 2** (`decider-v2.bin`): the popular tunes (at least 100
+    thesession.org tunebooks; 2,320) and each tune's length once round (the
+    median of its settings' played forms, `RoundLengths`; 23,305 tunes) are
+    in it; the 13 excluded settings are left out as they are when the index
+    loads; the baked-in repertoire is gone. A session's own tunes come with
+    the night, not in the file, so the weekly rebuild needs no database, only
+    the dump and TheSession-data's `tune_popularity.csv`. `numpy` joins the
+    app's requirements for the round lengths (`lab.analysis.form`).
+  - **The session's own tunes on the phone.** The service fetches a night's
+    `known-tunes` (the tunes the session logged before that night); the app
+    now fetches them too whenever a night's screen connects, and keeps the
+    last 30 nights' (`KnownTunes`), so a night at a pub with no signal still
+    prefers them; with none kept, the popular tunes stand in, as on the
+    service. `GET /api/session-instances/<id>/known-tunes` is now in the
+    native surface.
+  - **Held to the lab** by new fixtures from production's listener
+    (`Models(0, True)`, a stream's `Listener` with the popular second tier):
+    112 and 143 with the session's tune list, 137 with none (the popular
+    fallback). Swift matches on all 180 steps: the shortlist, the tunes
+    aligned, their scores (5e-13), outside and second-tier marks, the shown
+    tune, the beliefs to the state's 4 places, and the one "may have
+    changed" (143). A step a median 35 ms on the Mac.
+  - The meter's new strings have Irish drafts (`ios/Ceol/i18n-ga/tunes.json`;
+    the endpoint's two errors in `translations/ga`), for the product owner's
+    review with the rest.
+
 - **(2026-10-04) Loudness, relative to the night.** Absolute loudness was taken
   out of tune-ness after a test of laptop speakers recorded through a phone,
   which says nothing about a phone on a pub table (the player's correction).

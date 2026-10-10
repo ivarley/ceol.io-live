@@ -2423,6 +2423,16 @@
         }
       }
     },
+    "Ceol's server": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Freastalaí Ceol"
+          }
+        }
+      }
+    },
     "Ceol, go to Home": {
       "localizations": {
         "ga": {
@@ -3057,6 +3067,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Níorbh fhéidir an cuardach a dhéanamh. Seiceáil do cheangal."
+          }
+        }
+      }
+    },
+    "Couldn't start listening on this phone: %@": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Níorbh fhéidir éisteacht a thosú ar an bhfón seo: %@"
           }
         }
       }
@@ -4177,6 +4197,36 @@
         }
       }
     },
+    "Listening on": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ag éisteacht ar"
+          }
+        }
+      }
+    },
+    "Listening on this phone": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ag éisteacht ar an bhfón seo"
+          }
+        }
+      }
+    },
+    "Listening on this phone stopped: %@": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Stop an éisteacht ar an bhfón seo: %@"
+          }
+        }
+      }
+    },
     "Listening…": {
       "localizations": {
         "ga": {
@@ -5215,6 +5265,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Gan nasc"
+          }
+        }
+      }
+    },
+    "Not listening — still recording": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Gan éisteacht — fós ag taifeadadh"
           }
         }
       }
@@ -7431,6 +7491,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Seo an ceann atá in úsáid"
+          }
+        }
+      }
+    },
+    "This phone": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "An fón seo"
           }
         }
       }

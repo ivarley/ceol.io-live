@@ -27,7 +27,7 @@ struct DeciderDataTests {
     func install() throws {
         let dir = try scratch()
         defer { try? FileManager.default.removeItem(at: dir) }
-        let dest = dir.appendingPathComponent("installed/decider-v1.bin")
+        let dest = dir.appendingPathComponent("installed/decider-v2.bin")
         let sha = try DeciderData.sha256(of: corpusURL!)
         let bytes = (try FileManager.default.attributesOfItem(atPath: corpusURL!.path)[.size] as! NSNumber).intValue
 

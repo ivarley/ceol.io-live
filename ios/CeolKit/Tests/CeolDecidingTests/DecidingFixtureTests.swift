@@ -7,7 +7,7 @@
 // The corpus file is not in the repo (16 MB, rebuilt with the corpus), and it must be
 // the one packed from the index the fixtures were decided with (`python -m lab decider
 // export --from-index`): CEOL_DECIDER_DATA names it, else LAB_DATA_DIR/index/
-// decider-v1.bin, else this worktree's lab/data, else the copy the app ships
+// decider-v2.bin, else this worktree's lab/data, else the copy the app ships
 // (Sources/CeolDeciding/Data). The tests are skipped without one.
 
 import Foundation
@@ -31,9 +31,9 @@ let corpusURL: URL? = {
     let env = ProcessInfo.processInfo.environment
     var candidates = [String]()
     if let p = env["CEOL_DECIDER_DATA"] { candidates.append(p) }
-    if let d = env["LAB_DATA_DIR"] { candidates.append("\(d)/index/decider-v1.bin") }
+    if let d = env["LAB_DATA_DIR"] { candidates.append("\(d)/index/decider-v\(Corpus.version).bin") }
     let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../../../lab/data")
-    candidates.append(root.appendingPathComponent("index/decider-v1.bin").standardized.path)
+    candidates.append(root.appendingPathComponent("index/decider-v\(Corpus.version).bin").standardized.path)
     if let b = Corpus.bundled { candidates.append(b.path) }
     return candidates.lazy.map(URL.init(fileURLWithPath:)).first { url in
         guard let c = try? Corpus(contentsOf: url) else { return false }
@@ -48,6 +48,8 @@ struct DecideClip {
     let fx: [String: Any]
     var steps: [[String: Any]] { fx["steps"] as! [[String: Any]] }
     var taps: [[String: Any]] { fx["taps"] as! [[String: Any]] }
+    /// The session's own tunes the lab decided with, or nil (the popular ones stand in).
+    var sessionTunes: [Int]? { (fx["session_tunes"] as? [NSNumber])?.map(\.intValue) }
 
     static let names = ["r112-reel", "r137-talk", "r143-jig"]
 
@@ -64,13 +66,14 @@ struct DecideClip {
 
 func ints(_ x: Any?) -> [Int] { (x as? [NSNumber] ?? []).map(\.intValue) }
 
-@Suite("The phone's deciding against the lab's", .serialized, .enabled(if: corpus != nil, "no decider-v1.bin packed from the fixtures' index"))
+@Suite("The phone's deciding against the lab's", .serialized, .enabled(if: corpus != nil, "no decider-v2.bin packed from the fixtures' index"))
 struct DecidingFixtureTests {
     @Test("Every step: the same shortlist, the same scores, the same state", arguments: DecideClip.names)
     func steps(_ name: String) throws {
         let clip = DecideClip.load(name)
-        let decider = Decider(corpus: corpus!)
+        let decider = Decider(corpus: corpus!, sessionTunes: clip.sessionTunes)
         var poolSame = 0, tunesSame = 0, shownSame = 0, worstScore = 0.0, worstLogodds = 0.0, worstP = 0.0
+        var changed = 0
         for (i, step) in clip.steps.enumerated() {
             let got = try #require(decider.step(message: clip.message(step)))
             let last = try #require(decider.last)
@@ -88,6 +91,8 @@ struct DecidingFixtureTests {
             }
             worstLogodds = max(worstLogodds, abs(last.tuneLogodds - (step["tune_logodds"] as! NSNumber).doubleValue))
             #expect(last.nNotes == step["n_notes"] as! Int)
+            #expect(last.outside.sorted() == ints(step["outside"]), "\(name) step \(i): outside")
+            #expect(last.partly.sorted() == ints(step["partly"]), "\(name) step \(i): the second tier")
 
             let shown = got["shown"] as? Int, labShown = lab["shown"] as? Int
             if shown == labShown { shownSame += 1 } else {
@@ -106,6 +111,12 @@ struct DecidingFixtureTests {
             #expect((got["history"] as! [[String: Any]]).map { $0["tune_id"] as! Int }
                     == (lab["history"] as! [[String: Any]]).map { ($0["tune_id"] as! NSNumber).intValue })
             #expect(got["wide"] as? Bool == lab["wide"] as? Bool)
+            let changing = (got["changing"] as? [String: Any]).map { [$0["tune_id"] as! Int, $0["since_ms"] as! Int] }
+            let labChanging = (lab["changing"] as? [String: Any]).map {
+                [($0["tune_id"] as! NSNumber).intValue, ($0["since_ms"] as! NSNumber).intValue]
+            }
+            #expect(changing == labChanging, "\(name) step \(i): may have changed")
+            if labChanging != nil { changed += 1 }
 
             for tap in clip.taps where (tap["after"] as! Int) == i {
                 if tap["action"] as! String == "this" { decider.tapThis(tap["tune_id"] as! Int) }
@@ -113,7 +124,8 @@ struct DecidingFixtureTests {
             }
         }
         let n = clip.steps.count
-        print("\(name): pool \(poolSame)/\(n), aligned \(tunesSame)/\(n), shown \(shownSame)/\(n); "
+        print("\(name): pool \(poolSame)/\(n), aligned \(tunesSame)/\(n), shown \(shownSame)/\(n), "
+              + "may have changed on \(changed); "
               + "worst score \(worstScore), tune-ness log-odds \(worstLogodds), belief \(worstP)")
         #expect(poolSame == n)
         #expect(tunesSame == n)
@@ -140,7 +152,7 @@ struct DecidingFixtureTests {
             }
         }
         times.sort()
-        print(String(format: "corpus %.1f MB mapped in %.1f ms; repertoire %.1f ms; a step: median %.1f ms, "
+        print(String(format: "corpus %.1f MB mapped in %.1f ms; the session's tunes %.1f ms; a step: median %.1f ms, "
                      + "90th %.1f, worst %.1f (%d steps)", Double(c.byteCount) / 1e6, 1000 * load, 1000 * rep,
                      times[times.count / 2], times[times.count * 9 / 10], times.last!, times.count))
     }
@@ -149,7 +161,7 @@ struct DecidingFixtureTests {
 /// Heard and decided on the phone end to end: CeolHearing's clip of night 112 (the
 /// hearing fixtures' r112-reel, the same 30 s the deciding fixture starts with) through
 /// Swift's hearing, then Swift's deciding, against the lab's states.
-@Suite("Heard and decided in Swift", .enabled(if: corpus != nil, "no decider-v1.bin"))
+@Suite("Heard and decided in Swift", .enabled(if: corpus != nil, "no decider-v2.bin"))
 struct EndToEndTests {
     @Test("A clip of a reel: every state the lab's")
     func reel() throws {
@@ -158,8 +170,9 @@ struct EndToEndTests {
         let data = try Data(contentsOf: dir.appendingPathComponent("r112-reel.pcm"))
         let pcm = data.withUnsafeBytes { Array($0.bindMemory(to: Int16.self)) }.map { Int16(littleEndian: $0) }
         let hearer = Hearer(models: try HearingModels(computeUnits: .cpuOnly))
-        let decider = Decider(corpus: corpus!)
-        let lab = DecideClip.load("r112-reel").steps
+        let clip = DecideClip.load("r112-reel")
+        let decider = Decider(corpus: corpus!, sessionTunes: clip.sessionTunes)
+        let lab = clip.steps
         var i = 0
         for start in stride(from: 0, to: pcm.count, by: 22050) {
             hearer.append(Array(pcm[start..<min(pcm.count, start + 22050)]))

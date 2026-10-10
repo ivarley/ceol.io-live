@@ -90,25 +90,24 @@ final class Lookup {
         return out
     }
 
-    /// The `top` tunes for what was heard, over the whole corpus or only a repertoire's
-    /// tunes (with that repertoire's idf).
-    func lookup(_ steps: [Int?], top: Int, within rep: Repertoire? = nil) -> [Ranked] {
+    /// The `top` tunes for what was heard, over the whole corpus or ranked among `only`
+    /// (lab: Index.lookup's `only`: the idf stays the whole corpus's).
+    func lookup(_ steps: [Int?], top: Int, only: TuneSet? = nil) -> [Ranked] {
         let grams = grams(steps)
         if grams.isEmpty { return [] }
-        let nTunes = Double(rep?.size ?? corpus.nTunes)
+        let nTunes = Double(corpus.nTunes)
         var totalIDF = 0.0
         for (key, mult) in grams {
             guard let g = corpus.gram(key) else { continue }      // df 0: idf 0, adds nothing
             let list = corpus.tunes(holding: g)
-            let df = rep.map { Int($0.df[g]) } ?? list.count
-            if df == 0 { continue }
+            let df = list.count
             let w = log(nTunes / Double(df))
             totalIDF += w * Double(mult)
             if w <= 0 { continue }
             let wm = w * Double(mult)
             for t16 in list {
                 let t = Int(t16)
-                if let rep, !rep.member[t] { continue }
+                if let only, !only.member[t] { continue }
                 if hits[t] == 0 { touched.append(t) }
                 scores[t] += wm
                 hits[t] += Int32(mult)

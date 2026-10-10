@@ -50,7 +50,7 @@ enum ListenWhere: String, CaseIterable, Identifiable {
         set { UserDefaults.standard.set(newValue.rawValue, forKey: key) }
     }
 
-    var label: String { self == .phone ? "This phone" : "Ceol's server" }
+    var label: String { self == .phone ? tr("This phone") : tr("Ceol's server") }
 }
 
 @Observable
@@ -140,9 +140,11 @@ final class NightRecorder {
             return ListenLink(url: listenURL, token: token, streamID: streamID, instanceID: instanceID, source: capture)
         }
         let log = meterLog
-        let deciding = PhoneDeciding.corpus.map(PhoneDeciding.init)
+        let deciding = PhoneDeciding.corpus.map { PhoneDeciding(corpus: $0, sessionTunes: KnownTunes.cached(instanceID)) }
         if let deciding {
-            meterLog.write("app", ListenWire.event("decider", ["built_at": deciding.builtAt]))
+            meterLog.write("app", ListenWire.event("decider", [
+                "built_at": deciding.builtAt, "known_tunes": KnownTunes.cached(instanceID)?.count ?? 0,
+            ]))
         }
         let h = PhoneHearing(
             sends: deciding == nil,
@@ -197,6 +199,14 @@ final class NightRecorder {
             return
         }
         watchInterruptions()
+        // the session's own tunes, fresh if there is a signal: a phone deciding for itself
+        // takes them if it has not begun yet (the night's screen usually fetched them)
+        if let app, let deciding = streamLink as? PhoneDeciding {
+            let id = instanceID
+            Task {
+                if let ids = await KnownTunes.refresh(id, app: app, timeout: 5) { deciding.useSessionTunes(ids) }
+            }
+        }
         if let app {
             let n = NightModel(instanceID: instanceID, app: app)
             night = n
@@ -518,7 +528,7 @@ nonisolated final class PhoneHearing: ListenSource, @unchecked Sendable {
                 // background (the screen locked, which is most of a night)
                 hearer = Hearer(models: try HearingModels(computeUnits: .cpuAndNeuralEngine))
             } catch {
-                fail("Couldn't start listening on this phone: \(error.localizedDescription)")
+                fail(tr("Couldn't start listening on this phone: \(error.localizedDescription)"))
             }
         }
     }
@@ -544,7 +554,7 @@ nonisolated final class PhoneHearing: ListenSource, @unchecked Sendable {
                     try steps(hearer)
                 } catch {
                     self.hearer = nil
-                    fail("Listening on this phone stopped: \(error.localizedDescription)")
+                    fail(tr("Listening on this phone stopped: \(error.localizedDescription)"))
                 }
             }
         }
@@ -637,14 +647,25 @@ nonisolated final class PhoneDeciding: Listening, @unchecked Sendable {
     private var onState: (@Sendable (ListenState, String) -> Void)?
     private let corpus: Corpus
     private var decider: Decider?                    // touched only on `queue`
+    private var stepped = false                      // touched only on `queue`
 
     /// When the corpus this stream decides from was built.
     var builtAt: String { corpus.builtAt }
 
-    init(corpus: Corpus) {
+    /// `sessionTunes`: the tunes the session logged before the night (KnownTunes); nil,
+    /// and the popular tunes stand in.
+    init(corpus: Corpus, sessionTunes: [Int]?) {
         self.corpus = corpus
-        // the session's repertoire is worked out here, not on the main thread
-        queue.async { [self] in decider = Decider(corpus: corpus) }
+        queue.async { [self] in decider = Decider(corpus: corpus, sessionTunes: sessionTunes) }
+    }
+
+    /// The session's tunes arrived after the stream began: taken if nothing has been
+    /// decided yet, so a night is decided one way throughout.
+    func useSessionTunes(_ ids: [Int]) {
+        queue.async { [self] in
+            guard !stepped else { return }
+            decider = Decider(corpus: corpus, sessionTunes: ids)
+        }
     }
 
     var isRunning: Bool { lock.withLock { running } }
@@ -659,6 +680,7 @@ nonisolated final class PhoneDeciding: Listening, @unchecked Sendable {
     func take(_ heard: Heard) {
         queue.async { [self] in
             guard let decider, let onState = lock.withLock({ running ? self.onState : nil }) else { return }
+            stepped = true
             let notes = heard.notes.mapValues { $0.map { HeardNote($0.t0, $0.t1, $0.midi) } }
             decider.step(tMs: heard.tMs, notes: notes, features: heard.features, heardMs: heard.heardMs)
             let text = decider.stateMessage()

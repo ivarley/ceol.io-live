@@ -4,7 +4,8 @@ Publish the phone's decider file - weekly, riding along on the active-sessions c
 
 The app decides what tune is playing on the phone itself (spec 053, "Listening
 on the phone, offline"), from a file built from thesession.org's corpus. This
-rebuilds it from each Sunday's dump and publishes it for the app to fetch
+rebuilds it from each Sunday's dump and TheSession-data's tune popularity, and
+publishes it for the app to fetch
 (services/decider_data_service.py), after the merge sync's Monday 06:00 window.
 
 Gated on when the published manifest was last checked: due once each week from
@@ -28,8 +29,6 @@ from dotenv import load_dotenv
 load_dotenv()
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from database import get_db_connection  # noqa: E402
-
 logger = logging.getLogger(__name__)
 
 
@@ -51,13 +50,9 @@ def run_weekly_if_due(now_utc=None):
 
 
 def run(force=False):
-    conn = get_db_connection()
-    try:
-        from services import decider_data_service as dd
+    from services import decider_data_service as dd
 
-        outcome, manifest = dd.rebuild_and_publish(conn, force=force)
-    finally:
-        conn.close()
+    outcome, manifest = dd.rebuild_and_publish(force=force)
     logger.info(
         f"decider data {outcome}: {manifest['key']} built {manifest['built_at']}, "
         f"checked {manifest['checked_at']}"

@@ -2004,6 +2004,30 @@ paths:
       responses:
         "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/DeciderData" } } } }
         default: { $ref: "#/components/responses/Error" }
+  /api/session-instances/{session_instance_id}/known-tunes:
+    get:
+      operationId: getKnownTunes
+      summary: The tunes the session logged before this night, which listening prefers (spec 053)
+      description: >-
+        The listening service fetches these for a night it listens to; a phone deciding for
+        itself fetches and keeps them, for a night with no signal. `keys`: the key the session
+        plays each tune in, where it has one.
+      security: [{ bearer: [] }]
+      parameters: [{ name: session_instance_id, in: path, required: true, schema: { type: integer } }]
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, session_instance_id, tune_ids, keys]
+                properties:
+                  success: { type: boolean, const: true }
+                  session_instance_id: { type: integer }
+                  tune_ids: { type: array, items: { type: integer } }
+                  keys: { type: object, additionalProperties: { type: string } }
+        default: { $ref: "#/components/responses/Error" }
   /api/session-instances/{session_instance_id}/audio:
     get:
       operationId: getInstanceAudio

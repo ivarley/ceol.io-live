@@ -1,14 +1,21 @@
 """The phone's decider file, built straight from thesession.org's dump (spec 053,
 "Listening on the phone, offline").
 
-What the phone reads to decide with no connection (CeolKit's CeolDeciding): the
+What the phone reads to decide with no connection (CeolKit's CeolDeciding), as
+the listening service decides (`listen.Listener` on `Models(merged=True)`): the
 whole corpus's 6-gram postings per tune, every setting's "notes" reading for the
-aligner, the tunes' names and types, the session's repertoire, and the
-configuration and tune-ness model. It is what `corpus.index.Index` (all, n=6,
-folded) and `corpus.sequences.TuneSequences` hold, setting for setting, made in
-one pass with the standard library only, so the weekly cron can rebuild it from a
-fresh dump in a small instance (jobs/publish_decider_data.py). The lab's tests
-hold it equal to those two built the lab's way.
+aligner, the popular tunes (a session's second tier, and its first when its own
+are not known), each tune's length once round (the meter's "may have changed"),
+the tunes' names and types, and the configuration and tune-ness model. It is
+what `corpus.index.Index` (all, n=6, folded), `corpus.sequences.TuneSequences`
+and `analysis.form.RoundLengths` hold, with the excluded settings left out as
+they are when those load (`corpus.exclusions`), made in one pass over the dump
+so the weekly cron can rebuild it from a fresh one in a small instance
+(jobs/publish_decider_data.py). The lab's tests hold it equal to those built
+the lab's way.
+
+The session's own tunes are not in it: the app fetches them for the night
+(GET /api/session-instances/<id>/known-tunes), as the service does.
 
 The file, little-endian throughout:
 
@@ -21,21 +28,22 @@ The file, little-endian throughout:
      3 gram_keys  u32 per n-gram, ascending: sum((step + 6) * 12**i)
      4 post_off   u32, n_grams + 1: each n-gram's tunes in `postings`
      5 postings   u16 tune indexes, ascending within an n-gram
-     6 repertoire u16 tune indexes: the default session's tunes
-     7 set_off    u32, n_tunes + 1: each tune's settings in `seq_off`
-     8 seq_off    u32, n_settings + 1: each setting's symbols
-     9 symbols    i8 pitch classes, the "notes" reading
-    10 name_off   u32, n_tunes + 1
-    11 names      utf-8
-    12 type_off   u32, n_tunes + 1
-    13 types      utf-8
+     6 popular    u16 tune indexes: at least POPULAR_MIN thesession.org tunebooks
+     7 rounds     f32 per tune: eighths in one time through it as played (median
+                  over its settings), 0 for none readable
+     8 set_off    u32, n_tunes + 1: each tune's settings in `seq_off`
+     9 seq_off    u32, n_settings + 1: each setting's symbols
+    10 symbols    i8 pitch classes, the "notes" reading
+    11 name_off   u32, n_tunes + 1
+    12 names      utf-8
+    13 type_off   u32, n_tunes + 1
+    14 types      utf-8
 
 Postings are per tune, not per setting: the lookup counts a tune once per
-n-gram however many of its settings hold it. The repertoire's own index is the
-whole corpus's postings restricted to its tunes, with idf over those, so it is
-not stored; the phone counts it.
+n-gram however many of its settings hold it.
 """
 
+import csv
 import hashlib
 import json
 import os
@@ -45,25 +53,31 @@ import time
 from array import array
 
 from lab.corpus import abc_pitch
+from lab.corpus.exclusions import excluded_settings
 from lab.corpus.tunes_csv import iter_settings
 
-FORMAT_VERSION = 1          # the layout: bump when the phone must read it differently
-BUILDER_VERSION = "1"       # what goes in it: bump when the same inputs would build otherwise
+FORMAT_VERSION = 2          # the layout: bump when the phone must read it differently
+BUILDER_VERSION = "2"       # what goes in it: bump when the same inputs would build otherwise
 MAGIC = b"CEOLDEC1"
-SECTIONS = ("meta", "tune_ids", "gram_count", "gram_keys", "post_off", "postings", "repertoire",
+SECTIONS = ("meta", "tune_ids", "gram_count", "gram_keys", "post_off", "postings", "popular", "rounds",
             "set_off", "seq_off", "symbols", "name_off", "names", "type_off", "types")
 N = 6
+POPULAR_MIN = 100           # tunebooks: `candidate_tune_ids("popular")`
+MIN_ROUND_EIGHTHS = 32      # RoundLengths' min_eighths
 TUNENESS_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "configs", "tuneness.json")
 
-# The listening service's live configuration, as `listen.Listener` and its scorer
-# and decoder are built there. Restated here so the cron needs nothing but the
-# standard library; lab/tests/test_decider_file.py holds it to the real values.
+# The listening service's live configuration, as listen/service.py builds a
+# stream's `listen.Listener` (merged shortlists, the popular tunes as the second
+# tier, the default hop, no letting go on a drop, "may have changed" by rounds).
+# Restated so the cron needs no listener; lab/tests/test_decider_file.py holds it
+# to the real values.
 LISTENER = {
     "hop_ms": 4000, "pool_ms": 24000, "window_ms": 6000, "keep": 6,
-    "pool_top": 100, "fallback_top": 20, "wide_pool_top": 300, "wide_fallback_top": 60,
+    "shortlist_top": 100, "wide_shortlist_top": 300,
     "rule_out_s": 30.0, "chunk_notes": 24,
     "decoder": {"lam": 40.0, "tau": 0.45, "p_switch": 0.05, "p_none": 0.3, "nu": 0.05, "kappa": 0.0,
-                "gamma": 0.0},
+                "gamma": 0.0, "nu_partly": 0.5},
+    "change_watch": {"full": 0.99, "doubt": 0.8, "rounds": 1.8, "held_ms": 40000},
     "frontends": ["yin", "basic_pitch", "pesto"],
 }
 
@@ -101,22 +115,50 @@ def _tuneness():
             "mu": d["mu"], "sd": d["sd"], "gamma": d["gamma"], "kappa": d["kappa"], "fitted": d.get("fitted")}
 
 
-def inputs_digest(csv_sha256, repertoire_ids):
+def popular_tunes(popularity_path):
+    """Tune ids with at least POPULAR_MIN tunebooks, from TheSession-data's
+    tune_popularity.csv."""
+    with open(popularity_path, newline="", encoding="utf-8") as f:
+        return {int(r["tune_id"]) for r in csv.DictReader(f) if int(r["tunebooks"]) >= POPULAR_MIN}
+
+
+def inputs_digest(csv_sha256, popular):
     """What decides the file's contents, as one hash: the same digest means the
     same file but for its build time, so nothing new to publish."""
     h = hashlib.sha256()
     for part in (FORMAT_VERSION, BUILDER_VERSION, abc_pitch.PARSER_VERSION, csv_sha256,
-                 sorted(int(t) for t in repertoire_ids), _tuneness(), LISTENER):
+                 sorted(int(t) for t in popular), sorted(excluded_settings()), _tuneness(), LISTENER):
         h.update(json.dumps(part, sort_keys=True).encode())
     return h.hexdigest()
 
 
-def build(csv_path, repertoire_ids, out_path, progress=False):
-    """tunes.csv and the default session's tune ids -> the file at `out_path`
-    (written beside it and renamed into place). Returns its meta."""
+def round_length(settings):
+    """RoundLengths' answer for one tune from its (non-excluded) settings, or
+    None: the median of each readable setting's played length."""
+    import statistics
+
+    from lab.analysis.form import played_form
+
+    lengths = []
+    for s in settings:
+        try:
+            f = played_form(s.abc, key=s.mode, meter=s.meter)
+        except Exception:  # one unreadable setting must not lose the tune
+            continue
+        if f.length >= MIN_ROUND_EIGHTHS and f.bar_starts:
+            lengths.append(f.length)
+    return float(statistics.median(lengths)) if lengths else None
+
+
+def build(csv_path, popularity_path, out_path, progress=False):
+    """tunes.csv and tune_popularity.csv -> the file at `out_path` (written
+    beside it and renamed into place). Returns its meta."""
     t0 = time.time()
     csv_sha = file_sha256(csv_path)
+    popular = popular_tunes(popularity_path)
+    drop = excluded_settings()
     names, types = {}, {}
+    settings_of = {}          # tune id -> its settings, for the round lengths
     postings = {}             # gram key -> array of tune ids, one per setting holding it
     by_tune = {}              # tune id -> [bytes of the setting's "notes" reading]
     parsed = failed = rows = 0
@@ -126,6 +168,9 @@ def build(csv_path, repertoire_ids, out_path, progress=False):
             print(f"  {rows} settings, {len(postings)} n-grams, {time.time() - t0:.0f}s", flush=True)
         names.setdefault(s.tune_id, s.name)
         types.setdefault(s.tune_id, s.tune_type)
+        if s.setting_id in drop:        # as the index and sequences load (corpus.exclusions)
+            continue
+        settings_of.setdefault(s.tune_id, []).append(s)
         try:
             notes = abc_pitch.parse_abc(s.abc, key=s.mode, meter=s.meter)
         except Exception:  # a bad setting must not lose the corpus
@@ -156,19 +201,25 @@ def build(csv_path, repertoire_ids, out_path, progress=False):
         if len(plain) >= 8:
             by_tune.setdefault(s.tune_id, []).append(bytes(p % 256 for p in plain))
 
-    source = {"tunes_csv_sha256": csv_sha, "settings": rows, "settings_parsed": parsed,
-              "settings_failed": failed, "parser_version": abc_pitch.PARSER_VERSION}
-    meta = write(out_path, names, types, postings, by_tune, repertoire_ids, source,
-                 inputs_digest(csv_sha, repertoire_ids))
+    rounds = {}
+    for t, ss in settings_of.items():
+        n = round_length(ss)
+        if n:
+            rounds[t] = n
+    source = {"tunes_csv_sha256": csv_sha, "popularity_sha256": file_sha256(popularity_path), "settings": rows,
+              "settings_parsed": parsed, "settings_failed": failed, "settings_excluded": len(drop),
+              "parser_version": abc_pitch.PARSER_VERSION}
+    meta = write(out_path, names, types, postings, by_tune, popular, rounds, source,
+                 inputs_digest(csv_sha, popular))
     meta["file"]["build_seconds"] = round(time.time() - t0, 1)
     return meta
 
 
-def write(out_path, names, types, postings, by_tune, repertoire_ids, source, digest=None):
+def write(out_path, names, types, postings, by_tune, popular, rounds, source, digest=None):
     """The file from its parts: {tune id: name}, {tune id: type}, {n-gram key:
     tune ids holding it}, {tune id: [each setting's "notes" reading as bytes]},
-    the default session's tune ids, and where they came from. Written beside
-    `out_path` and renamed into place. Returns its meta."""
+    the popular tune ids, {tune id: eighths per round}, and where they came
+    from. Written beside `out_path` and renamed into place. Returns its meta."""
     tune = sorted(set(names) | set(by_tune))
     if len(tune) >= 1 << 16:
         raise SystemExit(f"{len(tune)} tunes: postings are u16, widen them")
@@ -189,7 +240,7 @@ def write(out_path, names, types, postings, by_tune, repertoire_ids, source, dig
             seq_off.append(len(symbols))
             n_settings += 1
         set_off.append(n_settings)
-    rep = sorted({at[t] for t in repertoire_ids if t in at})
+    pop = sorted({at[t] for t in popular if t in at})
 
     def strings(values):
         off, buf = array("I", [0]), bytearray()
@@ -203,7 +254,7 @@ def write(out_path, names, types, postings, by_tune, repertoire_ids, source, dig
     tuneness = _tuneness()
     meta = {
         "version": FORMAT_VERSION, "builder": BUILDER_VERSION, "n": N, "fold_octaves": True,
-        "n_tunes": len(names), "repertoire_n_tunes": len(rep),
+        "n_tunes": len(names), "popular_n_tunes": len(pop), "rounds_n_tunes": len(rounds),
         "built_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "inputs_sha256": digest, "source": source,
         "sequences": {"reading": "notes", "settings": n_settings},
@@ -215,13 +266,15 @@ def write(out_path, names, types, postings, by_tune, repertoire_ids, source, dig
         "meta": json.dumps(meta, separators=(",", ":")).encode(),
         "tune_ids": array("i", tune), "gram_count": gram_count,
         "gram_keys": array("I", keys), "post_off": post_off, "postings": post,
-        "repertoire": array("H", rep), "set_off": set_off, "seq_off": seq_off,
+        "popular": array("H", pop), "rounds": array("f", (rounds.get(t, 0.0) for t in tune)),
+        "set_off": set_off, "seq_off": seq_off,
         "symbols": bytes(symbols), "name_off": name_off, "names": name_bytes,
         "type_off": type_off, "types": type_bytes,
     }
     for name in ("tune_ids", "gram_count"):
         assert sections[name].itemsize == 4
     assert sections["gram_keys"].itemsize == 4 and sections["postings"].itemsize == 2
+    assert sections["rounds"].itemsize == 4
 
     def count(v):
         return len(v)
