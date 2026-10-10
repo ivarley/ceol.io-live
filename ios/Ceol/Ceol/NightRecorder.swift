@@ -100,7 +100,8 @@ final class NightRecorder {
 
     /// The night's live log, kept open while recording so "this is it" can log the tune
     /// (NightModel.logTune: the same path, ops and offline queue as logging by hand, as
-    /// the person using the app). The night's screen, if open, hears it on the stream.
+    /// the person using the app). The same model as the night's screen when that is open
+    /// (AppModel.openNight), so the tune shows there at once, with or without a connection.
     private var night: NightModel?
     @ObservationIgnored private weak var app: AppModel?
     /// The tune "this is it" last logged, so a second tap doesn't log it twice.
@@ -207,11 +208,7 @@ final class NightRecorder {
                 if let ids = await KnownTunes.refresh(id, app: app, timeout: 5) { deciding.useSessionTunes(ids) }
             }
         }
-        if let app {
-            let n = NightModel(instanceID: instanceID, app: app)
-            night = n
-            Task { await n.start() }
-        }
+        if let app { night = app.openNight(instanceID) }
         runLink()
         UIDevice.current.isBatteryMonitoringEnabled = true
         ticker = Task { [weak self] in
@@ -271,7 +268,7 @@ final class NightRecorder {
         streamLink.stop()
         capture.stop()
         hearing = nil
-        night?.stop()
+        if let night { app?.closeNight(night) }
         night = nil
         meterLog.write("app", ListenWire.event("stop"))
         meterLog.close()

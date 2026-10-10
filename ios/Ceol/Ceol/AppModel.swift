@@ -77,6 +77,40 @@ final class AppModel {
         return URL(string: "wss://ceol-listen.onrender.com/listen")!
     }
 
+    /// The nights open now, one model each, shared by whoever has it open (the night's
+    /// screen, the recorder's "this is it"): two copies of one log would each keep their
+    /// own offline queue, and with no stream to carry changes between them a tune logged
+    /// by one would not show in the other (and each would save over the other's).
+    @ObservationIgnored private var openNights: [Int: (model: NightModel, users: Int)] = [:]
+
+    /// The night's model, shared; started if this is the first to open it.
+    func openNight(_ instanceID: Int) -> NightModel {
+        if let open = openNights[instanceID] {
+            openNights[instanceID] = (open.model, open.users + 1)
+            return open.model
+        }
+        let m = NightModel(instanceID: instanceID, app: self)
+        openNights[instanceID] = (m, 1)
+        Task { await m.start() }
+        return m
+    }
+
+    /// Done with a night's model: stopped once nobody has it open.
+    func closeNight(_ model: NightModel) {
+        guard let open = openNights[model.instanceID], open.model === model else {
+            model.stop()
+            return
+        }
+        if open.users <= 1 {
+            openNights[model.instanceID] = nil
+            model.stop()
+        } else {
+            // still open for the recorder: the screen's logging ends with the screen
+            model.setEditing(false)
+            openNights[model.instanceID] = (model, open.users - 1)
+        }
+    }
+
     /// The recordings on this phone, and their uploads (RecordingStore).
     let recordings = RecordingStore()
     /// The file the phone decides from when it listens offline, kept current.

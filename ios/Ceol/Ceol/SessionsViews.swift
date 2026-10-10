@@ -1062,13 +1062,16 @@ struct NightView: View {
             }
         }
         .task {
-            if model == nil {
-                let m = NightModel(instanceID: sessionInstanceID, app: app)
-                model = m
-                await m.start()
+            // the recorder may already have this night open: the same model, so a tune
+            // "this is it" logs shows here even with no connection
+            if model == nil { model = app.openNight(sessionInstanceID) }
+        }
+        .onDisappear {
+            if let model {
+                app.closeNight(model)
+                self.model = nil
             }
         }
-        .onDisappear { model?.stop() }
         .sheet(item: $infoTune) { TuneSheet(tune: $0) }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if let model, model.editing, let log = model.log {
