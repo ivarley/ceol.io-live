@@ -129,6 +129,34 @@ final class NightRecorder {
     /// How sure the meter must be to log a tune by itself: what it shows as 100%.
     nonisolated static let selfConfirmAt = 0.995
     nonisolated static let relogAfter: TimeInterval = 600
+    /// Under this, a confirmed tune is no longer claimed: the meter is figuring it out
+    /// again (the listener's "may have changed" doubts at the same level).
+    nonisolated static let doubtBelow = 0.8
+    /// "Not a tune" this many steps running (4 s each) before the set can end. On night
+    /// 143's labels: 3 steps (12 s) caught 27 of 28 set breaks and, within a set, ended
+    /// only a doubtful one (20 s of talk between two tunes 7 s apart); 2 steps caught all
+    /// 28 and two in-set pauses; 6 steps none in-set but only 24 of 28 breaks.
+    nonisolated static let endSetAfterSteps = 3
+    /// How many states running have said "not a tune".
+    @ObservationIgnored private var notATuneSteps = 0
+
+    /// What the meter shows, under "Listening on".
+    enum Showing: Equatable {
+        case waiting
+        /// Nothing is being played as a tune: how sure, 0...1.
+        case noTune(Double)
+        /// A tune, not yet known for sure.
+        case figuring
+        /// This tune, for sure (100%, or a person said so).
+        case sure(Int)
+    }
+
+    var showing: Showing {
+        if let c = confirmed { return .sure(c) }
+        guard let s = state else { return .waiting }
+        if s.notATune { return .noTune(s.none) }
+        return .figuring
+    }
 
     init(instanceID: Int, title: String, recordingID: String, fileURL: URL, meterLogURL: URL, listenURL: URL,
          token: String?, listenWhere: ListenWhere = .preferred, app: AppModel? = nil) {
@@ -311,23 +339,33 @@ final class NightRecorder {
     }
 
     /// The meter is sure (100%): it says "this is it" itself, as a person would, and the
-    /// tune is logged. Not a tune said to be wrong tonight, nor one logged from here in
-    /// the last ten minutes.
+    /// tune is logged. The tune last logged, sure again, is shown as sure but not logged a
+    /// second time. Never a tune said to be wrong tonight, nor another one logged from
+    /// here in the last ten minutes.
     private func selfConfirm(_ s: ListenState) {
-        guard selfConfirms else { return }
-        if let t = Self.selfConfirmTune(s, confirmed: confirmed, wrong: wrongTunes, loggedAt: loggedAt, now: Date()) {
-            tapThis(t, auto: true)
+        guard selfConfirms,
+            let pick = Self.selfConfirmTune(s, confirmed: confirmed, wrong: wrongTunes, lastLogged: logged,
+                                            loggedAt: loggedAt, now: Date())
+        else { return }
+        if pick.log {
+            tapThis(pick.tune, auto: true)
+        } else {
+            confirmed = pick.tune
+            confirmedAfterMs = s.tMs
+            changedFrom = nil
+            meterLog.write("app", ListenWire.event("sure_again", ["tune_id": pick.tune, "t_ms": s.tMs]))
         }
     }
 
-    /// The tune to confirm by itself in this state, if any (see `selfConfirm`).
-    nonisolated static func selfConfirmTune(_ s: ListenState, confirmed: Int?, wrong: Set<Int>, loggedAt: [Int: Date],
-                                            now: Date) -> Int? {
+    /// The tune to confirm by itself in this state, if any, and whether to log it.
+    nonisolated static func selfConfirmTune(_ s: ListenState, confirmed: Int?, wrong: Set<Int>, lastLogged: Int?,
+                                            loggedAt: [Int: Date], now: Date) -> (tune: Int, log: Bool)? {
         guard confirmed == nil, !s.notATune, !s.mayHaveChanged, let c = s.shownCandidate,
-            c.p >= selfConfirmAt, !wrong.contains(c.tuneID),
-            now.timeIntervalSince(loggedAt[c.tuneID] ?? .distantPast) >= relogAfter
+            c.p >= selfConfirmAt, !wrong.contains(c.tuneID)
         else { return nil }
-        return c.tuneID
+        if c.tuneID == lastLogged { return (c.tuneID, false) }
+        guard now.timeIntervalSince(loggedAt[c.tuneID] ?? .distantPast) >= relogAfter else { return nil }
+        return (c.tuneID, true)
     }
 
     /// "Wrong tune": the confirmed tune isn't what's playing. Its row comes back out of the
@@ -362,14 +400,17 @@ final class NightRecorder {
     /// Nothing is being played as a tune and the night's last set is still open (it has a
     /// tune, and no break after it): offer to end it.
     var canEndSet: Bool {
-        guard state?.notATune == true, let last = night?.log?.ordered.last else { return false }
+        guard state?.notATune == true, notATuneSteps >= Self.endSetAfterSteps,
+            let last = night?.log?.ordered.last
+        else { return false }
         return !last.isBreak
     }
 
-    /// End the night's open set, as the logger's own "end the set" does.
-    func endSet() {
+    /// End the night's open set, as the logger's own "end the set" does. `auto`: the meter
+    /// did it itself (the "by itself" switch on).
+    func endSet(auto: Bool = false) {
         night?.endSet()
-        meterLog.write("app", ListenWire.event("end_set", ["t_ms": state?.tMs ?? 0]))
+        meterLog.write("app", ListenWire.event("end_set", ["t_ms": state?.tMs ?? 0, "auto": auto]))
     }
 
     /// A tap to the service, kept in the meter log too.
@@ -402,14 +443,23 @@ final class NightRecorder {
         send(ListenWire.tapNone(shown: state?.top.map(\.tuneID) ?? []))
     }
 
-    private func received(_ s: ListenState) {
+    func received(_ s: ListenState) {
         let vocab = night?.vocab
         state = vocab.map { v in s.named { v.byID[$0]?.displayName } } ?? s
-        // the service has moved on (a new tune, or nothing playing): the meter again
-        if let c = confirmed, s.tMs > confirmedAfterMs + 4000, s.shown != c || s.notATune { confirmed = nil }
+        notATuneSteps = s.notATune ? notATuneSteps + 1 : 0
+        // no longer sure (another tune, nothing playing, or its belief has dropped): the
+        // meter is figuring it out again
+        if let c = confirmed, s.tMs > confirmedAfterMs + 4000,
+            s.shown != c || s.notATune || s.mayHaveChanged
+                || (s.top.first { $0.tuneID == c }?.p ?? 0) < Self.doubtBelow
+        {
+            confirmed = nil
+        }
         // a tune said to have changed: until the listener shows another, or nothing
         if let was = changedFrom, s.notATune || (s.shown != nil && s.shown != was.tuneID) { changedFrom = nil }
         selfConfirm(state ?? s)
+        // a long enough stretch of no tune ends the set, by itself as a person would
+        if selfConfirms, canEndSet { endSet(auto: true) }
     }
 
     /// A phone call or another app's audio stops the engine; when it ends, start again.

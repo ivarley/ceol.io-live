@@ -18,8 +18,19 @@ struct SelfConfirmTests {
         return try! JSONDecoder().decode(ListenState.self, from: data)
     }
 
-    func pick(_ s: ListenState, confirmed: Int? = nil, wrong: Set<Int> = [], loggedAt: [Int: Date] = [:]) -> Int? {
-        NightRecorder.selfConfirmTune(s, confirmed: confirmed, wrong: wrong, loggedAt: loggedAt, now: Date())
+    func pick(_ s: ListenState, confirmed: Int? = nil, wrong: Set<Int> = [], lastLogged: Int? = nil,
+              loggedAt: [Int: Date] = [:]) -> Int? {
+        NightRecorder.selfConfirmTune(s, confirmed: confirmed, wrong: wrong, lastLogged: lastLogged, loggedAt: loggedAt,
+                                      now: Date())?.tune
+    }
+
+    @Test func theTuneLastLoggedIsSureAgainButNotLoggedTwice() {
+        let again = NightRecorder.selfConfirmTune(state(p: 1.0), confirmed: nil, wrong: [], lastLogged: 452,
+                                                  loggedAt: [452: Date()], now: Date())
+        #expect(again?.tune == 452 && again?.log == false)
+        let fresh = NightRecorder.selfConfirmTune(state(p: 1.0), confirmed: nil, wrong: [], lastLogged: 748,
+                                                  loggedAt: [:], now: Date())
+        #expect(fresh?.tune == 452 && fresh?.log == true)
     }
 
     @Test func atOneHundredPercentTheShownTuneIsConfirmed() {

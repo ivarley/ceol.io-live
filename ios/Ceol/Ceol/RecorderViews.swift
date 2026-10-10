@@ -38,11 +38,14 @@ extension NightRecorder {
     /// The bar's one line: what it thinks right now.
     var headline: String {
         if let error { return error }
-        guard let s = state else { return tr("Listening…") }
-        if s.notATune { return tr("Not a tune right now") }
-        if s.mayHaveChanged { return tr("The tune may have changed…") }
-        if let c = s.shownCandidate ?? s.top.first { return c.name ?? tr("Tune \(c.tuneID)") }
-        return tr("Listening…")
+        switch showing {
+        case .waiting: return tr("Listening…")
+        case .noTune: return tr("No tune playing")
+        case .figuring: return tr("Figuring out the tune…")
+        case .sure(let c):
+            let name = state?.top.first { $0.tuneID == c }?.name
+            return name ?? tr("Tune \(c)")
+        }
     }
 
     var linkText: String {
@@ -135,28 +138,33 @@ struct ListenMeterView: View {
     /// The confirmed tune was tapped: "Wrong tune" or "Tune changed".
     @State private var correcting = false
 
+    /// Everything under the toolbar (its own view so a test can draw it).
+    var content: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 8) {
+                RecordingDot(level: recorder.level)
+                Text(recorder.clock).font(.ceol(size: 22, weight: .semibold)).monospacedDigit()
+                Spacer()
+                if let t = recorder.state?.tuneness {
+                    Text("sounds like a tune \(Int((t * 100).rounded()))%")
+                        .font(.ceol(size: 12)).foregroundStyle(CeolTokens.textMuted)
+                }
+            }
+            Text(recorder.linkText).font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
+            listenWhere
+            if let error = recorder.hearingError ?? recorder.error {
+                Text(error).font(.ceol(size: 14)).foregroundStyle(CeolTokens.danger)
+            }
+            mainState
+            selfConfirmSwitch
+            history
+        }
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    HStack(spacing: 8) {
-                        RecordingDot(level: recorder.level)
-                        Text(recorder.clock).font(.ceol(size: 22, weight: .semibold)).monospacedDigit()
-                        Spacer()
-                        if let t = recorder.state?.tuneness {
-                            Text("sounds like a tune \(Int((t * 100).rounded()))%")
-                                .font(.ceol(size: 12)).foregroundStyle(CeolTokens.textMuted)
-                        }
-                    }
-                    Text(recorder.linkText).font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
-                    listenWhere
-                    selfConfirmSwitch
-                    if let error = recorder.hearingError ?? recorder.error {
-                        Text(error).font(.ceol(size: 14)).foregroundStyle(CeolTokens.danger)
-                    }
-                    candidates
-                    history
-                }
+                content
                 .padding(16)
             }
             .background(CeolTokens.bgColor)
@@ -212,76 +220,73 @@ struct ListenMeterView: View {
     static let lowBelief = 0.05
     static let lowShown = 2
 
-    @ViewBuilder private var candidates: some View {
+    /// The meter's one main state, right under "Listening on": no tune playing, figuring
+    /// out the tune (the candidates), or sure of it (just that tune).
+    @ViewBuilder private var mainState: some View {
+        switch recorder.showing {
+        case .waiting:
+            Text("Waiting for the first few seconds of music.")
+                .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted).padding(.vertical, 20)
+        case .noTune(let none):
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Image(systemName: "person.2.wave.2.fill")
+                        .font(.system(size: 22)).foregroundStyle(CeolTokens.textMuted)
+                        .symbolEffect(.variableColor.iterative.reversing, options: .repeating)
+                    Text("No tune playing").font(.ceol(size: 20, weight: .semibold)).foregroundStyle(CeolTokens.textColor)
+                    Text(verbatim: "\(Int((none * 100).rounded()))%")
+                        .font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("meter.noTune")
+                if recorder.canEndSet {
+                    Button { recorder.endSet() } label: {
+                        Label("End the set", systemImage: "stop.circle")
+                            .font(.ceol(size: 17, weight: .semibold))
+                            .frame(maxWidth: .infinity, minHeight: 50)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(CeolTokens.primaryFill)
+                    .accessibilityIdentifier("meter.endSet")
+                }
+            }
+        case .figuring:
+            figuring
+        case .sure(let c):
+            sure(c)
+        }
+    }
+
+    /// A tune is playing, not yet known for sure: the names with their bars, any of which
+    /// can be tapped to say "this is it".
+    @ViewBuilder private var figuring: some View {
         let state = recorder.state
-        if let c = recorder.confirmed {
-            // "This is it" (tapped, or the meter sure at 100%): just that tune, until the
-            // listener moves on. Tapping it says it was wrong, or has ended.
-            let candidate = state?.top.first { $0.tuneID == c }
-            VStack(alignment: .leading, spacing: 10) {
-                if let candidate {
-                    Button { correcting = true } label: { row(candidate, shown: true) }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("meter.confirmed")
-                        .confirmationDialog(candidate.name ?? tr("Tune \(candidate.tuneID)"), isPresented: $correcting,
-                                            titleVisibility: .visible) {
-                            Button("Wrong tune", role: .destructive) { recorder.wrongTune() }
-                            Button("Tune changed") { recorder.tuneChanged() }
-                        }
-                }
-                if recorder.logged == c {
-                    Label("Logged to the night", systemImage: "checkmark")
-                        .font(.ceol(size: 13, weight: .semibold)).foregroundStyle(CeolTokens.success)
-                }
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text(state?.mayHaveChanged == true ? tr("The tune may have changed. Listening for what it is…")
-                        : tr("Listening for the tune to end or a new tune to start…"))
-                        .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
-                }
-                Text("Tap the tune if it's wrong or has changed.")
-                    .font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text("Figuring out the tune…").font(.ceol(size: 20, weight: .semibold))
+                    .foregroundStyle(CeolTokens.textColor)
             }
-        } else {
+            .accessibilityIdentifier("meter.figuring")
             if let was = recorder.changedFrom {
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text("The tune may have changed (was \(was.name ?? tr("Tune \(was.tuneID)"))). Listening for what it is…")
-                        .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
-                }
-                .accessibilityIdentifier("meter.changing")
+                Text("The tune may have changed (was \(was.name ?? tr("Tune \(was.tuneID)"))).")
+                    .font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
+                    .accessibilityIdentifier("meter.changing")
             } else if let was = state?.changing, state?.mayHaveChanged == true {
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text("The tune may have changed (was \(was.name ?? tr("Tune \(was.tuneID)"))). Listening for what it is…")
-                        .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
-                }
-                .accessibilityIdentifier("meter.changing")
+                Text("The tune may have changed (was \(was.name ?? tr("Tune \(was.tuneID)"))).")
+                    .font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
+                    .accessibilityIdentifier("meter.changing")
             }
-            if state?.notATune == true {
-                Text("Probably not a tune right now (\(Int(((state?.none ?? 0) * 100).rounded()))%)")
-                    .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
-            }
-            if recorder.canEndSet {
-                Button { recorder.endSet() } label: {
-                    Label("End the set", systemImage: "stop.circle")
-                        .font(.ceol(size: 17, weight: .semibold))
-                        .frame(maxWidth: .infinity, minHeight: 50)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(CeolTokens.primaryFill)
-                .accessibilityIdentifier("meter.endSet")
-            }
-            if state?.notATune == true {
-                // nothing being played as a tune: no names to choose from
-            } else if let top = state?.top, !top.isEmpty {
+            if let top = state?.top, !top.isEmpty {
                 let strong = top.filter { $0.p >= Self.lowBelief }
                 let weak = Array(top.filter { $0.p < Self.lowBelief }.prefix(Self.lowShown))
                 VStack(spacing: 8) {
                     ForEach(strong) { c in
-                        Button { recorder.tapThis(c.tuneID) } label: { row(c, shown: c.tuneID == state?.shown && state?.mayHaveChanged != true) }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("meter.tune")
+                        Button { recorder.tapThis(c.tuneID) } label: {
+                            row(c, shown: c.tuneID == state?.shown && state?.mayHaveChanged != true)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("meter.tune")
                     }
                     ForEach(weak) { c in
                         Button { recorder.tapThis(c.tuneID) } label: { row(c, shown: false).opacity(0.45) }
@@ -289,19 +294,55 @@ struct ListenMeterView: View {
                             .accessibilityIdentifier("meter.tune.weak")
                     }
                 }
-            } else if state == nil {
-                Text("Waiting for the first few seconds of music.")
-                    .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted).padding(.vertical, 20)
             }
-            if state?.notATune != true {
-                Button { recorder.tapNone() } label: {
-                    Text("None of these").font(.ceol(size: 17, weight: .semibold))
-                        .frame(maxWidth: .infinity, minHeight: 50)
+            Button { recorder.tapNone() } label: {
+                Text("None of these").font(.ceol(size: 17, weight: .semibold))
+                    .frame(maxWidth: .infinity, minHeight: 50)
+            }
+            .buttonStyle(.bordered)
+            .disabled(state?.top.isEmpty ?? true)
+            .accessibilityIdentifier("meter.none")
+        }
+    }
+
+    /// Sure of the tune (100%, or a person said so): just that tune, a green check to its
+    /// left. Tapping it says it was wrong, or has ended.
+    private func sure(_ c: Int) -> some View {
+        let candidate = recorder.state?.top.first { $0.tuneID == c }
+        let name = candidate?.name ?? tr("Tune \(c)")
+        return VStack(alignment: .leading, spacing: 8) {
+            Button { correcting = true } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 30)).foregroundStyle(CeolTokens.success)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(name).font(.ceol(size: 22, weight: .semibold))
+                            .foregroundStyle(CeolTokens.textColor).multilineTextAlignment(.leading)
+                        if let candidate {
+                            Text([candidate.type.map(TunesWords.type), candidate.outside ? tr("new to this session") : nil]
+                                .compactMap { $0 }.joined(separator: " · "))
+                                .font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
+                        }
+                    }
+                    Spacer(minLength: 0)
                 }
-                .buttonStyle(.bordered)
-                .disabled(state?.top.isEmpty ?? true)
-                .accessibilityIdentifier("meter.none")
+                .padding(.horizontal, 14).padding(.vertical, 14)
+                .background(CeolTokens.headerBg, in: RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(CeolTokens.success, lineWidth: 1))
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("meter.sure")
+            .confirmationDialog(name, isPresented: $correcting, titleVisibility: .visible) {
+                Button("Wrong tune", role: .destructive) { recorder.wrongTune() }
+                Button("Tune changed") { recorder.tuneChanged() }
+            }
+            if recorder.logged == c {
+                Label("Logged to the night", systemImage: "checkmark")
+                    .font(.ceol(size: 13, weight: .semibold)).foregroundStyle(CeolTokens.success)
+            }
+            Text("Tap the tune if it's wrong or has changed.")
+                .font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
         }
     }
 

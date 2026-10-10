@@ -3537,6 +3537,16 @@
         }
       }
     },
+    "Figuring out the tune…": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ag oibriú amach an fhoinn…"
+          }
+        }
+      }
+    },
     "Filter": {
       "localizations": {
         "ga": {
@@ -4188,6 +4198,7 @@
       }
     },
     "Listening for the tune to end or a new tune to start…": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -5043,6 +5054,16 @@
         }
       }
     },
+    "No tune playing": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Níl fonn á sheinm"
+          }
+        }
+      }
+    },
     "No tune with ID %@ found": {
       "localizations": {
         "ga": {
@@ -5240,6 +5261,7 @@
       }
     },
     "Not a tune right now": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -6027,6 +6049,7 @@
       }
     },
     "Probably not a tune right now (%lld%%)": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -7406,7 +7429,18 @@
         }
       }
     },
+    "The tune may have changed (was %@).": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "B'fhéidir gur athraigh an fonn (%@ a bhí ann)."
+          }
+        }
+      }
+    },
     "The tune may have changed (was %@). Listening for what it is…": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -7417,6 +7451,7 @@
       }
     },
     "The tune may have changed. Listening for what it is…": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -7427,6 +7462,7 @@
       }
     },
     "The tune may have changed…": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {

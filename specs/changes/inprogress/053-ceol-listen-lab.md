@@ -3231,6 +3231,22 @@ segmented blind; item 3 the follower). Open, in rough order:
     again for ten minutes.
   Both go to the listener as the existing "none" tap (with `why` for the log),
   so the service and the phone's decider need nothing new.
+  - **Three states, and the set's end** (the player's follow-up). Under
+    "Listening on" the meter shows one of: *No tune playing* (an animated
+    conversation icon, the belief beside it, "End the set" when it applies);
+    *Figuring out the tune…* (the names with their bars, "None of these"); or
+    the tune it is *sure* of, alone, with a green check. It leaves "sure" for
+    "figuring" when the tune's belief falls under 0.8 (the listener's own
+    doubt level), another tune is shown, or none; sure again of the tune last
+    logged, it shows it as sure and does not log it twice. With the switch on,
+    the set also ends by itself once "not a tune" has held for 3 steps (12 s),
+    which is also when "End the set" now appears. Chosen on night 143's
+    labels (2,921 live states, 72 tunes, 28 set breaks of 15 s or more): runs
+    of "not a tune" within a set were 1, 2 and 5 steps long, the 5 a doubtful
+    one (20 s of talk between two tunes 7 s apart); 2 steps would have caught
+    all 28 breaks and ended 2 sets wrongly, 3 steps 27 breaks and 1, 6 steps
+    24 breaks and none. A set break missed is a tune merged into the set
+    before it; one too many is a set split in two: both fixed by hand alike.
 
 - **(2026-10-04) Loudness, relative to the night.** Absolute loudness was taken
   out of tune-ness after a test of laptop speakers recorded through a phone,
