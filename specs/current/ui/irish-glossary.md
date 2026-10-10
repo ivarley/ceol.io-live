@@ -247,7 +247,8 @@ which. Added 2026-10-10, not yet reviewed.
 | Not listening — still recording | Gan éisteacht — fós ag taifeadadh | Shown when the phone's listening has stopped but the recording goes on. |
 | Couldn't start listening on this phone: … | Níorbh fhéidir éisteacht a thosú ar an bhfón seo: … | The rest is the phone's own error message. |
 | Listening on this phone stopped: … | Stop an éisteacht ar an bhfón seo: … | |
-| Log a tune by itself at 100% | Logáil fonn leis féin ag 100% | A switch on the meter: when it is sure of a tune, it logs it without a tap. |
+| Log automatically at 100% | Logáil go huathoibríoch ag 100% | A switch on the meter: when it is sure of a tune, it logs it without a tap. |
+| Start Listening | Tosaigh ag éisteacht | The big button that starts recording a night and listening to it. |
 | Starting up… | Ag tosú… | The meter's state until the listener first answers, a few seconds in. |
 | No tune playing | Níl fonn á sheinm | The meter's state when it hears talk, tuning or silence. |
 | Figuring out the tune… | Ag oibriú amach an fhoinn… | The meter's state while a tune plays and it isn't yet sure which. |

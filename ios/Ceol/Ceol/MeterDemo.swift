@@ -1,6 +1,7 @@
 // A debug build's demo of the meter (-CeolMeterDemo YES): the listener's states played
-// on a timer through the real meter, with no microphone and no service, to look at its
-// states and animations (spec 053). Not in release builds.
+// on a timer through the real meter and the mini bar under it, with no microphone and no
+// service, to look at their states and animations (spec 053). -CeolMeterDemo start shows
+// the screen before a night starts. Not in release builds.
 
 #if DEBUG
 import CeolLogic
@@ -25,7 +26,16 @@ struct MeterDemoView: View {
     ]
 
     var body: some View {
+        if UserDefaults.standard.string(forKey: "CeolMeterDemo") == "start" {
+            ListenStartView(title: "B.D. Riley's · demo") {}
+        } else {
+            demo
+        }
+    }
+
+    private var demo: some View {
         ListenMeterView(recorder: recorder, onStop: {})
+            .safeAreaInset(edge: .bottom, spacing: 0) { RecorderBar(recorder: recorder) }
             .task {
                 UserDefaults.standard.set(true, forKey: "SelfConfirm")
                 let start = Date()

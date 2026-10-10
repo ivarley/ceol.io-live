@@ -67,6 +67,9 @@ final class AppModel {
     /// A night being recorded and listened to (spec 053): the mini bar over the tabs,
     /// the meter when it's opened. One at a time.
     var recorder: NightRecorder?
+    /// A night whose Record was tapped, not yet started: the meter's screen shows where to
+    /// listen and "Start Listening", and nothing is recorded until that is tapped.
+    var readyToRecord: (instanceID: Int, title: String)?
 
     /// The listening service. A debug build can point elsewhere with
     /// `-CeolListenURL ws://127.0.0.1:8440/listen`.

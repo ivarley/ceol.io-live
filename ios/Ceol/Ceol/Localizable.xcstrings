@@ -2593,6 +2593,16 @@
         }
       }
     },
+    "Close": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Dún"
+          }
+        }
+      }
+    },
     "Common Tunes?": {
       "extractionState": "stale",
       "localizations": {
@@ -4356,11 +4366,22 @@
       }
     },
     "Log a tune by itself at 100%": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
             "state": "needs_review",
             "value": "Logáil fonn leis féin ag 100%"
+          }
+        }
+      }
+    },
+    "Log automatically at 100%": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Logáil go huathoibríoch ag 100%"
           }
         }
       }
@@ -7126,6 +7147,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Scoilt"
+          }
+        }
+      }
+    },
+    "Start Listening": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tosaigh ag éisteacht"
           }
         }
       }

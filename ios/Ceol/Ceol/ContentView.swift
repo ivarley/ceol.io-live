@@ -141,11 +141,20 @@ struct MainTabView: View {
             }
         }
         .fullScreenCover(isPresented: Binding(
-            get: { model.recorder?.showingMeter ?? false },
-            set: { model.recorder?.showingMeter = $0 })
+            get: { model.recorder?.showingMeter ?? false || model.readyToRecord != nil },
+            set: {
+                model.recorder?.showingMeter = $0
+                if !$0 { model.readyToRecord = nil }
+            })
         ) {
+            // one screen: ready to start, then the meter in place once started
             if let recorder = model.recorder {
                 ListenMeterView(recorder: recorder) { model.stopRecording() }
+            } else if let ready = model.readyToRecord {
+                ListenStartView(title: ready.title) {
+                    model.startRecording(instanceID: ready.instanceID, title: ready.title)
+                    model.readyToRecord = nil
+                }
             }
         }
         .ceolSharePane()

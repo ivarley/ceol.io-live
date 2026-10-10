@@ -20,7 +20,7 @@ struct CeolApp: App {
     /// The app, or (a debug build, -CeolMeterDemo YES) the meter's demo.
     @ViewBuilder private var root: some View {
         #if DEBUG
-            if UserDefaults.standard.bool(forKey: "CeolMeterDemo") { MeterDemoView() } else { ContentView() }
+            if UserDefaults.standard.string(forKey: "CeolMeterDemo") != nil { MeterDemoView() } else { ContentView() }
         #else
             ContentView()
         #endif

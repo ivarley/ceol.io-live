@@ -105,16 +105,23 @@ struct RecorderBar: View {
         Button { recorder.showingMeter = true } label: {
             HStack(spacing: 10) {
                 RecordingDot(level: recorder.level)
+                stateIcon.frame(width: 30)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(recorder.headline).lineLimit(1)
-                        .font(.ceol(size: 15, weight: .semibold))
-                        .foregroundStyle(CeolTokens.textColor)
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(recorder.headline).lineLimit(1)
+                            .font(.ceol(size: 15, weight: .semibold))
+                            .foregroundStyle(CeolTokens.textColor)
+                        if case .noTune(let none) = recorder.showing {
+                            Text(verbatim: "\(Int((none * 100).rounded()))%")
+                                .font(.ceol(size: 12)).foregroundStyle(CeolTokens.textMuted)
+                        }
+                    }
                     Text("\(recorder.clock) · \(recorder.linkText)").lineLimit(1)
                         .font(.ceol(size: 12)).monospacedDigit()
                         .foregroundStyle(CeolTokens.textMuted)
                 }
                 Spacer(minLength: 4)
-                if let s = recorder.state, !s.notATune, !s.mayHaveChanged, let c = s.shownCandidate ?? s.top.first {
+                if recorder.showing == .figuring, let s = recorder.state, let c = s.shownCandidate ?? s.top.first {
                     CertaintyBar(p: c.p, cell: 5, height: 14)
                 }
                 Image(systemName: "chevron.up").font(.system(size: 12)).foregroundStyle(CeolTokens.textMuted)
@@ -126,6 +133,15 @@ struct RecorderBar: View {
         .buttonStyle(.plain)
         .accessibilityLabel("Recording, \(recorder.headline). Show the meter.")
         .accessibilityIdentifier("recorder.bar")
+    }
+
+    /// The meter's state, as its icon: the same as the meter's own.
+    @ViewBuilder private var stateIcon: some View {
+        switch recorder.showing {
+        case .waiting, .figuring: ProgressView().controlSize(.small)
+        case .noTune: Conversation().font(.system(size: 13)).foregroundStyle(CeolTokens.textMuted)
+        case .sure: Image(systemName: "checkmark.circle.fill").font(.system(size: 20)).foregroundStyle(CeolTokens.success)
+        }
     }
 }
 
@@ -149,6 +165,55 @@ struct Conversation: View {
                 talker = 1 - talker
             }
         }
+    }
+}
+
+/// The meter's screen before a night starts: where to listen, and "Start Listening".
+/// Nothing is recorded until that is tapped; then the meter takes its place.
+struct ListenStartView: View {
+    let title: String
+    let onStart: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var place = ListenWhere.preferred
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 28) {
+                HStack(spacing: 10) {
+                    Text("Listening on").font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
+                    Picker("Listening on", selection: $place) {
+                        ForEach(ListenWhere.allCases) { Text($0.label).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    .accessibilityIdentifier("start.listenWhere")
+                }
+                Button {
+                    ListenWhere.preferred = place
+                    onStart()
+                } label: {
+                    Label("Start Listening", systemImage: "record.circle")
+                        .font(.ceol(size: 22, weight: .semibold))
+                        .frame(maxWidth: .infinity, minHeight: 72)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(CeolTokens.primaryFill)
+                .accessibilityIdentifier("start.listen")
+                Spacer()
+            }
+            .padding(16)
+            .padding(.top, 20)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .background(CeolTokens.bgColor)
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { dismiss() } label: { Image(systemName: "chevron.down") }
+                        .accessibilityLabel("Close")
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
     }
 }
 
@@ -232,7 +297,7 @@ struct ListenMeterView: View {
     /// next night.
     private var selfConfirmSwitch: some View {
         Toggle(isOn: Binding(get: { recorder.selfConfirms }, set: { recorder.selfConfirms = $0 })) {
-            Text("Log a tune by itself at 100%").font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
+            Text("Log automatically at 100%").font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
         }
         .tint(CeolTokens.primaryFill)
         .accessibilityIdentifier("meter.selfConfirm")
@@ -421,7 +486,12 @@ struct RecordNightButton: View {
     var body: some View {
         let recordingThis = app.recorder?.instanceID == instanceID
         Button {
-            if recordingThis { app.recorder?.showingMeter = true } else { app.startRecording(instanceID: instanceID, title: title) }
+            if recordingThis {
+                app.recorder?.showingMeter = true
+            } else {
+                // the meter's screen, ready: nothing is recorded until "Start Listening"
+                app.readyToRecord = (instanceID, title)
+            }
         } label: {
             Label(recordingThis ? tr("Recording") : tr("Record"), systemImage: recordingThis ? "record.circle.fill" : "record.circle")
                 .foregroundStyle(recordingThis ? CeolTokens.danger : CeolTokens.textColor)
