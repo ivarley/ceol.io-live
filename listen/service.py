@@ -229,12 +229,36 @@ async def _load():
         # one whole-corpus index for every session, its own tunes preferred
         models = await asyncio.to_thread(Models, 0, True)
         _name_tunes(models)
-        state["models"] = models
         state["load_s"] = round(time.time() - t0, 1)
+        t1 = time.time()
+        await asyncio.to_thread(_warm, models)
+        state["warm_s"] = round(time.time() - t1, 1)
+        print(f"listen: models loaded in {state['load_s']}s, warmed in {state['warm_s']}s", flush=True)
+        state["models"] = models
     except Exception as e:
         state["error"] = repr(e)
     finally:
         state["loading"] = False
+
+
+def _warm(models):
+    """One listener's first steps on a few seconds of made-up tune, so the first
+    phone to connect after a start does not wait while Basic Pitch loads and the
+    aligner compiles (a phone switched to this service on 2026-10-10, a minute
+    after a deploy, heard nothing for the 33 s it waited)."""
+    import tempfile
+
+    from lab.tools.listen import HOP_MS, Listener
+
+    t = np.arange(int(SR * 0.25)) / SR
+    notes = [62, 64, 66, 67, 69, 71, 73, 74, 73, 71, 69, 67, 66, 64, 62, 66] * 2   # a D major run, in eighths
+    y = np.concatenate([0.3 * np.sin(2 * np.pi * 440 * 2 ** ((m - 69) / 12) * t) for m in notes]).astype(np.float32)
+    with tempfile.TemporaryDirectory() as d:
+        li = Listener(d, models=models, audio_name="warm.wav", keep_s=KEEP_S)
+        li.store.append(y)
+        for step_t in range(HOP_MS, li.store.duration_ms + 1, HOP_MS):
+            li.step(step_t)
+        li.close()
 
 
 @asynccontextmanager
@@ -242,7 +266,10 @@ async def lifespan(app):
     from listen.data import ensure_data
 
     await asyncio.to_thread(ensure_data)
-    tasks = [asyncio.create_task(_load()), asyncio.create_task(_sweep()), asyncio.create_task(_jobs())]
+    # Loaded and warmed before the port opens: on a deploy, the old instance keeps
+    # every phone until this one can answer at once.
+    await _load()
+    tasks = [asyncio.create_task(_sweep()), asyncio.create_task(_jobs())]
     yield
     for t in tasks:
         t.cancel()

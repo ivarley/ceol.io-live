@@ -42,6 +42,11 @@ median 0.4 s after its audio was sent (the first 3.3 s, the models loading);
 after the drop the stream resumed at exactly 60.0 s; the saved
 `audio.flac` was the full 180.0 s.
 
+The service loads its models and warms them (one listener's first steps on a
+few seconds of made-up tune, so Basic Pitch is loaded and the aligner compiled)
+before it opens its port: on a deploy, the old instance keeps every phone until
+the new one can answer at once.
+
 `GET /health` says whether the models are loaded, how many streams are open
 and the process's peak memory.
 
