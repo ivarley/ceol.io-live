@@ -157,7 +157,7 @@ struct EditableLog: View {
                     model.selected = nil
                     model.composer.cancelResolving(returnText: false)
                 } else {
-                    withAnimation(.easeOut(duration: 0.2)) { model.remove(id) }
+                    withAnimation(.easeOut(duration: 0.2)) { model.removeWithUndo(id) }
                 }
             },
             onEdit: {

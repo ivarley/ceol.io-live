@@ -580,10 +580,24 @@ final class NightModel {
         guard var l = log, let (op, rows) = l.removeMany(Array(picked)) else { return }
         log = l
         picked = []
+        enqueue([op])
+        offerUndo(rows)
+    }
+
+    /// A tune swiped away, with Undo, as a bulk delete has. A row the server hasn't
+    /// answered for yet (just logged, or logged offline) has no id to restore by, and goes
+    /// without one, as a bulk delete leaves such rows out.
+    func removeWithUndo(_ id: RecordID) {
+        guard let row = log?.records.first(where: { $0.recordID == id }) else { return }
+        remove(id)
+        if !row["_temp"].isTruthy, !row.isBreak { offerUndo([row]) }
+    }
+
+    /// "Deleted …, Undo" over the bottom bar for eight seconds.
+    private func offerUndo(_ rows: [LogRecord]) {
         undoSeq += 1
         let seq = undoSeq
         undoable = (rows, rows.count)
-        enqueue([op])
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(8))
             if self?.undoSeq == seq { self?.undoable = nil }
