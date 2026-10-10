@@ -338,6 +338,29 @@ def _trace(V, back, enter_from, post_from, post, chains, tune_of, lengths, L, n_
     return path_state, path_pos, chosen
 
 
+def span_fit(heard, chains):
+    """How well one tune explains a stretch: the best path from "not a tune"
+    into the tune (entered anywhere in its form, any of its chains, round and
+    round) and out to "not a tune", scored over "not a tune" all the way. 0:
+    the tune explains nothing; each eighth it matches adds about MATCH -
+    NOISE. For judging between a draft's candidates (drafts.judge_drafts):
+    the tunes are each followed through the same heard slots, so their fits
+    compare."""
+    pre, post = 0.0, NEG
+    Vs = [np.full(len(c.form), NEG) for c in chains]
+    E = [_emissions(heard, c.form) for c in chains]
+    for t in range(len(heard)):
+        best_in = max(float(V.max()) for V in Vs)
+        new = []
+        for V, e in zip(Vs, E):
+            v = np.maximum(np.maximum(np.roll(V, 1), np.roll(V, 2) - SKIP), V - STAY)
+            new.append(np.maximum(v, pre - ENTER) + e[t])
+        post = max(post, best_in - LEAVE) + NOISE
+        pre += NOISE
+        Vs = new
+    return max(pre, post, max(float(V.max()) for V in Vs)) - NOISE * len(heard)
+
+
 def boundaries(path_state, times, n_tunes):
     """-> (start time of each tune, end time of the set)."""
     starts = []

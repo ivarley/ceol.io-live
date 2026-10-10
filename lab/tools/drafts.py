@@ -612,6 +612,86 @@ def prefer_set_type(drafts, states, duration_ms, model, log=print):
     return ds
 
 
+JUDGE_MARGIN = 20.0    # a fit this much better (about 12 eighths matched) to rename a draft
+JUDGE_PEAK = 0.3       # the tunes judged: those the listener believed this much over the stretch, or showed
+JUDGE_MAX = 5
+
+
+def judge_drafts(rid, drafts, states, duration_ms, model, log=print, audio=None, board=None, keys=None):
+    """A judge by following (spec 053, "A judge by following"): each draft's
+    stretch is followed through every tune the listener showed or believed at
+    JUDGE_PEAK or more over it (up to JUDGE_MAX, the draft's own among them),
+    all their settings, in the session's key (`keys`); the draft takes the tune
+    whose fit (`follow.span_fit`) beats its own by JUDGE_MARGIN. The 6 s
+    window weighs a few seconds at a time; following weighs the whole
+    stretch, so a tune shown briefly at full belief beats one shown longer
+    that never fits. -> drafts, p_right worked out again where any changed.
+
+    Thirteen labelled nights, from their saved states: 13 drafts renamed;
+    labelled tunes named right 882 -> 890 of 918 (fixed 9: Jim Keefe's, The
+    Sailor's Bonnet, The Porthole Of The Kelp, The New Custom House, The
+    Floating Crowbar, The Limerick Lasses, The Boys Of Malin, Sord
+    Cholmcille, The Piper On Horseback; broken 1, Mac's Fancy on 4; p 0.02);
+    wrong or extra 42 -> 33."""
+    from lab.analysis.confidence import features, spans
+    from lab.analysis.follow import chains_for, eighth, heard_slots, slot_grid, span_fit
+    from lab.analysis.form import played_forms
+    from lab.analysis.pulse import tempo_map
+    from lab.bench.retrieval import transcribe_segment
+    from lab.frontends import get_frontend
+
+    if keys is None:
+        keys = {}
+        if rid is not None:
+            with open(paths.manifest_path(rid)) as f:
+                keys = {r["tune_id"]: r.get("key") for r in json.load(f).get("repertoire", [])}
+    fe = get_frontend("basic_pitch")
+    store, sha = _night_audio(rid, audio)
+    changed = 0
+    with _board(board) as board:
+        for a, b, d in spans(drafts, duration_ms):
+            inside = [st for st in states if a <= st["t_ms"] <= b + HOP_MS]
+            peak, info = {}, {}
+            for st in inside:
+                for c in st.get("top") or []:
+                    peak[c["tune_id"]] = max(peak.get(c["tune_id"], 0.0), c["p"])
+                    info.setdefault(c["tune_id"], c)
+            shown = {st["shown"] for st in inside if st.get("shown") is not None}
+            cands = sorted({t for t, p in peak.items() if p >= JUDGE_PEAK} | shown | {d["tune_id"]},
+                           key=lambda t: -peak.get(t, 0.0))[:JUDGE_MAX]
+            if d["tune_id"] not in cands:
+                cands[-1] = d["tune_id"]
+            if len(cands) < 2:
+                continue
+            forms = played_forms(cands)
+            if d["tune_id"] not in forms:
+                continue
+            tm = tempo_map(store.read(a, b), store.sr)
+            if not tm:
+                continue
+            notes, _, _ = transcribe_segment(fe, store, sha, int(a), int(b), board=board)
+            times = slot_grid(a, b, tmap={"t_ms": tm["t_ms"], "period_ms": [eighth(p) for p in tm["period_ms"]]})
+            heard = heard_slots(notes, times)
+            fits = {t: span_fit(heard, chains_for(0, forms[t], session_key=keys.get(t))) for t in cands if t in forms}
+            best = max(fits, key=fits.get)
+            if best == d["tune_id"] or fits[best] - fits[d["tune_id"]] <= JUDGE_MARGIN:
+                continue
+            c = info.get(best, {})
+            ps = [next((x["p"] for x in st.get("top") or [] if x["tune_id"] == best), 0.0) for st in inside]
+            seen = [st["t_ms"] for st in inside if st.get("shown") == best]
+            log(f"{_fmt(a)} {d['name']} -> {c.get('name')} (followed: {fits[d['tune_id']]:.0f} -> {fits[best]:.0f})")
+            d.update(tune_id=best, name=c.get("name", d["name"]), type=c.get("type"),
+                     outside=bool(c.get("outside")), conf=round(float(sorted(ps)[len(ps) // 2]), 4) if ps else 0.0,
+                     first_shown_ms=seen[0] if seen else None, last_shown_ms=seen[-1] if seen else None,
+                     how=d.get("how", "") + ", judged by following")
+            changed += 1
+    if changed:
+        features(drafts, states, duration_ms)
+        for d in drafts:
+            d["p_right"] = model.percent(d["features"]) if model else None
+    return drafts
+
+
 def self_merge(run, ends, states, naming):
     """One tune for a run of unsure drafts (consolidate_unsure)."""
     a, b = run[0]["start_ms"], ends[id(run[-1])]
@@ -943,6 +1023,9 @@ def main(args):
         # (prefer_set_type); then unsure names do not flip-flop (consolidate_unsure)
         drafts = prefer_set_type(drafts, states, dur, model)
         drafts = tidy(consolidate_unsure(drafts, states, dur, model))
+        # then each stretch is judged by following its candidates (judge_drafts)
+        if not args.no_follow:
+            drafts = judge_drafts(rid, drafts, states, dur, model)
     out = args.out or os.path.join(paths.recording_dir(rid), "drafts.json")
     with open(out, "w") as f:
         json.dump({"recording_id": rid, "followed": not args.no_follow, "blind": args.blind,

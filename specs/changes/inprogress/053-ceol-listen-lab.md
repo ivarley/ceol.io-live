@@ -2566,6 +2566,41 @@ distinguishable from chance: not adopted; `drop_release_s` stays, off by
 default. The shown-but-drafted-as-another misses are not mostly a held tune
 refusing to let go.
 
+**A judge by following** (2026-10-09). After Fable's suggestion (in
+another session) of online score following as the live state: the live
+decoder carries which tune, not where in it, and judges each 6 s window
+afresh. First the misses, then following tried offline as a judge between
+candidates, before any live tracker.
+
+*The misses.* Of the 36 labelled tunes not named right over thirteen nights
+(the drafts with the long settings left out, through the set's type and the
+unsure runs merged), 17 had been shown by the meter. Most alike: the right
+tune shown 16-32 s at 99-100%, the draft named for one shown longer at low
+belief, often the same few (The Mason's Apron, Jenny's Welcome To Charlie,
+The Spike Island Lasses, The Bucks Of Oranmore, The Burren); 5 of the 17 were
+unsure runs merged under the wrong name; 2 never drafted; 3 drafted wrong
+with confidence (Tuttle's for The Bunch Of Green Rushes at 98%, Tom Billy's
+for Langstrom's Pony at 94%, The Boy In The Gap for The Piper On Horseback at
+72%). The rest: a candidate never shown 11, never a candidate 8.
+
+*The judge* (`drafts.judge_drafts`, `follow.span_fit`): each draft's stretch
+is followed through every tune the listener showed or believed at 30%+ over
+it (up to 5, the draft's own among them), all their settings, in the
+session's key, entered and left anywhere; the draft takes the tune whose fit
+beats its own by 20 (about 12 eighths matched). After the unsure runs are
+merged, in the lab's drafting and in the find-tunes job. Thirteen nights:
+13 drafts renamed; named right 882 -> 890 of 918 (fixed 9: Jim Keefe's, The
+Sailor's Bonnet, The Porthole Of The Kelp, The New Custom House, The
+Floating Crowbar, The Limerick Lasses, The Boys Of Malin, Sord Cholmcille,
+The Piper On Horseback; broken 1: Mac's Fancy on 4, played away from its
+settings' key, judged The Blarney Pilgrim; p 0.02); wrong or extra 42 -> 33.
+Flat across its settings: any margin 0-40, judging all drafts or only those
+under 85% or 50%, every variant names 890 (fixed 8-10, broken 0-2). About
+90 s a night here (84 drafts on 140). Next: the key allowance in the judge
+(Mac's Fancy), and the merged runs that cover two tunes (The Wild Irishman
+and The Sailor's Bonnet on 140, one draft): following can split as well as
+name. A live tracker (position, tempo, rounds as state) waits on these.
+
 **"The tune may have changed" on the meter** (2026-10-08). The player wants
 the meter, live, to go quickly from "I'm hearing X" to "the tune may have
 changed, I'm listening for what it is". Measured on the saved states of the
