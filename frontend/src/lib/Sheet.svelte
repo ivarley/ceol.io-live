@@ -18,8 +18,10 @@
 </script>
 
 <script>
+  // i18n-converted
   import { Dialog as BitsDialog } from 'bits-ui'
   import Chevron from './Chevron.svelte'
+  import { t } from './i18n/index.js'
 
   // Sheet (spec 035): holds a task or scrollable detail — never a bare decision
   // (that's Dialog). Full-screen under 768px; on desktop a single prop picks
@@ -34,10 +36,10 @@
     // with enough in it to fill a screen; this is for the ones without.
     compact = false,
     back = null, // label for a back chevron ("< Label") replacing Cancel
-    cancelLabel = 'Cancel',
+    cancelLabel = t('Cancel'),
     onCancel = () => {}, // abandon: Cancel button, back chevron, scrim tap, Escape
     onDone = null, // commit; the Done button only renders when this is passed
-    doneLabel = 'Done',
+    doneLabel = t('Done'),
     children,
     footer = null, // optional footer snippet (action bar)
   } = $props()

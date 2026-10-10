@@ -1,60 +1,61 @@
+{# i18n-converted #}
 {% extends "base.html" %}
 
-{% block title %}Bulk Import - {{ session.name }}{% endblock %}
+{% block title %}{{ _('Bulk Import - %(session)s', session=session.name) }}{% endblock %}
 
 {% block content %}
 <div class="docs-content-inner">
     <div class="container">
         <article class="docs-article" id="section-1">
             <header class="docs-header">
-                <h1 class="docs-heading">Bulk Import Members - {{ session.name }}</h1>
+                <h1 class="docs-heading">{{ _('Bulk Import Members - %(session)s', session=session.name) }}</h1>
                 <section class="docs-intro">
-                    <p>Import multiple members from CSV data. <a href="/admin/sessions/{{ session.path }}/people">← Back to Members</a></p>
+                    <p>{{ _('Import multiple members from CSV data.') }} <a href="/admin/sessions/{{ session.path }}/people">{{ _('← Back to Members') }}</a></p>
                 </section>
             </header>
             
             {% if step == "input" %}
             <!-- CSV Input Step -->
             <section class="docs-section" id="csv-input">
-                <h2 class="section-heading">Paste Comma-Separated Data</h2>
+                <h2 class="section-heading">{{ _('Paste Comma-Separated Data') }}</h2>
                 
                 <!-- Format Help - Collapsible -->
                 <div class="mb-3">
                     <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none d-flex align-items-center" id="format-help-toggle" aria-expanded="false">
                         <span class="chevron-icon me-2" id="format-help-icon">▶</span>
-                        <span class="text-muted">Need help with CSV format?</span>
+                        <span class="text-muted">{{ _('Need help with CSV format?') }}</span>
                     </button>
                 </div>
                 
                 <div class="format-help-content" id="format-help" style="display: none;">
                     <!-- Format Explanation with Examples -->
                     <div class="alert alert-info mb-4">
-                        <h6>Supported CSV Formats</h6>
-                        <p class="mb-2">The system automatically detects your CSV format. You can use any of these arrangements:</p>
+                        <h6>{{ _('Supported CSV Formats') }}</h6>
+                        <p class="mb-2">{{ _('The system automatically detects your CSV format. You can use any of these arrangements:') }}</p>
                         <ul class="mb-3 small">
-                            <li><strong>Basic:</strong> Name, Email, Instruments</li>
-                            <li><strong>With headers:</strong> First Name, Last Name, Email, Instruments</li>
-                            <li><strong>Extended:</strong> Name, Email, Phone, City, State, Country, Instruments</li>
+                            <li><strong>{{ _('Basic:') }}</strong> {{ _('Name, Email, Instruments') }}</li>
+                            <li><strong>{{ _('With headers:') }}</strong> {{ 'First Name, Last Name, Email, Instruments' }}</li>
+                            <li><strong>{{ _('Extended:') }}</strong> {{ _('Name, Email, Phone, City, State, Country, Instruments') }}</li>
                         </ul>
                         
-                        <p class="mb-2"><strong>Field Notes:</strong></p>
+                        <p class="mb-2"><strong>{{ _('Field Notes:') }}</strong></p>
                         <ul class="mb-3 small">
-                            <li><strong>Name:</strong> Can be "First Last" or separate First/Last columns</li>
-                            <li><strong>Contact:</strong> Email addresses or phone numbers are auto-detected</li>
-                            <li><strong>Instruments:</strong> Comma-separated list (e.g., "Fiddle,Flute" or "Guitar")</li>
-                            <li><strong>Location:</strong> Missing city/state/country will default from session settings</li>
+                            <li><strong>{{ _('Name:') }}</strong> {{ _('Can be "First Last" or separate First/Last columns') }}</li>
+                            <li><strong>{{ _('Contact:') }}</strong> {{ _('Email addresses or phone numbers are auto-detected') }}</li>
+                            <li><strong>{{ _('Instruments:') }}</strong> {{ _('Comma-separated list (e.g., "Fiddle,Flute" or "Guitar")') }}</li>
+                            <li><strong>{{ _('Location:') }}</strong> {{ _('Missing city/state/country will default from session settings') }}</li>
                         </ul>
                         
-                        <p class="mb-2"><strong>Example CSV formats:</strong></p>
+                        <p class="mb-2"><strong>{{ _('Example CSV formats:') }}</strong></p>
                         <div class="small font-monospace bg-light p-2 rounded mb-0">
-                            <strong>Simple:</strong><br>
-                            John Smith,john@example.com,Fiddle,Flute<br>
-                            Jane Doe,jane@example.com,Guitar<br><br>
+                            <strong>{{ _('Simple:') }}</strong><br>
+                            {{ 'John Smith,john@example.com,Fiddle,Flute' }}<br>
+                            {{ 'Jane Doe,jane@example.com,Guitar' }}<br><br>
                             
-                            <strong>With headers:</strong><br>
-                            First Name,Last Name,Email,Instruments<br>
-                            John,Smith,john@example.com,"Fiddle,Flute"<br>
-                            Jane,Doe,jane@example.com,Guitar
+                            <strong>{{ _('With headers:') }}</strong><br>
+                            {{ 'First Name,Last Name,Email,Instruments' }}<br>
+                            {{ 'John,Smith,john@example.com,"Fiddle,Flute"' }}<br>
+                            {{ 'Jane,Doe,jane@example.com,Guitar' }}
                         </div>
                     </div>
                 </div>
@@ -62,24 +63,24 @@
                 <form id="csv-input-form">
                     <div class="mb-3">
                         <label for="csv-data" class="form-label">
-                            <strong>CSV Data</strong>
-                            <span class="text-muted">(paste from Excel, Google Sheets, or any CSV source)</span>
+                            <strong>{{ _('CSV Data') }}</strong>
+                            <span class="text-muted">{{ _('(paste from Excel, Google Sheets, or any CSV source)') }}</span>
                         </label>
                         <textarea 
                             id="csv-data" 
                             class="form-control" 
                             rows="15" 
-                            placeholder="Paste your CSV data here...&#10;&#10;Example:&#10;John Smith,john@example.com,Fiddle,Flute&#10;Jane Doe,jane@example.com,Guitar&#10;Mike Johnson,512-555-1234,Mandolin"
+                            placeholder="{{ _('Paste your CSV data here...') }}&#10;&#10;{{ _('Example:') }}&#10;John Smith,john@example.com,Fiddle,Flute&#10;Jane Doe,jane@example.com,Guitar&#10;Mike Johnson,512-555-1234,Mandolin"
                             required></textarea>
                     </div>
                     
                     <div class="d-flex justify-content-between">
-                        <button type="button" class="btn btn-secondary" onclick="clearCsvData()">Clear</button>
+                        <button type="button" class="btn btn-secondary" onclick="clearCsvData()">{{ _('Clear') }}</button>
                         <button type="submit" class="btn btn-primary" id="process-btn">
-                            <span class="btn-text">Next →</span>
+                            <span class="btn-text">{{ _('Next →') }}</span>
                             <span class="btn-spinner" style="display: none;">
                                 <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                                Processing...
+                                {{ _('Processing...') }}
                             </span>
                         </button>
                     </div>
@@ -89,10 +90,10 @@
             {% elif step == "preview" %}
             <!-- Preview Step -->
             <section class="docs-section" id="csv-preview">
-                <h2 class="section-heading">Step 2: Review & Confirm</h2>
+                <h2 class="section-heading">{{ _('Step 2: Review & Confirm') }}</h2>
                 
                 <div class="alert alert-success mb-3" id="processing-summary">
-                    <strong>Processing Results:</strong>
+                    <strong>{{ _('Processing Results:') }}</strong>
                     <span id="summary-text"></span>
                 </div>
                 
@@ -101,12 +102,12 @@
                     <table class="table table-sm table-bordered" id="preview-table">
                         <thead class="table-light">
                             <tr>
-                                <th>Name</th>
-                                <th>Email</th>
-                                <th>Phone</th>
-                                <th>Location</th>
-                                <th>Instruments</th>
-                                <th>Status</th>
+                                <th>{{ _('Name') }}</th>
+                                <th>{{ _('Email') }}</th>
+                                <th>{{ _('Phone') }}</th>
+                                <th>{{ _('Location') }}</th>
+                                <th>{{ _('Instruments') }}</th>
+                                <th>{{ _('Status') }}</th>
                             </tr>
                         </thead>
                         <tbody id="preview-table-body">
@@ -116,11 +117,11 @@
                 </div>
                 
                 <div class="d-flex justify-content-between">
-                    <button type="button" class="btn btn-secondary" id="back-to-input">← Back to Edit CSV</button>
+                    <button type="button" class="btn btn-secondary" id="back-to-input">{{ _('← Back to Edit CSV') }}</button>
                     <div>
-                        <button type="button" class="btn btn-outline-primary me-2" id="select-all">Select All</button>
-                        <button type="button" class="btn btn-outline-secondary me-2" id="select-none">Select None</button>
-                        <button type="button" class="btn btn-success" id="save-players">Save Selected Members</button>
+                        <button type="button" class="btn btn-outline-primary me-2" id="select-all">{{ _('Select All') }}</button>
+                        <button type="button" class="btn btn-outline-secondary me-2" id="select-none">{{ _('Select None') }}</button>
+                        <button type="button" class="btn btn-success" id="save-players">{{ _('Save Selected Members') }}</button>
                     </div>
                 </div>
             </section>
@@ -136,6 +137,23 @@
 </form>
 
 <script>
+const BULK_T = {
+    enterCsv: {{ _('Please enter CSV data')|tojson }},
+    errorProcessing: {{ _('Error processing CSV: {error}')|tojson }},
+    errorProcessingData: {{ _('Error processing CSV data: {error}')|tojson }},
+    noData: {{ _('No processed data found. Please start over.')|tojson }},
+    none: {{ _('None')|tojson }},
+    fromDefaults: {{ _('From session defaults')|tojson }},
+    duplicate: {{ _('Duplicate ({reason})')|tojson }},
+    isNew: {{ _('New')|tojson }},
+    summary: {{ _('Found {total} entries: {new} new members, {duplicates} duplicates')|tojson }},
+    saveSelected: {{ _('Save Selected Members ({count})')|tojson }},
+    selectOne: {{ _('Please select at least one person to save')|tojson }},
+    saving: {{ _('Saving...')|tojson }},
+    saved: {{ _('Successfully saved {count} members!')|tojson }},
+    skipped: {{ _('({count} duplicates skipped)')|tojson }},
+    errorSaving: {{ _('Error saving members: {error}')|tojson }},
+};
 // Global variables
 let processedPeople = [];
 let sessionId = {{ session.session_id }};
@@ -190,7 +208,7 @@ function setupCsvInputHandlers() {
 async function processCsvData() {
     const csvData = document.getElementById('csv-data').value.trim();
     if (!csvData) {
-        alert('Please enter CSV data');
+        alert(BULK_T.enterCsv);
         return;
     }
     
@@ -218,12 +236,12 @@ async function processCsvData() {
             processedPeople = data.processed_people;
             showPreviewStep();
         } else {
-            alert('Error processing CSV: ' + data.message);
+            alert(BULK_T.errorProcessing.replace('{error}', data.message));
         }
         
     } catch (error) {
         console.error('Error:', error);
-        alert('Error processing CSV data: ' + error.message);
+        alert(BULK_T.errorProcessingData.replace('{error}', error.message));
     } finally {
         // Restore button state
         const submitBtn = document.getElementById('process-btn');
@@ -253,7 +271,7 @@ function setupPreviewHandlers() {
         updateProcessingSummary();
     } else {
         // No data found, redirect back to input
-        alert('No processed data found. Please start over.');
+        alert(BULK_T.noData);
         window.location.href = window.location.pathname;
         return;
     }
@@ -293,9 +311,9 @@ function populatePreviewTable() {
         const instrumentList = Array.isArray(person.instruments) ? person.instruments : [];
         const instrumentsHtml = instrumentList.length > 0 
             ? instrumentList.map(inst => `<span class="instrument-badge">${inst}</span>`).join('<span class="instrument-comma">, </span>')
-            : '<span class="text-muted">None</span>';
+            : '<span class="text-muted">' + BULK_T.none + '</span>';
         
-        const location = [person.city, person.state, person.country].filter(Boolean).join(', ') || 'From session defaults';
+        const location = [person.city, person.state, person.country].filter(Boolean).join(', ') || BULK_T.fromDefaults;
         
         row.innerHTML = `
             <td>
@@ -308,8 +326,8 @@ function populatePreviewTable() {
             <td>${instrumentsHtml}</td>
             <td>
                 ${person.is_duplicate 
-                    ? `<span class="badge bg-warning duplicate-badge">Duplicate (${person.duplicate_reason})</span>`
-                    : '<span class="badge bg-success">New</span>'
+                    ? `<span class="badge bg-warning duplicate-badge">${BULK_T.duplicate.replace('{reason}', person.duplicate_reason)}</span>`
+                    : '<span class="badge bg-success">' + BULK_T.isNew + '</span>'
                 }
             </td>
         `;
@@ -323,7 +341,7 @@ function updateProcessingSummary() {
     const duplicates = processedPeople.filter(p => p.is_duplicate).length;
     const newPeople = total - duplicates;
     
-    const summaryText = `Found ${total} entries: ${newPeople} new members, ${duplicates} duplicates`;
+    const summaryText = BULK_T.summary.replace('{total}', total).replace('{new}', newPeople).replace('{duplicates}', duplicates);
     document.getElementById('summary-text').textContent = summaryText;
 }
 
@@ -343,7 +361,7 @@ function updateSaveButtonState() {
     const checkedBoxes = document.querySelectorAll('#preview-table-body input[type="checkbox"]:checked');
     const saveBtn = document.getElementById('save-players');
     saveBtn.disabled = checkedBoxes.length === 0;
-    saveBtn.textContent = `Save Selected Members (${checkedBoxes.length})`;
+    saveBtn.textContent = BULK_T.saveSelected.replace('{count}', checkedBoxes.length);
 }
 
 async function saveSelectedPlayers() {
@@ -356,7 +374,7 @@ async function saveSelectedPlayers() {
     });
     
     if (selectedPeople.length === 0) {
-        alert('Please select at least one person to save');
+        alert(BULK_T.selectOne);
         return;
     }
     
@@ -364,7 +382,7 @@ async function saveSelectedPlayers() {
         // Show loading state
         const saveBtn = document.getElementById('save-players');
         const originalText = saveBtn.textContent;
-        saveBtn.textContent = 'Saving...';
+        saveBtn.textContent = BULK_T.saving;
         saveBtn.disabled = true;
         
         const response = await fetch(`/api/session/${sessionId}/bulk-import/save`, {
@@ -378,15 +396,15 @@ async function saveSelectedPlayers() {
         const data = await response.json();
         
         if (data.success) {
-            alert(`Successfully saved ${data.created_count} members!${data.skipped_count > 0 ? ` (${data.skipped_count} duplicates skipped)` : ''}`);
+            alert(BULK_T.saved.replace('{count}', data.created_count) + (data.skipped_count > 0 ? ' ' + BULK_T.skipped.replace('{count}', data.skipped_count) : ''));
             window.location.href = `/admin/sessions/{{ session.path }}/people`;
         } else {
-            alert('Error saving members: ' + data.message);
+            alert(BULK_T.errorSaving.replace('{error}', data.message));
         }
 
     } catch (error) {
         console.error('Error:', error);
-        alert('Error saving members: ' + error.message);
+        alert(BULK_T.errorSaving.replace('{error}', error.message));
     } finally {
         // Restore button state
         const saveBtn = document.getElementById('save-players');

@@ -1,4 +1,5 @@
 <script>
+  // i18n-converted
   /**
    * The seven states a person can be in at a session (spec 034), as one fixed icon row.
    *
@@ -10,25 +11,27 @@
    * Icons are inline SVG because FontAwesome is NOT loaded on this page (the <i class="fas">
    * elsewhere in this template render as nothing).
    */
+  import { t } from '../lib/index.js'
+
   let { person } = $props()
 
   const isVisitor = $derived(person.relationship === 'visitor')
 
   // [key, lit?, label] -- label doubles as the tooltip.
   const flags = $derived([
-    ['user', !!person.username, person.username ? `User account: ${person.username}` : 'No user account'],
+    ['user', !!person.username, person.username ? t('User account: {name}', { name: person.username }) : t('No user account')],
     ['confirmed', !!person.confirmed, person.confirmed
-      ? 'Confirmed — can see this session’s people and attendance'
-      : 'Not confirmed — cannot see this session’s people'],
-    ['member', !isVisitor, isVisitor ? 'Not a member' : 'Member — this is one of their sessions'],
-    ['visitor', isVisitor, isVisitor ? 'Visitor — came, but it isn’t their session' : 'Not a visitor'],
-    ['archived', !!person.archived, person.archived ? 'Archived — hidden from default lists' : 'Not archived'],
-    ['session-admin', !!person.is_admin, person.is_admin ? 'Session admin' : 'Not a session admin'],
-    ['system-admin', !!person.is_system_admin, person.is_system_admin ? 'System admin' : 'Not a system admin'],
+      ? t('Confirmed — can see this session’s people and attendance')
+      : t('Not confirmed — cannot see this session’s people')],
+    ['member', !isVisitor, isVisitor ? t('Not a member') : t('Member — this is one of their sessions')],
+    ['visitor', isVisitor, isVisitor ? t('Visitor — came, but it isn’t their session') : t('Not a visitor')],
+    ['archived', !!person.archived, person.archived ? t('Archived — hidden from default lists') : t('Not archived')],
+    ['session-admin', !!person.is_admin, person.is_admin ? t('Session admin') : t('Not a session admin')],
+    ['system-admin', !!person.is_system_admin, person.is_system_admin ? t('System admin') : t('Not a system admin')],
   ])
 </script>
 
-<span class="pf" role="img" aria-label="Status flags">
+<span class="pf" role="img" aria-label={t('Status flags')}>
   {#each flags as [key, lit, label] (key)}
     <span class="pf-i" class:on={lit} class:off={!lit} title={label} data-flag={key} data-on={lit}>
       <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">

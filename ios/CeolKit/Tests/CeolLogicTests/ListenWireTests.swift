@@ -5,6 +5,13 @@ import Testing
 
 @Suite("The listening service's wire")
 struct ListenWireTests {
+    @Test("The start names the night, so the service can prefer its session's tunes")
+    func startNamesTheNight() {
+        let with = ListenWire.start(streamID: "s", instanceID: 42)
+        #expect(with.contains(#""instance_id":42"#) && with.contains(#""stream_id":"s""#))
+        #expect(!ListenWire.start(streamID: "s").contains("instance_id"))
+    }
+
     @Test("A frame is the offset as a little-endian UInt64, then 16-bit little-endian samples")
     func frame() {
         let data = ListenWire.frame(offset: 0x0102, samples: [1, -2][...])
@@ -63,6 +70,27 @@ struct ListenWireTests {
         #expect(s.tMs == 16000 && s.top.count == 2 && s.shown == 91)
         #expect(s.shownCandidate?.name == "Roaring Barmaid, The")
         #expect(s.top[1].outside == false && !s.notATune && s.history.first?.fromMs == 16000)
+    }
+
+    @Test("A state says when the tune shown may have changed; an older service's says nothing")
+    func changing() throws {
+        let text = #"""
+            {"type":"state","t_ms":52000,"top":[{"tune_id":91,"name":"Roaring Barmaid, The","p":0.9},
+             {"tune_id":514,"name":"Down The Broom","p":0.08}],"none":0.02,"shown":91,
+             "changing":{"tune_id":91,"name":"Roaring Barmaid, The","since_ms":48000}}
+            """#
+        guard case .state(let s) = ListenMessage.decode(text) else {
+            Issue.record("not a state")
+            return
+        }
+        #expect(s.changing == ListenState.Changing(tuneID: 91, name: "Roaring Barmaid, The", sinceMs: 48000))
+        #expect(s.mayHaveChanged)
+        #expect(s.named { $0 == 91 ? "The Roaring Barmaid" : nil }.changing?.name == "The Roaring Barmaid")
+        guard case .state(let old) = ListenMessage.decode(#"{"type":"state","t_ms":4000,"top":[],"none":0.1,"changing":null}"#) else {
+            Issue.record("not a state")
+            return
+        }
+        #expect(old.changing == nil && !old.mayHaveChanged)
     }
 
     @Test("The meter shows a tune as the session does; the dump's name only for one it doesn't know")

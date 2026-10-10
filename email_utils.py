@@ -1,7 +1,9 @@
+# i18n-converted
 import os
 import logging
 import markdown
 from flask import url_for, current_app
+from flask_babel import force_locale, gettext as _
 from itsdangerous import URLSafeSerializer, BadSignature
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail, Header
@@ -10,8 +12,9 @@ from sendgrid.helpers.mail import Mail, Header
 logger = logging.getLogger(__name__)
 
 
-def send_email_via_sendgrid(to_email, subject, body_text, body_html=None,
-                            from_email=None, unsubscribe_url=None):
+def send_email_via_sendgrid(
+    to_email, subject, body_text, body_html=None, from_email=None, unsubscribe_url=None
+):
     """Send email using SendGrid API.
 
     from_email: overrides MAIL_DEFAULT_SENDER for this message (must be a
@@ -47,7 +50,9 @@ def send_email_via_sendgrid(to_email, subject, body_text, body_html=None,
             message.header = Header("List-Unsubscribe", f"<{unsubscribe_url}>")
         else:
             message.header = Header("List-Unsubscribe", f"<mailto:{unsubscribe_email}>")
-        message.add_header(Header("List-Unsubscribe-Post", "List-Unsubscribe=One-Click"))
+        message.add_header(
+            Header("List-Unsubscribe-Post", "List-Unsubscribe=One-Click")
+        )
 
         response = sg.send(message)
 
@@ -77,26 +82,73 @@ def send_email_via_sendgrid(to_email, subject, body_text, body_html=None,
         return False
 
 
+def _recipient_language(user):
+    """The language an email to this account goes out in (spec 057): theirs."""
+    from i18n import user_language
+
+    try:
+        return user_language(user)
+    except Exception:
+        return "en"
+
+
+def _language_of_user_id(user_id):
+    from i18n import LANGUAGES
+    from database import get_db_connection
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT language FROM user_account WHERE user_id = %s", (user_id,))
+        row = cur.fetchone()
+    finally:
+        conn.close()
+    return row[0] if row and row[0] in LANGUAGES else "en"
+
+
+def _button(url, label):
+    return (
+        f'<p><a href="{url}" style="background-color: #007bff; color: white; '
+        f'padding: 10px 20px; text-decoration: none; border-radius: 5px;">{label}</a></p>'
+    )
+
+
+# Every _() here is a plain call, never inside an f-string: Babel's extractor doesn't
+# look inside f-strings, so such a string would never reach the catalog.
+
+
 def send_password_reset_email(user, token):
-    logger.info(f"Initiating password reset email - User: {user.username}, Email: {user.email}")
+    logger.info(
+        f"Initiating password reset email - User: {user.username}, Email: {user.email}"
+    )
 
     reset_url = url_for("reset_password", token=token, _external=True)
 
-    subject = "Password Reset Request - Irish Music Sessions"
-    body_text = f"""To reset your password, visit the following link:
+    with force_locale(_recipient_language(user)):
+        subject = _("Password Reset Request - Ceol")
+        visit = _("To reset your password, visit the following link:")
+        heading = _("Password Reset Request")
+        click = _("To reset your password, click the following link:")
+        link = _("Reset Your Password")
+        ignore = _(
+            "If you did not make this request, please ignore this email and no changes will be made."
+        )
+        expires = _("This link will expire in 1 hour.")
+
+    body_text = f"""{visit}
 {reset_url}
 
-If you did not make this request, please ignore this email and no changes will be made.
+{ignore}
 
-This link will expire in 1 hour.
+{expires}
 """
 
     body_html = f"""
-    <h2>Password Reset Request</h2>
-    <p>To reset your password, click the following link:</p>
-    <p><a href="{reset_url}">Reset Your Password</a></p>
-    <p>If you did not make this request, please ignore this email and no changes will be made.</p>
-    <p><strong>This link will expire in 1 hour.</strong></p>
+    <h2>{heading}</h2>
+    <p>{click}</p>
+    <p><a href="{reset_url}">{link}</a></p>
+    <p>{ignore}</p>
+    <p><strong>{expires}</strong></p>
     """
 
     result = send_email_via_sendgrid(user.email, subject, body_text, body_html)
@@ -104,35 +156,54 @@ This link will expire in 1 hour.
     if result:
         logger.info(f"Password reset email sent successfully - User: {user.username}")
     else:
-        logger.error(f"Password reset email failed - User: {user.username}, Email: {user.email}")
+        logger.error(
+            f"Password reset email failed - User: {user.username}, Email: {user.email}"
+        )
 
     return result
 
 
 def send_verification_email(user, token):
-    logger.info(f"Initiating verification email - User: {user.username}, Email: {user.email}")
+    logger.info(
+        f"Initiating verification email - User: {user.username}, Email: {user.email}"
+    )
 
     verification_url = url_for("verify_email", token=token, _external=True)
 
-    subject = "Verify Your Email Address - Irish Music Sessions"
-    body_text = f"""Welcome to Irish Music Sessions!
+    with force_locale(_recipient_language(user)):
+        subject = _("Verify Your Email Address - Ceol")
+        welcome = _("Welcome to Ceol!")
+        click = _(
+            "Please click the following link to verify your email address and activate your account:"
+        )
+        thanks = _(
+            "Thank you for registering with us. Please verify your email address to activate your account."
+        )
+        button = _("Verify Email Address")
+        paste = _(
+            "If the button doesn't work, copy and paste this link into your browser:"
+        )
+        ignore = _("If you did not create this account, please ignore this email.")
+        expires = _("This link will expire in 24 hours.")
 
-Please click the following link to verify your email address and activate your account:
+    body_text = f"""{welcome}
+
+{click}
 {verification_url}
 
-If you did not create this account, please ignore this email.
+{ignore}
 
-This link will expire in 24 hours.
+{expires}
 """
 
     body_html = f"""
-    <h2>Welcome to Irish Music Sessions!</h2>
-    <p>Thank you for registering with us. Please verify your email address to activate your account.</p>
-    <p><a href="{verification_url}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Verify Email Address</a></p>
-    <p>If the button doesn't work, copy and paste this link into your browser:</p>
+    <h2>{welcome}</h2>
+    <p>{thanks}</p>
+    {_button(verification_url, button)}
+    <p>{paste}</p>
     <p>{verification_url}</p>
-    <p>If you did not create this account, please ignore this email.</p>
-    <p><strong>This link will expire in 24 hours.</strong></p>
+    <p>{ignore}</p>
+    <p><strong>{expires}</strong></p>
     """
 
     result = send_email_via_sendgrid(user.email, subject, body_text, body_html)
@@ -140,7 +211,9 @@ This link will expire in 24 hours.
     if result:
         logger.info(f"Verification email sent successfully - User: {user.username}")
     else:
-        logger.error(f"Verification email failed - User: {user.username}, Email: {user.email}")
+        logger.error(
+            f"Verification email failed - User: {user.username}, Email: {user.email}"
+        )
 
     return result
 
@@ -148,30 +221,46 @@ This link will expire in 24 hours.
 def send_registration_email(email, token):
     """The link that creates an account for an address typed on the login page
     (migration 056). No account exists yet, so it goes to a bare address, and the
-    wording has to make sense to someone who never asked for it."""
+    wording has to make sense to someone who never asked for it. No account means no
+    language setting: it goes out in the language of the request that asked for it."""
     logger.info(f"Initiating registration email - Email: {email}")
 
     verification_url = url_for("verify_email", token=token, _external=True)
 
-    subject = "Create your account - Irish Music Sessions"
-    body_text = f"""Someone, hopefully you, asked to create an Irish Music Sessions account with this email address.
+    subject = _("Create your account - Ceol")
+    asked = _(
+        "Someone, hopefully you, asked to create a Ceol account with this email address."
+    )
+    click = _("Click this link to create your account and log in:")
+    heading = _("Create your Ceol account")
+    asked_short = _(
+        "Someone, hopefully you, asked to create an account with this email address."
+    )
+    button = _("Create my account")
+    paste = _("If the button doesn't work, copy and paste this link into your browser:")
+    ignore = _(
+        "If this wasn't you, ignore this email. No account is created unless the link is clicked."
+    )
+    expires = _("This link will expire in 24 hours.")
 
-Click this link to create your account and log in:
+    body_text = f"""{asked}
+
+{click}
 {verification_url}
 
-If this wasn't you, ignore this email. No account is created unless the link is clicked.
+{ignore}
 
-This link will expire in 24 hours.
+{expires}
 """
 
     body_html = f"""
-    <h2>Create your Irish Music Sessions account</h2>
-    <p>Someone, hopefully you, asked to create an account with this email address.</p>
-    <p><a href="{verification_url}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Create my account</a></p>
-    <p>If the button doesn't work, copy and paste this link into your browser:</p>
+    <h2>{heading}</h2>
+    <p>{asked_short}</p>
+    {_button(verification_url, button)}
+    <p>{paste}</p>
     <p>{verification_url}</p>
-    <p>If this wasn't you, ignore this email. No account is created unless the link is clicked.</p>
-    <p><strong>This link will expire in 24 hours.</strong></p>
+    <p>{ignore}</p>
+    <p><strong>{expires}</strong></p>
     """
 
     result = send_email_via_sendgrid(email, subject, body_text, body_html)
@@ -186,27 +275,40 @@ This link will expire in 24 hours.
 
 def send_login_link_email(user, token):
     """Send magic link for passwordless login (15 min expiry)"""
-    logger.info(f"Initiating login link email - User: {user.username}, Email: {user.email}")
+    logger.info(
+        f"Initiating login link email - User: {user.username}, Email: {user.email}"
+    )
 
     login_url = url_for("login_with_token", token=token, _external=True)
 
-    subject = "Your Login Link - Irish Music Sessions"
-    body_text = f"""Click this link to log in to Irish Music Sessions:
+    with force_locale(_recipient_language(user)):
+        subject = _("Your Login Link - Ceol")
+        click = _("Click this link to log in to Ceol:")
+        heading = _("Log In to Ceol")
+        below = _("Click the button below to log in:")
+        button = _("Log In")
+        paste = _(
+            "If the button doesn't work, copy and paste this link into your browser:"
+        )
+        expires = _("This link will expire in 15 minutes.")
+        ignore = _("If you did not request this login link, please ignore this email.")
+
+    body_text = f"""{click}
 {login_url}
 
-This link will expire in 15 minutes.
+{expires}
 
-If you did not request this login link, please ignore this email.
+{ignore}
 """
 
     body_html = f"""
-    <h2>Log In to Irish Music Sessions</h2>
-    <p>Click the button below to log in:</p>
-    <p><a href="{login_url}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Log In</a></p>
-    <p>If the button doesn't work, copy and paste this link into your browser:</p>
+    <h2>{heading}</h2>
+    <p>{below}</p>
+    {_button(login_url, button)}
+    <p>{paste}</p>
     <p>{login_url}</p>
-    <p><strong>This link will expire in 15 minutes.</strong></p>
-    <p>If you did not request this login link, please ignore this email.</p>
+    <p><strong>{expires}</strong></p>
+    <p>{ignore}</p>
     """
 
     result = send_email_via_sendgrid(user.email, subject, body_text, body_html)
@@ -214,9 +316,62 @@ If you did not request this login link, please ignore this email.
     if result:
         logger.info(f"Login link email sent successfully - User: {user.username}")
     else:
-        logger.error(f"Login link email failed - User: {user.username}, Email: {user.email}")
+        logger.error(
+            f"Login link email failed - User: {user.username}, Email: {user.email}"
+        )
 
     return result
+
+
+def send_person_added_email(admin, person, session):
+    """Tell a session's admin that someone was added to it, in the admin's language.
+    `admin`: dict(name, email, language); `person`: dict(name, email, relationship);
+    `session`: dict(name, location, path). An empty location reads "Unknown"."""
+    review_url = f"https://ceol.io/admin/sessions/{session['path']}/people"
+    with force_locale(admin.get("language") or "en"):
+        location = session["location"] or _("Unknown")
+        subject = _("New person added to session: %(session)s", session=session["name"])
+        args = dict(person=person["name"], session=session["name"], location=location)
+        if person["relationship"] == "member":
+            added = _(
+                '%(person)s has been added to the session "%(session)s" in %(location)s as a member.',
+                **args,
+            )
+        elif person["relationship"] == "visitor":
+            added = _(
+                '%(person)s has been added to the session "%(session)s" in %(location)s as a visitor.',
+                **args,
+            )
+        else:
+            added = _(
+                '%(person)s has been added to the session "%(session)s" in %(location)s as a %(relationship)s.',
+                relationship=person["relationship"],
+                **args,
+            )
+        hello = _("Hello %(name)s,", name=admin["name"])
+        details = _("Person Details:")
+        name_line = _("Name: %(name)s", name=person["name"])
+        email_line = _("Email: %(email)s", email=person["email"] or _("Not provided"))
+        review = _(
+            "You can review and modify this person's role in the session admin interface: %(url)s",
+            url=review_url,
+        )
+        regards = _("Best regards,")
+        signature = _("The Ceol.io Session Management System")
+
+    body = f"""{hello}
+
+{added}
+
+{details}
+- {name_line}
+- {email_line}
+
+{review}
+
+{regards}
+{signature}"""
+    return send_email_via_sendgrid(admin["email"], subject, body)
 
 
 def _unsubscribe_serializer():
@@ -247,10 +402,12 @@ def send_update_email(user_id, to_email, subject, body_markdown):
         _external=True,
     )
 
-    footer_text = (
-        "You're receiving this because you opted in to updates on ceol.io.\n"
-        f"Unsubscribe: {unsubscribe_url}"
-    )
+    with force_locale(_language_of_user_id(user_id)):
+        opted_in = _(
+            "You're receiving this because you opted in to updates on ceol.io."
+        )
+        unsubscribe = _("Unsubscribe")
+        footer_text = opted_in + "\n" + _("Unsubscribe: %(url)s", url=unsubscribe_url)
     # Plain-text part is the raw Markdown source (readable as-is)
     body_text = f"{body_markdown}\n\n--\n{footer_text}\n"
 
@@ -258,8 +415,8 @@ def send_update_email(user_id, to_email, subject, body_markdown):
     {markdown.markdown(body_markdown)}
     <hr style="margin-top: 2em; border: none; border-top: 1px solid #ddd;">
     <p style="color: #6c757d; font-size: 0.85em;">
-        You're receiving this because you opted in to updates on ceol.io.
-        <a href="{unsubscribe_url}">Unsubscribe</a>
+        {opted_in}
+        <a href="{unsubscribe_url}">{unsubscribe}</a>
     </p>
     """
 

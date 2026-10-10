@@ -1,4 +1,5 @@
 <script>
+  // i18n-converted
   // Two canvases over the same precomputed envelope (spec 050).
   //
   //   overview -- the whole recording at a glance, with every placed tune drawn
@@ -7,7 +8,8 @@
   //               point is therefore always in the same place on screen, which
   //               is what makes marking a whole night by feel possible; dragging
   //               the tape scrubs, so the finger never covers the mark point.
-  import { envelopeForRange, formatTime, setColor } from './logic.js'
+  import { envelopeForRange, formatTime, setBreakBefore, setColor } from './logic.js'
+  import { t } from '../lib/index.js'
 
   let {
     peaks = null,
@@ -35,11 +37,11 @@
   // drag starts -- two marks a second apart are two pixels apart at 3-hour zoom.
   let hotEdge = $state(null)
 
-  // A quarter shorter on a phone. Both canvases sit in a sticky column above
+  // Roughly half height on a phone. Both canvases sit in a sticky column above
   // the tune list, so every pixel here is a pixel the list does not get -- and
   // neither view loses anything at this size: the tape is read across, not up.
-  const OVERVIEW_H = $derived(compact ? 42 : 56)
-  const DETAIL_H = $derived(compact ? 126 : 168)
+  const OVERVIEW_H = $derived(compact ? 28 : 56)
+  const DETAIL_H = $derived(compact ? 92 : 168)
   // Grab tolerance. Touch gets far more of it: a fingertip is nowhere near as
   // precise as a cursor, and a 2px line is not a touch target.
   const EDGE_GRAB_PX = 6
@@ -61,7 +63,8 @@
     return out
   })
 
-  const tuneById = $derived(new Map(tunes.map((t) => [t.session_instance_tune_id, t])))
+  const tuneById = $derived(new Map(tunes.map((tune) => [tune.session_instance_tune_id, tune])))
+  const setOf = $derived(new Map(tunes.map((tune) => [tune.session_instance_tune_id, tune.set_number])))
 
   // Redraw whenever anything visible changes. Reading the props here is what
   // registers the dependency -- Svelte 5 effects track what they touch.
@@ -203,12 +206,12 @@
     // Second ticks, thinning out as you zoom out so they never become noise.
     const stepMs = zoomMs <= 10000 ? 1000 : zoomMs <= 40000 ? 5000 : zoomMs <= 180000 ? 30000 : 120000
     ctx.font = '10px SFMono-Regular, Menlo, monospace'
-    for (let t = Math.ceil(startMs / stepMs) * stepMs; t < endMs; t += stepMs) {
-      const x = msToX(t)
+    for (let tick = Math.ceil(startMs / stepMs) * stepMs; tick < endMs; tick += stepMs) {
+      const x = msToX(tick)
       ctx.fillStyle = 'rgba(255,255,255,0.18)'
       ctx.fillRect(Math.round(x), DETAIL_H - 14, 1, 14)
       ctx.fillStyle = 'rgba(255,255,255,0.4)'
-      ctx.fillText(formatTime(t), Math.round(x) + 3, DETAIL_H - 4)
+      ctx.fillText(formatTime(tick), Math.round(x) + 3, DETAIL_H - 4)
     }
 
     // The centre line: the mark point, always here.
@@ -267,6 +270,15 @@
     // boundary can only have meant that boundary. Everywhere else is still the
     // scrub it has always been, so the common gesture is unchanged.
     const grabbed = edgeNear(event.clientX, rect, event.pointerType === 'touch' ? EDGE_GRAB_TOUCH_PX : EDGE_GRAB_PX)
+    // A start at a set break is two coincident edges (see setBreakBefore): hold
+    // off choosing until the pointer says which way it is going.
+    const endId = grabbed?.edge === 'start' ? setBreakBefore(segments, setOf, grabbed.id) : null
+    if (endId != null) {
+      drag = { kind: 'split', startId: grabbed.id, endId, startX: event.clientX }
+      hotEdge = { id: grabbed.id, edge: 'start' }
+      onscrubstart()
+      return
+    }
     if (grabbed) {
       drag = { kind: 'edge', id: grabbed.id, edge: grabbed.edge }
       hotEdge = { id: grabbed.id, edge: grabbed.edge }
@@ -293,6 +305,13 @@
       return
     }
     const rect = event.currentTarget.getBoundingClientRect()
+    if (drag.kind === 'split') {
+      const dx = event.clientX - drag.startX
+      if (Math.abs(dx) <= 3) return
+      // Later moves the next set's start; earlier pulls back the previous set's end.
+      drag = dx > 0 ? { kind: 'edge', id: drag.startId, edge: 'start' } : { kind: 'edge', id: drag.endId, edge: 'end' }
+      hotEdge = { id: drag.id, edge: drag.edge }
+    }
     if (drag.kind === 'edge') {
       // The tape deliberately does NOT follow: it is centred on the playhead,
       // so moving the playhead here would slide the view out from under the
@@ -310,6 +329,13 @@
   function pointerUp(event) {
     if (!drag) return
     const rect = event.currentTarget.getBoundingClientRect()
+    if (drag.kind === 'split') {
+      // Pressed on a split edge and let go without moving: nothing to move.
+      hotEdge = null
+      drag = null
+      onscrubend()
+      return
+    }
     if (drag.kind === 'edge') {
       onedgecommit(drag.id, drag.edge, detailMsAt(event.clientX, rect))
       hotEdge = null
@@ -354,7 +380,7 @@
       onwheel={detailWheel}
     ></canvas>
     {#if !peaks}
-      <div class="wf-empty">no waveform for this recording</div>
+      <div class="wf-empty">{t('no waveform for this recording')}</div>
     {/if}
   </div>
 

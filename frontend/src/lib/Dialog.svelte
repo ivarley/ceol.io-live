@@ -1,5 +1,7 @@
 <script>
+  // i18n-converted
   import { AlertDialog } from 'bits-ui'
+  import { t } from './i18n/index.js'
 
   // Dialog (spec 035): ONE decision, never scrolls. Confirm label is an explicit
   // verb ("Delete session"), never "OK". Outside clicks are ignored (a decision
@@ -8,8 +10,8 @@
     open = $bindable(false),
     title = '',
     description = '', // plain-text body; use children for markup instead
-    confirmLabel = 'Confirm', // callers should pass an explicit verb
-    cancelLabel = 'Cancel',
+    confirmLabel = t('Confirm'), // callers should pass an explicit verb
+    cancelLabel = t('Cancel'),
     destructive = false, // red confirm for irreversible actions
     confirmDisabled = false, // e.g. until a typed confirmation matches
     busyLabel = '', // shown on the confirm while an async onConfirm is in flight ("Removing…")

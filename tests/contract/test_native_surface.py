@@ -42,6 +42,7 @@ CHECKED_GETS = [
     ("/api/home", "/api/home"),
     ("/api/resolve", "/api/resolve?path=/sessions/austin/mueller/2024-09-03"),
     ("/api/my-tunes", "/api/my-tunes"),
+    ("/api/my-tunes/common/{other_person_id}", "/api/my-tunes/common/2"),
     ("/api/offline/bundle", "/api/offline/bundle"),
     ("/api/tunes/search", "/api/tunes/search?q=cooley"),
     (

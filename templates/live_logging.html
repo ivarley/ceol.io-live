@@ -1,15 +1,19 @@
-<!doctype html>
-<html lang="en">
+{# i18n-converted #}<!doctype html>
+<html lang="{{ lang }}">
 <head>
   <meta charset="utf-8">
   <!-- maximum-scale=1 stops mobile browsers auto-zooming when a text field gains focus (app-like locked viewport) -->
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
-  <title>Live Logging</title>
+  <title>{{ _('Live Logging') }}</title>
   <!--
     Spec 024 Phase 0 shell. Clean-slate: deliberately does NOT extend base.html.
     Bootstrap config is inlined for the self-contained Svelte bundle to read.
   -->
+  {# Spec 057: the language the live bundle renders in, and the legacy scripts'
+     strings (this shell doesn't extend base.html, which sets the same). #}
   <script>
+    window.__CEOL_LANG__ = {{ lang | tojson }};
+    window.__CEOL_T__ = {{ ceol_js_strings() | tojson }};
     window.__LIVE_CONFIG__ = {
       sessionInstanceId: {{ session_instance_id | tojson }},
       sessionId: {{ session_id | tojson }},

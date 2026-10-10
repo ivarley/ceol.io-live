@@ -1,14 +1,16 @@
 <script>
+  // i18n-converted
   // Details tab: the session-details edit form (save via PUT
   // /api/sessions/<path>/admin-update), termination / reactivation flows, and
   // the recurrence schedule editor with live preview.
   import { formatTime } from '../shared/format.js'
   import { parseThesessionSessionId } from '../shared/parse.js'
   import { normalizeSessionPath } from '../shared/sessionpath.js'
+  import { sessionPathErrorText } from '../shared/sessionpathText.js'
 
   let { session, sessionPath, timezoneOptions = [], festival = null } = $props()
 
-  import { Dialog, Sheet, toast } from '../lib/index.js'
+  import { Dialog, Sheet, toast, t, tn, formatDate } from '../lib/index.js'
   import CopyYearSheet from '../festival/CopyYearSheet.svelte'
 
   // Spec 056: a festival year can be copied to a new year by its admins.
@@ -94,7 +96,7 @@
 
     // Basic validation
     if (!formData.name) {
-      toast('Session name is required', 'error')
+      toast(t('Session name is required'), 'error')
       return
     }
     // Not just non-empty: this path is the URL of the very screen you're on, so
@@ -104,17 +106,20 @@
     const { error: pathError } =
       formData.path === sessionPath ? { error: null } : normalizeSessionPath(formData.path)
     if (pathError) {
-      toast(pathError, 'error')
+      toast(sessionPathErrorText(pathError), 'error')
       return
     }
     // Catch a mistyped link (or a pasted TUNE url) here rather than after a round trip.
     if (formData.thesession_id && thesessionRef == null) {
-      toast('Enter a thesession.org session URL (thesession.org/sessions/1234) or numeric ID', 'error')
+      toast(t('Enter a thesession.org session URL (thesession.org/sessions/1234) or numeric ID'), 'error')
       return
     }
-    for (const [minutes, label] of [[bufferBefore, 'Minutes before'], [bufferAfter, 'Minutes after']]) {
+    for (const [minutes, message] of [
+      [bufferBefore, t('Minutes before must be a whole number of minutes')],
+      [bufferAfter, t('Minutes after must be a whole number of minutes')],
+    ]) {
       if (!/^\d+$/.test(String(minutes).trim())) {
-        toast(`${label} must be a whole number of minutes`, 'error')
+        toast(message, 'error')
         return
       }
     }
@@ -128,7 +133,7 @@
       .then((response) => response.json())
       .then((data) => {
         if (data.success) {
-          toast(data.message || 'Session details saved successfully', 'success')
+          toast(data.message || t('Session details saved successfully'), 'success')
           // Every route on this page is keyed on the path we just changed, so the
           // page's own sessionPath is now stale and a second save would 404.
           // Stays "Saving…" until the page moves.
@@ -137,14 +142,14 @@
             return
           }
         } else {
-          toast(data.error || "Couldn't save the session details. Try again.", 'error')
+          toast(data.error || t("Couldn't save the session details. Try again."), 'error')
         }
         savingDetails = false
       })
       .catch((error) => {
         savingDetails = false
         console.error('Error saving session details:', error)
-        toast("Couldn't save the session details. Check your connection and try again.", 'error')
+        toast(t("Couldn't save the session details. Check your connection and try again."), 'error')
       })
   }
 
@@ -161,7 +166,7 @@
 
   function saveTerminationDate() {
     if (!modalTerminationDate) {
-      modalError = 'Please select a date.'
+      modalError = t('Please select a date.')
       return
     }
     setTerminationDate(modalTerminationDate)
@@ -183,13 +188,13 @@
           window.location.reload()
         } else {
           terminating = false
-          modalError = data.error || "Couldn't set the termination date. Try again."
+          modalError = data.error || t("Couldn't set the termination date. Try again.")
         }
       })
       .catch((error) => {
         terminating = false
         console.error('Error setting termination date:', error)
-        modalError = "Couldn't set the termination date. Check your connection and try again."
+        modalError = t("Couldn't set the termination date. Check your connection and try again.")
       })
   }
 
@@ -210,12 +215,12 @@
           window.location.reload()
           return new Promise(() => {})
         }
-        toast(data.error || "Couldn't reactivate the session. Try again.", 'error')
+        toast(data.error || t("Couldn't reactivate the session. Try again."), 'error')
         return false
       })
       .catch((error) => {
         console.error('Error reactivating session:', error)
-        toast("Couldn't reactivate the session. Check your connection and try again.", 'error')
+        toast(t("Couldn't reactivate the session. Check your connection and try again."), 'error')
         return false
       })
   }
@@ -223,12 +228,22 @@
   // --- Recurrence editor --------------------------------------------------------
   const WEEKDAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
   const NTH_OPTIONS = [
-    { value: 1, label: '1st' },
-    { value: 2, label: '2nd' },
-    { value: 3, label: '3rd' },
-    { value: 4, label: '4th' },
-    { value: -1, label: 'Last' },
+    { value: 1, label: t('1st') },
+    { value: 2, label: t('2nd') },
+    { value: 3, label: t('3rd') },
+    { value: 4, label: t('4th') },
+    { value: -1, label: t('Last') },
   ]
+  // The weekday as a plural in the recurrence preview ("mondays").
+  const WEEKDAY_PLURALS = {
+    monday: () => t('mondays'),
+    tuesday: () => t('tuesdays'),
+    wednesday: () => t('wednesdays'),
+    thursday: () => t('thursdays'),
+    friday: () => t('fridays'),
+    saturday: () => t('saturdays'),
+    sunday: () => t('sundays'),
+  }
 
   let recurrenceEditMode = $state(false)
   let schedules = $state([]) // [{id, type, weekday, start_time, end_time, every_n_weeks, which:Set-like array}]
@@ -317,15 +332,26 @@
   // Preview text (legacy updateRecurrencePreview, recomputed reactively).
   const previewItems = $derived(
     collectSchedulesFromForm().map((schedule, idx) => {
-      let desc = `Schedule ${idx + 1}: ${schedule.weekday}s`
-      if (schedule.type === 'weekly') {
-        desc += schedule.every_n_weeks > 1 ? ` (every ${schedule.every_n_weeks} weeks)` : ''
-      } else {
-        const nthLabels = (schedule.which || []).map((n) => (n === -1 ? 'last' : ['1st', '2nd', '3rd', '4th'][n - 1]))
-        desc += ` (${nthLabels.join(', ')} of month)`
+      const vars = {
+        n: idx + 1,
+        days: WEEKDAY_PLURALS[schedule.weekday]?.() ?? `${schedule.weekday}s`,
+        start: formatTime(schedule.start_time),
+        end: formatTime(schedule.end_time),
       }
-      desc += ` from ${formatTime(schedule.start_time)} to ${formatTime(schedule.end_time)}`
-      return desc
+      if (schedule.type === 'weekly') {
+        return schedule.every_n_weeks > 1
+          ? tn(
+              schedule.every_n_weeks,
+              'Schedule {n}: {days} (every {weeks} week) from {start} to {end}',
+              'Schedule {n}: {days} (every {weeks} weeks) from {start} to {end}',
+              { ...vars, weeks: schedule.every_n_weeks }
+            )
+          : t('Schedule {n}: {days} from {start} to {end}', vars)
+      }
+      const nthLabels = (schedule.which || []).map((n) =>
+        n === -1 ? t('last') : [t('1st'), t('2nd'), t('3rd'), t('4th')][n - 1]
+      )
+      return t('Schedule {n}: {days} ({which} of month) from {start} to {end}', { ...vars, which: nthLabels.join(', ') })
     })
   )
 
@@ -341,11 +367,11 @@
     // Validate all schedules have required fields
     for (let schedule of collected) {
       if (!schedule.weekday || !schedule.start_time || !schedule.end_time) {
-        toast('All schedules must have a weekday, start time, and end time', 'error')
+        toast(t('All schedules must have a weekday, start time, and end time'), 'error')
         return
       }
       if (schedule.type === 'monthly_nth_weekday' && (!schedule.which || schedule.which.length === 0)) {
-        toast('Monthly patterns must have at least one occurrence selected', 'error')
+        toast(t('Monthly patterns must have at least one occurrence selected'), 'error')
         return
       }
     }
@@ -360,7 +386,7 @@
       try {
         JSON.parse(recurrenceValue)
       } catch (e) {
-        toast('Invalid JSON format. Please check your recurrence pattern.', 'error')
+        toast(t('Invalid JSON format. Please check your recurrence pattern.'), 'error')
         return
       }
     }
@@ -376,26 +402,27 @@
       .then((response) => response.json())
       .then((data) => {
         if (data.success) {
-          toast('Recurrence schedule updated successfully', 'success')
+          toast(t('Recurrence schedule updated successfully'), 'success')
           // Reload page to show updated human-readable format (stays "Saving…" till then)
           setTimeout(() => window.location.reload(), 1000)
         } else {
           savingRecurrence = false
-          toast(data.error || "Couldn't save the recurrence schedule. Try again.", 'error')
+          toast(data.error || t("Couldn't save the recurrence schedule. Try again."), 'error')
         }
       })
       .catch((error) => {
         savingRecurrence = false
         console.error('Error saving recurrence:', error)
-        toast("Couldn't save the recurrence schedule. Check your connection and try again.", 'error')
+        toast(t("Couldn't save the recurrence schedule. Check your connection and try again."), 'error')
       })
   }
 
-  const capitalize3 = (day) => day.charAt(0).toUpperCase() + day.slice(1, 3)
+  // "Mon": 2024-01-01 was a Monday, so WEEKDAYS[i] falls on 2024-01-0{i+1}.
+  const weekdayShort = (day) => formatDate(`2024-01-0${WEEKDAYS.indexOf(day) + 1}`, { weekday: 'short' })
 </script>
 
 <section class="docs-section">
-  <h2 class="section-heading">Session Details</h2>
+  <h2 class="section-heading">{t('Session Details')}</h2>
 
   <form
     id="session-details-form"
@@ -408,15 +435,15 @@
     <div class="row">
       <div class="col-md-6">
         <div class="mb-3">
-          <label for="session-name" class="form-label">Session Name</label>
+          <label for="session-name" class="form-label">{t('Session Name')}</label>
           <input type="text" class="form-control" id="session-name" bind:value={name} />
         </div>
 
         <div class="mb-3">
           <label for="session-path" class="form-label">
-            URL Path
+            {t('URL Path')}
             {#if path.trim()}
-              <a href="/sessions/{path.trim()}" target="_blank" class="path-link" title="Open session page">↗</a>
+              <a href="/sessions/{path.trim()}" target="_blank" class="path-link" title={t('Open session page')}>↗</a>
             {/if}
           </label>
           <input type="text" class="form-control" id="session-path" bind:value={path} />
@@ -424,54 +451,54 @@
 
         <div class="mb-3">
           <label for="thesession-id" class="form-label">
-            TheSession.org ID
+            {t('TheSession.org ID')}
             {#if thesessionRef != null}
               <a
                 href="https://thesession.org/sessions/{thesessionRef}"
                 target="_blank"
                 rel="noopener noreferrer"
                 class="path-link"
-                title="Open on thesession.org">↗</a>
+                title={t('Open on thesession.org')}>↗</a>
             {/if}
           </label>
           <input
             type="text"
             class="form-control"
             id="thesession-id"
-            placeholder="ID or thesession.org/sessions/… URL"
+            placeholder={t('ID or thesession.org/sessions/… URL')}
             bind:value={thesessionId} />
-          <small class="text-muted d-block">Links this session to its listing on thesession.org. Leave blank if it isn't listed there.</small>
+          <small class="text-muted d-block">{t("Links this session to its listing on thesession.org. Leave blank if it isn't listed there.")}</small>
         </div>
 
         <div class="mb-3">
-          <label for="location-name" class="form-label">Location Name</label>
+          <label for="location-name" class="form-label">{t('Location Name')}</label>
           <input type="text" class="form-control" id="location-name" bind:value={locationName} />
         </div>
 
         <div class="mb-3">
-          <label for="location-street" class="form-label">Street Address</label>
+          <label for="location-street" class="form-label">{t('Street Address')}</label>
           <input type="text" class="form-control" id="location-street" bind:value={locationStreet} />
         </div>
       </div>
 
       <div class="col-md-6">
         <div class="mb-3">
-          <label for="city" class="form-label">City</label>
+          <label for="city" class="form-label">{t('City')}</label>
           <input type="text" class="form-control" id="city" bind:value={city} />
         </div>
 
         <div class="mb-3">
-          <label for="state" class="form-label">State</label>
+          <label for="state" class="form-label">{t('State')}</label>
           <input type="text" class="form-control" id="state" bind:value={stateField} />
         </div>
 
         <div class="mb-3">
-          <label for="country" class="form-label">Country</label>
+          <label for="country" class="form-label">{t('Country')}</label>
           <input type="text" class="form-control" id="country" bind:value={country} />
         </div>
 
         <div class="mb-3">
-          <label for="timezone" class="form-label">Timezone</label>
+          <label for="timezone" class="form-label">{t('Timezone')}</label>
           <select class="form-select" id="timezone" name="timezone" bind:value={timezone}>
             {#each timezoneOptions as tz (tz.value)}
               <option value={tz.value}>{tz.label}</option>
@@ -480,18 +507,16 @@
         </div>
 
         <div class="mb-3">
-          <label for="session-type" class="form-label">Session Type</label>
+          <label for="session-type" class="form-label">{t('Session Type')}</label>
           <select class="form-select" id="session-type" bind:value={sessionType}>
-            <option value="regular">Regular (recurring)</option>
-            <option value="festival">Festival</option>
+            <option value="regular">{t('Regular (recurring)')}</option>
+            <option value="festival">{t('Festival')}</option>
           </select>
           <small class="text-muted d-block">
             {#if sessionType === 'festival'}
-              A festival runs between its first and last dates instead of recurring: the public page leads with
-              the "Sessions" tab, grouped by day, and its instances may overlap.
+              {t('A festival runs between its first and last dates instead of recurring: the public page leads with the "Sessions" tab, grouped by day, and its instances may overlap.')}
             {:else}
-              A regular session recurs on the schedule below. Choose Festival for a multi-day event whose
-              sessions are listed by day.
+              {t('A regular session recurs on the schedule below. Choose Festival for a multi-day event whose sessions are listed by day.')}
             {/if}
           </small>
         </div>
@@ -501,17 +526,17 @@
     <div class="row">
       <div class="col-md-6">
         <div class="mb-3">
-          <label for="location-phone" class="form-label">Location Phone</label>
+          <label for="location-phone" class="form-label">{t('Location Phone')}</label>
           <input type="tel" class="form-control" id="location-phone" bind:value={locationPhone} />
         </div>
 
         <div class="mb-3">
-          <label for="location-website" class="form-label">Location Website</label>
+          <label for="location-website" class="form-label">{t('Location Website')}</label>
           <input type="url" class="form-control" id="location-website" bind:value={locationWebsite} />
         </div>
 
         <div class="mb-3">
-          <label for="initiation-date" class="form-label">First Session Date</label>
+          <label for="initiation-date" class="form-label">{t('First Session Date')}</label>
           <input type="date" class="form-control" id="initiation-date" bind:value={initiationDate} />
         </div>
       </div>
@@ -519,7 +544,7 @@
       <div class="col-md-6">
         {#if session.termination_date}
           <div class="mb-3">
-            <label for="termination-date" class="form-label">Last Session Date</label>
+            <label for="termination-date" class="form-label">{t('Last Session Date')}</label>
             <input type="date" class="form-control" id="termination-date" bind:value={terminationDate} />
             <div class="mt-2">
               <a
@@ -530,14 +555,14 @@
                   e.preventDefault()
                   reactivateConfirmOpen = true
                 }}>
-                <i class="fas fa-play-circle"></i> Reactivate session
+                <i class="fas fa-play-circle"></i> {t('Reactivate session')}
               </a>
             </div>
           </div>
         {:else}
           <div class="mb-3">
             <div class="alert alert-warning">
-              <strong>Session Status:</strong> This session is currently active
+              <strong>{t('Session Status:')}</strong> {t('This session is currently active')}
             </div>
             <a
               href="#deactivate"
@@ -547,7 +572,7 @@
                 e.preventDefault()
                 openTerminationModal()
               }}>
-              <i class="fas fa-stop-circle"></i> Mark this session as inactive
+              <i class="fas fa-stop-circle"></i> {t('Mark this session as inactive')}
             </a>
           </div>
         {/if}
@@ -556,7 +581,7 @@
           <div class="form-check">
             <input class="form-check-input" type="checkbox" id="unlisted-address" bind:checked={unlistedAddress} />
             <label class="form-check-label" for="unlisted-address">
-              Hide address from public
+              {t('Hide address from public')}
             </label>
           </div>
         </div>
@@ -564,7 +589,7 @@
     </div>
 
     <div class="mb-3">
-      <span class="form-label">Recurrence Schedule</span>
+      <span class="form-label">{t('Recurrence Schedule')}</span>
 
       <!-- Read-only view -->
       <div id="recurrence-readonly-view" style:display={recurrenceEditMode ? 'none' : ''}>
@@ -573,16 +598,16 @@
             <div class="d-flex justify-content-between align-items-start">
               <div class="recurrence-text">{session.recurrence_readable}</div>
               <button type="button" class="btn btn-sm btn-outline-primary" onclick={showRecurrenceEditMode}>
-                <i class="fas fa-edit"></i> Edit
+                <i class="fas fa-edit"></i> {t('Edit')}
               </button>
             </div>
           </div>
         {:else}
           <div class="recurrence-display p-3 border rounded bg-light text-muted">
             <div class="d-flex justify-content-between align-items-center">
-              <div>No recurrence pattern set</div>
+              <div>{t('No recurrence pattern set')}</div>
               <button type="button" class="btn btn-sm btn-primary" onclick={showRecurrenceEditMode}>
-                <i class="fas fa-plus"></i> Add Schedule
+                <i class="fas fa-plus"></i> {t('Add Schedule')}
               </button>
             </div>
           </div>
@@ -595,25 +620,25 @@
           {#each schedules as schedule, idx (schedule.id)}
             <div class="schedule-form" id="schedule-{schedule.id}">
               <div class="schedule-form-header">
-                <span class="schedule-form-title">Schedule {schedule.id + 1}</span>
+                <span class="schedule-form-title">{t('Schedule {n}', { n: schedule.id + 1 })}</span>
                 <button type="button" class="btn btn-sm btn-outline-danger" onclick={() => removeSchedule(schedule.id)}>
-                  <i class="fas fa-trash"></i> Remove
+                  <i class="fas fa-trash"></i> {t('Remove')}
                 </button>
               </div>
 
               <div class="mb-3">
-                <span class="form-label">Pattern Type</span>
+                <span class="form-label">{t('Pattern Type')}</span>
                 <select
                   class="form-select schedule-type"
                   data-schedule-id={schedule.id}
                   bind:value={schedule.type}>
-                  <option value="weekly">Weekly</option>
-                  <option value="monthly_nth_weekday">Monthly (Nth Weekday)</option>
+                  <option value="weekly">{t('Weekly')}</option>
+                  <option value="monthly_nth_weekday">{t('Monthly (Nth Weekday)')}</option>
                 </select>
               </div>
 
               <div class="mb-3">
-                <span class="form-label">Weekday</span>
+                <span class="form-label">{t('Weekday')}</span>
                 <div class="weekday-buttons">
                   {#each WEEKDAYS as day (day)}
                     <button
@@ -622,7 +647,7 @@
                       data-schedule-id={schedule.id}
                       data-weekday={day}
                       onclick={() => selectWeekday(schedule, day)}>
-                      {capitalize3(day)}
+                      {weekdayShort(day)}
                     </button>
                   {/each}
                 </div>
@@ -630,12 +655,12 @@
 
               <div class="weekly-options" id="weekly-options-{schedule.id}" style:display={schedule.type === 'weekly' ? '' : 'none'}>
                 <div class="mb-3">
-                  <span class="form-label">Frequency</span>
+                  <span class="form-label">{t('Frequency')}</span>
                   <select class="form-select schedule-frequency" data-schedule-id={schedule.id} bind:value={schedule.every_n_weeks}>
-                    <option value={1}>Every week</option>
-                    <option value={2}>Every 2 weeks</option>
-                    <option value={3}>Every 3 weeks</option>
-                    <option value={4}>Every 4 weeks</option>
+                    <option value={1}>{t('Every week')}</option>
+                    <option value={2}>{tn(2, 'Every {n} week', 'Every {n} weeks')}</option>
+                    <option value={3}>{tn(3, 'Every {n} week', 'Every {n} weeks')}</option>
+                    <option value={4}>{tn(4, 'Every {n} week', 'Every {n} weeks')}</option>
                   </select>
                 </div>
               </div>
@@ -645,7 +670,7 @@
                 id="monthly-options-{schedule.id}"
                 style:display={schedule.type === 'monthly_nth_weekday' ? '' : 'none'}>
                 <div class="mb-3">
-                  <span class="form-label">Which occurrences?</span>
+                  <span class="form-label">{t('Which occurrences?')}</span>
                   <div class="nth-occurrence-checkboxes">
                     {#each NTH_OPTIONS as opt (opt.value)}
                       <label class="nth-checkbox-label">
@@ -665,7 +690,7 @@
 
               <div class="row">
                 <div class="col-md-6 mb-3">
-                  <label class="form-label" for="schedule-start-{schedule.id}">Start Time</label>
+                  <label class="form-label" for="schedule-start-{schedule.id}">{t('Start Time')}</label>
                   <input
                     type="time"
                     class="form-control schedule-start-time"
@@ -674,7 +699,7 @@
                     bind:value={schedule.start_time} />
                 </div>
                 <div class="col-md-6 mb-3">
-                  <label class="form-label" for="schedule-end-{schedule.id}">End Time</label>
+                  <label class="form-label" for="schedule-end-{schedule.id}">{t('End Time')}</label>
                   <input
                     type="time"
                     class="form-control schedule-end-time"
@@ -688,12 +713,12 @@
         </div>
 
         <button type="button" class="btn btn-sm btn-outline-primary mt-2" onclick={addScheduleForm}>
-          <i class="fas fa-plus"></i> Add Schedule
+          <i class="fas fa-plus"></i> {t('Add Schedule')}
         </button>
 
         <!-- Preview section -->
         <div id="recurrence-preview" class="mt-3 p-3 border rounded settings-box" style:display={previewItems.length ? 'block' : 'none'}>
-          <h6 class="mb-2">Next 5 Occurrences:</h6>
+          <h6 class="mb-2">{t('Next 5 Occurrences:')}</h6>
           <ul id="recurrence-preview-list" class="mb-0">
             {#each previewItems as item, i (i)}
               <li>{item}</li>
@@ -702,30 +727,29 @@
         </div>
 
         <div class="mt-3">
-          <button type="button" class="btn btn-sm btn-secondary" onclick={hideRecurrenceEditMode}>Cancel</button>
-          <button type="button" class="btn btn-sm btn-primary" onclick={saveRecurrenceFromForm} disabled={savingRecurrence}>{savingRecurrence ? 'Saving…' : 'Save'}</button>
+          <button type="button" class="btn btn-sm btn-secondary" onclick={hideRecurrenceEditMode}>{t('Cancel')}</button>
+          <button type="button" class="btn btn-sm btn-primary" onclick={saveRecurrenceFromForm} disabled={savingRecurrence}>{savingRecurrence ? t('Saving…') : t('Save')}</button>
         </div>
       </div>
     </div>
 
     <!-- Auto-create instances settings -->
     <div class="mb-3">
-      <span class="form-label">Auto-Create Instances</span>
+      <span class="form-label">{t('Auto-Create Instances')}</span>
       <div class="p-3 border rounded settings-box">
         <div class="form-check mb-2">
           <input class="form-check-input" type="checkbox" id="auto-create-instances" bind:checked={autoCreateInstances} />
           <label class="form-check-label" for="auto-create-instances">
-            Automatically create session instances ahead of time
+            {t('Automatically create session instances ahead of time')}
           </label>
         </div>
         <div class="d-flex align-items-center gap-2" id="auto-create-hours-container">
-          <label for="auto-create-hours" class="form-label mb-0">Create instances</label>
+          <label for="auto-create-hours" class="form-label mb-0">{t('Create instances')}</label>
           <input type="number" class="form-control" id="auto-create-hours" bind:value={autoCreateHours} min="1" max="168" style="width: 80px;" />
-          <span>hours ahead</span>
+          <span>{t('hours ahead')}</span>
         </div>
         <small class="text-muted d-block mt-2">
-          When enabled, the system will automatically create upcoming session instances based on the recurrence pattern.
-          This runs every 15 minutes.
+          {t('When enabled, the system will automatically create upcoming session instances based on the recurrence pattern. This runs every 15 minutes.')}
         </small>
       </div>
     </div>
@@ -733,50 +757,50 @@
     <!-- Active window: how long either side of the scheduled time this session counts
          as "happening now" (active_session_manager reads these). -->
     <div class="mb-3">
-      <span class="form-label">Active Window</span>
+      <span class="form-label">{t('Active Window')}</span>
       <div class="p-3 border rounded settings-box">
         <div class="d-flex align-items-center gap-2 flex-wrap">
-          <span>Counts as happening now from</span>
+          <span>{t('Counts as happening now from')}</span>
           <input
             type="number"
             class="form-control"
             id="active-buffer-before"
-            aria-label="Minutes before the session starts"
+            aria-label={t('Minutes before the session starts')}
             bind:value={bufferBefore}
             min="0"
             max="1440"
             style="width: 90px;" />
-          <span>minutes before it starts, until</span>
+          <span>{t('minutes before it starts, until')}</span>
           <input
             type="number"
             class="form-control"
             id="active-buffer-after"
-            aria-label="Minutes after the session ends"
+            aria-label={t('Minutes after the session ends')}
             bind:value={bufferAfter}
             min="0"
             max="1440"
             style="width: 90px;" />
-          <span>minutes after it ends.</span>
+          <span>{t('minutes after it ends.')}</span>
         </div>
         <small class="text-muted d-block mt-2">
-          Drives the "Live" badge, the live-logging screen, and which instance the session page opens on.
+          {t('Drives the "Live" badge, the live-logging screen, and which instance the session page opens on.')}
         </small>
       </div>
     </div>
 
     <!-- People tracking (spec 039) -->
     <div class="mb-3">
-      <span class="form-label">People Tracking</span>
+      <span class="form-label">{t('People Tracking')}</span>
       <div class="p-3 border rounded settings-box">
         <div class="form-check mb-2">
           <input class="form-check-input" type="checkbox" id="show-people-list" bind:checked={showPeopleList} />
-          <label class="form-check-label" for="show-people-list">Show a members list</label>
-          <small class="text-muted d-block">Allows session members to see who else plays here.</small>
+          <label class="form-check-label" for="show-people-list">{t('Show a members list')}</label>
+          <small class="text-muted d-block">{t('Allows session members to see who else plays here.')}</small>
         </div>
         <div class="form-check mb-2">
           <input class="form-check-input" type="checkbox" id="track-attendance" bind:checked={trackAttendance} />
-          <label class="form-check-label" for="track-attendance">Record attendance</label>
-          <small class="text-muted d-block">Allows you to record who attends each session. Visible only to members.</small>
+          <label class="form-check-label" for="track-attendance">{t('Record attendance')}</label>
+          <small class="text-muted d-block">{t('Allows you to record who attends each session. Visible only to members.')}</small>
         </div>
         <div class="form-check">
           <input
@@ -786,30 +810,30 @@
             bind:checked={trackSetStarters}
             disabled={!trackAttendance}
           />
-          <label class="form-check-label" for="track-set-starters">Record set starters</label>
+          <label class="form-check-label" for="track-set-starters">{t('Record set starters')}</label>
           <small class="text-muted d-block">
-            Allows you to record who started each set. Visible only to members.{#if !trackAttendance} Requires attendance.{/if}
+            {t('Allows you to record who started each set. Visible only to members.')}{#if !trackAttendance} {t('Requires attendance.')}{/if}
           </small>
         </div>
       </div>
     </div>
 
     <div class="mb-3">
-      <label for="comments" class="form-label">Comments</label>
+      <label for="comments" class="form-label">{t('Comments')}</label>
       <textarea class="form-control" id="comments" rows="4" bind:value={comments}></textarea>
     </div>
 
-    <button type="submit" class="btn btn-primary" disabled={savingDetails}>{savingDetails ? 'Saving…' : 'Save Changes'}</button>
+    <button type="submit" class="btn btn-primary" disabled={savingDetails}>{savingDetails ? t('Saving…') : t('Save Changes')}</button>
   </form>
 
   {#if festival && thisYear}
     <div class="copy-year-entry" id="copy-year-entry">
       <p>
-        This is <a href="/sessions/{festival.place.slug}">{festival.place.name}</a> {thisYear.year}.
-        A new year starts from this one's venue, timezone, settings and admins.
+        {t('This is')} <a href="/sessions/{festival.place.slug}">{festival.place.name}</a> {thisYear.year}.
+        {t("A new year starts from this one's venue, timezone, settings and admins.")}
       </p>
       <button type="button" class="btn btn-outline-primary" id="copy-year-btn" onclick={() => (copyYearOpen = true)}>
-        Copy to a new year
+        {t('Copy to a new year')}
       </button>
     </div>
     <CopyYearSheet bind:open={copyYearOpen} {festival} source={thisYear} />
@@ -819,24 +843,24 @@
 <!-- Termination Date Sheet: a Sheet (not a Dialog) because the date field can
      fail validation and must keep the form open with the inline error; the
      destructive commit is an explicit verb in the footer. -->
-<Sheet bind:open={terminationModalOpen} title="Set Session End Date">
-  <p class="mb-3">What was the last date of the session?</p>
+<Sheet bind:open={terminationModalOpen} title={t('Set Session End Date')}>
+  <p class="mb-3">{t('What was the last date of the session?')}</p>
   <div class="mb-3">
-    <label for="modal-termination-date" class="form-label">Last Session Date</label>
+    <label for="modal-termination-date" class="form-label">{t('Last Session Date')}</label>
     <input type="date" class="form-control" id="modal-termination-date" bind:value={modalTerminationDate} required />
   </div>
   <div id="modal-error-message" class="alert alert-danger" style:display={modalError ? 'block' : 'none'}>{modalError}</div>
   {#snippet footer()}
     <div style="text-align: right;">
-      <button type="button" class="btn btn-danger" id="save-termination-date" onclick={saveTerminationDate} disabled={terminating}>{terminating ? 'Terminating…' : 'Terminate session'}</button>
+      <button type="button" class="btn btn-danger" id="save-termination-date" onclick={saveTerminationDate} disabled={terminating}>{terminating ? t('Terminating…') : t('Terminate session')}</button>
     </div>
   {/snippet}
 </Sheet>
 
 <Dialog
   bind:open={reactivateConfirmOpen}
-  title="Reactivate this session?"
-  description="This will remove the termination date."
-  confirmLabel="Reactivate session"
-  busyLabel="Reactivating…"
+  title={t('Reactivate this session?')}
+  description={t('This will remove the termination date.')}
+  confirmLabel={t('Reactivate session')}
+  busyLabel={t('Reactivating…')}
   onConfirm={reactivateSession} />

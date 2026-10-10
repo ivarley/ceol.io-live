@@ -1,4 +1,5 @@
 <script>
+  // i18n-converted
   /**
    * The People tab — this session's roster (spec 034).
    *
@@ -18,9 +19,10 @@
    */
   import { untrack } from 'svelte'
   import { SvelteSet } from 'svelte/reactivity'
-  import { Chip, LoadError, PersonPicker, Row, SearchField, Seg, Sheet, Toolbar, toast, toastFailure, ServerError } from '../lib/index.js'
+  import { Chip, LoadError, PersonPicker, Row, SearchField, Seg, Sheet, Toolbar, toast, ServerError, t, tn, instrumentName, formatDate } from '../lib/index.js'
+  import { toastFailed } from './failure.js'
   import { normalizeQuotes } from '../shared/parse.js'
-  import { filterPeople } from './logic.js'
+  import { filterPeople, sortPeople, PEOPLE_SORT_DEFAULT_DIR } from './logic.js'
 
   let {
     active,
@@ -43,14 +45,46 @@
   let currentPeopleFilter = $state('members') // 'members' | 'visitors' | 'archived'
   let searchText = $state('')
   let filterOpen = $state(false) // the toolbar's filter panel
+  // Regulars is the order the server sends; the other two are re-sorts of it. Without
+  // attendance there is nothing to sort by but the name, so the Sort row goes.
+  const DEFAULT_SORT = { type: 'regular', dir: 'desc' }
+  let sort = $state({ ...DEFAULT_SORT })
 
   const searchQuery = $derived(normalizeQuotes(searchText.toLowerCase().trim()))
-  const filteredPeople = $derived(filterPeople(peopleData, currentPeopleFilter, searchQuery))
+  const filteredPeople = $derived(
+    sortPeople(filterPeople(peopleData, currentPeopleFilter, searchQuery), trackAttendance ? sort : { type: 'name', dir: 'asc' })
+  )
+  const sortIsDefault = $derived(sort.type === DEFAULT_SORT.type && sort.dir === DEFAULT_SORT.dir)
+  const activeFilterCount = $derived(
+    (currentPeopleFilter === FILTERS[0].id ? 0 : 1) + (trackAttendance && !sortIsDefault ? 1 : 0)
+  )
+
+  const SORTS = [
+    { id: 'regular', label: t('Regulars') },
+    { id: 'last', label: t('Last here') },
+    { id: 'name', label: t('Name') },
+  ]
+
+  // A new mode starts the way it reads best (the most, the latest, A to Z).
+  function setSortMode(type) {
+    sort = type === sort.type ? sort : { type, dir: PEOPLE_SORT_DEFAULT_DIR[type] }
+  }
+
+  function clearFilters() {
+    currentPeopleFilter = FILTERS[0].id
+    sort = { ...DEFAULT_SORT }
+  }
+
+  // "Oct 1" this year, "Oct 1, 2025" before it.
+  function lastHere(date) {
+    const thisYear = date.slice(0, 4) === String(new Date().getFullYear())
+    return formatDate(date, thisYear ? { month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric', year: 'numeric' })
+  }
 
   const FILTERS = [
-    { id: 'members', label: 'Members' },
-    { id: 'visitors', label: 'Visitors' },
-    { id: 'archived', label: 'Archived' },
+    { id: 'members', label: t('Members') },
+    { id: 'visitors', label: t('Visitors') },
+    { id: 'archived', label: t('Archived') },
   ]
 
   // People an admin has yet to vouch for. Until they're confirmed they can't see anyone here.
@@ -117,7 +151,11 @@
       pickerOpen = false
       fetchPeople()
     } catch (e) {
-      toastFailure('add that person', e)
+      toastFailed(
+        e,
+        t("Couldn't add that person. Try again."),
+        t("Couldn't add that person. Check your connection and try again.")
+      )
     } finally {
       saving = false
     }
@@ -184,11 +222,28 @@
 
   const nameOf = (p) => `${p.first_name} ${p.last_name}`.trim()
 
-  const FIELD_WHAT = {
-    confirmed: 'change whether they are confirmed',
-    archived: 'change whether they are archived',
-    relationship: 'change their relationship to this session',
+  // What a failed save says: [the server explained it, it never got there].
+  const FIELD_FAILED = {
+    confirmed: () => [
+      t("Couldn't change whether they are confirmed. Try again."),
+      t("Couldn't change whether they are confirmed. Check your connection and try again."),
+    ],
+    archived: () => [
+      t("Couldn't change whether they are archived. Try again."),
+      t("Couldn't change whether they are archived. Check your connection and try again."),
+    ],
+    relationship: () => [
+      t("Couldn't change their relationship to this session. Try again."),
+      t("Couldn't change their relationship to this session. Check your connection and try again."),
+    ],
   }
+  const fieldFailed = (field) =>
+    FIELD_FAILED[field]
+      ? FIELD_FAILED[field]()
+      : [
+          t("Couldn't save that change. Try again."),
+          t("Couldn't save that change. Check your connection and try again."),
+        ]
 
   async function setField(personId, field, value) {
     if (detailBusy) return false
@@ -208,7 +263,7 @@
       )
       return true
     } catch (e) {
-      toastFailure(FIELD_WHAT[field] || 'save that change', e)
+      toastFailed(e, ...fieldFailed(field))
       return false
     } finally {
       detailBusy = false
@@ -222,8 +277,8 @@
     if (await setField(detailRow.person_id, 'confirmed', next)) {
       toast(
         next
-          ? `${nameOf(detailRow)} can now see this session's people and attendance.`
-          : `${nameOf(detailRow)} can no longer see this session's people.`,
+          ? t("{name} can now see this session's people and attendance.", { name: nameOf(detailRow) })
+          : t("{name} can no longer see this session's people.", { name: nameOf(detailRow) }),
         'success'
       )
     }
@@ -244,8 +299,8 @@
   }
 
   const RELATIONSHIPS = [
-    { id: 'member', label: 'Member' },
-    { id: 'visitor', label: 'Visitor' },
+    { id: 'member', label: t('Member') },
+    { id: 'visitor', label: t('Visitor') },
   ]
 
   // ---- deep link ---------------------------------------------------------------
@@ -268,9 +323,10 @@
         toolbarClass="filter-top-row"
         buttonClass="filter-panel-toggle"
         bind:open={filterOpen}
-        activeCount={currentPeopleFilter === FILTERS[0].id ? 0 : 1}
+        activeCount={activeFilterCount}
+        onClear={activeFilterCount > 0 ? clearFilters : null}
         addId="add-person-btn"
-        addTitle="Add someone to this session"
+        addTitle={t('Add someone to this session')}
         onAdd={openAddPerson}>
         {#snippet search()}
           <SearchField
@@ -279,18 +335,48 @@
             inputClass="filter-search-input"
             wrapperClass="people-search-wrap filter-search-wrap"
             styled={false}
-            placeholder="Search people..." />
+            placeholder={t('Search people...')} />
         {/snippet}
         {#snippet filter()}
-          <Seg
-            options={FILTERS}
-            value={currentPeopleFilter}
-            onSelect={(id) => (currentPeopleFilter = id)}
-            idAttr="data-people-filter"
-            styled={false}
-            segClass="filter-button-group"
-            optClass="filter-sort-btn"
-            aria-label="Filter people" />
+          <!-- Labelled rows, in the order the app's sheet has them: who, then the order. -->
+          <div class="people-pane">
+            <div class="people-pane-row">
+              <span class="people-pane-label" id="people-show-label">{t('Show')}</span>
+              <Seg
+                options={FILTERS}
+                value={currentPeopleFilter}
+                onSelect={(id) => (currentPeopleFilter = id)}
+                idAttr="data-people-filter"
+                styled={false}
+                segClass="filter-button-group"
+                optClass="filter-sort-btn"
+                aria-labelledby="people-show-label" />
+            </div>
+            {#if trackAttendance}
+              <div class="people-pane-row">
+                <span class="people-pane-label" id="people-sort-label">{t('Sort')}</span>
+                <div class="people-pane-sort">
+                  <Seg
+                    options={SORTS}
+                    value={sort.type}
+                    onSelect={setSortMode}
+                    idAttr="data-people-sort"
+                    styled={false}
+                    segClass="filter-button-group"
+                    optClass="filter-sort-btn"
+                    aria-labelledby="people-sort-label" />
+                  <button
+                    id="people-sort-direction"
+                    class="filter-sort-direction-btn"
+                    title={t('Toggle sort direction')}
+                    aria-label={sort.dir === 'desc' ? t('Sorting downward') : t('Sorting upward')}
+                    onclick={() => (sort = { ...sort, dir: sort.dir === 'asc' ? 'desc' : 'asc' })}>
+                    {sort.dir === 'desc' ? '↓' : '↑'}
+                  </button>
+                </div>
+              </div>
+            {/if}
+          </div>
         {/snippet}
       </Toolbar>
     </div>
@@ -299,35 +385,37 @@
       <!-- Confirming is the ONLY way people-visibility is granted, so an admin needs to know
            someone is waiting on it. -->
       <p class="people-nudge">
-        {awaitingConfirmation.length}
-        {awaitingConfirmation.length === 1 ? 'person has' : 'people have'} joined and can't see
-        who plays here yet. Open them to confirm.
+        {tn(
+          awaitingConfirmation.length,
+          "{n} person has joined and can't see who plays here yet. Open them to confirm.",
+          "{n} people have joined and can't see who plays here yet. Open them to confirm."
+        )}
       </p>
     {/if}
 
     <div class="people-list" id="people-list">
       {#if !peopleLoaded}
         <div style="padding: 40px 20px; text-align: center; color: var(--text-muted, #6c757d);">
-          <i class="loading-dots">Loading people...</i>
+          <i class="loading-dots">{t('Loading people...')}</i>
         </div>
       {:else if peopleError}
-        <LoadError id="people-load-error" what="this session's people" onRetry={fetchPeople} retrying={peopleRetrying} />
+        <LoadError id="people-load-error" message={t("Couldn't load this session's people.")} onRetry={fetchPeople} retrying={peopleRetrying} />
       {:else if filteredPeople.length === 0}
         <div style="padding: 40px 20px; text-align: center; color: var(--text-muted, #6c757d);">
           <p>
             {#if searchQuery}
-              No people found matching your search
+              {t('No people found matching your search')}
             {:else if currentPeopleFilter === 'visitors'}
-              No visitors to this session yet
+              {t('No visitors to this session yet')}
             {:else if currentPeopleFilter === 'archived'}
-              Nobody archived
+              {t('Nobody archived')}
             {:else}
-              No people in this session yet
+              {t('No people in this session yet')}
             {/if}
           </p>
           {#if searchQuery}
             <button class="people-empty-add" onclick={openAddPerson}>
-              Add Someone To This Session
+              {t('Add Someone To This Session')}
             </button>
           {/if}
         </div>
@@ -343,8 +431,13 @@
             rowClass="person-row{person.archived ? ' archived' : ''}"
             onclick={() => showPersonDetail(person.person_id)}>
             {#snippet lead()}
-              <div class="person-icon {person.has_user_account ? 'has-account' : 'no-account'}">
-                <i class="fa fa-user-circle"></i>
+              <!-- Coloured when they're on Ceol: only they can be confirmed, or have
+                   tunes in common with you. -->
+              <div
+                class="person-icon {person.has_user_account ? 'has-account' : 'no-account'}"
+                title={person.has_user_account ? t('On Ceol') : t('Not on Ceol')}>
+                <i class="fa fa-user-circle" aria-hidden="true"></i>
+                <span class="sr-only">{person.has_user_account ? t('On Ceol') : t('Not on Ceol')}</span>
               </div>
             {/snippet}
             {#snippet body()}
@@ -355,25 +448,30 @@
                 {#if person.relationship === 'visitor' || person.archived || (!person.confirmed && person.has_user_account)}
                   <div class="person-badges">
                     {#if person.relationship === 'visitor'}
-                      <Chip label="Visitor" variant="warning" />
+                      <Chip label={t('Visitor')} variant="warning" />
                     {/if}
                     {#if person.archived}
-                      <Chip label="Archived" />
+                      <Chip label={t('Archived')} />
                     {/if}
                     {#if !person.confirmed && person.has_user_account}
-                      <Chip label="Unconfirmed" variant="warning" title="Can't see this session's people yet" />
+                      <Chip label={t('Unconfirmed')} variant="warning" title={t("Can't see this session's people yet")} />
                     {/if}
                   </div>
                 {/if}
                 <div class="person-instruments">
-                  {person.instruments && person.instruments.length > 0 ? person.instruments.join(', ') : 'No instruments listed'}
+                  {person.instruments && person.instruments.length > 0 ? person.instruments.map(instrumentName).join(', ') : t('No instruments listed')}
                 </div>
               </div>
             {/snippet}
             {#snippet trailing()}
               {#if trackAttendance}
                 <div class="person-meta">
-                  <Chip label={String(person.attendance_count || 0)} styled={false} chipClass="person-attendance-badge" title="Nights attended" />
+                  <!-- Sorted by the last night, the row says which night it was. -->
+                  {#if sort.type === 'last'}
+                    <span class="person-last-here" title={t('Last here')}>{person.last_attended ? lastHere(person.last_attended) : '—'}</span>
+                  {:else}
+                    <Chip label={String(person.attendance_count || 0)} styled={false} chipClass="person-attendance-badge" title={t('Nights attended')} />
+                  {/if}
                 </div>
               {/if}
             {/snippet}
@@ -388,25 +486,25 @@
     <div id="person-detail-content">
       {#if detailLoading}
         <div style="padding: 40px 20px; text-align: center;">
-          <i class="loading-dots">Loading...</i>
+          <i class="loading-dots">{t('Loading...')}</i>
         </div>
       {:else if detailFailed || !detailPerson}
         <LoadError
           id="person-detail-load-error"
-          what="this person's details"
+          message={t("Couldn't load this person's details.")}
           onRetry={detailPersonId ? () => loadPersonDetail(detailPersonId) : null}
           retrying={detailLoading} />
       {:else}
         {#if detailPerson.person_id === currentUserId}
-          <div style="margin-bottom: 16px;"><a href="/me" class="person-detail-link">View my profile</a></div>
+          <div style="margin-bottom: 16px;"><a href="/me" class="person-detail-link">{t('View my profile')}</a></div>
         {/if}
         {#if detailPerson.has_user_account && detailPerson.person_id !== currentUserId}
-          <div style="margin-bottom: 16px;"><a href="/me/and/{detailPerson.person_id}?from={sessionPath}" class="person-detail-link">Common Tunes?</a></div>
+          <div style="margin-bottom: 16px;"><a href="/me/and/{detailPerson.person_id}?from={sessionPath}" class="person-detail-link">{t('Tunes in common')}</a></div>
         {/if}
 
         {#if detailRow && (isSessionAdmin || detailPerson.person_id === currentUserId)}
           <div class="person-detail-section">
-            <h3>Relationship to this session</h3>
+            <h3>{t('Relationship to this session')}</h3>
             <Seg
               options={RELATIONSHIPS}
               value={detailRow.relationship}
@@ -414,11 +512,11 @@
               idAttr="data-relationship" />
             <p class="pd-hint">
               {#if detailBusyField === 'relationship'}
-                Saving…
+                {t('Saving…')}
               {:else if detailRow.relationship === 'visitor'}
-                Came here, but this isn't one of their sessions.
+                {t("Came here, but this isn't one of their sessions.")}
               {:else}
-                This is one of their sessions — its tunes count towards their stats.
+                {t('This is one of their sessions — its tunes count towards their stats.')}
               {/if}
             </p>
           </div>
@@ -426,63 +524,61 @@
 
         {#if detailRow && isSessionAdmin}
           <div class="person-detail-section">
-            <h3>Session admin</h3>
+            <h3>{t('Session admin')}</h3>
             <!-- The copy has to say what confirming DOES, at the point of click. A bare
                  "Confirmed" toggle would be an admin handing over the roster without
                  realising it. -->
             <button class="pd-action" disabled={detailBusy} onclick={toggleConfirmed}>
               {#if detailBusyField === 'confirmed'}
-                Saving…
+                {t('Saving…')}
               {:else if detailRow.confirmed}
-                Un-confirm {nameOf(detailPerson)} — they'll no longer see this session's
-                people list and attendance records
+                {t("Un-confirm {name} — they'll no longer see this session's people list and attendance records", { name: nameOf(detailPerson) })}
               {:else}
-                Confirm {nameOf(detailPerson)} — they'll be able to see this session's people
-                list and attendance records
+                {t("Confirm {name} — they'll be able to see this session's people list and attendance records", { name: nameOf(detailPerson) })}
               {/if}
             </button>
             <button class="pd-action" disabled={detailBusy} onclick={toggleArchived}>
               {#if detailBusyField === 'archived'}
-                Saving…
+                {t('Saving…')}
               {:else if detailRow.archived}
-                Restore {nameOf(detailPerson)} to the roster
+                {t('Restore {name} to the roster', { name: nameOf(detailPerson) })}
               {:else}
-                Archive {nameOf(detailPerson)} — hide them from lists (still findable by name)
+                {t('Archive {name} — hide them from lists (still findable by name)', { name: nameOf(detailPerson) })}
               {/if}
             </button>
           </div>
         {/if}
 
         <div class="person-detail-location">
-          {locationStringOf(detailPerson).length > 0 ? locationStringOf(detailPerson).join(', ') : 'No location specified'}
+          {locationStringOf(detailPerson).length > 0 ? locationStringOf(detailPerson).join(', ') : t('No location specified')}
         </div>
         <div class="person-detail-section">
-          <h3>TheSession.org</h3>
+          <h3>{'TheSession.org' /* a name, not translated */}</h3>
           {#if detailPerson.thesession_user_id}
-            <a href="https://thesession.org/members/{detailPerson.thesession_user_id}" target="_blank" class="person-detail-link">View on TheSession.org</a>
+            <a href="https://thesession.org/members/{detailPerson.thesession_user_id}" target="_blank" class="person-detail-link">{t('View on TheSession.org')}</a>
           {:else}
-            <span style="color: var(--text-muted);">Not linked</span>
+            <span style="color: var(--text-muted);">{t('Not linked')}</span>
           {/if}
         </div>
         <div class="person-detail-section">
-          <h3>Instruments</h3>
+          <h3>{t('Instruments')}</h3>
           {#if detailPerson.instruments && detailPerson.instruments.length > 0}
             <div class="person-instruments-list">
               {#each detailPerson.instruments as inst (inst)}
-                <Chip label={inst} styled={false} chipClass="person-instrument-badge" />
+                <Chip label={instrumentName(inst)} styled={false} chipClass="person-instrument-badge" />
               {/each}
             </div>
           {:else}
-            <span style="color: var(--text-muted);">No instruments listed</span>
+            <span style="color: var(--text-muted);">{t('No instruments listed')}</span>
           {/if}
         </div>
         {#if trackAttendance}
         <div class="person-detail-section">
-          <h3>Sessions Attended</h3>
+          <h3>{t('Sessions Attended')}</h3>
           {#if detailPerson.attended_instances && detailPerson.attended_instances.length > 0}
             <table class="attendance-table">
               <thead>
-                <tr><th>Date</th></tr>
+                <tr><th>{t('Date')}</th></tr>
               </thead>
               <tbody>
                 <!-- Keyed by instance id, not date: a session may legitimately run
@@ -500,7 +596,7 @@
               </tbody>
             </table>
           {:else}
-            <p style="color: var(--text-muted); margin-top: 12px;">No sessions attended yet</p>
+            <p style="color: var(--text-muted); margin-top: 12px;">{t('No sessions attended yet')}</p>
           {/if}
         </div>
         {/if}
@@ -517,7 +613,7 @@
     bind:open={pickerOpen}
     scope="session"
     mode="attendance"
-    title="Add someone to this session"
+    title={t('Add someone to this session')}
     people={peopleData}
     {canonicalInstruments}
     busy={saving}
@@ -536,6 +632,23 @@
     font-size: 0.86rem;
   }
   .person-row.archived { opacity: 0.55; }
+  .people-pane { display: flex; flex-direction: column; gap: 10px; }
+  .people-pane-row { display: flex; flex-direction: column; gap: 6px; }
+  .people-pane-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .people-pane-sort { display: flex; gap: 8px; align-items: stretch; }
+  .people-pane-sort :global(.filter-button-group) { flex: 1; }
+  .people-pane :global(.filter-button-group .filter-sort-btn) { flex: 1; }
+  .person-last-here { font-size: 0.86rem; color: var(--text-muted); white-space: nowrap; }
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+  }
   .person-badges { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 2px; }
   .pd-hint { font-size: 0.82rem; color: var(--text-muted, #6c757d); margin: 8px 0 0; }
   .pd-action {

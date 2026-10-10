@@ -1,4 +1,5 @@
 <script>
+  // i18n-converted
   import Chevron from './Chevron.svelte'
   /**
    * PersonPicker (spec 034) — the ONE flow for finding and adding a person to a session.
@@ -34,6 +35,7 @@
   import List from './List.svelte'
   import Chip from './Chip.svelte'
   import { pickerTiers, splitName } from '../people.js'
+  import { t, instrumentName } from './i18n/index.js'
 
   let {
     open = $bindable(false),
@@ -60,7 +62,7 @@
   let newInstruments = $state([])
   let newOther = $state('')
 
-  const heading = $derived(title || (mode === 'starter' ? 'Who started this set?' : 'Attendance'))
+  const heading = $derived(title || (mode === 'starter' ? t('Who started this set?') : t('Attendance')))
 
   const q = $derived(query.trim().toLowerCase())
 
@@ -77,18 +79,18 @@
     const push = (rows, tier, label) => {
       rows.forEach((p, i) => out.push({ ...p, _tier: tier, _label: i === 0 ? label : null }))
     }
-    const t = pickerTiers(people, query)
+    const tiers = pickerTiers(people, query)
     if (scope === 'instance') {
-      push(t.here, 'here', 'Checked in')
-      push(t.roster, 'roster', 'Not checked in')
-      push(t.archived, 'archived', 'Archived')
+      push(tiers.here, 'here', t('Checked in'))
+      push(tiers.roster, 'roster', t('Not checked in'))
+      push(tiers.archived, 'archived', t('Archived'))
     } else {
       // Session scope has no check-ins: everyone visible, in the server's order, split
       // only by archived.
-      const shown = new Set([...t.here, ...t.roster, ...t.archived])
+      const shown = new Set([...tiers.here, ...tiers.roster, ...tiers.archived])
       const visible = people.filter((p) => shown.has(p))
       push(visible.filter((p) => !p.archived), 'roster', null)
-      push(visible.filter((p) => p.archived), 'archived', 'Archived')
+      push(visible.filter((p) => p.archived), 'archived', t('Archived'))
     }
     return out
   })
@@ -163,30 +165,30 @@
 <!-- compact: on a phone this is a card, not the whole screen. It is a list you
      consult — who is here — and taking the screen for it buries the log or the drawer
      you opened it from. Desktop keeps the docked pane. -->
-<Sheet bind:open title={heading} desktop="dock" compact onCancel={close} doneLabel="Done" onDone={close}>
+<Sheet bind:open title={heading} desktop="dock" compact onCancel={close} doneLabel={t('Done')} onDone={close}>
   {#if showCreate}
     <div class="pp-create">
-      <button class="pp-back" onclick={resetCreate}><Chevron dir="left" size={14} /> Back to list</button>
+      <button class="pp-back" onclick={resetCreate}><Chevron dir="left" size={14} /> {t('Back to list')}</button>
       <label class="pp-field">
-        <span>First name</span>
-        <input bind:value={newFirst} placeholder="First name" />
+        <span>{t('First name')}</span>
+        <input bind:value={newFirst} placeholder={t('First name')} />
       </label>
       <label class="pp-field">
-        <span>Last name</span>
-        <input bind:value={newLast} placeholder="Last name" />
+        <span>{t('Last name')}</span>
+        <input bind:value={newLast} placeholder={t('Last name')} />
       </label>
       <label class="pp-field">
-        <span>Email <em>(optional)</em></span>
-        <input bind:value={newEmail} type="email" placeholder="name@example.com" />
+        <span>{t('Email')} <em>{t('(optional)')}</em></span>
+        <input bind:value={newEmail} type="email" placeholder={t('name@example.com')} />
       </label>
       <!-- Email is the ONLY cross-session identity key (spec 034): supply it and we attach the
            existing person instead of creating a duplicate. Names never match across sessions —
            two different John Smiths are two different people. -->
-      <p class="pp-hint">If they already have an account, their email links them to it.</p>
+      <p class="pp-hint">{t('If they already have an account, their email links them to it.')}</p>
 
       {#if canonicalInstruments.length}
         <div class="pp-instruments">
-          <span class="pp-field-label">Instruments <em>(optional)</em></span>
+          <span class="pp-field-label">{t('Instruments')} <em>{t('(optional)')}</em></span>
           <div class="pp-inst-grid">
             {#each canonicalInstruments as inst (inst)}
               <label class="pp-inst">
@@ -195,17 +197,17 @@
                   checked={newInstruments.includes(inst)}
                   onchange={() => toggleInstrument(inst)}
                 />
-                <span>{inst}</span>
+                <span>{instrumentName(inst)}</span>
               </label>
             {/each}
           </div>
           <div class="pp-other">
             <input
               bind:value={newOther}
-              placeholder="Other instrument…"
+              placeholder={t('Other instrument…')}
               onkeydown={(e) => e.key === 'Enter' && (e.preventDefault(), addOther())}
             />
-            <button onclick={addOther} disabled={!newOther.trim()}>Add</button>
+            <button onclick={addOther} disabled={!newOther.trim()}>{t('Add')}</button>
           </div>
           {#each newInstruments.filter((i) => !canonicalInstruments.some((c) => c.toLowerCase() === i.toLowerCase())) as extra (extra)}
             <Chip label={extra} dismissible onDismiss={() => toggleInstrument(extra)} />
@@ -216,12 +218,12 @@
   {:else}
     <SearchField
       bind:value={query}
-      placeholder={scope === 'session' ? 'Filter people…' : 'Filter or add someone…'}
+      placeholder={scope === 'session' ? t('Filter people…') : t('Filter or add someone…')}
       debounce={0}
     />
 
     {#if mode === 'starter' && currentStarterName && !q}
-      <button class="pp-clear" onclick={() => { onClear(); close() }}>— Clear —</button>
+      <button class="pp-clear" onclick={() => { onClear(); close() }}>— {t('Clear')} —</button>
     {/if}
 
     <List items={items} bind:active onSelect={pick}>
@@ -236,16 +238,16 @@
           <span class="pp-name">{item.display_name}</span>
 
           {#if item.archived}
-            <Chip label="archived" />
+            <Chip label={t('archived')} />
           {/if}
           {#if item.relationship === 'visitor'}
-            <Chip label="visitor" />
+            <Chip label={t('visitor')} />
           {/if}
           {#if item.attending && mode === 'attendance'}
             <button
               class="pp-out"
-              title="Check out"
-              aria-label={`Check out ${item.display_name}`}
+              title={t('Check out')}
+              aria-label={t('Check out {name}', { name: item.display_name })}
               onclick={(e) => { e.stopPropagation(); onCheckOut(item) }}
             >✕</button>
           {/if}
@@ -255,13 +257,13 @@
 
     {#if noMatches}
       <p class="pp-empty">
-        {#if q}No one here by that name.{:else}No one on this session's list yet.{/if}
+        {#if q}{t('No one here by that name.')}{:else}{t("No one on this session's list yet.")}{/if}
       </p>
     {/if}
 
     {#if canCreate}
       <button class="pp-add" onclick={openCreate} disabled={busy}>
-        ＋ Add <strong>{query.trim()}</strong>
+        ＋ {t('Add')} <strong>{query.trim()}</strong>
       </button>
     {/if}
   {/if}
@@ -269,7 +271,7 @@
   {#snippet footer()}
     {#if showCreate}
       <button class="pp-commit" onclick={submitCreate} disabled={!newFirst.trim() || busy}>
-        Add person
+        {t('Add person')}
       </button>
     {/if}
   {/snippet}

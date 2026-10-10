@@ -21,12 +21,18 @@ struct ContentView: View {
             if model.phase == .launching || !minimumSplashDone {
                 SplashView().transition(.opacity)
             } else {
-                switch model.phase {
-                case .upgradeRequired: UpgradeRequiredView().transition(.opacity)
-                case .signedOut: SignInView().transition(.opacity)
-                case .profileSetup: ProfileSetupView().transition(.opacity)
-                case .signedIn, .launching: MainTabView().transition(.opacity)
+                Group {
+                    switch model.phase {
+                    case .upgradeRequired: UpgradeRequiredView().transition(.opacity)
+                    case .signedOut: SignInView().transition(.opacity)
+                    case .profileSetup: ProfileSetupView().transition(.opacity)
+                    case .signedIn, .launching: MainTabView().transition(.opacity)
+                    }
                 }
+                // Spec 057: the id rebuilds the screens when the language changes, so text
+                // from tr() follows too. It sits here, not on the root, so the launch tasks
+                // below run once (rebuilding the root re-ran start() and re-opened links).
+                .id(model.language)
             }
         }
         .animation(.easeInOut(duration: 0.4), value: model.phase)
@@ -65,10 +71,21 @@ enum AppTab: Hashable, CaseIterable {
 
     var title: String {
         switch self {
-        case .home: "Home"
-        case .sessions: "Sessions"
-        case .tunes: "Tunes"
-        case .me: "Me"
+        case .home: tr("Home")
+        case .sessions: tr("Sessions")
+        case .tunes: tr("Tunes")
+        case .me: tr("Me")
+        }
+    }
+
+    /// The tab's accessibility identifier ("tab.me"): English whatever the language,
+    /// for the UI tests.
+    var identifier: String {
+        switch self {
+        case .home: "tab.home"
+        case .sessions: "tab.sessions"
+        case .tunes: "tab.tunes"
+        case .me: "tab.me"
         }
     }
 
@@ -161,7 +178,7 @@ struct CeolTabBar: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityIdentifier("tab.\(tab.title.lowercased())")
+                .accessibilityIdentifier(tab.identifier)
                 .accessibilityLabel(tab.title)
                 .accessibilityAddTraits(on ? [.isSelected, .isButton] : .isButton)
             }
@@ -204,7 +221,7 @@ struct SplashView: View {
                 .resizable()
                 .scaledToFit()
                 .frame(width: 220)
-                .accessibilityLabel("Ceol")
+                .accessibilityLabel(Text(verbatim: "Ceol"))
             Text("Trad Irish Session Tracker")
                 .font(.ceol(size: 17, weight: .medium))
                 .tracking(0.5)

@@ -159,6 +159,20 @@ class TestClickingTheLink:
         assert "/auth/setup-profile" in r.headers["Location"]
         assert client.get("/auth/setup-profile").status_code == 200
 
+    def test_the_account_takes_the_language_it_was_made_in(
+        self, mock_send, client, new_email
+    ):
+        """Spec 057: someone signing up with the switch on Gaeilge gets an Irish
+        account, so its emails are Irish from the first one."""
+        client.set_cookie("ceol_lang", "ga")
+        _enter_email(client, new_email)
+        token = _pending(new_email)[0][0]
+        client.get(f"/verify-email/{token}")
+        assert _q(
+            "SELECT language FROM user_account WHERE LOWER(user_email) = LOWER(%s)",
+            (new_email,),
+        ) == [("ga",)]
+
     def test_takes_over_an_accountless_person_with_that_email(
         self, mock_send, client, new_email
     ):

@@ -25,7 +25,7 @@ private func refusalMessage(_ error: Components.Responses._Error) -> String? {
     (try? error.body.json)?.message
 }
 
-private let offlineMessage = "Couldn't reach Ceol, so nothing changed. Check your connection and try again."
+private var offlineMessage: String { tr("Couldn't reach Ceol, so nothing changed. Check your connection and try again.") }
 
 // MARK: - A tune
 
@@ -56,7 +56,7 @@ struct AddSessionTuneSheet: View {
             } else {
                 DeepSearchSheet(
                     app: model, scope: .session(path), initialQuery: initialQuery, preferType: nil,
-                    title: "Add a tune to this session", allowAsIs: false, closesOnPick: false,
+                    title: tr("Add a tune to this session"), allowAsIs: false, closesOnPick: false,
                     pickedResult: { result = $0 },
                     onClose: { dismiss() }
                 ) { payload in
@@ -122,8 +122,8 @@ private struct AddSessionTuneForm: View {
                 VStack(alignment: .leading, spacing: 20) {
                     card
                     VStack(alignment: .leading, spacing: 6) {
-                        label("We call this (optional)")
-                        field("Local name for this tune, if different", text: $alias, id: "addSessionTune.alias")
+                        label(tr("We call this (optional)"))
+                        field(tr("Local name for this tune, if different"), text: $alias, id: "addSessionTune.alias")
                     }
                     VStack(alignment: .leading, spacing: 10) {
                         Button { withAnimation(.easeOut(duration: 0.15)) { advanced.toggle() } } label: {
@@ -173,8 +173,8 @@ private struct AddSessionTuneForm: View {
                             canRender: result?["can_render"] == true)
             }
             let meta = [
-                isRemote ? "importing from thesession.org" : nil,
-                result?["tunebook_count"]?.intValue.map { "\($0) tunebooks" },
+                isRemote ? tr("importing from thesession.org") : nil,
+                result?["tunebook_count"]?.intValue.map { tr("\($0) tunebooks") },
             ].compactMap { $0 }
             if !meta.isEmpty {
                 Text(meta.joined(separator: " · ")).font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
@@ -190,18 +190,18 @@ private struct AddSessionTuneForm: View {
 
     private var advancedFields: some View {
         VStack(alignment: .leading, spacing: 6) {
-            label("Setting (optional)")
-            field("Setting number or thesession.org URL", text: $setting, id: "addSessionTune.setting")
+            label(tr("Setting (optional)"))
+            field(tr("Setting number or thesession.org URL"), text: $setting, id: "addSessionTune.setting")
                 .onChange(of: setting) { settingError = nil }
-            help("If the session plays a specific setting of the tune, paste its URL or setting number.")
+            help(tr("If the session plays a specific setting of the tune, paste its URL or setting number."))
             if let settingError { Text(settingError).font(.ceol(size: 14)).foregroundStyle(CeolTokens.danger) }
-            label("Key (optional)").padding(.top, 8)
+            label(tr("Key (optional)")).padding(.top, 8)
             Menu {
                 Button("(not specified)") { key = "" }
                 ForEach(Self.keys, id: \.self) { k in Button(k) { key = k } }
             } label: {
                 HStack {
-                    Text(key.isEmpty ? "(not specified)" : key).font(.ceol(size: 16))
+                    Text(key.isEmpty ? tr("(not specified)") : key).font(.ceol(size: 16))
                         .foregroundStyle(key.isEmpty ? CeolTokens.textMuted : CeolTokens.textColor)
                     Spacer()
                     Image(systemName: "chevron.up.chevron.down").font(.system(size: 13)).foregroundStyle(CeolTokens.textMuted)
@@ -210,7 +210,7 @@ private struct AddSessionTuneForm: View {
                 .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(CeolTokens.borderColor, lineWidth: 1))
             }
             .accessibilityIdentifier("addSessionTune.key")
-            help("The key the session typically plays this tune in.")
+            help(tr("The key the session typically plays this tune in."))
         }
     }
 
@@ -246,7 +246,7 @@ private struct AddSessionTuneForm: View {
         failure = nil
         let s = settingID
         guard s.ok else {
-            settingError = "Enter a setting number or paste a thesession.org URL."
+            settingError = tr("Enter a setting number or paste a thesession.org URL.")
             advanced = true
             return
         }
@@ -265,8 +265,8 @@ private struct AddSessionTuneForm: View {
                 onAdded(r.tuneId, trimmedAlias.isEmpty ? name : trimmedAlias)
             case .default(let status, let error):
                 failure = status == 409
-                    ? "\(name) is already on this session's list."
-                    : refusalMessage(error) ?? "Couldn't add the tune to the session. Try again."
+                    ? tr("\(name) is already on this session's list.")
+                    : refusalMessage(error) ?? tr("Couldn't add the tune to the session. Try again.")
             }
         } catch {
             failure = offlineMessage
@@ -340,8 +340,8 @@ struct AddSessionPersonSheet: View {
                     ForEach(matches, id: \.personId) { p in
                         HStack {
                             Text(p.displayName).foregroundStyle(CeolTokens.textColor)
-                            if p.archived == true { Pill(text: "archived") }
-                            if p.relationship == "visitor" { Pill(text: "visitor") }
+                            if p.archived == true { Pill(text: tr("archived")) }
+                            if p.relationship == "visitor" { Pill(text: tr("visitor")) }
                         }
                         .listRowBackground(Color.clear)
                     }
@@ -375,7 +375,7 @@ struct AddSessionPersonSheet: View {
         case .ok(let ok):
             return .number(Double(try ok.body.json.personId))
         case .default(_, let error):
-            throw Refusal(errorDescription: refusalMessage(error) ?? "That person wasn't added. Try again.")
+            throw Refusal(errorDescription: refusalMessage(error) ?? tr("That person wasn't added. Try again."))
         }
     }
 }

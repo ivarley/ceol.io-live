@@ -977,7 +977,13 @@ main.wide .hx-drawer {
   border-radius: 8px;
   font-size: 14px;
   cursor: pointer;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
 }
+.notice-text { flex: 1 1 auto; min-width: 0; }
+/* The whole notice is the tap target; the × just says so. */
+.notice-x { flex: 0 0 auto; font-size: 18px; line-height: 1; opacity: 0.8; }
 
 .error { color: #e0594b; font-size: 14px; }
 
@@ -2018,4 +2024,9 @@ main.wide .sidepane { grid-area: pane; overflow-y: auto; min-height: 0; }
   --hover-bg: #3d3d3d;
   --primary: #65b464;
   --text-muted: #9a9aa3;
+}
+
+/* Spec 057: Irish isn't title-cased; undo the chip's capitalize in Irish. */
+html[lang="ga"] .ls-chip {
+  text-transform: none;
 }

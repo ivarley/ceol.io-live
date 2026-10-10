@@ -19,6 +19,10 @@ save_to_history, which would copy the private rows straight back into *_history.
 
 import logging
 
+from flask_babel import gettext as _
+
+# i18n-converted
+
 logger = logging.getLogger(__name__)
 
 
@@ -33,7 +37,14 @@ class AccountDeletionRefused(Exception):
 
 # Contact details and outside identities on the person row (and its history copies).
 # The name is not here: it is what keeps the roster entry meaningful.
-PRIVATE_PERSON_COLUMNS = ("email", "sms_number", "city", "state", "country", "thesession_user_id")
+PRIVATE_PERSON_COLUMNS = (
+    "email",
+    "sms_number",
+    "city",
+    "state",
+    "country",
+    "thesession_user_id",
+)
 
 
 def delete_account(cur, user_id):
@@ -54,12 +65,16 @@ def delete_account(cur, user_id):
     if is_system_admin:
         raise AccountDeletionRefused(
             "admin_account",
-            "A system admin account can't be deleted from here. Ask another admin to "
-            "remove your admin rights first.",
+            _(
+                "A system admin account can't be deleted from here. Ask another admin to "
+                "remove your admin rights first."
+            ),
         )
     # A former admin may still be the sender of record on update emails; that column is
     # NOT NULL, so the account cannot go without deciding who sent them. Refuse cleanly.
-    cur.execute("SELECT 1 FROM email_message WHERE sent_by_user_id = %s LIMIT 1", (user_id,))
+    cur.execute(
+        "SELECT 1 FROM email_message WHERE sent_by_user_id = %s LIMIT 1", (user_id,)
+    )
     if cur.fetchone():
         raise AccountDeletionRefused(
             "sent_update_emails",
@@ -80,14 +95,19 @@ def delete_account(cur, user_id):
         "last_modified_date = NOW() WHERE person_id = %s",
         (person_id,),
     )
-    cur.execute(f"UPDATE person_history SET {cleared} WHERE person_id = %s", (person_id,))
+    cur.execute(
+        f"UPDATE person_history SET {cleared} WHERE person_id = %s", (person_id,)
+    )
 
     # --- the login ---
     # Rows that reference the account by FK without a cascade, then the account and
     # its own history (usernames, emails, password hashes). user_session cascades.
     cur.execute("DELETE FROM email_message_recipient WHERE user_id = %s", (user_id,))
     cur.execute("DELETE FROM login_history WHERE user_id = %s", (user_id,))
-    cur.execute("UPDATE tune_merge_scan SET started_by_user_id = NULL WHERE started_by_user_id = %s", (user_id,))
+    cur.execute(
+        "UPDATE tune_merge_scan SET started_by_user_id = NULL WHERE started_by_user_id = %s",
+        (user_id,),
+    )
     cur.execute("DELETE FROM user_account_history WHERE user_id = %s", (user_id,))
     cur.execute("DELETE FROM user_account WHERE user_id = %s", (user_id,))
 

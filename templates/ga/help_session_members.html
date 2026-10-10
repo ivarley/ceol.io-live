@@ -1,0 +1,63 @@
+{% extends "help_base.html" %}
+
+{% set page_title = "Daoine an tseisiúin" %}
+{% set page_description = "Baill, cuairteoirí agus tinreamh ag seisiúin" %}
+{% set active_page = "members" %}
+
+{% block help_content %}
+<h1>Daoine an tseisiúin</h1>
+
+<p>Coinníonn an cluaisín <strong>Daoine</strong> cuntas ar na daoine a sheinneann ag do sheisiún. Ní
+gá do dhuine cuntas a bheith aige ar an suíomh seo le bheith liostaithe — is féidir le bainisteoirí
+an tseisiúin aon duine a sheinneann ann a chur leis.</p>
+
+<h2>Baill agus cuairteoirí</h2>
+
+<p>Tá gaol ag gach duine ar rolla an tseisiúin leis an seisiún:</p>
+<ul>
+    <li><strong>Ball</strong> - Is ceann dá seisiúin féin é seo. Áirítear foinn na mball i
+        staitisticí pobail an tseisiúin, agus bíonn an seisiún ar a liosta "Mo sheisiúin".</li>
+    <li><strong>Cuairteoir</strong> - Sheinn siad anseo, ach ní ceann dá ngnáthsheisiúin
+        é.</li>
+</ul>
+
+<h2>Cé a fheiceann liosta na ndaoine</h2>
+
+<p>Tá na foinn agus na logálacha poiblí, ach <strong>níl na daoine</strong>. Níl an cluaisín Daoine
+ná na taifid tinrimh le feiceáil ach ag bainisteoirí an tseisiúin agus ag na daoine atá
+<strong>deimhnithe</strong> ag an seisiún. Ní fheiceann tú rolla seisiúin díreach toisc gur chláraigh
+tú leis — deimhníonn bainisteoir thú ar dtús (taispeántar daoine nua mar "Gan deimhniú" go dtí sin).
+Ar an gcaoi sin ní fheiceann ach na daoine a sheinneann le chéile i ndáiríre cé a bhí cén áit.</p>
+
+<p>Is féidir le seisiúin gnéithe na ndaoine a mhúchadh go hiomlán freisin: tá liosta na mball, an
+cuntas tinrimh, agus an cuntas ar thosaitheoirí sraithe roghnach, gach ceann acu, faoi stiúir
+bhainisteoirí an tseisiúin.</p>
+
+<h2>Tinreamh</h2>
+
+<p>Má choinníonn an seisiún cuntas tinrimh, taispeánann ró gach duine cé mhéad oíche a bhí siad i
+láthair, agus liostaíonn a mbileog sonraí na dátaí. Déantar daoine a mharcáil i láthair díreach sa
+<a href="/help/session-tracking/live-logger">logálaí beo</a> agus tú ag logáil — fiú duine nua a
+tháinig isteach díreach a chur leis. Nuair a bhíonn seisiún ar siúl, nuashonraíonn marcáil i láthair
+an táscaire "Ar siúl anois" freisin.</p>
+
+<h2>Cé a thosaigh cad</h2>
+
+<p>Is féidir le seisiúin cuntas a choinneáil ar cé a thosaigh gach sraith — bealach spraíúil le
+feiceáil cé a thugann na foinn éagsúla isteach. Socraítear é seo sa logálaí beo, sraith ar shraith
+nó trí roinnt sraitheanna a shannadh in éineacht.</p>
+
+<h2>Do bhainisteoirí seisiúin</h2>
+
+<p>Is féidir le bainisteoirí, ó bhileog sonraí duine:</p>
+<ul>
+    <li><strong>Daoine a chur leis</strong> - Rolla an tseisiúin a chuardach nó taifead duine úrnua
+        a chruthú (d'aon ghnó níl cuardach ginearálta daoine ann — ní féidir leat daoine ó sheisiúin
+        eile a bhrabhsáil)</li>
+    <li>Duine a <strong>dheimhniú</strong>, rud a thugann rochtain dó ar liosta na ndaoine agus ar an tinreamh</li>
+    <li>A <strong>ghaol</strong> leis an seisiún a shocrú (ball nó cuairteoir)</li>
+    <li>Duine a d'imigh a <strong>chartlannú</strong> — bíonn sé i bhfolach ón ngnáthliosta ach
+        coinnítear a stair, agus feiceann sé an seisiún mar a sheisiún féin fós</li>
+    <li><strong>Bainisteoir seisiúin</strong> a dhéanamh de bhaill eile</li>
+</ul>
+{% endblock %}

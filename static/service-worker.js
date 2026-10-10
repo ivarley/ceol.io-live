@@ -214,6 +214,9 @@ self.addEventListener('fetch', (event) => {
     // ...including its searches, which moved to /api/tunes/* scoped by ?instance=.
     if (url.pathname.startsWith('/api/tunes/') && url.searchParams.has('instance')) return
     if (url.pathname.startsWith('/live/')) return
+    // The offline bundle has its own copy (IndexedDB, static/js/offline_data.js) and its
+    // own version check; caching ~11 MB of it here too only spends storage.
+    if (url.pathname === '/api/offline/bundle') return
     if (url.pathname === '/logout') return
     // NOTE: /admin is intentionally NOT bypassed — admin navigations still go through
     // handleNav so they show the offline page (rather than a browser error) when

@@ -1,5 +1,7 @@
 <script>
+  // i18n-converted
   import { onDestroy } from 'svelte'
+  import { t } from './i18n/index.js'
 
   // SearchField (spec 035): debounced text input with a clear-×. THE search
   // input — every page filter box runs on it. No tune/thesession logic here,
@@ -13,7 +15,7 @@
   //    pass through to the <input> via ...rest.
   let {
     value = $bindable(''),
-    placeholder = 'Search…',
+    placeholder = t('Search…'),
     debounce = 300, // ms of idle before onSearch fires
     onSearch = () => {},
     styled = true, // false: behavior only, skin comes from the page
@@ -76,7 +78,7 @@
     onkeydown={onKey}
   />
   {#if value}
-    <button type="button" class="kit-x" aria-label="Clear search" onclick={clear}>&#215;</button>
+    <button type="button" class="kit-x" aria-label={t('Clear search')} onclick={clear}>&#215;</button>
   {/if}
 </div>
 

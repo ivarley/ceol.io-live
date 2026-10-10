@@ -1,3 +1,4 @@
+{# i18n-converted #}
 {% extends "base.html" %}
 
 {# Home (spec 052 §B8 Stage 4). Signed in, this is a thin shell: the payload below
@@ -69,8 +70,8 @@
         {% for category, message in messages %}
             <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible" role="alert" style="margin-bottom: 20px;">
                 {{ message }}
-                <button type="button" class="close" data-dismiss="alert" aria-label="Close" onclick="this.parentElement.style.display='none'">
-                    <span aria-hidden="true">&times;</span>
+                <button type="button" class="close" data-dismiss="alert" aria-label="{{ _('Close') }}" onclick="this.parentElement.style.display='none'">
+                    <span aria-hidden="true">×</span>
                 </button>
             </div>
         {% endfor %}
@@ -90,10 +91,11 @@
 {% else %}
 
 <div class="anon-hero">
-    <h2>Track your tunes. Log your sessions.</h2>
-    <p>Keep track of tunes you know or want to learn, see what's popular in different sessions, and log what you play at your session.</p>
-    <a href="/login" class="btn-login">Log In or Register</a>
-    <p class="anon-browse">Don't want an account? You can still <a href="/sessions">browse sessions</a>.</p>
+    <h2>{{ _('Track your tunes. Log your sessions.') }}</h2>
+    <p>{{ _("Keep track of tunes you know or want to learn, see what's popular in different sessions, and log what you play at your session.") }}</p>
+    <a href="/login" class="btn-login">{{ _('Log In or Register') }}</a>
+    {% set browse_link %}<a href="/sessions">{{ _('browse sessions') }}</a>{% endset %}
+    <p class="anon-browse">{{ _("Don't want an account? You can still %(link)s.", link=browse_link) }}</p>
 </div>
 
 {% endif %}

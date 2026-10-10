@@ -39,7 +39,7 @@ struct FestivalView: View {
                             Text(dates(start, y.terminationDate)).font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
                         }
                         Spacer(minLength: 6)
-                        Text(y.loggedInstances == 1 ? "1 session logged" : "\(y.loggedInstances) sessions logged")
+                        Text(y.loggedInstances == 1 ? tr("1 session logged") : tr("\(y.loggedInstances) sessions logged"))
                             .font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
                     }
                 }
@@ -51,9 +51,9 @@ struct FestivalView: View {
     }
 
     private func dates(_ start: String, _ end: String?) -> String {
-        let first = HomeRules.shortDate(start, currentYear: nil)
+        let first = SessionsL10n.shortDate(start)
         guard let end, end != start else { return first }
-        return "\(first) – \(HomeRules.shortDate(end, currentYear: nil))"
+        return "\(first) – \(SessionsL10n.shortDate(end))"
     }
 
     private func load() async {

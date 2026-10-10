@@ -20,12 +20,15 @@ web (api_auth.is_native_client() false). A native caller gets a Bearer token —
 same user_session row a cookie session records — and never a Set-Cookie.
 """
 
+# i18n-converted
 import os
 import re
 from datetime import timedelta
 
 import bcrypt
 from flask import flash, jsonify, request, session, url_for
+from flask_babel import gettext as _
+import i18n
 from flask_login import current_user, login_user, logout_user
 
 from api_auth import (
@@ -73,6 +76,8 @@ def user_payload(user, *, profile_incomplete=None):
         "last_name": user.last_name,
         "is_system_admin": bool(user.is_system_admin),
         "timezone": user.timezone or "UTC",
+        # Spec 057: the interface language, 'en' or 'ga'.
+        "language": i18n.user_language(user),
         "email_verified": bool(user.email_verified),
         "has_password": bool(user.has_password()),
         "needs_profile_setup": bool(profile_incomplete),
@@ -168,7 +173,7 @@ def auth_exchange():
     data = request.get_json(silent=True) or {}
     token = (data.get("token") or "").strip()
     if not token:
-        return api_error("token is required", 400, "missing_token")
+        return api_error("token is required", 400, "missing_token")  # not-i18n
 
     ip_address, user_agent = request_client_info()
 
@@ -177,7 +182,9 @@ def auth_exchange():
     status, user_id = complete_pending_registration(token)
     if status == "account_exists":
         return api_error(
-            "There's already an account for this email address. Log in with it instead.",
+            _(
+                "There's already an account for this email address. Log in with it instead."
+            ),
             409,
             "account_exists",
         )
@@ -222,7 +229,7 @@ def auth_exchange():
                 failure_reason="INVALID_LOGIN_TOKEN",
             )
             return api_error(
-                "Invalid or expired link. Please request a new one.",
+                _("Invalid or expired link. Please request a new one."),
                 401,
                 "invalid_token",
             )
@@ -256,7 +263,9 @@ def auth_exchange():
 
     user = User.get_by_id(user_id)
     if not user or not user.is_active:
-        return api_error("This account has been deactivated.", 403, "account_inactive")
+        return api_error(
+            _("This account has been deactivated."), 403, "account_inactive"
+        )
     return jsonify(establish_session(user, method))
 
 
@@ -270,11 +279,13 @@ def auth_resend_verification():
     data = request.get_json(silent=True) or {}
     email = (data.get("email") or "").strip().lower()
     if not email:
-        return api_error("Email address is required", 400, "missing_email")
+        return api_error(_("Email address is required"), 400, "missing_email")
 
     generic = {
         "success": True,
-        "message": "If an unverified account with that email exists, a verification email has been sent.",
+        "message": _(
+            "If an unverified account with that email exists, a verification email has been sent."
+        ),
     }
     conn = get_db_connection()
     try:
@@ -369,7 +380,7 @@ def auth_set_password():
     password = data.get("password") or ""
     if len(password) < 8:
         return api_error(
-            "Password must be at least 8 characters.", 400, "password_too_short"
+            _("Password must be at least 8 characters."), 400, "password_too_short"
         )
     hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
     conn = get_db_connection()
@@ -427,11 +438,13 @@ def delete_account_api():
     expected = (current_user.email or current_user.username or "").strip().lower()
     if not typed or typed != expected:
         return api_error(
-            "Type your account's email address to confirm.",
+            _("Type your account's email address to confirm."),
             400,
             code="confirmation_mismatch",
         )
 
+    # Worded now, in their language, while the account still says what it is.
+    notice = _("Your account has been deleted.")
     user_id = current_user.user_id
     conn = get_db_connection()
     try:
@@ -443,7 +456,7 @@ def delete_account_api():
             return api_error(e.message, 403, code=e.code)
         except LookupError:
             conn.rollback()
-            return api_error("Account not found", 404)
+            return api_error(_("Account not found"), 404)
         conn.commit()
     finally:
         conn.close()
@@ -452,7 +465,7 @@ def delete_account_api():
     # and Flask-Login's cached user. The notice shows on the next page the web loads.
     session.clear()
     logout_user()
-    flash("Your account has been deleted.", "success")
+    flash(notice, "success")
     return jsonify({"success": True})
 
 
@@ -522,7 +535,7 @@ def _load_account(cur, user_id):
     cur.execute(
         """
         SELECT username, user_email, email_verified, hashed_password IS NOT NULL,
-               receive_update_emails, created_date
+               receive_update_emails, created_date, language
         FROM user_account WHERE user_id = %s
         """,
         (user_id,),
@@ -541,6 +554,7 @@ def _load_account(cur, user_id):
         "has_password": bool(row[3]),
         "receive_update_emails": bool(row[4]),
         "created_at": row[5].isoformat() if row[5] else None,
+        "language": row[6] or "en",
         "last_login": last.isoformat() if last else None,
     }
 
@@ -578,7 +592,7 @@ def me_profile():
 
         instruments = data.get("instruments")
         if instruments is not None and not isinstance(instruments, list):
-            return api_error("instruments must be a list", 400, "invalid")
+            return api_error("instruments must be a list", 400, "invalid")  # not-i18n
         timezone = s("timezone") or None
 
         # The rest of /me (spec 052): each is changed only when the request names it,
@@ -592,7 +606,7 @@ def me_profile():
                 text = match.group(1)
             if text and not text.isdigit():
                 return api_error(
-                    "Enter your thesession.org member number or profile link",
+                    _("Enter your thesession.org member number or profile link"),
                     400,
                     "invalid_thesession_user_id",
                 )
@@ -601,19 +615,28 @@ def me_profile():
         if "username" in data:
             username = s("username")
             if not username:
-                return api_error("Username can't be empty", 400, "invalid_username")
+                return api_error(_("Username can't be empty"), 400, "invalid_username")
             cur.execute(
                 "SELECT 1 FROM user_account WHERE LOWER(username) = LOWER(%s) AND user_id != %s",
                 (username, current_user.user_id),
             )
             if cur.fetchone():
-                return api_error("That username is taken", 400, "username_taken")
+                return api_error(_("That username is taken"), 400, "username_taken")
+        language = data.get("language")
+        if language is not None and language not in i18n.LANGUAGES:
+            return api_error(
+                "language must be 'en' or 'ga'",  # not-i18n
+                400,
+                "invalid_language",
+            )
         receive_update_emails = data.get("receive_update_emails")
         if receive_update_emails is not None and not isinstance(
             receive_update_emails, bool
         ):
             return api_error(
-                "receive_update_emails must be true or false", 400, "invalid"
+                "receive_update_emails must be true or false",  # not-i18n
+                400,
+                "invalid",
             )
 
         save_to_history(
@@ -664,6 +687,9 @@ def me_profile():
                     current_user.person_id,
                 ),
             )
+        if language is not None:
+            i18n.save_user_language(current_user.user_id, language)
+            current_user.language = language
         if username is not None or receive_update_emails is not None:
             save_to_history(
                 cur,
@@ -863,7 +889,7 @@ def resolve_path():
     """
     raw = (request.args.get("path") or "").strip()
     if not raw:
-        return api_error("path is required", 400, "missing_path")
+        return api_error("path is required", 400, "missing_path")  # not-i18n
     path = raw
     if "://" in path:
         path = path.split("://", 1)[1]
@@ -886,7 +912,7 @@ def resolve_path():
             )
             row = cur.fetchone()
             if not row:
-                return api_error("Not found", 404)
+                return api_error(_("Not found"), 404)
             return jsonify(
                 {
                     "success": True,
@@ -904,7 +930,7 @@ def resolve_path():
                 path = path.removesuffix(suffix)
                 break
         if not path:
-            return api_error("Not found", 404)
+            return api_error(_("Not found"), 404)
 
         # Spec 055 resolution, the same as web_routes.session_handler: exact path,
         # town/metro alias, path_redirect, then {path}/{date-or-id}. The payload
@@ -913,7 +939,7 @@ def resolve_path():
 
         resolved = places.resolve_session_path(cur, path)
         if resolved is None:
-            return api_error("Not found", 404)
+            return api_error(_("Not found"), 404)
         if resolved["kind"] == "place":
             # Spec 056: a festival answers with its years and the window rule's pick
             # (`current`, null when the picker applies); a town with just the place.
@@ -974,7 +1000,7 @@ def resolve_path():
             )
         row = cur.fetchone()
         if not row:
-            return api_error("Not found", 404)
+            return api_error(_("Not found"), 404)
         return jsonify(
             {
                 "success": True,
@@ -1002,7 +1028,11 @@ def auth_web_session():
     data = request.get_json(silent=True) or {}
     next_path = (data.get("next") or "/").strip()
     if not is_site_path(next_path):
-        return api_error("next must be a site-relative path", 400, "invalid_next")
+        return api_error(
+            "next must be a site-relative path",  # not-i18n
+            400,
+            "invalid_next",
+        )
 
     token = generate_login_token()
     expires = now_utc() + timedelta(minutes=WEB_SESSION_TOKEN_MINUTES)
@@ -1048,7 +1078,7 @@ def apple_app_site_association():
         a.strip() for a in os.environ.get("IOS_APP_IDS", "").split(",") if a.strip()
     ]
     if not app_ids:
-        return api_error("Not configured", 404, "not_configured")
+        return api_error("Not configured", 404, "not_configured")  # not-i18n
     body = {
         "applinks": {
             "apps": [],

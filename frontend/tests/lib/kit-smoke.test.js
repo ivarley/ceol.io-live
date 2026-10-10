@@ -31,7 +31,11 @@ const COMPONENTS = {
 
 describe('kit exports', () => {
   it('exports exactly the documented surface', () => {
-    expect(Object.keys(kit).sort()).toEqual([...Object.keys(COMPONENTS), 'toast', 'toastFailure', 'ServerError'].sort())
+    expect(Object.keys(kit).sort()).toEqual(
+      [...Object.keys(COMPONENTS), 'toast', 'toastFailure', 'ServerError',
+       // spec 057: the interface language
+       't', 'tn', 'tc', 'currentLang', 'LANGUAGE_NAMES', 'formatDate', 'formatNumber', 'tuneTypeName', 'instrumentName'].sort()
+    )
   })
 
   for (const [name, props] of Object.entries(COMPONENTS)) {

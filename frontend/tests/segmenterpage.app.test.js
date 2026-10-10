@@ -774,10 +774,10 @@ describe('phone layout', () => {
     return render(App, { props: { pageData } })
   }
 
-  it('shrinks both canvases by a quarter', () => {
+  it('shrinks both canvases to about half', () => {
     const { container } = phone()
-    expect(container.querySelector('.wf-detail canvas').style.height).toBe('126px')
-    expect(container.querySelector('.wf-overview canvas').style.height).toBe('42px')
+    expect(container.querySelector('.wf-detail canvas').style.height).toBe('92px')
+    expect(container.querySelector('.wf-overview canvas').style.height).toBe('28px')
   })
 
   it('keeps them full size on a desktop', () => {
@@ -823,12 +823,43 @@ describe('phone layout', () => {
     expect(inline.textContent).not.toContain('set 1')
   })
 
-  it('moves the encode switch into the header and shortens what shares the line', () => {
+  it('puts the header on one line: the playhead, the count and a button for the rest', () => {
     const { container } = phone()
-    expect(container.querySelector('.sg-progress .sg-opt-audio')).toBeTruthy()
-    expect(container.querySelector('.sg-opts .sg-opt-audio')).toBeNull()
-    expect(container.querySelector('.sg-progress').textContent).not.toContain('placed')
-    expect(container.querySelector('.sg-editlog').textContent.trim()).toBe('✎ Fix')
+    const bar = container.querySelector('.sg-bar')
+    expect(bar.querySelector('.sg-time')).toBeTruthy()
+    expect(bar.querySelector('.sg-count').textContent).not.toContain('placed')
+    // The clock has moved up into the bar, so it has no row of its own.
+    expect(container.querySelector('.sg-clock')).toBeNull()
+    // Everything that isn't marking waits behind the button.
+    expect(container.querySelector('h1')).toBeNull()
+    expect(container.querySelector('.sg-opts')).toBeNull()
+    expect(container.querySelector('.sg-opt-audio')).toBeNull()
+    expect(container.querySelector('.sg-editlog')).toBeNull()
+  })
+
+  it('opens the other controls from that button, and closes them again', async () => {
+    const { container } = phone()
+    const toggle = container.querySelector('.sg-more-toggle')
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+
+    await fireEvent.click(toggle)
+    const more = container.querySelector('.sg-more')
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(more.querySelector('h1')).toBeTruthy()
+    expect(more.querySelector('.sg-opts')).toBeTruthy()
+    expect(more.querySelector('.sg-opt-audio')).toBeTruthy()
+    expect(more.querySelector('.sg-editlog')).toBeTruthy()
+
+    await fireEvent.click(toggle)
+    expect(container.querySelector('.sg-more')).toBeNull()
+  })
+
+  it('keeps the full header on a desktop', () => {
+    const { container } = desktop()
+    expect(container.querySelector('.sg-bar')).toBeNull()
+    expect(container.querySelector('.sg-head h1')).toBeTruthy()
+    expect(container.querySelector('.sg-clock')).toBeTruthy()
+    expect(container.querySelector('.sg-opts .sg-opt-audio')).toBeTruthy()
   })
 
   it('follows a rotation or a resize without a reload', async () => {
@@ -1270,5 +1301,50 @@ describe('a link to a moment', () => {
     window.location.hash = '#t=3:30'
     window.dispatchEvent(new HashChangeEvent('hashchange'))
     await waitFor(() => expect(container.querySelector('.sg-time').textContent).toMatch(/^3:30/))
+  })
+})
+
+describe("a machine's guesses (spec 053)", () => {
+  const guessed = () => {
+    const p = payload()
+    p.tunes[0].confidence = 62
+    p.tunes[0].source = 'listen'
+    p.tunes[2].confidence = 91
+    p.tunes[2].source = 'listen'
+    return p
+  }
+  const reply = (body) => ({ ok: true, status: 200, json: async () => body })
+
+  it('shows how sure in bands of 10, highlights only the uncertain, and filters to them', async () => {
+    const p = guessed()
+    p.tunes[2].confidence = 99
+    const { container, getByText } = render(App, { props: { pageData: p } })
+    const conf = (id) => container.querySelector(`.tl-row[data-tune-id="${id}"] .tl-conf`)
+    expect(conf(1).textContent).toBe('60%')
+    expect(conf(1).classList.contains('is-uncertain')).toBe(true)
+    expect(container.querySelector('.tl-row[data-tune-id="1"] .tl-confirm')).toBeTruthy()
+    expect(conf(3).textContent).toBe('100%')
+    expect(conf(3).classList.contains('is-uncertain')).toBe(false)
+    expect(container.querySelector('.tl-row[data-tune-id="3"] .tl-confirm')).toBeNull()
+    expect(conf(2)).toBeNull() // a person's row
+    expect(getByText('1 tune needs a check')).toBeTruthy()
+    await fireEvent.click(container.querySelector('.sg-checks input'))
+    expect([...container.querySelectorAll('.tl-row')].map((r) => r.dataset.tuneId)).toEqual(['1'])
+  })
+
+  it('steps through the uncertain ones with N and confirms with C', async () => {
+    const p = guessed()
+    p.tunes[2].confidence = 74 // shown 70: uncertain too
+    const after = guessed()
+    after.tunes[2].confidence = 100
+    global.fetch = vi.fn(async () => reply({ success: true, tunes: after.tunes }))
+    const { container, getByText } = render(App, { props: { pageData: p } })
+    expect(getByText('2 tunes need a check')).toBeTruthy()
+    await fireEvent.keyDown(window, { key: 'n' }) // from the first tune, the next uncertain one is the third
+    expect(container.querySelector('.tl-row.is-cursor').dataset.tuneId).toBe('3')
+    await fireEvent.keyDown(window, { key: 'c' })
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledWith('/api/recordings/7/segments/3/confirm', expect.objectContaining({ method: 'POST' })))
+    await waitFor(() => expect(container.querySelector('.tl-row[data-tune-id="3"] .tl-conf')).toBeNull())
+    expect(getByText('1 tune needs a check')).toBeTruthy()
   })
 })

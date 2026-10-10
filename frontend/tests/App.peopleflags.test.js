@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import App from '../src/App.svelte' // static: loading it per test can outrun the hook timeout
 import { render, waitFor } from '@testing-library/svelte'
 
 // Spec 039: a session can opt out of the members list, attendance, and set starters.
@@ -73,11 +74,9 @@ async function panel(container) {
   }
 }
 
-let App
 beforeEach(async () => {
   document.body.innerHTML = ''
   livePeople.mockClear()
-  App = (await import('../src/App.svelte')).default
 })
 
 describe('header honours the per-session people flags (spec 039)', () => {

@@ -1,4 +1,6 @@
 <script>
+  // i18n-converted
+  import { t } from './i18n/index.js'
   // Chip (spec 035): small pill — tune pills, filter pills, instrument badges,
   // status badges. Clickable when onclick is passed; dismissible shows the one
   // sanctioned close glyph (U+00D7).
@@ -38,7 +40,7 @@
       >{/if}{#if dismissible}<button
         type="button"
         class="kit-x {xClass}"
-        aria-label="Remove {label}"
+        aria-label={t('Remove {label}', { label })}
         onclick={onDismiss}>&#215;</button
       >{/if}</span
   >

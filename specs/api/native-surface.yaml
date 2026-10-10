@@ -70,6 +70,8 @@ components:
         last_name: { type: string }
         is_system_admin: { type: boolean }
         timezone: { type: string }
+        # Spec 057: the interface language, en or ga.
+        language: { type: string, enum: [en, ga] }
         email_verified: { type: boolean }
         has_password: { type: boolean }
         needs_profile_setup: { type: boolean }
@@ -129,6 +131,7 @@ components:
             email_verified: { type: boolean }
             has_password: { type: boolean }
             receive_update_emails: { type: boolean }
+            language: { type: string, enum: [en, ga] }
             created_at: { $ref: "#/components/schemas/DateTimeOrNull" }
             last_login: { $ref: "#/components/schemas/DateTimeOrNull" }
         needs_profile_setup: { type: boolean }
@@ -374,7 +377,7 @@ components:
         op_id: { type: string, format: uuid }
         type:
           type: string
-          enum: [add, set_status, set_heard, set_notes, set_tags, remove, set_instrument_status]
+          enum: [add, set_status, set_heard, set_notes, set_tags, remove, set_instrument_status, set_setting]
         tune_id: { type: integer }
         # add (optional, default "want to learn") and set_status (required).
         learn_status: { $ref: "#/components/schemas/LearnStatus" }
@@ -384,6 +387,9 @@ components:
         notes: { type: [string, "null"] }
         # set_tags: the whole list.
         tags: { type: array, items: { type: string } }
+        # set_setting: the setting you play (null clears). One only thesession.org has
+        # is imported first, so this needs a connection unless the setting is held.
+        setting_id: { type: [integer, "null"] }
         # set_instrument_status: an instrument on your profile, and its status (null
         # removes the override).
         instrument: { type: string }
@@ -717,11 +723,30 @@ components:
               confirmed: { type: boolean }
               archived: { type: boolean }
               is_admin: { type: boolean }
+              # On Ceol (a login), not only a name on the roster: only they can be
+              # confirmed, or have tunes in common with you.
+              has_user_account: { type: boolean }
               attending: { type: boolean }
               # How often they come (the attendance picker orders by these).
               attendance_count: { type: integer }
               recent_attendance_count: { type: integer }
               last_attended: { type: [string, "null"] }
+    CommonTunes:
+      type: object
+      required: [success, tunes, count]
+      properties:
+        success: { type: boolean, const: true }
+        count: { type: integer }
+        tunes:
+          type: array
+          items:
+            type: object
+            required: [tune_id, tune_name, tune_type, tunebook_count]
+            properties:
+              tune_id: { type: integer }
+              tune_name: { type: string }
+              tune_type: { type: [string, "null"] }
+              tunebook_count: { type: integer }
     TuneSearch:
       type: object
       required: [success, tunes, count]
@@ -783,6 +808,30 @@ components:
               abc: { type: string }
               incipit_abc: { type: [string, "null"] }
               incipit_image: { type: [string, "null"] }
+    TheSessionTunePreview:
+      type: object
+      required: [success, tune_id]
+      properties:
+        success: { type: boolean, const: true }
+        is_local: { type: boolean }
+        tune_id: { type: integer }
+        name: { type: string }
+        tune_type: { type: [string, "null"] }
+        settings:
+          type: array
+          items:
+            type: object
+            required: [setting_id, key, abc, incipit_abc]
+            properties:
+              setting_id: { type: integer }
+              key: { type: [string, "null"] }
+              abc: { type: string }
+              incipit_abc: { type: [string, "null"] }
+    SettingSaved:
+      type: object
+      required: [success]
+      properties:
+        success: { type: boolean, const: true }
     Image:
       type: object
       required: [success, image]
@@ -815,6 +864,8 @@ components:
             # The session's own names for the tune, when the detail is session-scoped.
             aliases: { type: array, items: { type: string } }
             setting_id: { type: [integer, "null"] }
+            # A night's own setting, when the detail is scoped to one; it is what's drawn.
+            setting_override: { type: [integer, "null"] }
             setting_key: { type: [string, "null"] }
             abc: { type: [string, "null"] }
             incipit_abc: { type: [string, "null"] }
@@ -839,6 +890,9 @@ components:
         source: { type: [string, "null"] }
         # 0-100, how sure an automatic source was; the live logger writes 100.
         confidence: { type: [integer, "null"] }
+        # which calibration model made a machine's `confidence` (spec 053, schema 060);
+        # null when a person logged or confirmed the tune
+        confidence_model: { type: [string, "null"] }
         deleted: { type: boolean }
         started_by_person_id: { type: [integer, "null"] }
         # Who started the set, as the log shows it ("Sarah O").
@@ -1282,6 +1336,7 @@ paths:
                 thesession_user_id: { type: string }
                 username: { type: string }
                 receive_update_emails: { type: boolean }
+                language: { type: string, enum: [en, ga] }
       responses:
         "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Profile" } } } }
         default: { $ref: "#/components/responses/Error" }
@@ -1335,6 +1390,21 @@ paths:
       requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/MyTunesOp" } } } }
       responses:
         "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/MyTunesOpResult" } } } }
+        default: { $ref: "#/components/responses/Error" }
+  /api/my-tunes/common/{other_person_id}:
+    get:
+      operationId: getCommonTunes
+      summary: >-
+        The tunes you and another person both have as learned or learning, A to Z by
+        default. Someone with no tunebook (or no login) has none in common.
+      security: [{ bearer: [] }]
+      parameters:
+        - { name: other_person_id, in: path, required: true, schema: { type: integer } }
+        - { name: search, in: query, required: false, schema: { type: string } }
+        - { name: tune_type, in: query, required: false, schema: { type: string } }
+        - { name: sort, in: query, required: false, schema: { type: string, enum: [alpha-asc, alpha-desc, popularity-desc] } }
+      responses:
+        "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/CommonTunes" } } } }
         default: { $ref: "#/components/responses/Error" }
   /api/offline/bundle:
     get:
@@ -1507,15 +1577,31 @@ paths:
   /api/tunes/thesession/{thesession_id}/preview:
     get:
       operationId: getTheSessionTunePreview
-      summary: Preview a thesession.org tune not yet imported
+      summary: >-
+        Preview a thesession.org tune not yet imported. For one already on Ceol it answers
+        only {is_local, tune_id}, unless full=1, which always fetches every setting (the
+        setting chooser's list beyond the ones we hold).
       security: [{ bearer: [] }]
-      parameters: [{ name: thesession_id, in: path, required: true, schema: { type: integer } }]
-      responses: { "200": { description: ok } }
+      parameters:
+        - { name: thesession_id, in: path, required: true, schema: { type: integer } }
+        - { name: full, in: query, required: false, schema: { type: string, enum: ["1"] } }
+      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/TheSessionTunePreview" } } } } }
   /api/tunes/render-abc:
     post:
       operationId: renderAbc
       summary: Ephemeral ABC -> PNG
       security: [{ bearer: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [abc]
+              properties:
+                abc: { type: string }
+                key: { type: [string, "null"] }
+                tune_type: { type: [string, "null"] }
+                kind: { type: string, enum: [incipit, full] }
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Image" } } } } }
   /api/tunes/abc-filter:
     post:
@@ -1591,6 +1677,50 @@ paths:
                 key: { type: [string, "null"] }
       responses:
         "201": { description: added, content: { application/json: { schema: { $ref: "#/components/schemas/SessionTuneAdded" } } } }
+        default: { $ref: "#/components/responses/Error" }
+  /api/sessions/{session_path}/tunes/{tune_id}:
+    put:
+      operationId: updateSessionTune
+      summary: >-
+        What the session plays: its setting for the tune (session admins; others get 403).
+        A setting only thesession.org has is imported first; 404 when it has no such
+        setting for the tune. The web also writes alias/key here; the native client
+        documents only the setting.
+      security: [{ bearer: [] }]
+      parameters:
+        - { name: session_path, in: path, required: true, schema: { type: string } }
+        - { name: tune_id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                setting_id: { type: [integer, "null"] }
+      responses:
+        "200": { description: saved, content: { application/json: { schema: { $ref: "#/components/schemas/SettingSaved" } } } }
+        default: { $ref: "#/components/responses/Error" }
+  /api/sessions/{session_path}/{date_or_id}/tunes/{tune_id}:
+    put:
+      operationId: updateSessionInstanceTune
+      summary: >-
+        What was played on one night: its setting for the tune (any session member; 403
+        otherwise, 404 when the tune wasn't logged that night). A setting only
+        thesession.org has is imported first. null goes back to the session's setting.
+      security: [{ bearer: [] }]
+      parameters:
+        - { name: session_path, in: path, required: true, schema: { type: string } }
+        - { name: date_or_id, in: path, required: true, schema: { type: string } }
+        - { name: tune_id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                setting_override: { type: [integer, "null"] }
+      responses:
+        "200": { description: saved, content: { application/json: { schema: { $ref: "#/components/schemas/SettingSaved" } } } }
         default: { $ref: "#/components/responses/Error" }
   /api/sessions/{session_path}/people/add:
     post:

@@ -384,6 +384,15 @@ drag can't be ambiguous about which of two coincident things it moves. Dragging
 a start that another tune ends into therefore moves their shared edge, which is
 what it looks like it does.
 
+Except across a set break. There the coincident start and implicit end are two
+edges that have not been pulled apart yet — one set stops, there is talk or
+tuning, the next set starts — so the handle splits on the first movement:
+dragging it later moves the next set's start and pins the previous set's end
+where it was (made explicit); dragging it earlier pulls the previous set's end
+back and leaves the start alone. Either way a gap opens and both edges are
+handles from then on. A start moved this way is saved as two writes (the pinned
+end first) and undone as one step.
+
 Three decisions worth keeping:
 
 - **The drag is local until it is dropped.** A PUT per animation frame would be
@@ -418,18 +427,26 @@ The left column is sticky above the tune list, so its height *is* the list's
 height — and at full size it filled a phone screen on its own. The header and
 the top of the tape, where the drag handles live, could only be seen by
 scrolling the list back to the very top, which then left room for about two
-tunes. The phone layout (under 900px) is that column giving back ~110px, a
-quarter of it:
+tunes. The phone layout (under 900px) keeps only what marking needs above the
+log — about 310px of it, down from about 500:
 
-- both canvases are a quarter shorter — the tape is read across, not up;
+- the header is one line: the playhead time (so the clock has no row of its
+  own), the placed count, the saving dot, and a ⋯ button. Everything that is
+  not marking waits behind that button: the title and session line, the audio
+  source and the offline copy, Fix and export, speed, zoom and snap, and the
+  "Find the tunes" panel (except on an empty night, where the log has room for
+  it). Opening it pushes the tape down; it is for setting up, not for marking.
+  While the panel is closed, a job that is waiting, running or paused shows as
+  a thin bar just above the mark row, which opens the panel when tapped;
+- both canvases are about half height (92px and 28px) — the tape is read
+  across, not up;
 - the "next up" banner folds into the mark button's own row and drops the set
   number, since the list two inches below already says which set this is;
 - the separate <kbd>E</kbd> button goes. The mark button already covers the
   ordinary case by switching to "End of set" the moment a set's last tune is
   placed, and a whole row for the rarer of the two is a row the list wants
   more. Ending a set you have already scrolled past is a keyboard job now;
-- Undo becomes an icon, and the encode switch moves up beside Fix and export,
-  where "placed" and "the log" give up their words to make room.
+- Undo becomes an icon, and the transport and mark rows are a little shorter.
 
 The breakpoint is read synchronously at init and then followed with a
 `matchMedia` listener, so the tape is never drawn tall and re-drawn short on
@@ -568,6 +585,29 @@ tune so a break lands on each side) and the tune's identity from TuneSearch's
 payload; with neither a mark nor an anchor the body is rejected. An unlinked
 row keeps its one-tap flow — naming it is the one thing it needs — and its `×`.
 
+### A machine's guesses (spec 053)
+
+The listener can log a night itself (`lab drafts --blind --apply` today; the live
+logger later). Each tune it logs carries `confidence`, the chance in whole
+percent that the name is right, from a calibration model fitted on labelled
+nights, and `confidence_model`, which model said so: `POST .../segments` with
+`confidence` (0-99) and `confidence_model` makes the row `source='listen'`.
+
+The tool shows each such tune's confidence to the nearest 10% (a 99 reads
+100%; the stored number stays exact). Only a truly uncertain one, shown at 80%
+or under, is highlighted (a filled amber badge, an amber name, a ✓) and counts
+as needing a check: over ten labelled nights the model's 90% and up were right
+99-100% of the time, and on night 134 the one tune shown under 90 was the one
+wrong name (the player, 2026-10-07: "highlight just the ones that are truly
+uncertain"). Above the list, "N tunes need a check" with a toggle that shows
+only those, and ‹ › to step from one to the next (keys N and ⇧N); C confirms
+the cursor tune, and any machine's tune can be confirmed from its menu. Confirm (`POST .../segments/<sit_id>/confirm`, a `set_confidence`
+op to 100) and correcting the tune (the name, or Edit) both settle it: the
+confidence becomes 100 and the model is cleared, while the history keeps what
+the machine said, how sure, and by which model, the material the next model is
+fitted on. Times are not part of the check: a start or end is corrected by
+moving it, as ever.
+
 ### Offline
 
 The tool is used where the audio was made: a pub, a back room, a car on the way
@@ -637,9 +677,10 @@ segmenter until both have synced — the two queues are independent by design.
 | `GET /api/recordings/<id>/peaks` | the envelope as raw bytes, cached |
 | `PUT /api/recordings/<id>/segments/<sit_id>` | place or move a tune (upsert) |
 | `DELETE /api/recordings/<id>/segments/<sit_id>` | unplace a tune |
-| `POST /api/recordings/<id>/segments` | log a new tune: at a mark (`start_ms`), or beside a row / as a new set (`after_record_id`, `before_record_id`, `new_set`), optionally identified (TuneSearch's payload); returns the whole list |
+| `POST /api/recordings/<id>/segments` | log a new tune: at a mark (`start_ms`), or beside a row / as a new set (`after_record_id`, `before_record_id`, `new_set`), optionally identified (TuneSearch's payload), optionally a machine's (`confidence`, `confidence_model`); returns the whole list |
 | `PUT /api/recordings/<id>/segments/<sit_id>/tune` | say which tune it was, or change it (TuneSearch's payload) |
 | `POST /api/recordings/<id>/segments/<sit_id>/unlog` | take a tune out of the log, and its placement with it |
+| `POST /api/recordings/<id>/segments/<sit_id>/confirm` | yes, a machine's guess is the tune: confidence 100 (spec 053) |
 | `GET /api/recordings/<id>/export` | the resolved slice list |
 | `GET /api/session-instances/<id>/recordings` | recordings + progress |
 

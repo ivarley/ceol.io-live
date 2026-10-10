@@ -1,4 +1,5 @@
 <script>
+  // i18n-converted
   // The Today card (spec 052 §B2). Present only when a session is on today.
   //
   // At a festival there can be several, and the thing you need to see is THAT
@@ -11,6 +12,7 @@
   // one people look for. The button stops propagation so a tap is one navigation,
   // not two.
   import { statusLabel, todaySubtitle, tallyLabel, sessionStatus, sessionInstanceHref } from './logic.js'
+  import { t } from '../lib/index.js'
 
   let { sessions = [] } = $props()
 
@@ -52,7 +54,7 @@
           aria-label={session.name}
           onclick={(e) => open(session, e)}>
           <div class="today-top">
-            <span class="today-eyebrow">Today</span>
+            <span class="today-eyebrow">{t('Today')}</span>
             <span class="today-chip" data-status={status}>{statusLabel(session)}</span>
           </div>
           <div class="today-name">{session.name}</div>
@@ -62,7 +64,7 @@
             <a
               class="today-view"
               href={sessionInstanceHref(session)}
-              onclick={(e) => e.stopPropagation()}>View</a>
+              onclick={(e) => e.stopPropagation()}>{t('View')}</a>
           </div>
         </div>
       {/each}

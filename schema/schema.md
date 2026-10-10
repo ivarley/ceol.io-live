@@ -60,6 +60,7 @@ The database will be a Postgres database. The basic entities in my model will be
     - key_override - optional field meaning that this instance of playing the tune was in a different key from the key on the tune record / session_tune record.
     - setting_override - in case this instance of playing the tune differs from that which is mapped as the standard for this session.
     - started_by_person_id - foreign key to person table, optional, indicates which person started the set (applies to all tunes in the set)
+    - source / confidence / confidence_model - who wrote the row ('human', 'segmenter', or 'listen' for a machine that logged what it heard) and, for a machine, the chance in whole percent that the name is right and which calibration model said so (schema 060, spec 053). Confirm or a person's correction makes the confidence 100 and clears the model; under 100 is a tune waiting for a person's check. NULL confidence is a person's own entry.
 
 - **recording** - One audio file covering some or all of one session instance (spec 050). Many recordings can cover one instance (several phones, or one phone that stopped and restarted), so they share an instance timeline: exactly one recording per instance carries `is_clock_anchor` and its t=0 IS the instance's zero point; every other recording states `clock_offset_ms`, how far after that zero point its own t=0 falls. Attributes:
     - storage_key - the S3 object key; playback is via a presigned URL, which supports range requests so a 3-hour file can be scrubbed without downloading it
@@ -75,6 +76,8 @@ The database will be a Postgres database. The basic entities in my model will be
 - **recording_tune_segment** - The junction between a logged tune and a time range in a recording: "Banish Misfortune runs from 19:22 to 22:04 in recording 1". Points at `session_instance_tune`, not `tune`, so a tune merge carries segments along for free via the log row. Unique on (recording_id, session_instance_tune_id). Attributes:
     - start_ms - required
     - end_ms - **nullable, and the nullability is the point**: the next tune's start implies the previous tune's end, so an explicit end is only recorded at the end of a set. NULL means "runs until the next segment starts", never "unknown".
+
+- **listen_job** - Background work for the listening service (schema 061, spec 053 `053 files/find-tunes-on-the-server.md`): an admin asks the segmenter to find a night's tunes from its recording; the listening service claims the job, reports its phase and progress (its heartbeat), pauses while a night is listened to live, and posts the tunes, which go into the night as `source='listen'` with their confidence. status `queued` | `running` | `paused` | `done` | `failed` | `cancelled`; one active job per recording; `running_s` / `paused_s` with `queued_at` / `started_at` / `finished_at` are the times the page and `/admin/listen-jobs` show; a held job silent for two minutes goes back to the queue (at most three attempts).
 
 - **recording_tune_segment_resolved** (view) - Every segment with its end resolved (implicit ends become the next segment's start; a trailing implicit end becomes the end of the file) and its tune identified. This is the shape the ML training corpus is cut from.
 

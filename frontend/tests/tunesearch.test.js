@@ -4,6 +4,7 @@
 // tune name resolves to THAT tune, and a ?setting=/#setting deep link rides along as
 // the chosen setting (which each surface then applies at its own scope).
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import TuneSearch from '../src/TuneSearch.svelte' // static: loading it per test can outrun the hook timeout
 import { render, waitFor, fireEvent } from '@testing-library/svelte'
 
 const deepSearch = vi.fn(async () => [])
@@ -23,10 +24,8 @@ vi.mock('../src/client.js', () => ({
 const URL_WITH_SETTING = 'https://thesession.org/tunes/8645?setting=44656#setting44656'
 const config = { searchApiBase: '/api/my-tunes' }
 
-let TuneSearch
 beforeEach(async () => {
   vi.clearAllMocks()
-  TuneSearch = (await import('../src/TuneSearch.svelte')).default
 })
 
 // The preview is the "resolved" state: its header/skeleton replaces the search body.

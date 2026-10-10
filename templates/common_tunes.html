@@ -1,6 +1,7 @@
+{# i18n-converted #}
 {% extends "base.html" %}
 
-{% block title %}Tunes In Common{% endblock %}
+{% block title %}{{ _('Tunes In Common') }}{% endblock %}
 
 
 {% block extra_css %}
@@ -263,8 +264,8 @@
 
 {% block content %}
 <div class="landing-page" style="display: block;">
-    <h1>Tunes In Common</h1>
-    <p class="page-subtitle">{{ current_person_name }} and {{ other_person_name }} have these tunes in common:</p>
+    <h1>{{ _('Tunes In Common') }}</h1>
+    <p class="page-subtitle">{{ _('%(name)s and %(other)s have these tunes in common:', name=current_person_name, other=other_person_name) }}</p>
     {# A named destination, not history.back() (spec 052 §B17). The app is
        display:standalone, so an installed visitor has no browser Back to fall back
        on, and a shared link has no history at all. No origin, no row: the Sessions
@@ -282,11 +283,11 @@
         <div class="filters-container">
             <div class="filter-row">
                 <div class="filter-group">
-                    <input type="text" id="tune-search" class="filter-input" placeholder="Search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+                    <input type="text" id="tune-search" class="filter-input" placeholder="{{ _('Search') }}" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
                 </div>
                 <div class="filter-group">
-                    <select id="type-filter" class="filter-select" title="Tune type">
-                        <option value="">All Types</option>
+                    <select id="type-filter" class="filter-select" title="{{ _('Tune type') }}">
+                        <option value="">{{ _('All Types') }}</option>
                     </select>
                 </div>
             </div>
@@ -294,7 +295,7 @@
 
         <div class="results-count">
             <span id="results-count-text"></span>
-            <button id="sort-toggle" class="sort-toggle" title="Toggle sort order">
+            <button id="sort-toggle" class="sort-toggle" title="{{ _('Toggle sort order') }}">
                 <span id="sort-icon">↓</span>
             </button>
         </div>
@@ -304,14 +305,30 @@
         </div>
 
         <div id="no-results" class="no-results" style="display: none;">
-            <h3>No tunes in common yet</h3>
-            <p>You and {{ other_person_name }} don't have any tunes marked as "learned" or "learning" in common.</p>
+            <h3>{{ _('No tunes in common yet') }}</h3>
+            <p>{{ _('You and %(name)s don\'t have any tunes marked as "learned" or "learning" in common.', name=other_person_name) }}</p>
         </div>
     </div>
 
     <script>
         const otherPersonId = {{ other_person_id }};
         const otherPersonName = "{{ other_person_name }}";
+        const TUNE_TYPES = {
+            'barndance': {{ _('Barndance')|tojson }}, 'hornpipe': {{ _('Hornpipe')|tojson }},
+            'jig': {{ _('Jig')|tojson }}, 'march': {{ _('March')|tojson }},
+            'mazurka': {{ _('Mazurka')|tojson }}, 'polka': {{ _('Polka')|tojson }},
+            'reel': {{ _('Reel')|tojson }}, 'slide': {{ _('Slide')|tojson }},
+            'slip jig': {{ _('Slip Jig')|tojson }}, 'strathspey': {{ _('Strathspey')|tojson }},
+            'three-two': {{ _('Three-Two')|tojson }}, 'waltz': {{ _('Waltz')|tojson }},
+            'air': {{ _('Air')|tojson }}
+        };
+        // A tune type as an interface word; the value itself stays the data's.
+        function tuneTypeName(type) {
+            return TUNE_TYPES[String(type || '').toLowerCase()] || type;
+        }
+        const T_SHOWING = {{ js_ngettext('Showing {filtered} of {n} tune', 'Showing {filtered} of {n} tunes')|tojson }};
+        const T_TUNES = {{ js_ngettext('{n} tune', '{n} tunes')|tojson }};
+        const T_UNKNOWN = {{ _('Unknown')|tojson }};
 
         let allTunes = [];
         let filteredTunes = [];
@@ -382,7 +399,8 @@
             types.forEach(type => {
                 const option = document.createElement('option');
                 option.value = type;
-                option.textContent = type.charAt(0).toUpperCase() + type.slice(1);
+                const label = tuneTypeName(type);
+                option.textContent = label.charAt(0).toUpperCase() + label.slice(1);
                 typeFilter.appendChild(option);
             });
         }
@@ -470,9 +488,9 @@
             const total = allTunes.length;
             const filtered = filteredTunes.length;
             if (filtered < total) {
-                resultsCountText.textContent = `Showing ${filtered} of ${total} tunes`;
+                resultsCountText.textContent = ceolPlural(T_SHOWING, total).replace('{filtered}', filtered);
             } else {
-                resultsCountText.textContent = `${total} tune${total !== 1 ? 's' : ''}`;
+                resultsCountText.textContent = ceolPlural(T_TUNES, total);
             }
 
             // Render tune rows
@@ -480,7 +498,7 @@
         }
 
         function createTuneRow(tune) {
-            const tuneName = tune.tune_name || 'Unknown';
+            const tuneName = tune.tune_name || T_UNKNOWN;
             const tuneType = tune.tune_type || '';
             const tunebookCount = tune.tunebook_count || 0;
 
@@ -489,7 +507,7 @@
             const isPopularityMode = sortMode.id === 'popularity-desc';
 
             let countBadge = '';
-            let typeBadge = tuneType ? `<span class="tune-type">${tuneType}</span>` : '';
+            let typeBadge = tuneType ? `<span class="tune-type">${tuneTypeName(tuneType)}</span>` : '';
 
             if (isPopularityMode) {
                 countBadge = `<span class="tune-count-badge">${tunebookCount}</span>`;

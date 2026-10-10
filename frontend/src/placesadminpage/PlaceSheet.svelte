@@ -1,8 +1,9 @@
 <script>
+  // i18n-converted
   // Edit a place, or add one (spec 055 "Places admin page"). A changed slug is a
   // rename: every session path under it moves and the old addresses redirect.
   import { untrack } from 'svelte'
-  import { Dialog, Sheet, toast } from '../lib/index.js'
+  import { Dialog, Sheet, toast, t, tn } from '../lib/index.js'
   import { canDelete, parentOptions } from './logic.js'
 
   let {
@@ -45,7 +46,7 @@
       body: body ? JSON.stringify(body) : undefined,
     })
     const data = await resp.json()
-    if (!resp.ok || !data.success) throw new Error(data.error || data.message || 'Something went wrong')
+    if (!resp.ok || !data.success) throw new Error(data.error || data.message || t('Something went wrong'))
     return data
   }
 
@@ -64,7 +65,7 @@
         ? await send('PUT', `/api/admin/places/${place.place_id}`, body)
         : await send('POST', '/api/admin/places', body)
       const moved = data.moved?.length
-      toast(moved ? `Saved; ${moved} ${moved === 1 ? 'path' : 'paths'} moved` : 'Saved', 'success')
+      toast(moved ? tn(moved, 'Saved; {n} path moved', 'Saved; {n} paths moved') : t('Saved'), 'success')
       open = false
       onSaved(data)
     } catch (e) {
@@ -76,7 +77,7 @@
   async function remove() {
     try {
       const data = await send('DELETE', `/api/admin/places/${place.place_id}`)
-      toast(`Deleted ${place.name}`, 'success')
+      toast(t('Deleted {name}', { name: place.name }), 'success')
       open = false
       onSaved(data)
     } catch (e) {
@@ -86,31 +87,31 @@
   }
 </script>
 
-<Sheet bind:open title={place ? `Edit ${place.name}` : 'Add a place'} compact>
+<Sheet bind:open title={place ? t('Edit {name}', { name: place.name }) : t('Add a place')} compact>
   <form class="place-form" id="placeForm" onsubmit={(e) => { e.preventDefault(); save() }}>
     <div class="kit-group">
       <div class="kit-field">
-        <label for="placeName">Name</label>
-        <input id="placeName" type="text" bind:value={name} placeholder="Required" />
+        <label for="placeName">{t('Name')}</label>
+        <input id="placeName" type="text" bind:value={name} placeholder={t('Required')} />
       </div>
       <div class="kit-field">
-        <label for="placeSlug">Slug</label>
-        <input id="placeSlug" type="text" bind:value={slug} placeholder={place ? '' : 'From the name'} />
+        <label for="placeSlug">{t('Slug')}</label>
+        <input id="placeSlug" type="text" bind:value={slug} placeholder={place ? '' : t('From the name')} />
       </div>
       {#if !isFestival}
         <div class="kit-field">
-          <label for="placeArea">State / area</label>
+          <label for="placeArea">{t('State / area')}</label>
           <input id="placeArea" type="text" bind:value={area} />
         </div>
         <div class="kit-field">
-          <label for="placeCountry">Country</label>
+          <label for="placeCountry">{t('Country')}</label>
           <input id="placeCountry" type="text" bind:value={country} />
         </div>
       {/if}
       <div class="kit-field">
-        <label for="placeParent">{isFestival ? 'Town' : 'Inside'}</label>
+        <label for="placeParent">{isFestival ? t('Town') : t('Inside')}</label>
         <select id="placeParent" bind:value={parentId}>
-          {#if !isFestival}<option value="">Nothing (top level)</option>{/if}
+          {#if !isFestival}<option value="">{t('Nothing (top level)')}</option>{/if}
           {#each options as p (p.place_id)}
             <option value={String(p.place_id)}>{p.name}{p.area ? `, ${p.area}` : ''}</option>
           {/each}
@@ -120,8 +121,7 @@
 
     {#if renaming}
       <p class="place-note" id="placeRenameNote">
-        Renaming moves {place.paths} {place.paths === 1 ? 'session' : 'sessions'} from
-        /sessions/{place.slug}/… to /sessions/{slug.trim()}/…. Old links keep working.
+        {tn(place.paths, 'Renaming moves {n} session from {from} to {to}. Old links keep working.', 'Renaming moves {n} sessions from {from} to {to}. Old links keep working.', { from: `/sessions/${place.slug}/…`, to: `/sessions/${slug.trim()}/…` })}
       </p>
     {/if}
     {#if error}
@@ -129,11 +129,11 @@
     {/if}
 
     <button type="submit" class="place-save" id="placeSave" disabled={saving}>
-      {saving ? 'Saving…' : place ? 'Save' : 'Add place'}
+      {saving ? t('Saving…') : place ? t('Save') : t('Add place')}
     </button>
     {#if place && canDelete(place)}
       <button type="button" class="place-delete" id="placeDelete" onclick={() => (confirmDelete = true)}>
-        Delete {place.name}
+        {t('Delete {name}', { name: place.name })}
       </button>
     {/if}
   </form>
@@ -141,10 +141,10 @@
 
 <Dialog
   bind:open={confirmDelete}
-  title="Delete {place?.name}?"
-  description="Nothing uses this place, so nothing else changes."
-  confirmLabel="Delete place"
-  busyLabel="Deleting…"
+  title={t('Delete {name}?', { name: place?.name })}
+  description={t('Nothing uses this place, so nothing else changes.')}
+  confirmLabel={t('Delete place')}
+  busyLabel={t('Deleting…')}
   destructive
   onConfirm={remove} />
 

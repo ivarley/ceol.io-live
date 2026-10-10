@@ -34,6 +34,7 @@ fresh. Result rows accumulate across runs — they are the record the admin
 page displays (an applied merge can't be re-detected later).
 """
 
+# i18n-converted
 import os
 import re
 import csv
@@ -43,6 +44,7 @@ import time
 import sys
 
 import requests
+from flask_babel import gettext as _
 
 from database import get_db_connection
 
@@ -50,14 +52,18 @@ from database import get_db_connection
 USER_AGENT = "ceol.io merged-tune sync (https://ceol.io; contact: ian@ceol.io)"
 
 TUNE_URL = "https://thesession.org/tunes/{tune_id}"
-DUMP_TUNES_URL = "https://raw.githubusercontent.com/adactio/TheSession-data/main/csv/tunes.csv"
-DUMP_ALIASES_URL = "https://raw.githubusercontent.com/adactio/TheSession-data/main/csv/aliases.csv"
+DUMP_TUNES_URL = (
+    "https://raw.githubusercontent.com/adactio/TheSession-data/main/csv/tunes.csv"
+)
+DUMP_ALIASES_URL = (
+    "https://raw.githubusercontent.com/adactio/TheSession-data/main/csv/aliases.csv"
+)
 
-REQUEST_TIMEOUT = 10       # seconds (per-tune requests)
-DUMP_TIMEOUT = 120         # seconds (the tunes dump is ~17 MB)
-MAX_REDIRECT_HOPS = 3      # A->B->C->D max; longer chains recorded as errors
-MAX_RETRIES = 3            # same pattern as thesession_sync_service
-RETRY_DELAY = 2            # seconds, doubled each retry
+REQUEST_TIMEOUT = 10  # seconds (per-tune requests)
+DUMP_TIMEOUT = 120  # seconds (the tunes dump is ~17 MB)
+MAX_REDIRECT_HOPS = 3  # A->B->C->D max; longer chains recorded as errors
+MAX_RETRIES = 3  # same pattern as thesession_sync_service
+RETRY_DELAY = 2  # seconds, doubled each retry
 RETRY_BACKOFF = 2
 
 # A truncated/garbage dump must not send us checking thousands of "missing"
@@ -106,7 +112,8 @@ def _request_with_retry(method, url, throttle):
         throttle.wait()
         try:
             resp = requests.request(
-                method, url,
+                method,
+                url,
                 allow_redirects=False,
                 timeout=REQUEST_TIMEOUT,
                 headers={"User-Agent": USER_AGENT},
@@ -126,6 +133,7 @@ def _request_with_retry(method, url, throttle):
 # Live per-tune detection (fallback path; also the final say on redirects)
 # ---------------------------------------------------------------------------
 
+
 def check_tune(tune_id, throttle=None):
     """Classify one tune id against the live site.
 
@@ -136,50 +144,80 @@ def check_tune(tune_id, throttle=None):
     throttle = throttle or _Throttle()
     current_id = tune_id
     try:
-        resp = _request_with_retry("HEAD", TUNE_URL.format(tune_id=current_id), throttle)
+        resp = _request_with_retry(
+            "HEAD", TUNE_URL.format(tune_id=current_id), throttle
+        )
     except Exception as e:
-        return {"result_type": "error", "target_tune_id": None,
-                "target_name": None, "target_aliases": None,
-                "detail": f"{e} (after {MAX_RETRIES} attempts)"}
+        return {
+            "result_type": "error",
+            "target_tune_id": None,
+            "target_name": None,
+            "target_aliases": None,
+            "detail": f"{e} (after {MAX_RETRIES} attempts)",
+        }
 
     if resp.status_code == 200:
         return None
     if resp.status_code == 404:
-        return {"result_type": "deleted", "target_tune_id": None,
-                "target_name": None, "target_aliases": None, "detail": "404"}
+        return {
+            "result_type": "deleted",
+            "target_tune_id": None,
+            "target_name": None,
+            "target_aliases": None,
+            "detail": "404",
+        }
     if resp.status_code not in REDIRECT_STATUSES:
-        return {"result_type": "error", "target_tune_id": None,
-                "target_name": None, "target_aliases": None,
-                "detail": f"HTTP {resp.status_code}"}
+        return {
+            "result_type": "error",
+            "target_tune_id": None,
+            "target_name": None,
+            "target_aliases": None,
+            "detail": f"HTTP {resp.status_code}",
+        }
 
     # Merged: follow the Location chain to the final target.
     first_status = resp.status_code
     for _hop in range(MAX_REDIRECT_HOPS):
         m = re.search(r"/tunes/(\d+)", resp.headers.get("Location", ""))
         if not m:
-            return {"result_type": "error", "target_tune_id": None,
-                    "target_name": None, "target_aliases": None,
-                    "detail": f"HTTP {resp.status_code} redirect to non-tune URL: "
-                              f"{resp.headers.get('Location', '')!r}"}
+            return {
+                "result_type": "error",
+                "target_tune_id": None,
+                "target_name": None,
+                "target_aliases": None,
+                "detail": f"HTTP {resp.status_code} redirect to non-tune URL: "
+                f"{resp.headers.get('Location', '')!r}",
+            }
         current_id = int(m.group(1))
         try:
-            resp = _request_with_retry("HEAD", TUNE_URL.format(tune_id=current_id), throttle)
+            resp = _request_with_retry(
+                "HEAD", TUNE_URL.format(tune_id=current_id), throttle
+            )
         except Exception as e:
             # Chain target unreachable: keep the id we did resolve, note the gap.
-            return _merged_result(current_id, first_status, throttle,
-                                  note=f"target check failed: {e}")
+            return _merged_result(
+                current_id, first_status, throttle, note=f"target check failed: {e}"
+            )
         if resp.status_code not in REDIRECT_STATUSES:
             break
     else:
-        return {"result_type": "error", "target_tune_id": None,
-                "target_name": None, "target_aliases": None,
-                "detail": f"redirect chain longer than {MAX_REDIRECT_HOPS} hops"}
+        return {
+            "result_type": "error",
+            "target_tune_id": None,
+            "target_name": None,
+            "target_aliases": None,
+            "detail": f"redirect chain longer than {MAX_REDIRECT_HOPS} hops",
+        }
 
     if resp.status_code == 404:
         # Redirects to a tune that is itself gone — not mergeable; surface as error.
-        return {"result_type": "error", "target_tune_id": current_id,
-                "target_name": None, "target_aliases": None,
-                "detail": f"redirect target #{current_id} is 404 on thesession.org"}
+        return {
+            "result_type": "error",
+            "target_tune_id": current_id,
+            "target_name": None,
+            "target_aliases": None,
+            "detail": f"redirect target #{current_id} is 404 on thesession.org",
+        }
 
     return _merged_result(current_id, first_status, throttle)
 
@@ -190,7 +228,8 @@ def _merged_result(target_id, first_status, throttle, note=None):
     name, aliases = None, None
     try:
         resp = _request_with_retry(
-            "GET", TUNE_URL.format(tune_id=target_id) + "?format=json", throttle)
+            "GET", TUNE_URL.format(tune_id=target_id) + "?format=json", throttle
+        )
         if resp.status_code == 200:
             data = resp.json()
             name = data.get("name")
@@ -200,10 +239,13 @@ def _merged_result(target_id, first_status, throttle, note=None):
     detail = f"HTTP {first_status}"
     if note:
         detail += f"; {note}"
-    return {"result_type": "merged", "target_tune_id": target_id,
-            "target_name": name,
-            "target_aliases": json.dumps(aliases) if aliases is not None else None,
-            "detail": detail}
+    return {
+        "result_type": "merged",
+        "target_tune_id": target_id,
+        "target_name": name,
+        "target_aliases": json.dumps(aliases) if aliases is not None else None,
+        "detail": detail,
+    }
 
 
 def verify_thesession_redirect(old_tune_id, new_tune_id):
@@ -215,36 +257,74 @@ def verify_thesession_redirect(old_tune_id, new_tune_id):
     """
     url = TUNE_URL.format(tune_id=old_tune_id) + "?format=json"
     try:
-        resp = requests.request("GET", url, timeout=5, allow_redirects=False,
-                                headers={"User-Agent": USER_AGENT})
+        resp = requests.request(
+            "GET",
+            url,
+            timeout=5,
+            allow_redirects=False,
+            headers={"User-Agent": USER_AGENT},
+        )
         if resp.status_code in REDIRECT_STATUSES:
             m = re.search(r"/tunes/(\d+)", resp.headers.get("Location", ""))
             final_id = int(m.group(1)) if m else None
         elif resp.status_code == 200:
             final_id = resp.json().get("id")
         elif resp.status_code == 404:
-            return {"status": "not_found",
-                    "message": f"thesession.org has no tune #{old_tune_id} - cannot verify this merge."}
+            return {
+                "status": "not_found",
+                "message": _(
+                    "thesession.org has no tune #%(old)s - cannot verify this merge.",
+                    old=old_tune_id,
+                ),
+            }
         else:
-            return {"status": "unreachable",
-                    "message": f"thesession.org returned HTTP {resp.status_code} - could not verify this merge."}
+            return {
+                "status": "unreachable",
+                "message": _(
+                    "thesession.org returned HTTP %(status)s - could not verify this merge.",
+                    status=resp.status_code,
+                ),
+            }
 
         if final_id == new_tune_id:
-            return {"status": "confirmed",
-                    "message": f"Confirmed: thesession.org redirects tune #{old_tune_id} to #{new_tune_id}."}
+            return {
+                "status": "confirmed",
+                "message": _(
+                    "Confirmed: thesession.org redirects tune #%(old)s to #%(new)s.",
+                    old=old_tune_id,
+                    new=new_tune_id,
+                ),
+            }
         if final_id == old_tune_id:
-            return {"status": "no_redirect",
-                    "message": f"thesession.org does NOT redirect tune #{old_tune_id} - it is still a live tune there. Double-check the IDs before merging."}
-        return {"status": "mismatch",
-                "message": f"thesession.org redirects tune #{old_tune_id} to #{final_id}, not #{new_tune_id}. Double-check the IDs before merging."}
+            return {
+                "status": "no_redirect",
+                "message": _(
+                    "thesession.org does NOT redirect tune #%(old)s - it is still a live tune "
+                    "there. Double-check the IDs before merging.",
+                    old=old_tune_id,
+                ),
+            }
+        return {
+            "status": "mismatch",
+            "message": _(
+                "thesession.org redirects tune #%(old)s to #%(final)s, not #%(new)s. "
+                "Double-check the IDs before merging.",
+                old=old_tune_id,
+                final=final_id,
+                new=new_tune_id,
+            ),
+        }
     except Exception:
-        return {"status": "unreachable",
-                "message": "Could not reach thesession.org to verify this merge."}
+        return {
+            "status": "unreachable",
+            "message": _("Could not reach thesession.org to verify this merge."),
+        }
 
 
 # ---------------------------------------------------------------------------
 # Dump download + settings-trace
 # ---------------------------------------------------------------------------
+
 
 def _open_dump(url, throttle):
     """GET a dump file (streaming, redirects allowed), retried with backoff."""
@@ -254,7 +334,8 @@ def _open_dump(url, throttle):
         throttle.wait()
         try:
             resp = requests.request(
-                "GET", url,
+                "GET",
+                url,
                 stream=True,
                 allow_redirects=True,
                 timeout=DUMP_TIMEOUT,
@@ -302,7 +383,8 @@ def _fetch_dump(throttle):
 
     if len(live_tune_ids) < MIN_DUMP_TUNES:
         raise RuntimeError(
-            f"tunes dump looks truncated ({len(live_tune_ids)} tunes < {MIN_DUMP_TUNES}); aborting run")
+            f"tunes dump looks truncated ({len(live_tune_ids)} tunes < {MIN_DUMP_TUNES}); aborting run"
+        )
 
     aliases_map = {}
     resp = _open_dump(DUMP_ALIASES_URL, throttle)
@@ -334,15 +416,19 @@ def _trace_via_settings(cur, tune_id, setting_map, aliases_map):
     if len(targets) != 1:
         return None
     target_id, target_name = next(iter(targets.items()))
-    return {"result_type": "merged", "target_tune_id": target_id,
-            "target_name": target_name,
-            "target_aliases": json.dumps(aliases_map.get(target_id, [])),
-            "detail": "settings-trace (dump)"}
+    return {
+        "result_type": "merged",
+        "target_tune_id": target_id,
+        "target_name": target_name,
+        "target_aliases": json.dumps(aliases_map.get(target_id, [])),
+        "detail": "settings-trace (dump)",
+    }
 
 
 # ---------------------------------------------------------------------------
 # Applying a merge (shared with the manual /api/admin/tunes/merge endpoint)
 # ---------------------------------------------------------------------------
+
 
 def apply_merge(cur, old_tune_id, new_tune_id, user_id=None):
     """Run the spec-030 apply sequence on the caller's cursor: capture the log
@@ -351,7 +437,8 @@ def apply_merge(cur, old_tune_id, new_tune_id, user_id=None):
     the transaction. Returns (proc_result_json, events_emitted)."""
     # Rows of the old tune in instances with feed activity in the last 24h —
     # anything older has no plausible SSE listeners (spec 030 #6).
-    cur.execute("""
+    cur.execute(
+        """
         SELECT sit.session_instance_id, sit.session_instance_tune_id
         FROM session_instance_tune sit
         WHERE sit.tune_id = %s AND sit.deleted = FALSE
@@ -359,13 +446,18 @@ def apply_merge(cur, old_tune_id, new_tune_id, user_id=None):
             SELECT DISTINCT session_instance_id FROM session_event
             WHERE server_ts > (NOW() AT TIME ZONE 'UTC') - INTERVAL '24 hours'
           )
-    """, (old_tune_id,))
+    """,
+        (old_tune_id,),
+    )
     live_rows = cur.fetchall()
 
-    cur.execute("SELECT merge_tune_ids(%s, %s, %s)", (old_tune_id, new_tune_id, user_id))
+    cur.execute(
+        "SELECT merge_tune_ids(%s, %s, %s)", (old_tune_id, new_tune_id, user_id)
+    )
     result = cur.fetchone()[0]
 
     from live_logging_routes import emit_change_tune
+
     events_emitted = 0
     for instance_id, record_id in live_rows:
         if emit_change_tune(cur, instance_id, record_id, user_id):
@@ -381,11 +473,14 @@ def _apply_candidate(cur, tune_id, result):
     Raises on failure (caller rolls back and records an error row)."""
     target = result["target_tune_id"]
     note = ""
-    cur.execute("SELECT name, redirect_to_tune_id FROM tune WHERE tune_id = %s", (target,))
+    cur.execute(
+        "SELECT name, redirect_to_tune_id FROM tune WHERE tune_id = %s", (target,)
+    )
     row = cur.fetchone()
     if row is None:
         # Target not local: import it in THIS transaction (atomic with the merge).
         from live_logging_routes import _import_tune_for_live
+
         imported_name, _tune_type = _import_tune_for_live(cur, target, None)
         result["target_name"] = result["target_name"] or imported_name
         note = "; target imported"
@@ -407,6 +502,7 @@ def _apply_candidate(cur, tune_id, result):
 # ---------------------------------------------------------------------------
 # Run lifecycle
 # ---------------------------------------------------------------------------
+
 
 def create_run(started_by_user_id=None):
     """Insert a 'running' tune_merge_scan row, unless one is already running
@@ -484,9 +580,16 @@ def _record_result(cur, scan_id, tune_id, result, applied):
             applied_at = EXCLUDED.applied_at,
             checked_at = (NOW() AT TIME ZONE 'UTC')
         """,
-        (scan_id, tune_id, result["result_type"], result["target_tune_id"],
-         result["target_name"], result["target_aliases"], result["detail"],
-         applied),
+        (
+            scan_id,
+            tune_id,
+            result["result_type"],
+            result["target_tune_id"],
+            result["target_name"],
+            result["target_aliases"],
+            result["detail"],
+            applied,
+        ),
     )
     return True
 
@@ -508,7 +611,8 @@ def run_sync(scan_id):
             return
 
         cur.execute(
-            "SELECT tune_id FROM tune WHERE redirect_to_tune_id IS NULL ORDER BY tune_id")
+            "SELECT tune_id FROM tune WHERE redirect_to_tune_id IS NULL ORDER BY tune_id"
+        )
         local_ids = [r[0] for r in cur.fetchall()]
 
         _heartbeat(conn, cur, scan_id)
@@ -528,7 +632,9 @@ def run_sync(scan_id):
         for tune_id in candidates:
             # Cancel check each candidate — Cancel flips the row's status from
             # any worker.
-            cur.execute("SELECT status FROM tune_merge_scan WHERE scan_id = %s", (scan_id,))
+            cur.execute(
+                "SELECT status FROM tune_merge_scan WHERE scan_id = %s", (scan_id,)
+            )
             status_row = cur.fetchone()
             if not status_row or status_row[0] != "running":
                 conn.commit()
@@ -554,10 +660,13 @@ def run_sync(scan_id):
                     applied = True
                 except Exception as e:
                     conn.rollback()
-                    result = {"result_type": "error", "target_tune_id": result["target_tune_id"],
-                              "target_name": result["target_name"],
-                              "target_aliases": result["target_aliases"],
-                              "detail": f"merge apply failed: {e}"}
+                    result = {
+                        "result_type": "error",
+                        "target_tune_id": result["target_tune_id"],
+                        "target_name": result["target_name"],
+                        "target_aliases": result["target_aliases"],
+                        "detail": f"merge apply failed: {e}",
+                    }
 
             recorded = False
             if result is not None:
@@ -573,13 +682,15 @@ def run_sync(scan_id):
                     heartbeat_at = (NOW() AT TIME ZONE 'UTC')
                 WHERE scan_id = %s
                 """,
-                (1 if result and result["result_type"] == "merged" else 0,
-                 1 if applied else 0,
-                 # A tune already recorded as deleted by an earlier run is old
-                 # news — it shouldn't reappear in every weekly summary.
-                 1 if recorded and result["result_type"] == "deleted" else 0,
-                 1 if result and result["result_type"] == "error" else 0,
-                 scan_id),
+                (
+                    1 if result and result["result_type"] == "merged" else 0,
+                    1 if applied else 0,
+                    # A tune already recorded as deleted by an earlier run is old
+                    # news — it shouldn't reappear in every weekly summary.
+                    1 if recorded and result["result_type"] == "deleted" else 0,
+                    1 if result and result["result_type"] == "error" else 0,
+                    scan_id,
+                ),
             )
             conn.commit()
 
@@ -607,7 +718,8 @@ def run_sync(scan_id):
 def start_scan_thread(scan_id):
     """Fire-and-forget worker thread for a run row already marked 'running'
     (the admin page's Run Now)."""
-    t = threading.Thread(target=run_sync, args=(scan_id,), daemon=True,
-                         name=f"tune-merge-sync-{scan_id}")
+    t = threading.Thread(
+        target=run_sync, args=(scan_id,), daemon=True, name=f"tune-merge-sync-{scan_id}"
+    )
     t.start()
     return t

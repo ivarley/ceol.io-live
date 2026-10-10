@@ -192,3 +192,38 @@ def played_forms(tune_ids, min_eighths=32):
         if f.length >= min_eighths and f.bar_starts:
             out.setdefault(s.tune_id, []).append((s.setting_id, s.mode, f))
     return out
+
+
+class RoundLengths:
+    """Eighths in one time through a tune, as played (repeats taken): the
+    median over its readable settings, so a setting written with its
+    repeats spelt out, or a page of variations, does not decide it. For the
+    meter's count of how many times a tune has gone round (lab listen,
+    `Listener._watch_change`). The dump is read once; each tune's forms are
+    worked out the first time it is asked for."""
+
+    def __init__(self, path=None):
+        from lab import paths
+        from lab.corpus.exclusions import excluded_settings
+        from lab.corpus.tunes_csv import iter_settings
+
+        drop = excluded_settings()
+        self._settings = {}
+        for s in iter_settings(path or paths.tunes_csv_path()):
+            if s.setting_id not in drop:
+                self._settings.setdefault(s.tune_id, []).append(s)
+        self._cache = {}
+
+    def __call__(self, tune_id, min_eighths=32):
+        """-> eighths per round, or None for a tune with no readable setting."""
+        if tune_id not in self._cache:
+            lengths = []
+            for s in self._settings.get(tune_id, []):
+                try:
+                    f = played_form(s.abc, key=s.mode, meter=s.meter)
+                except Exception:  # one unreadable setting must not lose the tune
+                    continue
+                if f.length >= min_eighths and f.bar_starts:
+                    lengths.append(f.length)
+            self._cache[tune_id] = float(np.median(lengths)) if lengths else None
+        return self._cache[tune_id]

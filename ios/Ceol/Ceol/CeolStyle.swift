@@ -166,7 +166,8 @@ struct TypeChip: View {
     var size: CGFloat = 13
 
     var body: some View {
-        Text(label.capitalized)
+        // In Irish, the interface word for the type (tuneTypeName); English as it was.
+        Text(AppLanguage.code == "ga" ? tuneTypeName(label) : label.capitalized)
             .font(.ceol(size: size))
             .lineLimit(1)
             .padding(.horizontal, 6)
@@ -265,9 +266,9 @@ struct StatusGlyph: View {
 enum MyTunesStatusLabel {
     static func label(_ status: String) -> String {
         switch status {
-        case "learned": "Learned"
-        case "learning": "Learning"
-        default: "To Learn"
+        case "learned": tr("Learned")
+        case "learning": tr("Learning")
+        default: tr("To Learn")
         }
     }
 }
@@ -357,7 +358,7 @@ struct SetCard<Content: View>: View {
                             .overlay(Capsule().strokeBorder(play.playing ? CeolTokens.primary : CeolTokens.borderColor, lineWidth: 1))
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(play.playing ? "Stop" : "Play this set")
+                    .accessibilityLabel(play.playing ? tr("Stop") : tr("Play this set"))
                     .accessibilityIdentifier("set.play")
                 }
             }
@@ -418,7 +419,7 @@ struct SearchRow<FilterMenu: View>: View {
     @ViewBuilder var filterMenu: () -> FilterMenu
     var onAdd: (() -> Void)? = nil
     var addID: String = "add"
-    var addLabel: String = "Add"
+    var addLabel: String = tr("Add")
     var focused: FocusState<Bool>.Binding? = nil
     /// Opens a sort and filter drawer (in place of the menu); `filterCount` badges it.
     var onFilter: (() -> Void)? = nil
@@ -461,7 +462,7 @@ struct SearchRow<FilterMenu: View>: View {
                 // Borderless: in a List row, plain buttons share the row's tap, and the
                 // filter button's tap opened Add (and the reverse).
                 .buttonStyle(.borderless)
-                .accessibilityLabel(filterCount > 0 ? "Sort and filter, \(filterCount) on" : "Sort and filter")
+                .accessibilityLabel(filterCount > 0 ? tr("Sort and filter, \(filterCount) on") : tr("Sort and filter"))
                 .accessibilityIdentifier("\(fieldID).filter")
             } else if FilterMenu.self != EmptyView.self {
                 Menu { filterMenu() } label: {
@@ -496,7 +497,7 @@ private struct OptionalFocus: ViewModifier {
 
 extension SearchRow where FilterMenu == EmptyView {
     init(text: Binding<String>, prompt: String, fieldID: String = "search", onAdd: (() -> Void)? = nil,
-         addID: String = "add", addLabel: String = "Add", focused: FocusState<Bool>.Binding? = nil,
+         addID: String = "add", addLabel: String = tr("Add"), focused: FocusState<Bool>.Binding? = nil,
          onFilter: (() -> Void)? = nil, filterCount: Int = 0) {
         self.init(text: text, prompt: prompt, fieldID: fieldID, filterMenu: { EmptyView() }, onAdd: onAdd,
                   addID: addID, addLabel: addLabel, focused: focused, onFilter: onFilter, filterCount: filterCount)
@@ -686,7 +687,7 @@ struct SharePane: View {
                     UIPasteboard.general.url = target.url
                     copied = true
                 } label: {
-                    Label(copied ? "Copied" : "Copy link", systemImage: copied ? "checkmark" : "doc.on.doc")
+                    Label(copied ? tr("Copied") : tr("Copy link"), systemImage: copied ? "checkmark" : "doc.on.doc")
                         .font(.ceol(size: 16, weight: .medium)).frame(maxWidth: .infinity, minHeight: 46)
                         .foregroundStyle(CeolTokens.textColor)
                         .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(CeolTokens.borderColor, lineWidth: 1))
@@ -789,5 +790,54 @@ struct FlowLayout: Layout {
             x += s.width + spacing
             line = max(line, s.height)
         }
+    }
+}
+
+// MARK: - Vocabulary (spec 057)
+
+/// A tune type the server sends in English ("Reel", "slip jig") as the interface word
+/// in the app's language, as the web's tuneTypeName(). English shows the value as sent;
+/// anything unknown shows as sent.
+nonisolated func tuneTypeName(_ type: String) -> String {
+    guard AppLanguage.code == "ga" else { return type }
+    switch type.lowercased() {
+    case "barndance": return tr("Barndance")
+    case "hornpipe": return tr("Hornpipe")
+    case "jig": return tr("Jig")
+    case "march": return tr("March")
+    case "mazurka": return tr("Mazurka")
+    case "polka": return tr("Polka")
+    case "reel": return tr("Reel")
+    case "slide": return tr("Slide")
+    case "slip jig": return tr("Slip Jig")
+    case "strathspey": return tr("Strathspey")
+    case "three-two": return tr("Three-Two")
+    case "waltz": return tr("Waltz")
+    case "air": return tr("Air")
+    default: return type
+    }
+}
+
+/// A canonical instrument (instruments.py: "Fiddle") in the app's language, as the
+/// web's instrumentName(). English and anything unknown show as sent.
+nonisolated func instrumentName(_ name: String) -> String {
+    guard AppLanguage.code == "ga" else { return name }
+    switch name.lowercased() {
+    case "banjo": return tr("Banjo")
+    case "bodhrán": return tr("Bodhrán")
+    case "bouzouki": return tr("Bouzouki")
+    case "button accordion": return tr("Button Accordion")
+    case "concertina": return tr("Concertina")
+    case "fiddle": return tr("Fiddle")
+    case "flute": return tr("Flute")
+    case "guitar": return tr("Guitar")
+    case "harp": return tr("Harp")
+    case "low whistle": return tr("Low Whistle")
+    case "mandolin": return tr("Mandolin")
+    case "piano": return tr("Piano")
+    case "piano accordion": return tr("Piano Accordion")
+    case "uilleann pipes": return tr("Uilleann Pipes")
+    case "whistle": return tr("Whistle")
+    default: return name
     }
 }

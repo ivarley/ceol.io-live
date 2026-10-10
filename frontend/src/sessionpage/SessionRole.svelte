@@ -1,4 +1,5 @@
 <script>
+  // i18n-converted
   /**
    * The session role badge, and the sheet that changes it (spec 034, Changes 1 & 2).
    *
@@ -13,7 +14,8 @@
    * You can't grant yourself Admin, obviously. You CAN set your own member/visitor: it says
    * whose session this is, and that's a claim about your own life.
    */
-  import { Sheet, Seg, Chip, Dialog, toast, toastFailure, ServerError } from '../lib/index.js'
+  import { Sheet, Seg, Chip, Dialog, toast, ServerError, t } from '../lib/index.js'
+  import { toastFailed } from './failure.js'
 
   let { sessionPath, permissions } = $props()
 
@@ -43,18 +45,22 @@
       window.location.reload()
       return new Promise(() => {})
     } catch (e) {
-      toastFailure('leave this session', e)
+      toastFailed(
+        e,
+        t("Couldn't leave this session. Try again."),
+        t("Couldn't leave this session. Check your connection and try again.")
+      )
       return false
     }
   }
 
   const isAdmin = permissions.is_session_admin
-  const label = $derived(isAdmin ? 'Admin' : relationship === 'visitor' ? 'Visitor' : 'Member')
+  const label = $derived(isAdmin ? t('Admin') : relationship === 'visitor' ? t('Visitor') : t('Member'))
   const variant = $derived(isAdmin ? 'primary' : relationship === 'visitor' ? 'warning' : 'success')
 
   const OPTIONS = [
-    { id: 'member', label: 'I attend this session' },
-    { id: 'visitor', label: "I've just visited" },
+    { id: 'member', label: t('I attend this session') },
+    { id: 'visitor', label: t("I've just visited") },
   ]
 
   function openSheet() {
@@ -80,12 +86,16 @@
       open = false
       toast(
         draft === 'member'
-          ? 'This is now one of your sessions.'
-          : "Marked as a session you've visited.",
+          ? t('This is now one of your sessions.')
+          : t("Marked as a session you've visited."),
         'success'
       )
     } catch (e) {
-      toastFailure('save your relationship to this session', e)
+      toastFailed(
+        e,
+        t("Couldn't save your relationship to this session. Try again."),
+        t("Couldn't save your relationship to this session. Check your connection and try again.")
+      )
     } finally {
       saving = false
     }
@@ -93,36 +103,34 @@
 </script>
 
 {#if relationship}
-  <Chip label={label} {variant} onclick={openSheet} title="Change your relationship to this session" />
+  <Chip label={label} {variant} onclick={openSheet} title={t('Change your relationship to this session')} />
 {/if}
 
-<Sheet bind:open title="Your relationship to this session" onCancel={() => (open = false)}>
+<Sheet bind:open title={t('Your relationship to this session')} onCancel={() => (open = false)}>
   <p class="sr-lead">
-    This decides whether the session's tunes count as <strong>yours</strong> — in your tune
-    stats, and in "played at my sessions".
+    {@html t('This decides whether the session\'s tunes count as <strong>yours</strong> — in your tune stats, and in "played at my sessions".')}
   </p>
 
   <Seg options={OPTIONS} value={draft} onSelect={(id) => (draft = id)} idAttr="data-relationship" />
 
   <p class="sr-note">
     {#if draft === 'member'}
-      Its tunes and history count as one of your sessions.
+      {t('Its tunes and history count as one of your sessions.')}
     {:else}
-      You came, but it isn't one of your sessions — its tunes won't count as yours. The
-      specific nights you were there still do.
+      {t("You came, but it isn't one of your sessions — its tunes won't count as yours. The specific nights you were there still do.")}
     {/if}
   </p>
 
   {#if isAdmin}
-    <p class="sr-note">You're an admin here. That doesn't change either way.</p>
+    <p class="sr-note">{t("You're an admin here. That doesn't change either way.")}</p>
   {/if}
 
   <button type="button" class="sr-leave" id="leave-session-btn" onclick={() => (leaveOpen = true)}>
-    Leave this session
+    {t('Leave this session')}
   </button>
 
   {#snippet footer()}
-    <button class="sr-save" onclick={save} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+    <button class="sr-save" onclick={save} disabled={saving}>{saving ? t('Saving…') : t('Save')}</button>
   {/snippet}
 </Sheet>
 
@@ -130,14 +138,12 @@
      answer is nothing you logged, which is worth saying rather than assuming. -->
 <Dialog
   bind:open={leaveOpen}
-  title="Leave this session?"
-  confirmLabel="Leave"
-  busyLabel="Leaving…"
+  title={t('Leave this session?')}
+  confirmLabel={t('Leave')}
+  busyLabel={t('Leaving…')}
   onConfirm={leaveSession}>
   <p>
-    You'll stop seeing it on your home page and its tunes will no longer count as
-    yours. Everything you logged there stays exactly where it is, and you can join
-    again whenever you like.
+    {t("You'll stop seeing it on your home page and its tunes will no longer count as yours. Everything you logged there stays exactly where it is, and you can join again whenever you like.")}
   </p>
 </Dialog>
 

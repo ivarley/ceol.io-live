@@ -1,7 +1,10 @@
+// i18n-converted
 // Toast (spec 035): thin wrapper over the site-wide `window.showMessage`
 // (defined by base.html) so kit components toast identically to legacy pages.
 // Pages without it (the live logger's clean-slate shell) get a self-contained
 // stacked container instead: top-center, auto-dismiss.
+
+import { t } from './i18n/index.js'
 
 const DISMISS_MS = 3000
 const HOST_ID = 'kit-toasts'
@@ -93,14 +96,16 @@ export class ServerError extends Error {}
  * Toast a failed ACTION: what failed and what to do next, never raw error text.
  * `what` completes "Couldn't …" ("remove the tune from your list"). A
  * ServerError's own message wins; the raw error always goes to the console.
+ * Pass `what` through t() (spec 057): its Irish is a verbal-noun clause that
+ * follows "Níorbh fhéidir" ("an fonn a bhaint de do liosta").
  */
 export function toastFailure(what, error) {
   if (error) console.error(`Couldn't ${what}:`, error)
   let message
   if (error instanceof ServerError) {
-    message = error.message || `Couldn't ${what}. Try again.`
+    message = error.message || t("Couldn't {what}. Try again.", { what })
   } else {
-    message = `Couldn't ${what}. Check your connection and try again.`
+    message = t("Couldn't {what}. Check your connection and try again.", { what })
   }
   toast(message, 'error')
 }

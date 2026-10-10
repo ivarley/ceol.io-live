@@ -1,4 +1,13 @@
-from flask import Flask, render_template, request, session, send_from_directory, redirect
+# i18n-converted  (spec 057: every message a person reads goes through _())
+from flask import (
+    Flask,
+    render_template,
+    request,
+    session,
+    send_from_directory,
+    redirect,
+)
+from flask_babel import gettext as _, lazy_gettext
 from flask_login import LoginManager
 from werkzeug.routing import BaseConverter
 import os
@@ -11,9 +20,19 @@ from dotenv import load_dotenv
 from auth import User, SESSION_LIFETIME_WEEKS
 from api_auth import public_api
 from api_app_routes import (
-    auth_exchange, auth_resend_verification, auth_logout, auth_set_password,
-    api_me, me_profile, app_config, api_home, resolve_path, auth_web_session,
-    apple_app_site_association, delete_account_api, listen_decider_data,
+    auth_exchange,
+    auth_resend_verification,
+    auth_logout,
+    auth_set_password,
+    api_me,
+    me_profile,
+    app_config,
+    api_home,
+    resolve_path,
+    auth_web_session,
+    apple_app_site_association,
+    delete_account_api,
+    listen_decider_data,
 )
 from api_routes import *
 from web_routes import *
@@ -23,6 +42,19 @@ from place_routes import (
     get_admin_places,
     update_admin_place,
 )
+from listen_job_routes import (
+    admin_listen_jobs,
+    cancel_listen_job,
+    claim_listen_job,
+    get_find_tunes,
+    instance_known_tunes,
+    listen_job_fail,
+    listen_job_progress,
+    listen_job_result,
+    retry_listen_job,
+    start_find_tunes,
+    undo_find_tunes,
+)
 from recording_routes import (
     get_recording_segmenter,
     get_recording_peaks,
@@ -31,6 +63,7 @@ from recording_routes import (
     log_recording_tune,
     set_recording_tune,
     unlog_recording_tune,
+    confirm_recording_tune,
     get_instance_recordings,
     get_instance_audio,
     download_recording_segment,
@@ -61,9 +94,24 @@ from api_person_tune_routes import (
     search_tunes,
     abc_filter_tunes,
     update_my_profile,
-    get_common_tunes
+    get_common_tunes,
 )
-from live_logging_routes import tunes_deep_search, tunes_thesession_search, tunes_incipit_image, tunes_preview, tunes_setting_image, tunes_thesession_preview, tunes_render_abc, live_bootstrap, live_vocabulary, live_op, live_issue_token, live_tune_detail, live_people, live_match
+from live_logging_routes import (
+    tunes_deep_search,
+    tunes_thesession_search,
+    tunes_incipit_image,
+    tunes_preview,
+    tunes_setting_image,
+    tunes_thesession_preview,
+    tunes_render_abc,
+    live_bootstrap,
+    live_vocabulary,
+    live_op,
+    live_issue_token,
+    live_tune_detail,
+    live_people,
+    live_match,
+)
 from timezone_utils import format_datetime_with_timezone, utc_to_local
 from flask_login import current_user
 
@@ -72,19 +120,20 @@ load_dotenv()
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler()  # Log to stdout (captured by Render/Gunicorn)
-    ]
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler()],  # Log to stdout (captured by Render/Gunicorn)
 )
+
 
 # Custom URL converter for date or ID
 class DateOrIdConverter(BaseConverter):
     """Matches dates in YYYY-MM-DD format or numeric IDs"""
-    regex = r'\d{4}-\d{2}-\d{2}|\d+'
+
+    regex = r"\d{4}-\d{2}-\d{2}|\d+"
+
 
 app = Flask(__name__)
-app.url_map.converters['date_or_id'] = DateOrIdConverter
+app.url_map.converters["date_or_id"] = DateOrIdConverter
 
 
 # --- JSON: ISO 8601 dates, always (spec 052 A4) ---------------------------------
@@ -124,7 +173,7 @@ app.secret_key = os.environ.get(
 
 # Configure permanent session lifetime to match database session expiration
 # This ensures Flask session cookies persist for the full session duration
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(weeks=SESSION_LIFETIME_WEEKS)
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(weeks=SESSION_LIFETIME_WEEKS)
 
 # Share the session cookie across subdomains so the live-logging streaming sidecar
 # (e.g. streaming.ceol.io) receives it (spec 024 §H / §A4). Subdomains of one
@@ -133,11 +182,11 @@ app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(weeks=SESSION_LIFETIME_WEEK
 # env-driven so local dev (env unset) keeps today's host-only, non-Secure cookie.
 _cookie_domain = os.environ.get("SESSION_COOKIE_DOMAIN")  # e.g. ".ceol.io" in prod
 if _cookie_domain:
-    app.config['SESSION_COOKIE_DOMAIN'] = _cookie_domain
-    app.config['REMEMBER_COOKIE_DOMAIN'] = _cookie_domain
+    app.config["SESSION_COOKIE_DOMAIN"] = _cookie_domain
+    app.config["REMEMBER_COOKIE_DOMAIN"] = _cookie_domain
 if os.environ.get("SESSION_COOKIE_SECURE", "").lower() in ("1", "true", "yes"):
-    app.config['SESSION_COOKIE_SECURE'] = True
-    app.config['REMEMBER_COOKIE_SECURE'] = True
+    app.config["SESSION_COOKIE_SECURE"] = True
+    app.config["REMEMBER_COOKIE_SECURE"] = True
 
 # Configure Flask to handle trailing slashes consistently
 app.url_map.strict_slashes = False
@@ -146,14 +195,17 @@ app.url_map.strict_slashes = False
 # self-contained mini-sites, e.g. /mockups/logging/ -> mockups/logging/index.html
 MOCKUPS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mockups")
 
+
 def mockup_index(mockup):
     # ensure a trailing slash so the page's relative asset paths resolve correctly
     if not request.path.endswith("/"):
         return redirect(request.path + "/")
     return send_from_directory(MOCKUPS_DIR, os.path.join(mockup, "index.html"))
 
+
 def mockup_file(mockup, filename):
     return send_from_directory(MOCKUPS_DIR, os.path.join(mockup, filename))
+
 
 app.add_url_rule("/mockups/<mockup>/", "mockup_index", mockup_index)
 app.add_url_rule("/mockups/<mockup>/<path:filename>", "mockup_file", mockup_file)
@@ -161,8 +213,18 @@ app.add_url_rule("/mockups/<mockup>/<path:filename>", "mockup_file", mockup_file
 # Configure Flask-Login
 login_manager = LoginManager()
 login_manager.init_app(app)
+
+# Spec 057: English or Irish, per person (i18n.py).
+import i18n  # noqa: E402
+
+i18n.init_app(app)
+app.jinja_env.globals["release_note_months"] = release_note_months  # help sidebar
 login_manager.login_view = "login"  # type: ignore
-login_manager.login_message = "Please log in to access this page."
+login_manager.login_message = lazy_gettext("Please log in to access this page.")
+# Flask-Login flashes login_message into the session cookie, which needs a plain str:
+# turn the lazy string into the request's language at the moment it is flashed.
+login_manager.localize_callback = str
+
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -184,6 +246,7 @@ def load_user(user_id):
     except (TypeError, ValueError):
         return None
 
+
 @login_manager.request_loader
 def load_user_from_request(req):
     """Authenticate `Authorization: Bearer <user_session id>` against /api/* (spec 035).
@@ -201,6 +264,7 @@ def load_user_from_request(req):
     if not token:
         return None
     from database import get_db_connection
+
     conn = get_db_connection()
     try:
         cur = conn.cursor()
@@ -218,12 +282,15 @@ def load_user_from_request(req):
         return None
     return User.get_by_id(row[0])
 
+
 @app.context_processor
 def inject_canonical_instruments():
     """Expose the single canonical instrument list to every template so all
     instrument pickers render from one source (see instruments.py)."""
     from instruments import CANONICAL_INSTRUMENTS
+
     return {"canonical_instruments": CANONICAL_INSTRUMENTS}
+
 
 # Before request handler to capture referrer parameter
 @app.before_request
@@ -232,10 +299,10 @@ def capture_referrer():
     Capture the referrer parameter from URLs and store it in the session.
     This allows tracking which person referred a new user to the site.
     """
-    referrer = request.args.get('referrer')
+    referrer = request.args.get("referrer")
     if referrer:
         # Store in session for later use during registration
-        session['referred_by_person_id'] = referrer
+        session["referred_by_person_id"] = referrer
 
 
 # --- Request timing -------------------------------------------------------
@@ -315,6 +382,7 @@ def _normalize_api_errors(resp):
     if resp.direct_passthrough or not (resp.mimetype or "").endswith("json"):
         return resp
     from api_auth import normalize_error_body
+
     try:
         body = resp.get_json(silent=True)
     except Exception:
@@ -384,6 +452,7 @@ def format_datetime_tz(dt, session_timezone=None, format_str="%Y-%m-%d %H:%M"):
     # Default: show as UTC
     return format_datetime_with_timezone(dt, "UTC", format_str)
 
+
 @app.template_filter("to_user_timezone")
 def to_user_timezone(dt, session_timezone=None):
     """Convert UTC datetime to user's timezone (or session timezone if no user)"""
@@ -404,6 +473,7 @@ def to_user_timezone(dt, session_timezone=None):
     # Default: return as UTC
     return dt
 
+
 @app.template_global("get_user_timezone")
 def get_user_timezone():
     """Get current user's timezone for use in templates"""
@@ -413,6 +483,7 @@ def get_user_timezone():
     except Exception:
         pass
     return "UTC"
+
 
 @app.template_filter("instance_url_id")
 def instance_url_id(instance):
@@ -427,14 +498,15 @@ def instance_url_id(instance):
     Returns:
         String identifier to use in URL (either date string or numeric ID)
     """
-    if instance.get('multiple_on_date', False):
-        return str(instance['session_instance_id'])
+    if instance.get("multiple_on_date", False):
+        return str(instance["session_instance_id"])
     else:
         # Return date as string in YYYY-MM-DD format
-        date = instance['date']
-        if hasattr(date, 'strftime'):
-            return date.strftime('%Y-%m-%d')
+        date = instance["date"]
+        if hasattr(date, "strftime"):
+            return date.strftime("%Y-%m-%d")
         return str(date)
+
 
 # Register web page routes
 app.add_url_rule("/", "home", home)
@@ -447,31 +519,64 @@ app.add_url_rule(
     "session_tune_info",
     session_tune_info,
 )
-app.add_url_rule("/sessions/<path:session_path>/people", "session_people", session_people)
-app.add_url_rule("/sessions/<path:session_path>/people/<int:person_id>", "session_person_detail", session_person_detail)
+app.add_url_rule(
+    "/sessions/<path:session_path>/people", "session_people", session_people
+)
+app.add_url_rule(
+    "/sessions/<path:session_path>/people/<int:person_id>",
+    "session_person_detail",
+    session_person_detail,
+)
 app.add_url_rule("/sessions/<path:session_path>/logs", "session_logs", session_logs)
 app.add_url_rule("/sessions/<path:full_path>", "session_handler", session_handler)
-app.add_url_rule("/sessions/<path:full_path>/players", "session_instance_players", session_instance_players)
+app.add_url_rule(
+    "/sessions/<path:full_path>/players",
+    "session_instance_players",
+    session_instance_players,
+)
 app.add_url_rule("/add-session", "add_session", add_session)
 app.add_url_rule("/tunes", "tunes_page", tunes_page)
 app.add_url_rule("/about", "about_page", about_page)
 app.add_url_rule("/help", "help_page", help_page)
+app.add_url_rule(
+    "/irish-glossary-review", "irish_glossary_review", irish_glossary_review
+)
 app.add_url_rule("/help/sessions", "help_sessions", help_sessions)
 app.add_url_rule("/help/offline", "help_offline", help_offline)
 app.add_url_rule("/help/my-tunes", "help_my_tunes", help_my_tunes)
-app.add_url_rule("/help/session-tracking/tunes", "help_session_tunes", help_session_tunes)
+app.add_url_rule(
+    "/help/session-tracking/tunes", "help_session_tunes", help_session_tunes
+)
 app.add_url_rule("/help/session-tracking/logs", "help_session_logs", help_session_logs)
-app.add_url_rule("/help/session-tracking/members", "help_session_members", help_session_members)
-app.add_url_rule("/help/session-tracking/live-logger", "help_live_logger", help_live_logger)
-app.add_url_rule("/help/release-notes/", "help_release_notes_index", help_release_notes_index)
-app.add_url_rule("/help/release-notes/<month>", "help_release_notes", help_release_notes)
+app.add_url_rule(
+    "/help/session-tracking/members", "help_session_members", help_session_members
+)
+app.add_url_rule(
+    "/help/session-tracking/live-logger", "help_live_logger", help_live_logger
+)
+app.add_url_rule(
+    "/help/release-notes/", "help_release_notes_index", help_release_notes_index
+)
+app.add_url_rule(
+    "/help/release-notes/<month>", "help_release_notes", help_release_notes
+)
 app.add_url_rule("/share", "share_page", share_page)
 app.add_url_rule("/register", "register", register, methods=["GET", "POST"])
 app.add_url_rule("/login", "login", login, methods=["GET", "POST"])
 app.add_url_rule("/logout", "logout", logout)
 # public_api: the login flow itself — necessarily unauthenticated (handlers live in web_routes.py)
-app.add_url_rule("/api/auth/check-email", "check_email_api", public_api(check_email_api), methods=["POST"])
-app.add_url_rule("/api/auth/login-password", "login_password_api", public_api(login_password_api), methods=["POST"])
+app.add_url_rule(
+    "/api/auth/check-email",
+    "check_email_api",
+    public_api(check_email_api),
+    methods=["POST"],
+)
+app.add_url_rule(
+    "/api/auth/login-password",
+    "login_password_api",
+    public_api(login_password_api),
+    methods=["POST"],
+)
 app.add_url_rule("/auth/login/<token>", "login_with_token", login_with_token)
 # The app -> web handoff (POST /api/auth/web-session): the same one-time login on a
 # path the iOS app does NOT claim as a Universal Link, so the link loads in the app's
@@ -480,28 +585,82 @@ app.add_url_rule("/auth/web/<token>", "web_handoff_login", login_with_token)
 # The app-shell API (spec 052): auth handshake, identity, config, home, resolve.
 # Handlers carry their own @public_api / @api_login_required markers.
 app.add_url_rule("/api/auth/exchange", "auth_exchange", auth_exchange, methods=["POST"])
-app.add_url_rule("/api/auth/resend-verification", "auth_resend_verification", auth_resend_verification, methods=["POST"])
+app.add_url_rule(
+    "/api/auth/resend-verification",
+    "auth_resend_verification",
+    auth_resend_verification,
+    methods=["POST"],
+)
 app.add_url_rule("/api/auth/logout", "auth_logout", auth_logout, methods=["POST"])
-app.add_url_rule("/api/auth/set-password", "auth_set_password", auth_set_password, methods=["POST"])
-app.add_url_rule("/api/auth/web-session", "auth_web_session", auth_web_session, methods=["POST"])
+app.add_url_rule(
+    "/api/auth/set-password", "auth_set_password", auth_set_password, methods=["POST"]
+)
+app.add_url_rule(
+    "/api/auth/web-session", "auth_web_session", auth_web_session, methods=["POST"]
+)
+app.add_url_rule("/language/<code>", "set_language", i18n.set_language, methods=["GET"])
 app.add_url_rule("/api/me", "api_me", api_me, methods=["GET"])
 app.add_url_rule("/api/me/profile", "me_profile", me_profile, methods=["GET", "PUT"])
-app.add_url_rule("/api/me/delete-account", "delete_account_api", delete_account_api, methods=["POST"])
+app.add_url_rule(
+    "/api/me/delete-account", "delete_account_api", delete_account_api, methods=["POST"]
+)
 app.add_url_rule("/api/app-config", "app_config", app_config, methods=["GET"])
 app.add_url_rule("/api/home", "api_home", api_home, methods=["GET"])
 app.add_url_rule("/api/resolve", "resolve_path", resolve_path, methods=["GET"])
-app.add_url_rule("/api/listen/decider-data", "listen_decider_data", listen_decider_data, methods=["GET"])
-app.add_url_rule("/.well-known/apple-app-site-association", "apple_app_site_association", apple_app_site_association)
+app.add_url_rule(
+    "/api/listen/decider-data",
+    "listen_decider_data",
+    listen_decider_data,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/.well-known/apple-app-site-association",
+    "apple_app_site_association",
+    apple_app_site_association,
+)
 # The one tune-search family (spec 052 A6), scoped by ?session= / ?instance=.
-app.add_url_rule("/api/tunes/deep-search", "tunes_deep_search", tunes_deep_search, methods=["GET"])
-app.add_url_rule("/api/tunes/thesession-search", "tunes_thesession_search", tunes_thesession_search, methods=["GET"])
-app.add_url_rule("/api/tunes/<int:tune_id>/incipit-image", "tunes_incipit_image", tunes_incipit_image, methods=["GET"])
-app.add_url_rule("/api/tunes/<int:tune_id>/preview", "tunes_preview", tunes_preview, methods=["GET"])
-app.add_url_rule("/api/tunes/settings/<int:setting_id>/image", "tunes_setting_image", tunes_setting_image, methods=["GET"])
-app.add_url_rule("/api/tunes/thesession/<int:thesession_id>/preview", "tunes_thesession_preview", tunes_thesession_preview, methods=["GET"])
-app.add_url_rule("/api/tunes/render-abc", "tunes_render_abc", tunes_render_abc, methods=["POST"])
-app.add_url_rule("/auth/set-password", "set_password_optional", set_password_optional, methods=["GET", "POST"])
-app.add_url_rule("/auth/setup-profile", "setup_profile", setup_profile, methods=["GET", "POST"])
+app.add_url_rule(
+    "/api/tunes/deep-search", "tunes_deep_search", tunes_deep_search, methods=["GET"]
+)
+app.add_url_rule(
+    "/api/tunes/thesession-search",
+    "tunes_thesession_search",
+    tunes_thesession_search,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/tunes/<int:tune_id>/incipit-image",
+    "tunes_incipit_image",
+    tunes_incipit_image,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/tunes/<int:tune_id>/preview", "tunes_preview", tunes_preview, methods=["GET"]
+)
+app.add_url_rule(
+    "/api/tunes/settings/<int:setting_id>/image",
+    "tunes_setting_image",
+    tunes_setting_image,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/tunes/thesession/<int:thesession_id>/preview",
+    "tunes_thesession_preview",
+    tunes_thesession_preview,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/tunes/render-abc", "tunes_render_abc", tunes_render_abc, methods=["POST"]
+)
+app.add_url_rule(
+    "/auth/set-password",
+    "set_password_optional",
+    set_password_optional,
+    methods=["GET", "POST"],
+)
+app.add_url_rule(
+    "/auth/setup-profile", "setup_profile", setup_profile, methods=["GET", "POST"]
+)
 app.add_url_rule(
     "/forgot-password", "forgot_password", forgot_password, methods=["GET", "POST"]
 )
@@ -560,13 +719,17 @@ app.add_url_rule(
     session_admin_person,
 )
 app.add_url_rule(
-    "/admin/sessions/<path:session_path>/tunes", "session_admin_tunes", session_admin_tunes
+    "/admin/sessions/<path:session_path>/tunes",
+    "session_admin_tunes",
+    session_admin_tunes,
 )
 app.add_url_rule(
     "/admin/sessions/<path:session_path>/logs", "session_admin_logs", session_admin_logs
 )
 app.add_url_rule(
-    "/admin/sessions/<path:session_path>/cache", "session_admin_cache", session_admin_cache
+    "/admin/sessions/<path:session_path>/cache",
+    "session_admin_cache",
+    session_admin_cache,
 )
 app.add_url_rule(
     "/admin/sessions/<path:session_path>/bulk-import",
@@ -606,13 +769,23 @@ app.add_url_rule(
     get_admin_people_api,
     methods=["GET"],
 )
-app.add_url_rule("/api/admin/places", "get_admin_places", get_admin_places, methods=["GET"])
-app.add_url_rule("/api/admin/places", "create_admin_place", create_admin_place, methods=["POST"])
 app.add_url_rule(
-    "/api/admin/places/<int:place_id>", "update_admin_place", update_admin_place, methods=["PUT"]
+    "/api/admin/places", "get_admin_places", get_admin_places, methods=["GET"]
 )
 app.add_url_rule(
-    "/api/admin/places/<int:place_id>", "delete_admin_place", delete_admin_place, methods=["DELETE"]
+    "/api/admin/places", "create_admin_place", create_admin_place, methods=["POST"]
+)
+app.add_url_rule(
+    "/api/admin/places/<int:place_id>",
+    "update_admin_place",
+    update_admin_place,
+    methods=["PUT"],
+)
+app.add_url_rule(
+    "/api/admin/places/<int:place_id>",
+    "delete_admin_place",
+    delete_admin_place,
+    methods=["DELETE"],
 )
 app.add_url_rule(
     "/api/admin/people/merge",
@@ -674,6 +847,7 @@ app.add_url_rule(
     live_logging_screen,
 )
 
+
 # Serve the live-screen service worker at /live/sw.js so its scope is /live/
 # (it must control /live/instances/* navigations). Kept no-store so SW updates
 # are picked up promptly.
@@ -685,6 +859,7 @@ def live_service_worker():
     )
     resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     return resp
+
 
 app.add_url_rule("/live/sw.js", "live_service_worker", live_service_worker)
 
@@ -700,6 +875,7 @@ def app_service_worker():
     )
     resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     return resp
+
 
 app.add_url_rule("/sw.js", "app_service_worker", app_service_worker)
 
@@ -732,6 +908,7 @@ if os.environ.get("E2E_TEST_ROUTES") == "1":
 def offline_page():
     return render_template("offline.html")
 
+
 app.add_url_rule("/offline", "offline_page", offline_page)
 
 
@@ -744,7 +921,9 @@ app.add_url_rule("/offline", "offline_page", offline_page)
 # URL match), so on a slow connection a page load only waits for the HTML document.
 import hashlib
 
-_static_versions = {}  # filename -> (mtime, size, hash) — mtime/size guard picks up dev rebuilds
+_static_versions = (
+    {}
+)  # filename -> (mtime, size, hash) — mtime/size guard picks up dev rebuilds
 
 
 def _static_version(filename):
@@ -774,9 +953,14 @@ def _stamp_static_version(endpoint, values):
 
 @app.after_request
 def _immutable_versioned_static(resp):
-    if request.path.startswith("/static/") and request.args.get("v") and resp.status_code == 200:
+    if (
+        request.path.startswith("/static/")
+        and request.args.get("v")
+        and resp.status_code == 200
+    ):
         resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
     return resp
+
 
 # /api/sessions/data (positional-tuple sessions list) deleted — zero UI callers;
 # /api/sessions/with-today-status is the serialized replacement (spec 035 follow-up).
@@ -1574,6 +1758,11 @@ app.add_url_rule(
     admin_recordings,
 )
 app.add_url_rule(
+    "/admin/listen-jobs",
+    "admin_listen_jobs_page",
+    admin_listen_jobs_page,
+)
+app.add_url_rule(
     "/admin/recordings/<int:recording_id>/segment",
     "segment_recording",
     segment_recording,
@@ -1673,6 +1862,12 @@ app.add_url_rule(
     methods=["POST"],
 )
 app.add_url_rule(
+    "/api/recordings/<int:recording_id>/segments/<int:session_instance_tune_id>/confirm",
+    "confirm_recording_tune",
+    confirm_recording_tune,
+    methods=["POST"],
+)
+app.add_url_rule(
     "/api/recordings/<int:recording_id>/export",
     "export_recording_segments",
     export_recording_segments,
@@ -1682,6 +1877,74 @@ app.add_url_rule(
     "/api/session-instances/<int:session_instance_id>/recordings",
     "get_instance_recordings",
     get_instance_recordings,
+    methods=["GET"],
+)
+# Background work for the listening service, and the session's own tunes for
+# live listening (spec 053, "053 files/find-tunes-on-the-server.md").
+app.add_url_rule(
+    "/api/recordings/<int:recording_id>/find-tunes",
+    "start_find_tunes",
+    start_find_tunes,
+    methods=["POST"],
+)
+app.add_url_rule(
+    "/api/recordings/<int:recording_id>/find-tunes",
+    "get_find_tunes",
+    get_find_tunes,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/recordings/<int:recording_id>/find-tunes/undo",
+    "undo_find_tunes",
+    undo_find_tunes,
+    methods=["POST"],
+)
+app.add_url_rule(
+    "/api/listen-jobs/<int:job_id>/cancel",
+    "cancel_listen_job",
+    cancel_listen_job,
+    methods=["POST"],
+)
+app.add_url_rule(
+    "/api/listen-jobs/<int:job_id>/retry",
+    "retry_listen_job",
+    retry_listen_job,
+    methods=["POST"],
+)
+app.add_url_rule(
+    "/api/admin/listen-jobs",
+    "admin_listen_jobs",
+    admin_listen_jobs,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/listen-jobs/claim",
+    "claim_listen_job",
+    claim_listen_job,
+    methods=["POST"],
+)
+app.add_url_rule(
+    "/api/listen-jobs/<int:job_id>/progress",
+    "listen_job_progress",
+    listen_job_progress,
+    methods=["POST"],
+)
+app.add_url_rule(
+    "/api/listen-jobs/<int:job_id>/result",
+    "listen_job_result",
+    listen_job_result,
+    methods=["POST"],
+)
+app.add_url_rule(
+    "/api/listen-jobs/<int:job_id>/fail",
+    "listen_job_fail",
+    listen_job_fail,
+    methods=["POST"],
+)
+app.add_url_rule(
+    "/api/session-instances/<int:session_instance_id>/known-tunes",
+    "instance_known_tunes",
+    instance_known_tunes,
     methods=["GET"],
 )
 # Playback: the read side of the segmenter's work, for the session-instance page.
@@ -1708,6 +1971,7 @@ FUNNY_ERROR_IMAGES = [
     "djembe.avif",
 ]
 
+
 def get_random_funny_content():
     """Get random funny text and image for error pages"""
     if FUNNY_ERROR_TEXTS:
@@ -1719,6 +1983,7 @@ def get_random_funny_content():
         )
         return funny_text, funny_image
     return None, None
+
 
 def render_error_page(message, status_code=400):
     """Helper function to render error page with consistent formatting"""
@@ -1733,18 +1998,22 @@ def render_error_page(message, status_code=400):
         status_code,
     )
 
+
 @app.errorhandler(404)
 def not_found_error(error):  # pylint: disable=unused-argument
     funny_text, funny_image = get_random_funny_content()
     return (
         render_template(
             "error.html",
-            error_message="Page not found. The session you're looking for might have ended, or the URL might be incorrect.",
+            error_message=_(
+                "Page not found. The session you're looking for might have ended, or the URL might be incorrect."
+            ),
             funny_text=funny_text,
             funny_image=funny_image,
         ),
         404,
     )
+
 
 @app.errorhandler(403)
 def forbidden_error(error):  # pylint: disable=unused-argument
@@ -1752,12 +2021,15 @@ def forbidden_error(error):  # pylint: disable=unused-argument
     return (
         render_template(
             "error.html",
-            error_message="You don't have permission to access this page. You might need to log in or contact an admin.",
+            error_message=_(
+                "You don't have permission to access this page. You might need to log in or contact an admin."
+            ),
             funny_text=funny_text,
             funny_image=funny_image,
         ),
         403,
     )
+
 
 @app.errorhandler(401)
 def unauthorized_error(error):  # pylint: disable=unused-argument
@@ -1765,12 +2037,15 @@ def unauthorized_error(error):  # pylint: disable=unused-argument
     return (
         render_template(
             "error.html",
-            error_message="You must be logged in to access this page. Please log in and try again.",
+            error_message=_(
+                "You must be logged in to access this page. Please log in and try again."
+            ),
             funny_text=funny_text,
             funny_image=funny_image,
         ),
         401,
     )
+
 
 @app.errorhandler(500)
 def internal_error(error):  # pylint: disable=unused-argument
@@ -1778,12 +2053,15 @@ def internal_error(error):  # pylint: disable=unused-argument
     return (
         render_template(
             "error.html",
-            error_message="A server error occurred. Our team has been notified and will look into this issue.",
+            error_message=_(
+                "A server error occurred. Our team has been notified and will look into this issue."
+            ),
             funny_text=funny_text,
             funny_image=funny_image,
         ),
         500,
     )
+
 
 @app.errorhandler(Exception)
 def handle_exception(error):
@@ -1794,12 +2072,15 @@ def handle_exception(error):
     return (
         render_template(
             "error.html",
-            error_message=f"An unexpected error occurred: {str(error)}",
+            error_message=_(
+                "An unexpected error occurred: %(error)s", error=str(error)
+            ),
             funny_text=funny_text,
             funny_image=funny_image,
         ),
         500,
     )
+
 
 if __name__ == "__main__":
     app.run(

@@ -3,6 +3,7 @@ import re
 import threading
 import time
 import psycopg2
+from flask_babel import gettext as _
 import psycopg2.pool
 
 
@@ -20,7 +21,12 @@ def get_current_user_id():
     """
     try:
         from flask_login import current_user
-        if current_user and hasattr(current_user, 'user_id') and current_user.is_authenticated:
+
+        if (
+            current_user
+            and hasattr(current_user, "user_id")
+            and current_user.is_authenticated
+        ):
             return current_user.user_id
     except RuntimeError:
         # Outside of request context (e.g., in cron jobs or scripts)
@@ -57,28 +63,30 @@ def normalize_quotes_sql(col):
     catalog data may use either). Mirrors normalize_quotes() exactly; pair with a
     normalize_quotes()'d query so BOTH sides use straight quotes."""
     src = "||".join(f"chr({cp})" for cp in _SMART_SINGLES + _SMART_DOUBLES)
-    dst = "||".join(["chr(39)"] * len(_SMART_SINGLES) + ["chr(34)"] * len(_SMART_DOUBLES))
+    dst = "||".join(
+        ["chr(39)"] * len(_SMART_SINGLES) + ["chr(34)"] * len(_SMART_DOUBLES)
+    )
     return f"translate({col}, {src}, {dst})"
 
 
 # Mapping of tune types to expected eighth notes per bar
 # Used for detecting pickup notes (anacrusis) in ABC notation
 TUNE_TYPE_BEATS = {
-    'Jig': 6,           # 6/8 time
-    'Reel': 8,          # 4/4 time
-    'Slip Jig': 9,      # 9/8 time
-    'Hop Jig': 9,       # 9/8 time
-    'Hornpipe': 8,      # 4/4 time
-    'Polka': 4,         # 2/4 time
-    'Set Dance': 8,     # 4/4 time
-    'Slide': 12,        # 12/8 time
-    'Waltz': 6,         # 3/4 time
-    'Barndance': 8,     # 4/4 time
-    'Strathspey': 8,    # 4/4 time
-    'Three-Two': 12,    # 3/2 time
-    'Mazurka': 6,       # 3/4 time
-    'March': 8,         # 4/4 time (most common)
-    'Air': 8,           # Variable, defaulting to 4/4
+    "Jig": 6,  # 6/8 time
+    "Reel": 8,  # 4/4 time
+    "Slip Jig": 9,  # 9/8 time
+    "Hop Jig": 9,  # 9/8 time
+    "Hornpipe": 8,  # 4/4 time
+    "Polka": 4,  # 2/4 time
+    "Set Dance": 8,  # 4/4 time
+    "Slide": 12,  # 12/8 time
+    "Waltz": 6,  # 3/4 time
+    "Barndance": 8,  # 4/4 time
+    "Strathspey": 8,  # 4/4 time
+    "Three-Two": 12,  # 3/2 time
+    "Mazurka": 6,  # 3/4 time
+    "March": 8,  # 4/4 time (most common)
+    "Air": 8,  # Variable, defaulting to 4/4
 }
 
 
@@ -105,38 +113,38 @@ def count_eighth_notes_in_bar(bar_content):
         char = bar_content[i]
 
         # Skip decorations and grace notes
-        if char == '!':
+        if char == "!":
             # Skip until next !
             i += 1
-            while i < len(bar_content) and bar_content[i] != '!':
+            while i < len(bar_content) and bar_content[i] != "!":
                 i += 1
             i += 1
             continue
 
-        if char == '{':
+        if char == "{":
             # Skip grace notes until }
-            while i < len(bar_content) and bar_content[i] != '}':
+            while i < len(bar_content) and bar_content[i] != "}":
                 i += 1
             i += 1
             continue
 
         # Handle chords [...]
-        if char == '[':
+        if char == "[":
             # Chords count as one note, get the duration after the ]
-            while i < len(bar_content) and bar_content[i] != ']':
+            while i < len(bar_content) and bar_content[i] != "]":
                 i += 1
             i += 1
             # Now get the duration modifier if any
             duration = 1  # Default eighth note
             if i < len(bar_content):
-                if bar_content[i:i+2] == '/2':
+                if bar_content[i : i + 2] == "/2":
                     duration = 0.5
                     i += 2
-                elif bar_content[i] == '/':
+                elif bar_content[i] == "/":
                     duration = 0.5
                     i += 1
                 elif bar_content[i].isdigit():
-                    num = ''
+                    num = ""
                     while i < len(bar_content) and bar_content[i].isdigit():
                         num += bar_content[i]
                         i += 1
@@ -145,7 +153,7 @@ def count_eighth_notes_in_bar(bar_content):
             continue
 
         # Note letters (A-G, a-g) and rest (z, x)
-        if char in 'ABCDEFGabcdefgzxZ':
+        if char in "ABCDEFGabcdefgzxZ":
             duration = 1  # Default is one eighth note
             i += 1
 
@@ -156,17 +164,17 @@ def count_eighth_notes_in_bar(bar_content):
 
             # Check for duration modifiers
             if i < len(bar_content):
-                if bar_content[i:i+2] == '/2':
+                if bar_content[i : i + 2] == "/2":
                     duration = 0.5
                     i += 2
-                elif bar_content[i:i+2] == '/4':
+                elif bar_content[i : i + 2] == "/4":
                     duration = 0.25
                     i += 2
-                elif bar_content[i] == '/':
+                elif bar_content[i] == "/":
                     duration = 0.5
                     i += 1
                 elif bar_content[i].isdigit():
-                    num = ''
+                    num = ""
                     while i < len(bar_content) and bar_content[i].isdigit():
                         num += bar_content[i]
                         i += 1
@@ -202,10 +210,10 @@ def extract_abc_incipit(abc_notation, tune_type=None):
     bar_positions = []
     i = 0
     while i < len(abc_notation):
-        if abc_notation[i] == '|':
+        if abc_notation[i] == "|":
             bar_positions.append(i)
             # Skip any immediately following bar-related characters (:, |, etc.)
-            while i + 1 < len(abc_notation) and abc_notation[i + 1] in ':|]':
+            while i + 1 < len(abc_notation) and abc_notation[i + 1] in ":|]":
                 i += 1
         i += 1
 
@@ -227,10 +235,13 @@ def extract_abc_incipit(abc_notation, tune_type=None):
             # Extract content between first and second bar line
             first_bar_start = bar_positions[0]
             # Skip past the bar line and any modifiers (:, |, etc.)
-            while first_bar_start < len(abc_notation) and abc_notation[first_bar_start] in ':|[]':
+            while (
+                first_bar_start < len(abc_notation)
+                and abc_notation[first_bar_start] in ":|[]"
+            ):
                 first_bar_start += 1
 
-            first_bar_content = abc_notation[first_bar_start:bar_positions[1]]
+            first_bar_content = abc_notation[first_bar_start : bar_positions[1]]
 
             # Count beats in first bar
             first_bar_beats = count_eighth_notes_in_bar(first_bar_content)
@@ -247,7 +258,7 @@ def extract_abc_incipit(abc_notation, tune_type=None):
     incipit_end += 1
 
     # Also include any bar modifiers immediately after (like : or |)
-    while incipit_end < len(abc_notation) and abc_notation[incipit_end] in ':|]':
+    while incipit_end < len(abc_notation) and abc_notation[incipit_end] in ":|]":
         incipit_end += 1
 
     return abc_notation[:incipit_end]
@@ -624,12 +635,12 @@ def save_to_history(cur, table_name, operation, record_id, user_id=None):
             INSERT INTO session_instance_tune_history
             (session_instance_tune_id, operation, changed_by_user_id, session_instance_id, tune_id,
              name, order_position, record_type, played_timestamp, inserted_timestamp,
-             key_override, setting_override, source, confidence, played_start, played_end,
+             key_override, setting_override, source, confidence, confidence_model, played_start, played_end,
              logged_timestamp, client_device_id, deleted,
              created_date, last_modified_date, created_by_user_id, last_modified_user_id)
             SELECT session_instance_tune_id, %s, %s, session_instance_id, tune_id,
                    name, order_position, record_type, played_timestamp, inserted_timestamp,
-                   key_override, setting_override, source, confidence, played_start, played_end,
+                   key_override, setting_override, source, confidence, confidence_model, played_start, played_end,
                    logged_timestamp, client_device_id, deleted,
                    created_date, last_modified_date, created_by_user_id, last_modified_user_id
             FROM session_instance_tune WHERE session_instance_tune_id = %s
@@ -657,18 +668,18 @@ def save_to_history(cur, table_name, operation, record_id, user_id=None):
             """
             INSERT INTO user_account_history
             (user_id, operation, changed_by_user_id, person_id, username, user_email, hashed_password,
-             timezone, is_active, is_system_admin, receive_update_emails, email_verified, verification_token,
+             timezone, language, is_active, is_system_admin, receive_update_emails, email_verified, verification_token,
              verification_token_expires, password_reset_token, password_reset_expires,
              created_date, last_modified_date, referred_by_person_id, created_by_user_id, last_modified_user_id)
             SELECT user_id, %s, %s, person_id, username, user_email, hashed_password,
-                   timezone, is_active, is_system_admin, receive_update_emails, email_verified, verification_token,
+                   timezone, language, is_active, is_system_admin, receive_update_emails, email_verified, verification_token,
                    verification_token_expires, password_reset_token, password_reset_expires,
                    created_date, last_modified_date, referred_by_person_id, created_by_user_id, last_modified_user_id
             FROM user_account WHERE user_id = %s
         """,
             (operation, user_id, record_id),
         )
-        
+
     elif table_name == "person_tune":
         # record_id is either a (person_id, tune_id) tuple or a scalar person_tune_id
         # (models/person_tune.py passes the latter). This branch was missing until the
@@ -707,7 +718,7 @@ def save_to_history(cur, table_name, operation, record_id, user_id=None):
         """,
             (operation, user_id, person_id, instrument),
         )
-        
+
     elif table_name == "person_tune_instrument":
         # For person_tune_instrument, record_id is a tuple (person_id, tune_id, instrument)
         person_id, tune_id, instrument = record_id
@@ -924,67 +935,82 @@ def normalize_override_name(cur, session_id, tune_id, name):
 
 # Session Attendee Tracking Database Functions
 
-def check_in_person(session_instance_id, person_id, attendance, comment='', user_id=None):
+
+def check_in_person(
+    session_instance_id, person_id, attendance, comment="", user_id=None
+):
     """
     Check a person into a session instance or update their attendance status.
-    
+
     Returns tuple of (success, message, action) where action is 'added' or 'updated'.
     """
     conn = get_db_connection()
     cur = conn.cursor()
-    
+
     try:
         # Begin transaction
         cur.execute("BEGIN")
-        
+
         # Check if attendance record already exists
-        cur.execute("""
+        cur.execute(
+            """
             SELECT attendance, comment, created_date 
             FROM session_instance_person 
             WHERE session_instance_id = %s AND person_id = %s
-        """, (session_instance_id, person_id))
-        
+        """,
+            (session_instance_id, person_id),
+        )
+
         existing_record = cur.fetchone()
-        
+
         if existing_record:
             # Get the session_instance_person_id for history logging
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT session_instance_person_id 
                 FROM session_instance_person 
                 WHERE session_instance_id = %s AND person_id = %s
-            """, (session_instance_id, person_id))
-            
+            """,
+                (session_instance_id, person_id),
+            )
+
             existing_id = cur.fetchone()[0]
-            
+
             # Log to history before update
             save_to_history(
                 cur,
-                'session_instance_person',
-                'UPDATE',
+                "session_instance_person",
+                "UPDATE",
                 (session_instance_id, person_id),
                 user_id=user_id,
             )
-            
+
             # Update existing record
-            cur.execute("""
+            cur.execute(
+                """
                 UPDATE session_instance_person
                 SET attendance = %s, comment = %s, last_modified_date = (NOW() AT TIME ZONE 'UTC'),
                     last_modified_user_id = %s
                 WHERE session_instance_id = %s AND person_id = %s
-            """, (attendance, comment, user_id, session_instance_id, person_id))
-            
+            """,
+                (attendance, comment, user_id, session_instance_id, person_id),
+            )
+
             action = "updated"
         else:
             # Get the session_id for this session_instance_id
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT session_id FROM session_instance 
                 WHERE session_instance_id = %s
-            """, (session_instance_id,))
-            
+            """,
+                (session_instance_id,),
+            )
+
             session_id_result = cur.fetchone()
             if not session_id_result:
                 raise Exception(f"Session instance {session_instance_id} not found")
-            
+
             session_id = session_id_result[0]
 
             # Spec 034: check-in creates a session_person row if one is missing, as an
@@ -996,39 +1022,65 @@ def check_in_person(session_instance_id, person_id, attendance, comment='', user
             # If a row already exists we touch NOTHING: we never downgrade a member to a
             # visitor, never un-archive someone (a visit means "she's here tonight", not
             # "she's back" -- only an admin states the second), and never confirm.
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT COUNT(*) FROM session_person
                 WHERE session_id = %s AND person_id = %s
-            """, (session_id, person_id))
+            """,
+                (session_id, person_id),
+            )
 
             session_person_exists = cur.fetchone()[0] > 0
 
             if not session_person_exists:
-                cur.execute("""
+                cur.execute(
+                    """
                     INSERT INTO session_person
                         (session_id, person_id, relationship, confirmed, archived, is_admin, created_by_user_id)
                     VALUES (%s, %s, 'visitor', FALSE, FALSE, FALSE, %s)
-                """, (session_id, person_id, user_id))
-                save_to_history(cur, 'session_person', 'INSERT', (session_id, person_id), user_id=user_id)
+                """,
+                    (session_id, person_id, user_id),
+                )
+                save_to_history(
+                    cur,
+                    "session_person",
+                    "INSERT",
+                    (session_id, person_id),
+                    user_id=user_id,
+                )
 
             # Insert new attendance record
-            cur.execute("""
+            cur.execute(
+                """
                 INSERT INTO session_instance_person (session_instance_id, person_id, attendance, comment, created_date, created_by_user_id)
                 VALUES (%s, %s, %s, %s, (NOW() AT TIME ZONE 'UTC'), %s)
                 RETURNING session_instance_person_id
-            """, (session_instance_id, person_id, attendance, comment, user_id))
-            
+            """,
+                (session_instance_id, person_id, attendance, comment, user_id),
+            )
+
             new_record_id = cur.fetchone()[0]
-            
+
             # Log INSERT to history (manually since record was just created)
-            cur.execute("""
+            cur.execute(
+                """
                 INSERT INTO session_instance_person_history
                 (session_instance_person_id, session_instance_id, person_id, attendance, comment, operation, changed_by_user_id, changed_at, created_date)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, (NOW() AT TIME ZONE 'UTC'), (NOW() AT TIME ZONE 'UTC'))
-            """, (new_record_id, session_instance_id, person_id, attendance, comment, 'INSERT', user_id))
-            
+            """,
+                (
+                    new_record_id,
+                    session_instance_id,
+                    person_id,
+                    attendance,
+                    comment,
+                    "INSERT",
+                    user_id,
+                ),
+            )
+
             action = "added"
-        
+
         # Commit transaction
         cur.execute("COMMIT")
 
@@ -1037,33 +1089,48 @@ def check_in_person(session_instance_id, person_id, attendance, comment='', user
         # we update the person's location
         try:
             from active_session_manager import update_session_instance_active_status
+
             update_session_instance_active_status(session_instance_id, conn)
         except Exception as e:
             # Log error but don't fail the check-in
             import logging
+
             logger = logging.getLogger(__name__)
-            logger.error(f"Failed to update session instance {session_instance_id} active status: {e}")
+            logger.error(
+                f"Failed to update session instance {session_instance_id} active status: {e}"
+            )
 
         # Update person's active session based on their attendance status
         # Import locally to avoid circular dependency
         try:
-            if attendance == 'yes':
+            if attendance == "yes":
                 # If they checked in as "yes", update their active session instance
                 from active_session_manager import update_person_active_instance
+
                 update_person_active_instance(person_id, session_instance_id, conn)
             else:
                 # If they checked in as "maybe" or "no", recalculate their active session
                 # (they should not be at this session, but may be at another overlapping one)
                 from active_session_manager import recalculate_person_active_instance
+
                 recalculate_person_active_instance(person_id, conn)
             conn.commit()
         except Exception as e:
             # Log error but don't fail the check-in
             import logging
+
             logger = logging.getLogger(__name__)
             logger.error(f"Failed to update person {person_id} active instance: {e}")
 
-        return True, f"Successfully {action} attendance", action
+        return (
+            True,
+            (
+                _("Successfully added attendance")
+                if action == "added"
+                else _("Successfully updated attendance")
+            ),
+            action,
+        )
 
     except Exception as e:
         cur.execute("ROLLBACK")
@@ -1073,13 +1140,16 @@ def check_in_person(session_instance_id, person_id, attendance, comment='', user
         conn.close()
 
 
-def create_person_with_instruments(first_name, last_name, email=None, instruments=None, user_id=None):
+def create_person_with_instruments(
+    first_name, last_name, email=None, instruments=None, user_id=None
+):
     """
     Create a new person with associated instruments.
-    
+
     Returns tuple of (success, message, person_id, display_name).
     """
     from instruments import normalize_instruments
+
     instruments = normalize_instruments(instruments)
 
     conn = get_db_connection()
@@ -1090,60 +1160,80 @@ def create_person_with_instruments(first_name, last_name, email=None, instrument
         cur.execute("BEGIN")
 
         # Check if person with same name already exists (for display name disambiguation)
-        cur.execute("""
+        cur.execute(
+            """
             SELECT person_id, first_name, last_name, email 
             FROM person 
             WHERE LOWER(first_name) = LOWER(%s) AND LOWER(last_name) = LOWER(%s)
-        """, (first_name, last_name))
-        
+        """,
+            (first_name, last_name),
+        )
+
         existing_people = cur.fetchall()
-        
+
         # Insert person
-        cur.execute("""
+        cur.execute(
+            """
             INSERT INTO person (first_name, last_name, email, created_date, created_by_user_id)
             VALUES (%s, %s, %s, (NOW() AT TIME ZONE 'UTC'), %s)
             RETURNING person_id
-        """, (first_name, last_name, email, user_id))
-        
+        """,
+            (first_name, last_name, email, user_id),
+        )
+
         person_id = cur.fetchone()[0]
-        
+
         # Log person creation to history (manually since record was just created)
-        cur.execute("""
+        cur.execute(
+            """
             INSERT INTO person_history
             (person_id, first_name, last_name, email, operation, changed_by_user_id, changed_at, created_date)
             VALUES (%s, %s, %s, %s, %s, %s, (NOW() AT TIME ZONE 'UTC'), (NOW() AT TIME ZONE 'UTC'))
-        """, (person_id, first_name, last_name, email, 'INSERT', user_id))
-        
+        """,
+            (person_id, first_name, last_name, email, "INSERT", user_id),
+        )
+
         # Insert instruments
         for instrument in instruments:
-            cur.execute("""
+            cur.execute(
+                """
                 INSERT INTO person_instrument (person_id, instrument, created_date, created_by_user_id)
                 VALUES (%s, %s, (NOW() AT TIME ZONE 'UTC'), %s)
-            """, (person_id, instrument, user_id))
+            """,
+                (person_id, instrument, user_id),
+            )
 
             # Log instrument creation to history (manually since record was just created)
-            cur.execute("""
+            cur.execute(
+                """
                 INSERT INTO person_instrument_history
                 (person_id, instrument, operation, changed_by_user_id, changed_at, created_date)
                 VALUES (%s, %s, %s, %s, (NOW() AT TIME ZONE 'UTC'), (NOW() AT TIME ZONE 'UTC'))
-            """, (person_id, instrument, 'INSERT', user_id))
-        
+            """,
+                (person_id, instrument, "INSERT", user_id),
+            )
+
         # Commit transaction
         cur.execute("COMMIT")
-        
+
         # Generate display name (with disambiguation if needed)
         base_name = f"{first_name} {last_name}"
         display_name = base_name
-        
+
         # If there are existing people with same name, add email or ID for disambiguation
         if existing_people:
             if email:
                 display_name = f"{base_name} ({email})"
             else:
                 display_name = f"{base_name} (#{person_id})"
-        
-        return True, f"Successfully created person: {display_name}", person_id, display_name
-        
+
+        return (
+            True,
+            _("Successfully created person: %(name)s", name=display_name),
+            person_id,
+            display_name,
+        )
+
     except Exception as e:
         cur.execute("ROLLBACK")
         return False, str(e), None, None
@@ -1155,23 +1245,26 @@ def create_person_with_instruments(first_name, last_name, email=None, instrument
 def get_person_instruments(person_id):
     """
     Get all instruments for a specific person.
-    
+
     Returns list of instrument names.
     """
     conn = get_db_connection()
     cur = conn.cursor()
-    
+
     try:
-        cur.execute("""
+        cur.execute(
+            """
             SELECT instrument 
             FROM person_instrument 
             WHERE person_id = %s 
             ORDER BY instrument
-        """, (person_id,))
-        
+        """,
+            (person_id,),
+        )
+
         results = cur.fetchall()
         return [row[0] for row in results]
-        
+
     finally:
         cur.close()
         conn.close()
@@ -1180,10 +1273,11 @@ def get_person_instruments(person_id):
 def update_person_instruments(person_id, instruments, user_id=None):
     """
     Update all instruments for a specific person.
-    
+
     Returns tuple of (success, message, changes_dict).
     """
     from instruments import normalize_instruments
+
     instruments = normalize_instruments(instruments)
 
     conn = get_db_connection()
@@ -1194,54 +1288,65 @@ def update_person_instruments(person_id, instruments, user_id=None):
         cur.execute("BEGIN")
 
         # Get existing instruments
-        cur.execute("SELECT instrument FROM person_instrument WHERE person_id = %s", (person_id,))
+        cur.execute(
+            "SELECT instrument FROM person_instrument WHERE person_id = %s",
+            (person_id,),
+        )
         existing_results = cur.fetchall()
         existing_instruments = set(row[0] for row in existing_results)
         new_instruments = set(instruments)
-        
+
         # Calculate changes
         instruments_to_remove = existing_instruments - new_instruments
         instruments_to_add = new_instruments - existing_instruments
-        
+
         # Remove instruments no longer in the list
         for instrument in instruments_to_remove:
             # Log removal to history before delete
             save_to_history(
                 cur,
-                'person_instrument',
-                'DELETE',
+                "person_instrument",
+                "DELETE",
                 (person_id, instrument),
                 user_id=user_id,
             )
-            
-            cur.execute("DELETE FROM person_instrument WHERE person_id = %s AND instrument = %s", 
-                       (person_id, instrument))
-        
+
+            cur.execute(
+                "DELETE FROM person_instrument WHERE person_id = %s AND instrument = %s",
+                (person_id, instrument),
+            )
+
         # Add new instruments
         for instrument in instruments_to_add:
-            cur.execute("""
+            cur.execute(
+                """
                 INSERT INTO person_instrument (person_id, instrument, created_date, created_by_user_id)
                 VALUES (%s, %s, (NOW() AT TIME ZONE 'UTC'), %s)
-            """, (person_id, instrument, user_id))
+            """,
+                (person_id, instrument, user_id),
+            )
 
             # Log addition to history (manually since record was just created)
-            cur.execute("""
+            cur.execute(
+                """
                 INSERT INTO person_instrument_history
                 (person_id, instrument, operation, changed_by_user_id, changed_at, created_date)
                 VALUES (%s, %s, %s, %s, (NOW() AT TIME ZONE 'UTC'), (NOW() AT TIME ZONE 'UTC'))
-            """, (person_id, instrument, 'INSERT', user_id))
-        
+            """,
+                (person_id, instrument, "INSERT", user_id),
+            )
+
         # Commit transaction
         cur.execute("COMMIT")
-        
+
         changes = {
-            'added': sorted(list(instruments_to_add)),
-            'removed': sorted(list(instruments_to_remove)),
-            'total_changes': len(instruments_to_add) + len(instruments_to_remove)
+            "added": sorted(list(instruments_to_add)),
+            "removed": sorted(list(instruments_to_remove)),
+            "total_changes": len(instruments_to_add) + len(instruments_to_remove),
         }
-        
-        return True, "Successfully updated instruments", changes
-        
+
+        return True, _("Successfully updated instruments"), changes
+
     except Exception as e:
         cur.execute("ROLLBACK")
         return False, str(e), None
@@ -1253,54 +1358,67 @@ def update_person_instruments(person_id, instruments, user_id=None):
 def remove_person_attendance(session_instance_id, person_id, user_id=None):
     """
     Remove a person from a session instance attendance list.
-    
+
     Returns tuple of (success, message, previous_attendance_data).
     """
     conn = get_db_connection()
     cur = conn.cursor()
-    
+
     try:
         # Begin transaction
         cur.execute("BEGIN")
-        
+
         # Get existing record before deletion
-        cur.execute("""
+        cur.execute(
+            """
             SELECT attendance, comment, created_date 
             FROM session_instance_person 
             WHERE session_instance_id = %s AND person_id = %s
-        """, (session_instance_id, person_id))
-        
+        """,
+            (session_instance_id, person_id),
+        )
+
         existing_record = cur.fetchone()
         if not existing_record:
-            return False, "Person is not currently attending this session instance", None
-        
+            return (
+                False,
+                _("Person is not currently attending this session instance"),
+                None,
+            )
+
         # Log removal to history before delete
         save_to_history(
             cur,
-            'session_instance_person',
-            'DELETE',
+            "session_instance_person",
+            "DELETE",
             (session_instance_id, person_id),
             user_id=user_id,
         )
-        
+
         # Get the session_id for this session_instance_id
-        cur.execute("""
+        cur.execute(
+            """
             SELECT session_id FROM session_instance 
             WHERE session_instance_id = %s
-        """, (session_instance_id,))
-        
+        """,
+            (session_instance_id,),
+        )
+
         session_id_result = cur.fetchone()
         if not session_id_result:
             raise Exception(f"Session instance {session_instance_id} not found")
-        
+
         session_id = session_id_result[0]
-        
+
         # Delete attendance record
-        cur.execute("""
+        cur.execute(
+            """
             DELETE FROM session_instance_person
             WHERE session_instance_id = %s AND person_id = %s
-        """, (session_instance_id, person_id))
-        
+        """,
+            (session_instance_id, person_id),
+        )
+
         # Commit transaction
         cur.execute("COMMIT")
 
@@ -1308,22 +1426,26 @@ def remove_person_attendance(session_instance_id, person_id, user_id=None):
         # They should no longer be at this session, but may be at another overlapping one
         try:
             from active_session_manager import recalculate_person_active_instance
+
             recalculate_person_active_instance(person_id, conn)
             conn.commit()
         except Exception as e:
             # Log error but don't fail the removal
             import logging
+
             logger = logging.getLogger(__name__)
-            logger.error(f"Failed to recalculate person {person_id} active instance after removal: {e}")
+            logger.error(
+                f"Failed to recalculate person {person_id} active instance after removal: {e}"
+            )
 
         previous_data = {
-            'attendance': existing_record[0],
-            'comment': existing_record[1],
-            'created_date': existing_record[2]
+            "attendance": existing_record[0],
+            "comment": existing_record[1],
+            "created_date": existing_record[2],
         }
 
-        return True, "Successfully removed person from attendance", previous_data
-        
+        return True, _("Successfully removed person from attendance"), previous_data
+
     except Exception as e:
         cur.execute("ROLLBACK")
         return False, str(e), None

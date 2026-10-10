@@ -314,6 +314,11 @@ def fetch_tunes_csv(force=False, attempts=4):
                 resp = _open_dump(url, _NoThrottle())
                 expected = resp.headers.get("Content-Length")
                 expected = int(expected) if expected and expected.isdigit() else None
+                if resp.headers.get("Content-Encoding"):
+                    # Content-Length is then the compressed size, and iter_content
+                    # gives the decompressed bytes; the tune-count floor still
+                    # catches a truncated dump
+                    expected = None
                 n = 0
                 started = time.time()
                 with open(part, "wb") as f:

@@ -1,5 +1,9 @@
 // Shared display-formatting helpers (kit-adoption follow-up to spec 035). One
 // tested copy replaces the per-bundle duplicates; semantics are the legacy ones.
+//
+// Spec 057: in Irish, times read on the 24-hour clock ("19:00"), as they do on
+// Irish timetables; English keeps the legacy "7:00pm".
+import { currentLang } from '../lib/i18n/index.js'
 
 /**
  * 24-hour "HH:MM" (or "HH:MM:SS") -> 12-hour "H:MMam/pm". Empty input -> ''.
@@ -10,6 +14,7 @@ export function formatTime(timeStr) {
   const parts = timeStr.split(':')
   let hour = parseInt(parts[0])
   const minute = parts[1]
+  if (currentLang() === 'ga') return `${String(hour).padStart(2, '0')}:${minute}`
   const period = hour >= 12 ? 'pm' : 'am'
   hour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour
   return `${hour}:${minute}${period}`

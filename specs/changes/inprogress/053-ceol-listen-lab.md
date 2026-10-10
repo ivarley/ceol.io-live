@@ -2517,6 +2517,327 @@ tunes) and The Porthole Of The Kelp. Compute +3% a step. So the production
 design costs nothing here and needs no index per session; The Duke Of Leinster
 (112, first played that night) is still not reached.
 
+**Confidence that means what it says** (2026-10-07). The listener will log
+tunes itself, so each logged tune needs the chance it is right, shown where a
+person checks it. The decoder's belief is not that chance: of the tunes it
+held at 0.99 or more, 0.8% were wrong, and the 108 wrong or extra tunes of ten
+nights' blind drafts (nine nights and 136, with the session's history and as a
+new session; 1,581 tunes) mostly sat at 0.7-1.0. `analysis.confidence` fits a
+logistic model on each drafted tune's belief (median and 10th percentile while
+shown), how steadily it was shown, its length, its tunebook count, whether it
+is outside the session and the stretch's tune-ness, against the labels
+(thesession.org duplicates counted as one, `lab/configs/same_tunes.json`).
+Scored leaving each night out, it is honest where it matters: said under 50%,
+14% right (99 tunes); 50-70%, 57% (21); 70-90%, 70% against 82% said (37, the
+one band a little overconfident); 90-97%, 100% (43); 97-99%, 97% (102); 99% and
+over, 100% (1,279). Brier 0.018 against belief's 0.051. Under 70 it flags 120
+tunes holding 94 of the 108 wrong ones (belief under 0.7 flagged 17). Length
+and belief carry most of it; popular tunes come out slightly less sure (their
+look-alikes are popular too) and tunes outside the session slightly more
+(what reaches the log from outside has beaten the session's own). Model 1 is
+`lab/configs/confidence.json`; drafts carry each tune's features and `p_right`
+(0-99), and `--apply` sends them as the log row's `confidence` with
+`confidence_model` "listen-1" (schema 060, spec 050 "A machine's guesses"), so
+the segmenter asks for a check on every one under 100. Refitting with more
+labelled nights is a new version; a stored confidence keeps the version that
+made it.
+
+**Letting go when belief drops** (2026-10-08). Of the 36 labelled tunes still
+not named right over thirteen nights, 13 had been shown at some point but were
+drafted as another; the next biggest groups: 8 a candidate never shown, 6 not
+heard as a tune (quiet, talk), 6 never a candidate (first time, or Mac's
+Fancy off its key), 3 under 45 s. The player's idea: a tune that was 100%
+and drops has changed; stop hearing it. Measured as a signal on the saved
+states: a tune held at 0.99 or more for 40 s whose belief falls under 0.9 is
+a changeover 59% of the time, a set's end 38%, mid-tune 3% (26 of 817), and
+such a drop comes at 89% of changeovers (held only 12 s: 8% mid-tune).
+`Listener(drop_release_s=)`: on such a drop the tune is ruled out for that
+long, as a "none of these" tap does. Replayed on all thirteen nights at 60 s,
+against the same with the long settings left out, through the same final
+steps: named right 882 -> 884 of 918 (fixed 5, all of the shown-but-drafted-
+as-another kind: The Sailor's Bonnet, The Porthole Of The Kelp, The New Custom
+House, The Bunch Of Green Rushes twice; broken 3 on the hard nights,
+Mulqueen's and Da New Rigged Ship on 139, Mickey Chewing Bubblegum on 115;
+p 0.73); wrong or extra 42 -> 47; to check 65 -> 69; starts unchanged (687 ->
+684 within 1 s). Not adopted at 60 s. At 20 s, same nights and steps:
+named right 882 -> 884 (fixed 3: The Porthole Of The Kelp, The Bunch Of Green
+Rushes twice; broken 1: Da New Rigged Ship on 139; p 0.62); wrong or extra
+42 -> 44; to check 65 -> 69; starts 687 -> 684 within 1 s. Two more named
+against two more extras and four more to check, and neither length is
+distinguishable from chance: not adopted; `drop_release_s` stays, off by
+default. The shown-but-drafted-as-another misses are not mostly a held tune
+refusing to let go.
+
+**A judge by following** (2026-10-09). After Fable's suggestion (in
+another session) of online score following as the live state: the live
+decoder carries which tune, not where in it, and judges each 6 s window
+afresh. First the misses, then following tried offline as a judge between
+candidates, before any live tracker.
+
+*The misses.* Of the 36 labelled tunes not named right over thirteen nights
+(the drafts with the long settings left out, through the set's type and the
+unsure runs merged), 17 had been shown by the meter. Most alike: the right
+tune shown 16-32 s at 99-100%, the draft named for one shown longer at low
+belief, often the same few (The Mason's Apron, Jenny's Welcome To Charlie,
+The Spike Island Lasses, The Bucks Of Oranmore, The Burren); 5 of the 17 were
+unsure runs merged under the wrong name; 2 never drafted; 3 drafted wrong
+with confidence (Tuttle's for The Bunch Of Green Rushes at 98%, Tom Billy's
+for Langstrom's Pony at 94%, The Boy In The Gap for The Piper On Horseback at
+72%). The rest: a candidate never shown 11, never a candidate 8.
+
+*The judge* (`drafts.judge_drafts`, `follow.span_fit`): each draft's stretch
+is followed through every tune the listener showed or believed at 30%+ over
+it (up to 5, the draft's own among them), all their settings, in the
+session's key, entered and left anywhere; the draft takes the tune whose fit
+beats its own by 20 (about 12 eighths matched). After the unsure runs are
+merged, in the lab's drafting and in the find-tunes job. Thirteen nights:
+13 drafts renamed; named right 882 -> 890 of 918 (fixed 9: Jim Keefe's, The
+Sailor's Bonnet, The Porthole Of The Kelp, The New Custom House, The
+Floating Crowbar, The Limerick Lasses, The Boys Of Malin, Sord Cholmcille,
+The Piper On Horseback; broken 1: Mac's Fancy on 4, played away from its
+settings' key, judged The Blarney Pilgrim; p 0.02); wrong or extra 42 -> 33.
+Flat across its settings: any margin 0-40, judging all drafts or only those
+under 85% or 50%, every variant names 890 (fixed 8-10, broken 0-2). About
+90 s a night here (84 drafts on 140). Next: the key allowance in the judge
+(Mac's Fancy), and the merged runs that cover two tunes (The Wild Irishman
+and The Sailor's Bonnet on 140, one draft): following can split as well as
+name. A live tracker (position, tempo, rounds as state) waits on these.
+
+**"The tune may have changed" on the meter** (2026-10-08). The player wants
+the meter, live, to go quickly from "I'm hearing X" to "the tune may have
+changed, I'm listening for what it is". Measured on the saved states of the
+thirteen labelled nights, at the changeovers inside sets where the old tune
+was at 99% or more just before (477 to 505 of them by rule): today the meter
+claims the old tune until 9 s after the new one's marked start (median; 90%
+by 15 s) and names the new one at 11 s (22 s), and there is no state between
+the two. The listener's belief in the old tune falls under 90% at 7 s, about
+the step the meter lets go: most of the wait is the 6 s window and a step
+every 4 s, not the meter holding on.
+
+- *A state between.* The listener's state gains `changing`
+  (`ChangeWatch`). First rule ("held"): shown at 99% for 40 s, then under
+  95%. The meter stops claiming the old tune at 7 s (90% by 11 s); the new one
+  is named when it was; "may have changed" inside tunes 3.4 times an hour.
+- *The player's AND* (adopted, rule "rounds"): the tune has been at 99%, has
+  gone round 1.8 times or more since it was shown (time over the beat the
+  listener hears, times the tune's eighths per round, `form.RoundLengths`,
+  the median over its settings), and its belief falls under 80%. 8 s (75% by
+  10 s, 90% by 13 s), new tune named unchanged, 0.8 an hour inside tunes,
+  against 3.4. Under 95% instead of 80%: 7 s (11 s), 2.3 an hour. How many
+  times a tune went round (counted from its marked start): 3 times 354 of
+  477, twice 35, 4 times 36, others 52; a rule wanting nearly 3 rounds (2.8)
+  never fires on about 1 change in 9.
+- *Following the held tune* (forward scores only, its settings plus a way
+  out, the beat from the whole stretch, so a little flattered): the way out
+  wins at a median 2.8 s (75% by 5.4 s, 90% by 13.5 s), never within 30 s on
+  42 of 477, false alarms 6.1 an hour in the 45 s before a change. Fast when
+  it locks on, but it misses about 1 in 10; with 1.8 rounds it is 3.0 s
+  median, 90% by 15.5 s, 34 never, 2.1 an hour. Not adopted: it would need
+  the follower live, and the rounds rule has a fifth of its false alarms.
+- *A step every 2 s* (`Listener(hop_ms=2000)`, the decoder's lam and p_switch
+  halved so a second counts the same; six nights): the old tune let go at 10
+  s against 9, the new one named at 11 s against 12; with the rounds rule 9 s
+  against 8, 1.5 an hour against 0.9. No gain for twice the compute; the
+  step stays 4 s.
+
+The meter shows it on the lab page and on the phone ("The tune may have
+changed (was X). Listening for what it is…"), once the service runs this.
+
+**Settings that match everything** (2026-10-08). The Mason's Apron was the
+commonest wrong name over thirteen labelled nights (8 times, right once), and
+two of its 35 settings on thesession.org are pages of variations, about 1,600
+notes against a usual 120 (12549, 12550). The player asked for them to be
+left out. Across the corpus, 13 settings are at least 800 notes and 6 times
+their tune's median: The Mason's Apron (three), The Tarbolton and Bonnie Kate
+(both wrong names over noodling on 136), Miss McLeod's, The Harvest Home,
+Connie The Soldier and others. `corpus.exclusions` drops them from the n-gram
+index and the aligner's sequences as those load (the built files and the
+service's data stay as they are; `lab/configs/excluded_settings.json`, each
+with its reason; `python -m lab exclusions` lists the rule's candidates).
+Replayed on all thirteen nights (2.4 hours of audio among them had one of the
+13 tunes as a candidate, so a targeted replay would have saved little), each
+side through the same final steps: labelled tunes named right 882 and 882 of
+918, none fixed or broken; wrong or extra tunes 39 -> 42; to check 64 -> 65.
+The Mason's Apron as a wrong name straight from the listener 8 -> 3 (the
+once it was played still right), but the stretches it took went to other
+wrong names, and the set-type rule had already put most of it right
+downstream: the long settings were where an unsure listener landed, not why
+it was unsure. Kept, as the player asked and at no cost in names; not a
+measured gain.
+
+**An unsure tune takes its set's type** (2026-10-08). The player: use the
+tune type, "in particular to heavily penalize the wrong type if confidence is
+low". `drafts.prefer_set_type`, before the run-merging: a set's type is what
+its confident tunes (85% and up) agree on; an unsure tune of another type is
+renamed to the tune of the set's type the listener believed most over its
+stretch (from the candidates it weighed); nothing to go by, or no candidate of
+that type, and it stands. From the saved states, thirteen labelled nights: 6
+renamed, every one wrong before; 3 right after (The Mason's Apron in a set of
+reels as The Rolling Waves on 139 and as The Cock And The Hen on 140; Monaghan's
+as Rip The Calico on 115), none right before made wrong. With the run-merging:
+labelled tunes named right 883 -> 882 of 918 (merging alone 881), wrong or
+extra tunes 55 -> 39, to check 84 -> 64. Adopted with it (blind drafting and
+the server's job).
+
+**Unsure runs as one tune** (2026-10-08). The player: "the 'makes a new
+tune at each change' is super annoying to deal with after the fact. High
+confidence should name as quick as it can, but anything 80% or below should
+resist flip-flopping and should make its best guess over the entire span
+rather than splitting it up." `drafts.consolidate_unsure`, after each tune's
+confidence: in one set, a run of back-to-back unsure tunes (p_right under 85,
+shown at 80% or under; under 2 s apart) has its short pieces (under 45 s)
+absorbed into the long piece before them (or after, leading the run), and
+takes the longest piece's name; two long unsure tunes side by side stay two (a
+real changeover); a confident tune is never touched. From the saved states,
+thirteen labelled nights: wrong or extra tunes 55 -> 40, tunes to check 84 ->
+64, labelled tunes named right 883 -> 881 of 918 (fixed 0, lost 2, p 0.5: both
+real tunes played once through, under 45 s, Jackson's on 112 and The Bunch Of
+Green Rushes on 5). Merging every unsure run whole, named by the most belief
+over it, lost 4 (two real tunes side by side merged, Michael Creamer's and The
+Sailor's Bonnet, Liz Kelly's and Scarce O' Tatties); pieces under 30 s lost 1
+but left 45 wrong. Adopted (blind drafting and the server's job): no names
+gained, a quarter less to clean up, which is what the player asked for. The
+pieces are often The Mason's Apron (three times on 139, once on 140, twice on
+115), a tune the listener falls back on when unsure: to look at.
+
+**Negative: a second opinion over whole stretches** (2026-10-08). After
+drafting, look tunes up again over their stretch as the bench does (three
+trackers, the whole corpus, the aligner on a 300-tune shortlist; at most the
+middle 90 s, since whole sets at once took hours). A: each tune under 85%
+renamed to the second opinion's choice, its neighbours' type preferred when
+they agree. B: a run of back-to-back tunes in one set holding one under 85%
+merged into one tune when the whole matched at least as well as its best
+part. On the nights it was meant for and an easy one (112, 115, 132),
+labelled tunes named right, against the drafts: A fixed 2 (Sord Cholmcille
+on 132, one on 115) and broke 3 (two on 112, one on 115); B fixed none and
+broke 8 (six on 112, two on 115), swallowing real tunes into their
+neighbours and not repairing 115's Tuttle's, whose whole stretch did not
+match Tuttle's better than its pieces matched their wrong names. Stopped
+there: on the stretches the listener is unsure of, the bench's lookup is no
+better a judge than the listener. Also neutral: confidence model version 2,
+refitted with 132, 134 and 115 (1,735 tunes, 119 wrong), the same flags and
+catches as version 1 on those nights (Brier 0.0507 against 0.0506 on 115);
+version 1 kept.
+
+**Night 115, the first found on the server, and a harder night** (2026-10-08).
+The first "find the tunes" job in production (recording 115, 3 h 25 min,
+2025-07-24): 84 min listening on Render (2.4x real time), 8 min following 40
+sets, no pauses; 87 tunes logged, 18 flagged. Checked by the player: 78 of the
+87 right; the 9 wrong all among the 18 flagged, but so were 9 right ones (The
+Humours Of Whiskey at 6%, Wissahickon Drive at 4%), and one wrong was given
+83% (The Sailor's Bonnet as The Mason's Apron, 90 s). Re-run locally the job
+gives the same 87 and 18 exactly; the settings before the tiers give the same
+78 and 9, so the tiers are not the cause, nor history (98% of the night's
+tunes logged before it). The recording is harder to hear: inside labelled
+tunes the listener's top tune was under 0.9 in 11.7% of steps, against 4.3%
+on 112 (three weeks earlier) and 3.6% on 136; 3 dB quieter than 112, nothing
+clipped. Six of the nine mistakes are one tune cut into pieces, each named
+something else (Tuttle's as three tunes; Rip The Calico's last 30 s; 24 s
+inside Wissahickon Drive; 5 s before Franc A'Phoill); three are whole tunes
+misnamed (Mac's Fancy, played off its written key, as The Star Of Munster;
+The Donegal Lancers as Jack Rowe; The Sailor's Bonnet). To do: refit the
+confidence model (version 2) with 115, 134 and 132, the first harder night
+among them; and the second opinion over a whole stretch of continuous music
+(see "Still open"), which is what the cut-up tunes need.
+
+**Following, profiled and made faster** (2026-10-07). Following set starts
+(`follow_drafts`) is the slow part of drafting a night, and the part a server
+would run with no caches. Profiled on night 134 with an empty transcription
+cache and the models on the CPU: 9.5 s a set, of which Basic Pitch
+re-transcribing the set 71% (its note-making alone 40%: the library's
+"melodia trick" scanned the whole frames-by-pitches matrix for the loudest
+energy left before every note it followed, 570,741 scans on six sets), the
+Viterbi 17% and the tempo map 9%. Two exact changes: the melodia trick sorts
+the candidates once (energy is only ever zeroed, so the loudest left is the
+first not yet zeroed; the library's notes on random activations, tied ones
+and five minutes of 112, 2.17 s -> 0.06 s), and the Viterbi's slot-by-slot
+step is compiled with numba (the same path as the loop on 25 random sets).
+Old against new on 134 and 132, each with an empty cache: every start the
+same; 36 -> 19 s and 16 -> 9 s with warm models. What is left on 134: the tempo
+map 12.5 s, the Viterbi 3.7 s, transcription (cached here; about 2.3 s a set
+uncached). Not adopted: the tempo map reading one onset envelope for the whole
+span instead of one per window (`pulse.SHARED_ONSET`, off), about 8 s a night
+faster but starts within 1 s 600 -> 596 of 744 on ten nights (better 9, worse
+13, p 0.52); no harm measured, no reason to take it. The larger lever, not
+yet tried: reusing the listener's own transcription instead of transcribing
+each set again.
+
+**A second opinion over the whole tune** (2026-10-07, one case). Night 132,
+checked by the player: 22 of 23 named right; the one wrong, drafted as
+Cregg's Pipes (a reel) between two polkas at 3%, was Sord Cholmcille (8549,
+23 tunebooks, never played at the session), played cleanly. The listener led
+with it only for its last 16 s (0.98-1.00), after a minute of The Pigeon On
+The Gate, Paudeen O'Rafferty and Cregg's Pipes, and drafting took the longest
+run. Looked up over its whole stretch as the bench does (three trackers, the
+whole corpus, the aligner on a 300-tune shortlist) it comes first, narrowly:
+0.540 against a march's 0.532 over the labelled span, 0.545 against a polka's
+0.525 over the drafted one; over its first 30 s it is 25th. To measure: a
+second-opinion pass over each drafted tune's whole stretch, with the
+neighbours' tune type as a preference (the player: "contiguous music between
+two polkas, so it's very unlikely to be a reel"), wrong names fixed against
+right ones broken on every labelled night.
+
+**Night 134, logged by the listener and checked** (2026-10-07). A 1.9-hour
+night never logged, never tuned on: the listener over its audio (merged
+shortlists, the session's history before the night), drafted blind, applied
+to the log with model 1's confidence, then checked by the player in the
+segmenter. 43 of 44 named right; the one wrong, The Boy In The Gap for The
+Piper On Horseback, was the only tune under 95% (72%). Starts within 3 s for
+40 of the 44; four 13-22 s off (Music For A Found Harmonium +21.5 s; Cronin's
+and Coleman's Cross +13 s, two of the three sets following could not read;
+Moll Roe -12.8 s). The player's call from it: confidence shown in bands of 10,
+a 99 as 100, and only the truly uncertain (shown at 80% or under) highlighted
+and counted (spec 050, "A machine's guesses").
+
+**A brand-new session, nine nights** (2026-10-07). The same nine nights
+blind, as a session that has never logged a tune would get them (`lab drafts
+--blind --new-session`): merged shortlists with popular tunes (>= 100
+tunebooks, 2,320) in place of the session's own, and no session keys for
+following. Against the same runs with the session's history before each
+night, both drafted on today's code: named right 662 -> 654 of 689; wrong
+or extra tunes 39 -> 58; tune by tune better 2, worse 19 (p 0.0002). The
+losses split between the 31 labelled tunes under 100 tunebooks (better 0,
+worse 9, p 0.004: Din Tarrant's, The New Leaf, The Star Of Ireland, Jim
+Keefe's, Barbara Needham's, Pop Polka #2, The Ballinamore, The Bridge Of
+Athlone, The Piper On Horseback) and popular tunes (better 2, worse 10, p
+0.04). The popular ones are mostly confident confusions between look-alikes
+that the session's history had settled: Larry Redican's Mother as The Whinny
+Hills Of Leitrim (0.99, on two nights), Cooley's Delight as The Morning
+Lark, O'Connell's Trip To Parliament and The Floating Crowbar as The Spike
+Island Lasses, The New Custom House as The Broken Pledge. With 2,320 tunes
+preferred, a tune's look-alike is preferred as much as it is. So a new
+session works (95% of the labelled tunes are popular, and 654 of 689 named
+right is usable), but the history is worth about 1% of names and a third of
+the wrong ones. How fast a session earns it: of each night's tunes, the
+session had logged 16% in its last night, 48% in its last 4, 62% in its last
+8, 87% in its last 32 and 97% in all 200.
+
+**A young session, and the production rule** (2026-10-07). The same nine
+nights as a session that has logged only its last 8 nights (about 300 tunes),
+three ways, against the full history (662 named right, 39 wrong or extra) and
+a brand-new session (654, 58):
+
+| the session knows | named right / 689 | wrong or extra |
+|---|---|---|
+| its full history | 662 | 39 |
+| its last 8 nights, popular tunes a second tier (half the outside discount) | 659 | 48 |
+| its last 8 nights + popular tunes as one tier | 654 | 58 |
+| popular tunes only (brand new) | 654 | 58 |
+| its last 8 nights only | 644 | 69 |
+
+The tiered young session against a brand-new one: better 13, worse 6 (p 0.17),
+against the full history better 7, worse 17 (p 0.06). One tier changes
+nothing (a young session's tunes are nearly all popular already, and the
+union is 2,341 tunes against 2,320); the history alone is worse than knowing
+nothing, because it lacks the tunes it has not yet heard. So production's
+rule is the tiers: the session's own tunes first, popular ones second (half
+the discount of an outside tune), everything else last; a session with no
+history has popular tunes as its own. What a player can be told, from this
+one session: with no history about 95 in 100 tunes are named right; after
+about eight nights logged a sixth fewer wrong names; with a long history a
+third fewer. (`lab drafts --merged --history-nights K --popular tier`;
+`--nu-partly` is untuned at 0.5.)
+
 **Negative: tempo evidence step by step** (2026-10-05). Each 4 s step, each
 candidate's aligner score less its type's cost for the beat over the last
 12 s (analysis.tempo: up to 0.06, none under pulse strength 0.25; fitted
@@ -2869,6 +3190,17 @@ segmented blind; item 3 the follower). Open, in rough order:
   hiding the repertoire: names right with the repertoire, with the whole corpus
   and no prior, and with tunebook tiers, the threshold and penalty swept on
   the labels. It will flatter a session that plays many obscure tunes.
+- **A second opinion over the whole tune** (tried 2026-10-08: negative, see
+  "Negative: a second opinion over whole stretches"; what was planned:) After drafting, look each drafted tune up again over
+  its whole stretch (three trackers, the whole corpus, the aligner on a
+  300-tune shortlist, as the bench does), with the neighbouring tunes' type as
+  a preference ("contiguous music between two polkas is very unlikely to be a
+  reel"), and change the name only where the second opinion disagrees
+  clearly. One case so far (night 132, Sord Cholmcille: first by 0.540 to
+  0.532 over its labelled span, 25th over its first 30 s). Measure on every
+  labelled night (nine, 136, 134, 132): names fixed against names broken. The
+  second opinion agreeing or not is also a candidate feature for the
+  confidence model (version 2, refitted with 132 and 134).
 - **Too short to be a tune:** a minimum duration before a detection counts,
   the player's rule for melodic noodling, which tune-ness leaves at 50-70%
   of its chunks.

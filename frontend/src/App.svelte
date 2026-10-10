@@ -1,4 +1,5 @@
 <script>
+  // i18n-converted
   import { onMount, onDestroy, untrack, tick } from 'svelte'
   import { fly } from 'svelte/transition'
   import { cubicOut } from 'svelte/easing'
@@ -6,7 +7,8 @@
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
   import { bootstrap, vocabulary, sendOp, sendTyping, liveMatch, livePeople, deepSearch, fetchIncipit, openStream, probeServers, tuneDetail, myTunesList, myTunesOp, instanceAudio } from './client.js'
   import TuneSearch from './TuneSearch.svelte'
-  import { Chevron, Dialog, LoadError, PersonPicker, Sheet } from './lib/index.js'
+  import { Chevron, Dialog, LoadError, PersonPicker, Sheet, t, tn, formatDate, tuneTypeName, instrumentName, tc } from './lib/index.js'
+  import { labelName, activityLine } from './livelabels.js'
   import SidePane from './SidePane.svelte'
   import RecordingsModal from './RecordingsModal.svelte'
   import { queuePut, queueAll, queueDelete, snapshotPut, snapshotGet, matchCachePut, matchCacheGet } from './offline.js'
@@ -15,7 +17,7 @@
   // (and with the server) — see shared/abcquery.js.
   import { looksLikeAbc } from './shared/abcquery.js'
   import {
-    computeOrdered, segmentByBreaks, setsOf, tunesOf, pluralType, setLabel,
+    computeOrdered, segmentByBreaks, setsOf, tunesOf, setLabel,
     maxPos, cursorPos, remapAnchors, wireBody, normName,
     openSetMergeTarget, mergeStable, parseThesessionId, parseThesessionSettingId,
     computeCursorSlots, seamKeyFor, seamActionFor, cursorAtClosedSetEnd,
@@ -140,12 +142,19 @@
     return `${Math.floor(m / 60)}h ${m % 60}m`
   }
   const connTitle = $derived(
-    displayStatus === 'live' ? 'Connected'
+    displayStatus === 'live' ? t('Connected')
       // "offline" is the dot's catch-all for can't-connect, but if the probe proves the
       // app server IS reachable the honest headline is stream trouble, not "offline".
-      : displayStatus === 'offline' ? (connProbe?.app ? 'Connection trouble' : "You're offline")
-      : sseStatus === 'connecting' ? 'Connecting…' : 'Reconnecting…'
+      : displayStatus === 'offline' ? (connProbe?.app ? t('Connection trouble') : t("You're offline"))
+      : sseStatus === 'connecting' ? t('Connecting…') : t('Reconnecting…')
   )
+  // The connection dot's state, as a word (title / aria-label).
+  const STATUS_WORDS = { live: t('live'), offline: t('offline'), reconnecting: t('reconnecting') }
+  // A server-probe result in the connection popup.
+  const probeWord = (ok) => (ok == null ? t('checking…') : ok ? '✓ ' + t('reachable') : '✕ ' + t('unreachable'))
+  // My-list statuses as the chips and shortcuts word them (the stored values are English).
+  const STATUS_CHIP = { 'want to learn': t('want to learn'), learning: t('learning'), learned: t('learned'), [NOT_ON_LIST]: t('not on list') }
+  const statusWord = (st) => STATUS_CHIP[st] || st
 
   // "reconnecting" is short-lived: if the stream doesn't come back within a few
   // seconds, declare offline (covers reload-while-offline, where navigator.onLine
@@ -502,7 +511,7 @@
   const sets = $derived(setsOf(segments))
   const tunes = $derived(tunesOf(ordered))
   // "61 tunes in 26 sets" — shown in the header-expand and (collapsed) on the date line.
-  const tuneSummary = $derived(`${tunes.length} tune${tunes.length === 1 ? '' : 's'} in ${sets.length} set${sets.length === 1 ? '' : 's'}`)
+  const tuneSummary = $derived(t('{tunes} in {sets}', { tunes: tn(tunes.length, '{n} tune', '{n} tunes'), sets: tn(sets.length, '{n} set', '{n} sets') }))
 
   // pluralType + setLabel now live in logstate.js (pure, unit-tested).
 
@@ -525,7 +534,7 @@
     if (displayTz) opts.timeZone = displayTz
     return {
       who: names.length ? names.join(', ') : null,
-      when: latest ? new Date(latest).toLocaleTimeString('en-US', opts) : null,
+      when: latest ? formatDate(new Date(latest), opts) : null,
     }
   }
   const lastRecordId = $derived(ordered.length ? ordered[ordered.length - 1].session_instance_tune_id : null)
@@ -1057,7 +1066,7 @@
       })
       if (!res.ok) {
         const detail = await res.json().catch(() => null)
-        const err = new Error(detail?.error || "Couldn't download that tune. Try again.")
+        const err = new Error(detail?.error || t("Couldn't download that tune. Try again."))
         err.explained = true
         throw err
       }
@@ -1074,7 +1083,7 @@
       setTimeout(() => URL.revokeObjectURL(url), 30000)
     } catch (e) {
       console.error('Download failed:', e)
-      audioErr = e?.explained ? e.message : "Couldn't download that tune. Check your connection and try again."
+      audioErr = e?.explained ? e.message : t("Couldn't download that tune. Check your connection and try again.")
     } finally {
       downloading.delete(id)
     }
@@ -1140,7 +1149,7 @@
   // enough will fail to load one day. Re-ask for a fresh one, ONCE, and resume where
   // we were — a second failure is a real error and gets shown.
   async function onAudioError() {
-    if (urlRetried || !audioRec) { audioErr = 'Audio unavailable'; return }
+    if (urlRetried || !audioRec) { audioErr = t('Audio unavailable'); return }
     urlRetried = true
     const wasPlaying = playQ
     await loadAudio()
@@ -1180,8 +1189,8 @@
    * is standing in the room.
    */
   const attendanceLabel = $derived.by(() => {
-    if (!instanceDate) return 'Attending'
-    return instanceDate < localToday() ? 'Attended' : 'Attending'
+    if (!instanceDate) return t('Attending')
+    return instanceDate < localToday() ? tc('people', 'Attended') : t('Attending')
   })
 
   /** Today, in the logger's own local calendar, as YYYY-MM-DD. */
@@ -1223,16 +1232,17 @@
   function closePicker() { pickerOpen = false; pickerSet = null }
 
   // Attendance ops need a connection (not in the offline op model); surface rejections.
-  async function attendanceOp(op_type, payload, label) {
+  // `label` names the action and `offlineMsg` says it needs a connection (both translated).
+  async function attendanceOp(op_type, payload, label, offlineMsg) {
     error = ''
-    if (!navigator.onLine) { notice = `You're offline — ${label} needs a connection.`; return false }
+    if (!navigator.onLine) { notice = offlineMsg; return false }
     try {
       const res = await sendOp(config, op_type, payload)
       if (res.rejected) { notice = res.message || `${label}: ${res.reason}`; return false }
       await refreshAttendees()
       return res
     } catch (e) {
-      if (e.networkError) notice = `You're offline — ${label} needs a connection.`
+      if (e.networkError) notice = offlineMsg
       else error = e.message
       return false
     }
@@ -1260,7 +1270,7 @@
     if (pickerMode === 'starter') {
       const setId = pickerSet // capture: the picker closes out from under us
       if (!person.attending) {
-        const ok = await attendanceOp('attendance_add', { person_id: person.person_id }, 'Check in')
+        const ok = await attendanceOp('attendance_add', { person_id: person.person_id }, t('Check in'), t("You're offline — Check in needs a connection."))
         if (!ok) return
       }
       attributeTo(setId, person)
@@ -1269,12 +1279,12 @@
     // Attendance mode: the row toggles. (Check-out has its own ✕; tapping a checked-in row
     // is a no-op rather than a surprise removal.)
     if (!person.attending) {
-      await attendanceOp('attendance_add', { person_id: person.person_id }, 'Check in')
+      await attendanceOp('attendance_add', { person_id: person.person_id }, t('Check in'), t("You're offline — Check in needs a connection."))
     }
   }
 
   function checkOutPerson(person) {
-    attendanceOp('attendance_remove', { person_id: person.person_id }, 'Remove')
+    attendanceOp('attendance_remove', { person_id: person.person_id }, t('Remove'), t("You're offline — Remove needs a connection."))
   }
 
   function clearStarter() {
@@ -1291,7 +1301,8 @@
     const res = await attendanceOp(
       'attendance_create_person',
       { first_name, last_name, email, instruments },
-      'Add person'
+      t('Add person'),
+      t("You're offline — Add person needs a connection.")
     )
     // The new person is checked in by the op. In starter mode, credit them with the set and
     // close -- that is the "a visitor shows up mid-tune" path, and it should cost one gesture.
@@ -1323,13 +1334,13 @@
   async function saveNotes() {
     const text = notesDraft
     error = ''
-    if (!navigator.onLine) { notice = "You're offline — notes need a connection."; return }
+    if (!navigator.onLine) { notice = t("You're offline — notes need a connection."); return }
     notesText = text // optimistic; dirty clears
     try {
       const res = await sendOp(config, 'edit_notes', { notes: text })
       if (res.rejected) notice = res.message || res.reason
     } catch (e) {
-      if (e.networkError) notice = "You're offline — notes need a connection."
+      if (e.networkError) notice = t("You're offline — notes need a connection.")
       else error = e.message
     }
   }
@@ -1386,7 +1397,7 @@
     if (!iso) return ''
     const [y, m, d] = iso.split('-').map(Number)
     if (!y || !m || !d) return iso
-    return new Date(y, m - 1, d, 12).toLocaleDateString(undefined, {
+    return formatDate(new Date(y, m - 1, d, 12), {
       weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
     })
   }
@@ -1394,7 +1405,7 @@
   async function saveDate() {
     if (!dateDraft || !dateDirty) { dateOpen = false; return }
     dateErr = ''
-    if (!navigator.onLine) { dateErr = "You're offline — changing the date needs a connection."; return }
+    if (!navigator.onLine) { dateErr = t("You're offline — changing the date needs a connection."); return }
     dateSaving = true
     try {
       // Date and times go in ONE op: they're one edit behind one Save, so sending
@@ -1411,7 +1422,7 @@
       applyDate(res)
       dateOpen = false
     } catch (e) {
-      dateErr = e.networkError ? "You're offline — changing the date needs a connection." : e.message
+      dateErr = e.networkError ? t("You're offline — changing the date needs a connection.") : e.message
     } finally {
       dateSaving = false
     }
@@ -1448,7 +1459,7 @@
     const next = nameDraft.trim()
     if (next === (instanceName || '')) { nameOpen = false; return }
     nameErr = ''
-    if (!navigator.onLine) { nameErr = "You're offline — naming this log needs a connection."; return }
+    if (!navigator.onLine) { nameErr = t("You're offline — naming this log needs a connection."); return }
     nameSaving = true
     try {
       const res = await sendOp(config, 'set_name', { name: next })
@@ -1459,7 +1470,7 @@
       applyName(res)
       nameOpen = false
     } catch (e) {
-      nameErr = e.networkError ? "You're offline — naming this log needs a connection." : e.message
+      nameErr = e.networkError ? t("You're offline — naming this log needs a connection.") : e.message
     } finally {
       nameSaving = false
     }
@@ -1480,7 +1491,7 @@
 
   function markComplete() {
     error = ''
-    if (!navigator.onLine) { notice = "You're offline — marking complete needs a connection."; return }
+    if (!navigator.onLine) { notice = t("You're offline — marking complete needs a connection."); return }
     markCompleteOpen = true
   }
 
@@ -1492,7 +1503,7 @@
       logComplete = true // the SSE echo reconciles everyone else
       if (mode === 'edit') setMode('view') // leave editing; re-bootstrap now sees it complete
     } catch (e) {
-      if (e.networkError) notice = "You're offline — marking complete needs a connection."
+      if (e.networkError) notice = t("You're offline — marking complete needs a connection.")
       else error = e.message
       return false
     }
@@ -1502,7 +1513,7 @@
   // so a session opened via the render-only fast-path becomes editable without a reload.
   function markIncomplete() {
     error = ''
-    if (!navigator.onLine) { notice = "You're offline — this needs a connection."; return }
+    if (!navigator.onLine) { notice = t("You're offline — this needs a connection."); return }
     markIncompleteOpen = true
   }
 
@@ -1513,7 +1524,7 @@
       logComplete = false
       connect() // rewire live editing (stream + vocabulary)
     } catch (e) {
-      if (e.networkError) notice = "You're offline — this needs a connection."
+      if (e.networkError) notice = t("You're offline — this needs a connection.")
       else error = e.message
       return false
     }
@@ -1614,7 +1625,7 @@
       listLoaded = true
     } catch {
       listMode = false
-      notice = "Couldn't load your tune list — this needs a connection."
+      notice = t("Couldn't load your tune list — this needs a connection.")
     } finally {
       listLoading = false
     }
@@ -1647,7 +1658,7 @@
     const unlinked = [...selected].filter((id) => byId.get(id) && byId.get(id).tune_id == null).length
     const plans = planStatusOps(tuneIds, (tid) => myList.get(tid), myInstruments, listInstrument, target)
     if (!plans.length) {
-      flashNotice(unlinked ? 'No change — unlinked tunes can’t be added to your list' : 'Already up to date')
+      flashNotice(unlinked ? t('No change — unlinked tunes can’t be added to your list') : t('Already up to date'))
       return
     }
     listBusy = true
@@ -1663,10 +1674,20 @@
       }
     }
     listBusy = false
-    const scope = listInstrument !== 'all' && myInstruments.length > 1 ? ` on ${listInstrument}` : ''
+    const scoped = listInstrument !== 'all' && myInstruments.length > 1
+    const vars = { status: statusWord(target), instrument: instrumentName(listInstrument) }
     const skipped = tuneIds.length - plans.length
-    if (failed) notice = `Set ${done} of ${plans.length} tunes to “${target}”${scope} — ${failed} failed (offline?)`
-    else flashNotice(`Set ${done} tune${done === 1 ? '' : 's'} to “${target}”${scope}${skipped ? ` · ${skipped} already there` : ''}`)
+    if (failed) {
+      const v = { ...vars, done, total: plans.length, failed }
+      notice = scoped
+        ? t('Set {done} of {total} tunes to “{status}” on {instrument} — {failed} failed (offline?)', v)
+        : t('Set {done} of {total} tunes to “{status}” — {failed} failed (offline?)', v)
+    } else {
+      const msg = scoped
+        ? tn(done, 'Set {n} tune to “{status}” on {instrument}', 'Set {n} tunes to “{status}” on {instrument}', vars)
+        : tn(done, 'Set {n} tune to “{status}”', 'Set {n} tunes to “{status}”', vars)
+      flashNotice(msg + (skipped ? ` · ${t('{n} already there', { n: skipped })}` : ''))
+    }
   }
 
   function enterSelectMode() {
@@ -1725,7 +1746,7 @@
     lastCopy = clip
     try { await navigator.clipboard.writeText(clip.text) } catch { /* internal clipboard still set */ }
     const n = clip.rich.reduce((s, set) => s + set.length, 0)
-    flashNotice(`Copied ${n} tune${n === 1 ? '' : 's'} in ${clip.rich.length} set${clip.rich.length === 1 ? '' : 's'}`)
+    flashNotice(t('Copied {tunes} in {sets}', { tunes: tn(n, '{n} tune', '{n} tunes'), sets: tn(clip.rich.length, '{n} set', '{n} sets') }))
   }
 
   // Paste (§D): three-case resolution — our own last copy pastes RICH (links survive);
@@ -1736,7 +1757,7 @@
     let text = ''
     try { text = await navigator.clipboard.readText() } catch { /* read blocked — internal fallback */ }
     const plan = parseClipboard(text, lastCopy) || (lastCopy ? { kind: 'internal', sets: lastCopy.rich } : null)
-    if (!plan || !plan.sets.length) { flashNotice('Nothing to paste'); return }
+    if (!plan || !plan.sets.length) { flashNotice(t('Nothing to paste')); return }
     await pasteSets(plan.sets)
   }
 
@@ -1819,7 +1840,7 @@
       byId.set(btmp, { session_instance_tune_id: btmp, record_type: 'break', order_position: bkey, deleted: false, _temp: true })
       await trySend({ op_id: bop, op_type: 'set_break', payload: { action: 'insert', before_record_id: newSetTarget }, status: 'sending', ts: nextTs(), tempId: btmp })
     }
-    flashNotice(`Pasted ${total} tune${total === 1 ? '' : 's'} in ${sets.length} set${sets.length === 1 ? '' : 's'}`)
+    flashNotice(t('Pasted {tunes} in {sets}', { tunes: tn(total, '{n} tune', '{n} tunes'), sets: tn(sets.length, '{n} set', '{n} sets') }))
   }
 
   // Bulk delete (§E): ONE atomic remove_tunes op + an Undo toast wired to the
@@ -1875,8 +1896,8 @@
     assignOpen = false
     const n = segs.length
     flashNotice(personOrNull
-      ? `Assigned ${n} set${n === 1 ? '' : 's'} to ${personOrNull.display_name}`
-      : `Cleared the starter on ${n} set${n === 1 ? '' : 's'}`)
+      ? tn(n, 'Assigned {n} set to {name}', 'Assigned {n} sets to {name}', { name: personOrNull.display_name })
+      : tn(n, 'Cleared the starter on {n} set', 'Cleared the starter on {n} sets'))
   }
 
   // --- drag-to-move (§F): pointer events on the grab bar, seams as drop zones ---
@@ -2114,7 +2135,8 @@
   function openDrawer(r) {
     selectedId = null
     if (!r.tune_id) {
-      notice = 'Logged as text — link it to a catalog tune to see details, notation, and stats.'
+      // Information, not a problem: it clears itself like the other passing messages.
+      flashNotice(t('Logged as text — link it to a catalog tune to see details, notation, and stats.'))
       return
     }
     if (!window.TuneDetailModal) return
@@ -2225,7 +2247,7 @@
   // window authors nothing, so every incoming change is "remote" worth showing — even
   // one from your own account logging in another window.
   function noteRemote(d) {
-    const text = activityText(d, person ? person.person_id : null, viewing) // people.js
+    const text = activityLine(d, person ? person.person_id : null, viewing) // livelabels.js over people.js
     if (!text) return
     const id = ++activityId
     // Append; keep only the most recent MAX_ACTIVITY so a burst from several people
@@ -2388,7 +2410,7 @@
     // the merge is visible and reversible ("keep both"), rather than silent.
     if (entry.op_type === 'add_tune' && res.op_type === 'corroborate' && !entry._queued) {
       const seq = ++mergeNudgeSeq
-      mergeNudge = { name: entry.name || res.record?.name || 'that tune', payload: entry.payload }
+      mergeNudge = { name: entry.name || res.record?.name || t('that tune'), payload: entry.payload }
       setTimeout(() => { if (seq === mergeNudgeSeq) mergeNudge = null }, 7000)
     }
   }
@@ -2496,7 +2518,7 @@
   function corroborateLocally(target, payload, name) {
     flashId(target.session_instance_tune_id, 'merge')
     const seq = ++mergeNudgeSeq
-    mergeNudge = { name: name || payload.name || 'that tune', payload }
+    mergeNudge = { name: name || payload.name || t('that tune'), payload }
     setTimeout(() => { if (seq === mergeNudgeSeq) mergeNudge = null }, 7000)
     trySend({ op_id: crypto.randomUUID(), name, op_type: 'add_tune', payload: { ...payload, after_record_id: null, before_record_id: null }, status: 'sending', ts: nextTs(), _localMerged: true })
   }
@@ -2564,21 +2586,21 @@
 
   // --- reconnect reconciliation review (§G) ---
   const RECONCILE_VERB = {
-    add_tune: 'Add', change_tune: 'Edit', remove_tune: 'Remove', set_break: 'Set break',
-    set_confidence: 'Confirm', attribute_set_starter: 'Set starter', edit_notes: 'Edit notes',
-    move_tunes: 'Move', remove_tunes: 'Bulk remove', restore_tunes: 'Restore',
+    add_tune: t('Add'), change_tune: t('Edit'), remove_tune: t('Remove'), set_break: t('Set break'),
+    set_confidence: t('Confirm'), attribute_set_starter: t('Set starter'), edit_notes: t('Edit notes'),
+    move_tunes: t('Move'), remove_tunes: t('Bulk remove'), restore_tunes: t('Restore'),
   }
   const RECONCILE_REASON = {
-    target_deleted: 'it had already been removed',
-    not_found: 'it no longer exists',
-    target_removed: 'it had already been removed',
+    target_deleted: t('it had already been removed'),
+    not_found: t('it no longer exists'),
+    target_removed: t('it had already been removed'),
   }
   function reconcileDesc(item) {
     const verb = RECONCILE_VERB[item.op_type] || item.op_type
     return item.name ? `${verb} “${item.name}”` : verb
   }
   function reconcileWhy(item) {
-    return RECONCILE_REASON[item.reason] || item.message || item.reason || 'a conflict'
+    return RECONCILE_REASON[item.reason] || item.message || item.reason || t('a conflict')
   }
   const dismissReconcile = () => { reconcile = null }
 
@@ -2914,7 +2936,7 @@
       return true
     }
     if (logComplete) {
-      notice = 'This log is marked complete — use "Mark as not complete" in the header to edit it.'
+      notice = t('This log is marked complete — use "Mark as not complete" in the header to edit it.')
     } else {
       pendingViewAdd = { payload, name }
     }
@@ -3355,8 +3377,8 @@
         const stillQueued = [...pending.values()].filter((e) => e.status === 'queued').length
         const synced = Math.max(0, wasQueued - stillQueued)
         const parts = []
-        if (synced) parts.push(`${synced} synced`)
-        if (added) parts.push(`${added} added while away`)
+        if (synced) parts.push(t('{n} synced', { n: synced }))
+        if (added) parts.push(t('{n} added while away', { n: added }))
         if (parts.length) showSync(parts.join(' · '))
       }
       everConnected = true
@@ -3365,7 +3387,7 @@
       // Nothing painted yet: the list shows a LoadError. Otherwise the rows on screen
       // stand, and this says why they may be stale.
       if (!painted) logUnavailable = true
-      else error = "Couldn't reach the live log. Retrying…"
+      else error = t("Couldn't reach the live log. Retrying…")
       sseStatus = 'error'
       scheduleReconnect() // never leave a failed connect with no retry pending
     } finally {
@@ -3627,8 +3649,8 @@
   {#if showConnDot}
     <button
       class="conn-btn"
-      title={displayStatus}
-      aria-label="Connection: {displayStatus}"
+      title={STATUS_WORDS[displayStatus] || displayStatus}
+      aria-label={t('Connection: {status}', { status: STATUS_WORDS[displayStatus] || displayStatus })}
       aria-expanded={connPopup}
       onclick={(e) => { e.stopPropagation(); connPopup = !connPopup }}
     ><span class="conn-dot conn-{displayStatus}"></span></button>
@@ -3636,33 +3658,33 @@
       <div class="conn-popup" role="status">
         <div class="conn-popup-title"><span class="conn-dot conn-{displayStatus}"></span>{connTitle}</div>
         {#if displayStatus === 'live'}
-          <div class="conn-popup-line">{mode === 'edit' ? 'Live — changes save and stream instantly.' : 'Watching live — updates appear as others log.'}</div>
+          <div class="conn-popup-line">{mode === 'edit' ? t('Live — changes save and stream instantly.') : t('Watching live — updates appear as others log.')}</div>
           {#if lastEventAt}
-            <div class="conn-popup-line">Last server activity {fmtDur(connNow - lastEventAt)} ago.</div>
+            <div class="conn-popup-line">{t('Last server activity {time} ago.', { time: fmtDur(connNow - lastEventAt) })}</div>
           {/if}
         {:else if displayStatus === 'offline' && offlineSince}
-          <div class="conn-popup-line">{connProbe?.app ? 'Stream down' : 'Offline'} for {fmtDur(connNow - offlineSince)}.</div>
+          <div class="conn-popup-line">{connProbe?.app ? t('Stream down for {time}.', { time: fmtDur(connNow - offlineSince) }) : t('Offline for {time}.', { time: fmtDur(connNow - offlineSince) })}</div>
         {/if}
         {#if queuedCount > 0}
           <div class="conn-popup-line conn-popup-queued">
-            {queuedCount} change{queuedCount === 1 ? '' : 's'} saved on this device — {displayStatus === 'offline' ? 'will sync when you reconnect.' : 'syncing…'}
+            {tn(queuedCount, '{n} change saved on this device', '{n} changes saved on this device')} — {displayStatus === 'offline' ? t('will sync when you reconnect.') : t('syncing…')}
           </div>
         {:else if sendingCount > 0}
-          <div class="conn-popup-line">{sendingCount} change{sendingCount === 1 ? '' : 's'} saving…</div>
+          <div class="conn-popup-line">{tn(sendingCount, '{n} change saving…', '{n} changes saving…')}</div>
         {:else if mode === 'edit'}
-          <div class="conn-popup-line">All changes saved.</div>
+          <div class="conn-popup-line">{t('All changes saved.')}</div>
         {/if}
         {#if displayStatus !== 'live'}
           <div class="conn-popup-probe">
-            <div class="conn-popup-line">App server: {connProbe ? (connProbe.app ? '✓ reachable' : '✕ unreachable') : 'checking…'}</div>
-            <div class="conn-popup-line">Live-updates server ({streamHost}): {connProbe ? (connProbe.stream ? '✓ reachable' : '✕ unreachable') : 'checking…'}</div>
+            <div class="conn-popup-line">{t('App server: {state}', { state: probeWord(connProbe ? connProbe.app : null) })}</div>
+            <div class="conn-popup-line">{t('Live-updates server ({host}): {state}', { host: streamHost, state: probeWord(connProbe ? connProbe.stream : null) })}</div>
             {#if connProbe && connProbe.app && !connProbe.stream}
-              <div class="conn-popup-line conn-popup-hint">Only the live-updates server is unreachable — changes still save, but updates from others won't appear until it's back.</div>
+              <div class="conn-popup-line conn-popup-hint">{t("Only the live-updates server is unreachable — changes still save, but updates from others won't appear until it's back.")}</div>
             {:else if connProbe && connProbe.app && connProbe.stream}
               {#if streamHostMismatch}
-                <div class="conn-popup-line conn-popup-hint">Host mismatch: the page is on {location.host} but the stream is on {streamHost} — login cookies don't cross those hosts, so the stream can't authenticate. Open the app via the other host or set STREAMING_BASE_URL to match.</div>
+                <div class="conn-popup-line conn-popup-hint">{t("Host mismatch: the page is on {page} but the stream is on {stream} — login cookies don't cross those hosts, so the stream can't authenticate. Open the app via the other host or set STREAMING_BASE_URL to match.", { page: location.host, stream: streamHost })}</div>
               {:else}
-                <div class="conn-popup-line conn-popup-hint">Both servers respond but the stream isn't connecting — if this persists, the stream may be failing to authenticate.</div>
+                <div class="conn-popup-line conn-popup-hint">{t("Both servers respond but the stream isn't connecting — if this persists, the stream may be failing to authenticate.")}</div>
               {/if}
             {/if}
           </div>
@@ -3676,7 +3698,7 @@
     <!-- Mirrors the app-wide header (base.html .header): full-viewport bar, 30px logo +
          site title (hidden on phones, like .logo-text). -->
     <div class="appbar">
-      <a class="brand" href="/" aria-label="ceol.io home"><img src="/static/images/logo3-1.png" alt="ceol" /><span class="brand-text">Traditional Irish Session Logs</span></a>
+      <a class="brand" href="/" aria-label={t('ceol.io home')}><img src="/static/images/logo3-1.png" alt={'ceol'} /><span class="brand-text">{t('Traditional Irish Session Logs')}</span></a>
       <!-- The hamburger menu is the SHARED app menu, rendered server-side in the live
            shell (templates/hamburger_menu.html) and floated top-right. 'Find a tune'
            routes to openDeep() here via window.__liveFindTune (set in onMount). -->
@@ -3692,7 +3714,7 @@
     <header class="topbar" bind:this={topbarEl}>
       <div class="topbar-row" role="button" tabindex="0" onclick={toggleExpand} onkeydown={(e) => activate(e, toggleExpand)}>
         <div class="topbar-main">
-          <div class="session-name">{sessionName || 'Session'}</div>
+          <div class="session-name">{sessionName || t('Session')}</div>
           <!-- This log's own name, when it has one. A weekly session doesn't: the date
                says which night. A festival does, and there the date says nothing on its
                own — so it sits above the date, on its own line, rather than being packed
@@ -3713,12 +3735,12 @@
         <span class="topbar-tools">
           <span class="topbar-presence">
             {#each readOnly ? [] : roster as p (p.person_id)}
-              <span class="avatar" class:away={p.away} style="background:{colorFor(p.arrival_seq)}" title="{p.name}{p.away ? ' (away)' : p.devices > 1 ? ` (${p.devices} devices)` : ''}">
+              <span class="avatar" class:away={p.away} style="background:{colorFor(p.arrival_seq)}" title={p.name + (p.away ? ' ' + t('(away)') : p.devices > 1 ? ' ' + t('({n} devices)', { n: p.devices }) : '')}>
                 {initials(p.name)}{#if !p.away && p.devices > 1}<sup>{p.devices}</sup>{/if}
               </span>
             {/each}
           </span>
-          <a class="header-help" href="/help/session-tracking/live-logger" title="How to use the live logger" onclick={(e) => e.stopPropagation()}>
+          <a class="header-help" href="/help/session-tracking/live-logger" title={t('How to use the live logger')} onclick={(e) => e.stopPropagation()}>
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="10"></circle>
               <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
@@ -3751,11 +3773,11 @@
 
   <!-- Reconnect reconciliation review (§G): offline changes the server couldn't apply. -->
   {#if reconcile}
-    <div class="reconcile-scrim" role="button" tabindex="-1" aria-label="Dismiss" onclick={dismissReconcile} onkeydown={(e) => activate(e, dismissReconcile)}></div>
+    <div class="reconcile-scrim" role="button" tabindex="-1" aria-label={t('Dismiss')} onclick={dismissReconcile} onkeydown={(e) => activate(e, dismissReconcile)}></div>
     <div class="reconcile" role="dialog" aria-modal="true">
-      <div class="reconcile-head">Some offline changes didn’t stick</div>
+      <div class="reconcile-head">{t('Some offline changes didn’t stick')}</div>
       <p class="reconcile-sub">
-        {reconcile.items.length} change{reconcile.items.length === 1 ? '' : 's'} you made offline couldn’t be applied when you reconnected — usually because someone else changed the same tune first.
+        {tn(reconcile.items.length, '{n} change you made offline couldn’t be applied when you reconnected — usually because someone else changed the same tune first.', '{n} changes you made offline couldn’t be applied when you reconnected — usually because someone else changed the same tune first.')}
       </p>
       <ul class="reconcile-list">
         {#each reconcile.items as it, i (i)}
@@ -3763,16 +3785,16 @@
         {/each}
       </ul>
       <div class="reconcile-actions">
-        <button class="rc-ok" onclick={dismissReconcile}>Got it</button>
+        <button class="rc-ok" onclick={dismissReconcile}>{t('Got it')}</button>
       </div>
     </div>
   {/if}
 
   <div class="feed-msgs">
-    {#if notice}<div class="notice" role="button" tabindex="0" onclick={() => (notice = '')} onkeydown={(e) => activate(e, () => (notice = ''))}>{notice}</div>{/if}
+    {#if notice}<div class="notice" role="button" tabindex="0" onclick={() => (notice = '')} onkeydown={(e) => activate(e, () => (notice = ''))}><span class="notice-text">{notice}</span><span class="notice-x" aria-hidden="true">×</span></div>{/if}
     {#if queuedCount > 0}
       <p class="offline-banner">
-        ⏳ {queuedCount} change{queuedCount === 1 ? '' : 's'} queued{displayStatus === 'offline' ? ' — offline' : ', syncing…'}
+        ⏳ {displayStatus === 'offline' ? tn(queuedCount, '{n} change queued — offline', '{n} changes queued — offline') : tn(queuedCount, '{n} change queued, syncing…', '{n} changes queued, syncing…')}
       </p>
     {/if}
   </div>
@@ -3785,20 +3807,20 @@
       {#if listMode}
         <!-- highlight mode: the instrument scope replaces the filter box -->
         {#if myInstruments.length > 1}
-          <select class="searchbar-inst" aria-label="Instrument" bind:value={listInstrument}>
-            <option value="all">All instruments</option>
+          <select class="searchbar-inst" aria-label={t('Instrument')} bind:value={listInstrument}>
+            <option value="all">{t('All instruments')}</option>
             {#each myInstruments as i (i.instrument)}
-              <option value={i.instrument}>{i.instrument}</option>
+              <option value={i.instrument}>{instrumentName(i.instrument)}</option>
             {/each}
           </select>
         {:else}
-          <span class="searchbar-instlabel">{myInstruments[0]?.instrument || 'My tune list'}</span>
+          <span class="searchbar-instlabel">{instrumentName(myInstruments[0]?.instrument) || t('My tune list')}</span>
         {/if}
-        {#if listLoading}<span class="spinner" aria-label="Loading your list"></span>{/if}
+        {#if listLoading}<span class="spinner" aria-label={t('Loading your list')}></span>{/if}
       {:else}
         <input
           class="searchbar-input"
-          placeholder="Filter tunes…"
+          placeholder={t('Filter tunes…')}
           bind:value={searchText}
           bind:this={searchInputEl}
           onfocus={() => (searchMode = true)}
@@ -3810,52 +3832,52 @@
           autocomplete="off"
           spellcheck="false"
         />
-        {#if searchMode && searchText}<button class="searchbar-clear" title="Clear filter" onclick={doneSearching}>✕</button>{/if}
+        {#if searchMode && searchText}<button class="searchbar-clear" title={t('Clear filter')} onclick={doneSearching}>✕</button>{/if}
       {/if}
       <!-- my-list highlight toggle: color every tune by MY learn status (needs a list,
            so it's absent when signed out) -->
       {#if !readOnly}
-        <button class="listmode-btn" class:on={listMode} title={listMode ? 'Hide my list status' : 'Show my list status'} aria-pressed={listMode} onclick={toggleListMode}>★</button>
+        <button class="listmode-btn" class:on={listMode} title={listMode ? t('Hide my list status') : t('Show my list status')} aria-pressed={listMode} onclick={toggleListMode}>★</button>
       {/if}
       <!-- selection-mode toggle (spec 029 §A): available in edit AND view (copy-only) -->
-      <button class="selmode-btn" class:on={selectMode} title={selectMode ? 'Leave selection mode' : 'Select tunes'} aria-pressed={selectMode} onclick={toggleSelectMode}>☑</button>
+      <button class="selmode-btn" class:on={selectMode} title={selectMode ? t('Leave selection mode') : t('Select tunes')} aria-pressed={selectMode} onclick={toggleSelectMode}>☑</button>
     </div>
     <!-- min-height:100% (in CSS) guarantees ≥ SEARCH_BAR_H of overflow so the bar can always
          tuck out of sight, even when the log is too short to fill the viewport -->
     <div class="sets-body">
     {#if selectMode}
       <div class="selrow">
-        <button onclick={selectAllVisible}>Select all</button>
+        <button onclick={selectAllVisible}>{t('Select all')}</button>
         <span aria-hidden="true">·</span>
-        <button onclick={selectNone}>None</button>
+        <button onclick={selectNone}>{t('None')}</button>
       </div>
       {#if listMode}
         <!-- select-by-status shortcuts (additive, like Select all) -->
         <div class="selrow selrow-status">
-          <span class="selrow-k">Select:</span>
-          <button class="ls-not-on-list" onclick={() => selectByStatus(NOT_ON_LIST)}>not on list</button>
+          <span class="selrow-k">{t('Select:')}</span>
+          <button class="ls-not-on-list" onclick={() => selectByStatus(NOT_ON_LIST)}>{statusWord(NOT_ON_LIST)}</button>
           <span aria-hidden="true">·</span>
-          <button class="ls-want-to-learn" onclick={() => selectByStatus('want to learn')}>want to learn</button>
+          <button class="ls-want-to-learn" onclick={() => selectByStatus('want to learn')}>{statusWord('want to learn')}</button>
           <span aria-hidden="true">·</span>
-          <button class="ls-learning" onclick={() => selectByStatus('learning')}>learning</button>
+          <button class="ls-learning" onclick={() => selectByStatus('learning')}>{statusWord('learning')}</button>
           <span aria-hidden="true">·</span>
-          <button class="ls-learned" onclick={() => selectByStatus('learned')}>learned</button>
+          <button class="ls-learned" onclick={() => selectByStatus('learned')}>{statusWord('learned')}</button>
         </div>
       {/if}
     {/if}
     {#if drag?.started && dragKeys?.has('top-new')}
       <!-- drag-only drop zone: land as own set(s) at the very start (spec 029 §F) -->
-      <div class="drop-extreme" data-seam="top-new" class:drop-active={drag.activeKey === 'top-new'}>new set</div>
+      <div class="drop-extreme" data-seam="top-new" class:drop-active={drag.activeKey === 'top-new'}>{t('new set')}</div>
     {/if}
     {#each displaySegments as seg, si (seg.tunes[0].session_instance_tune_id)}
       <div class="set">
-        <button class="set-label" class:open={openTrayId === seg.tunes[0].session_instance_tune_id} onclick={(e) => { e.stopPropagation(); toggleTray(seg.tunes[0].session_instance_tune_id) }}>{setLabel(seg.tunes)}</button>
+        <button class="set-label" class:open={openTrayId === seg.tunes[0].session_instance_tune_id} onclick={(e) => { e.stopPropagation(); toggleTray(seg.tunes[0].session_instance_tune_id) }}>{labelName(setLabel(seg.tunes))}</button>
         <!-- Both of these ride the card's top-right corner, so they share ONE
              positioned row rather than each claiming the same coordinates. The ▶ is
              last, keeping it in the very corner whether or not a starter is named. -->
         <div class="set-topright">
           {#if trackStarters && !readOnly && setStarterName(seg)}
-            <button class="starter-pill" class:flash={starterFlashId === seg.tunes[0].session_instance_tune_id} title="Started by {setStarterName(seg)}" onclick={(e) => { e.stopPropagation(); openTrayId = seg.tunes[0].session_instance_tune_id }}>▸ {setStarterName(seg)}</button>
+            <button class="starter-pill" class:flash={starterFlashId === seg.tunes[0].session_instance_tune_id} title={t('Started by {name}', { name: setStarterName(seg) })} onclick={(e) => { e.stopPropagation(); openTrayId = seg.tunes[0].session_instance_tune_id }}>▸ {setStarterName(seg)}</button>
           {/if}
           <!-- Play the whole set, from its first timestamped tune. Shown as soon as ANY
                tune in the set has a mark, since a part-marked set still plays what's there. -->
@@ -3864,8 +3886,8 @@
             <button
               class="setplay-btn"
               class:on={setPlaying}
-              title={setPlaying ? 'Stop' : 'Play this set'}
-              aria-label={setPlaying ? 'Stop' : 'Play this set'}
+              title={setPlaying ? t('Stop') : t('Play this set')}
+              aria-label={setPlaying ? t('Stop') : t('Play this set')}
               onclick={(e) => { e.stopPropagation(); setPlaying ? stopPlayback() : startQueue(queueFor(seg.tunes)) }}
             >{setPlaying ? '■' : '▶'}</button>
           {/if}
@@ -3876,21 +3898,21 @@
           <div class="set-tray">
             {#if trackStarters && !readOnly}
             <div class="tray-row">
-              <span class="tray-k">Started by</span>
+              <span class="tray-k">{t('Started by')}</span>
               {#if viewing}
-                <span class="starter-value" class:set={setStarterName(seg)}>{setStarterName(seg) || 'Not set'}</span>
+                <span class="starter-value" class:set={setStarterName(seg)}>{setStarterName(seg) || t('Not set')}</span>
               {:else}
                 <button
                   class="starter-value"
                   class:set={setStarterName(seg)}
                   onclick={() => openStarterPicker(seg.tunes[0].session_instance_tune_id)}
-                >{setStarterName(seg) || 'Not set'}</button>
+                >{setStarterName(seg) || t('Not set')}</button>
               {/if}
             </div>
             {/if}
             {#if !readOnly && loggedInfo(seg.tunes)}
               {@const li = loggedInfo(seg.tunes)}
-              <div class="tray-row"><span class="tray-k">Logged by</span><span class="tray-v">{li.who || 'someone'}{li.when ? ` · ${li.when}` : ''}</span></div>
+              <div class="tray-row"><span class="tray-k">{t('Logged by')}</span><span class="tray-v">{li.who || t('someone')}{li.when ? ` · ${li.when}` : ''}</span></div>
             {/if}
           </div>
         {/if}
@@ -3898,7 +3920,7 @@
           <div class="seam start-seam" role="button" tabindex="0" data-seam={`start:${seg.tunes[0].session_instance_tune_id}`} class:drop-eligible={dragKeys?.has(`start:${seg.tunes[0].session_instance_tune_id}`)} class:drop-active={drag?.started && drag.activeKey === `start:${seg.tunes[0].session_instance_tune_id}`} class:active={visibleSeam === `start:${seg.tunes[0].session_instance_tune_id}`} onclick={() => setCursor({ before: seg.tunes[0].session_instance_tune_id })} onkeydown={(e) => activate(e, () => setCursor({ before: seg.tunes[0].session_instance_tune_id }))}>
             {#if visibleSeam === `start:${seg.tunes[0].session_instance_tune_id}`}
               <span class="seam-line"></span>
-            {:else}<span class="seam-plus">＋ start of set</span>{/if}
+            {:else}<span class="seam-plus">＋ {t('start of set')}</span>{/if}
           </div>
         {/if}
         {#each seg.tunes as r, ti (r.session_instance_tune_id)}
@@ -3931,22 +3953,22 @@
             onclick={(e) => rowClick(r, e)}
             onkeydown={(e) => activate(e, () => rowClick(r))}
           >
-            <span class="name">{#if searchMode && searchText.trim() && tuneNameMatches(r, searchText.trim().toLowerCase())}{@const p = suggestionParts(r.name, searchText.trim())}{p.pre}<span class="search-hit">{p.mid}</span>{p.post}{:else}{r.name || (r.tune_id ? `#${r.tune_id}` : '(unnamed)')}{/if}{#if r.key_override}<span class="key-override">(in {r.key_override})</span>{/if}</span>
-            {#if lst}<span class="ls-chip {statusClass(lst)}">{lst}</span>{/if}
+            <span class="name">{#if searchMode && searchText.trim() && tuneNameMatches(r, searchText.trim().toLowerCase())}{@const p = suggestionParts(r.name, searchText.trim())}{p.pre}<span class="search-hit">{p.mid}</span>{p.post}{:else}{r.name || (r.tune_id ? `#${r.tune_id}` : t('(unnamed)'))}{/if}{#if r.key_override}<span class="key-override">{t('(in {key})', { key: r.key_override })}</span>{/if}</span>
+            {#if lst}<span class="ls-chip {statusClass(lst)}">{statusWord(lst)}</span>{/if}
             {#if r._temp}
               {#if r._resolving}
                 <!-- match still resolving: the one case worth a spinner (what got logged is unknown) -->
-                <span class="actions"><span class="spinner"></span><span class="pend-label">resolving…</span></span>
+                <span class="actions"><span class="spinner"></span><span class="pend-label">{t('resolving…')}</span></span>
               {:else}
                 <!-- confident add: reads as fully logged; the op syncs transparently in the
                      background. Only an offline-queued op gets a marker (§D). -->
-                {#if !r.tune_id && r.record_type === 'tune'}<span class="row-warn" title="Not linked to a catalog tune">⚠ unlinked</span>{/if}
-                {#if r._status === 'queued'}<span class="pend-label offline" title="Saved offline — syncs when you reconnect">offline</span>{/if}
+                {#if !r.tune_id && r.record_type === 'tune'}<span class="row-warn" title={t('Not linked to a catalog tune')}>⚠ {t('unlinked')}</span>{/if}
+                {#if r._status === 'queued'}<span class="pend-label offline" title={t('Saved offline — syncs when you reconnect')}>{t('offline')}</span>{/if}
               {/if}
             {:else if r._removing}
-              <span class="actions"><span class="spinner"></span><span class="pend-label">removing</span><button class="restore" onclick={(e) => { e.stopPropagation(); restore(r.session_instance_tune_id) }}>Restore</button></span>
+              <span class="actions"><span class="spinner"></span><span class="pend-label">{t('removing')}</span><button class="restore" onclick={(e) => { e.stopPropagation(); restore(r.session_instance_tune_id) }}>{t('Restore')}</button></span>
             {:else}
-              {#if !r.tune_id && r.record_type === 'tune'}<span class="row-warn" title="Not linked to a catalog tune">⚠ unlinked</span>{/if}
+              {#if !r.tune_id && r.record_type === 'tune'}<span class="row-warn" title={t('Not linked to a catalog tune')}>⚠ {t('unlinked')}</span>{/if}
               <!-- Hear this tune. Deliberately NOT gated on canEdit (unlike ⓘ): playing
                    back is reading, so it survives view and search mode. Only the marks
                    gate it — a tune nobody timestamped has no button at all. -->
@@ -3954,8 +3976,8 @@
                 <button
                   class="play-btn"
                   class:on={playingId === r.session_instance_tune_id}
-                  title={playingId === r.session_instance_tune_id && !audioPaused ? 'Pause' : 'Play this tune'}
-                  aria-label={playingId === r.session_instance_tune_id && !audioPaused ? 'Pause' : 'Play this tune'}
+                  title={playingId === r.session_instance_tune_id && !audioPaused ? t('Pause') : t('Play this tune')}
+                  aria-label={playingId === r.session_instance_tune_id && !audioPaused ? t('Pause') : t('Play this tune')}
                   onclick={(e) => { e.stopPropagation(); toggleTune(seg.tunes, r.session_instance_tune_id) }}
                 >{playingId === r.session_instance_tune_id && !audioPaused ? '❚❚' : '▶'}</button>
                 <!-- Circular, because the glyph it replaced (⤓) carries its mass in the
@@ -3969,8 +3991,8 @@
                   class="dl-btn"
                   class:busy
                   href={`/api/recordings/${audioRec.recording_id}/segments/${r.session_instance_tune_id}/download`}
-                  title={busy ? 'Preparing the file…' : 'Download this tune'}
-                  aria-label={busy ? 'Preparing the file' : 'Download this tune'}
+                  title={busy ? t('Preparing the file…') : t('Download this tune')}
+                  aria-label={busy ? t('Preparing the file') : t('Download this tune')}
                   aria-busy={busy}
                   download
                   onclick={(e) => { e.stopPropagation(); e.preventDefault(); downloadTune(r) }}
@@ -3987,13 +4009,13 @@
                   </svg>
                 </a>
               {/if}
-              {#if canEdit && !selectMode && r.tune_id}<button class="info-btn" title="Tune details" onclick={(e) => { e.stopPropagation(); openDrawer(r) }}>ⓘ</button>
+              {#if canEdit && !selectMode && r.tune_id}<button class="info-btn" title={t('Tune details')} onclick={(e) => { e.stopPropagation(); openDrawer(r) }}>ⓘ</button>
               {:else if canEdit && !selectMode && resolved.has(r.session_instance_tune_id)}<span class="info-btn info-slot" aria-hidden="true"></span>{/if}
               {#if canEdit && !selectMode && selectedId === r.session_instance_tune_id}
                 <!-- selected-row insert points: pills riding the row's edges (like the
                      seam Split/Join pills) that place the cursor before/after this tune -->
-                <button class="insert-pill top" title="Insert above" aria-label="Insert above" onclick={(e) => { e.stopPropagation(); insertBeforeRow(r.session_instance_tune_id) }}>↑</button>
-                <button class="insert-pill bottom" title="Insert below" aria-label="Insert below" onclick={(e) => { e.stopPropagation(); insertAfterRow(r.session_instance_tune_id) }}>↓</button>
+                <button class="insert-pill top" title={t('Insert above')} aria-label={t('Insert above')} onclick={(e) => { e.stopPropagation(); insertBeforeRow(r.session_instance_tune_id) }}>↑</button>
+                <button class="insert-pill bottom" title={t('Insert below')} aria-label={t('Insert below')} onclick={(e) => { e.stopPropagation(); insertAfterRow(r.session_instance_tune_id) }}>↓</button>
               {/if}
             {/if}
             {#if selectMode && selected.has(r.session_instance_tune_id)}<span class="sel-badge" aria-hidden="true">✓</span>{/if}
@@ -4007,7 +4029,7 @@
                   class="grab"
                   role="button"
                   tabindex="-1"
-                  aria-label="Drag to move"
+                  aria-label={t('Drag to move')}
                   onpointerdown={(e) => startDrag(e, r)}
                   onpointermove={dragMove}
                   onpointerup={dragEnd}
@@ -4020,22 +4042,22 @@
             {#if r._resolving}
               <!-- pending placeholder: bail out of the in-flight match -->
               <div class="row-actions">
-                <button onclick={() => { selectedId = null; cancelResolving(true) }}>✎ Edit</button>
-                <button class="danger" onclick={() => { selectedId = null; cancelResolving(false) }}>🗑 Remove</button>
+                <button onclick={() => { selectedId = null; cancelResolving(true) }}>✎ {t('Edit')}</button>
+                <button class="danger" onclick={() => { selectedId = null; cancelResolving(false) }}>🗑 {t('Remove')}</button>
               </div>
             {:else if r._temp}
               <!-- queued offline add: cancel it locally — the op hasn't reached the server -->
               <div class="row-actions">
-                <button class="danger" onclick={() => cancelQueuedRow(r.session_instance_tune_id)}>🗑 Remove</button>
+                <button class="danger" onclick={() => cancelQueuedRow(r.session_instance_tune_id)}>🗑 {t('Remove')}</button>
               </div>
             {:else}
             <div class="row-actions">
-              {#if r.tune_id}<button onclick={() => openDrawer(r)}>ⓘ Info</button>{/if}
+              {#if r.tune_id}<button onclick={() => openDrawer(r)}>ⓘ {t('Info')}</button>{/if}
               {#if r.confidence != null && r.confidence <= 70}
-                <button onclick={() => confirmRow(r.session_instance_tune_id)}>✓ Confirm</button>
+                <button onclick={() => confirmRow(r.session_instance_tune_id)}>✓ {t('Confirm')}</button>
               {/if}
-              <button onclick={() => startEdit(r.session_instance_tune_id)}>✎ Edit</button>
-              <button class="danger" onclick={() => removeRow(r.session_instance_tune_id)}>🗑 Remove</button>
+              <button onclick={() => startEdit(r.session_instance_tune_id)}>✎ {t('Edit')}</button>
+              <button class="danger" onclick={() => removeRow(r.session_instance_tune_id)}>🗑 {t('Remove')}</button>
             </div>
             {/if}
           {/if}
@@ -4048,14 +4070,14 @@
               </div>
               {#if drag?.started && dragKeys?.has('end-new')}
                 <!-- drag-only drop zone: land as own set(s) below the open end (spec 029 §F) -->
-                <div class="drop-extreme" data-seam="end-new" class:drop-active={drag.activeKey === 'end-new'}>new set</div>
+                <div class="drop-extreme" data-seam="end-new" class:drop-active={drag.activeKey === 'end-new'}>{t('new set')}</div>
               {/if}
           {:else if canEdit && !r._temp}
               <div class="seam" role="button" tabindex="0" data-seam={`after:${r.session_instance_tune_id}`} class:drop-eligible={dragKeys?.has(`after:${r.session_instance_tune_id}`)} class:drop-active={drag?.started && drag.activeKey === `after:${r.session_instance_tune_id}`} class:active={visibleSeam === `after:${r.session_instance_tune_id}`} onclick={() => setCursor(r.session_instance_tune_id)} onkeydown={(e) => activate(e, () => setCursor(r.session_instance_tune_id))}>
                 {#if visibleSeam === `after:${r.session_instance_tune_id}`}
                   <span class="seam-line"></span>
                   {#if ti < seg.tunes.length - 1}
-                    <button class="seam-pill split" onclick={(e) => { e.stopPropagation(); splitAt(r.session_instance_tune_id) }}>Split</button>
+                    <button class="seam-pill split" onclick={(e) => { e.stopPropagation(); splitAt(r.session_instance_tune_id) }}>{t('Split')}</button>
                   {/if}
                 {:else}<span class="seam-plus">＋</span>{/if}
               </div>
@@ -4066,15 +4088,15 @@
         <div class="seam inter-seam" role="button" tabindex="0" data-seam={`inter:${displaySegments[si + 1].tunes[0].session_instance_tune_id}`} class:drop-eligible={dragKeys?.has(`inter:${displaySegments[si + 1].tunes[0].session_instance_tune_id}`)} class:drop-active={drag?.started && drag.activeKey === `inter:${displaySegments[si + 1].tunes[0].session_instance_tune_id}`} class:active={visibleSeam === `inter:${displaySegments[si + 1].tunes[0].session_instance_tune_id}`} onclick={() => setNewSetCursor(displaySegments[si + 1].tunes[0].session_instance_tune_id)} onkeydown={(e) => activate(e, () => setNewSetCursor(displaySegments[si + 1].tunes[0].session_instance_tune_id))}>
           {#if visibleSeam === `inter:${displaySegments[si + 1].tunes[0].session_instance_tune_id}`}
             <span class="seam-line"></span>
-            <button class="seam-pill join" onclick={(e) => { e.stopPropagation(); joinAt(seg.breakAfter) }}>Join</button>
-          {:else}<span class="seam-plus">＋ new set</span>{/if}
+            <button class="seam-pill join" onclick={(e) => { e.stopPropagation(); joinAt(seg.breakAfter) }}>{t('Join')}</button>
+          {:else}<span class="seam-plus">＋ {t('new set')}</span>{/if}
         </div>
       {/if}
     {:else}
       {#if logUnavailable}
-        <LoadError what="this session's log" onRetry={retryLog} retrying={retryingLog} />
+        <LoadError message={t("Couldn't load this session's log.")} onRetry={retryLog} retrying={retryingLog} />
       {:else if loaded}
-        <p class="empty">No tunes yet — log one below.</p>
+        <p class="empty">{t('No tunes yet — log one below.')}</p>
       {:else}
         <!-- first-load skeleton: tune-sized rows with a shimmer sweeping across them -->
         <div class="skeleton" aria-hidden="true">
@@ -4088,8 +4110,8 @@
       <!-- closed end (trailing break): the end cursor starts a NEW set here -->
       <div class="seam end-seam new-set-end" role="button" tabindex="0" data-seam="end" class:drop-eligible={dragKeys?.has('end')} class:drop-active={drag?.started && drag.activeKey === 'end'} class:active={visibleSeam === 'end'} onclick={() => setCursor(null)} onkeydown={(e) => activate(e, () => setCursor(null))}>
         {#if visibleSeam === 'end'}
-          <span class="seam-line"></span><span class="seam-hint">new set</span>
-        {:else}<span class="seam-plus">＋ new set</span>{/if}
+          <span class="seam-line"></span><span class="seam-hint">{t('new set')}</span>
+        {:else}<span class="seam-plus">＋ {t('new set')}</span>{/if}
       </div>
     {/if}
     <!-- scroll room so the end-of-list seam can rise ABOVE the upward dropdown (§D) -->
@@ -4101,8 +4123,8 @@
 
   {#if canEdit && !readOnly && othersTyping.length}
     <div class="typing">
-      {#each othersTyping as t (t.person_id)}<span class="t-name" style="color:{colorFor(t.arrival_seq)}">{t.name}</span>{/each}
-      <span class="t-verb">{othersTyping.length === 1 ? 'is' : 'are'} typing…</span>
+      {#each othersTyping as ty (ty.person_id)}<span class="t-name" style="color:{colorFor(ty.arrival_seq)}">{ty.name}</span>{/each}
+      <span class="t-verb">{tn(othersTyping.length, 'is typing…', 'are typing…')}</span>
     </div>
   {/if}
 
@@ -4142,93 +4164,93 @@
               max={Math.max(1, tuneLenMs)}
               step="100"
               value={scrubValue}
-              aria-label="Position within this tune"
+              aria-label={t('Position within this tune')}
               oninput={onScrubInput}
               onchange={onScrubCommit}
             />
             <div class="pp-times">
               <span>{formatClock(scrubValue)}</span>
-              <span class="pp-pos">{playQ.idx + 1} of {playQ.ids.length}</span>
+              <span class="pp-pos">{t('{n} of {total}', { n: playQ.idx + 1, total: playQ.ids.length })}</span>
               <span>−{formatClock(Math.max(0, tuneLenMs - scrubValue))}</span>
             </div>
             <div class="pp-transport">
-              <button class="pp-btn" title="Previous tune" aria-label="Previous tune" onclick={prevTune}>⏮</button>
-              <button class="pp-btn big" title={audioPaused ? 'Play' : 'Pause'} aria-label={audioPaused ? 'Play' : 'Pause'} onclick={togglePlayPause}>{audioPaused ? '▶' : '❚❚'}</button>
-              <button class="pp-btn" title="Next tune" aria-label="Next tune" disabled={playQ.idx + 1 >= playQ.ids.length} onclick={nextTune}>⏭</button>
-              <button class="pp-btn" title="Stop" aria-label="Stop" onclick={stopPlayback}>■</button>
+              <button class="pp-btn" title={t('Previous tune')} aria-label={t('Previous tune')} onclick={prevTune}>⏮</button>
+              <button class="pp-btn big" title={audioPaused ? t('Play') : t('Pause')} aria-label={audioPaused ? t('Play') : t('Pause')} onclick={togglePlayPause}>{audioPaused ? '▶' : '❚❚'}</button>
+              <button class="pp-btn" title={t('Next tune')} aria-label={t('Next tune')} disabled={playQ.idx + 1 >= playQ.ids.length} onclick={nextTune}>⏭</button>
+              <button class="pp-btn" title={t('Stop')} aria-label={t('Stop')} onclick={stopPlayback}>■</button>
             </div>
             <div class="pp-modes">
-              <button class="pp-mode" class:on={repeatOne} aria-pressed={repeatOne} onclick={() => (repeatOne = !repeatOne)}>Repeat 1</button>
-              <button class="pp-mode" class:on={autoContinue} aria-pressed={autoContinue} onclick={() => (autoContinue = !autoContinue)}>Auto-continue</button>
+              <button class="pp-mode" class:on={repeatOne} aria-pressed={repeatOne} onclick={() => (repeatOne = !repeatOne)}>{t('Repeat 1')}</button>
+              <button class="pp-mode" class:on={autoContinue} aria-pressed={autoContinue} onclick={() => (autoContinue = !autoContinue)}>{t('Auto-continue')}</button>
               {#if canSwitchHd}
                 {@const hdSize = formatBytes(audioSources.find((s) => s.id === 'master')?.size_bytes)}
                 <button
                   class="pp-mode"
                   class:on={hdOn}
                   aria-pressed={hdOn}
-                  title={hdOn ? 'Back to the smaller stream' : `Play the full-quality file${hdSize ? ` (${hdSize})` : ''} — best on a fast connection`}
+                  title={hdOn ? t('Back to the smaller stream') : hdSize ? t('Play the full-quality file ({size}) — best on a fast connection', { size: hdSize }) : t('Play the full-quality file — best on a fast connection')}
                   onclick={() => switchAudioSource(hdOn ? 'proxy' : 'master')}
-                >HD{#if hdSize && !hdOn}<span class="pp-mode-sub">{hdSize}</span>{/if}</button>
+                >{t('HD')}{#if hdSize && !hdOn}<span class="pp-mode-sub">{hdSize}</span>{/if}</button>
               {/if}
             </div>
           </div>
         {/if}
         <div class="playbar">
-          <button class="pb-toggle" title={audioPaused ? 'Play' : 'Pause'} aria-label={audioPaused ? 'Play' : 'Pause'} onclick={togglePlayPause}>{audioPaused ? '▶' : '❚❚'}</button>
-          <button class="pb-open" aria-expanded={playerOpen} title={playerOpen ? 'Hide controls' : 'Show controls'} onclick={() => (playerOpen = !playerOpen)}>
-            <span class="pb-name">{byId.get(playingId)?.name || 'Playing'}</span>
+          <button class="pb-toggle" title={audioPaused ? t('Play') : t('Pause')} aria-label={audioPaused ? t('Play') : t('Pause')} onclick={togglePlayPause}>{audioPaused ? '▶' : '❚❚'}</button>
+          <button class="pb-open" aria-expanded={playerOpen} title={playerOpen ? t('Hide controls') : t('Show controls')} onclick={() => (playerOpen = !playerOpen)}>
+            <span class="pb-name">{byId.get(playingId)?.name || t('Playing')}</span>
             <span class="pb-time">{formatClock(playhead)} / {formatClock(tuneLenMs)}</span>
             <span class="pb-chev" aria-hidden="true">{playerOpen ? '⌄' : '⌃'}</span>
           </button>
-          <button class="pb-stop" title="Stop" aria-label="Stop" onclick={stopPlayback}>×</button>
+          <button class="pb-stop" title={t('Stop')} aria-label={t('Stop')} onclick={stopPlayback}>×</button>
         </div>
       </div>
     {/if}
     {#if audioErr}<div class="playbar err">{audioErr}</div>{/if}
     {#if undoDelete}
       <div class="undo-toast" transition:fly={{ y: 8, duration: 160 }}>
-        <span>Deleted {undoDelete.count} tune{undoDelete.count === 1 ? '' : 's'}</span>
-        <button class="undo-btn" onclick={undoBulkDelete}>Undo</button>
+        <span>{tn(undoDelete.count, 'Deleted {n} tune', 'Deleted {n} tunes')}</span>
+        <button class="undo-btn" onclick={undoBulkDelete}>{t('Undo')}</button>
       </div>
     {/if}
     {#if selectMode}
       <!-- selection bottom bar (spec 029 §C); view mode is copy-only -->
       <footer class="selbar">
-        <span class="selcount">{selected.size} selected</span>
-        <button class="sel-act" disabled={!selected.size} onclick={copySelection}>Copy</button>
+        <span class="selcount">{t('{n} selected', { n: selected.size })}</span>
+        <button class="sel-act" disabled={!selected.size} onclick={copySelection}>{t('Copy')}</button>
         {#if !viewing}
-          <button class="sel-act" class:dim={!lastCopy} disabled={searchMode} title="Paste tunes from clipboard" onclick={pasteClipboard}>Paste</button>
-          <button class="sel-act sel-danger" disabled={!selected.size} onclick={bulkDelete}>Delete</button>
+          <button class="sel-act" class:dim={!lastCopy} disabled={searchMode} title={t('Paste tunes from clipboard')} onclick={pasteClipboard}>{t('Paste')}</button>
+          <button class="sel-act sel-danger" disabled={!selected.size} onclick={bulkDelete}>{t('Delete')}</button>
           {#if trackStarters}
-            <button class="sel-act" disabled={!selected.size} onclick={openAssign}>Assign</button>
+            <button class="sel-act" disabled={!selected.size} onclick={openAssign}>{t('Assign')}</button>
           {/if}
         {/if}
         {#if listMode}
           <!-- bulk add-to-list / set-status (my personal list — safe in view mode too) -->
-          <button class="sel-act" disabled={!selected.size || listBusy} title="Add the selected tunes to my list / change their status" onclick={() => (listStatusOpen = true)}>My list</button>
+          <button class="sel-act" disabled={!selected.size || listBusy} title={t('Add the selected tunes to my list / change their status')} onclick={() => (listStatusOpen = true)}>{t('My list')}</button>
         {/if}
-        <button class="sel-done" onclick={exitSelectMode}>Done</button>
+        <button class="sel-done" onclick={exitSelectMode}>{t('Done')}</button>
       </footer>
     {:else if searchMode}
       <footer class="viewbar searchbar-dock">
-        <button class="editbtn done-search" onclick={doneSearching}>Done Searching</button>
+        <button class="editbtn done-search" onclick={doneSearching}>{t('Done Searching')}</button>
       </footer>
     {:else}
     {#if !atEnd}
-      <button class="goend-pill" onclick={goToEnd}>↓ Go to end</button>
+      <button class="goend-pill" onclick={goToEnd}>↓ {t('Go to end')}</button>
     {/if}
     {#if viewing}
       <footer class="viewbar">
         {#if readOnly}
           <!-- Signed out: no edit affordance at all, just the way in. -->
           <span class="logdone">
-            {#if logComplete}✓ This session has been fully logged{:else}Viewing this session log{/if}
-            · <a class="viewbar-login" href="/login?next={encodeURIComponent(location.pathname + location.search)}">Log in to edit</a>
+            {#if logComplete}✓ {t('This session has been fully logged')}{:else}{t('Viewing this session log')}{/if}
+            · <a class="viewbar-login" href="/login?next={encodeURIComponent(location.pathname + location.search)}">{t('Log in to edit')}</a>
           </span>
         {:else if logComplete}
-          <span class="logdone">✓ This session has been fully logged</span>
+          <span class="logdone">✓ {t('This session has been fully logged')}</span>
         {:else}
-          <button class="editbtn" onclick={() => setMode('edit')}>✎ Edit log</button>
+          <button class="editbtn" onclick={() => setMode('edit')}>✎ {t('Edit log')}</button>
         {/if}
       </footer>
     {:else}
@@ -4237,7 +4259,7 @@
         {#if tsInputId != null}
           <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions -->
           <li class="result-ts" role="option" aria-selected="false" onmousedown={(e) => e.preventDefault()} onclick={previewThesessionInput}>
-            <span class="r-name">🔍 Tune #{tsInputId} from thesession.org…</span>
+            <span class="r-name">🔍 {t('Tune #{id} from thesession.org…', { id: tsInputId })}</span>
           </li>
         {/if}
         {#if showNext && nextSuggestion}
@@ -4246,28 +4268,28 @@
           <li id="cres-0" class="result-next" class:hl={composerHl === 0} role="option" aria-selected={composerHl === 0} onmousedown={(e) => e.preventDefault()} onclick={() => pickResult(nextSuggestion)}>
             <span class="r-arrow" aria-hidden="true">→</span>
             <span class="r-name">{parts.pre}<strong>{parts.mid}</strong>{parts.post}</span>
-            <span class="r-meta">{nextSuggestion.tune_type || ''}<span class="r-next-label"> · usually next</span></span>
-            <button class="r-dismiss" type="button" title="Don't suggest this next" aria-label="Dismiss suggestion" onmousedown={(e) => e.preventDefault()} onclick={(e) => { e.stopPropagation(); dismissNext() }}>×</button>
+            <span class="r-meta">{tuneTypeName(nextSuggestion.tune_type) || ''}<span class="r-next-label">{` · ${t('usually next')}`}</span></span>
+            <button class="r-dismiss" type="button" title={t("Don't suggest this next")} aria-label={t('Dismiss suggestion')} onmousedown={(e) => e.preventDefault()} onclick={(e) => { e.stopPropagation(); dismissNext() }}>×</button>
           </li>
         {/if}
-        {#each visibleResults as t, vi (t.tune_id)}
+        {#each visibleResults as tr, vi (tr.tune_id)}
           {@const ci = (showNext && nextSuggestion ? 1 : 0) + vi}
           <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions -->
-          <li id="cres-{ci}" class:hl={composerHl === ci} role="option" aria-selected={composerHl === ci} onmousedown={(e) => e.preventDefault()} onclick={() => pickResult(t)}>
-            <span class="r-name">{t.name}</span>
+          <li id="cres-{ci}" class:hl={composerHl === ci} role="option" aria-selected={composerHl === ci} onmousedown={(e) => e.preventDefault()} onclick={() => pickResult(tr)}>
+            <span class="r-name">{tr.name}</span>
             <span class="r-meta">
-              {t.tune_type || ''}{#if t.in_session_tune}<span class="r-insession"> · in session</span>{/if}{#if t.abc}<span class="r-abc"> · ♪ notation</span>{/if}
+              {tuneTypeName(tr.tune_type) || ''}{#if tr.in_session_tune}<span class="r-insession">{` · ${t('in session')}`}</span>{/if}{#if tr.abc}<span class="r-abc">{` · ♪ ${t('notation')}`}</span>{/if}
             </span>
-            <button class="r-peek" title="Look closer before logging" aria-label={`Preview ${t.name} before logging`} onmousedown={(e) => e.preventDefault()} onclick={(e) => { e.stopPropagation(); openQuickPreview(vi) }}>🔍</button>
+            <button class="r-peek" title={t('Look closer before logging')} aria-label={t('Preview {name} before logging', { name: tr.name })} onmousedown={(e) => e.preventDefault()} onclick={(e) => { e.stopPropagation(); openQuickPreview(vi) }}>🔍</button>
           </li>
         {/each}
         {#if noMatch && !results.length}
-          <li class="result-empty">No tunes match your search</li>
+          <li class="result-empty">{t('No tunes match your search')}</li>
         {/if}
         {#if resolving}
           <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions -->
           <li class="result-asis" role="option" aria-selected="false" onmousedown={(e) => e.preventDefault()} onclick={logAsIs}>
-            <span class="r-name">Log “{resolving.text}” as-is</span>
+            <span class="r-name">{t('Log “{name}” as-is', { name: resolving.text })}</span>
           </li>
         {/if}
       </ul>
@@ -4275,23 +4297,23 @@
 
     {#if ambiguous}
       <div class="ambig-hint" transition:fly={{ y: 8, duration: 160 }}>
-        <span><b>“{resolving ? resolving.text : input.trim()}”</b> matches several tunes — tap one, press Enter for the top match, or “Log as-is”.</span>
+        <span><b>“{resolving ? resolving.text : input.trim()}”</b> {t('matches several tunes — tap one, press Enter for the top match, or “Log as-is”.')}</span>
       </div>
     {/if}
 
     {#if mergeNudge}
       <div class="merge-nudge" transition:fly={{ y: 8, duration: 160 }}>
-        <span class="mn-text"><b>{mergeNudge.name}</b> is already in this set — merged.</span>
-        <button class="mn-keep" onclick={keepBoth}>Keep both</button>
-        <button class="mn-ok" onclick={dismissMerge} aria-label="Dismiss">✕</button>
+        <span class="mn-text"><b>{mergeNudge.name}</b> {t('is already in this set — merged.')}</span>
+        <button class="mn-keep" onclick={keepBoth}>{t('Keep both')}</button>
+        <button class="mn-ok" onclick={dismissMerge} aria-label={t('Dismiss')}>✕</button>
       </div>
     {/if}
 
     {#if editingId != null}
       <div class="edit-banner">
-        <span class="edit-label">Editing <b>{editingName}</b> — pick a match, or type a new name</span>
-        <button class="edit-unlink" onclick={openDeep} title="Search the whole catalogue, or thesession.org">Search</button>
-        <button class="edit-unlink" onclick={unlinkEdit} title="Drop the catalog link, keep the text">Unlink</button>
+        <span class="edit-label">{t('Editing')} <b>{editingName}</b> {t('— pick a match, or type a new name')}</span>
+        <button class="edit-unlink" onclick={openDeep} title={t('Search the whole catalogue, or thesession.org')}>{t('Search')}</button>
+        <button class="edit-unlink" onclick={unlinkEdit} title={t('Drop the catalog link, keep the text')}>{t('Unlink')}</button>
       </div>
     {/if}
 
@@ -4310,7 +4332,7 @@
           aria-expanded={composerNavItems.length > 0}
           aria-controls="composer-results"
           aria-activedescendant={composerHl >= 0 ? `cres-${composerHl}` : undefined}
-          placeholder={composerLocked ? 'Resolving…' : (editingId != null ? 'Re-pick or rename this tune…' : 'Search or type a tune…')}
+          placeholder={composerLocked ? t('Resolving…') : (editingId != null ? t('Re-pick or rename this tune…') : t('Search or type a tune…'))}
           bind:value={input}
           bind:this={inputEl}
           oninput={onInput}
@@ -4341,29 +4363,29 @@
         />
         {#if searching}<span class="spinner input-spin"></span>{:else if input && !composerLocked}
           <!-- clear-× shares the spinner's slot (only one shows at a time) -->
-          <button class="input-clear" type="button" title="Clear" aria-label="Clear entry" onmousedown={(e) => e.preventDefault()} onclick={clearEntry}>×</button>
+          <button class="input-clear" type="button" title={t('Clear')} aria-label={t('Clear entry')} onmousedown={(e) => e.preventDefault()} onclick={clearEntry}>×</button>
         {/if}
       </div>
-      <button onmousedown={(e) => e.preventDefault()} onclick={commit} disabled={editingId == null && !composerLocked && !input.trim()}>{editingId != null ? 'Save' : 'Log'}</button>
+      <button onmousedown={(e) => e.preventDefault()} onclick={commit} disabled={editingId == null && !composerLocked && !input.trim()}>{editingId != null ? t('Save') : t('Log')}</button>
       {#if editingId != null}
-        <button class="endset" title="Cancel editing" onclick={cancelEdit}>Cancel</button>
+        <button class="endset" title={t('Cancel editing')} onclick={cancelEdit}>{t('Cancel')}</button>
       {:else if input.trim() && !resolving}
         <!-- Mid-search, End set / Done are useless (End set is a post-pick action; Done
              leaves edit mode), so the slot becomes the deep-search escape instead of a
              row pinned to the dropdown's top edge that could clip off-screen. -->
-        <button class="search-btn" title="Search deeper for this tune" onmousedown={(e) => e.preventDefault()} onclick={openDeep}>Search 🔍</button>
+        <button class="search-btn" title={t('Search deeper for this tune')} onmousedown={(e) => e.preventDefault()} onclick={openDeep}>{t('Search')} 🔍</button>
       {:else if activeSeam === 'end'}
         <!-- At the live end: open set -> close it (yellow "End set"); closed end with
              nothing selected -> the subtle grey "Done" leaves edit mode for read-only
              View (spec 021 §A3). Hidden while seam-editing or with a row selected. -->
         {#if endIsOpen}
-          <button class="endset hot" title="End the current set" onclick={endSet}>End set</button>
+          <button class="endset hot" title={t('End the current set')} onclick={endSet}>{t('End set')}</button>
         {:else if selectedId == null}
-          <button class="done-btn" title="Done logging — switch to read-only view" onclick={() => setMode('view')}>Done</button>
+          <button class="done-btn" title={t('Done logging — switch to read-only view')} onclick={() => setMode('view')}>{t('Done')}</button>
         {/if}
       {:else if atClosedSetEnd && selectedId == null}
         <!-- At the end of a set that's already closed: done with it, back to the end. -->
-        <button class="endset hot" title="Done with this set: back to the end of the log" onclick={() => setCursor(null)}>End set</button>
+        <button class="endset hot" title={t('Done with this set: back to the end of the log')} onclick={() => setCursor(null)}>{t('End set')}</button>
       {/if}
     </div>
     {/if}
@@ -4381,35 +4403,35 @@
 
   {#if assignOpen}
     <!-- bulk Assign (spec 029 §G): the set-tray starter picker as a modal -->
-    <div class="drawer-scrim" role="button" tabindex="-1" aria-label="Close" onclick={() => (assignOpen = false)} onkeydown={(e) => activate(e, () => (assignOpen = false))}></div>
+    <div class="drawer-scrim" role="button" tabindex="-1" aria-label={t('Close')} onclick={() => (assignOpen = false)} onkeydown={(e) => activate(e, () => (assignOpen = false))}></div>
     <div class="assign-modal" role="dialog" aria-modal="true">
-      <div class="assign-head">Sets started by…</div>
-      <input class="starter-filter" placeholder="Filter players…" bind:value={assignFilter} />
+      <div class="assign-head">{t('Sets started by…')}</div>
+      <input class="starter-filter" placeholder={t('Filter players…')} bind:value={assignFilter} />
       <div class="starter-list">
-        <button class="starter-item clear" onclick={() => assignTo(null)}>— Clear —</button>
+        <button class="starter-item clear" onclick={() => assignTo(null)}>— {t('Clear')} —</button>
         {#each assignAttendees as p (p.person_id)}
           <button class="starter-item" onclick={() => assignTo(p)}>{p.display_name}</button>
         {:else}
-          {#if attendeesLoaded}<p class="starter-empty">No one checked in yet.</p>{:else if attendeesFailed}<LoadError what="who's checked in" inline onRetry={refreshAttendees} />{:else}<p class="starter-empty">Loading…</p>{/if}
+          {#if attendeesLoaded}<p class="starter-empty">{t('No one checked in yet.')}</p>{:else if attendeesFailed}<LoadError message={t("Couldn't load who's checked in.")} inline onRetry={refreshAttendees} />{:else}<p class="starter-empty">{t('Loading…')}</p>{/if}
         {/each}
-        <button class="starter-item add-player" onclick={() => { assignOpen = false; openAttendance() }}>＋ Add a player</button>
+        <button class="starter-item add-player" onclick={() => { assignOpen = false; openAttendance() }}>＋ {t('Add a player')}</button>
       </div>
     </div>
   {/if}
 
   {#if listStatusOpen}
     <!-- bulk my-list status: reuses the assign-modal shell -->
-    <div class="drawer-scrim" role="button" tabindex="-1" aria-label="Close" onclick={() => (listStatusOpen = false)} onkeydown={(e) => activate(e, () => (listStatusOpen = false))}></div>
+    <div class="drawer-scrim" role="button" tabindex="-1" aria-label={t('Close')} onclick={() => (listStatusOpen = false)} onkeydown={(e) => activate(e, () => (listStatusOpen = false))}></div>
     <div class="assign-modal mylist-modal" role="dialog" aria-modal="true">
-      <div class="assign-head">Put on my list as…</div>
+      <div class="assign-head">{t('Put on my list as…')}</div>
       <p class="mylist-scope">
-        {selected.size} tune{selected.size === 1 ? '' : 's'}
-        {listInstrument !== 'all' && myInstruments.length > 1 ? ` · for ${listInstrument}` : ' · all instruments'}
+        {tn(selected.size, '{n} tune', '{n} tunes')}
+        {listInstrument !== 'all' && myInstruments.length > 1 ? ` · ${t('for {instrument}', { instrument: instrumentName(listInstrument) })}` : ` · ${t('all instruments')}`}
       </p>
       <div class="starter-list">
-        <button class="starter-item ls-opt ls-want-to-learn" onclick={() => applyListStatus('want to learn')}>Want to learn</button>
-        <button class="starter-item ls-opt ls-learning" onclick={() => applyListStatus('learning')}>Learning</button>
-        <button class="starter-item ls-opt ls-learned" onclick={() => applyListStatus('learned')}>Learned</button>
+        <button class="starter-item ls-opt ls-want-to-learn" onclick={() => applyListStatus('want to learn')}>{t('Want to learn')}</button>
+        <button class="starter-item ls-opt ls-learning" onclick={() => applyListStatus('learning')}>{t('Learning')}</button>
+        <button class="starter-item ls-opt ls-learned" onclick={() => applyListStatus('learned')}>{t('Learned')}</button>
       </div>
     </div>
   {/if}
@@ -4417,7 +4439,7 @@
   {#if drag?.started}
     <!-- floating drag ghost (spec 029 §F): name for one tune, a count card for a block -->
     <div class="drag-ghost" style="left:{drag.x}px; top:{drag.y}px">
-      {#if drag.block.tuneIds.length === 1}{drag.name}{:else}{drag.block.tuneIds.length} tunes{drag.block.setCount > 1 ? ` · ${drag.block.setCount} sets` : ''}{/if}
+      {#if drag.block.tuneIds.length === 1}{drag.name}{:else}{tn(drag.block.tuneIds.length, '{n} tune', '{n} tunes')}{drag.block.setCount > 1 ? ` · ${tn(drag.block.setCount, '{n} set', '{n} sets')}` : ''}{/if}
     </div>
   {/if}
 
@@ -4460,13 +4482,13 @@
 
   <!-- Pane pick while in read-only View: confirm the implicit edit-mode switch (spec 028). -->
   {#if pendingViewAdd}
-    <div class="reconcile-scrim" role="button" tabindex="-1" aria-label="Cancel" onclick={cancelViewAdd} onkeydown={(e) => activate(e, cancelViewAdd)}></div>
+    <div class="reconcile-scrim" role="button" tabindex="-1" aria-label={t('Cancel')} onclick={cancelViewAdd} onkeydown={(e) => activate(e, cancelViewAdd)}></div>
     <div class="reconcile viewadd" role="dialog" aria-modal="true">
-      <div class="reconcile-head">Switch to editing?</div>
-      <p class="reconcile-sub">You're viewing this log. Add <b>“{pendingViewAdd.name}”</b> and switch to edit mode?</p>
+      <div class="reconcile-head">{t('Switch to editing?')}</div>
+      <p class="reconcile-sub">{t("You're viewing this log. Add")} <b>“{pendingViewAdd.name}”</b> {t('and switch to edit mode?')}</p>
       <div class="reconcile-actions">
-        <button class="va-cancel" onclick={cancelViewAdd}>Cancel</button>
-        <button class="rc-ok" onclick={confirmViewAdd}>Add &amp; edit</button>
+        <button class="va-cancel" onclick={cancelViewAdd}>{t('Cancel')}</button>
+        <button class="rc-ok" onclick={confirmViewAdd}>{t('Add & edit')}</button>
       </div>
     </div>
   {/if}
@@ -4508,9 +4530,9 @@
              the first thing a middle-truncation eats. -->
         <div class="kit-field kit-field-stack">
           <span class="kit-field-head">
-            <span class="kit-field-label">Date</span>
+            <span class="kit-field-label">{t('Date')}</span>
             {#if !readOnly}
-              <button class="hx-act" onclick={openDateEditor}>Change</button>
+              <button class="hx-act" onclick={openDateEditor}>{t('Change')}</button>
             {/if}
           </span>
           <span class="kit-field-value">
@@ -4528,58 +4550,58 @@
              nothing at a festival where there is no usual. -->
         {#if instanceName || !readOnly}
           <div class="kit-field">
-            <span class="kit-field-label">Name</span>
-            <span class="kit-field-value">{instanceName || (isFestival ? 'Unnamed' : 'The usual')}</span>
+            <span class="kit-field-label">{t('Name')}</span>
+            <span class="kit-field-value">{instanceName || (isFestival ? t('Unnamed') : t('The usual'))}</span>
             {#if !readOnly}
-              <button class="hx-act" onclick={openNameEditor}>{instanceName ? 'Rename' : 'Name it'}</button>
+              <button class="hx-act" onclick={openNameEditor}>{instanceName ? t('Rename') : t('Name it')}</button>
             {/if}
           </div>
         {/if}
 
         <div class="kit-field">
-          <span class="kit-field-label">Tunes</span>
+          <span class="kit-field-label">{t('Tunes')}</span>
           <span class="kit-field-value">{tuneSummary}</span>
         </div>
 
         <div class="kit-field header-complete">
-          <span class="kit-field-label">Status</span>
+          <span class="kit-field-label">{t('Status')}</span>
           {#if logComplete}
-            <span class="kit-field-value hc-done">✓ Marked complete</span>
+            <span class="kit-field-value hc-done">✓ {t('Marked complete')}</span>
             {#if !readOnly}
-              <button class="hx-act" onclick={markIncomplete}>Re-open</button>
+              <button class="hx-act" onclick={markIncomplete}>{t('Re-open')}</button>
             {/if}
           {:else}
-            <span class="kit-field-value">Still logging</span>
+            <span class="kit-field-value">{t('Still logging')}</span>
             {#if !readOnly}
-              <button class="hx-act" onclick={markComplete}>Mark complete</button>
+              <button class="hx-act" onclick={markComplete}>{t('Mark complete')}</button>
             {/if}
           {/if}
         </div>
       </div>
 
       {#if (trackAttendance && !readOnly) || canManageRecordings || (!readOnly && roster.length)}
-        <h3 class="kit-group-head">Who and what</h3>
+        <h3 class="kit-group-head">{t('Who and what')}</h3>
         <div class="kit-group">
           {#if trackAttendance && !readOnly}
             <div class="kit-field kit-field-stack">
               <span class="kit-field-head">
                 <span class="kit-field-label">{attendanceLabel}</span>
                 <b class="hx-count">{checkedIn.length}</b>
-                <button class="hx-act" onclick={openAttendance}>Manage</button>
+                <button class="hx-act" onclick={openAttendance}>{t('Manage')}</button>
               </span>
               <span class="kit-field-value">
-                {checkedIn.length ? checkedIn.map((a) => a.display_name).join(', ') : 'No one checked in yet'}
+                {checkedIn.length ? checkedIn.map((a) => a.display_name).join(', ') : t('No one checked in yet')}
               </span>
             </div>
           {/if}
 
           {#if !readOnly && roster.length}
             <div class="kit-field kit-field-stack">
-              <span class="kit-field-head"><span class="kit-field-label">Logging</span></span>
+              <span class="kit-field-head"><span class="kit-field-label">{t('Logging')}</span></span>
               <span class="kit-field-value">
-                {roster.filter((p) => !p.away).map((p) => p.name).join(', ') || 'No one right now'}
+                {roster.filter((p) => !p.away).map((p) => p.name).join(', ') || t('No one right now')}
                 {#if roster.some((p) => p.away)}
-                  <span class="hx-away">· away: {roster.filter((p) => p.away).map((p) => p.name).join(', ')}</span>
+                  <span class="hx-away">· {t('away: {names}', { names: roster.filter((p) => p.away).map((p) => p.name).join(', ') })}</span>
                 {/if}
               </span>
             </div>
@@ -4587,18 +4609,18 @@
 
           {#if canManageRecordings}
             <div class="kit-field">
-              <span class="kit-field-label">Recordings</span>
+              <span class="kit-field-label">{t('Recordings')}</span>
               <span class="kit-field-value">
                 {#if recordingCount === null}
                   —
                 {:else if recordingCount === 0}
-                  none uploaded yet
+                  {t('none uploaded yet')}
                 {:else}
                   <b class="hx-strong">{recordingCount}</b>
-                  {recordingCount === 1 ? 'recording' : 'recordings'}
+                  {tn(recordingCount, 'recording', 'recordings')}
                 {/if}
               </span>
-              <button class="hx-act" onclick={() => (recordingsOpen = true)}>Manage</button>
+              <button class="hx-act" onclick={() => (recordingsOpen = true)}>{t('Manage')}</button>
             </div>
           {/if}
         </div>
@@ -4607,7 +4629,7 @@
       {#if readOnly}
         <!-- Signed out: notes are part of the public log, but read-only. -->
         {#if notesText}
-          <h3 class="kit-group-head">Notes</h3>
+          <h3 class="kit-group-head">{t('Notes')}</h3>
           <div class="kit-group">
             <div class="kit-field kit-field-stack">
               <span class="kit-field-value header-notes-ro">{notesText}</span>
@@ -4615,14 +4637,14 @@
           </div>
         {/if}
       {:else}
-        <h3 class="kit-group-head">Notes</h3>
+        <h3 class="kit-group-head">{t('Notes')}</h3>
         <div class="kit-group">
           <div class="hx-notes">
-            <textarea class="hn-area" rows="3" placeholder="Add notes for this session…" bind:value={notesDraft}></textarea>
+            <textarea class="hn-area" rows="3" placeholder={t('Add notes for this session…')} bind:value={notesDraft}></textarea>
             {#if notesDraft !== notesText}
               <span class="hn-actions">
-                <button class="hn-save" onclick={saveNotes}>Save</button>
-                <button class="hn-cancel" onclick={() => (notesDraft = notesText)}>Cancel</button>
+                <button class="hn-save" onclick={saveNotes}>{t('Save')}</button>
+                <button class="hn-cancel" onclick={() => (notesDraft = notesText)}>{t('Cancel')}</button>
               </span>
             {/if}
           </div>
@@ -4631,7 +4653,7 @@
 
       <div class="kit-group">
         <a class="kit-field" id="go-to-session" href="/sessions/{config.sessionPath}">
-          <span class="kit-field-label">{sessionName || 'The session'}</span>
+          <span class="kit-field-label">{sessionName || t('The session')}</span>
           <Chevron class="kit-chev" />
         </a>
       </div>
@@ -4642,17 +4664,17 @@
 
 <Dialog
   bind:open={markCompleteOpen}
-  title="Mark this session log as completely logged?"
-  description="This hides the editing controls."
-  confirmLabel="Mark complete"
-  busyLabel="Marking complete…"
+  title={t('Mark this session log as completely logged?')}
+  description={t('This hides the editing controls.')}
+  confirmLabel={t('Mark complete')}
+  busyLabel={t('Marking complete…')}
   onConfirm={doMarkComplete} />
 
 <Dialog
   bind:open={markIncompleteOpen}
-  title="Re-open this session log for editing?"
-  confirmLabel="Re-open log"
-  busyLabel="Re-opening…"
+  title={t('Re-open this session log for editing?')}
+  confirmLabel={t('Re-open log')}
+  busyLabel={t('Re-opening…')}
   onConfirm={doMarkIncomplete} />
 
 <!--
@@ -4679,20 +4701,19 @@
 -->
 <Sheet
   bind:open={dateOpen}
-  title="Date &amp; time"
+  title={t('Date & time')}
   compact
   onCancel={() => { dateOpen = false }}>
   <div class="dt-body">
     <p class="dt-note">
-      If you started logging after midnight, the log may be dated a day later than the
-      session actually happened. Set it to the right night here.
+      {t('If you started logging after midnight, the log may be dated a day later than the session actually happened. Set it to the right night here.')}
     </p>
     <div class="dt-nudge">
-      <button class="dt-step" onclick={() => nudgeDate(-1)}><Chevron dir="left" size={14} /> Previous day</button>
-      <button class="dt-step" onclick={() => nudgeDate(1)}>Next day <Chevron size={14} /></button>
+      <button class="dt-step" onclick={() => nudgeDate(-1)}><Chevron dir="left" size={14} /> {t('Previous day')}</button>
+      <button class="dt-step" onclick={() => nudgeDate(1)}>{t('Next day')} <Chevron size={14} /></button>
     </div>
     <label class="dt-field">
-      <span class="dt-label">Date</span>
+      <span class="dt-label">{t('Date')}</span>
       <input
         class="dt-input"
         type="date"
@@ -4704,18 +4725,18 @@
          until it stopped" — which is why the hint says so instead of nagging. -->
     <div class="dt-times">
       <label class="dt-field">
-        <span class="dt-label">Start</span>
+        <span class="dt-label">{t('Start')}</span>
         <input class="dt-input" type="time" bind:value={startDraft} oninput={() => { dateErr = '' }} />
       </label>
       <label class="dt-field">
-        <span class="dt-label">End</span>
+        <span class="dt-label">{t('End')}</span>
         <input class="dt-input" type="time" bind:value={endDraft} oninput={() => { dateErr = '' }} />
       </label>
     </div>
-    <p class="dt-hint">Leave End blank if it ran on past when anyone was counting.</p>
+    <p class="dt-hint">{t('Leave End blank if it ran on past when anyone was counting.')}</p>
     <p class="dt-preview" class:dt-changed={dateDirty}>
       {draftWhen}
-      {#if !dateDirty}<span class="dt-same">(unchanged)</span>{/if}
+      {#if !dateDirty}<span class="dt-same">{t('(unchanged)')}</span>{/if}
     </p>
     {#if dateErr}
       <p class="dt-err">{dateErr}</p>
@@ -4725,7 +4746,7 @@
     <!-- Cancel lives in the Sheet's own header row; the footer carries only the commit. -->
     <div class="dt-actions">
       <button class="dt-save" disabled={dateSaving || !dateDraft || !dateDirty} onclick={saveDate}>
-        {dateSaving ? 'Saving…' : dateConfirm ? 'Save anyway' : 'Save'}
+        {dateSaving ? t('Saving…') : dateConfirm ? t('Save anyway') : t('Save')}
       </button>
     </div>
   {/snippet}
@@ -4739,7 +4760,7 @@
 -->
 <Sheet
   bind:open={nameOpen}
-  title="Log name"
+  title={t('Log name')}
   compact
   onCancel={() => { nameOpen = false }}>
   <div class="dt-body">
@@ -4751,28 +4772,25 @@
          differ. -->
     <p class="dt-note">
       {#if isFestival}
-        Several sessions share a day here, so the date on its own won't tell them apart.
-        This name is what the log is called everywhere it's listed.
+        {t("Several sessions share a day here, so the date on its own won't tell them apart. This name is what the log is called everywhere it's listed.")}
       {:else}
-        Most nights don't need one — the date says which session it was. Name this log when
-        the date isn't enough: a night somewhere other than the usual place, or a second
-        session on the same day.
+        {t("Most nights don't need one — the date says which session it was. Name this log when the date isn't enough: a night somewhere other than the usual place, or a second session on the same day.")}
       {/if}
     </p>
     <label class="dt-field">
-      <span class="dt-label">Name</span>
+      <span class="dt-label">{t('Name')}</span>
       <input
         class="dt-input"
         type="text"
         maxlength="255"
-        placeholder={isFestival ? 'e.g. Advanced Session @ Jim Bowie' : "e.g. At Sarah's house"}
+        placeholder={isFestival ? t('e.g. Advanced Session @ Jim Bowie') : t("e.g. At Sarah's house")}
         bind:value={nameDraft}
         oninput={() => { nameErr = '' }}
         onkeydown={(e) => { if (e.key === 'Enter') saveName() }} />
     </label>
     <p class="dt-preview" class:dt-changed={nameDraft.trim() !== (instanceName || '')}>
-      {nameDraft.trim() || (isFestival ? 'Unnamed — shown by date alone' : 'No name — shown by date alone')}
-      {#if nameDraft.trim() === (instanceName || '')}<span class="dt-same">(unchanged)</span>{/if}
+      {nameDraft.trim() || (isFestival ? t('Unnamed — shown by date alone') : t('No name — shown by date alone'))}
+      {#if nameDraft.trim() === (instanceName || '')}<span class="dt-same">{t('(unchanged)')}</span>{/if}
     </p>
     {#if nameErr}
       <p class="dt-err">{nameErr}</p>
@@ -4783,7 +4801,7 @@
       <!-- "Clear name" only when there is a name to clear. On an already-unnamed log
            an empty box is the status quo, not a deletion. -->
       <button class="dt-save" disabled={nameSaving || nameDraft.trim() === (instanceName || '')} onclick={saveName}>
-        {nameSaving ? 'Saving…' : !nameDraft.trim() && instanceName ? 'Clear name' : 'Save name'}
+        {nameSaving ? t('Saving…') : !nameDraft.trim() && instanceName ? t('Clear name') : t('Save name')}
       </button>
     </div>
   {/snippet}

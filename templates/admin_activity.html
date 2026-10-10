@@ -1,6 +1,7 @@
+{# i18n-converted #}
 {% extends "base.html" %}
 
-{% block title %}Admin - Activity{% endblock %}
+{% block title %}{{ _('Admin - Activity') }}{% endblock %}
 
 {% block content %}
 <div class="docs-content-inner">
@@ -12,17 +13,17 @@
             <section class="docs-section" id="activity-categories">
                 <div class="category-buttons">
                     <a href="{{ url_for('admin_activity', category='all', hours=hours_filter, activity_type=activity_type_filter, session_id=session_filter, user=user_filter) }}"
-                       class="btn btn-category {{ 'active' if category == 'all' else '' }}">All</a>
+                       class="btn btn-category {{ 'active' if category == 'all' else '' }}">{{ _('All') }}</a>
                     <a href="{{ url_for('admin_activity', category='sessions', hours=hours_filter, activity_type=activity_type_filter, session_id=session_filter, user=user_filter) }}"
-                       class="btn btn-category {{ 'active' if category == 'sessions' else '' }}">Sessions</a>
+                       class="btn btn-category {{ 'active' if category == 'sessions' else '' }}">{{ _('Sessions') }}</a>
                     <a href="{{ url_for('admin_activity', category='people', hours=hours_filter, activity_type=activity_type_filter, session_id=session_filter, user=user_filter) }}"
-                       class="btn btn-category {{ 'active' if category == 'people' else '' }}">People</a>
+                       class="btn btn-category {{ 'active' if category == 'people' else '' }}">{{ _('People') }}</a>
                     <a href="{{ url_for('admin_activity', category='tunes', hours=hours_filter, activity_type=activity_type_filter, session_id=session_filter, user=user_filter) }}"
-                       class="btn btn-category {{ 'active' if category == 'tunes' else '' }}">Tunes</a>
+                       class="btn btn-category {{ 'active' if category == 'tunes' else '' }}">{{ _('Tunes') }}</a>
                     <a href="{{ url_for('admin_activity', category='logs', hours=hours_filter, activity_type=activity_type_filter, session_id=session_filter, user=user_filter) }}"
-                       class="btn btn-category {{ 'active' if category == 'logs' else '' }}">Logs</a>
+                       class="btn btn-category {{ 'active' if category == 'logs' else '' }}">{{ _('Logs') }}</a>
                     <a href="{{ url_for('admin_activity', category='logins', hours=hours_filter, activity_type=activity_type_filter, session_id=session_filter, user=user_filter) }}"
-                       class="btn btn-category {{ 'active' if category == 'logins' else '' }}">Logins</a>
+                       class="btn btn-category {{ 'active' if category == 'logins' else '' }}">{{ _('Logins') }}</a>
                 </div>
             </section>
 
@@ -32,46 +33,46 @@
                     <input type="hidden" name="category" value="{{ category }}">
                     <div class="row align-items-end">
                         <div class="col-md-2 col-sm-6 mb-3">
-                            <label for="hours" class="form-label">Time Period</label>
+                            <label for="hours" class="form-label">{{ _('Time Period') }}</label>
                             <select name="hours" id="hours" class="form-select">
-                                <option value="1" {{ 'selected' if hours_filter == 1 }}>Last Hour</option>
-                                <option value="24" {{ 'selected' if hours_filter == 24 }}>Last 24 Hours</option>
-                                <option value="168" {{ 'selected' if hours_filter == 168 }}>Last Week</option>
-                                <option value="720" {{ 'selected' if hours_filter == 720 }}>Last Month</option>
+                                <option value="1" {{ 'selected' if hours_filter == 1 }}>{{ _('Last Hour') }}</option>
+                                <option value="24" {{ 'selected' if hours_filter == 24 }}>{{ _('Last 24 Hours') }}</option>
+                                <option value="168" {{ 'selected' if hours_filter == 168 }}>{{ _('Last Week') }}</option>
+                                <option value="720" {{ 'selected' if hours_filter == 720 }}>{{ _('Last Month') }}</option>
                             </select>
                         </div>
                         <div class="col-md-2 col-sm-6 mb-3">
-                            <label for="activity_type" class="form-label">Activity</label>
+                            <label for="activity_type" class="form-label">{{ _('Activity') }}</label>
                             <select name="activity_type" id="activity_type" class="form-select" autocomplete="off">
-                                <option value="" {% if not activity_type_filter %}selected{% endif %}>All</option>
+                                <option value="" {% if not activity_type_filter %}selected{% endif %}>{{ _('All') }}</option>
                                 {% if category == 'logins' %}
-                                <option value="ACTIVE_SESSIONS" {% if activity_type_filter == 'ACTIVE_SESSIONS' %}selected{% endif %}>Active Sessions</option>
-                                <option value="LOGIN_SUCCESS" {% if activity_type_filter == 'LOGIN_SUCCESS' %}selected{% endif %}>Login Success</option>
-                                <option value="LOGIN_FAILURE" {% if activity_type_filter == 'LOGIN_FAILURE' %}selected{% endif %}>Login Failure</option>
-                                <option value="LOGOUT" {% if activity_type_filter == 'LOGOUT' %}selected{% endif %}>Logout</option>
-                                <option value="PASSWORD_RESET" {% if activity_type_filter == 'PASSWORD_RESET' %}selected{% endif %}>Password Reset</option>
+                                <option value="ACTIVE_SESSIONS" {% if activity_type_filter == 'ACTIVE_SESSIONS' %}selected{% endif %}>{{ _('Active Sessions') }}</option>
+                                <option value="LOGIN_SUCCESS" {% if activity_type_filter == 'LOGIN_SUCCESS' %}selected{% endif %}>{{ _('Login Success') }}</option>
+                                <option value="LOGIN_FAILURE" {% if activity_type_filter == 'LOGIN_FAILURE' %}selected{% endif %}>{{ _('Login Failure') }}</option>
+                                <option value="LOGOUT" {% if activity_type_filter == 'LOGOUT' %}selected{% endif %}>{{ _('Logout') }}</option>
+                                <option value="PASSWORD_RESET" {% if activity_type_filter == 'PASSWORD_RESET' %}selected{% endif %}>{{ _('Password Reset') }}</option>
                                 {% else %}
-                                <option value="created" {% if activity_type_filter == 'created' %}selected{% endif %}>Created</option>
-                                <option value="modified" {% if activity_type_filter == 'modified' %}selected{% endif %}>Modified</option>
+                                <option value="created" {% if activity_type_filter == 'created' %}selected{% endif %}>{{ _('Created') }}</option>
+                                <option value="modified" {% if activity_type_filter == 'modified' %}selected{% endif %}>{{ _('Modified') }}</option>
                                 {% endif %}
                             </select>
                         </div>
                         <div class="col-md-3 col-sm-6 mb-3">
-                            <label for="session_id" class="form-label">Session</label>
+                            <label for="session_id" class="form-label">{{ _('Session') }}</label>
                             <select name="session_id" id="session_id" class="form-select" autocomplete="off">
-                                <option value="" {% if not session_filter %}selected{% endif %}>All Sessions</option>
+                                <option value="" {% if not session_filter %}selected{% endif %}>{{ _('All Sessions') }}</option>
                                 {% for s in sessions %}
                                 <option value="{{ s.session_id }}" {% if session_filter == s.session_id|string %}selected{% endif %}>{{ s.name }}</option>
                                 {% endfor %}
                             </select>
                         </div>
                         <div class="col-md-3 col-sm-6 mb-3">
-                            <label for="user" class="form-label">User</label>
+                            <label for="user" class="form-label">{{ _('User') }}</label>
                             <input type="text" name="user" id="user" class="form-control"
-                                   value="{{ user_filter }}" placeholder="Search username...">
+                                   value="{{ user_filter }}" placeholder="{{ _('Search username...') }}">
                         </div>
                         <div class="col-md-2 col-sm-12 mb-3">
-                            <button type="submit" class="btn btn-primary w-100">Filter</button>
+                            <button type="submit" class="btn btn-primary w-100">{{ _('Filter') }}</button>
                         </div>
                     </div>
                 </form>
@@ -79,8 +80,8 @@
 
             <section class="docs-section" id="activity-list">
                 <h2 class="section-heading">
-                    {% if activity_type_filter == 'ACTIVE_SESSIONS' %}Active Sessions{% else %}Activity{% endif %}
-                    <span class="docs-time">({{ total_count }} entries)</span>
+                    {% if activity_type_filter == 'ACTIVE_SESSIONS' %}{{ _('Active Sessions') }}{% else %}{{ _('Activity') }}{% endif %}
+                    <span class="docs-time">({{ ngettext('%(num)d entry', '%(num)d entries', total_count) }})</span>
                 </h2>
 
                 {% if activity_items %}
@@ -89,11 +90,11 @@
                         {% if activity_type_filter == 'ACTIVE_SESSIONS' %}
                         <thead>
                             <tr>
-                                <th>Login Time</th>
-                                <th>Name</th>
-                                <th>Username</th>
-                                <th>Duration</th>
-                                <th>IP Address</th>
+                                <th>{{ _('Login Time') }}</th>
+                                <th>{{ _('Name') }}</th>
+                                <th>{{ _('Username') }}</th>
+                                <th>{{ _('Duration') }}</th>
+                                <th>{{ _('IP Address') }}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -110,12 +111,12 @@
                         {% else %}
                         <thead>
                             <tr>
-                                <th>Timestamp</th>
-                                <th>Type</th>
-                                <th>Name</th>
-                                <th>Activity</th>
-                                <th>User</th>
-                                <th>History</th>
+                                <th>{{ _('Timestamp') }}</th>
+                                <th>{{ _('Type') }}</th>
+                                <th>{{ _('Name') }}</th>
+                                <th>{{ _('Activity') }}</th>
+                                <th>{{ _('User') }}</th>
+                                <th>{{ _('History') }}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -145,7 +146,7 @@
                                     <button class="btn btn-sm btn-outline-secondary history-btn"
                                             data-entity-type="{{ item.entity_type }}"
                                             data-entity-id="{{ item.entity_id }}"
-                                            title="View history">
+                                            title="{{ _('View history') }}">
                                         <i class="fas fa-history"></i>
                                     </button>
                                     {% endif %}
@@ -159,12 +160,12 @@
 
                 <!-- Pagination -->
                 {% if total_pages > 1 %}
-                <nav aria-label="Activity pagination" class="mt-4">
+                <nav aria-label="{{ _('Activity pagination') }}" class="mt-4">
                     <ul class="pagination justify-content-center">
                         {% if has_prev %}
                             <li class="page-item">
                                 <a class="page-link" href="{{ url_for('admin_activity', page=page-1, category=category, hours=hours_filter, activity_type=activity_type_filter, session_id=session_filter, user=user_filter) }}">
-                                    Previous
+                                    {{ _('Previous') }}
                                 </a>
                             </li>
                         {% endif %}
@@ -190,7 +191,7 @@
                         {% if has_next %}
                             <li class="page-item">
                                 <a class="page-link" href="{{ url_for('admin_activity', page=page+1, category=category, hours=hours_filter, activity_type=activity_type_filter, session_id=session_filter, user=user_filter) }}">
-                                    Next
+                                    {{ _('Next') }}
                                 </a>
                             </li>
                         {% endif %}
@@ -200,8 +201,8 @@
 
                 {% else %}
                 <div class="alert alert-info" role="alert">
-                    <h4 class="alert-heading">No Activity</h4>
-                    <p>No activity found for the selected criteria.</p>
+                    <h4 class="alert-heading">{{ _('No Activity') }}</h4>
+                    <p>{{ _('No activity found for the selected criteria.') }}</p>
                 </div>
                 {% endif %}
             </section>
@@ -214,12 +215,12 @@
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="historyModalLabel">Change History</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <h5 class="modal-title" id="historyModalLabel">{{ _('Change History') }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
             </div>
             <div class="modal-body" id="historyModalBody">
                 <div class="text-center">
-                    <i class="fas fa-spinner fa-spin"></i> Loading...
+                    <i class="fas fa-spinner fa-spin"></i> {{ _('Loading...') }}
                 </div>
             </div>
         </div>
@@ -387,6 +388,16 @@
 </style>
 
 <script>
+const ACTIVITY_T = {
+    loading: {{ _('Loading...')|tojson }},
+    failed: {{ _('Failed to load history')|tojson }},
+    errorLoading: {{ _('Error loading history: {error}')|tojson }},
+    noHistory: {{ _('No history records found.')|tojson }},
+    timestamp: {{ _('Timestamp')|tojson }},
+    operation: {{ _('Operation')|tojson }},
+    changedBy: {{ _('Changed By')|tojson }},
+    system: {{ _('System')|tojson }},
+};
 document.addEventListener('DOMContentLoaded', function() {
     // History button click handler
     document.querySelectorAll('.history-btn').forEach(function(btn) {
@@ -396,7 +407,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // Show modal with loading state
             const modal = new bootstrap.Modal(document.getElementById('historyModal'));
-            document.getElementById('historyModalBody').innerHTML = '<div class="text-center"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
+            document.getElementById('historyModalBody').innerHTML = '<div class="text-center"><i class="fas fa-spinner fa-spin"></i> ' + ACTIVITY_T.loading + '</div>';
             modal.show();
 
             // Fetch history data
@@ -407,12 +418,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         renderHistory(data.history, entityType);
                     } else {
                         document.getElementById('historyModalBody').innerHTML =
-                            `<div class="alert alert-danger">${data.error || 'Failed to load history'}</div>`;
+                            `<div class="alert alert-danger">${data.error || ACTIVITY_T.failed}</div>`;
                     }
                 })
                 .catch(error => {
                     document.getElementById('historyModalBody').innerHTML =
-                        `<div class="alert alert-danger">Error loading history: ${error.message}</div>`;
+                        `<div class="alert alert-danger">${ACTIVITY_T.errorLoading.replace('{error}', error.message)}</div>`;
                 });
         });
     });
@@ -420,12 +431,12 @@ document.addEventListener('DOMContentLoaded', function() {
     function renderHistory(history, entityType) {
         if (!history || history.length === 0) {
             document.getElementById('historyModalBody').innerHTML =
-                '<div class="alert alert-info">No history records found.</div>';
+                '<div class="alert alert-info">' + ACTIVITY_T.noHistory + '</div>';
             return;
         }
 
         let html = '<table class="table table-sm table-striped">';
-        html += '<thead><tr><th>Timestamp</th><th>Operation</th><th>Changed By</th></tr></thead>';
+        html += `<thead><tr><th>${ACTIVITY_T.timestamp}</th><th>${ACTIVITY_T.operation}</th><th>${ACTIVITY_T.changedBy}</th></tr></thead>`;
         html += '<tbody>';
 
         history.forEach(function(record) {
@@ -434,7 +445,7 @@ document.addEventListener('DOMContentLoaded', function() {
             html += `<tr>
                 <td class="timestamp">${record.changed_at}</td>
                 <td><span class="badge bg-${opClass}">${record.operation}</span></td>
-                <td>${record.changed_by || 'System'}</td>
+                <td>${record.changed_by || ACTIVITY_T.system}</td>
             </tr>`;
         });
 

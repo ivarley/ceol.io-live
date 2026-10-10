@@ -14,6 +14,9 @@ uvicorn[standard]
 websockets
 python-dotenv
 boto3
+# decoding a recording for a background job (find_tunes): a static ffmpeg in a
+# wheel, as the web app's ingest uses (Render's native runtime has none)
+imageio-ffmpeg
 
 numpy<2.1
 scipy

@@ -2,6 +2,8 @@
 // each timestamped tune (❚❚ while it plays), a ▶ / ■ on the set, the tune being heard
 // tinted green (not the insertion point's yellow: the two can be on different rows), and
 // the player: a one-line bar that opens into the transport.
+//
+// i18n-converted (spec 057). "HD", "MB" and "GB" read the same in Irish.
 
 import CeolDesign
 import CeolLogic
@@ -22,7 +24,7 @@ struct TunePlayButton: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.borderless)
-        .accessibilityLabel(playing && !paused ? "Pause" : "Play this tune")
+        .accessibilityLabel(playing && !paused ? tr("Pause") : tr("Play this tune"))
         .accessibilityIdentifier("tune.play")
     }
 }
@@ -57,7 +59,7 @@ struct PlayerBar: View {
                         .frame(width: 36, height: 36)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(player.paused ? "Play" : "Pause")
+                .accessibilityLabel(player.paused ? tr("Play") : tr("Pause"))
                 .accessibilityIdentifier("player.toggle")
                 Button { withAnimation(.easeOut(duration: 0.2)) { player.open.toggle() } } label: {
                     HStack(spacing: 6) {
@@ -71,7 +73,7 @@ struct PlayerBar: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(player.open ? "Hide controls" : "Show controls")
+                .accessibilityLabel(player.open ? tr("Hide controls") : tr("Show controls"))
                 .accessibilityIdentifier("player.open")
                 Button { player.stop() } label: {
                     Image(systemName: "xmark").foregroundStyle(CeolTokens.textMuted).frame(width: 36, height: 36)
@@ -113,17 +115,17 @@ struct PlayerBar: View {
             }
             .font(.ceol(size: 12)).monospacedDigit().foregroundStyle(CeolTokens.textMuted)
             HStack(spacing: 18) {
-                transportButton("backward.end.fill", "Previous tune") { player.previous() }
-                transportButton(player.paused ? "play.fill" : "pause.fill", player.paused ? "Play" : "Pause", big: true) {
+                transportButton("backward.end.fill", tr("Previous tune")) { player.previous() }
+                transportButton(player.paused ? "play.fill" : "pause.fill", player.paused ? tr("Play") : tr("Pause"), big: true) {
                     player.togglePlayPause()
                 }
-                transportButton("forward.end.fill", "Next tune") { player.next() }
+                transportButton("forward.end.fill", tr("Next tune")) { player.next() }
                     .disabled(player.idx + 1 >= player.queue.count)
-                transportButton("stop.fill", "Stop") { player.stop() }
+                transportButton("stop.fill", tr("Stop")) { player.stop() }
             }
             HStack(spacing: 8) {
-                mode("Repeat 1", on: player.repeatOne) { player.repeatOne.toggle() }
-                mode("Auto-continue", on: player.autoContinue) { player.autoContinue.toggle() }
+                mode(tr("Repeat 1"), on: player.repeatOne) { player.repeatOne.toggle() }
+                mode(tr("Auto-continue"), on: player.autoContinue) { player.autoContinue.toggle() }
                 if player.canSwitchHD {
                     let size = player.masterSize.map { " \(Self.megabytes($0))" } ?? ""
                     mode(player.hdOn ? "HD" : "HD\(size)", on: player.hdOn) { player.switchSource(player.hdOn ? "proxy" : "master") }

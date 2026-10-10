@@ -364,7 +364,7 @@ def build_person_details_payload(
         """
         SELECT user_id, username, user_email, email_verified, is_system_admin,
                is_active, created_date, timezone, hashed_password,
-               receive_update_emails
+               receive_update_emails, language
         FROM user_account
         WHERE person_id = %s
         """,
@@ -392,6 +392,7 @@ def build_person_details_payload(
             "timezone_display": get_timezone_display_name(urow["timezone"] or "UTC"),
             "has_password": urow["hashed_password"] is not None and urow["hashed_password"] != "",
             "receive_update_emails": urow["receive_update_emails"],
+            "language": urow["language"] or "en",  # spec 057
         }
 
     # Sessions this person is associated with (spec 034). `relationship` and `is_admin` are
@@ -2080,7 +2081,7 @@ def _load_instance_tune_log(conn, session_instance_id: int, session_id: int) -> 
         """
         SELECT sit.session_instance_tune_id, sit.tune_id, sit.record_type, sit.order_position,
                COALESCE(sit.name, st.alias, t.name) AS display_name,
-               t.tune_type, sit.source
+               t.tune_type, sit.source, sit.confidence, sit.confidence_model
         FROM session_instance_tune sit
         LEFT JOIN tune t ON t.tune_id = sit.tune_id
         LEFT JOIN session_tune st ON st.tune_id = sit.tune_id AND st.session_id = %s
@@ -2115,6 +2116,11 @@ def _load_instance_tune_log(conn, session_instance_id: int, session_id: int) -> 
                 # (spec 050 "Logging while segmenting"); the tool treats those
                 # differently from a log someone wrote down on the night.
                 "source": row["source"],
+                # How sure a machine was that this is the tune (0-99, schema 060's
+                # model), 100 once a person confirmed it, None when a person logged it.
+                # Under 100: the segmenter asks for a check.
+                "confidence": row["confidence"],
+                "confidence_model": row["confidence_model"],
                 "segment": None,
             }
         )

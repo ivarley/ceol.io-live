@@ -1,0 +1,414 @@
+{
+  "Language": {
+    "ga": "Teanga",
+    "review": true
+  },
+  "The language Ceol's screens and emails are in.": {
+    "ga": "An teanga ina bhfuil scáileáin agus ríomhphoist Cheol.",
+    "review": true
+  },
+  "Couldn't change the language. Try again.": {
+    "ga": "Níorbh fhéidir an teanga a athrú. Bain triail eile as.",
+    "review": true
+  },
+  "Barndance": {
+    "ga": "Damhsa sciobóil",
+    "review": true
+  },
+  "Hornpipe": {
+    "ga": "Cornphíopa",
+    "review": true
+  },
+  "Jig": {
+    "ga": "Port",
+    "review": true
+  },
+  "March": {
+    "ga": "Máirseáil",
+    "review": true
+  },
+  "Mazurka": {
+    "ga": "Mazurka",
+    "review": true
+  },
+  "Polka": {
+    "ga": "Polca",
+    "review": true
+  },
+  "Reel": {
+    "ga": "Ríl",
+    "review": true
+  },
+  "Slide": {
+    "ga": "Sleamhnán",
+    "review": true
+  },
+  "Slip Jig": {
+    "ga": "Port luascach",
+    "review": true
+  },
+  "Strathspey": {
+    "ga": "Strathspey",
+    "review": true
+  },
+  "Three-Two": {
+    "ga": "Trí-dó",
+    "review": true
+  },
+  "Waltz": {
+    "ga": "Válsa",
+    "review": true
+  },
+  "Air": {
+    "ga": "Fonn mall",
+    "review": true
+  },
+  "Banjo": {
+    "ga": "Bainseó",
+    "review": true
+  },
+  "Bodhrán": {
+    "ga": "Bodhrán",
+    "review": true
+  },
+  "Bouzouki": {
+    "ga": "Búsúcaí",
+    "review": true
+  },
+  "Button Accordion": {
+    "ga": "Bosca ceoil",
+    "review": true
+  },
+  "Concertina": {
+    "ga": "Consairtín",
+    "review": true
+  },
+  "Fiddle": {
+    "ga": "Fidil",
+    "review": true
+  },
+  "Flute": {
+    "ga": "Feadóg mhór",
+    "review": true
+  },
+  "Guitar": {
+    "ga": "Giotár",
+    "review": true
+  },
+  "Harp": {
+    "ga": "Cláirseach",
+    "review": true
+  },
+  "Low Whistle": {
+    "ga": "Feadóg íseal",
+    "review": true
+  },
+  "Mandolin": {
+    "ga": "Maindilín",
+    "review": true
+  },
+  "Piano": {
+    "ga": "Pianó",
+    "review": true
+  },
+  "Piano Accordion": {
+    "ga": "Cairdín pianó",
+    "review": true
+  },
+  "Uilleann Pipes": {
+    "ga": "Píb uilleann",
+    "review": true
+  },
+  "Whistle": {
+    "ga": "Feadóg",
+    "review": true
+  },
+  "Cancel": {
+    "ga": "Cealaigh",
+    "review": true
+  },
+  "Save": {
+    "ga": "Sábháil",
+    "review": true
+  },
+  "Saving…": {
+    "ga": "Á shábháil…",
+    "review": true
+  },
+  "Saved": {
+    "ga": "Sábháilte",
+    "review": true
+  },
+  "Done": {
+    "ga": "Déanta",
+    "review": true
+  },
+  "Delete": {
+    "ga": "Scrios",
+    "review": true
+  },
+  "Edit": {
+    "ga": "Cuir in eagar",
+    "review": true
+  },
+  "Add": {
+    "ga": "Cuir leis",
+    "review": true
+  },
+  "Close": {
+    "ga": "Dún",
+    "review": true
+  },
+  "Back": {
+    "ga": "Siar",
+    "review": true
+  },
+  "Search": {
+    "ga": "Cuardaigh",
+    "review": true
+  },
+  "Retry": {
+    "ga": "Bain triail eile as",
+    "review": true
+  },
+  "Try again": {
+    "ga": "Bain triail eile as",
+    "review": true
+  },
+  "Loading…": {
+    "ga": "Á lódáil…",
+    "review": true
+  },
+  "Remove": {
+    "ga": "Bain",
+    "review": true
+  },
+  "Next": {
+    "ga": "Ar aghaidh",
+    "review": true
+  },
+  "Previous": {
+    "ga": "Roimhe",
+    "review": true
+  },
+  "Filter": {
+    "ga": "Scag",
+    "review": true
+  },
+  "Filters": {
+    "ga": "Scagairí",
+    "review": true
+  },
+  "Sort": {
+    "ga": "Sórtáil",
+    "review": true
+  },
+  "All": {
+    "ga": "Gach ceann",
+    "review": true
+  },
+  "None": {
+    "ga": "Dada",
+    "review": true
+  },
+  "Today": {
+    "ga": "Inniu",
+    "review": true
+  },
+  "Tonight": {
+    "ga": "Anocht",
+    "review": true
+  },
+  "Yesterday": {
+    "ga": "Inné",
+    "review": true
+  },
+  "Tomorrow": {
+    "ga": "Amárach",
+    "review": true
+  },
+  "Name": {
+    "ga": "Ainm",
+    "review": true
+  },
+  "Date": {
+    "ga": "Dáta",
+    "review": true
+  },
+  "Time": {
+    "ga": "Am",
+    "review": true
+  },
+  "Notes": {
+    "ga": "Nótaí",
+    "review": true
+  },
+  "Settings": {
+    "ga": "Socruithe",
+    "review": true
+  },
+  "More": {
+    "ga": "Tuilleadh",
+    "review": true
+  },
+  "Less": {
+    "ga": "Níos lú",
+    "review": true
+  },
+  "Copy": {
+    "ga": "Cóipeáil",
+    "review": true
+  },
+  "Copied": {
+    "ga": "Cóipeáilte",
+    "review": true
+  },
+  "Share": {
+    "ga": "Comhroinn",
+    "review": true
+  },
+  "Help": {
+    "ga": "Cabhair",
+    "review": true
+  },
+  "Tunes": {
+    "ga": "Foinn",
+    "review": true
+  },
+  "Sessions": {
+    "ga": "Seisiúin",
+    "review": true
+  },
+  "Session": {
+    "ga": "Seisiún",
+    "review": true
+  },
+  "Tune": {
+    "ga": "Fonn",
+    "review": true
+  },
+  "Key": {
+    "ga": "Gléas",
+    "review": true
+  },
+  "Setting": {
+    "ga": "Leagan",
+    "review": true
+  },
+  "Type": {
+    "ga": "Cineál",
+    "review": true
+  },
+  "People": {
+    "ga": "Daoine",
+    "review": true
+  },
+  "Members": {
+    "ga": "Baill",
+    "review": true
+  },
+  "Member": {
+    "ga": "Ball",
+    "review": true
+  },
+  "Visitor": {
+    "ga": "Cuairteoir",
+    "review": true
+  },
+  "Visitors": {
+    "ga": "Cuairteoirí",
+    "review": true
+  },
+  "Admin": {
+    "ga": "Bainisteoir",
+    "review": true
+  },
+  "Logs": {
+    "ga": "Logálacha",
+    "review": true
+  },
+  "Log": {
+    "ga": "Logáil",
+    "review": true
+  },
+  "Learning": {
+    "ga": "Á fhoghlaim",
+    "review": true
+  },
+  "Want to learn": {
+    "ga": "Le foghlaim",
+    "review": true
+  },
+  "Learned": {
+    "ga": "Ar eolas",
+    "review": true
+  },
+  "Instruments": {
+    "ga": "Uirlisí",
+    "review": true
+  },
+  "Instrument": {
+    "ga": "Uirlis",
+    "review": true
+  },
+  "Location": {
+    "ga": "Áit",
+    "review": true
+  },
+  "Festival": {
+    "ga": "Féile",
+    "review": true
+  },
+  "Home": {
+    "ga": "Tús",
+    "review": true
+  },
+  "Me": {
+    "ga": "Mise",
+    "review": true
+  },
+  "About": {
+    "ga": "Eolas",
+    "review": true
+  },
+  "Sign in": {
+    "ga": "Sínigh isteach",
+    "review": true
+  },
+  "Sign out": {
+    "ga": "Sínigh amach",
+    "review": true
+  },
+  "Log in": {
+    "ga": "Sínigh isteach",
+    "review": true
+  },
+  "Log out": {
+    "ga": "Sínigh amach",
+    "review": true
+  },
+  "Profile": {
+    "ga": "Próifíl",
+    "review": true
+  },
+  "On Now": {
+    "ga": "Ar siúl anois",
+    "review": true
+  },
+  "Something went wrong. Try again.": {
+    "ga": "Chuaigh rud éigin amú. Bain triail eile as.",
+    "review": true
+  },
+  "You're offline. Check your connection, then try again.": {
+    "ga": "Tá tú as líne. Seiceáil do cheangal, ansin bain triail eile as.",
+    "review": true
+  },
+  "area|Admin": {
+    "ga": "Riarachán",
+    "review": false
+  },
+  "people|Attended": {
+    "ga": "Bhí i láthair",
+    "review": true
+  }
+}

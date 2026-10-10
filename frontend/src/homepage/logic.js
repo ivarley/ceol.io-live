@@ -9,6 +9,7 @@
 
 import { parseLocalDate } from '../shared/parse.js'
 import { formatTime, instanceTimeLabel } from '../shared/format.js'
+import { t, tn, formatDate } from '../lib/i18n/index.js'
 
 /**
  * The nights happening today, out of the week's list.
@@ -39,10 +40,10 @@ export function sessionStatus(session) {
 /** The status chip's words. "Starts 7:00pm" needs a time; without one, "Today". */
 export function statusLabel(session) {
   const status = sessionStatus(session)
-  if (status === 'live') return 'Live now'
-  if (status === 'finished') return 'Finished'
+  if (status === 'live') return t('Live now')
+  if (status === 'finished') return t('Finished')
   const start = formatTime(session?.start_time)
-  return start ? `Starts ${start}` : 'Today'
+  return start ? t('Starts {time}', { time: start }) : t('Today')
 }
 
 /**
@@ -58,7 +59,7 @@ export function todaySubtitle(session) {
   if (session.location_name) parts.push(session.location_name)
   if (sessionStatus(session) === 'live') {
     const n = session.people_here || 0
-    if (n > 0) parts.push(`${n} ${n === 1 ? 'person' : 'people'} here`)
+    if (n > 0) parts.push(tn(n, '{n} person here', '{n} people here'))
   }
   return parts.join(' · ')
 }
@@ -69,11 +70,10 @@ export function todaySubtitle(session) {
  */
 export function tallyLabel(session) {
   const n = session?.tunes_logged || 0
-  if (!n) return 'No tunes logged yet'
-  const noun = n === 1 ? 'tune' : 'tunes'
+  if (!n) return t('No tunes logged yet')
   return sessionStatus(session) === 'live'
-    ? `${n} ${noun} logged so far`
-    : `${n} ${noun} logged`
+    ? tn(n, '{n} tune logged so far', '{n} tunes logged so far')
+    : tn(n, '{n} tune logged', '{n} tunes logged')
 }
 
 /** Where the card and its View button go: that night's log. */
@@ -88,14 +88,14 @@ export function weekSubtitle(session, todayStr) {
   const when = instanceTimeLabel(session)
   if (when) parts.push(when)
   if (session.location_name) parts.push(session.location_name)
-  if (session.log_complete_date) parts.push('logged')
-  else if (todayStr && session.date < todayStr) parts.push('not logged')
+  if (session.log_complete_date) parts.push(t('logged'))
+  else if (todayStr && session.date < todayStr) parts.push(t('not logged'))
   return parts.join(' · ')
 }
 
 /** The weekday over the day of month, for a row's date block. */
 export function dowOf(dateStr) {
-  return parseLocalDate(dateStr).toLocaleDateString('en-US', { weekday: 'short' })
+  return formatDate(parseLocalDate(dateStr), { weekday: 'short' })
 }
 
 export function domOf(dateStr) {
@@ -107,7 +107,7 @@ export function shortDate(dateStr, currentYear) {
   const d = parseLocalDate(dateStr)
   const opts = { month: 'short', day: 'numeric' }
   if (currentYear && d.getFullYear() !== currentYear) opts.year = 'numeric'
-  return d.toLocaleDateString('en-US', opts)
+  return formatDate(d, opts)
 }
 
 /** "2 hours ago" for something edited recently, a date once that stops being useful. */
@@ -116,13 +116,13 @@ export function editedLabel(iso, currentYear, now = new Date()) {
   const then = new Date(iso)
   if (Number.isNaN(then.getTime())) return ''
   const mins = Math.floor((now - then) / 60000)
-  if (mins < 1) return 'just now'
-  if (mins < 60) return `${mins} minute${mins === 1 ? '' : 's'} ago`
+  if (mins < 1) return t('just now')
+  if (mins < 60) return tn(mins, '{n} minute ago', '{n} minutes ago')
   const hours = Math.floor(mins / 60)
-  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`
+  if (hours < 24) return tn(hours, '{n} hour ago', '{n} hours ago')
   const opts = { month: 'short', day: 'numeric' }
   if (currentYear && then.getFullYear() !== currentYear) opts.year = 'numeric'
-  return then.toLocaleDateString('en-US', opts)
+  return formatDate(then, opts)
 }
 
 /**
@@ -138,7 +138,7 @@ export function continueItems(payload, currentYear) {
   const logs = (payload?.in_progress_logs || []).map((l) => ({
     kind: 'log',
     key: `log-${l.session_instance_id}`,
-    title: `Finish logging ${l.name}`,
+    title: t('Finish logging {name}', { name: l.name }),
     date: l.date,
     lastEdit: l.last_edit,
     detail: shortDate(l.date, year),
@@ -147,10 +147,10 @@ export function continueItems(payload, currentYear) {
   const recordings = (payload?.in_progress_recordings || []).map((r) => ({
     kind: 'recording',
     key: `rec-${r.recording_id}`,
-    title: `Place tunes on ${r.label || r.name}`,
+    title: t('Place tunes on {name}', { name: r.label || r.name }),
     date: r.date,
     lastEdit: r.last_edit,
-    detail: `${r.placed} of ${r.tune_count} tunes placed`,
+    detail: tn(r.tune_count, '{placed} of {n} tunes placed', '{placed} of {n} tunes placed', { placed: r.placed }),
     href: `/admin/recordings/${r.recording_id}/segment`,
   }))
   return [...logs, ...recordings].sort((a, b) => {

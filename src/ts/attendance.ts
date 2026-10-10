@@ -3,6 +3,10 @@
  * Handles session attendance functionality including check-in, person search, and instrument management
  */
 
+// Spec 057: the strings people read, in the page's language. The page puts them in
+// window.__CEOL_T__ (session_instance_players.html); English is the fallback.
+const T = (s: string): string => ((window as any).__CEOL_T__ && (window as any).__CEOL_T__[s]) || s;
+
 // Type definitions
 interface AttendanceConfig {
     sessionInstanceId: number;
@@ -297,9 +301,9 @@ class AttendanceManager {
 
             switch (status) {
                 case 'yes':
-                    btn.innerHTML = '<i class="fas fa-check-circle"></i> Checked In';
+                    btn.innerHTML = '<i class="fas fa-check-circle"></i> ' + T('Checked In');
                     btn.className = 'btn btn-success btn-sm';
-                    changeLink.textContent = 'Change To Maybe';
+                    changeLink.textContent = T('Change To Maybe');
                     changeLink.style.display = '';
                     changeLink.onclick = (e) => {
                         e.preventDefault();
@@ -307,9 +311,9 @@ class AttendanceManager {
                     };
                     break;
                 case 'maybe':
-                    btn.innerHTML = '<i class="fas fa-question-circle"></i> Maybe';
+                    btn.innerHTML = '<i class="fas fa-question-circle"></i> ' + T('Maybe');
                     btn.className = 'btn btn-warning btn-sm';
-                    changeLink.textContent = 'Change To No';
+                    changeLink.textContent = T('Change To No');
                     changeLink.style.display = '';
                     changeLink.onclick = (e) => {
                         e.preventDefault();
@@ -317,9 +321,9 @@ class AttendanceManager {
                     };
                     break;
                 case 'no':
-                    btn.innerHTML = '<i class="fas fa-times-circle"></i> Not Coming';
+                    btn.innerHTML = '<i class="fas fa-times-circle"></i> ' + T('Not Coming');
                     btn.className = 'btn btn-danger btn-sm';
-                    changeLink.textContent = 'Change To Yes';
+                    changeLink.textContent = T('Change To Yes');
                     changeLink.style.display = '';
                     changeLink.onclick = (e) => {
                         e.preventDefault();
@@ -328,7 +332,7 @@ class AttendanceManager {
                     break;
             }
         } else {
-            btn.innerHTML = '<i class="fas fa-check"></i> Check In';
+            btn.innerHTML = '<i class="fas fa-check"></i> ' + T('Check In');
             btn.className = 'btn btn-success btn-sm';
             btn.disabled = false;
             btn.onclick = () => this.quickCheckin();
@@ -365,7 +369,7 @@ class AttendanceManager {
             this.updateStats();
             this.updateQuickCheckinButton();
         } catch (error) {
-            this.showError('Error loading attendance data');
+            this.showError(T('Error loading attendance data'));
         }
     }
 
@@ -392,7 +396,7 @@ class AttendanceManager {
         if (!container) return;
 
         if (this.attendees.length === 0) {
-            container.innerHTML = '<div class="text-center p-3 text-muted">No attendees yet</div>';
+            container.innerHTML = '<div class="text-center p-3 text-muted">' + T('No attendees yet') + '</div>';
             return;
         }
 
@@ -424,7 +428,7 @@ class AttendanceManager {
             if (attendee.instruments && attendee.instruments.length > 0) {
                 instrumentsDiv.textContent = attendee.instruments.join(', ');
             } else {
-                instrumentsDiv.textContent = 'No instruments listed';
+                instrumentsDiv.textContent = T('No instruments listed');
             }
 
             if (this.config!.canManage) {
@@ -469,10 +473,10 @@ class AttendanceManager {
 
     private getStatusDisplay(status: AttendanceStatus): string {
         switch (status) {
-            case 'yes': return '<span class="text-success"><i class="fas fa-check"></i> Yes</span>';
-            case 'maybe': return '<span class="text-warning"><i class="fas fa-question"></i> Maybe</span>';
-            case 'no': return '<span class="text-danger"><i class="fas fa-times"></i> No</span>';
-            default: return '<span class="text-muted">Unknown</span>';
+            case 'yes': return '<span class="text-success"><i class="fas fa-check"></i> ' + T('Yes') + '</span>';
+            case 'maybe': return '<span class="text-warning"><i class="fas fa-question"></i> ' + T('Maybe') + '</span>';
+            case 'no': return '<span class="text-danger"><i class="fas fa-times"></i> ' + T('No') + '</span>';
+            default: return '<span class="text-muted">' + T('Unknown') + '</span>';
         }
     }
 
@@ -517,7 +521,7 @@ class AttendanceManager {
         const btn = document.getElementById('quick-checkin-btn') as HTMLButtonElement;
         if (btn) {
             btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking In ...';
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ' + T('Checking In ...');
         }
 
         try {
@@ -536,16 +540,16 @@ class AttendanceManager {
             }
 
             await this.loadAttendance();
-            this.showSuccess('Checked in successfully!');
+            this.showSuccess(T('Checked in successfully!'));
 
             // Refresh the active session badge in the header
             window.dispatchEvent(new Event('refreshActiveSession'));
         } catch (error) {
-            this.showError((error as Error).message || 'Error checking in');
+            this.showError((error as Error).message || T('Error checking in'));
             // Reset button state on error
             if (btn) {
                 btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-check"></i> Check In';
+                btn.innerHTML = '<i class="fas fa-check"></i> ' + T('Check In');
             }
         }
     }
@@ -556,11 +560,11 @@ class AttendanceManager {
         const btn = document.getElementById('quick-checkin-btn') as HTMLButtonElement;
         const changeLink = document.getElementById('quick-checkin-change-link') as HTMLAnchorElement;
 
-        const statusText = newStatus === 'yes' ? 'Yes' : newStatus === 'maybe' ? 'Maybe' : 'No';
+        const statusText = newStatus === 'yes' ? T('Yes') : newStatus === 'maybe' ? T('Maybe') : T('No');
 
         if (btn) {
             btn.disabled = true;
-            btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Changing Status To ${statusText} ...`;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ' + T('Changing Status To {status} ...').replace('{status}', statusText);
         }
         if (changeLink) {
             changeLink.style.display = 'none';
@@ -582,12 +586,12 @@ class AttendanceManager {
             }
 
             await this.loadAttendance();
-            this.showSuccess('Status updated!');
+            this.showSuccess(T('Status updated!'));
 
             // Refresh the active session badge in the header
             window.dispatchEvent(new Event('refreshActiveSession'));
         } catch (error) {
-            this.showError((error as Error).message || 'Error updating status');
+            this.showError((error as Error).message || T('Error updating status'));
             // Reset will happen via updateQuickCheckinButton called from loadAttendance
             // But in case of error before that, manually restore
             this.updateQuickCheckinButton();
@@ -617,7 +621,7 @@ class AttendanceManager {
             }
             
             // Success - optimistic update was correct
-            this.showSuccess('Attendance updated');
+            this.showSuccess(T('Attendance updated'));
 
             // If the current user's attendance was updated, refresh the active session badge
             if (personId == this.config.currentPersonId) {
@@ -626,7 +630,7 @@ class AttendanceManager {
         } catch (error) {
             // Revert optimistic update on error by reloading from server
             await this.loadAttendance();
-            this.showError((error as Error).message || 'Error updating attendance');
+            this.showError((error as Error).message || T('Error updating attendance'));
         }
     }
 
@@ -657,7 +661,7 @@ class AttendanceManager {
             const data = await response.json() as APIResponse<Person[]>;
             this.displaySearchResults(data.data || [], query);
         } catch (error) {
-            this.showError('Search error');
+            this.showError(T('Search error'));
         }
     }
 
@@ -669,7 +673,7 @@ class AttendanceManager {
             const addPersonDiv = document.createElement('div');
             addPersonDiv.className = 'search-result-item add-person-result';
             addPersonDiv.dataset.personName = query;
-            addPersonDiv.innerHTML = `<div class="person-name text-primary"><i class="fas fa-plus"></i> Add a new person "${query}"</div>`;
+            addPersonDiv.innerHTML = `<div class="person-name text-primary"><i class="fas fa-plus"></i> ${T('Add a new person "{query}"').replace('{query}', query)}</div>`;
             addPersonDiv.onclick = () => {
                 window.attendanceManagerInstance?.showAddPersonModalWithName(addPersonDiv.dataset.personName!);
             };
@@ -685,7 +689,7 @@ class AttendanceManager {
 
         const html = people.map(person => {
             const instruments = person.instruments && person.instruments.length > 0 ? 
-                person.instruments.join(', ') : 'No instruments';
+                person.instruments.join(', ') : T('No instruments');
             return `<div class="search-result-item" onclick="window.attendanceManagerInstance?.addExistingPerson(${person.person_id})">` +
                    `<div class="person-name">${person.first_name} ${person.last_name}</div>` +
                    `<div class="person-instruments text-muted small">${instruments}</div>` +
@@ -732,7 +736,7 @@ class AttendanceManager {
         })
         .then(() => {
             // Success - optimistic update was correct
-            this.showSuccess('Person added to attendance');
+            this.showSuccess(T('Person added to attendance'));
 
             // If the current user was added, refresh the active session badge
             if (personId == this.config!.currentPersonId) {
@@ -742,7 +746,7 @@ class AttendanceManager {
         .catch(async (error) => {
             // Revert optimistic update on error by reloading from server
             await this.loadAttendance();
-            this.showError((error as Error).message || 'Error adding person');
+            this.showError((error as Error).message || T('Error adding person'));
         });
     }
 
@@ -766,7 +770,7 @@ class AttendanceManager {
                         let instruments: string[] = [];
                         if (instrumentsElement) {
                             const instrumentText = instrumentsElement.textContent!.trim();
-                            if (instrumentText && instrumentText !== 'No instruments') {
+                            if (instrumentText && instrumentText !== T('No instruments')) {
                                 instruments = instrumentText.split(', ');
                             }
                         }
@@ -937,12 +941,12 @@ class AttendanceManager {
         
         // Validate form data
         if (!personData.first_name || !personData.first_name.trim()) {
-            this.showError('First name is required');
+            this.showError(T('First name is required'));
             return;
         }
         
         if (!personData.last_name || !personData.last_name.trim()) {
-            this.showError('Last name is required');
+            this.showError(T('Last name is required'));
             return;
         }
         
@@ -961,7 +965,7 @@ class AttendanceManager {
         
         // Show initial toast message
         const displayName = personData.first_name + ' ' + personData.last_name;
-        this.showSuccess('Adding ' + displayName + '...');
+        this.showSuccess(T('Adding {name}...').replace('{name}', displayName));
 
         // Create temporary person for optimistic update
         const tempPerson: Attendee = {
@@ -1016,7 +1020,7 @@ class AttendanceManager {
             if (searchInput) searchInput.value = '';
             if (searchResults) searchResults.style.display = 'none';
 
-            this.showSuccess(tempPerson.display_name + ' added successfully');
+            this.showSuccess(T('{name} added successfully').replace('{name}', String(tempPerson.display_name)));
 
             // If the current user was added, refresh the active session badge
             if (personId == this.config!.currentPersonId) {
@@ -1025,13 +1029,13 @@ class AttendanceManager {
         } catch (error) {
             // Remove optimistic update on error
             this.removePersonFromUIOptimistic(tempPerson.person_id);
-            this.showError((error as Error).message || 'Error creating person');
+            this.showError((error as Error).message || T('Error creating person'));
         }
     }
 
     refreshAttendance(): void {
         this.loadAttendance();
-        this.showSuccess('Attendance refreshed');
+        this.showSuccess(T('Attendance refreshed'));
     }
 
     editPerson(personId: number | string): void {
@@ -1078,7 +1082,7 @@ class AttendanceManager {
             const removeBtn = document.createElement('button');
             removeBtn.type = 'button';
             removeBtn.textContent = '×';
-            removeBtn.setAttribute('aria-label', `Remove ${inst}`);
+            removeBtn.setAttribute('aria-label', T('Remove {name}').replace('{name}', inst));
             removeBtn.style.background = 'none';
             removeBtn.style.border = 'none';
             removeBtn.style.color = '#fff';
@@ -1097,7 +1101,7 @@ class AttendanceManager {
     }
 
     removePerson(personId: number | string): void {
-        if (!confirm('Mark this person as not attending?')) return;
+        if (!confirm(T('Mark this person as not attending?'))) return;
 
         // Set their status to "no" instead of removing them entirely
         this.updateAttendanceStatus(personId, 'no');
@@ -1106,7 +1110,7 @@ class AttendanceManager {
     async removePersonFromSession(personId: number | string): Promise<void> {
         if (!this.config) return;
 
-        if (!confirm('Remove this person from this session instance? This will not affect their general session membership.')) {
+        if (!confirm(T('Remove this person from this session instance? This will not affect their general session membership.'))) {
             return;
         }
 
@@ -1126,7 +1130,7 @@ class AttendanceManager {
                 throw new Error(errorData.error || 'Failed to remove person from session');
             }
 
-            this.showSuccess('Person removed from session instance');
+            this.showSuccess(T('Person removed from session instance'));
 
             // If the current user was removed, refresh the active session badge
             if (personId == this.config.currentPersonId) {
@@ -1135,7 +1139,7 @@ class AttendanceManager {
         } catch (error) {
             // Reload attendance on error to restore accurate state
             await this.loadAttendance();
-            this.showError((error as Error).message || 'Error removing person from session');
+            this.showError((error as Error).message || T('Error removing person from session'));
         }
     }
 
@@ -1404,7 +1408,7 @@ class AttendanceManager {
         const instrumentsDiv = item.querySelector('.person-instruments') as HTMLElement;
         if (instrumentsDiv) {
             const instrumentsText = attendee.instruments && attendee.instruments.length > 0 ? 
-                attendee.instruments.join(', ') : 'No instruments';
+                attendee.instruments.join(', ') : T('No instruments');
             instrumentsDiv.textContent = instrumentsText;
         }
         

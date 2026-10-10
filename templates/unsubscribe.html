@@ -1,6 +1,7 @@
+{# i18n-converted #}
 {% extends "base.html" %}
 
-{% block title %}Unsubscribed - Irish Music Sessions{% endblock %}
+{% block title %}{{ _('Unsubscribed - Irish Music Sessions') }}{% endblock %}
 
 {% block content %}
 <div class="page-wrapper">
@@ -9,13 +10,13 @@
             <div class="col-md-6 col-lg-4">
                 <div class="card mt-5">
                     <div class="card-header">
-                        <h3 class="card-title text-center mb-0">Unsubscribed</h3>
+                        <h3 class="card-title text-center mb-0">{{ _('Unsubscribed') }}</h3>
                     </div>
                     <div class="card-body">
-                        <p>You've been unsubscribed from app updates.</p>
+                        <p>{{ _("You've been unsubscribed from app updates.") }}</p>
                         <p class="text-muted mb-0">
-                            Changed your mind? You can turn updates back on any time
-                            on <a href="{{ url_for('user_profile') }}">your profile</a>.
+                            {% set profile_link %}<a href="{{ url_for('user_profile') }}">{{ _('your profile') }}</a>{% endset %}
+                            {{ _('Changed your mind? You can turn updates back on any time on %(profile)s.', profile=profile_link) }}
                         </p>
                     </div>
                 </div>

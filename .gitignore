@@ -59,6 +59,9 @@ test-results.xml
 
 # Translations
 *.mo
+# Spec 057: the compiled Irish catalog is committed (the deploy build may not run
+# pybabel compile); tests/unit/test_i18n_catalogs.py checks it matches the .po.
+!translations/**/*.mo
 *.pot
 
 # Django stuff:
@@ -174,6 +177,8 @@ ios/CeolKit/.swiftpm/
 # iOS build output from `make ios-test` / `make ios-build`
 ios/.derived/
 ios/.derived-release/
+# Spec 057: per-agent build folders for the String Catalog work.
+ios/.derived-i18n-*/
 # a debug build for a phone, installed with devicectl
 ios/.derived-device/
 

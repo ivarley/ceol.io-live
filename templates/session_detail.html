@@ -1,6 +1,7 @@
+{# i18n-converted #}
 {% extends "base.html" %}
 
-{% block title %}{{ session.name }} - Irish Music Session Details{% endblock %}
+{% block title %}{{ _('%(name)s - Irish Music Session Details', name=session.name) }}{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
@@ -47,7 +48,7 @@
         <a class="live-log-banner" href="/sessions/{{ session.path }}/{{ inst.session_instance_id }}"
            data-instance-id="{{ inst.session_instance_id }}">
             <span class="live-log-dot" aria-hidden="true"></span>
-            <span class="live-log-text">Open Today's Session Log{% if live|length > 1 and inst.start_time %} <span class="live-log-time">· {{ inst.start_time[:5] }}</span>{% endif %}</span>
+            <span class="live-log-text">{{ _("Open Today's Session Log") }}{% if live|length > 1 and inst.start_time %} <span class="live-log-time">· {{ inst.start_time[:5] }}</span>{% endif %}</span>
             <span class="live-log-chevron" aria-hidden="true">›</span>
         </a>
         {% endfor %}
@@ -56,16 +57,16 @@
             {# Role badge (Admin / Member / Visitor) -- mounted by the Svelte bundle. #}
             <div class="session-details-top">
                 <div id="session-role-root"></div>
-                {% if is_session_admin %}<a href="/admin/sessions/{{ session.path }}" class="session-admin-link">Admin page</a>{% endif %}
+                {% if is_session_admin %}<a href="/admin/sessions/{{ session.path }}" class="session-admin-link">{{ _('Admin page') }}</a>{% endif %}
             </div>
             {% if session.location_name and session.location_name != session.name %}
-            <p><strong>Location:</strong> {{ session.location_name }}</p>
+            <p><strong>{{ _('Location:') }}</strong> {{ session.location_name }}</p>
             {% endif %}
 
-            <p>{% if session.unlisted_address %}(unlisted address), {% else %}{% if session.location_street %}{{ session.location_street }}, {% endif %}{% endif %}{% if session.place %}{{ session.place.name }}{% if session.place.area %}, {{ session.place.area }}{% endif %}{% if session.place.country %}, {{ session.place.country }}{% endif %}{% endif %}{% if session.location_phone %} • {{ session.location_phone }}{% endif %}{% if session.location_website %} • <a href="{{ session.location_website }}" target="_blank">Web</a>{% endif %}{% if session.thesession_id %} • <a href="https://thesession.org/sessions/{{ session.thesession_id }}" target="_blank">thesession.org</a>{% endif %}</p>
+            <p>{% if session.unlisted_address %}{{ _('(unlisted address)') }}, {% else %}{% if session.location_street %}{{ session.location_street }}, {% endif %}{% endif %}{% if session.place %}{{ session.place.name }}{% if session.place.area %}, {{ session.place.area }}{% endif %}{% if session.place.country %}, {{ session.place.country }}{% endif %}{% endif %}{% if session.location_phone %} • {{ session.location_phone }}{% endif %}{% if session.location_website %} • <a href="{{ session.location_website }}" target="_blank">{{ _('Web') }}</a>{% endif %}{% if session.thesession_id %} • <a href="https://thesession.org/sessions/{{ session.thesession_id }}" target="_blank">{{ "thesession.org" }}</a>{% endif %}</p>
 
             {% if session.recurrence_readable %}
-            <p><strong>Schedule:</strong> {{ session.recurrence_readable }}</p>
+            <p><strong>{{ _('Schedule:') }}</strong> {{ session.recurrence_readable }}</p>
             {% endif %}
 
             {# The description is server-rendered here so it's present before the bundle
@@ -73,7 +74,7 @@
                plus a "more" toggle (long descriptions used to fill a phone screen). #}
             {% if session.comments %}
             <div id="session-about-root">
-                <p><strong>About this session:</strong> {{ session.comments }}</p>
+                <p><strong>{{ _('About this session:') }}</strong> {{ session.comments }}</p>
             </div>
             {% endif %}
         </div>

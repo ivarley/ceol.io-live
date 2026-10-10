@@ -1,4 +1,6 @@
 <script>
+  // i18n-converted
+  import { t } from '../lib/index.js'
   /**
    * The session's free-text description, clamped to two lines with a "more" toggle.
    *
@@ -33,14 +35,14 @@
 
 <div class="sa-wrap" class:sa-expanded={expanded}>
   <p class="sa-text" bind:this={el}>
-    <strong>About this session:</strong>
+    <strong>{t('About this session:')}</strong>
     {comments}{#if expanded}<button class="sa-toggle sa-less" onclick={() => (expanded = false)}
-        >less</button
+        >{t('less')}</button
       >{/if}
   </p>
 
   {#if overflowing && !expanded}
-    <button class="sa-toggle sa-more" onclick={() => (expanded = true)}>more …</button>
+    <button class="sa-toggle sa-more" onclick={() => (expanded = true)}>{t('more …')}</button>
   {/if}
 </div>
 

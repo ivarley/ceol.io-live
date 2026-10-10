@@ -1,0 +1,369 @@
+{% extends "help_base.html" %}
+
+{% set page_title = "Nótaí eisiúna - " + month_name %}
+{% set page_description = "Cad atá nua: " + month_name %}
+{% set active_page = "release-" + month %}
+
+{% block help_content %}
+<h1>Nótaí eisiúna: {{ month_name }}</h1>
+
+{% if month == '2026-07' %}
+<p class="release-date">Iúil 2026</p>
+
+<h2>An logálaí beo: feabhsuithe móra</h2>
+<ul class="release-notes-list">
+    <li>Leagan amach deisce: ar scáileáin leathana taispeánann an logálaí an dara pána, ina bhfuil cuardach fonn atá le feiceáil i gcónaí agus an chéad fhonn eile a mholtar</li>
+    <li>Smacht iomlán ón méarchlár ar an deasc: bogann na saigheadeochracha an cúrsóir ionsáite, scoilteann nó ceanglaíonn Enter sraitheanna, agus téann "/" díreach chuig an gcuardach</li>
+    <li>Mód roghnúcháin: roghnaigh go leor fonn le chéile chun iad a chóipeáil, a ghreamú, a bhogadh nó a scriosadh (agus is féidir é a chealú), nó chun tosaitheoir sraithe a shannadh — agus tarraing chun bogadh</li>
+    <li>Greamaigh oíche iomlán in aon iarracht amháin: scarann camóga na foinn i sraith, agus tosaíonn briseadh líne sraith nua</li>
+    <li>Réamhamharc sula gcuireann tú leis: tapáil toradh cuardaigh chun a nodaireacht iomlán a fheiceáil, leaganacha eile a bhrabhsáil, agus na hiarrthóirí a chur i gcomparáid — torthaí ó TheSession.org san áireamh</li>
+    <li>Mód aibhsithe (★): dathaigh an logáil de réir do stádais foghlama féin, agus cuir go leor fonn le do liosta in aon iarracht amháin</li>
+    <li>Tarraing anuas le cuardach a dhéanamh agus logáil na hoíche a scagadh go fonn amháin</li>
+    <li>Cuardach fonn breisithe ar TheSession.org, díreach ón logálaí</li>
+    <li>Taispeánann na ciorcail láithreachta túslitreacha fíora na ndaoine anois, agus taispeánann an ponc ceangail níos mó sonraí nuair a thapálann tú é</li>
+    <li>Lódáil níos tapúla ar cheangail mhalla, agus ceartúcháin d'athruithe a rinneadh as líne</li>
+    <li>Is féidir leat féin an logálaí nua a chur ar siúl anois ó leathanach do phróifíle</li>
+</ul>
+
+<h2>Mo chuid fonn</h2>
+<ul class="release-notes-list">
+    <li>Stádas foghlama de réir uirlise: rianaigh fonn ar leithligh ar gach uirlis a sheinneann tú</li>
+    <li>Bealach níos simplí chun fonn a chur leis, le cuardach agus réamhamharc aontaithe; tá sioncrónú an leabhair fonn ó TheSession.org istigh ann anois</li>
+    <li>Cnaipí scagaire, agus dathanna comhsheasmhacha ar shuaitheantais stádais i ngach áit</li>
+</ul>
+
+<h2>Sonraí an fhoinn</h2>
+<ul class="release-notes-list">
+    <li>Athchóiriú ar tharraiceán an fhoinn: na cluaisíní Stair agus Seisiún curtha le chéile, le naisc dhíreacha isteach sna logálacha seisiúin inar seinneadh an fonn</li>
+    <li>Liosta nua "Seinnte le" a thaispeánann na foinn a sheinntear go minic leis i sraith</li>
+    <li>Taispeántar gléasanna sáraithe i liostaí fonn anois</li>
+    <li>Nascann foinn chumaiscthe lena leagan reatha anois</li>
+</ul>
+
+<h2>Seisiúin</h2>
+<ul class="release-notes-list">
+    <li>Taispeánann liosta fonn an tseisiúin stádas do leabhair fonn féin in aice le gach fonn, agus tá bealach níos fearr ann chun cuardach a dhéanamh agus foinn a chur leis</li>
+    <li>Líon na bhfonn ar liosta logálacha an tseisiúin</li>
+    <li>Aicearra "Lean ort ag logáil" ar an leathanach Tús do logálacha atá fós idir lámha agat</li>
+    <li>"Mo sheisiúin" níos soiléire (na seisiúin ina bhfuil tú i do bhall, seachas na cinn ar thug tú cuairt orthu)</li>
+    <li>Is féidir le seisiúin gnéithe rianaithe daoine (liosta ball, tinreamh, tosaitheoirí sraithe) a chur ar siúl nó as anois</li>
+    <li>Ainmneacha iomlána i liostaí daoine</li>
+</ul>
+
+<h2>Cuma agus mothú</h2>
+<ul class="release-notes-list">
+    <li>Tá an aip i mód dorcha ar fad anois</li>
+    <li>Lódáil leathanach níos tapúla i ngach áit (taisceadh sócmhainní níos cliste)</li>
+</ul>
+
+{% elif month == '2026-06' %}
+<p class="release-date">Meitheamh 2026</p>
+
+<h2>An logálaí beo (béite)</h2>
+<p>Scáileán logála úrnua, déanta le húsáid le linn an tseisiúin féin:</p>
+<ul class="release-notes-list">
+    <li>Is féidir le roinnt daoine an seisiún céanna a logáil ag an am céanna agus athruithe a chéile a fheiceáil láithreach — níl cnaipe sábhála ann</li>
+    <li>Taispeánann ciorcail láithreachta, comharthaí clóscríofa agus fógraí gníomhaíochta cé atá ag logáil in éineacht leat</li>
+    <li>Faigheann gach logálaí dath, agus tá na foinn daite de réir an té a chuir leis iad</li>
+    <li>Meaitseáil fonn láithreach ó thaisce áitiúil — oibríonn an logáil gan aon mhoill líonra</li>
+    <li>An chéad fhonn eile a mholtar, bunaithe ar na sraitheanna a sheinneann do sheisiún de ghnáth</li>
+    <li>Taifead cé a thosaigh gach sraith, agus bainistigh an tinreamh ón áit chéanna</li>
+    <li>Mód féachana chun leanúint ar aghaidh gan eagarthóireacht, agus "Marcáil críochnaithe" do logálacha atá déanta</li>
+    <li>Oibríonn sé as líne: téann athruithe sa scuaine ar d'fheiste agus sioncrónaítear iad nuair a cheanglaíonn tú arís</li>
+</ul>
+
+<h2>Tacaíocht as líne i ngach áit</h2>
+<ul class="release-notes-list">
+    <li>Oibríonn Mo chuid fonn, sonraí fonn le nodaireacht, cuardach fonn agus leathanaigh do sheisiún anois gan cheangal</li>
+    <li>Sioncrónaítear athruithe a rinneadh as líne (fonn a chur leis, stádas a athrú, an líon uaireanta a chuala tú é a mhéadú) go huathoibríoch nuair a bhíonn tú ar líne arís</li>
+    <li>Taispeánann an ponc ceangail sa cheanntásc an stádas as líne nó sioncrónaithe</li>
+    <li>Lódáil níos tapúla ó thaisce áitiúil</li>
+</ul>
+
+<h2>Feabhsuithe eile</h2>
+<ul class="release-notes-list">
+    <li>Ceanntásc agus roghchlár comhsheasmhach ar fud na haipe ar fad</li>
+    <li>Deilbhín nua don suíomh</li>
+</ul>
+
+{% elif month == '2026-03' %}
+<p class="release-date">Márta 2026</p>
+
+<ul class="release-notes-list">
+    <li>Is féidir le bainisteoirí seisiúin ról bainisteora seisiúin a thabhairt do bhaill eile anois</li>
+    <li>An chéad leagan béite den ghné taifeadta fuaime seisiúin</li>
+</ul>
+
+{% elif month == '2026-02' %}
+<p class="release-date">Feabhra 2026</p>
+
+<ul class="release-notes-list">
+    <li>Taispeántar ceol scríofa anois d'fhoinn a cuardaíodh nach bhfuil sa bhunachar sonraí áitiúil fós</li>
+    <li>Nuair a roghnaíonn tú leagan ar leith agus fonn á chur leis agat, úsáidtear an leagan sin</li>
+    <li>Ceartúcháin ar fhoinn a chur le Mo chuid fonn</li>
+</ul>
+
+{% elif month == '2026-01' %}
+<p class="release-date">Eanáir 2026</p>
+
+<h2>Leathanach Tús nua</h2>
+<ul class="release-notes-list">
+    <li>Staitisticí foghlama agus na seisiúin atá romhat, d'aon sracfhéachaint</li>
+    <li>Naisc thapa isteach i do liosta fonn, sórtáilte go ciallmhar</li>
+</ul>
+
+<h2>Seisiúin</h2>
+<ul class="release-notes-list">
+    <li>Is féidir ócáidí seisiúin a chruthú go huathoibríoch anois de réir sceideal do sheisiúin</li>
+    <li>Ceartaíodh athnascadh fonn ar leathanach na logála</li>
+</ul>
+
+<h2>Feabhsuithe eile</h2>
+<ul class="release-notes-list">
+    <li>Tarraingt agus scaoileadh níos réidhe nuair a athordaíonn tú foinn ar an bhfón póca</li>
+    <li>Ceartaíodh scrolláil agus scagadh in Mo chuid fonn</li>
+    <li>Tá liosta na n-uirlisí in ord aibítre agus tú ag clárú</li>
+</ul>
+
+{% elif month == '2025-12' %}
+<p class="release-date">Nollaig 2025</p>
+
+<h2>Riarachán agus bainistíocht úsáideoirí</h2>
+<ul class="release-notes-list">
+    <li>Bealach síniú isteach agus clárúcháin níos fearr, le treoracha níos soiléire chun pasfhocal a chruthú</li>
+    <li>Scáileán breise i ndiaidh fíorú an ríomhphoist chun an phróifíl a chríochnú</li>
+    <li>Ní dhéantar idirdhealú idir cás na litreacha a thuilleadh nuair a lorgaítear ainm úsáideora</li>
+    <li>Téarmaíocht níos soiléire maidir le daoine, baill agus seinnteoirí</li>
+    <li>Feabhsuithe stíle agus comhsheasmhachta ar scáileáin riaracháin</li>
+</ul>
+
+<h2>Bainistíocht seisiún</h2>
+<ul class="release-notes-list">
+    <li>Cluaisín riaracháin d'fhoinn an tseisiúin, chun na foinn a bhainistiú níos fearr</li>
+    <li>An chéad leagan d'amharc ar ghníomhaíocht riaracháin</li>
+    <li>Bealach níos fearr chun seisiún a chur leis, le réamhshocruithe níos fearr</li>
+    <li>Socraítear an crios ama réamhshocraithe i gceart de réir an stáit anois</li>
+    <li>Tá stádas bainisteora seisiúin bunaithe anois ar cheist chuig an mbunachar sonraí seachas ar thaisce an tsínithe isteach</li>
+</ul>
+
+<h2>Gnéithe fonn</h2>
+<ul class="release-notes-list">
+    <li>Normalú ar chomharthaí athfhriotail agus foinn á gcuardach</li>
+    <li>Is féidir le baill seisiúin nach bainisteoirí iad a mharcáil cé a sheinn sraith</li>
+    <li>Rianú ar "cé a logáil an fonn"</li>
+    <li>Is féidir le bainisteoirí seisiúin foinn an tseisiúin a bhaint</li>
+    <li>Nasc chuig ABC Tools i bhfuinneog shonraí an fhoinn - cliceáil chun an fonn a chloisteáil á sheinm</li>
+    <li>Cuardaigh fonn de réir a aitheantais ar TheSession.org</li>
+    <li>Taispeántar níos mó torthaí i gcuardach seisiún</li>
+    <li>Feabhas ar amharc na bhfonn ar phróifílí úsáideoirí</li>
+</ul>
+
+<h2>Ceartúcháin fabhtanna</h2>
+<ul class="release-notes-list">
+    <li>Ceartaíodh suíomh agus dúnadh na fuinneoige aníos don tsraith</li>
+    <li>Ceartaíodh sábháil chumraíocht fhuinneog shonraí fonn an tseisiúin</li>
+    <li>Ceartaíodh sábháil created_by_user_id ar fhoinn ócáidí seisiúin</li>
+    <li>Ceartaíodh an roghchlár anuas "Tosaithe ag" a bhí ag preabadh</li>
+</ul>
+
+{% elif month == '2025-11' %}
+<p class="release-date">Samhain 2025</p>
+
+<h2>Nodaireacht ABC a thaispeáint</h2>
+<ul class="release-notes-list">
+    <li>Seirbhís nua chun nodaireacht ABC a thaispeáint mar cheol scríofa</li>
+    <li>An chéad leagan de leaganacha fonn, le tús an fhoinn (na chéad bharraí) á thaispeáint</li>
+    <li>Is féidir aistriú idir leaganacha éagsúla den fhonn</li>
+    <li>Feabhsuithe ar an gcaoi a dtaispeántar tús an fhoinn</li>
+</ul>
+
+<h2>Feabhsuithe cuardaigh</h2>
+<ul class="release-notes-list">
+    <li>Ní bhaineann sínte fada le haon chuardach anois (m.sh., aimsíonn "Ril" an focal "Ríl")</li>
+    <li>Cuardach ainmneacha laistigh de logáil na bhfonn</li>
+    <li>Láimhseáil níos fearr ar an gcuardach nuair atá foinn atá ar an liosta cheana sna torthaí</li>
+    <li>Cuardach fonn curtha le chéile i gcomhpháirt amháin a úsáidtear ar fud na haipe</li>
+</ul>
+
+<h2>Gnéithe riaracháin</h2>
+<ul class="release-notes-list">
+    <li>Liosta fonn san amharc riaracháin ar dhuine</li>
+    <li>Sórtáil agus líon na bhfonn ar liosta riaracháin na ndaoine</li>
+    <li>Is féidir ócáid seisiúin a chruthú ó amharc riaracháin na logálacha</li>
+    <li>Cnaipe ag an mbainisteoir chun ríomhphost a fhíorú ar leathanach chuntas an úsáideora</li>
+</ul>
+
+<h2>Feabhsuithe comhéadain</h2>
+<ul class="release-notes-list">
+    <li>Seoltaí gréasáin níos glaine do chluaisíní leathanach an tseisiúin agus do leathanaigh daoine</li>
+    <li>Fuinneoga níos comhsheasmhaí ar fud na haipe</li>
+    <li>Athchóiriú cuimsitheach ar z-index ionas go mbeidh na sraitheanna os cionn a chéile i gceart</li>
+    <li>Ceartaíodh téacs lipéad an tsuímh i bhfuinneog stair an fhoinn</li>
+    <li>Tar éis duit fonn a chur leis, scrollaítear chuige agus aibhsítear é sa liosta</li>
+</ul>
+
+{% elif month == '2025-10' %}
+<p class="release-date">Deireadh Fómhair 2025</p>
+
+<h2>Seisiúin bheo agus marcáil i láthair</h2>
+<ul class="release-notes-list">
+    <li>Suaitheantas stádais do sheisiún beo agus cnaipe "Ar siúl anois" sa cheanntásc</li>
+    <li>Aibhsítear an ócáid seisiúin nuair atá sí ar siúl</li>
+    <li>Stóráiltear agus ríomhtar cathain atá seisiún ar siúl faoi láthair</li>
+    <li>Jab cron a rianaíonn seisiúin bheo i bhfíor-am</li>
+    <li>Nuair a mharcáiltear úsáideoir i láthair, nuashonraítear an stádas beo láithreach</li>
+</ul>
+
+<h2>Mód féile</h2>
+<ul class="release-notes-list">
+    <li>Seisiúin de chineál féile, d'imeachtaí a mhaireann roinnt laethanta</li>
+    <li>Athruithe comhéadain chun mód féile a thaispeáint</li>
+    <li>Taispeántar seisiúin an lae inniu de réir réamhshocraithe i mód féile</li>
+</ul>
+
+<h2>Daoine an tseisiúin agus tinreamh</h2>
+<ul class="release-notes-list">
+    <li>Cluaisín Daoine an tseisiúin chun baill a bhainistiú</li>
+    <li>Bealach chun duine a chur leis mar bhall nua den seisiún</li>
+    <li>Gné na bhfonn coitianta, chun a fheiceáil cé chomh mór is atá stór ceoil i bpáirt agaibh</li>
+</ul>
+
+<h2>Feabhsuithe ar liostaí fonn</h2>
+<ul class="release-notes-list">
+    <li>Painéal sleamhnáin le sonraí an fhoinn ón liosta fonn</li>
+    <li>Is féidir fonn a chur le do liosta ó liosta fonn an tseisiúin nó na hócáide</li>
+    <li>Scagairí níos fearr do liostaí fonn</li>
+    <li>Coinnítear luachanna sórtála agus scagtha sa seoladh gréasáin</li>
+</ul>
+
+<h2>PWA agus fón póca</h2>
+<ul class="release-notes-list">
+    <li>Léiriú PWA agus deilbhíní</li>
+    <li>Cód QR ar an leathanach comhroinnte</li>
+    <li>Athnuachan i mód PWA</li>
+    <li>Roghanna simplí comhroinnte</li>
+</ul>
+
+<h2>Feabhsuithe eile</h2>
+<ul class="release-notes-list">
+    <li>Taispeántar an sceideal ar leathanach sonraí an tseisiúin</li>
+    <li>Is féidir buan-nasc a dhéanamh chuig foinn aonair</li>
+    <li>Cumasctar le duine atá ann cheana agus tú ag clárú, má tá a leithéid ann</li>
+    <li>Cineálacha fonn curtha le logálacha ócáidí seisiúin</li>
+    <li>Cuir uirlisí in eagar ar leathanach na próifíle</li>
+</ul>
+
+{% elif month == '2025-09' %}
+<p class="release-date">Meán Fómhair 2025</p>
+
+<h2>Córas rianaithe tinrimh</h2>
+<ul class="release-notes-list">
+    <li>Rianú iomlán ar thinreamh</li>
+    <li>Bainistíocht daoine an tseisiúin (gnáthsheinnteoirí, bainisteoirí)</li>
+    <li>Scagadh de réir stádas tinrimh</li>
+    <li>Iompórtáil seinnteoirí i mbloc do sheisiúin</li>
+    <li>Is féidir seinnteoir a scriosadh</li>
+</ul>
+
+<h2>Aistriú go TypeScript</h2>
+<ul class="release-notes-list">
+    <li>Tosaíodh ar chód foinseach JavaScript a thiontú go TypeScript</li>
+    <li>Céim tógála TypeScript</li>
+    <li>Bonneagar tástála JavaScript</li>
+</ul>
+
+<h2>Feabhsuithe ar riarachán seisiún</h2>
+<ul class="release-notes-list">
+    <li>Cluaisín riaracháin don seisiún</li>
+    <li>Naisc chuig leathanach riaracháin an duine sa seisiún agus uaidh</li>
+    <li>Feabhsuithe ar leathanach an tinrimh</li>
+    <li>Taispeántar na gnáthsheinnteoirí i gcónaí ar liosta an tinrimh</li>
+    <li>Cuardach chun seinnteoirí a chur leis go tapa</li>
+</ul>
+
+<h2>Feabhsuithe ar an eagarthóir</h2>
+<ul class="release-notes-list">
+    <li>"Eolas" curtha leis an roghchlár comhthéacs san eagarthóir béite</li>
+    <li>Is féidir fonn nasctha a chur leis san eagarthóir béite</li>
+    <li>Ceartaíodh na saigheada leathnaithe ar leathanach sonraí an tseisiúin</li>
+</ul>
+
+{% elif month == '2025-08' %}
+<p class="release-date">Lúnasa 2025</p>
+
+<h2>Eagarthóir liosta fonn, leagan 2</h2>
+<ul class="release-notes-list">
+    <li>Athscríobh iomlán ar eagarthóir an liosta fonn, le comhéadan cosúil le próiseálaí focal</li>
+    <li>Foinn a chur in eagar ar an bhfón póca</li>
+    <li>Tarraing agus scaoil chun foinn a athordú</li>
+    <li>Tacaíocht do chealú agus athdhéanamh</li>
+    <li>Sábháil uathoibríoch le heatramh is féidir a shocrú</li>
+    <li>Roghchláir chomhthéacs do ghníomhartha ar fhoinn</li>
+</ul>
+
+<h2>Mód dorcha</h2>
+<ul class="release-notes-list">
+    <li>Tacaíocht do mhód dorcha ar fud na haipe</li>
+    <li>Lasc téama sa roghchlár hamburger</li>
+    <li>Sábháiltear an rogha i stóras áitiúil an bhrabhsálaí</li>
+</ul>
+
+<h2>Gnéithe riaracháin</h2>
+<ul class="release-notes-list">
+    <li>Cuardach daoine don riarachán</li>
+    <li>Amharc úsáideoirí ar scáileán an riaracháin</li>
+    <li>Feidhmiúlacht daoine an tseisiúin</li>
+    <li>Rianú ar stair an tsínithe isteach</li>
+    <li>Rannóg sonraí duine sa riarachán</li>
+</ul>
+
+<h2>Córas úsáideoirí</h2>
+<ul class="release-notes-list">
+    <li>Cuntais úsáideora a chruthú agus síniú isteach</li>
+    <li>Fíorú ríomhphoist trí SendGrid</li>
+    <li>Próifíl an úsáideora atá sínithe isteach ag /me</li>
+    <li>Filleadh ar an leathanach roimhe tar éis síniú isteach</li>
+</ul>
+
+<h2>Gnéithe seisiún</h2>
+<ul class="release-notes-list">
+    <li>Tacaíocht do chrios ama an tseisiúin</li>
+    <li>Fuinneog chun seisiún a chur leis</li>
+    <li>Ócáidí seisiúin a chur in eagar agus a chruthú</li>
+    <li>Gné chun seisiún a mharcáil críochnaithe</li>
+    <li>Foinn a nascadh agus a athnascadh</li>
+</ul>
+
+<h2>Feabhsuithe comhéadain agus úsáide</h2>
+<ul class="release-notes-list">
+    <li>Roghchlár hamburger le haghaidh nascleanúna</li>
+    <li>Leagan amach leathanaigh comhdhlúite le bunteimpléad</li>
+    <li>Leathanaigh earráide saincheaptha</li>
+    <li>Táblaí chun stair na n-athruithe a rianú</li>
+</ul>
+
+{% elif month == '2025-07' %}
+<p class="release-date">Iúil 2025</p>
+
+<h2>An chéad seoladh</h2>
+<ul class="release-notes-list">
+    <li>Croífheidhmiúlacht rianaithe seisiún</li>
+    <li>Leathanaigh sonraí seisiún</li>
+    <li>Leathanaigh ócáidí seisiúin le liostaí fonn</li>
+    <li>Nascacht agus scéimre an bhunachair sonraí</li>
+    <li>Comhtháthú le TheSession.org le haghaidh sonraí fonn</li>
+</ul>
+
+<h2>Bunghnéithe</h2>
+<ul class="release-notes-list">
+    <li>Foinn a chur le hócáidí seisiúin agus a scriosadh uathu</li>
+    <li>Idirdhealú idir mód eagarthóireachta agus mód féachana d'ócáidí seisiúin</li>
+    <li>Foinn a ghrúpáil i sraitheanna</li>
+    <li>Rianú ar mhinicíocht agus ar choitiantacht fonn</li>
+    <li>"Liathróid Draíochta 8", a roghnaíonn fonn go randamach de réir mhinicíocht an tseisiúin</li>
+</ul>
+
+{% else %}
+<p>Níl nótaí eisiúna ar fáil don mhí seo.</p>
+{% endif %}
+{% endblock %}

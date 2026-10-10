@@ -1,0 +1,109 @@
+{# i18n-converted #}
+{% extends "base.html" %}
+
+{% block title %}{{ _('Admin - Listening jobs') }}{% endblock %}
+
+{% macro clock(s) -%}
+    {%- if s is none -%}—
+    {%- elif s < 60 -%}{{ _('%(n)s s', n=s|round|int) }}
+    {%- elif s < 3600 -%}{{ _('%(m)s min %(s)s s', m=(s // 60)|int, s=(s % 60)|round|int) }}
+    {%- else -%}{{ _('%(h)s h %(m)s min', h=(s // 3600)|int, m=((s % 3600) // 60)|int) }}
+    {%- endif -%}
+{%- endmacro %}
+
+{% block content %}
+<div class="docs-content-inner">
+    <div class="container">
+        <article class="docs-article">
+            {% set active_tab = 'listen_jobs' %}
+            {% include 'admin_tabs.html' %}
+
+            <p class="text-muted">
+                {{ _('Background work for the listening service: finding a night\'s tunes from its recording, started from the segmenter. Live listening comes first; a job waits while a night is being listened to.') }}
+            </p>
+
+            {% if not jobs %}
+            <p>{{ _('No jobs yet.') }}</p>
+            {% else %}
+            <div class="table-responsive">
+            <table class="table table-sm listen-jobs">
+                <thead>
+                    <tr>
+                        <th>{{ _('Night') }}</th>
+                        <th>{{ _('Status') }}</th>
+                        <th>{{ _('Waited') }}</th>
+                        <th>{{ _('Ran') }}</th>
+                        <th>{{ _('Paused for live') }}</th>
+                        <th>{{ _('Asked by') }}</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for j in jobs %}
+                    <tr class="job-{{ j.status }}">
+                        <td>
+                            <a href="{{ url_for('segment_recording', recording_id=j.recording_id) }}">{{ j.session_name }} · {{ j.date }}</a>
+                            <div class="text-muted small">{{ _('Recording %(id)s', id=j.recording_id) }}{% if j.recording_label %} · {{ j.recording_label }}{% endif %}</div>
+                        </td>
+                        <td>
+                            {% if j.status == 'queued' %}{{ _('Waiting') }}{% if j.jobs_ahead %} · {{ _('%(n)s ahead', n=j.jobs_ahead) }}{% endif %}
+                            {% elif j.status == 'running' %}{{ _('Running') }}
+                            {% elif j.status == 'paused' %}{{ _('Paused while a night is being listened to live') }}
+                            {% elif j.status == 'done' %}{{ _('Done') }}
+                            {% elif j.status == 'failed' %}{{ _('Failed') }}
+                            {% elif j.status == 'cancelled' %}{{ _('Cancelled') }}
+                            {% endif %}
+                            {% if j.status in ('running', 'paused') %}
+                            <div class="text-muted small">
+                                {% if j.phase == 'listening' and j.total_ms %}{{ _('listening') }} {{ ((100 * (j.heard_ms or 0)) / j.total_ms)|round|int }}%
+                                {% elif j.phase == 'following' %}{{ _('following the sets') }} {{ (100 * (j.progress or 0))|round|int }}%
+                                {% elif j.phase == 'finishing' %}{{ _('putting the tunes in') }}
+                                {% else %}{{ _('fetching the recording') }}{% endif %}
+                                {% if j.worker %} · {{ j.worker }}{% endif %}
+                            </div>
+                            {% elif j.status == 'done' and j.result %}
+                            <div class="text-muted small">{{ _('%(tunes)s tunes, %(sets)s sets, %(check)s to check', tunes=j.result.logged or j.result.tunes or 0, sets=j.result.sets or 0, check=j.result.need_check or 0) }}</div>
+                            {% elif j.status == 'failed' and j.error %}
+                            <div class="text-danger small">{{ j.error }}</div>
+                            {% endif %}
+                        </td>
+                        <td>{{ clock(j.waited_s) }}</td>
+                        <td>{{ clock(j.running_s) }}</td>
+                        <td>{{ clock(j.paused_s) if j.paused_s else '—' }}</td>
+                        <td>{{ j.requested_by or '—' }}</td>
+                        <td>
+                            {% if j.status in ('queued', 'running', 'paused') %}
+                            <button type="button" class="btn btn-sm btn-outline-secondary" data-job-action="cancel" data-job="{{ j.listen_job_id }}">{{ _('Cancel') }}</button>
+                            {% elif j.status in ('failed', 'cancelled') %}
+                            <button type="button" class="btn btn-sm btn-outline-secondary" data-job-action="retry" data-job="{{ j.listen_job_id }}">{{ _('Try again') }}</button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            </div>
+            {% endif %}
+        </article>
+    </div>
+</div>
+
+<script>
+    // Cancel and retry go through the job API; the page then shows the result.
+    document.querySelectorAll('[data-job-action]').forEach(function (b) {
+        b.addEventListener('click', function () {
+            b.disabled = true;
+            fetch('/api/listen-jobs/' + b.dataset.job + '/' + b.dataset.jobAction, { method: 'POST', credentials: 'same-origin' })
+                .then(function (r) { return r.json(); })
+                .then(function (body) {
+                    if (!body.success) { alert(body.error || ''); }
+                    location.reload();
+                });
+        });
+    });
+    {% if any_active %}
+    // something is waiting or running: keep the page current
+    setTimeout(function () { location.reload(); }, 15000);
+    {% endif %}
+</script>
+{% endblock %}

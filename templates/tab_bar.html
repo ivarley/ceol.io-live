@@ -1,3 +1,4 @@
+{# i18n-converted #}
 {# Bottom tab bar (spec 052 §B8 Stage 5, design in §B1).
 
    Four destinations on a phone — Home, Sessions, Tunes, Me — replacing the nine-item
@@ -24,13 +25,13 @@
 #}
 {% from 'partials/nav_icons.html' import nav_icon %}
 {% set p = request.path %}
-<nav class="tab-bar" id="tab-bar" aria-label="Main">
+<nav class="tab-bar" id="tab-bar" aria-label="{{ _('Main') }}">
   <a href="/" class="tab-bar-item{% if p == '/' %} active{% endif %}"
      {% if p == '/' %}aria-current="page"{% endif %} data-tab="home">
     {# The C from the wordmark, masked so one image can be grey at rest and the accent
        colour when active — an <img> could not be recoloured without a second file. #}
     <span class="tab-bar-glyph tab-bar-c" aria-hidden="true"></span>
-    <span class="tab-bar-label">Home</span>
+    <span class="tab-bar-label">{{ _('Home') }}</span>
   </a>
 
   <a href="/sessions" class="tab-bar-item{% if p.startswith('/sessions') %} active{% endif %}"
@@ -38,7 +39,7 @@
     <span class="tab-bar-glyph" aria-hidden="true">
       {{ nav_icon('sessions') }}
     </span>
-    <span class="tab-bar-label">Sessions</span>
+    <span class="tab-bar-label">{{ _('Sessions') }}</span>
   </a>
 
   {% if current_user.is_authenticated %}
@@ -47,7 +48,7 @@
     <span class="tab-bar-glyph" aria-hidden="true">
       {{ nav_icon('tunes') }}
     </span>
-    <span class="tab-bar-label">Tunes</span>
+    <span class="tab-bar-label">{{ _('Tunes') }}</span>
   </a>
 
   <a href="/me" class="tab-bar-item{% if p == '/me' or p.startswith('/me/') %} active{% endif %}"
@@ -55,7 +56,7 @@
     <span class="tab-bar-glyph" aria-hidden="true">
       {{ nav_icon('me') }}
     </span>
-    <span class="tab-bar-label">Me</span>
+    <span class="tab-bar-label">{{ _('Me') }}</span>
   </a>
   {% else %}
   {# The tradition's tunes rather than yours (spec 052 §B18). /my-tunes is your own
@@ -66,7 +67,7 @@
     <span class="tab-bar-glyph" aria-hidden="true">
       {{ nav_icon('tunes') }}
     </span>
-    <span class="tab-bar-label">Tunes</span>
+    <span class="tab-bar-label">{{ _('Tunes') }}</span>
   </a>
 
   {# Where Me would be. It holds what the signed-out hamburger held: the way in, and
@@ -78,7 +79,7 @@
     <span class="tab-bar-glyph" aria-hidden="true">
       {{ nav_icon('about') }}
     </span>
-    <span class="tab-bar-label">About</span>
+    <span class="tab-bar-label">{{ _('About') }}</span>
   </a>
   {% endif %}
 </nav>

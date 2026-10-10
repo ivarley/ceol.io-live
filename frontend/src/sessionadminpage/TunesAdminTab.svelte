@@ -1,8 +1,9 @@
 <script>
+  // i18n-converted
   // Tunes tab: grid of all tunes played at this session — search (free text or
   // tune id/URL) + sortable columns, fetched once when the tab is active.
   import { untrack } from 'svelte'
-  import { LoadError, SearchField } from '../lib/index.js'
+  import { LoadError, SearchField, t, tuneTypeName } from '../lib/index.js'
   import { createAbcMatcher } from '../shared/abcfilter.svelte.js'
   import { compareValues, filterTuneList, tuneSortValue } from './logic.js'
 
@@ -63,7 +64,7 @@
     // fetch lands, so the first query has nothing to match against and must be retried.
     abcMatch.update(
       search,
-      () => untrack(() => (allTunes || []).map((t) => t.tune_id)),
+      () => untrack(() => (allTunes || []).map((tune) => tune.tune_id)),
       (allTunes || []).length
     )
   })
@@ -87,7 +88,7 @@
           id="tunes-search"
           inputClass="form-control"
           styled={false}
-          placeholder="Search tunes..."
+          placeholder={t('Search tunes...')}
           autocomplete="off"
           autocorrect="off"
           autocapitalize="off"
@@ -98,27 +99,27 @@
 
   <div id="tunes-content">
     {#if loadError}
-      <LoadError id="tunes-load-error" what="this session's tunes" onRetry={loadTunes} retrying={loading} />
+      <LoadError id="tunes-load-error" message={t("Couldn't load this session's tunes.")} onRetry={loadTunes} retrying={loading} />
     {:else if !allTunes}
-      <p class="text-muted">Loading tunes...</p>
+      <p class="text-muted">{t('Loading tunes...')}</p>
     {:else if allTunes.length === 0}
-      <div class="alert alert-info">No tunes have been played at this session yet.</div>
+      <div class="alert alert-info">{t('No tunes have been played at this session yet.')}</div>
     {:else if filteredTunes.length === 0}
-      <div class="alert alert-info">No tunes match the search criteria.</div>
+      <div class="alert alert-info">{t('No tunes match the search criteria.')}</div>
     {:else}
       <div class="table-responsive">
         <table class="table table-striped" id="tunes-table">
           <thead>
             <tr>
-              <th style="cursor: pointer;" onclick={() => sortTunes('tune_name')}>Tune Name{indicator('tune_name')}</th>
-              <th style="cursor: pointer;" onclick={() => sortTunes('session_alias')}>Session Alias{indicator('session_alias')}</th>
-              <th style="cursor: pointer;" onclick={() => sortTunes('tune_type')}>Type{indicator('tune_type')}</th>
-              <th style="cursor: pointer;" onclick={() => sortTunes('session_key')}>Session Key{indicator('session_key')}</th>
-              <th style="cursor: pointer;" onclick={() => sortTunes('setting_key')}>Setting Key{indicator('setting_key')}</th>
-              <th style="cursor: pointer; text-align: center;" onclick={() => sortTunes('play_count')}>Plays{indicator('play_count')}</th>
-              <th style="cursor: pointer; text-align: center;" onclick={() => sortTunes('want_to_learn')}>Want{indicator('want_to_learn')}</th>
-              <th style="cursor: pointer; text-align: center;" onclick={() => sortTunes('learning')}>Learning{indicator('learning')}</th>
-              <th style="cursor: pointer; text-align: center;" onclick={() => sortTunes('learned')}>Learned{indicator('learned')}</th>
+              <th style="cursor: pointer;" onclick={() => sortTunes('tune_name')}>{t('Tune Name')}{indicator('tune_name')}</th>
+              <th style="cursor: pointer;" onclick={() => sortTunes('session_alias')}>{t('Session Alias')}{indicator('session_alias')}</th>
+              <th style="cursor: pointer;" onclick={() => sortTunes('tune_type')}>{t('Type')}{indicator('tune_type')}</th>
+              <th style="cursor: pointer;" onclick={() => sortTunes('session_key')}>{t('Session Key')}{indicator('session_key')}</th>
+              <th style="cursor: pointer;" onclick={() => sortTunes('setting_key')}>{t('Setting Key')}{indicator('setting_key')}</th>
+              <th style="cursor: pointer; text-align: center;" onclick={() => sortTunes('play_count')}>{t('Plays')}{indicator('play_count')}</th>
+              <th style="cursor: pointer; text-align: center;" onclick={() => sortTunes('want_to_learn')}>{t('Want')}{indicator('want_to_learn')}</th>
+              <th style="cursor: pointer; text-align: center;" onclick={() => sortTunes('learning')}>{t('Learning')}{indicator('learning')}</th>
+              <th style="cursor: pointer; text-align: center;" onclick={() => sortTunes('learned')}>{t('Learned')}{indicator('learned')}</th>
             </tr>
           </thead>
           <tbody>
@@ -129,12 +130,12 @@
                     {tune.tune_name}
                   </a>
                   <!-- Here because its NOTATION matched, not its name/alias/type/key. -->
-                  {#if abcMatch.ids.has(tune.tune_id)}<span class="abc-only-badge" title="Matched the notation">♪</span>{/if}
+                  {#if abcMatch.ids.has(tune.tune_id)}<span class="abc-only-badge" title={t('Matched the notation')}>♪</span>{/if}
                 </td>
                 <td class="tune-alias">
                   {#if tune.session_alias && tune.session_alias !== tune.tune_name}{tune.session_alias}{:else}<span class="text-muted">-</span>{/if}
                 </td>
-                <td class="tune-type">{#if tune.tune_type}{tune.tune_type}{:else}<span class="text-muted">-</span>{/if}</td>
+                <td class="tune-type">{#if tune.tune_type}{tuneTypeName(tune.tune_type)}{:else}<span class="text-muted">-</span>{/if}</td>
                 <td class="tune-session-key">{#if tune.session_key}{tune.session_key}{:else}<span class="text-muted">-</span>{/if}</td>
                 <td class="tune-setting-key">{#if tune.setting_key}{tune.setting_key}{:else}<span class="text-muted">-</span>{/if}</td>
                 <td class="tune-play-count text-center">{tune.play_count}</td>

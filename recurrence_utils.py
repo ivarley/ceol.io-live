@@ -4,10 +4,15 @@ Recurrence pattern utilities for session scheduling.
 Handles parsing, validation, and calculation of session recurrence patterns.
 """
 
+# i18n-converted
 import json
 from datetime import datetime, date, time, timedelta
 from typing import List, Dict, Optional, Tuple
 import calendar
+
+from babel.dates import get_day_names
+from flask_babel import gettext as _, get_locale, ngettext
+
 try:
     from zoneinfo import ZoneInfo
 except ImportError:
@@ -15,7 +20,15 @@ except ImportError:
 
 
 # Valid weekday names
-WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+WEEKDAYS = [
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+    "sunday",
+]
 
 # Mapping from weekday name to ISO weekday number (Monday=1, Sunday=7)
 WEEKDAY_TO_ISO = {
@@ -30,6 +43,12 @@ WEEKDAY_TO_ISO = {
 
 # Mapping from ISO weekday to name
 ISO_TO_WEEKDAY = {v: k for k, v in WEEKDAY_TO_ISO.items()}
+
+
+def _is_irish():
+    """Whether this request is answered in Irish (outside a request: English)."""
+    locale = get_locale()
+    return locale is not None and locale.language == "ga"
 
 
 class RecurrenceSchedule:
@@ -70,11 +89,15 @@ class RecurrenceSchedule:
         elif self.type == "monthly_nth_weekday":
             self.which = schedule_dict.get("which", [])
             if not isinstance(self.which, list) or not self.which:
-                raise ValueError("which must be a non-empty list for monthly_nth_weekday")
+                raise ValueError(
+                    "which must be a non-empty list for monthly_nth_weekday"
+                )
             # Validate which values (1-4 or -1 for last)
             for n in self.which:
                 if n not in [1, 2, 3, 4, -1]:
-                    raise ValueError(f"Invalid 'which' value: {n}. Must be 1-4 or -1 (last)")
+                    raise ValueError(
+                        f"Invalid 'which' value: {n}. Must be 1-4 or -1 (last)"
+                    )
         else:
             raise ValueError(f"Invalid schedule type: {self.type}")
 
@@ -120,7 +143,10 @@ class RecurrenceSchedule:
         return False
 
     def get_next_occurrence(
-        self, after_dt: datetime, timezone: ZoneInfo, reference_date: Optional[date] = None
+        self,
+        after_dt: datetime,
+        timezone: ZoneInfo,
+        reference_date: Optional[date] = None,
     ) -> Optional[datetime]:
         """
         Get the next occurrence of this schedule after the given datetime.
@@ -195,36 +221,57 @@ class RecurrenceSchedule:
         Returns:
             Human-readable description (e.g., "Thursdays from 7:00pm-10:30pm")
         """
-        # Format times
-        start_str = self.start_time.strftime("%I:%M%p").lstrip("0").lower()
-        end_str = self.end_time.strftime("%I:%M%p").lstrip("0").lower()
+        irish = _is_irish()
+
+        # Format times: "7:00pm" in English, the 24-hour clock ("19:00") in Irish.
+        if irish:
+            start_str = self.start_time.strftime("%H:%M")
+            end_str = self.end_time.strftime("%H:%M")
+        else:
+            start_str = self.start_time.strftime("%I:%M%p").lstrip("0").lower()
+            end_str = self.end_time.strftime("%I:%M%p").lstrip("0").lower()
 
         # Format day
-        day_name = self.weekday.capitalize()
+        if irish:
+            day_name = get_day_names("wide", locale="ga")[
+                WEEKDAY_TO_ISO[self.weekday] - 1
+            ]
+        else:
+            day_name = self.weekday.capitalize()
+        times = {"day": day_name, "start": start_str, "end": end_str}
 
         if self.type == "weekly":
             if self.every_n_weeks == 1:
-                day_str = f"{day_name}s"
-            elif self.every_n_weeks == 2:
-                day_str = f"Every other {day_name}"
-            else:
-                day_str = f"Every {self.every_n_weeks} weeks on {day_name}"
+                return _("%(day)ss from %(start)s-%(end)s", **times)
+            if self.every_n_weeks == 2:
+                return _("Every other %(day)s from %(start)s-%(end)s", **times)
+            return ngettext(
+                "Every %(num)d week on %(day)s from %(start)s-%(end)s",
+                "Every %(num)d weeks on %(day)s from %(start)s-%(end)s",
+                self.every_n_weeks,
+                **times,
+            )
 
-        elif self.type == "monthly_nth_weekday":
-            # Convert which numbers to ordinals
-            ordinals = {
-                1: "first",
-                2: "second",
-                3: "third",
-                4: "fourth",
-                -1: "last",
-            }
-            which_str = " and ".join([ordinals[n] for n in sorted(self.which)])
-            day_str = f"{which_str.capitalize()} {day_name}s of the month"
+        # monthly_nth_weekday: "First and third Sundays of the month from ..."
+        ordinals = {
+            1: _("first"),
+            2: _("second"),
+            3: _("third"),
+            4: _("fourth"),
+            -1: _("last"),
+        }
+        names = [ordinals[n] for n in sorted(self.which)]
+        nths = names[0]
+        for name in names[1:]:
+            nths = _("%(first)s and %(second)s", first=nths, second=name)
+        text = _(
+            "%(nths)s %(day)ss of the month from %(start)s-%(end)s", nths=nths, **times
+        )
+        return text[:1].upper() + text[1:]
 
-        return f"{day_str} from {start_str}-{end_str}"
-
-    def _date_matches_pattern(self, check_date: date, reference_date: Optional[date] = None) -> bool:
+    def _date_matches_pattern(
+        self, check_date: date, reference_date: Optional[date] = None
+    ) -> bool:
         """
         Check if a date matches this schedule's pattern (ignoring time).
 
@@ -326,10 +373,15 @@ class SessionRecurrence:
         Returns:
             True if any schedule is active
         """
-        return any(schedule.is_active_at(dt, reference_date) for schedule in self.schedules)
+        return any(
+            schedule.is_active_at(dt, reference_date) for schedule in self.schedules
+        )
 
     def get_next_occurrence(
-        self, after_dt: datetime, timezone: ZoneInfo, reference_date: Optional[date] = None
+        self,
+        after_dt: datetime,
+        timezone: ZoneInfo,
+        reference_date: Optional[date] = None,
     ) -> Optional[datetime]:
         """
         Get the soonest next occurrence across all schedules.
@@ -372,7 +424,9 @@ class SessionRecurrence:
         all_occurrences = []
         for schedule in self.schedules:
             all_occurrences.extend(
-                schedule.get_occurrences_in_range(start_date, end_date, timezone, reference_date)
+                schedule.get_occurrences_in_range(
+                    start_date, end_date, timezone, reference_date
+                )
             )
 
         # Sort by start time
@@ -387,24 +441,34 @@ class SessionRecurrence:
             Human-readable description, or "No regular schedule" if no schedules
         """
         if not self.schedules:
-            return "No regular schedule"
+            return _("No regular schedule")
 
         descriptions = [schedule.to_human_readable() for schedule in self.schedules]
 
         if len(descriptions) == 1:
             return descriptions[0]
         elif len(descriptions) == 2:
-            return f"{descriptions[0]} and {descriptions[1]}"
+            return _(
+                "%(first)s and %(second)s",
+                first=descriptions[0],
+                second=descriptions[1],
+            )
         else:
-            # Oxford comma for 3+
-            return ", ".join(descriptions[:-1]) + f", and {descriptions[-1]}"
+            # Oxford comma for 3+ (English; Irish has none)
+            return _(
+                "%(list)s, and %(last)s",
+                list=", ".join(descriptions[:-1]),
+                last=descriptions[-1],
+            )
 
     def has_schedules(self) -> bool:
         """Check if this recurrence has any schedules."""
         return len(self.schedules) > 0
 
 
-def validate_recurrence_json(recurrence_json: Optional[str]) -> Tuple[bool, Optional[str]]:
+def validate_recurrence_json(
+    recurrence_json: Optional[str],
+) -> Tuple[bool, Optional[str]]:
     """
     Validate recurrence JSON format.
 
@@ -438,4 +502,4 @@ def to_human_readable(recurrence_json: Optional[str]) -> str:
         recurrence = SessionRecurrence(recurrence_json)
         return recurrence.to_human_readable()
     except ValueError:
-        return "Invalid recurrence pattern"
+        return _("Invalid recurrence pattern")

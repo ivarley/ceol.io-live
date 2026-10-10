@@ -1,4 +1,5 @@
 <script>
+  // i18n-converted
   // The Tunes tab: instant first paint from the embedded first 20 rows, async
   // /tunes/remaining merge (serializer dicts — the tuple reshaping hack is dead),
   // client-side search/type/my-status filtering with URL round-trip, selection
@@ -27,9 +28,25 @@
   const sessionPath = session.path
   const isLoggedIn = permissions.is_logged_in
 
-  import { Chip, LoadError, Row, SearchField, Seg, Sheet, Toolbar, toast } from '../lib/index.js'
+  import { Chip, LoadError, Row, SearchField, Seg, Sheet, Toolbar, toast, t, tn, tuneTypeName, instrumentName } from '../lib/index.js'
   import { createAbcMatcher } from '../shared/abcfilter.svelte.js'
-  import { STATUSES, STATUS_LABELS } from '../mylist.js'
+  import { STATUSES } from '../mylist.js'
+
+  // How a status is worded (mylist.js STATUS_LABELS, in the page's language).
+  const STATUS_WORDS = {
+    'want to learn': () => t('To Learn'),
+    learning: () => t('Learning'),
+    learned: () => t('Learned'),
+  }
+  const statusWord = (st) => (STATUS_WORDS[st] ? STATUS_WORDS[st]() : st)
+  // The raw status value as the row chip and the copy summary show it (lower case).
+  const RAW_STATUS = {
+    'want to learn': () => t('want to learn'),
+    learning: () => t('learning'),
+    learned: () => t('learned'),
+    'not on list': () => t('not on list'),
+  }
+  const rawStatus = (st) => (RAW_STATUS[st] ? RAW_STATUS[st]() : st)
 
   // ---- state ---------------------------------------------------------------
   let allTunes = $state([...initialTunes])
@@ -88,9 +105,15 @@
     filteredTunes.length > 0 && filteredTunes.every((t) => selectedTuneIds.has(t.tune_id))
   )
   const countText = $derived.by(() => {
-    if (tunebookLoading) return 'Loading your tunebook…'
-    if (loadingTunes) return `Loading all tunes... (${allTunes.length}/${totalTunesCount})`
-    if (remainingError) return `Showing ${filteredTunes.length} of the first ${allTunes.length} of ${totalTunesCount} tunes`
+    if (tunebookLoading) return t('Loading your tunebook…')
+    if (loadingTunes) return t('Loading all tunes... ({loaded}/{total})', { loaded: allTunes.length, total: totalTunesCount })
+    if (remainingError)
+      return tn(
+        totalTunesCount,
+        'Showing {shown} of the first {first} of {n} tunes',
+        'Showing {shown} of the first {first} of {n} tunes',
+        { shown: filteredTunes.length, first: allTunes.length }
+      )
     return resultsCountLabel(filteredTunes.length, allTunes.length)
   })
   const showInstScope = $derived(!!filters.mystatus && statusInstruments.length > 0)
@@ -312,9 +335,9 @@
   let copying = $state(false)
 
   const learnStatuses = [
-    ['want to learn', 'Want to Learn'],
-    ['learning', 'Learning'],
-    ['learned', 'Learned'],
+    ['want to learn', t('Want to Learn')],
+    ['learning', t('Learning')],
+    ['learned', t('Learned')],
   ]
 
   async function showCopyModal() {
@@ -344,7 +367,7 @@
   const copyConfirmMessage = $derived.by(() => {
     let destinationName
     if (selectedDestination === 'my_tunes') {
-      destinationName = `My Tunes (as "${selectedLearnStatus}")`
+      destinationName = t('My Tunes (as "{status}")', { status: rawStatus(selectedLearnStatus) })
     } else if (selectedDestination) {
       const destPath = selectedDestination.replace('session:', '')
       const dest = (adminSessions || []).find((s) => s.path === destPath)
@@ -352,15 +375,24 @@
     } else {
       return ''
     }
-    const n = selectedTuneIds.size
-    return `${n} tune${n !== 1 ? 's' : ''} will be copied to ${destinationName}. Proceed?`
+    return tn(
+      selectedTuneIds.size,
+      '{n} tune will be copied to {destination}. Proceed?',
+      '{n} tunes will be copied to {destination}. Proceed?',
+      { destination: destinationName }
+    )
   })
 
   const copyWarning = $derived.by(() => {
     const visibleSelectedCount = filteredTunes.filter((t) => selectedTuneIds.has(t.tune_id)).length
     const totalSelectedCount = selectedTuneIds.size
     if (visibleSelectedCount !== totalSelectedCount && (filters.search || filters.type)) {
-      return `Warning: This will copy all ${totalSelectedCount} selected tunes, not just the ${visibleSelectedCount} selected tunes visible right now with your filters and searches enabled!`
+      return tn(
+        totalSelectedCount,
+        'Warning: This will copy all {n} selected tunes, not just the {visible} selected tunes visible right now with your filters and searches enabled!',
+        'Warning: This will copy all {n} selected tunes, not just the {visible} selected tunes visible right now with your filters and searches enabled!',
+        { visible: visibleSelectedCount }
+      )
     }
     return ''
   })
@@ -388,12 +420,12 @@
         sessionStorage.setItem('copyTunesMessage', data.message)
         window.location.href = data.redirect_url
       } else {
-        toast(data.error || "Couldn't copy the tunes. Try again.", 'error')
+        toast(data.error || t("Couldn't copy the tunes. Try again."), 'error')
         copying = false
       }
     } catch (error) {
       console.error('Error copying tunes:', error)
-      toast("Couldn't copy the tunes. Check your connection and try again.", 'error')
+      toast(t("Couldn't copy the tunes. Check your connection and try again."), 'error')
       copying = false
     }
   }
@@ -426,9 +458,9 @@
   function checkForSuccessMessage() {
     const params = new URLSearchParams(window.location.search)
     if (params.has('added')) {
-      toast(`Successfully added "${params.get('added')}" to the session!`, 'success')
+      toast(t('Successfully added "{name}" to the session!', { name: params.get('added') }), 'success')
     } else if (params.has('already')) {
-      toast('This tune is already on the session list', 'info')
+      toast(t('This tune is already on the session list'), 'info')
     }
   }
 
@@ -502,7 +534,7 @@
         activeCount={hasActiveFilters ? 1 : 0}
         addId={isLoggedIn ? 'add-session-tune-btn' : null}
         addHref={isLoggedIn ? `/sessions/${sessionPath}/tunes?add=1` : null}
-        addTitle="Add tune"
+        addTitle={t('Add tune')}
         onAdd={isLoggedIn ? handleAddSessionTuneClick : null}>
         {#snippet search()}
           <SearchField
@@ -511,7 +543,7 @@
             inputClass="filter-search-input"
             wrapperClass="filter-search-wrap"
             styled={false}
-            placeholder="Search"
+            placeholder={t('Search')}
             autocomplete="off"
             autocorrect="off"
             autocapitalize="off"
@@ -521,19 +553,19 @@
         {/snippet}
         {#snippet filter()}
           <div class="filter-panel-row">
-            <select id="type-filter" class="filter-panel-select" title="Tune type" bind:value={filters.type}>
-              <option value="">All Tune Types</option>
+            <select id="type-filter" class="filter-panel-select" title={t('Tune type')} bind:value={filters.type}>
+              <option value="">{t('All Tune Types')}</option>
               {#each tuneTypes as type (type)}
-                <option value={type}>{cap(type)}</option>
+                <option value={type}>{cap(tuneTypeName(type))}</option>
               {/each}
             </select>
           </div>
           <div class="filter-panel-row">
             <Seg
               options={[
-                { id: 'alpha', label: 'a-z' },
-                { id: 'session', label: 'session' },
-                { id: 'everywhere', label: 'everywhere' },
+                { id: 'alpha', label: t('a-z') },
+                { id: 'session', label: t('session') },
+                { id: 'everywhere', label: t('everywhere') },
               ]}
               value={sort.type}
               idAttr="data-sort"
@@ -544,7 +576,7 @@
             <button
               id="sort-direction-toggle"
               class="filter-sort-direction-btn"
-              title="Toggle sort direction"
+              title={t('Toggle sort direction')}
               onclick={() => (sort.dir = sort.dir === 'asc' ? 'desc' : 'asc')}>
               <span id="sort-direction-icon">{sort.dir === 'desc' ? '↓' : '↑'}</span>
             </button>
@@ -554,11 +586,11 @@
                  instances the viewer checked in to (attendance='yes'). -->
             <div class="filter-panel-row">
               <Chip
-                label="Nights I attended"
+                label={t('Nights I attended')}
                 active={filters.attended}
                 styled={false}
                 chipClass="filter-rel-chip{filters.attended ? ' active' : ''}"
-                title="Only tunes played on nights you checked in to"
+                title={t('Only tunes played on nights you checked in to')}
                 onclick={() => (filters.attended = !filters.attended)} />
             </div>
             <!-- My-tunebook status: colors every row by MY learn status (roll-up,
@@ -568,40 +600,40 @@
               <select
                 id="mystatus-filter"
                 class="filter-panel-select"
-                title="My tunebook status"
+                title={t('My tunebook status')}
                 bind:value={filters.mystatus}
                 onchange={activateMyStatus}>
-                <option value="">My Tunebook: off</option>
-                <option value="all">Show My Status</option>
-                <option value="not on list">Not On My List</option>
+                <option value="">{t('My Tunebook: off')}</option>
+                <option value="all">{t('Show My Status')}</option>
+                <option value="not on list">{t('Not On My List')}</option>
                 {#each STATUSES as st (st)}
-                  <option value={st}>{STATUS_LABELS[st]}</option>
+                  <option value={st}>{statusWord(st)}</option>
                 {/each}
               </select>
               <select
                 id="mystatus-inst"
                 class="filter-panel-select"
-                title="Instrument"
+                title={t('Instrument')}
                 style:display={showInstScope ? null : 'none'}
                 bind:value={myStatusInstrument}>
-                <option value="all">All Instruments</option>
+                <option value="all">{t('All Instruments')}</option>
                 {#each statusInstruments as inst (inst)}
-                  <option value={inst}>{inst}</option>
+                  <option value={inst}>{instrumentName(inst)}</option>
                 {/each}
               </select>
             </div>
           {/if}
           <div class="filter-panel-actions">
             {#if hasActiveFilters}
-              <button id="clear-filters-btn" class="filter-panel-clear-btn" onclick={clearFilters}>Clear Filters</button>
+              <button id="clear-filters-btn" class="filter-panel-clear-btn" onclick={clearFilters}>{t('Clear Filters')}</button>
             {/if}
           </div>
           {#if isLoggedIn}
             <div class="selection-buttons">
               <button id="select-tunes-btn" class="selection-btn" onclick={toggleSelectionMode}>
-                {selectionMode ? 'Cancel Selection' : 'Select Tunes...'}
+                {selectionMode ? t('Cancel Selection') : t('Select Tunes...')}
               </button>
-              <button id="copy-to-btn" class="selection-btn primary" disabled={selectedTuneIds.size === 0} onclick={showCopyModal}>And Copy To...</button>
+              <button id="copy-to-btn" class="selection-btn primary" disabled={selectedTuneIds.size === 0} onclick={showCopyModal}>{t('And Copy To...')}</button>
             </div>
           {/if}
         {/snippet}
@@ -612,7 +644,7 @@
       <LoadError
         inline
         id="tunes-remaining-error"
-        message="Couldn't load the rest of this session's tunes."
+        message={t("Couldn't load the rest of this session's tunes.")}
         onRetry={loadRemainingTunes}
         retrying={loadingTunes} />
     {/if}
@@ -620,7 +652,7 @@
       <LoadError
         inline
         id="tunebook-status-error"
-        message="Couldn't load your tunebook, so the My Tunebook filter is off."
+        message={t("Couldn't load your tunebook, so the My Tunebook filter is off.")}
         onRetry={retryMyStatus}
         retrying={tunebookLoading} />
     {/if}
@@ -633,26 +665,26 @@
           class="tune-select-checkbox"
           checked={allVisibleSelected}
           onclick={toggleSelectAll} />
-        <label for="select-all-checkbox" id="select-all-label">Select all</label>
+        <label for="select-all-checkbox" id="select-all-label">{t('Select all')}</label>
         <span
           id="deselect-link"
           class="deselect-link"
           style:display={selectedTuneIds.size > 0 ? 'inline' : 'none'}
-          onclick={deselectAll}>(Clear)</span>
+          onclick={deselectAll}>{t('(Clear)')}</span>
       </div>
     </div>
 
     <div class="tunes-list" id="tunes-list">
       {#if filteredTunes.length === 0 && filters.search}
         <div style="padding: 40px 20px; text-align: center; color: var(--text-muted, #6c757d);">
-          <p style="margin-bottom: 20px;">No tunes found matching "{filters.search}"</p>
+          <p style="margin-bottom: 20px;">{t('No tunes found matching "{query}"', { query: filters.search })}</p>
           {#if isLoggedIn}
             <a
               href="/sessions/{sessionPath}/tunes?add=1&q={encodeURIComponent(filters.search)}"
               class="btn btn-primary"
               style="padding: 12px 24px; background-color: var(--primary-fill); color: white; text-decoration: none; border-radius: 4px; display: inline-block;"
               onclick={handleAddSessionTuneClick}>
-              Add Tune
+              {t('Add Tune')}
             </a>
           {/if}
         </div>
@@ -680,33 +712,33 @@
                   e.stopPropagation()
                   toggleTuneSelection(tune.tune_id)
                 }} />
-              <h3 class="tune-name">{tune.tune_name || 'Unknown'}</h3>
+              <h3 class="tune-name">{tune.tune_name || t('Unknown')}</h3>
               <!-- Here because its NOTATION matched, not its name. -->
-              {#if tune._abcOnly}<span class="abc-only-badge" title="Matched the notation, not the name">♪</span>{/if}
+              {#if tune._abcOnly}<span class="abc-only-badge" title={t('Matched the notation, not the name')}>♪</span>{/if}
             </div>
             {/snippet}
             {#snippet trailing()}
             <div class="tune-meta">
-              {#if st}<Chip label={st.status} styled={false} chipClass="ls-chip {st.cls}" />{/if}
-              {#if tune.tune_type}<Chip label={tune.tune_type} styled={false} chipClass="tune-type" />{/if}
+              {#if st}<Chip label={rawStatus(st.status)} styled={false} chipClass="ls-chip {st.cls}" />{/if}
+              {#if tune.tune_type}<Chip label={tuneTypeName(tune.tune_type)} styled={false} chipClass="tune-type" />{/if}
               {#if filters.attended}
                 <Chip
-                  label="{tune.attended_play_count || 0} attended"
+                  label={tn(tune.attended_play_count || 0, '{n} attended', '{n} attended')}
                   styled={false}
                   chipClass="tune-count-badge"
-                  title="Times played on nights you attended" />
+                  title={t('Times played on nights you attended')} />
               {:else if sort.type === 'session'}
                 <Chip
                   label={String(tune.play_count || 0)}
                   styled={false}
                   chipClass="tune-count-badge"
-                  title="Times played at this session" />
+                  title={t('Times played at this session')} />
               {:else if sort.type === 'everywhere'}
                 <Chip
                   label={String(tune.tunebook_count || 0)}
                   styled={false}
                   chipClass="tune-count-badge"
-                  title="TheSession.org tunebooks" />
+                  title={t('TheSession.org tunebooks')} />
               {/if}
             </div>
             {/snippet}
@@ -724,19 +756,19 @@
   {#if isLoggedIn}
     <Sheet
       bind:open={copyOpen}
-      title="Copy {selectedTuneIds.size} tune{selectedTuneIds.size !== 1 ? 's' : ''} to…">
+      title={tn(selectedTuneIds.size, 'Copy {n} tune to…', 'Copy {n} tunes to…')}>
       <div class="copy-modal-destinations" id="copy-destinations">
         {#if destLoading}
-          <p style="color: var(--text-muted);">Loading destinations...</p>
+          <p style="color: var(--text-muted);">{t('Loading destinations...')}</p>
         {:else if destError}
-          <LoadError id="copy-destinations-error" what="your sessions" onRetry={loadDestinations} retrying={destLoading} />
+          <LoadError id="copy-destinations-error" message={t("Couldn't load your sessions.")} onRetry={loadDestinations} retrying={destLoading} />
         {:else}
           <div
             class="copy-destination-option"
             class:selected={selectedDestination === 'my_tunes'}
             onclick={() => (selectedDestination = 'my_tunes')}>
             <input type="radio" name="destination" value="my_tunes" checked={selectedDestination === 'my_tunes'} />
-            <span>My Tunes</span>
+            <span>{t('My Tunes')}</span>
             <div
               class="my-tunes-status-options"
               id="my-tunes-status-options"
@@ -767,12 +799,12 @@
       </div>
       {#snippet footer()}
         <div class="copy-modal-actions">
-          <button id="copy-next-btn" class="selection-btn primary" disabled={!selectedDestination} onclick={() => (confirmOpen = true)}>Next</button>
+          <button id="copy-next-btn" class="selection-btn primary" disabled={!selectedDestination} onclick={() => (confirmOpen = true)}>{t('Next')}</button>
         </div>
       {/snippet}
     </Sheet>
 
-    <Sheet bind:open={confirmOpen} title="Confirm Copy" back="Destinations">
+    <Sheet bind:open={confirmOpen} title={t('Confirm Copy')} back={t('Destinations')}>
       <p id="copy-confirm-message">{copyConfirmMessage}</p>
       {#if copyWarning}
         <div id="copy-warning" class="copy-modal-warning">{copyWarning}</div>
@@ -780,7 +812,7 @@
       {#snippet footer()}
         <div class="copy-modal-actions">
           <button id="copy-confirm-btn" class="selection-btn primary" disabled={copying} onclick={executeCopy}>
-            {copying ? 'Copying...' : 'Copy Them!'}
+            {copying ? t('Copying...') : t('Copy Them!')}
           </button>
         </div>
       {/snippet}

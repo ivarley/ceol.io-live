@@ -307,6 +307,8 @@ CREATE TABLE user_account (
     user_email VARCHAR(255) NOT NULL,
     hashed_password VARCHAR(255),  -- NULL for passwordless (magic link) users
     timezone VARCHAR(50) NOT NULL DEFAULT 'UTC',
+    -- Spec 057: the interface language, English or Irish.
+    language VARCHAR(8) NOT NULL DEFAULT 'en' CHECK (language IN ('en', 'ga')),
     is_active BOOLEAN DEFAULT TRUE,
     is_system_admin BOOLEAN DEFAULT FALSE,
     beta_live_logging BOOLEAN NOT NULL DEFAULT TRUE,  -- new live logger, now default-on for all users (spec 024)
@@ -685,6 +687,7 @@ CREATE TABLE session_instance_tune (
     -- with no later migration; human ops never write played_*.
     source VARCHAR(16) NOT NULL DEFAULT 'human',
     confidence SMALLINT,            -- 0..100; NULL = definite human entry
+    confidence_model VARCHAR(32),   -- which calibration model made `confidence` (060); NULL = a person
     played_start TIMESTAMPTZ,       -- audio-only
     played_end TIMESTAMPTZ,         -- audio-only
     logged_timestamp TIMESTAMPTZ,   -- client-asserted log time
@@ -928,6 +931,37 @@ CREATE TABLE recording_tune_segment (
     last_modified_user_id INTEGER
 );
 
+-- Background work for the listening service (schema 061; spec 053
+-- "053 files/find-tunes-on-the-server.md"): finding a night's tunes from its
+-- recording, queued by an admin, run by the listening service after live
+-- listening.
+CREATE TABLE listen_job (
+    listen_job_id         SERIAL PRIMARY KEY,
+    kind                  VARCHAR(16) NOT NULL DEFAULT 'find_tunes',
+    recording_id          INTEGER NOT NULL REFERENCES recording(recording_id) ON DELETE CASCADE,
+    requested_by_user_id  INTEGER REFERENCES user_account(user_id) ON DELETE SET NULL,
+    status                VARCHAR(16) NOT NULL DEFAULT 'queued',
+    phase                 VARCHAR(16),
+    progress              REAL,
+    heard_ms              INTEGER,
+    total_ms              INTEGER,
+    worker                VARCHAR(64),
+    heartbeat_at          TIMESTAMPTZ,
+    attempts              SMALLINT NOT NULL DEFAULT 0,
+    queued_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    started_at            TIMESTAMPTZ,
+    finished_at           TIMESTAMPTZ,
+    running_s             REAL NOT NULL DEFAULT 0,
+    paused_s              REAL NOT NULL DEFAULT 0,
+    result                JSONB,
+    error                 TEXT,
+    CONSTRAINT listen_job_status CHECK (status IN ('queued', 'running', 'paused', 'done', 'failed', 'cancelled')),
+    CONSTRAINT listen_job_kind CHECK (kind IN ('find_tunes'))
+);
+CREATE INDEX idx_listen_job_queue ON listen_job (status, queued_at);
+CREATE UNIQUE INDEX uq_listen_job_active_recording
+    ON listen_job (recording_id) WHERE status IN ('queued', 'running', 'paused');
+
 -- One tune is placed at most once per recording. (The same tune played twice in
 -- a night is two session_instance_tune rows, so this does not get in the way.)
 ALTER TABLE recording_tune_segment
@@ -1099,6 +1133,7 @@ CREATE TABLE session_instance_tune_history (
     started_by_person_id INTEGER,
     source VARCHAR(16),
     confidence SMALLINT,
+    confidence_model VARCHAR(32),
     played_start TIMESTAMPTZ,
     played_end TIMESTAMPTZ,
     logged_timestamp TIMESTAMPTZ,
@@ -1285,6 +1320,7 @@ CREATE TABLE user_account_history (
     user_email VARCHAR(255),
     hashed_password VARCHAR(255),
     timezone VARCHAR(50),
+    language VARCHAR(8),
     is_active BOOLEAN,
     is_system_admin BOOLEAN,
     receive_update_emails BOOLEAN,

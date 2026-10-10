@@ -24,6 +24,7 @@ Still ahead (Phase 1 tail / later): attendance ops (they have active-session sid
 effects), server-generated corroborate/merge detection (§H30), presence (§F).
 """
 
+# i18n-converted
 import base64
 import datetime
 import json
@@ -34,6 +35,7 @@ from urllib.parse import quote
 import psycopg2
 import requests
 from flask import request, jsonify
+from flask_babel import gettext as _
 from flask_login import current_user
 
 from database import (
@@ -53,8 +55,14 @@ from database import (
 )
 from auth import create_session
 from api_routes import (
-    api_login_required, segment_records_into_sets, render_abc_to_png, bytea_to_base64,
-    match_tune_core, _fetch_thesession_tune, TuneImportError, default_setting_id,
+    api_login_required,
+    segment_records_into_sets,
+    render_abc_to_png,
+    bytea_to_base64,
+    match_tune_core,
+    _fetch_thesession_tune,
+    TuneImportError,
+    default_setting_id,
 )
 from rate_limit import rate_limited
 from api_auth import public_api
@@ -75,7 +83,7 @@ LIVE_EVENT_CHANNEL = "live_session_events"
 # Tune these as we learn the real byte / bootstrap-latency cost; the vocabulary rides the
 # (blocking) bootstrap today, so very large N would argue for a deferred background fetch.
 LOCAL_VOCAB_SESSION_LIMIT = 200  # N
-LOCAL_VOCAB_GLOBAL_LIMIT = 25    # M
+LOCAL_VOCAB_GLOBAL_LIMIT = 25  # M
 
 
 class OpRejected(Exception):
@@ -96,7 +104,8 @@ _RECORD_COLS = (
     "sit.session_instance_tune_id, sit.tune_id, sit.name, sit.order_position, sit.record_type, "
     "sit.source, sit.confidence, sit.deleted, sit.started_by_person_id, sit.key_override, "
     "sit.setting_override, t.tune_type, sit.inserted_timestamp, cp.first_name, "
-    "sp.first_name, sp.last_name, cp.person_id, slc.color, st.alias, t.name, cp.last_name"
+    "sp.first_name, sp.last_name, cp.person_id, slc.color, st.alias, t.name, cp.last_name, "
+    "sit.confidence_model"
 )
 # LEFT JOIN tune (type/name), the creating user -> person (who logged it, for the per-set
 # "Logged by X · time" tray AND the per-row logger color tint), the started-by person
@@ -133,6 +142,8 @@ def _record_to_dict(row):
         "record_type": row[4],
         "source": row[5],
         "confidence": row[6],
+        # which calibration model made `confidence` (schema 060); None when a person set it
+        "confidence_model": row[21],
         "deleted": row[7],
         "started_by_person_id": row[8],
         "key_override": row[9],
@@ -156,8 +167,11 @@ def _record_to_dict(row):
 # page has always held. Scrubbed in ONE place (here) and applied at both exits: the
 # bootstrap below, and the SSE fan-out for anonymous connections (streaming/service.py).
 _PEOPLE_KEYS = (
-    "started_by_person_id", "started_by_name",
-    "logged_by", "logged_by_person_id", "logged_by_color",
+    "started_by_person_id",
+    "started_by_name",
+    "logged_by",
+    "logged_by_person_id",
+    "logged_by_color",
 )
 
 
@@ -186,12 +200,18 @@ def _reselect(cur, record_id):
 
 
 def _instance_exists(cur, session_instance_id):
-    cur.execute("SELECT 1 FROM session_instance WHERE session_instance_id = %s", (session_instance_id,))
+    cur.execute(
+        "SELECT 1 FROM session_instance WHERE session_instance_id = %s",
+        (session_instance_id,),
+    )
     return cur.fetchone() is not None
 
 
 def _session_id_of(cur, session_instance_id):
-    cur.execute("SELECT session_id FROM session_instance WHERE session_instance_id = %s", (session_instance_id,))
+    cur.execute(
+        "SELECT session_id FROM session_instance WHERE session_instance_id = %s",
+        (session_instance_id,),
+    )
     row = cur.fetchone()
     return row[0] if row else None
 
@@ -211,7 +231,11 @@ def emit_change_tune(cur, session_instance_id, record_id, user_id):
         "record": record,
         "actor": {
             "person_id": getattr(current_user, "person_id", None),
-            "name": _display_name(getattr(current_user, "first_name", None), getattr(current_user, "last_name", None)) or "",
+            "name": _display_name(
+                getattr(current_user, "first_name", None),
+                getattr(current_user, "last_name", None),
+            )
+            or "",
         },
     }
     cur.execute(
@@ -222,7 +246,10 @@ def emit_change_tune(cur, session_instance_id, record_id, user_id):
         (session_instance_id, json.dumps(payload), user_id),
     )
     event_id = cur.fetchone()[0]
-    cur.execute("SELECT pg_notify(%s, %s)", (LIVE_EVENT_CHANNEL, f"{session_instance_id}:{event_id}"))
+    cur.execute(
+        "SELECT pg_notify(%s, %s)",
+        (LIVE_EVENT_CHANNEL, f"{session_instance_id}:{event_id}"),
+    )
     return event_id
 
 
@@ -292,11 +319,11 @@ def _position_for(cur, session_instance_id, after_record_id, before_record_id=No
 def _require_live_record(cur, session_instance_id, record_id, *, allow_break=False):
     rec = _load_record(cur, session_instance_id, record_id)
     if rec is None:
-        raise OpRejected("not_found", "That record no longer exists.")
+        raise OpRejected("not_found", _("That record no longer exists."))
     if rec[7]:  # deleted -> removal beats a concurrent edit (§E2)
-        raise OpRejected("target_deleted", "That tune was removed by someone else.")
+        raise OpRejected("target_deleted", _("That tune was removed by someone else."))
     if rec[4] == "break" and not allow_break:
-        raise OpRejected("wrong_record_type", "That record is a set break.")
+        raise OpRejected("wrong_record_type", _("That record is a set break."))
     return rec
 
 
@@ -361,11 +388,15 @@ def _corroborate(cur, session_instance_id, target_id, data, user_id):
         (target_id, user_id, source, data.get("confidence")),
     )
     # Two distinct actors agreeing on the same tune/slot = human-verified.
-    cur.execute("SELECT COUNT(DISTINCT user_id) FROM corroboration WHERE record_id = %s", (target_id,))
+    cur.execute(
+        "SELECT COUNT(DISTINCT user_id) FROM corroboration WHERE record_id = %s",
+        (target_id,),
+    )
     distinct_corroborators = cur.fetchone()[0]
     save_to_history(cur, "session_instance_tune", "UPDATE", target_id, user_id=user_id)
     cur.execute(
-        "UPDATE session_instance_tune SET confidence = 100, last_modified_user_id = %s WHERE session_instance_tune_id = %s",
+        "UPDATE session_instance_tune SET confidence = 100, confidence_model = NULL, last_modified_user_id = %s "
+        "WHERE session_instance_tune_id = %s",
         (user_id, target_id),
     )
     return {
@@ -395,7 +426,9 @@ def _enroll_session_tune(cur, session_id, tune_id, user_id):
         (session_id, tune_id, default_setting_id(cur, tune_id), user_id),
     )
     if cur.rowcount > 0:
-        save_to_history(cur, "session_tune", "INSERT", (session_id, tune_id), user_id=user_id)
+        save_to_history(
+            cur, "session_tune", "INSERT", (session_id, tune_id), user_id=user_id
+        )
 
 
 def _unenroll_session_tune(cur, session_id, tune_id, user_id):
@@ -443,7 +476,9 @@ def _unenroll_session_tune(cur, session_id, tune_id, user_id):
     )
     if cur.fetchone() is None:
         return False
-    save_to_history(cur, "session_tune", "DELETE", (session_id, tune_id), user_id=user_id)
+    save_to_history(
+        cur, "session_tune", "DELETE", (session_id, tune_id), user_id=user_id
+    )
     cur.execute(
         "DELETE FROM session_tune WHERE session_id = %s AND tune_id = %s",
         (session_id, tune_id),
@@ -509,7 +544,9 @@ def _import_tune_for_live(cur, tune_id, user_id):
                 (setting_id, tune_id, s.get("key"), abc, incipit_abc, user_id, user_id),
             )
             if cur.rowcount > 0:
-                save_to_history(cur, "tune_setting", "INSERT", setting_id, user_id=user_id)
+                save_to_history(
+                    cur, "tune_setting", "INSERT", setting_id, user_id=user_id
+                )
 
     return name, tune_type
 
@@ -519,12 +556,17 @@ def _ensure_setting_local(cur, tune_id, setting_id, user_id):
     its ABC from thesession.org if needed (spec 032: the preview's pager shows
     settings the import never brought over; logging with one chosen imports it).
     Raises TuneImportError if it can't be fetched or doesn't exist remotely."""
-    cur.execute("SELECT 1 FROM tune_setting WHERE setting_id = %s AND tune_id = %s", (setting_id, tune_id))
+    cur.execute(
+        "SELECT 1 FROM tune_setting WHERE setting_id = %s AND tune_id = %s",
+        (setting_id, tune_id),
+    )
     if cur.fetchone():
         return
     data = _fetch_thesession_tune(tune_id)
     for s in data.get("settings") or []:
-        abc = (s.get("abc") or "").replace("!", "\n")  # thesession uses "!" as a line break
+        abc = (s.get("abc") or "").replace(
+            "!", "\n"
+        )  # thesession uses "!" as a line break
         if s.get("id") != setting_id or not abc:
             continue
         cur.execute("SELECT tune_type FROM tune WHERE tune_id = %s", (tune_id,))
@@ -542,7 +584,14 @@ def _ensure_setting_local(cur, tune_id, setting_id, user_id):
         if cur.rowcount > 0:
             save_to_history(cur, "tune_setting", "INSERT", setting_id, user_id=user_id)
         return
-    raise TuneImportError(f"Setting #{setting_id} not found on thesession.org for tune #{tune_id}", 404)
+    raise TuneImportError(
+        _(
+            "Setting #%(setting)s not found on thesession.org for tune #%(tune)s",
+            setting=setting_id,
+            tune=tune_id,
+        ),
+        404,
+    )
 
 
 def _maybe_apply_chosen_setting(cur, session_id, tune_id, record_id, data, user_id):
@@ -559,7 +608,10 @@ def _maybe_apply_chosen_setting(cur, session_id, tune_id, record_id, data, user_
         return None, None
     try:
         _ensure_setting_local(cur, tune_id, chosen, user_id)
-        return _apply_chosen_setting(cur, session_id, tune_id, record_id, chosen, user_id), None
+        return (
+            _apply_chosen_setting(cur, session_id, tune_id, record_id, chosen, user_id),
+            None,
+        )
     except TuneImportError as e:
         return None, e.message
 
@@ -574,13 +626,20 @@ def _apply_chosen_setting(cur, session_id, tune_id, record_id, setting_id, user_
     existing = None
     row = None
     if session_id is not None:
-        cur.execute("SELECT setting_id FROM session_tune WHERE session_id = %s AND tune_id = %s", (session_id, tune_id))
+        cur.execute(
+            "SELECT setting_id FROM session_tune WHERE session_id = %s AND tune_id = %s",
+            (session_id, tune_id),
+        )
         row = cur.fetchone()
         existing = row[0] if row else None
     if existing == setting_id:
         return "already"
-    if row is not None and (existing is None or existing == default_setting_id(cur, tune_id)):
-        save_to_history(cur, "session_tune", "UPDATE", (session_id, tune_id), user_id=user_id)
+    if row is not None and (
+        existing is None or existing == default_setting_id(cur, tune_id)
+    ):
+        save_to_history(
+            cur, "session_tune", "UPDATE", (session_id, tune_id), user_id=user_id
+        )
         cur.execute(
             "UPDATE session_tune SET setting_id = %s, last_modified_user_id = %s WHERE session_id = %s AND tune_id = %s",
             (setting_id, user_id, session_id, tune_id),
@@ -600,7 +659,9 @@ def _tune_from_thesession(cur, ts_id, user_id):
     """A thesession.org tune, in our catalogue: (tune_id, name). Follows a merge on
     thesession.org to the canonical tune; imports one we don't have yet. Raises
     TuneImportError for a fake or dead id (or thesession.org being down)."""
-    cur.execute("SELECT name, redirect_to_tune_id FROM tune WHERE tune_id = %s", (ts_id,))
+    cur.execute(
+        "SELECT name, redirect_to_tune_id FROM tune WHERE tune_id = %s", (ts_id,)
+    )
     row = cur.fetchone()
     if row and row[1] is not None:
         # Merged on thesession.org -> the canonical tune it points to.
@@ -621,7 +682,9 @@ def _handle_add_tune(cur, session_instance_id, data, user_id):
     # thesession.org import id (spec 026) counts as "something to add" alongside tune_id/name.
     ts_id = _parse_thesession_id(data.get("thesession_id"))
     if tune_id is None and not name and ts_id is None:
-        raise OpRejected("invalid", "add_tune requires tune_id, name, or thesession_id.")
+        raise OpRejected(
+            "invalid", _("add_tune requires tune_id, name, or thesession_id.")
+        )
 
     # An add that names its tune by id (a typeahead tap, the listener's pick, a pasted
     # thesession link) records the id only, and the row shows the name hierarchy,
@@ -635,7 +698,10 @@ def _handle_add_tune(cur, session_instance_id, data, user_id):
 
     # session_id is needed both for name->tune matching and for repertoire enrollment,
     # so resolve it once up front whenever a tune_id might end up linked.
-    cur.execute("SELECT session_id FROM session_instance WHERE session_instance_id = %s", (session_instance_id,))
+    cur.execute(
+        "SELECT session_id FROM session_instance WHERE session_instance_id = %s",
+        (session_instance_id,),
+    )
     srow = cur.fetchone()
     session_id = srow[0] if srow else None
 
@@ -652,7 +718,9 @@ def _handle_add_tune(cur, session_instance_id, data, user_id):
         except TuneImportError as e:
             import_failed = e.message
             if tune_id is None:
-                name = client_label or f"#{ts_id}"  # legible unmatched row for a fake/dead id
+                name = (
+                    client_label or f"#{ts_id}"
+                )  # legible unmatched row for a fake/dead id
 
     # Name -> tune matching takes priority for typed text. Tapping a typeahead result sends a
     # tune_id directly; hitting Enter sends just the text, which we resolve here via the same
@@ -661,7 +729,13 @@ def _handle_add_tune(cur, session_instance_id, data, user_id):
     # when the caller says the name is a placeholder (no_match): the segmenter logs a
     # tune it hasn't identified yet as "Gan Ainm", and thesession.org has real tunes by
     # that name, so matching would link the placeholder to one of them.
-    if ts_id is None and tune_id is None and name and session_id is not None and not data.get("no_match"):
+    if (
+        ts_id is None
+        and tune_id is None
+        and name
+        and session_id is not None
+        and not data.get("no_match")
+    ):
         matched_id, final_name, err = find_matching_tune(cur, session_id, name)
         if matched_id and not err:
             tune_id, name = matched_id, final_name
@@ -672,7 +746,9 @@ def _handle_add_tune(cur, session_instance_id, data, user_id):
     # or else the merged-away tune's own catalog name.
     remapped_from = None
     if tune_id is not None:
-        cur.execute("SELECT redirect_to_tune_id, name FROM tune WHERE tune_id = %s", (tune_id,))
+        cur.execute(
+            "SELECT redirect_to_tune_id, name FROM tune WHERE tune_id = %s", (tune_id,)
+        )
         rrow = cur.fetchone()
         if rrow and rrow[0] is not None:
             remapped_from = tune_id
@@ -688,18 +764,25 @@ def _handle_add_tune(cur, session_instance_id, data, user_id):
 
     source = data.get("source") or "human"
     confidence = data.get("confidence")
+    # which model made a machine's confidence (schema 060); a person's add has none
+    confidence_model = data.get("confidence_model") if confidence is not None else None
 
     # Duplicate-in-open-set collapses into a corroboration of the earliest row:
     # by tune_id when linked, else by identical raw name when matching fully failed.
     # Only for a pure append (a positioned insert is an explicit placement), and not
     # when the actor explicitly chose "keep both" (no_merge, §D16).
-    if (data.get("after_record_id") is None and data.get("before_record_id") is None
-            and not data.get("no_merge")):
+    if (
+        data.get("after_record_id") is None
+        and data.get("before_record_id") is None
+        and not data.get("no_merge")
+    ):
         target = _find_corroboration_target(cur, session_instance_id, tune_id, name)
         if target is not None:
             # A corroborated add still carries any explicitly chosen setting (spec 032) —
             # applied FIRST so _corroborate's reselect returns the row with its override.
-            applied, failed = _maybe_apply_chosen_setting(cur, session_id, tune_id, target[0], data, user_id)
+            applied, failed = _maybe_apply_chosen_setting(
+                cur, session_id, tune_id, target[0], data, user_id
+            )
             result = _corroborate(cur, session_instance_id, target[0], data, user_id)
             if applied:
                 result["setting_applied"] = applied
@@ -707,19 +790,35 @@ def _handle_add_tune(cur, session_instance_id, data, user_id):
                 result["setting_failed"] = failed
             return result
 
-    new_position = _position_for(cur, session_instance_id, data.get("after_record_id"), data.get("before_record_id"))
+    new_position = _position_for(
+        cur,
+        session_instance_id,
+        data.get("after_record_id"),
+        data.get("before_record_id"),
+    )
 
     cur.execute(
         """
         INSERT INTO session_instance_tune (
             session_instance_id, tune_id, name, order_position, record_type,
-            source, confidence, logged_timestamp, client_device_id,
+            source, confidence, confidence_model, logged_timestamp, client_device_id,
             inserted_timestamp, created_by_user_id, last_modified_user_id
-        ) VALUES (%s, %s, %s, %s, 'tune', %s, %s, %s, %s, (NOW() AT TIME ZONE 'UTC'), %s, %s)
+        ) VALUES (%s, %s, %s, %s, 'tune', %s, %s, %s, %s, %s, (NOW() AT TIME ZONE 'UTC'), %s, %s)
         RETURNING session_instance_tune_id
         """,
-        (session_instance_id, tune_id, name, new_position, source, confidence,
-         data.get("logged_timestamp"), data.get("client_device_id"), user_id, user_id),
+        (
+            session_instance_id,
+            tune_id,
+            name,
+            new_position,
+            source,
+            confidence,
+            confidence_model,
+            data.get("logged_timestamp"),
+            data.get("client_device_id"),
+            user_id,
+            user_id,
+        ),
     )
     record_id = cur.fetchone()[0]
     save_to_history(cur, "session_instance_tune", "INSERT", record_id, user_id=user_id)
@@ -729,7 +828,9 @@ def _handle_add_tune(cur, session_instance_id, data, user_id):
     # An explicitly chosen setting (spec 032: the preview's pager) — import it if it
     # isn't local yet, then session preference vs. this-row-only (_apply_chosen_setting).
     # A failed setting import never fails the op: the tune is logged fine without it.
-    setting_applied, setting_failed = _maybe_apply_chosen_setting(cur, session_id, tune_id, record_id, data, user_id)
+    setting_applied, setting_failed = _maybe_apply_chosen_setting(
+        cur, session_id, tune_id, record_id, data, user_id
+    )
     result = {"record": _reselect(cur, record_id)}
     if setting_applied:
         result["setting_applied"] = setting_applied
@@ -750,7 +851,7 @@ def _handle_remove_tune(cur, session_instance_id, data, user_id):
     record_id = data.get("record_id")
     rec = _load_record(cur, session_instance_id, record_id)
     if rec is None:
-        raise OpRejected("not_found", "That record no longer exists.")
+        raise OpRejected("not_found", _("That record no longer exists."))
     if rec[7]:
         return {"record": _record_to_dict(rec), "already_removed": True}  # idempotent
     save_to_history(cur, "session_instance_tune", "UPDATE", record_id, user_id=user_id)
@@ -760,7 +861,9 @@ def _handle_remove_tune(cur, session_instance_id, data, user_id):
     )
     # Deleting the last play un-enrolls the tune again (spec 045), so an add
     # the user immediately undid doesn't litter the session's tune list.
-    _unenroll_session_tune(cur, _session_id_of(cur, session_instance_id), rec[1], user_id)
+    _unenroll_session_tune(
+        cur, _session_id_of(cur, session_instance_id), rec[1], user_id
+    )
     return {"record": _reselect(cur, record_id)}
 
 
@@ -777,7 +880,7 @@ def _handle_change_tune(cur, session_instance_id, data, user_id):
         # edit: the row keeps what it had rather than being unlinked.
         ts_id = _parse_thesession_id(data.get("thesession_id"))
         if ts_id is None:
-            raise OpRejected("invalid", "That isn't a thesession.org tune.")
+            raise OpRejected("invalid", _("That isn't a thesession.org tune."))
         try:
             data["tune_id"], _found_name = _tune_from_thesession(cur, ts_id, user_id)
         except TuneImportError as e:
@@ -795,7 +898,10 @@ def _handle_change_tune(cur, session_instance_id, data, user_id):
         # stale client caches mean the merged tune. Mutating data keeps the
         # enrollment below on the canonical id too.
         if data["tune_id"] is not None:
-            cur.execute("SELECT redirect_to_tune_id, name FROM tune WHERE tune_id = %s", (data["tune_id"],))
+            cur.execute(
+                "SELECT redirect_to_tune_id, name FROM tune WHERE tune_id = %s",
+                (data["tune_id"],),
+            )
             rrow = cur.fetchone()
             merged_name = None
             if rrow and rrow[0] is not None:
@@ -807,7 +913,8 @@ def _handle_change_tune(cur, session_instance_id, data, user_id):
             # clearing whatever override the row carried. A relink to a merged-away tune
             # keeps that tune's own name (spec 030).
             data["name"] = merged_name
-        sets += ["tune_id = %s"]; params += [data["tune_id"]]
+        sets += ["tune_id = %s"]
+        params += [data["tune_id"]]
     if "name" in data:
         nm = data["name"]
         nm = str(nm).strip() if nm else None
@@ -821,19 +928,35 @@ def _handle_change_tune(cur, session_instance_id, data, user_id):
         else:
             effective_tune_id = rec[1]
         if effective_tune_id is not None and nm is not None:
-            cur.execute("SELECT session_id FROM session_instance WHERE session_instance_id = %s", (session_instance_id,))
+            cur.execute(
+                "SELECT session_id FROM session_instance WHERE session_instance_id = %s",
+                (session_instance_id,),
+            )
             srow = cur.fetchone()
-            nm = normalize_override_name(cur, srow[0] if srow else None, effective_tune_id, nm)
-        sets += ["name = %s"]; params += [nm]
+            nm = normalize_override_name(
+                cur, srow[0] if srow else None, effective_tune_id, nm
+            )
+        sets += ["name = %s"]
+        params += [nm]
     if "key_override" in data:
-        sets += ["key_override = %s"]; params += [data["key_override"]]
+        sets += ["key_override = %s"]
+        params += [data["key_override"]]
     if "setting_override" in data:
-        sets += ["setting_override = %s"]; params += [data["setting_override"]]
+        sets += ["setting_override = %s"]
+        params += [data["setting_override"]]
     if not sets:
-        raise OpRejected("invalid", "change_tune had no fields to change.")
+        raise OpRejected("invalid", _("change_tune had no fields to change."))
+    # A person saying which tune this is settles a machine's guess: the row is
+    # theirs now, verified (as Confirm does), and no longer needs a check.
+    if "tune_id" in data or "name" in data or data.get("unlink"):
+        sets += [
+            "confidence = CASE WHEN confidence IS NULL THEN NULL ELSE 100 END",
+            "confidence_model = NULL",
+        ]
 
     save_to_history(cur, "session_instance_tune", "UPDATE", record_id, user_id=user_id)
-    sets += ["last_modified_user_id = %s"]; params += [user_id, record_id]
+    sets += ["last_modified_user_id = %s"]
+    params += [user_id, record_id]
     cur.execute(
         f"UPDATE session_instance_tune SET {', '.join(sets)} WHERE session_instance_tune_id = %s",
         tuple(params),
@@ -844,7 +967,11 @@ def _handle_change_tune(cur, session_instance_id, data, user_id):
     old_tune_id = rec[1]
     unlinked = bool(data.get("unlink"))
     enrolls = None if unlinked else data.get("tune_id")
-    strands = old_tune_id if (unlinked or ("tune_id" in data and data["tune_id"] != old_tune_id)) else None
+    strands = (
+        old_tune_id
+        if (unlinked or ("tune_id" in data and data["tune_id"] != old_tune_id))
+        else None
+    )
     if enrolls or strands:
         session_id = _session_id_of(cur, session_instance_id)
         if session_id:
@@ -866,7 +993,8 @@ def _handle_set_confidence(cur, session_instance_id, data, user_id):
 
     save_to_history(cur, "session_instance_tune", "UPDATE", record_id, user_id=user_id)
     cur.execute(
-        "UPDATE session_instance_tune SET confidence = %s, last_modified_user_id = %s WHERE session_instance_tune_id = %s",
+        "UPDATE session_instance_tune SET confidence = %s, confidence_model = NULL, last_modified_user_id = %s "
+        "WHERE session_instance_tune_id = %s",
         (confidence, user_id, record_id),
     )
     # The actor corroborates this record (§H30); keyed by user, person derived.
@@ -920,8 +1048,10 @@ def _handle_attribute_set_starter(cur, session_instance_id, data, user_id):
         "UPDATE session_instance_tune SET started_by_person_id = %s, last_modified_user_id = %s WHERE session_instance_tune_id = ANY(%s)",
         (person_id, user_id, ids),
     )
-    return {"records": [_reselect(cur, rid) for rid in ids],
-            "person": _person_brief(cur, person_id) if person_id else None}
+    return {
+        "records": [_reselect(cur, rid) for rid in ids],
+        "person": _person_brief(cur, person_id) if person_id else None,
+    }
 
 
 def _handle_set_break(cur, session_instance_id, data, user_id):
@@ -935,16 +1065,28 @@ def _handle_set_break(cur, session_instance_id, data, user_id):
         if rec is None:
             return {"record_id": record_id, "removed": True, "already_removed": True}
         if rec[4] != "break":
-            raise OpRejected("wrong_record_type", "That record is not a set break.")
-        save_to_history(cur, "session_instance_tune", "DELETE", record_id, user_id=user_id)
-        cur.execute("DELETE FROM session_instance_tune WHERE session_instance_tune_id = %s", (record_id,))
+            raise OpRejected("wrong_record_type", _("That record is not a set break."))
+        save_to_history(
+            cur, "session_instance_tune", "DELETE", record_id, user_id=user_id
+        )
+        cur.execute(
+            "DELETE FROM session_instance_tune WHERE session_instance_tune_id = %s",
+            (record_id,),
+        )
         return {"record_id": record_id, "removed": True}
 
     if action != "insert":
-        raise OpRejected("invalid", f"unknown set_break action '{action}'.")
+        raise OpRejected(
+            "invalid", _("unknown set_break action '%(action)s'.", action=action)
+        )
     # before_record_id supports the between-sets "new set" gap insert (§C): a break
     # placed just before the next set's first tune, after the new tune we just added.
-    new_position = _position_for(cur, session_instance_id, data.get("after_record_id"), data.get("before_record_id"))
+    new_position = _position_for(
+        cur,
+        session_instance_id,
+        data.get("after_record_id"),
+        data.get("before_record_id"),
+    )
     cur.execute(
         """
         INSERT INTO session_instance_tune (
@@ -962,7 +1104,9 @@ def _handle_set_break(cur, session_instance_id, data, user_id):
 
 def _handle_edit_notes(cur, session_instance_id, data, user_id):
     notes = data.get("notes")
-    save_to_history(cur, "session_instance", "UPDATE", session_instance_id, user_id=user_id)
+    save_to_history(
+        cur, "session_instance", "UPDATE", session_instance_id, user_id=user_id
+    )
     cur.execute(
         "UPDATE session_instance SET comments = %s, last_modified_user_id = %s WHERE session_instance_id = %s",
         (notes, user_id, session_instance_id),
@@ -991,7 +1135,7 @@ def _parse_op_time(data, key):
     try:
         return True, datetime.time.fromisoformat(str(raw).strip())
     except ValueError:
-        raise OpRejected("invalid", f"That isn't a valid time (expected HH:MM).")
+        raise OpRejected("invalid", _("That isn't a valid time (expected HH:MM)."))
 
 
 def _handle_set_date(cur, session_instance_id, data, user_id):
@@ -1022,7 +1166,7 @@ def _handle_set_date(cur, session_instance_id, data, user_id):
     try:
         new_date = datetime.date.fromisoformat(raw)
     except ValueError:
-        raise OpRejected("invalid", "That isn't a valid date (expected YYYY-MM-DD).")
+        raise OpRejected("invalid", _("That isn't a valid date (expected YYYY-MM-DD)."))
 
     start_given, new_start = _parse_op_time(data, "start_time")
     end_given, new_end = _parse_op_time(data, "end_time")
@@ -1034,7 +1178,7 @@ def _handle_set_date(cur, session_instance_id, data, user_id):
     )
     row = cur.fetchone()
     if not row:
-        raise OpRejected("not_found", "This session log no longer exists.")
+        raise OpRejected("not_found", _("This session log no longer exists."))
     session_id, old_date, old_start, old_end = row
 
     if not start_given:
@@ -1071,10 +1215,15 @@ def _handle_set_date(cur, session_instance_id, data, user_id):
         if cur.fetchone()[0]:
             raise OpRejected(
                 "date_conflict",
-                f"This session already has a log dated {format_session_date(new_date)}.",
+                _(
+                    "This session already has a log dated %(date)s.",
+                    date=format_session_date(new_date),
+                ),
             )
 
-    save_to_history(cur, "session_instance", "UPDATE", session_instance_id, user_id=user_id)
+    save_to_history(
+        cur, "session_instance", "UPDATE", session_instance_id, user_id=user_id
+    )
     cur.execute(
         "UPDATE session_instance SET date = %s, start_time = %s, end_time = %s, "
         "last_modified_user_id = %s WHERE session_instance_id = %s",
@@ -1098,7 +1247,7 @@ def _handle_set_name(cur, session_instance_id, data, user_id):
     raw = data.get("name")
     new_name = (raw or "").strip() or None
     if new_name and len(new_name) > 255:
-        raise OpRejected("invalid", "That name is too long (255 characters max).")
+        raise OpRejected("invalid", _("That name is too long (255 characters max)."))
 
     cur.execute(
         "SELECT location_override FROM session_instance WHERE session_instance_id = %s",
@@ -1106,12 +1255,14 @@ def _handle_set_name(cur, session_instance_id, data, user_id):
     )
     row = cur.fetchone()
     if not row:
-        raise OpRejected("not_found", "This session log no longer exists.")
+        raise OpRejected("not_found", _("This session log no longer exists."))
     previous = row[0]
     if new_name == previous:
         return {"instance_name": new_name, "previous_name": previous}
 
-    save_to_history(cur, "session_instance", "UPDATE", session_instance_id, user_id=user_id)
+    save_to_history(
+        cur, "session_instance", "UPDATE", session_instance_id, user_id=user_id
+    )
     cur.execute(
         "UPDATE session_instance SET location_override = %s, last_modified_user_id = %s "
         "WHERE session_instance_id = %s",
@@ -1121,7 +1272,9 @@ def _handle_set_name(cur, session_instance_id, data, user_id):
 
 
 def _set_log_complete(cur, session_instance_id, user_id, complete):
-    save_to_history(cur, "session_instance", "UPDATE", session_instance_id, user_id=user_id)
+    save_to_history(
+        cur, "session_instance", "UPDATE", session_instance_id, user_id=user_id
+    )
     if complete:
         cur.execute(
             "UPDATE session_instance SET log_complete_date = (NOW() AT TIME ZONE 'UTC'), last_modified_user_id = %s WHERE session_instance_id = %s",
@@ -1132,8 +1285,14 @@ def _set_log_complete(cur, session_instance_id, user_id, complete):
             "UPDATE session_instance SET log_complete_date = NULL, last_modified_user_id = %s WHERE session_instance_id = %s",
             (user_id, session_instance_id),
         )
-    cur.execute("SELECT log_complete_date FROM session_instance WHERE session_instance_id = %s", (session_instance_id,))
-    return {"log_complete": complete, "log_complete_date": str(cur.fetchone()[0]) if complete else None}
+    cur.execute(
+        "SELECT log_complete_date FROM session_instance WHERE session_instance_id = %s",
+        (session_instance_id,),
+    )
+    return {
+        "log_complete": complete,
+        "log_complete_date": str(cur.fetchone()[0]) if complete else None,
+    }
 
 
 def _handle_mark_complete(cur, session_instance_id, data, user_id):
@@ -1189,11 +1348,15 @@ def _handle_move_tunes(cur, session_instance_id, data, user_id):
     """
     ids = data.get("record_ids")
     if not isinstance(ids, list) or not ids:
-        raise OpRejected("invalid", "move_tunes requires a non-empty record_ids list.")
+        raise OpRejected(
+            "invalid", _("move_tunes requires a non-empty record_ids list.")
+        )
     after_id = data.get("after_record_id")
     before_id = data.get("before_record_id")
     if after_id in ids or before_id in ids:
-        raise OpRejected("invalid_anchor", "The drop target is inside the moved block.")
+        raise OpRejected(
+            "invalid_anchor", _("The drop target is inside the moved block.")
+        )
     new_set = bool(data.get("new_set"))
 
     # The moving tunes, in current (authoritative) order. Silently drop ids that
@@ -1207,7 +1370,7 @@ def _handle_move_tunes(cur, session_instance_id, data, user_id):
     )
     tunes = cur.fetchall()
     if not tunes:
-        raise OpRejected("not_found", "None of those tunes exist any more.")
+        raise OpRejected("not_found", _("None of those tunes exist any more."))
     first_pos, last_pos = tunes[0][1], tunes[-1][1]
 
     # Interior breaks travel with the block (14 tunes in 4 sets stays 4 sets).
@@ -1308,8 +1471,13 @@ def _handle_move_tunes(cur, session_instance_id, data, user_id):
     prev_type = None
     for rid, rtype, _pos in _live_records_in_order(cur, session_instance_id):
         if rtype == "break" and (prev_type is None or prev_type == "break"):
-            save_to_history(cur, "session_instance_tune", "DELETE", rid, user_id=user_id)
-            cur.execute("DELETE FROM session_instance_tune WHERE session_instance_tune_id = %s", (rid,))
+            save_to_history(
+                cur, "session_instance_tune", "DELETE", rid, user_id=user_id
+            )
+            cur.execute(
+                "DELETE FROM session_instance_tune WHERE session_instance_tune_id = %s",
+                (rid,),
+            )
             removed_break_ids.append(rid)
             continue  # prev_type unchanged: the deleted break separates nothing
         prev_type = rtype
@@ -1328,7 +1496,9 @@ def _handle_remove_tunes(cur, session_instance_id, data, user_id):
     is a client bug and rejects the op."""
     ids = data.get("record_ids")
     if not isinstance(ids, list) or not ids:
-        raise OpRejected("invalid", "remove_tunes requires a non-empty record_ids list.")
+        raise OpRejected(
+            "invalid", _("remove_tunes requires a non-empty record_ids list.")
+        )
     cur.execute(
         "SELECT session_instance_tune_id, record_type, deleted, tune_id FROM session_instance_tune "
         "WHERE session_instance_id = %s AND session_instance_tune_id = ANY(%s) ORDER BY order_position",
@@ -1336,7 +1506,7 @@ def _handle_remove_tunes(cur, session_instance_id, data, user_id):
     )
     rows = cur.fetchall()
     if any(r[1] == "break" for r in rows):
-        raise OpRejected("wrong_record_type", "Breaks can't be removed this way.")
+        raise OpRejected("wrong_record_type", _("Breaks can't be removed this way."))
     target_ids = [r[0] for r in rows if not r[2]]
     for rid in target_ids:
         save_to_history(cur, "session_instance_tune", "UPDATE", rid, user_id=user_id)
@@ -1351,8 +1521,10 @@ def _handle_remove_tunes(cur, session_instance_id, data, user_id):
         targets = set(target_ids)
         for tune_id in {r[3] for r in rows if r[0] in targets and r[3]}:
             _unenroll_session_tune(cur, session_id, tune_id, user_id)
-    return {"records": [_reselect(cur, rid) for rid in target_ids],
-            "already_removed": not target_ids}
+    return {
+        "records": [_reselect(cur, rid) for rid in target_ids],
+        "already_removed": not target_ids,
+    }
 
 
 def _handle_restore_tunes(cur, session_instance_id, data, user_id):
@@ -1365,7 +1537,9 @@ def _handle_restore_tunes(cur, session_instance_id, data, user_id):
     to sit just before the live row that holds its key -- it was logged first."""
     ids = data.get("record_ids")
     if not isinstance(ids, list) or not ids:
-        raise OpRejected("invalid", "restore_tunes requires a non-empty record_ids list.")
+        raise OpRejected(
+            "invalid", _("restore_tunes requires a non-empty record_ids list.")
+        )
     cur.execute(
         "SELECT session_instance_tune_id, tune_id FROM session_instance_tune "
         "WHERE session_instance_id = %s AND session_instance_tune_id = ANY(%s) "
@@ -1430,12 +1604,19 @@ def _rekey_if_collided(cur, session_instance_id, record_id):
 
 
 def _person_brief(cur, person_id):
-    cur.execute("SELECT person_id, first_name, last_name FROM person WHERE person_id = %s", (person_id,))
+    cur.execute(
+        "SELECT person_id, first_name, last_name FROM person WHERE person_id = %s",
+        (person_id,),
+    )
     row = cur.fetchone()
     if not row:
         return {"person_id": person_id}
-    return {"person_id": row[0], "first_name": row[1], "last_name": row[2],
-            "display_name": f"{row[1]} {row[2]}".strip()}
+    return {
+        "person_id": row[0],
+        "first_name": row[1],
+        "last_name": row[2],
+        "display_name": f"{row[1]} {row[2]}".strip(),
+    }
 
 
 # Attendance ops (§C). These reuse the existing DB helpers, which manage their own
@@ -1445,21 +1626,30 @@ def _person_brief(cur, person_id):
 def _handle_attendance_add(cur, session_instance_id, data, user_id):
     person_id = data.get("person_id")
     if person_id is None:
-        raise OpRejected("invalid", "attendance_add requires person_id.")
+        raise OpRejected("invalid", _("attendance_add requires person_id."))
     attendance = data.get("attendance", "yes")
     comment = data.get("comment", "")
-    ok, message, action = db_check_in_person(session_instance_id, person_id, attendance, comment, user_id=user_id)
+    ok, message, action = db_check_in_person(
+        session_instance_id, person_id, attendance, comment, user_id=user_id
+    )
     if not ok:
         raise OpRejected("attendance_failed", message)
-    return {"attendance": attendance, "comment": comment, "action": action, "person": _person_brief(cur, person_id)}
+    return {
+        "attendance": attendance,
+        "comment": comment,
+        "action": action,
+        "person": _person_brief(cur, person_id),
+    }
 
 
 def _handle_attendance_remove(cur, session_instance_id, data, user_id):
     person_id = data.get("person_id")
     if person_id is None:
-        raise OpRejected("invalid", "attendance_remove requires person_id.")
+        raise OpRejected("invalid", _("attendance_remove requires person_id."))
     person = _person_brief(cur, person_id)  # capture name before the row goes
-    ok, message, _prev = db_remove_person_attendance(session_instance_id, person_id, user_id=user_id)
+    ok, message, _prev = db_remove_person_attendance(
+        session_instance_id, person_id, user_id=user_id
+    )
     if not ok:
         raise OpRejected("attendance_failed", message)
     return {"removed": True, "person": person}
@@ -1469,15 +1659,34 @@ def _handle_attendance_create_person(cur, session_instance_id, data, user_id):
     first = (data.get("first_name") or "").strip()
     last = (data.get("last_name") or "").strip()
     if not first:
-        raise OpRejected("invalid", "attendance_create_person requires first_name.")
+        raise OpRejected("invalid", _("attendance_create_person requires first_name."))
     ok, message, person_id, display_name = db_create_person_with_instruments(
-        first, last, email=data.get("email"), instruments=data.get("instruments"), user_id=user_id)
+        first,
+        last,
+        email=data.get("email"),
+        instruments=data.get("instruments"),
+        user_id=user_id,
+    )
     if not ok:
         raise OpRejected("create_failed", message)
     attendance = data.get("attendance", "yes")
-    db_check_in_person(session_instance_id, person_id, attendance, data.get("comment", ""), user_id=user_id)
-    return {"created": True, "attendance": attendance,
-            "person": {"person_id": person_id, "first_name": first, "last_name": last, "display_name": display_name}}
+    db_check_in_person(
+        session_instance_id,
+        person_id,
+        attendance,
+        data.get("comment", ""),
+        user_id=user_id,
+    )
+    return {
+        "created": True,
+        "attendance": attendance,
+        "person": {
+            "person_id": person_id,
+            "first_name": first,
+            "last_name": last,
+            "display_name": display_name,
+        },
+    }
 
 
 HANDLERS = {
@@ -1526,12 +1735,14 @@ def _people_ops_blocked(cur, session_instance_id):
     track_attendance, track_set_starters = row
     blocked = {}
     if not track_attendance:
-        msg = "This session isn't tracking attendance."
+        msg = _("This session isn't tracking attendance.")
         blocked["attendance_add"] = msg
         blocked["attendance_remove"] = msg
         blocked["attendance_create_person"] = msg
     if not track_set_starters:
-        blocked["attribute_set_starter"] = "This session isn't tracking set starters."
+        blocked["attribute_set_starter"] = _(
+            "This session isn't tracking set starters."
+        )
     return blocked
 
 
@@ -1547,7 +1758,7 @@ def apply_live_op(cur, session_instance_id, op_type, data, user_id, op_id=None):
     """
     handler = HANDLERS.get(op_type)
     if handler is None:
-        raise OpRejected("invalid", f"unknown op_type '{op_type}'")
+        raise OpRejected("invalid", _("unknown op_type '%(op_type)s'", op_type=op_type))
     payload = handler(cur, session_instance_id, data, user_id)
 
     # Stamp the actor (person, per §D) so observers can render "Sarah added …"
@@ -1555,7 +1766,11 @@ def apply_live_op(cur, session_instance_id, op_type, data, user_id, op_id=None):
     # person is what the UI shows.
     payload["actor"] = {
         "person_id": getattr(current_user, "person_id", None),
-        "name": _display_name(getattr(current_user, "first_name", None), getattr(current_user, "last_name", None)) or "",
+        "name": _display_name(
+            getattr(current_user, "first_name", None),
+            getattr(current_user, "last_name", None),
+        )
+        or "",
     }
 
     # A handler may emit a different event type than the client requested
@@ -1586,7 +1801,10 @@ def apply_live_op(cur, session_instance_id, op_type, data, user_id, op_id=None):
         "UPDATE session_instance SET logging_mode = 'live' WHERE session_instance_id = %s AND logging_mode <> 'live'",
         (session_instance_id,),
     )
-    cur.execute("SELECT pg_notify(%s, %s)", (LIVE_EVENT_CHANNEL, f"{session_instance_id}:{event_id}"))
+    cur.execute(
+        "SELECT pg_notify(%s, %s)",
+        (LIVE_EVENT_CHANNEL, f"{session_instance_id}:{event_id}"),
+    )
     return event_id, event_op_type, payload
 
 
@@ -1597,12 +1815,20 @@ def live_op(session_instance_id):
     op_type = data.get("op_type")
     op_id = data.get("op_id")
     if op_type not in HANDLERS:
-        return jsonify({"success": False, "error": f"unknown op_type '{op_type}'"}), 400
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": _("unknown op_type '%(op_type)s'", op_type=op_type),
+                }
+            ),
+            400,
+        )
     if op_id is not None:
         try:
             op_id = str(uuid.UUID(str(op_id)))  # normalize/validate
         except ValueError:
-            return jsonify({"success": False, "error": "op_id must be a UUID"}), 400
+            return jsonify({"success": False, "error": _("op_id must be a UUID")}), 400
 
     user_id = get_current_user_id()
     conn = get_db_connection()
@@ -1611,7 +1837,10 @@ def live_op(session_instance_id):
         cur.execute("BEGIN")
         if not _instance_exists(cur, session_instance_id):
             cur.execute("ROLLBACK")
-            return jsonify({"success": False, "error": "Session instance not found"}), 404
+            return (
+                jsonify({"success": False, "error": _("Session instance not found")}),
+                404,
+            )
 
         # People-tracking may be off for this session (spec 039). Refuse the ops rather
         # than only hiding their UI — a stale client, a queued offline op, or a direct
@@ -1620,8 +1849,16 @@ def live_op(session_instance_id):
         blocked = _people_ops_blocked(cur, session_instance_id)
         if op_type in blocked:
             cur.execute("ROLLBACK")
-            return jsonify({"success": False, "rejected": True, "reason": "people_tracking_off",
-                            "message": blocked[op_type], "op_id": op_id, "op_type": op_type})
+            return jsonify(
+                {
+                    "success": False,
+                    "rejected": True,
+                    "reason": "people_tracking_off",
+                    "message": blocked[op_type],
+                    "op_id": op_id,
+                    "op_type": op_type,
+                }
+            )
 
         # Idempotency fast path: a known op_id returns its cached ack (§C).
         if op_id is not None:
@@ -1632,28 +1869,64 @@ def live_op(session_instance_id):
             existing = cur.fetchone()
             if existing:
                 cur.execute("ROLLBACK")
-                return jsonify({"success": True, "duplicate": True, "event_id": existing[0],
-                                "op_id": op_id, "op_type": existing[1], **existing[2]})
+                return jsonify(
+                    {
+                        "success": True,
+                        "duplicate": True,
+                        "event_id": existing[0],
+                        "op_id": op_id,
+                        "op_type": existing[1],
+                        **existing[2],
+                    }
+                )
 
         try:
-            event_id, event_op_type, payload = apply_live_op(cur, session_instance_id, op_type, data, user_id, op_id)
+            event_id, event_op_type, payload = apply_live_op(
+                cur, session_instance_id, op_type, data, user_id, op_id
+            )
         except OpRejected as r:
             cur.execute("ROLLBACK")
-            return jsonify({"success": False, "rejected": True, "reason": r.reason,
-                            "message": r.message, "op_id": op_id, "op_type": op_type})
+            return jsonify(
+                {
+                    "success": False,
+                    "rejected": True,
+                    "reason": r.reason,
+                    "message": r.message,
+                    "op_id": op_id,
+                    "op_type": op_type,
+                }
+            )
         except psycopg2.errors.UniqueViolation:
             # Concurrent retry of the same op_id won the race; discard ours, return theirs.
             cur.execute("ROLLBACK")
-            cur.execute("SELECT event_id, op_type, payload FROM session_event WHERE op_id = %s", (op_id,))
+            cur.execute(
+                "SELECT event_id, op_type, payload FROM session_event WHERE op_id = %s",
+                (op_id,),
+            )
             row = cur.fetchone()
             if row:
-                return jsonify({"success": True, "duplicate": True, "event_id": row[0],
-                                "op_id": op_id, "op_type": row[1], **row[2]})
+                return jsonify(
+                    {
+                        "success": True,
+                        "duplicate": True,
+                        "event_id": row[0],
+                        "op_id": op_id,
+                        "op_type": row[1],
+                        **row[2],
+                    }
+                )
             raise
         cur.execute("COMMIT")
 
-        return jsonify({"success": True, "event_id": event_id, "op_id": op_id,
-                        "op_type": event_op_type, **payload})
+        return jsonify(
+            {
+                "success": True,
+                "event_id": event_id,
+                "op_id": op_id,
+                "op_type": event_op_type,
+                **payload,
+            }
+        )
     except Exception as e:
         try:
             cur.execute("ROLLBACK")
@@ -1670,16 +1943,25 @@ def live_tune_detail(session_instance_id, tune_id):
     conn = get_db_connection()
     try:
         cur = conn.cursor()
-        cur.execute("SELECT session_id FROM session_instance WHERE session_instance_id = %s", (session_instance_id,))
+        cur.execute(
+            "SELECT session_id FROM session_instance WHERE session_instance_id = %s",
+            (session_instance_id,),
+        )
         srow = cur.fetchone()
         if not srow:
-            return jsonify({"success": False, "error": "Session instance not found"}), 404
+            return (
+                jsonify({"success": False, "error": _("Session instance not found")}),
+                404,
+            )
         session_id = srow[0]
 
-        cur.execute("SELECT name, tune_type, tunebook_count_cached FROM tune WHERE tune_id = %s", (tune_id,))
+        cur.execute(
+            "SELECT name, tune_type, tunebook_count_cached FROM tune WHERE tune_id = %s",
+            (tune_id,),
+        )
         t = cur.fetchone()
         if not t:
-            return jsonify({"success": False, "error": "Tune not found"}), 404
+            return jsonify({"success": False, "error": _("Tune not found")}), 404
 
         cur.execute(
             """
@@ -1708,16 +1990,18 @@ def live_tune_detail(session_instance_id, tune_id):
         )
         dates = [str(r[0]) for r in cur.fetchall()]
 
-        return jsonify({
-            "success": True,
-            "tune_id": tune_id,
-            "name": t[0],
-            "tune_type": t[1],
-            "tunebook_count": t[2],
-            "played_here": played_here,
-            "played_global": played_global,
-            "dates": dates,
-        })
+        return jsonify(
+            {
+                "success": True,
+                "tune_id": tune_id,
+                "name": t[0],
+                "tune_type": t[1],
+                "tunebook_count": t[2],
+                "played_here": played_here,
+                "played_global": played_global,
+                "dates": dates,
+            }
+        )
     finally:
         conn.close()
 
@@ -1765,7 +2049,10 @@ def live_people(session_instance_id):
         )
         row = cur.fetchone()
         if not row:
-            return jsonify({"success": False, "message": "Session instance not found"}), 404
+            return (
+                jsonify({"success": False, "message": _("Session instance not found")}),
+                404,
+            )
         session_id = row[0]
 
         people = load_session_people(conn, session_id, instance_id=session_instance_id)
@@ -1783,19 +2070,22 @@ def live_people(session_instance_id):
         )
         for pid, first, last in cur.fetchall():
             if pid not in known:
-                people.append({
-                    "person_id": pid,
-                    "first_name": first,
-                    "last_name": last,
-                    "display_name": f"{first or ''} {last or ''}".strip() or f"#{pid}",
-                    "instruments": [],
-                    "relationship": "visitor",
-                    "confirmed": False,
-                    "archived": False,
-                    "attending": True,
-                    "attendance_count": 0,
-                    "recent_attendance_count": 0,
-                })
+                people.append(
+                    {
+                        "person_id": pid,
+                        "first_name": first,
+                        "last_name": last,
+                        "display_name": f"{first or ''} {last or ''}".strip()
+                        or f"#{pid}",
+                        "instruments": [],
+                        "relationship": "visitor",
+                        "confirmed": False,
+                        "archived": False,
+                        "attending": True,
+                        "attendance_count": 0,
+                        "recent_attendance_count": 0,
+                    }
+                )
 
         # Full names here on purpose: since 034/039 the People features are gated by
         # confirmation + per-session flags, so the picker no longer soft-privatizes to
@@ -1808,13 +2098,23 @@ def live_people(session_instance_id):
         conn.close()
 
 
-
 # Default meter per tune type, so the incipit ABC bars correctly for abcjs (§D deep search).
 _TYPE_METER = {
-    "Jig": "6/8", "Slip Jig": "9/8", "Hop Jig": "9/8", "Reel": "4/4",
-    "Hornpipe": "4/4", "Barndance": "4/4", "Strathspey": "4/4", "Polka": "2/4",
-    "Slide": "12/8", "Waltz": "3/4", "Mazurka": "3/4", "March": "4/4",
-    "Three-Two": "3/2", "Set Dance": "4/4", "Air": "4/4",
+    "Jig": "6/8",
+    "Slip Jig": "9/8",
+    "Hop Jig": "9/8",
+    "Reel": "4/4",
+    "Hornpipe": "4/4",
+    "Barndance": "4/4",
+    "Strathspey": "4/4",
+    "Polka": "2/4",
+    "Slide": "12/8",
+    "Waltz": "3/4",
+    "Mazurka": "3/4",
+    "March": "4/4",
+    "Three-Two": "3/2",
+    "Set Dance": "4/4",
+    "Air": "4/4",
 }
 
 
@@ -1851,26 +2151,35 @@ def _ensure_incipit(cur, tune_id, want_full=False):
     if not need_inc and not need_full:
         return bytea_to_base64(incipit_image)
 
-    inc_text = (incipit_abc or "").strip() or (extract_abc_incipit(abc, tune_type) if abc else "")
+    inc_text = (incipit_abc or "").strip() or (
+        extract_abc_incipit(abc, tune_type) if abc else ""
+    )
     inc_png = None
     if need_inc and inc_text:
-        inc_png = render_abc_to_png(_wrap_abc(inc_text, key, tune_type), is_incipit=True)
+        inc_png = render_abc_to_png(
+            _wrap_abc(inc_text, key, tune_type), is_incipit=True
+        )
     full_png = None
     if need_full and abc:
         full_png = render_abc_to_png(_wrap_abc(abc, key, tune_type), is_incipit=False)
 
     sets, params = [], []
     if inc_png:
-        sets.append("incipit_image = %s"); params.append(psycopg2.Binary(inc_png))
+        sets.append("incipit_image = %s")
+        params.append(psycopg2.Binary(inc_png))
     if full_png:
-        sets.append("image = %s"); params.append(psycopg2.Binary(full_png))
+        sets.append("image = %s")
+        params.append(psycopg2.Binary(full_png))
     if sets:
         sets.append("cache_updated_date = (NOW() AT TIME ZONE 'UTC')")
         params.append(setting_id)
-        cur.execute(f"UPDATE tune_setting SET {', '.join(sets)} WHERE setting_id = %s", params)
+        cur.execute(
+            f"UPDATE tune_setting SET {', '.join(sets)} WHERE setting_id = %s", params
+        )
 
     if inc_png:
         import base64
+
         return base64.b64encode(inc_png).decode()
     return bytea_to_base64(incipit_image)
 
@@ -1890,8 +2199,18 @@ def _parse_deep_search_args():
     return q, tune_type, prefer_type, mode, limit
 
 
-def _deep_search_core(cur, q, tune_type, prefer_type, mode, limit, person_id,
-                      session_id=None, on_list_last=False, in_session_last=False):
+def _deep_search_core(
+    cur,
+    q,
+    tune_type,
+    prefer_type,
+    mode,
+    limit,
+    person_id,
+    session_id=None,
+    on_list_last=False,
+    in_session_last=False,
+):
     """The deep catalog search shared by the live screen and the Add-to-My-Tunes pane.
 
     Modes (`mode=`): `mixed` (default) blends name + ABC-notation matches into one
@@ -1938,7 +2257,9 @@ def _deep_search_core(cur, q, tune_type, prefer_type, mode, limit, person_id,
     join_params = []
     params = [person_id]
     if session_id is not None:
-        join_sql = "LEFT JOIN session_tune st ON st.session_id = %s AND st.tune_id = t.tune_id"
+        join_sql = (
+            "LEFT JOIN session_tune st ON st.session_id = %s AND st.tune_id = t.tune_id"
+        )
         join_params = [session_id]
         in_session_sql = "(st.session_id IS NOT NULL)"
         played_here_sql = """(SELECT COUNT(*) FROM session_instance_tune sit
@@ -1982,11 +2303,15 @@ def _deep_search_core(cur, q, tune_type, prefer_type, mode, limit, person_id,
     # (most-played first), then prefix before substring, then the world's
     # popularity, then the name. Without a session played_here is 0 everywhere and
     # this collapses to type, rank, popularity -- the My Tunes ordering as before.
-    order_prefix = ("on_list, " if on_list_last else "") + ("in_session, " if in_session_last else "")
+    order_prefix = ("on_list, " if on_list_last else "") + (
+        "in_session, " if in_session_last else ""
+    )
     # Ordered OUTSIDE the select (see the subquery below) so the computed columns
     # can be used in expressions; Postgres only allows bare aliases in ORDER BY.
-    ranked_order = (f"{order_prefix}type_pref, (rank = 4), (rank <> 1), played_here DESC, rank, "
-                    "tunebook_count_cached DESC NULLS LAST, name")
+    ranked_order = (
+        f"{order_prefix}type_pref, (rank = 4), (rank <> 1), played_here DESC, rank, "
+        "tunebook_count_cached DESC NULLS LAST, name"
+    )
     if use_name and use_abc:
         rank = f"""CASE WHEN {name_eq()} THEN 1
                        WHEN {name_like()} THEN 2
@@ -2040,8 +2365,16 @@ def _deep_search_core(cur, q, tune_type, prefer_type, mode, limit, person_id,
     rows = cur.fetchall()
 
     results = [
-        {"tune_id": r[0], "name": r[1], "tune_type": r[2], "tunebook_count": r[3],
-         "on_list": r[4], "in_session": r[5], "played_here": r[6], "abc_only": bool(r[8])}
+        {
+            "tune_id": r[0],
+            "name": r[1],
+            "tune_type": r[2],
+            "tunebook_count": r[3],
+            "on_list": r[4],
+            "in_session": r[5],
+            "played_here": r[6],
+            "abc_only": bool(r[8]),
+        }
         for r in rows
     ]
 
@@ -2107,15 +2440,23 @@ def live_match(session_instance_id):
     except (ValueError, TypeError):
         limit = 8
     if len(q) < 2:
-        return jsonify({"success": True, "matched": False, "exact_match": False, "results": []})
+        return jsonify(
+            {"success": True, "matched": False, "exact_match": False, "results": []}
+        )
 
     conn = get_db_connection()
     try:
         cur = conn.cursor()
-        cur.execute("SELECT session_id FROM session_instance WHERE session_instance_id = %s", (session_instance_id,))
+        cur.execute(
+            "SELECT session_id FROM session_instance WHERE session_instance_id = %s",
+            (session_instance_id,),
+        )
         srow = cur.fetchone()
         if not srow:
-            return jsonify({"success": False, "error": "Session instance not found"}), 404
+            return (
+                jsonify({"success": False, "error": _("Session instance not found")}),
+                404,
+            )
         result = match_tune_core(cur, srow[0], q, prefer_type, limit)
         return jsonify({"success": True, **result})
     finally:
@@ -2143,16 +2484,25 @@ def _thesession_search_core(session_id=None, person_id=None):
     except (ValueError, TypeError):
         limit = 20
 
-    api_url = f"https://thesession.org/tunes/search?q={quote(q)}&format=json&perpage={limit}"
+    api_url = (
+        f"https://thesession.org/tunes/search?q={quote(q)}&format=json&perpage={limit}"
+    )
     if tune_type:
         api_url += f"&type={quote(tune_type)}"
     try:
         resp = requests.get(api_url, timeout=10)
         if resp.status_code != 200:
-            return jsonify({"success": False, "error": f"thesession.org returned {resp.status_code}"})
+            return jsonify(
+                {
+                    "success": False,
+                    "error": _(
+                        "thesession.org returned %(status)s", status=resp.status_code
+                    ),
+                }
+            )
         data = resp.json()
     except (requests.exceptions.RequestException, ValueError):
-        return jsonify({"success": False, "error": "Could not reach thesession.org"})
+        return jsonify({"success": False, "error": _("Could not reach thesession.org")})
 
     hits = data.get("tunes", []) or []
     ids = [h["id"] for h in hits if isinstance(h.get("id"), int)]
@@ -2166,10 +2516,16 @@ def _thesession_search_core(session_id=None, person_id=None):
             cur.execute("SELECT tune_id FROM tune WHERE tune_id = ANY(%s)", (ids,))
             local_ids = {r[0] for r in cur.fetchall()}
             if session_id is not None:
-                cur.execute("SELECT tune_id FROM session_tune WHERE session_id = %s AND tune_id = ANY(%s)", (session_id, ids))
+                cur.execute(
+                    "SELECT tune_id FROM session_tune WHERE session_id = %s AND tune_id = ANY(%s)",
+                    (session_id, ids),
+                )
                 session_ids = {r[0] for r in cur.fetchall()}
             if person_id is not None:
-                cur.execute("SELECT tune_id FROM person_tune WHERE person_id = %s AND tune_id = ANY(%s)", (person_id, ids))
+                cur.execute(
+                    "SELECT tune_id FROM person_tune WHERE person_id = %s AND tune_id = ANY(%s)",
+                    (person_id, ids),
+                )
                 list_ids = {r[0] for r in cur.fetchall()}
         finally:
             conn.close()
@@ -2184,16 +2540,18 @@ def _thesession_search_core(session_id=None, person_id=None):
         if not isinstance(tid, int) or tid in seen:
             continue
         seen.add(tid)
-        results.append({
-            "tune_id": tid,
-            "name": h.get("name"),
-            "alias": h.get("alias"),
-            "tune_type": (h.get("type") or "").title() or None,
-            "url": h.get("url"),
-            "is_local": tid in local_ids,
-            "in_session": tid in session_ids,
-            "on_list": tid in list_ids,
-        })
+        results.append(
+            {
+                "tune_id": tid,
+                "name": h.get("name"),
+                "alias": h.get("alias"),
+                "tune_type": (h.get("type") or "").title() or None,
+                "url": h.get("url"),
+                "is_local": tid in local_ids,
+                "in_session": tid in session_ids,
+                "on_list": tid in list_ids,
+            }
+        )
     return jsonify({"success": True, "results": results})
 
 
@@ -2225,6 +2583,7 @@ def _incipit_response(tune_id):
 # rest of the search family: live instance, /api/my-tunes, /api/sessions/<path>/tunes.
 # ---------------------------------------------------------------------------
 
+
 def _tune_preview_core(tune_id, session_id=None):
     """Preview data for a LOCAL catalog tune: every setting (ABC + incipit ABC +
     any cached incipit image inline — full images are fetched per setting via the
@@ -2246,7 +2605,7 @@ def _tune_preview_core(tune_id, session_id=None):
             )
             t = cur.fetchone()
         if not t:
-            return jsonify({"success": False, "error": "Tune not found"}), 404
+            return jsonify({"success": False, "error": _("Tune not found")}), 404
         name, tune_type, tunebook_count = t[0], t[1], t[2]
 
         cur.execute(
@@ -2263,7 +2622,8 @@ def _tune_preview_core(tune_id, session_id=None):
                 "setting_id": r[0],
                 "key": r[1],
                 "abc": r[2],
-                "incipit_abc": (r[3] or "").strip() or extract_abc_incipit(r[2], tune_type),
+                "incipit_abc": (r[3] or "").strip()
+                or extract_abc_incipit(r[2], tune_type),
                 "incipit_image": bytea_to_base64(r[4]) if r[4] else None,
             }
             for r in cur.fetchall()
@@ -2329,19 +2689,21 @@ def _tune_preview_core(tune_id, session_id=None):
             )
             dates = [str(r[0]) for r in cur.fetchall()]
 
-        return jsonify({
-            "success": True,
-            "tune_id": tune_id,
-            "name": name,
-            "tune_type": tune_type,
-            "tunebook_count": tunebook_count,
-            "aliases": aliases,
-            "played_here": played_here,
-            "dates": dates,
-            "session_setting_id": session_setting_id,
-            "person_tune": person_tune,
-            "settings": settings,
-        })
+        return jsonify(
+            {
+                "success": True,
+                "tune_id": tune_id,
+                "name": name,
+                "tune_type": tune_type,
+                "tunebook_count": tunebook_count,
+                "aliases": aliases,
+                "played_here": played_here,
+                "dates": dates,
+                "session_setting_id": session_setting_id,
+                "person_tune": person_tune,
+                "settings": settings,
+            }
+        )
     finally:
         conn.close()
 
@@ -2373,7 +2735,9 @@ def _ensure_setting_image(cur, setting_id, kind):
     else:
         if incipit_image is not None:
             return bytea_to_base64(incipit_image)
-        inc_text = (incipit_abc or "").strip() or (extract_abc_incipit(abc, tune_type) if abc else "")
+        inc_text = (incipit_abc or "").strip() or (
+            extract_abc_incipit(abc, tune_type) if abc else ""
+        )
         if not inc_text:
             return None
         png = render_abc_to_png(_wrap_abc(inc_text, key, tune_type), is_incipit=True)
@@ -2390,7 +2754,11 @@ def _ensure_setting_image(cur, setting_id, kind):
 def _setting_image_response(setting_id):
     """Render/cache-and-return one setting's notation image (?kind=incipit|full).
     Depends only on the setting, so all three route homes share it."""
-    kind = "full" if (request.args.get("kind") or "").strip().lower() == "full" else "incipit"
+    kind = (
+        "full"
+        if (request.args.get("kind") or "").strip().lower() == "full"
+        else "incipit"
+    )
     conn = get_db_connection()
     try:
         cur = conn.cursor()
@@ -2423,12 +2791,17 @@ def _thesession_preview_core(thesession_id):
     conn = get_db_connection()
     try:
         cur = conn.cursor()
-        cur.execute("SELECT tune_id, redirect_to_tune_id FROM tune WHERE tune_id = %s", (thesession_id,))
+        cur.execute(
+            "SELECT tune_id, redirect_to_tune_id FROM tune WHERE tune_id = %s",
+            (thesession_id,),
+        )
         row = cur.fetchone()
         if row:
             is_local = True
             if not full:
-                return jsonify({"success": True, "is_local": True, "tune_id": row[1] or row[0]})
+                return jsonify(
+                    {"success": True, "is_local": True, "tune_id": row[1] or row[0]}
+                )
     finally:
         conn.close()
 
@@ -2440,25 +2813,31 @@ def _thesession_preview_core(thesession_id):
     tune_type = (data.get("type") or "").title() or None
     settings = []
     for s in data.get("settings") or []:
-        abc = (s.get("abc") or "").replace("!", "\n")  # thesession uses "!" as a line break
+        abc = (s.get("abc") or "").replace(
+            "!", "\n"
+        )  # thesession uses "!" as a line break
         if not abc:
             continue
-        settings.append({
-            "setting_id": s.get("id"),
-            "key": s.get("key"),
-            "abc": abc,
-            "incipit_abc": extract_abc_incipit(abc, tune_type),
-        })
-    return jsonify({
-        "success": True,
-        "is_local": is_local,
-        "tune_id": thesession_id,
-        "name": data["name"],
-        "tune_type": tune_type,
-        "tunebook_count": data.get("tunebooks", 0),
-        "aliases": data.get("aliases") or [],
-        "settings": settings,
-    })
+        settings.append(
+            {
+                "setting_id": s.get("id"),
+                "key": s.get("key"),
+                "abc": abc,
+                "incipit_abc": extract_abc_incipit(abc, tune_type),
+            }
+        )
+    return jsonify(
+        {
+            "success": True,
+            "is_local": is_local,
+            "tune_id": thesession_id,
+            "name": data["name"],
+            "tune_type": tune_type,
+            "tunebook_count": data.get("tunebooks", 0),
+            "aliases": data.get("aliases") or [],
+            "settings": settings,
+        }
+    )
 
 
 def _render_abc_core():
@@ -2468,16 +2847,20 @@ def _render_abc_core():
     body = request.get_json(silent=True) or {}
     abc = (body.get("abc") or "").strip()
     if not abc:
-        return jsonify({"success": False, "error": "abc is required"}), 400
+        return jsonify({"success": False, "error": _("abc is required")}), 400
     if len(abc) > 20000:
-        return jsonify({"success": False, "error": "abc too long"}), 400
+        return jsonify({"success": False, "error": _("abc too long")}), 400
     key = (body.get("key") or "").strip() or None
     tune_type = (body.get("tune_type") or "").strip() or None
     kind = "full" if (body.get("kind") or "").strip().lower() == "full" else "incipit"
     if kind == "incipit":
         abc = extract_abc_incipit(abc, tune_type) or abc
-    png = render_abc_to_png(_wrap_abc(abc, key, tune_type), is_incipit=(kind == "incipit"))
-    return jsonify({"success": True, "image": base64.b64encode(png).decode() if png else None})
+    png = render_abc_to_png(
+        _wrap_abc(abc, key, tune_type), is_incipit=(kind == "incipit")
+    )
+    return jsonify(
+        {"success": True, "image": base64.b64encode(png).decode() if png else None}
+    )
 
 
 @api_login_required
@@ -2516,7 +2899,10 @@ def live_bootstrap(session_instance_id):
     try:
         cur = conn.cursor()
         if not _instance_exists(cur, session_instance_id):
-            return jsonify({"success": False, "error": "Session instance not found"}), 404
+            return (
+                jsonify({"success": False, "error": _("Session instance not found")}),
+                404,
+            )
 
         cur.execute(
             f"""
@@ -2527,10 +2913,16 @@ def live_bootstrap(session_instance_id):
             (session_instance_id,),
         )
         rows = cur.fetchall()
-        shape = _record_to_dict if can_edit else (lambda r: strip_people(_record_to_dict(r)))
+        shape = (
+            _record_to_dict
+            if can_edit
+            else (lambda r: strip_people(_record_to_dict(r)))
+        )
         records = [shape(r) for r in rows]
         # record_type is index 4 in _RECORD_COLS; segment into sets, dropping breaks.
-        sets = [[shape(r) for r in s] for s in segment_records_into_sets(rows, type_index=4)]
+        sets = [
+            [shape(r) for r in s] for s in segment_records_into_sets(rows, type_index=4)
+        ]
 
         cur.execute(
             """
@@ -2546,7 +2938,10 @@ def live_bootstrap(session_instance_id):
         meta = cur.fetchone()
         session_date = format_session_date(meta[3]) if meta else ""
 
-        cur.execute("SELECT COALESCE(MAX(event_id), 0) FROM session_event WHERE session_instance_id = %s", (session_instance_id,))
+        cur.execute(
+            "SELECT COALESCE(MAX(event_id), 0) FROM session_event WHERE session_instance_id = %s",
+            (session_instance_id,),
+        )
         high_water = cur.fetchone()[0]
 
         # NOTE: the session vocabulary (known_tunes/known_aliases) is intentionally NOT
@@ -2554,53 +2949,57 @@ def live_bootstrap(session_instance_id):
         # fetched by the client in the background AFTER first render, so it never blocks
         # bootstrap (§024 fast path / §G offline index).
 
-        return jsonify({
-            "success": True,
-            "session_instance_id": int(session_instance_id),
-            "can_edit": can_edit,
-            "current_person": {
-                "person_id": getattr(current_user, "person_id", None),
-                "first_name": getattr(current_user, "first_name", ""),
-                "last_name": getattr(current_user, "last_name", ""),
-            } if can_edit else None,
-            # Display tz for "logged at" times: viewer's own tz wins, session tz is
-            # the fallback (mirrors the app's format_datetime_tz precedence).
-            "user_timezone": getattr(current_user, "timezone", None),
-            "session_timezone": meta[6] if meta else None,
-            "session_id": meta[0] if meta else None,
-            "notes": meta[1] if meta else None,
-            "log_complete": bool(meta[2]) if meta else False,
-            "session_name": meta[4] if meta else "",
-            "session_path": meta[5] if meta else None,
-            "session_date": session_date,
-            # Raw ISO alongside the display string: the header's attendance tense reads
-            # it, and it can change under the screen now that set_date exists (spec 046).
-            "instance_date": meta[3].isoformat() if meta and meta[3] else None,
-            # This log's own name (session_instance.location_override). Null for the
-            # ordinary weekly night; at a festival it's what tells one instance from
-            # another, and it's editable from the header now (spec 047).
-            "instance_name": meta[8] if meta else None,
-            # When it ran (spec 048). Raw "HH:MM:SS"; the header formats them. A NULL
-            # end_time is a real state — the session that runs until it stops.
-            "start_time": meta[9].isoformat() if meta and meta[9] else None,
-            "end_time": meta[10].isoformat() if meta and meta[10] else None,
-            # 'regular' | 'festival' (spec 004). The header's naming help reads it: at a
-            # festival a name is the norm and the reason is specific, everywhere else it's
-            # the exception. Nothing is GATED on it — the fields are the same either way.
-            "session_type": (meta[11] if meta else None) or "regular",
-            # Is the session under way right now? Signed-out viewers stream only while it
-            # is (the sidecar enforces the same rule), and re-read it on every reconnect
-            # so a viewer whose session ends settles into a static snapshot by itself.
-            "instance_active": bool(meta[7]) if meta else False,
-            # The session's people settings (spec 039), which the page shell passes to the
-            # web logger as config: set starters show only when both tracking flags are on.
-            "show_people_list": bool(meta[12]) if meta else True,
-            "track_attendance": bool(meta[13]) if meta else True,
-            "track_set_starters": bool(meta[14]) if meta else True,
-            "records": records,
-            "sets": sets,
-            "last_event_id": high_water,
-        })
+        return jsonify(
+            {
+                "success": True,
+                "session_instance_id": int(session_instance_id),
+                "can_edit": can_edit,
+                "current_person": {
+                    "person_id": getattr(current_user, "person_id", None),
+                    "first_name": getattr(current_user, "first_name", ""),
+                    "last_name": getattr(current_user, "last_name", ""),
+                }
+                if can_edit
+                else None,
+                # Display tz for "logged at" times: viewer's own tz wins, session tz is
+                # the fallback (mirrors the app's format_datetime_tz precedence).
+                "user_timezone": getattr(current_user, "timezone", None),
+                "session_timezone": meta[6] if meta else None,
+                "session_id": meta[0] if meta else None,
+                "notes": meta[1] if meta else None,
+                "log_complete": bool(meta[2]) if meta else False,
+                "session_name": meta[4] if meta else "",
+                "session_path": meta[5] if meta else None,
+                "session_date": session_date,
+                # Raw ISO alongside the display string: the header's attendance tense reads
+                # it, and it can change under the screen now that set_date exists (spec 046).
+                "instance_date": meta[3].isoformat() if meta and meta[3] else None,
+                # This log's own name (session_instance.location_override). Null for the
+                # ordinary weekly night; at a festival it's what tells one instance from
+                # another, and it's editable from the header now (spec 047).
+                "instance_name": meta[8] if meta else None,
+                # When it ran (spec 048). Raw "HH:MM:SS"; the header formats them. A NULL
+                # end_time is a real state — the session that runs until it stops.
+                "start_time": meta[9].isoformat() if meta and meta[9] else None,
+                "end_time": meta[10].isoformat() if meta and meta[10] else None,
+                # 'regular' | 'festival' (spec 004). The header's naming help reads it: at a
+                # festival a name is the norm and the reason is specific, everywhere else it's
+                # the exception. Nothing is GATED on it — the fields are the same either way.
+                "session_type": (meta[11] if meta else None) or "regular",
+                # Is the session under way right now? Signed-out viewers stream only while it
+                # is (the sidecar enforces the same rule), and re-read it on every reconnect
+                # so a viewer whose session ends settles into a static snapshot by itself.
+                "instance_active": bool(meta[7]) if meta else False,
+                # The session's people settings (spec 039), which the page shell passes to the
+                # web logger as config: set starters show only when both tracking flags are on.
+                "show_people_list": bool(meta[12]) if meta else True,
+                "track_attendance": bool(meta[13]) if meta else True,
+                "track_set_starters": bool(meta[14]) if meta else True,
+                "records": records,
+                "sets": sets,
+                "last_event_id": high_water,
+            }
+        )
     finally:
         conn.close()
 
@@ -2781,14 +3180,26 @@ def live_vocabulary(session_instance_id):
     conn = get_db_connection()
     try:
         cur = conn.cursor()
-        cur.execute("SELECT session_id FROM session_instance WHERE session_instance_id = %s", (session_instance_id,))
+        cur.execute(
+            "SELECT session_id FROM session_instance WHERE session_instance_id = %s",
+            (session_instance_id,),
+        )
         srow = cur.fetchone()
         if not srow:
-            return jsonify({"success": False, "error": "Session instance not found"}), 404
+            return (
+                jsonify({"success": False, "error": _("Session instance not found")}),
+                404,
+            )
         session_id = srow[0]
         n, m = get_session_cache_limits(cur, session_id)
         known_tunes, known_aliases = compute_session_vocabulary(cur, session_id, n, m)
-        return jsonify({"success": True, "known_tunes": known_tunes, "known_aliases": known_aliases})
+        return jsonify(
+            {
+                "success": True,
+                "known_tunes": known_tunes,
+                "known_aliases": known_aliases,
+            }
+        )
     finally:
         conn.close()
 
@@ -2805,6 +3216,7 @@ def live_vocabulary(session_instance_id):
 #     ?instance=<id>       live screen — flags only, no re-sort
 # ---------------------------------------------------------------------------
 
+
 def _resolve_search_scope(cur):
     """-> (session_id | None, kind) for the current request's ?session= / ?instance=.
     Raises LookupError with a message when the named scope doesn't exist."""
@@ -2812,16 +3224,19 @@ def _resolve_search_scope(cur):
     path = (request.args.get("session") or "").strip().strip("/")
     if instance:
         if not instance.isdigit():
-            raise LookupError("instance must be an id")
-        cur.execute("SELECT session_id FROM session_instance WHERE session_instance_id = %s", (int(instance),))
+            raise LookupError(_("instance must be an id"))
+        cur.execute(
+            "SELECT session_id FROM session_instance WHERE session_instance_id = %s",
+            (int(instance),),
+        )
         row = cur.fetchone()
         if not row:
-            raise LookupError("Session instance not found")
+            raise LookupError(_("Session instance not found"))
         return row[0], "instance"
     if path:
         session_id = _session_id_by_path(cur, path)
         if session_id is None:
-            raise LookupError("Session not found")
+            raise LookupError(_("Session not found"))
         return session_id, "session"
     return None, "personal"
 
@@ -2834,7 +3249,14 @@ def _scope_or_404():
         try:
             session_id, kind = _resolve_search_scope(cur)
         except LookupError as e:
-            return None, None, (jsonify({"success": False, "error": str(e), "code": "not_found"}), 404)
+            return (
+                None,
+                None,
+                (
+                    jsonify({"success": False, "error": str(e), "code": "not_found"}),
+                    404,
+                ),
+            )
         return session_id, kind, None
     finally:
         conn.close()
@@ -2850,10 +3272,19 @@ def tunes_deep_search():
         try:
             session_id, kind = _resolve_search_scope(cur)
         except LookupError as e:
-            return jsonify({"success": False, "error": str(e), "code": "not_found"}), 404
+            return (
+                jsonify({"success": False, "error": str(e), "code": "not_found"}),
+                404,
+            )
         person_id = getattr(current_user, "person_id", None)
         results = _deep_search_core(
-            cur, q, tune_type, prefer_type, mode, limit, person_id,
+            cur,
+            q,
+            tune_type,
+            prefer_type,
+            mode,
+            limit,
+            person_id,
             session_id=session_id,
             on_list_last=(kind == "personal"),
             in_session_last=(kind == "session"),
@@ -2880,8 +3311,9 @@ def tunes_thesession_search():
     session_id, kind, err = _scope_or_404()
     if err:
         return err
-    return _thesession_search_core(session_id=session_id,
-                                   person_id=getattr(current_user, "person_id", None))
+    return _thesession_search_core(
+        session_id=session_id, person_id=getattr(current_user, "person_id", None)
+    )
 
 
 @api_login_required

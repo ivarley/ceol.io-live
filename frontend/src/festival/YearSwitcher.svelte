@@ -1,4 +1,6 @@
 <script>
+  // i18n-converted
+  import { t } from '../lib/index.js'
   // The year beside a festival's name on a year's page (spec 056): a <select> of
   // the festival's years that navigates on change, or just the year when there is
   // only one.
@@ -17,7 +19,7 @@
   <select
     class="festival-year-select"
     id="festival-year-select"
-    aria-label="{festival.place.name}: year"
+    aria-label={t('{name}: year', { name: festival.place.name })}
     value={currentPath}
     onchange={(e) => navigate(hrefFor(e.currentTarget.value))}>
     {#each [...years].reverse() as y (y.path)}

@@ -1,4 +1,5 @@
 <script>
+  // i18n-converted
   // The app-wide "Find a tune" sheet (hamburger menu), ported from the vanilla
   // implementation that lived in static/js/hamburger_menu.js (spec 035 Step 3c);
   // the bespoke overlay chrome (.ft-scrim/.ft-panel/.ft-head/.ft-close) became
@@ -7,8 +8,12 @@
   // e2e-selected by offline.spec.ts) and the same behavior: 200ms debounce,
   // min 2 chars, server search with offline-bundle fallback, stale-response
   // guard, click a result -> the shared tune-detail sheet.
-  import { LoadError, SearchField, Sheet } from '../lib/index.js'
+  import { LoadError, SearchField, Sheet, t, tuneTypeName, currentLang } from '../lib/index.js'
   import { parseThesessionId, parseThesessionSettingId } from '../shared/parse.js'
+
+  // The tune type as the server sent it in English (the pill's CSS sets its case), the
+  // interface word in Irish.
+  const typeLabel = (type) => (currentLang() === 'ga' ? tuneTypeName(type) : type)
 
   let open = $state(false)
   let query = $state('')
@@ -135,14 +140,14 @@
 
 <!-- Escape/scrim dismissal is the Sheet's; closing (any path) invalidates
      in-flight searches through onCancel. -->
-<Sheet bind:open title="Find a tune" onCancel={() => seq++}>
+<Sheet bind:open title={t('Find a tune')} onCancel={() => seq++}>
   <SearchField
     bind:this={searchField}
     bind:value={query}
     inputClass="ft-input"
     wrapperClass="ft-search-wrap"
     styled={false}
-    placeholder="Search by name or notes, or paste a link…"
+    placeholder={t('Search by name or notes, or paste a link…')}
     autocomplete="off"
     autocorrect="off"
     autocapitalize="off"
@@ -150,13 +155,13 @@
     debounce={200}
     onSearch={runSearch} />
   {#if linkRef && results === null}
-    <p class="ft-note">Looking up tune #{linkRef.id} from thesession.org…</p>
+    <p class="ft-note">{t('Looking up tune #{id} from thesession.org…', { id: linkRef.id })}</p>
   {:else if linkRef && linkRef.settingId != null && loggedIn && results && results.length}
     <!-- Say where the tap goes: this sheet can't hold on to a setting, My Tunes can. -->
-    <p class="ft-note">That link names setting #{linkRef.settingId} — opening it in My Tunes, where it can be saved.</p>
+    <p class="ft-note">{t('That link names setting #{id} — opening it in My Tunes, where it can be saved.', { id: linkRef.settingId })}</p>
   {/if}
   {#if searchFailed}
-    <LoadError message="Couldn't search for tunes." onRetry={() => runSearch(query)} />
+    <LoadError message={t("Couldn't search for tunes.")} onRetry={() => runSearch(query)} />
   {/if}
   <ul class="ft-results">
     {#if results !== null}
@@ -169,22 +174,22 @@
             onkeydown={(e) => e.key === 'Enter' && pick(tune)}
             role="option"
             aria-selected="false"
-            tabindex="0">{tune.name}{#if tune.abc_only}<span class="ft-abc" title={tune.abc_scope === 'incipit' ? 'Matched the opening bars (offline)' : 'Matched the notation, not the name'}>♪</span>{/if}<span class="ft-type">{tune.tune_type || ''}</span></li>
+            tabindex="0">{tune.name}{#if tune.abc_only}<span class="ft-abc" title={tune.abc_scope === 'incipit' ? t('Matched the opening bars (offline)') : t('Matched the notation, not the name')}>♪</span>{/if}<span class="ft-type">{typeLabel(tune.tune_type) || ''}</span></li>
         {/each}
       {:else if linkRef}
         <!-- The link resolved, the catalog just doesn't have that tune yet. Importing is
              an add, so it happens where adds happen: the My Tunes add pane, seeded with
              the same link (setting deep link included). -->
         <li class="ft-empty">
-          Tune #{linkRef.id} isn't in the library yet.
+          {t("Tune #{id} isn't in the library yet.", { id: linkRef.id })}
           {#if loggedIn}
-            <a class="ft-import" href={importHref}>Add it from thesession.org</a>
+            <a class="ft-import" href={importHref}>{t('Add it from thesession.org')}</a>
           {:else}
-            <a class="ft-import" href="https://thesession.org/tunes/{linkRef.id}" target="_blank" rel="noopener">View it on thesession.org</a>
+            <a class="ft-import" href="https://thesession.org/tunes/{linkRef.id}" target="_blank" rel="noopener">{t('View it on thesession.org')}</a>
           {/if}
         </li>
       {:else}
-        <li class="ft-empty">No tunes match</li>
+        <li class="ft-empty">{t('No tunes match')}</li>
       {/if}
     {/if}
   </ul>

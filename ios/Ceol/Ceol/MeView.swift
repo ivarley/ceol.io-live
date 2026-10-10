@@ -23,13 +23,14 @@ struct MeView: View {
     @State private var instrumentsOpen = false
     @State private var detailsOpen = false
     @State private var savingEmails = false
+    @State private var savingLanguage = false
     @State private var saveFailure: String?
 
     var body: some View {
         NavigationStack {
             Loaded(state: state, retry: load) { p in list(p) }
                 .background(CeolTokens.bgColor)
-                .ceolRootBar("Me", sharePath: "/me")
+                .ceolRootBar(tr("Me"), sharePath: "/me")
                 .sheet(isPresented: $editing) {
                     ProfileSetupView(editing: true) { Task { await load() } }
                 }
@@ -68,7 +69,7 @@ struct MeView: View {
         } catch let f as AuthFailure {
             webFailure = f.message
         } catch {
-            webFailure = "Couldn't reach Ceol. Check your connection and try again."
+            webFailure = tr("Couldn't reach Ceol. Check your connection and try again.")
         }
     }
 
@@ -82,16 +83,16 @@ struct MeView: View {
                 HStack(alignment: .center, spacing: 16) {
                     InitialsAvatar(first: profile.firstName, last: profile.lastName)
                     VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 10) {
-                            Text("\(profile.firstName) \(profile.lastName)")
-                                .font(.ceol(size: 24, weight: .semibold, relativeTo: .title2))
-                                .foregroundStyle(CeolTokens.textColor)
-                                .accessibilityIdentifier("me.name")
-                            if user?.isSystemAdmin == true {
-                                Text("ADMIN").font(.ceolItalic(size: 12)).tracking(0.8)
-                                    .padding(.horizontal, 10).padding(.vertical, 3)
-                                    .background(CeolTokens.primaryFill, in: Capsule())
-                                    .foregroundStyle(.white)
+                        // The badge sits beside the name when both fit, else under it, so a
+                        // long name or a long badge ("BAINISTEOIR") never breaks a word.
+                        ViewThatFits(in: .horizontal) {
+                            HStack(spacing: 10) {
+                                nameText("\(profile.firstName) \(profile.lastName)").lineLimit(1)
+                                adminBadge(user)
+                            }
+                            VStack(alignment: .leading, spacing: 4) {
+                                nameText("\(profile.firstName) \(profile.lastName)").fixedSize(horizontal: false, vertical: true)
+                                adminBadge(user)
                             }
                         }
                         let line = [user.map { "@\($0.username)" }, place.isEmpty ? nil : place].compactMap { $0 }
@@ -102,33 +103,48 @@ struct MeView: View {
                     Spacer(minLength: 4)
                     Button("Edit") { editing = true }
                         .font(.ceol(size: 17, weight: .medium)).foregroundStyle(CeolTokens.primary)
+                        .lineLimit(1).fixedSize()
                         .accessibilityIdentifier("me.edit")
                 }
                 KitGroup {
                     instrumentsRow(profile.instruments)
-                    KitRow("Location", value: place.isEmpty ? "Not provided" : place, muted: place.isEmpty)
+                    KitRow(tr("Location"), value: place.isEmpty ? tr("Not provided") : place, muted: place.isEmpty)
                     let sms = profile.smsNumber ?? ""
-                    KitRow("SMS", value: sms.isEmpty ? "Not provided" : sms, muted: sms.isEmpty)
+                    KitRow(tr("SMS"), value: sms.isEmpty ? tr("Not provided") : sms, muted: sms.isEmpty)
                     if let member = profile.thesessionUserId {
                         Link(destination: URL(string: "https://thesession.org/members/\(member)")!) {
                             KitRow(label: "thesession.org") {
-                                Text(verbatim: "Member \(member)").font(.ceol(size: 18)).foregroundStyle(CeolTokens.primary)
+                                Text(tr("Member \(member)")).font(.ceol(size: 18)).foregroundStyle(CeolTokens.primary)
                             }
                         }
                     } else {
-                        KitRow("thesession.org", value: "Not a member", muted: true)
+                        KitRow("thesession.org", value: tr("Not a member"), muted: true)
                     }
                 }
-                KitGroup(title: "Account") {
-                    if let a = p.account {
-                        KitRow("Username", value: a.username)
-                        if let email = a.email { KitRow("Email", value: email) }
-                    } else if let user {
-                        KitRow("Username", value: user.username)
+                // Spec 057: each language named in itself, whatever the app is in.
+                KitGroup(title: tr("Language")) {
+                    Picker("Language", selection: Binding(
+                        get: { model.language },
+                        set: { code in Task { await setLanguage(code) } })
+                    ) {
+                        Text(verbatim: "English").tag("en")
+                        Text(verbatim: "Gaeilge").tag("ga")
                     }
-                    KitRow("Time zone", value: shortZone(p))
+                    .pickerStyle(.segmented)
+                    .disabled(savingLanguage)
+                    .accessibilityIdentifier("me.language")
+                    .padding(.vertical, 6)
+                }
+                KitGroup(title: tr("Account")) {
                     if let a = p.account {
-                        KitRow(label: "Update emails") {
+                        KitRow(tr("Username"), value: a.username)
+                        if let email = a.email { KitRow(tr("Email"), value: email) }
+                    } else if let user {
+                        KitRow(tr("Username"), value: user.username)
+                    }
+                    KitRow(tr("Time zone"), value: shortZone(p))
+                    if let a = p.account {
+                        KitRow(label: tr("Update emails")) {
                             if savingEmails { ProgressView() }
                             Toggle("", isOn: Binding(get: { a.receiveUpdateEmails }, set: { on in Task { await setUpdateEmails(on) } }))
                                 .labelsHidden()
@@ -138,21 +154,21 @@ struct MeView: View {
                                 .accessibilityIdentifier("me.updateEmails")
                         }
                         Button { Task { await openWeb("/change-password", needsSignIn: true) } } label: {
-                            KitRow(label: a.hasPassword ? "Change my password" : "Create a password") {
+                            KitRow(label: a.hasPassword ? tr("Change my password") : tr("Create a password")) {
                                 WebMark(busy: opening == "/change-password")
                             }
                         }
                         .buttonStyle(.plain)
                         .disabled(opening != nil)
                         Button { withAnimation { detailsOpen.toggle() } } label: {
-                            KitRow(label: "Details") {
+                            KitRow(label: tr("Details")) {
                                 Image(systemName: detailsOpen ? "chevron.up" : "chevron.down").foregroundStyle(CeolTokens.textMuted)
                             }
                         }
                         .buttonStyle(.plain)
                         if detailsOpen {
-                            KitRow("Created", value: dateLabel(a.createdAt), muted: true)
-                            KitRow("Last login", value: dateLabel(a.lastLogin), muted: true)
+                            KitRow(tr("Created"), value: dateLabel(a.createdAt), muted: true)
+                            KitRow(tr("Last login"), value: dateLabel(a.lastLogin), muted: true)
                         }
                     }
                 }
@@ -163,27 +179,27 @@ struct MeView: View {
                     if user?.isSystemAdmin == true {
                         // Nights recorded with the app (spec 053), and their uploads.
                         Button { showingRecordings = true } label: {
-                            KitRow(label: "Recordings on this phone") {
+                            KitRow(label: tr("Recordings on this phone")) {
                                 Image(systemName: "chevron.right").foregroundStyle(CeolTokens.textMuted)
                             }
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("me.recordings")
                         Button { Task { await openWeb("/admin", needsSignIn: true) } } label: {
-                            KitRow(label: "Admin") { WebMark(busy: opening == "/admin") }
+                            KitRow(label: tr("Admin")) { WebMark(busy: opening == "/admin") }
                         }
                         .buttonStyle(.plain)
                         .disabled(opening != nil)
                         .accessibilityIdentifier("me.admin")
                     }
                     Button { Task { await openWeb("/help", needsSignIn: false) } } label: {
-                        KitRow(label: "Help") { WebMark(busy: opening == "/help") }
+                        KitRow(label: tr("Help")) { WebMark(busy: opening == "/help") }
                     }
                     .buttonStyle(.plain)
                     .disabled(opening != nil)
                     .accessibilityIdentifier("me.help")
                     Button { confirmSignOut = true } label: {
-                        KitRow(label: "Log Out", labelColor: CeolTokens.danger) { EmptyView() }
+                        KitRow(label: tr("Log Out"), labelColor: CeolTokens.danger) { EmptyView() }
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("me.signout")
@@ -194,7 +210,7 @@ struct MeView: View {
                 if let user, let email = user.email, !user.isSystemAdmin {
                     KitGroup {
                         Button { deleting = true } label: {
-                            KitRow(label: "Delete Account", labelColor: CeolTokens.danger) { EmptyView() }
+                            KitRow(label: tr("Delete Account"), labelColor: CeolTokens.danger) { EmptyView() }
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("me.delete")
@@ -209,9 +225,27 @@ struct MeView: View {
 
     /// Instruments on one line; when they don't fit, "Banjo, +2 more", and a tap shows
     /// them all.
+    private func nameText(_ name: String) -> some View {
+        // A name is data: shown as entered, never looked up in the catalog.
+        Text(verbatim: name)
+            .font(.ceol(size: 24, weight: .semibold, relativeTo: .title2))
+            .foregroundStyle(CeolTokens.textColor)
+            .accessibilityIdentifier("me.name")
+    }
+
+    @ViewBuilder private func adminBadge(_ user: User?) -> some View {
+        if user?.isSystemAdmin == true {
+            Text("ADMIN").font(.ceolItalic(size: 12)).tracking(0.8)
+                .lineLimit(1).fixedSize()
+                .padding(.horizontal, 10).padding(.vertical, 3)
+                .background(CeolTokens.primaryFill, in: Capsule())
+                .foregroundStyle(.white)
+        }
+    }
+
     @ViewBuilder private func instrumentsRow(_ instruments: [String]) -> some View {
         if instruments.isEmpty {
-            KitRow("Instruments", value: "None yet", muted: true)
+            KitRow(tr("Instruments"), value: tr("None yet"), muted: true)
         } else if instrumentsOpen {
             Button { withAnimation { instrumentsOpen = false } } label: {
                 VStack(alignment: .leading, spacing: 8) {
@@ -221,7 +255,7 @@ struct MeView: View {
                         Image(systemName: "chevron.up").foregroundStyle(CeolTokens.textMuted)
                     }
                     FlowLayout(spacing: 8) {
-                        ForEach(instruments, id: \.self) { Pill(text: $0, color: CeolTokens.textColor, size: 15) }
+                        ForEach(instruments, id: \.self) { Pill(text: instrumentName($0), color: CeolTokens.textColor, size: 15) }
                     }
                 }
                 .padding(.horizontal, 20).padding(.vertical, 14)
@@ -229,9 +263,10 @@ struct MeView: View {
             }
             .buttonStyle(.plain)
         } else {
-            let all = instruments.joined(separator: ", ")
-            let short = instruments.count > 1 ? "\(instruments[0]), +\(instruments.count - 1) more" : all
-            KitRow(label: "Instruments") {
+            let names = instruments.map(instrumentName)
+            let all = names.joined(separator: ", ")
+            let short = names.count > 1 ? tr("\(names[0]), +\(names.count - 1) more") : all
+            KitRow(label: tr("Instruments")) {
                 ViewThatFits(in: .horizontal) {
                     Text(all).font(.ceol(size: 18)).lineLimit(1)
                     Text(short).font(.ceol(size: 18)).lineLimit(1)
@@ -244,6 +279,21 @@ struct MeView: View {
         }
     }
 
+    private func setLanguage(_ code: String) async {
+        guard code != model.language else { return }
+        savingLanguage = true
+        saveFailure = nil
+        defer { savingLanguage = false }
+        do {
+            state = .loaded(try await model.auth.updateProfile(.init(language: code == "ga" ? .ga : .en)))
+            model.setLanguage(code)
+        } catch let f as AuthFailure {
+            saveFailure = f.message
+        } catch {
+            saveFailure = tr("Couldn't save that. Check your connection and try again.")
+        }
+    }
+
     private func setUpdateEmails(_ on: Bool) async {
         savingEmails = true
         saveFailure = nil
@@ -253,14 +303,14 @@ struct MeView: View {
         } catch let f as AuthFailure {
             saveFailure = f.message
         } catch {
-            saveFailure = "Couldn't save that. Check your connection and try again."
+            saveFailure = tr("Couldn't save that. Check your connection and try again.")
         }
     }
 
-    /// "Sep 28, 2026" from an ISO timestamp.
+    /// "Sep 28, 2026" from an ISO timestamp, in the app's language.
     private func dateLabel(_ iso: String?) -> String {
         guard let iso, let d = ISO8601DateFormatter.flexible(iso) else { return "—" }
-        return d.formatted(date: .abbreviated, time: .omitted)
+        return localizedDate(d, Date.FormatStyle(date: .abbreviated, time: .omitted))
     }
 
     /// "US Central" from the option "US Central (UTC-05:00)", as the web's row shows it.

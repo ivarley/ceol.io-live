@@ -1,4 +1,5 @@
 <script>
+  // i18n-converted
   // The Add Session Instance sheet — kit Sheet chrome (spec 035: Cancel top-left,
   // scrim/Escape cancel, commit in the footer so a failed POST keeps it open).
   // Opening prefills from GET next_instance_suggestion; adding POSTs add_instance
@@ -18,7 +19,7 @@
   let suggesting = $state(false)
   let suggestError = $state(false)
 
-  import { Sheet, toast, LoadError } from '../lib/index.js'
+  import { Sheet, toast, LoadError, t } from '../lib/index.js'
 
   export async function open() {
     // Defaults while we fetch the suggestion.
@@ -60,7 +61,7 @@
     if (adding) return
     const dateVal = date.trim()
     if (!dateVal) {
-      toast('Please enter a session date', 'error')
+      toast(t('Please enter a session date'), 'error')
       return
     }
 
@@ -90,29 +91,29 @@
           window.location.href = `/sessions/${sessionPath}/${instanceId}?edit=true`
         } else {
           adding = false
-          toast(data.message || "Couldn't add the session. Try again.", 'error')
+          toast(data.message || t("Couldn't add the session. Try again."), 'error')
         }
       })
       .catch((error) => {
         adding = false
         console.error('Error adding session instance:', error)
-        toast("Couldn't add the session. Check your connection and try again.", 'error')
+        toast(t("Couldn't add the session. Check your connection and try again."), 'error')
       })
   }
 </script>
 
-<Sheet bind:open={visible} title="Add Session Instance">
+<Sheet bind:open={visible} title={t('Add Session Instance')}>
   <!-- .modal-body keeps the page's label/input styling; the chrome is the Sheet's -->
   <div class="modal-body">
     {#if suggestError}
       <LoadError
         inline
         id="add-instance-suggest-error"
-        message="Couldn't look up the next usual date, so this is today. Check it before adding."
+        message={t("Couldn't look up the next usual date, so this is today. Check it before adding.")}
         onRetry={suggest}
         retrying={suggesting} />
     {/if}
-    <label for="session-date-input">Session Date:</label>
+    <label for="session-date-input">{t('Session Date:')}</label>
     <input
       type="date"
       id="session-date-input"
@@ -124,39 +125,38 @@
 
     <div style="margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
       <div>
-        <label for="session-start-time-input">Start Time:</label>
+        <label for="session-start-time-input">{t('Start Time:')}</label>
         <input type="time" id="session-start-time-input" bind:value={startTime} />
       </div>
       <div>
-        <label for="session-end-time-input">End Time:</label>
+        <label for="session-end-time-input">{t('End Time:')}</label>
         <input type="time" id="session-end-time-input" bind:value={endTime} />
       </div>
     </div>
 
-    <label for="session-location-input" style="margin-top: 16px;">{isFestival ? 'Name:' : 'Location:'}</label>
+    <label for="session-location-input" style="margin-top: 16px;">{isFestival ? t('Name:') : t('Location:')}</label>
     <input
       type="text"
       id="session-location-input"
-      placeholder={isFestival ? 'e.g. Advanced Session @ Jim Bowie' : `The usual: ${locationName}`}
+      placeholder={isFestival ? t('e.g. Advanced Session @ Jim Bowie') : t('The usual: {location}', { location: locationName })}
       bind:value={location} />
     {#if isFestival}
       <small class="add-instance-hint">
-        Several sessions share a day at a festival, so the date alone won't tell them
-        apart. This is what the log is called everywhere it's listed.
+        {t("Several sessions share a day at a festival, so the date alone won't tell them apart. This is what the log is called everywhere it's listed.")}
       </small>
     {/if}
 
-    <label for="session-comments-input" style="margin-top: 16px;">Comments:</label>
+    <label for="session-comments-input" style="margin-top: 16px;">{t('Comments:')}</label>
     <textarea
       id="session-comments-input"
-      placeholder="Notes about this session"
+      placeholder={t('Notes about this session')}
       rows="3"
       style="resize: vertical;"
       bind:value={comments}></textarea>
   </div>
   {#snippet footer()}
     <div style="text-align: right;">
-      <button type="button" class="selection-btn primary" id="add-session-confirm-btn" onclick={addSessionInstance} disabled={adding}>{adding ? 'Adding…' : 'Add Session'}</button>
+      <button type="button" class="selection-btn primary" id="add-session-confirm-btn" onclick={addSessionInstance} disabled={adding}>{adding ? t('Adding…') : t('Add Session')}</button>
     </div>
   {/snippet}
 </Sheet>

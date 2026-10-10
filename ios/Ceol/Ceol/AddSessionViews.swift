@@ -53,7 +53,7 @@ struct AddSessionView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    SearchRow(text: $query, prompt: "Session name, or a thesession.org link", fieldID: "addSession.query")
+                    SearchRow(text: $query, prompt: tr("Session name, or a thesession.org link"), fieldID: "addSession.query")
                     if let failure {
                         Text(failure).font(.ceol(size: 15)).foregroundStyle(CeolTokens.danger)
                     } else if searching {
@@ -67,13 +67,13 @@ struct AddSessionView: View {
                             dismiss()
                             onOpen(existing.path, existing.name)
                         } label: {
-                            card(title: "Open \(existing.name)", subtitle: "That session is already on Ceol.")
+                            card(title: tr("Open \(existing.name)"), subtitle: tr("That session is already on Ceol."))
                         }
                         .buttonStyle(.plain)
                     }
                     if let pendingID {
                         Button { Task { await check(pendingID) } } label: {
-                            card(title: "thesession.org session \(pendingID)", subtitle: "Look it up")
+                            card(title: tr("thesession.org session \(pendingID)"), subtitle: tr("Look it up"))
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("addSession.pendingID")
@@ -94,7 +94,7 @@ struct AddSessionView: View {
                     Button {
                         seed = SessionSeed(timezone: options?.defaultTimezone)
                     } label: {
-                        card(title: "Add a session manually", subtitle: "For sessions that aren't on thesession.org")
+                        card(title: tr("Add a session manually"), subtitle: tr("For sessions that aren't on thesession.org"))
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("addSession.manual")
@@ -184,10 +184,10 @@ struct AddSessionView: View {
         do {
             switch try await model.auth.client.searchTheSessionSessions(body: .json(.init(query: q))) {
             case .ok(let ok): results = try ok.body.json.results
-            case .default(_, let e): failure = refusal(e) ?? "Could not search thesession.org."
+            case .default(_, let e): failure = refusal(e) ?? tr("Could not search thesession.org.")
             }
         } catch {
-            if !Task.isCancelled { failure = "Could not reach thesession.org. Please try again." }
+            if !Task.isCancelled { failure = tr("Could not reach thesession.org. Please try again.") }
         }
     }
 
@@ -209,20 +209,20 @@ struct AddSessionView: View {
             case .ok(let ok):
                 let r = try ok.body.json
                 if r.exists, let path = r.sessionPath {
-                    existing = (String(path.dropFirst("/sessions/".count)), "session \(id)")
-                    failure = "Session \(id) is already on ceol.io."
+                    existing = (String(path.dropFirst("/sessions/".count)), tr("session \(id)"))
+                    failure = tr("Session \(id) is already on ceol.io.")
                     return
                 }
             case .default(_, let e):
-                failure = refusal(e) ?? "Could not check that session. Please try again."
+                failure = refusal(e) ?? tr("Could not check that session. Please try again.")
                 return
             }
             switch try await model.auth.client.fetchTheSessionSession(body: .json(.init(sessionId: n))) {
             case .ok(let ok): seed = seedFrom(try ok.body.json.sessionData)
-            case .default(_, let e): failure = refusal(e) ?? "Could not fetch that session from thesession.org."
+            case .default(_, let e): failure = refusal(e) ?? tr("Could not fetch that session from thesession.org.")
             }
         } catch {
-            failure = "Could not reach thesession.org. Please try again."
+            failure = tr("Could not reach thesession.org. Please try again.")
         }
     }
 
@@ -295,7 +295,16 @@ struct SessionDetailsForm: View {
     @State private var loaded = false
 
     private static let weekdays = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
-    private static let nths: [(Int, String)] = [(1, "1st"), (2, "2nd"), (3, "3rd"), (4, "4th"), (-1, "Last")]
+    private static var nths: [(Int, String)] { [(1, tr("1st")), (2, tr("2nd")), (3, tr("3rd")), (4, tr("4th")), (-1, tr("Last"))] }
+
+    /// A weekday's name in the app's language ("monday" -> "Monday", "Dé Luain").
+    private static func dayName(_ day: String) -> String {
+        guard AppLanguage.code == "ga", let i = weekdays.firstIndex(of: day) else { return day.capitalized }
+        let f = DateFormatter()
+        f.locale = AppLanguage.locale
+        // weekdays starts on Monday; the symbols on Sunday.
+        return f.standaloneWeekdaySymbols[(i + 1) % 7]
+    }
 
     private var generatedPath: String { AddSession.generatePath(city: city, sessionName: name) }
     private var path: String { manualPath ?? generatedPath }
@@ -313,7 +322,7 @@ struct SessionDetailsForm: View {
                 TextField("State or county (required)", text: $state).accessibilityIdentifier("details.state")
                 TextField("Country (required)", text: $country).accessibilityIdentifier("details.country")
             } footer: {
-                Text("ceol.io/sessions/\(path.isEmpty ? "…" : path)")
+                Text(verbatim: "ceol.io/sessions/\(path.isEmpty ? "…" : path)")
             }
             scheduleSection
             Section {
@@ -359,7 +368,7 @@ struct SessionDetailsForm: View {
             .accessibilityIdentifier("details.repeats")
             if !recType.isEmpty {
                 Picker("Day", selection: $weekday) {
-                    ForEach(Self.weekdays, id: \.self) { Text($0.capitalized).tag($0) }
+                    ForEach(Self.weekdays, id: \.self) { Text(Self.dayName($0)).tag($0) }
                 }
                 if recType == "weekly" {
                     Picker("Every", selection: $frequency) {
@@ -375,8 +384,8 @@ struct SessionDetailsForm: View {
                             set: { on in which = on ? which + [n] : which.filter { $0 != n } }))
                     }
                 }
-                TimeField(label: "Starts", time: $start)
-                TimeField(label: "Ends", time: $end)
+                TimeField(label: tr("Starts"), time: $start)
+                TimeField(label: tr("Ends"), time: $end)
             }
         } header: {
             Text("Schedule")
@@ -385,7 +394,7 @@ struct SessionDetailsForm: View {
                 if let unparsed = seed.unparsed {
                     Text("Couldn't read a schedule from \"\(unparsed)\". Set it here.").foregroundStyle(CeolTokens.warning)
                 }
-                Text(recurrence.summary)
+                Text(recurrenceText)
             }
         }
     }
@@ -440,35 +449,80 @@ struct SessionDetailsForm: View {
         }
     }
 
+    /// The schedule's summary (AddSession.summarizeRecurrence), in the app's language.
+    /// English is the logic's own sentence; Irish is built from the same choices, on the
+    /// 24-hour clock.
+    private var recurrenceText: String {
+        let english = recurrence
+        guard AppLanguage.code == "ga" else { return english.summary }
+        if recType.isEmpty { return tr("No schedule set") }
+        if weekday.isEmpty { return tr("Select a day...") }
+        let day = Self.dayName(weekday)
+        var summary: String
+        if recType == "weekly" {
+            switch frequency {
+            case 1: summary = tr("Every \(day)")
+            case 2: summary = tr("Every other \(day)")
+            default: summary = tr("Every \(frequency) weeks on \(day)")
+            }
+        } else {
+            if which.isEmpty { return tr("Select which occurrences...") }
+            let nths = Dictionary(uniqueKeysWithValues: Self.nths)
+            summary = tr("\(day), \(which.map { nths[$0] ?? "" }.joined(separator: " & ")) of the month")
+        }
+        return summary + " " + tr("from \(String(start.prefix(5))) to \(String(end.prefix(5)))")
+    }
+
+    /// SessionPath.normalize's refusals, in the app's language.
+    private static func pathError(_ e: String) -> String {
+        guard AppLanguage.code == "ga" else { return e }
+        let number = Int(e.filter(\.isNumber)) ?? 0
+        switch e {
+        case "Path is required": return tr("Path is required")
+        case "Path can't contain spaces or invisible characters": return tr("Path can't contain spaces or invisible characters")
+        case "Path can't start or end with a slash": return tr("Path can't start or end with a slash")
+        case "Path must have exactly two parts, a place and a name, like austin/mueller":
+            return tr("Path must have exactly two parts, a place and a name, like austin/mueller")
+        case "Path can't contain an empty part (//)": return tr("Path can't contain an empty part (//)")
+        case "Path can only contain letters, numbers, hyphens, underscores, periods and slashes":
+            return tr("Path can only contain letters, numbers, hyphens, underscores, periods and slashes")
+        case "Each part of the path must contain a letter or number": return tr("Each part of the path must contain a letter or number")
+        default:
+            if e.hasPrefix("Path must be") { return tr("Path must be \(number) characters or fewer") }
+            if e.hasPrefix("Each part of the path must be") { return tr("Each part of the path must be \(number) characters or fewer") }
+            return e
+        }
+    }
+
     private func trimmed(_ s: String) -> String { s.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     private func save() async {
         failure = nil
-        let missing = [("Name", name), ("City", city), ("State", state), ("Country", country)]
+        let missing = [(tr("Name"), name), (tr("City"), city), (tr("State"), state), (tr("Country"), country)]
             .filter { trimmed($0.1).isEmpty }.map(\.0)
         if !missing.isEmpty {
-            failure = "Please fill in required fields: \(missing.joined(separator: ", "))"
+            failure = tr("Please fill in required fields: \(missing.joined(separator: ", "))")
             return
         }
         let checked = SessionPath.normalize(path)
         guard let finalPath = checked.path else {
-            failure = checked.error
+            failure = checked.error.map(Self.pathError)
             advanced = true
             if manualPath == nil { manualPath = path }
             return
         }
         if !trimmed(thesessionID).isEmpty && TheSession.sessionID(thesessionID) == nil {
-            failure = "Enter a thesession.org session URL (thesession.org/sessions/1234) or numeric ID"
+            failure = tr("Enter a thesession.org session URL (thesession.org/sessions/1234) or numeric ID")
             advanced = true
             return
         }
         guard let before = Int(trimmed(bufferBefore)), let after = Int(trimmed(bufferAfter)), before >= 0, after >= 0 else {
-            failure = "Minutes before and after must be whole numbers of minutes"
+            failure = tr("Minutes before and after must be whole numbers of minutes")
             advanced = true
             return
         }
         if !recType.isEmpty && recurrence.json == nil {
-            failure = recurrence.summary
+            failure = recurrenceText
             return
         }
         saving = true
@@ -485,10 +539,10 @@ struct SessionDetailsForm: View {
         do {
             switch try await model.auth.client.addSession(body: .json(body)) {
             case .ok(let ok): onCreated(try ok.body.json.sessionPath, trimmed(name))
-            case .default(_, let e): failure = refusal(e) ?? "Failed to save session"
+            case .default(_, let e): failure = refusal(e) ?? tr("Failed to save session")
             }
         } catch {
-            failure = "Couldn't reach Ceol, so the session wasn't saved. Check your connection and try again."
+            failure = tr("Couldn't reach Ceol, so the session wasn't saved. Check your connection and try again.")
         }
     }
 }

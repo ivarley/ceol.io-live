@@ -1,0 +1,7 @@
+{
+  "about": "thesession.org entries that are the same tune (duplicates not yet merged there). Scoring counts a name from a group as right for any other in it. Each group with who said so and when.",
+  "groups": [
+    {"tune_ids": [1113, 5278], "names": ["Tralee Gaol", "The Glen Cottage"],
+     "said": "the player, 2026-10-07: duplicates on thesession.org (reported to them); recording 136"}
+  ]
+}

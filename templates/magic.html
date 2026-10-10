@@ -1,13 +1,14 @@
+{# i18n-converted #}
 {% extends "base.html" %}
 
-{% block title %}Magic Tunes{% endblock %}
+{% block title %}{{ _('Magic Tunes') }}{% endblock %}
 
 {% block content %}
 <div class="landing-page" style="display: block;">
-    <h1>Magic Tunes - {{ current_type.replace('+', ' ').title() }}s</h1>
+    <h1>{{ _('Magic Tunes - %(type)ss', type=current_type.replace('+', ' ').title()) }}</h1>
     
     <div>
-        <h2>Tune Types:</h2>
+        <h2>{{ _('Tune Types:') }}</h2>
         {% for tune_type in tune_types %}
             <a href="/magic?type={{ tune_type }}">{{ tune_type.replace('+', ' ').title() }}</a>
             {% if not loop.last %} | {% endif %}
@@ -15,21 +16,21 @@
     </div>
     
     <div>
-        <h2>Selected Tunes:</h2>
+        <h2>{{ _('Selected Tunes:') }}</h2>
         {% if tunes %}
             <ol>
             {% for tune in tunes %}
                 <li>
                     <a href="https://thesession.org/tunes/{{ tune[0] }}" target="_blank">{{ tune[1] }}</a>
-                    (Times Played: {{ tune[3] }})
+                    ({{ _('Times Played: %(count)s', count=tune[3]) }})
                 </li>
             {% endfor %}
             </ol>
         {% else %}
-            <p>No tunes found for {{ current_type.replace('+', ' ') }}.</p>
+            <p>{{ _('No tunes found for %(type)s.', type=current_type.replace('+', ' ')) }}</p>
         {% endif %}
     </div>
     
-    <p><a href="/magic?type={{ current_type }}">Get another set of {{ current_type.replace('+', ' ') }}s</a></p>
+    <p><a href="/magic?type={{ current_type }}">{{ _('Get another set of %(type)ss', type=current_type.replace('+', ' ')) }}</a></p>
 </div>
 {% endblock %}

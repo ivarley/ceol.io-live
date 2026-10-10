@@ -38,7 +38,6 @@ struct SessionPersonSheet: View {
     /// Which change is saving ("relationship", "confirmed", "archived").
     @State private var saving: String?
     @State private var failure: String?
-    @State private var page: WebPage?
 
     private var isMe: Bool { model.user?.personId == row.personId }
     private var name: String { "\(row.firstName) \(row.lastName)".trimmingCharacters(in: .whitespaces) }
@@ -56,7 +55,6 @@ struct SessionPersonSheet: View {
                 }
         }
         .ceolDrawer([.medium, .large])
-        .sheet(item: $page) { SafariView(url: $0.url).ignoresSafeArea() }
         .task {
             relationship = row.relationship
             confirmed = row.confirmed
@@ -70,7 +68,7 @@ struct SessionPersonSheet: View {
             switch try await model.auth.client.getSessionPerson(path: .init(sessionPath: path, personId: row.personId)) {
             case .ok(let ok): detail = .loaded(try ok.body.json.person)
             case .default(_, let error):
-                detail = .failed((try? error.body.json)?.message ?? "Couldn't load this person's details.")
+                detail = .failed((try? error.body.json)?.message ?? tr("Couldn't load this person's details."))
             }
         } catch {
             detail = .failed(loadFailureMessage(error))
@@ -87,12 +85,12 @@ struct SessionPersonSheet: View {
                 if let failure {
                     Text(failure).font(.ceol(size: 15)).foregroundStyle(CeolTokens.danger)
                 }
-                section("Instruments") {
+                section(tr("Instruments")) {
                     if p.instruments.isEmpty {
-                        muted("No instruments listed")
+                        muted(tr("No instruments listed"))
                     } else {
                         FlowLayout(spacing: 6) {
-                            ForEach(p.instruments, id: \.self) { Pill(text: $0.capitalized, size: 14) }
+                            ForEach(p.instruments, id: \.self) { Pill(text: SessionsL10n.instrument($0.capitalized), size: 14) }
                         }
                     }
                 }
@@ -101,7 +99,7 @@ struct SessionPersonSheet: View {
                         Link("View on TheSession.org", destination: url)
                             .font(.ceol(size: 16)).foregroundStyle(CeolTokens.primary)
                     } else {
-                        muted("Not linked")
+                        muted(tr("Not linked"))
                     }
                 }
                 if trackAttendance { nights(p) }
@@ -115,22 +113,22 @@ struct SessionPersonSheet: View {
     private func summary(_ p: SessionPersonDetail) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
-                if archived { Pill(text: "Archived", size: 12) }
+                if archived { Pill(text: tr("Archived"), size: 12) }
                 if relationship == "visitor" {
-                    Pill(text: "Visitor", style: .filled, color: Color(red: 0.55, green: 0.45, blue: 0.15), size: 12)
+                    Pill(text: tr("Visitor"), style: .filled, color: Color(red: 0.55, green: 0.45, blue: 0.15), size: 12)
                 }
-                if row.isAdmin { Pill(text: "Admin", style: .filled, color: CeolTokens.primaryFill, size: 12) }
+                if row.isAdmin { Pill(text: SessionsL10n.adminRole, style: .filled, color: CeolTokens.primaryFill, size: 12) }
                 // Can't see the session's people yet: an admin's to fix.
-                if isSessionAdmin && !confirmed { Pill(text: "Unconfirmed", size: 12) }
+                if isSessionAdmin && !confirmed { Pill(text: tr("Unconfirmed"), size: 12) }
             }
             if trackAttendance {
                 let n = p.attendedInstances.count
-                Text(n == 0 ? "Hasn't been checked in here yet" : n == 1 ? "Came 1 night" : "Came \(n) nights")
+                Text(n == 0 ? tr("Hasn't been checked in here yet") : n == 1 ? tr("Came 1 night") : tr("Came \(n) nights"))
                     .font(.ceol(size: 18, weight: .medium)).foregroundStyle(CeolTokens.textColor)
                     .accessibilityIdentifier("person.nights")
             }
             let place = [p.city, p.state, p.country].compactMap { $0 }.filter { !$0.isEmpty }
-            Text(place.isEmpty ? "No location specified" : place.joined(separator: ", "))
+            Text(place.isEmpty ? tr("No location specified") : place.joined(separator: ", "))
                 .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
         }
     }
@@ -144,14 +142,22 @@ struct SessionPersonSheet: View {
             .font(.ceol(size: 16)).foregroundStyle(CeolTokens.primary)
             .accessibilityIdentifier("person.profile")
         } else if p.hasUserAccount {
-            Button("Common Tunes?") { Task { await openCommonTunes() } }
-                .font(.ceol(size: 16)).foregroundStyle(CeolTokens.primary)
-                .accessibilityIdentifier("person.commonTunes")
+            // The tunes you both have, in the app (the web's /me/and/<id>).
+            NavigationLink {
+                CommonTunesView(personID: row.personId, name: name)
+            } label: {
+                HStack(spacing: 6) {
+                    Text("Tunes in common")
+                    Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold))
+                }
+            }
+            .font(.ceol(size: 16)).foregroundStyle(CeolTokens.primary)
+            .accessibilityIdentifier("person.commonTunes")
         }
     }
 
     private var relationshipSection: some View {
-        section("Relationship to this session") {
+        section(tr("Relationship to this session")) {
             Picker("Relationship", selection: Binding(get: { relationship ?? "member" }, set: { v in
                 Task { await setRelationship(v) }
             })) {
@@ -161,36 +167,36 @@ struct SessionPersonSheet: View {
             .pickerStyle(.segmented)
             .disabled(saving != nil)
             .accessibilityIdentifier("person.relationship")
-            muted(saving == "relationship" ? "Saving…"
-                : relationship == "visitor" ? "Came here, but this isn't one of their sessions."
-                : "This is one of their sessions — its tunes count towards their stats.")
+            muted(saving == "relationship" ? tr("Saving…")
+                : relationship == "visitor" ? tr("Came here, but this isn't one of their sessions.")
+                : tr("This is one of their sessions — its tunes count towards their stats."))
         }
     }
 
     /// What each control does, said at the point of tapping it: confirming hands over the
     /// session's people list, and an admin must know that.
     private var adminSection: some View {
-        section("Session admin") {
+        section(tr("Session admin")) {
             action(
-                saving == "confirmed" ? "Saving…"
+                saving == "confirmed" ? tr("Saving…")
                     : confirmed
-                    ? "Un-confirm \(name) — they'll no longer see this session's people list and attendance records"
-                    : "Confirm \(name) — they'll be able to see this session's people list and attendance records",
+                    ? tr("Un-confirm \(name) — they'll no longer see this session's people list and attendance records")
+                    : tr("Confirm \(name) — they'll be able to see this session's people list and attendance records"),
                 id: "person.confirm"
             ) { await setConfirmed(!confirmed) }
             action(
-                saving == "archived" ? "Saving…"
-                    : archived ? "Restore \(name) to the roster"
-                    : "Archive \(name) — hide them from lists (still findable by name)",
+                saving == "archived" ? tr("Saving…")
+                    : archived ? tr("Restore \(name) to the roster")
+                    : tr("Archive \(name) — hide them from lists (still findable by name)"),
                 id: "person.archive"
             ) { await setArchived(!archived) }
         }
     }
 
     @ViewBuilder private func nights(_ p: SessionPersonDetail) -> some View {
-        section("Nights attended") {
+        section(tr("Nights attended")) {
             if p.attendedInstances.isEmpty {
-                muted("No nights attended yet")
+                muted(tr("No nights attended yet"))
             } else {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(p.attendedInstances, id: \.sessionInstanceId) { night in
@@ -198,7 +204,7 @@ struct SessionPersonSheet: View {
                             // The night's log, in the Sessions tab under this session.
                             dismiss()
                             model.sessionsPath.append(
-                                .night(id: night.sessionInstanceId, title: "\(sessionName) · \(HomeRules.shortDate(night.date, currentYear: nil))"))
+                                .night(id: night.sessionInstanceId, title: "\(sessionName) · \(SessionsL10n.shortDate(night.date))"))
                         } label: {
                             HStack {
                                 Text(longDay(night.date) + yearSuffix(night.date)).font(.ceol(size: 16))
@@ -252,7 +258,7 @@ struct SessionPersonSheet: View {
 
     private func setRelationship(_ value: String) async {
         guard value != relationship, let r = Relationship(rawValue: value) else { return }
-        await save("relationship", what: "change their relationship to this session") {
+        await save("relationship", failed: tr("Couldn't change their relationship to this session. Try again.")) {
             switch try await model.auth.client.setSessionRelationship(
                 path: .init(sessionPath: path, personId: row.personId), body: .json(.init(relationship: r)))
             {
@@ -263,7 +269,7 @@ struct SessionPersonSheet: View {
     }
 
     private func setConfirmed(_ value: Bool) async {
-        await save("confirmed", what: "change whether they are confirmed") {
+        await save("confirmed", failed: tr("Couldn't change whether they are confirmed. Try again.")) {
             switch try await model.auth.client.setSessionPersonConfirmed(
                 path: .init(sessionPath: path, personId: row.personId), body: .json(.init(confirmed: value)))
             {
@@ -274,7 +280,7 @@ struct SessionPersonSheet: View {
     }
 
     private func setArchived(_ value: Bool) async {
-        await save("archived", what: "change whether they are archived") {
+        await save("archived", failed: tr("Couldn't change whether they are archived. Try again.")) {
             switch try await model.auth.client.setSessionPersonArchived(
                 path: .init(sessionPath: path, personId: row.personId), body: .json(.init(archived: value)))
             {
@@ -285,29 +291,20 @@ struct SessionPersonSheet: View {
     }
 
     /// Runs a change: `call` answers nil when it worked, else the server's refusal.
-    private func save(_ field: String, what: String, call: () async throws -> String?, then apply: () -> Void) async {
+    private func save(_ field: String, failed: String, call: () async throws -> String?, then apply: () -> Void) async {
         guard saving == nil else { return }
         saving = field
         failure = nil
         defer { saving = nil }
         do {
             if let refusal = try await call() {
-                failure = refusal.isEmpty ? "Couldn't \(what). Try again." : refusal
+                failure = refusal.isEmpty ? failed : refusal
                 return
             }
             apply()
             await onChanged()
         } catch {
-            failure = "Couldn't reach Ceol, so nothing changed. Check your connection and try again."
-        }
-    }
-
-    /// The tunes you both have, on the web, signed in.
-    private func openCommonTunes() async {
-        do {
-            page = WebPage(url: try await model.auth.webSession(next: "/me/and/\(row.personId)?from=\(path)"))
-        } catch {
-            failure = "Couldn't open Common Tunes. Check your connection and try again."
+            failure = tr("Couldn't reach Ceol, so nothing changed. Check your connection and try again.")
         }
     }
 }

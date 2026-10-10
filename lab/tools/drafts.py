@@ -349,7 +349,30 @@ def held_note_end(notes, lo_ms, hi_ms):
     return best
 
 
-def refine_ends(rid, drafts, log=print):
+def _night_audio(rid, audio):
+    """(store, sha1) for a recording: `audio` as given (the listening service
+    passes its own), else the lab's prepared file."""
+    from lab.audio.chunks import AudioStore
+
+    if audio is not None:
+        return audio
+    with open(os.path.join(paths.recording_dir(rid), "mono22k.sha1")) as f:
+        sha = f.read().strip()
+    store = AudioStore(paths.wav_path(rid))
+    store.clock_ms = store.duration_ms
+    return store, sha
+
+
+def _board(board):
+    """A transcription cache: the one given, else the lab's own board."""
+    import contextlib
+
+    from lab.board.board import Board
+
+    return contextlib.nullcontext(board) if board is not None else Board()
+
+
+def refine_ends(rid, drafts, log=print, audio=None, board=None):
     """Each set's end from its last held note. The meter's end (the last 4 s
     step that heard a tune) is where to look: from 6 s before it to 2 s after,
     the end of the last note held at least HELD_MS with no new note for
@@ -362,18 +385,13 @@ def refine_ends(rid, drafts, log=print):
     p = 0.0001; every night better. RING_OUT_MS is the median over those ends
     (leave-one-night-out gives the same counts); HELD_MS and QUIET_MS were
     chosen among a few on the same ends."""
-    from lab.audio.chunks import AudioStore
     from lab.bench.retrieval import transcribe_segment
-    from lab.board.board import Board
     from lab.frontends import get_frontend
 
     fe = get_frontend("basic_pitch")
-    with open(os.path.join(paths.recording_dir(rid), "mono22k.sha1")) as f:
-        sha = f.read().strip()
-    store = AudioStore(paths.wav_path(rid))
-    store.clock_ms = store.duration_ms
+    store, sha = _night_audio(rid, audio)
     moved = 0
-    with Board() as board:
+    with _board(board) as board:
         for d in drafts:
             if d["end_ms"] is None:
                 continue
@@ -469,34 +487,283 @@ def tidy(drafts):
     return drafts
 
 
+UNSURE_UNDER = 85        # p_right under this is shown at 80% or under: unsure (analysis.confidence.CHECK_UNDER)
+RUN_GAP_MS = 2000        # back to back: the next tune starts within this of the last one's end
+UNSURE_PIECE_MS = 45000  # an unsure piece shorter than this is absorbed into its run (a fragment, not a tune)
+
+
+def consolidate_unsure(drafts, states, duration_ms, model, log=print, min_piece_ms=UNSURE_PIECE_MS,
+                       naming="longest"):
+    """The player's rule (2026-10-08): a confident name stands, at once; but
+    unsure ones (shown at 80% or under) must not flip-flop. A run of back-to-
+    back unsure tunes in one set, with no break between them, is one tune whose
+    name is the best guess over the whole run: the tune with the most belief
+    summed over every step in it, not whichever name flickered last. Needs
+    each draft's p_right (from `model`); the merged tune's features and
+    p_right are worked out again. -> drafts.
+
+    `min_piece_ms`: only a piece shorter than this is absorbed into its run;
+    two longer unsure tunes side by side are a real changeover and stay apart
+    (None: every unsure run becomes one tune). `naming`: "longest" (the
+    longest piece's name) or "mass" (the most belief over the merged stretch).
+
+    Measured on thirteen labelled nights (spec 053, "Unsure runs as one
+    tune"): pieces under 45 s, the longest piece's name: wrong or extra tunes
+    55 -> 40, tunes to check 84 -> 64, labelled tunes named right 883 -> 881
+    (fixed 0, lost 2: Jackson's and The Bunch Of Green Rushes, real tunes played
+    once through, under 45 s); every unsure run merged by belief lost 4."""
+    from lab.analysis.confidence import features
+
+    ds = sorted(drafts, key=lambda d: d["start_ms"])
+    ends = {}
+    for i, d in enumerate(ds):
+        nxt = ds[i + 1]["start_ms"] if i + 1 < len(ds) else duration_ms
+        ends[id(d)] = min(d["end_ms"] or nxt, nxt)
+    unsure = [(d.get("p_right") is not None and d["p_right"] < UNSURE_UNDER) for d in ds]
+    out, i, merged = [], 0, 0
+    while i < len(ds):
+        j = i
+        while (unsure[i] and j + 1 < len(ds) and unsure[j + 1] and ds[j + 1]["set"] == ds[i]["set"]
+               and ds[j + 1]["start_ms"] - ends[id(ds[j])] < RUN_GAP_MS):
+            j += 1
+        if j == i:
+            out.append(ds[i])
+            i += 1
+            continue
+        run = ds[i:j + 1]
+        if min_piece_ms is None:
+            groups = [run]
+        else:
+            # each long piece is a tune; a short one joins the long piece before it
+            # (or, leading the run, the one after); a run of short pieces is one tune
+            long_at = [k for k, d in enumerate(run) if ends[id(d)] - d["start_ms"] >= min_piece_ms]
+            if not long_at:
+                groups = [run]
+            else:
+                groups = []
+                for n, k in enumerate(long_at):
+                    lo = 0 if n == 0 else k
+                    hi = long_at[n + 1] if n + 1 < len(long_at) else len(run)
+                    groups.append(run[lo:hi])
+        for run in groups:
+            if len(run) == 1:
+                out.append(run[0])
+                continue
+            m = self_merge(run, ends, states, naming)
+            log(f"unsure run of {len(run)} at {_fmt(run[0]['start_ms'])} "
+                f"({', '.join(d['name'] or '?' for d in run)}) -> {m['name']}")
+            out.append(m)
+            merged += len(run) - 1
+        i = j + 1
+    if merged:
+        # the merged tunes' confidence, over their whole stretch
+        features(out, states, duration_ms)
+        for d in out:
+            d["p_right"] = model.percent(d["features"]) if model else None
+    return out
+
+
+def prefer_set_type(drafts, states, duration_ms, model, log=print):
+    """The player's rule (2026-10-08): an unsure tune of the wrong type for its
+    set is heavily penalised. A set's type is what its confident tunes agree
+    on; an unsure tune (p_right under UNSURE_UNDER) of another type is renamed
+    to the tune of the set's type the listener believed most over its stretch,
+    from the candidates it weighed. Nothing to go by (no confident tune, or
+    confident ones of different types), or no candidate of the set's type: the
+    tune stands. -> drafts, p_right worked out again where any changed.
+
+    Thirteen labelled nights, from their saved states: 6 unsure tunes renamed,
+    all of them wrong before; 3 right after (two Mason's Aprons in sets of
+    reels, Monaghan's for Rip The Calico); none right before made wrong.
+    Labelled tunes named right 883 -> 884."""
+    from lab.analysis.confidence import features
+
+    ds = sorted(drafts, key=lambda d: d["start_ms"])
+    ends = {}
+    for i, d in enumerate(ds):
+        nxt = ds[i + 1]["start_ms"] if i + 1 < len(ds) else duration_ms
+        ends[id(d)] = min(d["end_ms"] or nxt, nxt)
+    low = lambda t: (t or "").lower()  # noqa
+    changed = 0
+    for d in ds:
+        if d.get("p_right") is None or d["p_right"] >= UNSURE_UNDER:
+            continue
+        sure = {low(x.get("type")) for x in ds if x is not d and x["set"] == d["set"]
+                and (x.get("p_right") or 0) >= UNSURE_UNDER and x.get("type")}
+        if len(sure) != 1:
+            continue
+        want = sure.pop()
+        if low(d.get("type")) == want:
+            continue
+        a, b = d["start_ms"], ends[id(d)]
+        mass, info = {}, {}
+        for st in states:
+            if a < st["t_ms"] <= b:
+                for c in st.get("top") or []:
+                    if low(c.get("type")) == want:
+                        mass[c["tune_id"]] = mass.get(c["tune_id"], 0.0) + c["p"]
+                        info.setdefault(c["tune_id"], c)
+        if not mass:
+            continue
+        best = max(mass, key=mass.get)
+        c = info[best]
+        ps = [next((x["p"] for x in st.get("top") or [] if x["tune_id"] == best), 0.0)
+              for st in states if a < st["t_ms"] <= b]
+        shown = [st["t_ms"] for st in states if a < st["t_ms"] <= b and st.get("shown") == best]
+        log(f"{_fmt(a)} {d['name']} ({d.get('type')}) in a set of {want}s -> {c.get('name')}")
+        d.update(tune_id=best, name=c.get("name", d["name"]), type=c.get("type"), outside=bool(c.get("outside")),
+                 conf=round(float(sorted(ps)[len(ps) // 2]), 4) if ps else 0.0,
+                 first_shown_ms=shown[0] if shown else None, last_shown_ms=shown[-1] if shown else None,
+                 how=d.get("how", "") + f", renamed to the set's type ({want})")
+        changed += 1
+    if changed:
+        features(ds, states, duration_ms)
+        for d in ds:
+            d["p_right"] = model.percent(d["features"]) if model else None
+    return ds
+
+
+JUDGE_MARGIN = 20.0    # a fit this much better (about 12 eighths matched) to rename a draft
+JUDGE_PEAK = 0.3       # the tunes judged: those the listener believed this much over the stretch, or showed
+JUDGE_MAX = 5
+
+
+def judge_drafts(rid, drafts, states, duration_ms, model, log=print, audio=None, board=None, keys=None):
+    """A judge by following (spec 053, "A judge by following"): each draft's
+    stretch is followed through every tune the listener showed or believed at
+    JUDGE_PEAK or more over it (up to JUDGE_MAX, the draft's own among them),
+    all their settings, in the session's key (`keys`); the draft takes the tune
+    whose fit (`follow.span_fit`) beats its own by JUDGE_MARGIN. The 6 s
+    window weighs a few seconds at a time; following weighs the whole
+    stretch, so a tune shown briefly at full belief beats one shown longer
+    that never fits. -> drafts, p_right worked out again where any changed.
+
+    Thirteen labelled nights, from their saved states: 13 drafts renamed;
+    labelled tunes named right 882 -> 890 of 918 (fixed 9: Jim Keefe's, The
+    Sailor's Bonnet, The Porthole Of The Kelp, The New Custom House, The
+    Floating Crowbar, The Limerick Lasses, The Boys Of Malin, Sord
+    Cholmcille, The Piper On Horseback; broken 1, Mac's Fancy on 4; p 0.02);
+    wrong or extra 42 -> 33."""
+    from lab.analysis.confidence import features, spans
+    from lab.analysis.follow import chains_for, eighth, heard_slots, slot_grid, span_fit
+    from lab.analysis.form import played_forms
+    from lab.analysis.pulse import tempo_map
+    from lab.bench.retrieval import transcribe_segment
+    from lab.frontends import get_frontend
+
+    if keys is None:
+        keys = {}
+        if rid is not None:
+            with open(paths.manifest_path(rid)) as f:
+                keys = {r["tune_id"]: r.get("key") for r in json.load(f).get("repertoire", [])}
+    fe = get_frontend("basic_pitch")
+    store, sha = _night_audio(rid, audio)
+    changed = 0
+    with _board(board) as board:
+        for a, b, d in spans(drafts, duration_ms):
+            inside = [st for st in states if a <= st["t_ms"] <= b + HOP_MS]
+            peak, info = {}, {}
+            for st in inside:
+                for c in st.get("top") or []:
+                    peak[c["tune_id"]] = max(peak.get(c["tune_id"], 0.0), c["p"])
+                    info.setdefault(c["tune_id"], c)
+            shown = {st["shown"] for st in inside if st.get("shown") is not None}
+            cands = sorted({t for t, p in peak.items() if p >= JUDGE_PEAK} | shown | {d["tune_id"]},
+                           key=lambda t: -peak.get(t, 0.0))[:JUDGE_MAX]
+            if d["tune_id"] not in cands:
+                cands[-1] = d["tune_id"]
+            if len(cands) < 2:
+                continue
+            forms = played_forms(cands)
+            if d["tune_id"] not in forms:
+                continue
+            tm = tempo_map(store.read(a, b), store.sr)
+            if not tm:
+                continue
+            notes, _, _ = transcribe_segment(fe, store, sha, int(a), int(b), board=board)
+            times = slot_grid(a, b, tmap={"t_ms": tm["t_ms"], "period_ms": [eighth(p) for p in tm["period_ms"]]})
+            heard = heard_slots(notes, times)
+            fits = {t: span_fit(heard, chains_for(0, forms[t], session_key=keys.get(t))) for t in cands if t in forms}
+            best = max(fits, key=fits.get)
+            if best == d["tune_id"] or fits[best] - fits[d["tune_id"]] <= JUDGE_MARGIN:
+                continue
+            c = info.get(best, {})
+            ps = [next((x["p"] for x in st.get("top") or [] if x["tune_id"] == best), 0.0) for st in inside]
+            seen = [st["t_ms"] for st in inside if st.get("shown") == best]
+            log(f"{_fmt(a)} {d['name']} -> {c.get('name')} (followed: {fits[d['tune_id']]:.0f} -> {fits[best]:.0f})")
+            d.update(tune_id=best, name=c.get("name", d["name"]), type=c.get("type"),
+                     outside=bool(c.get("outside")), conf=round(float(sorted(ps)[len(ps) // 2]), 4) if ps else 0.0,
+                     first_shown_ms=seen[0] if seen else None, last_shown_ms=seen[-1] if seen else None,
+                     how=d.get("how", "") + ", judged by following")
+            changed += 1
+    if changed:
+        features(drafts, states, duration_ms)
+        for d in drafts:
+            d["p_right"] = model.percent(d["features"]) if model else None
+    return drafts
+
+
+def self_merge(run, ends, states, naming):
+    """One tune for a run of unsure drafts (consolidate_unsure)."""
+    a, b = run[0]["start_ms"], ends[id(run[-1])]
+    mass, info = {}, {}
+    for st in states:
+        if a < st["t_ms"] <= b:
+            for c in st.get("top") or []:
+                mass[c["tune_id"]] = mass.get(c["tune_id"], 0.0) + c["p"]
+                info.setdefault(c["tune_id"], c)
+    if naming == "longest":
+        longest = max(run, key=lambda d: ends[id(d)] - d["start_ms"])
+        best = longest["tune_id"]
+        info.setdefault(best, {"name": longest["name"], "type": longest.get("type"),
+                               "outside": longest.get("outside")})
+    else:
+        best = max(mass, key=mass.get) if mass else run[0]["tune_id"]
+    shown = [st["t_ms"] for st in states if a < st["t_ms"] <= b and st.get("shown") == best]
+    ps = [next((c["p"] for c in st.get("top") or [] if c["tune_id"] == best), 0.0)
+          for st in states if a < st["t_ms"] <= b]
+    m = dict(run[0])
+    m["conf"] = round(float(sorted(ps)[len(ps) // 2]), 4) if ps else 0.0
+    c = info.get(best, {})
+    m.update(tune_id=best, name=c.get("name", m["name"]), type=c.get("type", m.get("type")),
+             outside=bool(c.get("outside", m.get("outside"))), end_ms=run[-1]["end_ms"],
+             first_shown_ms=shown[0] if shown else None, last_shown_ms=shown[-1] if shown else None,
+             how=m.get("how", "") + f", one of {len(run)} unsure merged")
+    return m
+
+
 FOLLOW_LEAD_MS = 90000    # a set's span for following: from this long before its first tune was shown
 FOLLOW_TAIL_MS = 30000    # ... to this long after its drafted end
 
 
-def follow_drafts(rid, manifest, drafts, log=print):
+def follow_drafts(rid, manifest, drafts, log=print, session_keys=True, audio=None, board=None, keys=None,
+                  progress=None):
     """Each set's starts from score following (analysis.follow), in place of
     the meter's: the drafts give the sets, the tunes in order and each set's
     rough span; following finds where each tune starts, the one ending and
     the next beginning decided together. Set ends stay the meter's (where the
     music stops), which following does worse. A set with a tune that has no
     readable setting keeps the meter's starts. The meter's start is kept on
-    each draft as `meter_start_ms`."""
+    each draft as `meter_start_ms`.
+
+    The listening service passes `audio` (store, sha1), a `board`, and `keys`
+    ({tune_id: the session's key}) in place of what the lab reads by `rid`;
+    `progress(sets done, sets)` is told after each set."""
     from lab.analysis.follow import follow_span
     from lab.analysis.form import played_forms
-    from lab.audio.chunks import AudioStore
-    from lab.board.board import Board
 
     duration = int(manifest["recording"]["duration_ms"])
     forms = played_forms({d["tune_id"] for d in drafts if d["tune_id"]})
-    keys = {r["tune_id"]: r.get("key") for r in manifest.get("repertoire", [])}
-    with open(os.path.join(paths.recording_dir(rid), "mono22k.sha1")) as f:
-        sha = f.read().strip()
-    store = AudioStore(paths.wav_path(rid))
-    store.clock_ms = store.duration_ms
+    # the key the session plays each tune in; a new session knows none
+    if keys is None:
+        keys = {r["tune_id"]: r.get("key") for r in manifest.get("repertoire", [])} if session_keys else {}
+    store, sha = _night_audio(rid, audio)
     prev_end = 0
-    with Board() as board:
+    with _board(board) as board:
         sets_seen = sorted({d["set"] for d in drafts})
-        for k in sets_seen:
+        for n_done, k in enumerate(sets_seen):
+            if progress:
+                progress(n_done, len(sets_seen))
             rows = [d for d in drafts if d["set"] == k]
             for d in rows:
                 d["meter_start_ms"] = d["start_ms"]
@@ -542,10 +809,11 @@ def _fmt(ms):
     return f"{s // 3600}:{s // 60 % 60:02d}:{s % 60:02d}"
 
 
-def session_tunes_before(rid):
+def session_tunes_before(rid, last_nights=None):
     """The tunes the recording's session had logged before the recording's
     night, from the session's history (lab pull): what a live system would know
-    then. None without a history."""
+    then. None without a history. `last_nights`: only its most recent this
+    many nights, as a young session would know."""
     with open(paths.manifest_path(rid)) as f:
         rec = json.load(f)["recording"]
     path = os.path.join(paths.data("sessions", str(rec["session_id"])), "logged_order.json")
@@ -554,10 +822,15 @@ def session_tunes_before(rid):
     with open(path) as f:
         rows = json.load(f)["rows"]
     night = str(rec["date"])[:10]
-    return {r["tune_id"] for r in rows if r["record_type"] == "tune" and r["tune_id"] and r["date"] < night}
+    rows = [r for r in rows if r["date"][:10] < night]
+    if last_nights:
+        keep = sorted({r["date"][:10] for r in rows})[-last_nights:]
+        rows = [r for r in rows if r["date"][:10] in keep]
+    return {r["tune_id"] for r in rows if r["record_type"] == "tune" and r["tune_id"]}
 
 
-def replay(rid, out_path, log=print, transpose=0, merged=False, tempo=False):
+def replay(rid, out_path, log=print, transpose=0, merged=False, tempo=False, new_session=False,
+           history_nights=None, popular=None, nu_partly=0.0, drop_release_s=None, hop_ms=None):
     """The listener (lab listen, the service's) run over a recording's audio
     offline, for a night recorded without the phone's meter: its states written
     as a meter log (dir "in"; at_ms is the audio time, there being no screen),
@@ -569,7 +842,15 @@ def replay(rid, out_path, log=print, transpose=0, merged=False, tempo=False):
 
     from lab.tools.listen import HOP_MS as STEP, Listener, Models
 
-    session = session_tunes_before(rid) if merged else None
+    # new_session: as a session that has never logged a tune would hear it
+    session = session_tunes_before(rid, history_nights) if merged and not new_session else None
+    second = None
+    if merged and popular:
+        from lab.corpus.index import candidate_tune_ids
+
+        second = candidate_tune_ids("popular")
+        if popular == "union":       # one tier: popular tunes count as the session's own
+            session, second = (session or set()) | second, None
     if merged:
         log(f"merged shortlists: {len(session) if session else 'no'} tunes known to the session before the night"
             + ("" if session else ", so popular tunes"))
@@ -583,7 +864,9 @@ def replay(rid, out_path, log=print, transpose=0, merged=False, tempo=False):
         log(f"tempo evidence from labelled tunes by type: {counts}")
     li = Listener(tempfile.mkdtemp(prefix=f"replay-{rid}-"),
                   models=Models(transpose=transpose, merged=merged, tempo=model),
-                  keep_s=120, session_tunes=session)
+                  keep_s=120, session_tunes=session, second_tier=second, nu_partly=nu_partly,
+                  drop_release_s=drop_release_s, hop_ms=hop_ms or STEP)
+    STEP = li.hop_ms
     part = out_path + ".part"
     started = time.time()
     with open(part, "w") as out:
@@ -602,6 +885,16 @@ def replay(rid, out_path, log=print, transpose=0, merged=False, tempo=False):
     os.replace(part, out_path)
 
 
+def _excluded_suffix():
+    """A replay's states depend on the settings left out of matching
+    (corpus.exclusions): a replay made with them is kept apart from one made
+    without."""
+    from lab.corpus.exclusions import excluded_settings
+
+    n = len(excluded_settings())
+    return f"-x{n}" if n else ""
+
+
 def add_parser(sub):
     p = sub.add_parser("drafts", help="draft a recording's segments from the phone's meter log")
     p.add_argument("recording", type=int)
@@ -618,6 +911,21 @@ def add_parser(sub):
     p.add_argument("--merged", action="store_true",
                    help="replay with merged shortlists (the whole corpus + the session's tunes logged before "
                         "the night, or popular tunes without any); kept as replay-states-merged.jsonl")
+    p.add_argument("--new-session", action="store_true",
+                   help="with --blind: as a session that has never logged anything would get it: merged "
+                        "shortlists with popular tunes in place of the session's own, and no session keys "
+                        "for following; kept as replay-states-...-new.jsonl")
+    p.add_argument("--history-nights", type=int,
+                   help="with --merged: the session's history only from its last this many nights (a young "
+                        "session)")
+    p.add_argument("--popular", choices=("union", "tier"),
+                   help="with --merged: popular tunes as well as the session's own, either as its own "
+                        "(union) or as a second tier (tier, discounted by --nu-partly of an outside tune's)")
+    p.add_argument("--nu-partly", type=float, default=0.5)
+    p.add_argument("--out", help="write the drafts here instead of the recording's drafts.json")
+    p.add_argument("--drop-release", type=float,
+                   help="replay letting go of a tune held at full belief, for this many seconds, once its belief "
+                        "drops (Listener drop_release_s)")
     p.add_argument("--tempo", action="store_true",
                    help="replay with tempo evidence (a candidate's type against the beat heard), fitted "
                         "without the recording's own labels; kept as replay-states-...-tempo.jsonl")
@@ -645,8 +953,22 @@ def main(args):
             raise SystemExit(f"the saved drafts were made {'with' if saved.get('blind') else 'without'} "
                              f"--blind; apply them the same way")
         drafts = saved["drafts"]
+        if args.blind and all("features" in d for d in drafts):
+            # the chance each is right by the model as it is now, which may be
+            # newer than the drafts (analysis.confidence)
+            from lab.analysis.confidence import ConfidenceModel
+
+            try:
+                model = ConfidenceModel.load()
+                for d in drafts:
+                    d["p_right"] = model.percent(d["features"])
+                saved["confidence_version"] = model.version
+                print(f"confidence from model {model.version}")
+            except OSError:
+                print("no confidence model yet (lab/configs/confidence.json): the tunes go in without one")
         print(f"applying the saved drafts: {len(drafts)} tunes in {max(d['set'] for d in drafts)} sets")
-        return apply_log(rid, drafts, args) if args.blind else apply(rid, drafts, args)
+        return (apply_log(rid, drafts, args, saved.get("confidence_version")) if args.blind
+                else apply(rid, drafts, args))
     if args.apply:
         # ask for the password now, not after minutes of replaying and following
         _signed_in(args)
@@ -654,7 +976,8 @@ def main(args):
     with open(paths.manifest_path(rid)) as f:
         manifest = json.load(f)
     log = os.path.join(paths.recording_dir(rid), "listen-states.jsonl")
-    if args.blind and not os.path.exists(log):
+    if args.blind and (args.new_session or args.history_nights or args.popular or args.drop_release
+                       or not os.path.exists(log)):
         args.replay = True
     if args.replay or not os.path.exists(log):
         if not args.replay:
@@ -665,11 +988,19 @@ def main(args):
         # for about 20% more compute, which a replay can spare and the live
         # service, near real time on Render, cannot yet.
         fifths = not args.no_fifths
+        if args.new_session:
+            args.merged = True
         name = ("replay-states" + ("-fifths" if fifths else "") + ("-merged" if args.merged else "")
-                + ("-tempo" if args.tempo else "") + ".jsonl")
+                + ("-tempo" if args.tempo else "") + ("-new" if args.new_session else "")
+                + (f"-h{args.history_nights}" if args.history_nights else "")
+                + (f"-pop{args.popular}" if args.popular else "")
+                + (f"{args.nu_partly:g}" if args.popular == "tier" else "") + _excluded_suffix()
+                + (f"-drop{args.drop_release:g}" if args.drop_release else "") + ".jsonl")
         log = os.path.join(paths.recording_dir(rid), name)
         if not os.path.exists(log):
-            replay(rid, log, transpose="fifths" if fifths else 0, merged=args.merged, tempo=args.tempo)
+            replay(rid, log, transpose="fifths" if fifths else 0, merged=args.merged, tempo=args.tempo,
+                   new_session=args.new_session, history_nights=args.history_nights, popular=args.popular,
+                   nu_partly=args.nu_partly if args.popular == "tier" else 0.0, drop_release_s=args.drop_release)
     states, _, logged = load_log(log)
     names = {r["tune_id"]: r["name"] for r in manifest.get("repertoire", [])}
     if args.blind:
@@ -680,16 +1011,38 @@ def main(args):
         if not os.path.exists(paths.wav_path(rid)):
             raise SystemExit(f"following needs the audio: python -m lab pull --recordings {rid}, then "
                              f"python -m lab prepare --recordings {rid} (or --no-follow)")
-        drafts = follow_drafts(rid, manifest, drafts)
+        drafts = follow_drafts(rid, manifest, drafts, session_keys=not args.new_session)
     if args.blind:
         drafts = join_sets(tidy(drop_squeezed(tidy(drafts))))
         drafts = tidy(drafts)
     if os.path.exists(paths.wav_path(rid)):
         drafts = tidy(refine_ends(rid, drafts)) if args.blind else refine_ends(rid, drafts)
-    out = os.path.join(paths.recording_dir(rid), "drafts.json")
+    # each tune's features, and the chance it is right (analysis.confidence)
+    from lab.analysis.confidence import ConfidenceModel, features
+
+    features(drafts, states, int(manifest["recording"]["duration_ms"]))
+    model = None
+    try:
+        model = ConfidenceModel.load()
+    except OSError:
+        pass
+    for d in drafts:
+        d["p_right"] = model.percent(d["features"]) if model else None
+    if args.blind and model:
+        dur = int(manifest["recording"]["duration_ms"])
+        # an unsure tune of the wrong type for its set takes the set's type
+        # (prefer_set_type); then unsure names do not flip-flop (consolidate_unsure)
+        drafts = prefer_set_type(drafts, states, dur, model)
+        drafts = tidy(consolidate_unsure(drafts, states, dur, model))
+        # then each stretch is judged by following its candidates (judge_drafts)
+        if not args.no_follow:
+            drafts = judge_drafts(rid, drafts, states, dur, model)
+    out = args.out or os.path.join(paths.recording_dir(rid), "drafts.json")
     with open(out, "w") as f:
         json.dump({"recording_id": rid, "followed": not args.no_follow, "blind": args.blind,
                    "rules": {"in_set_lead_ms": IN_SET_LEAD_MS, "tuneness": TUNE},
+                   "states_log": os.path.basename(log),
+                   "confidence_version": model.version if model else None,
                    "drafts": drafts}, f, indent=1)
 
     set_no = 0
@@ -711,7 +1064,7 @@ def main(args):
         print(f"blind: {len(low)} tunes named with a median belief under 0.5 (check these first): "
               + ", ".join(f"{_fmt(d['start_ms'])} {d['name']}" for d in low[:12]))
     if args.apply:
-        return apply_log(rid, drafts, args) if args.blind else apply(rid, drafts, args)
+        return apply_log(rid, drafts, args, model.version if model else None) if args.blind else apply(rid, drafts, args)
     return 0
 
 
@@ -736,7 +1089,7 @@ def _signed_in(args):
     return s
 
 
-def apply_log(rid, drafts, args):
+def apply_log(rid, drafts, args, version=None):
     """Log a blind night's tunes and place them, in one pass: each tune posted
     in time order to POST /api/recordings/<id>/segments with its start (and,
     for a set's last tune, its end). The server puts each new tune after the
@@ -757,6 +1110,11 @@ def apply_log(rid, drafts, args):
         for d in sorted(drafts, key=lambda d: d["start_ms"]):
             body = {"start_ms": int(d["start_ms"]), "end_ms": d["end_ms"]}
             body["thesession_id" if d.get("outside") else "tune_id"] = d["tune_id"]
+            if d.get("p_right") is not None and version is not None:
+                # the chance it is right, and which model said so (schema 060): the
+                # segmenter shows it as needing a check until someone confirms it
+                body["confidence"] = int(d["p_right"])
+                body["confidence_model"] = f"listen-{version}"
             r = s.post(f"{base}/api/recordings/{rid}/segments", json=body)
             if r.ok:
                 done += 1

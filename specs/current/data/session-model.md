@@ -111,8 +111,15 @@ Individual tunes played during a session instance.
 - `created_date`, `last_modified_date` - Audit timestamps
 
 **Live-logging columns** (Feature 024, `schema/024_live_logging_delta.sql`):
-- `source` - 'human' (default) or 'audio'
-- `confidence` - SMALLINT 0..100; NULL = definite human entry
+- `source` - who wrote the row: 'human' (default), 'segmenter' (logged from the timestamping
+  tool), or 'listen' (a machine logged what it heard, spec 053)
+- `confidence` - SMALLINT 0..100; NULL = definite human entry. A machine's row carries the
+  chance in whole percent (0-99) that the name is right; Confirm, or a person correcting the
+  tune, makes it 100. Under 100 = needs a person's check (the segmenter's filter, the logger's
+  amber row at 70 or below)
+- `confidence_model` - which calibration model made `confidence` (`schema/060_log_confidence_model.sql`,
+  spec 053; the model is `lab/configs/confidence.json`); NULL once a person has set it. The
+  history table keeps the machine's guess, its confidence and model beside the correction
 - `deleted` - Soft tombstone (live `remove_tune` op never hard-deletes)
 - `logged_timestamp` - Client-asserted log time
 - `client_device_id` - Originating device

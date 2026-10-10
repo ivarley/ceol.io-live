@@ -123,6 +123,8 @@ ios-test: ## iOS: CeolKit tests on the Mac (no simulator), then the app's tests 
 	cd ios/CeolKit && swift test
 	xcodebuild -project ios/Ceol/Ceol.xcodeproj -scheme Ceol -destination '$(IOS_SIM)' \
 		-derivedDataPath $(IOS_DERIVED) -skipPackagePluginValidation -only-testing:CeolTests test
+	# Spec 057: every string the build extracts has Irish (in the catalog or ios/Ceol/i18n-ga).
+	./venv/bin/python scripts/ios_strings.py missing --derived $(IOS_DERIVED)
 
 ios-build: ## iOS: build the app for the simulator
 	xcodebuild -project ios/Ceol/Ceol.xcodeproj -scheme Ceol -destination 'generic/platform=iOS Simulator' \
@@ -143,9 +145,24 @@ ios-ui-test: ## iOS: sign-in UI tests in the simulator, against a local server (
 	xcodebuild -project ios/Ceol/Ceol.xcodeproj -scheme Ceol -destination '$(IOS_SIM)' \
 		-derivedDataPath $(IOS_DERIVED) -skipPackagePluginValidation -only-testing:CeolUITests test
 
+ios-strings: ios-build ## iOS: sync the String Catalog from a build, then apply the Irish in ios/Ceol/i18n-ga (spec 057)
+	./venv/bin/python scripts/ios_strings.py sync --derived $(IOS_DERIVED)
+	./venv/bin/python scripts/ios_strings.py apply
+
 ios-fixtures: ## iOS: re-capture the real API responses CeolKit's decoding tests read (seeded local DB)
 	./venv/bin/python scripts/capture_native_fixtures.py
 
+
+# Spec 057: the server's and the templates' Irish catalog. extract -> update merges new
+# strings into translations/ga/LC_MESSAGES/messages.po; compile writes the .mo the
+# server reads. tests/unit/test_i18n_catalogs.py fails while any string lacks Irish.
+I18N_IGNORE = --ignore-dirs='venv node_modules lab spike tests frontend static ios streaming listen abc-renderer e2e scripts .git .claude'
+i18n-extract: ## i18n: extract the server's and templates' strings into translations/messages.pot
+	./venv/bin/pybabel extract -F babel.cfg $(I18N_IGNORE) -k _l -k lazy_gettext -k js_ngettext:1,2 --sort-by-file --no-wrap -o translations/messages.pot .
+	./venv/bin/pybabel update -i translations/messages.pot -d translations -l ga --no-wrap --no-fuzzy-matching --ignore-obsolete
+
+i18n-compile: ## i18n: compile translations/ga/LC_MESSAGES/messages.po to the .mo the server reads
+	./venv/bin/pybabel compile -d translations -l ga --statistics
 
 format:
 	black .

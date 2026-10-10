@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, waitFor } from '@testing-library/svelte'
 import { queuePut, queueAll, snapshotPut } from '../src/offline.js'
+// A static import (vi.mock below is hoisted above it): App.svelte and everything it pulls
+// in, the Irish catalog included, take a while to load the first time, and loading it
+// inside beforeEach ran into the 10 s hook timeout on a cold run.
+import App from '../src/App.svelte'
 
 // Characterization test: mounts the REAL App with client.js mocked, and pins the
 // observable behavior the logstate.js extraction must preserve — that a bootstrap of
@@ -42,10 +46,8 @@ vi.mock('../src/client.js', () => ({
 
 const config = { sessionInstanceId: 90, currentPerson: { person_id: 2, first_name: 'Ian' }, streamingBaseUrl: 'http://stream.test/' }
 
-let App
-beforeEach(async () => {
+beforeEach(() => {
   document.body.innerHTML = ''
-  App = (await import('../src/App.svelte')).default
 })
 
 describe('App renders bootstrapped records (extraction guard)', () => {

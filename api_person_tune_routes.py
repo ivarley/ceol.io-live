@@ -5,15 +5,26 @@ This module provides RESTful API endpoints for managing personal tune collection
 including CRUD operations, learning status updates, and heard count tracking.
 """
 
-from flask import request, jsonify
+# i18n-converted
+
+from flask import jsonify, make_response, request
+from flask_babel import gettext as _
 from flask_login import current_user
 from typing import Optional, Dict, Any
 from functools import wraps
 from models.person_tune import PersonTune
 from services.person_tune_service import PersonTuneService, UNSET, normalize_tags
 from services.thesession_sync_service import ThesessionSyncService
-from database import (get_db_connection, get_current_user_id, normalize_quotes,
-                      normalize_quotes_sql, ABC_MATCH_SQL, abc_search_terms)
+from database import (
+    get_db_connection,
+    get_current_user_id,
+    normalize_quotes,
+    normalize_quotes_sql,
+    ABC_MATCH_SQL,
+    abc_search_terms,
+)
+import os
+import threading
 import base64
 
 
@@ -35,7 +46,8 @@ person_tune_service = PersonTuneService()
 thesession_sync_service = ThesessionSyncService()
 
 
-from api_auth import api_login_required, public_api
+from api_auth import api_error, api_login_required, public_api
+from services import person_scope
 
 
 def get_user_person_id() -> int:
@@ -47,18 +59,28 @@ def get_user_person_id() -> int:
 
 def require_person_tune_ownership(func):
     """Decorator to verify user owns the person_tune record."""
+
     @wraps(func)
     def wrapper(person_tune_id, *args, **kwargs):
         # Get the person_tune to check ownership
         person_tune = person_tune_service.get_person_tune_by_id(person_tune_id)
         if not person_tune:
-            return jsonify({"success": False, "error": "Tune not found"}), 404
+            return jsonify({"success": False, "error": _("Tune not found")}), 404
 
         # Check if the current user owns this person_tune
         if person_tune.person_id != current_user.person_id:
-            return jsonify({"success": False, "error": "You do not have permission to access this tune"}), 403
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": _("You do not have permission to access this tune"),
+                    }
+                ),
+                403,
+            )
 
         return func(person_tune_id, *args, **kwargs)
+
     return wrapper
 
 
@@ -69,29 +91,32 @@ person_tune_login_required = api_login_required
 def _get_tune_details(tune_id: int) -> Optional[Dict[str, Any]]:
     """
     Helper function to fetch tune details from the database.
-    
+
     Args:
         tune_id: The tune ID to look up
-        
+
     Returns:
         Dictionary with tune details or None if not found
     """
     conn = get_db_connection()
     try:
         cur = conn.cursor()
-        cur.execute("""
+        cur.execute(
+            """
             SELECT tune_id, name, tune_type, tunebook_count_cached
             FROM tune
             WHERE tune_id = %s
-        """, (tune_id,))
-        
+        """,
+            (tune_id,),
+        )
+
         row = cur.fetchone()
         if row:
             return {
-                'tune_id': row[0],
-                'name': row[1],
-                'type': row[2],
-                'tunebook_count': row[3]
+                "tune_id": row[0],
+                "name": row[1],
+                "type": row[2],
+                "tunebook_count": row[3],
             }
         return None
     finally:
@@ -115,17 +140,24 @@ def _cache_setting_if_needed(tune_id: int, setting_id, user_id) -> None:
     if not setting_id:
         return
     from api_routes import cache_default_tune_setting
+
     conn = get_db_connection()
     try:
         cur = conn.cursor()
-        cur.execute("SELECT setting_id FROM tune_setting WHERE setting_id = %s", (setting_id,))
+        cur.execute(
+            "SELECT setting_id FROM tune_setting WHERE setting_id = %s", (setting_id,)
+        )
         if not cur.fetchone():
-            cache_default_tune_setting(tune_id, None, user_id, sync=True, target_setting_id=setting_id)
+            cache_default_tune_setting(
+                tune_id, None, user_id, sync=True, target_setting_id=setting_id
+            )
     finally:
         conn.close()
 
 
-def _apply_to_existing_person_tune(person_id: int, tune_id: int, setting_id, notes, user_id) -> Dict[str, Any]:
+def _apply_to_existing_person_tune(
+    person_id: int, tune_id: int, setting_id, notes, user_id
+) -> Dict[str, Any]:
     """Apply the EXPLICIT parts of an add request to a person_tune that already exists,
     and report what changed as {"setting_id": <id>} / {"notes": true}.
 
@@ -137,7 +169,9 @@ def _apply_to_existing_person_tune(person_id: int, tune_id: int, setting_id, not
         overwrite, so an existing note wins and the caller keeps theirs on screen.
     """
     applied: Dict[str, Any] = {}
-    existing = person_tune_service.get_person_tune_by_person_and_tune(person_id, tune_id)
+    existing = person_tune_service.get_person_tune_by_person_and_tune(
+        person_id, tune_id
+    )
     if not existing:
         return applied
 
@@ -189,26 +223,45 @@ def get_my_tunes():
     """
     try:
         # Parse and validate query parameters
-        page = max(1, int(request.args.get('page', 1)))
-        per_page = min(2000, max(1, int(request.args.get('per_page', 2000))))
-        learn_status_filter = request.args.get('learn_status')
-        tune_type_filter = request.args.get('tune_type')
-        search_query = request.args.get('search', '').strip()
-        sort_by = request.args.get('sort', 'alpha-asc')
+        page = max(1, int(request.args.get("page", 1)))
+        per_page = min(2000, max(1, int(request.args.get("per_page", 2000))))
+        learn_status_filter = request.args.get("learn_status")
+        tune_type_filter = request.args.get("tune_type")
+        search_query = request.args.get("search", "").strip()
+        sort_by = request.args.get("sort", "alpha-asc")
 
         # Validate learn_status if provided
-        if learn_status_filter and learn_status_filter not in ['want to learn', 'learning', 'learned']:
-            return jsonify({
-                "success": False,
-                "error": "Invalid learn_status. Must be 'want to learn', 'learning', or 'learned'"
-            }), 400
+        if learn_status_filter and learn_status_filter not in [
+            "want to learn",
+            "learning",
+            "learned",
+        ]:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": _(
+                            "Invalid learn_status. Must be 'want to learn', 'learning', or 'learned'"
+                        ),
+                    }
+                ),
+                400,
+            )
 
         # Validate sort_by if provided
         if sort_by not in VALID_PERSON_TUNE_SORTS:
-            return jsonify({
-                "success": False,
-                "error": f"Invalid sort. Must be one of: {', '.join(VALID_PERSON_TUNE_SORTS)}"
-            }), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": _(
+                            "Invalid sort. Must be one of: %(sorts)s",
+                            sorts=", ".join(VALID_PERSON_TUNE_SORTS),
+                        ),
+                    }
+                ),
+                400,
+            )
 
         person_id = get_user_person_id()
 
@@ -233,27 +286,34 @@ def get_my_tunes():
 
         # Disable caching to ensure fresh data after updates
         # User-specific data that changes frequently should not be cached
-        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-        response.headers['Pragma'] = 'no-cache'
-        response.headers['Expires'] = '0'
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
 
         return response, 200
 
     except AttributeError as e:
-        return jsonify({
-            "success": False,
-            "error": "User authentication error"
-        }), 401
+        return jsonify({"success": False, "error": _("User authentication error")}), 401
     except ValueError as e:
-        return jsonify({
-            "success": False,
-            "error": f"Invalid parameter: {str(e)}"
-        }), 400
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": _("Invalid parameter: %(error)s", error=str(e)),
+                }
+            ),
+            400,
+        )
     except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": f"Error retrieving tunes: {str(e)}"
-        }), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": _("Error retrieving tunes: %(error)s", error=str(e)),
+                }
+            ),
+            500,
+        )
 
 
 @person_tune_login_required
@@ -261,15 +321,15 @@ def get_my_tunes():
 def get_person_tune_detail(person_tune_id):
     """
     GET /api/my-tunes/<person_tune_id>
-    
+
     Get detailed information about a specific tune in the user's collection.
-    
+
     Route Parameters:
         - person_tune_id (int): ID of the person_tune record
-        
+
     Returns:
         JSON response with person_tune data and tune details
-        
+
     Requirements: 4.1, 4.2
     """
     try:
@@ -280,26 +340,24 @@ def get_person_tune_detail(person_tune_id):
         response_data = _person_tune_detail_response(person_tune_id)
 
         if not response_data:
-            return jsonify({
-                "success": False,
-                "error": "Tune not found"
-            }), 404
+            return jsonify({"success": False, "error": _("Tune not found")}), 404
 
-        return jsonify({
-            "success": True,
-            "person_tune": response_data
-        }), 200
-        
+        return jsonify({"success": True, "person_tune": response_data}), 200
+
     except AttributeError:
-        return jsonify({
-            "success": False,
-            "error": "User authentication error"
-        }), 401
+        return jsonify({"success": False, "error": _("User authentication error")}), 401
     except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": f"Error retrieving tune details: {str(e)}"
-        }), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": _(
+                        "Error retrieving tune details: %(error)s", error=str(e)
+                    ),
+                }
+            ),
+            500,
+        )
 
 
 @person_tune_login_required
@@ -327,46 +385,49 @@ def add_my_tune():
     try:
         data = request.get_json()
         if not data:
-            return jsonify({
-                "success": False,
-                "error": "No data provided"
-            }), 400
+            return jsonify({"success": False, "error": _("No data provided")}), 400
 
-        tune_id = data.get('tune_id')
+        tune_id = data.get("tune_id")
 
         # thesession.org import (spec 026 pattern): a thesession_id (int, numeric
         # string, or tunes URL) is also an acceptable target — thesession ids ARE our
         # tune ids, so it doubles as tune_id and, when the tune isn't local yet, we
         # import it server-side below (the add pane's remote picks + paste-a-URL).
         from live_logging_routes import _parse_thesession_id
-        thesession_id = _parse_thesession_id(data.get('thesession_id'))
+
+        thesession_id = _parse_thesession_id(data.get("thesession_id"))
         if not tune_id and thesession_id is not None:
             tune_id = thesession_id
         if not tune_id:
-            return jsonify({
-                "success": False,
-                "error": "tune_id is required"
-            }), 400
+            return jsonify({"success": False, "error": _("tune_id is required")}), 400
 
         # Check if tune exists and if it's a redirect
         conn = get_db_connection()
         try:
             cur = conn.cursor()
-            cur.execute("SELECT redirect_to_tune_id FROM tune WHERE tune_id = %s", (tune_id,))
+            cur.execute(
+                "SELECT redirect_to_tune_id FROM tune WHERE tune_id = %s", (tune_id,)
+            )
             redirect_check = cur.fetchone()
 
             if redirect_check and redirect_check[0] is not None:
                 # Tune is a redirect - get the destination tune's info
                 redirect_to_id = redirect_check[0]
-                cur.execute("SELECT name FROM tune WHERE tune_id = %s", (redirect_to_id,))
+                cur.execute(
+                    "SELECT name FROM tune WHERE tune_id = %s", (redirect_to_id,)
+                )
                 redirect_tune = cur.fetchone()
-                redirect_tune_name = redirect_tune[0] if redirect_tune else f"Tune #{redirect_to_id}"
+                redirect_tune_name = (
+                    redirect_tune[0]
+                    if redirect_tune
+                    else _("Tune #%(id)s", id=redirect_to_id)
+                )
 
                 # Check if the destination tune is already in their tunebook
                 person_id = get_user_person_id()
                 cur.execute(
                     "SELECT person_tune_id FROM person_tune WHERE person_id = %s AND tune_id = %s",
-                    (person_id, redirect_to_id)
+                    (person_id, redirect_to_id),
                 )
                 existing_person_tune = cur.fetchone()
 
@@ -374,13 +435,21 @@ def add_my_tune():
                     # Already in tunebook
                     cur.close()
                     conn.close()
-                    return jsonify({
-                        "success": False,
-                        "error": "tune_redirected_exists",
-                        "message": f"This tune was merged with {redirect_tune_name}, which is already in your tunebook",
-                        "redirect_to_tune_id": redirect_to_id,
-                        "redirect_to_tune_name": redirect_tune_name
-                    }), 409
+                    return (
+                        jsonify(
+                            {
+                                "success": False,
+                                "error": "tune_redirected_exists",  # not-i18n
+                                "message": _(
+                                    "This tune was merged with %(name)s, which is already in your tunebook",
+                                    name=redirect_tune_name,
+                                ),
+                                "redirect_to_tune_id": redirect_to_id,
+                                "redirect_to_tune_name": redirect_tune_name,
+                            }
+                        ),
+                        409,
+                    )
                 else:
                     # Add the destination tune instead
                     cur.close()
@@ -389,10 +458,10 @@ def add_my_tune():
                     # Update tune_id to use the redirect destination
                     tune_id = redirect_to_id
                     # Clear new_tune data since we're using the existing redirected-to tune
-                    data['new_tune'] = None
+                    data["new_tune"] = None
                     # Flag that we did a redirect so we can return the right message
-                    data['_redirected_from'] = data.get('tune_id')
-                    data['_redirect_tune_name'] = redirect_tune_name
+                    data["_redirected_from"] = data.get("tune_id")
+                    data["_redirect_tune_name"] = redirect_tune_name
 
             else:
                 cur.close()
@@ -410,6 +479,7 @@ def add_my_tune():
         if not tune_details and thesession_id is not None:
             from live_logging_routes import _import_tune_for_live
             from api_routes import TuneImportError
+
             conn = get_db_connection()
             try:
                 cur = conn.cursor()
@@ -417,10 +487,18 @@ def add_my_tune():
                 conn.commit()
             except TuneImportError as e:
                 conn.rollback()
-                return jsonify({
-                    "success": False,
-                    "error": f"Could not import tune from thesession.org: {e.message}"
-                }), 502
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "error": _(
+                                "Could not import tune from thesession.org: %(error)s",
+                                error=e.message,
+                            ),
+                        }
+                    ),
+                    502,
+                )
             except Exception:
                 conn.rollback()
                 raise
@@ -429,25 +507,28 @@ def add_my_tune():
             tune_details = _get_tune_details(tune_id)
 
         # If tune doesn't exist and new_tune data is provided, insert it
-        if not tune_details and data.get('new_tune'):
-            new_tune_data = data.get('new_tune')
+        if not tune_details and data.get("new_tune"):
+            new_tune_data = data.get("new_tune")
             conn = get_db_connection()
             try:
                 cur = conn.cursor()
 
                 # Insert the tune into the tune table
-                cur.execute("""
+                cur.execute(
+                    """
                     INSERT INTO tune (tune_id, name, tune_type, tunebook_count_cached, tunebook_count_cached_date, created_by_user_id)
                     VALUES (%s, %s, %s, %s, CURRENT_DATE, %s)
                     ON CONFLICT (tune_id) DO NOTHING
                     RETURNING tune_id
-                """, (
-                    new_tune_data.get('tune_id'),
-                    new_tune_data.get('name'),
-                    new_tune_data.get('tune_type'),
-                    new_tune_data.get('tunebook_count', 0),
-                    get_current_user_id()
-                ))
+                """,
+                    (
+                        new_tune_data.get("tune_id"),
+                        new_tune_data.get("name"),
+                        new_tune_data.get("tune_type"),
+                        new_tune_data.get("tunebook_count", 0),
+                        get_current_user_id(),
+                    ),
+                )
 
                 # If a new tune was actually inserted (not a conflict), cache the default setting
                 inserted_tune = cur.fetchone()
@@ -457,35 +538,48 @@ def add_my_tune():
                     # Cache the default setting and generate images
                     # Use lazy import to avoid circular dependency with api_routes
                     from api_routes import cache_default_tune_setting
+
                     # new_tune data from frontend doesn't include settings, so pass None
                     # to have the helper fetch full tune data from thesession.org
-                    cache_default_tune_setting(tune_id, None, get_current_user_id(), sync=True)
+                    cache_default_tune_setting(
+                        tune_id, None, get_current_user_id(), sync=True
+                    )
 
                 # Get the tune details after insertion
                 tune_details = _get_tune_details(tune_id)
 
             except Exception as e:
                 conn.rollback()
-                return jsonify({
-                    "success": False,
-                    "error": f"Error inserting tune: {str(e)}"
-                }), 500
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "error": _("Error inserting tune: %(error)s", error=str(e)),
+                        }
+                    ),
+                    500,
+                )
             finally:
                 conn.close()
 
         # Validate tune exists (either was already there or just inserted)
         if not tune_details:
-            return jsonify({
-                "success": False,
-                "error": f"Tune with ID {tune_id} not found"
-            }), 404
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": _("Tune with ID %(id)s not found", id=tune_id),
+                    }
+                ),
+                404,
+            )
 
-        learn_status = data.get('learn_status', 'want to learn')
-        notes = data.get('notes')
-        setting_id = data.get('setting_id')
+        learn_status = data.get("learn_status", "want to learn")
+        notes = data.get("notes")
+        setting_id = data.get("setting_id")
 
         person_id = get_user_person_id()
-        user_id = current_user.user_id if hasattr(current_user, 'user_id') else None
+        user_id = current_user.user_id if hasattr(current_user, "user_id") else None
 
         # Create the person_tune
         success, message, person_tune = person_tune_service.create_person_tune(
@@ -494,7 +588,7 @@ def add_my_tune():
             learn_status=learn_status,
             notes=notes,
             setting_id=setting_id,
-            user_id=user_id
+            user_id=user_id,
         )
 
         if not success:
@@ -505,21 +599,24 @@ def add_my_tune():
                 # thesession.org link resolves to a synthetic result with no on-list flag).
                 # Dropping the request on the floor loses exactly what the user configured,
                 # so apply it to the existing row and say what was applied.
-                applied = _apply_to_existing_person_tune(person_id, tune_id, setting_id, notes, user_id)
-                existing = person_tune_service.get_person_tune_by_person_and_tune(person_id, tune_id)
+                applied = _apply_to_existing_person_tune(
+                    person_id, tune_id, setting_id, notes, user_id
+                )
+                existing = person_tune_service.get_person_tune_by_person_and_tune(
+                    person_id, tune_id
+                )
                 body = {
                     "success": False,
                     "error": message,
                     "applied": applied,
                 }
                 if existing:
-                    body["person_tune"] = _person_tune_detail_response(existing.person_tune_id)
+                    body["person_tune"] = _person_tune_detail_response(
+                        existing.person_tune_id
+                    )
                 return jsonify(body), 409  # Conflict
             else:
-                return jsonify({
-                    "success": False,
-                    "error": message
-                }), 400
+                return jsonify({"success": False, "error": message}), 400
 
         _cache_setting_if_needed(tune_id, setting_id, user_id)
 
@@ -527,32 +624,47 @@ def add_my_tune():
         response_data = _person_tune_detail_response(person_tune.person_tune_id)
 
         # Check if we redirected from another tune
-        if data.get('_redirected_from'):
-            return jsonify({
-                "success": True,
-                "redirected": True,
-                "message": f"This tune was merged with {data.get('_redirect_tune_name')}, added it to your tunebook",
-                "redirect_to_tune_id": tune_id,
-                "redirect_to_tune_name": data.get('_redirect_tune_name'),
-                "person_tune": response_data
-            }), 201
+        if data.get("_redirected_from"):
+            return (
+                jsonify(
+                    {
+                        "success": True,
+                        "redirected": True,
+                        "message": _(
+                            "This tune was merged with %(name)s, added it to your tunebook",
+                            name=data.get("_redirect_tune_name"),
+                        ),
+                        "redirect_to_tune_id": tune_id,
+                        "redirect_to_tune_name": data.get("_redirect_tune_name"),
+                        "person_tune": response_data,
+                    }
+                ),
+                201,
+            )
 
-        return jsonify({
-            "success": True,
-            "message": "Tune added to your collection successfully",
-            "person_tune": response_data
-        }), 201
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "message": _("Tune added to your collection successfully"),
+                    "person_tune": response_data,
+                }
+            ),
+            201,
+        )
 
     except AttributeError:
-        return jsonify({
-            "success": False,
-            "error": "User authentication error"
-        }), 401
+        return jsonify({"success": False, "error": _("User authentication error")}), 401
     except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": f"Error adding tune: {str(e)}"
-        }), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": _("Error adding tune: %(error)s", error=str(e)),
+                }
+            ),
+            500,
+        )
 
 
 @person_tune_login_required
@@ -582,43 +694,52 @@ def update_person_tune(person_tune_id):
     try:
         data = request.get_json()
         if not data:
-            return jsonify({
-                "success": False,
-                "error": "No data provided"
-            }), 400
+            return jsonify({"success": False, "error": _("No data provided")}), 400
 
         # Extract fields from request - use UNSET for fields not provided
-        learn_status = data.get('learn_status') if 'learn_status' in data else UNSET
-        notes = data.get('notes') if 'notes' in data else UNSET
-        setting_id = data.get('setting_id') if 'setting_id' in data else UNSET
-        name_alias = data.get('name_alias') if 'name_alias' in data else UNSET
-        key = data.get('key') if 'key' in data else UNSET
-        tags = data.get('tags') if 'tags' in data else UNSET
-        heard_count = data.get('heard_count') if 'heard_count' in data else UNSET
+        learn_status = data.get("learn_status") if "learn_status" in data else UNSET
+        notes = data.get("notes") if "notes" in data else UNSET
+        setting_id = data.get("setting_id") if "setting_id" in data else UNSET
+        name_alias = data.get("name_alias") if "name_alias" in data else UNSET
+        key = data.get("key") if "key" in data else UNSET
+        tags = data.get("tags") if "tags" in data else UNSET
+        heard_count = data.get("heard_count") if "heard_count" in data else UNSET
 
         # tags must be a list when provided (normalized in the service). Reject a
         # non-list rather than silently coercing so client bugs surface.
         if tags is not UNSET and tags is not None and not isinstance(tags, list):
-            return jsonify({
-                "success": False,
-                "error": "tags must be a list of strings"
-            }), 400
+            return (
+                jsonify(
+                    {"success": False, "error": _("tags must be a list of strings")}
+                ),
+                400,
+            )
 
         # Validate setting_id if provided
-        if setting_id is not UNSET and setting_id is not None and setting_id != '':
+        if setting_id is not UNSET and setting_id is not None and setting_id != "":
             try:
                 setting_id = int(setting_id)
                 if setting_id <= 0:
-                    return jsonify({
-                        "success": False,
-                        "error": "setting_id must be a positive integer"
-                    }), 400
+                    return (
+                        jsonify(
+                            {
+                                "success": False,
+                                "error": _("setting_id must be a positive integer"),
+                            }
+                        ),
+                        400,
+                    )
             except (ValueError, TypeError):
-                return jsonify({
-                    "success": False,
-                    "error": "setting_id must be a valid integer"
-                }), 400
-        elif setting_id == '':
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "error": _("setting_id must be a valid integer"),
+                        }
+                    ),
+                    400,
+                )
+        elif setting_id == "":
             setting_id = None
 
         # Validate heard_count if provided
@@ -626,29 +747,39 @@ def update_person_tune(person_tune_id):
             try:
                 heard_count = int(heard_count)
                 if heard_count < 0:
-                    return jsonify({
-                        "success": False,
-                        "error": "heard_count cannot be negative"
-                    }), 400
+                    return (
+                        jsonify(
+                            {
+                                "success": False,
+                                "error": _("heard_count cannot be negative"),
+                            }
+                        ),
+                        400,
+                    )
             except (ValueError, TypeError):
-                return jsonify({
-                    "success": False,
-                    "error": "heard_count must be a valid integer"
-                }), 400
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "error": _("heard_count must be a valid integer"),
+                        }
+                    ),
+                    400,
+                )
 
         # Handle empty string for name_alias (means clear it)
-        if name_alias == '':
+        if name_alias == "":
             name_alias = None
 
         # Convert empty string to None for notes if needed
-        if notes == '':
+        if notes == "":
             notes = None
 
         # Empty string clears the key ("no preference — whatever the setting says")
-        if key == '':
+        if key == "":
             key = None
 
-        user_id = current_user.user_id if hasattr(current_user, 'user_id') else None
+        user_id = current_user.user_id if hasattr(current_user, "user_id") else None
 
         # Update the person_tune
         success, message, person_tune = person_tune_service.update_person_tune(
@@ -660,20 +791,14 @@ def update_person_tune(person_tune_id):
             key=key,
             tags=tags,
             heard_count=heard_count,
-            user_id=user_id
+            user_id=user_id,
         )
 
         if not success:
             if "not found" in message:
-                return jsonify({
-                    "success": False,
-                    "error": message
-                }), 404
+                return jsonify({"success": False, "error": message}), 404
             else:
-                return jsonify({
-                    "success": False,
-                    "error": message
-                }), 400
+                return jsonify({"success": False, "error": message}), 400
 
         # A setting picked from the preview's pager is often one we've never imported
         # (the pager pages thesession.org's full list), so cache its ABC — otherwise the
@@ -684,17 +809,23 @@ def update_person_tune(person_tune_id):
         # Build response with tune details via the shared serializer
         response_data = _person_tune_detail_response(person_tune.person_tune_id)
 
-        return jsonify({
-            "success": True,
-            "message": message,
-            "person_tune": response_data
-        }), 200
+        return (
+            jsonify(
+                {"success": True, "message": message, "person_tune": response_data}
+            ),
+            200,
+        )
 
     except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": f"Error updating tune: {str(e)}"
-        }), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": _("Error updating tune: %(error)s", error=str(e)),
+                }
+            ),
+            500,
+        )
 
 
 @person_tune_login_required
@@ -714,47 +845,52 @@ def increment_tune_heard_count(person_tune_id):
     Requirements: 1.6, 1.7, 1.8
     """
     try:
-        user_id = current_user.user_id if hasattr(current_user, 'user_id') else None
+        user_id = current_user.user_id if hasattr(current_user, "user_id") else None
 
         # Increment the heard count
         success, message, new_count = person_tune_service.increment_heard_count(
-            person_tune_id=person_tune_id,
-            user_id=user_id
+            person_tune_id=person_tune_id, user_id=user_id
         )
 
         if not success:
             if "not found" in message:
-                return jsonify({
-                    "success": False,
-                    "error": message
-                }), 404
+                return jsonify({"success": False, "error": message}), 404
             elif "want to learn" in message:
-                return jsonify({
-                    "success": False,
-                    "error": message
-                }), 422  # Unprocessable Entity
+                return (
+                    jsonify({"success": False, "error": message}),
+                    422,
+                )  # Unprocessable Entity
             else:
-                return jsonify({
-                    "success": False,
-                    "error": message
-                }), 400
+                return jsonify({"success": False, "error": message}), 400
 
         # Full response via the shared serializer
         response_data = _person_tune_detail_response(person_tune_id)
 
-        return jsonify({
-            "success": True,
-            "message": message,
-            "heard_count": new_count,
-            "new_count": new_count,  # Alias for consistency
-            "person_tune": response_data
-        }), 200
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "message": message,
+                    "heard_count": new_count,
+                    "new_count": new_count,  # Alias for consistency
+                    "person_tune": response_data,
+                }
+            ),
+            200,
+        )
 
     except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": f"Error incrementing heard count: {str(e)}"
-        }), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": _(
+                        "Error incrementing heard count: %(error)s", error=str(e)
+                    ),
+                }
+            ),
+            500,
+        )
 
 
 @person_tune_login_required
@@ -772,48 +908,53 @@ def decrement_tune_heard_count(person_tune_id):
         JSON response with updated heard count
     """
     try:
-        user_id = current_user.user_id if hasattr(current_user, 'user_id') else None
+        user_id = current_user.user_id if hasattr(current_user, "user_id") else None
 
         # Decrement the heard count
         success, message, new_count = person_tune_service.decrement_heard_count(
-            person_tune_id=person_tune_id,
-            user_id=user_id
+            person_tune_id=person_tune_id, user_id=user_id
         )
 
         if not success:
             # Check if it's a validation error or not found error
             if "not found" in message.lower():
-                return jsonify({
-                    "success": False,
-                    "error": message
-                }), 404
+                return jsonify({"success": False, "error": message}), 404
             elif "validation" in message.lower():
-                return jsonify({
-                    "success": False,
-                    "error": message
-                }), 422  # Unprocessable Entity
+                return (
+                    jsonify({"success": False, "error": message}),
+                    422,
+                )  # Unprocessable Entity
             else:
-                return jsonify({
-                    "success": False,
-                    "error": message
-                }), 400
+                return jsonify({"success": False, "error": message}), 400
 
         # Full response via the shared serializer
         response_data = _person_tune_detail_response(person_tune_id)
 
-        return jsonify({
-            "success": True,
-            "message": message,
-            "heard_count": new_count,
-            "new_count": new_count,  # Alias for consistency
-            "person_tune": response_data
-        }), 200
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "message": message,
+                    "heard_count": new_count,
+                    "new_count": new_count,  # Alias for consistency
+                    "person_tune": response_data,
+                }
+            ),
+            200,
+        )
 
     except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": f"Error decrementing heard count: {str(e)}"
-        }), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": _(
+                        "Error decrementing heard count: %(error)s", error=str(e)
+                    ),
+                }
+            ),
+            500,
+        )
 
 
 @person_tune_login_required
@@ -834,6 +975,9 @@ def my_tunes_op():
                        target count, NOT a delta, so a replayed +1 can't double-count)
       - set_notes  -> UPDATE notes
       - set_tags   -> UPDATE tags                    (absolute set; normalized server-side)
+      - set_setting -> UPDATE setting_id             (absolute set; null clears; a setting
+                       only thesession.org has is imported first, so this one needs a
+                       connection unless the setting is already held)
       - remove     -> DELETE
 
     Keyed by tune_id (not the server-assigned person_tune_id) so an offline
@@ -845,7 +989,12 @@ def my_tunes_op():
         op_type = data.get("type")
         tune_id = data.get("tune_id")
         if not op_type or tune_id is None:
-            return jsonify({"success": False, "error": "type and tune_id are required"}), 400
+            return (
+                jsonify(
+                    {"success": False, "error": _("type and tune_id are required")}
+                ),
+                400,
+            )
         user_id = getattr(current_user, "user_id", None)
 
         conn = get_db_connection()
@@ -856,7 +1005,9 @@ def my_tunes_op():
             # offline op means the merged tune. Uniform across op types — without this,
             # a replayed `add` would resurrect the tombstoned tune on the list.
             remapped_from = None
-            cur.execute("SELECT redirect_to_tune_id FROM tune WHERE tune_id = %s", (tune_id,))
+            cur.execute(
+                "SELECT redirect_to_tune_id FROM tune WHERE tune_id = %s", (tune_id,)
+            )
             rrow = cur.fetchone()
             if rrow and rrow[0] is not None:
                 remapped_from = tune_id
@@ -865,19 +1016,31 @@ def my_tunes_op():
             if op_type == "add":
                 learn_status = data.get("learn_status") or "want to learn"
                 if learn_status not in ("want to learn", "learning", "learned"):
-                    return jsonify({"success": False, "error": "invalid learn_status"}), 400
+                    return (
+                        jsonify({"success": False, "error": _("invalid learn_status")}),
+                        400,
+                    )
                 # Same starting heard_count the POST path gives a new row — an add is
                 # itself a hearing (PersonTune.DEFAULT_HEARD_COUNT).
                 cur.execute(
                     """INSERT INTO person_tune (person_id, tune_id, learn_status, heard_count, created_by_user_id)
                        VALUES (%s, %s, %s, %s, %s)
                        ON CONFLICT (person_id, tune_id) DO NOTHING""",
-                    (person_id, tune_id, learn_status, PersonTune.DEFAULT_HEARD_COUNT, user_id),
+                    (
+                        person_id,
+                        tune_id,
+                        learn_status,
+                        PersonTune.DEFAULT_HEARD_COUNT,
+                        user_id,
+                    ),
                 )
             elif op_type == "set_status":
                 learn_status = data.get("learn_status")
                 if learn_status not in ("want to learn", "learning", "learned"):
-                    return jsonify({"success": False, "error": "invalid learn_status"}), 400
+                    return (
+                        jsonify({"success": False, "error": _("invalid learn_status")}),
+                        400,
+                    )
                 cur.execute(
                     """UPDATE person_tune SET learn_status=%s, last_modified_user_id=%s
                        WHERE person_id=%s AND tune_id=%s""",
@@ -886,7 +1049,17 @@ def my_tunes_op():
             elif op_type == "set_heard":
                 hc = data.get("heard_count")
                 if not isinstance(hc, int) or hc < 0:
-                    return jsonify({"success": False, "error": "heard_count must be a non-negative integer"}), 400
+                    return (
+                        jsonify(
+                            {
+                                "success": False,
+                                "error": _(
+                                    "heard_count must be a non-negative integer"
+                                ),
+                            }
+                        ),
+                        400,
+                    )
                 cur.execute(
                     """UPDATE person_tune SET heard_count=%s, last_modified_user_id=%s
                        WHERE person_id=%s AND tune_id=%s RETURNING heard_count""",
@@ -909,6 +1082,40 @@ def my_tunes_op():
                        WHERE person_id=%s AND tune_id=%s""",
                     (normalize_tags(data.get("tags")), user_id, person_id, tune_id),
                 )
+            elif op_type == "set_setting":
+                # The version you play (the setting chooser). Nothing may point at a
+                # setting we don't hold, so one only thesession.org has is imported.
+                setting_id = data.get("setting_id")
+                if setting_id is not None and (
+                    isinstance(setting_id, bool)
+                    or not isinstance(setting_id, int)
+                    or setting_id <= 0
+                ):
+                    return (
+                        jsonify(
+                            {
+                                "success": False,
+                                "error": _(
+                                    "setting_id must be a positive integer or null"
+                                ),
+                            }
+                        ),
+                        400,
+                    )
+                if setting_id is not None:
+                    from api_routes import TuneImportError
+                    from live_logging_routes import _ensure_setting_local
+
+                    try:
+                        _ensure_setting_local(cur, tune_id, setting_id, user_id)
+                    except TuneImportError as e:
+                        conn.rollback()
+                        return jsonify({"success": False, "error": e.message}), e.status
+                cur.execute(
+                    """UPDATE person_tune SET setting_id=%s, last_modified_user_id=%s
+                       WHERE person_id=%s AND tune_id=%s""",
+                    (setting_id, user_id, person_id, tune_id),
+                )
             elif op_type == "remove":
                 cur.execute(
                     "DELETE FROM person_tune WHERE person_id=%s AND tune_id=%s",
@@ -922,9 +1129,21 @@ def my_tunes_op():
                 instrument = (data.get("instrument") or "").strip()
                 status = data.get("status")
                 if not instrument:
-                    return jsonify({"success": False, "error": "instrument is required"}), 400
-                if status is not None and status not in ("want to learn", "learning", "learned"):
-                    return jsonify({"success": False, "error": "invalid status"}), 400
+                    return (
+                        jsonify(
+                            {"success": False, "error": _("instrument is required")}
+                        ),
+                        400,
+                    )
+                if status is not None and status not in (
+                    "want to learn",
+                    "learning",
+                    "learned",
+                ):
+                    return (
+                        jsonify({"success": False, "error": _("invalid status")}),
+                        400,
+                    )
                 # Resolve against the person's profile (case-insensitive) + get the auto flag.
                 cur.execute(
                     "SELECT instrument, is_auto FROM person_instrument WHERE person_id=%s AND LOWER(instrument)=LOWER(%s)",
@@ -932,7 +1151,15 @@ def my_tunes_op():
                 )
                 inst_row = cur.fetchone()
                 if not inst_row:
-                    return jsonify({"success": False, "error": "instrument not on your profile"}), 400
+                    return (
+                        jsonify(
+                            {
+                                "success": False,
+                                "error": _("instrument not on your profile"),
+                            }
+                        ),
+                        400,
+                    )
                 canonical_instrument, is_auto = inst_row[0], inst_row[1]
                 # The tune must be on the person's list (the FK also enforces this).
                 cur.execute(
@@ -941,7 +1168,12 @@ def my_tunes_op():
                 )
                 pt_row = cur.fetchone()
                 if not pt_row:
-                    return jsonify({"success": False, "error": "tune not on your list"}), 400
+                    return (
+                        jsonify(
+                            {"success": False, "error": _("tune not on your list")}
+                        ),
+                        400,
+                    )
                 learn_status = pt_row[0]
                 if status is None or (is_auto and status == learn_status):
                     cur.execute(
@@ -956,16 +1188,36 @@ def my_tunes_op():
                            ON CONFLICT (person_id, tune_id, instrument)
                            DO UPDATE SET status = EXCLUDED.status,
                                          last_modified_user_id = EXCLUDED.last_modified_user_id""",
-                        (person_id, tune_id, canonical_instrument, status, user_id, user_id),
+                        (
+                            person_id,
+                            tune_id,
+                            canonical_instrument,
+                            status,
+                            user_id,
+                            user_id,
+                        ),
                     )
             else:
-                return jsonify({"success": False, "error": f"unknown op type: {op_type}"}), 400
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "error": _("unknown op type: %(type)s", type=op_type),
+                        }
+                    ),
+                    400,
+                )
             conn.commit()
         finally:
             cur.close()
             conn.close()
 
-        resp = {"success": True, "op_id": data.get("op_id"), "type": op_type, "tune_id": tune_id}
+        resp = {
+            "success": True,
+            "op_id": data.get("op_id"),
+            "type": op_type,
+            "tune_id": tune_id,
+        }
         if remapped_from is not None:
             resp["remapped_from"] = remapped_from
         if heard_count is not None:
@@ -973,7 +1225,15 @@ def my_tunes_op():
         return jsonify(resp), 200
 
     except Exception as e:
-        return jsonify({"success": False, "error": f"Error applying my-tunes op: {str(e)}"}), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": _("Error applying my-tunes op: %(error)s", error=str(e)),
+                }
+            ),
+            500,
+        )
 
 
 @person_tune_login_required
@@ -991,7 +1251,15 @@ def set_instrument_auto():
         instrument = (data.get("instrument") or "").strip()
         is_auto = data.get("is_auto")
         if not instrument or not isinstance(is_auto, bool):
-            return jsonify({"success": False, "error": "instrument and boolean is_auto are required"}), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": _("instrument and boolean is_auto are required"),
+                    }
+                ),
+                400,
+            )
         conn = get_db_connection()
         cur = conn.cursor()
         try:
@@ -1000,14 +1268,32 @@ def set_instrument_auto():
                 (is_auto, person_id, instrument),
             )
             if cur.rowcount == 0:
-                return jsonify({"success": False, "error": "instrument not on your profile"}), 400
+                return (
+                    jsonify(
+                        {"success": False, "error": _("instrument not on your profile")}
+                    ),
+                    400,
+                )
             conn.commit()
         finally:
             cur.close()
             conn.close()
-        return jsonify({"success": True, "instrument": instrument, "is_auto": is_auto}), 200
+        return (
+            jsonify({"success": True, "instrument": instrument, "is_auto": is_auto}),
+            200,
+        )
     except Exception as e:
-        return jsonify({"success": False, "error": f"Error setting instrument auto flag: {str(e)}"}), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": _(
+                        "Error setting instrument auto flag: %(error)s", error=str(e)
+                    ),
+                }
+            ),
+            500,
+        )
 
 
 @person_tune_login_required
@@ -1025,64 +1311,56 @@ def delete_person_tune(person_tune_id):
         JSON response with success status
     """
     try:
-        user_id = current_user.user_id if hasattr(current_user, 'user_id') else None
+        user_id = current_user.user_id if hasattr(current_user, "user_id") else None
 
         # Delete the person_tune
         success, message = person_tune_service.delete_person_tune(
-            person_tune_id=person_tune_id,
-            user_id=user_id
+            person_tune_id=person_tune_id, user_id=user_id
         )
 
         if not success:
             if "not found" in message:
-                return jsonify({
-                    "success": False,
-                    "error": message
-                }), 404
+                return jsonify({"success": False, "error": message}), 404
             else:
-                return jsonify({
-                    "success": False,
-                    "error": message
-                }), 400
+                return jsonify({"success": False, "error": message}), 400
 
-        return jsonify({
-            "success": True,
-            "message": message
-        }), 200
+        return jsonify({"success": True, "message": message}), 200
 
     except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": f"Error deleting tune: {str(e)}"
-        }), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": _("Error deleting tune: %(error)s", error=str(e)),
+                }
+            ),
+            500,
+        )
 
 
 @person_tune_login_required
 def update_my_profile():
     """
     PATCH /api/person/me
-    
+
     Update the current user's person record (limited fields).
-    
+
     Request Body:
         - thesession_user_id (int, optional): thesession.org user ID
-        
+
     Returns:
         JSON response with success status
     """
     try:
         data = request.get_json()
         if not data:
-            return jsonify({
-                "success": False,
-                "error": "No data provided"
-            }), 400
-        
+            return jsonify({"success": False, "error": _("No data provided")}), 400
+
         person_id = get_user_person_id()
-        
+
         # Only allow updating thesession_user_id for now
-        thesession_user_id = data.get('thesession_user_id')
-        
+        thesession_user_id = data.get("thesession_user_id")
+
         if thesession_user_id is not None:
             # Validate it's a positive integer
             try:
@@ -1090,43 +1368,57 @@ def update_my_profile():
                 if thesession_user_id <= 0:
                     raise ValueError("Must be positive")
             except (ValueError, TypeError):
-                return jsonify({
-                    "success": False,
-                    "error": "Invalid thesession_user_id. Must be a positive integer."
-                }), 400
-        
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "error": _(
+                                "Invalid thesession_user_id. Must be a positive integer."
+                            ),
+                        }
+                    ),
+                    400,
+                )
+
         conn = get_db_connection()
         try:
             cur = conn.cursor()
-            
+
             # Update person record
-            cur.execute("""
+            cur.execute(
+                """
                 UPDATE person
                 SET thesession_user_id = %s,
                     last_modified_date = (NOW() AT TIME ZONE 'UTC')
                 WHERE person_id = %s
-            """, (thesession_user_id, person_id))
-            
+            """,
+                (thesession_user_id, person_id),
+            )
+
             conn.commit()
-            
-            return jsonify({
-                "success": True,
-                "message": "Profile updated successfully"
-            }), 200
-            
+
+            return (
+                jsonify(
+                    {"success": True, "message": _("Profile updated successfully")}
+                ),
+                200,
+            )
+
         finally:
             conn.close()
-            
+
     except AttributeError:
-        return jsonify({
-            "success": False,
-            "error": "User authentication error"
-        }), 401
+        return jsonify({"success": False, "error": _("User authentication error")}), 401
     except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": f"Error updating profile: {str(e)}"
-        }), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": _("Error updating profile: %(error)s", error=str(e)),
+                }
+            ),
+            500,
+        )
 
 
 @public_api  # backs the hamburger "Find a tune" overlay, offered to logged-out users on every page (templates/hamburger_menu.html else-branch → frontend/src/tunesheet/FindTune.svelte)
@@ -1151,13 +1443,13 @@ def search_tunes():
     Requirements: 5.1
     """
     try:
-        query = normalize_quotes(request.args.get('q', '').strip())
+        query = normalize_quotes(request.args.get("q", "").strip())
 
         if not query:
-            return jsonify({
-                "success": False,
-                "error": "Search query is required"
-            }), 400
+            return (
+                jsonify({"success": False, "error": _("Search query is required")}),
+                400,
+            )
 
         # A thesession.org tune URL (or a bare tune id) is a POINTER, not a name — resolve
         # it to that one tune instead of running a hopeless LIKE over names. This is what
@@ -1165,79 +1457,109 @@ def search_tunes():
         # tune" overlay, the legacy search component); the deep search resolves links
         # client-side because it can also preview not-yet-imported tunes.
         from live_logging_routes import _parse_thesession_id
+
         ref_tune_id = _parse_thesession_id(query)
 
         if ref_tune_id is None and len(query) < 2:
-            return jsonify({
-                "success": False,
-                "error": "Search query must be at least 2 characters"
-            }), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": _("Search query must be at least 2 characters"),
+                    }
+                ),
+                400,
+            )
 
         # Get limit parameter
         try:
-            limit = min(50, max(1, int(request.args.get('limit', 20))))
+            limit = min(50, max(1, int(request.args.get("limit", 20))))
         except (ValueError, TypeError):
             limit = 20
 
         # Get optional context parameters
-        person_id = request.args.get('person_id', type=int)
+        person_id = request.args.get("person_id", type=int)
         # List membership/learn_status is private to the list owner: only honor
         # person_id for self (or a system admin) — anyone else gets catalog-only
         # results instead of a probe into another person's list.
         if person_id is not None:
-            own = getattr(current_user, 'person_id', None) if current_user.is_authenticated else None
+            own = (
+                getattr(current_user, "person_id", None)
+                if current_user.is_authenticated
+                else None
+            )
             is_admin = current_user.is_authenticated and current_user.is_system_admin
             if person_id != own and not is_admin:
                 person_id = None
-        session_id = request.args.get('session_id', type=int)
+        session_id = request.args.get("session_id", type=int)
         # Soft type preference (the type of the set you're logging into): matching-type
         # tunes sort above other types. None => no effect.
-        prefer_type = (request.args.get('prefer_type') or '').strip() or None
+        prefer_type = (request.args.get("prefer_type") or "").strip() or None
         # Search mode, matching the deep search's vocabulary (live_logging_routes.
         # _parse_deep_search_args): 'mixed' blends name + notation, 'name'/'abc' narrow to
         # one. No caller passes it yet -- the overlay relies on the 'mixed' default -- but
         # the two searches answering the same `mode` is what keeps them interchangeable.
-        mode = (request.args.get('mode') or '').strip().lower()
-        if mode not in ('name', 'abc', 'mixed'):
-            mode = 'mixed'
+        mode = (request.args.get("mode") or "").strip().lower()
+        if mode not in ("name", "abc", "mixed"):
+            mode = "mixed"
 
         conn = get_db_connection()
         try:
             cur = conn.cursor()
 
             # Build query with optional LEFT JOINs based on context
-            select_fields = ["t.tune_id", "t.name", "t.tune_type", "t.tunebook_count_cached"]
+            select_fields = [
+                "t.tune_id",
+                "t.name",
+                "t.tune_type",
+                "t.tunebook_count_cached",
+            ]
             joins = []
             order_by_fields = []
-            query_params = []   # JOIN params
-            select_params = []  # SELECT-clause params (abc_only, match_priority, type_pref)
+            query_params = []  # JOIN params
+            select_params = (
+                []
+            )  # SELECT-clause params (abc_only, match_priority, type_pref)
 
             # Add person_tune join if person_id provided
             if person_id:
-                select_fields.extend([
-                    "pt.person_tune_id IS NOT NULL AS in_person_tune",
-                    "pt.learn_status"
-                ])
-                joins.append("LEFT OUTER JOIN person_tune pt ON t.tune_id = pt.tune_id AND pt.person_id = %s")
+                select_fields.extend(
+                    [
+                        "pt.person_tune_id IS NOT NULL AS in_person_tune",
+                        "pt.learn_status",
+                    ]
+                )
+                joins.append(
+                    "LEFT OUTER JOIN person_tune pt ON t.tune_id = pt.tune_id AND pt.person_id = %s"
+                )
                 query_params.append(person_id)
                 # Rank tunes already in person_tune below others
-                order_by_fields.append("CASE WHEN pt.person_tune_id IS NOT NULL THEN 1 ELSE 0 END")
+                order_by_fields.append(
+                    "CASE WHEN pt.person_tune_id IS NOT NULL THEN 1 ELSE 0 END"
+                )
 
             # Add session_tune join if session_id provided
             if session_id:
                 select_fields.append("st.session_id IS NOT NULL AS in_session_tune")
-                joins.append("LEFT OUTER JOIN session_tune st ON t.tune_id = st.tune_id AND st.session_id = %s")
+                joins.append(
+                    "LEFT OUTER JOIN session_tune st ON t.tune_id = st.tune_id AND st.session_id = %s"
+                )
                 query_params.append(session_id)
                 # Rank tunes already in session_tune below others
                 if not person_id:  # Only add if not already prioritizing by person_tune
-                    order_by_fields.append("CASE WHEN st.session_id IS NOT NULL THEN 1 ELSE 0 END")
+                    order_by_fields.append(
+                        "CASE WHEN st.session_id IS NOT NULL THEN 1 ELSE 0 END"
+                    )
 
             # Notation (ABC) blend. Same rules as the deep search and the abc-filter
             # endpoint -- abc_search_terms owns the decision, so a note-shaped query
             # behaves the same here as it does in the live logger's deep search. A
             # pasted thesession.org link is a POINTER, not a query, so it never blends.
-            use_abc, abc_pattern = (False, None) if ref_tune_id is not None \
+            use_abc, abc_pattern = (
+                (False, None)
+                if ref_tune_id is not None
                 else abc_search_terms(query, mode)
+            )
             use_name = ref_tune_id is not None or mode in ("name", "mixed")
 
             _nm = f"LOWER(unaccent({normalize_quotes_sql('t.name')}))"
@@ -1246,7 +1568,9 @@ def search_tunes():
             # abc_only: this row matched the notation but NOT the name, so the client can
             # badge it as a notation hit rather than a puzzling name result.
             if use_abc and use_name:
-                select_fields.append(f"({ABC_MATCH_SQL} AND NOT ({_nm} LIKE LOWER(unaccent(%s)))) AS abc_only")
+                select_fields.append(
+                    f"({ABC_MATCH_SQL} AND NOT ({_nm} LIKE LOWER(unaccent(%s)))) AS abc_only"
+                )
                 select_params.extend([abc_pattern, name_like])
             elif use_abc:
                 select_fields.append("TRUE AS abc_only")
@@ -1257,22 +1581,28 @@ def search_tunes():
             # blended in, rows can qualify WITHOUT a name match, so the "contains" tier
             # becomes explicit and notation-only rows fall to the bottom tier.
             if use_abc and use_name:
-                select_fields.append(f"""CASE
+                select_fields.append(
+                    f"""CASE
                                WHEN {_nm} = LOWER(unaccent(%s)) THEN 1
                                WHEN {_nm} LIKE LOWER(unaccent(%s)) THEN 2
                                WHEN {_nm} LIKE LOWER(unaccent(%s)) THEN 3
                                ELSE 4
-                           END AS match_priority""")
+                           END AS match_priority"""
+                )
                 select_params.extend([query, f"{query}%", name_like])
             else:
-                select_fields.append(f"""CASE
+                select_fields.append(
+                    f"""CASE
                                WHEN {_nm} = LOWER(unaccent(%s)) THEN 1
                                WHEN {_nm} LIKE LOWER(unaccent(%s)) THEN 2
                                ELSE 3
-                           END AS match_priority""")
+                           END AS match_priority"""
+                )
                 select_params.extend([query, f"{query}%"])
             # Soft type preference (matching the set's type sorts first)
-            select_fields.append("CASE WHEN t.tune_type = %s THEN 0 ELSE 1 END AS type_pref")
+            select_fields.append(
+                "CASE WHEN t.tune_type = %s THEN 0 ELSE 1 END AS type_pref"
+            )
             select_params.append(prefer_type)
 
             # Build final query
@@ -1281,7 +1611,15 @@ def search_tunes():
 
             # Construct ORDER BY: matching type first (soft preference), then existing
             # person/session priority, match priority, tunebook count, name
-            order_by_parts = ["type_pref"] + order_by_fields + ["match_priority", "t.tunebook_count_cached DESC NULLS LAST", "t.name"]
+            order_by_parts = (
+                ["type_pref"]
+                + order_by_fields
+                + [
+                    "match_priority",
+                    "t.tunebook_count_cached DESC NULLS LAST",
+                    "t.name",
+                ]
+            )
             order_by_clause = ", ".join(order_by_parts)
 
             # An id/URL query matches exactly one tune (its merge target if it was merged
@@ -1290,6 +1628,7 @@ def search_tunes():
             where_params = []
             if ref_tune_id is not None:
                 from api_routes import follow_tune_redirect
+
                 ref_tune_id, _redirected_from = follow_tune_redirect(cur, ref_tune_id)
                 where_sql = "t.tune_id = %s"
                 where_params.append(ref_tune_id)
@@ -1305,8 +1644,17 @@ def search_tunes():
                     # mode='abc' on something that normalizes to nothing (e.g. a query
                     # that is only a chord symbol): no notation to match, and name search
                     # was excluded by the mode. Answer honestly rather than emit `WHERE ()`.
-                    return jsonify({"success": True, "tunes": [], "count": 0,
-                                    "query_tune_id": None}), 200
+                    return (
+                        jsonify(
+                            {
+                                "success": True,
+                                "tunes": [],
+                                "count": 0,
+                                "query_tune_id": None,
+                            }
+                        ),
+                        200,
+                    )
                 where_sql = "(" + " OR ".join(where_clauses) + ")"
 
             sql = f"""
@@ -1331,42 +1679,54 @@ def search_tunes():
             for row in cur.fetchall():
                 r = dict(zip(cols, row))
                 tune_data = {
-                    'tune_id': r['tune_id'],
-                    'name': r['name'],
-                    'tune_type': r['tune_type'],
-                    'tunebook_count': r['tunebook_count_cached'],
-                    'abc_only': bool(r['abc_only']),
+                    "tune_id": r["tune_id"],
+                    "name": r["name"],
+                    "tune_type": r["tune_type"],
+                    "tunebook_count": r["tunebook_count_cached"],
+                    "abc_only": bool(r["abc_only"]),
                 }
 
                 # Add person_tune fields if requested
                 if person_id:
-                    tune_data['in_person_tune'] = bool(r['in_person_tune'])
-                    tune_data['learn_status'] = r['learn_status'] if r['in_person_tune'] else None
+                    tune_data["in_person_tune"] = bool(r["in_person_tune"])
+                    tune_data["learn_status"] = (
+                        r["learn_status"] if r["in_person_tune"] else None
+                    )
 
                 # Add session_tune field if requested
                 if session_id:
-                    tune_data['in_session_tune'] = bool(r['in_session_tune'])
+                    tune_data["in_session_tune"] = bool(r["in_session_tune"])
 
                 tunes.append(tune_data)
 
-            return jsonify({
-                "success": True,
-                "tunes": tunes,
-                "count": len(tunes),
-                # Echoed when the query was a tune id / thesession.org URL: the canonical
-                # id it resolved to. An empty `tunes` alongside it means "that tune isn't
-                # in the local catalog yet" (an import, not a typo) — the clients say so.
-                "query_tune_id": ref_tune_id,
-            }), 200
+            return (
+                jsonify(
+                    {
+                        "success": True,
+                        "tunes": tunes,
+                        "count": len(tunes),
+                        # Echoed when the query was a tune id / thesession.org URL: the canonical
+                        # id it resolved to. An empty `tunes` alongside it means "that tune isn't
+                        # in the local catalog yet" (an import, not a typo) — the clients say so.
+                        "query_tune_id": ref_tune_id,
+                    }
+                ),
+                200,
+            )
 
         finally:
             conn.close()
 
     except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": f"Error searching tunes: {str(e)}"
-        }), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": _("Error searching tunes: %(error)s", error=str(e)),
+                }
+            ),
+            500,
+        )
 
 
 @public_api  # session pages are publicly viewable, so their Tunes tab must filter logged out
@@ -1392,17 +1752,26 @@ def abc_filter_tunes():
         data = request.get_json(silent=True) or {}
         q = (data.get("q") or "").strip()
         if len(q) > 200:
-            return jsonify({"success": False, "error": "Query too long"}), 400
+            return jsonify({"success": False, "error": _("Query too long")}), 400
 
         tune_ids = data.get("tune_ids") or []
         if not isinstance(tune_ids, list):
-            return jsonify({"success": False, "error": "tune_ids must be a list"}), 400
+            return (
+                jsonify({"success": False, "error": _("tune_ids must be a list")}),
+                400,
+            )
         if len(tune_ids) > 2000:
-            return jsonify({"success": False, "error": "Too many tune_ids (max 2000)"}), 400
+            return (
+                jsonify({"success": False, "error": _("Too many tune_ids (max 2000)")}),
+                400,
+            )
         try:
             tune_ids = [int(t) for t in tune_ids]
         except (TypeError, ValueError):
-            return jsonify({"success": False, "error": "tune_ids must be integers"}), 400
+            return (
+                jsonify({"success": False, "error": _("tune_ids must be integers")}),
+                400,
+            )
 
         # Ordinary name typing costs nothing: if the query is not note-shaped (or is too
         # short to discriminate), say "no notation matches" without touching the database.
@@ -1422,11 +1791,22 @@ def abc_filter_tunes():
                 """,
                 (tune_ids, pattern),
             )
-            return jsonify({"success": True, "tune_ids": [r[0] for r in cur.fetchall()]}), 200
+            return (
+                jsonify({"success": True, "tune_ids": [r[0] for r in cur.fetchall()]}),
+                200,
+            )
         finally:
             conn.close()
     except Exception as e:
-        return jsonify({"success": False, "error": f"Error matching notation: {str(e)}"}), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": _("Error matching notation: %(error)s", error=str(e)),
+                }
+            ),
+            500,
+        )
 
 
 @person_tune_login_required
@@ -1475,11 +1855,164 @@ def get_popular_tunes():
         finally:
             conn.close()
     except Exception as e:
-        return jsonify({"success": False, "error": f"Error fetching popular tunes: {str(e)}"}), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": _("Error fetching popular tunes: %(error)s", error=str(e)),
+                }
+            ),
+            500,
+        )
+
+
+# The bundle's two queries, shared with its version tag (_offline_bundle_etag).
+BUNDLE_TUNES_SQL = """
+    SELECT pt.person_tune_id, pt.tune_id, t.name, t.tune_type,
+           pt.learn_status, pt.heard_count, pt.notes, pt.name_alias,
+           pt.setting_id, pt.key, pt.tags, pt.learned_date,
+           t.tunebook_count_cached, t.tunebook_count_cached_date,
+           ts.incipit_abc, ts.incipit_image, ts.key AS setting_key,
+           gp.n AS global_play_count, plc.n AS person_list_count
+    FROM person_tune pt
+    JOIN tune t ON t.tune_id = pt.tune_id
+    LEFT JOIN LATERAL (
+        SELECT incipit_abc, incipit_image, key
+        FROM tune_setting ts2
+        WHERE ts2.tune_id = pt.tune_id
+          AND (pt.setting_id IS NULL OR ts2.setting_id = pt.setting_id)
+        ORDER BY (ts2.setting_id = pt.setting_id) DESC, ts2.setting_id ASC
+        LIMIT 1
+    ) ts ON TRUE
+    LEFT JOIN LATERAL (
+        SELECT COUNT(*) AS n FROM session_instance_tune sit
+        WHERE sit.tune_id = pt.tune_id AND sit.deleted = FALSE
+    ) gp ON TRUE
+    LEFT JOIN LATERAL (
+        SELECT COUNT(*) AS n FROM person_tune p2 WHERE p2.tune_id = pt.tune_id
+    ) plc ON TRUE
+    WHERE pt.person_id = %s
+    ORDER BY t.name ASC
+"""
+
+# Popular tunes carry incipit notation too, so a popular tune added offline
+# still shows its dots/ABC in the drawer.
+BUNDLE_POPULAR_SQL = """
+    SELECT t.tune_id, t.name, t.tune_type,
+           t.tunebook_count_cached, t.tunebook_count_cached_date,
+           ts.incipit_abc, ts.incipit_image, ts.key AS setting_key,
+           gp.n AS global_play_count, plc.n AS person_list_count
+    FROM tune t
+    LEFT JOIN LATERAL (
+        SELECT incipit_abc, incipit_image, key
+        FROM tune_setting ts2
+        WHERE ts2.tune_id = t.tune_id
+        ORDER BY ts2.setting_id ASC
+        LIMIT 1
+    ) ts ON TRUE
+    LEFT JOIN LATERAL (
+        SELECT COUNT(*) AS n FROM session_instance_tune sit
+        WHERE sit.tune_id = t.tune_id AND sit.deleted = FALSE
+    ) gp ON TRUE
+    LEFT JOIN LATERAL (
+        SELECT COUNT(*) AS n FROM person_tune p2 WHERE p2.tune_id = t.tune_id
+    ) plc ON TRUE
+    WHERE t.redirect_to_tune_id IS NULL
+    ORDER BY t.tunebook_count_cached DESC NULLS LAST, t.name ASC
+    LIMIT 100
+"""
+
+
+# One bundle build at a time per worker process. An admin's bundle is ~11 MB of JSON
+# built in memory (incipit images as base64), and on 2026-10-07 a browser waking with
+# eleven ceol.io tabs open asked for eleven at once and the 512 MB instance was
+# OOM-killed. Builds now queue; one that waits too long gets a quick 503, which the
+# client's sync ignores (it retries on a later page load).
+_OFFLINE_BUNDLE_BUILDS = threading.BoundedSemaphore(1)
+OFFLINE_BUNDLE_WAIT_S = 20
+
+
+# Bump when the bundle's shape changes without its data changing, so every
+# browser's copy goes stale. A deploy's commit (RENDER_GIT_COMMIT) does it too.
+BUNDLE_FORMAT = "1"
+
+
+def _offline_bundle_etag(conn, person_id):
+    """The bundle's version, computed by Postgres without building the bundle: a hash
+    of the very queries the bundle runs (incipit images included, hashed in the
+    database, so they never reach Python), plus the person's instrument overrides,
+    instruments and play counts, the bundle format and the deployed commit. Any change
+    to anything the bundle carries changes it; no "last modified" column is trusted."""
+    cur = conn.cursor()
+    cur.execute("SELECT tune_id FROM person_tune WHERE person_id = %s", (person_id,))
+    tune_ids = [r[0] for r in cur.fetchall()]
+
+    def rows_hash(sql):
+        return (
+            "(SELECT string_agg(md5(q::text), ',' ORDER BY md5(q::text)) FROM ("
+            + sql
+            + ") q)"
+        )
+
+    cur.execute(
+        "SELECT md5(concat_ws('|', "
+        + rows_hash(BUNDLE_TUNES_SQL.replace("%s", "%(person_id)s"))
+        + ", "
+        + rows_hash(BUNDLE_POPULAR_SQL)
+        + ", "
+        + rows_hash(
+            "SELECT tune_id, instrument, status FROM person_tune_instrument"
+            " WHERE person_id = %(person_id)s"
+        )
+        + ", "
+        + rows_hash(
+            "SELECT instrument, is_auto FROM person_instrument"
+            " WHERE person_id = %(person_id)s"
+        )
+        + ", "
+        + rows_hash(person_scope.person_tune_play_counts_sql())
+        + "))",
+        {"person_id": person_id, "tune_ids": tune_ids},
+    )
+    data = cur.fetchone()[0]
+    commit = os.environ.get("RENDER_GIT_COMMIT", "dev")[:12]
+    return f"{data}-{BUNDLE_FORMAT}-{commit}"
 
 
 @person_tune_login_required
 def get_offline_bundle():
+    """GET /api/offline/bundle, with a version tag: a browser that sends the tag of
+    the copy it holds (If-None-Match) gets a 304 and nothing is built."""
+    person_id = get_user_person_id()
+    conn = get_db_connection()
+    try:
+        etag = _offline_bundle_etag(conn, person_id)
+    finally:
+        conn.close()
+    if request.if_none_match.contains_weak(etag):
+        resp = make_response("", 304)
+    else:
+        if not _OFFLINE_BUNDLE_BUILDS.acquire(timeout=OFFLINE_BUNDLE_WAIT_S):
+            return api_error(
+                _("The offline copy is busy; try again shortly."),
+                503,
+                "offline_bundle_busy",
+                retry_after=30,
+            )
+        try:
+            resp = make_response(_build_offline_bundle())
+        finally:
+            _OFFLINE_BUNDLE_BUILDS.release()
+        if resp.status_code != 200:
+            return resp
+    resp.set_etag(etag)
+    # The page keeps its own copy (IndexedDB) and sends the tag itself; the browser's
+    # HTTP cache needn't hold a second 11 MB one.
+    resp.headers["Cache-Control"] = "private, no-store"
+    return resp
+
+
+def _build_offline_bundle():
     """
     GET /api/offline/bundle
 
@@ -1500,36 +2033,7 @@ def get_offline_bundle():
         conn = get_db_connection()
         try:
             cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-            cur.execute(
-                """
-                SELECT pt.person_tune_id, pt.tune_id, t.name, t.tune_type,
-                       pt.learn_status, pt.heard_count, pt.notes, pt.name_alias,
-                       pt.setting_id, pt.key, pt.tags, pt.learned_date,
-                       t.tunebook_count_cached, t.tunebook_count_cached_date,
-                       ts.incipit_abc, ts.incipit_image, ts.key AS setting_key,
-                       gp.n AS global_play_count, plc.n AS person_list_count
-                FROM person_tune pt
-                JOIN tune t ON t.tune_id = pt.tune_id
-                LEFT JOIN LATERAL (
-                    SELECT incipit_abc, incipit_image, key
-                    FROM tune_setting ts2
-                    WHERE ts2.tune_id = pt.tune_id
-                      AND (pt.setting_id IS NULL OR ts2.setting_id = pt.setting_id)
-                    ORDER BY (ts2.setting_id = pt.setting_id) DESC, ts2.setting_id ASC
-                    LIMIT 1
-                ) ts ON TRUE
-                LEFT JOIN LATERAL (
-                    SELECT COUNT(*) AS n FROM session_instance_tune sit
-                    WHERE sit.tune_id = pt.tune_id AND sit.deleted = FALSE
-                ) gp ON TRUE
-                LEFT JOIN LATERAL (
-                    SELECT COUNT(*) AS n FROM person_tune p2 WHERE p2.tune_id = pt.tune_id
-                ) plc ON TRUE
-                WHERE pt.person_id = %s
-                ORDER BY t.name ASC
-                """,
-                (person_id,),
-            )
+            cur.execute(BUNDLE_TUNES_SQL, (person_id,))
             # The person's instrument list is per-person, not per-tune; embed it in
             # each entry so the drawer's offline path reads one self-contained record.
             instruments = load_person_instruments(conn, person_id)
@@ -1550,7 +2054,9 @@ def get_offline_bundle():
                     "key": r["key"],
                     # Freeform per-person tags (spec 042); PARITY RULE with the drawer.
                     "tags": r["tags"] or [],
-                    "learned_date": r["learned_date"].isoformat() if r["learned_date"] else None,
+                    "learned_date": r["learned_date"].isoformat()
+                    if r["learned_date"]
+                    else None,
                     "tunebook_count": r["tunebook_count_cached"] or 0,
                     "tunebook_count_cached_date": (
                         r["tunebook_count_cached_date"].isoformat()
@@ -1559,7 +2065,9 @@ def get_offline_bundle():
                     ),
                     "setting_key": r["setting_key"],
                     "incipit_abc": r["incipit_abc"],
-                    "incipit_image": bytea_to_base64(r["incipit_image"]) if r["incipit_image"] is not None else None,
+                    "incipit_image": bytea_to_base64(r["incipit_image"])
+                    if r["incipit_image"] is not None
+                    else None,
                     "global_play_count": r["global_play_count"],
                     "person_list_count": r["person_list_count"],
                     "instruments": instruments,
@@ -1572,32 +2080,7 @@ def get_offline_bundle():
             # Popular tunes carry incipit notation too, so a popular tune added offline
             # still shows its dots/ABC in the drawer — plus the same stats fields, so
             # the drawer's not-on-list (Add) view renders the stats it shows online.
-            cur.execute(
-                """
-                SELECT t.tune_id, t.name, t.tune_type,
-                       t.tunebook_count_cached, t.tunebook_count_cached_date,
-                       ts.incipit_abc, ts.incipit_image, ts.key AS setting_key,
-                       gp.n AS global_play_count, plc.n AS person_list_count
-                FROM tune t
-                LEFT JOIN LATERAL (
-                    SELECT incipit_abc, incipit_image, key
-                    FROM tune_setting ts2
-                    WHERE ts2.tune_id = t.tune_id
-                    ORDER BY ts2.setting_id ASC
-                    LIMIT 1
-                ) ts ON TRUE
-                LEFT JOIN LATERAL (
-                    SELECT COUNT(*) AS n FROM session_instance_tune sit
-                    WHERE sit.tune_id = t.tune_id AND sit.deleted = FALSE
-                ) gp ON TRUE
-                LEFT JOIN LATERAL (
-                    SELECT COUNT(*) AS n FROM person_tune p2 WHERE p2.tune_id = t.tune_id
-                ) plc ON TRUE
-                WHERE t.redirect_to_tune_id IS NULL
-                ORDER BY t.tunebook_count_cached DESC NULLS LAST, t.name ASC
-                LIMIT 100
-                """
-            )
+            cur.execute(BUNDLE_POPULAR_SQL)
             popular = [
                 {
                     "tune_id": r["tune_id"],
@@ -1611,7 +2094,9 @@ def get_offline_bundle():
                     ),
                     "setting_key": r["setting_key"],
                     "incipit_abc": r["incipit_abc"],
-                    "incipit_image": bytea_to_base64(r["incipit_image"]) if r["incipit_image"] is not None else None,
+                    "incipit_image": bytea_to_base64(r["incipit_image"])
+                    if r["incipit_image"] is not None
+                    else None,
                     "global_play_count": r["global_play_count"],
                     "person_list_count": r["person_list_count"],
                 }
@@ -1622,7 +2107,17 @@ def get_offline_bundle():
         finally:
             conn.close()
     except Exception as e:
-        return jsonify({"success": False, "error": f"Error building offline bundle: {str(e)}"}), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": _(
+                        "Error building offline bundle: %(error)s", error=str(e)
+                    ),
+                }
+            ),
+            500,
+        )
 
 
 @person_tune_login_required
@@ -1663,12 +2158,28 @@ def get_my_sessions():
                 """,
                 (person_id, limit),
             )
-            sessions = [{"path": r[0], "name": r[1], "relationship": r[2]} for r in cur.fetchall()]
-            return jsonify({"success": True, "sessions": sessions, "count": len(sessions)}), 200
+            sessions = [
+                {"path": r[0], "name": r[1], "relationship": r[2]}
+                for r in cur.fetchall()
+            ]
+            return (
+                jsonify(
+                    {"success": True, "sessions": sessions, "count": len(sessions)}
+                ),
+                200,
+            )
         finally:
             conn.close()
     except Exception as e:
-        return jsonify({"success": False, "error": f"Error fetching sessions: {str(e)}"}), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": _("Error fetching sessions: %(error)s", error=str(e)),
+                }
+            ),
+            500,
+        )
 
 
 @person_tune_login_required
@@ -1677,25 +2188,25 @@ def sync_my_tunes():
     POST /api/my-tunes/sync
 
     Sync the current user's tune collection from thesession.org.
-    
+
     Request Body:
         - thesession_user_id (int, optional): thesession.org user ID (uses person.thesession_user_id if not provided)
         - learn_status (str, optional): Default learning status for synced tunes (default: 'want to learn')
         - retry_failed (bool, optional): Whether to retry previously failed tunes (default: false)
-        
+
     Returns:
         JSON response with sync results and statistics
-        
+
     Requirements: 2.1, 2.2, 2.3, 2.4, 2.5
     """
     try:
         data = request.get_json() or {}
         person_id = get_user_person_id()
-        user_id = current_user.user_id if hasattr(current_user, 'user_id') else None
-        
+        user_id = current_user.user_id if hasattr(current_user, "user_id") else None
+
         # Get thesession_user_id from request or person record
-        thesession_user_id = data.get('thesession_user_id')
-        
+        thesession_user_id = data.get("thesession_user_id")
+
         if not thesession_user_id:
             # Try to get from person record
             conn = get_db_connection()
@@ -1703,64 +2214,85 @@ def sync_my_tunes():
                 cur = conn.cursor()
                 cur.execute(
                     "SELECT thesession_user_id FROM person WHERE person_id = %s",
-                    (person_id,)
+                    (person_id,),
                 )
                 row = cur.fetchone()
                 if row and row[0]:
                     thesession_user_id = row[0]
             finally:
                 conn.close()
-        
+
         if not thesession_user_id:
-            return jsonify({
-                "success": False,
-                "error": "thesession_user_id is required. Please provide it in the request or set it in your profile."
-            }), 400
-        
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": _(
+                            "thesession_user_id is required. Please provide it in the request or set it in your profile."
+                        ),
+                    }
+                ),
+                400,
+            )
+
         # Validate thesession_user_id is a positive integer
         try:
             thesession_user_id = int(thesession_user_id)
             if thesession_user_id <= 0:
                 raise ValueError("Must be positive")
         except (ValueError, TypeError):
-            return jsonify({
-                "success": False,
-                "error": "Invalid thesession_user_id. Must be a positive integer."
-            }), 400
-        
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": _(
+                            "Invalid thesession_user_id. Must be a positive integer."
+                        ),
+                    }
+                ),
+                400,
+            )
+
         # Get optional parameters
-        learn_status = data.get('learn_status', 'want to learn')
-        
+        learn_status = data.get("learn_status", "want to learn")
+
         # Validate learn_status
-        if learn_status not in ['want to learn', 'learning', 'learned']:
-            return jsonify({
-                "success": False,
-                "error": "Invalid learn_status. Must be 'want to learn', 'learning', or 'learned'"
-            }), 400
-        
+        if learn_status not in ["want to learn", "learning", "learned"]:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": _(
+                            "Invalid learn_status. Must be 'want to learn', 'learning', or 'learned'"
+                        ),
+                    }
+                ),
+                400,
+            )
+
         # Perform the sync
         success, message, results = thesession_sync_service.sync_tunebook_to_person(
             person_id=person_id,
             thesession_user_id=thesession_user_id,
             learn_status=learn_status,
-            user_id=user_id
+            user_id=user_id,
         )
-        
+
         # Build response
         response = {
             "success": success,
             "message": message,
             "results": {
-                "tunes_fetched": results['tunes_fetched'],
-                "tunes_created": results['tunes_created'],
-                "person_tunes_added": results['person_tunes_added'],
-                "person_tunes_skipped": results['person_tunes_skipped'],
-                "errors": results['errors'],
-                "status": results.get('status', 'completed'),
-                "progress_percent": results.get('progress_percent', 100)
-            }
+                "tunes_fetched": results["tunes_fetched"],
+                "tunes_created": results["tunes_created"],
+                "person_tunes_added": results["person_tunes_added"],
+                "person_tunes_skipped": results["person_tunes_skipped"],
+                "errors": results["errors"],
+                "status": results.get("status", "completed"),
+                "progress_percent": results.get("progress_percent", 100),
+            },
         }
-        
+
         # Determine appropriate status code
         if not success:
             if "not found" in message or "User #" in message:
@@ -1771,31 +2303,34 @@ def sync_my_tunes():
                 status_code = 500
         else:
             status_code = 200
-        
+
         return jsonify(response), status_code
-        
+
     except AttributeError:
-        return jsonify({
-            "success": False,
-            "error": "User authentication error"
-        }), 401
+        return jsonify({"success": False, "error": _("User authentication error")}), 401
     except Exception as e:
         import traceback
         import sys
+
         # Log the full traceback for debugging
         print(f"ERROR in sync_my_tunes: {str(e)}", file=sys.stderr)
         print(traceback.format_exc(), file=sys.stderr)
-        return jsonify({
-            "success": False,
-            "error": f"Error syncing tunes: {str(e)}",
-            "results": {
-                "tunes_fetched": 0,
-                "tunes_created": 0,
-                "person_tunes_added": 0,
-                "person_tunes_skipped": 0,
-                "errors": [str(e)]
-            }
-        }), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": _("Error syncing tunes: %(error)s", error=str(e)),
+                    "results": {
+                        "tunes_fetched": 0,
+                        "tunes_created": 0,
+                        "person_tunes_added": 0,
+                        "person_tunes_skipped": 0,
+                        "errors": [str(e)],
+                    },
+                }
+            ),
+            500,
+        )
 
 
 @person_tune_login_required
@@ -1821,14 +2356,14 @@ def get_common_tunes(other_person_id):
         person_id = get_user_person_id()
 
         # Get query parameters
-        search_query = request.args.get('search', '').strip()
-        tune_type_filter = request.args.get('tune_type', '').strip()
-        sort_by = request.args.get('sort', 'alpha-asc')
+        search_query = request.args.get("search", "").strip()
+        tune_type_filter = request.args.get("tune_type", "").strip()
+        sort_by = request.args.get("sort", "alpha-asc")
 
         # Validate sort parameter
-        valid_sorts = ['alpha-asc', 'alpha-desc', 'popularity-desc']
+        valid_sorts = ["alpha-asc", "alpha-desc", "popularity-desc"]
         if sort_by not in valid_sorts:
-            sort_by = 'alpha-asc'
+            sort_by = "alpha-asc"
 
         # Build the SQL query
         conn = get_db_connection()
@@ -1864,11 +2399,11 @@ def get_common_tunes(other_person_id):
                 params.append(tune_type_filter)
 
             # Add sorting
-            if sort_by == 'alpha-asc':
+            if sort_by == "alpha-asc":
                 query += " ORDER BY t.name ASC"
-            elif sort_by == 'alpha-desc':
+            elif sort_by == "alpha-desc":
                 query += " ORDER BY t.name DESC"
-            elif sort_by == 'popularity-desc':
+            elif sort_by == "popularity-desc":
                 query += " ORDER BY t.tunebook_count_cached DESC NULLS LAST, t.name ASC"
 
             cur.execute(query, params)
@@ -1877,29 +2412,31 @@ def get_common_tunes(other_person_id):
             # Build response
             tunes = []
             for row in rows:
-                tunes.append({
-                    'tune_id': row[0],
-                    'tune_name': row[1],
-                    'tune_type': row[2],
-                    'tunebook_count': row[3] or 0
-                })
+                tunes.append(
+                    {
+                        "tune_id": row[0],
+                        "tune_name": row[1],
+                        "tune_type": row[2],
+                        "tunebook_count": row[3] or 0,
+                    }
+                )
 
-            return jsonify({
-                "success": True,
-                "tunes": tunes,
-                "count": len(tunes)
-            }), 200
+            return jsonify({"success": True, "tunes": tunes, "count": len(tunes)}), 200
 
         finally:
             conn.close()
 
     except AttributeError:
-        return jsonify({
-            "success": False,
-            "error": "User authentication error"
-        }), 401
+        return jsonify({"success": False, "error": _("User authentication error")}), 401
     except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": f"Error retrieving common tunes: {str(e)}"
-        }), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": _(
+                        "Error retrieving common tunes: %(error)s", error=str(e)
+                    ),
+                }
+            ),
+            500,
+        )

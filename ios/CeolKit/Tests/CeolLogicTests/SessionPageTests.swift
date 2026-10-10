@@ -150,4 +150,29 @@ struct SessionPageTests {
         #expect(SessionPage.filterPeople(people, view: .members, search: "maura") == [2])
         #expect(SessionPage.filterPeople(people, view: .members, search: "flute") == [1])
     }
+
+    // frontend/tests/sessionpage.logic.test.js "sortPeople", the same four people.
+    @Test func sortPeople() {
+        func person(_ first: String, _ recent: Int, _ ever: Int, _ last: String?) -> SessionPage.Person {
+            SessionPage.Person(name: "\(first) X", instruments: [], relationship: "member", archived: false,
+                               recentAttendanceCount: recent, attendanceCount: ever, lastAttended: last)
+        }
+        let people = [
+            person("Cara", 2, 10, "2026-09-01"),
+            person("Aoife", 5, 6, "2026-10-01"),
+            person("Brian", 2, 10, nil),
+            person("Dara", 0, 0, nil),
+        ]
+        func ids(_ mode: SessionPage.PeopleSortMode, _ descending: Bool) -> [Int] {
+            SessionPage.sortPeople(people, Array(people.indices), by: .init(mode: mode, descending: descending)).map { $0 + 1 }
+        }
+        #expect(ids(.regular, true) == [2, 3, 1, 4])
+        #expect(ids(.regular, false) == [4, 3, 1, 2])
+        #expect(ids(.last, true) == [2, 1, 3, 4])
+        #expect(ids(.last, false) == [1, 2, 3, 4])
+        #expect(ids(.name, false) == [2, 3, 1, 4])
+        #expect(ids(.name, true) == [4, 1, 3, 2])
+        #expect(SessionPage.PeopleSort(mode: .name).descending == false)
+        #expect(SessionPage.PeopleSort().descending == true)
+    }
 }

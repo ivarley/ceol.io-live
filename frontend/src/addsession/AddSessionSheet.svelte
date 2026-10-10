@@ -1,4 +1,5 @@
 <script>
+  // i18n-converted
   // Adding a session, stage 1 (spec 052 §B9): find it on thesession.org, or say
   // it isn't there.
   //
@@ -11,7 +12,7 @@
   // The lesson is gone. The field takes a name, an ID or a link because
   // parseSessionInput already sorts that out, and a placeholder says so in six
   // words.
-  import { Chevron, Dialog, Row, SearchField, Sheet } from '../lib/index.js'
+  import { Chevron, Dialog, Row, SearchField, Sheet, t } from '../lib/index.js'
   import DetailsSheet from './DetailsSheet.svelte'
   import { parseSessionInput, parseTheSessionRecurrence, generatePath, guessTimezone } from './logic.js'
 
@@ -105,9 +106,9 @@
         searching = false
         if (data.exists) {
           showError(
-            `Session ${sessionId} is already on ceol.io.`,
+            t('Session {id} is already on ceol.io.', { id: sessionId }),
             data.session_path,
-            'Open it'
+            t('Open it')
           )
         } else {
           fetchSessionData(sessionId)
@@ -116,7 +117,7 @@
       .catch((err) => {
         searching = false
         console.error('Error:', err)
-        showError('Could not check that session. Please try again.')
+        showError(t('Could not check that session. Please try again.'))
       })
   }
 
@@ -134,13 +135,13 @@
           results = data.results || []
         } else {
           results = null
-          showError(data.message || 'Could not search thesession.org.')
+          showError(data.message || t('Could not search thesession.org.'))
         }
       })
       .catch((err) => {
         searching = false
         console.error('Error:', err)
-        showError('Could not reach thesession.org. Please try again.')
+        showError(t('Could not reach thesession.org. Please try again.'))
       })
   }
 
@@ -167,13 +168,13 @@
         if (data.success) {
           openDetails(seedFromSessionData(data.session_data))
         } else {
-          showError(data.message || 'Could not fetch that session from thesession.org.')
+          showError(data.message || t('Could not fetch that session from thesession.org.'))
         }
       })
       .catch((err) => {
         searching = false
         console.error('Error:', err)
-        showError('Could not reach thesession.org. Please try again.')
+        showError(t('Could not reach thesession.org. Please try again.'))
       })
   }
 
@@ -184,7 +185,7 @@
     if (!schedule && d.recurrence) {
       const recurrenceText = Array.isArray(d.recurrence) ? d.recurrence.join(' ') : d.recurrence
       // (an empty schedule array is truthy — don't show the notice for "")
-      if (recurrenceText) unparsedText = `Couldn't read a schedule from "${recurrenceText}" — set it here.`
+      if (recurrenceText) unparsedText = t('Couldn\'t read a schedule from "{text}" — set it here.', { text: recurrenceText })
     }
     return {
       thesession_id: d.id || '',
@@ -236,15 +237,15 @@
   }
 </script>
 
-<Sheet bind:open title="Add a Session" onCancel={cancel}>
+<Sheet bind:open title={t('Add a Session')} onCancel={cancel}>
   <div class="as-search">
     <SearchField
       bind:value={query}
       id="sessionUrl"
       debounce={450}
       onSearch={onQuery}
-      placeholder="Session name, or a thesession.org link"
-      aria-label="Search thesession.org for a session" />
+      placeholder={t('Session name, or a thesession.org link')}
+      aria-label={t('Search thesession.org for a session')} />
 
     {#if error}
       <p class="as-error" id="errorAlert" role="alert">
@@ -256,7 +257,7 @@
     {/if}
 
     {#if searching}
-      <p class="as-status" id="loadingSpinner">Searching thesession.org…</p>
+      <p class="as-status" id="loadingSpinner">{t('Searching thesession.org…')}</p>
     {:else if pendingId}
       <!-- Bare digits: an offer rather than a guess. -->
       <div class="as-results" id="searchResultsList">
@@ -265,7 +266,7 @@
           rowClass="as-result"
           id="open-session-id"
           onclick={() => checkExistingSession(pendingId)}
-          title="Open session {pendingId}"
+          title={t('Open session {id}', { id: pendingId })}
           subtitle="thesession.org/sessions/{pendingId}">
           {#snippet trailing()}<Chevron class="kit-chev" />{/snippet}
         </Row>
@@ -281,7 +282,7 @@
             subtitle={placeOf(result)}>
             {#snippet trailing()}
               {#if result.exists_in_db}
-                <span class="as-added existing-indicator">Already added</span>
+                <span class="as-added existing-indicator">{t('Already added')}</span>
               {/if}
               <Chevron class="kit-chev" />
             {/snippet}
@@ -289,10 +290,10 @@
         {/each}
       </div>
     {:else if results && results.length === 0}
-      <p class="as-status" id="no-results">Nothing on thesession.org matches "{query.trim()}".</p>
+      <p class="as-status" id="no-results">{t('Nothing on thesession.org matches "{query}".', { query: query.trim() })}</p>
     {:else if !query.trim()}
       <p class="as-status">
-        Sessions come from thesession.org. Search for yours, or paste its link.
+        {t('Sessions come from thesession.org. Search for yours, or paste its link.')}
       </p>
     {/if}
 
@@ -305,8 +306,8 @@
         rowClass="as-result"
         id="add-manually"
         onclick={addManually}
-        title="Add a session manually"
-        subtitle="For sessions that aren't on thesession.org">
+        title={t('Add a session manually')}
+        subtitle={t("For sessions that aren't on thesession.org")}>
         {#snippet trailing()}<Chevron class="kit-chev" />{/snippet}
       </Row>
     </div>
@@ -323,14 +324,14 @@
   {timezoneOptions}
   {addMeDefault}
   {navigate}
-  back="Back" />
+  back={t('Back')} />
 
 <!-- Picking a session that is already here is a decision, so it is a Dialog. -->
 <Dialog
   bind:open={existingOpen}
-  title="Already on ceol.io"
-  description={`"${existingName}" is already here.`}
-  confirmLabel="Open it"
+  title={t('Already on ceol.io')}
+  description={t('"{name}" is already here.', { name: existingName })}
+  confirmLabel={t('Open it')}
   onConfirm={() => navigate(existingPath)} />
 
 <style>

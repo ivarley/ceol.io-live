@@ -1,4 +1,5 @@
 <script>
+  // i18n-converted
   // Catalogue matches, below your own (spec 052 §B1).
   //
   // "Find a tune" used to be a hamburger item opening a full-screen overlay. The tab
@@ -9,7 +10,7 @@
   // Below, and clearly labelled, because the two lists mean different things. A result
   // here is not a tune you have — tapping it opens the add flow rather than the tune
   // you were expecting, and a mixed list would make that a surprise every time.
-  import { Row } from '../lib/index.js'
+  import { Row, t, tuneTypeName } from '../lib/index.js'
 
   let {
     results = [],
@@ -24,15 +25,15 @@
 {#if loading || failed || results.length}
   <div class="notlist" id="not-on-your-list">
     <div class="notlist-divider">
-      <span class="notlist-label">Not on your list</span>
+      <span class="notlist-label">{t('Not on your list')}</span>
     </div>
 
     {#if loading && !results.length}
-      <div class="notlist-empty">Searching the catalogue for “{query}”…</div>
+      <div class="notlist-empty">{t('Searching the catalogue for “{query}”…', { query })}</div>
     {:else if failed}
       <div class="notlist-empty notlist-failed">
-        Couldn't search the catalogue. Check your connection, then
-        <button type="button" class="notlist-retry" onclick={onRetry}>try again</button>.
+        {t("Couldn't search the catalogue. Check your connection, then")}
+        <button type="button" class="notlist-retry" onclick={onRetry}>{t('try again')}</button>.
       </div>
     {:else}
       <div class="notlist-rows">
@@ -44,7 +45,7 @@
             title={tune.name}>
             {#snippet trailing()}
               <span class="notlist-meta">
-                {#if tune.tune_type}<span class="notlist-type">{tune.tune_type}</span>{/if}
+                {#if tune.tune_type}<span class="notlist-type">{tuneTypeName(tune.tune_type)}</span>{/if}
                 <span class="notlist-add" aria-hidden="true">+</span>
               </span>
             {/snippet}

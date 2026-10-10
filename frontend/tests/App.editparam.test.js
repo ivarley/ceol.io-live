@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import App from '../src/App.svelte' // static: loading it per test can outrun the hook timeout
 import { render, waitFor } from '@testing-library/svelte'
 import { openStream } from '../src/client.js'
 
@@ -54,13 +55,11 @@ const config = (over = {}) => ({
   ...over,
 })
 
-let App
 beforeEach(async () => {
   document.body.innerHTML = ''
   snapshot = makeSnapshot()
   vi.mocked(openStream).mockClear()
   window.history.replaceState({}, '', '/live/instances/90?edit=1')
-  App = (await import('../src/App.svelte')).default
 })
 
 afterEach(() => {

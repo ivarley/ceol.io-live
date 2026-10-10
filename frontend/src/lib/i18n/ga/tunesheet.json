@@ -1,0 +1,818 @@
+{
+  "Find a tune": {
+    "ga": "Aimsigh fonn",
+    "review": true
+  },
+  "Search by name or notes, or paste a link…": {
+    "ga": "Cuardaigh de réir ainm nó nótaí, nó greamaigh nasc…",
+    "review": true
+  },
+  "Looking up tune #{id} from thesession.org…": {
+    "ga": "Fonn #{id} á lorg ar thesession.org…",
+    "review": true
+  },
+  "That link names setting #{id} — opening it in My Tunes, where it can be saved.": {
+    "ga": "Tá leagan #{id} sa nasc sin — á oscailt i Mo chuid fonn, áit ar féidir é a shábháil.",
+    "review": true
+  },
+  "Couldn't search for tunes.": {
+    "ga": "Níorbh fhéidir foinn a chuardach.",
+    "review": true
+  },
+  "Matched the opening bars (offline)": {
+    "ga": "Meaitseáil leis na barraí tosaigh (as líne)",
+    "review": true
+  },
+  "Matched the notation, not the name": {
+    "ga": "Meaitseáil leis an nodaireacht, ní leis an ainm",
+    "review": true
+  },
+  "Tune #{id} isn't in the library yet.": {
+    "ga": "Níl fonn #{id} sa leabharlann fós.",
+    "review": true
+  },
+  "Add it from thesession.org": {
+    "ga": "Cuir leis ó thesession.org é",
+    "review": true
+  },
+  "View it on thesession.org": {
+    "ga": "Féach air ar thesession.org",
+    "review": true
+  },
+  "No tunes match": {
+    "ga": "Níl fonn ar bith a mheaitseálann",
+    "review": true
+  },
+  "(not specified)": {
+    "ga": "(gan sonrú)",
+    "review": true
+  },
+  "(as usual — {key})": {
+    "ga": "(mar is gnách — {key})",
+    "review": true
+  },
+  "(as usual)": {
+    "ga": "(mar is gnách)",
+    "review": true
+  },
+  "(the setting's key — {key})": {
+    "ga": "(gléas an leagain — {key})",
+    "review": true
+  },
+  "this session": {
+    "ga": "an seisiún seo",
+    "review": true
+  },
+  "To Learn": {
+    "ga": "Le foghlaim",
+    "review": true
+  },
+  "Refresh": {
+    "ga": "Athnuaigh",
+    "review": true
+  },
+  "Fetch": {
+    "ga": "Faigh",
+    "review": true
+  },
+  "Saved ✓": {
+    "ga": "Sábháilte ✓",
+    "review": true
+  },
+  "Couldn't save": {
+    "ga": "Níorbh fhéidir sábháil",
+    "review": true
+  },
+  "Saving...": {
+    "ga": "Á shábháil...",
+    "review": true
+  },
+  "Saved!": {
+    "ga": "Sábháilte!",
+    "review": true
+  },
+  "Error": {
+    "ga": "Earráid",
+    "review": true
+  },
+  "My List": {
+    "ga": "Mo liosta",
+    "review": true
+  },
+  "Details": {
+    "ga": "Sonraí",
+    "review": true
+  },
+  "History": {
+    "ga": "Stair",
+    "review": true
+  },
+  "Played With": {
+    "ga": "Seinnte le",
+    "review": true
+  },
+  "Couldn't load this tune.": {
+    "ga": "Níorbh fhéidir an fonn seo a lódáil.",
+    "review": true
+  },
+  "This tunebook entry no longer exists — it may have been merged into another tune. Check your tunebook list for the merged tune.": {
+    "ga": "Níl an iontráil seo ann a thuilleadh — b'fhéidir gur cumascadh le fonn eile í. Féach ar do liosta le haghaidh an fhoinn chumaiscthe.",
+    "review": true
+  },
+  "change the status": {
+    "ga": "an stádas a athrú",
+    "review": true
+  },
+  "change the status for {instrument}": {
+    "ga": "an stádas a athrú ({instrument})",
+    "review": true
+  },
+  "remove the tune from your {instrument} list": {
+    "ga": "an fonn a bhaint de do liosta ({instrument})",
+    "review": true
+  },
+  "Added to your tunes. It will sync when you are back online.": {
+    "ga": "Curtha le do chuid fonn. Sioncrónófar é nuair a bheidh tú ar líne arís.",
+    "review": true
+  },
+  "Added to your list.": {
+    "ga": "Curtha le do liosta.",
+    "review": true
+  },
+  "add the tune to your list": {
+    "ga": "an fonn a chur le do liosta",
+    "review": true
+  },
+  "update the heard count": {
+    "ga": "líon na n-éisteachtaí a nuashonrú",
+    "review": true
+  },
+  "load your version of this tune": {
+    "ga": "do leagan den fhonn seo a lódáil",
+    "review": true
+  },
+  "save your changes": {
+    "ga": "d'athruithe a shábháil",
+    "review": true
+  },
+  "save your notes": {
+    "ga": "do nótaí a shábháil",
+    "review": true
+  },
+  "save your tags": {
+    "ga": "do chlibeanna a shábháil",
+    "review": true
+  },
+  "load your sessions": {
+    "ga": "do sheisiúin a lódáil",
+    "review": true
+  },
+  "Couldn't load this tune at {name}.": {
+    "ga": "Níorbh fhéidir an fonn seo a lódáil ag {name}.",
+    "review": true
+  },
+  "Couldn't load this tune at that session.": {
+    "ga": "Níorbh fhéidir an fonn seo a lódáil ag an seisiún sin.",
+    "review": true
+  },
+  "Tune name cannot be empty": {
+    "ga": "Ní féidir ainm an fhoinn a fhágáil folamh",
+    "review": true
+  },
+  "save the tune name": {
+    "ga": "ainm an fhoinn a shábháil",
+    "review": true
+  },
+  "get the notation from thesession.org": {
+    "ga": "an nodaireacht a fháil ó thesession.org",
+    "review": true
+  },
+  "Got the notation, but couldn't save the setting. Try again.": {
+    "ga": "Fuarthas an nodaireacht, ach níorbh fhéidir an leagan a shábháil. Bain triail eile as.",
+    "review": true
+  },
+  "Got the notation, but couldn't save the setting. Check your connection and try again.": {
+    "ga": "Fuarthas an nodaireacht, ach níorbh fhéidir an leagan a shábháil. Seiceáil do cheangal, ansin bain triail eile as.",
+    "review": true
+  },
+  "Unable to remove tune": {
+    "ga": "Níorbh fhéidir an fonn a bhaint",
+    "review": true
+  },
+  "remove the tune from your list": {
+    "ga": "an fonn a bhaint de do liosta",
+    "review": true
+  },
+  "Unable to remove tune from session": {
+    "ga": "Níorbh fhéidir an fonn a bhaint den seisiún",
+    "review": true
+  },
+  "remove the tune from the session": {
+    "ga": "an fonn a bhaint den seisiún",
+    "review": true
+  },
+  "refresh the count": {
+    "ga": "an líon a athnuachan",
+    "review": true
+  },
+  "Tune #{old} was merged into {link} (#{id}) — you're viewing the merged tune.": {
+    "ga": "Cumascadh fonn #{old} le {link} (#{id}) — tá an fonn cumaiscthe os do chomhair.",
+    "review": true
+  },
+  "{name} plays a different one.": {
+    "ga": "Seinneann {name} leagan eile.",
+    "review": true
+  },
+  "{link} differs.": {
+    "ga": "Tá {link} difriúil.",
+    "review": true
+  },
+  "Loading...": {
+    "ga": "Á lódáil...",
+    "review": true
+  },
+  "Loading tune details...": {
+    "ga": "Sonraí an fhoinn á lódáil...",
+    "review": true
+  },
+  "You're offline, so this is your saved copy of the tune.": {
+    "ga": "Tá tú as líne, mar sin seo do chóip shábháilte den fhonn.",
+    "review": true
+  },
+  "Couldn't load the latest for this tune, so this is your saved copy.": {
+    "ga": "Níorbh fhéidir an leagan is déanaí den fhonn a lódáil, mar sin seo do chóip shábháilte.",
+    "review": true
+  },
+  "aka {name}": {
+    "ga": "nó {name}",
+    "review": true
+  },
+  "Log to {name}": {
+    "ga": "Logáil chuig {name}",
+    "review": true
+  },
+  "Log to the current session": {
+    "ga": "Logáil chuig an seisiún reatha",
+    "review": true
+  },
+  "Click to toggle between incipit and full notation": {
+    "ga": "Cliceáil chun athrú idir an tús agus an nodaireacht iomlán",
+    "review": true
+  },
+  "Incipit notation": {
+    "ga": "Nodaireacht an tosaigh",
+    "review": true
+  },
+  "Full notation": {
+    "ga": "Nodaireacht iomlán",
+    "review": true
+  },
+  "notes": {
+    "ga": "nótaí",
+    "review": true
+  },
+  "abc": {
+    "ga": "abc",
+    "review": true
+  },
+  "Generating notation…": {
+    "ga": "Nodaireacht á cruthú…",
+    "review": true
+  },
+  "Generate Notation": {
+    "ga": "Cruthaigh nodaireacht",
+    "review": true
+  },
+  "View on TheSession.org": {
+    "ga": "Féach air ar TheSession.org",
+    "review": true
+  },
+  "View in ABC Tools": {
+    "ga": "Féach air in ABC Tools",
+    "review": true
+  },
+  "Showing your version.": {
+    "ga": "Do leagan féin á thaispeáint.",
+    "review": true
+  },
+  "This is the version {name} plays.": {
+    "ga": "Seo an leagan a sheinneann {name}.",
+    "review": true
+  },
+  "Loading your version…": {
+    "ga": "Do leagan á lódáil…",
+    "review": true
+  },
+  "Your personal version": {
+    "ga": "Do leagan féin",
+    "review": true
+  },
+  "Status": {
+    "ga": "Stádas",
+    "review": true
+  },
+  "This tune is not on your list": {
+    "ga": "Níl an fonn seo ar do liosta",
+    "review": true
+  },
+  "Adding…": {
+    "ga": "Á chur leis…",
+    "review": true
+  },
+  "This tune is on your list as": {
+    "ga": "Tá an fonn seo ar do liosta mar",
+    "review": true
+  },
+  "Hide Instruments": {
+    "ga": "Folaigh na huirlisí",
+    "review": true
+  },
+  "View By Instrument": {
+    "ga": "De réir uirlise",
+    "review": true
+  },
+  "manual": {
+    "ga": "de láimh",
+    "review": true
+  },
+  "remove": {
+    "ga": "bain",
+    "review": true
+  },
+  "My notes": {
+    "ga": "Mo nótaí",
+    "review": true
+  },
+  "Enter notes here": {
+    "ga": "Scríobh nótaí anseo",
+    "review": true
+  },
+  "Add tags — space or enter…": {
+    "ga": "Cuir clibeanna leis — spás nó enter…",
+    "review": true
+  },
+  "Configure": {
+    "ga": "Socraigh",
+    "review": true
+  },
+  "Remove From My Tunes": {
+    "ga": "Bain de Mo chuid fonn",
+    "review": true
+  },
+  "I call this:": {
+    "ga": "Tugaim air:",
+    "review": true
+  },
+  "Enter your name for this tune": {
+    "ga": "D'ainm féin ar an bhfonn seo",
+    "review": true
+  },
+  "I play setting:": {
+    "ga": "Seinnim leagan:",
+    "review": true
+  },
+  "e.g., 123 or paste URL": {
+    "ga": "m.sh., 123 nó greamaigh URL",
+    "review": true
+  },
+  "Fetch setting from TheSession.org": {
+    "ga": "Faigh an leagan ó TheSession.org",
+    "review": true
+  },
+  "I play this in:": {
+    "ga": "Seinnim i:",
+    "review": true
+  },
+  "Offline — these can't be edited (notes & tags still can)": {
+    "ga": "As líne — ní féidir iad seo a athrú (is féidir nótaí agus clibeanna fós)",
+    "review": true
+  },
+  "Tune Name:": {
+    "ga": "Ainm an fhoinn:",
+    "review": true
+  },
+  "Enter tune name": {
+    "ga": "Ainm an fhoinn",
+    "review": true
+  },
+  "At {name}": {
+    "ga": "Ag {name}",
+    "review": true
+  },
+  "We call this:": {
+    "ga": "Tugaimid air:",
+    "review": true
+  },
+  "Our setting:": {
+    "ga": "Ár leagan:",
+    "review": true
+  },
+  "We play this in:": {
+    "ga": "Seinnimid i:",
+    "review": true
+  },
+  "Last Updated {date}": {
+    "ga": "Nuashonraithe {date}",
+    "review": true
+  },
+  "Canonical name: {name} (#{id})": {
+    "ga": "Ainm caighdeánach: {name} (#{id})",
+    "review": true
+  },
+  "Unknown": {
+    "ga": "Anaithnid",
+    "review": true
+  },
+  "Remove From Session": {
+    "ga": "Bain den seisiún",
+    "review": true
+  },
+  "Which plays of this tune": {
+    "ga": "Cé na seinmeanna den fhonn seo",
+    "review": true
+  },
+  "Loading your sessions…": {
+    "ga": "Do sheisiúin á lódáil…",
+    "review": true
+  },
+  "Update name, setting or key for this tune on this date": {
+    "ga": "Athraigh ainm, leagan nó gléas an fhoinn seo ar an dáta seo",
+    "review": true
+  },
+  "Update name, setting or key for this tune at this session": {
+    "ga": "Athraigh ainm, leagan nó gléas an fhoinn seo ag an seisiún seo",
+    "review": true
+  },
+  "this date's name, setting and key": {
+    "ga": "ainm, leagan agus gléas an dáta seo",
+    "review": true
+  },
+  "We called it:": {
+    "ga": "Thugamar air:",
+    "review": true
+  },
+  "We played setting:": {
+    "ga": "Sheinneamar leagan:",
+    "review": true
+  },
+  "We played it in:": {
+    "ga": "Sheinneamar i:",
+    "review": true
+  },
+  "You attended": {
+    "ga": "Bhí tú i láthair",
+    "review": true
+  },
+  "Only when I was there": {
+    "ga": "Nuair a bhí mé ann amháin",
+    "review": true
+  },
+  "Not played that night.": {
+    "ga": "Níor seinneadh an oíche sin é.",
+    "review": true
+  },
+  "You weren't there for any of this tune's plays here.": {
+    "ga": "Ní raibh tú i láthair nuair a seinneadh an fonn seo anseo.",
+    "review": true
+  },
+  "No play history recorded yet.": {
+    "ga": "Níl stair seinnte taifeadta fós.",
+    "review": true
+  },
+  "You were there": {
+    "ga": "Bhí tú ann",
+    "review": true
+  },
+  "Set {set}, Tune {position}": {
+    "ga": "Sraith {set}, Fonn {position}",
+    "review": true
+  },
+  "Setting: #{id}": {
+    "ga": "Leagan: #{id}",
+    "review": true
+  },
+  "Showing the 100 most recent sessions.": {
+    "ga": "Na 100 seisiún is déanaí á dtaispeáint.",
+    "review": true
+  },
+  "Play history isn't available offline.": {
+    "ga": "Níl an stair seinnte ar fáil as líne.",
+    "review": true
+  },
+  "play history": {
+    "ga": "an stair seinnte",
+    "review": true
+  },
+  "Loading play history…": {
+    "ga": "An stair seinnte á lódáil…",
+    "review": true
+  },
+  "This tune has not been played in a set with any other tune at this session yet.": {
+    "ga": "Níor seinneadh an fonn seo i sraith le fonn ar bith eile ag an seisiún seo fós.",
+    "review": true
+  },
+  "This tune has not been played in a set with any other tune yet.": {
+    "ga": "Níor seinneadh an fonn seo i sraith le fonn ar bith eile fós.",
+    "review": true
+  },
+  "played-with tunes": {
+    "ga": "na foinn a seinneadh leis",
+    "review": true
+  },
+  "No set history recorded yet.": {
+    "ga": "Níl stair sraitheanna taifeadta fós.",
+    "review": true
+  },
+  "Loading tunes…": {
+    "ga": "Foinn á lódáil…",
+    "review": true
+  },
+  "Remove this tune from your list?": {
+    "ga": "An fonn seo a bhaint de do liosta?",
+    "review": true
+  },
+  "Remove tune": {
+    "ga": "Bain an fonn",
+    "review": true
+  },
+  "Removing…": {
+    "ga": "Á bhaint…",
+    "review": true
+  },
+  "Remove this tune from the session tune list?": {
+    "ga": "An fonn seo a bhaint de liosta fonn an tseisiúin?",
+    "review": true
+  },
+  "At this session": {
+    "ga": "Ag an seisiún seo",
+    "review": true
+  },
+  "… on {date}": {
+    "ga": "… ar {date}",
+    "review": true
+  },
+  "At a different session …": {
+    "ga": "Ag seisiún eile …",
+    "review": true
+  },
+  "All My Sessions": {
+    "ga": "Mo sheisiúin go léir",
+    "review": true
+  },
+  "All Sessions": {
+    "ga": "Gach seisiún",
+    "review": true
+  },
+  "Set {set}, tune {position}": {
+    "ga": "Sraith {set}, fonn {position}",
+    "review": true
+  },
+  "At My Sessions": {
+    "ga": "Ag mo sheisiúin",
+    "review": true
+  },
+  "While I Was There": {
+    "ga": "Agus mé i láthair",
+    "review": true
+  },
+  "At This Session": {
+    "ga": "Ag an seisiún seo",
+    "review": true
+  },
+  "Globally": {
+    "ga": "Ar fud an domhain",
+    "review": true
+  },
+  "Year must be four digits, like 2026": {
+    "ga": "Ceithre dhigit atá sa bhliain, mar shampla 2026",
+    "review": true
+  },
+  "{name} already has {year}": {
+    "ga": "Tá {year} ag {name} cheana",
+    "review": true
+  },
+  "First and last day are both required": {
+    "ga": "Tá an chéad lá agus an lá deireanach ag teastáil",
+    "review": true
+  },
+  "Couldn't copy the year. Try again.": {
+    "ga": "Níorbh fhéidir an bhliain a chóipeáil. Bain triail eile as.",
+    "review": true
+  },
+  "Couldn't copy the year. Check your connection and try again.": {
+    "ga": "Níorbh fhéidir an bhliain a chóipeáil. Seiceáil do cheangal, ansin bain triail eile as.",
+    "review": true
+  },
+  "Copy to a new year": {
+    "ga": "Cóipeáil chuig bliain nua",
+    "review": true
+  },
+  "From {name} {year}: venue, timezone, settings and admins.": {
+    "ga": "Ó {name} {year}: an t-ionad, an crios ama, na socruithe agus na bainisteoirí.",
+    "review": true
+  },
+  "Copying…": {
+    "ga": "Á chóipeáil…",
+    "review": true
+  },
+  "Create {year}": {
+    "ga": "Cruthaigh {year}",
+    "review": true
+  },
+  "Create year": {
+    "ga": "Cruthaigh an bhliain",
+    "review": true
+  },
+  "{name}: year": {
+    "ga": "{name}: bliain",
+    "review": true
+  },
+  "Coming up": {
+    "ga": "Le teacht",
+    "review": true
+  },
+  "No years yet.": {
+    "ga": "Níl bliain ar bith ann fós.",
+    "review": true
+  },
+  "Add a year": {
+    "ga": "Cuir bliain leis",
+    "review": true
+  },
+  "Played {n} times at this session": {
+    "ga": {
+      "one": "Seinneadh {n} uair ag an seisiún seo",
+      "two": "Seinneadh {n} uair ag an seisiún seo",
+      "few": "Seinneadh {n} huaire ag an seisiún seo",
+      "many": "Seinneadh {n} n-uaire ag an seisiún seo",
+      "other": "Seinneadh {n} uair ag an seisiún seo"
+    },
+    "review": true
+  },
+  "Played {n} times at my sessions": {
+    "ga": {
+      "one": "Seinneadh {n} uair ag mo sheisiúin",
+      "two": "Seinneadh {n} uair ag mo sheisiúin",
+      "few": "Seinneadh {n} huaire ag mo sheisiúin",
+      "many": "Seinneadh {n} n-uaire ag mo sheisiúin",
+      "other": "Seinneadh {n} uair ag mo sheisiúin"
+    },
+    "review": true
+  },
+  "Played {n} times at all sessions": {
+    "ga": {
+      "one": "Seinneadh {n} uair ag gach seisiún",
+      "two": "Seinneadh {n} uair ag gach seisiún",
+      "few": "Seinneadh {n} huaire ag gach seisiún",
+      "many": "Seinneadh {n} n-uaire ag gach seisiún",
+      "other": "Seinneadh {n} uair ag gach seisiún"
+    },
+    "review": true
+  },
+  "You've heard this {n} times": {
+    "ga": {
+      "one": "Chuala tú é seo {n} uair",
+      "two": "Chuala tú é seo {n} uair",
+      "few": "Chuala tú é seo {n} huaire",
+      "many": "Chuala tú é seo {n} n-uaire",
+      "other": "Chuala tú é seo {n} uair"
+    },
+    "review": true
+  },
+  "Saved in {n} tune lists on Ceol.io": {
+    "ga": {
+      "one": "Sábháilte i {n} liosta fonn ar Ceol.io",
+      "two": "Sábháilte i {n} liosta fonn ar Ceol.io",
+      "few": "Sábháilte i {n} liosta fonn ar Ceol.io",
+      "many": "Sábháilte i {n} liosta fonn ar Ceol.io",
+      "other": "Sábháilte i {n} liosta fonn ar Ceol.io"
+    },
+    "review": true
+  },
+  "Saved in {n} tunebooks on TheSession.org": {
+    "ga": {
+      "one": "Sábháilte i {n} leabhar fonn ar TheSession.org",
+      "two": "Sábháilte i {n} leabhar fonn ar TheSession.org",
+      "few": "Sábháilte i {n} leabhar fonn ar TheSession.org",
+      "many": "Sábháilte i {n} leabhar fonn ar TheSession.org",
+      "other": "Sábháilte i {n} leabhar fonn ar TheSession.org"
+    },
+    "review": true
+  },
+  "Logged {n} times at this session": {
+    "ga": {
+      "one": "Logáladh {n} uair ag an seisiún seo",
+      "two": "Logáladh {n} uair ag an seisiún seo",
+      "few": "Logáladh {n} huaire ag an seisiún seo",
+      "many": "Logáladh {n} n-uaire ag an seisiún seo",
+      "other": "Logáladh {n} uair ag an seisiún seo"
+    },
+    "review": true
+  },
+  "Logged {n} times at my sessions": {
+    "ga": {
+      "one": "Logáladh {n} uair ag mo sheisiúin",
+      "two": "Logáladh {n} uair ag mo sheisiúin",
+      "few": "Logáladh {n} huaire ag mo sheisiúin",
+      "many": "Logáladh {n} n-uaire ag mo sheisiúin",
+      "other": "Logáladh {n} uair ag mo sheisiúin"
+    },
+    "review": true
+  },
+  "Logged {n} times while I was there": {
+    "ga": {
+      "one": "Logáladh {n} uair agus mé i láthair",
+      "two": "Logáladh {n} uair agus mé i láthair",
+      "few": "Logáladh {n} huaire agus mé i láthair",
+      "many": "Logáladh {n} n-uaire agus mé i láthair",
+      "other": "Logáladh {n} uair agus mé i láthair"
+    },
+    "review": true
+  },
+  "Logged {n} times at all sessions": {
+    "ga": {
+      "one": "Logáladh {n} uair ag gach seisiún",
+      "two": "Logáladh {n} uair ag gach seisiún",
+      "few": "Logáladh {n} huaire ag gach seisiún",
+      "many": "Logáladh {n} n-uaire ag gach seisiún",
+      "other": "Logáladh {n} uair ag gach seisiún"
+    },
+    "review": true
+  },
+  "In the repertoire of {n} sessions": {
+    "ga": {
+      "one": "Sa stór ceoil ag {n} seisiún",
+      "two": "Sa stór ceoil ag {n} sheisiún",
+      "few": "Sa stór ceoil ag {n} sheisiún",
+      "many": "Sa stór ceoil ag {n} seisiún",
+      "other": "Sa stór ceoil ag {n} seisiún"
+    },
+    "review": true
+  },
+  "{n} sessions logged": {
+    "ga": {
+      "one": "{n} seisiún logáilte",
+      "two": "{n} sheisiún logáilte",
+      "few": "{n} sheisiún logáilte",
+      "many": "{n} seisiún logáilte",
+      "other": "{n} seisiún logáilte"
+    },
+    "review": true
+  },
+  "the settings of this tune": {
+    "ga": "leaganacha an fhoinn seo",
+    "review": false
+  },
+  "Looking for settings on thesession.org…": {
+    "ga": "Leaganacha á lorg ar thesession.org…",
+    "review": false
+  },
+  "No settings found for this tune": {
+    "ga": "Níor aimsíodh leagan ar bith den fhonn seo",
+    "review": false
+  },
+  "in use": {
+    "ga": "in úsáid",
+    "review": false
+  },
+  "This is the one in use": {
+    "ga": "Seo an ceann atá in úsáid",
+    "review": false
+  },
+  "Use this setting": {
+    "ga": "Úsáid an leagan seo",
+    "review": false
+  },
+  "I play a different version": {
+    "ga": "Seinnim leagan eile",
+    "review": false
+  },
+  "We play a different version": {
+    "ga": "Seinnimid leagan eile",
+    "review": false
+  },
+  "We played a different version on this night": {
+    "ga": "Sheinneamar leagan eile an oíche seo",
+    "review": false
+  },
+  "Which version do you play?": {
+    "ga": "Cén leagan a sheinneann tú?",
+    "review": false
+  },
+  "Which version does {name} play?": {
+    "ga": "Cén leagan a sheinntear ag {name}?",
+    "review": false
+  },
+  "Which version was played that night?": {
+    "ga": "Cén leagan a seinneadh an oíche sin?",
+    "review": false
+  },
+  "change the setting": {
+    "ga": "an leagan a athrú",
+    "review": false
+  },
+  "Change Setting": {
+    "ga": "Athraigh an leagan",
+    "review": false
+  }
+}

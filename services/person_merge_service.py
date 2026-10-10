@@ -42,7 +42,11 @@ would collide on their uniques are dropped — then the losing account is
 deleted (user_session cascades, login_history keeps rows with user NULLed).
 """
 
+# i18n-converted
+
 from typing import Any, Dict, List, Optional
+
+from flask_babel import gettext as _
 
 import psycopg2.extras
 
@@ -126,14 +130,19 @@ def merge_session_person_fields(winner: Dict, loser: Dict) -> Dict[str, Any]:
         "confirmed": winner["confirmed"] or loser["confirmed"],
         "archived": winner["archived"] and loser["archived"],
         "is_admin": bool(winner["is_admin"] or loser["is_admin"]),
-        "gets_email_reminder": bool(winner["gets_email_reminder"] or loser["gets_email_reminder"]),
-        "gets_email_followup": bool(winner["gets_email_followup"] or loser["gets_email_followup"]),
+        "gets_email_reminder": bool(
+            winner["gets_email_reminder"] or loser["gets_email_reminder"]
+        ),
+        "gets_email_followup": bool(
+            winner["gets_email_followup"] or loser["gets_email_followup"]
+        ),
     }
 
 
 def merge_session_instance_person_fields(winner: Dict, loser: Dict) -> Dict[str, Any]:
     attendance = max(
-        (winner["attendance"], loser["attendance"]), key=lambda a: _ATTEND_RANK.get(a, 0)
+        (winner["attendance"], loser["attendance"]),
+        key=lambda a: _ATTEND_RANK.get(a, 0),
     )
     seqs = [s for s in (winner["arrival_seq"], loser["arrival_seq"]) if s is not None]
     return {
@@ -254,7 +263,9 @@ def _analyze(cur, loser_id: int, winner_id: int) -> Dict[str, Any]:
         WHERE sip.person_id = %s
     """
     a["session_instance_person"] = _split_rows(
-        rows(sql, loser_id), rows(sql, winner_id), key=lambda r: r["session_instance_id"]
+        rows(sql, loser_id),
+        rows(sql, winner_id),
+        key=lambda r: r["session_instance_id"],
     )
 
     # session_logger_color — collision keeps the winner's color (pure cosmetics)
@@ -297,21 +308,23 @@ def _checked_in_label(cur, person: Dict) -> Optional[str]:
     row = cur.fetchone()
     if not row:
         return None
-    return (
-        f"{person['first_name']} {person['last_name']} is currently checked in at "
-        f"{row['name']} ({row['date'].isoformat()})"
+    return _(
+        "%(person)s is currently checked in at %(session)s (%(date)s)",
+        person=f"{person['first_name']} {person['last_name']}",
+        session=row["name"],
+        date=row["date"].isoformat(),
     )
 
 
 def _validate(cur, loser_id: int, winner_id: int):
     if loser_id == winner_id:
-        raise MergeValidationError("Cannot merge a person into themselves")
+        raise MergeValidationError(_("Cannot merge a person into themselves"))
     loser = _fetch_person(cur, loser_id)
     if not loser:
-        raise MergeValidationError(f"Person {loser_id} not found", 404)
+        raise MergeValidationError(_("Person %(id)s not found", id=loser_id), 404)
     winner = _fetch_person(cur, winner_id)
     if not winner:
-        raise MergeValidationError(f"Person {winner_id} not found", 404)
+        raise MergeValidationError(_("Person %(id)s not found", id=winner_id), 404)
     return loser, winner
 
 
@@ -419,8 +432,12 @@ def build_merge_preview(conn, loser_id: int, winner_id: int) -> Dict[str, Any]:
                 "session_instance_id": c["loser"]["session_instance_id"],
                 "session_name": c["loser"]["session_name"],
                 "date": c["loser"]["date"].isoformat(),
-                "winner": strip(c["winner"], "session_instance_id", "session_name", "date"),
-                "loser": strip(c["loser"], "session_instance_id", "session_name", "date"),
+                "winner": strip(
+                    c["winner"], "session_instance_id", "session_name", "date"
+                ),
+                "loser": strip(
+                    c["loser"], "session_instance_id", "session_name", "date"
+                ),
                 "result": merge_session_instance_person_fields(c["winner"], c["loser"]),
             }
             for c in a["session_instance_person"][1]
@@ -454,22 +471,41 @@ def build_merge_preview(conn, loser_id: int, winner_id: int) -> Dict[str, Any]:
         if checked_in:
             warnings.append(checked_in)
     if winner["active"] != loser["active"]:
-        keep = "active" if winner["active"] else "inactive"
-        warnings.append(
-            f"The two people have different active flags; the survivor stays {keep}."
-        )
+        if winner["active"]:
+            warnings.append(
+                _(
+                    "The two people have different active flags; the survivor stays active."
+                )
+            )
+        else:
+            warnings.append(
+                _(
+                    "The two people have different active flags; the survivor stays inactive."
+                )
+            )
     if both_accounts:
         warnings.append(
-            "Both people have login accounts — you must choose which account survives; "
-            "the other will be deleted."
+            _(
+                "Both people have login accounts — you must choose which account survives; "
+                "the other will be deleted."
+            )
         )
     elif loser_acct:
         warnings.append(
-            f"The account '{loser_acct['username']}' will be re-linked to the surviving person."
+            _(
+                "The account '%(username)s' will be re-linked to the surviving person.",
+                username=loser_acct["username"],
+            )
         )
     changes = _profile_changes(winner, loser)
     for field, value in changes["discards"].items():
-        warnings.append(f"Discarding {field} “{value}” (survivor already has one).")
+        warnings.append(
+            _(
+                "Discarding %(field)s “%(value)s” (survivor already has one).",
+                field=field,
+                value=value,
+            )
+        )
 
     return {
         "success": True,
@@ -477,7 +513,9 @@ def build_merge_preview(conn, loser_id: int, winner_id: int) -> Dict[str, Any]:
         "loser": _person_summary(loser, loser_acct),
         "winner": _person_summary(winner, winner_acct),
         "accounts": {
-            "situation": "both" if both_accounts else ("one" if (loser_acct or winner_acct) else "none"),
+            "situation": "both"
+            if both_accounts
+            else ("one" if (loser_acct or winner_acct) else "none"),
             "needs_choice": both_accounts,
         },
         "moves": moves,
@@ -492,7 +530,9 @@ def build_merge_preview(conn, loser_id: int, winner_id: int) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-def _merge_accounts(cur, loser_id, winner_id, loser_acct, winner_acct, surviving_user_id, user_id):
+def _merge_accounts(
+    cur, loser_id, winner_id, loser_acct, winner_acct, surviving_user_id, user_id
+):
     """Resolve user_account.person_id (NOT NULL + UNIQUE). Returns the losing
     user_id when an account was deleted, else None."""
     if not loser_acct and not winner_acct:
@@ -513,8 +553,10 @@ def _merge_accounts(cur, loser_id, winner_id, loser_acct, winner_acct, surviving
     ids = {loser_acct["user_id"], winner_acct["user_id"]}
     if surviving_user_id not in ids:
         raise MergeValidationError(
-            "Both people have accounts; surviving_user_id must be one of "
-            f"{sorted(ids)}"
+            _(
+                "Both people have accounts; surviving_user_id must be one of %(ids)s",
+                ids=sorted(ids),
+            )
         )
     losing_user_id = (ids - {surviving_user_id}).pop()
 
@@ -563,7 +605,9 @@ def _merge_accounts(cur, loser_id, winner_id, loser_acct, winner_acct, surviving
     save_to_history(cur, "user_account", "DELETE", losing_user_id, user_id)
     cur.execute("DELETE FROM user_account WHERE user_id = %s", (losing_user_id,))
 
-    cur.execute("SELECT person_id FROM user_account WHERE user_id = %s", (surviving_user_id,))
+    cur.execute(
+        "SELECT person_id FROM user_account WHERE user_id = %s", (surviving_user_id,)
+    )
     if cur.fetchone()["person_id"] != winner_id:
         save_to_history(cur, "user_account", "UPDATE", surviving_user_id, user_id)
         cur.execute(
@@ -587,13 +631,15 @@ def execute_merge(
     winner_acct = _fetch_account(cur, winner_id)
     if loser_acct and winner_acct and surviving_user_id is None:
         raise MergeValidationError(
-            "Both people have accounts; surviving_user_id is required"
+            _("Both people have accounts; surviving_user_id is required")
         )
     a = _analyze(cur, loser_id, winner_id)
 
     # --- person_instrument ---------------------------------------------------
     for row in a["person_instrument"][0]:
-        save_to_history(cur, "person_instrument", "UPDATE", (loser_id, row["instrument"]), user_id)
+        save_to_history(
+            cur, "person_instrument", "UPDATE", (loser_id, row["instrument"]), user_id
+        )
         cur.execute(
             "UPDATE person_instrument SET person_id = %s, last_modified_user_id = %s "
             "WHERE person_id = %s AND instrument = %s",
@@ -602,13 +648,25 @@ def execute_merge(
     for c in a["person_instrument"][1]:
         merged = merge_person_instrument_fields(c["winner"], c["loser"])
         if merged["is_auto"] != c["winner"]["is_auto"]:
-            save_to_history(cur, "person_instrument", "UPDATE", (winner_id, c["winner"]["instrument"]), user_id)
+            save_to_history(
+                cur,
+                "person_instrument",
+                "UPDATE",
+                (winner_id, c["winner"]["instrument"]),
+                user_id,
+            )
             cur.execute(
                 "UPDATE person_instrument SET is_auto = %s, last_modified_user_id = %s "
                 "WHERE person_id = %s AND instrument = %s",
                 (merged["is_auto"], user_id, winner_id, c["winner"]["instrument"]),
             )
-        save_to_history(cur, "person_instrument", "DELETE", (loser_id, c["loser"]["instrument"]), user_id)
+        save_to_history(
+            cur,
+            "person_instrument",
+            "DELETE",
+            (loser_id, c["loser"]["instrument"]),
+            user_id,
+        )
         cur.execute(
             "DELETE FROM person_instrument WHERE person_id = %s AND instrument = %s",
             (loser_id, c["loser"]["instrument"]),
@@ -619,8 +677,11 @@ def execute_merge(
     pti = a["person_tune_instrument"]
     for row in pti["moves"]:
         save_to_history(
-            cur, "person_tune_instrument", "UPDATE",
-            (loser_id, row["tune_id"], row["instrument"]), user_id,
+            cur,
+            "person_tune_instrument",
+            "UPDATE",
+            (loser_id, row["tune_id"], row["instrument"]),
+            user_id,
         )
         cur.execute(
             "UPDATE person_tune_instrument SET person_id = %s, "
@@ -632,18 +693,30 @@ def execute_merge(
         merged = merge_person_tune_instrument_fields(c["winner"], c["loser"])
         if merged["status"] != c["winner"]["status"]:
             save_to_history(
-                cur, "person_tune_instrument", "UPDATE",
-                (winner_id, c["winner"]["tune_id"], c["winner"]["instrument"]), user_id,
+                cur,
+                "person_tune_instrument",
+                "UPDATE",
+                (winner_id, c["winner"]["tune_id"], c["winner"]["instrument"]),
+                user_id,
             )
             cur.execute(
                 "UPDATE person_tune_instrument SET status = %s, "
                 "last_modified_date = (NOW() AT TIME ZONE 'UTC'), last_modified_user_id = %s "
                 "WHERE person_id = %s AND tune_id = %s AND instrument = %s",
-                (merged["status"], user_id, winner_id, c["winner"]["tune_id"], c["winner"]["instrument"]),
+                (
+                    merged["status"],
+                    user_id,
+                    winner_id,
+                    c["winner"]["tune_id"],
+                    c["winner"]["instrument"],
+                ),
             )
         save_to_history(
-            cur, "person_tune_instrument", "DELETE",
-            (loser_id, c["loser"]["tune_id"], c["loser"]["instrument"]), user_id,
+            cur,
+            "person_tune_instrument",
+            "DELETE",
+            (loser_id, c["loser"]["tune_id"], c["loser"]["instrument"]),
+            user_id,
         )
         cur.execute(
             "DELETE FROM person_tune_instrument WHERE person_id = %s AND tune_id = %s AND instrument = %s",
@@ -653,7 +726,9 @@ def execute_merge(
     # --- person_tune ----------------------------------------------------------
     for c in a["person_tune"][1]:
         merged = merge_person_tune_fields(c["winner"], c["loser"])
-        save_to_history(cur, "person_tune", "UPDATE", (winner_id, c["winner"]["tune_id"]), user_id)
+        save_to_history(
+            cur, "person_tune", "UPDATE", (winner_id, c["winner"]["tune_id"]), user_id
+        )
         cur.execute(
             """
             UPDATE person_tune
@@ -662,22 +737,34 @@ def execute_merge(
             WHERE person_id = %s AND tune_id = %s
             """,
             (
-                merged["learn_status"], merged["heard_count"], merged["learned_date"],
-                merged["notes"], user_id, winner_id, c["winner"]["tune_id"],
+                merged["learn_status"],
+                merged["heard_count"],
+                merged["learned_date"],
+                merged["notes"],
+                user_id,
+                winner_id,
+                c["winner"]["tune_id"],
             ),
         )
-        save_to_history(cur, "person_tune", "DELETE", (loser_id, c["loser"]["tune_id"]), user_id)
+        save_to_history(
+            cur, "person_tune", "DELETE", (loser_id, c["loser"]["tune_id"]), user_id
+        )
         cur.execute(
             "DELETE FROM person_tune WHERE person_id = %s AND tune_id = %s",
             (loser_id, c["loser"]["tune_id"]),
         )
     for row in a["person_tune"][0]:
-        save_to_history(cur, "person_tune", "UPDATE", (loser_id, row["tune_id"]), user_id)
+        save_to_history(
+            cur, "person_tune", "UPDATE", (loser_id, row["tune_id"]), user_id
+        )
         for child in pti["carried"]:
             if child["tune_id"] == row["tune_id"]:
                 save_to_history(
-                    cur, "person_tune_instrument", "UPDATE",
-                    (loser_id, child["tune_id"], child["instrument"]), user_id,
+                    cur,
+                    "person_tune_instrument",
+                    "UPDATE",
+                    (loser_id, child["tune_id"], child["instrument"]),
+                    user_id,
                 )
     if a["person_tune"][0]:
         # children follow via person_tune_instrument's FK ON UPDATE CASCADE
@@ -690,7 +777,9 @@ def execute_merge(
 
     # --- session_person --------------------------------------------------------
     for row in a["session_person"][0]:
-        save_to_history(cur, "session_person", "UPDATE", (row["session_id"], loser_id), user_id)
+        save_to_history(
+            cur, "session_person", "UPDATE", (row["session_id"], loser_id), user_id
+        )
         cur.execute(
             "UPDATE session_person SET person_id = %s, "
             "last_modified_date = (NOW() AT TIME ZONE 'UTC'), last_modified_user_id = %s "
@@ -699,7 +788,13 @@ def execute_merge(
         )
     for c in a["session_person"][1]:
         merged = merge_session_person_fields(c["winner"], c["loser"])
-        save_to_history(cur, "session_person", "UPDATE", (c["winner"]["session_id"], winner_id), user_id)
+        save_to_history(
+            cur,
+            "session_person",
+            "UPDATE",
+            (c["winner"]["session_id"], winner_id),
+            user_id,
+        )
         cur.execute(
             """
             UPDATE session_person
@@ -709,12 +804,24 @@ def execute_merge(
             WHERE session_id = %s AND person_id = %s
             """,
             (
-                merged["relationship"], merged["confirmed"], merged["archived"],
-                merged["is_admin"], merged["gets_email_reminder"], merged["gets_email_followup"],
-                user_id, c["winner"]["session_id"], winner_id,
+                merged["relationship"],
+                merged["confirmed"],
+                merged["archived"],
+                merged["is_admin"],
+                merged["gets_email_reminder"],
+                merged["gets_email_followup"],
+                user_id,
+                c["winner"]["session_id"],
+                winner_id,
             ),
         )
-        save_to_history(cur, "session_person", "DELETE", (c["loser"]["session_id"], loser_id), user_id)
+        save_to_history(
+            cur,
+            "session_person",
+            "DELETE",
+            (c["loser"]["session_id"], loser_id),
+            user_id,
+        )
         cur.execute(
             "DELETE FROM session_person WHERE session_id = %s AND person_id = %s",
             (c["loser"]["session_id"], loser_id),
@@ -723,7 +830,11 @@ def execute_merge(
     # --- session_instance_person ----------------------------------------------
     for row in a["session_instance_person"][0]:
         save_to_history(
-            cur, "session_instance_person", "UPDATE", (row["session_instance_id"], loser_id), user_id
+            cur,
+            "session_instance_person",
+            "UPDATE",
+            (row["session_instance_id"], loser_id),
+            user_id,
         )
         cur.execute(
             "UPDATE session_instance_person SET person_id = %s, "
@@ -737,16 +848,22 @@ def execute_merge(
         # would reject the winner inheriting the loser's (earlier) seq while
         # the loser's row still holds it.
         save_to_history(
-            cur, "session_instance_person", "DELETE",
-            (c["loser"]["session_instance_id"], loser_id), user_id,
+            cur,
+            "session_instance_person",
+            "DELETE",
+            (c["loser"]["session_instance_id"], loser_id),
+            user_id,
         )
         cur.execute(
             "DELETE FROM session_instance_person WHERE session_instance_id = %s AND person_id = %s",
             (c["loser"]["session_instance_id"], loser_id),
         )
         save_to_history(
-            cur, "session_instance_person", "UPDATE",
-            (c["winner"]["session_instance_id"], winner_id), user_id,
+            cur,
+            "session_instance_person",
+            "UPDATE",
+            (c["winner"]["session_instance_id"], winner_id),
+            user_id,
         )
         cur.execute(
             """
@@ -756,8 +873,12 @@ def execute_merge(
             WHERE session_instance_id = %s AND person_id = %s
             """,
             (
-                merged["attendance"], merged["comment"], merged["arrival_seq"],
-                user_id, c["winner"]["session_instance_id"], winner_id,
+                merged["attendance"],
+                merged["comment"],
+                merged["arrival_seq"],
+                user_id,
+                c["winner"]["session_instance_id"],
+                winner_id,
             ),
         )
 
@@ -784,7 +905,8 @@ def execute_merge(
     for rec_id in a["recording_ids"]:
         save_to_history(cur, "recording", "UPDATE", rec_id, user_id)
     cur.execute(
-        "UPDATE recording SET person_id = %s WHERE person_id = %s", (winner_id, loser_id)
+        "UPDATE recording SET person_id = %s WHERE person_id = %s",
+        (winner_id, loser_id),
     )
 
     # --- referred_by pointers ------------------------------------------------------
@@ -827,7 +949,8 @@ def execute_merge(
         "moved": {
             "person_tune": len(a["person_tune"][0]),
             "person_instrument": len(a["person_instrument"][0]),
-            "person_tune_instrument": len(pti_counts["carried"]) + len(pti_counts["moves"]),
+            "person_tune_instrument": len(pti_counts["carried"])
+            + len(pti_counts["moves"]),
             "session_person": len(a["session_person"][0]),
             "session_instance_person": len(a["session_instance_person"][0]),
             "session_logger_color": len(a["session_logger_color"][0]),

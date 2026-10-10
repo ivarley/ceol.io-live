@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import App from '../src/App.svelte' // static: loading it per test can outrun the hook timeout
 import { render, waitFor } from '@testing-library/svelte'
 
 // The live screen mounted as a LOGGED-OUT visitor (config.canEdit === false): it is the
@@ -64,7 +65,6 @@ const publicConfig = (over = {}) => ({
   ...over,
 })
 
-let App
 beforeEach(async () => {
   document.body.innerHTML = ''
   snapshot = publicSnapshot()
@@ -72,7 +72,6 @@ beforeEach(async () => {
   openStream.mockClear()
   livePeople.mockClear()
   vocabulary.mockClear()
-  App = (await import('../src/App.svelte')).default
 })
 
 const rows = (c) => c.querySelectorAll('.tune-row .name')

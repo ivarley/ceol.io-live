@@ -1,4 +1,5 @@
 <script>
+  // i18n-converted
   // Seg (spec 035): segmented control — one row of mutually-exclusive option
   // buttons. THE seg — the status 3-ways (tune sheet + add pane), the sort/
   // status filter groups, and the history-scope toggles all run on it.

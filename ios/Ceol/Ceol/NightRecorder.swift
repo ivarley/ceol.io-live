@@ -26,6 +26,9 @@
 // The audio arrives on a real-time thread, so AudioCapture is nonisolated: a tap block
 // made inside a main-actor type would be main-actor isolated and trap off the main
 // thread under Swift 6.
+//
+// i18n-converted (spec 057): the messages we set are in the app's language; a refusal
+// the listening service sends is shown as it comes. The meter log is not translated.
 
 @preconcurrency import AVFoundation
 import CeolDeciding
@@ -121,7 +124,8 @@ final class NightRecorder {
             "started_at": ISO8601DateFormatter().string(from: startedAt), "listen": listenWhere.rawValue,
             "decide": listenWhere == .phone && PhoneDeciding.corpus != nil ? "phone" : "server",
         ]))
-        streamLink = ListenLink(url: listenURL, token: token, streamID: streamID, source: capture)
+        streamLink = ListenLink(url: listenURL, token: token, streamID: streamID, instanceID: instanceID,
+                                source: capture)
         streamLink = makeLink(streamID: streamID)
     }
 
@@ -133,7 +137,7 @@ final class NightRecorder {
         capture.onSamples = nil
         capture.streamsAudio = listenWhere == .server
         guard listenWhere == .phone else {
-            return ListenLink(url: listenURL, token: token, streamID: streamID, source: capture)
+            return ListenLink(url: listenURL, token: token, streamID: streamID, instanceID: instanceID, source: capture)
         }
         let log = meterLog
         let deciding = PhoneDeciding.corpus.map(PhoneDeciding.init)
@@ -156,7 +160,7 @@ final class NightRecorder {
             })
         hearing = h
         capture.onSamples = { h.take($0) }
-        return deciding ?? ListenLink(url: listenURL, token: token, streamID: streamID, source: h)
+        return deciding ?? ListenLink(url: listenURL, token: token, streamID: streamID, instanceID: instanceID, source: h)
     }
 
     /// Listen somewhere else from now on. The recording carries on; listening starts
@@ -181,14 +185,14 @@ final class NightRecorder {
     /// Asks for the microphone, starts the engine, the file and the stream.
     func start() async {
         guard await AVAudioApplication.requestRecordPermission() else {
-            error = "Ceol needs the microphone to record. Allow it in Settings."
+            error = tr("Ceol needs the microphone to record. Allow it in Settings.")
             stopped = true
             return
         }
         do {
             try capture.start()
         } catch {
-            self.error = "Couldn't start recording: \(error.localizedDescription)"
+            self.error = tr("Couldn't start recording: \(error.localizedDescription)")
             stopped = true
             return
         }
@@ -419,7 +423,7 @@ nonisolated final class AudioCapture: @unchecked Sendable {
         let input = engine.inputNode
         let inFormat = input.outputFormat(forBus: 0)
         guard inFormat.sampleRate > 0, let conv = AVAudioConverter(from: inFormat, to: outFormat) else {
-            throw NSError(domain: "Ceol", code: 1, userInfo: [NSLocalizedDescriptionKey: "No microphone input"])
+            throw NSError(domain: "Ceol", code: 1, userInfo: [NSLocalizedDescriptionKey: tr("No microphone input")])
         }
         converter = conv
         input.installTap(onBus: 0, bufferSize: 4096, format: inFormat) { [weak self] buffer, _ in
@@ -456,7 +460,7 @@ nonisolated final class AudioCapture: @unchecked Sendable {
 /// What a stream to the listening service carries: the audio (AudioCapture), or what the
 /// phone heard (PhoneHearing). ListenLink does the connecting and reconnecting.
 nonisolated protocol ListenSource: AnyObject, Sendable {
-    func startMessage(streamID: String) -> String
+    func startMessage(streamID: String, instanceID: Int) -> String
     /// The service's first reply -> what to send before the rest, or nil if it isn't the
     /// "ready" this stream expects.
     func ready(_ reply: ListenMessage) -> [String]?
@@ -466,7 +470,7 @@ nonisolated protocol ListenSource: AnyObject, Sendable {
 }
 
 nonisolated extension AudioCapture: ListenSource {
-    func startMessage(streamID: String) -> String { ListenWire.start(streamID: streamID) }
+    func startMessage(streamID: String, instanceID: Int) -> String { ListenWire.start(streamID: streamID, instanceID: instanceID) }
 
     func ready(_ reply: ListenMessage) -> [String]? {
         guard case .ready(let have) = reply else { return nil }
@@ -567,7 +571,7 @@ nonisolated final class PhoneHearing: ListenSource, @unchecked Sendable {
         }
     }
 
-    func startMessage(streamID: String) -> String { ListenWire.startHeard(streamID: streamID) }
+    func startMessage(streamID: String, instanceID: Int) -> String { ListenWire.startHeard(streamID: streamID, instanceID: instanceID) }
 
     func ready(_ reply: ListenMessage) -> [String]? {
         guard case .readyHeard(let t) = reply else { return nil }
@@ -687,16 +691,18 @@ nonisolated final class ListenLink: Listening, @unchecked Sendable {
     private let url: URL
     private let token: String?
     private let streamID: String
+    private let instanceID: Int
     private let source: any ListenSource
     private let lock = NSLock()
     private var task: URLSessionWebSocketTask?
     private var running = true
     private var runner: Task<Void, Never>?
 
-    init(url: URL, token: String?, streamID: String, source: any ListenSource) {
+    init(url: URL, token: String?, streamID: String, instanceID: Int, source: any ListenSource) {
         self.url = url
         self.token = token
         self.streamID = streamID
+        self.instanceID = instanceID
         self.source = source
     }
 
@@ -753,7 +759,7 @@ nonisolated final class ListenLink: Listening, @unchecked Sendable {
             lock.withLock { if task === ws { task = nil } }
         }
         do {
-            try await ws.send(.string(source.startMessage(streamID: streamID)))
+            try await ws.send(.string(source.startMessage(streamID: streamID, instanceID: instanceID)))
             // the first reply says how much it holds
             guard case .string(let first) = try await ws.receive() else { return nil }
             let reply = ListenMessage.decode(first)
@@ -761,7 +767,7 @@ nonisolated final class ListenLink: Listening, @unchecked Sendable {
             guard let answers = source.ready(reply) else { return nil }
             for a in answers { try await ws.send(.string(a)) }
         } catch {
-            if ws.closeCode.rawValue == 4401 { return "Not allowed to listen" }
+            if ws.closeCode.rawValue == 4401 { return tr("Not allowed to listen") }
             return nil
         }
         onLink(.live)

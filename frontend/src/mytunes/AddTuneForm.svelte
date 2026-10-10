@@ -1,10 +1,11 @@
 <script>
+  // i18n-converted
   // The add form living in TunePreview's footer (My Tunes pane): "Add as" +
   // per-instrument roll-up + collapsed notes + the add button. Owns ALL per-tune
   // form state — the parent keys this component on the previewed tune's identity,
   // so stepping ‹ › to another tune remounts it fresh (no notes leaking across).
-  import { Chip, Seg, ServerError } from '../lib/index.js'
-  import { STATUS_LABELS } from '../mylist.js'
+  import { Chip, Seg, t, instrumentName } from '../lib/index.js'
+  import { statusLabel as LABEL, failText } from './labels.js'
 
   let {
     instruments = [], // the person's instruments [{instrument, is_auto}]
@@ -21,24 +22,15 @@
   } = $props()
 
   const STATUSES = ['want to learn', 'learning', 'learned']
-  const LABELS = STATUS_LABELS
 
   // ---- already-on-the-list panel ------------------------------------------------
   // Offering "Update Setting" only makes sense when the user actually pointed at a
   // setting AND it isn't the one already recorded — otherwise there is nothing to update.
   const settingDiffers = $derived(chosenSettingId != null && chosenSettingId !== (existing?.setting_id ?? null))
-  const statusLabel = $derived(LABELS[existing?.learn_status] || null)
+  const statusLabel = $derived(existing?.learn_status ? LABEL(existing.learn_status) : null)
   const heardCount = $derived(existing?.heard_count ?? 0)
   let onListBusy = $state('') // '' | 'setting' | 'heard' — which on-list action is in flight
   let onListError = $state('')
-
-  // What to show when a request fails: the server's (or our own) explanation when
-  // there is one, else a human sentence. Raw network/parse text only reaches the console.
-  function failText(e, what) {
-    console.error(`Couldn't ${what}:`, e)
-    if (e instanceof ServerError && e.message) return e.message
-    return `Couldn't ${what}. Check your connection and try again.`
-  }
 
   async function runOnListAction(kind, fn) {
     if (onListBusy) return
@@ -48,7 +40,7 @@
       await fn()
       // success closes the pane; this component unmounts with it
     } catch (e) {
-      onListError = failText(e, kind === 'heard' ? 'update the heard count' : 'update your setting')
+      onListError = failText(e, kind === 'heard' ? t('update the heard count') : t('update your setting'))
       onListBusy = ''
     }
   }
@@ -103,7 +95,7 @@
       await onSubmit({ status: baseStatus, notes: notes.trim(), overrides: instrumentOverrides() })
       // success closes the pane; this component unmounts with it
     } catch (e) {
-      errorMsg = failText(e, 'add the tune')
+      errorMsg = failText(e, t('add the tune'))
       submitting = false
     }
   }
@@ -113,17 +105,17 @@
   <!-- Already yours: not an add. Say so (with the status, so the panel answers "what do
        I have on this tune?"), and offer only what's actually left to do here. -->
   <div class="mt-onlist-panel">
-    <button class="mt-onlist-head" onclick={onShowExisting} title="Show this tune on your list">
-      <span class="mt-onlist-star">★</span> Already on your list
+    <button class="mt-onlist-head" onclick={onShowExisting} title={t('Show this tune on your list')}>
+      <span class="mt-onlist-star">★</span> {t('Already on your list')}
       {#if statusLabel}<span class="mt-onlist-status">{statusLabel}</span>{/if}
     </button>
     {#if settingDiffers}
       <p class="mt-onlist-ask">
         {#if existing?.setting_id != null}
-          You play setting <strong>#{existing.setting_id}</strong> — this link points at
-          <strong>#{chosenSettingId}</strong>. Update it?
+          {t('You play setting')} <strong>#{existing.setting_id}</strong> — {t('this link points at')}
+          <strong>#{chosenSettingId}</strong>. {t('Update it?')}
         {:else}
-          You haven't picked a setting yet. Use <strong>#{chosenSettingId}</strong>?
+          {t("You haven't picked a setting yet.")} {t('Use')} <strong>#{chosenSettingId}</strong>?
         {/if}
       </p>
     {/if}
@@ -134,30 +126,30 @@
           class="pv-action mt-onlist-primary"
           disabled={!!onListBusy}
           onclick={() => runOnListAction('setting', () => onUpdateSetting())}>
-          {onListBusy === 'setting' ? 'Updating…' : 'Update Setting'}
+          {onListBusy === 'setting' ? t('Updating…') : t('Update Setting')}
         </button>
       {/if}
       <button
         class="pv-action mt-onlist-secondary"
         disabled={!!onListBusy}
         onclick={() => runOnListAction('heard', () => onHeardAgain())}>
-        {onListBusy === 'heard' ? 'Saving…' : `I Heard It Again${heardCount ? ` (${heardCount})` : ''}`}
+        {onListBusy === 'heard' ? t('Saving…') : heardCount ? t('I Heard It Again ({n})', { n: heardCount }) : t('I Heard It Again')}
       </button>
-      <button class="pv-action mt-onlist-cancel" disabled={!!onListBusy} onclick={onCancel}>Cancel</button>
+      <button class="pv-action mt-onlist-cancel" disabled={!!onListBusy} onclick={onCancel}>{t('Cancel')}</button>
     </div>
   </div>
 {:else}
   <div class="mt-form">
     <div class="mt-form-row">
-      <span class="mt-label">Add as</span>
+      <span class="mt-label">{t('Add as')}</span>
       {#if instruments.length >= 2}
         <button class="tsc-expand-link mt-expand" onclick={() => (instOpen = !instOpen)}>
-          {instOpen ? 'Hide Instruments' : 'By Instrument'}
+          {instOpen ? t('Hide Instruments') : t('By Instrument')}
         </button>
       {/if}
     </div>
     <Seg
-      options={STATUSES.map((st) => ({ id: st, label: LABELS[st] }))}
+      options={STATUSES.map((st) => ({ id: st, label: LABEL(st) }))}
       value={baseStatus}
       idAttr="data-status"
       styled={false}
@@ -169,12 +161,12 @@
         {#each instruments as inst (inst.instrument)}
           <div class="tsc-block tsc-inst-block">
             <div class="tsc-label-line mt-label">
-              {inst.instrument}
-              {#if !inst.is_auto}<Chip label="manual" styled={false} chipClass="mt-manual-badge" />{/if}
-              {#if effectiveStatus(inst) === null}<Chip label="not tracking" styled={false} chipClass="mt-untracked" />{/if}
+              {instrumentName(inst.instrument)}
+              {#if !inst.is_auto}<Chip label={t('manual')} styled={false} chipClass="mt-manual-badge" />{/if}
+              {#if effectiveStatus(inst) === null}<Chip label={t('not tracking')} styled={false} chipClass="mt-untracked" />{/if}
             </div>
             <Seg
-              options={STATUSES.map((st) => ({ id: st, label: LABELS[st] }))}
+              options={STATUSES.map((st) => ({ id: st, label: LABEL(st) }))}
               value={effectiveStatus(inst)}
               idAttr="data-status"
               styled={false}
@@ -190,17 +182,17 @@
       <!-- svelte-ignore a11y_autofocus -->
       <textarea
         class="mt-notes"
-        placeholder="Add any notes about this tune…"
+        placeholder={t('Add any notes about this tune…')}
         autofocus
         bind:value={notes}
       ></textarea>
     {:else}
-      <button class="mt-note-toggle" onclick={() => (notesOpen = true)}>＋ Add note</button>
+      <button class="mt-note-toggle" onclick={() => (notesOpen = true)}>＋ {t('Add note')}</button>
     {/if}
 
     {#if errorMsg}<p class="mt-error">{errorMsg}</p>{/if}
     <button class="pv-action mt-submit" disabled={submitting} onclick={handleSubmit}>
-      {submitting ? 'Adding…' : '＋ Add to My Tunes'}
+      {submitting ? t('Adding…') : t('＋ Add to My Tunes')}
     </button>
   </div>
 {/if}

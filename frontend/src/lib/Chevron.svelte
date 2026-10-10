@@ -1,4 +1,5 @@
 <script>
+  // i18n-converted
   // The app's one chevron (spec 052 §B16).
   //
   // Everything that pointed somewhere used to be a typographic character — `›` and

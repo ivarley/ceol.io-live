@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import App from '../src/App.svelte' // static: loading it per test can outrun the hook timeout
 import { render, waitFor, fireEvent } from '@testing-library/svelte'
 import { sendOp, openStream } from '../src/client.js'
 
@@ -50,12 +51,10 @@ const config = {
   streamingBaseUrl: 'http://stream.test/',
 }
 
-let App
 beforeEach(async () => {
   document.body.innerHTML = ''
   vi.mocked(sendOp).mockClear()
   vi.mocked(openStream).mockClear()
-  App = (await import('../src/App.svelte')).default
 })
 
 /** Expand the header and open the date sheet; returns the sheet element. */

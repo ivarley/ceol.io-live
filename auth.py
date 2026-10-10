@@ -5,6 +5,7 @@ from datetime import timedelta
 from flask_login import UserMixin
 import psycopg2
 from database import get_db_connection, save_to_history
+from i18n import request_language
 from timezone_utils import now_utc
 
 # Session configuration
@@ -27,6 +28,7 @@ class User(UserMixin):
         auto_save_tunes=False,
         auto_save_interval=60,
         active_session=None,
+        language=None,
     ):
         self.id = str(user_id)
         self.user_id = user_id
@@ -43,6 +45,9 @@ class User(UserMixin):
         self.auto_save_interval = auto_save_interval
         self.active_session = active_session  # Dict with session instance data or None
         self.hashed_password = None  # Will be set when loading from database
+        # Spec 057: 'en' or 'ga'. get_by_id (every request) reads it; a loader that
+        # doesn't leaves None and i18n.user_language() fetches it when asked.
+        self.language = language
 
     @property
     def is_active(self):
@@ -62,7 +67,7 @@ class User(UserMixin):
                 SELECT ua.user_id, ua.person_id, ua.username, ua.is_active, ua.is_system_admin,
                        ua.timezone, ua.email_verified, p.first_name, p.last_name, ua.user_email, ua.auto_save_tunes, ua.auto_save_interval,
                        p.at_active_session_instance_id, si.session_id, si.date, si.start_time, si.end_time, si.location_override, s.name, s.path,
-                       ua.hashed_password
+                       ua.hashed_password, ua.language
                 FROM user_account ua
                 JOIN person p ON ua.person_id = p.person_id
                 LEFT JOIN session_instance si ON p.at_active_session_instance_id = si.session_instance_id
@@ -77,14 +82,14 @@ class User(UserMixin):
                 active_session = None
                 if user_data[12]:  # at_active_session_instance_id
                     active_session = {
-                        'session_instance_id': user_data[12],
-                        'session_id': user_data[13],
-                        'date': user_data[14],
-                        'start_time': user_data[15],
-                        'end_time': user_data[16],
-                        'location_override': user_data[17],
-                        'session_name': user_data[18],
-                        'session_path': user_data[19]
+                        "session_instance_id": user_data[12],
+                        "session_id": user_data[13],
+                        "date": user_data[14],
+                        "start_time": user_data[15],
+                        "end_time": user_data[16],
+                        "location_override": user_data[17],
+                        "session_name": user_data[18],
+                        "session_path": user_data[19],
                     }
 
                 user = User(
@@ -106,6 +111,7 @@ class User(UserMixin):
                 # request (GET /api/me reports it; token-authenticated requests load
                 # the user through here).
                 user.hashed_password = user_data[20]
+                user.language = user_data[21]
                 return user
             return None
         finally:
@@ -236,7 +242,14 @@ class User(UserMixin):
         return self.hashed_password is not None and self.hashed_password != ""
 
     @staticmethod
-    def create_user(username, password, person_id, timezone="UTC", user_email=None, referred_by_person_id=None):
+    def create_user(
+        username,
+        password,
+        person_id,
+        timezone="UTC",
+        user_email=None,
+        referred_by_person_id=None,
+    ):
         hashed_password = bcrypt.hashpw(
             password.encode("utf-8"), bcrypt.gensalt()
         ).decode("utf-8")
@@ -245,11 +258,19 @@ class User(UserMixin):
             cur = conn.cursor()
             cur.execute(
                 """
-                INSERT INTO user_account (person_id, username, user_email, hashed_password, timezone, referred_by_person_id, created_by_user_id)
-                VALUES (%s, %s, %s, %s, %s, %s, NULL)
+                INSERT INTO user_account (person_id, username, user_email, hashed_password, timezone, referred_by_person_id, created_by_user_id, language)
+                VALUES (%s, %s, %s, %s, %s, %s, NULL, %s)
                 RETURNING user_id
             """,
-                (person_id, username, user_email, hashed_password, timezone, referred_by_person_id),
+                (
+                    person_id,
+                    username,
+                    user_email,
+                    hashed_password,
+                    timezone,
+                    referred_by_person_id,
+                    request_language(),
+                ),
             )
             result = cur.fetchone()
             if not result:
@@ -266,7 +287,9 @@ class User(UserMixin):
                 """,
                 (person_id, user_id),
             )
-            cur.execute("UPDATE person SET email = NULL WHERE person_id = %s", (person_id,))
+            cur.execute(
+                "UPDATE person SET email = NULL WHERE person_id = %s", (person_id,)
+            )
             conn.commit()
             return user_id
         finally:
@@ -339,7 +362,11 @@ def needs_profile_setup(person_id):
     first_name, last_name, city, state, country = row
     if not (first_name and first_name.strip()) or not (last_name and last_name.strip()):
         return True
-    has_location = (city and city.strip()) or (state and state.strip()) or (country and country.strip())
+    has_location = (
+        (city and city.strip())
+        or (state and state.strip())
+        or (country and country.strip())
+    )
     return not has_location
 
 
@@ -425,6 +452,7 @@ def log_login_event(
 
 # Attendance Permission Helper Functions
 
+
 def can_view_attendance(user, session_id):
     """
     Check if a user can see this session's PEOPLE -- the People tab, person detail
@@ -453,18 +481,18 @@ def can_view_attendance(user, session_id):
 def can_manage_attendance(user, session_id):
     """
     Check if a user can manage (add/edit/remove) attendance for a session.
-    
+
     Args:
         user: User object with is_system_admin property
         session_id: Session ID to check permissions for
-        
+
     Returns:
         bool: True if user can manage attendance, False otherwise
     """
     # System admins can manage any attendance
     if user.is_system_admin:
         return True
-    
+
     # Only session admins can manage attendance (regulars cannot)
     return is_session_admin(user.person_id, session_id)
 
@@ -486,7 +514,7 @@ def is_session_member(person_id, session_id):
             SELECT 1 FROM session_person
             WHERE person_id = %s AND session_id = %s
         """,
-            (person_id, session_id)
+            (person_id, session_id),
         )
         return cur.fetchone() is not None
     finally:
@@ -508,7 +536,7 @@ def is_session_confirmed(person_id, session_id):
             SELECT 1 FROM session_person
             WHERE person_id = %s AND session_id = %s AND confirmed = TRUE
         """,
-            (person_id, session_id)
+            (person_id, session_id),
         )
         return cur.fetchone() is not None
     finally:
@@ -518,11 +546,11 @@ def is_session_confirmed(person_id, session_id):
 def is_session_admin(person_id, session_id):
     """
     Check if a person is an admin for a given session.
-    
+
     Args:
         person_id: Person ID to check
         session_id: Session ID to check against
-        
+
     Returns:
         bool: True if person is an admin for the session, False otherwise
     """
@@ -534,7 +562,7 @@ def is_session_admin(person_id, session_id):
             SELECT 1 FROM session_person 
             WHERE person_id = %s AND session_id = %s AND is_admin = true
         """,
-            (person_id, session_id)
+            (person_id, session_id),
         )
         return cur.fetchone() is not None
     finally:
@@ -712,8 +740,8 @@ def complete_pending_registration(token):
             INSERT INTO user_account
                 (person_id, username, user_email, hashed_password, timezone,
                  email_verified, referred_by_person_id, created_date,
-                 last_modified_date, created_by_user_id)
-            VALUES (%s, %s, %s, NULL, 'UTC', TRUE, %s, %s, %s, NULL)
+                 last_modified_date, created_by_user_id, language)
+            VALUES (%s, %s, %s, NULL, 'UTC', TRUE, %s, %s, %s, NULL, %s)
             RETURNING user_id
             """,
             (
@@ -723,6 +751,7 @@ def complete_pending_registration(token):
                 referred_by_person_id,
                 now,
                 now,
+                request_language(),
             ),
         )
         user_id = cur.fetchone()[0]

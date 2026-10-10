@@ -25,28 +25,35 @@ public typealias TokenProvider = @Sendable () async -> String?
 extension Client {
     /// A client for `serverURL` that identifies itself as `clientID` (the value of
     /// X-Ceol-Client, e.g. "ios/1.0.0 (build 12)") and sends `token()` when it has one.
+    /// `language()` is the app's interface language ("en" / "ga"), sent as
+    /// Accept-Language so the server answers in it even before sign-in (spec 057).
     public static func ceol(
         serverURL: URL = CeolServer.production,
         clientID: String,
         token: @escaping TokenProvider,
+        language: @escaping @Sendable () -> String? = { nil },
         transport: any ClientTransport = URLSessionTransport()
     ) -> Client {
         Client(
             serverURL: serverURL,
             transport: transport,
-            middlewares: [ClientIDMiddleware(clientID: clientID), BearerTokenMiddleware(token: token)]
+            middlewares: [
+                ClientIDMiddleware(clientID: clientID, language: language), BearerTokenMiddleware(token: token),
+            ]
         )
     }
 }
 
-/// X-Ceol-Client on every request.
+/// X-Ceol-Client on every request, and Accept-Language when the app names its language.
 public struct ClientIDMiddleware: ClientMiddleware {
     public static let headerName = HTTPField.Name("X-Ceol-Client")!
 
     public let clientID: String
+    public let language: @Sendable () -> String?
 
-    public init(clientID: String) {
+    public init(clientID: String, language: @escaping @Sendable () -> String? = { nil }) {
         self.clientID = clientID
+        self.language = language
     }
 
     public func intercept(
@@ -58,6 +65,7 @@ public struct ClientIDMiddleware: ClientMiddleware {
     ) async throws -> (HTTPResponse, HTTPBody?) {
         var request = request
         request.headerFields[Self.headerName] = clientID
+        if let language = language() { request.headerFields[.acceptLanguage] = language }
         return try await next(request, body, baseURL)
     }
 }

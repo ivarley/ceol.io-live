@@ -10,7 +10,7 @@
 //
 // A session's tabs: the web's /sessions/<path> panels (SessionPage). Tunes: type, sort,
 // nights I attended, and my tunebook status; Logs: logged, attended or all; People:
-// members, visitors or archived.
+// members, visitors or archived, and a sort (the web's pane, row for row).
 
 import CeolDesign
 import CeolLogic
@@ -33,19 +33,19 @@ struct TunesFilterSheet: View {
                 VStack(alignment: .leading, spacing: 24) {
                     sortSection
                     ChoiceChips(
-                        label: "Type",
-                        options: [("", "All types")] + types.map { ($0, $0.capitalized) },
+                        label: tr("Type"),
+                        options: [("", tr("All types"))] + types.map { ($0, SessionsL10n.typeName($0)) },
                         selection: $filters.type)
                     if instruments.count >= 2 {
                         ChoiceChips(
-                            label: "Instrument",
-                            options: [("", "All my instruments")] + instruments.map { ($0.name, $0.name.capitalized) },
+                            label: tr("Instrument"),
+                            options: [("", tr("All my instruments"))] + instruments.map { ($0.name, SessionsL10n.instrument($0.name.capitalized)) },
                             selection: $filters.instrument)
                     }
                     addedSection
                     ChoiceChips(
-                        label: "Played",
-                        options: [("", "Anywhere"), ("member", "At my sessions"), ("attended", "When I was there")],
+                        label: tr("Played"),
+                        options: [("", tr("Anywhere")), ("member", tr("At my sessions")), ("attended", tr("When I was there"))],
                         selection: $filters.rel)
                 }
                 .padding(20)
@@ -80,11 +80,11 @@ struct TunesFilterSheet: View {
             HStack(spacing: 10) {
                 Menu {
                     Picker("Sort", selection: $sort.type) {
-                        ForEach(MyTunesList.sortModes, id: \.id) { Text($0.label).tag($0.id) }
+                        ForEach(MyTunesList.sortModes, id: \.id) { Text(SessionsL10n.myTunesSortLabel($0.id)).tag($0.id) }
                     }
                 } label: {
                     HStack {
-                        Text(MyTunesList.sortModeLabel(sort.type)).font(.ceol(size: 16)).foregroundStyle(CeolTokens.textColor)
+                        Text(SessionsL10n.myTunesSortLabel(sort.type)).font(.ceol(size: 16)).foregroundStyle(CeolTokens.textColor)
                         Spacer()
                         Image(systemName: "chevron.up.chevron.down").font(.system(size: 13)).foregroundStyle(CeolTokens.textMuted)
                     }
@@ -99,7 +99,7 @@ struct TunesFilterSheet: View {
                         .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(CeolTokens.borderColor, lineWidth: 1))
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(sort.descending ? "Sorting downward" : "Sorting upward")
+                .accessibilityLabel(sort.descending ? Text("Sorting downward") : Text("Sorting upward"))
             }
         }
     }
@@ -158,10 +158,10 @@ struct SessionsFilterSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     ChoiceChips(
-                        label: "Show", options: SessionsRules.Filter.allCases.map { ($0, $0.label) }, selection: $filter)
-                    ChoiceChips(label: "Sort", options: SessionsRules.Sort.allCases.map { ($0, $0.label) }, selection: $sort)
+                        label: tr("Show"), options: SessionsRules.Filter.allCases.map { ($0, SessionsL10n.label($0)) }, selection: $filter)
+                    ChoiceChips(label: tr("Sort"), options: SessionsRules.Sort.allCases.map { ($0, SessionsL10n.label($0)) }, selection: $sort)
                     if countries.count >= 2 {
-                        ChoiceChips(label: "Country", options: [("", "Anywhere")] + countries.map { ($0, $0) }, selection: $country)
+                        ChoiceChips(label: tr("Country"), options: [("", tr("Anywhere"))] + countries.map { ($0, $0) }, selection: $country)
                     }
                 }
                 .padding(20)
@@ -206,18 +206,18 @@ struct SessionTunesFilterSheet: View {
                 VStack(alignment: .leading, spacing: 24) {
                     sortSection
                     ChoiceChips(
-                        label: "Type",
-                        options: [("", "All types")] + types.map { ($0, $0.capitalized) },
+                        label: tr("Type"),
+                        options: [("", tr("All types"))] + types.map { ($0, SessionsL10n.typeName($0)) },
                         selection: $filters.type)
                     if signedIn {
                         ChoiceChips(
-                            label: "Played",
-                            options: [(false, "Any night"), (true, "Nights I attended")],
+                            label: tr("Played"),
+                            options: [(false, tr("Any night")), (true, tr("Nights I attended"))],
                             selection: $filters.attended)
                         VStack(alignment: .leading, spacing: 8) {
                             ChoiceChips(
-                                label: "My tunebook",
-                                options: SessionPage.MyStatus.allCases.map { ($0, $0.label) },
+                                label: tr("My tunebook"),
+                                options: SessionPage.MyStatus.allCases.map { ($0, SessionsL10n.label($0)) },
                                 selection: $filters.myStatus)
                             if tunebookFailed {
                                 Text("Your tunebook didn't load, so this is off. Try again.")
@@ -226,8 +226,8 @@ struct SessionTunesFilterSheet: View {
                         }
                         if filters.myStatus != .off && instruments.count >= 2 {
                             ChoiceChips(
-                                label: "Instrument",
-                                options: [("all", "All instruments")] + instruments.map { ($0, $0.capitalized) },
+                                label: tr("Instrument"),
+                                options: [("all", tr("All instruments"))] + instruments.map { ($0, SessionsL10n.instrument($0.capitalized)) },
                                 selection: $filters.myStatusInstrument)
                         }
                     }
@@ -268,11 +268,11 @@ struct SessionTunesFilterSheet: View {
                         // Name starts A to Z; the counts start with the most.
                         if mode != sort.mode { sort = .init(mode: mode, descending: mode.defaultDescending) }
                     })) {
-                        ForEach(SessionPage.SortMode.allCases, id: \.self) { Text($0.label).tag($0) }
+                        ForEach(SessionPage.SortMode.allCases, id: \.self) { Text(SessionsL10n.label($0)).tag($0) }
                     }
                 } label: {
                     HStack {
-                        Text(sort.mode.label).font(.ceol(size: 16)).foregroundStyle(CeolTokens.textColor)
+                        Text(SessionsL10n.label(sort.mode)).font(.ceol(size: 16)).foregroundStyle(CeolTokens.textColor)
                         Spacer()
                         Image(systemName: "chevron.up.chevron.down").font(.system(size: 13)).foregroundStyle(CeolTokens.textMuted)
                     }
@@ -287,7 +287,7 @@ struct SessionTunesFilterSheet: View {
                         .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(CeolTokens.borderColor, lineWidth: 1))
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(sort.descending ? "Sorting downward" : "Sorting upward")
+                .accessibilityLabel(sort.descending ? Text("Sorting downward") : Text("Sorting upward"))
                 .accessibilityIdentifier("filters.direction")
             }
         }
@@ -339,5 +339,103 @@ struct SessionTabFilterSheet<ID: Hashable>: View {
             }
         }
         .ceolDrawer([.medium])
+    }
+}
+
+/// The People tab's drawer, laid out as the web's pane is: who to show, then the order
+/// (a mode and a direction). Without attendance there is nothing to sort by but the
+/// name, so the Sort row goes.
+struct SessionPeopleFilterSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var view: SessionPage.PeopleView
+    @Binding var sort: SessionPage.PeopleSort
+    let trackAttendance: Bool
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    SegmentedSection(
+                        label: tr("Show"), options: SessionPage.PeopleView.allCases.map { ($0, SessionsL10n.label($0)) },
+                        selection: $view, id: "filters.show")
+                    if trackAttendance {
+                        SortSection(
+                            options: SessionPage.PeopleSortMode.allCases.map { ($0, SessionsL10n.label($0)) },
+                            mode: Binding(get: { sort.mode }, set: { mode in
+                                if mode != sort.mode { sort = .init(mode: mode) }
+                            }),
+                            descending: $sort.descending)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(20)
+            }
+            .background(CeolTokens.drawerBg)
+            .navigationTitle("Sort & filter")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Clear") {
+                        view = .members
+                        sort = .init()
+                    }
+                    .disabled(view == .members && sort == .init())
+                    .accessibilityIdentifier("filters.clear")
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }.accessibilityIdentifier("filters.done")
+                }
+            }
+        }
+        .ceolDrawer([.medium])
+    }
+}
+
+/// A labelled one-line choice.
+struct SegmentedSection<ID: Hashable>: View {
+    let label: String
+    let options: [(id: ID, label: String)]
+    @Binding var selection: ID
+    var id = "filters.segment"
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(label.uppercased()).font(.ceol(size: 12, weight: .semibold)).tracking(0.8)
+                .foregroundStyle(CeolTokens.textMuted)
+            Picker(label, selection: $selection) {
+                ForEach(options, id: \.id) { Text($0.label).tag($0.id) }
+            }
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier(id)
+        }
+    }
+}
+
+/// SORT: the modes on one line and a direction beside them, as the web's panes have it.
+struct SortSection<Mode: Hashable>: View {
+    let options: [(id: Mode, label: String)]
+    @Binding var mode: Mode
+    @Binding var descending: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("SORT").font(.ceol(size: 12, weight: .semibold)).tracking(0.8).foregroundStyle(CeolTokens.textMuted)
+            HStack(spacing: 10) {
+                Picker("Sort", selection: $mode) {
+                    ForEach(options, id: \.id) { Text($0.label).tag($0.id) }
+                }
+                .pickerStyle(.segmented)
+                .accessibilityIdentifier("filters.sort")
+                Button { descending.toggle() } label: {
+                    Image(systemName: descending ? "arrow.down" : "arrow.up")
+                        .font(.system(size: 15, weight: .medium)).foregroundStyle(CeolTokens.textColor)
+                        .frame(width: 40, height: 32)
+                        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(CeolTokens.borderColor, lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(descending ? Text("Sorting downward") : Text("Sorting upward"))
+                .accessibilityIdentifier("filters.direction")
+            }
+        }
     }
 }

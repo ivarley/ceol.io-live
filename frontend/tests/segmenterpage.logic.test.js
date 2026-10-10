@@ -5,11 +5,16 @@
 import { describe, it, expect } from 'vitest'
 import {
   edgeLimits,
+  setBreakBefore,
   envelopeForRange,
   formatDuration,
   formatTime,
   groupIntoSets,
   MIN_SEGMENT_MS,
+  confidenceBand,
+  isGuess,
+  needsCheck,
+  nextNeedingCheck,
   nextUnplacedIndex,
   resolveSegments,
   snapToOnset,
@@ -236,6 +241,39 @@ describe('edgeLimits', () => {
   })
 })
 
+describe('setBreakBefore', () => {
+  // A start that coincides with the previous tune's implicit end is one edge
+  // inside a set, and two edges across a set break.
+  const seg = (startMs, endMs, explicitEnd) => ({ startMs, endMs, explicitEnd, gapAfterMs: 0 })
+  const resolved = () =>
+    new Map([
+      [1, seg(10000, 20000, false)],
+      [2, seg(20000, 30000, false)],
+      [3, seg(30000, 40000, true)],
+      [4, seg(45000, 60000, false)],
+    ])
+
+  it('names the previous tune when its implicit end closes another set', () => {
+    const sets = new Map([[1, 1], [2, 2], [3, 2], [4, 3]])
+    expect(setBreakBefore(resolved(), sets, 2)).toBe(1)
+  })
+
+  it('is null inside a set, where the edge is shared', () => {
+    const sets = new Map([[1, 1], [2, 1], [3, 1], [4, 1]])
+    expect(setBreakBefore(resolved(), sets, 2)).toBeNull()
+  })
+
+  it('is null after an explicit end, which already has its own handle', () => {
+    const sets = new Map([[1, 1], [2, 2], [3, 2], [4, 3]])
+    expect(setBreakBefore(resolved(), sets, 4)).toBeNull()
+  })
+
+  it('is null for the first placed tune', () => {
+    const sets = new Map([[1, 1], [2, 2], [3, 2], [4, 3]])
+    expect(setBreakBefore(resolved(), sets, 1)).toBeNull()
+  })
+})
+
 describe('timeFromHash', () => {
   it('reads h:mm:ss, m:ss and plain seconds from #t=', async () => {
     const { timeFromHash } = await import('../src/segmenterpage/logic.js')
@@ -251,5 +289,35 @@ describe('timeFromHash', () => {
     for (const h of ['', '#', '#top', '#t=', '#t=1:2:3:4', '#t=1::2', '#t=abc', null]) {
       expect(timeFromHash(h)).toBeNull()
     }
+  })
+})
+
+describe('tunes needing a check (spec 053)', () => {
+  const tunes = [
+    { confidence: null }, // a person's row
+    { confidence: 62 }, // a machine's guess, truly uncertain
+    { confidence: 100 }, // confirmed
+    { confidence: 97 }, // a guess, practically sure
+    { confidence: 84 }, // shown as 80: uncertain
+    { confidence: 85 }, // shown as 90: not
+  ]
+
+  it('shows how sure in bands of 10, a 99 as 100', () => {
+    expect([99, 95, 94, 85, 84, 72, 5].map(confidenceBand)).toEqual([100, 100, 90, 90, 80, 70, 10])
+  })
+
+  it('is a guess until confirmed, and needs a check only when shown at 80% or under', () => {
+    expect(tunes.map(isGuess)).toEqual([false, true, false, true, true, true])
+    expect(tunes.map(needsCheck)).toEqual([false, true, false, false, true, false])
+    expect(needsCheck(undefined)).toBe(false)
+  })
+
+  it('steps forward and back through the uncertain ones, wrapping round the log', () => {
+    expect(nextNeedingCheck(tunes, 0)).toBe(1)
+    expect(nextNeedingCheck(tunes, 1)).toBe(4)
+    expect(nextNeedingCheck(tunes, 4)).toBe(1)
+    expect(nextNeedingCheck(tunes, 1, -1)).toBe(4)
+    expect(nextNeedingCheck([{ confidence: null }], 0)).toBe(-1)
+    expect(nextNeedingCheck([], 0)).toBe(-1)
   })
 })

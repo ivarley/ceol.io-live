@@ -22,6 +22,9 @@ struct CeolApp: App {
             ContentView()
                 .environment(model)
                 .font(.ceol())
+                // Spec 057: the profile's language, not the phone's (L10n.swift). ContentView
+                // rebuilds the screens when it changes.
+                .environment(\.locale, Locale(identifier: model.language == "ga" ? "ga_IE" : "en_US"))
                 // Universal Links (applinks:ceol.io) and any URL the app is opened with.
                 .onOpenURL { url in Task { await model.open(url) } }
         }

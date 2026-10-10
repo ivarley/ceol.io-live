@@ -1,6 +1,8 @@
 // Spec 024 client plumbing: bootstrap fetch, the generic op POST, and the SSE
 // subscription. Kept framework-free so App.svelte owns only UI + state.
 
+import { t } from './lib/i18n/index.js'
+
 export async function bootstrap(config) {
   // Same 10s abort guard as sendOp: connect() awaits this, so a fetch that hangs
   // on a dead keep-alive socket (common right after a network-interface change on
@@ -76,7 +78,7 @@ export async function sendOp(config, op_type, payload = {}, op_id = crypto.rando
   // The server's own explanation when it gave one; never the bare status line.
   if (!res.ok) {
     console.error(`${op_type} failed: ${res.status}`, json)
-    throw new Error(json.error || json.message || "The server couldn't make that change. Try again.")
+    throw new Error(json.error || json.message || t("The server couldn't make that change. Try again."))
   }
   return json // {success, rejected?, reason?, event_id?, record?, ...}
 }

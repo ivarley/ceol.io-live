@@ -1,4 +1,5 @@
 <script>
+  // i18n-converted
   // The session-instance detail sheet — the Svelte port of the vanilla
   // static/js/session_instance_modal.js (spec 035 Sheet unification). Kit Sheet
   // chrome replaces the slide-in overlay; the body (info rows, comments, the
@@ -6,7 +7,7 @@
   // behavior-for-behavior: details come from the same admin logs endpoint,
   // delete calls the same DELETE route; failures surface inline in the sheet.
   import { parseLocalDate } from '../shared/parse.js'
-  import { LoadError, Sheet, toastFailure, ServerError } from '../lib/index.js'
+  import { LoadError, Sheet, toast, ServerError, t, tn, formatDate } from '../lib/index.js'
 
   let { onDeleted = () => {} } = $props()
 
@@ -69,7 +70,7 @@
   // title (computed from the passed date so it shows during the load too).
   const dateStr = $derived(
     currentDate
-      ? parseLocalDate(currentDate).toLocaleDateString('en-US', {
+      ? formatDate(parseLocalDate(currentDate), {
           weekday: 'long',
           year: 'numeric',
           month: 'long',
@@ -80,9 +81,9 @@
 
   const timeRange = $derived.by(() => {
     if (!instance) return ''
-    if (instance.start_time && instance.end_time) return `${instance.start_time} - ${instance.end_time}`
-    if (instance.start_time) return `From ${instance.start_time}`
-    return 'Time not specified'
+    if (instance.start_time && instance.end_time) return t('{start} - {end}', { start: instance.start_time, end: instance.end_time })
+    if (instance.start_time) return t('From {time}', { time: instance.start_time })
+    return t('Time not specified')
   })
 
   function showDeleteConfirmation() {
@@ -108,7 +109,13 @@
       .catch((e) => {
         // Back to the details with the confirmation still open, so it can be retried.
         deleting = false
-        toastFailure('delete this session instance', e)
+        console.error("Couldn't delete this session instance:", e)
+        toast(
+          e instanceof ServerError
+            ? e.message || t("Couldn't delete this session instance. Try again.")
+            : t("Couldn't delete this session instance. Check your connection and try again."),
+          'error'
+        )
       })
   }
 </script>
@@ -117,77 +124,77 @@
   {#if loading || deleting}
     <div class="instance-modal-loading">
       <div class="instance-loading-spinner"></div>
-      <p>{deleting ? 'Deleting instance...' : 'Loading instance details...'}</p>
+      <p>{deleting ? t('Deleting instance...') : t('Loading instance details...')}</p>
     </div>
   {:else if error === 'missing'}
-    <LoadError id="instance-load-error" message="This session instance no longer exists." />
+    <LoadError id="instance-load-error" message={t('This session instance no longer exists.')} />
   {:else if error}
-    <LoadError id="instance-load-error" what="this session instance" onRetry={loadInstance} retrying={loading} />
+    <LoadError id="instance-load-error" message={t("Couldn't load this session instance.")} onRetry={loadInstance} retrying={loading} />
   {:else if instance}
     <div class="instance-modal-subtitle">{sessionPath}</div>
 
     <div class="instance-info-section">
       <div class="instance-info-row">
-        <span class="instance-info-label">Time:</span>
+        <span class="instance-info-label">{t('Time:')}</span>
         <span class="instance-info-value">{timeRange}</span>
       </div>
       <div class="instance-info-row">
-        <span class="instance-info-label">Status:</span>
+        <span class="instance-info-label">{t('Status:')}</span>
         <span class="instance-status-badge {instance.is_cancelled ? 'instance-status-cancelled' : 'instance-status-held'}">
-          {instance.is_cancelled ? 'Cancelled' : 'Held'}
+          {instance.is_cancelled ? t('Cancelled') : t('Held')}
         </span>
       </div>
       <div class="instance-info-row">
-        <span class="instance-info-label">Tunes Played:</span>
+        <span class="instance-info-label">{t('Tunes Played:')}</span>
         <span class="instance-info-value">
           <a href="/sessions/{sessionPath}/{instance.date}" target="_blank">
-            {instance.tune_count} tune{instance.tune_count !== 1 ? 's' : ''}
+            {tn(instance.tune_count, '{n} tune', '{n} tunes')}
           </a>
         </span>
       </div>
       <div class="instance-info-row">
-        <span class="instance-info-label">Attendance:</span>
-        <span class="instance-info-value">{instance.attendance_count} player{instance.attendance_count !== 1 ? 's' : ''}</span>
+        <span class="instance-info-label">{t('Attendance:')}</span>
+        <span class="instance-info-value">{tn(instance.attendance_count, '{n} player', '{n} players')}</span>
       </div>
     </div>
 
     {#if instance.comments && instance.comments.trim()}
       <div class="instance-comments-section">
-        <div class="instance-comments-label">Comments:</div>
+        <div class="instance-comments-label">{t('Comments:')}</div>
         <div class="instance-comments-value">{instance.comments}</div>
       </div>
     {/if}
 
     <div class="instance-modal-actions">
       <a href="/sessions/{sessionPath}/{instance.date}" class="instance-action-btn instance-action-btn-primary" target="_blank">
-        View Full Log
+        {t('View Full Log')}
       </a>
       <a href="/sessions/{sessionPath}/{instance.date}?mode=edit" class="instance-action-btn instance-action-btn-secondary">
-        Edit Log
+        {t('Edit Log')}
       </a>
       <button class="instance-action-btn instance-action-btn-danger" onclick={showDeleteConfirmation}>
-        Delete This Instance
+        {t('Delete This Instance')}
       </button>
     </div>
 
     {#if deleteConfirmShown}
       <div id="delete-confirmation">
         <div class="instance-delete-confirm">
-          <div class="instance-delete-confirm-title">⚠️ Confirm Deletion</div>
+          <div class="instance-delete-confirm-title">⚠️ {t('Confirm Deletion')}</div>
           <div class="instance-delete-confirm-text">
-            Are you sure you want to delete this session instance?<br />
-            This will remove:<br />
-            • {instance.tune_count} {instance.tune_count === 1 ? 'tune' : 'tunes'}<br />
-            • {instance.attendance_count} {instance.attendance_count === 1 ? 'player' : 'players'}
+            {t('Are you sure you want to delete this session instance?')}<br />
+            {t('This will remove:')}<br />
+            • {tn(instance.tune_count, '{n} tune', '{n} tunes')}<br />
+            • {tn(instance.attendance_count, '{n} player', '{n} players')}
             <br /><br />
-            <strong>This action cannot be undone.</strong>
+            <strong>{t('This action cannot be undone.')}</strong>
           </div>
           <div class="instance-delete-confirm-actions">
             <button class="instance-delete-confirm-btn instance-delete-cancel-btn" onclick={() => (deleteConfirmShown = false)}>
-              Cancel
+              {t('Cancel')}
             </button>
             <button class="instance-delete-confirm-btn instance-delete-execute-btn" onclick={executeDelete}>
-              Yes, Delete Instance
+              {t('Yes, Delete Instance')}
             </button>
           </div>
         </div>

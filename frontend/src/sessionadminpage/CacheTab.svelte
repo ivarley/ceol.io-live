@@ -1,14 +1,15 @@
 <script>
+  // i18n-converted
   // Local Cache tab (spec 024 fast-match vocabulary): N/M limits with a
   // debounced live preview of what each device would download, plus save.
   let { sessionPath, sessionLimit, globalLimit, load } = $props()
 
-  import { LoadError, toast } from '../lib/index.js'
+  import { LoadError, toast, t, tn, formatNumber, tuneTypeName } from '../lib/index.js'
 
   let n = $state(String(sessionLimit))
   let m = $state(String(globalLimit))
   let summaryHtmlParts = $state(null) // {session_count, global_count, total, kb}
-  let summaryText = $state('Loading preview…')
+  let summaryText = $state(t('Loading preview…'))
   let previewTunes = $state(null)
   let previewError = $state(null) // null | '' (connection) | the server's own message
   let previewLoading = $state(false)
@@ -22,7 +23,7 @@
   }
 
   function loadCachePreview() {
-    summaryText = 'Computing preview…'
+    summaryText = t('Computing preview…')
     summaryHtmlParts = null
     previewLoading = true
 
@@ -52,7 +53,7 @@
   function renderCachePreview(data) {
     // Estimate the real download size from the LEAN fields the client actually receives
     // (the preview adds tier/plays/tunebook_count, which the vocabulary endpoint strips).
-    const lean = data.tunes.map((t) => ({ tune_id: t.tune_id, name: t.name, alias: t.alias, tune_type: t.tune_type }))
+    const lean = data.tunes.map((tune) => ({ tune_id: tune.tune_id, name: tune.name, alias: tune.alias, tune_type: tune.tune_type }))
     const kb = (new Blob([JSON.stringify(lean)]).size / 1024).toFixed(1)
 
     previewError = null
@@ -82,16 +83,16 @@
       .then((data) => {
         saving = false
         if (data.success) {
-          toast('Local cache settings saved', 'success')
+          toast(t('Local cache settings saved'), 'success')
           loadCachePreview() // reflect the now-saved values
         } else {
-          toast(data.error || "Couldn't save the cache settings. Try again.", 'error')
+          toast(data.error || t("Couldn't save the cache settings. Try again."), 'error')
         }
       })
       .catch((error) => {
         saving = false
         console.error('Error saving cache settings:', error)
-        toast("Couldn't save the cache settings. Check your connection and try again.", 'error')
+        toast(t("Couldn't save the cache settings. Check your connection and try again."), 'error')
       })
   }
 
@@ -102,26 +103,23 @@
     }
   })
 
-  const popularityFor = (t) =>
-    t.tier === 'session'
-      ? `${t.plays} play${t.plays === 1 ? '' : 's'} here`
-      : `${(t.tunebook_count || 0).toLocaleString()} tunebooks`
+  const popularityFor = (tune) =>
+    tune.tier === 'session'
+      ? tn(tune.plays, '{n} play here', '{n} plays here')
+      : tn(tune.tunebook_count || 0, '{n} tunebooks', '{n} tunebooks', { n: formatNumber(tune.tunebook_count || 0) })
 </script>
 
 <section class="docs-section">
-  <h2 class="section-heading">Local Tune Cache</h2>
+  <h2 class="section-heading">{t('Local Tune Cache')}</h2>
   <p class="text-muted">
-    The live-logging screen preloads a list of tunes onto each device so typed
-    tune names match instantly &mdash; even offline. It holds the
-    <strong>N</strong> most-played tunes from <em>this</em> session, plus the
-    <strong>M</strong> most globally-popular tunes not already in that set.
-    Bigger numbers match more tunes without a network call, but make each
-    device download a little more.
+    {t('The live-logging screen preloads a list of tunes onto each device so typed tune names match instantly — even offline. It holds the')}
+    <strong>{'N'}</strong> {t('most-played tunes from this session, plus the')}
+    <strong>{'M'}</strong> {t('most globally-popular tunes not already in that set. Bigger numbers match more tunes without a network call, but make each device download a little more.')}
   </p>
 
   <div class="d-flex flex-wrap align-items-end gap-3 mb-3">
     <div>
-      <label for="cache-session-limit" class="form-label mb-1">N &mdash; this session's top tunes</label>
+      <label for="cache-session-limit" class="form-label mb-1">{'N'} — {t("this session's top tunes")}</label>
       <input
         type="number"
         class="form-control"
@@ -133,7 +131,7 @@
         style="width: 120px;" />
     </div>
     <div>
-      <label for="cache-global-limit" class="form-label mb-1">M &mdash; globally-popular extras</label>
+      <label for="cache-global-limit" class="form-label mb-1">{'M'} — {t('globally-popular extras')}</label>
       <input
         type="number"
         class="form-control"
@@ -144,43 +142,42 @@
         max="1000"
         style="width: 120px;" />
     </div>
-    <button type="button" class="btn btn-primary" id="cache-save-btn" onclick={saveCacheLimits} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+    <button type="button" class="btn btn-primary" id="cache-save-btn" onclick={saveCacheLimits} disabled={saving}>{saving ? t('Saving…') : t('Save')}</button>
   </div>
 
   <div id="cache-summary" class="mb-3 text-muted">
     {#if summaryHtmlParts}
-      Caching <strong>{summaryHtmlParts.session_count}</strong> session tune{summaryHtmlParts.session_count === 1 ? '' : 's'}
-      + <strong>{summaryHtmlParts.global_count}</strong> globally-popular = <strong>{summaryHtmlParts.total}</strong> total
-      (~{summaryHtmlParts.kb} KB per device).
+      {t('Caching')} <strong>{summaryHtmlParts.session_count}</strong> {tn(summaryHtmlParts.session_count, 'session tune', 'session tunes')}
+      + <strong>{summaryHtmlParts.global_count}</strong> {t('globally-popular')} = <strong>{summaryHtmlParts.total}</strong> {t('total')}
+      {t('(~{kb} KB per device).', { kb: summaryHtmlParts.kb })}
     {:else if summaryText}{summaryText}{/if}
   </div>
   <div id="cache-content">
     {#if previewError !== null}
       <LoadError
         id="cache-preview-error"
-        what="the cache preview"
-        message={previewError ? `Couldn't load the cache preview: ${previewError}` : ''}
+        message={previewError ? t("Couldn't load the cache preview: {error}", { error: previewError }) : t("Couldn't load the cache preview.")}
         onRetry={loadCachePreview}
         retrying={previewLoading} />
     {:else if previewTunes && previewTunes.length === 0}
-      <div class="alert alert-info">No tunes would be cached with these settings.</div>
+      <div class="alert alert-info">{t('No tunes would be cached with these settings.')}</div>
     {:else if previewTunes}
       <table class="table table-sm" id="cache-table">
         <thead>
           <tr>
-            <th style="width:3rem;">#</th><th>Tune</th><th>Type</th><th>Tier</th><th>Popularity</th>
+            <th style="width:3rem;">#</th><th>{t('Tune')}</th><th>{t('Type')}</th><th>{t('Tier')}</th><th>{t('Popularity')}</th>
           </tr>
         </thead>
         <tbody>
-          {#each previewTunes as t, i (i)}
+          {#each previewTunes as tune, i (i)}
             <tr>
               <td class="text-muted">{i + 1}</td>
-              <td><a href="/sessions/{sessionPath}/tunes/{t.tune_id}" class="tune-link">{t.name}</a></td>
-              <td>{#if t.tune_type}{t.tune_type}{:else}<span class="text-muted">-</span>{/if}</td>
+              <td><a href="/sessions/{sessionPath}/tunes/{tune.tune_id}" class="tune-link">{tune.name}</a></td>
+              <td>{#if tune.tune_type}{tuneTypeName(tune.tune_type)}{:else}<span class="text-muted">-</span>{/if}</td>
               <td>
-                {#if t.tier === 'session'}<span class="badge badge-primary">session</span>{:else}<span class="badge badge-secondary">global</span>{/if}
+                {#if tune.tier === 'session'}<span class="badge badge-primary">{t('session')}</span>{:else}<span class="badge badge-secondary">{t('global')}</span>{/if}
               </td>
-              <td class="text-muted">{popularityFor(t)}</td>
+              <td class="text-muted">{popularityFor(tune)}</td>
             </tr>
           {/each}
         </tbody>

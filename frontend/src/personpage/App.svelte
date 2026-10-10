@@ -1,4 +1,5 @@
 <script>
+  // i18n-converted
   // The person-details page view (spec 035 Step 5a) — ported behavior-for-behavior
   // from the legacy 1,350-line inline script in templates/person_details.html.
   // Serves both flavors: /me (user profile) and /admin/people/<id> (system admin).
@@ -15,7 +16,7 @@
   const isSystemAdmin = pageData.is_system_admin
   const personId = person.id
 
-  import { toast } from '../lib/index.js'
+  import { toast, t, tc } from '../lib/index.js'
   import AccountSection from './AccountSection.svelte'
 
   // Sections, and the tabs before them, are gone (spec 052 §B1). Four of the five
@@ -49,16 +50,16 @@
      than decoration. -->
 {#if !isUserProfile}
   <!-- Admin Breadcrumb Navigation -->
-  <nav class="admin-breadcrumb" aria-label="breadcrumb">
-    <a href="/admin" class="breadcrumb-item">Admin</a>
-    <span class="breadcrumb-separator">&gt;&gt;</span>
-    <a href="/admin/people" class="breadcrumb-item">People</a>
-    <span class="breadcrumb-separator">&gt;&gt;</span>
+  <nav class="admin-breadcrumb" aria-label={t('breadcrumb')}>
+    <a href="/admin" class="breadcrumb-item">{tc('area', 'Admin')}</a>
+    <span class="breadcrumb-separator">{'>>'}</span>
+    <a href="/admin/people" class="breadcrumb-item">{t('People')}</a>
+    <span class="breadcrumb-separator">{'>>'}</span>
     <!-- The trailing " >> <tab name>" is gone with the tabs: the page has one level
          now, so the person's name is the end of the trail. The empty spans stay
          because admin CSS and selectors still name them. -->
     <span id="breadcrumb-person-name" class="breadcrumb-current">{person.name}</span>
-    <span id="breadcrumb-tab-separator" class="breadcrumb-separator" style="display: none;">&gt;&gt;</span>
+    <span id="breadcrumb-tab-separator" class="breadcrumb-separator" style="display: none;">{'>>'}</span>
     <span id="breadcrumb-tab-name" class="breadcrumb-current" style="display: none;"></span>
   </nav>
 {/if}

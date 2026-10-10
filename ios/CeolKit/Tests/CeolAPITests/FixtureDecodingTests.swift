@@ -28,6 +28,7 @@ private func decode<T: Decodable>(_ type: T.Type, _ name: String) throws -> T {
 private let decoders: [String: @Sendable (String) throws -> Void] = [
     "ActiveInstance": { _ = try decode(Components.Schemas.ActiveInstance.self, $0) },
     "AppConfig": { _ = try decode(Components.Schemas.AppConfig.self, $0) },
+    "CommonTunes": { _ = try decode(Components.Schemas.CommonTunes.self, $0) },
     "DeepSearch": { _ = try decode(Components.Schemas.DeepSearch.self, $0) },
     "Home": { _ = try decode(Components.Schemas.Home.self, $0) },
     "LiveBootstrap": { _ = try decode(Components.Schemas.LiveBootstrap.self, $0) },

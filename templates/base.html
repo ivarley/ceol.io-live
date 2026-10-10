@@ -1,7 +1,21 @@
-<!DOCTYPE html>
-<html lang="en"> 
+{# i18n-converted #}<!DOCTYPE html>
+<html lang="{{ lang }}">
 <head>
-    <title>{% block title %}Irish Music Sessions{% endblock %}</title>
+    {# Spec 057: the language every bundle renders in (frontend/src/lib/i18n). #}
+    <script>window.__CEOL_LANG__ = {{ lang | tojson }};</script>
+    {# The legacy scripts' strings (static/js/*.js read them through T()), and the
+       plural picker for count sentences a page's script builds: forms come from
+       js_ngettext() (i18n.py), `{n}` is the number. #}
+    <script>
+    window.__CEOL_T__ = {{ ceol_js_strings() | tojson }};
+    window.ceolPlural = function (forms, n) {
+        var i = window.__CEOL_LANG__ === 'ga'
+            ? (n == 1 ? 0 : n == 2 ? 1 : n >= 3 && n <= 6 ? 2 : n >= 7 && n <= 10 ? 3 : 4)
+            : (n == 1 ? 0 : 4);
+        return String(forms[i]).split('{n}').join(String(n));
+    };
+    </script>
+    <title>{% block title %}{{ _('Irish Music Sessions') }}{% endblock %}</title>
     
     <!-- Meta -->
     <meta charset="utf-8">
@@ -13,7 +27,7 @@
     <meta http-equiv="Expires" content="0">
     {% endif %}
     
-    <meta name="description" content="{% block description %}Track your traditional Irish music sessions and tunes{% endblock %}">
+    <meta name="description" content="{% block description %}{{ _('Track your traditional Irish music sessions and tunes') }}{% endblock %}">
 
     <!-- PWA Manifest -->
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
@@ -139,6 +153,25 @@
         .docs-top-utilities {
             flex: 1;
         }
+
+        /* Spec 057: Irish isn't title-cased ("Á fhoghlaim", not "Á Fhoghlaim"): undo the
+           English capitalize rules on these labels when the page is in Irish. */
+        html[lang="ga"] .ls-chip,
+        html[lang="ga"] .tune-type,
+        html[lang="ga"] .status-badge,
+        html[lang="ga"] .tune-type-pill,
+        html[lang="ga"] .tune-type-badge,
+        html[lang="ga"] .text-capitalize { text-transform: none !important; }
+
+        /* Spec 057: the visitor's English/Gaeilge switch in the header. */
+        .header-lang-switch {
+            margin: 0 8px;
+            font-size: 0.85rem;
+            color: var(--secondary-text, #aaa);
+            text-decoration: none;
+            white-space: nowrap;
+        }
+        .header-lang-switch:hover { color: var(--text-color, #e0e0e0); text-decoration: underline; }
 
         .docs-logo-wrapper {
             top: 6px !important;
@@ -377,7 +410,7 @@
     <div class="branding docs-branding">
         <div class="container-fluid position-relative" style="padding-top: 3px; padding-bottom: 3px;">
             <div class="docs-logo-wrapper">
-                <div class="site-logo"><a class="navbar-brand" href="{{ url_for('home') }}"><img id="logo-img" height="30" src="{{ url_for('static', filename='images/logo3-1.png') }}" alt="logo"><span class="logo-text" style="font-weight: 50;">Traditional Irish Session Logs</span></a></div>
+                <div class="site-logo"><a class="navbar-brand" href="{{ url_for('home') }}"><img id="logo-img" height="30" src="{{ url_for('static', filename='images/logo3-1.png') }}" alt="{{ _('logo') }}"><span class="logo-text" style="font-weight: 50;">{{ _('Traditional Irish Session Logs') }}</span></a></div>
             </div><!--//docs-logo-wrapper-->
             <div class="docs-top-utilities d-flex justify-content-end align-items-center">
 
@@ -385,13 +418,21 @@
                    the tab bar itself is the navigation). #}
                 {% include 'header_nav.html' %}
 
+                {# Spec 057: a visitor's English/Gaeilge switch, at every width (the menu
+                   that carries it on desktop is hidden on phones). Signed in, the
+                   language is a profile setting on /me. #}
+                {% if not current_user.is_authenticated %}
+                <a class="header-lang-switch" href="{{ url_for('set_language', code=other_lang, next=request.full_path) }}"
+                   lang="{{ other_lang }}" hreflang="{{ other_lang }}">{{ 'Gaeilge' if other_lang == 'ga' else 'English' }}</a>
+                {% endif %}
+
                 <ul class="list-inline mx-md-3 mb-0 d-none d-lg-flex">
                     <!-- <li class="list-inline-item"><a href="#"><i class="fab fa-product-hunt fa-fw"></i></a></li> -->
                 </ul><!--//social-list-->
 
                 <!-- Connection / offline-sync status (managed by connection_status.js) -->
                 <span class="conn-status" id="conn-status" style="display:none;">
-                    <button type="button" class="conn-status-btn" id="conn-status-btn" aria-label="Connection status">
+                    <button type="button" class="conn-status-btn" id="conn-status-btn" aria-label="{{ _('Connection status') }}">
                         <span id="conn-status-dot" class="conn-dot"></span>
                     </button>
                     <div class="in-session-popup conn-status-popup" id="conn-status-popup">
@@ -403,7 +444,7 @@
                 <!-- In Session Badge -->
                 {% if current_user.is_authenticated %}
                 <div class="in-session-badge" id="inSessionBadge">
-                    <button class="in-session-badge-button" id="inSessionButton" aria-label="Live session on now"><span class="live-dot"></span>Live</button>
+                    <button class="in-session-badge-button" id="inSessionButton" aria-label="{{ _('Live session on now') }}"><span class="live-dot"></span>{{ _('Live') }}</button>
                     <div class="in-session-popup" id="inSessionPopup">
                         <div class="in-session-popup-title" id="inSessionPopupTitle"></div>
                         <div class="in-session-popup-detail" id="inSessionPopupDate"></div>
@@ -417,7 +458,7 @@
                      every screen, which is the whole point of it: the URL and QR it
                      offers are for the page you are looking at now. -->
                 <button type="button" class="share-btn" id="share-btn"
-                        title="Share this page" aria-label="Share this page">
+                        title="{{ _('Share this page') }}" aria-label="{{ _('Share this page') }}">
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                         <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
                         <line x1="8.6" y1="10.5" x2="15.4" y2="6.5"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/>
@@ -435,7 +476,7 @@
 </header><!--//header-->
 
     <!-- Pull-to-Refresh Indicator (only visible in PWA mode) -->
-    <div id="pullToRefreshIndicator">Refresh ...</div>
+    <div id="pullToRefreshIndicator">{{ _('Refresh ...') }}</div>
 
     <div class="docs-wrapper">
 	    <div class="docs-content">
@@ -461,13 +502,13 @@
 <div class="share-dialog" id="share-dialog" role="dialog" aria-modal="true"
      aria-labelledby="share-title" hidden>
   <div class="share-panel">
-    <h2 class="share-title" id="share-title">Share this page</h2>
+    <h2 class="share-title" id="share-title">{{ _('Share this page') }}</h2>
     <img class="share-qr" id="share-qr" alt="">
     <code class="share-url" id="share-url"></code>
     <div class="share-actions">
-      <button type="button" class="share-action primary" id="share-copy">Copy link</button>
-      <button type="button" class="share-action" id="share-native" hidden>Share&hellip;</button>
-      <button type="button" class="share-action" data-share-close>Close</button>
+      <button type="button" class="share-action primary" id="share-copy">{{ _('Copy link') }}</button>
+      <button type="button" class="share-action" id="share-native" hidden>{{ _('Share…') }}</button>
+      <button type="button" class="share-action" data-share-close>{{ _('Close') }}</button>
     </div>
   </div>
 </div>
@@ -581,7 +622,7 @@ if ('serviceWorker' in navigator) {
                         if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
                             // New service worker available — activate it; the resulting
                             // controllerchange (guarded below) performs the single reload.
-                            if (confirm('A new version is available! Reload to update?')) {
+                            if (confirm({{ _('A new version is available! Reload to update?') | tojson }})) {
                                 newWorker.postMessage({ type: 'SKIP_WAITING' });
                             }
                         }
@@ -760,22 +801,22 @@ if ('serviceWorker' in navigator) {
 
         // Format date
         const dateObj = new Date(activeSession.date + 'T00:00:00');
-        const dateStr = dateObj.toLocaleDateString('en-US', {
+        const dateStr = dateObj.toLocaleDateString(window.__CEOL_LANG__ === 'ga' ? 'ga-IE' : 'en-US', {
             weekday: 'short',
             year: 'numeric',
             month: 'short',
             day: 'numeric'
         });
-        popupDate.innerHTML = `<strong>Date:</strong> ${dateStr}`;
+        popupDate.innerHTML = `<strong>${ {{ _('Date:') | tojson }} }</strong> ${dateStr}`;
 
         // Format time range
         if (activeSession.start_time && activeSession.end_time) {
             const timeStr = formatTimeRange(activeSession.start_time, activeSession.end_time);
-            popupTime.innerHTML = `<strong>Time:</strong> ${timeStr}`;
+            popupTime.innerHTML = `<strong>${ {{ _('Time:') | tojson }} }</strong> ${timeStr}`;
             popupTime.style.display = 'block';
         } else if (activeSession.start_time) {
             const timeStr = formatTimeRange(activeSession.start_time, null);
-            popupTime.innerHTML = `<strong>Time:</strong> ${timeStr}`;
+            popupTime.innerHTML = `<strong>${ {{ _('Time:') | tojson }} }</strong> ${timeStr}`;
             popupTime.style.display = 'block';
         } else {
             popupTime.style.display = 'none';
@@ -783,7 +824,7 @@ if ('serviceWorker' in navigator) {
 
         // Show location override if present
         if (activeSession.location_override) {
-            popupLocation.innerHTML = `<strong>Location:</strong> ${activeSession.location_override}`;
+            popupLocation.innerHTML = `<strong>${ {{ _('Location:') | tojson }} }</strong> ${activeSession.location_override}`;
             popupLocation.style.display = 'block';
         } else {
             popupLocation.style.display = 'none';
@@ -796,6 +837,8 @@ if ('serviceWorker' in navigator) {
             const parts = timeStr.split(':');
             let hour = parseInt(parts[0]);
             const minute = parts[1];
+            // Irish uses the 24-hour clock, as the Svelte pages do (shared/format.js).
+            if (window.__CEOL_LANG__ === 'ga') return `${String(hour).padStart(2, '0')}:${minute}`;
             const period = hour >= 12 ? 'pm' : 'am';
             hour = hour > 12 ? hour - 12 : (hour === 0 ? 12 : hour);
             return `${hour}:${minute}${period}`;

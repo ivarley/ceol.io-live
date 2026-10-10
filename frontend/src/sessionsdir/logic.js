@@ -10,6 +10,8 @@
 // "United States", hand-added sessions "USA"). Folded to one key so a USA viewer
 // doesn't see "United States" on every imported row. The iOS app keeps the same
 // list (CeolLogic/SessionsRules.swift, countryAliases).
+import { t } from '../lib/i18n/index.js'
+
 const COUNTRY_ALIASES = {
   us: 'usa',
   'u.s.': 'usa',
@@ -43,5 +45,5 @@ export function locationLabel(session, viewerCountry) {
   const mine = normaliseCountry(viewerCountry)
   const sameCountry = !!mine && normaliseCountry(place?.country) === mine
   const parts = [place?.name, place?.area, sameCountry ? null : place?.country]
-  return parts.filter(Boolean).join(', ') || 'Unknown'
+  return parts.filter(Boolean).join(', ') || t('Unknown')
 }

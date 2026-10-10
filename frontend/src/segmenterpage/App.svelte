@@ -1,4 +1,5 @@
 <script>
+  // i18n-converted
   // Recording segmenter (spec 050): put start/end timestamps on the tunes already
   // logged against a night's audio, fast enough to do a three-hour session in one
   // sitting. The output is the training corpus for tune recognition.
@@ -11,9 +12,15 @@
   import Waveform from './Waveform.svelte'
   import TuneList from './TuneList.svelte'
   import TunePicker from './TunePicker.svelte'
+  import FindTunes from './FindTunes.svelte'
   import {
     edgeLimits,
+    MIN_SEGMENT_MS,
+    setBreakBefore,
     formatTime,
+    isGuess,
+    needsCheck,
+    nextNeedingCheck,
     nextUnplacedIndex,
     resolveSegments,
     snapToOnset,
@@ -21,6 +28,7 @@
     timeFromHash,
     ZOOM_LEVELS,
   } from './logic.js'
+  import { t, tn } from '../lib/index.js'
 
   let { pageData = null } = $props()
 
@@ -96,6 +104,11 @@
   let compact = $state(
     typeof window !== 'undefined' && window.matchMedia ? window.matchMedia(COMPACT_QUERY).matches : false,
   )
+  // Phone: everything that is not marking -- the title, the audio source, the
+  // offline copy, Fix and export, speed, zoom and snap, finding the tunes --
+  // waits behind one button, so the tape, the transport and the mark row are
+  // all that stand above the log.
+  let moreOpen = $state(false)
 
   // How much chrome sits above the tool -- the site's fixed header plus the
   // page padding. The phone layout gives the tape and the controls the top of
@@ -115,6 +128,7 @@
 
   const durationMs = $derived(recording?.duration_ms ?? 0)
   const segments = $derived(resolveSegments(tunes, durationMs))
+  const setOf = $derived(new Map(tunes.map((t) => [t.session_instance_tune_id, t.set_number])))
   const placedCount = $derived(tunes.filter((t) => t.segment).length)
   const cursorTune = $derived(cursorIndex >= 0 ? tunes[cursorIndex] ?? null : null)
   // Logging from the audio: the mark key writes a new tune into the log.
@@ -193,7 +207,7 @@
       pendingSeekMs = ms
       currentMs = ms
     }
-    flash(`At ${formatTime(ms)}, from the link`)
+    flash(t('At {time}, from the link', { time: formatTime(ms) }))
   }
 
   onMount(() => {
@@ -204,13 +218,13 @@
     if (linked != null) {
       pendingSeekMs = linked
       currentMs = linked
-      flash(`At ${formatTime(linked)}, from the link`)
+      flash(t('At {time}, from the link', { time: formatTime(linked) }))
     } else if (resumeAt != null) {
       // Paint the waveform at the remembered spot immediately -- the peaks are
       // already here, so the tape is back in place long before the audio is.
       pendingSeekMs = resumeAt
       currentMs = resumeAt
-      flash('Back where you left off')
+      flash(t('Back where you left off'))
     }
     cursorIndex = nextUnplacedIndex(tunes, 0)
     // On a warm cache the element can already be playable before the handlers
@@ -262,7 +276,7 @@
       if (!res.ok) throw new Error(`peaks ${res.status}`)
       peaks = new Uint8Array(await res.arrayBuffer())
     } catch (err) {
-      flash(`Could not load the waveform: ${err.message}`, 'error')
+      flash(t('Could not load the waveform: {error}', { error: err.message }), 'error')
     }
   }
 
@@ -377,13 +391,18 @@
       await refreshQueued()
       await persistMirror()
       if (refused.length) {
-        flash(`Synced, but ${refused.length} mark${refused.length === 1 ? '' : 's'} could not be saved: ${refused[0].error}`, 'error')
+        flash(
+          tn(refused.length, 'Synced, but {n} mark could not be saved: {error}', 'Synced, but {n} marks could not be saved: {error}', {
+            error: refused[0].error,
+          }),
+          'error'
+        )
       } else {
         const n = detail.recording_ids?.length === 1 ? detail.cleared : null
-        flash(n ? `Synced ${n} queued mark${n === 1 ? '' : 's'}` : 'Synced your queued marks')
+        flash(n ? tn(n, 'Synced {n} queued mark', 'Synced {n} queued marks') : t('Synced your queued marks'))
       }
     } catch (err) {
-      flash(`Synced, but could not refresh the log: ${err.message}`, 'error')
+      flash(t('Synced, but could not refresh the log: {error}', { error: err.message }), 'error')
     }
   }
 
@@ -406,11 +425,11 @@
         ...local,
         [source.id]: { url: URL.createObjectURL(entry.blob), size_bytes: entry.size_bytes, saved_at: entry.saved_at },
       }
-      flash(`Saved the ${source.label} encode on this device (${mb(entry.size_bytes)} MB) — the tool now works offline`)
+      flash(t('Saved the {label} encode on this device ({n} MB) — the tool now works offline', { label: source.label, n: mb(entry.size_bytes) }))
       if (sourceId === source.id) await reloadAudioKeepingPlace()
     } catch (err) {
-      if (err?.name === 'AbortError') flash('Download cancelled')
-      else flash(`Could not save the audio: ${err.message}`, 'error')
+      if (err?.name === 'AbortError') flash(t('Download cancelled'))
+      else flash(t('Could not save the audio: {error}', { error: err.message }), 'error')
     } finally {
       download = null
     }
@@ -426,9 +445,9 @@
       local = rest
       if (id === sourceId) await reloadAudioKeepingPlace()
       URL.revokeObjectURL(held.url)
-      flash('Removed the offline copy')
+      flash(t('Removed the offline copy'))
     } catch (err) {
-      flash(`Could not remove the offline copy: ${err.message}`, 'error')
+      flash(t('Could not remove the offline copy: {error}', { error: err.message }), 'error')
     }
   }
 
@@ -462,7 +481,7 @@
   function togglePlay() {
     if (!audio) return
     if (audio.paused) {
-      audio.play().catch((err) => flash(`Playback failed: ${err.message}`, 'error'))
+      audio.play().catch((err) => flash(t('Playback failed: {error}', { error: err.message }), 'error'))
     } else {
       audio.pause()
     }
@@ -590,15 +609,18 @@
     // whole point of the tool. A failed write rolls it back and says so.
     tunes[index] = { ...tune, segment: { ...(previous ?? {}), start_ms: Math.round(startMs), end_ms: endMs == null ? null : Math.round(endMs) } }
     undoStack.push({ index, previous, cursor: cursorIndex })
+    let ok = true
     try {
       const saved = await save(tune, startMs, endMs)
       tunes[index] = { ...tunes[index], segment: saved }
     } catch (err) {
       tunes[index] = { ...tunes[index], segment: previous }
       undoStack.pop()
-      flash(`Could not save "${tune.name}": ${err.message}`, 'error')
+      flash(t('Could not save "{name}": {error}', { name: tune.name, error: err.message }), 'error')
+      ok = false
     }
     persistMirror()
+    return ok
   }
 
   /**
@@ -617,7 +639,7 @@
     // tool logged that tune itself, nothing is known about what follows it, and
     // the next mark is far more often the next tune of the SAME set than the
     // end. The End-set button (E) is the explicit way to close it.
-    if (prev === tunes.length - 1 && tune.source === 'segmenter') return null
+    if (prev === tunes.length - 1 && (tune.source === 'segmenter' || tune.source === 'listen')) return null
     return prev
   })
 
@@ -647,7 +669,13 @@
     const shift = ms - currentMs
     if (Math.abs(shift) >= 60) {
       const dir = shift > 0 ? '+' : '−'
-      flash(`${name} at ${formatTime(ms, { millis: true })} (snapped ${dir}${(Math.abs(shift) / 1000).toFixed(2)}s — S to turn off)`)
+      flash(
+        t('{name} at {time} (snapped {shift}s — S to turn off)', {
+          name,
+          time: formatTime(ms, { millis: true }),
+          shift: `${dir}${(Math.abs(shift) / 1000).toFixed(2)}`,
+        })
+      )
     }
   }
 
@@ -655,16 +683,21 @@
     // Ends the tune under the playhead. Falls back to the last tune placed
     // before now, so it still works when the playhead has drifted past a set's
     // last tune into the chatter -- exactly when you reach for this key.
+    //
+    // A playhead sitting right on a tune's start (within MIN_SEGMENT_MS) can't
+    // mean that tune -- it would end as it begins. It means the tune before,
+    // whose end is being marked at the boundary between them.
     let targetId = soundingId
+    if (targetId != null && currentMs - segments.get(targetId).startMs < MIN_SEGMENT_MS) targetId = null
     if (targetId == null) {
       let best = null
       for (const [id, seg] of segments) {
-        if (seg.startMs <= currentMs && (!best || seg.startMs > best.startMs)) best = { id, startMs: seg.startMs }
+        if (seg.startMs + MIN_SEGMENT_MS <= currentMs && (!best || seg.startMs > best.startMs)) best = { id, startMs: seg.startMs }
       }
       targetId = best?.id ?? null
     }
     if (targetId == null) {
-      flash('No placed tune before the playhead to end.', 'info')
+      flash(t('No placed tune before the playhead to end.'), 'info')
       return
     }
     markEndAt(tunes.findIndex((t) => t.session_instance_tune_id === targetId))
@@ -674,11 +707,11 @@
     const tune = tunes[index]
     if (!tune?.segment) return
     if (currentMs <= tune.segment.start_ms) {
-      flash('The end has to come after the start.', 'error')
+      flash(t('The end has to come after the start.'), 'error')
       return
     }
     place(index, tune.segment.start_ms, currentMs)
-    flash(`Ended "${tune.name}" at ${formatTime(currentMs)}`)
+    flash(t('Ended "{name}" at {time}', { name: tune.name, time: formatTime(currentMs) }))
   }
 
   // ---- dragging a boundary ---------------------------------------------------
@@ -694,6 +727,10 @@
   // The segment as it stood before this drag began. Kept so the save records the
   // right "previous" for undo, and so a failed write rolls back to where the
   // edge actually was rather than to the last previewed position.
+  //
+  // `pinned` is set when the drag moves a start across a set break: the previous
+  // set's implicit end would otherwise follow it, so that end is fixed where it
+  // was (made explicit) for the length of the drag, and saved with it.
   let edgeDrag = null
 
   function previewEdge(id, edge, ms) {
@@ -701,7 +738,14 @@
     const tune = tunes[index]
     if (!tune?.segment) return
     if (!edgeDrag || edgeDrag.index !== index || edgeDrag.edge !== edge) {
-      edgeDrag = { index, edge, original: tune.segment }
+      edgeDrag = { index, edge, original: tune.segment, pinned: null }
+      const prevId = edge === 'start' ? setBreakBefore(segments, setOf, id) : null
+      if (prevId != null) {
+        const prevIndex = tunes.findIndex((t) => t.session_instance_tune_id === prevId)
+        const prev = tunes[prevIndex]
+        edgeDrag.pinned = { index: prevIndex, original: prev.segment }
+        tunes[prevIndex] = { ...prev, segment: { ...prev.segment, end_ms: tune.segment.start_ms } }
+      }
     }
     const limits = edgeLimits(segments, id, edge, durationMs)
     if (!limits) return
@@ -712,7 +756,10 @@
     }
     // Straight to `status`, not through flash(): this runs every frame of the
     // drag, and flash() would be scheduling and cancelling a timer each time.
-    status = `${tune.name} ${edge === 'start' ? 'starts' : 'ends'} ${formatTime(at, { millis: true })}`
+    status =
+      edge === 'start'
+        ? t('{name} starts {time}', { name: tune.name, time: formatTime(at, { millis: true }) })
+        : t('{name} ends {time}', { name: tune.name, time: formatTime(at, { millis: true }) })
     statusKind = 'info'
   }
 
@@ -727,8 +774,16 @@
     const index = held.index
     const moved = tunes[index]?.segment
     const original = held.original
-    if (!moved) return
+    const pinned = held.pinned
+    const unpin = () => {
+      if (pinned) tunes[pinned.index] = { ...tunes[pinned.index], segment: pinned.original }
+    }
+    if (!moved) {
+      unpin()
+      return
+    }
     if (moved.start_ms === original.start_ms && moved.end_ms === original.end_ms) {
+      unpin()
       status = ''
       return
     }
@@ -736,8 +791,27 @@
     // Put the original back before saving: place() reads the current segment as
     // the undo point, and by now that is the previewed position.
     tunes[index] = { ...tune, segment: original }
-    await place(index, moved.start_ms, moved.end_ms)
-    flash(`Moved "${tune.name}" ${edge === 'start' ? 'start' : 'end'} to ${formatTime(edge === 'start' ? moved.start_ms : moved.end_ms, { millis: true })} — U to undo`)
+    if (pinned) {
+      // The previous set's end first, so it never follows the start, even for a
+      // moment. Both writes are one gesture, so they are one undo.
+      const pinnedEnd = tunes[pinned.index].segment.end_ms
+      unpin()
+      if (!(await place(pinned.index, pinned.original.start_ms, pinnedEnd))) return
+      const pinStep = undoStack.pop()
+      if (!(await place(index, moved.start_ms, moved.end_ms))) {
+        await place(pinned.index, pinned.original.start_ms, pinned.original.end_ms)
+        undoStack.pop()
+        return
+      }
+      undoStack.push({ kind: 'pair', steps: [pinStep, undoStack.pop()] })
+    } else {
+      await place(index, moved.start_ms, moved.end_ms)
+    }
+    flash(
+      edge === 'start'
+        ? t('Moved "{name}" start to {time} — U to undo', { name: tune.name, time: formatTime(moved.start_ms, { millis: true }) })
+        : t('Moved "{name}" end to {time} — U to undo', { name: tune.name, time: formatTime(moved.end_ms, { millis: true }) })
+    )
   }
 
   /**
@@ -783,7 +857,7 @@
       if (err?.status !== 404) {
         tunes[index] = { ...tunes[index], segment: previous }
         if (moveCursor) cursorIndex = previousCursor
-        flash(`Could not clear "${tune.name}": ${err.message}`, 'error')
+        flash(t('Could not clear "{name}": {error}', { name: tune.name, error: err.message }), 'error')
       }
     } finally {
       saving -= 1
@@ -794,7 +868,7 @@
   async function undo() {
     const step = undoStack.pop()
     if (!step) {
-      flash('Nothing to undo.', 'info')
+      flash(t('Nothing to undo.'), 'info')
       return
     }
     if (step.kind === 'log') {
@@ -802,17 +876,25 @@
       const index = tunes.findIndex((t) => t.session_instance_tune_id === step.sitId)
       if (index >= 0) await unlogAt(index, false)
       cursorIndex = step.cursor
-      flash('Undid that tune')
+      flash(t('Undid that tune'))
       return
     }
+    // A pair (a start moved across a set break, and the end it left behind) is
+    // undone last write first.
+    const steps = step.kind === 'pair' ? [...step.steps].reverse() : [step]
+    for (const one of steps) await undoPlacement(one)
+    flash(t('Undid "{name}"', { name: tunes[steps[0].index]?.name ?? t('that mark') }))
+  }
+
+  async function undoPlacement(step) {
     cursorIndex = step.cursor
     if (step.previous) {
-      await place(step.index, step.previous.start_ms, step.previous.end_ms)
-      undoStack.pop() // place() pushed its own entry; the undo itself isn't undoable
+      // place() pushes its own entry; the undo itself isn't undoable. A failed
+      // place() has already taken its entry back off.
+      if (await place(step.index, step.previous.start_ms, step.previous.end_ms)) undoStack.pop()
     } else {
       await clearAt(step.index)
     }
-    flash(`Undid "${tunes[step.index]?.name ?? 'that mark'}"`)
   }
 
   // ---- logging while segmenting -------------------------------------------
@@ -852,10 +934,63 @@
       cursorIndex = -1 // the next mark logs the next tune
       revealId = body.tune?.session_instance_tune_id ?? null
       undoStack.push({ kind: 'log', sitId: body.tune?.session_instance_tune_id, cursor: -1 })
-      flash(`${GAN_AINM} at ${formatTime(startMs)} — tap it in the log to name it`)
+      flash(t('{name} at {time} — tap it in the log to name it', { name: GAN_AINM, time: formatTime(startMs) }))
     } catch (err) {
       const offlineNow = err instanceof TypeError
-      flash(offlineNow ? 'Logging a new tune needs a connection.' : `Could not log a tune: ${err.message}`, 'error')
+      flash(offlineNow ? t('Logging a new tune needs a connection.') : t('Could not log a tune: {error}', { error: err.message }), 'error')
+    } finally {
+      saving -= 1
+    }
+    persistMirror()
+  }
+
+  // A machine's guesses (spec 053): the truly uncertain ones the listener logged
+  // (shown at 80% or under) that nobody has confirmed or corrected yet, the
+  // filter that shows only those, and the way from one to the next.
+  let onlyChecks = $state(false)
+  const checksLeft = $derived(tunes.filter(needsCheck).length)
+
+  /** Put the cursor on the next (or previous) tune needing a check, and go to it. */
+  function jumpToCheck(step = 1) {
+    const i = nextNeedingCheck(tunes, cursorIndex >= 0 ? cursorIndex : step > 0 ? -1 : tunes.length, step)
+    if (i < 0) {
+      flash(t('Every tune here has been checked.'))
+      return
+    }
+    cursorIndex = i
+    jumpToCursor()
+  }
+
+  /** The tunes the listening service found are in: adopt the log as the server has it. */
+  async function reloadTunes() {
+    if (!recording) return
+    try {
+      const res = await fetch(`/api/recordings/${recording.recording_id}/segmenter`, { credentials: 'same-origin', cache: 'no-store' })
+      const body = await res.json()
+      if (!res.ok || !body.success) throw new Error(body.error || `HTTP ${res.status}`)
+      adoptTunes(body.tunes, cursorTune?.session_instance_tune_id ?? null)
+      baseGeneratedAt = body.generated_at ?? baseGeneratedAt
+      await persistMirror()
+    } catch (err) {
+      flash(t('Could not reload the log: {error}', { error: err.message }), 'error')
+    }
+  }
+
+  async function confirmAt(index) {
+    const tune = tunes[index]
+    if (!tune || !recording || !isGuess(tune)) return
+    saving += 1
+    try {
+      const res = await fetch(
+        `/api/recordings/${recording.recording_id}/segments/${tune.session_instance_tune_id}/confirm`,
+        { method: 'POST', credentials: 'same-origin' },
+      )
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok || !body.success) throw new Error(body.error || `HTTP ${res.status}`)
+      adoptTunes(body.tunes, cursorTune?.session_instance_tune_id ?? null)
+      flash(t('Confirmed "{name}"', { name: tune.name }))
+    } catch (err) {
+      flash(t('Could not confirm "{name}": {error}', { name: tune.name, error: err.message }), 'error')
     } finally {
       saving -= 1
     }
@@ -875,9 +1010,9 @@
       if (!res.ok || !body.success) throw new Error(body.error || `HTTP ${res.status}`)
       const cursorId = cursorTune?.session_instance_tune_id ?? null
       adoptTunes(body.tunes, cursorId)
-      if (moveCursor) flash(`Removed "${tune.name}" from the log`)
+      if (moveCursor) flash(t('Removed "{name}" from the log', { name: tune.name }))
     } catch (err) {
-      flash(`Could not remove "${tune.name}": ${err.message}`, 'error')
+      flash(t('Could not remove "{name}": {error}', { name: tune.name, error: err.message }), 'error')
     } finally {
       saving -= 1
     }
@@ -928,7 +1063,7 @@
     pickerOpen = true
     picker.open(
       { kind: 'insert', anchorId: anchor?.session_instance_tune_id ?? null, side: where.side, newSet: !!where.newSet },
-      { preferType, title: where.newSet ? 'Start a new set with…' : 'Add a tune', actionLabel: '＋ Add This Tune' },
+      { preferType, title: where.newSet ? t('Start a new set with…') : t('Add a tune'), actionLabel: t('＋ Add This Tune') },
     )
   }
 
@@ -954,11 +1089,11 @@
     adoptTunes(resBody.tunes, newId)
     revealId = newId
     undoStack.push({ kind: 'log', sitId: newId, cursor: previousCursor })
-    const name = resBody.tune?.name ?? 'that tune'
+    const name = resBody.tune?.name ?? t('that tune')
     flash(
       resBody.setting_failed
-        ? `Added "${name}" (setting not saved: ${resBody.setting_failed}) — M places it`
-        : `Added "${name}" — M places it at the playhead`,
+        ? t('Added "{name}" (setting not saved: {error}) — M places it', { name, error: resBody.setting_failed })
+        : t('Added "{name}" — M places it at the playhead', { name }),
     )
     persistMirror()
     return true
@@ -981,7 +1116,11 @@
     if (!res.ok || !body.success) throw new Error(body.error || `HTTP ${res.status}`)
     const cursorId = cursorTune?.session_instance_tune_id ?? null
     adoptTunes(body.tunes, cursorId)
-    flash(body.setting_failed ? `Named it "${body.tune?.name}" (setting not saved: ${body.setting_failed})` : `Named it "${body.tune?.name}"`)
+    flash(
+      body.setting_failed
+        ? t('Named it "{name}" (setting not saved: {error})', { name: body.tune?.name, error: body.setting_failed })
+        : t('Named it "{name}"', { name: body.tune?.name })
+    )
     persistMirror()
     return true
   }
@@ -1078,7 +1217,7 @@
       case 's':
       case 'S':
         snapEnabled = !snapEnabled
-        flash(`Onset snap ${snapEnabled ? 'on' : 'off'}`)
+        flash(snapEnabled ? t('Onset snap on') : t('Onset snap off'))
         break
       case '[':
         setSpeed(SPEEDS[Math.max(0, SPEEDS.indexOf(speed) - 1)])
@@ -1089,6 +1228,16 @@
       case 'g':
       case 'G':
         jumpToCursor()
+        break
+      case 'n':
+        jumpToCheck(1)
+        break
+      case 'N':
+        jumpToCheck(-1)
+        break
+      case 'c':
+      case 'C':
+        if (cursorIndex >= 0) confirmAt(cursorIndex)
         break
       default:
         handled = false
@@ -1103,11 +1252,11 @@
 {#snippet audioPicker()}
   {#if audioSources.length > 1}
     <label class="sg-opt sg-opt-audio">
-      {#if !compact}audio{/if}
+      {#if !compact}{t('audio')}{/if}
       <select value={sourceId} onchange={(e) => switchSource(e.currentTarget.value)}>
         {#each audioSources as src (src.id)}
           <option value={src.id}>
-            {src.label}{src.size_bytes && !compact ? ` · ${mb(src.size_bytes)} MB` : ''}{local[src.id] ? ' ✓' : ''}
+            {src.label}{src.size_bytes && !compact ? ` · ${t('{n} MB', { n: mb(src.size_bytes) })}` : ''}{local[src.id] ? ' ✓' : ''}
           </option>
         {/each}
       </select>
@@ -1122,72 +1271,143 @@
   {#if offline && currentSource}
     {#if download}
       <span class="sg-opt sg-offline is-busy" role="status">
-        saving {download.total ? `${Math.min(99, Math.round((download.loaded / download.total) * 100))}%` : `${mb(download.loaded)} MB`}
-        <button type="button" class="sg-offline-x" onclick={() => download?.abort?.abort()} aria-label="Cancel the download">×</button>
+        {t('saving {progress}', {
+          progress: download.total
+            ? `${Math.min(99, Math.round((download.loaded / download.total) * 100))}%`
+            : t('{n} MB', { n: mb(download.loaded) }),
+        })}
+        <button type="button" class="sg-offline-x" onclick={() => download?.abort?.abort()} aria-label={t('Cancel the download')}>×</button>
       </span>
     {:else if local[sourceId]}
-      <span class="sg-opt sg-offline is-saved" title="Saved on this device ({mb(local[sourceId].size_bytes)} MB) — plays with no connection">
-        {compact ? 'saved' : 'offline ✓'}
-        <button type="button" class="sg-offline-x" onclick={() => forgetOffline()} aria-label="Remove the offline copy" title="Remove the offline copy">×</button>
+      <span class="sg-opt sg-offline is-saved" title={t('Saved on this device ({n} MB) — plays with no connection', { n: mb(local[sourceId].size_bytes) })}>
+        {compact ? t('saved') : `${t('offline')} ✓`}
+        <button type="button" class="sg-offline-x" onclick={() => forgetOffline()} aria-label={t('Remove the offline copy')} title={t('Remove the offline copy')}>×</button>
       </span>
     {:else}
       <button
         type="button"
         class="sg-opt sg-offline"
         onclick={saveOffline}
-        title="Download this encode to the device so the tool works with no connection"
-      >⤓ {compact ? 'offline' : 'save offline'}{#if currentSource.size_bytes && !compact} · {mb(currentSource.size_bytes)} MB{/if}</button>
+        title={t('Download this encode to the device so the tool works with no connection')}
+      >⤓ {compact ? t('offline') : t('save offline')}{#if currentSource.size_bytes && !compact} · {t('{n} MB', { n: mb(currentSource.size_bytes) })}{/if}</button>
     {/if}
   {/if}
 {/snippet}
 
 {#if !recording}
-  <p class="sg-error">No recording payload. Reload the page.</p>
+  <p class="sg-error">{t('No recording payload. Reload the page.')}</p>
 {:else}
   <div class="sg" bind:this={rootEl} style="--sg-top: {topOffset}px">
-    <header class="sg-head">
+    {#snippet title()}
       <div>
-        <h1>{recording.label || 'Recording'}</h1>
+        <h1>{recording.label || t('Recording')}</h1>
         <p class="sg-sub">
           <a href="/sessions/{instance.session_path}">{instance.session_name}</a>
           · {instance.date}
           · {formatTime(durationMs)}
-          {#if recording.clock_offset_ms}· offset {formatTime(recording.clock_offset_ms)}{/if}
+          {#if recording.clock_offset_ms}· {t('offset {time}', { time: formatTime(recording.clock_offset_ms) })}{/if}
         </p>
       </div>
-      <div class="sg-progress">
-        <span class="sg-count"><strong>{placedCount}</strong> / {tunes.length}{#if !compact}{' placed'}{/if}</span>
-        <!-- Always in the DOM, merely invisible when idle. Appearing and
-             disappearing on every mark rewrapped the header, which moved the
-             whole page under a thumb already on its way to +15s. A dot on a
-             phone, where the word would cost the header a line of its own. -->
-        <span
-          class="sg-saving"
-          class:is-on={saving > 0 || queued > 0}
-          class:is-queued={queued > 0}
-          title={queued > 0 ? `${queued} mark${queued === 1 ? '' : 's'} waiting to sync` : 'saving'}
-        >{#if queued > 0}{compact ? `${queued}⇡` : `${queued} queued`}{:else}{compact ? '•' : 'saving…'}{/if}</span>
-        <!-- On a phone the encode switch rides up here with the other header
-             controls: down in the options row it was one more line of the
-             sticky column, and it is the one option you reach for when the
-             connection changes rather than while marking. -->
-        {#if compact}{@render audioPicker()}{@render offlineAudio()}{/if}
-        <!-- Fix and export travel together: when the phone header wraps, they
-             move to the next row as a pair rather than stranding "export". -->
-        <span class="sg-actions">
-          <button
-            type="button"
-            class="sg-editlog"
-            onclick={editLog}
-            title="Open this night's log in edit mode — you'll come back here, at this moment in the audio"
-          >✎ {compact ? 'Fix' : 'Fix the log'}</button>
-          <a class="sg-export" href="/api/recordings/{recording.recording_id}/export" target="_blank" rel="noopener">export</a>
-        </span>
+    {/snippet}
+    {#snippet count()}
+      <span class="sg-count"><strong>{placedCount}</strong> / {tunes.length}{#if !compact}{' ' + t('placed')}{/if}</span>
+      <!-- Always in the DOM, merely invisible when idle. Appearing and
+           disappearing on every mark rewrapped the header, which moved the
+           whole page under a thumb already on its way to +15s. A dot on a
+           phone, where the word would cost the header room it doesn't have. -->
+      <span
+        class="sg-saving"
+        class:is-on={saving > 0 || queued > 0}
+        class:is-queued={queued > 0}
+        title={queued > 0 ? tn(queued, '{n} mark waiting to sync', '{n} marks waiting to sync') : t('saving')}
+      >{#if queued > 0}{compact ? `${queued}⇡` : t('{n} queued', { n: queued })}{:else}{compact ? '•' : t('saving…')}{/if}</span>
+    {/snippet}
+    {#snippet actions()}
+      <!-- Fix and export travel together, so a wrap never strands "export". -->
+      <span class="sg-actions">
+        <button
+          type="button"
+          class="sg-editlog"
+          onclick={editLog}
+          title={t("Open this night's log in edit mode — you'll come back here, at this moment in the audio")}
+        >✎ {t('Fix the log')}</button>
+        <a class="sg-export" href="/api/recordings/{recording.recording_id}/export" target="_blank" rel="noopener">{t('export')}</a>
+      </span>
+    {/snippet}
+    {#snippet opts()}
+      <div class="sg-opts">
+        <label class="sg-opt">
+          {t('speed')}
+          <select value={speed} onchange={(e) => setSpeed(Number(e.currentTarget.value))}>
+            {#each SPEEDS as s}<option value={s}>{s}×</option>{/each}
+          </select>
+        </label>
+        <label class="sg-opt">
+          {t('zoom')}
+          <select value={zoomMs} onchange={(e) => (zoomMs = Number(e.currentTarget.value))}>
+            {#each ZOOM_LEVELS as z}<option value={z}>{t('{n}s', { n: z / 1000 })}</option>{/each}
+          </select>
+        </label>
+        <label class="sg-opt sg-opt-check">
+          <input type="checkbox" bind:checked={snapEnabled} />
+          {t('snap to onset')}
+        </label>
+        {#if !compact}{@render audioPicker()}{@render offlineAudio()}{/if}
       </div>
-    </header>
+    {/snippet}
+    {#snippet findTunes(variant = 'panel')}
+      <FindTunes
+        {variant}
+        onopen={() => (moreOpen = true)}
+        recordingId={recording.recording_id}
+        tunesCount={tunes.length}
+        listenCount={tunes.filter(isGuess).length}
+        onfound={reloadTunes}
+        ontunes={(list) => adoptTunes(list, cursorTune?.session_instance_tune_id ?? null)}
+      />
+    {/snippet}
+
+    {#if compact}
+      <!-- Phone: one line. Where the playhead is, how far through the night,
+           and the way to everything else. -->
+      <header class="sg-bar">
+        <span class="sg-time">{formatTime(currentMs, { millis: true })}</span>
+        <span class="sg-of">/ {formatTime(durationMs)}</span>
+        <span class="sg-bar-count">{@render count()}</span>
+        <button
+          type="button"
+          class="sg-more-toggle"
+          class:is-open={moreOpen}
+          aria-expanded={moreOpen}
+          aria-label={moreOpen ? t('Hide the other controls') : t('Show the other controls')}
+          title={moreOpen ? t('Hide the other controls') : t('Show the other controls')}
+          onclick={() => (moreOpen = !moreOpen)}
+        >⋯</button>
+      </header>
+      {#if moreOpen}
+        <div class="sg-more">
+          {@render title()}
+          <div class="sg-more-row">
+            {@render audioPicker()}{@render offlineAudio()}
+            {@render actions()}
+          </div>
+          {@render opts()}
+          <!-- An empty night shows this over the (empty) log instead. -->
+          {#if tunes.length}{@render findTunes()}{/if}
+        </div>
+      {/if}
+    {:else}
+      <header class="sg-head">
+        {@render title()}
+        <div class="sg-progress">
+          {@render count()}
+          {@render actions()}
+        </div>
+      </header>
+    {/if}
 
     {#if recording.audio_error}
-      <p class="sg-error">Audio unavailable: {recording.audio_error}</p>
+      <p class="sg-error">{t('Audio unavailable: {error}', { error: recording.audio_error })}</p>
     {/if}
 
     <div class="sg-body">
@@ -1209,15 +1429,17 @@
           onedgecommit={commitEdge}
         />
 
+        {#if !compact}
         <div class="sg-clock">
           <span class="sg-time">{formatTime(currentMs, { millis: true })}</span>
-          <span class="sg-of">of {formatTime(durationMs)}</span>
+          <span class="sg-of">{t('of {time}', { time: formatTime(durationMs) })}</span>
           {#if mediaBusy}
             <span class="sg-loading">
-              {mediaState === 'loading' ? 'loading audio…' : 'buffering…'}
+              {mediaState === 'loading' ? t('loading audio…') : t('buffering…')}
             </span>
           {/if}
         </div>
+        {/if}
 
         <!-- Which tune the mark key will place, and in which of its two modes.
              Its own band on a desktop; on a phone it is folded into the mark
@@ -1227,34 +1449,34 @@
           {#if pendingSetEndIndex != null}
             {@const ending = tunes[pendingSetEndIndex]}
             <div class="sg-next is-ending">
-              <span class="sg-next-label">end of set {ending.set_number}</span>
+              <span class="sg-next-label">{t('end of set {n}', { n: ending.set_number })}</span>
               <span class="sg-next-name">{ending.name}</span>
-              <span class="sg-next-meta">M marks where it stopped</span>
+              <span class="sg-next-meta">{t('M marks where it stopped')}</span>
             </div>
           {:else}
             <div class="sg-next" class:is-logging={!cursorTune}>
               {#if cursorTune}
-                <span class="sg-next-label">next up</span>
+                <span class="sg-next-label">{t('next up')}</span>
                 <span class="sg-next-name">{cursorTune.name}</span>
-                <span class="sg-next-meta">set {cursorTune.set_number}{cursorTune.is_set_end ? ' · last of set' : ''}</span>
+                <span class="sg-next-meta">{t('set {n}', { n: cursorTune.set_number })}{cursorTune.is_set_end ? ` · ${t('last of set')}` : ''}</span>
               {:else}
-                <span class="sg-next-label">log a tune</span>
+                <span class="sg-next-label">{t('log a tune')}</span>
                 <span class="sg-next-name">{GAN_AINM}</span>
-                <span class="sg-next-meta">M logs a new tune starting here · E ends the set</span>
+                <span class="sg-next-meta">{t('M logs a new tune starting here · E ends the set')}</span>
               {/if}
             </div>
           {/if}
         {/if}
 
         <div class="sg-controls">
-          <button type="button" onclick={() => nudge(-15000)}>−15s</button>
-          <button type="button" onclick={() => nudge(-5000)}>−5s</button>
+          <button type="button" onclick={() => nudge(-15000)}>{t('−15s')}</button>
+          <button type="button" onclick={() => nudge(-5000)}>{t('−5s')}</button>
           <button
             type="button"
             class="sg-play"
             onclick={togglePlay}
             aria-busy={mediaBusy}
-            title={mediaBusy ? 'Audio still loading' : playing ? 'Pause' : 'Play'}
+            title={mediaBusy ? t('Audio still loading') : playing ? t('Pause') : t('Play')}
           >
             {#if mediaBusy}
               <span class="sg-spinner" aria-hidden="true"></span>
@@ -1262,9 +1484,12 @@
               {playing ? '❚❚' : '▶'}
             {/if}
           </button>
-          <button type="button" onclick={() => nudge(5000)}>+5s</button>
-          <button type="button" onclick={() => nudge(15000)}>+15s</button>
+          <button type="button" onclick={() => nudge(5000)}>{t('+5s')}</button>
+          <button type="button" onclick={() => nudge(15000)}>{t('+15s')}</button>
         </div>
+
+        <!-- Phone, ⋯ closed: a running "Find the tunes" job as a thin bar. -->
+        {#if compact && !moreOpen && tunes.length}{@render findTunes('bar')}{/if}
 
         <div class="sg-controls sg-controls-main">
           <!-- Phone: the banner's job rides on the button's own row. Whose turn
@@ -1274,7 +1499,7 @@
           {#if compact}
             {@const ending = pendingSetEndIndex != null ? tunes[pendingSetEndIndex] : null}
             <div class="sg-next-inline" class:is-ending={ending != null}>
-              <span class="sg-next-label">{ending ? 'end of set' : cursorTune ? 'next up' : 'new tune'}</span>
+              <span class="sg-next-label">{ending ? t('end of set') : cursorTune ? t('next up') : t('new tune')}</span>
               <span class="sg-next-name">{(ending ?? cursorTune)?.name ?? GAN_AINM}</span>
             </div>
           {/if}
@@ -1285,7 +1510,7 @@
             class:is-logging={appendMode}
             onclick={markStart}
           >
-            {pendingSetEndIndex != null ? 'End of set' : appendMode ? 'Log a tune' : 'Mark start'}{#if !compact} <kbd>M</kbd>{/if}
+            {pendingSetEndIndex != null ? t('End of set') : appendMode ? t('Log a tune') : t('Mark start')}{#if !compact} <kbd>{'M'}</kbd>{/if}
           </button>
           <!-- The separate end key is for ending a set you have already scrolled
                past; the mark button covers the ordinary case on its own, by
@@ -1295,52 +1520,49 @@
                flips (the tool can't know a set's last tune) and this IS the
                only way to close a set. -->
           {#if !compact || appendMode}
-            <button type="button" class="sg-end" onclick={markEnd}>{compact ? 'End set' : 'End of set'}{#if !compact} <kbd>E</kbd>{/if}</button>
+            <button type="button" class="sg-end" onclick={markEnd}>{compact ? t('End set') : t('End of set')}{#if !compact} <kbd>{'E'}</kbd>{/if}</button>
           {/if}
-          <button type="button" class="sg-undo" onclick={undo} title="Undo the last mark" aria-label="Undo">
-            {#if compact}↺{:else}Undo <kbd>U</kbd>{/if}
+          <button type="button" class="sg-undo" onclick={undo} title={t('Undo the last mark')} aria-label={t('Undo')}>
+            {#if compact}↺{:else}{t('Undo')} <kbd>{'U'}</kbd>{/if}
           </button>
         </div>
 
-        <div class="sg-opts">
-          <label class="sg-opt">
-            speed
-            <select value={speed} onchange={(e) => setSpeed(Number(e.currentTarget.value))}>
-              {#each SPEEDS as s}<option value={s}>{s}×</option>{/each}
-            </select>
-          </label>
-          <label class="sg-opt">
-            zoom
-            <select value={zoomMs} onchange={(e) => (zoomMs = Number(e.currentTarget.value))}>
-              {#each ZOOM_LEVELS as z}<option value={z}>{z / 1000}s</option>{/each}
-            </select>
-          </label>
-          <label class="sg-opt sg-opt-check">
-            <input type="checkbox" bind:checked={snapEnabled} />
-            snap to onset
-          </label>
-          {#if !compact}{@render audioPicker()}{@render offlineAudio()}{/if}
-        </div>
+        {#if !compact}{@render opts()}{/if}
 
         <details class="sg-keys">
-          <summary>Keyboard</summary>
+          <summary>{t('Keyboard')}</summary>
           <dl>
-            <div><dt>Space</dt><dd>play / pause</dd></div>
-            <div><dt>M · Enter</dt><dd>mark start of the next tune</dd></div>
-            <div><dt>E</dt><dd>explicit end (end of a set)</dd></div>
-            <div><dt>U · ⌫</dt><dd>undo the last mark</dd></div>
-            <div><dt>← →</dt><dd>seek 5s (⇧ 1s, ⌥ 0.2s)</dd></div>
-            <div><dt>↑ ↓</dt><dd>move the cursor in the log</dd></div>
-            <div><dt>G</dt><dd>go to the cursor tune's mark</dd></div>
-            <div><dt>− =</dt><dd>zoom out / in</dd></div>
-            <div><dt>[ ]</dt><dd>slower / faster</dd></div>
-            <div><dt>S</dt><dd>toggle onset snap</dd></div>
-            <div><dt>drag an edge</dt><dd>move a boundary in the tape (no snap — the drag is the correction)</dd></div>
+            <div><dt>{t('Space')}</dt><dd>{t('play / pause')}</dd></div>
+            <div><dt>{'M'} · {t('Enter')}</dt><dd>{t('mark start of the next tune')}</dd></div>
+            <div><dt>{'E'}</dt><dd>{t('explicit end (end of a set)')}</dd></div>
+            <div><dt>{'U'} · ⌫</dt><dd>{t('undo the last mark')}</dd></div>
+            <div><dt>← →</dt><dd>{t('seek 5s (⇧ 1s, ⌥ 0.2s)')}</dd></div>
+            <div><dt>↑ ↓</dt><dd>{t('move the cursor in the log')}</dd></div>
+            <div><dt>{'G'}</dt><dd>{t("go to the cursor tune's mark")}</dd></div>
+            <div><dt>{'N'} · ⇧{'N'}</dt><dd>{t('next / previous tune needing a check')}</dd></div>
+            <div><dt>{'C'}</dt><dd>{t('confirm the cursor tune')}</dd></div>
+            <div><dt>− =</dt><dd>{t('zoom out / in')}</dd></div>
+            <div><dt>[ ]</dt><dd>{t('slower / faster')}</dd></div>
+            <div><dt>{'S'}</dt><dd>{t('toggle onset snap')}</dd></div>
+            <div><dt>{t('drag an edge')}</dt><dd>{t('move a boundary in the tape (no snap — the drag is the correction)')}</dd></div>
           </dl>
         </details>
       </section>
 
       <section class="sg-right">
+        {#if !compact || !tunes.length}{@render findTunes()}{/if}
+        {#if checksLeft || onlyChecks}
+          <!-- The listener's guesses still to check: show only those, and step
+               through them (N / ⇧N), confirming (C) or correcting each. -->
+          <div class="sg-checks">
+            <label>
+              <input type="checkbox" bind:checked={onlyChecks} />
+              {tn(checksLeft, '{n} tune needs a check', '{n} tunes need a check')}
+            </label>
+            <button type="button" title={t('Previous tune needing a check')} onclick={() => jumpToCheck(-1)} disabled={!checksLeft}>‹</button>
+            <button type="button" title={t('Next tune needing a check')} onclick={() => jumpToCheck(1)} disabled={!checksLeft}>›</button>
+          </div>
+        {/if}
         <TuneList
           {tunes}
           {segments}
@@ -1350,6 +1572,8 @@
           onclear={(i) => clearAt(i, true)}
           onname={openPicker}
           onunlog={(i) => unlogAt(i)}
+          onconfirm={(i) => confirmAt(i)}
+          {onlyChecks}
           oninsert={(i, side) => openInsertPicker({ index: i, side })}
           onnewset={(i) => openInsertPicker({ index: i, side: 'after', newSet: true })}
           {revealId}
@@ -1395,10 +1619,10 @@
         mediaState = 'error'
         flash(
           local[sourceId]
-            ? 'The saved audio could not be played. Remove the offline copy and save it again.'
+            ? t('The saved audio could not be played. Remove the offline copy and save it again.')
             : offline
-              ? 'The audio could not be loaded. Offline, the tool needs a copy saved on this device ("save offline" while connected); online, the signed URL may have expired — reload the page.'
-              : 'The audio file could not be loaded. The signed URL may have expired — reload the page.',
+              ? t('The audio could not be loaded. Offline, the tool needs a copy saved on this device ("save offline" while connected); online, the signed URL may have expired — reload the page.')
+              : t('The audio file could not be loaded. The signed URL may have expired — reload the page.'),
           'error',
         )
       }}
@@ -1410,7 +1634,7 @@
       <div class="sg-toast" class:is-error={statusKind === 'error'} role="status" aria-live="polite">
         <span>{status}</span>
         {#if statusKind === 'error'}
-          <button type="button" class="sg-toast-x" onclick={() => (status = '')} aria-label="Dismiss">×</button>
+          <button type="button" class="sg-toast-x" onclick={() => (status = '')} aria-label={t('Dismiss')}>×</button>
         {/if}
       </div>
     {/if}
@@ -1613,6 +1837,29 @@
     display: flex;
     flex-direction: column;
     min-height: 0;
+  }
+  .sg-checks {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85rem;
+    color: #e0b341;
+    padding: 2px 2px 6px;
+  }
+  .sg-checks label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin: 0;
+    flex: 1;
+    cursor: pointer;
+  }
+  .sg-checks button {
+    background: none;
+    border: 1px solid var(--border-color, #444);
+    border-radius: 5px;
+    color: var(--text-color, #e0e0e0);
+    padding: 0 8px;
   }
   .sg-right :global(.tl) {
     flex: 1 1 auto;
@@ -1828,6 +2075,7 @@
   @media (max-width: 900px) {
     .sg-body {
       grid-template-columns: minmax(0, 1fr);
+      gap: 8px;
     }
     .sg-left {
       position: sticky;
@@ -1842,40 +2090,87 @@
     .sg-keys {
       display: none;
     }
-    /* On a phone the controls get a row of their own under the title rather
-       than squeezing in beside it, and that row wraps between controls,
-       never inside one: count and queue on the left, the encode switch and
-       the offline copy in the middle, Fix and export pushed to the right. */
-    .sg-head {
-      gap: 4px;
+    /* The one-line bar that replaces the header: the playhead, the count,
+       and the button that opens everything else. */
+    .sg-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 6px;
+      min-height: 34px;
     }
-    .sg-progress {
-      flex: 1 0 100%;
+    .sg-bar .sg-time {
+      font-size: 1.2rem;
+    }
+    .sg-bar-count {
+      margin-left: auto;
+      display: inline-flex;
+      align-items: baseline;
+      gap: 6px;
+      font-size: 0.8rem;
+      color: var(--disabled-text, #888);
+    }
+    .sg-bar-count strong {
+      color: var(--text-color, #e0e0e0);
+    }
+    .sg-more-toggle {
+      min-width: 44px;
+      min-height: 34px;
+      background: var(--header-bg, #2d2d2d);
+      color: var(--text-color, #e0e0e0);
+      border: 1px solid var(--border-color, #444);
+      border-radius: 6px;
+      font-size: 1.1rem;
+      line-height: 1;
+      cursor: pointer;
+    }
+    .sg-more-toggle.is-open {
+      border-color: var(--warning, #f5c842);
+      color: var(--warning, #f5c842);
+    }
+    /* Everything that isn't marking. It pushes the tape down while open, which
+       is fine: it is open for setting up, not for marking. */
+    .sg-more {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 10px;
+      margin-bottom: 8px;
+      border: 1px solid var(--border-color, #444);
+      border-radius: 8px;
+      background: var(--header-bg, #2d2d2d);
+    }
+    .sg-more h1 {
+      font-size: 1.05rem;
+      margin: 0;
+    }
+    .sg-more-row {
+      display: flex;
       flex-wrap: wrap;
       align-items: center;
-      gap: 6px 8px;
+      gap: 8px;
       font-size: 0.8rem;
+      color: var(--disabled-text, #888);
     }
-    .sg-progress .sg-opt-audio select {
-      margin-left: 0;
-      padding: 2px 3px;
-      font-size: 0.75rem;
-      max-width: 118px;
-    }
-    .sg-progress .sg-actions {
+    .sg-more-row .sg-actions {
       margin-left: auto;
     }
-    .sg-progress .sg-offline {
-      padding: 2px 5px;
-      font-size: 0.75rem;
-      gap: 3px;
+    .sg-more-row .sg-opt-audio select {
+      margin-left: 4px;
+      max-width: 140px;
     }
-    .sg-progress .sg-actions {
-      gap: 8px;
+    .sg-controls {
+      gap: 5px;
+      margin-bottom: 6px;
     }
-    .sg-editlog {
-      padding: 4px 8px;
-      min-height: 28px;
+    .sg-controls button {
+      min-height: 40px;
+    }
+    .sg-controls-main {
+      margin-bottom: 0;
+    }
+    .sg-controls-main button {
+      min-height: 46px;
     }
     /* Undo is an icon here: it is one of three things competing for a row that
        also has to hold the mark button and whose turn it is. */

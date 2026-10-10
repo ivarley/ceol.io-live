@@ -1,4 +1,5 @@
 <script>
+  // i18n-converted
   // Who this page is about (spec 052 §B12).
   //
   // It replaces an h1 reading "Profile: Ian Varley" — 36px of a 664px screen
@@ -9,6 +10,8 @@
   //
   // It carries the Edit control because that is what Edit edits. The old button
   // floated alone above the first card with nothing anchoring it to anything.
+  import { t } from '../lib/index.js'
+
   let {
     name = '',
     subtitle = '',
@@ -36,7 +39,7 @@
   <span class="pd-identity-text">
     <span class="pd-name" id="identity-name">
       {name}
-      {#if isAdmin}<span class="pd-admin-badge admin-indicator">admin</span>{/if}
+      {#if isAdmin}<span class="pd-admin-badge admin-indicator">{t('admin')}</span>{/if}
     </span>
     {#if subtitle}<span class="pd-subtitle">{subtitle}</span>{/if}
   </span>
@@ -44,10 +47,10 @@
   {#if canEdit}
     <span class="pd-identity-actions edit-controls">
       {#if editMode}
-        <button type="button" id="cancel-btn" class="pd-action" disabled={saving} onclick={onCancel}>Cancel</button>
-        <button type="button" id="save-btn" class="pd-action pd-action-strong" disabled={saving} onclick={onSave}>{saving ? 'Saving…' : 'Save'}</button>
+        <button type="button" id="cancel-btn" class="pd-action" disabled={saving} onclick={onCancel}>{t('Cancel')}</button>
+        <button type="button" id="save-btn" class="pd-action pd-action-strong" disabled={saving} onclick={onSave}>{saving ? t('Saving…') : t('Save')}</button>
       {:else}
-        <button type="button" id="edit-btn" class="pd-action" onclick={onEdit}>Edit</button>
+        <button type="button" id="edit-btn" class="pd-action" onclick={onEdit}>{t('Edit')}</button>
       {/if}
     </span>
   {/if}

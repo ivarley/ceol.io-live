@@ -1,11 +1,12 @@
+{# i18n-converted #}
 <!-- Person Edit Modal -->
 <div class="modal fade" id="personEditModal" tabindex="-1" role="dialog" aria-labelledby="personEditModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-scrollable" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="personEditModalLabel">Edit Person</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
+                <h5 class="modal-title" id="personEditModalLabel">{{ _('Edit Person') }}</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="{{ _('Close') }}">
+                    <span aria-hidden="true">&#215;</span>
                 </button>
             </div>
             <div class="modal-body">
@@ -13,51 +14,51 @@
                     <input type="hidden" id="edit-person-id" name="person_id">
                     
                     <div class="form-group">
-                        <label for="edit-first-name">First Name</label>
+                        <label for="edit-first-name">{{ _('First Name') }}</label>
                         <input type="text" class="form-control" id="edit-first-name" name="first_name" required>
                     </div>
                     
                     <div class="form-group">
-                        <label for="edit-last-name">Last Name</label>
+                        <label for="edit-last-name">{{ _('Last Name') }}</label>
                         <input type="text" class="form-control" id="edit-last-name" name="last_name" required>
                     </div>
                     
                     <div class="form-group">
-                        <label for="edit-email">Email</label>
+                        <label for="edit-email">{{ _('Email') }}</label>
                         <input type="email" class="form-control" id="edit-email" name="email">
                     </div>
                     
                     <div class="form-group">
-                        <label>Instruments</label>
+                        <label>{{ _('Instruments') }}</label>
                         <div id="instruments-container">
                             <!-- Instrument checkboxes will be dynamically added here -->
                         </div>
                         <div class="input-group" style="margin-top: 8px;">
-                            <input type="text" class="form-control" id="new-instrument" placeholder="Other instrument...">
+                            <input type="text" class="form-control" id="new-instrument" placeholder="{{ _('Other instrument...') }}">
                             <div class="input-group-append">
-                                <button type="button" class="btn btn-secondary" onclick="window.attendanceManagerInstance && window.attendanceManagerInstance.addInstrument()">Add</button>
+                                <button type="button" class="btn btn-secondary" onclick="window.attendanceManagerInstance && window.attendanceManagerInstance.addInstrument()">{{ _('Add') }}</button>
                             </div>
                         </div>
                     </div>
                     
                     <div class="form-group">
-                        <label for="edit-attendance-status">Attendance Status</label>
+                        <label for="edit-attendance-status">{{ _('Attendance Status') }}</label>
                         <select class="form-control" id="edit-attendance-status" name="attendance_status">
-                            <option value="yes">Yes - Attending</option>
-                            <option value="maybe">Maybe</option>
-                            <option value="no">No - Not Attending</option>
+                            <option value="yes">{{ _('Yes - Attending') }}</option>
+                            <option value="maybe">{{ _('Maybe') }}</option>
+                            <option value="no">{{ _('No - Not Attending') }}</option>
                         </select>
                     </div>
                     
                     <div class="form-group">
-                        <label for="edit-comment">Comment</label>
+                        <label for="edit-comment">{{ _('Comment') }}</label>
                         <textarea class="form-control" id="edit-comment" name="comment" rows="2"></textarea>
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal" onclick="window.attendanceManagerInstance && window.attendanceManagerInstance.closeModal('personEditModal')">Cancel</button>
-                <button type="button" class="btn btn-primary" onclick="window.attendanceManagerInstance && window.attendanceManagerInstance.savePerson()">Save Changes</button>
+                <button type="button" class="btn btn-secondary" data-dismiss="modal" onclick="window.attendanceManagerInstance && window.attendanceManagerInstance.closeModal('personEditModal')">{{ _('Cancel') }}</button>
+                <button type="button" class="btn btn-primary" onclick="window.attendanceManagerInstance && window.attendanceManagerInstance.savePerson()">{{ _('Save Changes') }}</button>
             </div>
         </div>
     </div>
@@ -68,30 +69,30 @@
     <div class="modal-dialog modal-dialog-scrollable" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="addPersonModalLabel">Add New Person</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
+                <h5 class="modal-title" id="addPersonModalLabel">{{ _('Add New Person') }}</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="{{ _('Close') }}">
+                    <span aria-hidden="true">&#215;</span>
                 </button>
             </div>
             <div class="modal-body">
                 <form id="person-add-form">
                     <div class="form-group">
-                        <label for="add-first-name">First Name</label>
+                        <label for="add-first-name">{{ _('First Name') }}</label>
                         <input type="text" class="form-control" id="add-first-name" name="first_name" required>
                     </div>
                     
                     <div class="form-group">
-                        <label for="add-last-name">Last Name</label>
+                        <label for="add-last-name">{{ _('Last Name') }}</label>
                         <input type="text" class="form-control" id="add-last-name" name="last_name" required>
                     </div>
                     
                     <div class="form-group">
-                        <label for="add-email">Email (optional)</label>
+                        <label for="add-email">{{ _('Email (optional)') }}</label>
                         <input type="email" class="form-control" id="add-email" name="email">
                     </div>
                     
                     <div class="form-group">
-                        <label>Instruments</label>
+                        <label>{{ _('Instruments') }}</label>
                         <div id="add-instruments-container">
                             {% for instrument in canonical_instruments %}
                             <div class="form-check">
@@ -101,9 +102,9 @@
                             {% endfor %}
                         </div>
                         <div class="input-group" style="margin-top: 8px;">
-                            <input type="text" class="form-control" id="add-new-instrument" placeholder="Other instrument...">
+                            <input type="text" class="form-control" id="add-new-instrument" placeholder="{{ _('Other instrument...') }}">
                             <div class="input-group-append">
-                                <button type="button" class="btn btn-secondary" onclick="window.attendanceManagerInstance && window.attendanceManagerInstance.addNewInstrument()">Add</button>
+                                <button type="button" class="btn btn-secondary" onclick="window.attendanceManagerInstance && window.attendanceManagerInstance.addNewInstrument()">{{ _('Add') }}</button>
                             </div>
                         </div>
                         <div id="add-other-instruments-list" style="margin-top: 8px;"></div>
@@ -111,8 +112,8 @@
                 </form>
             </div>
             <div class="modal-footer" style="margin-top: 0; padding-top: 12px;">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal" onclick="window.attendanceManagerInstance && window.attendanceManagerInstance.closeModal('addPersonModal')">Cancel</button>
-                <button type="button" class="btn btn-primary" onclick="window.attendanceManagerInstance && window.attendanceManagerInstance.createPerson()">Add Person</button>
+                <button type="button" class="btn btn-secondary" data-dismiss="modal" onclick="window.attendanceManagerInstance && window.attendanceManagerInstance.closeModal('addPersonModal')">{{ _('Cancel') }}</button>
+                <button type="button" class="btn btn-primary" onclick="window.attendanceManagerInstance && window.attendanceManagerInstance.createPerson()">{{ _('Add Person') }}</button>
             </div>
         </div>
     </div>

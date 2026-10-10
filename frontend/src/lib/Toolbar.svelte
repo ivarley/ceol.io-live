@@ -1,5 +1,7 @@
 <script>
+  // i18n-converted
   import SearchField from './SearchField.svelte'
+  import { t } from './i18n/index.js'
 
   // Toolbar (spec 052 §B8 Stage 1): one line above a list — a SearchField plus
   // optional filter / sort / add buttons — and the filter panel that expands
@@ -27,7 +29,7 @@
     // panel beneath it; which control does the searching is the page's business.
     search = null, // snippet
     query = $bindable(''),
-    placeholder = 'Search…',
+    placeholder = t('Search…'),
     debounce = 300,
     onSearch = () => {},
 
@@ -47,7 +49,7 @@
     sortActive = false, // mark it when sorting is not the default
     onAdd = null, // set => an add (+) button
     addHref = null, // render the add control as a real link (it navigates)
-    addTitle = 'Add',
+    addTitle = t('Add'),
 
     // Legacy hooks. These pages already have ids and a button skin that CSS and
     // the e2e suite key on, and this component is meant to wear them rather than
@@ -115,8 +117,8 @@
         class:on={activeCount > 0}
         class:open
         class:active={open || activeCount > 0}
-        title="Show filters"
-        aria-label="Filter"
+        title={t('Show filters')}
+        aria-label={t('Filter')}
         aria-expanded={open}
         onclick={() => (open = !open)}
       >
@@ -136,7 +138,7 @@
         type="button"
         class="kit-tool-btn kit-tool-sort"
         class:on={sortActive}
-        aria-label="Sort"
+        aria-label={t('Sort')}
         onclick={(e) => onSort(e)}
       >
         <svg viewBox="0 0 24 24" aria-hidden="true"
@@ -185,7 +187,7 @@
       <div class="kit-filter-inner">
         {@render filter()}
         {#if onClear && activeCount > 0}
-          <button type="button" class="kit-filter-clear" onclick={onClear}>Clear filters</button>
+          <button type="button" class="kit-filter-clear" onclick={onClear}>{t('Clear filters')}</button>
         {/if}
       </div>
     </div>

@@ -1,4 +1,5 @@
 <script>
+  // i18n-converted
   // "Which tune was this?" for a tune the segmenter logged from the audio, and
   // "which tune goes here?" for one added from the log (spec 050 "Logging while
   // segmenting"). The search itself is the live logger's own TuneSearch --
@@ -11,14 +12,15 @@
   // underneath; closing it without picking changes nothing.
   import TuneSearch from '../TuneSearch.svelte'
   import { createPaneState } from '../mytunes/pane.svelte.js'
+  import { t } from '../lib/index.js'
 
   let { config, onPick, onClosed = () => {} } = $props()
 
   const pane = createPaneState('sg-pick-open')
   let target = $state(null) // what the pick is for: handed back to onPick untouched
   let initialQuery = $state('')
-  let title = $state('Which tune was this?')
-  let actionLabel = $state('＋ Log This Tune')
+  let title = $state(t('Which tune was this?'))
+  let actionLabel = $state(t('＋ Log This Tune'))
   // The set's tune type, as the live logger passes it: a soft ranking
   // preference, so a reel's neighbours come up reels first.
   let preferType = $state(null)
@@ -30,8 +32,8 @@
     target = what
     preferType = opts.preferType ?? null
     initialQuery = opts.initialQuery ?? ''
-    title = opts.title ?? 'Which tune was this?'
-    actionLabel = opts.actionLabel ?? '＋ Log This Tune'
+    title = opts.title ?? t('Which tune was this?')
+    actionLabel = opts.actionLabel ?? t('＋ Log This Tune')
     errorMsg = ''
     busy = false
     pane.open()
@@ -67,7 +69,7 @@
       },
       (err) => {
         busy = false
-        errorMsg = err?.message || 'Could not save that tune.'
+        errorMsg = err?.message || t('Could not save that tune.')
       },
     )
     return false

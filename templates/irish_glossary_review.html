@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{# Spec 057: the Irish glossary for a native speaker to review. Deliberately left in English:
+   its English is the subject of the review, not interface. Unlinked, not indexed. #}
+
+{% block title %}Ceol English–Irish glossary{% endblock %}
+{% block description %}Ceol's English–Irish glossary, for review{% endblock %}
+
+{% block extra_css %}
+<meta name="robots" content="noindex, nofollow">
+<style>
+    .glossary { max-width: 960px; margin: 0 auto; padding: 24px 16px 64px; line-height: 1.6;
+        font-size: 1.05rem; }
+    /* The site's default body text is muted; a page meant for reading wants full contrast. */
+    .glossary, .glossary p, .glossary li, .glossary td, .glossary strong { color: var(--text-color); }
+    .glossary h1, .glossary h2, .glossary h3 { color: #fff; }
+    .glossary h1 { margin-bottom: 0.6em; }
+    .glossary h2 { margin-top: 2em; padding-bottom: 0.3em; border-bottom: 1px solid var(--border-color); }
+    .glossary h3 { margin-top: 1.5em; font-size: 1.15rem; }
+    .glossary .table-wrap { overflow-x: auto; margin: 0.8em 0 1.2em; }
+    .glossary table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+    .glossary th, .glossary td { text-align: left; vertical-align: top; padding: 6px 10px;
+        border-bottom: 1px solid var(--border-color); }
+    .glossary th { color: #c8c8c8; font-weight: 600; white-space: nowrap; }
+    .glossary td:nth-child(2) { font-weight: 600; }
+    .glossary li { margin-bottom: 0.3em; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="glossary">
+    {{ glossary | safe }}
+</div>
+{% endblock %}

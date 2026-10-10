@@ -1,4 +1,5 @@
 <script>
+  // i18n-converted
   import { Popover as BitsPopover } from 'bits-ui'
 
   // Popover (spec 035): anchored floating panel (hamburger menu, in-session

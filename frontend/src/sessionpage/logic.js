@@ -7,6 +7,7 @@
 // normalizeQuotes, formatTime/formatTimeRange and instanceTimeLabel now live in
 // src/shared/ — one tested copy for every page bundle.
 import { extractTuneId, parseLocalDate } from '../shared/parse.js'
+import { t, tn, formatDate } from '../lib/i18n/index.js'
 
 // Sort functions keyed by type (alpha, session, everywhere) and direction.
 export const sortFunctions = {
@@ -74,8 +75,9 @@ export function filterAndSortTunes(allTunes, filters, sort, myStatusInstrument, 
 }
 
 export function resultsCountLabel(filteredCount, totalCount) {
-  if (filteredCount < totalCount) return `Showing ${filteredCount} of ${totalCount} tunes`
-  return `${totalCount} tune${totalCount !== 1 ? 's' : ''}`
+  if (filteredCount < totalCount)
+    return tn(totalCount, 'Showing {shown} of {n} tunes', 'Showing {shown} of {n} tunes', { shown: filteredCount })
+  return tn(totalCount, '{n} tune', '{n} tunes')
 }
 
 // ---- URL <-> state (the tunes tab's query-string contract) ---------------------
@@ -168,16 +170,16 @@ export function instanceUrlId(instance) {
 // went (spec 052 §B1): which nights you turned up to is a fact about THIS session,
 // so it belongs among this session's nights rather than on a page about you.
 export const LOG_VIEW_OPTIONS = [
-  { id: 'logged', label: 'Logged' },
-  { id: 'all', label: 'All' },
+  { id: 'logged', label: t('Logged') },
+  { id: 'all', label: t('All') },
 ]
 
 export function logViewOptions(isLoggedIn) {
   if (!isLoggedIn) return LOG_VIEW_OPTIONS
   return [
-    { id: 'logged', label: 'Logged' },
-    { id: 'attended', label: 'Attended' },
-    { id: 'all', label: 'All' },
+    { id: 'logged', label: t('Logged') },
+    { id: 'attended', label: t('Attended') },
+    { id: 'all', label: t('All') },
   ]
 }
 
@@ -220,7 +222,7 @@ export function tunePlayLinks(playsByInstance, instance, sessionPath, tuneId) {
   return (positions || []).map((p) => ({
     key: p.session_instance_tune_id,
     name: p.name,
-    where: `set ${p.set_number}, tune ${p.position_in_set}`,
+    where: t('set {set}, tune {tune}', { set: p.set_number, tune: p.position_in_set }),
     href:
       `/sessions/${sessionPath}/${instance.session_instance_id}` +
       `?highlight=${p.session_instance_tune_id}&tune=${tuneId}`,
@@ -255,7 +257,7 @@ export function matchLoggedTunes(tunes, query, limit = 8) {
 // styled as two lines, and derived here rather than in the component so the
 // timezone handling stays in one place (parseLocalDate, never new Date(str)).
 export function dowOf(dateStr) {
-  return parseLocalDate(dateStr).toLocaleDateString('en-US', { weekday: 'short' })
+  return formatDate(parseLocalDate(dateStr), { weekday: 'short' })
 }
 
 export function domOf(dateStr) {
@@ -269,12 +271,12 @@ export function rowDateLabel(dateStr, today = new Date()) {
   const d = parseLocalDate(dateStr)
   const opts = { weekday: 'long', month: 'short', day: 'numeric' }
   if (d.getFullYear() !== today.getFullYear()) opts.year = 'numeric'
-  return d.toLocaleDateString('en-US', opts)
+  return formatDate(d, opts)
 }
 
 export function festivalDayLabel(dateStr) {
   const dateObj = parseLocalDate(dateStr)
-  return dateObj.toLocaleDateString('en-US', {
+  return formatDate(dateObj, {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
@@ -330,4 +332,37 @@ export function filterPeople(peopleData, currentFilter, searchQuery) {
     })
   }
   return filtered
+}
+
+/**
+ * People-tab sorts. `regular` is the server's own order (who has come most in the last
+ * six months, then most ever), so the default leaves the list as it arrived. `last` is
+ * the night they last came; someone never checked in goes last whichever way it runs.
+ * `name` is first name, then last.
+ *
+ * `dir` is 'desc' or 'asc'. Each mode starts the way you'd want it (PEOPLE_SORT_DEFAULT_DIR):
+ * the most and the latest first, names A to Z.
+ */
+export const PEOPLE_SORTS = ['regular', 'last', 'name']
+export const PEOPLE_SORT_DEFAULT_DIR = { regular: 'desc', last: 'desc', name: 'asc' }
+
+const personName = (p) => `${p.first_name || ''} ${p.last_name || ''}`.trim().toLowerCase()
+const byName = (a, b) => personName(a).localeCompare(personName(b))
+const byCounts = (a, b) =>
+  (a.recent_attendance_count || 0) - (b.recent_attendance_count || 0) ||
+  (a.attendance_count || 0) - (b.attendance_count || 0)
+
+export function sortPeople(people, sort) {
+  const flip = sort.dir === 'asc' ? 1 : -1
+  return [...people].sort((a, b) => {
+    if (sort.type === 'name') return flip * byName(a, b)
+    if (sort.type === 'last') {
+      if (!a.last_attended !== !b.last_attended) return a.last_attended ? -1 : 1
+      if (!a.last_attended) return byName(a, b)
+      const byDate = flip * (a.last_attended || '').localeCompare(b.last_attended || '')
+      if (byDate) return byDate
+    }
+    // Ties read A to Z whichever way the counts run.
+    return flip * byCounts(a, b) || byName(a, b)
+  })
 }

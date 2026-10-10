@@ -1,4 +1,5 @@
 <script>
+  // i18n-converted
   // The app-wide tune-detail drawer (spec 035 Step 3, derived-mode refactor).
   //
   // ONE payload feeds it — GET /api/tunes/<id>/detail (optionally ?session=
@@ -44,6 +45,11 @@
     TagInput,
     toast,
     toastFailure,
+    t,
+    tn,
+    tuneTypeName,
+    currentLang,
+    instrumentName,
   } from '../lib/index.js'
   import {
     MUSICAL_KEYS,
@@ -57,8 +63,6 @@
     historyUrl,
     instancePositions,
     initialSessionScope,
-    extractSettingId,
-    validateSettingInput,
     playedWithScopeOptions,
     tuneHref,
     updateUrlWithTune,
@@ -80,6 +84,11 @@
     tagsEqual,
   } from './logic.js'
   import { STATUSES, STATUS_LABELS } from '../mylist.js'
+  import SettingChooser from './SettingChooser.svelte'
+
+  // The tune type as the server sent it in English (the pill's CSS sets its case), the
+  // interface word in Irish.
+  const typeLabel = (type) => (currentLang() === 'ga' ? tuneTypeName(type) : type)
 
   // ---- modal state -----------------------------------------------------------
   let visible = $state(false)
@@ -125,14 +134,13 @@
   // drawer-wide one: a single button committing both would be lying about what it does.
 
   // Personal: person_tune. Rendered on EVERY surface for a tune on my list.
-  let pcFields = $state({ name_alias: '', setting: '', key: '', notes: '', tags: [] })
+  let pcFields = $state({ name_alias: '', key: '', notes: '', tags: [] })
   let pcOriginals = $state({})
-  let pcSettingError = $state('')
   let pcSaveState = $state('idle') // idle | saving | saved | error (the Configure Save button)
   // Notes & tags now live in an always-visible panel that auto-saves on blur —
   // this drives the small "Saving…/Saved" flash for that (separate from Configure).
   let autoSaveState = $state('idle') // idle | saving | saved | error
-  let pcFetchState = $state('idle') // idle | loading | ok | warn | err
+  let pcFetchState = $state('idle') // idle | loading | ok | warn | err (Generate Notation)
 
   // Session: session_tune when the droplist is on 'general', else that instance's
   // session_instance_tune. One form; the droplist picks its target, so you never see
@@ -155,11 +163,9 @@
   // The transient "You attended" beside the filter, shown by tapping a row's ✓.
   let attendedHint = $state(false)
   let attendedHintTimer = null
-  let sessFields = $state({ alias: '', setting: '', key: '' })
+  let sessFields = $state({ alias: '', key: '' })
   let sessOriginals = $state({})
-  let sessSettingError = $state('')
   let sessSaveState = $state('idle')
-  let sessFetchState = $state('idle')
   let sessFormOpen = $state(false)
 
   // Details: the same session_tune row the History form writes at 'general' scope, but
@@ -167,11 +173,9 @@
   // rather than sharing sessFields, or selecting a date in History would silently repoint
   // the fields sitting on Details. Not collapsed behind a link either — the tab exists
   // BECAUSE that link was undiscoverable.
-  let dcFields = $state({ alias: '', setting: '', key: '' })
+  let dcFields = $state({ alias: '', key: '' })
   let dcOriginals = $state({})
-  let dcSettingError = $state('')
   let dcSaveState = $state('idle')
-  let dcFetchState = $state('idle')
 
   // "At a different session ..." — re-scope the drawer to another session I'm a member
   // of, to see what THEY do with this tune.
@@ -296,11 +300,10 @@
   const summaryLine = $derived.by(() => {
     if (!tune || attendedOnly || editingInstance) return ''
     if (scopeId === 'general')
-      return `Played ${tune.times_played || 0} ${plural(tune.times_played || 0, 'time')} at this session`
-    if (scopeId === 'member')
-      return `Played ${myPlayCount} ${plural(myPlayCount, 'time')} at my sessions`
+      return tn(tune.times_played || 0, 'Played {n} time at this session', 'Played {n} times at this session')
+    if (scopeId === 'member') return tn(myPlayCount, 'Played {n} time at my sessions', 'Played {n} times at my sessions')
     if (scopeId === 'all')
-      return `Played ${tune.global_play_count || 0} ${plural(tune.global_play_count || 0, 'time')} at all sessions`
+      return tn(tune.global_play_count || 0, 'Played {n} time at all sessions', 'Played {n} times at all sessions')
     return ''
   })
 
@@ -308,19 +311,20 @@
   // it would fall back to. An instance falls back to the session's key; the session
   // falls back to the setting's own key.
   const inheritKeyLabel = $derived.by(() => {
-    if (!tune) return '(not specified)'
+    if (!tune) return t('(not specified)')
     if (editingInstance) {
       const fallback = tune.key || tune.setting_key
-      return fallback ? `(as usual — ${fallback})` : '(as usual)'
+      return fallback ? t('(as usual — {key})', { key: fallback }) : t('(as usual)')
     }
-    return tune.setting_key ? `(the setting's key — ${tune.setting_key})` : '(not specified)'
+    return settingKeyLabel
   })
 
   // Details is always the session's own layer, so its inherit option always names the
   // setting's key — never "as usual", which is an instance's fallback.
-  const dcInheritKeyLabel = $derived(
-    tune?.setting_key ? `(the setting's key — ${tune.setting_key})` : '(not specified)'
+  const settingKeyLabel = $derived(
+    tune?.setting_key ? t("(the setting's key — {key})", { key: tune.setting_key }) : t('(not specified)')
   )
+  const dcInheritKeyLabel = $derived(settingKeyLabel)
 
   const rollup = $derived(tune ? rollupStatus(tune) : 'want to learn')
   const instruments = $derived(tune ? getInstrumentData(tune).instruments : [])
@@ -356,11 +360,14 @@
   const settingMismatch = $derived(
     inSession && onList && !!mySettingId && !!playedSettingId && mySettingId !== playedSettingId
   )
-  const sessionLabel = $derived(sessionScope?.session_name || 'this session')
+  const sessionLabel = $derived(sessionScope?.session_name || t('this session'))
 
   // What the notation section renders from: the played setting, or — while the
   // mismatch note's toggle is on — the viewer's own setting.
-  const notationSource = $derived(showingMyVersion && myNotation ? { ...tune, ...myNotation } : tune)
+  // (My version is mine alone: a night's own setting must not ride along with it.)
+  const notationSource = $derived(
+    showingMyVersion && myNotation ? { ...tune, ...myNotation, setting_override: null } : tune
+  )
   const notation = $derived(notationSource ? notationInfo(notationSource) : null)
   const notationView = $derived(
     notationSource ? notationDisplay(notationSource, notationMode, notationSize) : null
@@ -378,7 +385,13 @@
 
   // The status segs (overall and per-instrument) speak the app's one status
   // vocabulary — see STATUS_LABELS in mylist.js.
-  const STATUS_OPTIONS = STATUSES.map((id) => ({ id, label: STATUS_LABELS[id] }))
+  // STATUS_LABELS is English (mylist.js); each word goes through a literal t() here.
+  const STATUS_WORDS = {
+    'want to learn': () => t('To Learn'),
+    learning: () => t('Learning'),
+    learned: () => t('Learned'),
+  }
+  const STATUS_OPTIONS = STATUSES.map((id) => ({ id, label: STATUS_WORDS[id] ? STATUS_WORDS[id]() : STATUS_LABELS[id] }))
 
   // Offline, the three override fields go read-only and Notes stays live — a phone in
   // a pub basement is exactly where someone types a note about a tune, and set_notes
@@ -388,56 +401,44 @@
   // DevicePixelRatio -> matchMedia, which jsdom doesn't have.
   const isOffline = $derived(!onlineNow)
 
-  const settingLabelFor = (value, originalId) => {
-    const v = (value || '').trim()
-    const same = (!v && !originalId) || extractSettingId(v) === originalId
-    return hasCachedNotation && same ? 'Refresh' : 'Fetch'
-  }
-  const pcFetchLabel = $derived(settingLabelFor(pcFields.setting, pcOriginals.setting_id || null))
-  const sessFetchLabel = $derived(settingLabelFor(sessFields.setting, sessOriginals.setting_id || null))
-  const dcFetchLabel = $derived(settingLabelFor(dcFields.setting, dcOriginals.setting_id || null))
-
   // The Configure Save button covers ONLY the fields that still batch-save behind it
-  // (name alias / setting / key). Notes and tags moved to the always-visible panel and
+  // (name alias / key; the setting saves from its chooser). Notes and tags moved to the always-visible panel and
   // auto-save on blur, so they no longer make this dirty.
   const pcDirty = $derived.by(() => {
     if (!tune || !onList) return false
     return (
       pcFields.name_alias !== pcOriginals.name_alias ||
-      extractSettingId(pcFields.setting) !== (pcOriginals.setting_id || null) ||
       pcFields.key !== pcOriginals.key
     )
   })
-  const pcSaveDisabled = $derived(!pcDirty || pcSaveState !== 'idle' || !!pcSettingError)
+  const pcSaveDisabled = $derived(!pcDirty || pcSaveState !== 'idle')
   const autoSaveLabel = $derived(
-    autoSaveState === 'saving' ? 'Saving…' : autoSaveState === 'saved' ? 'Saved ✓' : autoSaveState === 'error' ? "Couldn't save" : ''
+    autoSaveState === 'saving' ? t('Saving…') : autoSaveState === 'saved' ? t('Saved ✓') : autoSaveState === 'error' ? t("Couldn't save") : ''
   )
 
   const sessDirty = $derived.by(() => {
     if (!tune || !inSession) return false
     return (
       sessFields.alias !== sessOriginals.alias ||
-      extractSettingId(sessFields.setting) !== (sessOriginals.setting_id || null) ||
       sessFields.key !== sessOriginals.key
     )
   })
-  const sessSaveDisabled = $derived(!sessDirty || sessSaveState !== 'idle' || !!sessSettingError)
+  const sessSaveDisabled = $derived(!sessDirty || sessSaveState !== 'idle')
 
   const dcDirty = $derived.by(() => {
     if (!tune || !inSession) return false
     return (
       dcFields.alias !== dcOriginals.alias ||
-      extractSettingId(dcFields.setting) !== (dcOriginals.setting_id || null) ||
       dcFields.key !== dcOriginals.key
     )
   })
-  const dcSaveDisabled = $derived(!dcDirty || dcSaveState !== 'idle' || !!dcSettingError)
+  const dcSaveDisabled = $derived(!dcDirty || dcSaveState !== 'idle')
 
   const adminDirty = $derived(!!tune && adminFields.name !== adminOriginals.name)
   const adminSaveDisabled = $derived(!adminDirty || adminSaveState !== 'idle')
 
   const saveLabelFor = (s) =>
-    s === 'saving' ? 'Saving...' : s === 'saved' ? 'Saved!' : s === 'error' ? 'Error' : 'Save'
+    s === 'saving' ? t('Saving...') : s === 'saved' ? t('Saved!') : s === 'error' ? t('Error') : t('Save')
   const saveBgFor = (s) => (s === 'saved' ? '#28a745' : s === 'error' ? '#dc3545' : '')
 
   const playedWithOptions = $derived(playedWithScopeOptions(mode, scope, loggedIn))
@@ -461,10 +462,10 @@
   // tab — four is already the mobile ceiling.
   const showMyList = $derived(mode !== 'admin' && loggedIn)
   const tabList = $derived([
-    ...(showMyList ? [{ id: 'my-list', label: 'My List' }] : []),
-    { id: 'details', label: 'Details' },
-    { id: 'history', label: 'History' },
-    { id: 'played-with', label: 'Played With' },
+    ...(showMyList ? [{ id: 'my-list', label: t('My List') }] : []),
+    { id: 'details', label: t('Details') },
+    { id: 'history', label: t('History') },
+    { id: 'played-with', label: t('Played With') },
   ])
   const defaultTab = $derived(showMyList ? 'my-list' : 'history')
 
@@ -481,14 +482,12 @@
     }
     pcFields = {
       name_alias: pcOriginals.name_alias,
-      setting: String(pcOriginals.setting_id || ''),
       key: pcOriginals.key,
       notes: pcOriginals.notes,
       // Copy the array — TagInput reassigns pcFields.tags, and pcOriginals must
       // keep the pristine snapshot for the dirty-check.
       tags: [...pcOriginals.tags],
     }
-    pcSettingError = ''
     pcSaveState = 'idle'
     pcFetchState = 'idle'
   }
@@ -515,12 +514,9 @@
     }
     sessFields = {
       alias: sessOriginals.alias,
-      setting: String(sessOriginals.setting_id || ''),
       key: sessOriginals.key,
     }
-    sessSettingError = ''
     sessSaveState = 'idle'
-    sessFetchState = 'idle'
   }
 
   // Details config: always the session's own row (session_tune), never an instance —
@@ -534,12 +530,9 @@
     }
     dcFields = {
       alias: dcOriginals.alias,
-      setting: String(dcOriginals.setting_id || ''),
       key: dcOriginals.key,
     }
-    dcSettingError = ''
     dcSaveState = 'idle'
-    dcFetchState = 'idle'
   }
 
   function seedAdminForm() {
@@ -626,7 +619,7 @@
   // not-yet-synced ops (offlinePayload synthesizes the viewer/on-list facts) so
   // the drawer works without a connection.
   function renderTuneFromOffline(cfg, errMsg) {
-    const fail = () => showErr(errMsg || "Couldn't load this tune.", () => show(cfg))
+    const fail = () => showErr(errMsg || t("Couldn't load this tune."), () => show(cfg))
     if (!window.CeolOffline || !cfg.tuneId) {
       fail()
       return
@@ -652,6 +645,7 @@
   export function show(rawCfg) {
     const cfg = normalizeShowConfig(rawCfg)
     config = cfg
+    chooserOpen = false
     errorRetry = null
     adding = false
     mySessionsState = 'idle'
@@ -736,7 +730,7 @@
           config.tuneId = d.person_tune.tune_id
           applyPayload(personTunePayload(d.person_tune))
         } else {
-          showErr("Couldn't load this tune.", () => show(cfg))
+          showErr(t("Couldn't load this tune."), () => show(cfg))
         }
       })
       .catch((error) => {
@@ -745,7 +739,9 @@
         if (error.status === 404) {
           removeUrlTuneParam('my_tunes')
           showErr(
-            'This tunebook entry no longer exists — it may have been merged into another tune. Check your tunebook list for the merged tune.'
+            t(
+              'This tunebook entry no longer exists — it may have been merged into another tune. Check your tunebook list for the merged tune.'
+            )
           )
           return
         }
@@ -754,6 +750,7 @@
   }
 
   export function close() {
+    chooserOpen = false
     showCls = false
     pendingHeard = 0
     removeUrlTuneParam(mode)
@@ -788,8 +785,13 @@
     if (event.target === event.currentTarget) close()
   }
 
+  // Escape inside a sheet or dialog stacked on the drawer closes only that. This runs in
+  // the capture phase, before Bits' own Escape handling closes the sheet, so the check
+  // still sees it open.
   function onKeydown(event) {
-    if (event.key === 'Escape' && visible) close()
+    if (event.key !== 'Escape' || !visible) return
+    if (chooserOpen || sessionPickerOpen || removeMyTunesOpen || removeSessionOpen) return
+    close()
   }
 
   // ---- tunebook status control ------------------------------------------------------
@@ -855,7 +857,7 @@
       .catch((error) => {
         statusSaving = false
         applyUi(prevStatus, prevOverrides) // revert
-        toastFailure('change the status', error)
+        toastFailure(t('change the status'), error)
       })
   }
 
@@ -886,7 +888,7 @@
       (error) => {
         setInstrumentOverrides(tune, prev)
         notifyStatusChange()
-        toastFailure(`change the status for ${inst.instrument}`, error)
+        toastFailure(t('change the status for {instrument}', { instrument: instrumentName(inst.instrument) }), error)
       }
     )
   }
@@ -907,7 +909,7 @@
       (error) => {
         setInstrumentOverrides(tune, prev)
         notifyStatusChange()
-        toastFailure(`remove the tune from your ${inst.instrument} list`, error)
+        toastFailure(t('remove the tune from your {instrument} list', { instrument: instrumentName(inst.instrument) }), error)
       }
     )
   }
@@ -934,7 +936,7 @@
           // from — send the user to their list (where the queued add shows as
           // pending) and acknowledge with a toast there, exactly as before.
           try {
-            sessionStorage.setItem('myTunesToast', 'Added to your tunes. It will sync when you are back online.')
+            sessionStorage.setItem('myTunesToast', t('Added to your tunes. It will sync when you are back online.'))
           } catch (e) {}
           window.location.href = '/my-tunes'
           return
@@ -953,11 +955,11 @@
           })
           .catch((error) => {
             console.error('Added, but reloading the tune failed:', error)
-            toast('Added to your list.', 'success')
+            toast(t('Added to your list.'), 'success')
             show({ ...config, initialTab: keepTab })
           })
       })
-      .catch((error) => toastFailure('add the tune to your list', error))
+      .catch((error) => toastFailure(t('add the tune to your list'), error))
       .finally(() => {
         adding = false
       })
@@ -993,7 +995,7 @@
       .catch((error) => {
         setLocal(currentCount)
         pendingHeard = Math.max(0, pendingHeard - 1)
-        toastFailure('update the heard count', error)
+        toastFailure(t('update the heard count'), error)
       })
   }
 
@@ -1005,31 +1007,6 @@
   }
 
   // ---- configure section / save --------------------------------------------------------
-
-  // Every form has a setting input; each validates its own.
-  function validateSettingField(which) {
-    const form = which === 'session' ? sessFields : which === 'details' ? dcFields : pcFields
-    const setError = (msg) => {
-      if (which === 'session') sessSettingError = msg
-      else if (which === 'details') dcSettingError = msg
-      else pcSettingError = msg
-    }
-    const value = (form.setting || '').trim()
-    if (!value) {
-      setError('')
-      return
-    }
-    const validation = validateSettingInput(value, tune.tune_id)
-    if (!validation.valid) {
-      setError(validation.error)
-      return
-    }
-    setError('')
-    // A pasted thesession.org URL collapses to just the setting number.
-    if (validation.settingId !== null && value !== validation.settingId.toString()) {
-      form.setting = validation.settingId.toString()
-    }
-  }
 
   // ---- the setting-mismatch note ----------------------------------------------------
 
@@ -1066,7 +1043,7 @@
         notationMode = info.initialMode
         notationSize = 'incipit'
       })
-      .catch((error) => toastFailure('load your version of this tune', error))
+      .catch((error) => toastFailure(t('load your version of this tune'), error))
       .finally(() => {
         myVersionLoading = false
       })
@@ -1089,7 +1066,7 @@
 
   // ---- personal config (person_tune) ------------------------------------------------
 
-  // Configure Save: name alias / setting / key. These are read-only offline, so this
+  // Configure Save: name alias / key. These are read-only offline, so this
   // is an online-only PUT. Notes & tags are NOT here — they auto-save (autoSavePersonal).
   export function savePersonal() {
     if (!tune || !config || pcSaveDisabled || isOffline) return
@@ -1098,8 +1075,6 @@
 
     const updates = {}
     if (pcFields.name_alias !== pcOriginals.name_alias) updates.name_alias = pcFields.name_alias.trim() || null
-    const newSettingId = extractSettingId(pcFields.setting)
-    if (newSettingId !== (pcOriginals.setting_id || null)) updates.setting_id = newSettingId
     if (pcFields.key !== pcOriginals.key) updates.key = pcFields.key || null
     if (!Object.keys(updates).length) return
 
@@ -1117,24 +1092,21 @@
         // Reseed ONLY the config originals — leaving notes/tags in pcFields untouched so
         // an in-progress (or just-autosaved) edit there isn't clobbered.
         pcOriginals.name_alias = pcFields.name_alias
-        pcOriginals.setting_id = newSettingId || ''
         pcOriginals.key = pcFields.key
         if (config.onSave && typeof config.onSave === 'function') config.onSave(data)
         setTimeout(() => (pcSaveState = 'idle'), 1200)
       })
       .catch((error) => {
-        toastFailure('save your changes', error)
+        toastFailure(t('save your changes'), error)
         flashSaveState((s) => (pcSaveState = s), 'error')
       })
   }
 
-  // Cancel the Configure edits — reverts ONLY name/setting/key, never the
+  // Cancel the Configure edits — reverts ONLY name/key, never the
   // separately-auto-saved notes & tags.
   export function cancelConfigure() {
     pcFields.name_alias = pcOriginals.name_alias
-    pcFields.setting = String(pcOriginals.setting_id || '')
     pcFields.key = pcOriginals.key
-    pcSettingError = ''
     pcSaveState = 'idle'
     pcFetchState = 'idle'
   }
@@ -1166,7 +1138,7 @@
       }, 1200)
     }
     const onErr = (error) => {
-      toastFailure(field === 'notes' ? 'save your notes' : 'save your tags', error)
+      toastFailure(field === 'notes' ? t('save your notes') : t('save your tags'), error)
       flashSaveState((s) => (autoSaveState = s), 'error')
     }
 
@@ -1203,14 +1175,11 @@
     if (!endpoint) return
 
     const updates = {}
-    const newSettingId = extractSettingId(sessFields.setting)
     if (editingInstance) {
       if (sessFields.alias !== sessOriginals.alias) updates.name = sessFields.alias.trim() || null
-      if (newSettingId !== (sessOriginals.setting_id || null)) updates.setting_override = newSettingId
       if (sessFields.key !== sessOriginals.key) updates.key_override = sessFields.key || null
     } else {
       if (sessFields.alias !== sessOriginals.alias) updates.alias = sessFields.alias.trim() || null
-      if (newSettingId !== (sessOriginals.setting_id || null)) updates.setting_id = newSettingId
       if (sessFields.key !== sessOriginals.key) updates.key = sessFields.key || null
     }
     if (!Object.keys(updates).length) return
@@ -1244,7 +1213,7 @@
         setTimeout(() => (sessSaveState = 'idle'), 1200)
       })
       .catch((error) => {
-        toastFailure('save your changes', error)
+        toastFailure(t('save your changes'), error)
         flashSaveState((s) => (sessSaveState = s), 'error')
       })
   }
@@ -1257,9 +1226,7 @@
     if (!tune || !config || dcSaveDisabled || !canEditSessionGeneral) return
 
     const updates = {}
-    const newSettingId = extractSettingId(dcFields.setting)
     if (dcFields.alias !== dcOriginals.alias) updates.alias = dcFields.alias.trim() || null
-    if (newSettingId !== (dcOriginals.setting_id || null)) updates.setting_id = newSettingId
     if (dcFields.key !== dcOriginals.key) updates.key = dcFields.key || null
     if (!Object.keys(updates).length) return
 
@@ -1284,7 +1251,7 @@
         setTimeout(() => (dcSaveState = 'idle'), 1200)
       })
       .catch((error) => {
-        toastFailure('save your changes', error)
+        toastFailure(t('save your changes'), error)
         flashSaveState((s) => (dcSaveState = s), 'error')
       })
   }
@@ -1310,7 +1277,7 @@
       })
       .catch((error) => {
         mySessionsState = 'idle'
-        toastFailure('load your sessions', error)
+        toastFailure(t('load your sessions'), error)
       })
   }
 
@@ -1339,7 +1306,13 @@
       .catch((error) => {
         console.error('Error re-scoping to session:', error)
         const msg = error instanceof ServerError && error.message ? error.message : ''
-        showErr(msg || `Couldn't load this tune at ${session.name || 'that session'}.`, () => scopeToSession(session))
+        showErr(
+          msg ||
+            (session.name
+              ? t("Couldn't load this tune at {name}.", { name: session.name })
+              : t("Couldn't load this tune at that session.")),
+          () => scopeToSession(session)
+        )
       })
   }
 
@@ -1385,7 +1358,7 @@
   // not pass blanks off as "no overrides", so a failure hides it behind a Retry.
   function loadInstanceOverrides() {
     const requested = scopeId
-    sessFields = { alias: '', setting: '', key: '' }
+    sessFields = { alias: '', key: '' }
     sessOriginals = { alias: '', setting_id: '', key: '' }
     overridesError = false
     fetch(detailUrl(tune.tune_id, { session: sessionScope.path, instance: requested }))
@@ -1401,7 +1374,6 @@
         }
         sessFields = {
           alias: sessOriginals.alias,
-          setting: String(sessOriginals.setting_id || ''),
           key: sessOriginals.key,
         }
       })
@@ -1417,7 +1389,7 @@
     if (!tune || adminSaveDisabled) return
     const name = adminFields.name.trim()
     if (!name) {
-      toast('Tune name cannot be empty', 'error')
+      toast(t('Tune name cannot be empty'), 'error')
       return
     }
     adminSaveState = 'saving'
@@ -1437,133 +1409,230 @@
         setTimeout(() => (adminSaveState = 'idle'), 1200)
       })
       .catch((error) => {
-        toastFailure('save the tune name', error)
+        toastFailure(t('save the tune name'), error)
         flashSaveState((s) => (adminSaveState = s), 'error')
       })
   }
 
-  // Fetch and cache a setting from TheSession.org, persist the setting id to whichever
-  // form asked, then re-render with the fetched notation. Resolves true when notation
-  // was fetched (even if the setting-id save then warned), so generateNotation can
-  // surface failures its own way.
-  //
-  // `which` is 'personal' | 'session' | 'details' | 'none' — 'none' just caches the
-  // notation (Generate Notation for a viewer with no form to save into).
-  export function fetchSetting(which = 'personal') {
-    if (!tune) return Promise.resolve(false)
-    const usingSession = which === 'session'
-    const usingDetails = which === 'details'
-    const state = () => (usingSession ? sessFetchState : usingDetails ? dcFetchState : pcFetchState)
-    const setState = (v) =>
-      usingSession ? (sessFetchState = v) : usingDetails ? (dcFetchState = v) : (pcFetchState = v)
-    if (state() === 'loading') return Promise.resolve(false)
+  // Put a setting's notation on the staff — the abc and whichever images it has. Any
+  // "your version" view is dropped: the staff now shows what was just fetched or chosen.
+  function showNotation(n) {
+    showingMyVersion = false
+    myNotation = null
+    tune.abc = n.abc
+    tune.incipit_abc = n.incipit_abc
+    tune.image = n.image || null
+    tune.incipit_image = n.incipit_image || null
+    if (n.key !== undefined) tune.setting_key = n.key
+    notationMode = notationInfo(tune).initialMode
+    notationSize = 'incipit'
+  }
 
+  // Generate Notation: fetch and cache this tune's notation from TheSession.org, then
+  // draw it. For a tune on my list that is my setting (or, if I have none, the tune's
+  // first, which then becomes mine); otherwise it only caches the tune's first setting.
+  // Resolves true when notation was fetched (even if saving the setting then warned).
+  function fetchNotation() {
+    if (!tune || pcFetchState === 'loading') return Promise.resolve(false)
     const tuneId = tune.tune_id
-    const form = usingSession ? sessFields : usingDetails ? dcFields : pcFields
-    const settingIdValue = which === 'none' ? '' : (form.setting || '').trim()
-    setState('loading')
-
-    const feedback = (s) => {
-      setState(s)
-      setTimeout(() => {
-        if (state() === s) setState('idle')
-      }, 2000)
-    }
-
-    let apiUrl = `/api/tunes/${tuneId}/settings/cache`
+    const ptid = onList ? (pts && pts.person_tune_id) || config?.ptid : null
     const params = new URLSearchParams()
-    if (settingIdValue) {
-      const validation = validateSettingInput(settingIdValue, tuneId)
-      params.set('setting_id', String(validation.settingId || settingIdValue))
-    }
+    if (ptid && pcOriginals.setting_id) params.set('setting_id', String(pcOriginals.setting_id))
     // A signed-out viewer's authority to make this one call. Harmless to send when
     // signed in; the server prefers the session.
     if (notationToken) params.set('token', notationToken)
-    if ([...params].length) apiUrl += `?${params}`
-
-    // Where the chosen setting id gets persisted. Personal writes person_tune; session
-    // writes whichever layer the droplist points at; 'none' writes nowhere.
-    const target = () => {
-      if (which === 'none') return null
-      if (usingSession) {
-        const endpoint = sessionEndpoint()
-        if (!endpoint || !canEditSessionLayer) return null
-        return { endpoint, body: (id) => (editingInstance ? { setting_override: id } : { setting_id: id }) }
-      }
-      if (usingDetails) {
-        if (!canEditSessionGeneral) return null
-        return {
-          endpoint: `/api/sessions/${sessionScope.path}/tunes/${tuneId}`,
-          body: (id) => ({ setting_id: id }),
-        }
-      }
-      const ptid = (pts && pts.person_tune_id) || config?.ptid
-      if (!ptid) return null
-      return { endpoint: `/api/my-tunes/${ptid}`, body: (id) => ({ setting_id: id }) }
+    const query = params.toString()
+    pcFetchState = 'loading'
+    const feedback = (st) => {
+      pcFetchState = st
+      setTimeout(() => {
+        if (pcFetchState === st) pcFetchState = 'idle'
+      }, 2000)
     }
 
-    return fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+    return fetch(`/api/tunes/${tuneId}/settings/cache${query ? `?${query}` : ''}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    })
       .then((response) => response.json())
       .then((data) => {
         if (!data.success) {
-          toastFailure('get the notation from thesession.org', new ServerError(data.message || data.error))
+          toastFailure(t('get the notation from thesession.org'), new ServerError(data.message || data.error))
           feedback('err')
           return false
         }
+        showNotation(data.setting)
         const fetchedSettingId = data.setting.setting_id
-        // The staff always shows what was just fetched, so drop any "my version" view.
-        showingMyVersion = false
-        myNotation = null
-        tune.abc = data.setting.abc
-        tune.incipit_abc = data.setting.incipit_abc
-        tune.image = data.setting.image
-        tune.incipit_image = data.setting.incipit_image
-        const info = notationInfo(tune)
-        notationMode = info.initialMode
-        notationSize = 'incipit'
-
-        const t = target()
-        if (!t) {
+        if (!ptid || fetchedSettingId === pcOriginals.setting_id) {
           feedback('ok')
           return true
         }
-        const body = t.body(fetchedSettingId)
-        return fetch(t.endpoint, {
+        return fetch(`/api/my-tunes/${ptid}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
+          body: JSON.stringify({ setting_id: fetchedSettingId }),
         })
           .then((response) => response.json())
           .then((saveData) => {
-            if (saveData.success) {
-              if (usingSession || usingDetails) {
-                Object.assign(tune, body)
-                seedSessionForm()
-                seedDetailsForm()
-              } else {
-                if (tune.person_tune_status) Object.assign(tune.person_tune_status, body)
-                seedPersonalForm()
-              }
-              feedback('ok')
-            } else {
-              console.error('Error saving setting_id:', saveData.error || saveData.message)
-              toast("Got the notation, but couldn't save the setting. Try again.", 'error')
-              feedback('warn')
-            }
+            if (!saveData.success) throw new ServerError(saveData.error || saveData.message)
+            if (pts) pts.setting_id = fetchedSettingId
+            pcOriginals.setting_id = fetchedSettingId
+            feedback('ok')
             return true
           })
           .catch((error) => {
             console.error('Error saving setting_id:', error)
-            toast("Got the notation, but couldn't save the setting. Check your connection and try again.", 'error')
+            toast(t("Got the notation, but couldn't save the setting. Try again."), 'error')
             feedback('warn')
             return true
           })
       })
       .catch((error) => {
-        toastFailure('get the notation from thesession.org', error)
+        toastFailure(t('get the notation from thesession.org'), error)
         feedback('err')
         return false
       })
+  }
+
+  // ---- the setting chooser ------------------------------------------------------------
+  // Which written version a layer plays is picked by looking at them, not by typing a
+  // setting number: the chooser pages every setting of the tune with its full notation.
+  // It opens for one layer — mine, the session's, or one night's — and the pick saves
+  // at once, on its own, like the learn status (not behind a form's Save).
+  let chooserOpen = $state(false)
+  let chooserLayer = $state(null) // {kind: 'personal' | 'session' | 'instance', instanceId?}
+
+  // The link under the staff offers the layer the drawer is looking at: on my list, my
+  // version; at a session, the session's; on one night, that night's.
+  const viewLayer = $derived.by(() => {
+    if (!tune || !loggedIn || isOffline) return null
+    if (mode === 'session_instance') {
+      const instanceId = sessionScope?.instance
+      const playedThatNight = playedInstances.some((i) => String(i.session_instance_id) === String(instanceId))
+      return playedThatNight && sessionScope?.can_edit_instance ? { kind: 'instance', instanceId } : null
+    }
+    if (mode === 'session') return sessionScope?.can_edit_session ? { kind: 'session' } : null
+    if (mode === 'my_tunes') return { kind: 'personal' }
+    return null
+  })
+  const viewLayerPrompt = $derived(
+    !viewLayer
+      ? ''
+      : viewLayer.kind === 'personal'
+        ? t('I play a different version')
+        : viewLayer.kind === 'session'
+          ? t('We play a different version')
+          : t('We played a different version on this night')
+  )
+
+  const isScopedInstance = (instanceId) => String(instanceId) === String(sessionScope?.instance ?? '')
+
+  // The setting a layer uses now — where the chooser opens, and the one it marks in use.
+  // A night with no setting of its own played the session's.
+  function layerSettingId(layer) {
+    if (!tune || !layer) return null
+    if (layer.kind === 'personal') return (pts && pts.setting_id) || (inSession ? null : tune.setting_id) || null
+    if (layer.kind === 'session') return tune.setting_id || null
+    const own = isScopedInstance(layer.instanceId)
+      ? tune.setting_override
+      : editingInstance && String(scopeId) === String(layer.instanceId)
+        ? sessOriginals.setting_id
+        : null
+    return own || tune.setting_id || null
+  }
+  const chooserHeading = $derived(
+    !chooserLayer
+      ? ''
+      : chooserLayer.kind === 'personal'
+        ? t('Which version do you play?')
+        : chooserLayer.kind === 'session'
+          ? t('Which version does {name} play?', { name: sessionLabel })
+          : t('Which version was played that night?')
+  )
+
+  export function openChooser(layer) {
+    if (!tune || !layer || isOffline) return
+    chooserLayer = layer
+    chooserOpen = true
+  }
+
+  // Where a layer's setting is written. Mine goes through the tunebook op (as the iOS
+  // app's does); the session's and a night's through their own rows.
+  function settingWrite(layer, tuneId, settingId) {
+    if (layer.kind === 'personal') {
+      return {
+        method: 'POST',
+        endpoint: '/api/my-tunes/ops',
+        body: { op_id: crypto.randomUUID(), type: 'set_setting', tune_id: tuneId, setting_id: settingId },
+      }
+    }
+    const path = sessionScope.path
+    if (layer.kind === 'session') {
+      return { method: 'PUT', endpoint: `/api/sessions/${path}/tunes/${tuneId}`, body: { setting_id: settingId } }
+    }
+    return {
+      method: 'PUT',
+      endpoint: `/api/sessions/${path}/${layer.instanceId}/tunes/${tuneId}`,
+      body: { setting_override: settingId },
+    }
+  }
+
+  // The chooser's pick: write it to the layer, then mirror it here. A setting only
+  // thesession.org has is imported by the server on the way (nothing may point at a
+  // setting we don't hold); its opening bars then render on first view. Resolves true
+  // when saved, which closes the chooser.
+  async function chooseSetting(setting, fullImage) {
+    const layer = chooserLayer
+    if (!tune || !layer) return false
+    const { method, endpoint, body } = settingWrite(layer, tune.tune_id, setting.setting_id)
+    try {
+      const res = await fetch(endpoint, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const data = await res.json()
+      if (!data.success) throw new ServerError(data.message || data.error)
+      applyChosenSetting(layer, setting.setting_id, {
+        abc: setting.abc,
+        incipit_abc: setting.incipit_abc,
+        incipit_image: setting.incipit_image || null,
+        image: fullImage || null,
+        key: setting.key,
+      })
+      if (config?.onSave && typeof config.onSave === 'function') config.onSave(data)
+      return true
+    } catch (error) {
+      toastFailure(t('change the setting'), error)
+      return false
+    }
+  }
+
+  // Mirror a saved pick onto the payload and the forms, and redraw the staff when it
+  // draws from the layer that changed (instance -> session -> mine, most specific wins).
+  function applyChosenSetting(layer, settingId, notation) {
+    let drawn = false
+    if (layer.kind === 'personal') {
+      if (pts) pts.setting_id = settingId
+      pcOriginals.setting_id = settingId
+      if (!inSession) {
+        tune.setting_id = settingId
+        drawn = true
+      }
+    } else if (layer.kind === 'session') {
+      tune.setting_id = settingId
+      dcOriginals.setting_id = settingId
+      if (!editingInstance) sessOriginals.setting_id = settingId
+      if (tune.session_scope) tune.session_scope.in_repertoire = true
+      drawn = !tune.setting_override
+    } else {
+      if (isScopedInstance(layer.instanceId)) {
+        tune.setting_override = settingId
+        drawn = true
+      }
+      if (editingInstance && String(scopeId) === String(layer.instanceId)) sessOriginals.setting_id = settingId
+    }
+    if (drawn) showNotation(notation)
   }
 
   // ---- lazy notation render ------------------------------------------------------
@@ -1585,7 +1654,7 @@
   }
   // Write a freshly rendered PNG back into whichever block the view is reading from.
   function patchNotationImage(settingId, field, value) {
-    if (tune && tune.setting_id === settingId) tune[field] = value
+    if (tune && (tune.setting_override || tune.setting_id) === settingId) tune[field] = value
     if (myNotation && myNotation.setting_id === settingId) myNotation = { ...myNotation, [field]: value }
   }
   async function renderMissingNotation(settingId) {
@@ -1605,7 +1674,8 @@
   $effect(() => {
     if (!visible || !loggedIn || isOffline) return
     const src = notationSource
-    const settingId = src?.setting_id
+    // The setting drawn: a night's own, else the one under it.
+    const settingId = src?.setting_override || src?.setting_id
     if (settingId == null) return
     // Only when there's something to render and nothing rendered yet.
     if (src.incipit_image || !(src.incipit_abc || src.abc)) return
@@ -1614,12 +1684,11 @@
     untrack(() => renderMissingNotation(settingId))
   })
 
-  // "Generate Notation" (shown in the notation area when nothing is cached): the SAME
-  // action as a form's Fetch/Refresh button. It saves the setting to my list when I
-  // have one, and otherwise just caches the notation.
+  // "Generate Notation" (shown in the notation area when nothing is cached). It saves
+  // the setting to my list when I have one, and otherwise just caches the notation.
   export function generateNotation() {
-    // fetchSetting has already said what went wrong when it resolves false.
-    fetchSetting(onList ? 'personal' : 'none').then((ok) => {
+    // fetchNotation has already said what went wrong when it resolves false.
+    fetchNotation().then((ok) => {
       if (!ok) return
       // If the fetch produced a rendered image, show the dots the user asked
       // for instead of leaving them on the abc text view.
@@ -1641,7 +1710,7 @@
   function doRemoveFromMyTunes() {
     const personTuneId = (pts && pts.person_tune_id) || config?.ptid
     if (!personTuneId) {
-      toast('Unable to remove tune', 'error')
+      toast(t('Unable to remove tune'), 'error')
       return
     }
     // Returned so the Dialog stays open, its confirm busy, until the server answers.
@@ -1654,7 +1723,7 @@
         close()
       })
       .catch((error) => {
-        toastFailure('remove the tune from your list', error)
+        toastFailure(t('remove the tune from your list'), error)
         return false
       })
   }
@@ -1667,7 +1736,7 @@
     const sessionPath = scope?.session
     const tuneId = tune?.tune_id
     if (!sessionPath || !tuneId) {
-      toast('Unable to remove tune from session', 'error')
+      toast(t('Unable to remove tune from session'), 'error')
       return
     }
     return fetch(`/api/sessions/${sessionPath}/tunes/${tuneId}`, { method: 'DELETE' })
@@ -1679,7 +1748,7 @@
         close()
       })
       .catch((error) => {
-        toastFailure('remove the tune from the session', error)
+        toastFailure(t('remove the tune from the session'), error)
         return false
       })
   }
@@ -1706,12 +1775,12 @@
           refreshState = 'ok'
         } else {
           refreshState = 'err'
-          toastFailure('refresh the count', new ServerError(data.error || data.message))
+          toastFailure(t('refresh the count'), new ServerError(data.error || data.message))
         }
       })
       .catch((error) => {
         refreshState = 'err'
-        toastFailure('refresh the count', error)
+        toastFailure(t('refresh the count'), error)
       })
       .finally(() => {
         setTimeout(() => {
@@ -1858,11 +1927,48 @@
     if (notation?.canToggleSize) toggleNotationSize()
   }
 
-  const plural = (n, word) => (n === 1 ? word : word + 's')
   const tunebookCountView = $derived(tune ? tune.tunebook_count || tune.tunebook_count_cached || 0 : 0)
+
+  // A sentence whose number (or link) sits in its own element: t()/tn() fill the
+  // placeholder with MARK, and the sentence is split around it, so the element lands
+  // wherever the language puts it. tn() still picks the plural form by the real count.
+  const MARK = '\u0000'
+  function around(text) {
+    const i = text.indexOf(MARK)
+    return i < 0 ? [text, ''] : [text.slice(0, i), text.slice(i + MARK.length)]
+  }
+  const heardLine = $derived(
+    around(tn(heardCountView, "You've heard this {n} time", "You've heard this {n} times", { n: MARK }))
+  )
+  const listCountLine = $derived(
+    around(tn(tune?.person_list_count || 0, 'Saved in {n} tune list on Ceol.io', 'Saved in {n} tune lists on Ceol.io', { n: MARK }))
+  )
+  const tunebookLine = $derived(
+    around(tn(tunebookCountView, 'Saved in {n} tunebook on TheSession.org', 'Saved in {n} tunebooks on TheSession.org', { n: MARK }))
+  )
+  const loggedHereLine = $derived(
+    around(tn(tune?.times_played || 0, 'Logged {n} time at this session', 'Logged {n} times at this session', { n: MARK }))
+  )
+  const loggedMineLine = $derived(
+    around(tn(myPlayCount, 'Logged {n} time at my sessions', 'Logged {n} times at my sessions', { n: MARK }))
+  )
+  const loggedThereLine = $derived(
+    around(tn(myAttendedCount, 'Logged {n} time while I was there', 'Logged {n} times while I was there', { n: MARK }))
+  )
+  const loggedAllLine = $derived(
+    around(tn(tune?.global_play_count || 0, 'Logged {n} time at all sessions', 'Logged {n} times at all sessions', { n: MARK }))
+  )
+  const repertoireLine = $derived(
+    around(tn(tune?.session_count || 0, 'In the repertoire of {n} session', 'In the repertoire of {n} sessions', { n: MARK }))
+  )
+  const mergedLine = $derived(
+    around(t("Tune #{old} was merged into {link} (#{id}) — you're viewing the merged tune.", { old: mergedFrom, link: MARK, id: tune?.tune_id }))
+  )
+  const mismatchMine = $derived(around(t('{name} plays a different one.', { name: MARK })))
+  const mismatchTheirs = $derived(around(t('{link} differs.', { link: MARK })))
 </script>
 
-<svelte:window onkeydown={onKeydown} />
+<svelte:window onkeydowncapture={onKeydown} />
 
 <!-- Inline display:none is a safety default (matches the legacy container partial):
      a page with its own `.modal-overlay { display: … }` rule can't reveal it. -->
@@ -1880,32 +1986,32 @@
           <tbody>
             <tr>
               {#if config?.tuneType}
-                <td class="modal-header-pill-cell"><Chip label={config.tuneType} styled={false} chipClass="tune-type-pill" /></td>
+                <td class="modal-header-pill-cell"><Chip label={typeLabel(config.tuneType)} styled={false} chipClass="tune-type-pill" /></td>
               {/if}
               <td class="modal-header-title-cell">
-                <h2 class="modal-tune-title">{config?.tuneName || 'Loading...'}</h2>
+                <h2 class="modal-tune-title">{config?.tuneName || t('Loading...')}</h2>
               </td>
               <td class="modal-header-spacer-cell"></td>
               <td class="modal-header-close-cell">
-                <button class="modal-close-btn" onclick={close} title="Close">&times;</button>
+                <button class="modal-close-btn" onclick={close} title={t('Close')}>×</button>
               </td>
             </tr>
           </tbody>
         </table>
         <div class="modal-loading">
           <div class="loading-spinner"></div>
-          <p>Loading tune details...</p>
+          <p>{t('Loading tune details...')}</p>
         </div>
       {:else if phase === 'error'}
         <table class="modal-header-section">
           <tbody>
             <tr>
               <td class="modal-header-title-cell">
-                <h2 class="modal-tune-title">Error</h2>
+                <h2 class="modal-tune-title">{t('Error')}</h2>
               </td>
               <td class="modal-header-spacer-cell"></td>
               <td class="modal-header-close-cell">
-                <button class="modal-close-btn" onclick={close} title="Close">&times;</button>
+                <button class="modal-close-btn" onclick={close} title={t('Close')}>×</button>
               </td>
             </tr>
           </tbody>
@@ -1922,7 +2028,7 @@
           <LoadError
             class="tune-saved-copy"
             inline
-            message={isOffline ? "You're offline, so this is your saved copy of the tune." : "Couldn't load the latest for this tune, so this is your saved copy."}
+            message={isOffline ? t("You're offline, so this is your saved copy of the tune.") : t("Couldn't load the latest for this tune, so this is your saved copy.")}
             onRetry={isOffline ? null : () => show(config)} />
         {/if}
         {#if mergedFrom != null}
@@ -1931,14 +2037,13 @@
             class="tune-merged-notice"
             style="background: var(--input-bg, #f8f9fa); border: 1px solid var(--border-color, #dee2e6); border-radius: 6px; padding: 0.5rem 0.75rem; margin-bottom: 0.75rem; font-size: 0.85rem; color: var(--secondary-text, #6c757d);"
           >
-            Tune #{mergedFrom} was merged into
-            <a
+            {mergedLine[0]}<a
               href={tuneHref(tune.tune_id, 'global')}
               onclick={(e) => {
                 e.preventDefault()
                 openPlayedWithTune({ tune_id: tune.tune_id, name: tune.tune_name || tune.name })
               }}>"{tune.tune_name || tune.name || `#${tune.tune_id}`}"</a
-            > (#{tune.tune_id}) — you're viewing the merged tune.
+            >{mergedLine[1]}
           </div>
         {/if}
 
@@ -1947,7 +2052,7 @@
           <tbody>
             <tr>
               {#if headerTuneType}
-                <td class="modal-header-pill-cell"><Chip label={headerTuneType} styled={false} chipClass="tune-type-pill" /></td>
+                <td class="modal-header-pill-cell"><Chip label={typeLabel(headerTuneType)} styled={false} chipClass="tune-type-pill" /></td>
               {/if}
               <td class="modal-header-title-cell">
                 <!-- The title is NOT clickable any more: expanding a config panel by
@@ -1955,12 +2060,12 @@
                      in the status block's action row. -->
                 <h2 class="modal-tune-title">{displayName}</h2>
                 {#if akaName}
-                  <div class="modal-tune-aka">aka {akaName}</div>
+                  <div class="modal-tune-aka">{t('aka {name}', { name: akaName })}</div>
                 {/if}
               </td>
               <td class="modal-header-spacer-cell"></td>
               <td class="modal-header-close-cell">
-                <button class="modal-close-btn" onclick={close} title="Close">&times;</button>
+                <button class="modal-close-btn" onclick={close} title={t('Close')}>×</button>
               </td>
             </tr>
           </tbody>
@@ -1971,7 +2076,7 @@
           <div class="active-session-log-section">
             <button class="active-session-log-btn" onclick={logToActiveSession}>
               <span class="active-session-log-dot"></span>
-              Log to {activeSess.session_name || 'the current session'}
+              {activeSess.session_name ? t('Log to {name}', { name: activeSess.session_name }) : t('Log to the current session')}
             </button>
           </div>
         {/if}
@@ -1988,14 +2093,14 @@
               class="abc-notation-display{notation.canToggleSize ? ' abc-notation-clickable' : ''}"
               data-current-mode={notationMode}
               data-current-size={notationSize}
-              title={notation.canToggleSize ? 'Click to toggle between incipit and full notation' : undefined}
+              title={notation.canToggleSize ? t('Click to toggle between incipit and full notation') : undefined}
               onclick={onNotationClick}
             >
               {#if notationView}
                 {#if notationView.kind === 'img'}
                   <img
                     src="data:image/png;base64,{notationView.src}"
-                    alt="{notationView.size === 'incipit' ? 'Incipit' : 'Full'} notation"
+                    alt={notationView.size === 'incipit' ? t('Incipit notation') : t('Full notation')}
                     class="abc-notation-image abc-notation-{notationView.size}"
                   />
                 {:else}
@@ -2014,7 +2119,7 @@
                       switchNotationMode('dots')
                     }}
                   >
-                    notes
+                    {t('notes')}
                   </button>
                   <button
                     class="notation-mode-tab {notationMode === 'abc' ? 'active' : ''}"
@@ -2024,7 +2129,7 @@
                       switchNotationMode('abc')
                     }}
                   >
-                    abc
+                    {t('abc')}
                   </button>
                 {:else if notation.hasAbc && !notation.hasDots && canGenerateNotation}
                   <!-- abc text is cached but no rendered staff image: offer to
@@ -2038,7 +2143,7 @@
                     }}
                     disabled={pcFetchState === 'loading'}
                   >
-                    {pcFetchState === 'loading' ? 'Generating notation…' : 'Generate Notation'}
+                    {pcFetchState === 'loading' ? t('Generating notation…') : t('Generate Notation')}
                   </button>
                 {/if}
               </div>
@@ -2047,14 +2152,14 @@
                     href={thesessionLink}
                     target="_blank"
                     class="notation-external-link"
-                    title="View on TheSession.org"
-                    onclick={(e) => e.stopPropagation()}>thesession</a
+                    title={t('View on TheSession.org')}
+                    onclick={(e) => e.stopPropagation()}>{'thesession'}</a
                   >{/if}{#if abctoolsLink}<a
                     href={abctoolsLink}
                     target="_blank"
                     class="notation-external-link"
-                    title="View in ABC Tools"
-                    onclick={(e) => e.stopPropagation()}>abc-tools</a
+                    title={t('View in ABC Tools')}
+                    onclick={(e) => e.stopPropagation()}>{'abc-tools'}</a
                   >{/if}
               </div>
             </div>
@@ -2064,15 +2169,15 @@
             {#if settingMismatch}
               <div class="notation-mismatch">
                 {#if showingMyVersion}
-                  Showing your version.
-                  <button type="button" class="notation-mismatch-link" onclick={toggleMyVersion}
+                  {t('Showing your version.')}
+                  {mismatchMine[0]}<button type="button" class="notation-mismatch-link" onclick={toggleMyVersion}
                     >{sessionLabel}</button
-                  > plays a different one.
+                  >{mismatchMine[1]}
                 {:else}
-                  This is the version {sessionLabel} plays.
-                  <button type="button" class="notation-mismatch-link" onclick={toggleMyVersion} disabled={myVersionLoading}
-                    >{myVersionLoading ? 'Loading your version…' : 'Your personal version'}</button
-                  > differs.
+                  {t('This is the version {name} plays.', { name: sessionLabel })}
+                  {mismatchTheirs[0]}<button type="button" class="notation-mismatch-link" onclick={toggleMyVersion} disabled={myVersionLoading}
+                    >{myVersionLoading ? t('Loading your version…') : t('Your personal version')}</button
+                  >{mismatchTheirs[1]}
                 {/if}
               </div>
             {/if}
@@ -2086,8 +2191,16 @@
               onclick={generateNotation}
               disabled={pcFetchState === 'loading'}
             >
-              {pcFetchState === 'loading' ? 'Generating notation…' : 'Generate Notation'}
+              {pcFetchState === 'loading' ? t('Generating notation…') : t('Generate Notation')}
             </button>
+          </div>
+        {/if}
+        {#if viewLayer}
+          <div class="notation-change-setting">
+            {viewLayerPrompt}
+            <button type="button" class="change-setting-btn" onclick={() => openChooser(viewLayer)}
+              >{t('Change Setting')}</button
+            >
           </div>
         {/if}
 
@@ -2097,10 +2210,10 @@
         {#snippet myListPane()}
           {#if !onList}
             <div class="tunebook-status-section tunebook-status-not-on-list">
-              <div class="tunebook-status-seg tsc-notlist-seg" role="group" aria-label="Status">
-                <span class="tunebook-status-opt tsc-notlist-label">This tune is not on your list</span>
+              <div class="tunebook-status-seg tsc-notlist-seg" role="group" aria-label={t('Status')}>
+                <span class="tunebook-status-opt tsc-notlist-label">{t('This tune is not on your list')}</span>
                 <button type="button" class="tunebook-status-opt tsc-notlist-add" onclick={addToTunebook} disabled={adding}
-                  >{adding ? 'Adding…' : 'Add'}</button
+                  >{adding ? t('Adding…') : t('Add')}</button
                 >
               </div>
             </div>
@@ -2108,7 +2221,7 @@
             <div class="tunebook-status-section tunebook-status-{rollup.replace(/ /g, '-')}">
               <div class="tsc-block tsc-main-block">
                 <div class="tsc-label-line">
-                  <span class="tsc-name tunebook-status-label">This tune is on your list as</span>
+                  <span class="tsc-name tunebook-status-label">{t('This tune is on your list as')}</span>
                 </div>
                 <Seg
                   options={STATUS_OPTIONS}
@@ -2118,14 +2231,14 @@
                   segClass="tunebook-status-seg{statusSaving ? ' saving' : ''}"
                   optClass="tunebook-status-opt"
                   role="group"
-                  aria-label="Status"
+                  aria-label={t('Status')}
                   onSelect={setTunebookStatus} />
               </div>
               <!-- Per-instrument toggle, centered right under the roll-up so the status
                    box stays compact. Configure/Remove moved to the notes & tags panel. -->
               {#if multiInstrument}
                 <button type="button" class="tsc-expand-link tsc-expand-center" onclick={toggleStatusExpand}>
-                  {piExpanded ? 'Hide Instruments' : 'View By Instrument'}
+                  {piExpanded ? t('Hide Instruments') : t('View By Instrument')}
                 </button>
               {/if}
               {#if multiInstrument && piExpanded}
@@ -2135,22 +2248,22 @@
                     <div class="tsc-block tsc-inst-block">
                       <div class="tsc-label-line">
                         <span class="tsc-name"
-                          >{inst.instrument}{#if !inst.is_auto}
-                            <Chip label="manual" styled={false} chipClass="tsc-manual" />{/if}</span
+                          >{instrumentName(inst.instrument)}{#if !inst.is_auto}
+                            <Chip label={t('manual')} styled={false} chipClass="tsc-manual" />{/if}</span
                         >
                         {#if !inst.is_auto && st !== null}
                           <button type="button" class="tsc-remove" onclick={() => removeInstrumentTune(i)}
-                            >× remove</button
+                            >× {t('remove')}</button
                           >
                         {/if}
                       </div>
                       {#if st === null}
-                        <div class="tunebook-status-seg tsc-notlist-seg" role="group" aria-label="Status">
-                          <span class="tunebook-status-opt tsc-notlist-label">This tune is not on your list</span>
+                        <div class="tunebook-status-seg tsc-notlist-seg" role="group" aria-label={t('Status')}>
+                          <span class="tunebook-status-opt tsc-notlist-label">{t('This tune is not on your list')}</span>
                           <button
                             type="button"
                             class="tunebook-status-opt tsc-notlist-add"
-                            onclick={() => setInstrumentStatus(i, 'want to learn')}>Add</button
+                            onclick={() => setInstrumentStatus(i, 'want to learn')}>{t('Add')}</button
                           >
                         </div>
                       {:else}
@@ -2162,7 +2275,7 @@
                           segClass="tunebook-status-seg"
                           optClass="tunebook-status-opt"
                           role="group"
-                          aria-label="Status"
+                          aria-label={t('Status')}
                           onSelect={(val) => setInstrumentStatus(i, val)} />
                       {/if}
                     </div>
@@ -2184,9 +2297,7 @@
               {#if heardVisible}
                 <div class="heard-count-section">
                   <div class="heard-count-label">
-                    You've heard this <span id="heard-count-value">{heardCountView}</span> time{heardCountView !== 1
-                      ? 's'
-                      : ''}
+                    {heardLine[0]}<span id="heard-count-value">{heardCountView}</span>{heardLine[1]}
                   </div>
                   <div class="heard-count-controls">
                     <span class="heard-count-spinner" style="display: {pendingHeard > 0 ? 'inline-block' : 'none'};">
@@ -2207,8 +2318,8 @@
                 <textarea
                   id="notes-textarea"
                   class="notes-textarea"
-                  aria-label="My notes"
-                  placeholder="Enter notes here"
+                  aria-label={t('My notes')}
+                  placeholder={t('Enter notes here')}
                   bind:value={pcFields.notes}
                   onblur={() => autoSavePersonal('notes')}
                 ></textarea>
@@ -2219,7 +2330,7 @@
                   bind:tags={pcFields.tags}
                   normalize={normalizeTag}
                   onblur={() => autoSavePersonal('tags')}
-                  placeholder="Add tags — space or enter…"
+                  placeholder={t('Add tags — space or enter…')}
                 />
               </div>
 
@@ -2231,11 +2342,11 @@
                     aria-expanded={isConfigVisible}
                     onclick={toggleConfigSection}
                   >
-                    <Chevron class="tsc-caret" dir={isConfigVisible ? "down" : "right"} size={14} />Configure
+                    <Chevron class="tsc-caret" dir={isConfigVisible ? "down" : "right"} size={14} />{t('Configure')}
                   </button>
                 </span>
                 <button type="button" class="tsc-action-link tsc-action-danger" onclick={removeFromMyTunes}>
-                  Remove From My Tunes
+                  {t('Remove From My Tunes')}
                 </button>
               </div>
 
@@ -2244,7 +2355,7 @@
               {#if isConfigVisible}
                 <div id="configure-section" class="configure-section tsc-config-body">
                   <div class="configure-field-group-inline">
-                    <label class="configure-label" for="name-alias-input">I call this:</label>
+                    <label class="configure-label" for="name-alias-input">{t('I call this:')}</label>
                     <input
                       type="text"
                       id="name-alias-input"
@@ -2253,50 +2364,25 @@
                       autocorrect="off"
                       autocapitalize="off"
                       spellcheck="false"
-                      placeholder={tune.tune_name || 'Enter your name for this tune'}
+                      placeholder={tune.tune_name || t('Enter your name for this tune')}
                       disabled={isOffline}
                       bind:value={pcFields.name_alias}
                     />
                   </div>
                   <div class="configure-field-group-inline">
-                    <label class="configure-label" for="setting-input">I play setting:</label>
-                    <div class="input-with-button">
-                      <input
-                        type="text"
-                        id="setting-input"
-                        class="configure-input"
-                        autocomplete="off"
-                        autocorrect="off"
-                        autocapitalize="off"
-                        spellcheck="false"
-                        placeholder="e.g., 123 or paste URL"
-                        style:border-color={pcSettingError ? '#dc3545' : ''}
-                        disabled={isOffline}
-                        bind:value={pcFields.setting}
-                        oninput={() => validateSettingField('personal')}
-                      />
+                    <div class="configure-label">{t('I play setting:')}</div>
+                    <div class="configure-value setting-value" id="setting-value">
+                      {pcOriginals.setting_id ? `#${pcOriginals.setting_id}` : '—'}
                       <button
                         type="button"
-                        class="fetch-setting-btn{pcFetchState === 'loading' ? ' fetch-setting-btn-loading' : ''}"
-                        onclick={() => fetchSetting('personal')}
-                        disabled={pcFetchState !== 'idle' || isOffline}
-                        style:background-color={pcFetchState === 'ok' ? '#28a745' : pcFetchState === 'warn' ? '#f0ad4e' : pcFetchState === 'err' ? '#dc3545' : ''}
-                        style:color={pcFetchState === 'ok' || pcFetchState === 'warn' || pcFetchState === 'err' ? 'white' : ''}
-                        title="Fetch setting from TheSession.org"
+                        class="change-setting-btn"
+                        disabled={isOffline}
+                        onclick={() => openChooser({ kind: 'personal' })}>{t('Change')}</button
                       >
-                        {#if pcFetchState === 'loading'}<span class="fetch-setting-spinner"></span>
-                        {:else if pcFetchState === 'ok'}✓
-                        {:else if pcFetchState === 'warn'}⚠
-                        {:else if pcFetchState === 'err'}✗
-                        {:else}{pcFetchLabel}{/if}
-                      </button>
                     </div>
                   </div>
-                  <div id="setting-error" class="field-error" style="display: {pcSettingError ? 'block' : 'none'};">
-                    {pcSettingError}
-                  </div>
                   <div class="configure-field-group-inline">
-                    <label class="configure-label" for="my-key-select">I play this in:</label>
+                    <label class="configure-label" for="my-key-select">{t('I play this in:')}</label>
                     <select
                       id="my-key-select"
                       class="configure-select"
@@ -2305,16 +2391,16 @@
                     >
                       {#each MUSICAL_KEYS as key}
                         <option value={key}
-                          >{key || (tune.setting_key ? `(the setting's key — ${tune.setting_key})` : '(not specified)')}</option
+                          >{key || settingKeyLabel}</option
                         >
                       {/each}
                     </select>
                   </div>
                   <div class="modal-action-buttons">
                     {#if isOffline}
-                      <span class="tsc-offline-hint">Offline — these can't be edited (notes &amp; tags still can)</span>
+                      <span class="tsc-offline-hint">{t("Offline — these can't be edited (notes & tags still can)")}</span>
                     {/if}
-                    <button class="btn-secondary" onclick={cancelConfigure} disabled={!pcDirty}>Cancel</button>
+                    <button class="btn-secondary" onclick={cancelConfigure} disabled={!pcDirty}>{t('Cancel')}</button>
                     <button
                       id="save-btn"
                       class="btn-primary"
@@ -2337,7 +2423,7 @@
         {#if mode === 'admin'}
           <div id="configure-section" class="configure-section">
             <div class="configure-field-group">
-              <label class="configure-label" for="tune-name-input">Tune Name:</label>
+              <label class="configure-label" for="tune-name-input">{t('Tune Name:')}</label>
               <input
                 type="text"
                 id="tune-name-input"
@@ -2346,12 +2432,12 @@
                 autocorrect="off"
                 autocapitalize="off"
                 spellcheck="false"
-                placeholder="Enter tune name"
+                placeholder={t('Enter tune name')}
                 bind:value={adminFields.name}
               />
             </div>
             <div class="modal-action-buttons">
-              <button class="btn-secondary" onclick={() => seedAdminForm()} disabled={!adminDirty}>Cancel</button>
+              <button class="btn-secondary" onclick={() => seedAdminForm()} disabled={!adminDirty}>{t('Cancel')}</button>
               <button
                 class="btn-primary"
                 onclick={saveAdmin}
@@ -2391,11 +2477,11 @@
             <div id="details-tab" class="modal-tab-pane{activeTab === 'details' ? ' active' : ''}">
               {#if inSession}
                 <div class="details-sess-block">
-                  <div class="details-sess-heading">At {sessionLabel}</div>
+                  <div class="details-sess-heading">{t('At {name}', { name: sessionLabel })}</div>
                   {#if canEditSessionGeneral}
                     <div class="configure-section sess-form">
                       <div class="configure-field-group-inline">
-                        <label class="configure-label" for="dc-alias-input">We call this:</label>
+                        <label class="configure-label" for="dc-alias-input">{t('We call this:')}</label>
                         <input
                           type="text"
                           id="dc-alias-input"
@@ -2409,43 +2495,19 @@
                         />
                       </div>
                       <div class="configure-field-group-inline">
-                        <label class="configure-label" for="dc-setting-input">Our setting:</label>
-                        <div class="input-with-button">
-                          <input
-                            type="text"
-                            id="dc-setting-input"
-                            class="configure-input"
-                            autocomplete="off"
-                            autocorrect="off"
-                            autocapitalize="off"
-                            spellcheck="false"
-                            placeholder="e.g., 123 or paste URL"
-                            style:border-color={dcSettingError ? '#dc3545' : ''}
-                            bind:value={dcFields.setting}
-                            oninput={() => validateSettingField('details')}
-                          />
+                        <div class="configure-label">{t('Our setting:')}</div>
+                        <div class="configure-value setting-value" id="dc-setting-value">
+                          {dcOriginals.setting_id ? `#${dcOriginals.setting_id}` : '—'}
                           <button
                             type="button"
-                            class="fetch-setting-btn{dcFetchState === 'loading' ? ' fetch-setting-btn-loading' : ''}"
-                            onclick={() => fetchSetting('details')}
-                            disabled={dcFetchState !== 'idle'}
-                            style:background-color={dcFetchState === 'ok' ? '#28a745' : dcFetchState === 'warn' ? '#f0ad4e' : dcFetchState === 'err' ? '#dc3545' : ''}
-                            style:color={dcFetchState === 'ok' || dcFetchState === 'warn' || dcFetchState === 'err' ? 'white' : ''}
-                            title="Fetch setting from TheSession.org"
+                            class="change-setting-btn"
+                            disabled={isOffline}
+                            onclick={() => openChooser({ kind: 'session' })}>{t('Change')}</button
                           >
-                            {#if dcFetchState === 'loading'}<span class="fetch-setting-spinner"></span>
-                            {:else if dcFetchState === 'ok'}✓
-                            {:else if dcFetchState === 'warn'}⚠
-                            {:else if dcFetchState === 'err'}✗
-                            {:else}{dcFetchLabel}{/if}
-                          </button>
                         </div>
                       </div>
-                      <div class="field-error" style="display: {dcSettingError ? 'block' : 'none'};">
-                        {dcSettingError}
-                      </div>
                       <div class="configure-field-group-inline">
-                        <label class="configure-label" for="dc-key-select">We play this in:</label>
+                        <label class="configure-label" for="dc-key-select">{t('We play this in:')}</label>
                         <select id="dc-key-select" class="configure-select" bind:value={dcFields.key}>
                           {#each MUSICAL_KEYS as key}
                             <option value={key}>{key || dcInheritKeyLabel}</option>
@@ -2453,7 +2515,7 @@
                         </select>
                       </div>
                       <div class="modal-action-buttons">
-                        <button class="btn-secondary" onclick={seedDetailsForm} disabled={!dcDirty}>Cancel</button>
+                        <button class="btn-secondary" onclick={seedDetailsForm} disabled={!dcDirty}>{t('Cancel')}</button>
                         <button
                           class="btn-primary"
                           onclick={saveDetails}
@@ -2469,15 +2531,15 @@
                          visitors; only a session admin can change it. -->
                     <div class="configure-section sess-form sess-form-readonly">
                       <div class="configure-field-group-inline">
-                        <div class="configure-label">We call this:</div>
+                        <div class="configure-label">{t('We call this:')}</div>
                         <div class="configure-value">{dcOriginals.alias || '—'}</div>
                       </div>
                       <div class="configure-field-group-inline">
-                        <div class="configure-label">Our setting:</div>
+                        <div class="configure-label">{t('Our setting:')}</div>
                         <div class="configure-value">{dcOriginals.setting_id || '—'}</div>
                       </div>
                       <div class="configure-field-group-inline">
-                        <div class="configure-label">We play this in:</div>
+                        <div class="configure-label">{t('We play this in:')}</div>
                         <div class="configure-value">{dcOriginals.key || '—'}</div>
                       </div>
                     </div>
@@ -2487,29 +2549,25 @@
               {#if tune.person_list_count != null}
                 <div class="stat-card">
                   <div class="stat-line">
-                    Saved in <span class="stat-number">{tune.person_list_count}</span> tune {plural(
-                      tune.person_list_count,
-                      'list'
-                    )} on Ceol.io
+                    {listCountLine[0]}<span class="stat-number">{tune.person_list_count}</span>{listCountLine[1]}
                   </div>
                 </div>
               {/if}
               <div class="stat-card">
                 <div class="stat-line">
-                  Saved in <span class="stat-number" id="tunebook-count">{tunebookCountView}</span>
-                  {plural(tunebookCountView, 'tunebook')} on TheSession.org
+                  {tunebookLine[0]}<span class="stat-number" id="tunebook-count">{tunebookCountView}</span>{tunebookLine[1]}
                   <button
                     class="refresh-btn"
                     onclick={refreshTunebookCount}
                     disabled={refreshState === 'loading'}
                     style:background-color={refreshState === 'ok' ? '#28a745' : refreshState === 'err' ? '#dc3545' : ''}
                     style:color={refreshState === 'ok' || refreshState === 'err' ? 'white' : ''}
-                    title="Refresh"
+                    title={t('Refresh')}
                   >
                     {refreshState === 'loading' ? '⟳' : refreshState === 'ok' ? '✓' : refreshState === 'err' ? '✗' : '↻'}
                   </button>
                   {#if tune.tunebook_count_cached_date}<span class="stat-note"
-                      >Last Updated {tune.tunebook_count_cached_date}</span
+                      >{t('Last Updated {date}', { date: tune.tunebook_count_cached_date })}</span
                     >{/if}
                 </div>
               </div>
@@ -2520,35 +2578,31 @@
               {#if mode === 'session' || mode === 'session_instance'}
                 <div class="stat-card">
                   <div class="stat-line">
-                    Logged <span class="stat-number">{tune.times_played || 0}</span>
-                    {plural(tune.times_played || 0, 'time')} at this session
+                    {loggedHereLine[0]}<span class="stat-number">{tune.times_played || 0}</span>{loggedHereLine[1]}
                   </div>
                 </div>
               {/if}
               {#if mode !== 'admin' && hasMyCounts}
                 <div class="stat-card">
                   <div class="stat-line">
-                    Logged <span class="stat-number">{myPlayCount}</span>
-                    {plural(myPlayCount, 'time')} at my sessions
+                    {loggedMineLine[0]}<span class="stat-number">{myPlayCount}</span>{loggedMineLine[1]}
                   </div>
                 </div>
                 <div class="stat-card">
                   <div class="stat-line">
-                    Logged <span class="stat-number">{myAttendedCount}</span>
-                    {plural(myAttendedCount, 'time')} while I was there
+                    {loggedThereLine[0]}<span class="stat-number">{myAttendedCount}</span>{loggedThereLine[1]}
                   </div>
                 </div>
               {/if}
               <div class="stat-card">
                 <div class="stat-line">
-                  Logged <span class="stat-number">{tune.global_play_count || 0}</span>
-                  {plural(tune.global_play_count || 0, 'time')} at all sessions
+                  {loggedAllLine[0]}<span class="stat-number">{tune.global_play_count || 0}</span>{loggedAllLine[1]}
                 </div>
               </div>
               {#if mode === 'admin'}
                 <div class="stat-card">
                   <div class="stat-line">
-                    In the repertoire of <span class="stat-number">{tune.session_count || 0}</span> sessions
+                    {repertoireLine[0]}<span class="stat-number">{tune.session_count || 0}</span>{repertoireLine[1]}
                   </div>
                 </div>
               {/if}
@@ -2556,7 +2610,7 @@
                    section, above everything you actually came to look at; they're facts
                    about the tune, so they belong with the other facts. -->
               <div class="stat-canonical">
-                Canonical name: {tune.tune_name || 'Unknown'} (#{tune.tune_id})
+                {t('Canonical name: {name} (#{id})', { name: tune.tune_name || t('Unknown'), id: tune.tune_id })}
               </div>
 
               <!-- Un-enrolling a tune from the repertoire. Only ever available for a tune
@@ -2567,7 +2621,7 @@
               {#if inSession && canRemoveFromSession}
                 <div class="sess-danger-foot">
                   <button type="button" class="tsc-action-link tsc-action-danger" onclick={removeFromSession}>
-                    Remove From Session
+                    {t('Remove From Session')}
                   </button>
                 </div>
               {/if}
@@ -2586,7 +2640,7 @@
                 <select
                   id="sess-scope-select"
                   class="configure-select"
-                  aria-label="Which plays of this tune"
+                  aria-label={t('Which plays of this tune')}
                   bind:value={scopeId}
                   onchange={(e) => selectSessionScope(e.currentTarget.value)}
                 >
@@ -2595,7 +2649,7 @@
                   {/each}
                 </select>
                 {#if mySessionsState === 'loading'}
-                  <span class="history-loading" aria-live="polite">Loading your sessions…</span>
+                  <span class="history-loading" aria-live="polite">{t('Loading your sessions…')}</span>
                 {/if}
               </div>
 
@@ -2604,19 +2658,19 @@
                    means anything across a wide lens, so both vanish for one. -->
               {#if canEditSessionLayer && !sessFormOpen}
                 <button type="button" class="sess-edit-link" onclick={() => (sessFormOpen = true)}>
-                  Update name, setting or key for this tune {editingInstance
-                    ? 'on this date'
-                    : 'at this session'}
+                  {editingInstance
+                    ? t('Update name, setting or key for this tune on this date')
+                    : t('Update name, setting or key for this tune at this session')}
                 </button>
               {/if}
 
               {#if canEditSessionLayer && sessFormOpen && overridesError}
-                <LoadError what="this date's name, setting and key" inline onRetry={loadInstanceOverrides} />
+                <LoadError what={t("this date's name, setting and key")} inline onRetry={loadInstanceOverrides} />
               {:else if canEditSessionLayer && sessFormOpen}
                 <div class="configure-section sess-form">
                   <div class="configure-field-group-inline">
                     <label class="configure-label" for="sess-alias-input">
-                      {editingInstance ? 'We called it:' : 'We call this:'}
+                      {editingInstance ? t('We called it:') : t('We call this:')}
                     </label>
                     <input
                       type="text"
@@ -2631,46 +2685,24 @@
                     />
                   </div>
                   <div class="configure-field-group-inline">
-                    <label class="configure-label" for="sess-setting-input">
-                      {editingInstance ? 'We played setting:' : 'Our setting:'}
-                    </label>
-                    <div class="input-with-button">
-                      <input
-                        type="text"
-                        id="sess-setting-input"
-                        class="configure-input"
-                        autocomplete="off"
-                        autocorrect="off"
-                        autocapitalize="off"
-                        spellcheck="false"
-                        placeholder="e.g., 123 or paste URL"
-                        style:border-color={sessSettingError ? '#dc3545' : ''}
-                        bind:value={sessFields.setting}
-                        oninput={() => validateSettingField('session')}
-                      />
+                    <div class="configure-label">
+                      {editingInstance ? t('We played setting:') : t('Our setting:')}
+                    </div>
+                    <div class="configure-value setting-value" id="sess-setting-value">
+                      {sessOriginals.setting_id ? `#${sessOriginals.setting_id}` : '—'}
                       <button
                         type="button"
-                        class="fetch-setting-btn{sessFetchState === 'loading' ? ' fetch-setting-btn-loading' : ''}"
-                        onclick={() => fetchSetting('session')}
-                        disabled={sessFetchState !== 'idle'}
-                        style:background-color={sessFetchState === 'ok' ? '#28a745' : sessFetchState === 'warn' ? '#f0ad4e' : sessFetchState === 'err' ? '#dc3545' : ''}
-                        style:color={sessFetchState === 'ok' || sessFetchState === 'warn' || sessFetchState === 'err' ? 'white' : ''}
-                        title="Fetch setting from TheSession.org"
+                        class="change-setting-btn"
+                        disabled={isOffline}
+                        onclick={() =>
+                          openChooser(editingInstance ? { kind: 'instance', instanceId: scopeId } : { kind: 'session' })}
+                        >{t('Change')}</button
                       >
-                        {#if sessFetchState === 'loading'}<span class="fetch-setting-spinner"></span>
-                        {:else if sessFetchState === 'ok'}✓
-                        {:else if sessFetchState === 'warn'}⚠
-                        {:else if sessFetchState === 'err'}✗
-                        {:else}{sessFetchLabel}{/if}
-                      </button>
                     </div>
-                  </div>
-                  <div class="field-error" style="display: {sessSettingError ? 'block' : 'none'};">
-                    {sessSettingError}
                   </div>
                   <div class="configure-field-group-inline">
                     <label class="configure-label" for="sess-key-select">
-                      {editingInstance ? 'We played it in:' : 'We play this in:'}
+                      {editingInstance ? t('We played it in:') : t('We play this in:')}
                     </label>
                     <select id="sess-key-select" class="configure-select" bind:value={sessFields.key}>
                       {#each MUSICAL_KEYS as key}
@@ -2686,7 +2718,7 @@
                         sessFormOpen = false
                       }}
                     >
-                      Cancel
+                      {t('Cancel')}
                     </button>
                     <button
                       class="btn-primary"
@@ -2704,15 +2736,15 @@
                      open to any member. -->
                 <div class="configure-section sess-form sess-form-readonly">
                   <div class="configure-field-group-inline">
-                    <div class="configure-label">{editingInstance ? 'We called it:' : 'We call this:'}</div>
+                    <div class="configure-label">{editingInstance ? t('We called it:') : t('We call this:')}</div>
                     <div class="configure-value">{sessOriginals.alias || '—'}</div>
                   </div>
                   <div class="configure-field-group-inline">
-                    <div class="configure-label">{editingInstance ? 'We played setting:' : 'Our setting:'}</div>
+                    <div class="configure-label">{editingInstance ? t('We played setting:') : t('Our setting:')}</div>
                     <div class="configure-value">{sessOriginals.setting_id || '—'}</div>
                   </div>
                   <div class="configure-field-group-inline">
-                    <div class="configure-label">{editingInstance ? 'We played it in:' : 'We play this in:'}</div>
+                    <div class="configure-label">{editingInstance ? t('We played it in:') : t('We play this in:')}</div>
                     <div class="configure-value">{sessOriginals.key || '—'}</div>
                   </div>
                 </div>
@@ -2727,12 +2759,12 @@
                      would overflow — or shove the control, which is the jump we just fixed.) -->
                 <span class="hist-right">
                   {#if attendedHint}
-                    <span class="hist-attended-hint" aria-live="polite">You attended</span>
+                    <span class="hist-attended-hint" aria-live="polite">{t('You attended')}</span>
                   {/if}
                   {#if loggedIn && !editingInstance && showAttendedFilter}
                     <label class="hist-filter">
                       <input type="checkbox" checked={attendedOnly} onchange={toggleAttendedOnly} />
-                      Only when I was there
+                      {t('Only when I was there')}
                     </label>
                   {/if}
                 </span>
@@ -2751,7 +2783,7 @@
                       {/each}
                     </div>
                   {:else}
-                    <div class="no-history">Not played that night.</div>
+                    <div class="no-history">{t('Not played that night.')}</div>
                   {/if}
                 </div>
               {:else}
@@ -2761,8 +2793,8 @@
                     {#if playInstances.length === 0}
                       <div class="no-history">
                         {attendedOnly
-                          ? "You weren't there for any of this tune's plays here."
-                          : 'No play history recorded yet.'}
+                          ? t("You weren't there for any of this tune's plays here.")
+                          : t('No play history recorded yet.')}
                       </div>
                     {:else}
                       <div class="history-list">
@@ -2776,8 +2808,8 @@
                                    several different rooms (spec 006). -->
                               <a href={instance.link}>
                                 {scopeId === 'general'
-                                  ? instance.instance_label || instance.date || 'Unknown'
-                                  : instance.full_name || instance.date || 'Unknown'}
+                                  ? instance.instance_label || instance.date || t('Unknown')
+                                  : instance.full_name || instance.date || t('Unknown')}
                               </a>
                               {#if instance.attended}
                                 <!-- A quiet mark, not a label: it's a footnote on the row, not
@@ -2787,8 +2819,8 @@
                                 <button
                                   type="button"
                                   class="history-attended-mark"
-                                  title="You were there"
-                                  aria-label="You were there"
+                                  title={t('You were there')}
+                                  aria-label={t('You were there')}
                                   onclick={(e) => {
                                     e.preventDefault()
                                     showAttendedHint()
@@ -2798,27 +2830,27 @@
                             </div>
                             {#if instance.set_number && instance.position_in_set}
                               <div class="history-position">
-                                Set {instance.set_number}, Tune {instance.position_in_set}
+                                {t('Set {set}, Tune {position}', { set: instance.set_number, position: instance.position_in_set })}
                               </div>
                             {/if}
                             {#if instance.setting_id_override}
-                              <div class="history-setting">Setting: #{instance.setting_id_override}</div>
+                              <div class="history-setting">{t('Setting: #{id}', { id: instance.setting_id_override })}</div>
                             {/if}
                           </div>
                         {/each}
                       </div>
                       {#if historyState.data.truncated}
-                        <div class="history-truncated">Showing the 100 most recent sessions.</div>
+                        <div class="history-truncated">{t('Showing the 100 most recent sessions.')}</div>
                       {/if}
                     {/if}
                   {:else if historyState.status === 'offline'}
-                    <div class="no-history">Play history isn't available offline.</div>
+                    <div class="no-history">{t("Play history isn't available offline.")}</div>
                   {:else if historyState.status === 'error'}
-                    <LoadError what="play history" onRetry={loadHistory} />
+                    <LoadError what={t('play history')} onRetry={loadHistory} />
                   {:else if historyState.status === 'none'}
-                    <div class="no-history">No play history recorded yet.</div>
+                    <div class="no-history">{t('No play history recorded yet.')}</div>
                   {:else}
-                    <div class="history-loading">Loading play history…</div>
+                    <div class="history-loading">{t('Loading play history…')}</div>
                   {/if}
                 </div>
               {/if}
@@ -2839,27 +2871,27 @@
                   {@const pwTunes = playedWithState.data.tunes || []}
                   {#if pwTunes.length === 0}
                     <div class="no-history">
-                      This tune has not been played in a set with any other tune{playedWithScopeKey === 'session'
-                        ? ' at this session'
-                        : ''} yet.
+                      {playedWithScopeKey === 'session'
+                        ? t('This tune has not been played in a set with any other tune at this session yet.')
+                        : t('This tune has not been played in a set with any other tune yet.')}
                     </div>
                   {:else}
                     <div class="played-with-list">
-                      {#each pwTunes as t}
+                      {#each pwTunes as pw}
                         <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-                        <div class="played-with-item" data-tune-id={t.tune_id} onclick={() => openPlayedWithTune(t)}>
-                          <span class="played-with-name">{t.name}</span>
-                          <span class="played-with-count">{t.count}</span>
+                        <div class="played-with-item" data-tune-id={pw.tune_id} onclick={() => openPlayedWithTune(pw)}>
+                          <span class="played-with-name">{pw.name}</span>
+                          <span class="played-with-count">{pw.count}</span>
                         </div>
                       {/each}
                     </div>
                   {/if}
                 {:else if playedWithState.status === 'error'}
-                  <LoadError what="played-with tunes" onRetry={loadPlayedWith} />
+                  <LoadError what={t('played-with tunes')} onRetry={loadPlayedWith} />
                 {:else if playedWithState.status === 'none'}
-                  <div class="no-history">No set history recorded yet.</div>
+                  <div class="no-history">{t('No set history recorded yet.')}</div>
                 {:else}
-                  <div class="history-loading">Loading tunes…</div>
+                  <div class="history-loading">{t('Loading tunes…')}</div>
                 {/if}
               </div>
             </div>
@@ -2872,23 +2904,35 @@
 
 <Dialog
   bind:open={removeMyTunesOpen}
-  title="Remove this tune from your list?"
-  confirmLabel="Remove tune"
-  busyLabel="Removing…"
+  title={t('Remove this tune from your list?')}
+  confirmLabel={t('Remove tune')}
+  busyLabel={t('Removing…')}
   destructive={true}
   onConfirm={doRemoveFromMyTunes} />
 
 <Dialog
   bind:open={removeSessionOpen}
-  title="Remove this tune from the session tune list?"
-  confirmLabel="Remove tune"
-  busyLabel="Removing…"
+  title={t('Remove this tune from the session tune list?')}
+  confirmLabel={t('Remove tune')}
+  busyLabel={t('Removing…')}
   destructive={true}
   onConfirm={doRemoveFromSession} />
 
 <!-- "At a different session ..." — re-scopes the whole drawer to another session I'm a
      member of, so I can see what THEY do with this tune. Visitor sessions are excluded:
      a session you dropped into once isn't one whose repertoire you have a view on. -->
+<!-- The setting chooser: every setting of the tune, full notation, for one layer. -->
+{#if tune}
+  <SettingChooser
+    bind:open={chooserOpen}
+    tuneId={tune.tune_id}
+    tuneName={displayName}
+    tuneType={tune.tune_type || ''}
+    currentSettingId={layerSettingId(chooserLayer)}
+    heading={chooserHeading}
+    onChoose={chooseSetting} />
+{/if}
+
 <SessionPicker
   bind:open={sessionPickerOpen}
   sessions={mySessions}

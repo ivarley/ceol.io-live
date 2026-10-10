@@ -1,9 +1,10 @@
 <script>
+  // i18n-converted
   // Tunebook sync view inside the add pane (folded-away /my-tunes/sync page):
   // fetch the person's thesession.org tunebook and add everything not already on
   // the list. Three sub-phases: form -> progress (indeterminate) -> results.
-  import { Chevron, Seg, ServerError } from '../lib/index.js'
-  import { STATUS_LABELS } from '../mylist.js'
+  import { Chevron, Seg, ServerError, t } from '../lib/index.js'
+  import { statusLabel, failText } from './labels.js'
 
   let {
     thesessionUserId = null, // saved person.thesession_user_id (null = never set)
@@ -13,7 +14,6 @@
   } = $props()
 
   const STATUSES = ['want to learn', 'learning', 'learned']
-  const LABELS = STATUS_LABELS
 
   let savedId = $state(thesessionUserId) // cleared via the x to enter a different ID
   let inputId = $state('')
@@ -28,22 +28,14 @@
     inputId = ''
   }
 
-  // What to show when a request fails: the server's (or our own) explanation when
-  // there is one, else a human sentence. Raw network/parse text only reaches the console.
-  function failText(e, what) {
-    console.error(`Couldn't ${what}:`, e)
-    if (e instanceof ServerError && e.message) return e.message
-    return `Couldn't ${what}. Check your connection and try again.`
-  }
-
   async function startSync() {
     const id = savedId != null ? Number(savedId) : parseInt(inputId, 10)
     if (!id || id < 1) {
-      errorMsg = 'Please enter a valid thesession.org user ID.'
+      errorMsg = t('Please enter a valid thesession.org user ID.')
       return
     }
     if (!navigator.onLine) {
-      errorMsg = 'You are offline. Sync requires an internet connection.'
+      errorMsg = t('You are offline. Sync requires an internet connection.')
       return
     }
     errorMsg = ''
@@ -73,7 +65,7 @@
       phase = 'results'
       onSynced(results)
     } catch (e) {
-      errorMsg = failText(e, 'sync your tunebook')
+      errorMsg = failText(e, t('sync your tunebook'))
       phase = 'form'
     }
   }
@@ -86,52 +78,51 @@
 </script>
 
 <div class="deep-head">
-  <button class="mt-back" onclick={onBack} aria-label="Back to search"><Chevron dir="left" size={18} /></button>
-  <span class="deep-title">Sync from TheSession.org</span>
-  <button class="deep-done" onclick={onClose}>Done</button>
+  <button class="mt-back" onclick={onBack} aria-label={t('Back to search')}><Chevron dir="left" size={18} /></button>
+  <span class="deep-title">{t('Sync from TheSession.org')}</span>
+  <button class="deep-done" onclick={onClose}>{t('Done')}</button>
 </div>
 
 <div class="mt-config mt-sync">
   {#if phase === 'form'}
     <p class="mt-sync-blurb">
-      Imports your thesession.org tunebook: tunes you don't have yet are added, and
-      tunes already on your list keep their current status.
+      {t("Imports your thesession.org tunebook: tunes you don't have yet are added, and tunes already on your list keep their current status.")}
     </p>
 
     {#if savedId != null}
       <div class="mt-section">
         <div class="mt-sync-saved">
-          <span class="mt-label">TheSession.org ID:</span>
+          <span class="mt-label">{t('TheSession.org ID:')}</span>
           <span class="mt-sync-saved-id">{savedId}</span>
-          <button class="mt-sync-clear" onclick={clearSavedId} title="Use a different ID" aria-label="Use a different ID">✕</button>
+          <button class="mt-sync-clear" onclick={clearSavedId} title={t('Use a different ID')} aria-label={t('Use a different ID')}>✕</button>
         </div>
       </div>
     {:else}
       <div class="mt-section">
-        <label class="mt-label" for="mt-sync-userid">TheSession.org ID</label>
+        <label class="mt-label" for="mt-sync-userid">{t('TheSession.org ID')}</label>
         <input
           id="mt-sync-userid"
           class="mt-setting"
           type="number"
           min="1"
-          placeholder="Enter your thesession.org user ID"
+          placeholder={t('Enter your thesession.org user ID')}
           bind:value={inputId}
           oninput={() => (errorMsg = '')}
         />
         <p class="mt-help">
-          Find it in your thesession.org profile URL: thesession.org/members/<strong>YOUR_ID</strong>
+          {t('Find it in your thesession.org profile URL:')} {'thesession.org/members/'}<strong>{t('YOUR_ID')}</strong>
         </p>
         <label class="mt-sync-save">
           <input type="checkbox" bind:checked={saveToProfile} />
-          Save to my profile
+          {t('Save to my profile')}
         </label>
       </div>
     {/if}
 
     <div class="mt-section">
-      <div class="tsc-label-line mt-label">Add new tunes as</div>
+      <div class="tsc-label-line mt-label">{t('Add new tunes as')}</div>
       <Seg
-        options={STATUSES.map((st) => ({ id: st, label: LABELS[st] }))}
+        options={STATUSES.map((st) => ({ id: st, label: statusLabel(st) }))}
         value={learnStatus}
         idAttr="data-status"
         styled={false}
@@ -141,36 +132,36 @@
     </div>
 
     {#if errorMsg}<p class="mt-error">{errorMsg}</p>{/if}
-    <button class="mt-submit" onclick={startSync}>Start Sync</button>
+    <button class="mt-submit" onclick={startSync}>{t('Start Sync')}</button>
   {:else if phase === 'progress'}
     <div class="mt-sync-progress">
       <div class="mt-sync-bar"><div class="mt-sync-bar-fill"></div></div>
-      <p class="mt-sync-status">Syncing your tunes from TheSession.org…</p>
-      <p class="mt-help">Large tunebooks can take a minute.</p>
+      <p class="mt-sync-status">{t('Syncing your tunes from TheSession.org…')}</p>
+      <p class="mt-help">{t('Large tunebooks can take a minute.')}</p>
     </div>
   {:else}
-    <div class="mt-sync-done">Sync complete!</div>
+    <div class="mt-sync-done">{t('Sync complete!')}</div>
     <div class="mt-sync-stats">
       <div class="mt-sync-stat">
         <span class="mt-sync-stat-value">{results.tunes_fetched || 0}</span>
-        <span class="mt-sync-stat-label">Tunes Fetched</span>
+        <span class="mt-sync-stat-label">{t('Tunes Fetched')}</span>
       </div>
       <div class="mt-sync-stat">
         <span class="mt-sync-stat-value">{results.person_tunes_added || 0}</span>
-        <span class="mt-sync-stat-label">Tunes Added</span>
+        <span class="mt-sync-stat-label">{t('Tunes Added')}</span>
       </div>
       <div class="mt-sync-stat">
         <span class="mt-sync-stat-value">{results.person_tunes_skipped || 0}</span>
-        <span class="mt-sync-stat-label">Already in Collection</span>
+        <span class="mt-sync-stat-label">{t('Already in Collection')}</span>
       </div>
       <div class="mt-sync-stat">
         <span class="mt-sync-stat-value">{results.tunes_created || 0}</span>
-        <span class="mt-sync-stat-label">New Tune Records</span>
+        <span class="mt-sync-stat-label">{t('New Tune Records')}</span>
       </div>
     </div>
     {#if (results.errors || []).length}
       <div class="mt-section">
-        <div class="mt-error">Errors encountered:</div>
+        <div class="mt-error">{t('Errors encountered:')}</div>
         <ul class="mt-sync-errors">
           {#each results.errors as err}
             <li>{err}</li>
@@ -178,7 +169,7 @@
         </ul>
       </div>
     {/if}
-    <button class="mt-submit" onclick={onClose}>View My Tunes</button>
-    <button class="mt-sync-again" onclick={syncAgain}>Sync Again</button>
+    <button class="mt-submit" onclick={onClose}>{t('View My Tunes')}</button>
+    <button class="mt-sync-again" onclick={syncAgain}>{t('Sync Again')}</button>
   {/if}
 </div>

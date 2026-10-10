@@ -20,7 +20,7 @@ private func refusal(_ error: Components.Responses._Error) -> String? {
     (try? error.body.json)?.message
 }
 
-private let unreachable = "Couldn't reach Ceol, so nothing changed. Check your connection and try again."
+private var unreachable: String { tr("Couldn't reach Ceol, so nothing changed. Check your connection and try again.") }
 
 // MARK: - Joining
 
@@ -75,7 +75,7 @@ struct JoinPrompt: View {
             case .ok:
                 await onChange()
             case .default(_, let error):
-                failure = refusal(error) ?? "Couldn't add you to this session. Try again."
+                failure = refusal(error) ?? tr("Couldn't add you to this session. Try again.")
             }
         } catch {
             failure = unreachable
@@ -161,7 +161,7 @@ struct RoleSheet: View {
                 await onChange()
                 dismiss()
             case .default(_, let error):
-                failure = refusal(error) ?? "Couldn't save that. Try again."
+                failure = refusal(error) ?? tr("Couldn't save that. Try again.")
             }
         } catch {
             failure = unreachable
@@ -178,7 +178,7 @@ struct RoleSheet: View {
                 await onChange()
                 dismiss()
             case .default(_, let error):
-                failure = refusal(error) ?? "Couldn't leave this session. Try again."
+                failure = refusal(error) ?? tr("Couldn't leave this session. Try again.")
             }
         } catch {
             failure = unreachable
@@ -228,7 +228,7 @@ struct AddNightView: View {
                     if suggesting { Text("Looking up the next usual date…") }
                 }
                 Section {
-                    TextField(usualVenue.map { "Venue (usually \($0))" } ?? "Venue", text: $location)
+                    TextField(usualVenue.map { tr("Venue (usually \($0))") } ?? tr("Venue"), text: $location)
                     TextField("Notes", text: $comments, axis: .vertical).lineLimit(1...4)
                 } footer: {
                     if let failure { Text(failure).foregroundStyle(CeolTokens.danger) }
@@ -305,10 +305,10 @@ struct AddNightView: View {
                 dismiss()
                 onAdded(r.sessionInstanceId, r.date)
             case .default(_, let error):
-                failure = refusal(error) ?? "Couldn't add the night. Try again."
+                failure = refusal(error) ?? tr("Couldn't add the night. Try again.")
             }
         } catch {
-            failure = "Couldn't reach Ceol, so the night wasn't added. Check your connection and try again."
+            failure = tr("Couldn't reach Ceol, so the night wasn't added. Check your connection and try again.")
         }
     }
 }

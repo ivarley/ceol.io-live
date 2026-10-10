@@ -131,12 +131,22 @@ Everything else about a session — tunes, logs, history — stays visible to ev
 - Attendance list display
 - Check-in buttons for regulars
 
-**Session page People tab** (`frontend/src/sessionpage/PeopleTab.svelte` —
-the session-detail page is a Svelte shell, spec 035):
-- Session members list (regulars/all filter + search)
-- Search interface for adding existing people
-- Create new person form
-- Person-detail modal with `/people/<id>` deep link
+**Session page People tab** (web: `frontend/src/sessionpage/PeopleTab.svelte`, a Svelte
+shell, spec 035; iOS: `peopleSection` in `ios/Ceol/Ceol/SessionsViews.swift`). Both
+surfaces have the same pieces:
+- The roster, with search. Each row's person icon is coloured when they're on Ceol
+  (`has_user_account`), grey when they're only a name on the list; the count beside it is
+  nights attended (or the last night here, when sorted by that).
+- The filter pane / sheet, two labelled rows: **Show** (Members / Visitors / Archived;
+  `filterPeople`) and **Sort** (Regulars / Last here / Name, with a direction;
+  `sortPeople` in `sessionpage/logic.js`, ported to `CeolLogic.SessionPage.sortPeople`).
+  Regulars is the server's own order (most nights in the last six months, then most
+  ever). Without attendance tracking the Sort row goes and the list is by name.
+- One add flow (PersonPicker / `AddSessionPersonSheet`).
+- The person sheet, with the `/people/<id>` deep link on the web. For someone on Ceol it
+  links to the tunes you both know or are learning (`GET /api/my-tunes/common/<id>`): the
+  web's `/me/and/<id>` page, and in the app its own screen (`CommonTunesView.swift`,
+  rules in `CeolLogic.CommonTunes`).
 
 ### AJAX Workflows
 

@@ -1,11 +1,13 @@
 <script>
+  // i18n-converted
   // The /sessions directory (spec 035 Step 4a) — ported behavior-for-behavior from
   // the legacy inline script in templates/sessions.html. Same DOM contract
   // (#search-bar, #sessions-table, #sessions-tbody, #no-results — the e2e suite and
   // this bundle's page.css select on these). First paint comes from the embedded
   // payload; a background refetch of the same API keeps it fresh.
+  import { formatTime } from '../shared/format.js'
   import { untrack } from 'svelte'
-  import { SearchField, Seg, Toolbar, LoadError } from '../lib/index.js'
+  import { SearchField, Seg, Toolbar, LoadError, t, tn } from '../lib/index.js'
   import { parseLocalDate } from '../shared/parse.js'
   import { locationLabel } from './logic.js'
   import AddSessionSheet from '../addsession/AddSessionSheet.svelte'
@@ -23,18 +25,20 @@
     ? ['my', 'visited', 'active', 'all', 'inactive']
     : ['active', 'all', 'inactive']
   const filterButtonLabels = {
-    my: 'My Sessions',
-    visited: 'Visited',
-    active: 'All Active',
-    all: 'All',
-    inactive: 'Inactive',
+    my: t('My Sessions'),
+    visited: t('Visited'),
+    active: t('All Active'),
+    all: t('All'),
+    inactive: t('Inactive'),
   }
-  const countLabels = {
-    my: 'sessions in your list',
-    visited: "sessions you've visited",
-    active: 'active sessions',
-    all: 'sessions',
-    inactive: 'inactive sessions',
+  // The words after the count. English says "sessions" whatever the number (the two
+  // forms are the same); Irish needs the number to choose the noun's form.
+  function countLabel(filter, n) {
+    if (filter === 'my') return tn(n, 'sessions in your list', 'sessions in your list')
+    if (filter === 'visited') return tn(n, "sessions you've visited", "sessions you've visited")
+    if (filter === 'active') return tn(n, 'active sessions', 'active sessions')
+    if (filter === 'inactive') return tn(n, 'inactive sessions', 'inactive sessions')
+    return tn(n, 'sessions', 'sessions')
   }
 
   let allSessions = $state([])
@@ -121,16 +125,7 @@
     })
   })
 
-  function formatTime(timeStr) {
-    if (!timeStr) return ''
-    const parts = timeStr.split(':')
-    let hour = parseInt(parts[0], 10)
-    const minute = parts[1]
-    const period = hour >= 12 ? 'pm' : 'am'
-    hour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour
-    return `${hour}:${minute}${period}`
-  }
-
+  // formatTime (shared): "7:00pm" in English, the 24-hour clock in Irish.
   function formatTimeRange(startTime, endTime) {
     if (!startTime) return ''
     const start = formatTime(startTime)
@@ -198,12 +193,12 @@
     <p class="place-where">
       {[scope.area, scope.country].filter(Boolean).join(', ')}
       {#if scope.parent}
-        · in <a href="/sessions/{scope.parent.slug}">{scope.parent.name}</a>
+        · {t('in')} <a href="/sessions/{scope.parent.slug}">{scope.parent.name}</a>
       {/if}
     </p>
     {#if scope.children?.length}
       <p class="place-children" id="place-children">
-        Includes
+        {t('Includes')}
         {#each scope.children as child, i (child.slug)}
           <a href="/sessions/{child.slug}">{child.name}</a>{i < scope.children.length - 1 ? ', ' : ''}
         {/each}
@@ -225,7 +220,7 @@
     activeCount={currentFilter === filterStates[0] ? 0 : 1}
     addId={isLoggedIn ? 'add-session-link' : null}
     onAdd={isLoggedIn ? openAdd : null}
-    addTitle="Add a session">
+    addTitle={t('Add a session')}>
     {#snippet search()}
       <SearchField
         bind:this={searchField}
@@ -234,7 +229,7 @@
         inputClass="filter-search-input"
         wrapperClass="filter-search-wrap"
         styled={false}
-        placeholder="Search by name or location..." />
+        placeholder={t('Search by name or location...')} />
     {/snippet}
 
     {#snippet filter()}
@@ -246,7 +241,7 @@
         styled={false}
         segClass="filter-button-group"
         optClass="filter-sort-btn"
-        aria-label="Which sessions to show" />
+        aria-label={t('Which sessions to show')} />
     {/snippet}
   </Toolbar>
 </div>
@@ -258,16 +253,16 @@
 {#if loaded}
 <div class="session-count" id="session-count">
   <span id="count-number">{filtered.length}</span>
-  <span id="count-filter-type">{countLabels[currentFilter] || 'sessions'}</span>
+  <span id="count-filter-type">{countLabel(currentFilter, filtered.length)}</span>
 </div>
 {/if}
 
 {#if !loaded}
   <div id="loading-message" class="loading-message">
-    {#if loadError}<LoadError what="sessions" onRetry={refresh} {retrying} />{:else}Loading<span class="loading-dots">...</span>{/if}
+    {#if loadError}<LoadError message={t("Couldn't load sessions.")} onRetry={refresh} {retrying} />{:else}{t('Loading')}<span class="loading-dots">...</span>{/if}
   </div>
 {:else if filtered.length === 0}
-  <div id="no-results" class="no-sessions">No sessions found.</div>
+  <div id="no-results" class="no-sessions">{t('No sessions found.')}</div>
 {:else}
   <!-- One line per session, like the tune lists: the name in full-strength text on
        the left, where the eye starts, and the place quiet and right-aligned. It was a
@@ -285,7 +280,7 @@
                 e.preventDefault()
                 const night = session.active_instances[0]
                 goto(`/sessions/${night.path || session.path}/${night.date}`)
-              }}>On Now</button>
+              }}>{t('On Now')}</button>
           {:else if session.active_instances && session.active_instances.length > 1}
             <!-- A festival can have several rooms going at once; the select is the
                  only control here that has to stop the row's own navigation. -->
@@ -294,14 +289,14 @@
               id="dropdown-{session.session_id}"
               onclick={(e) => e.preventDefault()}
               onchange={(e) => e.target.value && goto(`/sessions/${e.target.value}`)}>
-              <option value="">On Now ...</option>
+              <option value="">{t('On Now ...')}</option>
               {#each session.active_instances as instance (instance.session_instance_id)}
                 <option value="{instance.path || session.path}/{instance.date}">{instanceLabel(session, instance)}</option>
               {/each}
             </select>
           {/if}
           {#if session.kind === 'festival'}
-            <span class="session-row-kind">Festival</span>
+            <span class="session-row-kind">{t('Festival')}</span>
           {/if}
           {#if session.place && session.place.slug !== scope?.slug}
             <!-- The row is itself a link, so the place is a link by script: it takes
@@ -335,12 +330,12 @@
      than left-aligned like a caption. "Back to home" went with the page heading:
      the tab bar has a Home tab, and a link that repeats a tab is furniture. -->
 <p class="sessions-footnote">
-  Don't see your session?<br />
+  {t("Don't see your session?")}<br />
   {#if currentFilter === 'my'}
-    <a href="/sessions" onclick={searchAllSessions}>Search all sessions</a> or
-    <a href="/add-session" onclick={openAdd}>add it!</a>
+    <a href="/sessions" onclick={searchAllSessions}>{t('Search all sessions')}</a> {t('or')}
+    <a href="/add-session" onclick={openAdd}>{t('add it!')}</a>
   {:else}
-    <a href="/add-session" onclick={openAdd}>Add it!</a>
+    <a href="/add-session" onclick={openAdd}>{t('Add it!')}</a>
   {/if}
 </p>
 

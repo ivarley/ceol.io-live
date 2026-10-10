@@ -1,11 +1,12 @@
 <script>
+  // i18n-converted
   // The /admin/people table (spec 035 final migration) — ported behavior-for-
   // behavior from the inline script in the legacy templates/admin_people.html.
   // Same DOM contract (#people-search, #add-person-btn, #people-tbody,
   // #addPersonModal, #person-input — the e2e suite selects on these). First
   // paint comes from the embedded payload; search/sort are client-side; the
   // 2-step add-person wizard is a pair of kit Sheets (the PeopleTab pattern).
-  import { SearchField, Chip, Sheet, LoadError, toast } from '../lib/index.js'
+  import { SearchField, Chip, Sheet, LoadError, toast, t, tn } from '../lib/index.js'
   import { normalizeQuotes } from '../shared/parse.js'
 
   let { pageData = null } = $props()
@@ -25,11 +26,11 @@
 
   const locationOf = (p) => {
     const parts = [p.city, p.state, p.country].filter(Boolean)
-    return parts.length > 0 ? parts.join(', ') : 'Unknown'
+    return parts.length > 0 ? parts.join(', ') : t('Unknown')
   }
 
   // A person with blank first+last name still needs a clickable label.
-  const displayName = (p) => (p.name || '').trim() || p.username || '(unnamed)'
+  const displayName = (p) => (p.name || '').trim() || p.username || t('(unnamed)')
 
   // ---- email / account helpers ------------------------------------------------
   // Two emails can disagree: person.email (contact on the person record) vs
@@ -76,23 +77,23 @@
 
   // ---- sort ---------------------------------------------------------------------
   const COLUMNS = [
-    { id: 'name', label: 'Name', type: 'text', key: (p) => displayName(p).toLowerCase() },
-    { id: 'location', label: 'Location', type: 'text', key: (p) => (p.city || '').toLowerCase() },
+    { id: 'name', label: t('Name'), type: 'text', key: (p) => displayName(p).toLowerCase() },
+    { id: 'location', label: t('Location'), type: 'text', key: (p) => (p.city || '').toLowerCase() },
     { id: 'thesession', label: 'TheSession.org', type: 'number', key: (p) => p.thesession_user_id || 0 },
-    { id: 'username', label: 'Username', type: 'text', key: (p) => (p.username || 'no account').toLowerCase() },
-    { id: 'email', label: 'Email', type: 'text', key: (p) => effectiveEmail(p).toLowerCase() },
+    { id: 'username', label: t('Username'), type: 'text', key: (p) => (p.username || 'no account').toLowerCase() },
+    { id: 'email', label: t('Email'), type: 'text', key: (p) => effectiveEmail(p).toLowerCase() },
     // Comms/Account rank: 0 = no account (sorts to the bottom), 1 = the "off"
     // state (unsubscribed / inactive account), 2 = the "on" state — so a
     // descending sort surfaces subscribed/active first and the off-states next.
-    { id: 'comms', label: 'Updates', type: 'number', key: (p) => (!hasAccount(p) ? 0 : p.receive_update_emails ? 2 : 1) },
-    { id: 'account', label: 'Account Active', type: 'number', key: (p) => (!hasAccount(p) ? 0 : p.account_active ? 2 : 1) },
-    { id: 'sessions', label: 'Sessions', type: 'number', key: (p) => p.session_count },
-    { id: 'instances', label: 'Checked In', type: 'number', key: (p) => p.session_instance_count },
-    { id: 'tunes', label: 'Tunes', type: 'number', key: (p) => p.tune_count },
-    { id: 'latest', label: 'Latest Session', type: 'date', key: (p) => p.latest_session_date || '' },
-    { id: 'logged', label: 'Last Logged A Tune', type: 'date', key: (p) => p.last_logged_tune || '' },
-    { id: 'tunebook', label: 'Last Updated Their Tunebook', type: 'date', key: (p) => p.last_tunebook_update || '' },
-    { id: 'login', label: 'Last Login', type: 'date', key: (p) => p.last_login || '' },
+    { id: 'comms', label: t('Updates'), type: 'number', key: (p) => (!hasAccount(p) ? 0 : p.receive_update_emails ? 2 : 1) },
+    { id: 'account', label: t('Account Active'), type: 'number', key: (p) => (!hasAccount(p) ? 0 : p.account_active ? 2 : 1) },
+    { id: 'sessions', label: t('Sessions'), type: 'number', key: (p) => p.session_count },
+    { id: 'instances', label: t('Checked In'), type: 'number', key: (p) => p.session_instance_count },
+    { id: 'tunes', label: t('Tunes'), type: 'number', key: (p) => p.tune_count },
+    { id: 'latest', label: t('Latest Session'), type: 'date', key: (p) => p.latest_session_date || '' },
+    { id: 'logged', label: t('Last Logged A Tune'), type: 'date', key: (p) => p.last_logged_tune || '' },
+    { id: 'tunebook', label: t('Last Updated Their Tunebook'), type: 'date', key: (p) => p.last_tunebook_update || '' },
+    { id: 'login', label: t('Last Login'), type: 'date', key: (p) => p.last_login || '' },
   ]
 
   let sortColumn = $state(null)
@@ -150,7 +151,7 @@
 
   function retryPeople() {
     refetchPeople().then((ok) => {
-      if (!ok) toast("Still couldn't load the people list. Check your connection and try again.", 'error')
+      if (!ok) toast(t("Still couldn't load the people list. Check your connection and try again."), 'error')
     })
   }
 
@@ -201,7 +202,7 @@
   function processStep1() {
     const input = personInput.trim()
     if (!input) {
-      step1Error = 'Please enter a name or TheSession.org URL/ID'
+      step1Error = t('Please enter a name or TheSession.org URL/ID')
       return
     }
     step1Error = ''
@@ -239,7 +240,7 @@
       .catch((error) => {
         step1Busy = false
         console.error('Error looking up person:', error)
-        step1Error = "Couldn't look that up. Check your connection and try again."
+        step1Error = t("Couldn't look that up. Check your connection and try again.")
       })
   }
 
@@ -250,7 +251,7 @@
 
   function saveNewPerson() {
     if (!firstName.trim()) {
-      step2Error = 'First name is required'
+      step2Error = t('First name is required')
       return
     }
     saving = true
@@ -279,7 +280,7 @@
           // The legacy page reloaded; refetching the same payload endpoint
           // updates the table in place.
           refetchPeople().then((ok) => {
-            if (!ok) toast("Person added, but the list couldn't refresh. Reload the page to see them.", 'error')
+            if (!ok) toast(t("Person added, but the list couldn't refresh. Reload the page to see them."), 'error')
           })
         } else {
           step2Error = data.message
@@ -288,7 +289,7 @@
       .catch((error) => {
         saving = false
         console.error('Error creating person:', error)
-        step2Error = "Couldn't add the person. Check your connection and try again."
+        step2Error = t("Couldn't add the person. Check your connection and try again.")
       })
   }
 </script>
@@ -302,34 +303,34 @@
       inputClass="form-control people-search-input"
       wrapperClass="people-search-wrap"
       styled={false}
-      placeholder="Search by name, email, username, or location..." />
+      placeholder={t('Search by name, email, username, or location...')} />
     <select
       id="people-account-filter"
       class="form-control people-account-filter"
-      aria-label="Filter by account"
+      aria-label={t('Filter by account')}
       bind:value={accountFilter}>
-      <option value="users">Site Users Only</option>
-      <option value="all">All People</option>
+      <option value="users">{t('Site Users Only')}</option>
+      <option value="all">{t('All People')}</option>
     </select>
     <select
       id="people-active-filter"
       class="form-control people-account-filter"
-      aria-label="Filter by active status"
+      aria-label={t('Filter by active status')}
       bind:value={activeFilter}>
-      <option value="active">Active Only</option>
-      <option value="all">All</option>
+      <option value="active">{t('Active Only')}</option>
+      <option value="all">{t('All')}</option>
     </select>
-    <span class="people-count" aria-live="polite">{rows.length} {rows.length === 1 ? 'row' : 'rows'}</span>
-    <button id="add-person-btn" class="btn btn-primary btn-add-person" onclick={openAddPerson}>Add Person</button>
+    <span class="people-count" aria-live="polite">{tn(rows.length, '{n} row', '{n} rows')}</span>
+    <button id="add-person-btn" class="btn btn-primary btn-add-person" onclick={openAddPerson}>{t('Add Person')}</button>
   </div>
 
   <div id="people-content">
     {#if peopleFailed}
-      <LoadError what="the people list" onRetry={retryPeople} retrying={peopleLoading} />
+      <LoadError message={t("Couldn't load the people list.")} onRetry={retryPeople} retrying={peopleLoading} />
     {:else if people.length === 0}
       <div class="alert alert-info" role="alert">
-        <h4 class="alert-heading">No People Found</h4>
-        <p>There are currently no people records in the system.</p>
+        <h4 class="alert-heading">{t('No People Found')}</h4>
+        <p>{t('There are currently no people records in the system.')}</p>
       </div>
     {:else}
       <div class="table-responsive">
@@ -355,31 +356,31 @@
                 <td class="person-name">
                   <a href="/admin/people/{person.person_id}" class="person-link">{displayName(person)}</a>
                 </td>
-                <td class="person-location" title={locationOf(person)}>{person.city || 'Unknown'}</td>
+                <td class="person-location" title={locationOf(person)}>{person.city || t('Unknown')}</td>
                 <td class="person-thesession">
                   {#if person.thesession_user_id}
                     <a href="https://thesession.org/members/{person.thesession_user_id}" target="_blank" rel="noopener noreferrer">
                       {person.thesession_user_id}
                     </a>
                   {:else}
-                    <span class="text-muted">No member</span>
+                    <span class="text-muted">{t('No member')}</span>
                   {/if}
                 </td>
                 <td class="person-username">
                   {#if person.username}
                     <strong>{person.username}</strong>
                     {#if person.is_system_admin}
-                      <span class="admin-indicator">(admin)</span>
+                      <span class="admin-indicator">{t('(admin)')}</span>
                     {/if}
                   {:else}
-                    <span class="text-muted">No account</span>
+                    <span class="text-muted">{t('No account')}</span>
                   {/if}
                 </td>
                 <td class="person-email" class:email-mismatch={emailMismatch(person)}>
                   {#if emailMismatch(person)}
-                    <div class="email-split" title="Account email (receives updates) differs from the person's contact email">
-                      <span><span class="email-tag">acct</span> {accountEmail(person) || '(none)'}</span>
-                      <span><span class="email-tag">person</span> {personEmail(person) || '(none)'}</span>
+                    <div class="email-split" title={t("Account email (receives updates) differs from the person's contact email")}>
+                      <span><span class="email-tag">{t('acct')}</span> {accountEmail(person) || t('(none)')}</span>
+                      <span><span class="email-tag">{t('person')}</span> {personEmail(person) || t('(none)')}</span>
                     </div>
                   {:else if effectiveEmail(person)}
                     {effectiveEmail(person)}
@@ -391,18 +392,18 @@
                   {#if !person.username}
                     <span class="text-muted">—</span>
                   {:else if person.receive_update_emails}
-                    <span class="text-success">✓ Subscribed</span>
+                    <span class="text-success">✓ {t('Subscribed')}</span>
                   {:else}
-                    <span class="text-muted">Unsubscribed</span>
+                    <span class="text-muted">{t('Unsubscribed')}</span>
                   {/if}
                 </td>
                 <td class="person-account-active">
                   {#if !person.username}
                     <span class="text-muted">—</span>
                   {:else if person.account_active}
-                    <span class="text-success">Active</span>
+                    <span class="text-success">{t('Active')}</span>
                   {:else}
-                    <span class="text-danger">Inactive</span>
+                    <span class="text-danger">{t('Inactive')}</span>
                   {/if}
                 </td>
                 <td class="person-session-count">
@@ -430,30 +431,30 @@
                   {#if person.latest_session_date}
                     <span class="latest-session-info">{person.latest_session_date} - {person.latest_session_name}</span>
                   {:else}
-                    <span class="text-muted">None</span>
+                    <span class="text-muted">{t('None')}</span>
                   {/if}
                 </td>
                 <td class="person-last-logged">
                   {#if person.last_logged_tune}
                     {fmtTimestamp(person.last_logged_tune)}
                   {:else}
-                    <span class="text-muted">Never</span>
+                    <span class="text-muted">{t('Never')}</span>
                   {/if}
                 </td>
                 <td class="person-last-tunebook">
                   {#if person.last_tunebook_update}
                     {fmtTimestamp(person.last_tunebook_update)}
                   {:else}
-                    <span class="text-muted">Never</span>
+                    <span class="text-muted">{t('Never')}</span>
                   {/if}
                 </td>
                 <td class="person-last-login">
                   {#if person.last_login}
                     {fmtTimestamp(person.last_login)}
                   {:else if person.username}
-                    <span class="text-warning">Never</span>
+                    <span class="text-warning">{t('Never')}</span>
                   {:else}
-                    <span class="text-muted">N/A</span>
+                    <span class="text-muted">{t('N/A')}</span>
                   {/if}
                 </td>
               </tr>
@@ -463,7 +464,7 @@
       </div>
       {#if rows.length === 0 && (searchTerm || accountFilter !== 'all' || activeFilter !== 'all')}
         <div id="no-search-results" class="alert alert-info">
-          <p class="mb-0">No people match your search criteria.</p>
+          <p class="mb-0">{t('No people match your search criteria.')}</p>
         </div>
       {/if}
     {/if}
@@ -471,15 +472,15 @@
 </section>
 
 <!-- Add Person, step 1: name or thesession.org URL/ID -->
-<Sheet bind:open={step1Open} title="Add Person">
+<Sheet bind:open={step1Open} title={t('Add Person')}>
   <div id="addPersonModal" class="add-person-step">
     <div class="mb-3">
-      <label for="person-input" class="form-label">Enter the person's name, or URL or ID from thesession.org:</label>
+      <label for="person-input" class="form-label">{t("Enter the person's name, or URL or ID from thesession.org:")}</label>
       <input
         type="text"
         id="person-input"
         class="form-control"
-        placeholder="e.g. 'John Smith' or 'https://thesession.org/members/12345' or '12345'"
+        placeholder={t("e.g. 'John Smith' or 'https://thesession.org/members/12345' or '12345'")}
         bind:value={personInput}
         onkeydown={(e) => e.key === 'Enter' && processStep1()} />
       {#if step1Error}
@@ -490,7 +491,7 @@
   {#snippet footer()}
     <div class="add-person-actions">
       <button id="step1-next" class="btn btn-primary" disabled={step1Busy} onclick={processStep1}>
-        {step1Busy ? 'Looking up...' : 'Next'}
+        {step1Busy ? t('Looking up...') : t('Next')}
       </button>
     </div>
   {/snippet}
@@ -498,56 +499,56 @@
 
 <!-- Add Person, step 2: details form (commit lives in the footer so a failed
      POST keeps the form open; the back chevron returns to step 1) -->
-<Sheet bind:open={step2Open} title="Add Person" back="Back" onCancel={backToStep1}>
+<Sheet bind:open={step2Open} title={t('Add Person')} back={t('Back')} onCancel={backToStep1}>
   <form id="add-person-form" class="add-person-step" onsubmit={(e) => e.preventDefault()}>
     <div class="add-person-grid">
       <div>
         <div class="mb-3">
-          <label for="add-first-name" class="form-label">First Name</label>
+          <label for="add-first-name" class="form-label">{t('First Name')}</label>
           <input type="text" class="form-control" id="add-first-name" required bind:value={firstName} />
         </div>
         <div class="mb-3">
-          <label for="add-last-name" class="form-label">Last Name</label>
+          <label for="add-last-name" class="form-label">{t('Last Name')}</label>
           <input type="text" class="form-control" id="add-last-name" required bind:value={lastName} />
         </div>
         <div class="mb-3">
-          <label for="add-email" class="form-label">Email</label>
+          <label for="add-email" class="form-label">{t('Email')}</label>
           <input type="email" class="form-control" id="add-email" bind:value={email} />
         </div>
         <div class="mb-3">
-          <label for="add-sms-number" class="form-label">SMS Number</label>
+          <label for="add-sms-number" class="form-label">{t('SMS Number')}</label>
           <input type="text" class="form-control" id="add-sms-number" bind:value={smsNumber} />
         </div>
       </div>
       <div>
         <div class="mb-3">
-          <label for="add-city" class="form-label">City</label>
+          <label for="add-city" class="form-label">{t('City')}</label>
           <input type="text" class="form-control" id="add-city" bind:value={city} />
         </div>
         <div class="mb-3">
-          <label for="add-state" class="form-label">State</label>
+          <label for="add-state" class="form-label">{t('State')}</label>
           <input type="text" class="form-control" id="add-state" bind:value={stateArea} />
         </div>
         <div class="mb-3">
-          <label for="add-country" class="form-label">Country</label>
+          <label for="add-country" class="form-label">{t('Country')}</label>
           <input type="text" class="form-control" id="add-country" bind:value={country} />
         </div>
         <div class="mb-3">
-          <label for="add-thesession-user-id" class="form-label">TheSession User ID</label>
+          <label for="add-thesession-user-id" class="form-label">{t('TheSession User ID')}</label>
           <input type="number" class="form-control" id="add-thesession-user-id" readonly value={thesessionUserId} />
         </div>
       </div>
     </div>
     <div class="mb-3">
-      <label for="add-session-select" class="form-label">Add to Session (optional)</label>
+      <label for="add-session-select" class="form-label">{t('Add to Session (optional)')}</label>
       <select class="form-control" id="add-session-select" bind:value={sessionId}>
-        <option value="">Do not add to any sessions</option>
+        <option value="">{t('Do not add to any sessions')}</option>
         {#each sessions as session (session.session_id)}
           <option value={session.session_id}>{session.display_name}</option>
         {/each}
       </select>
       {#if sessionsFailed}
-        <LoadError what="the session list" inline onRetry={loadSessions} />
+        <LoadError message={t("Couldn't load the session list.")} inline onRetry={loadSessions} />
       {/if}
     </div>
     {#if step2Error}
@@ -557,7 +558,7 @@
   {#snippet footer()}
     <div class="add-person-actions">
       <button id="step2-save" class="btn btn-success" disabled={saving} onclick={saveNewPerson}>
-        {saving ? 'Saving...' : 'Save'}
+        {saving ? t('Saving...') : t('Save')}
       </button>
     </div>
   {/snippet}

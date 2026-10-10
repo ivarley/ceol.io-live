@@ -1,4 +1,5 @@
 <script>
+  // i18n-converted
   // Card (spec 035): plain surface — replaces .home-card and Bootstrap .card.
   let {
     hover = false, // lift on hover (linky cards)

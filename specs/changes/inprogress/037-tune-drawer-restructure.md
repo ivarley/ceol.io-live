@@ -76,6 +76,38 @@ Deliberately **not** covered: instance-vs-session setting differences (the Sessi
 those) and key differences (the key doesn't change what's drawn). Spec-later: an upcoming
 change goes deeper on settings and will revisit this.
 
+### The setting chooser (BUILT, Oct 2026)
+
+A setting is no longer typed in as a thesession.org number. Every place that set one — the
+personal Configure form, the Details form, the History form — shows the current setting
+(`#5150`) with a **Change** button, and under the staff a line offers the layer the drawer
+is looking at:
+
+| view | line | writes |
+|---|---|---|
+| my list (no session) | *I play a different version* **[Change Setting]** | `POST /api/my-tunes/ops` `{type: set_setting, tune_id, setting_id}` |
+| session (admins) | *We play a different version* **[Change Setting]** | `PUT /api/sessions/<path>/tunes/<id>` `{setting_id}` |
+| one night (members, tune played that night) | *We played a different version on this night* **[Change Setting]** | `PUT /api/sessions/<path>/<instance>/tunes/<id>` `{setting_override}` |
+
+Both open `SettingChooser.svelte` (a kit Sheet): the tune's settings we hold
+(`GET /api/tunes/<id>/preview`), then thesession.org's full list merged in setting order
+(`GET /api/tunes/thesession/<id>/preview?full=1`), opening on the setting the layer uses
+now. Each shows its **full** notation. Paging is instant because rendering runs ahead: the
+setting in view, then the next two, one at a time. A setting we hold renders through
+`/api/tunes/settings/<id>/image?kind=full`, which caches the PNG on `tune_setting`; one only
+thesession.org has renders ephemerally (`/api/tunes/render-abc`) and is cached for the page
+in `client.js`'s image registry. The pick saves at once, like the learn status — not behind
+the form's Save — in one request: all three writes import a setting only thesession.org has
+before saving it (`ensure_setting_held` / `_ensure_setting_local`: the ABC only, about a
+second; its images render on first view), since nothing may point at a setting we don't
+hold. A setting thesession.org doesn't have for the tune is a 404, and nothing is written.
+
+The iOS app has the same chooser (`ios/Ceol/Ceol/SettingChooser.swift`) on its tune sheet,
+with the same three lines and the same rules; a tune opened from a night's log carries the
+night (`TuneRef.instanceID`). The native surface gained the `set_setting` op, the two
+session writes (setting only), `setting_override` on the tune payload, a schema for
+thesession.org's preview (`?full=1`) and a body for `render-abc` — all additive.
+
 ## The name matcher
 
 "Meaningfully differs" is a display-only heuristic. Pure function in

@@ -1,10 +1,12 @@
 <script>
+  // i18n-converted
   // The festival picker (spec 056): the festival's name, then one line per year —
   // upcoming first, then past years newest first (the server's order) — with the
   // dates and how many of its sessions have logged tunes. Admins of the latest
   // year get "Add a year", which copies from that year.
   import CopyYearSheet from '../festival/CopyYearSheet.svelte'
   import { formatRange } from './logic.js'
+  import { t, tn } from '../lib/index.js'
 
   let { pageData } = $props()
 
@@ -30,19 +32,19 @@
             <span class="festival-year-number">{y.year}</span>
             <span class="festival-year-dates">{formatRange(y.initiation_date, y.termination_date)}</span>
             <span class="festival-year-count">
-              {#if isUpcoming(y)}Coming up{:else}{y.logged_instances} {y.logged_instances === 1 ? 'session' : 'sessions'} logged{/if}
+              {#if isUpcoming(y)}{t('Coming up')}{:else}{tn(y.logged_instances, '{n} session logged', '{n} sessions logged')}{/if}
             </span>
           </a>
         </li>
       {/each}
     </ul>
   {:else}
-    <p class="festival-empty">No years yet.</p>
+    <p class="festival-empty">{t('No years yet.')}</p>
   {/if}
 
   {#if canAdd && pageData.latest}
     <button type="button" class="festival-add-year" id="festival-add-year" onclick={() => (copyOpen = true)}>
-      Add a year
+      {t('Add a year')}
     </button>
     <CopyYearSheet bind:open={copyOpen} {festival} source={pageData.latest} />
   {/if}

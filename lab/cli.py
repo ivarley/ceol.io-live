@@ -32,6 +32,8 @@ COMMANDS = {
     "listen": "lab.tools.listen",
     "drafts": "lab.tools.drafts",
     "coreml": "lab.tools.coreml",
+    "confidence": "lab.analysis.confidence",
+    "exclusions": "lab.corpus.exclusions",
     "hearing-fixtures": "lab.tools.hearing_fixtures",
     "decider": "lab.tools.decider",
 }

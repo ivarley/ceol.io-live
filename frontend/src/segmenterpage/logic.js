@@ -32,6 +32,50 @@ export function timeFromHash(hash) {
   return Number.isFinite(seconds) ? Math.round(seconds * 1000) : null
 }
 
+/**
+ * A tune a machine logged that no one has confirmed yet: it carries the
+ * listener's confidence (0-99, the chance in whole percent that the name is
+ * right; spec 053), where a person's own row has none and a confirmed one 100.
+ */
+export function isGuess(tune) {
+  return tune?.confidence != null && tune.confidence < 100
+}
+
+/**
+ * How sure, as shown: the nearest 10%. The stored number stays exact (the
+ * model's calibration keeps its detail); a person reads bands, and a 99 is
+ * shown as the 100 it practically is.
+ */
+export function confidenceBand(confidence) {
+  return Math.round(confidence / 10) * 10
+}
+
+/**
+ * Shown at or under this, a guess is truly uncertain: highlighted, counted,
+ * and stepped through. Over ten labelled nights the model's 90% and up were
+ * right 99-100% of the time and its 70-90% about 70% (spec 053); on night
+ * 134 the one tune shown under 90 was the one wrong name.
+ */
+export const CHECK_AT_OR_BELOW = 80
+
+/** A machine's guess uncertain enough that a person should look. */
+export function needsCheck(tune) {
+  return isGuess(tune) && confidenceBand(tune.confidence) <= CHECK_AT_OR_BELOW
+}
+
+/**
+ * The next tune needing a check after `from` (`step` 1) or before it (`step`
+ * -1), wrapping round the log; -1 if none does.
+ */
+export function nextNeedingCheck(tunes, from, step = 1) {
+  const n = tunes.length
+  for (let k = 1; k <= n; k++) {
+    const i = (((from + step * k) % n) + n) % n
+    if (needsCheck(tunes[i])) return i
+  }
+  return -1
+}
+
 /** Index of the first tune with no segment, at or after `from`. -1 if none. */
 export function nextUnplacedIndex(tunes, from = 0) {
   for (let i = Math.max(0, from); i < tunes.length; i++) {
@@ -155,6 +199,30 @@ export function edgeLimits(resolved, id, edge, durationMs) {
     // Forwards: never past this tune's own end, wherever that end comes from.
     hi: Math.max(0, (me.explicitEnd ? me.endMs : next ? next.seg.startMs : durationMs) - MIN_SEGMENT_MS),
   }
+}
+
+/**
+ * The tune whose implicit end a start handle carries across a set break, or null.
+ *
+ * Inside a set, an implicit end and the next start are one edge: the tunes run
+ * into each other, and moving that start moves both. Across a set break there
+ * are really two edges that happen to coincide until someone separates them --
+ * one set stops, there is talk or tuning, another set starts. The tape offers
+ * that start as a split edge: the first way it is dragged decides which of the
+ * two moves, and the other stays put.
+ *
+ * `setOf` maps session_instance_tune_id -> set_number.
+ */
+export function setBreakBefore(resolved, setOf, id) {
+  const order = [...resolved.entries()].sort((a, b) => a[1].startMs - b[1].startMs)
+  const i = order.findIndex(([tuneId]) => tuneId === id)
+  if (i <= 0) return null
+  const [prevId, prev] = order[i - 1]
+  if (prev.explicitEnd) return null
+  const prevSet = setOf.get(prevId)
+  const mySet = setOf.get(id)
+  if (prevSet == null || mySet == null || prevSet === mySet) return null
+  return prevId
 }
 
 /**

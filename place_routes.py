@@ -6,7 +6,9 @@ the page's payload (serializers.build_admin_places_payload) so the page redraws
 from one shape.
 """
 
+# i18n-converted
 from flask import jsonify, request
+from flask_babel import gettext as _
 from flask_login import current_user
 
 import places
@@ -17,7 +19,9 @@ from database import get_db_connection
 def _admin_only():
     if not getattr(current_user, "is_system_admin", False):
         return (
-            jsonify({"success": False, "error": "Only a site admin can change places"}),
+            jsonify(
+                {"success": False, "error": _("Only a site admin can change places")}
+            ),
             403,
         )
     return None
@@ -30,7 +34,7 @@ def _parent_id(data):
     try:
         return int(raw), None
     except (TypeError, ValueError):
-        return None, "That parent doesn't exist"
+        return None, _("That parent doesn't exist")
 
 
 def _answer(conn, status=200, **extra):
@@ -67,7 +71,7 @@ def create_admin_place():
     data = request.get_json(silent=True) or {}
     name = str(data.get("name") or "").strip()
     if not name:
-        return jsonify({"success": False, "error": "A name is required"}), 400
+        return jsonify({"success": False, "error": _("A name is required")}), 400
     slug = str(data.get("slug") or "").strip() or places.slugify(name)
     parent_id, error = _parent_id(data)
     if error:
@@ -113,7 +117,7 @@ def update_admin_place(place_id):
         cur = conn.cursor()
         place = places.get_place(cur, place_id)
         if place is None:
-            return _refuse(conn, "Place not found", 404)
+            return _refuse(conn, _("Place not found"), 404)
         error = places.update_place(
             cur,
             place,
@@ -150,7 +154,7 @@ def delete_admin_place(place_id):
         cur = conn.cursor()
         place = places.get_place(cur, place_id)
         if place is None:
-            return _refuse(conn, "Place not found", 404)
+            return _refuse(conn, _("Place not found"), 404)
         error = places.delete_place(cur, place)
         if error:
             return _refuse(conn, error)

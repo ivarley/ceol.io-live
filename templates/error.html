@@ -1,11 +1,12 @@
+{# i18n-converted #}
 {% extends "base.html" %}
 
-{% block title %}Something went wrong{% endblock %}
+{% block title %}{{ _('Something went wrong') }}{% endblock %}
 
 {% block content %}
 <div class="container" style="max-width: 600px; margin: 50px auto; padding: 20px; text-align: center;">
     <h1 style="font-size: 2.5em; color: var(--error-text, #721c24); margin-bottom: 30px;">
-        Something went wrong. :(
+        {{ _('Something went wrong. :(') }}
     </h1>
     
     {% if error_message %}
@@ -18,14 +19,15 @@
     <div id="funny-content" style="margin-top: 40px;">
         {% if funny_text %}
         <div style="background-color: var(--info-bg, #d1ecf1); border: 1px solid var(--info-border, #bee5eb); color: var(--info-text, #0c5460); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-            <p style="font-size: 1.1em; margin: 0;">Perhaps we could interest you in something from <a href="https://www.joefago.com/thesessionshoppe-instruments">The Session Shoppe</a>, like a {{ funny_text }}?</p>
+            {% set shop %}<a href="https://www.joefago.com/thesessionshoppe-instruments">{{ 'The Session Shoppe' }}</a>{% endset %}
+            <p style="font-size: 1.1em; margin: 0;">{{ _('Perhaps we could interest you in something from %(shop)s, like a %(item)s?', shop=shop, item=funny_text) }}</p>
         </div>
         {% endif %}
         
         {% if funny_image %}
         <div style="margin-top: 20px;">
             <img src="{{ url_for('static', filename='images/error/' + funny_image) }}" 
-                 alt="Error illustration" 
+                 alt="{{ _('Error illustration') }}" 
                  style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
         </div>
         {% endif %}
@@ -34,7 +36,7 @@
     <div style="margin-top: 40px;">
         <a href="{{ url_for('home') }}" 
            style="display: inline-block; background-color: var(--primary-fill, #4a8049); color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 500;">
-            Go back home
+            {{ _('Go back home') }}
         </a>
     </div>
 </div>

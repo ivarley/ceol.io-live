@@ -1,26 +1,28 @@
+{# i18n-converted #}
 <!-- Admin Breadcrumb Navigation -->
-<nav class="admin-breadcrumb" aria-label="breadcrumb">
+<nav class="admin-breadcrumb" aria-label="{{ _('breadcrumb') }}">
     {% if current_user.is_system_admin %}
-    <a href="{{ url_for('admin') }}" class="breadcrumb-item">Admin</a>
+    <a href="{{ url_for('admin') }}" class="breadcrumb-item">{{ _('Admin') }}</a>
     {% if active_tab %}
-    <span class="breadcrumb-separator">&gt;&gt;</span>
+    <span class="breadcrumb-separator">{{ '>>' }}</span>
     <span class="breadcrumb-current">
-        {% if active_tab == 'sessions_list' %}Sessions
-        {% elif active_tab == 'tunes' %}Tunes
-        {% elif active_tab == 'merge_tunes' %}Merge Tunes
-        {% elif active_tab == 'people' %}People
-        {% elif active_tab == 'places' %}Places
-        {% elif active_tab == 'activity' %}Activity
-        {% elif active_tab == 'test_links' %}Test Links
-        {% elif active_tab == 'cache_settings' %}Cache Settings
-        {% elif active_tab == 'email_updates' %}Email Updates
-        {% elif active_tab == 'recordings' %}Recordings
+        {% if active_tab == 'sessions_list' %}{{ _('Sessions') }}
+        {% elif active_tab == 'tunes' %}{{ _('Tunes') }}
+        {% elif active_tab == 'merge_tunes' %}{{ _('Merge Tunes') }}
+        {% elif active_tab == 'people' %}{{ _('People') }}
+        {% elif active_tab == 'places' %}{{ _('Places') }}
+        {% elif active_tab == 'activity' %}{{ _('Activity') }}
+        {% elif active_tab == 'test_links' %}{{ _('Test Links') }}
+        {% elif active_tab == 'cache_settings' %}{{ _('Cache Settings') }}
+        {% elif active_tab == 'email_updates' %}{{ _('Email Updates') }}
+        {% elif active_tab == 'recordings' %}{{ _('Recordings') }}
+        {% elif active_tab == 'listen_jobs' %}{{ _('Listening jobs') }}
         {% endif %}
     </span>
     {% endif %}
     {% else %}
     {# Session admins just see a simple header #}
-    <span class="breadcrumb-current">My Sessions</span>
+    <span class="breadcrumb-current">{{ _('My Sessions') }}</span>
     {% endif %}
 </nav>
 
@@ -32,52 +34,57 @@
         <a class="nav-link {{ 'active' if active_tab == 'sessions_list' else '' }}"
            href="{{ url_for('admin_sessions_list') }}"
            role="tab">
-            Sessions
+            {{ _('Sessions') }}
         </a>
         <a class="nav-link {{ 'active' if active_tab == 'tunes' else '' }}"
            href="{{ url_for('admin_tunes') }}"
            role="tab">
-            Tunes
+            {{ _('Tunes') }}
         </a>
         <a class="nav-link {{ 'active' if active_tab == 'merge_tunes' else '' }}"
            href="{{ url_for('admin_tune_merge') }}"
            role="tab">
-            Merge Tunes
+            {{ _('Merge Tunes') }}
         </a>
         <a class="nav-link {{ 'active' if active_tab == 'people' else '' }}"
            href="{{ url_for('admin_people') }}"
            role="tab">
-            People
+            {{ _('People') }}
         </a>
         <a class="nav-link {{ 'active' if active_tab == 'places' else '' }}"
            href="{{ url_for('admin_places') }}"
            role="tab">
-            Places
+            {{ _('Places') }}
         </a>
         <a class="nav-link {{ 'active' if active_tab == 'activity' else '' }}"
            href="{{ url_for('admin_activity') }}"
            role="tab">
-            Activity
+            {{ _('Activity') }}
         </a>
         <a class="nav-link {{ 'active' if active_tab == 'test_links' else '' }}"
            href="{{ url_for('admin_test_links') }}"
            role="tab">
-            Test Links
+            {{ _('Test Links') }}
         </a>
         <a class="nav-link {{ 'active' if active_tab == 'cache_settings' else '' }}"
            href="{{ url_for('admin_cache_settings') }}"
            role="tab">
-            Cache Settings
+            {{ _('Cache Settings') }}
         </a>
         <a class="nav-link {{ 'active' if active_tab == 'email_updates' else '' }}"
            href="{{ url_for('admin_email_updates') }}"
            role="tab">
-            Email Updates
+            {{ _('Email Updates') }}
         </a>
         <a class="nav-link {{ 'active' if active_tab == 'recordings' else '' }}"
            href="{{ url_for('admin_recordings') }}"
            role="tab">
-            Recordings
+            {{ _('Recordings') }}
+        </a>
+        <a class="nav-link {{ 'active' if active_tab == 'listen_jobs' else '' }}"
+           href="{{ url_for('admin_listen_jobs_page') }}"
+           role="tab">
+            {{ _('Listening jobs') }}
         </a>
     </div>
 
@@ -85,34 +92,37 @@
     <div class="admin-tabs-mobile">
         <select class="form-select" onchange="location = this.value">
             <option value="{{ url_for('admin_sessions_list') }}" {{ 'selected' if active_tab == 'sessions_list' else '' }}>
-                Sessions
+                {{ _('Sessions') }}
             </option>
             <option value="{{ url_for('admin_tunes') }}" {{ 'selected' if active_tab == 'tunes' else '' }}>
-                Tunes
+                {{ _('Tunes') }}
             </option>
             <option value="{{ url_for('admin_tune_merge') }}" {{ 'selected' if active_tab == 'merge_tunes' else '' }}>
-                Merge Tunes
+                {{ _('Merge Tunes') }}
             </option>
             <option value="{{ url_for('admin_people') }}" {{ 'selected' if active_tab == 'people' else '' }}>
-                People
+                {{ _('People') }}
             </option>
             <option value="{{ url_for('admin_places') }}" {{ 'selected' if active_tab == 'places' else '' }}>
-                Places
+                {{ _('Places') }}
             </option>
             <option value="{{ url_for('admin_activity') }}" {{ 'selected' if active_tab == 'activity' else '' }}>
-                Activity
+                {{ _('Activity') }}
             </option>
             <option value="{{ url_for('admin_test_links') }}" {{ 'selected' if active_tab == 'test_links' else '' }}>
-                Test Links
+                {{ _('Test Links') }}
             </option>
             <option value="{{ url_for('admin_cache_settings') }}" {{ 'selected' if active_tab == 'cache_settings' else '' }}>
-                Cache Settings
+                {{ _('Cache Settings') }}
             </option>
             <option value="{{ url_for('admin_email_updates') }}" {{ 'selected' if active_tab == 'email_updates' else '' }}>
-                Email Updates
+                {{ _('Email Updates') }}
             </option>
             <option value="{{ url_for('admin_recordings') }}" {{ 'selected' if active_tab == 'recordings' else '' }}>
-                Recordings
+                {{ _('Recordings') }}
+            </option>
+            <option value="{{ url_for('admin_listen_jobs_page') }}" {{ 'selected' if active_tab == 'listen_jobs' else '' }}>
+                {{ _('Listening jobs') }}
             </option>
         </select>
     </div>
