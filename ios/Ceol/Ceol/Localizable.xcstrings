@@ -4239,6 +4239,7 @@
       }
     },
     "Listening…": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -7169,6 +7170,16 @@
         }
       }
     },
+    "Starting up…": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ag tosú…"
+          }
+        }
+      }
+    },
     "Starts": {
       "localizations": {
         "ga": {
@@ -8123,6 +8134,7 @@
       }
     },
     "Waiting for the first few seconds of music.": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {

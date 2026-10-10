@@ -30,7 +30,8 @@ struct MeterDemoView: View {
                 UserDefaults.standard.set(true, forKey: "SelfConfirm")
                 let start = Date()
                 for (i, step) in Self.script.enumerated() {
-                    let wait = step.0 - Date().timeIntervalSince(start)
+                    // starting up for the first few seconds, as a real start is
+                    let wait = 3 + step.0 - Date().timeIntervalSince(start)
                     if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
                     recorder.received(Self.state(t: 4000 * (i + 1), step.1, step.2, step.3))
                 }

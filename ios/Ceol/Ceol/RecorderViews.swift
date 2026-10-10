@@ -39,7 +39,7 @@ extension NightRecorder {
     var headline: String {
         if let error { return error }
         switch showing {
-        case .waiting: return tr("Listening…")
+        case .waiting: return tr("Starting up…")
         case .noTune: return tr("No tune playing")
         case .figuring: return tr("Figuring out the tune…")
         case .sure(let c):
@@ -248,8 +248,14 @@ struct ListenMeterView: View {
     @ViewBuilder private var mainState: some View {
         switch recorder.showing {
         case .waiting:
-            Text("Waiting for the first few seconds of music.")
-                .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted).padding(.vertical, 20)
+            // until the listener's first answer, a step's worth of audio in
+            HStack(spacing: 10) {
+                ProgressView()
+                Text("Starting up…").font(.ceol(size: 24, weight: .semibold)).foregroundStyle(CeolTokens.textColor)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .accessibilityIdentifier("meter.startingUp")
         case .noTune(let none):
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
