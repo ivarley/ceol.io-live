@@ -12,6 +12,7 @@
 		6E33AA072FF3613700BE9904 /* CeolSession in Frameworks */ = {isa = PBXBuildFile; productRef = 6E33AA062FF3613700BE9904 /* CeolSession */; };
 		6E33AA092FF3613700BE9904 /* CeolLogic in Frameworks */ = {isa = PBXBuildFile; productRef = 6E33AA082FF3613700BE9904 /* CeolLogic */; };
 		6E33AA0B2FF3613700BE9904 /* CeolHearing in Frameworks */ = {isa = PBXBuildFile; productRef = 6E33AA0A2FF3613700BE9904 /* CeolHearing */; };
+		6E33AA0D2FF3613700BE9904 /* CeolDeciding in Frameworks */ = {isa = PBXBuildFile; productRef = 6E33AA0C2FF3613700BE9904 /* CeolDeciding */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -65,6 +66,7 @@
 				6E33AA072FF3613700BE9904 /* CeolSession in Frameworks */,
 				6E33AA092FF3613700BE9904 /* CeolLogic in Frameworks */,
 				6E33AA0B2FF3613700BE9904 /* CeolHearing in Frameworks */,
+				6E33AA0D2FF3613700BE9904 /* CeolDeciding in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -130,6 +132,7 @@
 				6E33AA062FF3613700BE9904 /* CeolSession */,
 				6E33AA082FF3613700BE9904 /* CeolLogic */,
 				6E33AA0A2FF3613700BE9904 /* CeolHearing */,
+				6E33AA0C2FF3613700BE9904 /* CeolDeciding */,
 			);
 			productName = Ceol;
 			productReference = 6E33A9C62FF3613500BE9904 /* Ceol.app */;
@@ -631,6 +634,10 @@
 		6E33AA0A2FF3613700BE9904 /* CeolHearing */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = CeolHearing;
+		};
+		6E33AA0C2FF3613700BE9904 /* CeolDeciding */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = CeolDeciding;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

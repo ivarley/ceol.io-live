@@ -14,6 +14,11 @@ instead of audio, and the service only decides. Try it without a phone:
 
     python -m listen.client ws://localhost:8440/listen --recording 112 --heard
 
+An app built with the decider's data file decides on the phone as well
+(CeolKit's `CeolDeciding`, a port of `Listener.decide`), and listening on the
+phone then uses no service at all; see spec 053, "Listening on the phone,
+offline".
+
 This is the spike: one service, a shared token, no app page yet. It exists
 to measure a real instance before the native recorder is built.
 

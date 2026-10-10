@@ -2738,6 +2738,66 @@ segmented blind; item 3 the follower). Open, in rough order:
   - Still to measure: a real night with the phone listening: its speed and
     lag on an iPhone, battery and heat over three hours, and that the names
     shown match a server-listened night (they should: the same notes).
+- **(2026-10-10) Listening on the phone, offline: the deciding too.** The
+  phone now decides as well as hears, so a night needs no connection at all
+  (the recording and the logged tunes already waited for one). CeolKit's
+  `CeolDeciding` is `Listener.decide` in Swift, in the service's live
+  configuration: the repertoire's shortlist (100, 300 widened) and the whole
+  corpus's (20, 60), the aligner on the "notes" reading in the written key
+  over the last seven steps' pools, tune-ness, the decoder, and the taps
+  ("this is it" confirms and pins; "none of these" rules out for 30 s and
+  widens).
+  - **The data is small.** The service holds about 3 GB, nearly all of it
+    PyTorch and Python's dicts; what the decider reads packs into 15.6 MB
+    (`python -m lab decider export`, lab/tools/decider.py documents the
+    layout): the whole corpus's postings per tune (3.1M, as 16-bit tune
+    numbers, 6.3 MB), every setting's "notes" reading (5.9 MB), the n-gram
+    keys and offsets, names and types, and the configuration and tune-ness
+    model in a JSON header. The phone maps it rather than reading it (0.2 ms
+    to open), so it costs little resident memory.
+  - **The repertoire index is not shipped.** It is exactly the whole
+    corpus's postings restricted to the session's tunes, with its document
+    frequencies counted over those tunes: checked posting for posting, and
+    each tune's n-gram count, against the built one. So a session's
+    repertoire is a list of tune ids, and its idf takes 7.5 ms to count on
+    the Mac. The file carries this session's list as the default.
+  - **Held to the lab** by `python -m lab decider fixtures`: four minutes
+    each of 112 (a reel set), 137 (talk, with a "none of these" tap) and
+    143 (jigs, with a "this is it" on the second name, overriding the
+    decoder), heard by the lab, each step's shortlist, the tunes aligned,
+    their scores, tune-ness, the belief and the state. Swift on the same
+    messages: the shortlist and the tunes aligned the same on 180 of 180
+    steps, scores and tune-ness log-odds within 5e-13 (the fixtures' 12
+    decimal places), the tune shown the same on every step, every
+    displayed belief to the 4 places the state carries, the history the
+    same. One thing the lab hides: each state's history list is the one
+    the next step appends to, so a state kept by reference later gains the
+    next tune (what the service sends is serialised at once, so unaffected;
+    the fixtures copy it). End to end, the hearing fixtures' 30 s of 112
+    heard and decided in Swift names The Merry Blacksmith at every step,
+    state for state with the lab.
+  - **Speed on the Mac** (M-series, optimised): a step a median 55 ms, 90th
+    percentile 77, worst 105, the aligner across all cores. With the hearing
+    (about 150 ms) that is about 0.2 s of every 4 s. The target is built
+    optimised in Debug too (unoptimised it is some 30 times slower, and an
+    app run from Xcode is a Debug build).
+  - **In the app.** "This phone" now means heard and decided on the phone
+    when the app has the data file (`Corpus.shipped`: a fetched copy in
+    Application Support, else the one built in from
+    `ios/CeolKit/Sources/CeolDeciding/Data`, gitignored); without it, heard
+    on the phone and decided by the service, as before. `PhoneDeciding`
+    stands in for the stream: each step to the decider on a queue of its
+    own, its state through the same path as the service's (the meter log
+    gets it as "in", as if it had come over the wire), the taps to the
+    decider. The meter log's "begin" and "listen" say where the night is
+    decided.
+  - Still to do: measure it on an iPhone over a night (speed, memory, heat,
+    battery); a way for the app to fetch a newer data file rather than wait
+    for an app release (the corpus grows weekly; the lab's model changes
+    more often); the session's own repertoire in place of the default
+    (needs the tune list to come down with the session, ahead of the night);
+    and each lab change to the decider ported and its fixtures passing
+    before it reaches the phone.
 - **(2026-10-04) Loudness, relative to the night.** Absolute loudness was taken
   out of tune-ness after a test of laptop speakers recorded through a phone,
   which says nothing about a phone on a pub table (the player's correction).

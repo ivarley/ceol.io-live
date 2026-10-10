@@ -10,10 +10,12 @@
 //     long outage the service is told to skip (the file still has that audio).
 //
 // Or the phone listens for itself (ListenWhere.phone, spec 053 "Listening on the
-// phone"): CeolHearing turns the audio into notes and features every 4 s, and only
-// those go to the service, which decides what is playing. Much less to send, and the
-// service does a sixth of the work. Which one is chosen in the meter, and can change
-// mid-night: the recording goes on, and listening starts again on a new stream.
+// phone"): CeolHearing turns the audio into notes and features every 4 s, and
+// CeolDeciding decides what is playing, on the phone, with no connection at all
+// (PhoneDeciding). An app built without the decider's data file sends the notes and
+// features to the service instead, which decides. Which one is chosen in the meter,
+// and can change mid-night: the recording goes on, and listening starts again on a
+// new stream.
 //
 // It records with the screen locked and while you use the rest of the app (the audio
 // background mode), and picks up again after an interruption such as a phone call.
@@ -26,6 +28,7 @@
 // thread under Swift 6.
 
 @preconcurrency import AVFoundation
+import CeolDeciding
 import CeolHearing
 import CeolLogic
 import CoreML
@@ -80,7 +83,7 @@ final class NightRecorder {
     /// Listening on the phone couldn't start (the models), or stopped.
     private(set) var hearingError: String?
     @ObservationIgnored private let capture: AudioCapture
-    @ObservationIgnored private var streamLink: ListenLink
+    @ObservationIgnored private var streamLink: any Listening
     @ObservationIgnored private var hearing: PhoneHearing?
     @ObservationIgnored private let meterLog: MeterLog
     @ObservationIgnored private let listenURL: URL
@@ -116,13 +119,15 @@ final class NightRecorder {
         meterLog.write("app", ListenWire.event("begin", [
             "instance_id": instanceID, "stream_id": streamID, "recording": recordingID,
             "started_at": ISO8601DateFormatter().string(from: startedAt), "listen": listenWhere.rawValue,
+            "decide": listenWhere == .phone && PhoneDeciding.corpus != nil ? "phone" : "server",
         ]))
         streamLink = ListenLink(url: listenURL, token: token, streamID: streamID, source: capture)
         streamLink = makeLink(streamID: streamID)
     }
 
-    /// The stream for the chosen place: audio from the capture, or the phone's hearing.
-    private func makeLink(streamID: String) -> ListenLink {
+    /// The stream for the chosen place: audio from the capture, or the phone's hearing,
+    /// decided on the phone when it has the decider's data and on the service if not.
+    private func makeLink(streamID: String) -> any Listening {
         hearing = nil
         hearingError = nil
         capture.onSamples = nil
@@ -131,8 +136,11 @@ final class NightRecorder {
             return ListenLink(url: listenURL, token: token, streamID: streamID, source: capture)
         }
         let log = meterLog
+        let deciding = PhoneDeciding.corpus.map(PhoneDeciding.init)
         let h = PhoneHearing(
+            sends: deciding == nil,
             onStep: { heard, lagMs in
+                deciding?.take(heard)
                 // the phone's own work, a step at a time: how long and how far behind
                 log.write("app", ListenWire.event("heard", [
                     "t_ms": heard.tMs, "lag_ms": lagMs, "hear_ms": heard.timing.values.reduce(0, +),
@@ -145,7 +153,7 @@ final class NightRecorder {
             })
         hearing = h
         capture.onSamples = { h.take($0) }
-        return ListenLink(url: listenURL, token: token, streamID: streamID, source: h)
+        return deciding ?? ListenLink(url: listenURL, token: token, streamID: streamID, source: h)
     }
 
     /// Listen somewhere else from now on. The recording carries on; listening starts
@@ -161,6 +169,7 @@ final class NightRecorder {
         capture.resetOutbox()
         meterLog.write("app", ListenWire.event("listen", [
             "listen": place.rawValue, "stream_id": streamID, "from_sample": capture.written,
+            "decide": place == .phone && PhoneDeciding.corpus != nil ? "phone" : "server",
         ]))
         streamLink = makeLink(streamID: streamID)
         runLink()
@@ -487,8 +496,12 @@ nonisolated final class PhoneHearing: ListenSource, @unchecked Sendable {
     private let onStep: @Sendable (Heard, Int) -> Void
     /// Why, and whether listening has stopped (or only moved to the CPU).
     private let onFailure: @Sendable (String, Bool) -> Void
+    /// The steps go to the service (it decides); false when the phone decides itself.
+    private let sends: Bool
 
-    init(onStep: @escaping @Sendable (Heard, Int) -> Void, onFailure: @escaping @Sendable (String, Bool) -> Void) {
+    init(sends: Bool = true, onStep: @escaping @Sendable (Heard, Int) -> Void,
+         onFailure: @escaping @Sendable (String, Bool) -> Void) {
+        self.sends = sends
         self.onStep = onStep
         self.onFailure = onFailure
         // first on the queue, so every block of audio waits for the models
@@ -533,7 +546,7 @@ nonisolated final class PhoneHearing: ListenSource, @unchecked Sendable {
     private func steps(_ hearer: Hearer) throws {
         for heard in try hearer.readySteps() {
             let lag = lock.withLock { () -> Int in
-                outbox.append(t: heard.tMs, message: heard.message())
+                if sends { outbox.append(t: heard.tMs, message: heard.message()) }
                 lastStepT = heard.tMs
                 return Int(1000 * Double(captured) / Double(Hearer.sampleRate)) - heard.tMs
             }
@@ -587,10 +600,81 @@ nonisolated private final class ConverterFeed: @unchecked Sendable {
     }
 }
 
+// MARK: - Deciding on the phone
+
+/// Where the states come from and the taps go: the listening service (ListenLink), or
+/// the phone itself (PhoneDeciding).
+nonisolated protocol Listening: AnyObject, Sendable {
+    var isRunning: Bool { get }
+    func run(onState: @escaping @Sendable (ListenState, String) -> Void,
+             onLink: @escaping @Sendable (NightRecorder.Link) -> Void)
+    /// A tap, as ListenWire writes it for the service.
+    func send(_ text: String)
+    func stop()
+}
+
+/// The service's deciding, done on the phone (CeolDeciding, spec 053 "Listening on the
+/// phone, offline"): each step the phone heard goes to the decider on a queue of its
+/// own, and its state comes back as the service's "state" message would, so the meter
+/// and its log cannot tell the difference. No network at all.
+nonisolated final class PhoneDeciding: Listening, @unchecked Sendable {
+    /// The decider's data, mapped once for the app's life; nil if the app has none.
+    static let corpus: Corpus? = Corpus.shipped.flatMap { try? Corpus(contentsOf: $0) }
+
+    private let queue = DispatchQueue(label: "io.ceol.deciding", qos: .userInitiated)
+    private let lock = NSLock()
+    private var running = true
+    private var onState: (@Sendable (ListenState, String) -> Void)?
+    private let corpus: Corpus
+    private var decider: Decider?                    // touched only on `queue`
+
+    init(corpus: Corpus) {
+        self.corpus = corpus
+        // the session's repertoire is worked out here, not on the main thread
+        queue.async { [self] in decider = Decider(corpus: corpus) }
+    }
+
+    var isRunning: Bool { lock.withLock { running } }
+
+    func run(onState: @escaping @Sendable (ListenState, String) -> Void,
+             onLink: @escaping @Sendable (NightRecorder.Link) -> Void) {
+        lock.withLock { self.onState = onState }
+        onLink(.live)
+    }
+
+    /// One step of the phone's hearing.
+    func take(_ heard: Heard) {
+        queue.async { [self] in
+            guard let decider, let onState = lock.withLock({ running ? self.onState : nil }) else { return }
+            let notes = heard.notes.mapValues { $0.map { HeardNote($0.t0, $0.t1, $0.midi) } }
+            decider.step(tMs: heard.tMs, notes: notes, features: heard.features, heardMs: heard.heardMs)
+            let text = decider.stateMessage()
+            if case .state(let s) = ListenMessage.decode(text) { onState(s, text) }
+        }
+    }
+
+    func send(_ text: String) {
+        guard let obj = try? JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any],
+            obj["type"] as? String == "tap"
+        else { return }
+        let shown = (obj["shown"] as? [NSNumber] ?? []).map(\.intValue)
+        let tune = (obj["tune_id"] as? NSNumber)?.intValue
+        queue.async { [self] in
+            switch obj["action"] as? String {
+            case "this": if let tune { decider?.tapThis(tune) }
+            case "none": decider?.tapNone(shown: shown)
+            default: break
+            }
+        }
+    }
+
+    func stop() { lock.withLock { running = false } }
+}
+
 // MARK: - The stream to the service
 
 /// One WebSocket to the listening service at a time, reconnecting until stopped.
-nonisolated final class ListenLink: @unchecked Sendable {
+nonisolated final class ListenLink: Listening, @unchecked Sendable {
     private let url: URL
     private let token: String?
     private let streamID: String

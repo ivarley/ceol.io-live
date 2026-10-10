@@ -187,3 +187,6 @@ ios/.derived-device/
 # credentials and a later tidy-up that anchors that rule must not silently
 # start tracking them.
 /lab/.env
+
+# The decider data file the app ships with (spec 053), built by `lab decider export`
+ios/CeolKit/Sources/CeolDeciding/Data/*.bin

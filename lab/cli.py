@@ -33,6 +33,7 @@ COMMANDS = {
     "drafts": "lab.tools.drafts",
     "coreml": "lab.tools.coreml",
     "hearing-fixtures": "lab.tools.hearing_fixtures",
+    "decider": "lab.tools.decider",
 }
 
 

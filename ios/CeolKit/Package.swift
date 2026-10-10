@@ -13,6 +13,10 @@
 //   CeolHearing listening on the phone (spec 053): audio -> notes and features, the lab's
 //               listen.Hearer in Swift, held to fixtures the lab writes
 //               (python -m lab hearing-fixtures).
+//   CeolDeciding deciding on the phone, offline (spec 053): notes and features -> what is
+//               playing, the lab's listen.Listener.decide over a corpus file the lab
+//               writes (python -m lab decider export), held to its fixtures
+//               (python -m lab decider fixtures).
 //
 // Both inputs live in the web repo and are symlinked rather than copied, so the app
 // cannot quietly build against a stale copy of either — nor CeolLogicTests against a
@@ -31,6 +35,7 @@ let package = Package(
         .library(name: "CeolLogic", targets: ["CeolLogic"]),
         .library(name: "CeolSession", targets: ["CeolSession"]),
         .library(name: "CeolHearing", targets: ["CeolHearing"]),
+        .library(name: "CeolDeciding", targets: ["CeolDeciding"]),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-openapi-generator", from: "1.6.0"),
@@ -73,6 +78,17 @@ let package = Package(
         // Stage by stage against the lab, on clips of real nights (Fixtures, written by
         // `python -m lab hearing-fixtures`).
         .testTarget(name: "CeolHearingTests", dependencies: ["CeolHearing"], resources: [.copy("Fixtures")]),
+        // Deciding on the phone (spec 053): the shortlist, the aligner, tune-ness and the
+        // decoder over the corpus file, which is mapped, not loaded.
+        // Optimised in Debug too: its loops (the aligner, the lookup) run about 30 times
+        // slower unoptimised, and an app run from Xcode is a Debug build.
+        .target(name: "CeolDeciding", resources: [.copy("Data")], swiftSettings: [.unsafeFlags(["-O"])]),
+        // Step by step against the lab (Fixtures, written by `python -m lab decider
+        // fixtures`); the corpus file is not in the repo: CEOL_DECIDER_DATA, or the lab's
+        // data directory (LAB_DATA_DIR/index/decider-v1.bin).
+        // Also heard and decided in Swift end to end, on CeolHearingTests' clips.
+        .testTarget(name: "CeolDecidingTests", dependencies: ["CeolDeciding", "CeolHearing"],
+                    resources: [.copy("Fixtures")]),
         .testTarget(
             name: "CeolAPITests",
             dependencies: [
