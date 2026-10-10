@@ -66,14 +66,34 @@ extension NightRecorder {
     }
 }
 
-/// The recording dot: red, its glow following the microphone.
+/// The recording dot: red, its glow following the microphone. `pulses`: every few
+/// seconds a red ring leaves it, growing and fading as it goes (the mini bar's).
 struct RecordingDot: View {
     let level: Double
+    var pulses = false
+    @State private var ring = false
+
     var body: some View {
         Circle().fill(CeolTokens.danger).frame(width: 10, height: 10)
             .background(Circle().fill(CeolTokens.danger.opacity(0.35)).frame(width: 10 + 14 * level, height: 10 + 14 * level))
+            .overlay {
+                if pulses {
+                    Circle().stroke(CeolTokens.danger, lineWidth: 1.5).frame(width: 10, height: 10)
+                        .scaleEffect(ring ? 3 : 1).opacity(ring ? 0 : 0.8)
+                }
+            }
             .frame(width: 24, height: 24)
             .animation(.easeOut(duration: 0.2), value: level)
+            .task(id: pulses) {
+                guard pulses else { return }
+                while !Task.isCancelled {
+                    var still = Transaction()
+                    still.disablesAnimations = true
+                    withTransaction(still) { ring = false }
+                    withAnimation(.easeOut(duration: 1.4)) { ring = true }
+                    try? await Task.sleep(for: .seconds(3))
+                }
+            }
     }
 }
 
@@ -104,7 +124,7 @@ struct RecorderBar: View {
     private var openButton: some View {
         Button { recorder.showingMeter = true } label: {
             HStack(spacing: 10) {
-                RecordingDot(level: recorder.level)
+                RecordingDot(level: recorder.level, pulses: true)
                 stateIcon.frame(width: 30)
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
