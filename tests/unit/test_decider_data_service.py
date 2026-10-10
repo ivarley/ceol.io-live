@@ -22,7 +22,10 @@ class FakeS3:
 
     def get_object(self, Bucket, Key):
         if Key not in self.objects:
-            raise self.exceptions.NoSuchKey(Key)
+            # what S3 says to credentials that may not list the bucket
+            e = Exception(Key)
+            e.response = {"Error": {"Code": "AccessDenied"}}
+            raise e
         return {"Body": io.BytesIO(self.objects[Key])}
 
     def put_object(self, Bucket, Key, Body, ContentType=None):

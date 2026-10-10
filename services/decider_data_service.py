@@ -58,12 +58,18 @@ def manifest_key(fmt):
 
 
 def current_manifest(fmt):
-    """The published manifest for a format, or None if there is none."""
+    """The published manifest for a format, or None if there is none. The app's
+    credentials may read objects but not list the bucket, and without that S3
+    answers a missing object with AccessDenied rather than NoSuchKey; either
+    means none yet (a real lack of access shows when publishing writes)."""
     s3, bucket = _s3()
     try:
         body = s3.get_object(Bucket=bucket, Key=manifest_key(fmt))["Body"].read()
-    except s3.exceptions.NoSuchKey:
-        return None
+    except Exception as e:
+        code = getattr(e, "response", {}).get("Error", {}).get("Code")
+        if code in ("NoSuchKey", "404", "AccessDenied", "403"):
+            return None
+        raise
     return json.loads(body)
 
 
