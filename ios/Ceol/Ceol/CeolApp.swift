@@ -17,9 +17,18 @@ struct CeolApp: App {
         CeolAppearance.apply()
     }
 
+    /// The app, or (a debug build, -CeolMeterDemo YES) the meter's demo.
+    @ViewBuilder private var root: some View {
+        #if DEBUG
+            if UserDefaults.standard.bool(forKey: "CeolMeterDemo") { MeterDemoView() } else { ContentView() }
+        #else
+            ContentView()
+        #endif
+    }
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            root
                 .environment(model)
                 .font(.ceol())
                 // Spec 057: the profile's language, not the phone's (L10n.swift). ContentView
