@@ -231,12 +231,14 @@ struct ListenMeterView: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                     Image(systemName: "person.2.wave.2.fill")
-                        .font(.system(size: 22)).foregroundStyle(CeolTokens.textMuted)
+                        .font(.system(size: 26)).foregroundStyle(CeolTokens.textMuted)
                         .symbolEffect(.variableColor.iterative.reversing, options: .repeating)
-                    Text("No tune playing").font(.ceol(size: 20, weight: .semibold)).foregroundStyle(CeolTokens.textColor)
+                    Text("No tune playing").font(.ceol(size: 24, weight: .semibold)).foregroundStyle(CeolTokens.textColor)
                     Text(verbatim: "\(Int((none * 100).rounded()))%")
-                        .font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
+                        .font(.ceol(size: 14)).foregroundStyle(CeolTokens.textMuted)
                 }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("meter.noTune")
                 if recorder.canEndSet {
@@ -262,11 +264,13 @@ struct ListenMeterView: View {
     @ViewBuilder private var figuring: some View {
         let state = recorder.state
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                ProgressView().controlSize(.small)
-                Text("Figuring out the tune…").font(.ceol(size: 20, weight: .semibold))
+            HStack(spacing: 10) {
+                ProgressView()
+                Text("Figuring out the tune…").font(.ceol(size: 24, weight: .semibold))
                     .foregroundStyle(CeolTokens.textColor)
             }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
             .accessibilityIdentifier("meter.figuring")
             if let was = recorder.changedFrom {
                 Text("The tune may have changed (was \(was.name ?? tr("Tune \(was.tuneID)"))).")
