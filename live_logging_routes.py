@@ -705,6 +705,21 @@ def _handle_add_tune(cur, session_instance_id, data, user_id):
     srow = cur.fetchone()
     session_id = srow[0] if srow else None
 
+    # A tune_id not in our catalogue is a thesession.org id we haven't imported (our tune
+    # ids are thesession.org's): import it as a thesession_id would, rather than fail the
+    # insert on the tune foreign key. The live listener names tunes from the whole of
+    # thesession.org, and app builds before 2026-10-10 log its popular-tier picks by
+    # tune_id (a phone's offline queue replayed one on 2026-10-10 and was refused).
+    if ts_id is None and tune_id is not None:
+        try:
+            as_int = int(tune_id)
+        except (TypeError, ValueError):
+            as_int = None
+        if as_int is not None:
+            cur.execute("SELECT 1 FROM tune WHERE tune_id = %s", (as_int,))
+            if cur.fetchone() is None:
+                ts_id, tune_id = as_int, None
+
     # thesession.org import (spec 026): an optional thesession_id means "ensure this tune is in
     # our catalog, importing it if needed, then log it linked". It takes priority over tune_id/
     # name and runs inside this op's transaction, so the new tune row commits atomically with

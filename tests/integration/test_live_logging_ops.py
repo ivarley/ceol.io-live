@@ -809,6 +809,35 @@ def test_add_tune_thesession_id_idempotent_by_op_id(
     assert len(_records(db_cursor, inst)) == 1
 
 
+def test_add_tune_by_an_unknown_tune_id_imports_it(
+        client, authenticated_user, live_instance, db_cursor, monkeypatch):
+    """A tune_id not in our catalogue is a thesession.org id: imported and logged linked,
+    as a thesession_id is, rather than refused on the tune foreign key (the live listener's
+    popular-tier picks, logged by tune_id from app builds 27 and 28)."""
+    import live_logging_routes
+    monkeypatch.setattr(live_logging_routes, "_fetch_thesession_tune", lambda tid: dict(FAKE_TS_TUNE))
+    sid, inst = live_instance["session_id"], live_instance["instance_id"]
+    with authenticated_user:
+        resp, body = _op(client, inst, op_type="add_tune", tune_id=IMPORT_ID, name="Imported Reel, The")
+    assert resp.status_code == 200 and body["success"] is True
+    assert body["record"]["tune_id"] == IMPORT_ID
+    db_cursor.execute("SELECT name FROM tune WHERE tune_id = %s", (IMPORT_ID,))
+    assert db_cursor.fetchone()[0] == "The Imported Reel"
+    assert _repertoire_count(db_cursor, sid, IMPORT_ID) == 1
+
+
+def test_add_tune_by_a_known_tune_id_does_not_fetch(
+        client, authenticated_user, live_instance, monkeypatch):
+    """A tune_id we have is linked as before, with no import."""
+    import live_logging_routes
+    monkeypatch.setattr(live_logging_routes, "_fetch_thesession_tune",
+                        _no_fetch("should not fetch a tune already in the catalog"))
+    inst, reel = live_instance["instance_id"], live_instance["reel"]
+    with authenticated_user:
+        resp, body = _op(client, inst, op_type="add_tune", tune_id=reel)
+    assert body["success"] is True and body["record"]["tune_id"] == reel
+
+
 def test_add_tune_thesession_id_already_local_no_fetch(
         client, authenticated_user, live_instance, monkeypatch):
     """If we already have the tune, thesession_id links it without any network fetch."""

@@ -419,20 +419,18 @@ final class NightRecorder {
         streamLink.send(text)
     }
 
-    /// Add the tapped tune to the end of the night's log. A tune of the session's
-    /// repertoire goes in by its id; one the whole-corpus fallback found goes in by its
-    /// thesession.org id, as the composer logs a pasted thesession link. Only the id is
-    /// sent; the name (as the meter shows it, received) is the row's label until the
-    /// server answers.
+    /// Add the tapped tune to the end of the night's log, by its thesession.org id, as the
+    /// composer logs a pasted thesession link: the server links a tune Ceol has and imports
+    /// one it hasn't. Only the id is sent; the name (as the meter shows it) is the row's
+    /// label until the server answers.
     private func logToNight(_ tuneID: Int, auto: Bool = false) {
         guard logged != tuneID, let night, night.log != nil else { return }
         let c = state?.top.first { $0.tuneID == tuneID }
         let name: JSONValue = c?.name.map(JSONValue.string) ?? .null
-        if c?.outside == true {
-            loggedRow = night.logTune(["thesession_id": JSONValue(tuneID), "name": name], at: .end)
-        } else {
-            loggedRow = night.logTune(["tune_id": JSONValue(tuneID), "name": name], at: .end)
-        }
+        // by thesession.org id always: the listener names tunes from the whole of
+        // thesession.org, and one of its popular picks may not be in Ceol's catalogue yet
+        // (the server imports it; one it has is simply linked)
+        loggedRow = night.logTune(["thesession_id": JSONValue(tuneID), "name": name], at: .end)
         logged = tuneID
         loggedAt[tuneID] = Date()
         meterLog.write("app", ListenWire.event("logged", ["tune_id": tuneID, "outside": c?.outside == true, "auto": auto]))
