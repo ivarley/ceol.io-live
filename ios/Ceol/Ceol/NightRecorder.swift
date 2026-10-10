@@ -126,6 +126,16 @@ final class NightRecorder {
             meterLog.write("app", ListenWire.event("self_confirm", ["on": selfConfirms, "t_ms": state?.tMs ?? 0]))
         }
     }
+    /// Whether the recording goes up to Ceol's server when the night stops: an option on
+    /// the meter, remembered, off unless turned on. Off, it stays on the phone, where the
+    /// recordings list can still upload it.
+    var uploadsRecording: Bool = UserDefaults.standard.bool(forKey: "UploadRecording") {
+        didSet {
+            guard uploadsRecording != oldValue else { return }
+            UserDefaults.standard.set(uploadsRecording, forKey: "UploadRecording")
+            meterLog.write("app", ListenWire.event("upload_recording", ["on": uploadsRecording, "t_ms": state?.tMs ?? 0]))
+        }
+    }
     /// How sure the meter must be to log a tune by itself: what it shows as 100%.
     nonisolated static let selfConfirmAt = 0.995
     nonisolated static let relogAfter: TimeInterval = 600

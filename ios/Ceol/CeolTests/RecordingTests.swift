@@ -64,3 +64,22 @@ struct RecordingTests {
         return out
     }
 }
+
+/// "Upload the recording to Ceol" off: the recording is kept on the phone, says so, and
+/// nothing uploads it by itself.
+@MainActor
+struct KeepOnPhoneTests {
+    @Test func aRecordingKeptOnThePhoneSaysSo() {
+        let store = RecordingStore()
+        let id = "test-keep-\(UUID().uuidString)"
+        store.begin(id: id, instanceID: 1, title: "A night")
+        store.finish(id: id, keepOnPhone: true)
+        let r = store.items.first { $0.id == id }
+        #expect(r?.keepOnPhone == true)
+        #expect(r?.phase == .ready)
+        #expect(r?.statusText == "Kept on this phone")
+        store.finish(id: id, keepOnPhone: false)
+        #expect(store.items.first { $0.id == id }?.statusText == "Not uploaded yet")
+        if let r = store.items.first(where: { $0.id == id }) { store.delete(r) }
+    }
+}

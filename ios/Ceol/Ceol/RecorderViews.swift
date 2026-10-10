@@ -225,6 +225,8 @@ struct ListenMeterView: View {
     @State private var confirmingStop = false
     /// The confirmed tune was tapped: "Wrong tune" or "Tune changed".
     @State private var correcting = false
+    /// The options, opened (folded away each time the meter opens).
+    @State private var showingOptions = false
 
     /// Everything under the toolbar (its own view so a test can draw it).
     var content: some View {
@@ -244,7 +246,7 @@ struct ListenMeterView: View {
                 Text(error).font(.ceol(size: 14)).foregroundStyle(CeolTokens.danger)
             }
             mainState
-            selfConfirmSwitch
+            options
             history
         }
     }
@@ -291,6 +293,31 @@ struct ListenMeterView: View {
             .pickerStyle(.segmented)
             .accessibilityIdentifier("meter.listenWhere")
         }
+    }
+
+    /// The night's options, folded away until opened: logging by itself at 100%, and
+    /// uploading the recording. Each is kept for the next night.
+    private var options: some View {
+        DisclosureGroup(isExpanded: $showingOptions) {
+            VStack(spacing: 12) {
+                selfConfirmSwitch
+                uploadSwitch
+            }
+            .padding(.top, 8)
+        } label: {
+            Text("Options").font(.ceol(size: 14, weight: .semibold)).foregroundStyle(CeolTokens.textMuted)
+        }
+        .tint(CeolTokens.textMuted)
+        .accessibilityIdentifier("meter.options")
+    }
+
+    /// Whether the recording goes up to Ceol's server when the night stops.
+    private var uploadSwitch: some View {
+        Toggle(isOn: Binding(get: { recorder.uploadsRecording }, set: { recorder.uploadsRecording = $0 })) {
+            Text("Upload the recording to Ceol").font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
+        }
+        .tint(CeolTokens.primaryFill)
+        .accessibilityIdentifier("meter.uploadRecording")
     }
 
     /// Whether a tune the meter is sure of (100%) is logged without a tap: kept for the
@@ -506,7 +533,7 @@ extension LocalRecording {
     var statusText: String {
         switch phase {
         case .recording: tr("Recording")
-        case .ready: tr("Not uploaded yet")
+        case .ready: keepOnPhone == true ? tr("Kept on this phone") : tr("Not uploaded yet")
         case .converting: tr("Preparing the file…")
         case .uploading: tr("Uploading…")
         case .confirming: tr("Finishing the upload…")

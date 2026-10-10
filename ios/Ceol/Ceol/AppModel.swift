@@ -139,8 +139,10 @@ final class AppModel {
         guard let r = recorder else { return }
         r.stop()
         recorder = nil
-        recordings.finish(id: r.recordingID)
-        Task { await recordings.upload(r.recordingID) }
+        // uploaded only with the option on; otherwise kept on the phone (Upload in the list)
+        let upload = r.uploadsRecording
+        recordings.finish(id: r.recordingID, keepOnPhone: !upload)
+        if upload { Task { await recordings.upload(r.recordingID) } }
     }
 
     /// A session, in the Sessions tab.

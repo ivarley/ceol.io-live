@@ -48,6 +48,10 @@ struct LocalRecording: Codable, Identifiable, Equatable {
     var uploadName: String?
     /// The meter log has reached the server.
     var meterLogSent: Bool?
+    /// Kept on the phone: the "Upload the recording" option was off when it stopped, so
+    /// nothing uploads it by itself (Upload in the list still can). Nil: from before the
+    /// option, uploaded as then.
+    var keepOnPhone: Bool?
 }
 
 @Observable
@@ -96,10 +100,11 @@ final class RecordingStore {
         save(LocalRecording(id: id, instanceID: instanceID, title: title, startedAt: Date(), phase: .recording))
     }
 
-    func finish(id: String) {
+    func finish(id: String, keepOnPhone: Bool = false) {
         guard var r = items.first(where: { $0.id == id }) else { return }
         r.endedAt = Date()
         r.phase = .ready
+        r.keepOnPhone = keepOnPhone
         save(r)
     }
 
@@ -159,11 +164,11 @@ final class RecordingStore {
     }
 
     /// Recordings not uploaded (a failure, or a stop the app never got to upload),
-    /// each at most every ten minutes.
+    /// each at most every ten minutes; not one kept on the phone.
     func retryWaiting() {
         guard let app, !app.simulatedOffline else { return }
         let now = Date()
-        for r in items where r.phase == .failed || r.phase == .ready {
+        for r in items where (r.phase == .failed || r.phase == .ready) && r.keepOnPhone != true {
             if let t = lastTried[r.id], now.timeIntervalSince(t) < Self.retryEvery { continue }
             lastTried[r.id] = now
             Task { await upload(r.id) }
@@ -173,6 +178,8 @@ final class RecordingStore {
     func upload(_ id: String) async {
         guard var r = items.first(where: { $0.id == id }), let app else { return }
         lastTried[id] = Date()
+        // asked for by hand (or by the option): retried like any other from now on
+        r.keepOnPhone = false
         r.error = nil
         r.phase = .converting
         save(r)

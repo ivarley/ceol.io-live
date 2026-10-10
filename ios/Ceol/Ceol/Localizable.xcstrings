@@ -4067,6 +4067,16 @@
         }
       }
     },
+    "Kept on this phone": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Coinnithe ar an bhfón seo"
+          }
+        }
+      }
+    },
     "Key": {
       "localizations": {
         "ga": {
@@ -5660,6 +5670,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Barraí tosaigh"
+          }
+        }
+      }
+    },
+    "Options": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Roghanna"
           }
         }
       }
@@ -8010,6 +8030,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Stad an uaslódáil: %@"
+          }
+        }
+      }
+    },
+    "Upload the recording to Ceol": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Uaslódáil an taifeadadh chuig Ceol"
           }
         }
       }

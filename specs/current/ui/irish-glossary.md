@@ -248,6 +248,9 @@ which. Added 2026-10-10, not yet reviewed.
 | Couldn't start listening on this phone: … | Níorbh fhéidir éisteacht a thosú ar an bhfón seo: … | The rest is the phone's own error message. |
 | Listening on this phone stopped: … | Stop an éisteacht ar an bhfón seo: … | |
 | Log automatically at 100% | Logáil go huathoibríoch ag 100% | A switch on the meter: when it is sure of a tune, it logs it without a tap. |
+| Options | Roghanna | The meter's folded-away section holding its two switches. |
+| Upload the recording to Ceol | Uaslódáil an taifeadadh chuig Ceol | A switch: off, a night's recording stays on the phone. |
+| Kept on this phone | Coinnithe ar an bhfón seo | A recording's status when it wasn't uploaded. |
 | Start Listening | Tosaigh ag éisteacht | The big button that starts recording a night and listening to it. |
 | Starting up… | Ag tosú… | The meter's state until the listener first answers, a few seconds in. |
 | No tune playing | Níl fonn á sheinm | The meter's state when it hears talk, tuning or silence. |
