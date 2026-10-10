@@ -67,7 +67,7 @@ extension NightRecorder {
 }
 
 /// The recording dot: red, its glow following the microphone. `pulses`: every few
-/// seconds a red ring leaves it, growing and fading as it goes (the mini bar's).
+/// seconds a red ring leaves it, growing and fading as it goes, while recording.
 struct RecordingDot: View {
     let level: Double
     var pulses = false
@@ -252,7 +252,7 @@ struct ListenMeterView: View {
     var content: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 8) {
-                RecordingDot(level: recorder.level)
+                RecordingDot(level: recorder.level, pulses: true)
                 Text(recorder.clock).font(.ceol(size: 22, weight: .semibold)).monospacedDigit()
                 Spacer()
                 if let t = recorder.state?.tuneness {

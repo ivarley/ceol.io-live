@@ -1,9 +1,11 @@
 // A debug build's demo of the meter (-CeolMeterDemo YES): the listener's states played
-// on a timer through the real meter and the mini bar under it, with no microphone and no
-// service, to look at their states and animations (spec 053). -CeolMeterDemo start shows
-// the screen before a night starts. Not in release builds.
+// on a timer through the real meter, with no microphone and no service, to look at its
+// states and animations (spec 053). -CeolMeterDemo bar shows the meter minimised: the
+// mini bar over the tabs' place; -CeolMeterDemo start the screen before a night starts.
+// Not in release builds.
 
 #if DEBUG
+import CeolDesign
 import CeolLogic
 import Foundation
 import SwiftUI
@@ -26,26 +28,26 @@ struct MeterDemoView: View {
     ]
 
     var body: some View {
-        if UserDefaults.standard.string(forKey: "CeolMeterDemo") == "start" {
-            ListenStartView(title: "B.D. Riley's · demo") {}
-        } else {
-            demo
+        switch UserDefaults.standard.string(forKey: "CeolMeterDemo") {
+        case "start": ListenStartView(title: "B.D. Riley's · demo") {}
+        case "bar":
+            CeolTokens.bgColor.ignoresSafeArea()
+                .safeAreaInset(edge: .bottom, spacing: 0) { RecorderBar(recorder: recorder) }
+                .task { await play() }
+        default:
+            ListenMeterView(recorder: recorder, onStop: {}).task { await play() }
         }
     }
 
-    private var demo: some View {
-        ListenMeterView(recorder: recorder, onStop: {})
-            .safeAreaInset(edge: .bottom, spacing: 0) { RecorderBar(recorder: recorder) }
-            .task {
-                UserDefaults.standard.set(true, forKey: "SelfConfirm")
-                let start = Date()
-                for (i, step) in Self.script.enumerated() {
-                    // starting up for the first few seconds, as a real start is
-                    let wait = 3 + step.0 - Date().timeIntervalSince(start)
-                    if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
-                    recorder.received(Self.state(t: 4000 * (i + 1), step.1, step.2, step.3))
-                }
-            }
+    private func play() async {
+        UserDefaults.standard.set(true, forKey: "SelfConfirm")
+        let start = Date()
+        for (i, step) in Self.script.enumerated() {
+            // starting up for the first few seconds, as a real start is
+            let wait = 3 + step.0 - Date().timeIntervalSince(start)
+            if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
+            recorder.received(Self.state(t: 4000 * (i + 1), step.1, step.2, step.3))
+        }
     }
 
     static func state(t: Int, _ a: Double, _ b: Double, _ none: Double) -> ListenState {
