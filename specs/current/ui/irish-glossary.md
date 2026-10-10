@@ -232,6 +232,24 @@ Words the translation needed that neither list covered, grouped by where they ap
 | active window | tréimhse ghníomhach | Minutes before/after a session when it counts as live. |
 | recurrence pattern | pátrún athfhillteach | |
 
+### Listening to a session
+
+The meter that names the tune while a night is recorded. The phone can do the
+listening itself, with no connection, or leave it to Ceol's server; a person picks
+which. Added 2026-10-10, not yet reviewed.
+
+| English | Irish | Usage notes |
+|---|---|---|
+| listening (now) | ag éisteacht | As in the existing "Ag éisteacht" on the meter. |
+| Listening on (this phone / Ceol's server) | Ag éisteacht ar | The label before the two choices. |
+| this phone | an fón seo | "Ag éisteacht ar an bhfón seo" (eclipsis after "ar an"). |
+| Ceol's server | Freastalaí Ceol | The other choice. "Freastalaí" as in "earráid fhreastalaí". |
+| Not listening — still recording | Gan éisteacht — fós ag taifeadadh | Shown when the phone's listening has stopped but the recording goes on. |
+| Couldn't start listening on this phone: … | Níorbh fhéidir éisteacht a thosú ar an bhfón seo: … | The rest is the phone's own error message. |
+| Listening on this phone stopped: … | Stop an éisteacht ar an bhfón seo: … | |
+| the decider (the part that names the tune) | an cinnteoir | Only in a server error: "Níorbh fhéidir sonraí an chinnteora a léamh" (the decider data could not be read). Developer-facing; a plainer word is welcome. |
+| format (of a file) | formáid | "Ní mór don fhormáid a bheith ina slánuimhir" (format must be a whole number). Developer-facing. |
+
 ### Errors and technical words
 
 Mostly in messages people see only when something goes wrong.
