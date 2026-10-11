@@ -19,6 +19,27 @@ describe('AddTuneForm', () => {
     expect(onSubmit).toHaveBeenCalledWith({ status: 'want to learn', notes: '', overrides: [] })
   })
 
+  it('submits the alias and key only once each is opened and given', async () => {
+    // Opened and left blank: no alias.
+    const blank = vi.fn().mockResolvedValue()
+    const first = render(AddTuneForm, { instruments: [], onSubmit: blank })
+    await fireEvent.click(first.getByText('I call this something else'))
+    await fireEvent.click(first.container.querySelector('.mt-submit'))
+    expect(blank).toHaveBeenCalledWith({ status: 'want to learn', notes: '', overrides: [] })
+    first.unmount()
+    // Given: both ride along, the alias trimmed.
+    const onSubmit = vi.fn().mockResolvedValue()
+    const { container, getByText } = render(AddTuneForm, { instruments: [], onSubmit })
+    await fireEvent.click(getByText('I call this something else'))
+    await fireEvent.input(container.querySelector('.mt-alias'), { target: { value: '  The Jig I Know ' } })
+    await fireEvent.click(getByText('I play this in a different key'))
+    await fireEvent.change(container.querySelector('.mt-key'), { target: { value: 'Gmajor' } })
+    await fireEvent.click(container.querySelector('.mt-submit'))
+    expect(onSubmit).toHaveBeenCalledWith({
+      status: 'want to learn', notes: '', overrides: [], alias: 'The Jig I Know', key: 'Gmajor',
+    })
+  })
+
   it('submits the chosen status and typed note', async () => {
     const onSubmit = vi.fn().mockResolvedValue()
     const { container } = render(AddTuneForm, { instruments: [], onSubmit })

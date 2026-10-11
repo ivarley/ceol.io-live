@@ -3917,12 +3917,32 @@
         }
       }
     },
+    "I call this something else": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tugaim ainm eile air seo"
+          }
+        }
+      }
+    },
     "I play a different version": {
       "localizations": {
         "ga": {
           "stringUnit": {
             "state": "translated",
             "value": "Seinnim leagan eile"
+          }
+        }
+      }
+    },
+    "I play this in a different key": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Seinnim é seo i ngléas eile"
           }
         }
       }
@@ -4185,6 +4205,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Gléas (roghnach)"
+          }
+        }
+      }
+    },
+    "Key I play it in": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "An gléas a sheinnim é ann"
           }
         }
       }
@@ -8613,6 +8643,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Fáilte ar ais, "
+          }
+        }
+      }
+    },
+    "What I call it": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "An t-ainm a thugaim air"
           }
         }
       }

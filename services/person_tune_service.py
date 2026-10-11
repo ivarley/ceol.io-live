@@ -69,6 +69,8 @@ class PersonTuneService:
         notes: Optional[str] = None,
         setting_id: Optional[int] = None,
         user_id: Optional[int] = None,
+        name_alias: Optional[str] = None,
+        key: Optional[str] = None,
     ) -> Tuple[bool, str, Optional[PersonTune]]:
         """
         Create a new PersonTune record.
@@ -101,6 +103,8 @@ class PersonTuneService:
                 learn_status=learn_status,
                 notes=notes,
                 setting_id=setting_id,
+                name_alias=name_alias,
+                key=key,
             )
 
             # Save to database

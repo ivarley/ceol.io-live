@@ -298,6 +298,12 @@ struct TuneSheet: View {
     @State private var fullScreen = false
     @State private var notationFailed = false
     @State private var chooser: SettingLayer?
+    /// Adding: what you call it and the key you play it in, when they differ from the
+    /// catalogue's; a link each, opening into its field.
+    @State private var aliasOpen = false
+    @State private var alias = ""
+    @State private var keyOpen = false
+    @State private var key = ""
 
     var body: some View {
         NavigationStack {
@@ -353,12 +359,15 @@ struct TuneSheet: View {
 
     /// Saves one op; true when the server took it.
     @discardableResult
-    private func save(_ type: TuneOp._TypePayload, status s: LearnStatus? = nil, heard h: Int? = nil, notes n: String? = nil) async -> Bool {
+    private func save(
+        _ type: TuneOp._TypePayload, status s: LearnStatus? = nil, heard h: Int? = nil, notes n: String? = nil,
+        nameAlias: String? = nil, key: String? = nil
+    ) async -> Bool {
         busy = true
         failure = nil
         defer { busy = false }
         do {
-            try await model.applyTuneOp(type, tuneID: tune.id, learnStatus: s, heardCount: h, notes: n)
+            try await model.applyTuneOp(type, tuneID: tune.id, learnStatus: s, heardCount: h, notes: n, nameAlias: nameAlias, key: key)
             onChanged()
             return true
         } catch let f as TuneOpFailure {
@@ -376,7 +385,9 @@ struct TuneSheet: View {
     }
 
     private func add(_ new: MyTunesRules.Status) async {
-        if await save(.add, status: LearnStatus(stored: new.rawValue)) {
+        let a = alias.trimmingCharacters(in: .whitespaces)
+        if await save(.add, status: LearnStatus(stored: new.rawValue), nameAlias: aliasOpen && !a.isEmpty ? a : nil,
+                      key: keyOpen && !key.isEmpty ? key : nil) {
             status = new.rawValue
             heard = 1  // an add is itself a hearing, as on the web
             if let s = tune.settingID, await saveSetting(s, for: .mine) == nil {
@@ -434,6 +445,7 @@ struct TuneSheet: View {
             .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(
                 current == nil ? CeolTokens.borderColor : .white.opacity(0.6), lineWidth: 1))
             .clipShape(RoundedRectangle(cornerRadius: 6))
+            if current == nil { addExtras }
             if current == .wantToLearn {
                 Stepper(value: Binding(get: { heard }, set: { n in Task { await setHeard(n) } }), in: 0...999) {
                     (heard == 1 ? Text("Heard it once") : Text("Heard it \(heard) times")).font(.ceol(size: 16)).foregroundStyle(.white)
@@ -652,6 +664,46 @@ struct TuneSheet: View {
         await load()
         onChanged()
         return nil
+    }
+
+    /// Before the add: "I call this something else" and "I play this in a different
+    /// key", each opening into its field, as the web's add form.
+    private var addExtras: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if aliasOpen {
+                TextField("", text: $alias, prompt: Text(tr("What I call it")).foregroundStyle(CeolTokens.textMuted))
+                    .font(.ceol(size: 16)).foregroundStyle(CeolTokens.textColor)
+                    .autocorrectionDisabled()
+                    .padding(.horizontal, 12).frame(height: 44)
+                    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(CeolTokens.borderColor, lineWidth: 1))
+                    .accessibilityIdentifier("sheet.add.alias")
+            } else {
+                Button("I call this something else") { withAnimation(.easeOut(duration: 0.15)) { aliasOpen = true } }
+                    .font(.ceol(size: 15)).foregroundStyle(CeolTokens.primary)
+                    .accessibilityIdentifier("sheet.add.aliasLink")
+            }
+            if keyOpen {
+                Menu {
+                    Button("(not specified)") { key = "" }
+                    ForEach(TunePreviewPane.keys, id: \.self) { k in Button(k) { key = k } }
+                } label: {
+                    HStack {
+                        Text(key.isEmpty ? tr("Key I play it in") : key).font(.ceol(size: 16))
+                            .foregroundStyle(key.isEmpty ? CeolTokens.textMuted : CeolTokens.textColor)
+                        Spacer()
+                        Image(systemName: "chevron.up.chevron.down").font(.system(size: 13)).foregroundStyle(CeolTokens.textMuted)
+                    }
+                    .padding(.horizontal, 12).frame(height: 44)
+                    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(CeolTokens.borderColor, lineWidth: 1))
+                }
+                .accessibilityIdentifier("sheet.add.key")
+            } else {
+                Button("I play this in a different key") { withAnimation(.easeOut(duration: 0.15)) { keyOpen = true } }
+                    .font(.ceol(size: 15)).foregroundStyle(CeolTokens.primary)
+                    .accessibilityIdentifier("sheet.add.keyLink")
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func stat(_ label: String, _ value: Int) -> some View {

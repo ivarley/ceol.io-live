@@ -6,6 +6,7 @@
   // so stepping ‹ › to another tune remounts it fresh (no notes leaking across).
   import { Chip, Seg, t, instrumentName } from '../lib/index.js'
   import { statusLabel as LABEL, failText } from './labels.js'
+  import { MUSICAL_KEYS } from '../tunesheet/logic.js'
 
   let {
     instruments = [], // the person's instruments [{instrument, is_auto}]
@@ -50,6 +51,12 @@
   let instChoices = $state({}) // instrument -> status ('want to learn'|...|null). Missing key = default.
   let notes = $state('')
   let notesOpen = $state(false) // notes fold out on demand — keeps the footer compact
+  // What you call it and the key you play it in, when they differ from the catalogue's:
+  // a link each, opening into its field (the setting is the preview's pager).
+  let aliasOpen = $state(false)
+  let alias = $state('')
+  let keyOpen = $state(false)
+  let key = $state('')
   let submitting = $state(false)
   let errorMsg = $state('')
 
@@ -92,7 +99,12 @@
     errorMsg = ''
     submitting = true
     try {
-      await onSubmit({ status: baseStatus, notes: notes.trim(), overrides: instrumentOverrides() })
+      // The alias and key ride along only when given (an open field with nothing in
+      // it is no alias).
+      const extras = {}
+      if (aliasOpen && alias.trim()) extras.alias = alias.trim()
+      if (keyOpen && key) extras.key = key
+      await onSubmit({ status: baseStatus, notes: notes.trim(), overrides: instrumentOverrides(), ...extras })
       // success closes the pane; this component unmounts with it
     } catch (e) {
       errorMsg = failText(e, t('add the tune'))
@@ -188,6 +200,21 @@
       ></textarea>
     {:else}
       <button class="mt-note-toggle" onclick={() => (notesOpen = true)}>＋ {t('Add note')}</button>
+    {/if}
+    {#if aliasOpen}
+      <!-- svelte-ignore a11y_autofocus -->
+      <input class="mt-alias" type="text" placeholder={t('What I call it')} autofocus bind:value={alias} />
+    {:else}
+      <button class="mt-note-toggle" onclick={() => (aliasOpen = true)}>{t('I call this something else')}</button>
+    {/if}
+    {#if keyOpen}
+      <select class="mt-key" aria-label={t('Key I play it in')} bind:value={key}>
+        {#each MUSICAL_KEYS as k}
+          <option value={k}>{k || t('Key I play it in')}</option>
+        {/each}
+      </select>
+    {:else}
+      <button class="mt-note-toggle" onclick={() => (keyOpen = true)}>{t('I play this in a different key')}</button>
     {/if}
 
     {#if errorMsg}<p class="mt-error">{errorMsg}</p>{/if}

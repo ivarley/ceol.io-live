@@ -1080,5 +1080,21 @@
   "＋ Add to My Tunes": {
     "ga": "＋ Cuir le Mo chuid fonn",
     "review": true
+  },
+  "I call this something else": {
+    "ga": "Tugaim ainm eile air seo",
+    "review": true
+  },
+  "I play this in a different key": {
+    "ga": "Seinnim é seo i ngléas eile",
+    "review": true
+  },
+  "What I call it": {
+    "ga": "An t-ainm a thugaim air",
+    "review": true
+  },
+  "Key I play it in": {
+    "ga": "An gléas a sheinnim é ann",
+    "review": true
   }
 }

@@ -98,7 +98,7 @@
   // still applies the setting (and notes, when the row had none) that the form
   // collected and reports them as `applied`, so the landing toast can say so — a
   // pasted link can't tell you up front that the tune is already yours.
-  async function performAdd(target, { status, notes, settingId, overrides }) {
+  async function performAdd(target, { status, notes, settingId, overrides, alias = '', key = '' }) {
     const tuneId = target.tune_id ?? target.thesession_id
     if (target.thesession_id != null || settingId != null) {
       if (!navigator.onLine) {
@@ -118,6 +118,8 @@
           learn_status: status,
           notes: notes || null,
           setting_id: settingId,
+          name_alias: alias || null,
+          key: key || null,
         }),
       })
       const j = await res.json().catch(() => ({}))
@@ -127,7 +129,10 @@
       await applyOverrides(finalId, overrides)
       return { finalId, already: false }
     }
-    await submitOp({ type: 'add', tune_id: tuneId, learn_status: status, name: target.name, tune_type: target.tune_type })
+    const add = { type: 'add', tune_id: tuneId, learn_status: status, name: target.name, tune_type: target.tune_type }
+    if (alias) add.name_alias = alias
+    if (key) add.key = key
+    await submitOp(add)
     if (notes) await submitOp({ type: 'set_notes', tune_id: tuneId, notes })
     await applyOverrides(tuneId, overrides)
     return { finalId: tuneId, already: false }

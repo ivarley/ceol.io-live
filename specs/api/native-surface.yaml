@@ -394,6 +394,10 @@ components:
         # removes the override).
         instrument: { type: string }
         status: { oneOf: [{ $ref: "#/components/schemas/LearnStatus" }, { type: "null" }] }
+        # add (optional): what you call the tune, and the key you play it in, when they
+        # differ from the catalogue's.
+        name_alias: { type: [string, "null"] }
+        key: { type: [string, "null"] }
     LearnStatus:
       type: string
       enum: [want to learn, learning, learned]

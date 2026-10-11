@@ -27,11 +27,12 @@ extension AppModel {
     @discardableResult
     func applyTuneOp(
         _ type: TuneOp._TypePayload, tuneID: Int, learnStatus: LearnStatus? = nil,
-        heardCount: Int? = nil, notes: String? = nil, settingID: Int? = nil
+        heardCount: Int? = nil, notes: String? = nil, settingID: Int? = nil,
+        nameAlias: String? = nil, key: String? = nil
     ) async throws -> Components.Schemas.MyTunesOpResult {
         let op = TuneOp(
             opId: UUID().uuidString, _type: type, tuneId: tuneID, learnStatus: learnStatus,
-            heardCount: heardCount, notes: notes, settingId: settingID)
+            heardCount: heardCount, notes: notes, settingId: settingID, nameAlias: nameAlias, key: key)
         let response: Operations.ApplyMyTunesOp.Output
         do {
             response = try await auth.client.applyMyTunesOp(body: .json(op))

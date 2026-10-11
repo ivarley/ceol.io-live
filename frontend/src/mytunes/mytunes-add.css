@@ -333,6 +333,10 @@
 }
 .mt-add-pane .mt-note-toggle:hover { color: var(--text); }
 .mt-add-pane .mt-form .mt-notes { min-height: 52px; }
+.mt-add-pane .mt-alias, .mt-add-pane .mt-key {
+  font: inherit; font-size: 14px; padding: 9px 12px; width: 100%; box-sizing: border-box;
+  background: var(--input-bg, var(--bg)); border: 1px solid var(--border); border-radius: 8px; color: var(--text);
+}
 .mt-add-pane .mt-form .mt-error { margin: 0; }
 /* ---------- already-on-your-list panel (replaces the add form) ---------- */
 /* Gold "your list" voice, same footprint as the add form it stands in for. */

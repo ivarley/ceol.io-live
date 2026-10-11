@@ -155,18 +155,28 @@ def _cache_setting_if_needed(tune_id: int, setting_id, user_id) -> None:
         conn.close()
 
 
+def _clean_text(value) -> Optional[str]:
+    """A short free-text field from a request body: stripped, blank as None."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
 def _apply_to_existing_person_tune(
-    person_id: int, tune_id: int, setting_id, notes, user_id
+    person_id: int, tune_id: int, setting_id, notes, user_id, name_alias=None, key=None
 ) -> Dict[str, Any]:
     """Apply the EXPLICIT parts of an add request to a person_tune that already exists,
-    and report what changed as {"setting_id": <id>} / {"notes": true}.
+    and report what changed as {"setting_id": <id>} / {"notes": true} / {"name_alias":
+    true} / {"key": true}.
 
-    Only what the caller actually asked for is touched, and the two fields have
+    Only what the caller actually asked for is touched, and the fields have
     deliberately different rules:
       - setting_id: applied even over an existing one. Picking a setting is an explicit,
         cheap-to-redo choice, and the caller just pointed at this one.
-      - notes: applied only when the existing row has none. Free text is lossy to
-        overwrite, so an existing note wins and the caller keeps theirs on screen.
+      - notes, name_alias, key: applied only when the existing row has none. Free text
+        is lossy to overwrite, so an existing value wins and the caller keeps theirs
+        on screen.
     """
     applied: Dict[str, Any] = {}
     existing = person_tune_service.get_person_tune_by_person_and_tune(
@@ -193,6 +203,24 @@ def _apply_to_existing_person_tune(
         )
         if ok:
             applied["notes"] = True
+
+    if name_alias and not (existing.name_alias or "").strip():
+        ok, _msg, _pt = person_tune_service.update_person_tune(
+            person_tune_id=existing.person_tune_id,
+            name_alias=name_alias,
+            user_id=user_id,
+        )
+        if ok:
+            applied["name_alias"] = True
+
+    if key and not (existing.key or "").strip():
+        ok, _msg, _pt = person_tune_service.update_person_tune(
+            person_tune_id=existing.person_tune_id,
+            key=key,
+            user_id=user_id,
+        )
+        if ok:
+            applied["key"] = True
 
     return applied
 
@@ -577,6 +605,11 @@ def add_my_tune():
         learn_status = data.get("learn_status", "want to learn")
         notes = data.get("notes")
         setting_id = data.get("setting_id")
+        # What you call it and the key you play it in, when they differ from the
+        # catalogue's (the add form's "I call this something else" / "I play this in
+        # a different key"); blank means neither.
+        name_alias = _clean_text(data.get("name_alias"))
+        key = _clean_text(data.get("key"))
 
         person_id = get_user_person_id()
         user_id = current_user.user_id if hasattr(current_user, "user_id") else None
@@ -589,6 +622,8 @@ def add_my_tune():
             notes=notes,
             setting_id=setting_id,
             user_id=user_id,
+            name_alias=name_alias,
+            key=key,
         )
 
         if not success:
@@ -600,7 +635,7 @@ def add_my_tune():
                 # Dropping the request on the floor loses exactly what the user configured,
                 # so apply it to the existing row and say what was applied.
                 applied = _apply_to_existing_person_tune(
-                    person_id, tune_id, setting_id, notes, user_id
+                    person_id, tune_id, setting_id, notes, user_id, name_alias, key
                 )
                 existing = person_tune_service.get_person_tune_by_person_and_tune(
                     person_id, tune_id
@@ -1021,10 +1056,12 @@ def my_tunes_op():
                         400,
                     )
                 # Same starting heard_count the POST path gives a new row — an add is
-                # itself a hearing (PersonTune.DEFAULT_HEARD_COUNT).
+                # itself a hearing (PersonTune.DEFAULT_HEARD_COUNT). What you call it
+                # and the key you play it in ride along when the add form gave them.
                 cur.execute(
-                    """INSERT INTO person_tune (person_id, tune_id, learn_status, heard_count, created_by_user_id)
-                       VALUES (%s, %s, %s, %s, %s)
+                    """INSERT INTO person_tune (person_id, tune_id, learn_status, heard_count, created_by_user_id,
+                                                name_alias, key)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s)
                        ON CONFLICT (person_id, tune_id) DO NOTHING""",
                     (
                         person_id,
@@ -1032,6 +1069,8 @@ def my_tunes_op():
                         learn_status,
                         PersonTune.DEFAULT_HEARD_COUNT,
                         user_id,
+                        _clean_text(data.get("name_alias")),
+                        _clean_text(data.get("key")),
                     ),
                 )
             elif op_type == "set_status":

@@ -18,13 +18,15 @@ class TestPersonTuneAPI:
     def test_get_my_tunes_requires_authentication(self, client):
         """Test that GET /api/my-tunes requires authentication."""
         response = client.get("/api/my-tunes")
-        
+
         assert response.status_code == 401
         data = json.loads(response.data)
         assert data["success"] is False
         assert "authentication" in data["error"].lower()
 
-    def test_get_my_tunes_empty_collection(self, client, authenticated_user, db_conn, db_cursor):
+    def test_get_my_tunes_empty_collection(
+        self, client, authenticated_user, db_conn, db_cursor
+    ):
         """Test getting tunes when user has no tunes in collection."""
         # Clean up any existing person_tune records for this user
         db_cursor.execute("DELETE FROM person_tune WHERE person_id = 2")
@@ -40,7 +42,9 @@ class TestPersonTuneAPI:
         assert len(data["tunes"]) == 0
         assert data["pagination"]["total_count"] == 0
 
-    def test_get_my_tunes_with_data(self, client, authenticated_user, db_conn, db_cursor):
+    def test_get_my_tunes_with_data(
+        self, client, authenticated_user, db_conn, db_cursor
+    ):
         """Test getting tunes when user has tunes in collection."""
         # Clean up any existing person_tune records for this user
         db_cursor.execute("DELETE FROM person_tune WHERE person_id = 2")
@@ -53,46 +57,69 @@ class TestPersonTuneAPI:
 
         # Ensure person exists
         person_id = 2  # Match authenticated_user fixture
-        db_cursor.execute("""
+        db_cursor.execute(
+            """
             INSERT INTO person (person_id, first_name, last_name, email)
             VALUES (%s, %s, %s, %s)
             ON CONFLICT (person_id) DO NOTHING
-        """, (person_id, "Test", "User", f"test{unique_id}@example.com"))
-        
-        db_cursor.execute("""
+        """,
+            (person_id, "Test", "User", f"test{unique_id}@example.com"),
+        )
+
+        db_cursor.execute(
+            """
             INSERT INTO tune (tune_id, name, tune_type, tunebook_count_cached)
             VALUES (%s, %s, %s, %s), (%s, %s, %s, %s)
             ON CONFLICT (tune_id) DO NOTHING
-        """, (
-            tune_id_1, f"Test Reel {unique_id}", "Reel", 100,
-            tune_id_2, f"Test Jig {unique_id}", "Jig", 50
-        ))
-        
+        """,
+            (
+                tune_id_1,
+                f"Test Reel {unique_id}",
+                "Reel",
+                100,
+                tune_id_2,
+                f"Test Jig {unique_id}",
+                "Jig",
+                50,
+            ),
+        )
+
         # Add tunes to user's collection
-        db_cursor.execute("""
+        db_cursor.execute(
+            """
             INSERT INTO person_tune (person_id, tune_id, learn_status, heard_count)
             VALUES (%s, %s, %s, %s), (%s, %s, %s, %s)
-        """, (
-            person_id, tune_id_1, 'want to learn', 3,
-            person_id, tune_id_2, 'learning', 0
-        ))
+        """,
+            (
+                person_id,
+                tune_id_1,
+                "want to learn",
+                3,
+                person_id,
+                tune_id_2,
+                "learning",
+                0,
+            ),
+        )
         db_conn.commit()
-        
+
         with authenticated_user:
             response = client.get("/api/my-tunes")
-        
+
         assert response.status_code == 200
         data = json.loads(response.data)
         assert data["success"] is True
         assert len(data["tunes"]) == 2
         assert data["pagination"]["total_count"] == 2
-        
+
         # Verify tune data
         tune_names = [t["tune_name"] for t in data["tunes"]]
         assert f"Test Reel {unique_id}" in tune_names
         assert f"Test Jig {unique_id}" in tune_names
 
-    def test_get_my_tunes_with_learn_status_filter(self, client, authenticated_user, db_conn, db_cursor):
+    def test_get_my_tunes_with_learn_status_filter(
+        self, client, authenticated_user, db_conn, db_cursor
+    ):
         """Test filtering tunes by learn_status."""
         # Clean up any existing person_tune records for this user
         db_cursor.execute("DELETE FROM person_tune WHERE person_id = 2")
@@ -105,33 +132,43 @@ class TestPersonTuneAPI:
 
         person_id = 2  # Match authenticated_user fixture
         # Ensure person exists
-        db_cursor.execute("""
+        db_cursor.execute(
+            """
             INSERT INTO person (person_id, first_name, last_name, email)
             VALUES (%s, %s, %s, %s)
             ON CONFLICT (person_id) DO NOTHING
-        """, (person_id, "Test", "User", f"test{unique_id}@example.com"))
-        
-        db_cursor.execute("""
+        """,
+            (person_id, "Test", "User", f"test{unique_id}@example.com"),
+        )
+
+        db_cursor.execute(
+            """
             INSERT INTO tune (tune_id, name, tune_type)
             VALUES (%s, %s, %s), (%s, %s, %s)
             ON CONFLICT (tune_id) DO NOTHING
-        """, (
-            tune_id_1, f"Want to Learn Reel {unique_id}", "Reel",
-            tune_id_2, f"Learning Jig {unique_id}", "Jig"
-        ))
-        
-        db_cursor.execute("""
+        """,
+            (
+                tune_id_1,
+                f"Want to Learn Reel {unique_id}",
+                "Reel",
+                tune_id_2,
+                f"Learning Jig {unique_id}",
+                "Jig",
+            ),
+        )
+
+        db_cursor.execute(
+            """
             INSERT INTO person_tune (person_id, tune_id, learn_status)
             VALUES (%s, %s, %s), (%s, %s, %s)
-        """, (
-            person_id, tune_id_1, 'want to learn',
-            person_id, tune_id_2, 'learning'
-        ))
+        """,
+            (person_id, tune_id_1, "want to learn", person_id, tune_id_2, "learning"),
+        )
         db_conn.commit()
-        
+
         with authenticated_user:
             response = client.get("/api/my-tunes?learn_status=want to learn")
-        
+
         assert response.status_code == 200
         data = json.loads(response.data)
         assert data["success"] is True
@@ -139,7 +176,9 @@ class TestPersonTuneAPI:
         assert data["tunes"][0]["learn_status"] == "want to learn"
         assert data["filters"]["learn_status"] == "want to learn"
 
-    def test_get_my_tunes_with_tune_type_filter(self, client, authenticated_user, db_conn, db_cursor):
+    def test_get_my_tunes_with_tune_type_filter(
+        self, client, authenticated_user, db_conn, db_cursor
+    ):
         """Test filtering tunes by tune_type."""
         # Clean up any existing person_tune records for this user
         db_cursor.execute("DELETE FROM person_tune WHERE person_id = 2")
@@ -152,40 +191,59 @@ class TestPersonTuneAPI:
 
         person_id = 2  # Match authenticated_user fixture
         # Ensure person exists
-        db_cursor.execute("""
+        db_cursor.execute(
+            """
             INSERT INTO person (person_id, first_name, last_name, email)
             VALUES (%s, %s, %s, %s)
             ON CONFLICT (person_id) DO NOTHING
-        """, (person_id, "Test", "User", f"test{unique_id}@example.com"))
-        
-        db_cursor.execute("""
+        """,
+            (person_id, "Test", "User", f"test{unique_id}@example.com"),
+        )
+
+        db_cursor.execute(
+            """
             INSERT INTO tune (tune_id, name, tune_type)
             VALUES (%s, %s, %s), (%s, %s, %s)
             ON CONFLICT (tune_id) DO NOTHING
-        """, (
-            tune_id_1, f"Filter Reel {unique_id}", "Reel",
-            tune_id_2, f"Filter Jig {unique_id}", "Jig"
-        ))
-        
-        db_cursor.execute("""
+        """,
+            (
+                tune_id_1,
+                f"Filter Reel {unique_id}",
+                "Reel",
+                tune_id_2,
+                f"Filter Jig {unique_id}",
+                "Jig",
+            ),
+        )
+
+        db_cursor.execute(
+            """
             INSERT INTO person_tune (person_id, tune_id, learn_status)
             VALUES (%s, %s, %s), (%s, %s, %s)
-        """, (
-            person_id, tune_id_1, 'want to learn',
-            person_id, tune_id_2, 'want to learn'
-        ))
+        """,
+            (
+                person_id,
+                tune_id_1,
+                "want to learn",
+                person_id,
+                tune_id_2,
+                "want to learn",
+            ),
+        )
         db_conn.commit()
-        
+
         with authenticated_user:
             response = client.get("/api/my-tunes?tune_type=Reel")
-        
+
         assert response.status_code == 200
         data = json.loads(response.data)
         assert data["success"] is True
         assert len(data["tunes"]) == 1
         assert data["tunes"][0]["tune_type"] == "Reel"
 
-    def test_get_my_tunes_with_search(self, client, authenticated_user, db_conn, db_cursor):
+    def test_get_my_tunes_with_search(
+        self, client, authenticated_user, db_conn, db_cursor
+    ):
         """Test searching tunes by name."""
         # Create test tunes
         unique_id = str(uuid.uuid4())[:8]
@@ -194,72 +252,100 @@ class TestPersonTuneAPI:
 
         person_id = 2  # Match authenticated_user fixture
         # Ensure person exists
-        db_cursor.execute("""
+        db_cursor.execute(
+            """
             INSERT INTO person (person_id, first_name, last_name, email)
             VALUES (%s, %s, %s, %s)
             ON CONFLICT (person_id) DO NOTHING
-        """, (person_id, "Test", "User", f"test{unique_id}@example.com"))
-        
-        db_cursor.execute("""
+        """,
+            (person_id, "Test", "User", f"test{unique_id}@example.com"),
+        )
+
+        db_cursor.execute(
+            """
             INSERT INTO tune (tune_id, name, tune_type)
             VALUES (%s, %s, %s), (%s, %s, %s)
             ON CONFLICT (tune_id) DO NOTHING
-        """, (
-            tune_id_1, f"Cooley's Reel {unique_id}", "Reel",
-            tune_id_2, f"Morrison's Jig {unique_id}", "Jig"
-        ))
-        
-        db_cursor.execute("""
+        """,
+            (
+                tune_id_1,
+                f"Cooley's Reel {unique_id}",
+                "Reel",
+                tune_id_2,
+                f"Morrison's Jig {unique_id}",
+                "Jig",
+            ),
+        )
+
+        db_cursor.execute(
+            """
             INSERT INTO person_tune (person_id, tune_id, learn_status)
             VALUES (%s, %s, %s), (%s, %s, %s)
-        """, (
-            person_id, tune_id_1, 'want to learn',
-            person_id, tune_id_2, 'want to learn'
-        ))
+        """,
+            (
+                person_id,
+                tune_id_1,
+                "want to learn",
+                person_id,
+                tune_id_2,
+                "want to learn",
+            ),
+        )
         db_conn.commit()
-        
+
         with authenticated_user:
             response = client.get("/api/my-tunes?search=Cooley")
-        
+
         assert response.status_code == 200
         data = json.loads(response.data)
         assert data["success"] is True
         assert len(data["tunes"]) == 1
         assert "Cooley" in data["tunes"][0]["tune_name"]
 
-    def test_get_my_tunes_pagination(self, client, authenticated_user, db_conn, db_cursor):
+    def test_get_my_tunes_pagination(
+        self, client, authenticated_user, db_conn, db_cursor
+    ):
         """Test pagination of tune collection."""
         # Create multiple test tunes
         unique_id = str(uuid.uuid4())[:8]
         person_id = 2  # Match authenticated_user fixture
-        
+
         # Ensure person exists
-        db_cursor.execute("""
+        db_cursor.execute(
+            """
             INSERT INTO person (person_id, first_name, last_name, email)
             VALUES (%s, %s, %s, %s)
             ON CONFLICT (person_id) DO NOTHING
-        """, (person_id, "Test", "User", f"test{unique_id}@example.com"))
-        
+        """,
+            (person_id, "Test", "User", f"test{unique_id}@example.com"),
+        )
+
         # Create 5 tunes
         for i in range(5):
             tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 50000 + i
-            db_cursor.execute("""
+            db_cursor.execute(
+                """
                 INSERT INTO tune (tune_id, name, tune_type)
                 VALUES (%s, %s, %s)
                 ON CONFLICT (tune_id) DO NOTHING
-            """, (tune_id, f"Pagination Tune {i} {unique_id}", "Reel"))
-            
-            db_cursor.execute("""
+            """,
+                (tune_id, f"Pagination Tune {i} {unique_id}", "Reel"),
+            )
+
+            db_cursor.execute(
+                """
                 INSERT INTO person_tune (person_id, tune_id, learn_status)
                 VALUES (%s, %s, %s)
-            """, (person_id, tune_id, 'want to learn'))
-        
+            """,
+                (person_id, tune_id, "want to learn"),
+            )
+
         db_conn.commit()
-        
+
         with authenticated_user:
             # Get first page with 2 items per page
             response = client.get("/api/my-tunes?page=1&per_page=2")
-        
+
         assert response.status_code == 200
         data = json.loads(response.data)
         assert data["success"] is True
@@ -273,7 +359,7 @@ class TestPersonTuneAPI:
     def test_add_my_tune_requires_authentication(self, client):
         """Test that POST /api/my-tunes requires authentication."""
         response = client.post("/api/my-tunes", json={"tune_id": 123})
-        
+
         assert response.status_code == 401
         data = json.loads(response.data)
         assert data["success"] is False
@@ -283,21 +369,27 @@ class TestPersonTuneAPI:
         # Create test tune
         unique_id = str(uuid.uuid4())[:8]
         tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 50000
-        
-        db_cursor.execute("""
+
+        db_cursor.execute(
+            """
             INSERT INTO tune (tune_id, name, tune_type, tunebook_count_cached)
             VALUES (%s, %s, %s, %s)
             ON CONFLICT (tune_id) DO NOTHING
-        """, (tune_id, f"New Tune {unique_id}", "Reel", 75))
+        """,
+            (tune_id, f"New Tune {unique_id}", "Reel", 75),
+        )
         db_conn.commit()
-        
+
         with authenticated_user:
-            response = client.post("/api/my-tunes", json={
-                "tune_id": tune_id,
-                "learn_status": "want to learn",
-                "notes": "Test notes"
-            })
-        
+            response = client.post(
+                "/api/my-tunes",
+                json={
+                    "tune_id": tune_id,
+                    "learn_status": "want to learn",
+                    "notes": "Test notes",
+                },
+            )
+
         assert response.status_code == 201
         data = json.loads(response.data)
         assert data["success"] is True
@@ -309,8 +401,9 @@ class TestPersonTuneAPI:
     def test_add_my_tune_missing_tune_id(self, client, authenticated_user):
         """Test adding tune without tune_id."""
         with authenticated_user:
-            response = client.post("/api/my-tunes",
-                                  json={"learn_status": "want to learn"})
+            response = client.post(
+                "/api/my-tunes", json={"learn_status": "want to learn"}
+            )
 
         assert response.status_code == 400
         data = json.loads(response.data)
@@ -321,52 +414,65 @@ class TestPersonTuneAPI:
         """Test adding a tune that doesn't exist."""
         with authenticated_user:
             response = client.post("/api/my-tunes", json={"tune_id": 999999999})
-        
+
         assert response.status_code == 404
         data = json.loads(response.data)
         assert data["success"] is False
         assert "not found" in data["error"].lower()
 
-    def test_add_my_tune_duplicate(self, client, authenticated_user, db_conn, db_cursor):
+    def test_add_my_tune_duplicate(
+        self, client, authenticated_user, db_conn, db_cursor
+    ):
         """Test adding a tune that's already in collection."""
         # Create test tune
         unique_id = str(uuid.uuid4())[:8]
         tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 50000
         person_id = 2  # Match authenticated_user fixture
-        
+
         # Ensure person exists
-        db_cursor.execute("""
+        db_cursor.execute(
+            """
             INSERT INTO person (person_id, first_name, last_name, email)
             VALUES (%s, %s, %s, %s)
             ON CONFLICT (person_id) DO NOTHING
-        """, (person_id, "Test", "User", f"test{unique_id}@example.com"))
-        
-        db_cursor.execute("""
+        """,
+            (person_id, "Test", "User", f"test{unique_id}@example.com"),
+        )
+
+        db_cursor.execute(
+            """
             INSERT INTO tune (tune_id, name, tune_type)
             VALUES (%s, %s, %s)
             ON CONFLICT (tune_id) DO NOTHING
-        """, (tune_id, f"Duplicate Tune {unique_id}", "Reel"))
-        
+        """,
+            (tune_id, f"Duplicate Tune {unique_id}", "Reel"),
+        )
+
         # Add tune to collection first. The hash-derived tune_id above can
         # collide with one from a sibling test (same formula, 100k space), so
         # tolerate the row already existing — the test only needs it present.
-        db_cursor.execute("""
+        db_cursor.execute(
+            """
             INSERT INTO person_tune (person_id, tune_id, learn_status)
             VALUES (%s, %s, %s)
             ON CONFLICT (person_id, tune_id) DO NOTHING
-        """, (person_id, tune_id, 'want to learn'))
+        """,
+            (person_id, tune_id, "want to learn"),
+        )
         db_conn.commit()
-        
+
         # Try to add the same tune again
         with authenticated_user:
             response = client.post("/api/my-tunes", json={"tune_id": tune_id})
-        
+
         assert response.status_code == 409  # Conflict
         data = json.loads(response.data)
         assert data["success"] is False
         assert "already exists" in data["error"].lower()
 
-    def test_add_my_tune_duplicate_applies_chosen_setting(self, client, authenticated_user, db_conn, db_cursor):
+    def test_add_my_tune_duplicate_applies_chosen_setting(
+        self, client, authenticated_user, db_conn, db_cursor
+    ):
         """A tune already on the list: the add is still a 409, but the setting the
         caller explicitly chose lands on the existing row (and is reported in
         `applied`). Regression: a pasted thesession.org link can't tell you the tune
@@ -377,36 +483,54 @@ class TestPersonTuneAPI:
         other_setting_id = tune_id + 8
         person_id = 2  # Match authenticated_user fixture
 
-        db_cursor.execute("""
+        db_cursor.execute(
+            """
             INSERT INTO person (person_id, first_name, last_name, email)
             VALUES (%s, %s, %s, %s)
             ON CONFLICT (person_id) DO NOTHING
-        """, (person_id, "Test", "User", f"test{unique_id}@example.com"))
-        db_cursor.execute("""
+        """,
+            (person_id, "Test", "User", f"test{unique_id}@example.com"),
+        )
+        db_cursor.execute(
+            """
             INSERT INTO tune (tune_id, name, tune_type)
             VALUES (%s, %s, %s)
             ON CONFLICT (tune_id) DO NOTHING
-        """, (tune_id, f"Already Mine {unique_id}", "Reel"))
+        """,
+            (tune_id, f"Already Mine {unique_id}", "Reel"),
+        )
         # Both settings already cached, so nothing reaches out to thesession.org.
-        db_cursor.execute("""
+        db_cursor.execute(
+            """
             INSERT INTO tune_setting (setting_id, tune_id, key, abc)
             VALUES (%s, %s, 'Gmajor', 'X'), (%s, %s, 'Dmajor', 'Y')
             ON CONFLICT (setting_id) DO NOTHING
-        """, (setting_id, tune_id, other_setting_id, tune_id))
-        db_cursor.execute("DELETE FROM person_tune WHERE person_id = %s AND tune_id = %s", (person_id, tune_id))
-        db_cursor.execute("""
+        """,
+            (setting_id, tune_id, other_setting_id, tune_id),
+        )
+        db_cursor.execute(
+            "DELETE FROM person_tune WHERE person_id = %s AND tune_id = %s",
+            (person_id, tune_id),
+        )
+        db_cursor.execute(
+            """
             INSERT INTO person_tune (person_id, tune_id, learn_status, notes, setting_id)
             VALUES (%s, %s, 'learning', 'my old note', NULL)
-        """, (person_id, tune_id))
+        """,
+            (person_id, tune_id),
+        )
         db_conn.commit()
 
         with authenticated_user:
-            response = client.post("/api/my-tunes", json={
-                "tune_id": tune_id,
-                "learn_status": "learned",
-                "notes": "notes typed into the add form",
-                "setting_id": setting_id,
-            })
+            response = client.post(
+                "/api/my-tunes",
+                json={
+                    "tune_id": tune_id,
+                    "learn_status": "learned",
+                    "notes": "notes typed into the add form",
+                    "setting_id": setting_id,
+                },
+            )
 
         assert response.status_code == 409
         data = json.loads(response.data)
@@ -418,38 +542,55 @@ class TestPersonTuneAPI:
             (person_id, tune_id),
         )
         row = db_cursor.fetchone()
-        assert row[0] == setting_id          # the chosen setting was carried over
-        assert row[1] == 'my old note'       # existing notes are never overwritten
-        assert row[2] == 'learning'          # and an add never restates the status
+        assert row[0] == setting_id  # the chosen setting was carried over
+        assert row[1] == "my old note"  # existing notes are never overwritten
+        assert row[2] == "learning"  # and an add never restates the status
 
-    def test_add_my_tune_duplicate_fills_empty_notes(self, client, authenticated_user, db_conn, db_cursor):
+    def test_add_my_tune_duplicate_fills_empty_notes(
+        self, client, authenticated_user, db_conn, db_cursor
+    ):
         """Notes from the add form fill an EMPTY notes field on the existing row."""
         unique_id = str(uuid.uuid4())[:8]
         tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 70000
         person_id = 2
 
-        db_cursor.execute("""
+        db_cursor.execute(
+            """
             INSERT INTO person (person_id, first_name, last_name, email)
             VALUES (%s, %s, %s, %s)
             ON CONFLICT (person_id) DO NOTHING
-        """, (person_id, "Test", "User", f"test{unique_id}@example.com"))
-        db_cursor.execute("""
+        """,
+            (person_id, "Test", "User", f"test{unique_id}@example.com"),
+        )
+        db_cursor.execute(
+            """
             INSERT INTO tune (tune_id, name, tune_type)
             VALUES (%s, %s, %s)
             ON CONFLICT (tune_id) DO NOTHING
-        """, (tune_id, f"Note Filler {unique_id}", "Jig"))
-        db_cursor.execute("DELETE FROM person_tune WHERE person_id = %s AND tune_id = %s", (person_id, tune_id))
-        db_cursor.execute("""
+        """,
+            (tune_id, f"Note Filler {unique_id}", "Jig"),
+        )
+        db_cursor.execute(
+            "DELETE FROM person_tune WHERE person_id = %s AND tune_id = %s",
+            (person_id, tune_id),
+        )
+        db_cursor.execute(
+            """
             INSERT INTO person_tune (person_id, tune_id, learn_status)
             VALUES (%s, %s, 'want to learn')
-        """, (person_id, tune_id))
+        """,
+            (person_id, tune_id),
+        )
         db_conn.commit()
 
         with authenticated_user:
-            response = client.post("/api/my-tunes", json={
-                "tune_id": tune_id,
-                "notes": "b part is tricky",
-            })
+            response = client.post(
+                "/api/my-tunes",
+                json={
+                    "tune_id": tune_id,
+                    "notes": "b part is tricky",
+                },
+            )
 
         assert response.status_code == 409
         assert json.loads(response.data)["applied"] == {"notes": True}
@@ -459,8 +600,9 @@ class TestPersonTuneAPI:
         )
         assert db_cursor.fetchone()[0] == "b part is tricky"
 
-    def test_update_setting_caches_the_settings_notation(self, client, authenticated_user, db_conn, db_cursor,
-                                                          monkeypatch):
+    def test_update_setting_caches_the_settings_notation(
+        self, client, authenticated_user, db_conn, db_cursor, monkeypatch
+    ):
         """Adopting a setting from the preview's pager (Update Setting) must bring its
         ABC with it — the pager pages thesession.org's full list, so the setting you
         picked is usually one the catalog has never imported."""
@@ -474,42 +616,59 @@ class TestPersonTuneAPI:
         fetched = {}
 
         def fake_cache(tid, tune_data, user_id, sync=True, target_setting_id=None):
-            fetched['tune_id'] = tid
-            fetched['setting_id'] = target_setting_id
+            fetched["tune_id"] = tid
+            fetched["setting_id"] = target_setting_id
             return True, "cached", target_setting_id
 
         monkeypatch.setattr(api_routes, "cache_default_tune_setting", fake_cache)
 
-        db_cursor.execute("""
+        db_cursor.execute(
+            """
             INSERT INTO person (person_id, first_name, last_name, email)
             VALUES (%s, %s, %s, %s)
             ON CONFLICT (person_id) DO NOTHING
-        """, (person_id, "Test", "User", f"test{unique_id}@example.com"))
-        db_cursor.execute("""
+        """,
+            (person_id, "Test", "User", f"test{unique_id}@example.com"),
+        )
+        db_cursor.execute(
+            """
             INSERT INTO tune (tune_id, name, tune_type)
             VALUES (%s, %s, %s)
             ON CONFLICT (tune_id) DO NOTHING
-        """, (tune_id, f"Pager Pick {unique_id}", "Reel"))
-        db_cursor.execute("DELETE FROM person_tune WHERE person_id = %s AND tune_id = %s", (person_id, tune_id))
-        db_cursor.execute("""
+        """,
+            (tune_id, f"Pager Pick {unique_id}", "Reel"),
+        )
+        db_cursor.execute(
+            "DELETE FROM person_tune WHERE person_id = %s AND tune_id = %s",
+            (person_id, tune_id),
+        )
+        db_cursor.execute(
+            """
             INSERT INTO person_tune (person_id, tune_id, learn_status)
             VALUES (%s, %s, 'learning') RETURNING person_tune_id
-        """, (person_id, tune_id))
+        """,
+            (person_id, tune_id),
+        )
         ptid = db_cursor.fetchone()[0]
         db_conn.commit()
 
         with authenticated_user:
-            response = client.put(f"/api/my-tunes/{ptid}", json={"setting_id": setting_id})
+            response = client.put(
+                f"/api/my-tunes/{ptid}", json={"setting_id": setting_id}
+            )
 
         assert response.status_code == 200
         # The uncached setting was fetched for THIS tune...
-        assert fetched == {'tune_id': tune_id, 'setting_id': setting_id}
+        assert fetched == {"tune_id": tune_id, "setting_id": setting_id}
         # ...and recorded as the person's setting.
-        db_cursor.execute("SELECT setting_id FROM person_tune WHERE person_tune_id = %s", (ptid,))
+        db_cursor.execute(
+            "SELECT setting_id FROM person_tune WHERE person_tune_id = %s", (ptid,)
+        )
         assert db_cursor.fetchone()[0] == setting_id
 
-    def test_new_rows_start_at_one_hearing_on_both_add_paths(self, client, authenticated_user, db_conn,
-                                                             db_cursor):
+    def test_new_rows_start_at_one_hearing_on_both_add_paths(
+        self, client, authenticated_user, db_conn, db_cursor
+    ):
         """Adding a tune IS a hearing — you don't put a tune on your list having never
         heard it — so a new row starts at heard_count 1. Zero is left meaning what it
         says: on the list, not heard since. Both add paths (the POST and the offline
@@ -520,22 +679,35 @@ class TestPersonTuneAPI:
         tune_b = tune_a + 1
         person_id = 2
 
-        db_cursor.execute("""
+        db_cursor.execute(
+            """
             INSERT INTO person (person_id, first_name, last_name, email)
             VALUES (%s, %s, %s, %s)
             ON CONFLICT (person_id) DO NOTHING
-        """, (person_id, "Test", "User", f"test{unique_id}@example.com"))
-        db_cursor.execute("""
+        """,
+            (person_id, "Test", "User", f"test{unique_id}@example.com"),
+        )
+        db_cursor.execute(
+            """
             INSERT INTO tune (tune_id, name, tune_type) VALUES (%s, %s, 'Reel'), (%s, %s, 'Jig')
             ON CONFLICT (tune_id) DO NOTHING
-        """, (tune_a, f"Heard Once A {unique_id}", tune_b, f"Heard Once B {unique_id}"))
-        db_cursor.execute("DELETE FROM person_tune WHERE person_id = %s AND tune_id = ANY(%s)",
-                          (person_id, [tune_a, tune_b]))
+        """,
+            (tune_a, f"Heard Once A {unique_id}", tune_b, f"Heard Once B {unique_id}"),
+        )
+        db_cursor.execute(
+            "DELETE FROM person_tune WHERE person_id = %s AND tune_id = ANY(%s)",
+            (person_id, [tune_a, tune_b]),
+        )
         db_conn.commit()
 
         with authenticated_user:
-            assert client.post("/api/my-tunes", json={"tune_id": tune_a}).status_code == 201
-            op = client.post("/api/my-tunes/ops", json={"type": "add", "tune_id": tune_b})
+            assert (
+                client.post("/api/my-tunes", json={"tune_id": tune_a}).status_code
+                == 201
+            )
+            op = client.post(
+                "/api/my-tunes/ops", json={"type": "add", "tune_id": tune_b}
+            )
             assert op.status_code == 200
 
         db_cursor.execute(
@@ -544,46 +716,127 @@ class TestPersonTuneAPI:
         )
         assert db_cursor.fetchall() == [(tune_a, 1), (tune_b, 1)]
 
+    def test_both_add_paths_keep_the_alias_and_key(
+        self, client, authenticated_user, db_conn, db_cursor
+    ):
+        """The add form's "I call this something else" and "I play this in a different
+        key" land on the new row, from POST /api/my-tunes and from the add op alike;
+        blank ones are nothing at all."""
+        unique_id = str(uuid.uuid4())[:8]
+        tune_a = 900000000 + int(unique_id[:6], 16) % 100000 + 70000
+        tune_b = tune_a + 1
+        person_id = 2
+        db_cursor.execute(
+            """
+            INSERT INTO person (person_id, first_name, last_name, email)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (person_id) DO NOTHING
+        """,
+            (person_id, "Test", "User", f"test{unique_id}@example.com"),
+        )
+        db_cursor.execute(
+            """
+            INSERT INTO tune (tune_id, name, tune_type) VALUES (%s, %s, 'Reel'), (%s, %s, 'Jig')
+            ON CONFLICT (tune_id) DO NOTHING
+        """,
+            (tune_a, f"Alias A {unique_id}", tune_b, f"Alias B {unique_id}"),
+        )
+        db_cursor.execute(
+            "DELETE FROM person_tune WHERE person_id = %s AND tune_id = ANY(%s)",
+            (person_id, [tune_a, tune_b]),
+        )
+        db_conn.commit()
+
+        with authenticated_user:
+            r = client.post(
+                "/api/my-tunes",
+                json={"tune_id": tune_a, "name_alias": "  Our Reel ", "key": "Dmajor"},
+            )
+            assert r.status_code == 201
+            op = client.post(
+                "/api/my-tunes/ops",
+                json={
+                    "type": "add",
+                    "tune_id": tune_b,
+                    "name_alias": "",
+                    "key": "Gmajor",
+                },
+            )
+            assert op.status_code == 200
+
+        db_cursor.execute(
+            "SELECT tune_id, name_alias, key FROM person_tune WHERE person_id = %s AND tune_id = ANY(%s) ORDER BY tune_id",
+            (person_id, [tune_a, tune_b]),
+        )
+        assert db_cursor.fetchall() == [
+            (tune_a, "Our Reel", "Dmajor"),
+            (tune_b, None, "Gmajor"),
+        ]
+
+        # Already on the list: the alias and key fill in only where the row has none.
+        with authenticated_user:
+            r = client.post(
+                "/api/my-tunes",
+                json={"tune_id": tune_b, "name_alias": "Their Jig", "key": "Amajor"},
+            )
+            assert r.status_code == 409
+            assert r.get_json()["applied"] == {"name_alias": True}
+        db_cursor.execute(
+            "SELECT name_alias, key FROM person_tune WHERE person_id = %s AND tune_id = %s",
+            (person_id, tune_b),
+        )
+        assert db_cursor.fetchone() == ("Their Jig", "Gmajor")
+
     def test_update_tune_status_requires_authentication(self, client):
         """Test that PUT /api/my-tunes/<id>/status requires authentication."""
         response = client.put("/api/my-tunes/1", json={"learn_status": "learning"})
-        
+
         assert response.status_code == 401
         data = json.loads(response.data)
         assert data["success"] is False
 
-    def test_update_tune_status_success(self, client, authenticated_user, db_conn, db_cursor):
+    def test_update_tune_status_success(
+        self, client, authenticated_user, db_conn, db_cursor
+    ):
         """Test successfully updating tune learning status."""
         # Create test tune and person_tune
         unique_id = str(uuid.uuid4())[:8]
         tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 50000
         person_id = 2  # Match authenticated_user fixture
-        
-        db_cursor.execute("""
+
+        db_cursor.execute(
+            """
             INSERT INTO tune (tune_id, name, tune_type)
             VALUES (%s, %s, %s)
             ON CONFLICT (tune_id) DO NOTHING
-        """, (tune_id, f"Status Update Tune {unique_id}", "Reel"))
-        
-        db_cursor.execute("""
+        """,
+            (tune_id, f"Status Update Tune {unique_id}", "Reel"),
+        )
+
+        db_cursor.execute(
+            """
             INSERT INTO person_tune (person_id, tune_id, learn_status)
             VALUES (%s, %s, %s)
             RETURNING person_tune_id
-        """, (person_id, tune_id, 'want to learn'))
+        """,
+            (person_id, tune_id, "want to learn"),
+        )
         person_tune_id = db_cursor.fetchone()[0]
         db_conn.commit()
-        
+
         with authenticated_user:
-            response = client.put(f"/api/my-tunes/{person_tune_id}", json={
-                "learn_status": "learning"
-            })
-        
+            response = client.put(
+                f"/api/my-tunes/{person_tune_id}", json={"learn_status": "learning"}
+            )
+
         assert response.status_code == 200
         data = json.loads(response.data)
         assert data["success"] is True
         assert data["person_tune"]["learn_status"] == "learning"
 
-    def test_update_tune_tags_normalizes_and_persists(self, client, authenticated_user, db_conn, db_cursor):
+    def test_update_tune_tags_normalizes_and_persists(
+        self, client, authenticated_user, db_conn, db_cursor
+    ):
         """PUT tags: server re-normalizes (lowercase, ws->hyphen, dedupe) and stores TEXT[]."""
         unique_id = str(uuid.uuid4())[:8]
         tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 51000
@@ -610,17 +863,23 @@ class TestPersonTuneAPI:
         assert data["success"] is True
         assert data["person_tune"]["tags"] == ["session", "to-learn", "#reel"]
 
-        db_cursor.execute("SELECT tags FROM person_tune WHERE person_tune_id = %s", (person_tune_id,))
+        db_cursor.execute(
+            "SELECT tags FROM person_tune WHERE person_tune_id = %s", (person_tune_id,)
+        )
         assert db_cursor.fetchone()[0] == ["session", "to-learn", "#reel"]
 
         # Clearing: an empty list stores '{}'.
         with authenticated_user:
             response = client.put(f"/api/my-tunes/{person_tune_id}", json={"tags": []})
         assert response.status_code == 200
-        db_cursor.execute("SELECT tags FROM person_tune WHERE person_tune_id = %s", (person_tune_id,))
+        db_cursor.execute(
+            "SELECT tags FROM person_tune WHERE person_tune_id = %s", (person_tune_id,)
+        )
         assert db_cursor.fetchone()[0] == []
 
-    def test_set_tags_op_normalizes_and_persists(self, client, authenticated_user, db_conn, db_cursor):
+    def test_set_tags_op_normalizes_and_persists(
+        self, client, authenticated_user, db_conn, db_cursor
+    ):
         """POST /api/my-tunes/ops set_tags: absolute set, normalized server-side."""
         unique_id = str(uuid.uuid4())[:8]
         tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 52000
@@ -639,49 +898,65 @@ class TestPersonTuneAPI:
         with authenticated_user:
             response = client.post(
                 "/api/my-tunes/ops",
-                json={"op_id": "op1", "type": "set_tags", "tune_id": tune_id, "tags": ["Fav", "fav", "quick set"]},
+                json={
+                    "op_id": "op1",
+                    "type": "set_tags",
+                    "tune_id": tune_id,
+                    "tags": ["Fav", "fav", "quick set"],
+                },
             )
         assert response.status_code == 200
         assert json.loads(response.data)["success"] is True
 
         db_cursor.execute(
-            "SELECT tags FROM person_tune WHERE person_id = %s AND tune_id = %s", (person_id, tune_id)
+            "SELECT tags FROM person_tune WHERE person_id = %s AND tune_id = %s",
+            (person_id, tune_id),
         )
         assert db_cursor.fetchone()[0] == ["fav", "quick-set"]
 
-    def test_update_tune_status_to_learned_sets_date(self, client, authenticated_user, db_conn, db_cursor):
+    def test_update_tune_status_to_learned_sets_date(
+        self, client, authenticated_user, db_conn, db_cursor
+    ):
         """Test that updating status to 'learned' sets learned_date."""
         # Create test tune and person_tune
         unique_id = str(uuid.uuid4())[:8]
         tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 50000
         person_id = 2  # Match authenticated_user fixture
-        
-        db_cursor.execute("""
+
+        db_cursor.execute(
+            """
             INSERT INTO tune (tune_id, name, tune_type)
             VALUES (%s, %s, %s)
             ON CONFLICT (tune_id) DO NOTHING
-        """, (tune_id, f"Learned Tune {unique_id}", "Reel"))
-        
-        db_cursor.execute("""
+        """,
+            (tune_id, f"Learned Tune {unique_id}", "Reel"),
+        )
+
+        db_cursor.execute(
+            """
             INSERT INTO person_tune (person_id, tune_id, learn_status)
             VALUES (%s, %s, %s)
             RETURNING person_tune_id
-        """, (person_id, tune_id, 'learning'))
+        """,
+            (person_id, tune_id, "learning"),
+        )
         person_tune_id = db_cursor.fetchone()[0]
         db_conn.commit()
-        
+
         with authenticated_user:
-            response = client.put(f"/api/my-tunes/{person_tune_id}", json={
-                "learn_status": "learned"
-            })
-        
+            response = client.put(
+                f"/api/my-tunes/{person_tune_id}", json={"learn_status": "learned"}
+            )
+
         assert response.status_code == 200
         data = json.loads(response.data)
         assert data["success"] is True
         assert data["person_tune"]["learn_status"] == "learned"
         assert data["person_tune"]["learned_date"] is not None
 
-    def test_update_tune_status_unauthorized(self, client, authenticated_user, db_conn, db_cursor):
+    def test_update_tune_status_unauthorized(
+        self, client, authenticated_user, db_conn, db_cursor
+    ):
         """Test that users cannot update other users' tunes."""
         # The gate here is person-level OWNERSHIP (require_person_tune_ownership),
         # which even system admins do not bypass.
@@ -689,33 +964,42 @@ class TestPersonTuneAPI:
         unique_id = str(uuid.uuid4())[:8]
         tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 50000
         other_person_id = 999  # Different from authenticated user's person_id
-        
+
         # Create the other person
-        db_cursor.execute("""
+        db_cursor.execute(
+            """
             INSERT INTO person (person_id, first_name, last_name, email)
             VALUES (%s, %s, %s, %s)
             ON CONFLICT (person_id) DO NOTHING
-        """, (other_person_id, "Other", "User", f"other{unique_id}@example.com"))
-        
-        db_cursor.execute("""
+        """,
+            (other_person_id, "Other", "User", f"other{unique_id}@example.com"),
+        )
+
+        db_cursor.execute(
+            """
             INSERT INTO tune (tune_id, name, tune_type)
             VALUES (%s, %s, %s)
             ON CONFLICT (tune_id) DO NOTHING
-        """, (tune_id, f"Other User Tune {unique_id}", "Reel"))
-        
-        db_cursor.execute("""
+        """,
+            (tune_id, f"Other User Tune {unique_id}", "Reel"),
+        )
+
+        db_cursor.execute(
+            """
             INSERT INTO person_tune (person_id, tune_id, learn_status)
             VALUES (%s, %s, %s)
             RETURNING person_tune_id
-        """, (other_person_id, tune_id, 'want to learn'))
+        """,
+            (other_person_id, tune_id, "want to learn"),
+        )
         person_tune_id = db_cursor.fetchone()[0]
         db_conn.commit()
-        
+
         with authenticated_user:
-            response = client.put(f"/api/my-tunes/{person_tune_id}", json={
-                "learn_status": "learning"
-            })
-        
+            response = client.put(
+                f"/api/my-tunes/{person_tune_id}", json={"learn_status": "learning"}
+            )
+
         assert response.status_code == 403  # Forbidden
         data = json.loads(response.data)
         assert data["success"] is False
@@ -723,42 +1007,52 @@ class TestPersonTuneAPI:
     def test_increment_heard_count_requires_authentication(self, client):
         """Test that POST /api/my-tunes/<id>/heard requires authentication."""
         response = client.post("/api/my-tunes/1/heard")
-        
+
         assert response.status_code == 401
         data = json.loads(response.data)
         assert data["success"] is False
 
-    def test_increment_heard_count_success(self, client, authenticated_user, db_conn, db_cursor):
+    def test_increment_heard_count_success(
+        self, client, authenticated_user, db_conn, db_cursor
+    ):
         """Test successfully incrementing heard count."""
         # Create test tune and person_tune
         unique_id = str(uuid.uuid4())[:8]
         tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 50000
         person_id = 2  # Match authenticated_user fixture
-        
-        db_cursor.execute("""
+
+        db_cursor.execute(
+            """
             INSERT INTO tune (tune_id, name, tune_type)
             VALUES (%s, %s, %s)
             ON CONFLICT (tune_id) DO NOTHING
-        """, (tune_id, f"Heard Count Tune {unique_id}", "Reel"))
-        
-        db_cursor.execute("""
+        """,
+            (tune_id, f"Heard Count Tune {unique_id}", "Reel"),
+        )
+
+        db_cursor.execute(
+            """
             INSERT INTO person_tune (person_id, tune_id, learn_status, heard_count)
             VALUES (%s, %s, %s, %s)
             RETURNING person_tune_id
-        """, (person_id, tune_id, 'want to learn', 2))
+        """,
+            (person_id, tune_id, "want to learn", 2),
+        )
         person_tune_id = db_cursor.fetchone()[0]
         db_conn.commit()
-        
+
         with authenticated_user:
             response = client.post(f"/api/my-tunes/{person_tune_id}/heard")
-        
+
         assert response.status_code == 200
         data = json.loads(response.data)
         assert data["success"] is True
         assert data["heard_count"] == 3
         assert data["person_tune"]["heard_count"] == 3
 
-    def test_increment_heard_count_any_status(self, client, authenticated_user, db_conn, db_cursor):
+    def test_increment_heard_count_any_status(
+        self, client, authenticated_user, db_conn, db_cursor
+    ):
         """Heard count can be incremented regardless of learn status.
 
         The old 'want to learn'-only restriction was removed when
@@ -770,17 +1064,23 @@ class TestPersonTuneAPI:
         tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 50000
         person_id = 2  # Match authenticated_user fixture
 
-        db_cursor.execute("""
+        db_cursor.execute(
+            """
             INSERT INTO tune (tune_id, name, tune_type)
             VALUES (%s, %s, %s)
             ON CONFLICT (tune_id) DO NOTHING
-        """, (tune_id, f"Learning Status Tune {unique_id}", "Reel"))
+        """,
+            (tune_id, f"Learning Status Tune {unique_id}", "Reel"),
+        )
 
-        db_cursor.execute("""
+        db_cursor.execute(
+            """
             INSERT INTO person_tune (person_id, tune_id, learn_status, heard_count)
             VALUES (%s, %s, %s, %s)
             RETURNING person_tune_id
-        """, (person_id, tune_id, 'learning', 0))
+        """,
+            (person_id, tune_id, "learning", 0),
+        )
         person_tune_id = db_cursor.fetchone()[0]
         db_conn.commit()
 
@@ -792,7 +1092,9 @@ class TestPersonTuneAPI:
         assert data["success"] is True
         assert data["heard_count"] == 1
 
-    def test_increment_heard_count_unauthorized(self, client, authenticated_user, db_conn, db_cursor):
+    def test_increment_heard_count_unauthorized(
+        self, client, authenticated_user, db_conn, db_cursor
+    ):
         """Test that users cannot increment heard count for other users' tunes."""
         # The gate here is person-level OWNERSHIP (require_person_tune_ownership),
         # which even system admins do not bypass.
@@ -800,31 +1102,40 @@ class TestPersonTuneAPI:
         unique_id = str(uuid.uuid4())[:8]
         tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 50000
         other_person_id = 999
-        
+
         # Create the other person
-        db_cursor.execute("""
+        db_cursor.execute(
+            """
             INSERT INTO person (person_id, first_name, last_name, email)
             VALUES (%s, %s, %s, %s)
             ON CONFLICT (person_id) DO NOTHING
-        """, (other_person_id, "Other", "User", f"other{unique_id}@example.com"))
-        
-        db_cursor.execute("""
+        """,
+            (other_person_id, "Other", "User", f"other{unique_id}@example.com"),
+        )
+
+        db_cursor.execute(
+            """
             INSERT INTO tune (tune_id, name, tune_type)
             VALUES (%s, %s, %s)
             ON CONFLICT (tune_id) DO NOTHING
-        """, (tune_id, f"Other User Heard Tune {unique_id}", "Reel"))
-        
-        db_cursor.execute("""
+        """,
+            (tune_id, f"Other User Heard Tune {unique_id}", "Reel"),
+        )
+
+        db_cursor.execute(
+            """
             INSERT INTO person_tune (person_id, tune_id, learn_status, heard_count)
             VALUES (%s, %s, %s, %s)
             RETURNING person_tune_id
-        """, (other_person_id, tune_id, 'want to learn', 0))
+        """,
+            (other_person_id, tune_id, "want to learn", 0),
+        )
         person_tune_id = db_cursor.fetchone()[0]
         db_conn.commit()
-        
+
         with authenticated_user:
             response = client.post(f"/api/my-tunes/{person_tune_id}/heard")
-        
+
         assert response.status_code == 403  # Forbidden
         data = json.loads(response.data)
         assert data["success"] is False
@@ -832,36 +1143,44 @@ class TestPersonTuneAPI:
     def test_get_person_tune_detail_requires_authentication(self, client):
         """Test that GET /api/my-tunes/<id> requires authentication."""
         response = client.get("/api/my-tunes/1")
-        
+
         assert response.status_code == 401
         data = json.loads(response.data)
         assert data["success"] is False
         assert "authentication" in data["error"].lower()
 
-    def test_get_person_tune_detail_success(self, client, authenticated_user, db_conn, db_cursor):
+    def test_get_person_tune_detail_success(
+        self, client, authenticated_user, db_conn, db_cursor
+    ):
         """Test successfully getting tune detail."""
         # Create test tune and person_tune
         unique_id = str(uuid.uuid4())[:8]
         tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 50000
         person_id = 2  # Match authenticated_user fixture
-        
-        db_cursor.execute("""
+
+        db_cursor.execute(
+            """
             INSERT INTO tune (tune_id, name, tune_type, tunebook_count_cached)
             VALUES (%s, %s, %s, %s)
             ON CONFLICT (tune_id) DO NOTHING
-        """, (tune_id, f"Detail Tune {unique_id}", "Reel", 150))
-        
-        db_cursor.execute("""
+        """,
+            (tune_id, f"Detail Tune {unique_id}", "Reel", 150),
+        )
+
+        db_cursor.execute(
+            """
             INSERT INTO person_tune (person_id, tune_id, learn_status, heard_count, notes)
             VALUES (%s, %s, %s, %s, %s)
             RETURNING person_tune_id
-        """, (person_id, tune_id, 'want to learn', 5, 'Test notes'))
+        """,
+            (person_id, tune_id, "want to learn", 5, "Test notes"),
+        )
         person_tune_id = db_cursor.fetchone()[0]
         db_conn.commit()
-        
+
         with authenticated_user:
             response = client.get(f"/api/my-tunes/{person_tune_id}")
-        
+
         assert response.status_code == 200
         data = json.loads(response.data)
         assert data["success"] is True
@@ -872,14 +1191,17 @@ class TestPersonTuneAPI:
         assert data["person_tune"]["heard_count"] == 5
         assert data["person_tune"]["notes"] == "Test notes"
         assert data["person_tune"]["tunebook_count"] == 150
-        assert data["person_tune"]["thesession_url"] == f"https://thesession.org/tunes/{tune_id}"
+        assert (
+            data["person_tune"]["thesession_url"]
+            == f"https://thesession.org/tunes/{tune_id}"
+        )
         assert "session_play_count" in data["person_tune"]
 
     def test_get_person_tune_detail_not_found(self, client, authenticated_user):
         """Test getting detail for non-existent tune."""
         with authenticated_user:
             response = client.get("/api/my-tunes/999999999")
-        
+
         assert response.status_code == 404
         data = json.loads(response.data)
         assert data["success"] is False
@@ -889,129 +1211,172 @@ class TestPersonTuneAPI:
         """Test that users cannot get details for other users' tunes."""
         from unittest.mock import patch
         from auth import User
-        
+
         # Create a non-admin user
         unique_id = str(uuid.uuid4())[:8]
         non_admin_person_id = int(unique_id[:4], 16) % 1000 + 5000
-        
-        db_cursor.execute("""
+
+        db_cursor.execute(
+            """
             INSERT INTO person (person_id, first_name, last_name, email)
             VALUES (%s, %s, %s, %s)
             ON CONFLICT (person_id) DO NOTHING
-        """, (non_admin_person_id, "NonAdmin", "User", f"nonadmin{unique_id}@example.com"))
-        
+        """,
+            (
+                non_admin_person_id,
+                "NonAdmin",
+                "User",
+                f"nonadmin{unique_id}@example.com",
+            ),
+        )
+
         # Create another user's tune
         tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 50000
         other_person_id = 999
-        
+
         # Create the other person
-        db_cursor.execute("""
+        db_cursor.execute(
+            """
             INSERT INTO person (person_id, first_name, last_name, email)
             VALUES (%s, %s, %s, %s)
             ON CONFLICT (person_id) DO NOTHING
-        """, (other_person_id, "Other", "User", f"other{unique_id}@example.com"))
-        
-        db_cursor.execute("""
+        """,
+            (other_person_id, "Other", "User", f"other{unique_id}@example.com"),
+        )
+
+        db_cursor.execute(
+            """
             INSERT INTO tune (tune_id, name, tune_type)
             VALUES (%s, %s, %s)
             ON CONFLICT (tune_id) DO NOTHING
-        """, (tune_id, f"Other User Detail Tune {unique_id}", "Reel"))
-        
-        db_cursor.execute("""
+        """,
+            (tune_id, f"Other User Detail Tune {unique_id}", "Reel"),
+        )
+
+        db_cursor.execute(
+            """
             INSERT INTO person_tune (person_id, tune_id, learn_status)
             VALUES (%s, %s, %s)
             RETURNING person_tune_id
-        """, (other_person_id, tune_id, 'want to learn'))
+        """,
+            (other_person_id, tune_id, "want to learn"),
+        )
         person_tune_id = db_cursor.fetchone()[0]
         db_conn.commit()
-        
+
         # Create non-admin user and authenticate
         non_admin_user = User(
             user_id=9999,
             person_id=non_admin_person_id,
             username="nonadmin",
             is_system_admin=False,
-            email=f"nonadmin{unique_id}@example.com"
+            email=f"nonadmin{unique_id}@example.com",
         )
-        
+
         with patch("auth.User.get_by_id") as mock_get_user:
             mock_get_user.return_value = non_admin_user
-            
+
             with client.session_transaction() as sess:
                 sess["_user_id"] = "9999"
                 sess["_fresh"] = True
                 sess["is_system_admin"] = False
                 sess["admin_session_ids"] = []
-            
+
             response = client.get(f"/api/my-tunes/{person_tune_id}")
-        
+
         assert response.status_code == 403  # Forbidden
         data = json.loads(response.data)
         assert data["success"] is False
-        assert ("permission" in data["error"].lower() or "unauthorized" in data["error"].lower())
+        assert (
+            "permission" in data["error"].lower()
+            or "unauthorized" in data["error"].lower()
+        )
 
-    def test_get_person_tune_detail_with_session_play_count(self, client, authenticated_user, db_conn, db_cursor):
+    def test_get_person_tune_detail_with_session_play_count(
+        self, client, authenticated_user, db_conn, db_cursor
+    ):
         """Test that tune detail includes session play count."""
         # Create test tune and person_tune
         unique_id = str(uuid.uuid4())[:8]
         tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 50000
         person_id = 2  # Match authenticated_user fixture person_id
         session_id = int(unique_id[2:6], 16) % 10000 + 1000
-        
+
         # Create session
-        db_cursor.execute("""
+        db_cursor.execute(
+            """
             INSERT INTO session (session_id, name, path)
             VALUES (%s, %s, %s)
             ON CONFLICT (session_id) DO NOTHING
-        """, (session_id, f"Test Session {unique_id}", f"test-session-{unique_id}"))
-        
+        """,
+            (session_id, f"Test Session {unique_id}", f"test-session-{unique_id}"),
+        )
+
         # Add person to session
-        db_cursor.execute("""
+        db_cursor.execute(
+            """
             INSERT INTO session_person (session_id, person_id)
             VALUES (%s, %s)
             ON CONFLICT (session_id, person_id) DO NOTHING
-        """, (session_id, person_id))
-        
+        """,
+            (session_id, person_id),
+        )
+
         # Create session instance
-        db_cursor.execute("""
+        db_cursor.execute(
+            """
             INSERT INTO session_instance (session_id, date)
             VALUES (%s, CURRENT_DATE)
             RETURNING session_instance_id
-        """, (session_id,))
+        """,
+            (session_id,),
+        )
         session_instance_id = db_cursor.fetchone()[0]
 
         # Check in too, so this fixture exercises BOTH spec 033 lenses:
         # member_play_count (session_person membership) and attended_play_count
         # (session_instance_person attendance='yes').
-        db_cursor.execute("""
+        db_cursor.execute(
+            """
             INSERT INTO session_instance_person (session_instance_id, person_id, attendance)
             VALUES (%s, %s, 'yes')
             ON CONFLICT (session_instance_id, person_id) DO NOTHING
-        """, (session_instance_id, person_id))
-        
-        db_cursor.execute("""
+        """,
+            (session_instance_id, person_id),
+        )
+
+        db_cursor.execute(
+            """
             INSERT INTO tune (tune_id, name, tune_type)
             VALUES (%s, %s, %s)
             ON CONFLICT (tune_id) DO NOTHING
-        """, (tune_id, f"Session Play Tune {unique_id}", "Reel"))
-        
+        """,
+            (tune_id, f"Session Play Tune {unique_id}", "Reel"),
+        )
+
         # Add tune to session instance
-        db_cursor.execute("""
+        db_cursor.execute(
+            """
             INSERT INTO session_instance_tune (session_instance_id, tune_id, order_position)
             VALUES (%s, %s, %s)
-        """, (session_instance_id, tune_id, 'V'))
-        
-        db_cursor.execute("""
+        """,
+            (session_instance_id, tune_id, "V"),
+        )
+
+        db_cursor.execute(
+            """
             INSERT INTO person_tune (person_id, tune_id, learn_status)
             VALUES (%s, %s, %s)
             RETURNING person_tune_id
-        """, (person_id, tune_id, 'want to learn'))
+        """,
+            (person_id, tune_id, "want to learn"),
+        )
         person_tune_id = db_cursor.fetchone()[0]
         db_conn.commit()
-        
+
         with authenticated_user:
             response = client.get(f"/api/my-tunes/{person_tune_id}")
-        
+
         assert response.status_code == 200
         data = json.loads(response.data)
         assert data["success"] is True
@@ -1019,9 +1384,14 @@ class TestPersonTuneAPI:
         # session_play_count is the deprecated alias of member_play_count.
         assert data["person_tune"]["member_play_count"] >= 1
         assert data["person_tune"]["attended_play_count"] >= 1
-        assert data["person_tune"]["session_play_count"] == data["person_tune"]["member_play_count"]
+        assert (
+            data["person_tune"]["session_play_count"]
+            == data["person_tune"]["member_play_count"]
+        )
 
-    def test_play_count_lenses_diverge(self, client, authenticated_user, db_conn, db_cursor):
+    def test_play_count_lenses_diverge(
+        self, client, authenticated_user, db_conn, db_cursor
+    ):
         """Spec 033: member_play_count (R3) and attended_play_count (R4) are
         different relationships and must diverge in both directions.
 
@@ -1038,7 +1408,11 @@ class TestPersonTuneAPI:
         for sid, suffix in ((sid_m, "m"), (sid_v, "v")):
             db_cursor.execute(
                 "INSERT INTO session (session_id, name, path) VALUES (%s, %s, %s) ON CONFLICT DO NOTHING",
-                (sid, f"Lens Session {suffix} {unique_id}", f"lens-{suffix}-{unique_id}"),
+                (
+                    sid,
+                    f"Lens Session {suffix} {unique_id}",
+                    f"lens-{suffix}-{unique_id}",
+                ),
             )
         db_cursor.execute(
             """INSERT INTO session_person (session_id, person_id, relationship)
@@ -1083,6 +1457,8 @@ class TestPersonTuneAPI:
 
         assert response.status_code == 200
         data = json.loads(response.data)["person_tune"]
-        assert data["member_play_count"] == 1     # session M's play, despite no check-in
-        assert data["attended_play_count"] == 1   # session V's play, despite visitor status
-        assert data["session_play_count"] == 1    # alias of member
+        assert data["member_play_count"] == 1  # session M's play, despite no check-in
+        assert (
+            data["attended_play_count"] == 1
+        )  # session V's play, despite visitor status
+        assert data["session_play_count"] == 1  # alias of member
