@@ -21,11 +21,7 @@ struct FestivalView: View {
     var body: some View {
         Loaded(state: state, retry: load) { r in years(r) }
             .background(CeolTokens.bgColor)
-            .ceolPushedBar(name)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) { ShareButton(path: "/sessions/\(slug)", subject: name) }
-                    .sharedBackgroundVisibility(.hidden)
-            }
+            .ceolPushedBar(name) { ShareButton(path: "/sessions/\(slug)", subject: name) }
             .task { if state.value == nil { await load() } }
     }
 

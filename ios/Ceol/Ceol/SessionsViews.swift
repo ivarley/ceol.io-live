@@ -248,12 +248,8 @@ struct SessionDetailView: View {
     var body: some View {
         Loaded(state: state, retry: load) { d in content(d) }
             .background(CeolTokens.bgColor)
-            .ceolPushedBar(name)
-            .toolbar {
-                // The web's Share: a link to this page, for someone without the app too.
-                ToolbarItem(placement: .topBarTrailing) { ShareButton(path: "/sessions/\(path)/\(tab.rawValue.lowercased())", subject: name) }
-                    .sharedBackgroundVisibility(.hidden)
-            }
+            // The web's Share: a link to this page, for someone without the app too.
+            .ceolPushedBar(name) { ShareButton(path: "/sessions/\(path)/\(tab.rawValue.lowercased())", subject: name) }
             .navigationDestination(item: $newNight) { NightView(sessionInstanceID: $0.id, title: $0.title) }
             .sheet(isPresented: $editingRole) {
                 if let p = state.value?.permissions, let relationship = p.relationship {
@@ -988,6 +984,7 @@ private struct PersonRow: View {
 struct NightView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     let sessionInstanceID: Int
     let title: String
     @State private var model: NightModel?
@@ -1003,6 +1000,41 @@ struct NightView: View {
     @State private var scroll = ScrollPosition(edge: .top)
     @State private var scrollGeometry = ScrollGeometry(
         contentOffset: .zero, contentSize: .zero, contentInsets: .init(), containerSize: .zero)
+
+    /// The top bar's actions: Edit log / Select / Done while the night can be logged,
+    /// Record (system admins, spec 053), and Share.
+    @ViewBuilder private var nightActions: some View {
+        HStack(spacing: 14) {
+            if let model, model.log != nil, model.status != .finished, !deepSearching {
+                if model.selecting {
+                    Button("Done") { model.setSelecting(false) }
+                        .font(.ceol(size: 16, weight: .semibold))
+                        .accessibilityIdentifier("select.done")
+                } else if model.editing {
+                    Button("Select") { model.setSelecting(true); composerFocused = false }
+                        .accessibilityIdentifier("night.select")
+                    Button("Done") { finishEditing() }
+                        .font(.ceol(size: 16, weight: .semibold))
+                        .accessibilityIdentifier("night.done")
+                } else {
+                    Button { model.setEditing(true) } label: {
+                        Label("Edit log", systemImage: "pencil")
+                    }
+                    .accessibilityIdentifier("night.edit")
+                }
+            }
+            if app.user?.isSystemAdmin == true, model?.night != nil, model?.editing != true {
+                // Recording a night for the listener (spec 053): system admins, for now.
+                RecordNightButton(instanceID: sessionInstanceID, title: title)
+            }
+            if let night = model?.night, let path = night["session_path"]?.stringValue, model?.editing != true {
+                // A night's page is its date, or its id when it has none.
+                ShareButton(
+                    path: "/sessions/\(path)/\(night["instance_date"]?.stringValue ?? String(sessionInstanceID))",
+                    subject: "\(night["session_name"]?.stringValue ?? ""), \(night["session_date"]?.stringValue ?? "")")
+            }
+        }
+    }
 
     var body: some View {
         Group {
@@ -1021,46 +1053,7 @@ struct NightView: View {
             }
         }
         .background(CeolTokens.bgColor)
-        .ceolPushedBar(title)
-        .toolbar {
-            if let model, model.log != nil, model.status != .finished, !deepSearching {
-                ToolbarItem(placement: .topBarTrailing) {
-                    if model.selecting {
-                        Button("Done") { model.setSelecting(false) }
-                            .font(.ceol(size: 16, weight: .semibold))
-                            .accessibilityIdentifier("select.done")
-                    } else if model.editing {
-                        HStack(spacing: 14) {
-                            Button("Select") { model.setSelecting(true); composerFocused = false }
-                                .accessibilityIdentifier("night.select")
-                            Button("Done") { finishEditing() }
-                                .font(.ceol(size: 16, weight: .semibold))
-                                .accessibilityIdentifier("night.done")
-                        }
-                    } else {
-                        Button { model.setEditing(true) } label: {
-                            Label("Edit log", systemImage: "pencil")
-                        }
-                        .accessibilityIdentifier("night.edit")
-                    }
-                }
-            }
-            if app.user?.isSystemAdmin == true, model?.night != nil, model?.editing != true {
-                // Recording a night for the listener (spec 053): system admins, for now.
-                ToolbarItem(placement: .topBarTrailing) {
-                    RecordNightButton(instanceID: sessionInstanceID, title: title)
-                }
-            }
-            if let night = model?.night, let path = night["session_path"]?.stringValue, model?.editing != true {
-                // A night's page is its date, or its id when it has none.
-                ToolbarItem(placement: .topBarTrailing) {
-                    ShareButton(
-                        path: "/sessions/\(path)/\(night["instance_date"]?.stringValue ?? String(sessionInstanceID))",
-                        subject: "\(night["session_name"]?.stringValue ?? ""), \(night["session_date"]?.stringValue ?? "")")
-                }
-                .sharedBackgroundVisibility(.hidden)
-            }
-        }
+        .ceolPushedBar(title) { nightActions }
         .task {
             if model == nil {
                 let m = NightModel(instanceID: sessionInstanceID, app: app)
@@ -1316,7 +1309,7 @@ struct NightView: View {
             // Watching, the player sits above the tab bar (editing, above the composer).
             if !model.editing && model.player.isPlaying {
                 PlayerBar(player: model.player, name: playingName(model))
-                    .padding(.horizontal, 16).padding(.bottom, CeolTabBar.height + 8)
+                    .padding(.horizontal, 16).padding(.bottom, CeolTabBar.height(landscape: verticalSizeClass == .compact) + 8)
             }
         }
         .animation(.easeOut(duration: 0.2), value: model.player.isPlaying)

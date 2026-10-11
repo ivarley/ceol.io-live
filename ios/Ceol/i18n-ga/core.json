@@ -103,7 +103,7 @@
   "Log Out": "Sínigh amach",
   "Logged": "Logáilte",
   "Me": "Mise",
-  "Member %lld": "Ball %lld",
+  "Member %@": "Ball %@",
   "New here? Enter your email and we'll send you a link to create your account.": "Nua anseo? Cuir isteach do ríomhphost agus seolfaimid nasc chugat chun do chuntas a chruthú.",
   "No sessions scheduled this week.": "Níl seisiún ar bith sceidealta an tseachtain seo.",
   "No tunes logged yet": "Níl fonn ar bith logáilte fós",

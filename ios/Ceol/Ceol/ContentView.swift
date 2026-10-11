@@ -106,10 +106,12 @@ enum AppTab: Hashable, CaseIterable {
 /// Every screen hides the system bar through ceolRootBar / ceolPushedBar.
 struct MainTabView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
 
     /// The tab bar, and the recorder's bar above it while a night is recorded.
     private var bottomBars: CGFloat {
-        CeolTabBar.height + (model.recorder != nil ? RecorderBar.height : model.recordings.active != nil ? UploadBar.height : 0)
+        CeolTabBar.height(landscape: verticalSizeClass == .compact)
+            + (model.recorder != nil ? RecorderBar.height : model.recordings.active != nil ? UploadBar.height : 0)
     }
 
     var body: some View {
@@ -155,26 +157,37 @@ struct MainTabView: View {
 
 struct CeolTabBar: View {
     @Environment(AppModel.self) private var model
-    /// The bar above the home indicator: its top padding, the tabs, and the rule.
-    static let height: CGFloat = 6 + 54 + 1 + 8
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+
+    /// The bar above the home indicator: its top padding, the tabs, and the rule. A
+    /// phone on its side has little height to spare, so the bar is a short strip there,
+    /// each tab's icon beside its name, low on the screen.
+    static func height(landscape: Bool) -> CGFloat {
+        landscape ? 2 + 34 + 1 + 2 : 6 + 54 + 1 + 8
+    }
+
+    private var landscape: Bool { verticalSizeClass == .compact }
 
     var body: some View {
         HStack(spacing: 0) {
             ForEach(AppTab.allCases, id: \.self) { tab in
                 let on = model.tab == tab
                 Button {
-                    model.tab = tab
+                    // Already in the section: back to its top-level page.
+                    if on { model.returnToRoot(tab) } else { model.tab = tab }
                 } label: {
-                    VStack(spacing: 3) {
-                        Image(tab.icon).renderingMode(.template).resizable().scaledToFit().frame(width: 24, height: 24)
+                    let layout = landscape ? AnyLayout(HStackLayout(spacing: 6)) : AnyLayout(VStackLayout(spacing: 3))
+                    layout {
+                        Image(tab.icon).renderingMode(.template).resizable().scaledToFit()
+                            .frame(width: landscape ? 20 : 24, height: landscape ? 20 : 24)
                         Text(tab.title).font(.ceol(size: 11, weight: on ? .semibold : .medium, relativeTo: .caption2))
                     }
                     .foregroundStyle(on ? CeolTokens.primary : CeolTokens.logoGreenSoft)
                     .padding(.horizontal, 14)
-                    .padding(.vertical, 5)
+                    .padding(.vertical, landscape ? 3 : 5)
                     // Where you are, at a glance: a soft green lozenge behind the tab.
                     .background(on ? CeolTokens.primary.opacity(0.16) : .clear, in: RoundedRectangle(cornerRadius: 12))
-                    .frame(maxWidth: .infinity, minHeight: 54)
+                    .frame(maxWidth: .infinity, minHeight: landscape ? 34 : 54)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -183,7 +196,7 @@ struct CeolTabBar: View {
                 .accessibilityAddTraits(on ? [.isSelected, .isButton] : .isButton)
             }
         }
-        .padding(.top, 6)
+        .padding(.top, landscape ? 2 : 6)
         .background(CeolTokens.bgColor.ignoresSafeArea(edges: .bottom))
         .overlay(alignment: .top) { Rectangle().fill(CeolTokens.borderColor).frame(height: 1) }
     }

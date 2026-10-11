@@ -114,7 +114,8 @@ struct MeView: View {
                     if let member = profile.thesessionUserId {
                         Link(destination: URL(string: "https://thesession.org/members/\(member)")!) {
                             KitRow(label: "thesession.org") {
-                                Text(tr("Member \(member)")).font(.ceol(size: 18)).foregroundStyle(CeolTokens.primary)
+                                // As text, not a number: an ID takes no thousands separators.
+                                Text(tr("Member \(String(member))")).font(.ceol(size: 18)).foregroundStyle(CeolTokens.primary)
                             }
                         }
                     } else {

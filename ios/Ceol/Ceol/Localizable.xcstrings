@@ -2583,6 +2583,16 @@
         }
       }
     },
+    "Close": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Dún"
+          }
+        }
+      }
+    },
     "Common Tunes?": {
       "extractionState": "stale",
       "localizations": {
@@ -4513,7 +4523,18 @@
         }
       }
     },
+    "Member %@": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ball %@"
+          }
+        }
+      }
+    },
     "Member %lld": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -5545,6 +5566,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Barraí tosaigh"
+          }
+        }
+      }
+    },
+    "Opens the notation full screen": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Osclaíonn sé an nodaireacht ar an scáileán iomlán"
           }
         }
       }
