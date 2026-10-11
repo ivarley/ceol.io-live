@@ -182,12 +182,14 @@ CREATE INDEX idx_tune_redirect_to ON tune(redirect_to_tune_id) WHERE redirect_to
 -- function (fold smart quotes -> ASCII, strip accents, lowercase) shared by both the
 -- index expressions and the matching queries (api_routes.match_tune_core,
 -- database.find_matching_tune), so the planner uses the indexes.
+-- unaccent is schema-qualified because pg_restore (and so pg_upgrade) runs with an
+-- empty search_path and rebuilds the indexes on this function (migration 062).
 CREATE OR REPLACE FUNCTION tune_search_key(text)
 RETURNS text
 LANGUAGE sql
 IMMUTABLE STRICT PARALLEL SAFE
 AS $$
-    SELECT lower(unaccent('unaccent', translate($1,
+    SELECT lower(public.unaccent('public.unaccent'::regdictionary, translate($1,
         chr(8216)||chr(8217)||chr(700)||chr(8242)||chr(96)||chr(180)
         ||chr(8220)||chr(8221)||chr(8222)||chr(8243)||chr(171)||chr(187),
         chr(39)||chr(39)||chr(39)||chr(39)||chr(39)||chr(39)
