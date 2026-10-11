@@ -2018,3 +2018,9 @@ The plan (Phases 0-6) runs from here in `ios/`; see `ios/README.md` for the layo
     Retry for the rest. Found on the way: `testBrowsingTunes` had looked for the
     notation as an image since 03ba084 made it a button. Help: `help_offline.html` and its Irish twin say
     what the app keeps.
+- **Full-screen notation zooms, 2026-10-11.** The whole tune over the whole screen
+  (`NotationFullScreen`) is now a `UIScrollView` (`ZoomableNotation`): pinch to zoom
+  in to four times and pan about, double tap to zoom in on a spot and back out, a tap
+  to put it away as before; the phone turned refits it to the new width. The image
+  carries the zoom as its accessibility value ("250%"), for VoiceOver and
+  `testPinchingTheNotation`, since the accessibility frame does not follow the zoom.

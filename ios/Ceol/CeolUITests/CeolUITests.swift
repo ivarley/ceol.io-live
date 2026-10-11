@@ -1722,6 +1722,38 @@ final class CeolUITests: XCTestCase {
         XCTAssertEqual(now, seededStatus)
     }
 
+    /// The whole tune over the whole screen zooms: a pinch makes the staff bigger, a
+    /// double tap brings it back, and a tap puts the screen away.
+    @MainActor
+    func testPinchingTheNotation() throws {
+        let app = launch()
+        signIn(app)
+        app.buttons["tab.tunes"].firstMatch.tap()
+        let cooleys = app.buttons.containing(NSPredicate(format: "label CONTAINS \"Cooley's\"")).firstMatch
+        XCTAssertTrue(cooleys.waitForExistence(timeout: 10))
+        cooleys.tap()
+        let notation = app.buttons["sheet.notation"]
+        XCTAssertTrue(notation.waitForExistence(timeout: 20))
+        notation.tap()  // the whole tune
+        if app.buttons["OK, Got It!"].waitForExistence(timeout: 3) { app.buttons["OK, Got It!"].tap() }
+        let full = app.buttons["sheet.fullScreen"]
+        XCTAssertTrue(full.waitForExistence(timeout: 20))
+        full.tap()
+        let image = app.images.matching(NSPredicate(format: "label BEGINSWITH 'Notation for Cooley'")).firstMatch
+        XCTAssertTrue(image.waitForExistence(timeout: 5))
+        XCTAssertEqual(image.value as? String, "100%")
+        func zoom() -> Int { Int((image.value as? String ?? "").dropLast()) ?? -1 }
+        image.pinch(withScale: 2.5, velocity: 1)
+        snapshot("notation pinched")
+        let grown = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in zoom() > 150 }, object: nil)
+        XCTAssertEqual(XCTWaiter().wait(for: [grown], timeout: 5), .completed, "the staff should be bigger after a pinch: \(image.value ?? "")")
+        image.doubleTap()
+        let back = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in zoom() == 100 }, object: nil)
+        XCTAssertEqual(XCTWaiter().wait(for: [back], timeout: 5), .completed, "a double tap should zoom back out: \(image.value ?? "")")
+        app.buttons["Close"].tap()
+        XCTAssertTrue(image.waitForNonExistence(timeout: 5))
+    }
+
     @MainActor
     func testMeShowsTheProfile() throws {
         let app = launch()

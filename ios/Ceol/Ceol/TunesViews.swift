@@ -1019,35 +1019,121 @@ extension TuneSheet {
 
 /// The whole tune over the whole screen, on white as the notation card: as wide as the
 /// screen whichever way the phone is held (turn it on its side for a wider staff), and
-/// scrolling down when it is taller. A tap anywhere puts it away.
+/// scrolling down when it is taller. Pinch to zoom in (to four times) and pan about;
+/// a double tap zooms in on that spot and back out. A tap anywhere puts it away.
 struct NotationFullScreen: View {
     @Environment(\.dismiss) private var dismiss
     let image: UIImage
     let name: String
 
     var body: some View {
-        ScrollView {
-            Image(uiImage: image)
-                .resizable().scaledToFit()
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .accessibilityLabel("Notation for \(name)")
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.white)
-        .contentShape(Rectangle())
-        .onTapGesture { dismiss() }
-        .overlay(alignment: .topTrailing) {
-            Button { dismiss() } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 28))
-                    .foregroundStyle(Color.black.opacity(0.45))
-                    .padding(12)
+        ZoomableNotation(image: image, name: name) { dismiss() }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.white)
+            .overlay(alignment: .topTrailing) {
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 28))
+                        .foregroundStyle(Color.black.opacity(0.45))
+                        .padding(12)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Close")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Close")
+            .ignoresSafeArea(edges: .bottom)
+    }
+}
+
+/// The notation in a UIScrollView, which is what gives pinch-to-zoom its native feel
+/// (the bounce at the ends, the momentum, zooming about the fingers) as Photos has it.
+struct ZoomableNotation: UIViewRepresentable {
+    let image: UIImage
+    let name: String
+    let onTap: () -> Void
+
+    func makeUIView(context: Context) -> NotationScrollView {
+        let v = NotationScrollView(image: image)
+        v.imageView.accessibilityLabel = tr("Notation for \(name)")
+        v.onTap = onTap
+        return v
+    }
+
+    func updateUIView(_ v: NotationScrollView, context: Context) {
+        v.onTap = onTap
+        if v.imageView.image !== image {
+            v.imageView.image = image
+            v.refit()
         }
-        .ignoresSafeArea(edges: .bottom)
+    }
+}
+
+final class NotationScrollView: UIScrollView, UIScrollViewDelegate {
+    let imageView: UIImageView
+    var onTap: () -> Void = {}
+    /// The width the image was last fitted to: a change (the phone turned) refits it.
+    private var fittedWidth: CGFloat = 0
+
+    init(image: UIImage) {
+        imageView = UIImageView(image: image)
+        super.init(frame: .zero)
+        delegate = self
+        minimumZoomScale = 1
+        maximumZoomScale = 4
+        bouncesZoom = true
+        showsHorizontalScrollIndicator = false
+        contentInsetAdjustmentBehavior = .never
+        contentInset = UIEdgeInsets(top: 12, left: 0, bottom: 12, right: 0)
+        backgroundColor = .white
+        imageView.isAccessibilityElement = true
+        imageView.accessibilityTraits = .image
+        addSubview(imageView)
+        let double = UITapGestureRecognizer(target: self, action: #selector(doubleTapped))
+        double.numberOfTapsRequired = 2
+        addGestureRecognizer(double)
+        let single = UITapGestureRecognizer(target: self, action: #selector(tapped))
+        single.require(toFail: double)
+        addGestureRecognizer(single)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { nil }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        if bounds.width != fittedWidth { refit() }
+    }
+
+    /// The image as wide as the view at 1×, its height to match; zoomed out again.
+    func refit() {
+        let w = bounds.width
+        guard w > 0, let img = imageView.image, img.size.width > 0 else { return }
+        fittedWidth = w
+        zoomScale = 1
+        imageView.frame = CGRect(x: 0, y: 0, width: w, height: w * img.size.height / img.size.width)
+        contentSize = imageView.frame.size
+        contentOffset = CGPoint(x: 0, y: -contentInset.top)
+        imageView.accessibilityValue = "100%"
+    }
+
+    func viewForZooming(in scrollView: UIScrollView) -> UIView? { imageView }
+
+    /// How far in, for VoiceOver (and the UI test): "250%".
+    func scrollViewDidZoom(_ scrollView: UIScrollView) {
+        imageView.accessibilityValue = "\(Int((zoomScale * 100).rounded()))%"
+    }
+
+    @objc private func tapped() { onTap() }
+
+    /// Zoomed in: back to the whole width. Else 2.5× about the tapped spot.
+    @objc private func doubleTapped(_ g: UITapGestureRecognizer) {
+        if zoomScale > 1.01 {
+            setZoomScale(1, animated: true)
+            return
+        }
+        let scale: CGFloat = 2.5
+        let p = g.location(in: imageView)
+        let size = CGSize(width: bounds.width / scale, height: bounds.height / scale)
+        zoom(to: CGRect(x: p.x - size.width / 2, y: p.y - size.height / 2, width: size.width, height: size.height), animated: true)
     }
 }
 
