@@ -62,6 +62,7 @@
     "other": "Chuala tú é %lld uair"
   },
   "Heard it once": "Chuala tú é uair amháin",
+  "Hi! You found a secret feature!": "Haigh! Tá gné rúnda aimsithe agat!",
   "Hide controls": "Folaigh na rialuithe",
   "Hide the meter": "Folaigh an méadar",
   "Hornpipe": "Cornphíopa",
@@ -121,6 +122,7 @@
   "Notes": "Nótaí",
   "Nothing recorded on this phone yet. Record a night from its page.": "Níl aon rud taifeadta ar an bhfón seo fós. Taifead oíche óna leathanach féin.",
   "OK": "OK",
+  "OK, Got It!": "Ceart go leor, tuigim!",
   "Offline — still recording, will catch up": "As líne — fós ag taifeadadh, tiocfaidh sé suas",
   "Offline — try again later": "As líne — bain triail eile as ar ball",
   "Offline — will finish later": "As líne — críochnófar ar ball é",
@@ -207,6 +209,7 @@
   "Whistle": "Feadóg",
   "Whole tune": "An fonn ar fad",
   "Wrong tune": "Fonn mícheart",
+  "You can tap the opening bars to see the whole tune setting.\n\nBUT! Please remember that traditional Irish music is best learned by listening, not reading. It's OK to use the notation as a reference, in a pinch, but it's always better to learn with your ears.": "Is féidir leat tús an fhoinn a thapáil chun leagan iomlán an fhoinn a fheiceáil.\n\nACH! Cuimhnigh gur fearr ceol traidisiúnta na hÉireann a fhoghlaim trí éisteacht, ní trí léamh. Tá sé ceart go leor an nodaireacht a úsáid mar thagairt, nuair a bhíonn gá, ach is fearr i gcónaí foghlaim le do chluasa.",
   "containing '%@'": "ina bhfuil '%@'",
   "in '%@' status": "le stádas '%@'",
   "in use": "in úsáid",

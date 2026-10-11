@@ -302,6 +302,9 @@ struct TuneSheet: View {
     @State private var abcMode = false
     /// What's showing, over the whole screen (the arrows under the staff).
     @State private var fullScreen = false
+    /// The first time you tap through to the whole tune: a word about learning by ear.
+    @State private var showNotationNotice = false
+    @State private var notationNoticeDone = false
     @State private var notationFailed = false
     @State private var chooser: SettingLayer?
     /// Adding: what you call it and the key you play it in, when they differ from the
@@ -759,6 +762,17 @@ struct TuneSheet: View {
                     .disabled(t.abc == nil && t.incipitAbc == nil)
                     .opacity(t.abc == nil && t.incipitAbc == nil ? 0.4 : 1)
                 Spacer()
+                // Full screen, once the whole tune is showing (the opening bars fit as they are).
+                if showFull && !abcMode && (full ?? incipit) != nil {
+                    Button { fullScreen = true } label: {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right").font(.system(size: 17))
+                            .foregroundStyle(CeolTokens.primary)
+                            .frame(width: 36, height: 32).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Full screen")
+                    .accessibilityIdentifier("sheet.fullScreen")
+                }
                 // Where else to see it: a menu, so more can join thesession.org and abc-tools.
                 Menu {
                     // Names, not words to translate.
@@ -773,26 +787,34 @@ struct TuneSheet: View {
                 }
                 .accessibilityLabel("Open in…")
                 .accessibilityIdentifier("sheet.openIn")
-                Button { fullScreen = true } label: {
-                    Image(systemName: "arrow.up.left.and.arrow.down.right").font(.system(size: 17))
-                        .foregroundStyle(CeolTokens.primary)
-                        .frame(width: 36, height: 32).contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .disabled(abcMode || (showFull ? (full ?? incipit) : incipit) == nil)
-                .opacity(abcMode || (showFull ? (full ?? incipit) : incipit) == nil ? 0.4 : 1)
-                .accessibilityLabel("Full screen")
-                .accessibilityIdentifier("sheet.fullScreen")
             }
         }
         .padding(12)
         .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(CeolTokens.borderColor, lineWidth: 1))
+        .alert("Hi! You found a secret feature!", isPresented: $showNotationNotice) {
+            Button("OK, Got It!") {
+                notationNoticeDone = true
+                Self.markNotationNoticeSeen(for: model.user?.personId)
+            }
+        } message: {
+            Text("You can tap the opening bars to see the whole tune setting.\n\nBUT! Please remember that traditional Irish music is best learned by listening, not reading. It's OK to use the notation as a reference, in a pinch, but it's always better to learn with your ears.")
+        }
     }
 
-    /// Opening bars ⇄ the whole tune, fetched the first time it is asked for.
+    /// Opening bars ⇄ the whole tune, fetched the first time it is asked for. The first
+    /// time through to the whole tune, a word about learning by ear (once per person).
     private func flipSize(_ t: Components.Schemas.TuneDetail.SessionTunePayload) {
         showFull.toggle()
         if showFull && !abcMode { Task { await loadFull(t) } }
+        if showFull && !notationNoticeDone && !Self.notationNoticeSeen(for: model.user?.personId) { showNotationNotice = true }
+    }
+
+    private static func notationNoticeKey(for personID: Int?) -> String { "CeolNotationNoticeSeen.\(personID ?? 0)" }
+    private static func notationNoticeSeen(for personID: Int?) -> Bool {
+        UserDefaults.standard.bool(forKey: notationNoticeKey(for: personID))
+    }
+    private static func markNotationNoticeSeen(for personID: Int?) {
+        UserDefaults.standard.set(true, forKey: notationNoticeKey(for: personID))
     }
 
     /// The tune on thesession.org, at the setting drawn (a night's own, else the session's).

@@ -3897,6 +3897,16 @@
         }
       }
     },
+    "Hi! You found a secret feature!": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Haigh! Tá gné rúnda aimsithe agat!"
+          }
+        }
+      }
+    },
     "Hide controls": {
       "localizations": {
         "ga": {
@@ -5756,6 +5766,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "OK"
+          }
+        }
+      }
+    },
+    "OK, Got It!": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ceart go leor, tuigim!"
           }
         }
       }
@@ -8867,6 +8887,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Tháinig tú, ach ní seisiún de do chuid é: ní áireofar a chuid fonn mar do chuid féin. Áirítear fós na hoícheanta a raibh tú ann."
+          }
+        }
+      }
+    },
+    "You can tap the opening bars to see the whole tune setting.\n\nBUT! Please remember that traditional Irish music is best learned by listening, not reading. It's OK to use the notation as a reference, in a pinch, but it's always better to learn with your ears.": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Is féidir leat tús an fhoinn a thapáil chun leagan iomlán an fhoinn a fheiceáil.\n\nACH! Cuimhnigh gur fearr ceol traidisiúnta na hÉireann a fhoghlaim trí éisteacht, ní trí léamh. Tá sé ceart go leor an nodaireacht a úsáid mar thagairt, nuair a bhíonn gá, ach is fearr i gcónaí foghlaim le do chluasa."
           }
         }
       }
