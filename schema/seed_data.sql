@@ -1247,6 +1247,19 @@ INSERT INTO person_tune (person_id, tune_id, learn_status, heard_count, notes) V
 (2, 55, 'learned', 40, 'The Kesh'),
 (2, 71, 'learned', 35, 'Morrison''s');
 
+-- Your own name for a tune (person_tune.name_alias) leads everywhere a tune is
+-- named to you, over your sessions' names; the others go beside it unless they
+-- are the same name spelt differently (tune_names.name_key). sarah_fiddle:
+INSERT INTO person_tune (person_id, tune_id, learn_status, heard_count, notes, name_alias) VALUES
+-- hers, Hyde Park's ('Goodbye Ireland') and the catalogue's all differ: two others
+(2, 33, 'learning', 4, 'Farewell To Ireland', 'Slán le hÉirinn'),
+-- hers is Hyde Park's ('The Rambling Connaughtman') without the article: one other
+(2, 19, 'learning', 2, 'Connaughtman''s Rambles', 'Rambling Connaughtman');
+-- hers is the catalogue's ('Maid Behind The Bar, The') without the article: no others
+UPDATE person_tune SET name_alias = 'Maid Behind the Bar' WHERE person_id = 2 AND tune_id = 64;
+-- ian: his own longer name for Cooley's, the catalogue's beside it
+UPDATE person_tune SET name_alias = 'Cooley''s Reel' WHERE person_id = 1 AND tune_id = 1;
+
 -- =============================================================================
 -- TUNE SETTINGS (ABC notation from TheSession.org)
 -- 2 settings per tune, ~300 total

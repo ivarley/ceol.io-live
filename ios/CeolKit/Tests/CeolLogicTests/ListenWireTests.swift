@@ -112,6 +112,19 @@ struct ListenWireTests {
         #expect(n.top.map(\.name) == ["The Roaring Barmaid", "Rosie", "Down The Broom"])
         #expect(n.history.first?.name == "The Roaring Barmaid")
         #expect(n.shown == 91 && n.top[0].p == 0.6)
+
+        // The vocabulary's display_name (your own name for the tune, else the
+        // session's, else the catalogue's — the server's rule) beats the session's
+        // alias, and its other_names come along for the line under it.
+        let yours = try #require(Composer.buildIndex(
+            known: [["tune_id": 7, "name": "The Rose In The Heather", "alias": "Rosie",
+                     "display_name": "Rose In The Heather (mine)", "other_names": ["Rosie", "The Rose In The Heather"]],
+                    ["tune_id": 91, "name": "The Roaring Barmaid", "alias": "", "display_name": "The Roaring Barmaid", "other_names": []]],
+            aliases: nil))
+        let m = s.named { yours.byID[$0]?.displayName }
+        #expect(m.top.map(\.name) == ["The Roaring Barmaid", "Rose In The Heather (mine)", "Down The Broom"])
+        #expect(yours.byID[7]?.otherNames == ["Rosie", "The Rose In The Heather"])
+        #expect(yours.byID[91]?.otherNames == [])
     }
 
     @Test("A tap names the tune and what was on screen")

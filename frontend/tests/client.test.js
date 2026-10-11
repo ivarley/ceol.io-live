@@ -92,9 +92,11 @@ describe('lenient search helpers', () => {
     mockFetchOnce({ json: { exact_match: true, results: [{ tune_id: 1, tune_name: 'Cooleys', tune_type: 'Reel', in_session_tune: true }] } })
     const out = await liveMatch(config, 'cooleys')
     expect(out.exact_match).toBe(true)
-    // The catalogue name stands in when the server sends none; your_alias is null then.
+    // The catalogue name stands in when the server sends none; the other naming
+    // fields are null then (the rows fall back to the names they have).
     expect(out.results[0]).toEqual({
       tune_id: 1, name: 'Cooleys', tune_type: 'Reel', in_session_tune: true, catalogue_name: 'Cooleys', your_alias: null,
+      display_name: null, other_names: null,
     })
 
     mockFetchOnce({ reject: new Error('offline') })

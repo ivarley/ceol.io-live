@@ -136,6 +136,25 @@ flagged `abc_scope: 'incipit'`. See [Offline Support](offline.md).
 
 **Search**: Both types searched with equal priority
 
+**Personal name**: `person_tune.name_alias` - what you call the tune in your own tunebook
+
+### The displayed name (`tune_names.py`)
+
+One rule for every row that names a tune to a viewer: the deep-search cards (all scopes),
+the preview, the logger's quick matches (`/match`) and the night's vocabulary (so the
+offline matches and the listening meter). Each carries `display_name` and `other_names`:
+
+- **Title**: your personal name, else the session's (the scoped session's own
+  `session_tune.alias`; without a scope, the name used by the session of yours that wins the
+  precedence — most attended, then most recent, then first by name), else the catalogue's.
+- **Other names** (at most two): the name the search matched on, then the session's, then
+  the catalogue's, skipping any that is a spelling of a name already shown. `name_key`
+  folds case, accents, quotes, apostrophes and punctuation, and the article whether leading
+  ("The Dairy Maid") or trailing ("Dairy Maid, The").
+
+`session_defaults` is unchanged: it is what the session says (its name, setting, key) for
+the add flows to start from, not the title.
+
 ## Error Handling
 
 **Multiple Matches**: Error unless disambiguated with alias

@@ -127,13 +127,15 @@
     if (yes) node.focus()
   }
 
-  // The card's name is what a session of yours calls the tune, when one has a name
-  // for it; the catalogue's name, and the name of yours the search found it by, go
-  // under it as "also known as", with the match lit so you can see why it's here.
+  // The card's name is the server's display_name: your own name for the tune, else
+  // the session's, else the catalogue's (tune_names.py); the other names go under it
+  // as "also known as", the match lit so you can see why it's here. A result from
+  // thesession.org has neither field: its name is all there is.
   function cardTitle(r) {
-    return r.session_defaults?.alias || r.name
+    return r.display_name || r.session_defaults?.alias || r.name
   }
   function alsoKnownAs(r) {
+    if (r.other_names) return r.other_names
     const title = cardTitle(r)
     const names = []
     if (r.name !== title) names.push(r.name)

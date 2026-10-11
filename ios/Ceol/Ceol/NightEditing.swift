@@ -1124,9 +1124,11 @@ struct Suggestions: View {
         }
     }
 
-    /// A quick match as your sessions know the tune: the name the session of yours
-    /// that wins the precedence gives it leads (else this session's, else the
-    /// catalogue's); the other names it was found by follow, the match lit.
+    /// A quick match as you know the tune: the server's display_name leads (your own
+    /// name for it, else this session's, else the catalogue's) and its other_names
+    /// follow, the match lit. A row from /match carries them; one found offline takes
+    /// them from the vocabulary's entry; one with neither (an old vocabulary) falls
+    /// back to the names it has.
     static func asKnown(_ t: JSONValue, vocab: VocabIndex?, query: String) -> (title: String, aka: Text?) {
         let id = t["tune_id"]?.intValue
         let known = id.flatMap { vocab?.byID[$0] }
@@ -1134,11 +1136,14 @@ struct Suggestions: View {
         let catalogue = t["catalogue_name"]?.stringValue ?? known?.name ?? name
         let alias = known?.alias
         let yourAlias = t["your_alias"]?.stringValue ?? known?.yourAlias
-        let title = yourAlias ?? alias ?? catalogue
+        let served = t["display_name"]?.stringValue ?? known?.serverDisplayName
+        let title = served ?? yourAlias ?? alias ?? catalogue
         let q = query.trimmingCharacters(in: .whitespaces).lowercased()
         var others: [String] = []
-        for n in [catalogue, alias, name].compactMap({ $0 }) where n != title && !others.contains(n) {
-            if !q.isEmpty, n.lowercased().contains(q) { others.append(n) }
+        if served != nil {
+            others = t["other_names"]?.arrayValue?.compactMap(\.stringValue) ?? known?.otherNames ?? []
+        } else {
+            for n in [catalogue, alias, name].compactMap({ $0 }) where n != title && !others.contains(n) { others.append(n) }
         }
         guard !others.isEmpty else { return (title, nil) }
         var lit = Text("Also known as") + Text(verbatim: " ")
@@ -1146,7 +1151,7 @@ struct Suggestions: View {
             if i > 0 { lit = lit + Text(verbatim: ", ") }
             var rest = Substring(n)
             while !rest.isEmpty {
-                guard let r = rest.range(of: q, options: [.caseInsensitive, .diacriticInsensitive]) else {
+                guard !q.isEmpty, let r = rest.range(of: q, options: [.caseInsensitive, .diacriticInsensitive]) else {
                     lit = lit + Text(verbatim: String(rest))
                     break
                 }
@@ -1166,7 +1171,7 @@ struct Suggestions: View {
                     Text(title).font(.ceol(size: 16, weight: bold ? .semibold : .regular)).foregroundStyle(color)
                         .lineLimit(1)
                     if let aka {
-                        aka.font(.ceol(size: 12)).foregroundStyle(CeolTokens.textMuted).lineLimit(1)
+                        aka.font(.ceol(size: 12)).italic().foregroundStyle(CeolTokens.textMuted).lineLimit(1)
                     }
                 }
                 Spacer(minLength: 4)

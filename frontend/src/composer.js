@@ -26,9 +26,10 @@ const rid = (r) => r.session_instance_tune_id
 // Returns null when there is no vocabulary at all.
 export function buildVocabIndex(known, aliases) {
   if (!known && !aliases) return null
-  // display: per tune, the session's own name for it and the name the session of
-  // yours that wins the precedence gives it — for the rows' titles, apart from the
-  // matching (which the fixtures hold).
+  // display: per tune, the name it is shown under and the names beside it
+  // (display_name / other_names, tune_names.py), with the session's own name and the
+  // name the session of yours that wins the precedence gives it — for the rows'
+  // titles, apart from the matching (which the fixtures hold).
   const index = { alias: {}, name: {}, byId: {}, list: [], next: {} }
   Object.defineProperty(index, 'display', { value: {}, enumerable: false })
   const add = (map, key, id) => {
@@ -50,7 +51,12 @@ export function buildVocabIndex(known, aliases) {
     if (!t.tune_id) continue
     if (t.next) index.next[t.tune_id] = t.next
     index.byId[t.tune_id] = { tune_id: t.tune_id, name: t.name, tune_type: t.tune_type ?? null }
-    if (t.alias || t.your_alias) index.display[t.tune_id] = { alias: t.alias || null, your_alias: t.your_alias || null }
+    if (t.alias || t.your_alias || t.display_name) {
+      index.display[t.tune_id] = {
+        alias: t.alias || null, your_alias: t.your_alias || null,
+        display_name: t.display_name || null, other_names: t.other_names || [],
+      }
+    }
     const n = normName(t.name)
     add(index.name, n, t.tune_id)
     add(index.name, stripThe(n), t.tune_id) // "The X" <-> "X", both ways

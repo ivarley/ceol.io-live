@@ -67,6 +67,7 @@ from api_routes import (
 from rate_limit import rate_limited
 from api_auth import public_api
 from fractional_indexing import generate_append_position, generate_position_between
+from tune_names import display_names, name_key
 
 
 # One global LISTEN/NOTIFY channel for the whole feed (spec 024 §A4). The payload
@@ -2257,6 +2258,45 @@ def _your_session_defaults(cur, person_id, tune_ids):
     }
 
 
+def _personal_names(cur, person_id, tune_ids):
+    """What you call each tune in your own tunebook (person_tune.name_alias);
+    {tune_id: name}, only the tunes you have named."""
+    if not person_id or not tune_ids:
+        return {}
+    cur.execute(
+        """
+        SELECT tune_id, name_alias FROM person_tune
+        WHERE person_id = %s AND tune_id = ANY(%s)
+          AND name_alias IS NOT NULL AND name_alias <> ''
+        """,
+        (person_id, list(tune_ids)),
+    )
+    return dict(cur.fetchall())
+
+
+def _name_rows(
+    cur, person_id, rows, catalogue, this_session=None, matched=None, defaults=None
+):
+    """Give each row dict its display_name and other_names (tune_names.display_names):
+    your own name for the tune leads, then the session's, then the catalogue's, the
+    rest beside it. `catalogue`, `this_session` and `matched` read a row; `defaults`
+    is _your_session_defaults for these tunes when the caller has it already."""
+    ids = [r["tune_id"] for r in rows if r.get("tune_id")]
+    personal = _personal_names(cur, person_id, ids)
+    if defaults is None:
+        defaults = _your_session_defaults(cur, person_id, ids)
+    for r in rows:
+        tid = r.get("tune_id")
+        d = (defaults.get(tid) or {}) if tid else {}
+        r["display_name"], r["other_names"] = display_names(
+            catalogue(r),
+            personal=personal.get(tid) if tid else None,
+            this_session=this_session(r) if this_session else None,
+            your_session=d.get("alias"),
+            matched=matched(r) if matched else None,
+        )
+
+
 def _deep_search_core(
     cur,
     q,
@@ -2334,6 +2374,7 @@ def _deep_search_core(
         )
         join_params = [session_id]
         in_session_sql = "(st.session_id IS NOT NULL)"
+        this_alias_sql = "st.alias"
         played_here_sql = """(SELECT COUNT(*) FROM session_instance_tune sit
                       JOIN session_instance si ON si.session_instance_id = sit.session_instance_id
                       WHERE si.session_id = %s AND sit.tune_id = t.tune_id
@@ -2341,6 +2382,7 @@ def _deep_search_core(
         params += [session_id]
     else:
         in_session_sql = "FALSE"
+        this_alias_sql = "NULL"
         played_here_sql = "0"
     params.append(prefer_type)
 
@@ -2442,7 +2484,8 @@ def _deep_search_core(
                    CASE WHEN t.tune_type = %s THEN 0 ELSE 1 END AS type_pref,
                    {matched_alias_sql} AS matched_alias,
                    {abc_only_sql} AS abc_only,
-                   {rank} AS rank
+                   {rank} AS rank,
+                   {this_alias_sql} AS this_alias
             FROM tune t
             {join_sql}
             WHERE {' AND '.join(where)}
@@ -2468,6 +2511,8 @@ def _deep_search_core(
             # The name of yours it was found by, when not its catalogue name.
             "matched_alias": r[9],
             "abc_only": bool(r[10]),
+            # The scoped session's own name for it, for the title; not sent.
+            "_this_alias": r[12],
         }
         for r in rows
     ]
@@ -2476,6 +2521,16 @@ def _deep_search_core(
     defaults = _your_session_defaults(cur, person_id, [r["tune_id"] for r in results])
     for r in results:
         r["session_defaults"] = defaults.get(r["tune_id"])
+    # The card's title and the names beside it: yours, the session's, the catalogue's.
+    _name_rows(
+        cur,
+        person_id,
+        results,
+        catalogue=lambda r: r["name"],
+        this_session=lambda r: r.pop("_this_alias"),
+        matched=lambda r: r["matched_alias"],
+        defaults=defaults,
+    )
 
     # one pass for the cached incipit IMAGE + whether the tune is renderable (has
     # ABC). Notation is rendered server-side by the abc-renderer service; the card
@@ -2564,9 +2619,10 @@ def live_match(session_instance_id):
 
 
 def _personalize_match_rows(cur, rows):
-    """The quick matches as your sessions know the tunes: each row gains the
-    catalogue name (tune_name is the session's own name when it has one) and
-    your_alias, what the session of yours that wins the precedence calls it."""
+    """The quick matches as you know the tunes: each row gains the catalogue name
+    (tune_name is the session's own name when it has one), your_alias (what the
+    session of yours that wins the precedence calls it), and the display_name and
+    other_names every named row carries."""
     ids = [r["tune_id"] for r in rows if r.get("tune_id")]
     if not ids:
         return
@@ -2581,6 +2637,17 @@ def _personalize_match_rows(cur, rows):
     for r in rows:
         r["catalogue_name"] = names.get(r["tune_id"], r.get("tune_name"))
         r["your_alias"] = (defaults.get(r["tune_id"]) or {}).get("alias")
+    # tune_name is the session's own name when it has one, else the catalogue's.
+    _name_rows(
+        cur,
+        person_id,
+        [r for r in rows if r.get("tune_id")],
+        catalogue=lambda r: r["catalogue_name"],
+        this_session=lambda r: r["tune_name"]
+        if r.get("tune_name") != r["catalogue_name"]
+        else None,
+        defaults=defaults,
+    )
 
 
 def _thesession_search_core(session_id=None, person_id=None):
@@ -2773,7 +2840,7 @@ def _tune_preview_core(tune_id, session_id=None):
                 }
 
         aliases, played_here, dates = [], 0, []
-        session_setting_id = None
+        session_setting_id, this_alias = None, None
         if session_id is not None:
             cur.execute(
                 "SELECT alias, setting_id FROM session_tune WHERE session_id = %s AND tune_id = %s",
@@ -2781,8 +2848,7 @@ def _tune_preview_core(tune_id, session_id=None):
             )
             strow = cur.fetchone()
             if strow:
-                if strow[0]:
-                    aliases.append(strow[0])
+                this_alias = strow[0] or None
                 session_setting_id = strow[1]
             cur.execute(
                 "SELECT alias FROM session_tune_alias WHERE session_id = %s AND tune_id = %s ORDER BY alias",
@@ -2812,16 +2878,43 @@ def _tune_preview_core(tune_id, session_id=None):
         # Without a session scope (your tunebook's add): what a session of yours already
         # says about the tune, for the pager to land on and the add to start from.
         session_defaults = None
-        if current_user.is_authenticated and getattr(current_user, "person_id", None):
-            session_defaults = _your_session_defaults(
-                cur, current_user.person_id, [tune_id]
-            ).get(tune_id)
+        person_id = (
+            current_user.person_id
+            if current_user.is_authenticated
+            and getattr(current_user, "person_id", None)
+            else None
+        )
+        if person_id:
+            session_defaults = _your_session_defaults(cur, person_id, [tune_id]).get(
+                tune_id
+            )
+
+        # The title as you know the tune, and the other names first in the alias line
+        # (the rest of the line is thesession.org's aliases, less any spelling of a
+        # name already shown).
+        named = {"tune_id": tune_id}
+        _name_rows(
+            cur,
+            person_id,
+            [named],
+            catalogue=lambda r: name,
+            this_session=lambda r: this_alias,
+            defaults={tune_id: session_defaults} if session_defaults else {},
+        )
+        shown = {name_key(named["display_name"])} | {
+            name_key(n) for n in named["other_names"]
+        }
+        aliases = named["other_names"] + [
+            a for a in aliases if name_key(a) not in shown
+        ]
 
         return jsonify(
             {
                 "success": True,
                 "tune_id": tune_id,
                 "name": name,
+                "display_name": named["display_name"],
+                "other_names": named["other_names"],
                 "tune_type": tune_type,
                 "tunebook_count": tunebook_count,
                 "aliases": aliases,
@@ -3329,6 +3422,7 @@ def live_vocabulary(session_instance_id):
             if current_user.is_authenticated
             else None
         )
+        defaults = {}
         if person_id and known_tunes:
             defaults = _your_session_defaults(
                 cur, person_id, [t["tune_id"] for t in known_tunes]
@@ -3337,6 +3431,17 @@ def live_vocabulary(session_instance_id):
                 alias = (defaults.get(t["tune_id"]) or {}).get("alias")
                 if alias:
                     t["your_alias"] = alias
+        # The name each tune is shown under (your own, the session's, the catalogue's)
+        # and the others beside it: the quick matches found offline and the listening
+        # meter name tunes from here.
+        _name_rows(
+            cur,
+            person_id,
+            known_tunes,
+            catalogue=lambda t: t["name"],
+            this_session=lambda t: t.get("alias"),
+            defaults=defaults,
+        )
         return jsonify(
             {
                 "success": True,

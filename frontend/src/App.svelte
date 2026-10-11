@@ -2191,28 +2191,28 @@
     if (last && last.tune_id != null) dismissedNext.add(nextAssocKey(last.tune_id, nx.tune_id))
   }
   // Don't list the suggested tune twice (pinned row + a normal result below it).
-  // A quick match as your sessions know the tune: the name the session of yours that
-  // wins the precedence gives it leads (else this session's, else the catalogue's);
-  // the other names it was found by go after it, the match lit.
+  // A quick match as you know the tune: the server's display_name leads (your own
+  // name, else this session's, else the catalogue's — tune_names.py) and its
+  // other_names go after it, the match lit. The row carries them when it came from
+  // /match; the vocabulary's entry has them for a match found offline. A row with
+  // neither (an old vocabulary in the offline bundle) falls back to the names it has.
   function rowDisplay(tr) {
     const d = localIndex?.display?.[tr.tune_id] || {}
+    if (tr.display_name) return { title: tr.display_name, names: tr.other_names || [] }
+    if (d.display_name) return { title: d.display_name, names: d.other_names || [] }
     const yourAlias = tr.your_alias ?? d.your_alias ?? null
     const alias = d.alias ?? null
     const catalogue = tr.catalogue_name ?? (alias && tr.name === alias ? null : tr.name) ?? tr.name
-    return { title: yourAlias || alias || catalogue || tr.name, names: [catalogue, alias, tr.name] }
+    const title = yourAlias || alias || catalogue || tr.name
+    const names = []
+    for (const n of [catalogue, alias, tr.name]) if (n && n !== title && !names.includes(n)) names.push(n)
+    return { title, names }
   }
   function rowTitle(tr) {
     return rowDisplay(tr).title
   }
   function rowAka(tr) {
-    const { title, names } = rowDisplay(tr)
-    const q = input.trim().toLowerCase()
-    const out = []
-    for (const n of names) {
-      if (!n || n === title || out.includes(n)) continue
-      if (q && n.toLowerCase().includes(q)) out.push(n)
-    }
-    return out
+    return rowDisplay(tr).names
   }
   function litName(name) {
     const q = input.trim().toLowerCase()

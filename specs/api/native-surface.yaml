@@ -792,6 +792,11 @@ components:
               session_defaults: { oneOf: [{ $ref: "#/components/schemas/SessionDefaults" }, { type: "null" }] }
               # The name of your sessions' the search found it by, when not its catalogue name.
               matched_alias: { type: [string, "null"] }
+              # The card's title (your own name for the tune, else the session's, else the
+              # catalogue's) and the other names beside it, at most two, none a spelling
+              # of another (tune_names.py).
+              display_name: { type: string }
+              other_names: { type: array, items: { type: string } }
               in_session: { type: boolean }
               played_here: { type: integer }
               abc_only: { type: boolean }
@@ -817,6 +822,10 @@ components:
         name: { type: string }
         tune_type: { type: [string, "null"] }
         tunebook_count: { type: [integer, "null"] }
+        # The title as you know the tune and the other names beside it, as the search
+        # card has them; `aliases` opens with the other names.
+        display_name: { type: string }
+        other_names: { type: array, items: { type: string } }
         aliases: { type: array }
         played_here: { type: integer }
         # Without a scope (your tunebook): what a session of yours already says about

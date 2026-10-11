@@ -130,9 +130,10 @@ export async function liveMatch(config, q, preferType) {
       exact_match: !!j.exact_match,
       results: (j.results || []).map((r) => ({
         tune_id: r.tune_id, name: r.tune_name, tune_type: r.tune_type, in_session_tune: r.in_session_tune,
-        // As your sessions know it: the catalogue name under the session's, and the name
-        // the session of yours that wins the precedence gives it.
+        // As you know it: the name it is shown under and the names beside it, with the
+        // catalogue name and the name the session of yours that wins the precedence gives it.
         catalogue_name: r.catalogue_name ?? r.tune_name, your_alias: r.your_alias ?? null,
+        display_name: r.display_name ?? null, other_names: r.other_names ?? null,
       })),
     }
   } catch {

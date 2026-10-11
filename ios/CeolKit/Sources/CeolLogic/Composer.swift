@@ -21,8 +21,14 @@ public struct VocabTune: Sendable, Equatable, Hashable {
     /// The name the session of yours that wins the precedence gives it (the
     /// vocabulary's your_alias), when one does.
     public var yourAlias: String?
-    /// As you know it: your sessions' name for it, else this session's, else the tune's.
-    public var displayName: String { yourAlias ?? alias ?? name }
+    /// The name the server shows it under (the vocabulary's display_name: your own
+    /// name for it, else the session's, else the catalogue's) and the names beside
+    /// it (other_names), as every named row has them (tune_names.py).
+    public var serverDisplayName: String?
+    public var otherNames: [String] = []
+    /// As you know it: the server's display name; before one, your sessions' name
+    /// for it, else this session's, else the tune's.
+    public var displayName: String { serverDisplayName ?? yourAlias ?? alias ?? name }
 
     public init(tuneID: Int, name: String, tuneType: String?, abc: Bool = false) {
         self.tuneID = tuneID
@@ -94,6 +100,8 @@ public enum Composer {
             index.byID[id] = VocabTune(tuneID: id, name: name, tuneType: type)
             index.byID[id]?.alias = t["alias"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 }
             index.byID[id]?.yourAlias = t["your_alias"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 }
+            index.byID[id]?.serverDisplayName = t["display_name"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 }
+            index.byID[id]?.otherNames = t["other_names"]?.arrayValue?.compactMap(\.stringValue) ?? []
             let n = LogState.normName(name)
             add(&index.name, n, id)
             add(&index.name, LogState.stripThe(n), id)

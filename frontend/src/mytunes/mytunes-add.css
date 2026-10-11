@@ -137,6 +137,7 @@
 .mt-add-pane .deep-badge.star { background: rgba(238, 191, 65, 0.22); color: #e8d28a; }
 .mt-add-pane .deep-books { color: var(--muted); margin-left: auto; }
 .mt-add-pane .deep-aka, .mt-add-pane .deep-defaults { font-size: 12px; color: var(--muted); }
+.mt-add-pane .deep-aka { font-style: italic; }
 .mt-add-pane .deep-hit { background: rgba(245, 197, 24, 0.28); color: var(--text); border-radius: 3px; padding: 0 2px; }
 .mt-add-pane .deep-remote { padding: 4px 14px 20px; display: flex; flex-direction: column; gap: 10px; }
 .mt-add-pane .deep-remote-head {

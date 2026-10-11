@@ -24,15 +24,15 @@ from database import get_db_connection
 pytestmark = pytest.mark.integration
 
 # High, unlikely-to-collide ids for throwaway rows.
-TUNE = 9421          # "Glorp Preview Reel" — two settings, one with a cached incipit image
-TUNE_BARE = 9422     # "Glorp Preview Bare" — no settings at all
-TUNE_MERGED = 9423   # redirects to TUNE (merged away)
+TUNE = 9421  # "Glorp Preview Reel" — two settings, one with a cached incipit image
+TUNE_BARE = 9422  # "Glorp Preview Bare" — no settings at all
+TUNE_MERGED = 9423  # redirects to TUNE (merged away)
 SETTING_A = 94211
 SETTING_B = 94212
-SID = 9420           # throwaway session (aliases + played-here stats)
+SID = 9420  # throwaway session (aliases + played-here stats)
 SPATH = "glorp-preview-test"
-SI = 94201           # throwaway session instance
-REMOTE_ID = 94299    # not in the local catalog (thesession preview fetches)
+SI = 94201  # throwaway session instance
+REMOTE_ID = 94299  # not in the local catalog (thesession preview fetches)
 
 FAKE_TS_TUNE = {
     "id": REMOTE_ID,
@@ -73,7 +73,10 @@ def preview_rows():
            VALUES (%s, %s, 'Ador', 'eA~A2 eAdB|', 'eA~A2 eAdB', %s)""",
         (SETTING_B, TUNE, b"\x89PNG-fake-incipit-b"),
     )
-    cur.execute("INSERT INTO session (session_id, name, path) VALUES (%s, 'Glorp Preview Test', %s)", (SID, SPATH))
+    cur.execute(
+        "INSERT INTO session (session_id, name, path) VALUES (%s, 'Glorp Preview Test', %s)",
+        (SID, SPATH),
+    )
     # The session prefers SETTING_B — the preview opens/badges it and the session-scoped
     # deep-search card shows ITS incipit instead of the default (lowest-id) one.
     cur.execute(
@@ -97,19 +100,36 @@ def preview_rows():
 
     yield {"session_path": SPATH}
 
-    cur.execute("DELETE FROM session_instance_tune_history WHERE session_instance_id = %s", (SI,))
-    cur.execute("DELETE FROM session_instance_tune WHERE session_instance_id = %s", (SI,))
-    cur.execute("DELETE FROM session_instance_history WHERE session_instance_id = %s", (SI,))
+    cur.execute(
+        "DELETE FROM session_instance_tune_history WHERE session_instance_id = %s",
+        (SI,),
+    )
+    cur.execute(
+        "DELETE FROM session_instance_tune WHERE session_instance_id = %s", (SI,)
+    )
+    cur.execute(
+        "DELETE FROM session_instance_history WHERE session_instance_id = %s", (SI,)
+    )
     cur.execute("DELETE FROM session_instance WHERE session_instance_id = %s", (SI,))
     cur.execute("DELETE FROM session_tune_alias WHERE session_id = %s", (SID,))
     cur.execute("DELETE FROM session_tune_history WHERE session_id = %s", (SID,))
     cur.execute("DELETE FROM session_tune WHERE session_id = %s", (SID,))
     cur.execute("DELETE FROM session_history WHERE session_id = %s", (SID,))
     cur.execute("DELETE FROM session WHERE session_id = %s", (SID,))
-    cur.execute("DELETE FROM tune_setting_history WHERE setting_id = ANY(%s)", ([SETTING_A, SETTING_B],))
-    cur.execute("DELETE FROM tune_setting WHERE setting_id = ANY(%s)", ([SETTING_A, SETTING_B],))
-    cur.execute("DELETE FROM tune_history WHERE tune_id = ANY(%s)", ([TUNE, TUNE_BARE, TUNE_MERGED],))
-    cur.execute("DELETE FROM tune WHERE tune_id = ANY(%s)", ([TUNE, TUNE_BARE, TUNE_MERGED],))
+    cur.execute(
+        "DELETE FROM tune_setting_history WHERE setting_id = ANY(%s)",
+        ([SETTING_A, SETTING_B],),
+    )
+    cur.execute(
+        "DELETE FROM tune_setting WHERE setting_id = ANY(%s)", ([SETTING_A, SETTING_B],)
+    )
+    cur.execute(
+        "DELETE FROM tune_history WHERE tune_id = ANY(%s)",
+        ([TUNE, TUNE_BARE, TUNE_MERGED],),
+    )
+    cur.execute(
+        "DELETE FROM tune WHERE tune_id = ANY(%s)", ([TUNE, TUNE_BARE, TUNE_MERGED],)
+    )
     conn.commit()
     cur.close()
     conn.close()
@@ -120,7 +140,9 @@ def test_tune_preview_requires_login(client, preview_rows):
     assert resp.status_code == 401
 
 
-def test_tune_preview_personal_settings_and_no_session_fields(client, authenticated_user, preview_rows):
+def test_tune_preview_personal_settings_and_no_session_fields(
+    client, authenticated_user, preview_rows
+):
     """My Tunes home: all settings in setting_id order (abc + incipit abc, cached
     incipit inline), no session aliases/stats."""
     with authenticated_user:
@@ -139,7 +161,9 @@ def test_tune_preview_personal_settings_and_no_session_fields(client, authentica
     assert body["session_setting_id"] is None  # personal scope: no session preference
 
 
-def test_tune_preview_reports_the_viewers_own_row(client, authenticated_user, preview_rows):
+def test_tune_preview_reports_the_viewers_own_row(
+    client, authenticated_user, preview_rows
+):
     """`person_tune` tells the add surfaces what the VIEWER already has, so a pasted
     thesession.org link (a synthetic result with no on_list flag) can't offer to "add"
     a tune that's been on the list for years."""
@@ -173,7 +197,9 @@ def test_tune_preview_reports_the_viewers_own_row(client, authenticated_user, pr
         conn.close()
 
 
-def test_tune_preview_merged_tune_reports_the_canonical_row(client, authenticated_user, preview_rows):
+def test_tune_preview_merged_tune_reports_the_canonical_row(
+    client, authenticated_user, preview_rows
+):
     """A merged-away id resolves to the canonical tune, so the on-list facts must be
     the canonical tune's — not "not on your list" because the old id has no row."""
     conn = get_db_connection()
@@ -197,14 +223,18 @@ def test_tune_preview_merged_tune_reports_the_canonical_row(client, authenticate
         conn.close()
 
 
-def test_tune_preview_session_scope_aliases_and_stats(client, authenticated_user, preview_rows):
+def test_tune_preview_session_scope_aliases_and_stats(
+    client, authenticated_user, preview_rows
+):
     """Session-path home: session_tune.alias + session_tune_alias surface as
     aliases; played-here count and dates are scoped to the session."""
     with authenticated_user:
         resp = client.get(f"/api/tunes/{TUNE}/preview?session={SPATH}")
     body = resp.get_json()
     assert body["success"] is True
-    assert body["aliases"] == ["The Glorp", "Glorpy McGlorp"]
+    # The session's own name is the title; the alias line opens with the catalogue's.
+    assert body["display_name"] == "The Glorp"
+    assert body["aliases"] == ["Glorp Preview Reel", "Glorpy McGlorp"]
     assert body["played_here"] == 1
     assert body["dates"] == ["2026-06-24"]
     assert body["session_setting_id"] == SETTING_B  # the pager opens/badges this one
@@ -227,12 +257,16 @@ def test_tune_preview_no_settings_and_unknown(client, authenticated_user, previe
     assert missing.status_code == 404
 
 
-def test_deep_search_card_prefers_session_setting_incipit(client, authenticated_user, preview_rows):
+def test_deep_search_card_prefers_session_setting_incipit(
+    client, authenticated_user, preview_rows
+):
     """With a session scope, the card's incipit is the SESSION'S preferred setting
     (among cached images); without one, the lowest cached setting wins as before."""
     with authenticated_user:
         personal = client.get("/api/tunes/deep-search?q=glorp preview reel")
-        scoped = client.get(f"/api/tunes/deep-search?session={SPATH}&q=glorp preview reel")
+        scoped = client.get(
+            f"/api/tunes/deep-search?session={SPATH}&q=glorp preview reel"
+        )
         pv = client.get(f"/api/tunes/{TUNE}/preview?session={SPATH}")
     settings = {s["setting_id"]: s for s in pv.get_json()["settings"]}
     assert settings[SETTING_A]["incipit_image"] != settings[SETTING_B]["incipit_image"]
@@ -242,7 +276,9 @@ def test_deep_search_card_prefers_session_setting_incipit(client, authenticated_
     assert scoped_card["incipit_image"] == settings[SETTING_B]["incipit_image"]
 
 
-def test_setting_image_cached_full_and_missing(client, authenticated_user, preview_rows):
+def test_setting_image_cached_full_and_missing(
+    client, authenticated_user, preview_rows
+):
     """A cached incipit returns inline. kind=full renders on demand when the
     abc-renderer service is reachable (and caches the PNG on the setting row) or
     degrades to a null image when it isn't — success either way. An unknown
@@ -259,13 +295,18 @@ def test_setting_image_cached_full_and_missing(client, authenticated_user, previ
         conn = get_db_connection()
         try:
             cur = conn.cursor()
-            cur.execute("SELECT image IS NOT NULL FROM tune_setting WHERE setting_id = %s", (SETTING_B,))
+            cur.execute(
+                "SELECT image IS NOT NULL FROM tune_setting WHERE setting_id = %s",
+                (SETTING_B,),
+            )
             assert cur.fetchone()[0] is True
         finally:
             conn.close()
 
 
-def test_thesession_preview_local_id_shortcuts(client, authenticated_user, preview_rows, monkeypatch):
+def test_thesession_preview_local_id_shortcuts(
+    client, authenticated_user, preview_rows, monkeypatch
+):
     """An id we already have (or a merged alias of it) reports is_local + the
     canonical id — and never touches the network."""
     import live_logging_routes
@@ -281,11 +322,16 @@ def test_thesession_preview_local_id_shortcuts(client, authenticated_user, previ
     assert merged.get_json() == {"success": True, "is_local": True, "tune_id": TUNE}
 
 
-def test_thesession_preview_remote_fetches_and_shapes(client, authenticated_user, preview_rows, monkeypatch):
+def test_thesession_preview_remote_fetches_and_shapes(
+    client, authenticated_user, preview_rows, monkeypatch
+):
     """A remote id returns name/type/aliases/settings with '!' line breaks unfolded
     and incipit abc derived; empty-abc settings are dropped."""
     import live_logging_routes
-    monkeypatch.setattr(live_logging_routes, "_fetch_thesession_tune", lambda tid: dict(FAKE_TS_TUNE))
+
+    monkeypatch.setattr(
+        live_logging_routes, "_fetch_thesession_tune", lambda tid: dict(FAKE_TS_TUNE)
+    )
     with authenticated_user:
         resp = client.get(f"/api/tunes/thesession/{REMOTE_ID}/preview")
     body = resp.get_json()
@@ -301,13 +347,19 @@ def test_thesession_preview_remote_fetches_and_shapes(client, authenticated_user
     assert s["incipit_abc"]
 
 
-def test_thesession_preview_full_fetches_for_local_id(client, authenticated_user, preview_rows, monkeypatch):
+def test_thesession_preview_full_fetches_for_local_id(
+    client, authenticated_user, preview_rows, monkeypatch
+):
     """?full=1 skips the local short-circuit: an already-imported tune still gets the
     complete thesession settings list (the preview backfills settings beyond the one
     the import brought over), flagged is_local."""
     import live_logging_routes
-    monkeypatch.setattr(live_logging_routes, "_fetch_thesession_tune",
-                        lambda tid: {**FAKE_TS_TUNE, "id": tid})
+
+    monkeypatch.setattr(
+        live_logging_routes,
+        "_fetch_thesession_tune",
+        lambda tid: {**FAKE_TS_TUNE, "id": tid},
+    )
     with authenticated_user:
         resp = client.get(f"/api/tunes/thesession/{TUNE}/preview?full=1")
     body = resp.get_json()
@@ -316,7 +368,9 @@ def test_thesession_preview_full_fetches_for_local_id(client, authenticated_user
     assert len(body["settings"]) == 1 and body["settings"][0]["setting_id"] == 942991
 
 
-def test_thesession_preview_fetch_error_passthrough(client, authenticated_user, preview_rows, monkeypatch):
+def test_thesession_preview_fetch_error_passthrough(
+    client, authenticated_user, preview_rows, monkeypatch
+):
     import live_logging_routes
     from api_routes import TuneImportError
 
@@ -334,8 +388,15 @@ def test_render_abc_validates_and_degrades(client, authenticated_user, preview_r
     """No abc -> 400; with abc but no renderer configured -> success, null image."""
     with authenticated_user:
         empty = client.post("/api/tunes/render-abc", json={})
-        ok = client.post("/api/tunes/render-abc",
-                         json={"abc": "GE~E2 GEDE|", "key": "Gmaj", "tune_type": "Reel", "kind": "incipit"})
+        ok = client.post(
+            "/api/tunes/render-abc",
+            json={
+                "abc": "GE~E2 GEDE|",
+                "key": "Gmaj",
+                "tune_type": "Reel",
+                "kind": "incipit",
+            },
+        )
     assert empty.status_code == 400
     assert ok.status_code == 200
     assert ok.get_json()["success"] is True
@@ -348,4 +409,6 @@ def test_live_home_registered(client, authenticated_user, preview_rows):
     body = resp.get_json()
     assert body["success"] is True
     assert body["played_here"] == 1
-    assert body["aliases"] == ["The Glorp", "Glorpy McGlorp"]
+    # The session's own name is the title; the alias line opens with the catalogue's.
+    assert body["display_name"] == "The Glorp"
+    assert body["aliases"] == ["Glorp Preview Reel", "Glorpy McGlorp"]

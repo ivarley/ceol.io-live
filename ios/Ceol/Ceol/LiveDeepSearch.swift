@@ -321,9 +321,10 @@ struct DeepSearchSheet: View {
             } label: {
                 VStack(alignment: .leading, spacing: 8) {
                     let defaults = r["session_defaults"].flatMap { $0.isNull ? nil : $0 }
-                    // Your session's name for it leads; the catalogue's, and the name of
-                    // yours it was found by, go under it with the match lit.
-                    let title = defaults?["alias"]?.stringValue ?? name
+                    // The server's display_name leads (your own name for it, else the
+                    // session's, else the catalogue's); its other_names go under it with
+                    // the match lit. A result from thesession.org has only its name.
+                    let title = r["display_name"]?.stringValue ?? defaults?["alias"]?.stringValue ?? name
                     HStack(alignment: .firstTextBaseline) {
                         Text(title).font(.ceol(size: 17, weight: .semibold)).foregroundStyle(CeolTokens.textColor)
                             .multilineTextAlignment(.leading)
@@ -333,11 +334,13 @@ struct DeepSearchSheet: View {
                                 .foregroundStyle(CeolTokens.textMuted)
                         }
                     }
-                    let others = ([r["name"]?.stringValue, r["matched_alias"]?.stringValue].compactMap { $0 })
+                    let others = r["other_names"]?.arrayValue?.compactMap(\.stringValue)
+                        ?? ([r["name"]?.stringValue, r["matched_alias"]?.stringValue].compactMap { $0 })
                         .filter { $0 != title }.reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
                     if !others.isEmpty {
                         (Text("Also known as") + Text(verbatim: " ") + lit(others.joined(separator: ", ")))
-                            .font(.ceol(size: 12)).foregroundStyle(CeolTokens.textMuted)
+                            .font(.ceol(size: 12)).italic().foregroundStyle(CeolTokens.textMuted)
+                            .multilineTextAlignment(.leading)
                     }
                     if !remote, let id {
                         let settingID = defaults?["setting_id"]?.intValue
@@ -724,7 +727,8 @@ struct TunePreviewPane: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(data?["name"]?.stringValue ?? item?.r["name"]?.stringValue ?? "")
+                        Text(data?["display_name"]?.stringValue ?? item?.r["display_name"]?.stringValue
+                             ?? data?["name"]?.stringValue ?? item?.r["name"]?.stringValue ?? "")
                             .font(.ceol(size: 22, weight: .semibold)).foregroundStyle(CeolTokens.textColor)
                         if let t = data?["tune_type"]?.stringValue ?? item?.r["tune_type"]?.stringValue {
                             TypeChip(label: t, size: 14)

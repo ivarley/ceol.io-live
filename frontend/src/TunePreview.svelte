@@ -282,7 +282,7 @@
   </div>
 
   <div class="pv-body">
-    <div class="pv-name">{data?.name ?? item?.r?.name ?? ''}<span class="pv-type">{tuneTypeName(data?.tune_type ?? item?.r?.tune_type ?? '')}</span></div>
+    <div class="pv-name">{data?.display_name ?? item?.r?.display_name ?? data?.name ?? item?.r?.name ?? ''}<span class="pv-type">{tuneTypeName(data?.tune_type ?? item?.r?.tune_type ?? '')}</span></div>
 
     {#if loading}
       <div class="pv-skel" style="width:60%"></div>

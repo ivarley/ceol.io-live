@@ -495,6 +495,14 @@ struct ListenMeterView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(c.name ?? tr("Tune \(c.tuneID)")).font(.ceol(size: 18, weight: .semibold))
                     .foregroundStyle(CeolTokens.textColor).multilineTextAlignment(.leading)
+                // The names beside yours (the session's, the catalogue's), so two people
+                // at one session see why their meters name the tune differently.
+                let others = recorder.otherNames(for: c.tuneID)
+                if !others.isEmpty {
+                    (Text("Also known as") + Text(verbatim: " " + others.joined(separator: ", ")))
+                        .font(.ceol(size: 12)).italic().foregroundStyle(CeolTokens.textMuted)
+                        .multilineTextAlignment(.leading)
+                }
                 Text([c.type.map(TunesWords.type), c.outside ? tr("new to this session") : nil, "\(Int((c.p * 100).rounded()))%"]
                     .compactMap { $0 }.joined(separator: " · "))
                     .font(.ceol(size: 12)).foregroundStyle(CeolTokens.textMuted)

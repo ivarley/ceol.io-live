@@ -451,6 +451,12 @@ final class NightRecorder {
         send(ListenWire.tapNone(shown: state?.top.map(\.tuneID) ?? []))
     }
 
+    /// The other names of a tune the meter names (the vocabulary's other_names: the
+    /// session's and the catalogue's when yours leads); none for a tune outside it.
+    func otherNames(for tuneID: Int) -> [String] {
+        night?.vocab?.byID[tuneID]?.otherNames ?? []
+    }
+
     func received(_ s: ListenState) {
         let vocab = night?.vocab
         state = vocab.map { v in s.named { v.byID[$0]?.displayName } } ?? s
