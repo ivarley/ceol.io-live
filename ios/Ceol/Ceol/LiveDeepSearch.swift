@@ -62,10 +62,14 @@ struct DeepSearchSheet: View {
     /// The ＋ rail, when it does something other than `onPick` (your tunebook: on the
     /// list at once, as To Learn). Returns what went wrong, or nil.
     var onQuickAdd: (([String: JSONValue]) async -> String?)? = nil
+    /// The preview offers "We call this something else" and "We play this in a different
+    /// key" (a session's list): the pick then carries `alias` and `key`.
+    var sessionExtras = false
     /// Close the sheet (Done, a swipe down, or after a pick).
     let onClose: () -> Void
-    /// {tune_id, name, tune_type, setting_id?, ...the result's fields}, {thesession_id, ...}, or {name}.
-    let onPick: ([String: JSONValue]) -> Void
+    /// The pick: {tune_id, name, tune_type, setting_id?, alias?, key?}, {thesession_id, ...},
+    /// or {name}. Returns what went wrong (the sheet stays, and says so), or nil.
+    let onPick: ([String: JSONValue]) async -> String?
 
     enum Mode: String, CaseIterable { case mixed, name, abc }
 
@@ -109,14 +113,16 @@ struct DeepSearchSheet: View {
                 if let i = preview, previewItems.indices.contains(i) {
                     TunePreviewPane(
                         app: app, scope: scope, items: previewItems, index: i, actionLabel: actionLabel,
-                        allowRemoteAction: allowRemote,
+                        allowRemoteAction: allowRemote, extras: sessionExtras,
                         onBack: {
                             preview = nil
                             pasted = nil
                         }
-                    ) { item, data, settingID in
+                    ) { item, data, settingID, extras in
                         pickedResult?(item.r)
-                        pick(Self.payload(item, data: data, settingID: settingID))
+                        var payload = Self.payload(item, data: data, settingID: settingID)
+                        payload.merge(extras) { _, new in new }
+                        return await pick(payload)
                     }
                     .background(CeolTokens.drawerBg)
                     .transition(.move(edge: .trailing))
@@ -191,7 +197,7 @@ struct DeepSearchSheet: View {
                         }
                         if allowAsIs && mode != .abc {
                             wide(tr("＋ Log “\(q)” as typed (unlinked)"), color: CeolTokens.primary, id: "deep.asIs") {
-                                pick(["name": .string(q)])
+                                Task { quickFailure = await pick(["name": .string(q)]) }
                             }
                         }
                     }
@@ -377,7 +383,7 @@ struct DeepSearchSheet: View {
             }
         } else {
             pickedResult?(item.r)
-            pick(payload)
+            Task { quickFailure = await pick(payload) }
         }
     }
 
@@ -427,11 +433,14 @@ struct DeepSearchSheet: View {
         .accessibilityIdentifier(id)
     }
 
-    private func pick(_ payload: [String: JSONValue]) {
+    /// Hands the pick on; what went wrong, or nil once it is taken (and the sheet
+    /// closed, where a pick closes it).
+    private func pick(_ payload: [String: JSONValue]) async -> String? {
+        if let problem = await onPick(payload) { return problem }
         preview = nil
         pasted = nil
-        onPick(payload)
         if closesOnPick { onClose() }
+        return nil
     }
 
     private func search() async {
@@ -546,9 +555,20 @@ struct TunePreviewPane: View {
     /// Whether the button works for a tune only thesession.org has (an import): not
     /// from your tunebook, which takes catalogue tunes only.
     var allowRemoteAction = true
+    /// "We call this something else" and "We play this in a different key" above the
+    /// button (a session's list), handed on as `alias` and `key`.
+    var extras = false
     let onBack: () -> Void
-    /// The pick: the result, the preview's data (nil when it didn't load), the chosen setting.
-    let onAction: (DeepSearchItem, JSONValue?, Int?) -> Void
+    /// The pick: the result, the preview's data (nil when it didn't load), the chosen
+    /// setting, and the extras ({alias, key}, those given). What went wrong, or nil.
+    let onAction: (DeepSearchItem, JSONValue?, Int?, [String: JSONValue]) async -> String?
+
+    /// The keys the web's form offers.
+    static let keys = [
+        "Amajor", "Aminor", "Adorian", "Amixolydian", "Bminor", "Cmajor", "Dmajor", "Dminor",
+        "Eminor", "Fmajor", "Gmajor", "Dmixolydian", "Bmixolydian", "Edorian", "Gdorian",
+        "Gminor", "Ddorian", "Cdorian", "Fdorian", "Gmixolydian", "Emajor", "Bdorian", "Emixolydian",
+    ]
 
     struct Setting: Equatable {
         let id: Int?
@@ -577,6 +597,12 @@ struct TunePreviewPane: View {
     @State private var undrawable: Set<String> = []
     @State private var aliasesExpanded = false
     @State private var loadRun = 0
+    @State private var aliasOpen = false
+    @State private var alias = ""
+    @State private var keyOpen = false
+    @State private var key = ""
+    @State private var busy = false
+    @State private var actionFailure: String?
 
     private var item: DeepSearchItem? { items.indices.contains(idx) ? items[idx] : nil }
     private var setting: Setting? { settings.indices.contains(setIdx) ? settings[setIdx] : nil }
@@ -627,23 +653,82 @@ struct TunePreviewPane: View {
                 .padding(16)
             }
             .scrollDismissesKeyboard(.interactively)
-            Button { if let item { onAction(item, data, chosenSettingID) } } label: {
-                Text(actionLabel).font(.ceol(size: 17, weight: .semibold))
-                    .frame(maxWidth: .infinity, minHeight: 48)
-                    .foregroundStyle(.white)
-                    .background(CeolTokens.primaryFill, in: RoundedRectangle(cornerRadius: 8))
+            VStack(spacing: 10) {
+                if extras && !loading && !failed { extrasBlock }
+                if let actionFailure {
+                    Text(actionFailure).font(.ceol(size: 14)).foregroundStyle(CeolTokens.danger)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                Button { Task { await act() } } label: {
+                    Text(busy ? tr("Adding…") : actionLabel).font(.ceol(size: 17, weight: .semibold))
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                        .foregroundStyle(.white)
+                        .background(CeolTokens.primaryFill, in: RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+                .disabled(loading || busy || !actionAllowed)
+                .opacity(loading || busy || !actionAllowed ? 0.5 : 1)
+                .accessibilityIdentifier("preview.action")
             }
-            .buttonStyle(.plain)
-            .disabled(loading || !actionAllowed)
-            .opacity(loading || !actionAllowed ? 0.5 : 1)
             .padding(.horizontal, 16).padding(.vertical, 10)
-            .accessibilityIdentifier("preview.action")
         }
         .task { idx = index; await load() }
         .onChange(of: idx) { Task { await load() } }
         .onChange(of: setIdx) { Task { await drawCurrent() } }
         .onChange(of: size) { Task { await drawCurrent() } }
         .onChange(of: mode) { if mode == .notes { Task { await drawCurrent() } } }
+    }
+
+    private func act() async {
+        guard let item, !busy else { return }
+        busy = true
+        actionFailure = nil
+        var extra: [String: JSONValue] = [:]
+        let a = alias.trimmingCharacters(in: .whitespaces)
+        if aliasOpen && !a.isEmpty { extra["alias"] = .string(a) }
+        if keyOpen && !key.isEmpty { extra["key"] = .string(key) }
+        actionFailure = await onAction(item, data, chosenSettingID, extra)
+        busy = false
+    }
+
+    /// The session's own word for the tune, and its key, when they differ from the
+    /// catalogue's: a link each, opening into the field. (The setting is the pager's.)
+    private var extrasBlock: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if aliasOpen {
+                TextField("", text: $alias, prompt: Text(tr("What this session calls it")).foregroundStyle(CeolTokens.textMuted))
+                    .font(.ceol(size: 16))
+                    .autocorrectionDisabled()
+                    .padding(.horizontal, 12).frame(height: 44)
+                    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(CeolTokens.borderColor, lineWidth: 1))
+                    .accessibilityIdentifier("preview.alias")
+            } else {
+                Button("We call this something else") { withAnimation(.easeOut(duration: 0.15)) { aliasOpen = true } }
+                    .font(.ceol(size: 15)).foregroundStyle(CeolTokens.primary)
+                    .accessibilityIdentifier("preview.aliasLink")
+            }
+            if keyOpen {
+                Menu {
+                    Button("(not specified)") { key = "" }
+                    ForEach(Self.keys, id: \.self) { k in Button(k) { key = k } }
+                } label: {
+                    HStack {
+                        Text(key.isEmpty ? tr("Key the session plays it in") : key).font(.ceol(size: 16))
+                            .foregroundStyle(key.isEmpty ? CeolTokens.textMuted : CeolTokens.textColor)
+                        Spacer()
+                        Image(systemName: "chevron.up.chevron.down").font(.system(size: 13)).foregroundStyle(CeolTokens.textMuted)
+                    }
+                    .padding(.horizontal, 12).frame(height: 44)
+                    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(CeolTokens.borderColor, lineWidth: 1))
+                }
+                .accessibilityIdentifier("preview.key")
+            } else {
+                Button("We play this in a different key") { withAnimation(.easeOut(duration: 0.15)) { keyOpen = true } }
+                    .font(.ceol(size: 15)).foregroundStyle(CeolTokens.primary)
+                    .accessibilityIdentifier("preview.keyLink")
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// Back to the results, where this one is, and the steppers to the others.
@@ -862,6 +947,11 @@ struct TunePreviewPane: View {
         mode = .notes
         size = .incipit
         aliasesExpanded = false
+        aliasOpen = false
+        alias = ""
+        keyOpen = false
+        key = ""
+        actionFailure = nil
         guard let id = item.r["tune_id"]?.intValue else {
             loading = false
             failed = true
@@ -967,6 +1057,9 @@ extension DeepSearchSheet {
         onPick: @escaping ([String: JSONValue]) -> Void
     ) {
         self.init(app: model.app, scope: .instance(model.instanceID), initialQuery: initialQuery, preferType: preferType,
-                  onClose: onClose, onPick: onPick)
+                  onClose: onClose) { payload in
+            onPick(payload)
+            return nil
+        }
     }
 }

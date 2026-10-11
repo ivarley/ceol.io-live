@@ -1832,6 +1832,7 @@
       }
     },
     "Add this tune": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -1852,6 +1853,7 @@
       }
     },
     "Add to Session": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -1872,6 +1874,7 @@
       }
     },
     "Add to session": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -2266,6 +2269,7 @@
       }
     },
     "Back to search": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -3537,6 +3541,7 @@
       }
     },
     "Enter a setting number or paste a thesession.org URL.": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -3943,6 +3948,7 @@
       }
     },
     "If the session plays a specific setting of the tune, paste its URL or setting number.": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -4173,11 +4179,22 @@
       }
     },
     "Key (optional)": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
             "state": "needs_review",
             "value": "Gléas (roghnach)"
+          }
+        }
+      }
+    },
+    "Key the session plays it in": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "An gléas a sheinneann an seisiún é ann"
           }
         }
       }
@@ -4401,6 +4418,7 @@
       }
     },
     "Local name for this tune, if different": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -5571,6 +5589,7 @@
       }
     },
     "Not this one? Back to search": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -7048,6 +7067,7 @@
       }
     },
     "Setting (optional)": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -7058,6 +7078,7 @@
       }
     },
     "Setting number or thesession.org URL": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -7690,6 +7711,7 @@
       }
     },
     "The key the session typically plays this tune in.": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -8495,11 +8517,22 @@
       }
     },
     "We call this (optional)": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
             "state": "needs_review",
             "value": "Tugaimidne air (roghnach)"
+          }
+        }
+      }
+    },
+    "We call this something else": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tugaimid ainm eile air seo"
           }
         }
       }
@@ -8510,6 +8543,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Seinnimid leagan eile"
+          }
+        }
+      }
+    },
+    "We play this in a different key": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Seinnimid é seo i ngléas eile"
           }
         }
       }
@@ -8570,6 +8613,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Fáilte ar ais, "
+          }
+        }
+      }
+    },
+    "What this session calls it": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "An t-ainm a thugann an seisiún seo air"
           }
         }
       }
@@ -9031,6 +9084,7 @@
       }
     },
     "importing from thesession.org": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -9620,6 +9674,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "＋ Cuir %@ leis"
+          }
+        }
+      }
+    },
+    "＋ Add This Tune": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "＋ Cuir an fonn seo leis"
           }
         }
       }

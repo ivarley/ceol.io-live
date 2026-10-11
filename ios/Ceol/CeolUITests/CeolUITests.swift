@@ -209,22 +209,19 @@ final class CeolUITests: XCTestCase {
         field.typeText("Lucy Farr")
         let result = app.buttons["deep.result"].firstMatch
         XCTAssertTrue(result.waitForExistence(timeout: 10))
-        // The card opens its preview (the look before you add); its button goes on to the form.
+        // The card opens its preview (the look before you add); its button adds at once.
         result.tap()
         let preview = app.buttons["preview.action"]
         XCTAssertTrue(preview.waitForExistence(timeout: 10))
+        snapshot("add session tune")
         preview.tap()
-        let add = app.buttons["addSessionTune.add"]
-        if add.waitForExistence(timeout: 5) {
-            snapshot("add session tune")
-            add.tap()
-            XCTAssertTrue(add.waitForNonExistence(timeout: 10))
+        if app.staticTexts["Played at this session"].waitForExistence(timeout: 5) {
+            // Already there from an earlier run: it opens instead.
+            app.buttons["Done"].firstMatch.tap()
+        } else {
+            XCTAssertTrue(preview.waitForNonExistence(timeout: 10))
             // Searched to the new one.
             XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier == 'session.tune' AND label CONTAINS \"Lucy Farr's\"")).firstMatch.waitForExistence(timeout: 10))
-        } else {
-            // Already there from an earlier run: it opens instead.
-            XCTAssertTrue(app.staticTexts["Played at this session"].waitForExistence(timeout: 10))
-            app.buttons["Done"].firstMatch.tap()
         }
 
         // Someone new on the People tab.

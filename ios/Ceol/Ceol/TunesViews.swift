@@ -767,10 +767,11 @@ struct AddTuneSheet: View {
             onQuickAdd: { await quickAdd($0) },
             onClose: { dismiss() }
         ) { payload in
-            guard let id = payload["tune_id"]?.intValue else { return }
+            guard let id = payload["tune_id"]?.intValue else { return tr("That tune isn't in Ceol's library yet.") }
             open = TuneRef(
                 id: id, name: payload["name"]?.stringValue ?? "", type: payload["tune_type"]?.stringValue,
                 statusKnown: false, settingID: payload["setting_id"]?.intValue)
+            return nil
         }
         .sheet(item: $open) { tune in
             TuneSheet(tune: tune) {

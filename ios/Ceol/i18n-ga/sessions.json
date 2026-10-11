@@ -174,6 +174,7 @@
   "Its tunes and history count as one of your sessions.": "Áirítear a chuid fonn agus a stair mar sheisiún de do chuid.",
   "Just visiting": "Ar cuairt amháin",
   "Key (optional)": "Gléas (roghnach)",
+  "Key the session plays it in": "An gléas a sheinneann an seisiún é ann",
   "Last": "Deireanach",
   "Last here": "An uair dheireanach anseo",
   "Leave": "Fág",
@@ -317,9 +318,12 @@
   "Visitors": "Cuairteoirí",
   "Want to learn": "Le foghlaim",
   "We call this (optional)": "Tugaimidne air (roghnach)",
+  "We call this something else": "Tugaimid ainm eile air seo",
+  "We play this in a different key": "Seinnimid é seo i ngléas eile",
   "Web": "Gréasán",
   "Week": "Seachtain",
   "Weekly": "Gach seachtain",
+  "What this session calls it": "An t-ainm a thugann an seisiún seo air",
   "When": "Cathain",
   "When I was there": "Nuair a bhí mé ann",
   "Yes, Add Me": "Freastalaím, cuir leis mé",
@@ -341,5 +345,6 @@
   "session %@": "seisiún %@",
   "thesession.org session %@": "Seisiún %@ ar thesession.org",
   "thesession.org session link or id": "Nasc nó aitheantas seisiúin thesession.org",
-  "✓ This session has been fully logged": "✓ Logáladh an seisiún seo go hiomlán"
+  "✓ This session has been fully logged": "✓ Logáladh an seisiún seo go hiomlán",
+  "＋ Add This Tune": "＋ Cuir an fonn seo leis"
 }

@@ -3,8 +3,9 @@
 // tab's person picker (scope "session").
 //
 // A tune: the catalogue search (DeepSearchSheet, scoped to the session, so tunes already
-// on its list say so and dim), then what the session calls it and, under Advanced, the
-// setting and key it plays. Picking one already on the list opens it instead.
+// on its list say so and dim). The + on a result adds it as it is; the preview adds it
+// with the setting paged to, and what the session calls it and the key it plays, when
+// those differ. Picking one already on the list opens it instead.
 //
 // A person: the session's own list first, since the one you mean is often already on
 // it; failing that, the new-person form. No search of everyone on Ceol: that would tell
@@ -34,242 +35,58 @@ struct AddSessionTuneSheet: View {
     @Environment(\.dismiss) private var dismiss
     let path: String
     let initialQuery: String
-    /// Added: the tune's id and name.
+    /// Added: the tune's id and name (the session's own, when one was given).
     let onAdded: (Int, String) -> Void
     /// Picked one already on the list: the tune's id, name and type.
     let onAlready: (Int, String, String?) -> Void
 
-    /// The pick (its add payload) and the search result it came from.
-    @State private var picked: [String: JSONValue]?
+    /// The search result the pick came from (whether it was already on the list).
     @State private var result: JSONValue?
 
     var body: some View {
-        Group {
-            if let picked {
-                AddSessionTuneForm(path: path, picked: picked, result: result, onBack: {
-                    self.picked = nil
-                    result = nil
-                }) { id, name in
-                    dismiss()
-                    onAdded(id, name)
-                }
-            } else {
-                DeepSearchSheet(
-                    app: model, scope: .session(path), initialQuery: initialQuery, preferType: nil,
-                    title: tr("Add a tune to this session"), actionLabel: tr("Add this tune"), allowAsIs: false, closesOnPick: false,
-                    pickedResult: { result = $0 },
-                    onClose: { dismiss() }
-                ) { payload in
-                    let id = payload["tune_id"]?.intValue ?? payload["thesession_id"]?.intValue
-                    if result?["in_session"] == true, let id {
-                        // Already on the list: not an add. Show it instead.
-                        dismiss()
-                        onAlready(id, payload["name"]?.stringValue ?? "", payload["tune_type"]?.stringValue)
-                    } else {
-                        picked = payload
-                    }
-                }
+        DeepSearchSheet(
+            app: model, scope: .session(path), initialQuery: initialQuery, preferType: nil,
+            title: tr("Add a tune to this session"), actionLabel: tr("＋ Add This Tune"), allowAsIs: false,
+            closesOnPick: false, pickedResult: { result = $0 }, sessionExtras: true,
+            onClose: { dismiss() }
+        ) { payload in
+            let id = payload["tune_id"]?.intValue ?? payload["thesession_id"]?.intValue
+            if result?["in_session"] == true, let id {
+                // Already on the list: not an add. Show it instead.
+                dismiss()
+                onAlready(id, payload["name"]?.stringValue ?? "", payload["tune_type"]?.stringValue)
+                return nil
             }
+            return await add(payload)
         }
         .ceolDrawer(interactive: false)
     }
-}
 
-/// The add form for a picked tune: its card, "We call this", and Advanced.
-private struct AddSessionTuneForm: View {
-    @Environment(AppModel.self) private var model
-    let path: String
-    let picked: [String: JSONValue]
-    let result: JSONValue?
-    let onBack: () -> Void
-    let onAdded: (Int, String) -> Void
-
-    @State private var alias = ""
-    @State private var advanced = false
-    @State private var setting = ""
-    @State private var settingError: String?
-    @State private var key = ""
-    @State private var busy = false
-    @State private var failure: String?
-
-    /// The keys the web's form offers.
-    static let keys = [
-        "Amajor", "Aminor", "Adorian", "Amixolydian", "Bminor", "Cmajor", "Dmajor", "Dminor",
-        "Eminor", "Fmajor", "Gmajor", "Dmixolydian", "Bmixolydian", "Edorian", "Gdorian",
-        "Gminor", "Ddorian", "Cdorian", "Fdorian", "Gmixolydian", "Emajor", "Bdorian", "Emixolydian",
-    ]
-
-    private var name: String { picked["name"]?.stringValue ?? "" }
-    private var tuneID: Int? { picked["tune_id"]?.intValue }
-    private var theSessionID: Int? { picked["thesession_id"]?.intValue }
-    /// From thesession.org: adding it imports it.
-    private var isRemote: Bool { theSessionID != nil }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            ZStack {
-                Text("Add to session").font(.ceol(size: 17, weight: .semibold)).foregroundStyle(CeolTokens.textColor)
-                HStack {
-                    Button(action: onBack) { Image(systemName: "chevron.left") }
-                        .accessibilityLabel("Back to search")
-                        .accessibilityIdentifier("addSessionTune.back")
-                    Spacer()
-                }
-                .font(.ceol(size: 17)).foregroundStyle(CeolTokens.primary)
-            }
-            .padding(.horizontal, 16).padding(.vertical, 12)
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    card
-                    VStack(alignment: .leading, spacing: 6) {
-                        label(tr("We call this (optional)"))
-                        field(tr("Local name for this tune, if different"), text: $alias, id: "addSessionTune.alias")
-                    }
-                    VStack(alignment: .leading, spacing: 10) {
-                        Button { withAnimation(.easeOut(duration: 0.15)) { advanced.toggle() } } label: {
-                            Label("Advanced", systemImage: advanced ? "chevron.down" : "chevron.right")
-                                .font(.ceol(size: 16)).foregroundStyle(CeolTokens.primary)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("addSessionTune.advanced")
-                        if advanced { advancedFields }
-                    }
-                    if let failure {
-                        Text(failure).font(.ceol(size: 15)).foregroundStyle(CeolTokens.danger)
-                    }
-                    Button { Task { await add() } } label: {
-                        Text(busy ? "Adding…" : "Add to Session").font(.ceol(size: 17, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity, minHeight: 48)
-                            .background(CeolTokens.primaryFill, in: RoundedRectangle(cornerRadius: 8))
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(busy)
-                    .accessibilityIdentifier("addSessionTune.add")
-                }
-                .padding(16)
-            }
-            .scrollDismissesKeyboard(.interactively)
-        }
-        .background(CeolTokens.drawerBg)
-        // A setting picked in the search's preview would arrive here; open Advanced to show it.
-        .onAppear {
-            if let s = picked["setting_id"]?.intValue {
-                setting = String(s)
-                advanced = true
-            }
-        }
-    }
-
-    private var card: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(name).font(.ceol(size: 19, weight: .semibold)).foregroundStyle(CeolTokens.textColor)
-                Spacer()
-                if let t = picked["tune_type"]?.stringValue { TypeChip(label: t) }
-            }
-            if !isRemote, let id = tuneID {
-                DeepIncipit(app: model, tuneID: id, base64: result?["incipit_image"]?.stringValue,
-                            canRender: result?["can_render"] == true)
-            }
-            let meta = [
-                isRemote ? tr("importing from thesession.org") : nil,
-                result?["tunebook_count"]?.intValue.map { tr("\($0) tunebooks") },
-            ].compactMap { $0 }
-            if !meta.isEmpty {
-                Text(meta.joined(separator: " · ")).font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
-            }
-            Button("Not this one? Back to search", action: onBack)
-                .font(.ceol(size: 15)).foregroundStyle(CeolTokens.primary)
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(CeolTokens.headerBg, in: RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(CeolTokens.borderColor, lineWidth: 1))
-    }
-
-    private var advancedFields: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            label(tr("Setting (optional)"))
-            field(tr("Setting number or thesession.org URL"), text: $setting, id: "addSessionTune.setting")
-                .onChange(of: setting) { settingError = nil }
-            help(tr("If the session plays a specific setting of the tune, paste its URL or setting number."))
-            if let settingError { Text(settingError).font(.ceol(size: 14)).foregroundStyle(CeolTokens.danger) }
-            label(tr("Key (optional)")).padding(.top, 8)
-            Menu {
-                Button("(not specified)") { key = "" }
-                ForEach(Self.keys, id: \.self) { k in Button(k) { key = k } }
-            } label: {
-                HStack {
-                    Text(key.isEmpty ? tr("(not specified)") : key).font(.ceol(size: 16))
-                        .foregroundStyle(key.isEmpty ? CeolTokens.textMuted : CeolTokens.textColor)
-                    Spacer()
-                    Image(systemName: "chevron.up.chevron.down").font(.system(size: 13)).foregroundStyle(CeolTokens.textMuted)
-                }
-                .padding(.horizontal, 12).frame(height: 44)
-                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(CeolTokens.borderColor, lineWidth: 1))
-            }
-            .accessibilityIdentifier("addSessionTune.key")
-            help(tr("The key the session typically plays this tune in."))
-        }
-    }
-
-    private func label(_ s: String) -> some View {
-        Text(s).font(.ceol(size: 15, weight: .semibold)).foregroundStyle(CeolTokens.textColor)
-    }
-
-    private func help(_ s: String) -> some View {
-        Text(s).font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
-    }
-
-    private func field(_ prompt: String, text: Binding<String>, id: String) -> some View {
-        TextField("", text: text, prompt: Text(prompt).foregroundStyle(CeolTokens.textMuted))
-            .font(.ceol(size: 16))
-            .textInputAutocapitalization(.never)
-            .autocorrectionDisabled()
-            .padding(.horizontal, 12).frame(height: 44)
-            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(CeolTokens.borderColor, lineWidth: 1))
-            .accessibilityIdentifier(id)
-    }
-
-    /// A bare number, or a thesession.org URL's ?setting= / #setting.
-    private var settingID: (ok: Bool, id: Int?) {
-        let t = setting.trimmingCharacters(in: .whitespaces)
-        if t.isEmpty { return (true, nil) }
-        if let n = Int(t), n > 0 { return (true, n) }
-        if let n = TheSession.settingID(t) { return (true, n) }
-        return (false, nil)
-    }
-
-    private func add() async {
-        guard !busy else { return }
-        failure = nil
-        let s = settingID
-        guard s.ok else {
-            settingError = tr("Enter a setting number or paste a thesession.org URL.")
-            advanced = true
-            return
-        }
-        busy = true
-        defer { busy = false }
-        let trimmedAlias = alias.trimmingCharacters(in: .whitespaces)
+    /// Adds it to the session's list: the + takes the tune as it is (its first setting,
+    /// no name or key of the session's own); the preview's button brings the setting
+    /// chosen in its pager, and the alias and key when given. What went wrong, or nil.
+    private func add(_ payload: [String: JSONValue]) async -> String? {
+        let name = payload["name"]?.stringValue ?? ""
+        let alias = payload["alias"]?.stringValue
         do {
             switch try await model.auth.client.addSessionTune(
                 path: .init(sessionPath: path),
                 body: .json(.init(
-                    tuneId: tuneID, thesessionId: theSessionID,
-                    alias: trimmedAlias.isEmpty ? nil : trimmedAlias, settingId: s.id, key: key.isEmpty ? nil : key)))
+                    tuneId: payload["tune_id"]?.intValue, thesessionId: payload["thesession_id"]?.intValue,
+                    alias: alias, settingId: payload["setting_id"]?.intValue, key: payload["key"]?.stringValue)))
             {
             case .created(let created):
                 let r = try created.body.json
-                onAdded(r.tuneId, trimmedAlias.isEmpty ? name : trimmedAlias)
+                dismiss()
+                onAdded(r.tuneId, alias ?? name)
+                return nil
             case .default(let status, let error):
-                failure = status == 409
+                return status == 409
                     ? tr("\(name) is already on this session's list.")
                     : refusalMessage(error) ?? tr("Couldn't add the tune to the session. Try again.")
             }
         } catch {
-            failure = offlineMessage
+            return offlineMessage
         }
     }
 }
