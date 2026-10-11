@@ -27,20 +27,44 @@ extension Client {
     /// X-Ceol-Client, e.g. "ios/1.0.0 (build 12)") and sends `token()` when it has one.
     /// `language()` is the app's interface language ("en" / "ga"), sent as
     /// Accept-Language so the server answers in it even before sign-in (spec 057).
+    /// `offline()` true fails every request as if the phone had no signal (the app's
+    /// debug switch), so a test of the kept copies sees what a pub with no signal shows.
     public static func ceol(
         serverURL: URL = CeolServer.production,
         clientID: String,
         token: @escaping TokenProvider,
         language: @escaping @Sendable () -> String? = { nil },
+        offline: @escaping @Sendable () -> Bool = { false },
         transport: any ClientTransport = URLSessionTransport()
     ) -> Client {
         Client(
             serverURL: serverURL,
             transport: transport,
             middlewares: [
+                OfflineMiddleware(offline: offline),
                 ClientIDMiddleware(clientID: clientID, language: language), BearerTokenMiddleware(token: token),
             ]
         )
+    }
+}
+
+/// No signal, pretended: the request fails before it is sent.
+public struct OfflineMiddleware: ClientMiddleware {
+    public let offline: @Sendable () -> Bool
+
+    public init(offline: @escaping @Sendable () -> Bool) {
+        self.offline = offline
+    }
+
+    public func intercept(
+        _ request: HTTPRequest,
+        body: HTTPBody?,
+        baseURL: URL,
+        operationID: String,
+        next: @Sendable (HTTPRequest, HTTPBody?, URL) async throws -> (HTTPResponse, HTTPBody?)
+    ) async throws -> (HTTPResponse, HTTPBody?) {
+        if offline() { throw URLError(.notConnectedToInternet) }
+        return try await next(request, body, baseURL)
     }
 }
 

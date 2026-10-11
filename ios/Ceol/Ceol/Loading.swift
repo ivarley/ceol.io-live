@@ -42,9 +42,7 @@ struct Loaded<Value, Content: View>: View {
 
 /// What a screen says when a fetch fails. The server's own sentence when it sent one.
 func loadFailureMessage(_ error: Error) -> String {
-    if let url = error as? URLError, url.code == .notConnectedToInternet || url.code == .networkConnectionLost {
-        return tr("You're offline. Check your connection, then try again.")
-    }
+    if isConnectionFailure(error) { return offlineLoadMessage }
     return tr("Something went wrong reaching Ceol. Try again in a moment.")
 }
 

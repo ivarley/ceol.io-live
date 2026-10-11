@@ -321,10 +321,10 @@ final class CeolUITests: XCTestCase {
         XCTAssertTrue(cooleys.waitForExistence(timeout: 10))
         snapshot("tunes")
         cooleys.tap()
-        XCTAssertTrue(app.images["Notation for Cooley's"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.buttons["sheet.notation"].waitForExistence(timeout: 20))
         snapshot("sheet")
         app.buttons["Done"].tap()
-        XCTAssertTrue(app.images["Notation for Cooley's"].waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["sheet.notation"].waitForNonExistence(timeout: 5))
 
         // The sort and filter drawer.
         app.buttons["tunes.search.filter"].tap()
@@ -1658,6 +1658,70 @@ final class CeolUITests: XCTestCase {
     }
 
     /// Phase 3d: Me shows the profile and opens it to edit (cancelled: seed data stays put).
+    /// Phase 6: what you looked at (and what was fetched ahead) opens with no signal on
+    /// the next launch, saying so, and a tunebook change made then waits to be sent.
+    @MainActor
+    func testTheSecondLaunchOpensWithNoSignal() async throws {
+        // Cooley's status as seeded, to put back whatever the test leaves queued.
+        let api = try await TestAPI.signedIn(server: server)
+        let mine = try await api.get("/api/my-tunes")
+        let cooleys = try XCTUnwrap(((mine["tunes"] as? [[String: Any]]) ?? []).first { ($0["tune_name"] as? String)?.hasPrefix("Cooley's") == true })
+        let cooleysID = try XCTUnwrap(cooleys["tune_id"] as? Int)
+        let seededStatus = try XCTUnwrap(cooleys["learn_status"] as? String)
+        addTeardownBlock {
+            _ = try? await api.post("/api/my-tunes/ops", ["op_id": UUID().uuidString.lowercased(), "type": "set_status", "tune_id": cooleysID, "learn_status": seededStatus])
+        }
+        let newStatus = seededStatus == "learned" ? "learning" : "learned"
+        let cooleysRow = { (app: XCUIApplication) in app.buttons.containing(NSPredicate(format: "label CONTAINS \"Cooley's\"")).firstMatch }
+        let muellerRow = { (app: XCUIApplication) in app.buttons.containing(NSPredicate(format: "label CONTAINS 'Mueller Session'")).firstMatch }
+
+        // Online: look at the Sessions list and the Tunes list, and open the session so
+        // its own payloads are surely kept (the prefetcher is filling the rest).
+        var app = launch()
+        signIn(app)
+        app.buttons["tab.sessions"].firstMatch.tap()
+        XCTAssertTrue(muellerRow(app).waitForExistence(timeout: 10))
+        muellerRow(app).tap()
+        XCTAssertTrue(app.buttons["session.tune"].firstMatch.waitForExistence(timeout: 10))
+        app.buttons.containing(NSPredicate(format: "label BEGINSWITH 'Logs'")).firstMatch.tap()
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label MATCHES '.*[1-9][0-9]* tunes.*'")).firstMatch.waitForExistence(timeout: 10))
+        app.buttons["tab.tunes"].firstMatch.tap()
+        XCTAssertTrue(cooleysRow(app).waitForExistence(timeout: 10))
+
+        // Relaunch with no signal: every one of those opens on what it had, and says so.
+        app.terminate()
+        app = launch(reset: false, extra: ["-CeolStartOffline", "YES"])
+        XCTAssertTrue(app.staticTexts["Welcome back, Ian"].waitForExistence(timeout: 15), "Home from the kept copy")
+        let offline = app.descendants(matching: .any)["kept.offline"]
+        XCTAssertTrue(offline.waitForExistence(timeout: 10), "the bar says the kept copy is showing")
+        XCTAssertTrue(offline.label.localizedCaseInsensitiveContains("offline"), offline.label)
+        snapshot("home offline")
+        app.buttons["tab.sessions"].firstMatch.tap()
+        XCTAssertTrue(muellerRow(app).waitForExistence(timeout: 10), "the kept sessions list")
+        muellerRow(app).tap()
+        XCTAssertTrue(app.buttons["session.tune"].firstMatch.waitForExistence(timeout: 10), "the kept session page")
+        app.buttons.containing(NSPredicate(format: "label BEGINSWITH 'Logs'")).firstMatch.tap()
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label MATCHES '.*[1-9][0-9]* tunes.*'")).firstMatch.waitForExistence(timeout: 10), "the kept logs")
+        snapshot("session offline")
+
+        // A change to the tunebook waits, and shows at once.
+        app.buttons["tab.tunes"].firstMatch.tap()
+        XCTAssertTrue(cooleysRow(app).waitForExistence(timeout: 10), "the kept tunebook")
+        cooleysRow(app).tap()
+        XCTAssertTrue(app.descendants(matching: .any)["sheet.offline"].waitForExistence(timeout: 10))
+        app.buttons["sheet.status.\(newStatus)"].tap()
+        XCTAssertTrue(app.buttons["sheet.status.\(newStatus)"].waitForExistence(timeout: 5))
+        app.buttons["Done"].firstMatch.tap()
+        let waiting = app.staticTexts["tunes.waiting"]
+        XCTAssertTrue(waiting.waitForExistence(timeout: 5))
+        XCTAssertTrue(waiting.label.contains("1 change waiting"), waiting.label)
+        snapshot("tunes offline")
+        // Nothing reached the server.
+        let after = try await api.get("/api/my-tunes")
+        let now = ((after["tunes"] as? [[String: Any]]) ?? []).first { ($0["tune_id"] as? Int) == cooleysID }?["learn_status"] as? String
+        XCTAssertEqual(now, seededStatus)
+    }
+
     @MainActor
     func testMeShowsTheProfile() throws {
         let app = launch()

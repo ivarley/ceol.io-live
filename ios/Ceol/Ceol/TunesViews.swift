@@ -52,7 +52,7 @@ struct TuneRef: Identifiable, Hashable {
 
 struct TunesView: View {
     @Environment(AppModel.self) private var model
-    @State private var state: LoadState<MyTunesPayload> = .loading
+    private var state: Resource<MyTunesPayload> { model.myTunes }
     @State private var filters = MyTunesList.Filters()
     @State private var sort = MyTunesList.Sort()
     @State private var search = ""
@@ -66,8 +66,9 @@ struct TunesView: View {
 
     var body: some View {
         NavigationStack {
-            Loaded(state: state, retry: load) { payload in list(payload) }
+            Resourced(resource: state) { payload in list(payload) }
                 .background(CeolTokens.bgColor)
+                .ceolKept(state)
                 .ceolRootBar(tr("Tunes"), sharePath: model.tunesStatus.map { "/my-tunes?status=\($0.rawValue.replacingOccurrences(of: " ", with: "+"))" } ?? "/my-tunes")
                 .task(id: search) { await searchCatalogue() }
                 // The search keyboard would otherwise stay up over the sheet.
@@ -84,7 +85,7 @@ struct TunesView: View {
                     adding = false
                     searching = false
                 }
-                .task { if state.value == nil { await load() } }
+                .task { await state.refresh(ifOlderThan: 20) }
                 .alert("Not saved", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
                     Button("OK") {}
                 } message: {
@@ -113,11 +114,7 @@ struct TunesView: View {
     }
 
     private func load() async {
-        do {
-            state = .loaded(try await model.auth.client.getMyTunes().ok.body.json)
-        } catch {
-            if state.value == nil { state = .failed(loadFailureMessage(error)) }
-        }
+        await state.refresh()
     }
 
     /// The catalogue below your own matches, after a short pause in typing. Two
@@ -136,6 +133,28 @@ struct TunesView: View {
             catalogueFailed = false
         } catch {
             if !Task.isCancelled { catalogueFailed = true }
+        }
+    }
+
+    /// Changes made with no signal, waiting to be sent; and any the server refused.
+    @ViewBuilder private var queueNotice: some View {
+        let n = model.tuneQueue.count
+        if n > 0 {
+            Text(n == 1 ? tr("1 change waiting to be sent") : tr("\(n) changes waiting to be sent"))
+                .font(.ceol(size: 13)).foregroundStyle(CeolTokens.warning)
+                .accessibilityIdentifier("tunes.waiting")
+        }
+        if !model.tuneQueue.refused.isEmpty {
+            HStack(alignment: .top, spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(model.tuneQueue.refused, id: \.self) { r in
+                        Text("Couldn't save \(r)").font(.ceol(size: 13)).foregroundStyle(CeolTokens.warning)
+                    }
+                }
+                Spacer()
+                Button("Dismiss") { model.tuneQueue.refused = [] }.font(.ceol(size: 13)).foregroundStyle(CeolTokens.primary)
+            }
+            .accessibilityIdentifier("tunes.refused")
         }
     }
 
@@ -169,6 +188,7 @@ struct TunesView: View {
                     }
                 }
                 .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
+                queueNotice
             }
             .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 6, trailing: 16))
             .listRowBackground(CeolTokens.bgColor)
@@ -310,7 +330,15 @@ struct TuneSheet: View {
 
     var body: some View {
         NavigationStack {
-            Loaded(state: detail, retry: load) { d in content(d.sessionTune) }
+            Group {
+                if case .failed(let message) = detail, tune.statusKnown {
+                    // No signal, but your status came with the list: that much still
+                    // works (a change waits to be sent); the notation needs a connection.
+                    keptContent(message)
+                } else {
+                    Loaded(state: detail, retry: load) { d in content(d.sessionTune) }
+                }
+            }
                 .background(Self.surface)
                 .navigationTitle(tune.name)
                 .navigationBarTitleDisplayMode(.inline)
@@ -370,7 +398,9 @@ struct TuneSheet: View {
         failure = nil
         defer { busy = false }
         do {
-            try await model.applyTuneOp(type, tuneID: tune.id, learnStatus: s, heardCount: h, notes: n, nameAlias: nameAlias, key: key)
+            try await model.applyTuneOp(
+                type, tuneID: tune.id, learnStatus: s, heardCount: h, notes: n, nameAlias: nameAlias, key: key,
+                name: tune.name, tuneType: tune.type)
             onChanged()
             return true
         } catch let f as TuneOpFailure {
@@ -518,6 +548,39 @@ struct TuneSheet: View {
                     (Text("Also called: ").font(.ceol(size: 15, weight: .semibold)) + Text(aliases.joined(separator: ", ")).font(.ceol(size: 15)))
                         .foregroundStyle(CeolTokens.textMuted)
                 }
+                HStack {
+                    Spacer()
+                    if status != nil {
+                        Button("Remove From My Tunes") { confirmRemove = true }
+                            .font(.ceol(size: 16)).foregroundStyle(CeolTokens.danger)
+                            .disabled(busy)
+                            .accessibilityIdentifier("sheet.remove")
+                    }
+                }
+            }
+            .padding(20)
+        }
+    }
+
+    /// The sheet with no connection, for a tune from your list: its name, your status
+    /// and notes, and why the rest is missing.
+    @ViewBuilder private func keptContent(_ message: String) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                HStack(spacing: 12) {
+                    if let type = tune.type { TypeChip(label: TunesWords.type(type), size: 16) }
+                    Text(tune.name).font(.ceol(size: 26, weight: .semibold, relativeTo: .title)).foregroundStyle(CeolTokens.textColor)
+                }
+                HStack(spacing: 10) {
+                    Image(systemName: "wifi.exclamationmark").foregroundStyle(CeolTokens.textMuted)
+                    Text(message).font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
+                    Spacer(minLength: 0)
+                    Button("Retry") { Task { await load() } }.font(.ceol(size: 15, weight: .medium)).foregroundStyle(CeolTokens.primary)
+                }
+                .padding(12)
+                .background(CeolTokens.bgColor, in: RoundedRectangle(cornerRadius: 10))
+                .accessibilityIdentifier("sheet.offline")
+                yourList
                 HStack {
                     Spacer()
                     if status != nil {
@@ -714,7 +777,9 @@ struct TunebookPanel: View {
         failure = nil
         defer { busy = false }
         do {
-            try await model.applyTuneOp(type, tuneID: tune.id, learnStatus: s, heardCount: h, nameAlias: nameAlias, key: key)
+            try await model.applyTuneOp(
+                type, tuneID: tune.id, learnStatus: s, heardCount: h, nameAlias: nameAlias, key: key,
+                name: tune.name, tuneType: tune.type)
             onChanged()
             return true
         } catch let f as TuneOpFailure {
@@ -1031,7 +1096,8 @@ struct AddTuneSheet: View {
         do {
             try await model.applyTuneOp(
                 .add, tuneID: id, learnStatus: .wantToLearn,
-                nameAlias: payload["alias"]?.stringValue, key: payload["key"]?.stringValue)
+                nameAlias: payload["alias"]?.stringValue, key: payload["key"]?.stringValue,
+                name: payload["name"]?.stringValue, tuneType: payload["tune_type"]?.stringValue)
             if let sid = payload["setting_id"]?.intValue {
                 try await model.applyTuneOp(.setSetting, tuneID: id, settingID: sid)
             }

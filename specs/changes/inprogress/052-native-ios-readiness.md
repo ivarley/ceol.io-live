@@ -1958,3 +1958,63 @@ The plan (Phases 0-6) runs from here in `ios/`; see `ios/README.md` for the layo
       `-CeolTestAudioURL` plays a test tone (`CeolUITests/tone.m4a`).
     Tests: `testLeavingSeamModeAndSearchFromTheRight`, `testHearingANight`, and two more
     in the web's `live-logger-edit-row.spec.ts`.
+- **Phase 6 — offline from the second launch: BUILT 2026-10-11.** Until now only a
+  night you had opened was kept on the phone (5d); Home, the Sessions list, a session's
+  three tabs, your Tunebook and Me each fetched when shown, spun on every launch, and
+  showed "Couldn't load this" with no signal. The web has a different model (a service
+  worker, `GET /api/offline/bundle`, an op queue); the app uses none of it. Decided by
+  the product owner, 2026-10-11: the app keeps every one of those payloads, prefetches
+  them as soon as it is launched, shows what it has at once and refreshes behind a
+  quiet spinner, and the tunebook's writes queue offline, as the web's do.
+  - **A payload kept per screen (`Resource.swift`).** `Resource<Value>` is one
+    endpoint's payload: its value, when it was saved, whether a refresh is running and
+    whether the last one failed. It is read from disk when first asked for
+    (`PayloadStore`: one JSON file per key in Application Support/Payloads, cleared on
+    sign-out, as `NightStore` is) and written on every successful fetch. One instance
+    per key, held by `AppModel` (`Payloads.swift`: `home`, `sessions`, `myTunes`,
+    `profile`, `sessionDetail(path)`, `sessionTunesRest(path)`, `sessionLogs(path)`,
+    `sessionPeople(path)`), so a screen and the prefetcher share one fetch: a refresh
+    already in flight is joined, not repeated.
+  - **One loading pattern.** `Resourced` shows the kept value at once when there is
+    one, with the screen's own spinner only when there is nothing yet, and the failure
+    screen with Retry only when there is nothing and the fetch failed. While a refresh
+    runs over a kept value a small spinner sits in the top bar's middle (`ceolKept`
+    sets a preference `CeolTopBar` renders where the title would be); when it fails
+    over a kept value the bar says "Offline" (or "Couldn't refresh") there instead. Fresh replaces kept: these are
+    server-owned lists, so there is nothing to merge. Pull to refresh stays. The night
+    screen keeps its own model (5d), unchanged. The Logs and People tabs of a session
+    are resources too, so the first switch to them has no spinner once prefetched.
+  - **Prefetching (`Prefetcher.swift`).** After sign-in, when the app comes forward
+    (at most every ten minutes) and when the network returns after a failed round:
+    Home, the Sessions list and your Tunebook at once, then for each session you are a
+    member of its detail, remaining tunes, logs and people, then the nights you are
+    likely to open with no signal: this week's from Home and each member session's
+    active and three most recent nights, each saved for the night screen (its
+    bootstrap, an empty-queue log and its vocabulary) unless the phone already holds
+    that night with changes waiting or has it open, plus its known tunes for the
+    decider. Not in Low Data Mode beyond the first three, and never two rounds at once.
+    The three lists refresh every round; the fan-out behind them only what is older
+    than ten minutes, so a relaunch soon after is three requests, not eighty. Festivals
+    are skipped (their path is not a session's). The debug "no signal" switch is now a
+    client middleware (`OfflineMiddleware`), so every request honours it, which the
+    kept-copy UI test needs.
+  - **Tunebook writes offline (`TuneQueue.swift`).** `applyTuneOp` now tries the server
+    and, when it can't be reached (a connection error, not a refusal), queues the op in
+    a file and applies it to the kept Tunebook at once (`TunebookOps.apply`: add with
+    the name the caller gave, status, heard, notes, setting, remove), so the list and
+    Home's counts show the change. Anything queued keeps order: while ops wait, new
+    ones wait behind them. The queue is sent in order when the network returns, the app
+    comes forward, or the next op is attempted; a refusal drops that op and is listed
+    on the Tunes tab ("Couldn't save …"), a connection failure stops the round. Once
+    drained the Tunebook and Home are refreshed. The Tunes tab shows "N changes waiting
+    to be sent" while any are. Night logs keep their own queue (5d).
+  - Tests: `CeolTests/OfflineTests.swift` (the store's round trip, the optimistic
+    application of each op type, queueing and persistence across models, the queue's
+    order), `testTheSecondLaunchOpensWithNoSignal` (sign in, look around, relaunch
+    with no signal: Home, Sessions, a session's tunes and logs and the Tunebook all
+    open on their kept copies, the bar says Offline, a status change waits and the
+    server never sees it), and the existing suites. The tune sheet opened from your
+    list with no signal shows your status, notes and Remove (`keptContent`), with a
+    Retry for the rest. Found on the way: `testBrowsingTunes` had looked for the
+    notation as an image since 03ba084 made it a button. Help: `help_offline.html` and its Irish twin say
+    what the app keeps.

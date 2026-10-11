@@ -12,7 +12,7 @@ import SwiftUI
 
 struct MeView: View {
     @Environment(AppModel.self) private var model
-    @State private var state: LoadState<Profile> = .loading
+    private var state: Resource<ProfilePayload> { model.profile }
     @State private var editing = false
     @State private var confirmSignOut = false
     @State private var showingRecordings = false
@@ -28,8 +28,9 @@ struct MeView: View {
 
     var body: some View {
         NavigationStack {
-            Loaded(state: state, retry: load) { p in list(p) }
+            Resourced(resource: state) { p in list(p) }
                 .background(CeolTokens.bgColor)
+                .ceolKept(state)
                 .ceolRootBar(tr("Me"), sharePath: "/me")
                 .sheet(isPresented: $editing) {
                     ProfileSetupView(editing: true) { Task { await load() } }
@@ -44,16 +45,12 @@ struct MeView: View {
                 .confirmationDialog("Sign out of Ceol on this iPhone?", isPresented: $confirmSignOut, titleVisibility: .visible) {
                     Button("Sign out", role: .destructive) { Task { await model.signOut() } }
                 }
-                .task { if state.value == nil { await load() } }
+                .task { await state.refresh(ifOlderThan: 20) }
         }
     }
 
     private func load() async {
-        do {
-            state = .loaded(try await model.auth.profile())
-        } catch {
-            if state.value == nil { state = .failed(loadFailureMessage(error)) }
-        }
+        await state.refresh()
     }
 
     /// A web page, signed in: mint the one-time link, then open it. The handoff also
@@ -286,7 +283,7 @@ struct MeView: View {
         saveFailure = nil
         defer { savingLanguage = false }
         do {
-            state = .loaded(try await model.auth.updateProfile(.init(language: code == "ga" ? .ga : .en)))
+            state.replace(try await model.auth.updateProfile(.init(language: code == "ga" ? .ga : .en)))
             model.setLanguage(code)
         } catch let f as AuthFailure {
             saveFailure = f.message
@@ -300,7 +297,7 @@ struct MeView: View {
         saveFailure = nil
         defer { savingEmails = false }
         do {
-            state = .loaded(try await model.auth.updateProfile(.init(receiveUpdateEmails: on)))
+            state.replace(try await model.auth.updateProfile(.init(receiveUpdateEmails: on)))
         } catch let f as AuthFailure {
             saveFailure = f.message
         } catch {

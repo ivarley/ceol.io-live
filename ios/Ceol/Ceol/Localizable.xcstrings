@@ -628,6 +628,46 @@
         }
       }
     },
+    "%lld changes waiting to be sent": {
+      "localizations": {
+        "ga": {
+          "variations": {
+            "plural": {
+              "few": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%lld athrú ag fanacht le seoladh"
+                }
+              },
+              "many": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%lld n-athrú ag fanacht le seoladh"
+                }
+              },
+              "one": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%lld athrú ag fanacht le seoladh"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%lld athrú ag fanacht le seoladh"
+                }
+              },
+              "two": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%lld athrú ag fanacht le seoladh"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld changes you made offline couldn’t be applied when you reconnected — usually because someone else changed the same tune first.": {
       "localizations": {
         "ga": {
@@ -1569,6 +1609,16 @@
       }
     },
     ", ": {},
+    "1 change waiting to be sent": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "1 athrú ag fanacht le seoladh"
+          }
+        }
+      }
+    },
     "1 change you made offline couldn’t be applied when you reconnected — usually because someone else changed the same tune first.": {
       "localizations": {
         "ga": {
@@ -3300,6 +3350,37 @@
         }
       }
     },
+    "Couldn't refresh": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Níorbh fhéidir athnuachan"
+          }
+        }
+      }
+    },
+    "Couldn't refresh · showing what you had": {
+      "extractionState": "stale",
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Níorbh fhéidir athnuachan · an méid a bhí agat á thaispeáint"
+          }
+        }
+      }
+    },
+    "Couldn't save %@": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Níorbh fhéidir %@ a shábháil"
+          }
+        }
+      }
+    },
     "Couldn't save that. Check your connection and try again.": {
       "localizations": {
         "ga": {
@@ -3577,6 +3658,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Sonraí"
+          }
+        }
+      }
+    },
+    "Dismiss": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Dún"
           }
         }
       }
@@ -8774,6 +8865,16 @@
         }
       }
     },
+    "Updating": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Á nuashonrú"
+          }
+        }
+      }
+    },
     "Upload": {
       "localizations": {
         "ga": {
@@ -9324,6 +9425,17 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Is bainisteoir anseo thú. Ní athraíonn sé sin ar aon chaoi."
+          }
+        }
+      }
+    },
+    "You're offline · showing what you had": {
+      "extractionState": "stale",
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tá tú as líne · an méid a bhí agat á thaispeáint"
           }
         }
       }

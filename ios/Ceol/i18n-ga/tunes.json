@@ -1,5 +1,12 @@
 {
   "%@’s": "de chuid %@",
+  "%lld changes waiting to be sent": {
+    "one": "%lld athrú ag fanacht le seoladh",
+    "two": "%lld athrú ag fanacht le seoladh",
+    "few": "%lld athrú ag fanacht le seoladh",
+    "many": "%lld n-athrú ag fanacht le seoladh",
+    "other": "%lld athrú ag fanacht le seoladh"
+  },
   "%lld of %@ on %@": "%3$@: %1$lld as %2$@",
   "%lld of %lld": "%lld as %lld",
   "%lld percent": "%lld faoin gcéad",
@@ -10,6 +17,7 @@
     "many": "%lld bhfonn",
     "other": "%lld fonn"
   },
+  "1 change waiting to be sent": "1 athrú ag fanacht le seoladh",
   "1 tune": "1 fhonn",
   "Add %@ as To Learn": "Cuir %@ leis, le foghlaim",
   "Add a tune": "Cuir fonn leis",
@@ -37,12 +45,14 @@
   "Couldn't load the settings of this tune.": "Níorbh fhéidir leaganacha an fhoinn seo a lódáil.",
   "Couldn't prepare the file: %@": "Níorbh fhéidir an comhad a ullmhú: %@",
   "Couldn't reach Ceol, so that wasn't saved. Check your connection and try again.": "Níorbh fhéidir teagmháil a dhéanamh le Ceol, mar sin níor sábháladh é sin. Seiceáil do cheangal agus bain triail eile as.",
+  "Couldn't save %@": "Níorbh fhéidir %@ a shábháil",
   "Couldn't search the catalogue.": "Níorbh fhéidir an chatalóg a chuardach.",
   "Couldn't search the catalogue. Check your connection.": "Níorbh fhéidir an chatalóg a chuardach. Seiceáil do cheangal.",
   "Couldn't start listening on this phone: %@": "Níorbh fhéidir éisteacht a thosú ar an bhfón seo: %@",
   "Couldn't start recording: %@": "Níorbh fhéidir an taifeadadh a thosú: %@",
   "Delete": "Scrios",
   "Delete this recording from the phone?": "Scrios an taifeadadh seo den fhón?",
+  "Dismiss": "Dún",
   "Done": "Déanta",
   "End set": "Críochnaigh an tsraith",
   "End the set": "Críochnaigh an tsraith",

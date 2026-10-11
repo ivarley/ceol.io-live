@@ -42,7 +42,7 @@ struct SessionDestinations: ViewModifier {
 
 struct SessionsView: View {
     @Environment(AppModel.self) private var model
-    @State private var state: LoadState<SessionsPayload> = .loading
+    private var state: Resource<SessionsPayload> { model.sessions }
     @State private var scope: SessionsRules.Scope = .mine
     @State private var status: SessionsRules.Status = .active
     @State private var search = ""
@@ -55,8 +55,9 @@ struct SessionsView: View {
     var body: some View {
         @Bindable var model = model
         NavigationStack(path: $model.sessionsPath) {
-            Loaded(state: state, retry: load) { payload in list(payload) }
+            Resourced(resource: state) { payload in list(payload) }
                 .background(CeolTokens.bgColor)
+                .ceolKept(state)
                 .ceolRootBar(tr("Sessions"), sharePath: "/sessions")
                 .modifier(SessionDestinations())
                 .sheet(isPresented: $filtering) {
@@ -73,22 +74,25 @@ struct SessionsView: View {
                         Task { await load() }
                     }
                 }
-                .task { if state.value == nil { await load() } }
+                .task {
+                    decideDefault()
+                    await state.refresh(ifOlderThan: 20)
+                    decideDefault()
+                }
         }
     }
 
     private func load() async {
-        do {
-            let payload = try await model.auth.client.listSessions().ok.body.json
-            // Not a member of anything yet: start on All Active, not an empty list.
-            if !decidedDefault {
-                decidedDefault = true
-                if !payload.sessions.contains(where: \.userIsMember) { scope = .all }
-            }
-            state = .loaded(payload)
-        } catch {
-            if state.value == nil { state = .failed(loadFailureMessage(error)) }
-        }
+        await state.refresh()
+        decideDefault()
+    }
+
+    /// Not a member of anything yet: start on All Active, not an empty list. Decided
+    /// on the first list seen, kept or fresh.
+    private func decideDefault() {
+        guard !decidedDefault, let payload = state.value else { return }
+        decidedDefault = true
+        if !payload.sessions.contains(where: \.userIsMember) { scope = .all }
     }
 
     @ViewBuilder private func list(_ payload: SessionsPayload) -> some View {
@@ -184,10 +188,15 @@ struct SessionDetailView: View {
         }
     }
 
-    @State private var state: LoadState<SessionDetailPayload> = .loading
+    // The page's payloads are kept on the phone (Phase 6, Payloads.swift): the detail,
+    // the tunes after its first 20, the logs and the people.
+    private var state: Resource<SessionDetailPayload> { model.sessionDetail(path) }
+    private var rest: Resource<SessionTunesRestPayload> { model.sessionTunesRest(path) }
+    private var logs: Resource<SessionLogsPayload> { model.sessionLogs(path) }
+    private var people: Resource<SessionPeoplePayload> { model.sessionPeople(path) }
     @State private var tab: Tab = .tunes
-    @State private var logs: LoadState<SessionLogsPayload> = .loading
-    @State private var people: LoadState<SessionPeoplePayload> = .loading
+    /// The tab and the logs view the first detail seen chose (once).
+    @State private var defaultsApplied = false
     @State private var addingNight = false
     @State private var editingRole = false
     @State private var aboutOpen = false
@@ -199,13 +208,10 @@ struct SessionDetailView: View {
     // Each tab's search and filter row, as on the web (SessionPage holds the rules).
     // Tunes: every tune once the rest arrive (the detail carries the first 20), and
     // your tunebook once the status filter asks for it.
-    @State private var allTunes: [SessionTunePayload]?
-    @State private var remainingFailed = false
     @State private var tuneSearch = ""
     @State private var tuneFilters = SessionPage.Filters()
     @State private var tuneSort = SessionPage.Sort()
     @State private var filteringTunes = false
-    @State private var tunebook: Tunebook?
     @State private var tunebookFailed = false
     /// Tunes whose notes match a search that looks like notes (the server's answer).
     @State private var abcIDs: Set<Int>?
@@ -234,6 +240,30 @@ struct SessionDetailView: View {
         let instruments: [MyTunesList.Instrument]
     }
 
+    /// Every tune, once the rest have arrived: the detail's first 20 and the remainder
+    /// (less any the two have in common, when one is older than the other).
+    private var allTunes: [SessionTunePayload]? {
+        guard let d = state.value else { return nil }
+        guard d.hasMoreTunes else { return d.tunes }
+        guard let r = rest.value else { return nil }
+        var seen = Set(d.tunes.map(\.tuneId))
+        return d.tunes + r.tunes.filter { seen.insert($0.tuneId).inserted }
+    }
+
+    private var remainingFailed: Bool {
+        state.value?.hasMoreTunes == true && rest.value == nil && rest.failure != nil && !rest.refreshing
+    }
+
+    /// Your tunebook, for the Tunes tab's status filter, from the kept list.
+    private var tunebook: Tunebook? {
+        guard let mine = model.myTunes.value else { return nil }
+        var entries: [Int: SessionPage.TunebookEntry] = [:]
+        for t in mine.tunes {
+            entries[t.tuneId] = .init(status: t.learnStatus, instrumentStatus: t.instrumentStatus.additionalProperties)
+        }
+        return Tunebook(entries: entries, instruments: mine.instruments.map { .init(name: $0.instrument, isAuto: $0.isAuto) })
+    }
+
     /// The nights the chosen tune was played, and where in each ("Set 2, tune 1").
     struct TuneNights {
         let ids: Set<Int>
@@ -247,8 +277,9 @@ struct SessionDetailView: View {
     }
 
     var body: some View {
-        Loaded(state: state, retry: load) { d in content(d) }
+        Resourced(resource: state) { d in content(d) }
             .background(CeolTokens.bgColor)
+            .ceolKept(state)
             // The web's Share: a link to this page, for someone without the app too.
             .ceolPushedBar(name) { ShareButton(path: "/sessions/\(path)/\(tab.rawValue.lowercased())", subject: name) }
             .navigationDestination(item: $newNight) { NightView(sessionInstanceID: $0.id, title: $0.title) }
@@ -256,7 +287,7 @@ struct SessionDetailView: View {
                 if let p = state.value?.permissions, let relationship = p.relationship {
                     RoleSheet(path: path, relationship: relationship, isAdmin: p.isSessionAdmin) {
                         await load()
-                        people = .loading
+                        await people.refresh()
                     }
                 }
             }
@@ -311,41 +342,35 @@ struct SessionDetailView: View {
             .task(id: tuneFilters.myStatus != .off) { await loadTunebook() }
             .sheet(isPresented: $addingNight) {
                 AddNightView(path: path, usualVenue: state.value?.session.locationName) { id, date in
-                    logs = .loading
                     newNight = NewNight(id: id, title: "\(name) · \(SessionsL10n.shortDate(date))")
-                    Task { await load() }
+                    Task {
+                        await load()
+                        await logs.refresh()
+                    }
                 }
             }
-            .task { if state.value == nil { await load() } }
+            .task {
+                applyDefaults()
+                await load(ifOlderThan: 20)
+            }
     }
 
-    private func load() async {
-        do {
-            let d = try await model.auth.client.getSessionDetail(path: .init(sessionPath: path)).ok.body.json
-            if d.defaultTab == .logs && state.value == nil { tab = .logs }
-            // A festival's list is its schedule: hiding the nights with nothing logged
-            // yet would hide the festival (the web defaults it to "all" too).
-            if d.session.sessionType == "festival" && state.value == nil { logView = .all }
-            state = .loaded(d)
-            await loadRemainingTunes(d)
-        } catch {
-            if state.value == nil { state = .failed(loadFailureMessage(error)) }
-        }
+    /// Fetch the detail, then the tunes after its first 20, so the search and filters
+    /// cover them all. A kept copy younger than `age` stands.
+    private func load(ifOlderThan age: TimeInterval = 0) async {
+        await state.refresh(ifOlderThan: age)
+        applyDefaults()
+        if state.value?.hasMoreTunes == true { await rest.refresh(ifOlderThan: age) }
     }
 
-    /// The tunes after the first 20, so the search and filters cover them all.
-    private func loadRemainingTunes(_ d: SessionDetailPayload) async {
-        guard d.hasMoreTunes else {
-            allTunes = d.tunes
-            return
-        }
-        do {
-            let rest = try await model.auth.client.getSessionTunesRemaining(path: .init(sessionPath: path)).ok.body.json
-            allTunes = d.tunes + rest.tunes
-            remainingFailed = false
-        } catch {
-            remainingFailed = true
-        }
+    /// Once, on the first detail seen (kept or fresh): the tab it opens on, and a
+    /// festival's list is its schedule, so hiding the nights with nothing logged yet
+    /// would hide the festival (the web defaults it to "all" too).
+    private func applyDefaults() {
+        guard !defaultsApplied, let d = state.value else { return }
+        defaultsApplied = true
+        if d.defaultTab == .logs { tab = .logs }
+        if d.session.sessionType == "festival" { logView = .all }
     }
 
     /// A search that looks like notes asks the server which of the session's tunes have
@@ -367,16 +392,9 @@ struct SessionDetailView: View {
     }
 
     private func loadTunebook() async {
-        guard tuneFilters.myStatus != .off, tunebook == nil else { return }
+        guard tuneFilters.myStatus != .off else { return }
         tunebookFailed = false
-        do {
-            let mine = try await model.auth.client.getMyTunes().ok.body.json
-            var entries: [Int: SessionPage.TunebookEntry] = [:]
-            for t in mine.tunes {
-                entries[t.tuneId] = .init(status: t.learnStatus, instrumentStatus: t.instrumentStatus.additionalProperties)
-            }
-            tunebook = Tunebook(entries: entries, instruments: mine.instruments.map { .init(name: $0.instrument, isAuto: $0.isAuto) })
-        } catch {
+        if !(await model.myTunes.refresh(ifOlderThan: 60)) {
             tunebookFailed = true
             tuneFilters.myStatus = .off
         }
@@ -410,15 +428,11 @@ struct SessionDetailView: View {
     }
 
     private func loadLogs() async {
-        do {
-            logs = .loaded(try await model.auth.client.getSessionLogs(path: .init(sessionPath: path)).ok.body.json)
-        } catch { logs = .failed(loadFailureMessage(error)) }
+        await logs.refresh()
     }
 
     private func loadPeople() async {
-        do {
-            people = .loaded(try await model.auth.client.getSessionPeople(path: .init(sessionPath: path)).ok.body.json)
-        } catch { people = .failed(loadFailureMessage(error)) }
+        await people.refresh()
     }
 
     @ViewBuilder private func content(_ d: SessionDetailPayload) -> some View {
@@ -478,7 +492,7 @@ struct SessionDetailView: View {
                 }
                 JoinPrompt(path: path, permissions: d.permissions) {
                     await load()
-                    people = .loading
+                    await people.refresh()
                 }
                 .padding(.horizontal, 20)
                 VStack(spacing: 0) {
@@ -599,7 +613,7 @@ struct SessionDetailView: View {
                     Text(tunesCountText(shown: shown.count, loaded: all.count, total: d.totalTunesCount))
                         .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
                     if remainingFailed {
-                        Button("Retry") { Task { await loadRemainingTunes(d) } }
+                        Button("Retry") { Task { await rest.refresh() } }
                             .font(.ceol(size: 15)).foregroundStyle(CeolTokens.primary)
                     }
                 }
@@ -670,16 +684,24 @@ struct SessionDetailView: View {
     }
 
     @ViewBuilder private func logsSection(_ d: SessionDetailPayload) -> some View {
-        switch logs {
-        case .loading:
-            ProgressView().padding(24).task { await loadLogs() }
-        case .failed(let message):
-            VStack(spacing: 8) {
-                Text(message).foregroundStyle(CeolTokens.textMuted)
-                Button("Retry") { Task { await loadLogs() } }
+        Group {
+            if let l = logs.value {
+                logsBody(d, l)
+            } else if let message = logs.failure, !logs.refreshing {
+                VStack(spacing: 8) {
+                    Text(message).foregroundStyle(CeolTokens.textMuted)
+                    Button("Retry") { Task { await loadLogs() } }
+                }
+                .padding(24)
+            } else {
+                ProgressView().padding(24)
             }
-            .padding(24)
-        case .loaded(let l):
+        }
+        .task { await logs.refresh(ifOlderThan: 20) }
+    }
+
+    @ViewBuilder private func logsBody(_ d: SessionDetailPayload, _ l: SessionLogsPayload) -> some View {
+        Group {
             let years = filteredGroups(l)
             let festival = l.sessionType == "festival"
             VStack(alignment: .leading, spacing: 0) {
@@ -834,16 +856,24 @@ struct SessionDetailView: View {
     }
 
     @ViewBuilder private func peopleSection() -> some View {
-        switch people {
-        case .loading:
-            ProgressView().padding(24).task { await loadPeople() }
-        case .failed(let message):
-            VStack(spacing: 8) {
-                Text(message).foregroundStyle(CeolTokens.textMuted)
-                Button("Retry") { Task { await loadPeople() } }
+        Group {
+            if let p = people.value {
+                peopleBody(p)
+            } else if let message = people.failure, !people.refreshing {
+                VStack(spacing: 8) {
+                    Text(message).foregroundStyle(CeolTokens.textMuted)
+                    Button("Retry") { Task { await loadPeople() } }
+                }
+                .padding(24)
+            } else {
+                ProgressView().padding(24)
             }
-            .padding(24)
-        case .loaded(let p):
+        }
+        .task { await people.refresh(ifOlderThan: 20) }
+    }
+
+    @ViewBuilder private func peopleBody(_ p: SessionPeoplePayload) -> some View {
+        Group {
             let trackAttendance = state.value?.session.trackAttendance ?? true
             // Without attendance the only order is the name (as on the web).
             let sort = trackAttendance ? peopleSort : SessionPage.PeopleSort(mode: .name)

@@ -523,18 +523,29 @@ struct CeolTopBar<Trailing: View>: ViewModifier {
     let title: String
     let root: Bool
     @ViewBuilder let trailing: () -> Trailing
+    /// The screen's kept payload being refreshed, or shown with no signal (ceolKept).
+    @State private var kept: KeptStatus?
 
     func body(content: Content) -> some View {
         let landscape = verticalSizeClass == .compact
         content
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
+            .onPreferenceChange(KeptStatusPreference.self) { value in
+                Task { @MainActor in kept = value }
+            }
             .toolbar {
                 if root {
                     ToolbarItem(placement: .topBarLeading) { WordmarkButton() }
                         .sharedBackgroundVisibility(.hidden)
                 }
-                ToolbarItem(placement: .principal) { Color.clear.frame(width: 1, height: 1) }
+                // No title (the wordmark or the back button says where you are); the
+                // kept payload's spinner or "Offline" sits here instead.
+                ToolbarItem(placement: .principal) {
+                    if let kept { KeptStatusView(status: kept).animation(.easeInOut(duration: 0.2), value: kept) }
+                    else { Color.clear.frame(width: 1, height: 1) }
+                }
+                .sharedBackgroundVisibility(.hidden)
                 ToolbarItem(placement: .topBarTrailing) { trailing() }
                     .sharedBackgroundVisibility(.hidden)
             }

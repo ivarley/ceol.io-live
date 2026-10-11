@@ -224,13 +224,7 @@ final class NightModel {
             let b = try await app.getJSON("/api/live/instances/\(instanceID)/bootstrap")
             stalePaint?.cancel()
             night = b
-            let meta: [String: JSONValue] = [
-                "notes": b["notes"] ?? .null, "instance_date": b["instance_date"] ?? .null,
-                "session_date": b["session_date"] ?? .null, "start_time": b["start_time"] ?? .null,
-                "end_time": b["end_time"] ?? .null, "instance_name": b["instance_name"] ?? .null,
-                "log_complete": b["log_complete"] ?? false,
-            ]
-            let fresh = LiveLog(records: b["records"]?.arrayValue ?? [], meta: meta, lastEventID: b["last_event_id"]?.intValue ?? 0)
+            let fresh = LiveLog(records: b["records"]?.arrayValue ?? [], meta: Self.meta(from: b), lastEventID: b["last_event_id"]?.intValue ?? 0)
             // Changes still in flight, or saved from last time, are laid over the fresh
             // log, not lost.
             let wasQueued = queuedCount
@@ -283,6 +277,16 @@ final class NightModel {
         var l = l
         for id in l.sendOrder { l.markQueued(id) }
         return l
+    }
+
+    /// The log's own fields, from the bootstrap (the Prefetcher builds a night's log too).
+    static func meta(from b: JSONValue) -> [String: JSONValue] {
+        [
+            "notes": b["notes"] ?? .null, "instance_date": b["instance_date"] ?? .null,
+            "session_date": b["session_date"] ?? .null, "start_time": b["start_time"] ?? .null,
+            "end_time": b["end_time"] ?? .null, "instance_name": b["instance_name"] ?? .null,
+            "log_complete": b["log_complete"] ?? false,
+        ]
     }
 
     // MARK: - Saving

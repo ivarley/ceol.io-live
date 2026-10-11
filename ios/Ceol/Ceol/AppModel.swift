@@ -65,7 +65,11 @@ final class AppModel {
         #else
             false
         #endif
-    }()
+    }() {
+        didSet { Self.offlineFlag.value = simulatedOffline }
+    }
+    /// The same switch, readable from the API client's middleware off the main actor.
+    nonisolated static let offlineFlag = OfflineFlag()
     static var testHooks: Bool {
         #if DEBUG
             UserDefaults.standard.bool(forKey: "CeolTestHooks")
@@ -99,6 +103,14 @@ final class AppModel {
     /// own offline queue, and with no stream to carry changes between them a tune logged
     /// by one would not show in the other (and each would save over the other's).
     @ObservationIgnored private var openNights: [Int: (model: NightModel, users: Int)] = [:]
+    /// The payloads kept on the phone, one Resource per key (Payloads.swift).
+    @ObservationIgnored var resources: [String: Any] = [:]
+    /// Fetches them ahead (Prefetcher), and sends tunebook changes made with no signal (TuneQueue).
+    let prefetcher = Prefetcher()
+    let tuneQueue = TuneQueue()
+
+    /// Whether a night's model is open (its own saves win over a prefetch).
+    func isNightOpen(_ instanceID: Int) -> Bool { openNights[instanceID] != nil }
 
     /// The night's model, shared; started if this is the first to open it.
     func openNight(_ instanceID: Int) -> NightModel {
@@ -212,10 +224,12 @@ final class AppModel {
 
     init(server: URL = AppModel.serverURL, store: any TokenStore = KeychainTokenStore()) {
         let client = Client.ceol(
-            serverURL: server, clientID: ClientID.current, token: { store.token() }, language: { AppLanguage.code })
+            serverURL: server, clientID: ClientID.current, token: { store.token() }, language: { AppLanguage.code },
+            offline: { AppModel.offlineFlag.value })
         auth = AuthService(client: client, store: store)
         self.server = server
         devHosts = CeolServer.production.host() == server.host() ? [] : [server.host() ?? ""]
+        Self.offlineFlag.value = simulatedOffline
     }
 
     /// The server to talk to. Production, unless a debug build is launched with
@@ -240,6 +254,8 @@ final class AppModel {
             if UserDefaults.standard.bool(forKey: "CeolResetSession") {
                 try? auth.store.setToken(nil)
                 NightStore.clearAll()
+                forgetPayloads()
+                tuneQueue.stop()
             }
             if let s = UserDefaults.standard.string(forKey: "CeolOpenURL"), let url = URL(string: s) { pendingLink = url }
             // -CeolTab me: start on that tab (screenshots of one screen).
@@ -263,8 +279,15 @@ final class AppModel {
             }
         } catch {
             // Can't reach the server, but a token is stored: stay signed in rather than
-            // pretend the person is signed out. Screens load what they can.
-            phase = auth.store.token() != nil ? .signedIn : .signedOut
+            // pretend the person is signed out. Screens show what they kept, and the
+            // prefetcher fills in who we are once the server can be reached.
+            if auth.store.token() != nil {
+                phase = .signedIn
+                prefetcher.start(app: self)
+                tuneQueue.start(app: self)
+            } else {
+                phase = .signedOut
+            }
         }
         if let url = pendingLink {
             pendingLink = nil
@@ -287,6 +310,23 @@ final class AppModel {
         // a recording's upload left half-way when the app last went away
         recordings.resume(app: self)
         deciderData.start(app: self)
+        // the screens' payloads, ahead of their opening; changes made with no signal
+        prefetcher.start(app: self)
+        tuneQueue.start(app: self)
+    }
+
+    /// Launched with no signal, the person is unknown though signed in: once the server
+    /// answers, learn who they are (the prefetcher's first move).
+    func restoreUser() async {
+        guard user == nil, phase == .signedIn, let u = try? await auth.currentUser() else { return }
+        enter(u, next: nil)
+    }
+
+    /// The app came forward: fetch what changed, send what waited.
+    func appCameForward() {
+        guard phase == .signedIn else { return }
+        prefetcher.appCameForward()
+        Task { await tuneQueue.flush() }
     }
 
     /// The interface language changed (sign-in, or the Me screen's setting).
@@ -338,16 +378,33 @@ final class AppModel {
 
     func signOut() async {
         await auth.logout()
-        NightStore.clearAll()
-        user = nil
+        forgetAccountData()
         phase = .signedOut
     }
 
     /// The account is gone (AuthService.deleteAccount already forgot the token).
     func accountDeleted() {
-        NightStore.clearAll()
-        user = nil
+        forgetAccountData()
         notice = tr("Your account has been deleted.")
         phase = .signedOut
+    }
+
+    /// Everything kept for this account: nights, payloads, waiting tunebook changes.
+    private func forgetAccountData() {
+        prefetcher.stop()
+        tuneQueue.stop()
+        NightStore.clearAll()
+        forgetPayloads()
+        user = nil
+    }
+}
+
+/// A flag read from any thread (the client's middleware) and set on the main actor.
+nonisolated final class OfflineFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var on = false
+    var value: Bool {
+        get { lock.withLock { on } }
+        set { lock.withLock { on = newValue } }
     }
 }

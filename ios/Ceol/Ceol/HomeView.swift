@@ -31,29 +31,32 @@ extension HomePayload.UpcomingSessionsPayloadPayload {
 
 struct HomeView: View {
     @Environment(AppModel.self) private var model
-    @State private var state: LoadState<HomePayload> = .loading
     var body: some View {
         NavigationStack {
-            Loaded(state: state, retry: load) { home in
+            Resourced(resource: model.home) { home in
                 content(home)
             }
             .background(CeolTokens.bgColor)
+            .ceolKept(model.home)
             .ceolRootBar(tr("Home"), sharePath: "/")
-            .task { if state.value == nil { await load() } }
+            .task { await model.home.refresh(ifOlderThan: 20) }
         }
     }
 
     private func load() async {
-        do {
-            state = .loaded(try await model.auth.client.getHome().ok.body.json)
-        } catch {
-            if state.value == nil { state = .failed(loadFailureMessage(error)) }
-        }
+        await model.home.refresh()
+    }
+
+    /// The server's "today" while the payload is today's; the phone's once it is older
+    /// (kept overnight, with no signal, yesterday's nights are not tonight's).
+    private var todayString: String {
+        if let saved = model.home.savedAt, Calendar.current.isDateInToday(saved), let t = model.home.value?.today { return t }
+        return localToday()
     }
 
     @ViewBuilder private func content(_ home: HomePayload) -> some View {
         let week = home.upcomingSessions
-        let today = HomeRules.todaysSessions(week.map(\.night), today: home.today)
+        let today = HomeRules.todaysSessions(week.map(\.night), today: todayString)
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
                 (Text("Welcome back, ") + Text(home.viewer?.firstName ?? tr("there")).font(.ceol(size: 26, weight: .semibold)))
@@ -80,7 +83,7 @@ struct HomeView: View {
                         Text("No sessions scheduled this week.").foregroundStyle(CeolTokens.textMuted).padding(.vertical, 16)
                     }
                     ForEach(week, id: \.sessionInstanceId) { s in
-                        WeekRow(night: s.night, today: home.today) {
+                        WeekRow(night: s.night, today: todayString) {
                             openNight(s.night, id: s.sessionInstanceId)
                         } openSession: {
                             model.openSession(path: s.path, name: s.name)

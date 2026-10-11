@@ -14,6 +14,7 @@ import SwiftUI
 /// or the tabs (AppModel.Phase).
 struct ContentView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.scenePhase) private var scenePhase
     @State private var minimumSplashDone = false
 
     var body: some View {
@@ -40,6 +41,8 @@ struct ContentView: View {
         // The web is dark-only (static/css/theme.css), and the tokens are its palette.
         .preferredColorScheme(.dark)
         .task { await model.start() }
+        // Back in the foreground: fetch what changed, send what waited (Phase 6).
+        .onChange(of: scenePhase) { _, phase in if phase == .active { model.appCameForward() } }
         .task {
             // Long enough to read as a splash, not a flicker, when launch is instant.
             try? await Task.sleep(for: .seconds(1))
