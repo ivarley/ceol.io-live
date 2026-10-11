@@ -127,6 +127,35 @@
     if (yes) node.focus()
   }
 
+  // The card's name is what a session of yours calls the tune, when one has a name
+  // for it; the catalogue's name, and the name of yours the search found it by, go
+  // under it as "also known as", with the match lit so you can see why it's here.
+  function cardTitle(r) {
+    return r.session_defaults?.alias || r.name
+  }
+  function alsoKnownAs(r) {
+    const title = cardTitle(r)
+    const names = []
+    if (r.name !== title) names.push(r.name)
+    if (r.matched_alias && r.matched_alias !== title && !names.includes(r.matched_alias)) names.push(r.matched_alias)
+    return names
+  }
+  // [{text, hit}] pieces of a name, the query's occurrences marked.
+  function lit(name) {
+    const q = deepQuery.trim().toLowerCase()
+    if (!q) return [{ text: name, hit: false }]
+    const pieces = []
+    let rest = name
+    while (rest) {
+      const i = rest.toLowerCase().indexOf(q)
+      if (i < 0) { pieces.push({ text: rest, hit: false }); break }
+      if (i > 0) pieces.push({ text: rest.slice(0, i), hit: false })
+      pieces.push({ text: rest.slice(i, i + q.length), hit: true })
+      rest = rest.slice(i + q.length)
+    }
+    return pieces
+  }
+
   // The card's gold badge says what this flow doesn't already show: adding to your
   // tunebook (on-list tunes are dimmed), whether a session of yours plays it; adding
   // to a session's list (its tunes are dimmed), whether it's on your list; logging a
@@ -425,6 +454,7 @@
       {config}
       items={externalPreview.items}
       index={externalPreview.index}
+      adoptDefaults={dimOnList}
       initialSettingId={externalPreview.settingId ?? null}
       {actionLabel}
       footer={previewFooter}
@@ -439,6 +469,7 @@
     {config}
     items={previewItems}
     index={previewIdx}
+    adoptDefaults={dimOnList}
     {actionLabel}
     footer={previewFooter}
     onAction={previewAction}
@@ -572,18 +603,18 @@
       <div id="dres-{di}" class="deep-card deep-card-split" class:hl={hl === di} class:onlist={(dimOnList && r.on_list) || (dimInSession && r.in_session)} role="option" aria-selected={hl === di}>
         <button class="deep-card-body" aria-label={t('Preview {name}', { name: r.name })} onclick={() => openPreview(di)}>
           <div class="deep-card-head">
-            {#if dimOnList && r.session_defaults?.alias}
-              <!-- Your session's name for it leads; the catalogue's follows, muted. -->
-              <span class="deep-name">{r.session_defaults.alias} <span class="deep-name-catalogue">{r.name}</span></span>
-            {:else}
-              <span class="deep-name">{r.name}</span>
-            {/if}
+            <span class="deep-name">{cardTitle(r)}</span>
             <span class="deep-type">{tuneTypeName(r.tune_type) || ''}</span>
           </div>
+          {#if alsoKnownAs(r).length}
+            <div class="deep-aka">{t('Also known as')} {#each alsoKnownAs(r) as name, ni}{#if ni > 0}, {/if}{#each lit(name) as piece}{#if piece.hit}<span class="deep-hit">{piece.text}</span>{:else}{piece.text}{/if}{/each}{/each}</div>
+          {/if}
           <div class="deep-staff">
-            <Incipit {config} tuneId={r.tune_id} image={r.incipit_image} canRender={r.can_render} />
+            <Incipit {config} tuneId={r.tune_id}
+              image={r.session_defaults?.setting_id != null ? r.session_defaults.incipit_image : r.incipit_image}
+              canRender={r.can_render} settingId={r.session_defaults?.setting_id ?? null} />
           </div>
-          {#if dimOnList && r.session_defaults && (r.session_defaults.setting_id != null || r.session_defaults.key)}
+          {#if r.session_defaults && (r.session_defaults.setting_id != null || r.session_defaults.key)}
             <div class="deep-defaults">{t('As at {session}', { session: r.session_defaults.session_name })}: {[r.session_defaults.setting_id != null ? `#${r.session_defaults.setting_id}` : null, r.session_defaults.key].filter(Boolean).join(' · ')}</div>
           {/if}
           <div class="deep-meta">

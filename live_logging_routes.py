@@ -2224,11 +2224,12 @@ def _your_session_defaults(cur, person_id, tune_ids):
     cur.execute(
         """
         SELECT DISTINCT ON (st.tune_id)
-               st.tune_id, s.name, s.path, st.alias, st.setting_id, st.key
+               st.tune_id, s.name, s.path, st.alias, st.setting_id, st.key, ts.incipit_image
         FROM session_tune st
         JOIN session s ON s.session_id = st.session_id
         JOIN session_person sp ON sp.session_id = st.session_id
              AND sp.person_id = %s AND sp.archived = FALSE
+        LEFT JOIN tune_setting ts ON ts.setting_id = st.setting_id
         LEFT JOIN (
             SELECT si.session_id, COUNT(*) AS n, MAX(si.date) AS last
             FROM session_instance_person sip
@@ -2249,6 +2250,8 @@ def _your_session_defaults(cur, person_id, tune_ids):
             "alias": r[3],
             "setting_id": r[4],
             "key": r[5],
+            # The setting's opening bars, when drawn before; else the card asks for them.
+            "incipit_image": bytea_to_base64(r[6]) if r[6] else None,
         }
         for r in cur.fetchall()
     }
@@ -2308,10 +2311,23 @@ def _deep_search_core(
     # The session's own name for the tune (session_tune.alias) is a second name to
     # match and rank on. Joined once; the alias is NULL without a session.
     _al = f"LOWER(unaccent({normalize_quotes_sql('st.alias')}))"
+    # Every name your sessions use for a tune (session_tune.alias and the extra
+    # session_tune_alias rows), for matching and for "also known as": the CTE below.
+    _ya = f"LOWER(unaccent({normalize_quotes_sql('ya.alias')}))"
+    your_aliases_sql = """
+        WITH ya AS (
+            SELECT yst.tune_id, yst.alias FROM session_tune yst
+            JOIN session_person sp ON sp.session_id = yst.session_id AND sp.person_id = %s AND sp.archived = FALSE
+            WHERE yst.alias IS NOT NULL AND yst.alias <> ''
+            UNION
+            SELECT sta.tune_id, sta.alias FROM session_tune_alias sta
+            JOIN session_person sp ON sp.session_id = sta.session_id AND sp.person_id = %s AND sp.archived = FALSE
+        )
+    """
     join_sql = ""
     join_params = []
-    # on_list, then in_your_sessions (both take the viewer).
-    params = [person_id, person_id]
+    # The CTE's two viewers, then on_list and in_your_sessions (the viewer again).
+    params = [person_id, person_id, person_id, person_id]
     if session_id is not None:
         join_sql = (
             "LEFT JOIN session_tune st ON st.session_id = %s AND st.tune_id = t.tune_id"
@@ -2328,19 +2344,31 @@ def _deep_search_core(
         played_here_sql = "0"
     params.append(prefer_type)
 
-    # A name test that also accepts the session alias (when there is one).
+    # A name test that also accepts any name your sessions use for the tune, and the
+    # scoped session's alias (when there is one).
     def name_like(pattern_placeholder="%s"):
+        your = f"EXISTS (SELECT 1 FROM ya WHERE ya.tune_id = t.tune_id AND {_ya} LIKE LOWER(unaccent({pattern_placeholder})))"
         if session_id is None:
-            return f"{_nm} LIKE LOWER(unaccent({pattern_placeholder}))"
-        return f"({_nm} LIKE LOWER(unaccent({pattern_placeholder})) OR {_al} LIKE LOWER(unaccent({pattern_placeholder})))"
+            return f"({_nm} LIKE LOWER(unaccent({pattern_placeholder})) OR {your})"
+        return f"({_nm} LIKE LOWER(unaccent({pattern_placeholder})) OR {_al} LIKE LOWER(unaccent({pattern_placeholder})) OR {your})"
 
     def name_eq():
+        your = f"EXISTS (SELECT 1 FROM ya WHERE ya.tune_id = t.tune_id AND {_ya} = LOWER(unaccent(%s)))"
         if session_id is None:
-            return f"{_nm} = LOWER(unaccent(%s))"
-        return f"({_nm} = LOWER(unaccent(%s)) OR {_al} = LOWER(unaccent(%s)))"
+            return f"({_nm} = LOWER(unaccent(%s)) OR {your})"
+        return f"({_nm} = LOWER(unaccent(%s)) OR {_al} = LOWER(unaccent(%s)) OR {your})"
 
     # How many %s each of the two helpers consumes.
-    n_like = 1 if session_id is None else 2
+    n_like = 2 if session_id is None else 3
+
+    # The name of your sessions' that matched, when the search found the tune by it
+    # rather than by its catalogue name (the card says "also known as").
+    if use_name:
+        matched_alias_sql = f"""CASE WHEN {_nm} LIKE LOWER(unaccent(%s)) THEN NULL ELSE
+            (SELECT ya.alias FROM ya WHERE ya.tune_id = t.tune_id AND {_ya} LIKE LOWER(unaccent(%s)) LIMIT 1) END"""
+        params += [f"%{q}%", f"%{q}%"]
+    else:
+        matched_alias_sql = "NULL"
 
     # abc_only flag: row matched notation but NOT name (so the card can badge it).
     if use_abc and use_name:
@@ -2402,6 +2430,7 @@ def _deep_search_core(
     params.append(limit)
 
     sql = f"""
+        {your_aliases_sql}
         SELECT * FROM (
             SELECT t.tune_id, t.name, t.tune_type, t.tunebook_count_cached,
                    EXISTS(SELECT 1 FROM person_tune pt WHERE pt.tune_id = t.tune_id AND pt.person_id = %s) AS on_list,
@@ -2411,6 +2440,7 @@ def _deep_search_core(
                    {in_session_sql} AS in_session,
                    {played_here_sql} AS played_here,
                    CASE WHEN t.tune_type = %s THEN 0 ELSE 1 END AS type_pref,
+                   {matched_alias_sql} AS matched_alias,
                    {abc_only_sql} AS abc_only,
                    {rank} AS rank
             FROM tune t
@@ -2435,17 +2465,17 @@ def _deep_search_core(
             "in_your_sessions": r[5],
             "in_session": r[6],
             "played_here": r[7],
-            "abc_only": bool(r[9]),
+            # The name of yours it was found by, when not its catalogue name.
+            "matched_alias": r[9],
+            "abc_only": bool(r[10]),
         }
         for r in rows
     ]
-    if session_id is None:
-        # Your tunebook's add starts from what a session of yours already says.
-        defaults = _your_session_defaults(
-            cur, person_id, [r["tune_id"] for r in results]
-        )
-        for r in results:
-            r["session_defaults"] = defaults.get(r["tune_id"])
+    # What a session of yours already says about each tune: its name for it, and the
+    # setting and key it plays. Every card shows these first.
+    defaults = _your_session_defaults(cur, person_id, [r["tune_id"] for r in results])
+    for r in results:
+        r["session_defaults"] = defaults.get(r["tune_id"])
 
     # one pass for the cached incipit IMAGE + whether the tune is renderable (has
     # ABC). Notation is rendered server-side by the abc-renderer service; the card
@@ -2761,11 +2791,7 @@ def _tune_preview_core(tune_id, session_id=None):
         # Without a session scope (your tunebook's add): what a session of yours already
         # says about the tune, for the pager to land on and the add to start from.
         session_defaults = None
-        if (
-            session_id is None
-            and current_user.is_authenticated
-            and getattr(current_user, "person_id", None)
-        ):
+        if current_user.is_authenticated and getattr(current_user, "person_id", None):
             session_defaults = _your_session_defaults(
                 cur, current_user.person_id, [tune_id]
             ).get(tune_id)

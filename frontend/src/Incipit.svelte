@@ -5,10 +5,12 @@
   // isn't cached yet, lazily (when scrolled into view) asks the incipit endpoint to
   // render + cache it in the background, then displays it.
   import { untrack } from 'svelte'
-  import { fetchIncipit } from './client.js'
+  import { fetchIncipit, settingImage } from './client.js'
   import { t } from './lib/index.js'
 
-  let { config, tuneId, image = null, canRender = false } = $props()
+  // settingId: a particular setting's opening bars (what a session of yours plays)
+  // rather than the tune's default ones.
+  let { config, tuneId, image = null, canRender = false, settingId = null } = $props()
   let src = $state(untrack(() => image)) // initial cached image; the lazy fetch fills it in if absent
   let loading = $state(false)
   let el
@@ -27,10 +29,11 @@
   })
 
   $effect(() => {
-    if (src || !visible || !canRender || !tuneId) return
+    if (src || !visible || !tuneId) return
+    if (settingId == null && !canRender) return
     loading = true
-    fetchIncipit(config, tuneId)
-      .then((b64) => { if (b64) src = b64 })
+    const p = settingId != null ? settingImage(config, settingId, 'incipit') : fetchIncipit(config, tuneId)
+    p.then((b64) => { if (b64) src = b64 })
       .finally(() => { loading = false })
   })
 </script>
@@ -40,7 +43,7 @@
     <img class="incipit-img" src={`data:image/png;base64,${src}`} alt={t('notation')} />
   {:else if loading}
     <span class="deep-noabc">♪ {t('rendering…')}</span>
-  {:else if canRender}
+  {:else if canRender || settingId != null}
     <span class="deep-noabc">♪</span>
   {:else}
     <span class="deep-noabc">♪ {t('no notation')}</span>

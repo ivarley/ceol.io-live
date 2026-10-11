@@ -320,25 +320,31 @@ struct DeepSearchSheet: View {
                 preview = index
             } label: {
                 VStack(alignment: .leading, spacing: 8) {
-                    let defaults = scopeIsMine ? r["session_defaults"] : nil
+                    let defaults = r["session_defaults"].flatMap { $0.isNull ? nil : $0 }
+                    // Your session's name for it leads; the catalogue's, and the name of
+                    // yours it was found by, go under it with the match lit.
+                    let title = defaults?["alias"]?.stringValue ?? name
                     HStack(alignment: .firstTextBaseline) {
-                        if let alias = defaults?["alias"]?.stringValue {
-                            // Your session's name for it leads; the catalogue's follows, muted.
-                            (Text(alias).font(.ceol(size: 17, weight: .semibold)).foregroundStyle(CeolTokens.textColor)
-                                + Text(verbatim: " ") + Text(name).font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted))
-                                .multilineTextAlignment(.leading)
-                        } else {
-                            Text(name).font(.ceol(size: 17, weight: .semibold)).foregroundStyle(CeolTokens.textColor)
-                                .multilineTextAlignment(.leading)
-                        }
+                        Text(title).font(.ceol(size: 17, weight: .semibold)).foregroundStyle(CeolTokens.textColor)
+                            .multilineTextAlignment(.leading)
                         Spacer()
                         if let t = r["tune_type"]?.stringValue {
                             Text(TunesWords.type(t).uppercased()).font(.ceol(size: 12)).tracking(0.4)
                                 .foregroundStyle(CeolTokens.textMuted)
                         }
                     }
+                    let others = ([r["name"]?.stringValue, r["matched_alias"]?.stringValue].compactMap { $0 })
+                        .filter { $0 != title }.reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
+                    if !others.isEmpty {
+                        (Text("Also known as") + Text(verbatim: " ") + lit(others.joined(separator: ", ")))
+                            .font(.ceol(size: 12)).foregroundStyle(CeolTokens.textMuted)
+                    }
                     if !remote, let id {
-                        DeepIncipit(app: app, tuneID: id, base64: r["incipit_image"]?.stringValue, canRender: r["can_render"] == true)
+                        let settingID = defaults?["setting_id"]?.intValue
+                        DeepIncipit(
+                            app: app, tuneID: id,
+                            base64: settingID != nil ? defaults?["incipit_image"]?.stringValue : r["incipit_image"]?.stringValue,
+                            canRender: r["can_render"] == true, settingID: settingID)
                     }
                     if let d = defaults, let session = d["session_name"]?.stringValue {
                         let parts = [d["setting_id"]?.intValue.map { "#\($0)" }, d["key"]?.stringValue].compactMap { $0 }
@@ -390,6 +396,24 @@ struct DeepSearchSheet: View {
         .background(CeolTokens.cardBg, in: RoundedRectangle(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(CeolTokens.borderColor, lineWidth: 1))
         .opacity(onList || (r["in_session"] == true && (remote || !allowAsIs)) ? 0.6 : 1)
+    }
+
+    /// A name with the search's text lit wherever it occurs.
+    private func lit(_ text: String) -> Text {
+        let q = trimmedQuery.lowercased()
+        guard !q.isEmpty else { return Text(verbatim: text) }
+        var out = Text(verbatim: "")
+        var rest = Substring(text)
+        while !rest.isEmpty {
+            guard let range = rest.range(of: q, options: [.caseInsensitive, .diacriticInsensitive]) else {
+                out = out + Text(verbatim: String(rest))
+                break
+            }
+            out = out + Text(verbatim: String(rest[..<range.lowerBound]))
+                + Text(verbatim: String(rest[range])).foregroundStyle(CeolTokens.starBadgeText).bold()
+            rest = rest[range.upperBound...]
+        }
+        return out
     }
 
     private func metaBadge(_ text: String, star: Bool) -> some View {
@@ -569,6 +593,8 @@ struct DeepIncipit: View {
     let tuneID: Int
     let base64: String?
     let canRender: Bool
+    /// A particular setting's opening bars (what a session of yours plays), not the tune's.
+    var settingID: Int? = nil
     @State private var image: UIImage?
     @State private var tried = false
 
@@ -579,15 +605,20 @@ struct DeepIncipit: View {
                     .frame(maxHeight: 56)
                     .padding(4)
                     .background(Color.white, in: RoundedRectangle(cornerRadius: 6))
-            } else if canRender && !tried {
+            } else if (canRender || settingID != nil) && !tried {
                 ProgressView().tint(.gray).frame(maxWidth: .infinity, minHeight: 44)
                     .background(Color.white.opacity(0.9), in: RoundedRectangle(cornerRadius: 6))
             } else {
                 Text("♪ no notation").font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
             }
         }
-        .task(id: tuneID) {
+        .task(id: "\(tuneID):\(settingID ?? 0)") {
             if let base64, let data = Data(base64Encoded: base64) {
+                image = UIImage(data: data)
+            } else if let settingID,
+                let r = try? await app.getJSON("/api/tunes/settings/\(settingID)/image?kind=incipit"),
+                let s = r["image"]?.stringValue, let data = Data(base64Encoded: s)
+            {
                 image = UIImage(data: data)
             } else if canRender,
                 let r = try? await app.getJSON("/api/tunes/\(tuneID)/incipit-image"),
@@ -677,8 +708,13 @@ struct TunePreviewPane: View {
     private var sessionSettingID: Int? { data?["session_setting_id"]?.intValue }
     /// Your tunebook's add: what a session of yours already says (none elsewhere).
     private var defaults: JSONValue? { data?["session_defaults"].flatMap { $0.isNull ? nil : $0 } }
-    /// The setting to save: the one paged to, else your session's (which counts as chosen).
-    private var chosenSettingID: Int? { touched ? setting?.id : defaults?["setting_id"]?.intValue }
+    /// The setting to save: the one paged to; else, for your tunebook only, your
+    /// session's (elsewhere it is landed on, not chosen).
+    private var chosenSettingID: Int? {
+        if touched { return setting?.id }
+        if case .mine = scope { return defaults?["setting_id"]?.intValue }
+        return nil
+    }
     private var tuneID: Int? { data?["tune_id"]?.intValue ?? item?.r["tune_id"]?.intValue }
     private var actionAllowed: Bool { allowRemoteAction || !isRemote }
 

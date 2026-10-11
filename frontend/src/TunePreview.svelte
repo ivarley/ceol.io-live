@@ -21,6 +21,7 @@
     items, // combined nav list: [{r: <search result>, remote: bool}]
     index = 0, // start position
     initialSettingId = null, // a pasted URL's ?setting=/#setting deep link — land the pager there (counts as CHOSEN)
+    adoptDefaults = false, // your tunebook's add: a session of yours' setting counts as chosen, not just landed on
     actionLabel = '＋ ' + t('Log This Tune'),
     footer = null, // optional snippet (item, previewData, chosenSettingId) replacing the default action button
     onAction, // (item, previewData) -> onAdd's return (false = deferred, stay open)
@@ -35,6 +36,7 @@
   // A URL-requested setting jumps the pager when (or as soon as) it appears — including
   // after the backfill lands, since the deep-linked setting may not be imported yet.
   let pendingSetting = untrack(() => initialSettingId)
+  let landDefault = null // a session of yours' setting to land on once the backfill brings it (not chosen)
   let data = $state(null) // tune-preview / thesession-preview response
   let loading = $state(true)
   let failed = $state(false)
@@ -98,7 +100,10 @@
       // you see first is the one this session plays. Landing there isn't a "choice"
       // (pagerTouched stays false), so logging changes nothing.
       let si = -1
-      if (pendingSetting == null && d.session_defaults?.setting_id != null) pendingSetting = d.session_defaults.setting_id
+      // What a session of yours plays: chosen outright for your tunebook (adoptDefaults),
+      // merely landed on elsewhere.
+      if (pendingSetting == null && adoptDefaults && d.session_defaults?.setting_id != null) pendingSetting = d.session_defaults.setting_id
+      if (!adoptDefaults && d.session_defaults?.setting_id != null) landDefault = d.session_defaults.setting_id
       if (pendingSetting != null) {
         si = (d.settings || []).findIndex((s) => s.setting_id === pendingSetting)
         if (si >= 0) { pagerTouched = true; pendingSetting = null }
@@ -106,6 +111,10 @@
       }
       if (si < 0 && d.session_setting_id != null) {
         si = (d.settings || []).findIndex((s) => s.setting_id === d.session_setting_id)
+      }
+      if (si < 0 && landDefault != null) {
+        si = (d.settings || []).findIndex((s) => s.setting_id === landDefault)
+        if (si >= 0) landDefault = null
       }
       if (si > 0) setIdx = si
       loading = false
@@ -156,6 +165,16 @@
       }
     }
     pendingSetting = null
+    if (landDefault != null && !pagerTouched) {
+      const si = data.settings.findIndex((s) => s.setting_id === landDefault)
+      landDefault = null
+      if (si >= 0) {
+        setIdx = si
+        size = 'incipit'
+        if (mode === 'notes') loadImage()
+        return
+      }
+    }
     if (hadNone && extra.length && mode === 'notes') loadImage() // was "no notation"; now renderable
   }
 
@@ -209,6 +228,7 @@
     const n = idx + d
     if (n < 0 || n >= items.length) return
     pendingSetting = null // a URL's setting deep-link only applies to the tune it named
+    landDefault = null
     show(n)
   }
 

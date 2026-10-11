@@ -787,9 +787,11 @@ components:
               on_list: { type: boolean }
               # In the repertoire of a session you belong to.
               in_your_sessions: { type: boolean }
-              # Without a scope (your tunebook): what a session of yours already says
-              # about the tune, for the add to start from (null when none has a say).
+              # What a session of yours already says about the tune: its name for it,
+              # and the setting and key it plays (null when none has a say).
               session_defaults: { oneOf: [{ $ref: "#/components/schemas/SessionDefaults" }, { type: "null" }] }
+              # The name of your sessions' the search found it by, when not its catalogue name.
+              matched_alias: { type: [string, "null"] }
               in_session: { type: boolean }
               played_here: { type: integer }
               abc_only: { type: boolean }
@@ -804,6 +806,8 @@ components:
         alias: { type: [string, "null"] }
         setting_id: { type: [integer, "null"] }
         key: { type: [string, "null"] }
+        # The setting's opening bars (base64 PNG), when drawn before.
+        incipit_image: { type: [string, "null"] }
     TunePreview:
       type: object
       required: [success, tune_id, name, tune_type, tunebook_count, aliases, played_here, settings]

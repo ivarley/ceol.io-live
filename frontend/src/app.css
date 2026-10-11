@@ -1362,7 +1362,8 @@ main.wide .hx-drawer {
 }
 .deep-badge.star { background: rgba(245, 197, 24, 0.16); color: #e8d28a; }
 .deep-books { color: var(--muted); margin-left: auto; }
-.deep-name-catalogue { font-weight: 400; color: var(--muted); font-size: 13px; }
+.deep-aka { font-size: 12px; color: var(--muted); }
+.deep-hit { background: rgba(245, 197, 24, 0.28); color: var(--text); border-radius: 3px; padding: 0 2px; }
 .deep-defaults { font-size: 12px; color: var(--muted); }
 
 /* Split result card: body opens the preview, the ＋ rail adds in one tap. The base

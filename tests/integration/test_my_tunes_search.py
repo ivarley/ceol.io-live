@@ -218,6 +218,23 @@ def test_deep_search_offers_your_sessions_overrides(
             preview = client.get(
                 f"/api/tunes/{search_tunes['onlist']}/preview"
             ).get_json()
+        # Found by your session's name for it: the card says so. And in a scoped search too.
+        with authenticated_user:
+            hits = client.get("/api/tunes/deep-search?q=as we call").get_json()[
+                "results"
+            ]
+            scoped = client.get(
+                f"/api/tunes/deep-search?session={SPATH}&q=glorp fandango"
+            ).get_json()["results"]
+        hit = next(r for r in hits if r["tune_id"] == search_tunes["onlist"])
+        assert hit["matched_alias"] == "Glorp As We Call It"
+        assert by_id[search_tunes["onlist"]]["matched_alias"] is None
+        assert (
+            next(r for r in scoped if r["tune_id"] == search_tunes["onlist"])[
+                "session_defaults"
+            ]["alias"]
+            == "Glorp As We Call It"
+        )
         d = by_id[search_tunes["onlist"]]["session_defaults"]
         assert d == {
             "session_name": "Glorp Search Test",
@@ -225,6 +242,7 @@ def test_deep_search_offers_your_sessions_overrides(
             "alias": "Glorp As We Call It",
             "setting_id": None,
             "key": "Dmajor",
+            "incipit_image": None,
         }
         assert preview["session_defaults"] == d
         assert by_id[search_tunes["offlist"]]["session_defaults"] is None

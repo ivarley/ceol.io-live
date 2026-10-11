@@ -2031,6 +2031,16 @@
         }
       }
     },
+    "Also known as": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ainmneacha eile"
+          }
+        }
+      }
+    },
     "Also known as: %@": {
       "localizations": {
         "ga": {

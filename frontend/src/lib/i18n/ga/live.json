@@ -1586,5 +1586,9 @@
   "{session}’s": {
     "ga": "de chuid {session}",
     "review": true
+  },
+  "Also known as": {
+    "ga": "Ainmneacha eile",
+    "review": true
   }
 }
