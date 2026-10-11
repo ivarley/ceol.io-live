@@ -37,8 +37,10 @@ struct LocalRecording: Codable, Identifiable, Equatable {
 
     /// The file's base name.
     let id: String
-    let instanceID: Int
-    let title: String
+    /// The night it was recorded for; none when it was just listening (spec 059), which
+    /// the server has no place for, so it stays on the phone.
+    var instanceID: Int?
+    var title: String
     let startedAt: Date
     var endedAt: Date?
     var phase: Phase
@@ -96,8 +98,21 @@ final class RecordingStore {
     // MARK: - Keeping track
 
     /// A recording has begun: its JSON, beside the CAF the recorder writes.
-    func begin(id: String, instanceID: Int, title: String) {
+    func begin(id: String, instanceID: Int?, title: String) {
         save(LocalRecording(id: id, instanceID: instanceID, title: title, startedAt: Date(), phase: .recording))
+    }
+
+    /// The recording turned off part-way: it is gone.
+    func discard(_ id: String) {
+        if let r = items.first(where: { $0.id == id }) { delete(r) }
+    }
+
+    /// The night a recording in progress is for changed (logging began, or stopped).
+    func retitle(_ id: String, instanceID: Int?, title: String) {
+        guard var r = items.first(where: { $0.id == id }), r.phase == .recording else { return }
+        r.instanceID = instanceID
+        r.title = title
+        save(r)
     }
 
     func finish(id: String, keepOnPhone: Bool = false) {
@@ -168,7 +183,7 @@ final class RecordingStore {
     func retryWaiting() {
         guard let app, !app.simulatedOffline else { return }
         let now = Date()
-        for r in items where (r.phase == .failed || r.phase == .ready) && r.keepOnPhone != true {
+        for r in items where (r.phase == .failed || r.phase == .ready) && r.keepOnPhone != true && r.instanceID != nil {
             if let t = lastTried[r.id], now.timeIntervalSince(t) < Self.retryEvery { continue }
             lastTried[r.id] = now
             Task { await upload(r.id) }
@@ -177,6 +192,8 @@ final class RecordingStore {
 
     func upload(_ id: String) async {
         guard var r = items.first(where: { $0.id == id }), let app else { return }
+        // the server files a recording under a night: one made just listening stays here
+        guard let instanceID = r.instanceID else { return fail(id, tr("Not for a night, so it can't be uploaded.")) }
         lastTried[id] = Date()
         // asked for by hand (or by the option): retried like any other from now on
         r.keepOnPhone = false
@@ -196,7 +213,7 @@ final class RecordingStore {
         // 2. a signed upload
         let (status, body) = (try? await app.postJSON(
             "/api/recordings/upload-url",
-            body: ["session_instance_id": .number(Double(r.instanceID)), "filename": .string(encodedURL.lastPathComponent)]))
+            body: ["session_instance_id": .number(Double(instanceID)), "filename": .string(encodedURL.lastPathComponent)]))
             ?? (0, .null)
         guard status == 200, let put = body["upload_url"]?.stringValue.flatMap(URL.init(string:)),
             let key = body["storage_key"]?.stringValue, let type = body["content_type"]?.stringValue
@@ -216,12 +233,13 @@ final class RecordingStore {
 
     /// The file is in S3: tell the server, which starts its ingest.
     func confirm(_ id: String) async {
-        guard var r = items.first(where: { $0.id == id }), let key = r.storageKey, let app else { return }
+        guard var r = items.first(where: { $0.id == id }), let key = r.storageKey, let app, let instanceID = r.instanceID
+        else { return }
         r.phase = .confirming
         save(r)
         progress[id] = nil
         var body: [String: JSONValue] = [
-            "session_instance_id": .number(Double(r.instanceID)),
+            "session_instance_id": .number(Double(instanceID)),
             "storage_key": .string(key),
             "label": .string("\(r.title) (Ceol app)"),
             "started_at": .string(ISO8601DateFormatter().string(from: r.startedAt)),

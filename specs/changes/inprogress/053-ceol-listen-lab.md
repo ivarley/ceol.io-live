@@ -3059,6 +3059,11 @@ segmented blind; item 3 the follower). Open, in rough order:
   - Still to measure: a real night with the phone listening: its speed and
     lag on an iPhone, battery and heat over three hours, and that the names
     shown match a server-listened night (they should: the same notes).
+- **(2026-10-11) The meter's own tab.** Spec 059 (`059-listen-tab.md`): the
+  meter lives on a Listen tab and works with no night in mind (Ad-hoc mode: a
+  sure tune goes to your tunebook, a session's list or a night's log, and into
+  Recent Tunes Heard), or logs a night's tunes as before (Log mode). Recording
+  is optional when just listening.
 - **(2026-10-10) Listening on the phone, offline: the deciding too.** The
   phone now decides as well as hears, so a night needs no connection at all
   (the recording and the logged tunes already waited for one). CeolKit's

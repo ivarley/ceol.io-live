@@ -1,7 +1,8 @@
 // A debug build's demo of the meter (-CeolMeterDemo YES): the listener's states played
 // on a timer through the real meter, with no microphone and no service, to look at its
 // states and animations (spec 053). -CeolMeterDemo bar shows the meter minimised: the
-// mini bar over the tabs' place; -CeolMeterDemo start the screen before a night starts.
+// mini bar over the tabs' place; -CeolMeterDemo start the screen before a night starts;
+// -CeolMeterDemo adhoc the meter just listening (spec 059), logging nothing.
 // Not in release builds.
 
 #if DEBUG
@@ -14,7 +15,8 @@ struct MeterDemoView: View {
     @State private var recorder: NightRecorder = {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("meter-demo")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return NightRecorder(instanceID: 0, title: "B.D. Riley's · demo", recordingID: "demo",
+        let adhoc = UserDefaults.standard.string(forKey: "CeolMeterDemo") == "adhoc"
+        return NightRecorder(logging: adhoc ? nil : (0, "B.D. Riley's · demo"), recording: false, recordingID: "demo",
                              fileURL: dir.appendingPathComponent("demo.caf"),
                              meterLogURL: dir.appendingPathComponent("demo.jsonl"),
                              listenURL: URL(string: "ws://127.0.0.1:9/listen")!, token: nil, listenWhere: .phone)
@@ -28,14 +30,19 @@ struct MeterDemoView: View {
     ]
 
     var body: some View {
+        demo.preferredColorScheme(.dark)
+    }
+
+    @ViewBuilder private var demo: some View {
         switch UserDefaults.standard.string(forKey: "CeolMeterDemo") {
-        case "start": ListenStartView(title: "B.D. Riley's · demo") {}
+        case "start":
+            NavigationStack { ListenStartView(logging: (0, "B.D. Riley's · demo")) { _ in }.padding(16) }
         case "bar":
             CeolTokens.bgColor.ignoresSafeArea()
                 .safeAreaInset(edge: .bottom, spacing: 0) { RecorderBar(recorder: recorder) }
                 .task { await play() }
         default:
-            ListenMeterView(recorder: recorder, onStop: {}).task { await play() }
+            NavigationStack { ScrollView { ListenMeterView(recorder: recorder).padding(16) } }.task { await play() }
         }
     }
 

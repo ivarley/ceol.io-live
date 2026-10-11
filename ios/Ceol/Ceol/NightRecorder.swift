@@ -59,8 +59,14 @@ final class NightRecorder {
         case connecting, live, reconnecting, unavailable(String)
     }
 
-    let instanceID: Int
-    let title: String
+    /// The night the listener prefers the tunes of (spec 053): the one being logged, or
+    /// the one this was started from. None, and the popular tunes stand in.
+    private(set) var instanceID: Int?
+    /// The night the tunes it is sure of are logged to (spec 059's Log mode), if any.
+    private(set) var logsTo: (instanceID: Int, title: String)?
+    /// The screen's title: the night being logged, else just listening.
+    var title: String { logsTo?.title ?? tr("Listening") }
+    var isLogging: Bool { logsTo != nil }
     let startedAt = Date()
     private(set) var elapsed: TimeInterval = 0
     /// 0...1, the microphone's level, for the bar's dot.
@@ -72,15 +78,19 @@ final class NightRecorder {
     private(set) var behind: TimeInterval = 0
     private(set) var stopped = false
     var error: String?
-    /// The full-screen meter, open.
-    var showingMeter = false
     /// "This is it": the name a person tapped, until the service moves on.
     private(set) var confirmed: Int?
     /// The audio time of the state on screen when "this is it" was tapped: a state from
     /// before the service heard the tap must not undo it.
     @ObservationIgnored private var confirmedAfterMs = 0
 
+    /// Where the recording goes when there is one.
     let fileURL: URL
+    @ObservationIgnored private let meterLogURL: URL
+    /// Whether the audio is kept as a recording on the phone (spec 059): on for a night
+    /// being logged, off when just listening, and changeable mid-listen. Turned off,
+    /// the file so far is discarded.
+    private(set) var recording = false
     /// Where the listening is done now.
     private(set) var listenWhere: ListenWhere
     /// Listening on the phone couldn't start (the models), or stopped.
@@ -118,7 +128,8 @@ final class NightRecorder {
     /// listener shows another tune (or nothing).
     private(set) var changedFrom: (tuneID: Int, name: String?)?
     /// Whether the meter logs a tune by itself at 100%: the switch on the meter,
-    /// remembered for the next night (on unless turned off).
+    /// remembered for the next night (on unless turned off). It says the tune is sure at
+    /// 100% whatever the switch; the switch is whether that logs it (and only to a night).
     var selfConfirms: Bool = UserDefaults.standard.object(forKey: "SelfConfirm") as? Bool ?? true {
         didSet {
             guard selfConfirms != oldValue else { return }
@@ -168,28 +179,81 @@ final class NightRecorder {
         return .figuring
     }
 
-    init(instanceID: Int, title: String, recordingID: String, fileURL: URL, meterLogURL: URL, listenURL: URL,
-         token: String?, listenWhere: ListenWhere = .preferred, app: AppModel? = nil) {
-        self.instanceID = instanceID
-        self.title = title
+    /// `logging`: the night to log the tunes to (Log mode), or nil to just listen.
+    /// `recording`: whether to keep the audio as a recording from the start.
+    init(logging: (instanceID: Int, title: String)?, recording: Bool, recordingID: String, fileURL: URL,
+         meterLogURL: URL, listenURL: URL, token: String?, listenWhere: ListenWhere = .preferred, app: AppModel? = nil) {
+        instanceID = logging?.instanceID
+        logsTo = logging
         self.app = app
         self.recordingID = recordingID
         self.fileURL = fileURL
+        self.meterLogURL = meterLogURL
         self.listenURL = listenURL
         self.token = token
         self.listenWhere = listenWhere
-        capture = AudioCapture(fileURL: fileURL)
+        capture = AudioCapture()
         let streamID = UUID().uuidString
-        meterLog = MeterLog(url: meterLogURL, since: startedAt)
+        // the meter log is held until there is a recording for it to sit beside
+        meterLog = MeterLog(url: recording ? meterLogURL : nil, since: startedAt)
         meterLog.write("app", ListenWire.event("begin", [
-            "instance_id": instanceID, "stream_id": streamID, "recording": recordingID,
+            "instance_id": logging.map { $0.instanceID as Any } ?? NSNull(), "stream_id": streamID, "recording": recordingID,
             "started_at": ISO8601DateFormatter().string(from: startedAt), "listen": listenWhere.rawValue,
             "decide": listenWhere == .phone && PhoneDeciding.corpus != nil ? "phone" : "server",
             "self_confirm": UserDefaults.standard.object(forKey: "SelfConfirm") as? Bool ?? true,
+            "logging": logging != nil,
         ]))
-        streamLink = ListenLink(url: listenURL, token: token, streamID: streamID, instanceID: instanceID,
-                                source: capture)
+        streamLink = ListenLink(url: listenURL, token: token, streamID: streamID, instanceID: nil, source: capture)
         streamLink = makeLink(streamID: streamID)
+        if recording { setRecording(true) }
+    }
+
+    /// Keep the audio as a recording from here on, or stop and discard what there is.
+    /// Nothing else changes: the listening goes on either way.
+    func setRecording(_ on: Bool) {
+        guard on != recording, !stopped else { return }
+        recording = on
+        if on {
+            app?.recordings.begin(id: recordingID, instanceID: logsTo?.instanceID, title: title)
+            meterLog.open(meterLogURL)
+            // the file begins now (at once if the engine isn't running yet: start() opens it)
+            if capture.isRunning { try? capture.startFile(fileURL) }
+            meterLog.write("app", ListenWire.event("recording", ["on": true, "from_sample": capture.written]))
+        } else {
+            meterLog.write("app", ListenWire.event("recording", ["on": false]))
+            capture.discardFile()
+            meterLog.discard()
+            app?.recordings.discard(recordingID)
+        }
+    }
+
+    /// Log the tunes it is sure of to this night from now on (Log mode). The listening
+    /// starts again on a new stream with the night as its hint, as a change of where
+    /// to listen does; a night already being logged is left first.
+    func startLogging(instanceID: Int, title: String) {
+        guard !stopped, logsTo?.instanceID != instanceID else { return }
+        stopLogging()
+        logsTo = (instanceID, title)
+        self.instanceID = instanceID
+        if let app {
+            night = app.openNight(instanceID)
+            app.recordings.retitle(recordingID, instanceID: instanceID, title: title)
+        }
+        meterLog.write("app", ListenWire.event("start_logging", ["instance_id": instanceID, "t_ms": state?.tMs ?? 0]))
+        restartLink(why: "logging")
+    }
+
+    /// Stop logging to the night and just show the tunes (Ad-hoc mode). The listening
+    /// goes on, with the night still as its hint.
+    func stopLogging() {
+        guard logsTo != nil else { return }
+        if let night { app?.closeNight(night) }
+        night = nil
+        logsTo = nil
+        logged = nil
+        loggedRow = nil
+        app?.recordings.retitle(recordingID, instanceID: nil, title: title)
+        meterLog.write("app", ListenWire.event("stop_logging", ["t_ms": state?.tMs ?? 0]))
     }
 
     /// The stream for the chosen place: audio from the capture, or the phone's hearing,
@@ -203,10 +267,10 @@ final class NightRecorder {
             return ListenLink(url: listenURL, token: token, streamID: streamID, instanceID: instanceID, source: capture)
         }
         let log = meterLog
-        let deciding = PhoneDeciding.corpus.map { PhoneDeciding(corpus: $0, sessionTunes: KnownTunes.cached(instanceID)) }
+        let deciding = PhoneDeciding.corpus.map { PhoneDeciding(corpus: $0, sessionTunes: instanceID.flatMap(KnownTunes.cached)) }
         if let deciding {
             meterLog.write("app", ListenWire.event("decider", [
-                "built_at": deciding.builtAt, "known_tunes": KnownTunes.cached(instanceID)?.count ?? 0,
+                "built_at": deciding.builtAt, "known_tunes": instanceID.flatMap(KnownTunes.cached)?.count ?? 0,
             ]))
         }
         let h = PhoneHearing(
@@ -233,19 +297,36 @@ final class NightRecorder {
     func listen(on place: ListenWhere) {
         guard place != listenWhere, !stopped else { return }
         ListenWhere.preferred = place
-        streamLink.stop()
         listenWhere = place
+        restartLink(why: "listen")
+    }
+
+    /// Listening starts again on a new stream (where it's done, or the night it prefers
+    /// changed), whose times count from here (logged with the sample).
+    private func restartLink(why: String) {
+        streamLink.stop()
         state = nil
         confirmed = nil
         changedFrom = nil
         let streamID = UUID().uuidString
         capture.resetOutbox()
-        meterLog.write("app", ListenWire.event("listen", [
-            "listen": place.rawValue, "stream_id": streamID, "from_sample": capture.written,
-            "decide": place == .phone && PhoneDeciding.corpus != nil ? "phone" : "server",
+        meterLog.write("app", ListenWire.event(why, [
+            "listen": listenWhere.rawValue, "stream_id": streamID, "from_sample": capture.written,
+            "instance_id": instanceID.map { $0 as Any } ?? NSNull(),
+            "decide": listenWhere == .phone && PhoneDeciding.corpus != nil ? "phone" : "server",
         ]))
         streamLink = makeLink(streamID: streamID)
+        refreshSessionTunes()
         runLink()
+    }
+
+    /// The night's own tunes, fresh if there is a signal: a phone deciding for itself
+    /// takes them if it has not begun yet (the night's screen usually fetched them).
+    private func refreshSessionTunes() {
+        guard let app, let id = instanceID, let deciding = streamLink as? PhoneDeciding else { return }
+        Task {
+            if let ids = await KnownTunes.refresh(id, app: app, timeout: 5) { deciding.useSessionTunes(ids) }
+        }
     }
 
     /// Asks for the microphone, starts the engine, the file and the stream.
@@ -256,22 +337,15 @@ final class NightRecorder {
             return
         }
         do {
-            try capture.start()
+            try capture.start(fileURL: recording ? fileURL : nil)
         } catch {
             self.error = tr("Couldn't start recording: \(error.localizedDescription)")
             stopped = true
             return
         }
         watchInterruptions()
-        // the session's own tunes, fresh if there is a signal: a phone deciding for itself
-        // takes them if it has not begun yet (the night's screen usually fetched them)
-        if let app, let deciding = streamLink as? PhoneDeciding {
-            let id = instanceID
-            Task {
-                if let ids = await KnownTunes.refresh(id, app: app, timeout: 5) { deciding.useSessionTunes(ids) }
-            }
-        }
-        if let app { night = app.openNight(instanceID) }
+        refreshSessionTunes()
+        if let app, let id = logsTo?.instanceID { night = app.openNight(id) }
         runLink()
         UIDevice.current.isBatteryMonitoringEnabled = true
         ticker = Task { [weak self] in
@@ -345,26 +419,33 @@ final class NightRecorder {
         confirmedAfterMs = state?.tMs ?? 0
         changedFrom = nil
         send(ListenWire.tapThis(tuneID: tuneID, shown: state?.top.map(\.tuneID) ?? [], auto: auto))
+        remember(tuneID)
         logToNight(tuneID, auto: auto)
     }
 
     /// The meter is sure (100%): it says "this is it" itself, as a person would, and the
-    /// tune is logged. The tune last logged, sure again, is shown as sure but not logged a
-    /// second time. Never a tune said to be wrong tonight, nor another one logged from
-    /// here in the last ten minutes.
+    /// tune is logged when a night is being logged with the switch on. The tune last
+    /// logged, sure again, is shown as sure but not logged a second time. Never a tune
+    /// said to be wrong tonight, nor another one logged from here in the last ten minutes.
     private func selfConfirm(_ s: ListenState) {
-        guard selfConfirms,
-            let pick = Self.selfConfirmTune(s, confirmed: confirmed, wrong: wrongTunes, lastLogged: logged,
-                                            loggedAt: loggedAt, now: Date())
+        guard let pick = Self.selfConfirmTune(s, confirmed: confirmed, wrong: wrongTunes, lastLogged: logged,
+                                              loggedAt: loggedAt, now: Date())
         else { return }
-        if pick.log {
+        if pick.log && selfConfirms && logsTo != nil {
             tapThis(pick.tune, auto: true)
         } else {
             confirmed = pick.tune
             confirmedAfterMs = s.tMs
             changedFrom = nil
-            meterLog.write("app", ListenWire.event("sure_again", ["tune_id": pick.tune, "t_ms": s.tMs]))
+            remember(pick.tune)
+            meterLog.write("app", ListenWire.event(pick.log ? "sure" : "sure_again", ["tune_id": pick.tune, "t_ms": s.tMs]))
         }
+    }
+
+    /// A tune it was sure of, into Recent Tunes Heard (spec 059).
+    private func remember(_ tuneID: Int) {
+        let c = state?.top.first { $0.tuneID == tuneID }
+        RecentTunes.add(RecentTune(tuneID: tuneID, name: c?.name ?? tr("Tune \(tuneID)"), type: c?.type, heardAt: Date()))
     }
 
     /// The tune to confirm by itself in this state, if any, and whether to log it.
@@ -473,7 +554,7 @@ final class NightRecorder {
         if let was = changedFrom, s.notATune || (s.shown != nil && s.shown != was.tuneID) { changedFrom = nil }
         selfConfirm(state ?? s)
         // a long enough stretch of no tune ends the set, by itself as a person would
-        if selfConfirms, canEndSet { endSet(auto: true) }
+        if selfConfirms, logsTo != nil, canEndSet { endSet(auto: true) }
     }
 
     /// A phone call or another app's audio stops the engine; when it ends, start again.
@@ -501,13 +582,14 @@ final class NightRecorder {
 
 // MARK: - The microphone, to the file and the outbox
 
-/// The engine, the converter to 22,050 Hz mono 16-bit, the file, and the audio the
-/// service hasn't acknowledged. Everything here runs off the main thread.
+/// The engine, the converter to 22,050 Hz mono 16-bit, the file (when there is one), and
+/// the audio the service hasn't acknowledged. Everything here runs off the main thread.
 nonisolated final class AudioCapture: @unchecked Sendable {
     private let engine = AVAudioEngine()
-    private let fileURL: URL
     private let lock = NSLock()
     private var file: AVAudioFile?
+    private var fileURL: URL?
+    private var _running = false
     private var converter: AVAudioConverter?
     // Ten minutes of unsent audio, about 26 MB; older audio is still in the file.
     private var outbox = ListenOutbox(capacity: ListenWire.sampleRate * 600)
@@ -518,9 +600,10 @@ nonisolated final class AudioCapture: @unchecked Sendable {
     private let outFormat = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: Double(ListenWire.sampleRate),
                                           channels: 1, interleaved: true)!
 
-    init(fileURL: URL) { self.fileURL = fileURL }
+    init() {}
 
     var level: Double { lock.withLock { _level } }
+    var isRunning: Bool { lock.withLock { _running } }
     var unsent: Int { lock.withLock { outbox.unsent } }
     /// Samples written to the file so far.
     var written: Int { lock.withLock { _written } }
@@ -538,16 +621,36 @@ nonisolated final class AudioCapture: @unchecked Sendable {
     /// A new stream: nothing sent, nothing held.
     func resetOutbox() { lock.withLock { outbox = ListenOutbox(capacity: ListenWire.sampleRate * 600) } }
 
-    func start() throws {
+    /// The microphone, and the file if the audio is to be kept.
+    func start(fileURL: URL?) throws {
         let session = AVAudioSession.sharedInstance()
         // .measurement turns off the voice processing (gain control, noise suppression)
         // that would flatten a session; play-and-record lets the night's player still play.
         try session.setCategory(.playAndRecord, mode: .measurement,
                                 options: [.defaultToSpeaker, .allowBluetoothA2DP, .mixWithOthers])
         try session.setActive(true)
-        file = try AVAudioFile(forWriting: fileURL, settings: outFormat.settings,
-                               commonFormat: .pcmFormatInt16, interleaved: true)
+        if let fileURL { try startFile(fileURL) }
         try startEngine()
+        lock.withLock { _running = true }
+    }
+
+    /// Keep the audio from here on in this file (a recording turned on mid-listen).
+    func startFile(_ url: URL) throws {
+        let f = try AVAudioFile(forWriting: url, settings: outFormat.settings, commonFormat: .pcmFormatInt16, interleaved: true)
+        lock.withLock {
+            file = f
+            fileURL = url
+        }
+    }
+
+    /// Stop keeping the audio, and remove what was kept.
+    func discardFile() {
+        let url = lock.withLock { () -> URL? in
+            file = nil
+            defer { fileURL = nil }
+            return fileURL
+        }
+        if let url { try? FileManager.default.removeItem(at: url) }
     }
 
     func restart() throws {
@@ -560,7 +663,10 @@ nonisolated final class AudioCapture: @unchecked Sendable {
     func stop() {
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
-        lock.withLock { file = nil }      // closes it
+        lock.withLock {
+            file = nil      // closes it
+            _running = false
+        }
     }
 
     private func startEngine() throws {
@@ -604,7 +710,7 @@ nonisolated final class AudioCapture: @unchecked Sendable {
 /// What a stream to the listening service carries: the audio (AudioCapture), or what the
 /// phone heard (PhoneHearing). ListenLink does the connecting and reconnecting.
 nonisolated protocol ListenSource: AnyObject, Sendable {
-    func startMessage(streamID: String, instanceID: Int) -> String
+    func startMessage(streamID: String, instanceID: Int?) -> String
     /// The service's first reply -> what to send before the rest, or nil if it isn't the
     /// "ready" this stream expects.
     func ready(_ reply: ListenMessage) -> [String]?
@@ -614,7 +720,7 @@ nonisolated protocol ListenSource: AnyObject, Sendable {
 }
 
 nonisolated extension AudioCapture: ListenSource {
-    func startMessage(streamID: String, instanceID: Int) -> String { ListenWire.start(streamID: streamID, instanceID: instanceID) }
+    func startMessage(streamID: String, instanceID: Int?) -> String { ListenWire.start(streamID: streamID, instanceID: instanceID) }
 
     func ready(_ reply: ListenMessage) -> [String]? {
         guard case .ready(let have) = reply else { return nil }
@@ -715,7 +821,7 @@ nonisolated final class PhoneHearing: ListenSource, @unchecked Sendable {
         }
     }
 
-    func startMessage(streamID: String, instanceID: Int) -> String { ListenWire.startHeard(streamID: streamID, instanceID: instanceID) }
+    func startMessage(streamID: String, instanceID: Int?) -> String { ListenWire.startHeard(streamID: streamID, instanceID: instanceID) }
 
     func ready(_ reply: ListenMessage) -> [String]? {
         guard case .readyHeard(let t) = reply else { return nil }
@@ -847,14 +953,14 @@ nonisolated final class ListenLink: Listening, @unchecked Sendable {
     private let url: URL
     private let token: String?
     private let streamID: String
-    private let instanceID: Int
+    private let instanceID: Int?
     private let source: any ListenSource
     private let lock = NSLock()
     private var task: URLSessionWebSocketTask?
     private var running = true
     private var runner: Task<Void, Never>?
 
-    init(url: URL, token: String?, streamID: String, instanceID: Int, source: any ListenSource) {
+    init(url: URL, token: String?, streamID: String, instanceID: Int?, source: any ListenSource) {
         self.url = url
         self.token = token
         self.streamID = streamID
@@ -964,24 +1070,58 @@ nonisolated final class ListenLink: Listening, @unchecked Sendable {
 
 /// The meter log beside a recording (ListenWire.logLine), appended as things happen so a
 /// crash keeps what came before. Written from the socket's thread and the main actor.
+/// With no recording yet (spec 059) the lines are held, up to a few hours' worth, and
+/// written out when one begins, so the log always starts at the start.
 nonisolated final class MeterLog: @unchecked Sendable {
     private let lock = NSLock()
     private var handle: FileHandle?
+    private var url: URL?
+    private var held: [String] = []
     private let since: Date
+    private static let holdAtMost = 20_000
 
-    init(url: URL, since: Date) {
+    init(url: URL?, since: Date) {
         self.since = since
-        if !FileManager.default.fileExists(atPath: url.path) {
-            FileManager.default.createFile(atPath: url.path, contents: nil)
+        if let url { open(url) }
+    }
+
+    /// Write to this file from now on, the held lines first.
+    func open(_ url: URL) {
+        lock.withLock {
+            guard handle == nil else { return }
+            if !FileManager.default.fileExists(atPath: url.path) {
+                FileManager.default.createFile(atPath: url.path, contents: nil)
+            }
+            handle = try? FileHandle(forWritingTo: url)
+            _ = try? handle?.seekToEnd()
+            self.url = url
+            for line in held { try? handle?.write(contentsOf: Data(line.utf8)) }
+            held = []
         }
-        handle = try? FileHandle(forWritingTo: url)
-        _ = try? handle?.seekToEnd()
+    }
+
+    /// The recording was discarded: hold the lines again, and remove the file.
+    func discard() {
+        let old = lock.withLock { () -> URL? in
+            try? handle?.close()
+            handle = nil
+            defer { url = nil }
+            return url
+        }
+        if let old { try? FileManager.default.removeItem(at: old) }
     }
 
     func write(_ dir: String, _ message: String) {
         let ms = Int(Date().timeIntervalSince(since) * 1000)
         let line = ListenWire.logLine(atMs: ms, dir: dir, message: message)
-        lock.withLock { try? handle?.write(contentsOf: Data(line.utf8)) }
+        lock.withLock {
+            if let handle {
+                try? handle.write(contentsOf: Data(line.utf8))
+            } else {
+                held.append(line)
+                if held.count > Self.holdAtMost { held.removeFirst(held.count - Self.holdAtMost) }
+            }
+        }
     }
 
     func close() {
@@ -990,4 +1130,42 @@ nonisolated final class MeterLog: @unchecked Sendable {
             handle = nil
         }
     }
+}
+
+// MARK: - Recent Tunes Heard
+
+/// A tune the meter was sure of (spec 059), kept on the phone.
+struct RecentTune: Codable, Identifiable, Equatable {
+    let tuneID: Int
+    let name: String
+    let type: String?
+    let heardAt: Date
+    var id: Date { heardAt }
+}
+
+/// The last tunes the meter was sure of, newest first: the same tune sure again within
+/// a few minutes is one hearing.
+enum RecentTunes {
+    static let key = "RecentTunesHeard"
+    nonisolated static let keep = 50
+    nonisolated static let sameWithin: TimeInterval = 600
+
+    static var all: [RecentTune] {
+        guard let data = UserDefaults.standard.data(forKey: key) else { return [] }
+        return (try? JSONDecoder.iso.decode([RecentTune].self, from: data)) ?? []
+    }
+
+    static func add(_ tune: RecentTune) {
+        let kept = adding(tune, to: all)
+        if let data = try? JSONEncoder.iso.encode(kept) { UserDefaults.standard.set(data, forKey: key) }
+    }
+
+    nonisolated static func adding(_ tune: RecentTune, to list: [RecentTune]) -> [RecentTune] {
+        if let last = list.first, last.tuneID == tune.tuneID, tune.heardAt.timeIntervalSince(last.heardAt) < sameWithin {
+            return list
+        }
+        return Array(([tune] + list).prefix(keep))
+    }
+
+    static func clear() { UserDefaults.standard.removeObject(forKey: key) }
 }

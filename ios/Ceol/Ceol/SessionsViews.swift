@@ -1023,8 +1023,8 @@ struct NightView: View {
                     .accessibilityIdentifier("night.edit")
                 }
             }
-            if app.user?.isSystemAdmin == true, model?.night != nil, model?.editing != true {
-                // Recording a night for the listener (spec 053): system admins, for now.
+            if let model, model.log != nil, model.status != .finished, model.editing != true {
+                // Listen and log the night's tunes (spec 053, 059): whoever can log it.
                 RecordNightButton(instanceID: sessionInstanceID, title: title)
             }
             if let night = model?.night, let path = night["session_path"]?.stringValue, model?.editing != true {

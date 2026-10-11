@@ -1891,6 +1891,16 @@
         }
       }
     },
+    "Add To This Session's Tune List": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Cuir le Liosta Fonn an tSeisiúin Seo"
+          }
+        }
+      }
+    },
     "Add a Session": {
       "localizations": {
         "ga": {
@@ -2060,6 +2070,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Cuir leis an seisiún"
+          }
+        }
+      }
+    },
+    "Added to this session's tune list": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Curtha le liosta fonn an tseisiúin seo"
           }
         }
       }
@@ -4089,6 +4109,7 @@
       }
     },
     "Hide the meter": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -4389,6 +4410,16 @@
         }
       }
     },
+    "Keep a recording on this phone": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Coinnigh taifeadadh ar an bhfón seo"
+          }
+        }
+      }
+    },
     "Keep both": {
       "localizations": {
         "ga": {
@@ -4550,6 +4581,26 @@
         }
       }
     },
+    "Listen": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Éist"
+          }
+        }
+      }
+    },
+    "Listen To What's Playing Now": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Éist leis an gceol atá á sheinm anois"
+          }
+        }
+      }
+    },
     "Listener unavailable (%@) — still recording": {
       "localizations": {
         "ga": {
@@ -4611,6 +4662,16 @@
         }
       }
     },
+    "Listening, %@. Show the meter.": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ag éisteacht, %@. Taispeáin an méadar."
+          }
+        }
+      }
+    },
     "Listening…": {
       "extractionState": "stale",
       "localizations": {
@@ -4654,6 +4715,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Gach fonn á lódáil… (%1$lld/%2$lld)"
+          }
+        }
+      }
+    },
+    "Loading the notation…": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ag lódáil na nodaireachta…"
           }
         }
       }
@@ -4725,6 +4796,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Sínigh amach"
+          }
+        }
+      }
+    },
+    "Log This Tune": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Logáil an Fonn Seo"
           }
         }
       }
@@ -4816,6 +4897,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Ag logáil"
+          }
+        }
+      }
+    },
+    "Logging tunes to %@": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ag logáil foinn chuig %@"
           }
         }
       }
@@ -5720,6 +5811,16 @@
         }
       }
     },
+    "Not for a night, so it can't be uploaded.": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ní le haghaidh oíche é, mar sin ní féidir é a uaslódáil."
+          }
+        }
+      }
+    },
     "Not in Ceol's library yet. Log it at a session first, and it will be imported.": {
       "localizations": {
         "ga": {
@@ -5908,6 +6009,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Nótaí"
+          }
+        }
+      }
+    },
+    "Nothing heard yet. Tunes the meter is sure of will be listed here.": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Níor cloiseadh aon rud fós. Liostófar anseo na foinn a bhfuil an méadar cinnte díobh."
           }
         }
       }
@@ -6641,6 +6752,16 @@
         }
       }
     },
+    "Recent Tunes Heard": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Foinn a Cloiseadh le Déanaí"
+          }
+        }
+      }
+    },
     "Reconnecting": {
       "localizations": {
         "ga": {
@@ -6652,6 +6773,7 @@
       }
     },
     "Record": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -6672,6 +6794,7 @@
       }
     },
     "Recording, %@. Show the meter.": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -7108,6 +7231,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Féach orthu uile"
+          }
+        }
+      }
+    },
+    "See the notation": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Féach ar an nodaireacht"
           }
         }
       }
@@ -7824,7 +7957,58 @@
         }
       }
     },
+    "Stop listening": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Stop ag éisteacht"
+          }
+        }
+      }
+    },
+    "Stop listening to this night?": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Stop ag éisteacht leis an oíche seo?"
+          }
+        }
+      }
+    },
+    "Stop listening?": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Stop ag éisteacht?"
+          }
+        }
+      }
+    },
+    "Stop logging": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Stop ag logáil"
+          }
+        }
+      }
+    },
+    "Stop logging these tunes to %@ and just show them instead?": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Stop ag logáil na bhfonn seo chuig %@ agus iad a thaispeáint amháin ina ionad?"
+          }
+        }
+      }
+    },
     "Stop recording": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -7835,6 +8019,7 @@
       }
     },
     "Stop recording this night?": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -7900,6 +8085,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Tapáil chun an fonn iomlán a thaispeáint"
+          }
+        }
+      }
+    },
+    "Tell me what tune is playing. Nothing is logged unless you say so.": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Abair liom cén fonn atá á sheinm. Ní logáiltear aon rud mura ndeir tú é."
           }
         }
       }
@@ -8284,6 +8479,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Inniu"
+          }
+        }
+      }
+    },
+    "Today, %@": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Inniu, %@"
           }
         }
       }
@@ -8928,6 +9133,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "An t-ainm a thugann an seisiún seo air"
+          }
+        }
+      }
+    },
+    "What tune am I hearing right now?": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Cén fonn atá á chloisteáil agam anois?"
           }
         }
       }

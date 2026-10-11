@@ -1,11 +1,13 @@
-// The recorder on screen (spec 053): a mini bar over the tabs while a night is being
-// recorded, like a podcast app's, so the rest of the app (the hand logger included)
-// stays usable; tap it for the certainty meter, the listening service's top five with
-// ten-segment bars, where a tap on a name says "this is it" and "None of these" sends
-// it looking again. The model is NightRecorder.
+// The listener on screen (spec 053, 059): the certainty meter, the listening service's
+// top five with ten-segment bars, where a tap on a name says "this is it" and "None of
+// these" sends it looking again; and a mini bar over the tabs while it listens and
+// another tab is up, like a podcast app's, so the rest of the app (the hand logger
+// included) stays usable. The meter lives on the Listen tab (ListenScreen.swift); the
+// model is NightRecorder.
 //
 // i18n-converted (spec 057). Tune names, and the night's title, are data.
 
+import CeolAPI
 import CeolDesign
 import CeolLogic
 import SwiftUI
@@ -71,14 +73,15 @@ extension NightRecorder {
 struct RecordingDot: View {
     let level: Double
     var pulses = false
+    var color = CeolTokens.danger
     @State private var ring = false
 
     var body: some View {
-        Circle().fill(CeolTokens.danger).frame(width: 10, height: 10)
-            .background(Circle().fill(CeolTokens.danger.opacity(0.35)).frame(width: 10 + 14 * level, height: 10 + 14 * level))
+        Circle().fill(color).frame(width: 10, height: 10)
+            .background(Circle().fill(color.opacity(0.35)).frame(width: 10 + 14 * level, height: 10 + 14 * level))
             .overlay {
                 if pulses {
-                    Circle().stroke(CeolTokens.danger, lineWidth: 1.5).frame(width: 10, height: 10)
+                    Circle().stroke(color, lineWidth: 1.5).frame(width: 10, height: 10)
                         .scaleEffect(ring ? 3 : 1).opacity(ring ? 0 : 0.8)
                 }
             }
@@ -97,8 +100,10 @@ struct RecordingDot: View {
     }
 }
 
-/// The mini recorder over the tabs (and over the composer while a night is logged).
+/// The mini listener over the tabs (and over the composer while a night is logged):
+/// a tap goes to the Listen tab.
 struct RecorderBar: View {
+    @Environment(AppModel.self) private var app
     let recorder: NightRecorder
     static let height: CGFloat = 56
 
@@ -122,9 +127,9 @@ struct RecorderBar: View {
     }
 
     private var openButton: some View {
-        Button { recorder.showingMeter = true } label: {
+        Button { app.openListen() } label: {
             HStack(spacing: 10) {
-                RecordingDot(level: recorder.level, pulses: true)
+                ListeningDot(level: recorder.level, recording: recorder.recording)
                 stateIcon.frame(width: 30)
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -151,7 +156,7 @@ struct RecorderBar: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Recording, \(recorder.headline). Show the meter.")
+        .accessibilityLabel("Listening, \(recorder.headline). Show the meter.")
         .accessibilityIdentifier("recorder.bar")
     }
 
@@ -162,6 +167,18 @@ struct RecorderBar: View {
         case .noTune: Conversation().font(.system(size: 13)).foregroundStyle(CeolTokens.textMuted)
         case .sure: Image(systemName: "checkmark.circle.fill").font(.system(size: 20)).foregroundStyle(CeolTokens.success)
         }
+    }
+}
+
+/// The listener's dot: red and pulsing while the audio is kept as a recording, green
+/// while it is only listened to (spec 059).
+struct ListeningDot: View {
+    let level: Double
+    let recording: Bool
+
+    var body: some View {
+        RecordingDot(level: level, pulses: recording, color: recording ? CeolTokens.danger : CeolTokens.success)
+            .accessibilityLabel(recording ? Text("Recording") : Text("Listening"))
     }
 }
 
@@ -188,17 +205,30 @@ struct Conversation: View {
     }
 }
 
-/// The meter's screen before a night starts: where to listen, and "Start Listening".
-/// Nothing is recorded until that is tapped; then the meter takes its place.
+/// The meter's screen before it starts: what it will do (log a night's tunes, or just
+/// say what is playing), where to listen (system admins: the service admits only
+/// them), whether to keep a recording, and "Start Listening". Nothing is heard until
+/// that is tapped; then the meter takes its place.
 struct ListenStartView: View {
-    let title: String
-    let onStart: () -> Void
-    @Environment(\.dismiss) private var dismiss
+    /// The night whose tunes it will log; nil, just listening (spec 059).
+    let logging: (instanceID: Int, title: String)?
+    /// Whether to keep a recording: chosen here, on for a night.
+    let onStart: (_ recording: Bool) -> Void
+    @Environment(AppModel.self) private var app
     @State private var place = ListenWhere.preferred
+    @State private var recording = false
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 28) {
+        VStack(alignment: .leading, spacing: 24) {
+            if let logging {
+                Label(tr("Logging tunes to \(logging.title)"), systemImage: "pencil.line")
+                    .font(.ceol(size: 16, weight: .semibold)).foregroundStyle(CeolTokens.textColor)
+                    .accessibilityIdentifier("start.logging")
+            } else {
+                Text("Tell me what tune is playing. Nothing is logged unless you say so.")
+                    .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
+            }
+            if app.user?.isSystemAdmin == true {
                 HStack(spacing: 10) {
                     Text("Listening on").font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
                     Picker("Listening on", selection: $place) {
@@ -207,52 +237,57 @@ struct ListenStartView: View {
                     .pickerStyle(.segmented)
                     .accessibilityIdentifier("start.listenWhere")
                 }
-                Button {
-                    ListenWhere.preferred = place
-                    onStart()
-                } label: {
-                    Label("Start Listening", systemImage: "record.circle")
-                        .font(.ceol(size: 22, weight: .semibold))
-                        .frame(maxWidth: .infinity, minHeight: 72)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(CeolTokens.primaryFill)
-                .accessibilityIdentifier("start.listen")
-                Spacer()
             }
-            .padding(16)
-            .padding(.top, 20)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .background(CeolTokens.bgColor)
-            .navigationTitle(title)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button { dismiss() } label: { Image(systemName: "chevron.down") }
-                        .accessibilityLabel("Close")
-                }
+            Toggle(isOn: $recording) {
+                Text("Keep a recording on this phone").font(.ceol(size: 14)).foregroundStyle(CeolTokens.textMuted)
             }
+            .tint(CeolTokens.primaryFill)
+            .accessibilityIdentifier("start.recording")
+            Button {
+                if app.user?.isSystemAdmin == true { ListenWhere.preferred = place }
+                onStart(recording)
+            } label: {
+                Label { Text("Start Listening") } icon: { EarGlyph(size: 26) }
+                    .font(.ceol(size: 22, weight: .semibold))
+                    .frame(maxWidth: .infinity, minHeight: 72)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(CeolTokens.primaryFill)
+            .accessibilityIdentifier("start.listen")
         }
-        .preferredColorScheme(.dark)
+        .onAppear { recording = logging != nil }
+        .onChange(of: logging?.instanceID) { _, _ in recording = logging != nil }
     }
 }
 
-/// The certainty meter: what it thinks right now, from the last few seconds.
+/// The certainty meter: what it thinks right now, from the last few seconds. In Log
+/// mode (spec 059) the tunes it is sure of go to a night, named at the top; otherwise
+/// a sure tune is offered to your tunebook, to wherever this was opened from
+/// (`context`), and as notation.
 struct ListenMeterView: View {
+    @Environment(AppModel.self) private var app
     let recorder: NightRecorder
-    let onStop: () -> Void
-    @Environment(\.dismiss) private var dismiss
-    @State private var confirmingStop = false
+    var context = ListenContext()
     /// The confirmed tune was tapped: "Wrong tune" or "Tune changed".
     @State private var correcting = false
+    /// "Stop logging": asked to be sure.
+    @State private var confirmingStopLogging = false
     /// The options, opened (folded away each time the meter opens).
     @State private var showingOptions = false
+    /// The context's action ("Add To This Session's Tune List", "Log This Tune"): the
+    /// tune it was done for, and what went wrong.
+    @State private var acted: Int?
+    @State private var actionFailure: String?
+    @State private var acting = false
+    /// The sure tune's full notation, loading or on screen.
+    @State private var notation: NotationFetch?
 
     /// Everything under the toolbar (its own view so a test can draw it).
     var content: some View {
         VStack(alignment: .leading, spacing: 14) {
+            logging
             HStack(spacing: 8) {
-                RecordingDot(level: recorder.level, pulses: true)
+                ListeningDot(level: recorder.level, recording: recorder.recording)
                 Text(recorder.clock).font(.ceol(size: 22, weight: .semibold)).monospacedDigit()
                 Spacer()
                 if let t = recorder.state?.tuneness {
@@ -261,7 +296,7 @@ struct ListenMeterView: View {
                 }
             }
             Text(recorder.linkText).font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
-            listenWhere
+            if app.user?.isSystemAdmin == true { listenWhere }
             if let error = recorder.hearingError ?? recorder.error {
                 Text(error).font(.ceol(size: 14)).foregroundStyle(CeolTokens.danger)
             }
@@ -272,34 +307,34 @@ struct ListenMeterView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                content
-                .padding(16)
+        content
+            .fullScreenCover(isPresented: Binding(get: { notation?.image != nil }, set: { if !$0 { notation = nil } })) {
+                if let n = notation, let image = n.image { NotationFullScreen(image: image, name: n.name) }
             }
-            .background(CeolTokens.bgColor)
-            .navigationTitle(recorder.title)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button { dismiss() } label: { Image(systemName: "chevron.down") }
-                        .accessibilityLabel("Hide the meter")
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Stop", role: .destructive) { confirmingStop = true }
-                        .accessibilityIdentifier("meter.stop")
-                }
+    }
+
+    /// Log mode's header: the night the tunes go to, and the way out of it.
+    @ViewBuilder private var logging: some View {
+        if let log = recorder.logsTo {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Label(tr("Logging tunes to \(log.title)"), systemImage: "pencil.line")
+                    .font(.ceol(size: 15, weight: .semibold)).foregroundStyle(CeolTokens.textColor)
+                    .accessibilityIdentifier("meter.logging")
+                Spacer(minLength: 0)
+                Button("Stop logging") { confirmingStopLogging = true }
+                    .font(.ceol(size: 14, weight: .medium)).foregroundStyle(CeolTokens.primary)
+                    .accessibilityIdentifier("meter.stopLogging")
             }
-            .confirmationDialog("Stop recording this night?", isPresented: $confirmingStop, titleVisibility: .visible) {
-                Button("Stop recording", role: .destructive) {
-                    dismiss()
-                    onStop()
-                }
-            } message: {
-                Text("The recording so far stays on this phone.")
+            .padding(12)
+            .background(CeolTokens.headerBg, in: RoundedRectangle(cornerRadius: 10))
+            .confirmationDialog(
+                tr("Stop logging these tunes to \(log.title) and just show them instead?"),
+                isPresented: $confirmingStopLogging, titleVisibility: .visible
+            ) {
+                Button("Stop logging") { recorder.stopLogging() }
+                    .accessibilityIdentifier("meter.stopLogging.confirm")
             }
         }
-        .preferredColorScheme(.dark)
     }
 
     /// Where the listening is done: a choice for whoever is recording, kept for the next
@@ -315,13 +350,15 @@ struct ListenMeterView: View {
         }
     }
 
-    /// The night's options, folded away until opened: logging by itself at 100%, and
-    /// uploading the recording. Each is kept for the next night.
+    /// The options, folded away until opened: logging by itself at 100% (a night only),
+    /// keeping a recording, and uploading it (a night's only). The first and last are
+    /// kept for the next night.
     private var options: some View {
         DisclosureGroup(isExpanded: $showingOptions) {
             VStack(spacing: 12) {
                 selfConfirmSwitch
-                uploadSwitch
+                recordingSwitch
+                if recorder.recording && recorder.isLogging { uploadSwitch }
             }
             .padding(.top, 8)
         } label: {
@@ -329,6 +366,15 @@ struct ListenMeterView: View {
         }
         .tint(CeolTokens.textMuted)
         .accessibilityIdentifier("meter.options")
+    }
+
+    /// Whether the audio is kept as a recording on the phone (spec 059).
+    private var recordingSwitch: some View {
+        Toggle(isOn: Binding(get: { recorder.recording }, set: { recorder.setRecording($0) })) {
+            Text("Keep a recording on this phone").font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
+        }
+        .tint(CeolTokens.primaryFill)
+        .accessibilityIdentifier("meter.recording")
     }
 
     /// Whether the recording goes up to Ceol's server when the night stops.
@@ -341,12 +387,13 @@ struct ListenMeterView: View {
     }
 
     /// Whether a tune the meter is sure of (100%) is logged without a tap: kept for the
-    /// next night.
+    /// next night. Off, and not to be had, with no night to log to.
     private var selfConfirmSwitch: some View {
-        Toggle(isOn: Binding(get: { recorder.selfConfirms }, set: { recorder.selfConfirms = $0 })) {
+        Toggle(isOn: Binding(get: { recorder.selfConfirms && recorder.isLogging }, set: { recorder.selfConfirms = $0 })) {
             Text("Log automatically at 100%").font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
         }
         .tint(CeolTokens.primaryFill)
+        .disabled(!recorder.isLogging)
         .accessibilityIdentifier("meter.selfConfirm")
     }
 
@@ -462,7 +509,7 @@ struct ListenMeterView: View {
                         Text(name).font(.ceol(size: 22, weight: .semibold))
                             .foregroundStyle(CeolTokens.textColor).multilineTextAlignment(.leading)
                         if let candidate {
-                            Text([candidate.type.map(TunesWords.type), candidate.outside ? tr("new to this session") : nil]
+                            Text([candidate.type.map(TunesWords.type), candidate.outside && recorder.instanceID != nil ? tr("new to this session") : nil]
                                 .compactMap { $0 }.joined(separator: " · "))
                                 .font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
                         }
@@ -483,10 +530,68 @@ struct ListenMeterView: View {
             if recorder.logged == c {
                 Label("Logged to the night", systemImage: "checkmark")
                     .font(.ceol(size: 13, weight: .semibold)).foregroundStyle(CeolTokens.success)
+            } else if recorder.isLogging {
+                // sure, but not logged by itself (the switch off, or logged lately): by hand
+                Button { recorder.tapThis(c) } label: {
+                    Label("Log This Tune", systemImage: "pencil.line")
+                        .font(.ceol(size: 17, weight: .semibold))
+                        .frame(maxWidth: .infinity, minHeight: 50)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(CeolTokens.primaryFill)
+                .accessibilityIdentifier("meter.log")
             }
             Text("Tap the tune if it's wrong or has changed.")
                 .font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
+            if !recorder.isLogging { sureActions(c, name: name, type: candidate?.type) }
         }
+    }
+
+    /// What to do with a tune it is sure of when no night is being logged (spec 059):
+    /// your tunebook, the place this was opened from, the notation.
+    private func sureActions(_ c: Int, name: String, type: String?) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            TunebookBox(tune: TuneRef(id: c, name: name, type: type, statusKnown: false))
+                .id(c)
+            if let action = context.action, context.instanceID == nil || context.instanceID != recorder.logsTo?.instanceID {
+                Button {
+                    acting = true
+                    actionFailure = nil
+                    Task {
+                        let payload: [String: JSONValue] = ["tune_id": .number(Double(c)), "name": .string(name),
+                                                            "tune_type": type.map(JSONValue.string) ?? .null]
+                        actionFailure = await action.run(payload)
+                        if actionFailure == nil { acted = c }
+                        acting = false
+                    }
+                } label: {
+                    Label(acted == c ? action.done : action.label, systemImage: acted == c ? "checkmark" : action.icon)
+                        .font(.ceol(size: 17, weight: .semibold))
+                        .frame(maxWidth: .infinity, minHeight: 50)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(CeolTokens.primaryFill)
+                .disabled(acting || acted == c)
+                .accessibilityIdentifier("meter.action")
+                if let actionFailure { Text(actionFailure).font(.ceol(size: 13)).foregroundStyle(CeolTokens.danger) }
+            }
+            Button {
+                notation = NotationFetch(tuneID: c, name: name)
+                Task { await notation?.load(app) }
+            } label: {
+                Label(notation?.tuneID == c && notation?.image == nil ? tr("Loading the notation…") : tr("See the notation"),
+                      systemImage: "music.note.list")
+                    .font(.ceol(size: 17, weight: .semibold))
+                    .frame(maxWidth: .infinity, minHeight: 50)
+            }
+            .buttonStyle(.bordered)
+            .disabled(notation?.tuneID == c && notation?.image == nil)
+            .accessibilityIdentifier("meter.notation")
+            if let n = notation, n.tuneID == c, n.failed {
+                Text("Couldn't draw the notation just now.").font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
+            }
+        }
+        .padding(.top, 6)
     }
 
     private func row(_ c: ListenState.Candidate, shown: Bool) -> some View {
@@ -503,7 +608,7 @@ struct ListenMeterView: View {
                         .font(.ceol(size: 12)).italic().foregroundStyle(CeolTokens.textMuted)
                         .multilineTextAlignment(.leading)
                 }
-                Text([c.type.map(TunesWords.type), c.outside ? tr("new to this session") : nil, "\(Int((c.p * 100).rounded()))%"]
+                Text([c.type.map(TunesWords.type), c.outside && recorder.instanceID != nil ? tr("new to this session") : nil, "\(Int((c.p * 100).rounded()))%"]
                     .compactMap { $0 }.joined(separator: " · "))
                     .font(.ceol(size: 12)).foregroundStyle(CeolTokens.textMuted)
             }
@@ -532,24 +637,20 @@ struct ListenMeterView: View {
     }
 }
 
-/// A night's toolbar: start recording it, or open the meter if it is the one recording.
+/// A night's toolbar: listen and log its tunes (the Listen tab, in Log mode for this
+/// night), or go to the meter if it is the night being logged.
 struct RecordNightButton: View {
     @Environment(AppModel.self) private var app
     let instanceID: Int
     let title: String
 
     var body: some View {
-        let recordingThis = app.recorder?.instanceID == instanceID
+        let loggingThis = app.recorder?.logsTo?.instanceID == instanceID
         Button {
-            if recordingThis {
-                app.recorder?.showingMeter = true
-            } else {
-                // the meter's screen, ready: nothing is recorded until "Start Listening"
-                app.readyToRecord = (instanceID, title)
-            }
+            app.openListen(logging: loggingThis ? nil : (instanceID, title))
         } label: {
-            Label(recordingThis ? tr("Recording") : tr("Record"), systemImage: recordingThis ? "record.circle.fill" : "record.circle")
-                .foregroundStyle(recordingThis ? CeolTokens.danger : CeolTokens.textColor)
+            Label { Text(loggingThis ? tr("Listening") : tr("Listen")) } icon: { EarGlyph(size: 20) }
+                .foregroundStyle(loggingThis ? CeolTokens.danger : CeolTokens.textColor)
         }
         .accessibilityIdentifier("night.record")
     }
@@ -619,7 +720,8 @@ struct RecordingsView: View {
                             .foregroundStyle(r.phase == .failed ? CeolTokens.danger : r.phase == .uploaded ? CeolTokens.success : CeolTokens.textMuted)
                         if let p = store.progress[r.id] { ProgressView(value: p).tint(CeolTokens.primary) }
                         HStack(spacing: 16) {
-                            if [.ready, .failed].contains(r.phase), app.recorder?.recordingID != r.id {
+                            // one made just listening has no night for the server to file it under
+                            if [.ready, .failed].contains(r.phase), app.recorder?.recordingID != r.id, r.instanceID != nil {
                                 Button(r.phase == .failed ? tr("Retry upload") : tr("Upload")) { Task { await store.upload(r.id) } }
                                     .accessibilityIdentifier("recordings.upload")
                             }

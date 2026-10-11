@@ -64,15 +64,17 @@ struct UpgradeRequiredView: View {
     }
 }
 
-/// The four tabs the web's phone tab bar already has (spec 052 §B1): Home, Sessions,
-/// Tunes, Me. Search is not a tab — it is the field at the top of Tunes.
+/// The four tabs the web's phone tab bar has (spec 052 §B1): Home, Sessions, Tunes, Me,
+/// and between them Listen (spec 059), the meter's home, which the web hasn't got.
+/// Search is not a tab — it is the field at the top of Tunes.
 enum AppTab: Hashable, CaseIterable {
-    case home, sessions, tunes, me
+    case home, sessions, listen, tunes, me
 
     var title: String {
         switch self {
         case .home: tr("Home")
         case .sessions: tr("Sessions")
+        case .listen: tr("Listen")
         case .tunes: tr("Tunes")
         case .me: tr("Me")
         }
@@ -84,6 +86,7 @@ enum AppTab: Hashable, CaseIterable {
         switch self {
         case .home: "tab.home"
         case .sessions: "tab.sessions"
+        case .listen: "tab.listen"
         case .tunes: "tab.tunes"
         case .me: "tab.me"
         }
@@ -93,6 +96,7 @@ enum AppTab: Hashable, CaseIterable {
         switch self {
         case .home: "TabHome"
         case .sessions: "TabSessions"
+        case .listen: "TabListen"
         case .tunes: "TabTunes"
         case .me: "TabMe"
         }
@@ -108,10 +112,12 @@ struct MainTabView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.verticalSizeClass) private var verticalSizeClass
 
-    /// The tab bar, and the recorder's bar above it while a night is recorded.
+    /// The tab bar, and the listener's bar above it while it listens (not on its own
+    /// tab, where the meter is).
     private var bottomBars: CGFloat {
         CeolTabBar.height(landscape: verticalSizeClass == .compact)
-            + (model.recorder != nil ? RecorderBar.height : model.recordings.active != nil ? UploadBar.height : 0)
+            + (model.recorder != nil && model.tab != .listen ? RecorderBar.height
+               : model.recordings.active != nil ? UploadBar.height : 0)
     }
 
     var body: some View {
@@ -123,6 +129,7 @@ struct MainTabView: View {
         TabView(selection: $model.tab) {
             Tab(value: AppTab.home) { HomeView() }
             Tab(value: AppTab.sessions) { SessionsView() }
+            Tab(value: AppTab.listen) { ListenTab() }
             Tab(value: AppTab.tunes) { TunesView() }
             Tab(value: AppTab.me) { MeView() }
         }
@@ -133,7 +140,7 @@ struct MainTabView: View {
             // shows the recorder above it itself).
             if !model.editingNight {
                 VStack(spacing: 0) {
-                    if let recorder = model.recorder {
+                    if let recorder = model.recorder, model.tab != .listen {
                         RecorderBar(recorder: recorder)
                     } else if model.recordings.active != nil {
                         UploadBar(store: model.recordings)
@@ -142,22 +149,10 @@ struct MainTabView: View {
                 }
             }
         }
-        .fullScreenCover(isPresented: Binding(
-            get: { model.recorder?.showingMeter ?? false || model.readyToRecord != nil },
-            set: {
-                model.recorder?.showingMeter = $0
-                if !$0 { model.readyToRecord = nil }
-            })
-        ) {
-            // one screen: ready to start, then the meter in place once started
-            if let recorder = model.recorder {
-                ListenMeterView(recorder: recorder) { model.stopRecording() }
-            } else if let ready = model.readyToRecord {
-                ListenStartView(title: ready.title) {
-                    model.startRecording(instanceID: ready.instanceID, title: ready.title)
-                    model.readyToRecord = nil
-                }
-            }
+        // The listen screen slid up from a night, Home or the mini bar (spec 059). A night
+        // left waiting on its start screen is let go with it.
+        .fullScreenCover(item: $model.presentedListen, onDismiss: { model.pendingLog = nil }) { _ in
+            ListenCover().environment(model)
         }
         .ceolSharePane()
         .tint(CeolTokens.primary)
@@ -183,7 +178,11 @@ struct CeolTabBar: View {
                 let on = model.tab == tab
                 Button {
                     // Already in the section: back to its top-level page.
-                    if on { model.returnToRoot(tab) } else { model.tab = tab }
+                    if on {
+                        model.returnToRoot(tab)
+                    } else {
+                        model.tab = tab
+                    }
                 } label: {
                     let layout = landscape ? AnyLayout(HStackLayout(spacing: 6)) : AnyLayout(VStackLayout(spacing: 3))
                     layout {

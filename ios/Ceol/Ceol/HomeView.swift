@@ -59,6 +59,16 @@ struct HomeView: View {
                 (Text("Welcome back, ") + Text(home.viewer?.firstName ?? tr("there")).font(.ceol(size: 26, weight: .semibold)))
                     .font(.ceol(size: 26, weight: .light, relativeTo: .title))
                     .foregroundStyle(CeolTokens.textColor)
+                // The meter, with no night in mind (spec 059).
+                Button { model.openListen() } label: {
+                    Label { Text("What tune am I hearing right now?") } icon: { EarGlyph(size: 22) }
+                        .font(.ceol(size: 17, weight: .semibold)).foregroundStyle(CeolTokens.primary)
+                        .frame(maxWidth: .infinity, minHeight: 50)
+                        .background(CeolTokens.headerBg, in: RoundedRectangle(cornerRadius: 10))
+                        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(CeolTokens.primary.opacity(0.6), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("home.listen")
                 if !today.isEmpty {
                     TodayStrip(nights: today) { n in
                         openNight(n, id: week.first { $0.path == n.path && $0.date == n.date && $0.name == n.name }?.sessionInstanceId)

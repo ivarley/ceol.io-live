@@ -88,6 +88,9 @@ struct DeepSearchSheet: View {
     /// The preview showing, as an index into `previewItems`.
     @State private var preview: Int?
     @State private var quickFailure: String?
+    /// The listen screen over this sheet (spec 059): what the meter is sure of can be
+    /// picked as a search result would be.
+    @State private var listening = false
 
     static let types = ["jig", "reel", "slip jig", "hornpipe", "polka", "slide", "waltz", "barndance", "strathspey", "three-two", "mazurka", "march"]
 
@@ -143,6 +146,9 @@ struct DeepSearchSheet: View {
                 }
             }
             .animation(.easeOut(duration: 0.2), value: preview)
+            .fullScreenCover(isPresented: $listening) {
+                ListenCover(context: listenContext).environment(app)
+            }
             .task(id: "\(query)|\(mode.rawValue)|\(type ?? "")") { await search() }
             .onAppear {
                 if query.isEmpty { query = initialQuery }
@@ -184,6 +190,19 @@ struct DeepSearchSheet: View {
                     } else if q.isEmpty {
                         Text("Search the tunes on Ceol by name, by the notes (\"GED BED\"), or paste a thesession.org link.")
                             .foregroundStyle(CeolTokens.textMuted)
+                        // Or let the meter name it (spec 059): the listen screen, over this
+                        // sheet, in whatever mode it is already in.
+                        Button {
+                            fieldFocused = false
+                            listening = true
+                        } label: {
+                            Label { Text("Listen To What's Playing Now") } icon: { EarGlyph(size: 20) }
+                                .font(.ceol(size: 16, weight: .semibold)).foregroundStyle(CeolTokens.primary)
+                                .frame(maxWidth: .infinity, minHeight: 48)
+                                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(CeolTokens.primary.opacity(0.6), lineWidth: 1))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("deep.listen")
                     } else if loading && results.isEmpty {
                         ProgressView().frame(maxWidth: .infinity).padding()
                     } else if failed {
@@ -225,6 +244,23 @@ struct DeepSearchSheet: View {
                 .padding(.horizontal, 16).padding(.vertical, 8)
             }
             .scrollDismissesKeyboard(.interactively)
+        }
+    }
+
+    /// What the listen screen offers a sure tune here: adding it to the session's list,
+    /// or logging it to the night (the search's own pick, which the sheet's owner
+    /// handles). Your tunebook is on the listen screen itself.
+    private var listenContext: ListenContext {
+        switch scope {
+        case .mine:
+            return ListenContext()
+        case .session:
+            return ListenContext(action: ListenAction(
+                label: tr("Add To This Session's Tune List"), done: tr("Added to this session's tune list"),
+                icon: "plus") { await onPick($0) })
+        case .instance(let id):
+            return ListenContext(instanceID: id, action: ListenAction(
+                label: tr("Log This Tune"), done: tr("Logged"), icon: "pencil.line") { await onPick($0) })
         }
     }
 

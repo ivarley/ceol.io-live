@@ -75,12 +75,15 @@ final class AppModel {
     }
     /// A night is being logged: the tab bar gives way to the composer.
     var editingNight = false
-    /// A night being recorded and listened to (spec 053): the mini bar over the tabs,
-    /// the meter when it's opened. One at a time.
+    /// The listener (spec 053, 059): the Listen tab's meter, and the mini bar over the
+    /// tabs while another tab is up. One at a time; logging a night's tunes or not.
     var recorder: NightRecorder?
-    /// A night whose Record was tapped, not yet started: the meter's screen shows where to
-    /// listen and "Start Listening", and nothing is recorded until that is tapped.
-    var readyToRecord: (instanceID: Int, title: String)?
+    /// A night whose Listen button was tapped with nothing listening yet: the listen
+    /// screen's start screen names it, and "Start Listening" logs to it. Nil: just listening.
+    var pendingLog: (instanceID: Int, title: String)?
+    /// The listen screen slid up over whatever is on screen (a night's Listen button,
+    /// Home's, the mini bar). The Listen tab shows the same screen in place.
+    var presentedListen: ListenPresentation?
 
     /// The listening service. A debug build can point elsewhere with
     /// `-CeolListenURL ws://127.0.0.1:8440/listen`.
@@ -130,30 +133,47 @@ final class AppModel {
     /// The file the phone decides from when it listens offline, kept current.
     let deciderData = DeciderRefresher()
 
-    /// Start recording a night (stopping any other first), and open the meter.
-    func startRecording(instanceID: Int, title: String) {
-        stopRecording()
+    /// Start listening (stopping any other first): logging the tunes to a night, which is
+    /// recorded as well, or just listening, with no recording unless it's turned on.
+    func startListening(logging: (instanceID: Int, title: String)?, recording: Bool? = nil) {
+        stopListening()
+        pendingLog = nil
         let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
-        let id = "night-\(instanceID)-\(stamp)"
-        recordings.begin(id: id, instanceID: instanceID, title: title)
-        let r = NightRecorder(instanceID: instanceID, title: title, recordingID: id,
+        let id = logging.map { "night-\($0.instanceID)-\(stamp)" } ?? "listen-\(stamp)"
+        // the server admits system admins only (listen/service.py); everyone else listens
+        // on the phone
+        let place: ListenWhere = user?.isSystemAdmin == true ? .preferred : .phone
+        let r = NightRecorder(logging: logging, recording: recording ?? (logging != nil), recordingID: id,
                               fileURL: recordings.dir.appending(path: "\(id).caf"),
                               meterLogURL: recordings.meterLog(id),
-                              listenURL: Self.listenURL, token: auth.store.token(), app: self)
+                              listenURL: Self.listenURL, token: auth.store.token(), listenWhere: place, app: self)
         recorder = r
-        r.showingMeter = true
         Task { await r.start() }
     }
 
-    /// Stop, keep the file, and send it up (RecordingStore.upload).
-    func stopRecording() {
+    /// Stop; keep the recording if there is one, and send it up (RecordingStore.upload)
+    /// when that option is on and it is a night's.
+    func stopListening() {
         guard let r = recorder else { return }
         r.stop()
         recorder = nil
+        guard r.recording else { return }
         // uploaded only with the option on; otherwise kept on the phone (Upload in the list)
-        let upload = r.uploadsRecording
+        let upload = r.uploadsRecording && r.logsTo != nil
         recordings.finish(id: r.recordingID, keepOnPhone: !upload)
         if upload { Task { await recordings.upload(r.recordingID) } }
+    }
+
+    /// The listen screen, slid up (spec 059): with a night to log to (its Listen button),
+    /// or none (Home, the mini bar). Already listening, a night given is logged from
+    /// here on. Already on the Listen tab, nothing slides up: the screen is there.
+    func openListen(logging: (instanceID: Int, title: String)? = nil) {
+        if let recorder, let logging {
+            recorder.startLogging(instanceID: logging.instanceID, title: logging.title)
+        } else if recorder == nil {
+            pendingLog = logging
+        }
+        if tab != .listen { presentedListen = ListenPresentation() }
     }
 
     /// A session, in the Sessions tab.

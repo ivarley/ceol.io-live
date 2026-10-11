@@ -307,12 +307,6 @@ struct TuneSheet: View {
     @State private var notationNoticeDone = false
     @State private var notationFailed = false
     @State private var chooser: SettingLayer?
-    /// Adding: what you call it and the key you play it in, when they differ from the
-    /// catalogue's; a link each, opening into its field.
-    @State private var aliasOpen = false
-    @State private var alias = ""
-    @State private var keyOpen = false
-    @State private var key = ""
 
     var body: some View {
         NavigationStack {
@@ -339,8 +333,6 @@ struct TuneSheet: View {
                     heard = tune.heardCount ?? 0
                     notes = tune.notes ?? ""
                     savedNotes = notes
-                    if let a = tune.alias { alias = a; aliasOpen = true }
-                    if let k = tune.key { key = k; keyOpen = true }
                     await load()
                 }
                 .confirmationDialog("Remove \(tune.name) from your tunes?", isPresented: $confirmRemove, titleVisibility: .visible) {
@@ -389,31 +381,6 @@ struct TuneSheet: View {
         return false
     }
 
-    private func setStatus(_ new: MyTunesRules.Status) async {
-        let old = status
-        status = new.rawValue
-        if !(await save(.setStatus, status: LearnStatus(stored: new.rawValue))) { status = old }
-    }
-
-    private func add(_ new: MyTunesRules.Status) async {
-        let a = alias.trimmingCharacters(in: .whitespaces)
-        if await save(.add, status: LearnStatus(stored: new.rawValue), nameAlias: aliasOpen && !a.isEmpty ? a : nil,
-                      key: keyOpen && !key.isEmpty ? key : nil) {
-            status = new.rawValue
-            heard = 1  // an add is itself a hearing, as on the web
-            if let s = tune.settingID, await saveSetting(s, for: .mine) == nil {
-                incipit = nil
-                full = nil
-            }
-        }
-    }
-
-    private func setHeard(_ count: Int) async {
-        let old = heard
-        heard = count
-        if !(await save(.setHeard, heard: count)) { heard = old }
-    }
-
     private func saveNotes() async {
         let trimmed = notes.trimmingCharacters(in: .whitespacesAndNewlines)
         if await save(.setNotes, notes: trimmed.isEmpty ? nil : trimmed) {
@@ -422,56 +389,16 @@ struct TuneSheet: View {
         }
     }
 
-    /// Your list, in the web's green panel: "This tune is on your list as" and the three
-    /// statuses as buttons, the heard count while you want to learn it; or, for a tune
-    /// not on it, the three ways to add it.
+    /// Your list (TunebookPanel), and your notes under it once the tune is on it.
     @ViewBuilder private var yourList: some View {
         let current = status.flatMap(MyTunesRules.Status.init(rawValue:))
-        VStack(spacing: 14) {
-            Text(current == nil ? tr("Add this tune to your list as") : tr("This tune is on your list as"))
-                .font(.ceol(size: 17)).foregroundStyle(CeolTokens.textColor)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            HStack(spacing: 0) {
-                ForEach(MyTunesRules.Status.allCases, id: \.self) { s in
-                    let on = s == current
-                    Button {
-                        Task { if current == nil { await add(s) } else if !on { await setStatus(s) } }
-                    } label: {
-                        Text(TunesWords.status(s.rawValue)).font(.ceol(size: 16, weight: on ? .semibold : .medium))
-                            .foregroundStyle(current == nil ? CeolTokens.primary : .white)
-                            .frame(maxWidth: .infinity, minHeight: 42)
-                            .background(on ? CeolTokens.primaryFill : .clear)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(busy)
-                    .accessibilityIdentifier(current == nil ? "sheet.add.\(s.rawValue)" : "sheet.status.\(s.rawValue)")
-                    .accessibilityAddTraits(on ? .isSelected : [])
-                    if s != MyTunesRules.Status.allCases.last {
-                        Rectangle().fill(current == nil ? CeolTokens.borderColor : .white.opacity(0.5)).frame(width: 1)
-                    }
-                }
+        TunebookPanel(tune: tune, status: $status, heard: $heard, onAdded: {
+            // the setting chosen in a search's preview is yours now too
+            if let s = tune.settingID, await saveSetting(s, for: .mine) == nil {
+                incipit = nil
+                full = nil
             }
-            .fixedSize(horizontal: false, vertical: true)
-            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(
-                current == nil ? CeolTokens.borderColor : .white.opacity(0.6), lineWidth: 1))
-            .clipShape(RoundedRectangle(cornerRadius: 6))
-            if current == nil { addExtras }
-            if current == .wantToLearn {
-                Stepper(value: Binding(get: { heard }, set: { n in Task { await setHeard(n) } }), in: 0...999) {
-                    (heard == 1 ? Text("Heard it once") : Text("Heard it \(heard) times")).font(.ceol(size: 16)).foregroundStyle(.white)
-                }
-                .accessibilityIdentifier("sheet.heard")
-            }
-            if let failure { Text(failure).font(.ceol(size: 13)).foregroundStyle(.white) }
-        }
-        .padding(16)
-        // On your list: the web's green panel (the tune drawer's "My List" box). Not yet
-        // on it: a plain outlined box, so green means "yours".
-        .background(current == nil ? Color.clear : Color(red: 0.13, green: 0.29, blue: 0.19), in: RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(current == nil ? CeolTokens.borderColor : .clear, lineWidth: 1))
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("sheet.status")
+        }, onChanged: onChanged)
         if current != nil {
             VStack(alignment: .trailing, spacing: 6) {
                 TextField("", text: $notes, prompt: Text("Notes").foregroundStyle(CeolTokens.textMuted), axis: .vertical)
@@ -675,6 +602,151 @@ struct TuneSheet: View {
         return nil
     }
 
+    private func stat(_ label: String, _ value: Int) -> some View {
+        HStack { Text(label); Spacer(); Text("\(value)").foregroundStyle(CeolTokens.textMuted) }
+            .font(.ceol(size: 16)).padding(.vertical, 12)
+    }
+}
+
+/// The web's green panel, "your list" (the tune drawer's My List box): "This tune is on
+/// your list as" and the three statuses as buttons, the heard count while you want to
+/// learn it; or, for a tune not on it, the three ways to add it, with your own name and
+/// key. The tune sheet's, and the listen screen's for a tune the meter is sure of
+/// (spec 059). `loadsStatus`: read your status from the tune's detail first (the sheet
+/// reads it itself).
+struct TunebookPanel: View {
+    @Environment(AppModel.self) private var model
+    let tune: TuneRef
+    @Binding var status: String?
+    @Binding var heard: Int
+    var loadsStatus = false
+    /// After an add was saved: the sheet applies a setting chosen in a search.
+    var onAdded: () async -> Void = {}
+    var onChanged: () -> Void = {}
+
+    @State private var busy = false
+    @State private var loading = false
+    @State private var failure: String?
+    /// Adding: what you call it and the key you play it in, when they differ from the
+    /// catalogue's; a link each, opening into its field.
+    @State private var aliasOpen = false
+    @State private var alias = ""
+    @State private var keyOpen = false
+    @State private var key = ""
+
+    var body: some View {
+        let current = status.flatMap(MyTunesRules.Status.init(rawValue:))
+        VStack(spacing: 14) {
+            if loading {
+                ProgressView().frame(maxWidth: .infinity)
+            } else {
+                Text(current == nil ? tr("Add this tune to your list as") : tr("This tune is on your list as"))
+                    .font(.ceol(size: 17)).foregroundStyle(CeolTokens.textColor)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                HStack(spacing: 0) {
+                    ForEach(MyTunesRules.Status.allCases, id: \.self) { s in
+                        let on = s == current
+                        Button {
+                            Task { if current == nil { await add(s) } else if !on { await setStatus(s) } }
+                        } label: {
+                            Text(TunesWords.status(s.rawValue)).font(.ceol(size: 16, weight: on ? .semibold : .medium))
+                                .foregroundStyle(current == nil ? CeolTokens.primary : .white)
+                                .frame(maxWidth: .infinity, minHeight: 42)
+                                .background(on ? CeolTokens.primaryFill : .clear)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(busy)
+                        .accessibilityIdentifier(current == nil ? "sheet.add.\(s.rawValue)" : "sheet.status.\(s.rawValue)")
+                        .accessibilityAddTraits(on ? .isSelected : [])
+                        if s != MyTunesRules.Status.allCases.last {
+                            Rectangle().fill(current == nil ? CeolTokens.borderColor : .white.opacity(0.5)).frame(width: 1)
+                        }
+                    }
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(
+                    current == nil ? CeolTokens.borderColor : .white.opacity(0.6), lineWidth: 1))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                if current == nil { addExtras }
+                if current == .wantToLearn {
+                    Stepper(value: Binding(get: { heard }, set: { n in Task { await setHeard(n) } }), in: 0...999) {
+                        (heard == 1 ? Text("Heard it once") : Text("Heard it \(heard) times")).font(.ceol(size: 16)).foregroundStyle(.white)
+                    }
+                    .accessibilityIdentifier("sheet.heard")
+                }
+                if let failure { Text(failure).font(.ceol(size: 13)).foregroundStyle(.white) }
+            }
+        }
+        .padding(16)
+        // On your list: the web's green panel (the tune drawer's "My List" box). Not yet
+        // on it: a plain outlined box, so green means "yours".
+        .background(current == nil ? Color.clear : Color(red: 0.13, green: 0.29, blue: 0.19), in: RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(current == nil ? CeolTokens.borderColor : .clear, lineWidth: 1))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("sheet.status")
+        .onAppear {
+            if let a = tune.alias { alias = a; aliasOpen = true }
+            if let k = tune.key { key = k; keyOpen = true }
+        }
+        .task(id: tune.id) { if loadsStatus { await loadStatus() } }
+    }
+
+    /// Your status for the tune, from its detail (the listen screen knows only its id).
+    private func loadStatus() async {
+        loading = true
+        defer { loading = false }
+        guard let d = try? await model.auth.client.getTuneDetail(path: .init(tuneId: tune.id), query: .init()).ok.body.json,
+            let mine = JSONValue(encoding: d.sessionTune.personTuneStatus)
+        else { return }
+        if mine["on_list"]?.boolValue == true {
+            status = mine["learn_status"]?.stringValue
+            heard = mine["heard_count"]?.intValue ?? 0
+        } else {
+            status = nil
+        }
+    }
+
+    /// Saves one op; true when the server took it.
+    private func save(_ type: TuneOp._TypePayload, status s: LearnStatus? = nil, heard h: Int? = nil,
+                      nameAlias: String? = nil, key: String? = nil) async -> Bool {
+        busy = true
+        failure = nil
+        defer { busy = false }
+        do {
+            try await model.applyTuneOp(type, tuneID: tune.id, learnStatus: s, heardCount: h, nameAlias: nameAlias, key: key)
+            onChanged()
+            return true
+        } catch let f as TuneOpFailure {
+            failure = f.message
+        } catch {
+            failure = tr("That wasn't saved. Try again.")
+        }
+        return false
+    }
+
+    private func setStatus(_ new: MyTunesRules.Status) async {
+        let old = status
+        status = new.rawValue
+        if !(await save(.setStatus, status: LearnStatus(stored: new.rawValue))) { status = old }
+    }
+
+    private func add(_ new: MyTunesRules.Status) async {
+        let a = alias.trimmingCharacters(in: .whitespaces)
+        if await save(.add, status: LearnStatus(stored: new.rawValue), nameAlias: aliasOpen && !a.isEmpty ? a : nil,
+                      key: keyOpen && !key.isEmpty ? key : nil) {
+            status = new.rawValue
+            heard = 1  // an add is itself a hearing, as on the web
+            await onAdded()
+        }
+    }
+
+    private func setHeard(_ count: Int) async {
+        let old = heard
+        heard = count
+        if !(await save(.setHeard, heard: count)) { heard = old }
+    }
+
     /// Before the add: "I call this something else" and "I play this in a different
     /// key", each opening into its field, as the web's add form.
     private var addExtras: some View {
@@ -714,12 +786,20 @@ struct TuneSheet: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
+}
 
-    private func stat(_ label: String, _ value: Int) -> some View {
-        HStack { Text(label); Spacer(); Text("\(value)").foregroundStyle(CeolTokens.textMuted) }
-            .font(.ceol(size: 16)).padding(.vertical, 12)
+/// TunebookPanel with its own status: for a tune known only by its id (the listen screen).
+struct TunebookBox: View {
+    let tune: TuneRef
+    @State private var status: String?
+    @State private var heard = 0
+
+    var body: some View {
+        TunebookPanel(tune: tune, status: $status, heard: $heard, loadsStatus: true)
     }
+}
 
+extension TuneSheet {
     /// The notation card, as the web's tune drawer: the staff (or the ABC) on white,
     /// tapped to flip opening bars ⇄ the whole tune; under it the notes / abc tabs on the
     /// left and, on the right, "open in" (thesession.org, abc-tools) and full screen.
