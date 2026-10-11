@@ -319,6 +319,10 @@ final class CeolUITests: XCTestCase {
         app.buttons["tab.tunes"].firstMatch.tap()
         let cooleys = app.buttons.containing(NSPredicate(format: "label CONTAINS \"Cooley's\"")).firstMatch
         XCTAssertTrue(cooleys.waitForExistence(timeout: 10))
+        // The wordmark says where you are: no "Tunes" in the bar (the kept-payload slot
+        // once rendered empty, which brought the system title back). What's there is
+        // the slot's one-pixel stand-in, which carries the title as its label.
+        XCTAssertLessThan(app.navigationBars.staticTexts["Tunes"].frame.width, 10)
         snapshot("tunes")
         cooleys.tap()
         XCTAssertTrue(app.buttons["sheet.notation"].waitForExistence(timeout: 20))

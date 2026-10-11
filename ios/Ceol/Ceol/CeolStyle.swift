@@ -542,8 +542,11 @@ struct CeolTopBar<Trailing: View>: ViewModifier {
                 // No title (the wordmark or the back button says where you are); the
                 // kept payload's spinner or "Offline" sits here instead.
                 ToolbarItem(placement: .principal) {
-                    if let kept { KeptStatusView(status: kept).animation(.easeInOut(duration: 0.2), value: kept) }
-                    else { Color.clear.frame(width: 1, height: 1) }
+                    // Always a view: an empty slot would bring the system title back.
+                    ZStack {
+                        Color.clear.frame(width: 1, height: 1)
+                        if let kept { KeptStatusView(status: kept).animation(.easeInOut(duration: 0.2), value: kept) }
+                    }
                 }
                 .sharedBackgroundVisibility(.hidden)
                 ToolbarItem(placement: .topBarTrailing) { trailing() }
