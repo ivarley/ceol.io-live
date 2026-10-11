@@ -18,8 +18,11 @@ public struct VocabTune: Sendable, Equatable, Hashable {
     public var abc = false
     /// The session's own name for it (session_tune.alias), when it has one.
     public var alias: String?
-    /// As the session shows it: its alias, else the tune's name.
-    public var displayName: String { alias ?? name }
+    /// The name the session of yours that wins the precedence gives it (the
+    /// vocabulary's your_alias), when one does.
+    public var yourAlias: String?
+    /// As you know it: your sessions' name for it, else this session's, else the tune's.
+    public var displayName: String { yourAlias ?? alias ?? name }
 
     public init(tuneID: Int, name: String, tuneType: String?, abc: Bool = false) {
         self.tuneID = tuneID
@@ -90,6 +93,7 @@ public enum Composer {
             }
             index.byID[id] = VocabTune(tuneID: id, name: name, tuneType: type)
             index.byID[id]?.alias = t["alias"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 }
+            index.byID[id]?.yourAlias = t["your_alias"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 }
             let n = LogState.normName(name)
             add(&index.name, n, id)
             add(&index.name, LogState.stripThe(n), id)

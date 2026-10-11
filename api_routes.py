@@ -9382,19 +9382,18 @@ def match_tune_core(cur, session_id, tune_name, previous_tune_type=None, limit=5
 
     # Wildcard candidate list. Split into two branches so the catalog-wide name search is
     # index-backed (idx_tune_name_trgm via tune_search_key) instead of a full scan; session
-    # aliases (small, session-scoped) are matched separately. This preserves the original
-    # COALESCE(st.alias, t.name) semantics exactly: a tune with a session alias is searched
-    # by its alias, a tune without one by its name.
+    # aliases (small, session-scoped) are matched separately. A tune the session has its
+    # own name for is found by either name and shown under the session's (the UNION
+    # folds the two branches' identical rows).
     like_pattern = f"%{tune_name.lower()}%"
     cur.execute(
         """
         WITH cand AS (
-            -- name branch: effective search target is the tune name (no session alias)
-            SELECT t.tune_id, t.name AS display_name, t.tune_type, t.tunebook_count_cached
+            -- name branch: the catalogue name, shown under the session's own when it has one
+            SELECT t.tune_id, COALESCE(st.alias, t.name) AS display_name, t.tune_type, t.tunebook_count_cached
             FROM tune t
             LEFT JOIN session_tune st ON st.tune_id = t.tune_id AND st.session_id = %s
             WHERE t.redirect_to_tune_id IS NULL
-              AND st.alias IS NULL
               AND tune_search_key(t.name) LIKE %s
             UNION
             -- alias branch: session-scoped, small

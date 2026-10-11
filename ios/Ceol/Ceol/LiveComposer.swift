@@ -135,6 +135,9 @@ final class LogComposerModel {
                 var o: [String: JSONValue] = ["tune_id": t["tune_id"] ?? .null, "name": t["tune_name"] ?? .null,
                                               "tune_type": t["tune_type"] ?? .null]
                 if let v = t["in_session_tune"] { o["in_session_tune"] = v }
+                // As your sessions know it (the rows' titles, apart from the matching).
+                if let v = t["catalogue_name"], !v.isNull { o["catalogue_name"] = v }
+                if let v = t["your_alias"], !v.isNull { o["your_alias"] = v }
                 return .object(o)
             }
             m = ["exact_match": r["exact_match"] ?? false, "results": .array(rows)]

@@ -2191,6 +2191,44 @@
     if (last && last.tune_id != null) dismissedNext.add(nextAssocKey(last.tune_id, nx.tune_id))
   }
   // Don't list the suggested tune twice (pinned row + a normal result below it).
+  // A quick match as your sessions know the tune: the name the session of yours that
+  // wins the precedence gives it leads (else this session's, else the catalogue's);
+  // the other names it was found by go after it, the match lit.
+  function rowDisplay(tr) {
+    const d = localIndex?.display?.[tr.tune_id] || {}
+    const yourAlias = tr.your_alias ?? d.your_alias ?? null
+    const alias = d.alias ?? null
+    const catalogue = tr.catalogue_name ?? (alias && tr.name === alias ? null : tr.name) ?? tr.name
+    return { title: yourAlias || alias || catalogue || tr.name, names: [catalogue, alias, tr.name] }
+  }
+  function rowTitle(tr) {
+    return rowDisplay(tr).title
+  }
+  function rowAka(tr) {
+    const { title, names } = rowDisplay(tr)
+    const q = input.trim().toLowerCase()
+    const out = []
+    for (const n of names) {
+      if (!n || n === title || out.includes(n)) continue
+      if (q && n.toLowerCase().includes(q)) out.push(n)
+    }
+    return out
+  }
+  function litName(name) {
+    const q = input.trim().toLowerCase()
+    if (!q) return [{ text: name, hit: false }]
+    const pieces = []
+    let rest = name
+    while (rest) {
+      const i = rest.toLowerCase().indexOf(q)
+      if (i < 0) { pieces.push({ text: rest, hit: false }); break }
+      if (i > 0) pieces.push({ text: rest.slice(0, i), hit: false })
+      pieces.push({ text: rest.slice(i, i + q.length), hit: true })
+      rest = rest.slice(i + q.length)
+    }
+    return pieces
+  }
+
   const visibleResults = $derived(
     showNext && nextSuggestion ? results.filter((r) => r.tune_id !== nextSuggestion.tune_id) : results
   )
@@ -4276,7 +4314,7 @@
           {@const ci = (showNext && nextSuggestion ? 1 : 0) + vi}
           <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions -->
           <li id="cres-{ci}" class:hl={composerHl === ci} role="option" aria-selected={composerHl === ci} onmousedown={(e) => e.preventDefault()} onclick={() => pickResult(tr)}>
-            <span class="r-name">{tr.name}</span>
+            <span class="r-name">{rowTitle(tr)}{#if rowAka(tr).length}<span class="r-aka">{t('Also known as')} {#each rowAka(tr) as name, ni}{#if ni > 0}, {/if}{#each litName(name) as piece}{#if piece.hit}<span class="r-hit">{piece.text}</span>{:else}{piece.text}{/if}{/each}{/each}</span>{/if}</span>
             <span class="r-meta">
               {tuneTypeName(tr.tune_type) || ''}{#if tr.in_session_tune}<span class="r-insession">{` · ${t('in session')}`}</span>{/if}{#if tr.abc}<span class="r-abc">{` · ♪ ${t('notation')}`}</span>{/if}
             </span>

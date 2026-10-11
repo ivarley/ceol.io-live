@@ -2557,9 +2557,30 @@ def live_match(session_instance_id):
                 404,
             )
         result = match_tune_core(cur, srow[0], q, prefer_type, limit)
+        _personalize_match_rows(cur, result["results"])
         return jsonify({"success": True, **result})
     finally:
         conn.close()
+
+
+def _personalize_match_rows(cur, rows):
+    """The quick matches as your sessions know the tunes: each row gains the
+    catalogue name (tune_name is the session's own name when it has one) and
+    your_alias, what the session of yours that wins the precedence calls it."""
+    ids = [r["tune_id"] for r in rows if r.get("tune_id")]
+    if not ids:
+        return
+    cur.execute("SELECT tune_id, name FROM tune WHERE tune_id = ANY(%s)", (ids,))
+    names = dict(cur.fetchall())
+    person_id = (
+        getattr(current_user, "person_id", None)
+        if current_user.is_authenticated
+        else None
+    )
+    defaults = _your_session_defaults(cur, person_id, ids) if person_id else {}
+    for r in rows:
+        r["catalogue_name"] = names.get(r["tune_id"], r.get("tune_name"))
+        r["your_alias"] = (defaults.get(r["tune_id"]) or {}).get("alias")
 
 
 def _thesession_search_core(session_id=None, person_id=None):
@@ -3301,6 +3322,21 @@ def live_vocabulary(session_instance_id):
         session_id = srow[0]
         n, m = get_session_cache_limits(cur, session_id)
         known_tunes, known_aliases = compute_session_vocabulary(cur, session_id, n, m)
+        # What the session of yours that wins the precedence calls each tune, for the
+        # quick matches to lead with (the session's own alias is there already).
+        person_id = (
+            getattr(current_user, "person_id", None)
+            if current_user.is_authenticated
+            else None
+        )
+        if person_id and known_tunes:
+            defaults = _your_session_defaults(
+                cur, person_id, [t["tune_id"] for t in known_tunes]
+            )
+            for t in known_tunes:
+                alias = (defaults.get(t["tune_id"]) or {}).get("alias")
+                if alias:
+                    t["your_alias"] = alias
         return jsonify(
             {
                 "success": True,

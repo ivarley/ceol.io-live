@@ -254,6 +254,56 @@ def test_deep_search_offers_your_sessions_overrides(
         conn.close()
 
 
+def test_quick_matches_lead_with_your_sessions_name(
+    client, authenticated_user, search_tunes
+):
+    """The logger's /match rows and the vocabulary carry your_alias (what the session
+    of yours that wins the precedence calls the tune) and the catalogue name."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "UPDATE session_tune SET alias = 'Glorp As We Call It' WHERE session_id = %s AND tune_id = %s",
+        (SID, search_tunes["onlist"]),
+    )
+    cur.execute(
+        "INSERT INTO session_person (session_id, person_id) VALUES (%s, %s)",
+        (SID, PERSON_ID),
+    )
+    cur.execute(
+        "INSERT INTO session_instance (session_id, date) VALUES (%s, '2026-01-02') RETURNING session_instance_id",
+        (SID,),
+    )
+    iid = cur.fetchone()[0]
+    conn.commit()
+    try:
+        with authenticated_user:
+            rows = client.get(f"/api/live/instances/{iid}/match?q=glorp").get_json()[
+                "results"
+            ]
+            vocab = client.get(f"/api/live/instances/{iid}/vocabulary").get_json()[
+                "known_tunes"
+            ]
+        row = next(r for r in rows if r["tune_id"] == search_tunes["onlist"])
+        assert row["tune_name"] == "Glorp As We Call It"
+        assert row["catalogue_name"] == "Glorp Fandango Alpha"
+        assert row["your_alias"] == "Glorp As We Call It"
+        known = next(t for t in vocab if t["tune_id"] == search_tunes["onlist"])
+        assert known["your_alias"] == "Glorp As We Call It"
+    finally:
+        cur.execute(
+            "DELETE FROM session_instance_history WHERE session_instance_id = %s",
+            (iid,),
+        )
+        cur.execute(
+            "DELETE FROM session_instance WHERE session_instance_id = %s", (iid,)
+        )
+        cur.execute("DELETE FROM session_person_history WHERE session_id = %s", (SID,))
+        cur.execute("DELETE FROM session_person WHERE session_id = %s", (SID,))
+        conn.commit()
+        cur.close()
+        conn.close()
+
+
 def test_session_deep_search_unknown_session_404(
     client, authenticated_user, search_tunes
 ):

@@ -1363,6 +1363,8 @@ main.wide .hx-drawer {
 .deep-badge.star { background: rgba(245, 197, 24, 0.16); color: #e8d28a; }
 .deep-books { color: var(--muted); margin-left: auto; }
 .deep-aka { font-size: 12px; color: var(--muted); }
+.r-aka { display: block; font-size: 12px; font-weight: 400; color: var(--muted); }
+.r-hit { background: rgba(245, 197, 24, 0.28); color: var(--text); border-radius: 3px; padding: 0 2px; }
 .deep-hit { background: rgba(245, 197, 24, 0.28); color: var(--text); border-radius: 3px; padding: 0 2px; }
 .deep-defaults { font-size: 12px; color: var(--muted); }
 

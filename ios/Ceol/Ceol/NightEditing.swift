@@ -1112,7 +1112,8 @@ struct Suggestions: View {
                 t["tune_type"]?.stringValue.map(tuneTypeName), t["in_session_tune"] == true ? tr("in session") : nil,
                 t["abc"] == true ? tr("♪ notation") : nil,
             ].compactMap { $0 }.joined(separator: " · ")
-            row(title: t["name"]?.stringValue ?? "", detail: detail.isEmpty ? nil : detail, id: "suggest.row") { c.pick(t) }
+            let known = Self.asKnown(t, vocab: model.vocab, query: c.text)
+            row(title: known.title, detail: detail.isEmpty ? nil : detail, aka: known.aka, id: "suggest.row") { c.pick(t) }
         case .noMatch:
             Text("No tunes match your search").font(.ceol(size: 14)).foregroundStyle(CeolTokens.textMuted)
                 .frame(maxWidth: .infinity, alignment: .leading).padding(12)
@@ -1121,12 +1122,51 @@ struct Suggestions: View {
         }
     }
 
-    private func row(title: String, detail: String?, bold: Bool = false, id: String, color: Color = CeolTokens.textColor,
+    /// A quick match as your sessions know the tune: the name the session of yours
+    /// that wins the precedence gives it leads (else this session's, else the
+    /// catalogue's); the other names it was found by follow, the match lit.
+    static func asKnown(_ t: JSONValue, vocab: VocabIndex?, query: String) -> (title: String, aka: Text?) {
+        let id = t["tune_id"]?.intValue
+        let known = id.flatMap { vocab?.byID[$0] }
+        let name = t["name"]?.stringValue ?? ""
+        let catalogue = t["catalogue_name"]?.stringValue ?? known?.name ?? name
+        let alias = known?.alias
+        let yourAlias = t["your_alias"]?.stringValue ?? known?.yourAlias
+        let title = yourAlias ?? alias ?? catalogue
+        let q = query.trimmingCharacters(in: .whitespaces).lowercased()
+        var others: [String] = []
+        for n in [catalogue, alias, name].compactMap({ $0 }) where n != title && !others.contains(n) {
+            if !q.isEmpty, n.lowercased().contains(q) { others.append(n) }
+        }
+        guard !others.isEmpty else { return (title, nil) }
+        var lit = Text("Also known as") + Text(verbatim: " ")
+        for (i, n) in others.enumerated() {
+            if i > 0 { lit = lit + Text(verbatim: ", ") }
+            var rest = Substring(n)
+            while !rest.isEmpty {
+                guard let r = rest.range(of: q, options: [.caseInsensitive, .diacriticInsensitive]) else {
+                    lit = lit + Text(verbatim: String(rest))
+                    break
+                }
+                lit = lit + Text(verbatim: String(rest[..<r.lowerBound]))
+                    + Text(verbatim: String(rest[r])).foregroundStyle(CeolTokens.starBadgeText).bold()
+                rest = rest[r.upperBound...]
+            }
+        }
+        return (title, lit)
+    }
+
+    private func row(title: String, detail: String?, bold: Bool = false, aka: Text? = nil, id: String, color: Color = CeolTokens.textColor,
                      action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 8) {
-                Text(title).font(.ceol(size: 16, weight: bold ? .semibold : .regular)).foregroundStyle(color)
-                    .lineLimit(1)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title).font(.ceol(size: 16, weight: bold ? .semibold : .regular)).foregroundStyle(color)
+                        .lineLimit(1)
+                    if let aka {
+                        aka.font(.ceol(size: 12)).foregroundStyle(CeolTokens.textMuted).lineLimit(1)
+                    }
+                }
                 Spacer(minLength: 4)
                 if let detail {
                     Text(detail).font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted).lineLimit(1)
