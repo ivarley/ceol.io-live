@@ -4301,7 +4301,7 @@
           </li>
         {/if}
         {#if showNext && nextSuggestion}
-          {@const parts = suggestionParts(nextSuggestion.name, input)}
+          {@const parts = suggestionParts(rowTitle(nextSuggestion), input)}
           <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions -->
           <li id="cres-0" class="result-next" class:hl={composerHl === 0} role="option" aria-selected={composerHl === 0} onmousedown={(e) => e.preventDefault()} onclick={() => pickResult(nextSuggestion)}>
             <span class="r-arrow" aria-hidden="true">→</span>

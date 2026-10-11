@@ -1100,7 +1100,9 @@ struct Suggestions: View {
             row(title: tr("Tune #\(id) from thesession.org"), detail: nil, id: "suggest.thesession") { c.logTheSession(id) }
         case .next(let next):
             HStack(spacing: 0) {
-                row(title: next.name, detail: [tr("usually next"), next.tuneType.map(tuneTypeName)].compactMap { $0 }.joined(separator: " · "),
+                // As your sessions know it (the vocabulary's entry has the names; `next` only the catalogue's).
+                row(title: model.vocab?.byID[next.tuneID]?.displayName ?? next.displayName,
+                    detail: [tr("usually next"), next.tuneType.map(tuneTypeName)].compactMap { $0 }.joined(separator: " · "),
                     bold: true, id: "suggest.next") { c.pick(next.json) }
                 Button { model.dismissLikelyNext() } label: {
                     Image(systemName: "xmark").font(.system(size: 13)).foregroundStyle(CeolTokens.textMuted).frame(width: 40, height: 40)

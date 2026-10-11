@@ -2882,6 +2882,72 @@ INSERT INTO session_instance_person (session_instance_id, person_id, attendance)
 (120, 1, 'yes'), (120, 2, 'yes'), (120, 3, 'yes'), (120, 4, 'yes'), (120, 5, 'yes');
 
 -- =============================================================================
+-- A session's own name, setting and key for a tune (session_tune.alias,
+-- setting_id, key), in every combination, and the precedence between sessions
+-- when several of yours have a say: the one you've been to most often, then
+-- the most recently, then the first by name. sarah_fiddle (person 2) belongs
+-- to Mueller (attended 11 nights), Downtown (5), and these three small
+-- sessions (2 nights each). Held by tests/integration/test_session_overrides.py.
+-- =============================================================================
+
+INSERT INTO session (session_id, place_id, name, path, city, state, country, timezone, location_name, location_street, location_website, recurrence, comments, initiation_date) VALUES
+(7, 1, 'Hyde Park Session', 'austin/hyde-park', 'Austin', 'TX', 'USA', 'America/Chicago',
+ 'Hyde Park Bar & Grill', '4206 Duval St', NULL,
+ '{"schedules": [{"type": "weekly", "weekday": "saturday", "start_time": "15:00", "end_time": "18:00", "every_n_weeks": 1}]}',
+ 'A small afternoon session with its own names for a few tunes.',
+ '2025-02-01'),
+(8, 1, 'Riverside Session', 'austin/riverside', 'Austin', 'TX', 'USA', 'America/Chicago',
+ 'The Riverside Tavern', '1800 S Lamar Blvd', NULL,
+ '{"schedules": [{"type": "weekly", "weekday": "saturday", "start_time": "15:00", "end_time": "18:00", "every_n_weeks": 1}]}',
+ NULL,
+ '2025-03-01'),
+(9, 1, 'Barton Springs Session', 'austin/barton-springs', 'Austin', 'TX', 'USA', 'America/Chicago',
+ 'Barton Springs Saloon', '2201 Barton Springs Rd', NULL,
+ '{"schedules": [{"type": "weekly", "weekday": "saturday", "start_time": "15:00", "end_time": "18:00", "every_n_weeks": 1}]}',
+ NULL,
+ '2025-03-01');
+
+INSERT INTO session_person (session_id, person_id, relationship, confirmed, is_admin) VALUES
+(7, 1, 'member', TRUE, TRUE), (7, 2, 'member', TRUE, FALSE),
+(8, 1, 'member', TRUE, TRUE), (8, 2, 'member', TRUE, FALSE),
+(9, 1, 'member', TRUE, TRUE), (9, 2, 'member', TRUE, FALSE);
+
+-- Two nights each. Riverside and Barton Springs share their dates, so between
+-- them only the name decides; Hyde Park's are earlier, so Riverside beats it.
+INSERT INTO session_instance (session_instance_id, session_id, date, start_time, end_time, comments) VALUES
+(450, 7, '2025-03-01', '15:00', '18:00', NULL),
+(451, 7, '2025-03-08', '15:00', '18:00', NULL),
+(452, 8, '2025-04-05', '15:00', '18:00', NULL),
+(453, 8, '2025-04-12', '15:00', '18:00', NULL),
+(454, 9, '2025-04-05', '15:00', '18:00', NULL),
+(455, 9, '2025-04-12', '15:00', '18:00', NULL);
+
+INSERT INTO session_instance_person (session_instance_id, person_id, attendance) VALUES
+(450, 2, 'yes'), (451, 2, 'yes'), (452, 2, 'yes'), (453, 2, 'yes'), (454, 2, 'yes'), (455, 2, 'yes');
+
+-- Hyde Park: every combination of the three overrides, one tune each.
+INSERT INTO session_tune (session_id, tune_id, alias, setting_id, key) VALUES
+(7, 6, 'The Sweetheart', NULL, NULL),              -- alias only
+(7, 15, NULL, 12381, NULL),                        -- setting only
+(7, 17, NULL, NULL, 'Dmajor'),                     -- key only
+(7, 19, 'The Rambling Connaughtman', 12390, NULL), -- alias + setting
+(7, 21, 'Kelly''s Castle', NULL, 'Gmajor'),        -- alias + key
+(7, 29, NULL, 12420, 'Amajor'),                    -- setting + key
+(7, 33, 'Goodbye Ireland', 12428, 'Dmajor'),       -- all three
+-- Precedence by attendance: Mueller (11 nights) has this tune with a key only;
+-- Hyde Park (2 nights) names it. Mueller wins, so the name does not apply.
+(7, 74, 'The Apron', NULL, 'Dmajor'),
+-- Precedence by recency: Hyde Park and Riverside (2 nights each); Riverside's are later.
+(7, 34, 'Frieze Breeches (Hyde Park)', NULL, NULL),
+(8, 34, 'Frieze Breeches (Riverside)', NULL, NULL),
+-- Precedence by name: Riverside and Barton Springs, the same nights; Barton Springs first.
+(8, 45, 'Glendart (Riverside)', NULL, NULL),
+(9, 45, 'Glendart (Barton Springs)', NULL, NULL);
+
+-- A session sarah_fiddle is not in (Chicago) names a tune: no say for her.
+UPDATE session_tune SET alias = 'Bracken' WHERE session_id = 4 AND tune_id = 647;
+
+-- =============================================================================
 -- Reset sequences to avoid conflicts with future inserts
 -- =============================================================================
 
