@@ -762,8 +762,8 @@ struct TuneSheet: View {
                     .disabled(t.abc == nil && t.incipitAbc == nil)
                     .opacity(t.abc == nil && t.incipitAbc == nil ? 0.4 : 1)
                 Spacer()
-                // Full screen, once the whole tune is showing (the opening bars fit as they are).
-                if showFull && !abcMode && (full ?? incipit) != nil {
+                // Full screen, once the whole tune is up (the opening bars fit as they are).
+                if showFull && !abcMode && full != nil {
                     Button { fullScreen = true } label: {
                         Image(systemName: "arrow.up.left.and.arrow.down.right").font(.system(size: 17))
                             .foregroundStyle(CeolTokens.primary)

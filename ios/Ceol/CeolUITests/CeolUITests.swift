@@ -421,9 +421,10 @@ final class CeolUITests: XCTestCase {
         let filter = app.buttons["sessions.search.filter"].firstMatch
         XCTAssertTrue(filter.waitForExistence(timeout: 10))
         filter.tap()
-        let allActive = app.buttons["All Active"].firstMatch
-        XCTAssertTrue(allActive.waitForExistence(timeout: 5))
-        allActive.tap()
+        // Everyone's sessions (the status stays Active).
+        let everyones = app.buttons["All"].firstMatch
+        XCTAssertTrue(everyones.waitForExistence(timeout: 5))
+        everyones.tap()
         app.buttons["filters.done"].tap()
         let boston = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Boston Celtic Session'")).firstMatch
         XCTAssertTrue(boston.waitForExistence(timeout: 10))

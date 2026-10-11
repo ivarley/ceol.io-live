@@ -548,6 +548,86 @@
         }
       }
     },
+    "%lld active sessions in your list": {
+      "localizations": {
+        "ga": {
+          "variations": {
+            "plural": {
+              "few": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%lld sheisiún gníomhach i do liosta"
+                }
+              },
+              "many": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%lld seisiún gníomhach i do liosta"
+                }
+              },
+              "one": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%lld sheisiún gníomhach i do liosta"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%lld seisiún gníomhach i do liosta"
+                }
+              },
+              "two": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%lld sheisiún gníomhach i do liosta"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld active sessions you've visited": {
+      "localizations": {
+        "ga": {
+          "variations": {
+            "plural": {
+              "few": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%lld sheisiún gníomhach ar thug tú cuairt orthu"
+                }
+              },
+              "many": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%lld seisiún gníomhach ar thug tú cuairt orthu"
+                }
+              },
+              "one": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%lld sheisiún gníomhach ar thug tú cuairt orthu"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%lld seisiún gníomhach ar thug tú cuairt orthu"
+                }
+              },
+              "two": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%lld sheisiún gníomhach ar thug tú cuairt orthu"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld changes you made offline couldn’t be applied when you reconnected — usually because someone else changed the same tune first.": {
       "localizations": {
         "ga": {
@@ -661,6 +741,86 @@
                 "stringUnit": {
                   "state": "needs_review",
                   "value": "%lld sheisiún neamhghníomhach"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld inactive sessions in your list": {
+      "localizations": {
+        "ga": {
+          "variations": {
+            "plural": {
+              "few": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%lld sheisiún neamhghníomhach i do liosta"
+                }
+              },
+              "many": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%lld seisiún neamhghníomhach i do liosta"
+                }
+              },
+              "one": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%lld sheisiún neamhghníomhach i do liosta"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%lld seisiún neamhghníomhach i do liosta"
+                }
+              },
+              "two": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%lld sheisiún neamhghníomhach i do liosta"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld inactive sessions you've visited": {
+      "localizations": {
+        "ga": {
+          "variations": {
+            "plural": {
+              "few": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%lld sheisiún neamhghníomhach ar thug tú cuairt orthu"
+                }
+              },
+              "many": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%lld seisiún neamhghníomhach ar thug tú cuairt orthu"
+                }
+              },
+              "one": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%lld sheisiún neamhghníomhach ar thug tú cuairt orthu"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%lld seisiún neamhghníomhach ar thug tú cuairt orthu"
+                }
+              },
+              "two": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%lld sheisiún neamhghníomhach ar thug tú cuairt orthu"
                 }
               }
             }
@@ -1690,6 +1850,16 @@
         }
       }
     },
+    "Active": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Gníomhach"
+          }
+        }
+      }
+    },
     "Add": {
       "localizations": {
         "ga": {
@@ -1972,6 +2142,7 @@
       }
     },
     "All Active": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -4840,6 +5011,16 @@
         }
       }
     },
+    "Mine": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Mo chuid"
+          }
+        }
+      }
+    },
     "Minutes before and after must be whole numbers of minutes": {
       "localizations": {
         "ga": {
@@ -4891,6 +5072,7 @@
       }
     },
     "My Sessions": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {

@@ -25,25 +25,36 @@ struct SessionsRulesTests {
     @Test("filters: membership, visitors, and active until the end date arrives")
     func filters() {
         let today = "2026-09-28"
-        #expect(SessionsRules.matches(entry(member: true), filter: .mine, search: "", today: today))
-        #expect(!SessionsRules.matches(entry(relationship: "visitor"), filter: .mine, search: "", today: today))
-        #expect(SessionsRules.matches(entry(relationship: "visitor"), filter: .visited, search: "", today: today))
-        #expect(SessionsRules.matches(entry(), filter: .active, search: "", today: today))
-        #expect(SessionsRules.matches(entry(ends: "2026-10-01"), filter: .active, search: "", today: today))
-        #expect(!SessionsRules.matches(entry(ends: "2026-09-28"), filter: .active, search: "", today: today))
-        #expect(SessionsRules.matches(entry(ends: "2026-09-28"), filter: .inactive, search: "", today: today))
-        #expect(!SessionsRules.matches(entry(), filter: .inactive, search: "", today: today))
-        #expect(SessionsRules.matches(entry(ends: "2020-01-01"), filter: .all, search: "", today: today))
+        func ok(_ e: SessionsRules.Entry, _ scope: SessionsRules.Scope, _ status: SessionsRules.Status) -> Bool {
+            SessionsRules.matches(e, scope: scope, status: status, search: "", today: today)
+        }
+        // Whose.
+        #expect(ok(entry(member: true), .mine, .all))
+        #expect(!ok(entry(relationship: "visitor"), .mine, .all))
+        #expect(ok(entry(relationship: "visitor"), .visited, .all))
+        #expect(!ok(entry(member: true), .visited, .all))
+        #expect(ok(entry(), .all, .all))
+        // Which: active until the termination date arrives.
+        #expect(ok(entry(), .all, .active))
+        #expect(ok(entry(ends: "2026-10-01"), .all, .active))
+        #expect(!ok(entry(ends: "2026-09-28"), .all, .active))
+        #expect(ok(entry(ends: "2026-09-28"), .all, .inactive))
+        #expect(!ok(entry(), .all, .inactive))
+        #expect(ok(entry(ends: "2020-01-01"), .all, .all))
+        // Both at once: the defaults show your active sessions only.
+        #expect(ok(entry(member: true), .mine, .active))
+        #expect(!ok(entry(ends: "2020-01-01", member: true), .mine, .active))
+        #expect(!ok(entry(ends: "2026-10-01"), .mine, .active))
     }
 
     @Test("search: the name or the place, smart quotes folded")
     func search() {
         let today = "2026-09-28"
-        #expect(SessionsRules.matches(entry("O'Flaherty's"), filter: .all, search: "o\u{2019}flah", today: today))
-        #expect(SessionsRules.matches(entry(), filter: .all, search: "austin", today: today))
-        #expect(!SessionsRules.matches(entry(), filter: .all, search: "galway", today: today))
-        #expect(SessionsRules.matches(entry("Sligo Ma\u{ED}d"), filter: .all, search: "maid", today: today))
-        #expect(SessionsRules.matches(entry("Sligo Maid"), filter: .all, search: "ma\u{ED}d", today: today))
+        #expect(SessionsRules.matches(entry("O'Flaherty's"), scope: .all, status: .all, search: "o\u{2019}flah", today: today))
+        #expect(SessionsRules.matches(entry(), scope: .all, status: .all, search: "austin", today: today))
+        #expect(!SessionsRules.matches(entry(), scope: .all, status: .all, search: "galway", today: today))
+        #expect(SessionsRules.matches(entry("Sligo Ma\u{ED}d"), scope: .all, status: .all, search: "maid", today: today))
+        #expect(SessionsRules.matches(entry("Sligo Maid"), scope: .all, status: .all, search: "ma\u{ED}d", today: today))
     }
 
     @Test("sorts: name, place, on now first; ties keep their order")

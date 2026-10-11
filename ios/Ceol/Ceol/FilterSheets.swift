@@ -148,7 +148,8 @@ struct TunesFilterSheet: View {
 
 struct SessionsFilterSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @Binding var filter: SessionsRules.Filter
+    @Binding var scope: SessionsRules.Scope
+    @Binding var status: SessionsRules.Status
     @Binding var sort: SessionsRules.Sort
     @Binding var country: String
     let countries: [String]
@@ -158,7 +159,9 @@ struct SessionsFilterSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     ChoiceChips(
-                        label: tr("Show"), options: SessionsRules.Filter.allCases.map { ($0, SessionsL10n.label($0)) }, selection: $filter)
+                        label: tr("Show"), options: SessionsRules.Scope.allCases.map { ($0, SessionsL10n.label($0)) }, selection: $scope)
+                    ChoiceChips(
+                        label: tr("Status"), options: SessionsRules.Status.allCases.map { ($0, SessionsL10n.label($0)) }, selection: $status)
                     ChoiceChips(label: tr("Sort"), options: SessionsRules.Sort.allCases.map { ($0, SessionsL10n.label($0)) }, selection: $sort)
                     if countries.count >= 2 {
                         ChoiceChips(label: tr("Country"), options: [("", tr("Anywhere"))] + countries.map { ($0, $0) }, selection: $country)
@@ -172,7 +175,8 @@ struct SessionsFilterSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Clear") {
-                        filter = .mine
+                        scope = .mine
+                        status = .active
                         sort = .name
                         country = ""
                     }

@@ -1,5 +1,7 @@
 // The sessions list's rules — a port of frontend/src/sessionsdir (logic.js and the
-// filter in App.svelte): the five filters, the search, and where a session is.
+// filter in App.svelte), with the filter split in two: whose sessions (mine, visited,
+// all) and which are still going (active, inactive, all); then the search, and where
+// a session is.
 //
 // One deliberate difference: the web's search folds smart quotes and case; this also
 // strips accents, on both sides (LogState.normName), so "maid" finds "Maíd".
@@ -7,30 +9,15 @@
 import Foundation
 
 public enum SessionsRules {
-    /// The filters, in the web's order. Signed-out viewers get the last three.
-    public enum Filter: String, CaseIterable, Sendable {
-        case mine, visited, active, all, inactive
+    /// Whose sessions: the ones on your list, the ones you've visited, or everyone's.
+    /// Mine is the default, for a viewer with a list.
+    public enum Scope: String, CaseIterable, Sendable {
+        case mine, visited, all
+    }
 
-        public var label: String {
-            switch self {
-            case .mine: return "My Sessions"
-            case .visited: return "Visited"
-            case .active: return "All Active"
-            case .all: return "All"
-            case .inactive: return "Inactive"
-            }
-        }
-
-        /// "3 sessions in your list".
-        public var countNoun: String {
-            switch self {
-            case .mine: return "sessions in your list"
-            case .visited: return "sessions you've visited"
-            case .active: return "active sessions"
-            case .all: return "sessions"
-            case .inactive: return "inactive sessions"
-            }
-        }
+    /// Which sessions: still going, stopped, or both. Active is the default.
+    public enum Status: String, CaseIterable, Sendable {
+        case active, inactive, all
     }
 
     public struct Entry: Sendable {
@@ -57,18 +44,22 @@ public enum SessionsRules {
         }
     }
 
-    /// Does a session pass the filter and the search? `today` is the viewer's local
+    /// Does a session pass both filters and the search? `today` is the viewer's local
     /// "YYYY-MM-DD": a session is active until its termination date arrives.
-    public static func matches(_ e: Entry, filter: Filter, search: String, today: String) -> Bool {
-        let passes: Bool =
-            switch filter {
+    public static func matches(_ e: Entry, scope: Scope, status: Status, search: String, today: String) -> Bool {
+        let whose: Bool =
+            switch scope {
             case .mine: e.isMember
             case .visited: e.relationship == "visitor"
-            case .active: e.terminationDate.map { $0 > today } ?? true
             case .all: true
-            case .inactive: e.terminationDate.map { $0 <= today } ?? false
             }
-        guard passes else { return false }
+        let going: Bool =
+            switch status {
+            case .active: e.terminationDate.map { $0 > today } ?? true
+            case .inactive: e.terminationDate.map { $0 <= today } ?? false
+            case .all: true
+            }
+        guard whose && going else { return false }
         let term = LogState.normName(search)
         guard !term.isEmpty else { return true }
         let place = [e.city, e.state, e.country].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")

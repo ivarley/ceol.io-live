@@ -13,12 +13,40 @@
     "many": "%lld seisiún gníomhach",
     "other": "%lld seisiún gníomhach"
   },
+  "%lld active sessions in your list": {
+    "one": "%lld sheisiún gníomhach i do liosta",
+    "two": "%lld sheisiún gníomhach i do liosta",
+    "few": "%lld sheisiún gníomhach i do liosta",
+    "many": "%lld seisiún gníomhach i do liosta",
+    "other": "%lld seisiún gníomhach i do liosta"
+  },
+  "%lld active sessions you've visited": {
+    "one": "%lld sheisiún gníomhach ar thug tú cuairt orthu",
+    "two": "%lld sheisiún gníomhach ar thug tú cuairt orthu",
+    "few": "%lld sheisiún gníomhach ar thug tú cuairt orthu",
+    "many": "%lld seisiún gníomhach ar thug tú cuairt orthu",
+    "other": "%lld seisiún gníomhach ar thug tú cuairt orthu"
+  },
   "%lld inactive sessions": {
     "one": "%lld sheisiún neamhghníomhach",
     "two": "%lld sheisiún neamhghníomhach",
     "few": "%lld sheisiún neamhghníomhach",
     "many": "%lld seisiún neamhghníomhach",
     "other": "%lld seisiún neamhghníomhach"
+  },
+  "%lld inactive sessions in your list": {
+    "one": "%lld sheisiún neamhghníomhach i do liosta",
+    "two": "%lld sheisiún neamhghníomhach i do liosta",
+    "few": "%lld sheisiún neamhghníomhach i do liosta",
+    "many": "%lld seisiún neamhghníomhach i do liosta",
+    "other": "%lld seisiún neamhghníomhach i do liosta"
+  },
+  "%lld inactive sessions you've visited": {
+    "one": "%lld sheisiún neamhghníomhach ar thug tú cuairt orthu",
+    "two": "%lld sheisiún neamhghníomhach ar thug tú cuairt orthu",
+    "few": "%lld sheisiún neamhghníomhach ar thug tú cuairt orthu",
+    "many": "%lld seisiún neamhghníomhach ar thug tú cuairt orthu",
+    "other": "%lld seisiún neamhghníomhach ar thug tú cuairt orthu"
   },
   "%lld logs": {
     "one": "%lld logáil",
@@ -88,6 +116,7 @@
   "A session admin can confirm you to show you who else plays here.": "Is féidir le bainisteoir an tseisiúin tú a dheimhniú le go bhfeicfidh tú cé eile a sheinneann anseo.",
   "ADDED": "CURTHA LEIS",
   "About this session:": "Faoin seisiún seo:",
+  "Active": "Gníomhach",
   "Add a Session": "Cuir seisiún leis",
   "Add a night": "Cuir oíche leis",
   "Add a session": "Cuir seisiún leis",
@@ -191,6 +220,7 @@
   "Looking up the next usual date…": "An chéad ghnáthdháta eile á aimsiú…",
   "Member": "Ball",
   "Members": "Baill",
+  "Mine": "Mo chuid",
   "Minutes before and after must be whole numbers of minutes": "Caithfidh na nóiméid roimhe agus ina dhiaidh a bheith ina slánuimhreacha",
   "Monthly": "Gach mí",
   "My Sessions": "Mo sheisiúin",
@@ -294,6 +324,7 @@
   "Started (YYYY-MM-DD)": "Tosaíodh (BBBB-MM-LL)",
   "State": "Stát",
   "State or county (required)": "Stát nó contae (riachtanach)",
+  "Status": "Stádas",
   "That session is already on Ceol.": "Tá an seisiún sin ar Ceol cheana.",
   "The key the session typically plays this tune in.": "An gléas ina seinneann an seisiún an fonn seo de ghnáth.",
   "Their name…": "A n-ainm…",

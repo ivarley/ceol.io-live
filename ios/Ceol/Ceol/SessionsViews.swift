@@ -43,7 +43,8 @@ struct SessionDestinations: ViewModifier {
 struct SessionsView: View {
     @Environment(AppModel.self) private var model
     @State private var state: LoadState<SessionsPayload> = .loading
-    @State private var filter: SessionsRules.Filter = .mine
+    @State private var scope: SessionsRules.Scope = .mine
+    @State private var status: SessionsRules.Status = .active
     @State private var search = ""
     @State private var decidedDefault = false
     @State private var sort: SessionsRules.Sort = .name
@@ -60,10 +61,10 @@ struct SessionsView: View {
                 .modifier(SessionDestinations())
                 .sheet(isPresented: $filtering) {
                     SessionsFilterSheet(
-                        filter: $filter, sort: $sort, country: $country,
+                        scope: $scope, status: $status, sort: $sort, country: $country,
                         // Only countries with sessions under the other choices, so none is empty.
                         countries: SessionsRules.countries((state.value?.sessions ?? []).map(\.entry).filter {
-                            SessionsRules.matches($0, filter: filter, search: search, today: localToday())
+                            SessionsRules.matches($0, scope: scope, status: status, search: search, today: localToday())
                         }))
                 }
                 .sheet(isPresented: $adding) {
@@ -82,7 +83,7 @@ struct SessionsView: View {
             // Not a member of anything yet: start on All Active, not an empty list.
             if !decidedDefault {
                 decidedDefault = true
-                if !payload.sessions.contains(where: \.userIsMember) { filter = .active }
+                if !payload.sessions.contains(where: \.userIsMember) { scope = .all }
             }
             state = .loaded(payload)
         } catch {
@@ -93,7 +94,7 @@ struct SessionsView: View {
     @ViewBuilder private func list(_ payload: SessionsPayload) -> some View {
         let today = localToday()
         let passing = payload.sessions.filter {
-            SessionsRules.matches($0.entry, filter: filter, search: search, today: today)
+            SessionsRules.matches($0.entry, scope: scope, status: status, search: search, today: today)
                 && SessionsRules.inCountry($0.entry, country)
         }
         let shown = SessionsRules.sorted(passing.map(\.entry), by: sort) { !passing[$0].activeInstances.isEmpty }
@@ -104,8 +105,8 @@ struct SessionsView: View {
                     text: $search, prompt: tr("Search by name or location…"), fieldID: "sessions.search",
                     onAdd: { adding = true }, addID: "sessions.add", addLabel: tr("Add a session"),
                     onFilter: { filtering = true },
-                    filterCount: (filter != .mine ? 1 : 0) + (sort != .name ? 1 : 0) + (country.isEmpty ? 0 : 1))
-                Text(SessionsL10n.sessionsCount(shown.count, filter)).font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
+                    filterCount: (scope != .mine ? 1 : 0) + (status != .active ? 1 : 0) + (sort != .name ? 1 : 0) + (country.isEmpty ? 0 : 1))
+                Text(SessionsL10n.sessionsCount(shown.count, scope, status)).font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
             }
             .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 8, trailing: 16))
             .listRowBackground(CeolTokens.bgColor)
@@ -151,7 +152,7 @@ struct SessionsView: View {
                     .multilineTextAlignment(.center)
                     .foregroundStyle(CeolTokens.textMuted)
                     .onTapGesture {
-                        if filter == .all { adding = true } else { filter = .all }
+                        if scope == .all && status == .all { adding = true } else { scope = .all; status = .all }
                     }
             }
             .frame(maxWidth: .infinity)
@@ -1495,23 +1496,33 @@ enum SessionsL10n {
     static func instrument(_ name: String) -> String { TunesWords.instrument(name) }
 
     /// The sessions list's tally ("3 sessions in your list"), as SessionsRules words it.
-    static func sessionsCount(_ n: Int, _ filter: SessionsRules.Filter) -> String {
-        switch filter {
-        case .mine: tr("\(n) sessions in your list")
-        case .visited: tr("\(n) sessions you've visited")
-        case .active: tr("\(n) active sessions")
-        case .all: tr("\(n) sessions")
-        case .inactive: tr("\(n) inactive sessions")
+    static func sessionsCount(_ n: Int, _ scope: SessionsRules.Scope, _ status: SessionsRules.Status) -> String {
+        switch (scope, status) {
+        case (.mine, .active): tr("\(n) active sessions in your list")
+        case (.mine, .inactive): tr("\(n) inactive sessions in your list")
+        case (.mine, .all): tr("\(n) sessions in your list")
+        case (.visited, .active): tr("\(n) active sessions you've visited")
+        case (.visited, .inactive): tr("\(n) inactive sessions you've visited")
+        case (.visited, .all): tr("\(n) sessions you've visited")
+        case (.all, .active): tr("\(n) active sessions")
+        case (.all, .inactive): tr("\(n) inactive sessions")
+        case (.all, .all): tr("\(n) sessions")
         }
     }
 
-    static func label(_ f: SessionsRules.Filter) -> String {
-        switch f {
-        case .mine: tr("My Sessions")
+    static func label(_ s: SessionsRules.Scope) -> String {
+        switch s {
+        case .mine: tr("Mine")
         case .visited: tr("Visited")
-        case .active: tr("All Active")
         case .all: tr("All")
+        }
+    }
+
+    static func label(_ s: SessionsRules.Status) -> String {
+        switch s {
+        case .active: tr("Active")
         case .inactive: tr("Inactive")
+        case .all: tr("All")
         }
     }
 
