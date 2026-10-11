@@ -127,6 +127,24 @@
     if (yes) node.focus()
   }
 
+  // The card's gold badge says what this flow doesn't already show: adding to your
+  // tunebook (on-list tunes are dimmed), whether a session of yours plays it; adding
+  // to a session's list (its tunes are dimmed), whether it's on your list; logging a
+  // night, whether it's on your list and how often this session has played it.
+  function starBadge(r) {
+    if (dimOnList) return r.in_your_sessions ? t('played at your sessions') : null
+    if (dimInSession) return r.on_list ? t('on your list') : null
+    const n = r.played_here || 0
+    if (r.on_list && n >= 5) return t('on your list, played often this session')
+    if (r.on_list && n >= 2) return t('on your list, played occasionally this session')
+    if (r.on_list && n === 1) return t('on your list, played once this session')
+    if (r.on_list) return t('on your list')
+    if (n >= 5) return t('played often this session')
+    if (n >= 2) return t('played occasionally this session')
+    if (n === 1) return t('played once this session')
+    return null
+  }
+
   function runSearch() {
     if (deepTimer) clearTimeout(deepTimer)
     hl = -1 // a new query invalidates the keyboard highlight
@@ -562,9 +580,7 @@
           </div>
           <div class="deep-meta">
             {#if r.abc_only}<span class="deep-badge">♪ {t('notation')}</span>{/if}
-            {#if r.on_list}<span class="deep-badge star">★ {t('on your list')}</span>{/if}
-            {#if r.in_session}<span class="deep-badge">{t('in this session')}</span>{/if}
-            {#if r.played_here}<span class="deep-badge">{t('played here {n}×', { n: r.played_here })}</span>{/if}
+            {#if starBadge(r)}<span class="deep-badge star">★ {starBadge(r)}</span>{/if}
             <span class="deep-books">{r.tunebook_count ?? 0} {t('tunebooks')}</span>
           </div>
         </button>

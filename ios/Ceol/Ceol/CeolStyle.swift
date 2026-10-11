@@ -848,6 +848,10 @@ enum QRCode {
 extension CeolTokens {
     /// A drawer's surface: a step lighter than the page (#1a1a1a) and the cards on it.
     static let drawerBg = Color(red: 0.17, green: 0.17, blue: 0.17)
+    /// A card on a drawer: a shade lighter, so each stands apart (the web's search cards).
+    static let cardBg = Color(red: 0.215, green: 0.215, blue: 0.215)
+    /// The web's gold "★ on your list" badge: its text, on the warning colour's tint.
+    static let starBadgeText = Color(red: 0.91, green: 0.82, blue: 0.54)
 }
 
 /// A labelled row of choices in a drawer: the label above, the chips wrapping below.

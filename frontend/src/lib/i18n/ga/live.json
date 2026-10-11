@@ -1550,5 +1550,33 @@
   "{actor} cleared this log's name": {
     "ga": "Ghlan {actor} ainm na logála seo",
     "review": true
+  },
+  "played at your sessions": {
+    "ga": "seinnte ag do sheisiúin",
+    "review": true
+  },
+  "on your list, played once this session": {
+    "ga": "ar do liosta, seinnte uair amháin ag an seisiún seo",
+    "review": true
+  },
+  "on your list, played occasionally this session": {
+    "ga": "ar do liosta, seinnte ó am go chéile ag an seisiún seo",
+    "review": true
+  },
+  "on your list, played often this session": {
+    "ga": "ar do liosta, seinnte go minic ag an seisiún seo",
+    "review": true
+  },
+  "played once this session": {
+    "ga": "seinnte uair amháin ag an seisiún seo",
+    "review": true
+  },
+  "played occasionally this session": {
+    "ga": "seinnte ó am go chéile ag an seisiún seo",
+    "review": true
+  },
+  "played often this session": {
+    "ga": "seinnte go minic ag an seisiún seo",
+    "review": true
   }
 }

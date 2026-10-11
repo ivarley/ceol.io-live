@@ -22,10 +22,12 @@ from database import get_db_connection
 pytestmark = pytest.mark.integration
 
 # High, unlikely-to-collide ids for throwaway rows.
-ONLIST = 9411   # "Glorp Fandango Alpha" — on person 2's list + in the session, MORE popular
+ONLIST = (
+    9411  # "Glorp Fandango Alpha" — on person 2's list + in the session, MORE popular
+)
 OFFLIST = 9412  # "Glorp Fandango Beta"  — on neither, less popular
-PERSON_ID = 2   # matches sample_user_data's person_id
-SID = 9410      # throwaway session
+PERSON_ID = 2  # matches sample_user_data's person_id
+SID = 9410  # throwaway session
 SPATH = "glorp-search-test"
 
 
@@ -47,9 +49,13 @@ def search_tunes():
         "INSERT INTO person_tune (person_id, tune_id, learn_status) VALUES (%s, %s, 'learning')",
         (PERSON_ID, ONLIST),
     )
-    cur.execute("INSERT INTO session (session_id, name, path) VALUES (%s, %s, %s)",
-                (SID, "Glorp Search Test", SPATH))
-    cur.execute("INSERT INTO session_tune (session_id, tune_id) VALUES (%s, %s)", (SID, ONLIST))
+    cur.execute(
+        "INSERT INTO session (session_id, name, path) VALUES (%s, %s, %s)",
+        (SID, "Glorp Search Test", SPATH),
+    )
+    cur.execute(
+        "INSERT INTO session_tune (session_id, tune_id) VALUES (%s, %s)", (SID, ONLIST)
+    )
     conn.commit()
 
     yield {"onlist": ONLIST, "offlist": OFFLIST, "session_path": SPATH}
@@ -58,9 +64,13 @@ def search_tunes():
     cur.execute("DELETE FROM session_tune WHERE session_id = %s", (SID,))
     cur.execute("DELETE FROM session_history WHERE session_id = %s", (SID,))
     cur.execute("DELETE FROM session WHERE session_id = %s", (SID,))
-    cur.execute("DELETE FROM person_tune_history WHERE tune_id = ANY(%s)", ([ONLIST, OFFLIST],))
+    cur.execute(
+        "DELETE FROM person_tune_history WHERE tune_id = ANY(%s)", ([ONLIST, OFFLIST],)
+    )
     cur.execute("DELETE FROM person_tune WHERE tune_id = ANY(%s)", ([ONLIST, OFFLIST],))
-    cur.execute("DELETE FROM tune_history WHERE tune_id = ANY(%s)", ([ONLIST, OFFLIST],))
+    cur.execute(
+        "DELETE FROM tune_history WHERE tune_id = ANY(%s)", ([ONLIST, OFFLIST],)
+    )
     cur.execute("DELETE FROM tune WHERE tune_id = ANY(%s)", ([ONLIST, OFFLIST],))
     conn.commit()
     cur.close()
@@ -114,11 +124,15 @@ def test_incipit_endpoint_no_notation(client, authenticated_user, search_tunes):
     assert body["image"] is None
 
 
-def test_session_deep_search_flags_and_sorts_in_session_last(client, authenticated_user, search_tunes):
+def test_session_deep_search_flags_and_sorts_in_session_last(
+    client, authenticated_user, search_tunes
+):
     """Session flavor: in_session flagged, and the in-session tune sorts LAST even
     though it is far more popular (the add-to-session pane dims it)."""
     with authenticated_user:
-        resp = client.get(f"/api/tunes/deep-search?session={search_tunes['session_path']}&q=glorp fandango")
+        resp = client.get(
+            f"/api/tunes/deep-search?session={search_tunes['session_path']}&q=glorp fandango"
+        )
     assert resp.status_code == 200
     results = resp.get_json()["results"]
     by_id = {r["tune_id"]: r for r in results}
@@ -128,13 +142,48 @@ def test_session_deep_search_flags_and_sorts_in_session_last(client, authenticat
     assert ids.index(search_tunes["offlist"]) < ids.index(search_tunes["onlist"])
 
 
-def test_session_deep_search_unknown_session_404(client, authenticated_user, search_tunes):
+def test_deep_search_flags_tunes_your_sessions_play(
+    client, authenticated_user, search_tunes
+):
+    """in_your_sessions: the tune is in the repertoire of a session you belong to
+    (your tunebook's add badges it, since on-list is its dimming there)."""
+    with authenticated_user:
+        resp = client.get("/api/tunes/deep-search?q=glorp fandango")
+    by_id = {r["tune_id"]: r for r in resp.get_json()["results"]}
+    assert by_id[search_tunes["onlist"]]["in_your_sessions"] is False
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO session_person (session_id, person_id) VALUES (%s, %s)",
+        (SID, PERSON_ID),
+    )
+    conn.commit()
+    try:
+        with authenticated_user:
+            resp = client.get("/api/tunes/deep-search?q=glorp fandango")
+        by_id = {r["tune_id"]: r for r in resp.get_json()["results"]}
+        assert by_id[search_tunes["onlist"]]["in_your_sessions"] is True
+        assert by_id[search_tunes["offlist"]]["in_your_sessions"] is False
+    finally:
+        cur.execute("DELETE FROM session_person_history WHERE session_id = %s", (SID,))
+        cur.execute("DELETE FROM session_person WHERE session_id = %s", (SID,))
+        conn.commit()
+        cur.close()
+        conn.close()
+
+
+def test_session_deep_search_unknown_session_404(
+    client, authenticated_user, search_tunes
+):
     with authenticated_user:
         resp = client.get("/api/tunes/deep-search?session=no-such-session-xyz&q=glorp")
     assert resp.status_code == 404
 
 
-def test_thesession_search_dedupes_repeated_hits(client, authenticated_user, monkeypatch):
+def test_thesession_search_dedupes_repeated_hits(
+    client, authenticated_user, monkeypatch
+):
     """thesession matches per-setting, so one tune can appear several times in a single
     search response (common for ABC queries). The proxy must return each tune once —
     duplicates crash the client's keyed result list."""
@@ -147,15 +196,33 @@ def test_thesession_search_dedupes_repeated_hits(client, authenticated_user, mon
     def fake_get(url, timeout=None):
         resp = types.SimpleNamespace()
         resp.status_code = 200
-        resp.json = lambda: {"tunes": [
-            {"id": 4717, "name": "Kings Of Kerry", "type": "slide", "url": "https://thesession.org/tunes/4717"},
-            {"id": 2188, "name": "The Kerry Jig", "type": "slide", "url": "https://thesession.org/tunes/2188"},
-            {"id": 4717, "name": "Kings Of Kerry", "type": "slide", "url": "https://thesession.org/tunes/4717"},
-        ]}
+        resp.json = lambda: {
+            "tunes": [
+                {
+                    "id": 4717,
+                    "name": "Kings Of Kerry",
+                    "type": "slide",
+                    "url": "https://thesession.org/tunes/4717",
+                },
+                {
+                    "id": 2188,
+                    "name": "The Kerry Jig",
+                    "type": "slide",
+                    "url": "https://thesession.org/tunes/2188",
+                },
+                {
+                    "id": 4717,
+                    "name": "Kings Of Kerry",
+                    "type": "slide",
+                    "url": "https://thesession.org/tunes/4717",
+                },
+            ]
+        }
         return resp
 
     monkeypatch.setattr(
-        live_logging_routes, "requests",
+        live_logging_routes,
+        "requests",
         types.SimpleNamespace(get=fake_get, exceptions=real_requests.exceptions),
     )
     with authenticated_user:
@@ -201,7 +268,8 @@ def test_tune_search_link_follows_a_merge(client, search_tunes):
     conn.commit()
     try:
         resp = client.get(
-            "/api/tunes/search?q=https://thesession.org/tunes/%d" % search_tunes["offlist"]
+            "/api/tunes/search?q=https://thesession.org/tunes/%d"
+            % search_tunes["offlist"]
         )
         body = resp.get_json()
         assert [t["tune_id"] for t in body["tunes"]] == [search_tunes["onlist"]]
@@ -238,9 +306,11 @@ def test_tune_search_short_name_query_still_rejected(client):
 
 RANK_SID = 9420
 RANK_INSTANCE = 9421
-RANK_POPULAR = 9422   # "Glorp Maggie Alpha": the world's favourite, never played here
-RANK_LOCAL = 9423     # "Glorp Maggie Beta": obscure, but played at this session three times
-RANK_PREFIX = 9424    # "Maggie Glorp Gamma": a PREFIX hit for "maggie", never played here
+RANK_POPULAR = 9422  # "Glorp Maggie Alpha": the world's favourite, never played here
+RANK_LOCAL = (
+    9423  # "Glorp Maggie Beta": obscure, but played at this session three times
+)
+RANK_PREFIX = 9424  # "Maggie Glorp Gamma": a PREFIX hit for "maggie", never played here
 
 
 @pytest.fixture
@@ -255,12 +325,18 @@ def ranking_world():
         "(%s, 'Maggie Glorp Gamma', 'Jig', 400)",
         (RANK_POPULAR, RANK_LOCAL, RANK_PREFIX),
     )
-    cur.execute("INSERT INTO session (session_id, name, path) VALUES (%s, 'Glorp Rank', 'glorp-rank-test')", (RANK_SID,))
+    cur.execute(
+        "INSERT INTO session (session_id, name, path) VALUES (%s, 'Glorp Rank', 'glorp-rank-test')",
+        (RANK_SID,),
+    )
     cur.execute(
         "INSERT INTO session_instance (session_instance_id, session_id, date) VALUES (%s, %s, '2026-05-01')",
         (RANK_INSTANCE, RANK_SID),
     )
-    cur.execute("INSERT INTO session_tune (session_id, tune_id, alias) VALUES (%s, %s, 'Glorpy')", (RANK_SID, RANK_LOCAL))
+    cur.execute(
+        "INSERT INTO session_tune (session_id, tune_id, alias) VALUES (%s, %s, 'Glorpy')",
+        (RANK_SID, RANK_LOCAL),
+    )
     for pos in ("a0", "a1", "a2"):
         cur.execute(
             "INSERT INTO session_instance_tune (session_instance_id, tune_id, order_position, record_type) VALUES (%s, %s, %s, 'tune')",
@@ -268,14 +344,25 @@ def ranking_world():
         )
     conn.commit()
     yield
-    cur.execute("DELETE FROM session_instance_tune WHERE session_instance_id = %s", (RANK_INSTANCE,))
-    cur.execute("DELETE FROM session_instance WHERE session_instance_id = %s", (RANK_INSTANCE,))
+    cur.execute(
+        "DELETE FROM session_instance_tune WHERE session_instance_id = %s",
+        (RANK_INSTANCE,),
+    )
+    cur.execute(
+        "DELETE FROM session_instance WHERE session_instance_id = %s", (RANK_INSTANCE,)
+    )
     cur.execute("DELETE FROM session_tune_history WHERE session_id = %s", (RANK_SID,))
     cur.execute("DELETE FROM session_tune WHERE session_id = %s", (RANK_SID,))
     cur.execute("DELETE FROM session_history WHERE session_id = %s", (RANK_SID,))
     cur.execute("DELETE FROM session WHERE session_id = %s", (RANK_SID,))
-    cur.execute("DELETE FROM tune_history WHERE tune_id = ANY(%s)", ([RANK_POPULAR, RANK_LOCAL, RANK_PREFIX],))
-    cur.execute("DELETE FROM tune WHERE tune_id = ANY(%s)", ([RANK_POPULAR, RANK_LOCAL, RANK_PREFIX],))
+    cur.execute(
+        "DELETE FROM tune_history WHERE tune_id = ANY(%s)",
+        ([RANK_POPULAR, RANK_LOCAL, RANK_PREFIX],),
+    )
+    cur.execute(
+        "DELETE FROM tune WHERE tune_id = ANY(%s)",
+        ([RANK_POPULAR, RANK_LOCAL, RANK_PREFIX],),
+    )
     conn.commit()
     cur.close()
     conn.close()
@@ -284,13 +371,22 @@ def ranking_world():
 def _live_ids(client, q, **extra):
     from urllib.parse import urlencode
 
-    resp = client.get(f"/api/tunes/deep-search?instance={RANK_INSTANCE}&" + urlencode({"q": q, **extra}))
+    resp = client.get(
+        f"/api/tunes/deep-search?instance={RANK_INSTANCE}&"
+        + urlencode({"q": q, **extra})
+    )
     assert resp.status_code == 200, resp.get_data(as_text=True)
-    return [r["tune_id"] for r in resp.get_json()["results"] if r["tune_id"] in (RANK_POPULAR, RANK_LOCAL, RANK_PREFIX)]
+    return [
+        r["tune_id"]
+        for r in resp.get_json()["results"]
+        if r["tune_id"] in (RANK_POPULAR, RANK_LOCAL, RANK_PREFIX)
+    ]
 
 
-def test_live_deep_search_ranks_what_this_session_plays_above_popularity(client, authenticated_user, ranking_world):
-    """"maggie" at a session that plays Beta every week is Beta -- above the
+def test_live_deep_search_ranks_what_this_session_plays_above_popularity(
+    client, authenticated_user, ranking_world
+):
+    """ "maggie" at a session that plays Beta every week is Beta -- above the
     world's favourite AND above a prefix hit. The quick type-ahead already did
     this; the panel used to sort by how the name matched, then popularity."""
     with authenticated_user:
@@ -298,28 +394,40 @@ def test_live_deep_search_ranks_what_this_session_plays_above_popularity(client,
     assert ids == [RANK_LOCAL, RANK_POPULAR, RANK_PREFIX]
 
 
-def test_live_deep_search_prefers_the_sets_type_first(client, authenticated_user, ranking_world):
+def test_live_deep_search_prefers_the_sets_type_first(
+    client, authenticated_user, ranking_world
+):
     with authenticated_user:
         ids = _live_ids(client, "maggie", prefer_type="Jig")
     assert ids[0] == RANK_PREFIX
 
 
-def test_live_deep_search_puts_an_exact_hit_first(client, authenticated_user, ranking_world):
+def test_live_deep_search_puts_an_exact_hit_first(
+    client, authenticated_user, ranking_world
+):
     with authenticated_user:
         ids = _live_ids(client, "Glorp Maggie Alpha")
     assert ids[0] == RANK_POPULAR
 
 
-def test_live_deep_search_matches_the_sessions_own_name_for_a_tune(client, authenticated_user, ranking_world):
+def test_live_deep_search_matches_the_sessions_own_name_for_a_tune(
+    client, authenticated_user, ranking_world
+):
     with authenticated_user:
         ids = _live_ids(client, "glorpy")
     assert ids == [RANK_LOCAL]
 
 
-def test_my_tunes_deep_search_ranking_is_unchanged_without_a_session(client, authenticated_user, ranking_world):
+def test_my_tunes_deep_search_ranking_is_unchanged_without_a_session(
+    client, authenticated_user, ranking_world
+):
     """No session: no plays to rank on, so it stays type, name match, popularity."""
     with authenticated_user:
         resp = client.get("/api/tunes/deep-search?q=glorp")
-    ids = [r["tune_id"] for r in resp.get_json()["results"] if r["tune_id"] in (RANK_POPULAR, RANK_LOCAL, RANK_PREFIX)]
+    ids = [
+        r["tune_id"]
+        for r in resp.get_json()["results"]
+        if r["tune_id"] in (RANK_POPULAR, RANK_LOCAL, RANK_PREFIX)
+    ]
     # Two prefix hits by popularity, then the substring hit.
     assert ids == [RANK_POPULAR, RANK_LOCAL, RANK_PREFIX]

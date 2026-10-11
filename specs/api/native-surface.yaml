@@ -785,6 +785,8 @@ components:
               tune_type: { type: [string, "null"] }
               tunebook_count: { type: [integer, "null"] }
               on_list: { type: boolean }
+              # In the repertoire of a session you belong to.
+              in_your_sessions: { type: boolean }
               in_session: { type: boolean }
               played_here: { type: integer }
               abc_only: { type: boolean }

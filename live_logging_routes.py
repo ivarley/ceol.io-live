@@ -2270,7 +2270,8 @@ def _deep_search_core(
     _al = f"LOWER(unaccent({normalize_quotes_sql('st.alias')}))"
     join_sql = ""
     join_params = []
-    params = [person_id]
+    # on_list, then in_your_sessions (both take the viewer).
+    params = [person_id, person_id]
     if session_id is not None:
         join_sql = (
             "LEFT JOIN session_tune st ON st.session_id = %s AND st.tune_id = t.tune_id"
@@ -2364,6 +2365,9 @@ def _deep_search_core(
         SELECT * FROM (
             SELECT t.tune_id, t.name, t.tune_type, t.tunebook_count_cached,
                    EXISTS(SELECT 1 FROM person_tune pt WHERE pt.tune_id = t.tune_id AND pt.person_id = %s) AS on_list,
+                   EXISTS(SELECT 1 FROM session_tune yst
+                          JOIN session_person sp ON sp.session_id = yst.session_id
+                          WHERE sp.person_id = %s AND sp.archived = FALSE AND yst.tune_id = t.tune_id) AS in_your_sessions,
                    {in_session_sql} AS in_session,
                    {played_here_sql} AS played_here,
                    CASE WHEN t.tune_type = %s THEN 0 ELSE 1 END AS type_pref,
@@ -2386,9 +2390,12 @@ def _deep_search_core(
             "tune_type": r[2],
             "tunebook_count": r[3],
             "on_list": r[4],
-            "in_session": r[5],
-            "played_here": r[6],
-            "abc_only": bool(r[8]),
+            # In the repertoire of a session you belong to (your tunebook's add
+            # shows it: there, on_list is the dimming).
+            "in_your_sessions": r[5],
+            "in_session": r[6],
+            "played_here": r[7],
+            "abc_only": bool(r[9]),
         }
         for r in rows
     ]

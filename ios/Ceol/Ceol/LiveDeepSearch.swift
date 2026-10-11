@@ -314,26 +314,29 @@ struct DeepSearchSheet: View {
                 fieldFocused = false
                 preview = index
             } label: {
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .firstTextBaseline) {
                         Text(name).font(.ceol(size: 17, weight: .semibold)).foregroundStyle(CeolTokens.textColor)
                             .multilineTextAlignment(.leading)
                         Spacer()
-                        if let t = r["tune_type"]?.stringValue { TypeChip(label: t) }
+                        if let t = r["tune_type"]?.stringValue {
+                            Text(TunesWords.type(t).uppercased()).font(.ceol(size: 12)).tracking(0.4)
+                                .foregroundStyle(CeolTokens.textMuted)
+                        }
                     }
                     if !remote, let id {
                         DeepIncipit(app: app, tuneID: id, base64: r["incipit_image"]?.stringValue, canRender: r["can_render"] == true)
                     }
-                    let badges = [
-                        r["abc_only"] == true ? tr("♪ notation") : nil, r["on_list"] == true ? tr("★ on your list") : nil,
-                        r["in_session"] == true ? tr("in this session") : nil,
-                        r["played_here"]?.intValue.flatMap { $0 > 0 ? tr("played here \($0)×") : nil },
-                        remote
-                            ? (r["alias"]?.stringValue).map { tr("aka \($0)") }
-                            : Self.tunebooks(r["tunebook_count"]?.intValue ?? 0),
-                    ].compactMap { $0 }
-                    if !badges.isEmpty {
-                        Text(badges.joined(separator: " · ")).font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
+                    // The gold badge says what this flow doesn't already show; the
+                    // tunebooks sit at the right.
+                    HStack(alignment: .center, spacing: 6) {
+                        if r["abc_only"] == true { metaBadge(tr("♪ notation"), star: false) }
+                        if let star = starBadge(r) { metaBadge(star, star: true) }
+                        if remote, let alias = r["alias"]?.stringValue { metaBadge(tr("aka \(alias)"), star: false) }
+                        Spacer(minLength: 0)
+                        if !remote {
+                            Text(Self.tunebooks(r["tunebook_count"]?.intValue ?? 0)).font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
+                        }
                     }
                 }
                 .padding(12)
@@ -364,9 +367,43 @@ struct DeepSearchSheet: View {
             }
         }
         .fixedSize(horizontal: false, vertical: true)
-        .background(CeolTokens.headerBg, in: RoundedRectangle(cornerRadius: 10))
+        .background(CeolTokens.cardBg, in: RoundedRectangle(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(CeolTokens.borderColor, lineWidth: 1))
         .opacity(onList || (r["in_session"] == true && (remote || !allowAsIs)) ? 0.6 : 1)
+    }
+
+    private func metaBadge(_ text: String, star: Bool) -> some View {
+        Text(text).font(.ceol(size: 12, weight: .semibold))
+            .foregroundStyle(star ? CeolTokens.starBadgeText : CeolTokens.textMuted)
+            .padding(.horizontal, 8).padding(.vertical, 3)
+            .background(star ? CeolTokens.warning.opacity(0.16) : Color.white.opacity(0.06), in: Capsule())
+    }
+
+    /// What this flow doesn't already show: adding to your tunebook (on-list tunes are
+    /// dimmed), whether a session of yours plays it; adding to a session's list (its
+    /// tunes are dimmed), whether it's on your list; logging a night, whether it's on
+    /// your list and how often this session has played it (once; occasionally, 2 to 4
+    /// times; often, 5 or more).
+    private func starBadge(_ r: JSONValue) -> String? {
+        switch scope {
+        case .mine:
+            return r["in_your_sessions"] == true ? tr("★ played at your sessions") : nil
+        case .session:
+            return r["on_list"] == true ? tr("★ on your list") : nil
+        case .instance:
+            let onList = r["on_list"] == true
+            let n = r["played_here"]?.intValue ?? 0
+            switch (onList, n) {
+            case (true, 5...): return tr("★ on your list, played often this session")
+            case (true, 2...4): return tr("★ on your list, played occasionally this session")
+            case (true, 1): return tr("★ on your list, played once this session")
+            case (true, _): return tr("★ on your list")
+            case (false, 5...): return tr("★ played often this session")
+            case (false, 2...4): return tr("★ played occasionally this session")
+            case (false, 1): return tr("★ played once this session")
+            default: return nil
+            }
+        }
     }
 
     /// The ＋ rail: the caller's quick add where there is one (your tunebook), else the pick.

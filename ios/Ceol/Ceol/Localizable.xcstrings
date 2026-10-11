@@ -9155,6 +9155,7 @@
       }
     },
     "in this session": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -9315,6 +9316,7 @@
       }
     },
     "played here %lld×": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -9613,6 +9615,76 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "★ ar do liosta"
+          }
+        }
+      }
+    },
+    "★ on your list, played occasionally this session": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "★ ar do liosta, seinnte ó am go chéile ag an seisiún seo"
+          }
+        }
+      }
+    },
+    "★ on your list, played often this session": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "★ ar do liosta, seinnte go minic ag an seisiún seo"
+          }
+        }
+      }
+    },
+    "★ on your list, played once this session": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "★ ar do liosta, seinnte uair amháin ag an seisiún seo"
+          }
+        }
+      }
+    },
+    "★ played at your sessions": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "★ seinnte ag do sheisiúin"
+          }
+        }
+      }
+    },
+    "★ played occasionally this session": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "★ seinnte ó am go chéile ag an seisiún seo"
+          }
+        }
+      }
+    },
+    "★ played often this session": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "★ seinnte go minic ag an seisiún seo"
+          }
+        }
+      }
+    },
+    "★ played once this session": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "★ seinnte uair amháin ag an seisiún seo"
           }
         }
       }
