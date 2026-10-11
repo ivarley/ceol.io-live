@@ -3777,6 +3777,16 @@
         }
       }
     },
+    "Full screen": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Scáileán iomlán"
+          }
+        }
+      }
+    },
     "Got it": {
       "localizations": {
         "ga": {
@@ -5890,7 +5900,18 @@
         }
       }
     },
+    "Open in…": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Oscail i…"
+          }
+        }
+      }
+    },
     "Opening bars": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -5901,6 +5922,7 @@
       }
     },
     "Opens the notation full screen": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -8485,6 +8507,17 @@
         }
       }
     },
+    "View in ABC Tools": {
+      "extractionState": "stale",
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Féach in ABC Tools"
+          }
+        }
+      }
+    },
     "View my profile": {
       "localizations": {
         "ga": {
@@ -8788,6 +8821,7 @@
       }
     },
     "Whole tune": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {

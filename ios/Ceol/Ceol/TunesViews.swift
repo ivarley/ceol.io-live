@@ -298,7 +298,9 @@ struct TuneSheet: View {
     @State private var incipit: UIImage?
     @State private var full: UIImage?
     @State private var showFull = false
-    /// The whole tune, full screen (tapping the whole-tune staff opens it).
+    /// The ABC instead of the staff (the notes / abc tabs under it).
+    @State private var abcMode = false
+    /// What's showing, over the whole screen (the arrows under the staff).
     @State private var fullScreen = false
     @State private var notationFailed = false
     @State private var chooser: SettingLayer?
@@ -346,7 +348,7 @@ struct TuneSheet: View {
                     Text("Its status, notes and heard count go with it.")
                 }
                 .fullScreenCover(isPresented: $fullScreen) {
-                    if let full { NotationFullScreen(image: full, name: tune.name) }
+                    if let image = showFull ? (full ?? incipit) : incipit { NotationFullScreen(image: image, name: tune.name) }
                 }
                 .sheet(item: $chooser) { layer in
                     if let t = detail.value?.sessionTune {
@@ -587,8 +589,6 @@ struct TuneSheet: View {
                         .foregroundStyle(CeolTokens.textMuted)
                 }
                 HStack {
-                    Link(destination: URL(string: "https://thesession.org/tunes/\(t.tuneId)")!) { Text(verbatim: "TheSession.org") }
-                        .font(.ceol(size: 16)).foregroundStyle(CeolTokens.primary)
                     Spacer()
                     if status != nil {
                         Button("Remove From My Tunes") { confirmRemove = true }
@@ -717,42 +717,123 @@ struct TuneSheet: View {
             .font(.ceol(size: 16)).padding(.vertical, 12)
     }
 
-    /// The notation card: white, the opening bars or the whole tune, and the switch
-    /// between them underneath, as the web's notes tab.
+    /// The notation card, as the web's tune drawer: the staff (or the ABC) on white,
+    /// tapped to flip opening bars ⇄ the whole tune; under it the notes / abc tabs on the
+    /// left and, on the right, "open in" (thesession.org, abc-tools) and full screen.
     @ViewBuilder private func notation(_ t: Components.Schemas.TuneDetail.SessionTunePayload) -> some View {
         VStack(spacing: 10) {
-            if let image = showFull ? (full ?? incipit) : incipit {
-                let wholeTuneDrawn = showFull && full != nil
-                Image(uiImage: image)
-                    .resizable().scaledToFit()
-                    .padding(6)
-                    .background(Color.white, in: RoundedRectangle(cornerRadius: 6))
-                    .accessibilityLabel("Notation for \(t.tuneName)")
-                    .contentShape(Rectangle())
-                    // The whole tune, tapped: the full screen, where it is wider.
-                    .onTapGesture { if wholeTuneDrawn { fullScreen = true } }
-                    .accessibilityAddTraits(wholeTuneDrawn ? .isButton : [])
-                    .accessibilityHint(wholeTuneDrawn ? Text("Opens the notation full screen") : Text(verbatim: ""))
-            } else if notationFailed {
-                Text("Couldn't draw the notation just now.").font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
-            } else if t.incipitAbc == nil && t.abc == nil {
-                Text("No notation for this tune yet.").font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
-            } else {
-                ProgressView().frame(height: 80)
-            }
-            if t.abc != nil {
-                HStack(spacing: 22) {
-                    notationTab(tr("Opening bars"), on: !showFull) { showFull = false }
-                    notationTab(tr("Whole tune"), on: showFull) {
-                        showFull = true
-                        Task { await loadFull(t) }
+            Group {
+                if abcMode, let text = showFull ? t.abc : (t.incipitAbc ?? t.abc) {
+                    Button { flipSize(t) } label: {
+                        Text(verbatim: text).font(.system(size: 13, design: .monospaced))
+                            .foregroundStyle(.black).padding(10)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.white, in: RoundedRectangle(cornerRadius: 6))
                     }
-                    Spacer()
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Notation for \(t.tuneName)")
+                    .accessibilityHint(showFull ? Text("Tap to show the opening bars") : Text("Tap to show the whole tune"))
+                    .accessibilityIdentifier("sheet.notation")
+                } else if !abcMode, let image = showFull ? (full ?? incipit) : incipit {
+                    Button { flipSize(t) } label: {
+                        Image(uiImage: image)
+                            .resizable().scaledToFit()
+                            .padding(6)
+                            .background(Color.white, in: RoundedRectangle(cornerRadius: 6))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Notation for \(t.tuneName)")
+                    .accessibilityHint(showFull ? Text("Tap to show the opening bars") : Text("Tap to show the whole tune"))
+                    .accessibilityIdentifier("sheet.notation")
+                } else if notationFailed {
+                    Text("Couldn't draw the notation just now.").font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
+                } else if t.incipitAbc == nil && t.abc == nil {
+                    Text("No notation for this tune yet.").font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
+                } else {
+                    ProgressView().frame(height: 80)
                 }
+            }
+            HStack(spacing: 16) {
+                notationTab(tr("notes"), on: !abcMode) { abcMode = false }
+                notationTab(tr("abc"), on: abcMode) { abcMode = true }
+                    .disabled(t.abc == nil && t.incipitAbc == nil)
+                    .opacity(t.abc == nil && t.incipitAbc == nil ? 0.4 : 1)
+                Spacer()
+                // Where else to see it: a menu, so more can join thesession.org and abc-tools.
+                Menu {
+                    // Names, not words to translate.
+                    Link(destination: Self.theSessionURL(t)) { Label { Text(verbatim: "thesession.org") } icon: { Image(systemName: "safari") } }
+                    if let url = Self.abcToolsURL(t) {
+                        Link(destination: url) { Label { Text(verbatim: "abc-tools") } icon: { Image(systemName: "music.note") } }
+                    }
+                } label: {
+                    Image(systemName: "arrow.up.right.square").font(.system(size: 18))
+                        .foregroundStyle(CeolTokens.primary)
+                        .frame(width: 36, height: 32).contentShape(Rectangle())
+                }
+                .accessibilityLabel("Open in…")
+                .accessibilityIdentifier("sheet.openIn")
+                Button { fullScreen = true } label: {
+                    Image(systemName: "arrow.up.left.and.arrow.down.right").font(.system(size: 17))
+                        .foregroundStyle(CeolTokens.primary)
+                        .frame(width: 36, height: 32).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(abcMode || (showFull ? (full ?? incipit) : incipit) == nil)
+                .opacity(abcMode || (showFull ? (full ?? incipit) : incipit) == nil ? 0.4 : 1)
+                .accessibilityLabel("Full screen")
+                .accessibilityIdentifier("sheet.fullScreen")
             }
         }
         .padding(12)
         .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(CeolTokens.borderColor, lineWidth: 1))
+    }
+
+    /// Opening bars ⇄ the whole tune, fetched the first time it is asked for.
+    private func flipSize(_ t: Components.Schemas.TuneDetail.SessionTunePayload) {
+        showFull.toggle()
+        if showFull && !abcMode { Task { await loadFull(t) } }
+    }
+
+    /// The tune on thesession.org, at the setting drawn (a night's own, else the session's).
+    static func theSessionURL(_ t: Components.Schemas.TuneDetail.SessionTunePayload) -> URL {
+        let base = "https://thesession.org/tunes/\(t.tuneId)"
+        if let setting = t.settingOverride ?? t.settingId { return URL(string: "\(base)#setting\(setting)")! }
+        return URL(string: base)!
+    }
+
+    /// The tune in michaeleskin.com's abc-tools, the ABC in the link as the web builds it
+    /// (tunesheet/logic.js abcToolsUrl): the same header, compressed the same way.
+    static func abcToolsURL(_ t: Components.Schemas.TuneDetail.SessionTunePayload) -> URL? {
+        guard let abc = t.abc ?? t.incipitAbc, !abc.isEmpty else { return nil }
+        let body = abc.replacingOccurrences(of: "!", with: "\n")
+        let type = t.tuneType ?? ""
+        let meter = Self.meter(for: type)
+        let formatted = "X: 1\nT: \(t.tuneName)\nR: \(type)" + (meter.map { "\nM: \($0)" } ?? "")
+            + "\nL: 1/8\nK: \(t.settingKey ?? "")\n\(body)"
+        let compressed = LZString.compressToEncodedURIComponent(formatted)
+        let name = t.tuneName.addingPercentEncoding(withAllowedCharacters: Self.uriComponentAllowed) ?? ""
+        return URL(string: "https://michaeleskin.com/abctools/abctools.html?lzw=\(compressed)&format=noten&ssp=45&name=\(name)&play=1")
+    }
+
+    /// JavaScript's encodeURIComponent leaves these alone.
+    private static let uriComponentAllowed: CharacterSet = {
+        var set = CharacterSet.alphanumerics
+        set.insert(charactersIn: "-_.!~*'()")
+        return set
+    }()
+
+    /// The time signature for a tune type, as the web's abc-tools header has it.
+    private static func meter(for tuneType: String) -> String? {
+        switch tuneType.lowercased() {
+        case "polka": return "2/4"
+        case "barndance", "hornpipe", "reel", "march": return "4/4"
+        case "waltz", "mazurka": return "3/4"
+        case "hop jig": return "9/8"
+        case "jig", "set dance": return "6/8"
+        case "slide": return "12/8"
+        default: return nil
+        }
     }
 
     private func notationTab(_ label: String, on: Bool, action: @escaping () -> Void) -> some View {
