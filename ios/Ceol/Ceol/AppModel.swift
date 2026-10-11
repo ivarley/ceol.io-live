@@ -33,6 +33,17 @@ final class AppModel {
     var sessionsPath: [Route] = []
     /// The Tunes tab's status filter (nil: All). Home's Learning / To Learn boxes set it.
     var tunesStatus: MyTunesRules.Status?
+    /// Counts the taps on a tab's icon while already in it: each one asks that tab to
+    /// come back to its top-level page (returnToRoot). A tab's root watches its count
+    /// and closes whatever it has open over itself.
+    private(set) var rootRequests: [AppTab: Int] = [:]
+
+    /// The tab's icon, tapped while in it: back to the top of that section. Sessions
+    /// pops its stack here; each tab's root closes its own sheets on `rootRequests`.
+    func returnToRoot(_ tab: AppTab) {
+        if tab == .sessions { sessionsPath = [] }
+        rootRequests[tab, default: 0] += 1
+    }
 
     /// The Share pane, when open (ShareButton sets it; ceolSharePane shows it).
     var sharing: ShareTarget?

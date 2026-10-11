@@ -56,7 +56,7 @@ struct AddSessionTuneSheet: View {
             } else {
                 DeepSearchSheet(
                     app: model, scope: .session(path), initialQuery: initialQuery, preferType: nil,
-                    title: tr("Add a tune to this session"), allowAsIs: false, closesOnPick: false,
+                    title: tr("Add a tune to this session"), actionLabel: tr("Add this tune"), allowAsIs: false, closesOnPick: false,
                     pickedResult: { result = $0 },
                     onClose: { dismiss() }
                 ) { payload in

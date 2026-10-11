@@ -71,6 +71,13 @@ struct TunesView: View {
                     TunesFilterSheet(filters: $filters, sort: $sort, types: types, instruments: instruments)
                 }
                 .sheet(isPresented: $adding) { AddTuneSheet { Task { await load() } } }
+                // The Tunes icon, tapped while here: back to the list itself.
+                .onChange(of: model.rootRequests[.tunes]) { _, _ in
+                    open = nil
+                    filtering = false
+                    adding = false
+                    searching = false
+                }
                 .task { if state.value == nil { await load() } }
                 .alert("Not saved", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
                     Button("OK") {}
@@ -285,6 +292,8 @@ struct TuneSheet: View {
     @State private var incipit: UIImage?
     @State private var full: UIImage?
     @State private var showFull = false
+    /// The whole tune, full screen (tapping the whole-tune staff opens it).
+    @State private var fullScreen = false
     @State private var notationFailed = false
     @State private var chooser: SettingLayer?
 
@@ -321,6 +330,9 @@ struct TuneSheet: View {
                     }
                 } message: {
                     Text("Its status, notes and heard count go with it.")
+                }
+                .fullScreenCover(isPresented: $fullScreen) {
+                    if let full { NotationFullScreen(image: full, name: tune.name) }
                 }
                 .sheet(item: $chooser) { layer in
                     if let t = detail.value?.sessionTune {
@@ -556,7 +568,7 @@ struct TuneSheet: View {
                     Spacer()
                     if status != nil {
                         Button("Remove From My Tunes") { confirmRemove = true }
-                            .font(.ceol(size: 16)).foregroundStyle(CeolTokens.textMuted)
+                            .font(.ceol(size: 16)).foregroundStyle(CeolTokens.danger)
                             .disabled(busy)
                             .accessibilityIdentifier("sheet.remove")
                     }
@@ -646,11 +658,17 @@ struct TuneSheet: View {
     @ViewBuilder private func notation(_ t: Components.Schemas.TuneDetail.SessionTunePayload) -> some View {
         VStack(spacing: 10) {
             if let image = showFull ? (full ?? incipit) : incipit {
+                let wholeTuneDrawn = showFull && full != nil
                 Image(uiImage: image)
                     .resizable().scaledToFit()
                     .padding(6)
                     .background(Color.white, in: RoundedRectangle(cornerRadius: 6))
                     .accessibilityLabel("Notation for \(t.tuneName)")
+                    .contentShape(Rectangle())
+                    // The whole tune, tapped: the full screen, where it is wider.
+                    .onTapGesture { if wholeTuneDrawn { fullScreen = true } }
+                    .accessibilityAddTraits(wholeTuneDrawn ? .isButton : [])
+                    .accessibilityHint(wholeTuneDrawn ? Text("Opens the notation full screen") : Text(verbatim: ""))
             } else if notationFailed {
                 Text("Couldn't draw the notation just now.").font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
             } else if t.incipitAbc == nil && t.abc == nil {
@@ -684,6 +702,40 @@ struct TuneSheet: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(on ? .isSelected : [])
+    }
+}
+
+/// The whole tune over the whole screen, on white as the notation card: as wide as the
+/// screen whichever way the phone is held (turn it on its side for a wider staff), and
+/// scrolling down when it is taller. A tap anywhere puts it away.
+struct NotationFullScreen: View {
+    @Environment(\.dismiss) private var dismiss
+    let image: UIImage
+    let name: String
+
+    var body: some View {
+        ScrollView {
+            Image(uiImage: image)
+                .resizable().scaledToFit()
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .accessibilityLabel("Notation for \(name)")
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.white)
+        .contentShape(Rectangle())
+        .onTapGesture { dismiss() }
+        .overlay(alignment: .topTrailing) {
+            Button { dismiss() } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 28))
+                    .foregroundStyle(Color.black.opacity(0.45))
+                    .padding(12)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Close")
+        }
+        .ignoresSafeArea(edges: .bottom)
     }
 }
 

@@ -123,16 +123,7 @@ extension View {
     /// (it goes Home, as the web's does), Share top-right, and no page heading. `title`
     /// still names the screen for the back button; `sharePath` is the page on the web.
     func ceolRootBar(_ title: String, sharePath: String) -> some View {
-        navigationTitle(title)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) { WordmarkButton() }
-                    .sharedBackgroundVisibility(.hidden)
-                ToolbarItem(placement: .principal) { Color.clear.frame(width: 1, height: 1) }
-                ToolbarItem(placement: .topBarTrailing) { ShareButton(path: sharePath, subject: title) }
-                    .sharedBackgroundVisibility(.hidden)
-            }
-            .ceolHeaderBar()
+        modifier(CeolTopBar(title: title, root: true) { ShareButton(path: sharePath, subject: title) })
     }
 
     /// The web's header strip: the top bar on the header colour, always.
@@ -510,13 +501,135 @@ struct Hairline: View {
 }
 
 extension View {
-    /// A pushed screen's top bar: the back button and actions on the header colour,
-    /// no centred title (the web puts the name on the page).
+    /// A pushed screen's top bar: the back button and the screen's actions (`trailing`,
+    /// top right) on the header colour, no centred title (the web puts the name on the
+    /// page).
+    func ceolPushedBar<Trailing: View>(_ title: String, @ViewBuilder trailing: @escaping () -> Trailing) -> some View {
+        modifier(CeolTopBar(title: title, root: false, trailing: trailing))
+    }
+
     func ceolPushedBar(_ title: String) -> some View {
-        navigationTitle(title)
+        ceolPushedBar(title) { EmptyView() }
+    }
+}
+
+/// The top bar of every screen. Upright, it is the system's navigation bar: the
+/// wordmark or the back button, and the actions, on the header colour. On a phone on
+/// its side the system bar can't be made short (its items keep their 44-point glass,
+/// and a top inset sits above), so it is hidden and CeolLandscapeBar is drawn in its
+/// place: the same things on a strip half as tall, from the top edge of the screen.
+struct CeolTopBar<Trailing: View>: ViewModifier {
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    let title: String
+    let root: Bool
+    @ViewBuilder let trailing: () -> Trailing
+
+    func body(content: Content) -> some View {
+        let landscape = verticalSizeClass == .compact
+        content
+            .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .principal) { Color.clear.frame(width: 1, height: 1) } }
+            .toolbar {
+                if root {
+                    ToolbarItem(placement: .topBarLeading) { WordmarkButton() }
+                        .sharedBackgroundVisibility(.hidden)
+                }
+                ToolbarItem(placement: .principal) { Color.clear.frame(width: 1, height: 1) }
+                ToolbarItem(placement: .topBarTrailing) { trailing() }
+                    .sharedBackgroundVisibility(.hidden)
+            }
             .ceolHeaderBar()
+            .toolbarVisibility(landscape ? .hidden : .automatic, for: .navigationBar)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if landscape { CeolLandscapeBar(root: root, trailing: trailing) }
+            }
+            .background {
+                // Hiding the bar loses the swipe back; this keeps it (pushed screens only).
+                if landscape && !root { PopGestureKeeper().frame(width: 1, height: 1).opacity(0) }
+            }
+            // The strip starts at the screen's edge, not under the inset the system bar
+            // would have sat under.
+            .ignoresSafeArea(edges: landscape ? .top : [])
+    }
+}
+
+/// With the system navigation bar hidden (CeolTopBar on a phone on its side), UIKit
+/// drops the swipe from the left edge that goes back. This puts it back: while on
+/// screen it takes the pop gesture's delegate, allowing the swipe whenever there is a
+/// screen to go back to, and hands the original delegate back as it goes.
+struct PopGestureKeeper: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> Keeper { Keeper() }
+    func updateUIViewController(_ controller: Keeper, context: Context) {}
+
+    final class Keeper: UIViewController, UIGestureRecognizerDelegate {
+        private weak var gesture: UIGestureRecognizer?
+        private weak var original: UIGestureRecognizerDelegate?
+
+        override func viewDidAppear(_ animated: Bool) {
+            super.viewDidAppear(animated)
+            take()
+        }
+
+        override func didMove(toParent parent: UIViewController?) {
+            super.didMove(toParent: parent)
+            if parent != nil { take() } else { giveBack() }
+        }
+
+        override func viewWillDisappear(_ animated: Bool) {
+            super.viewWillDisappear(animated)
+            giveBack()
+        }
+
+        private func take() {
+            guard gesture == nil, let g = navigationController?.interactivePopGestureRecognizer else { return }
+            gesture = g
+            original = g.delegate
+            g.delegate = self
+        }
+
+        private func giveBack() {
+            if let g = gesture, g.delegate === self { g.delegate = original }
+            gesture = nil
+        }
+
+        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            (navigationController?.viewControllers.count ?? 0) > 1
+        }
+    }
+}
+
+/// The top bar on a phone on its side (CeolTopBar): a short strip on the header
+/// colour, the wordmark or a back chevron on the left and the screen's actions on the
+/// right.
+struct CeolLandscapeBar<Trailing: View>: View {
+    @Environment(\.dismiss) private var dismiss
+    let root: Bool
+    @ViewBuilder let trailing: () -> Trailing
+    /// Half the system bar's 78 points (its own 54 under the 24-point landscape inset).
+    private let height: CGFloat = 36
+
+    var body: some View {
+        HStack(spacing: 10) {
+            if root {
+                WordmarkButton()
+            } else {
+                Button { dismiss() } label: {
+                    Image(systemName: "chevron.left").font(.system(size: 17, weight: .semibold))
+                        .frame(width: 36, height: 30).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(CeolTokens.primary)
+                .accessibilityLabel("Back")
+                .accessibilityIdentifier("back")
+            }
+            Spacer(minLength: 0)
+            trailing()
+        }
+        .padding(.horizontal, 8)
+        .frame(maxWidth: .infinity)
+        .frame(height: height)
+        .background(CeolTokens.headerBg)
+        .overlay(alignment: .bottom) { Hairline() }
     }
 }
 
@@ -577,10 +690,14 @@ extension KitRow where Trailing == Text {
 /// The wordmark, which takes you Home.
 struct WordmarkButton: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
 
     var body: some View {
+        // Smaller on a phone on its side, so the top bar can take its short height.
+        let landscape = verticalSizeClass == .compact
         Button { model.tab = .home } label: {
-            Image("Wordmark").resizable().scaledToFit().frame(width: 110, height: 42)
+            Image("Wordmark").resizable().scaledToFit()
+                .frame(width: landscape ? 58 : 110, height: landscape ? 22 : 42)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Ceol, go to Home")
@@ -600,16 +717,19 @@ struct ShareTarget: Identifiable, Equatable {
 /// the drawer over it when there is one.
 struct ShareButton: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     let path: String
     var subject: String = "Ceol"
 
     var body: some View {
+        let landscape = verticalSizeClass == .compact
         Button {
             model.sharing = model.shareOverride ?? ShareTarget(url: model.webURL(path), title: subject)
         } label: {
-            Image("IconShare").renderingMode(.template).resizable().scaledToFit().frame(width: 20, height: 20)
+            Image("IconShare").renderingMode(.template).resizable().scaledToFit()
+                .frame(width: landscape ? 18 : 20, height: landscape ? 18 : 20)
                 .foregroundStyle(CeolTokens.textMuted)
-                .frame(width: 36, height: 36)
+                .frame(width: landscape ? 26 : 36, height: landscape ? 26 : 36)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
