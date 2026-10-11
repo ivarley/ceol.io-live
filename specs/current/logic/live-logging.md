@@ -25,7 +25,7 @@ Two processes, split by direction of data flow (§A4):
 
 ```
 client EventSource  ──SSE──>  streaming service
-                                 ↑  LISTEN session_instance_<id>
+                                 ↑  LISTEN live_session_events
 client  ──POST op──>  Flask referee  ──pg_notify(id only)──>  Postgres
                                  │  (event row written in same txn)
                                  └──> streaming re-reads session_event row, pushes to subscribers
@@ -34,8 +34,12 @@ client  ──POST op──>  Flask referee  ──pg_notify(id only)──>  Po
 - **Transport** (§A3): SSE downstream, plain `POST` upstream. No WebSockets, no polling.
 - **Fan-out** (§A4): Postgres `LISTEN/NOTIFY` (no Redis). The Flask referee appends a
   `session_event` row in the same transaction as the mutation, then
-  `pg_notify('session_instance_<id>', event_id)`; the streaming service re-reads that row
-  by id and pushes it.
+  `pg_notify('live_session_events', '<instance_id>:<event_id>')`; the streaming service
+  re-reads that row by id and pushes it to that instance's subscribers. One dedicated
+  connection holds the LISTEN for the whole process. When Postgres drops it (a restart,
+  a maintenance window, a major-version upgrade) the sidecar reconnects with backoff
+  and then ends every open stream, so each client reopens with its `Last-Event-ID` and
+  replays whatever was notified in the gap (`_listener_loop` in `streaming/service.py`).
 - **Two connections, not one** (§A5): the SSE event stream and the upstream op POSTs are
   independent — the screen keeps reading even while a write is in flight.
 - **Auth** (§D, §H): reuses the existing web stack — the Flask-Login session cookie

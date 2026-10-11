@@ -8,7 +8,8 @@ sync Flask app stays unchanged and owns all writes; this service is downstream
 fan-out ONLY:
 
   client EventSource  --SSE-->  this service
-                                  |  LISTEN session_instance_<id>
+                                  |  LISTEN live_session_events (one connection,
+                                  |  reconnected whenever Postgres drops it)
   Flask referee  --pg_notify-->  Postgres  (id-only NOTIFY)
                                   |  re-read session_event row by event_id
                                   push to subscribed clients
@@ -109,6 +110,73 @@ def _on_global_notify(conn, pid, channel, payload):
         return
     if PRESENCE.get(instance_id):  # only bother if someone's listening
         asyncio.create_task(_dispatch_op(instance_id, event_id))
+
+
+# The global LISTEN rides one dedicated connection, outside the pool (a pool hands a
+# dead connection straight back). A Postgres restart (Render's maintenance windows,
+# a major-version upgrade) closes it; until this loop existed that silently ended live
+# delivery until the sidecar was redeployed. The pool itself needs no such care:
+# asyncpg replaces a closed pool connection on the next acquire.
+LISTENER_RETRY_SECONDS = 1.0  # first retry delay; doubles each failure...
+LISTENER_RETRY_MAX_SECONDS = 30.0  # ...up to this
+LISTENER_PING_SECONDS = 60.0  # idle probe, for a socket that died without a FIN
+_sleep = asyncio.sleep  # a seam for the tests
+
+
+async def _connect_listener():
+    """The listener's own connection (a seam for the tests)."""
+    return await asyncpg.connect(_dsn())
+
+
+def _resync_all_streams():
+    """End every open SSE stream. NOTIFYs sent while the listener was down never reached
+    this process, so each client must replay the gap: both clients reopen a closed stream
+    on their own with their Last-Event-ID (EventSource natively; the iOS stream on a
+    closed body), and the replay step fills in whatever was missed."""
+    for conns in list(PRESENCE.values()):
+        for st in list(conns.values()):
+            st["queue"].put_nowait(("resync",))
+
+
+async def _listener_loop():
+    """Hold the global LISTEN for the life of the process.
+
+    Connect, LISTEN, then wait for the connection to end: asyncpg's termination listener
+    fires the moment the server closes it, and an idle ping catches a socket that died
+    silently. Then back off (1s doubling to 30s) and connect again; after a reconnect,
+    resync every open stream. Runs until cancelled at shutdown.
+    """
+    delay = LISTENER_RETRY_SECONDS
+    connected_before = False
+    while True:
+        conn = None
+        lost = asyncio.Event()
+        try:
+            conn = await _connect_listener()
+            conn.add_termination_listener(lambda _c: lost.set())
+            await conn.add_listener(LIVE_EVENT_CHANNEL, _on_global_notify)
+            delay = LISTENER_RETRY_SECONDS
+            if connected_before:
+                print("[streaming] listener reconnected; resyncing open streams")
+                _resync_all_streams()
+            else:
+                print(f"[streaming] listening '{LIVE_EVENT_CHANNEL}'")
+            connected_before = True
+            while not lost.is_set():
+                try:
+                    await asyncio.wait_for(lost.wait(), timeout=LISTENER_PING_SECONDS)
+                except asyncio.TimeoutError:
+                    await conn.execute("SELECT 1")  # raises if the socket died silently
+            print("[streaming] listener connection lost")
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            print(f"[streaming] listener error: {e!r}")
+        finally:
+            if conn is not None:
+                conn.terminate()  # immediate, and harmless on an already-closed connection
+        await _sleep(delay)
+        delay = min(delay * 2, LISTENER_RETRY_MAX_SECONDS)
 
 
 # --- Auth -----------------------------------------------------------------
@@ -554,6 +622,8 @@ async def events(request):
                     yield _presence_event(msg[1])  # no id: -> not a resume cursor
                 elif msg[0] == "typing":
                     yield _typing_event(msg[1])     # no id: either
+                elif msg[0] == "resync":
+                    return  # the listener reconnected: close, and the client replays the gap
                 elif msg[0] == "op":
                     _, eid, op_type, payload = msg
                     if eid <= replayed_through:
@@ -619,19 +689,18 @@ async def lifespan(app):
     global pool
     pool = await asyncpg.create_pool(_dsn(), min_size=1, max_size=10)
     # One dedicated, long-lived connection LISTENs the whole feed and fans every
-    # committed event out to the in-memory client queues (spec 024 §A4).
-    listener = await pool.acquire()
-    await listener.add_listener(LIVE_EVENT_CHANNEL, _on_global_notify)
+    # committed event out to the in-memory client queues (spec 024 §A4); the loop
+    # reconnects it whenever Postgres drops it.
+    listener = asyncio.create_task(_listener_loop())
     sweeper = asyncio.create_task(_typing_sweeper())
     away_sweeper = asyncio.create_task(_away_sweeper())
-    print(f"[streaming] live-logging SSE service up on :{PORT} (listening '{LIVE_EVENT_CHANNEL}')")
+    print(f"[streaming] live-logging SSE service up on :{PORT}")
     try:
         yield
     finally:
-        sweeper.cancel()
-        away_sweeper.cancel()
-        await listener.remove_listener(LIVE_EVENT_CHANNEL, _on_global_notify)
-        await pool.release(listener)
+        for task in (sweeper, away_sweeper, listener):
+            task.cancel()
+        await asyncio.gather(listener, return_exceptions=True)
         await pool.close()
 
 
