@@ -173,6 +173,69 @@ def test_deep_search_flags_tunes_your_sessions_play(
         conn.close()
 
 
+def test_deep_search_offers_your_sessions_overrides(
+    client, authenticated_user, search_tunes
+):
+    """session_defaults: what a session of yours calls the tune, and the setting and
+    key it plays, for your tunebook's add to start from; none without an override,
+    none from a session you don't belong to."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    with authenticated_user:
+        by_id = {
+            r["tune_id"]: r
+            for r in client.get("/api/tunes/deep-search?q=glorp fandango").get_json()[
+                "results"
+            ]
+        }
+    assert by_id[search_tunes["onlist"]]["session_defaults"] is None
+    cur.execute(
+        "UPDATE session_tune SET alias = 'Glorp As We Call It', key = 'Dmajor' WHERE session_id = %s AND tune_id = %s",
+        (SID, search_tunes["onlist"]),
+    )
+    conn.commit()
+    try:
+        with authenticated_user:
+            by_id = {
+                r["tune_id"]: r
+                for r in client.get(
+                    "/api/tunes/deep-search?q=glorp fandango"
+                ).get_json()["results"]
+            }
+        assert by_id[search_tunes["onlist"]]["session_defaults"] is None  # not a member
+        cur.execute(
+            "INSERT INTO session_person (session_id, person_id) VALUES (%s, %s)",
+            (SID, PERSON_ID),
+        )
+        conn.commit()
+        with authenticated_user:
+            by_id = {
+                r["tune_id"]: r
+                for r in client.get(
+                    "/api/tunes/deep-search?q=glorp fandango"
+                ).get_json()["results"]
+            }
+            preview = client.get(
+                f"/api/tunes/{search_tunes['onlist']}/preview"
+            ).get_json()
+        d = by_id[search_tunes["onlist"]]["session_defaults"]
+        assert d == {
+            "session_name": "Glorp Search Test",
+            "session_path": SPATH,
+            "alias": "Glorp As We Call It",
+            "setting_id": None,
+            "key": "Dmajor",
+        }
+        assert preview["session_defaults"] == d
+        assert by_id[search_tunes["offlist"]]["session_defaults"] is None
+    finally:
+        cur.execute("DELETE FROM session_person_history WHERE session_id = %s", (SID,))
+        cur.execute("DELETE FROM session_person WHERE session_id = %s", (SID,))
+        conn.commit()
+        cur.close()
+        conn.close()
+
+
 def test_session_deep_search_unknown_session_404(
     client, authenticated_user, search_tunes
 ):

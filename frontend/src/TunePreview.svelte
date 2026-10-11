@@ -56,6 +56,9 @@
   })
 
   const item = $derived(items[idx])
+  // Your tunebook's add (no scope): what a session of yours already says about the
+  // tune. Its setting is where the pager lands, and it counts as chosen.
+  const defaults = $derived(data?.session_defaults || null)
   const settings = $derived(data?.settings || [])
   const setting = $derived(settings[setIdx] || null)
   // remote = shown from thesession.org and NOT in our library (an import-on-add);
@@ -95,6 +98,7 @@
       // you see first is the one this session plays. Landing there isn't a "choice"
       // (pagerTouched stays false), so logging changes nothing.
       let si = -1
+      if (pendingSetting == null && d.session_defaults?.setting_id != null) pendingSetting = d.session_defaults.setting_id
       if (pendingSetting != null) {
         si = (d.settings || []).findIndex((s) => s.setting_id === pendingSetting)
         if (si >= 0) { pagerTouched = true; pendingSetting = null }
@@ -297,7 +301,7 @@
              (the notation below is the only thing that changes height) -->
         <div class="pv-setnav">
           <button class="pv-step" disabled={setIdx === 0} aria-label={t('Previous setting')} onclick={() => stepSetting(-1)}><Chevron dir="left" size={16} /></button>
-          <span class="pv-setlabel">{t('Setting {n} of {total}', { n: setIdx + 1, total: settings.length })}{setting?.setting_id != null ? ` · #${setting.setting_id}` : ''}{setting?.key ? ` · ${setting.key}` : ''}{#if setting?.setting_id != null && setting.setting_id === data.session_setting_id}<span class="pv-sesset"> · ★ {t('this session’s')}</span>{/if}</span>
+          <span class="pv-setlabel">{t('Setting {n} of {total}', { n: setIdx + 1, total: settings.length })}{setting?.setting_id != null ? ` · #${setting.setting_id}` : ''}{setting?.key ? ` · ${setting.key}` : ''}{#if setting?.setting_id != null && setting.setting_id === data.session_setting_id}<span class="pv-sesset"> · ★ {t('this session’s')}</span>{:else if setting?.setting_id != null && setting.setting_id === defaults?.setting_id}<span class="pv-sesset"> · ★ {t('{session}’s', { session: defaults.session_name })}</span>{/if}</span>
           <button class="pv-step" disabled={setIdx >= settings.length - 1} aria-label={t('Next setting')} onclick={() => stepSetting(1)}>
             {#if backfilling && setIdx >= settings.length - 1}
               <!-- more settings may be on their way from thesession.org — the arrow

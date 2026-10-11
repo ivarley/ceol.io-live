@@ -1,4 +1,5 @@
 {
+  "%@’s": "de chuid %@",
   "%lld of %@ on %@": "%3$@: %1$lld as %2$@",
   "%lld of %lld": "%lld as %lld",
   "%lld percent": "%lld faoin gcéad",
@@ -16,6 +17,7 @@
   "Air": "Fonn mall",
   "All": "Gach ceann",
   "Also called: ": "Ar a dtugtar freisin: ",
+  "As at %@": "Mar atá ag %@",
   "At sessions on Ceol": "Ag seisiúin ar Ceol",
   "Audio unavailable": "Níl an fhuaim ar fáil",
   "Auto-continue": "Lean ar aghaidh go huathoibríoch",

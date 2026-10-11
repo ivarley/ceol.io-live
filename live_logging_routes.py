@@ -2214,6 +2214,46 @@ def _parse_deep_search_args():
     return q, tune_type, prefer_type, mode, limit
 
 
+def _your_session_defaults(cur, person_id, tune_ids):
+    """What a session of yours already says about each tune: its own name, setting and
+    key (session_tune), for your tunebook's add to start from. Of several sessions,
+    the one you've been to most often, then most recently, then first by name. Only
+    tunes with an override of some kind; {tune_id: {...}}."""
+    if not person_id or not tune_ids:
+        return {}
+    cur.execute(
+        """
+        SELECT DISTINCT ON (st.tune_id)
+               st.tune_id, s.name, s.path, st.alias, st.setting_id, st.key
+        FROM session_tune st
+        JOIN session s ON s.session_id = st.session_id
+        JOIN session_person sp ON sp.session_id = st.session_id
+             AND sp.person_id = %s AND sp.archived = FALSE
+        LEFT JOIN (
+            SELECT si.session_id, COUNT(*) AS n, MAX(si.date) AS last
+            FROM session_instance_person sip
+            JOIN session_instance si ON si.session_instance_id = sip.session_instance_id
+            WHERE sip.person_id = %s AND sip.attendance = 'yes'
+            GROUP BY si.session_id
+        ) a ON a.session_id = st.session_id
+        WHERE st.tune_id = ANY(%s)
+          AND (st.alias IS NOT NULL OR st.setting_id IS NOT NULL OR st.key IS NOT NULL)
+        ORDER BY st.tune_id, COALESCE(a.n, 0) DESC, a.last DESC NULLS LAST, s.name ASC
+        """,
+        (person_id, person_id, list(tune_ids)),
+    )
+    return {
+        r[0]: {
+            "session_name": r[1],
+            "session_path": r[2],
+            "alias": r[3],
+            "setting_id": r[4],
+            "key": r[5],
+        }
+        for r in cur.fetchall()
+    }
+
+
 def _deep_search_core(
     cur,
     q,
@@ -2399,6 +2439,13 @@ def _deep_search_core(
         }
         for r in rows
     ]
+    if session_id is None:
+        # Your tunebook's add starts from what a session of yours already says.
+        defaults = _your_session_defaults(
+            cur, person_id, [r["tune_id"] for r in results]
+        )
+        for r in results:
+            r["session_defaults"] = defaults.get(r["tune_id"])
 
     # one pass for the cached incipit IMAGE + whether the tune is renderable (has
     # ABC). Notation is rendered server-side by the abc-renderer service; the card
@@ -2711,6 +2758,18 @@ def _tune_preview_core(tune_id, session_id=None):
             )
             dates = [str(r[0]) for r in cur.fetchall()]
 
+        # Without a session scope (your tunebook's add): what a session of yours already
+        # says about the tune, for the pager to land on and the add to start from.
+        session_defaults = None
+        if (
+            session_id is None
+            and current_user.is_authenticated
+            and getattr(current_user, "person_id", None)
+        ):
+            session_defaults = _your_session_defaults(
+                cur, current_user.person_id, [tune_id]
+            ).get(tune_id)
+
         return jsonify(
             {
                 "success": True,
@@ -2722,6 +2781,7 @@ def _tune_preview_core(tune_id, session_id=None):
                 "played_here": played_here,
                 "dates": dates,
                 "session_setting_id": session_setting_id,
+                "session_defaults": session_defaults,
                 "person_tune": person_tune,
                 "settings": settings,
             }

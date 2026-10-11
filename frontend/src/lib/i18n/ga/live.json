@@ -1578,5 +1578,13 @@
   "played often this session": {
     "ga": "seinnte go minic ag an seisiún seo",
     "review": true
+  },
+  "As at {session}": {
+    "ga": "Mar atá ag {session}",
+    "review": true
+  },
+  "{session}’s": {
+    "ga": "de chuid {session}",
+    "review": true
   }
 }

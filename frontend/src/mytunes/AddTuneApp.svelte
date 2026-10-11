@@ -141,13 +141,16 @@
   // ---- quick add (the ＋ rail / ⌘Enter): hard defaults, straight to the page ------
   // TuneSearch's onAdd only ever fires from the quick paths here — the preview's
   // default action button is replaced by the footer form (which submits itself).
-  async function doQuickAdd(target, name) {
+  async function doQuickAdd(target, name, defaults = null) {
     try {
+      // What a session of yours already says about the tune comes along.
       const { finalId, already, applied } = await performAdd(target, {
         status: 'want to learn',
         notes: '',
-        settingId: null,
+        settingId: defaults?.setting_id ?? null,
         overrides: [],
+        alias: defaults?.alias || '',
+        key: defaults?.key || '',
       })
       close()
       already ? onAlready(finalId, name, applied) : onAdded(finalId, name)
@@ -171,7 +174,8 @@
     searchError = ''
     doQuickAdd(
       { tune_id: payload.tune_id, thesession_id: payload.thesession_id ?? null, name, tune_type: payload.tune_type },
-      name
+      name,
+      result?.session_defaults ?? null
     )
     return false // TuneSearch keeps its query; the pane closes itself on success
   }
@@ -283,6 +287,7 @@
             <AddTuneForm
               {instruments}
               {chosenSettingId}
+              defaults={data?.session_defaults ?? item.r.session_defaults ?? null}
               onList={!!(data?.person_tune?.on_list ?? item.r.on_list)}
               existing={data?.person_tune ?? null}
               onShowExisting={() => {

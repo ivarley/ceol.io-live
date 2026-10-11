@@ -497,6 +497,16 @@
         }
       }
     },
+    "%@’s": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "de chuid %@"
+          }
+        }
+      }
+    },
     "%lld": {},
     "%lld active sessions": {
       "localizations": {
@@ -2138,6 +2148,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Mar bhainisteoir"
+          }
+        }
+      }
+    },
+    "As at %@": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Mar atá ag %@"
           }
         }
       }

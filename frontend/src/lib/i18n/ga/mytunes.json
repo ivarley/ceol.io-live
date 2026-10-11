@@ -1096,5 +1096,9 @@
   "Key I play it in": {
     "ga": "An gléas a sheinnim é ann",
     "review": true
+  },
+  "As at {session}": {
+    "ga": "Mar atá ag {session}",
+    "review": true
   }
 }

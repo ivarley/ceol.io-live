@@ -105,6 +105,7 @@ struct DeepSearchSheet: View {
     }
 
     private var filterCount: Int { (mode == .mixed ? 0 : 1) + (type == nil ? 0 : 1) }
+    private var scopeIsMine: Bool { if case .mine = scope { return true } else { return false } }
 
     var body: some View {
         NavigationStack {
@@ -121,6 +122,10 @@ struct DeepSearchSheet: View {
                     ) { item, data, settingID, extras in
                         pickedResult?(item.r)
                         var payload = Self.payload(item, data: data, settingID: settingID)
+                        if scopeIsMine, let d = data?["session_defaults"] ?? item.r["session_defaults"] {
+                            if let a = d["alias"]?.stringValue { payload["alias"] = .string(a) }
+                            if let k = d["key"]?.stringValue { payload["key"] = .string(k) }
+                        }
                         payload.merge(extras) { _, new in new }
                         return await pick(payload)
                     }
@@ -315,9 +320,17 @@ struct DeepSearchSheet: View {
                 preview = index
             } label: {
                 VStack(alignment: .leading, spacing: 8) {
+                    let defaults = scopeIsMine ? r["session_defaults"] : nil
                     HStack(alignment: .firstTextBaseline) {
-                        Text(name).font(.ceol(size: 17, weight: .semibold)).foregroundStyle(CeolTokens.textColor)
-                            .multilineTextAlignment(.leading)
+                        if let alias = defaults?["alias"]?.stringValue {
+                            // Your session's name for it leads; the catalogue's follows, muted.
+                            (Text(alias).font(.ceol(size: 17, weight: .semibold)).foregroundStyle(CeolTokens.textColor)
+                                + Text(verbatim: " ") + Text(name).font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted))
+                                .multilineTextAlignment(.leading)
+                        } else {
+                            Text(name).font(.ceol(size: 17, weight: .semibold)).foregroundStyle(CeolTokens.textColor)
+                                .multilineTextAlignment(.leading)
+                        }
                         Spacer()
                         if let t = r["tune_type"]?.stringValue {
                             Text(TunesWords.type(t).uppercased()).font(.ceol(size: 12)).tracking(0.4)
@@ -326,6 +339,13 @@ struct DeepSearchSheet: View {
                     }
                     if !remote, let id {
                         DeepIncipit(app: app, tuneID: id, base64: r["incipit_image"]?.stringValue, canRender: r["can_render"] == true)
+                    }
+                    if let d = defaults, let session = d["session_name"]?.stringValue {
+                        let parts = [d["setting_id"]?.intValue.map { "#\($0)" }, d["key"]?.stringValue].compactMap { $0 }
+                        if !parts.isEmpty {
+                            Text(verbatim: tr("As at \(session)") + ": " + parts.joined(separator: " · "))
+                                .font(.ceol(size: 12)).foregroundStyle(CeolTokens.textMuted)
+                        }
                     }
                     // The gold badge says what this flow doesn't already show; the
                     // tunebooks sit at the right.
@@ -408,7 +428,13 @@ struct DeepSearchSheet: View {
 
     /// The ＋ rail: the caller's quick add where there is one (your tunebook), else the pick.
     private func quickAdd(_ item: DeepSearchItem) {
-        let payload = Self.payload(item, data: nil, settingID: nil)
+        var payload = Self.payload(item, data: nil, settingID: nil)
+        // Your tunebook: what a session of yours already says comes along with the +.
+        if scopeIsMine, let d = item.r["session_defaults"] {
+            if let a = d["alias"]?.stringValue { payload["alias"] = .string(a) }
+            if let k = d["key"]?.stringValue { payload["key"] = .string(k) }
+            if let sid = d["setting_id"]?.intValue { payload["setting_id"] = .number(Double(sid)) }
+        }
         if let onQuickAdd {
             quickFailure = nil
             Task {
@@ -649,7 +675,10 @@ struct TunePreviewPane: View {
         return item?.remote == true && item?.r["is_local"] != true
     }
     private var sessionSettingID: Int? { data?["session_setting_id"]?.intValue }
-    private var chosenSettingID: Int? { touched ? setting?.id : nil }
+    /// Your tunebook's add: what a session of yours already says (none elsewhere).
+    private var defaults: JSONValue? { data?["session_defaults"].flatMap { $0.isNull ? nil : $0 } }
+    /// The setting to save: the one paged to, else your session's (which counts as chosen).
+    private var chosenSettingID: Int? { touched ? setting?.id : defaults?["setting_id"]?.intValue }
     private var tuneID: Int? { data?["tune_id"]?.intValue ?? item?.r["tune_id"]?.intValue }
     private var actionAllowed: Bool { allowRemoteAction || !isRemote }
 
@@ -855,6 +884,8 @@ struct TunePreviewPane: View {
                             .foregroundStyle(CeolTokens.textMuted)
                         if let id = s.id, id == sessionSettingID {
                             (Text(verbatim: "★ ") + Text("this session’s")).foregroundStyle(CeolTokens.warning)
+                        } else if let id = s.id, id == defaults?["setting_id"]?.intValue, let session = defaults?["session_name"]?.stringValue {
+                            (Text(verbatim: "★ ") + Text("\(session)’s")).foregroundStyle(CeolTokens.warning)
                         }
                     }
                 }
@@ -1008,12 +1039,13 @@ struct TunePreviewPane: View {
             let remoteTune = d["is_local"] == false
             data = d
             settings = Self.settings(d["settings"], remote: remoteTune)
-            if let sid = d["session_setting_id"]?.intValue, let i = settings.firstIndex(where: { $0.id == sid }) {
+            let landOn = d["session_setting_id"]?.intValue ?? d["session_defaults"]?["setting_id"]?.intValue
+            if let sid = landOn, let i = settings.firstIndex(where: { $0.id == sid }) {
                 setIdx = i
             }
             loading = false
             await drawCurrent()
-            if !remoteTune { await backfill(run: run, tuneID: d["tune_id"]?.intValue ?? id) }
+            if !remoteTune { await backfill(run: run, tuneID: d["tune_id"]?.intValue ?? id, landOn: landOn) }
         } catch {
             guard run == loadRun else { return }
             loading = false
@@ -1031,7 +1063,7 @@ struct TunePreviewPane: View {
 
     /// Ceol usually holds only the setting an import brought; thesession.org has them
     /// all. They come in behind the first, and so do the tune's other names there.
-    private func backfill(run: Int, tuneID: Int) async {
+    private func backfill(run: Int, tuneID: Int, landOn: Int? = nil) async {
         backfilling = true
         defer { if run == loadRun { backfilling = false } }
         guard let ts = try? await app.getJSON("/api/tunes/thesession/\(tuneID)/preview?full=1"), run == loadRun else { return }
@@ -1046,6 +1078,11 @@ struct TunePreviewPane: View {
         guard !extra.isEmpty else { return }
         let hadNone = settings.isEmpty
         settings += extra
+        // The setting to land on may only just have arrived (unless the pager was worked).
+        if !touched, let landOn, let i = settings.firstIndex(where: { $0.id == landOn }), i != setIdx {
+            setIdx = i
+            return
+        }
         if hadNone { await drawCurrent() }
     }
 

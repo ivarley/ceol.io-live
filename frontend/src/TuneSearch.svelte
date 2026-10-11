@@ -572,12 +572,20 @@
       <div id="dres-{di}" class="deep-card deep-card-split" class:hl={hl === di} class:onlist={(dimOnList && r.on_list) || (dimInSession && r.in_session)} role="option" aria-selected={hl === di}>
         <button class="deep-card-body" aria-label={t('Preview {name}', { name: r.name })} onclick={() => openPreview(di)}>
           <div class="deep-card-head">
-            <span class="deep-name">{r.name}</span>
+            {#if dimOnList && r.session_defaults?.alias}
+              <!-- Your session's name for it leads; the catalogue's follows, muted. -->
+              <span class="deep-name">{r.session_defaults.alias} <span class="deep-name-catalogue">{r.name}</span></span>
+            {:else}
+              <span class="deep-name">{r.name}</span>
+            {/if}
             <span class="deep-type">{tuneTypeName(r.tune_type) || ''}</span>
           </div>
           <div class="deep-staff">
             <Incipit {config} tuneId={r.tune_id} image={r.incipit_image} canRender={r.can_render} />
           </div>
+          {#if dimOnList && r.session_defaults && (r.session_defaults.setting_id != null || r.session_defaults.key)}
+            <div class="deep-defaults">{t('As at {session}', { session: r.session_defaults.session_name })}: {[r.session_defaults.setting_id != null ? `#${r.session_defaults.setting_id}` : null, r.session_defaults.key].filter(Boolean).join(' · ')}</div>
+          {/if}
           <div class="deep-meta">
             {#if r.abc_only}<span class="deep-badge">♪ {t('notation')}</span>{/if}
             {#if starBadge(r)}<span class="deep-badge star">★ {starBadge(r)}</span>{/if}

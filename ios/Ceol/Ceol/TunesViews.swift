@@ -44,6 +44,10 @@ struct TuneRef: Identifiable, Hashable {
     var statusKnown = true
     /// A setting chosen in the search's preview: applied as yours once the tune is added.
     var settingID: Int? = nil
+    /// What a session of yours calls the tune, and the key it plays: the add's fields
+    /// start from these.
+    var alias: String? = nil
+    var key: String? = nil
 }
 
 struct TunesView: View {
@@ -330,6 +334,8 @@ struct TuneSheet: View {
                     heard = tune.heardCount ?? 0
                     notes = tune.notes ?? ""
                     savedNotes = notes
+                    if let a = tune.alias { alias = a; aliasOpen = true }
+                    if let k = tune.key { key = k; keyOpen = true }
                     await load()
                 }
                 .confirmationDialog("Remove \(tune.name) from your tunes?", isPresented: $confirmRemove, titleVisibility: .visible) {
@@ -822,7 +828,8 @@ struct AddTuneSheet: View {
             guard let id = payload["tune_id"]?.intValue else { return tr("That tune isn't in Ceol's library yet.") }
             open = TuneRef(
                 id: id, name: payload["name"]?.stringValue ?? "", type: payload["tune_type"]?.stringValue,
-                statusKnown: false, settingID: payload["setting_id"]?.intValue)
+                statusKnown: false, settingID: payload["setting_id"]?.intValue,
+                alias: payload["alias"]?.stringValue, key: payload["key"]?.stringValue)
             return nil
         }
         .sheet(item: $open) { tune in
@@ -834,11 +841,17 @@ struct AddTuneSheet: View {
         .ceolDrawer(interactive: false)
     }
 
-    /// + : on the list at once, as To Learn (the web's + rail). What went wrong, or nil.
+    /// + : on the list at once, as To Learn (the web's + rail), with what a session of
+    /// yours already says about it. What went wrong, or nil.
     private func quickAdd(_ payload: [String: JSONValue]) async -> String? {
         guard let id = payload["tune_id"]?.intValue else { return tr("That tune isn't in Ceol's library yet.") }
         do {
-            try await model.applyTuneOp(.add, tuneID: id, learnStatus: .wantToLearn)
+            try await model.applyTuneOp(
+                .add, tuneID: id, learnStatus: .wantToLearn,
+                nameAlias: payload["alias"]?.stringValue, key: payload["key"]?.stringValue)
+            if let sid = payload["setting_id"]?.intValue {
+                try await model.applyTuneOp(.setSetting, tuneID: id, settingID: sid)
+            }
             onChanged()
             return nil
         } catch let f as TuneOpFailure {

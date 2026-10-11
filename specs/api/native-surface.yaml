@@ -787,11 +787,23 @@ components:
               on_list: { type: boolean }
               # In the repertoire of a session you belong to.
               in_your_sessions: { type: boolean }
+              # Without a scope (your tunebook): what a session of yours already says
+              # about the tune, for the add to start from (null when none has a say).
+              session_defaults: { oneOf: [{ $ref: "#/components/schemas/SessionDefaults" }, { type: "null" }] }
               in_session: { type: boolean }
               played_here: { type: integer }
               abc_only: { type: boolean }
               incipit_image: { type: [string, "null"] }
               can_render: { type: boolean }
+    SessionDefaults:
+      type: object
+      required: [session_name, session_path, alias, setting_id, key]
+      properties:
+        session_name: { type: string }
+        session_path: { type: string }
+        alias: { type: [string, "null"] }
+        setting_id: { type: [integer, "null"] }
+        key: { type: [string, "null"] }
     TunePreview:
       type: object
       required: [success, tune_id, name, tune_type, tunebook_count, aliases, played_here, settings]
@@ -803,6 +815,9 @@ components:
         tunebook_count: { type: [integer, "null"] }
         aliases: { type: array }
         played_here: { type: integer }
+        # Without a scope (your tunebook): what a session of yours already says about
+        # the tune; the pager lands on its setting.
+        session_defaults: { oneOf: [{ $ref: "#/components/schemas/SessionDefaults" }, { type: "null" }] }
         settings:
           type: array
           items:

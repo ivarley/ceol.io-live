@@ -15,6 +15,7 @@
     // the preview payload. A pasted link can land here without ever having said "add".
     existing = null,
     chosenSettingId = null, // the setting the pager is on, when the user pointed at one
+    defaults = null, // what a session of yours already says: {session_name, alias, setting_id, key}
     onSubmit, // async ({status, notes, overrides}) — throws Error(message) on failure
     onShowExisting = () => {}, // on-list hand-off (close pane + highlight on the page)
     onUpdateSetting, // async () — adopt chosenSettingId as the setting I play
@@ -53,10 +54,10 @@
   let notesOpen = $state(false) // notes fold out on demand — keeps the footer compact
   // What you call it and the key you play it in, when they differ from the catalogue's:
   // a link each, opening into its field (the setting is the preview's pager).
-  let aliasOpen = $state(false)
-  let alias = $state('')
-  let keyOpen = $state(false)
-  let key = $state('')
+  let aliasOpen = $state(!!defaults?.alias)
+  let alias = $state(defaults?.alias || '')
+  let keyOpen = $state(!!defaults?.key)
+  let key = $state(defaults?.key || '')
   let submitting = $state(false)
   let errorMsg = $state('')
 
@@ -201,9 +202,12 @@
     {:else}
       <button class="mt-note-toggle" onclick={() => (notesOpen = true)}>＋ {t('Add note')}</button>
     {/if}
+    {#if defaults && (defaults.alias || defaults.key)}
+      <div class="mt-defaults">{t('As at {session}', { session: defaults.session_name })}</div>
+    {/if}
     {#if aliasOpen}
       <!-- svelte-ignore a11y_autofocus -->
-      <input class="mt-alias" type="text" placeholder={t('What I call it')} autofocus bind:value={alias} />
+      <input class="mt-alias" type="text" placeholder={t('What I call it')} autofocus={!defaults?.alias} bind:value={alias} />
     {:else}
       <button class="mt-note-toggle" onclick={() => (aliasOpen = true)}>{t('I call this something else')}</button>
     {/if}
