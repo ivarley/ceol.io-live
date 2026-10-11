@@ -209,7 +209,11 @@ final class CeolUITests: XCTestCase {
         field.typeText("Lucy Farr")
         let result = app.buttons["deep.result"].firstMatch
         XCTAssertTrue(result.waitForExistence(timeout: 10))
+        // The card opens its preview (the look before you add); its button goes on to the form.
         result.tap()
+        let preview = app.buttons["preview.action"]
+        XCTAssertTrue(preview.waitForExistence(timeout: 10))
+        preview.tap()
         let add = app.buttons["addSessionTune.add"]
         if add.waitForExistence(timeout: 5) {
             snapshot("add session tune")
@@ -1046,7 +1050,12 @@ final class CeolUITests: XCTestCase {
         let card = app.buttons.matching(identifier: "deep.result").containing(NSPredicate(format: "label CONTAINS 'Silver Spear'")).firstMatch
         XCTAssertTrue(card.waitForExistence(timeout: 10))
         snapshot("deep search")
+        // The card opens its preview; Log This Tune logs it (the ＋ rail would log at once).
         card.tap()
+        let preview = app.buttons["preview.action"]
+        XCTAssertTrue(preview.waitForExistence(timeout: 10))
+        snapshot("deep search preview")
+        preview.tap()
         try await waitFor("Silver Spear from deep search") { linked($0, "Silver Spear, The") }
         app.buttons["night.done"].tap()
     }
@@ -1441,7 +1450,8 @@ final class CeolUITests: XCTestCase {
         app.buttons["edit.search"].tap()
         let card = app.buttons.matching(identifier: "deep.result").containing(NSPredicate(format: "label CONTAINS 'Silver Spear'")).firstMatch
         XCTAssertTrue(card.waitForExistence(timeout: 10))
-        card.tap()
+        // Relinking from the ＋ rail: one tap, no preview.
+        app.buttons.matching(identifier: "deep.quick").firstMatch.tap()
         try await waitFor("the unknown tune relinked") { rs in
             rs.contains { ($0["name"] as? String)?.contains("Silver Spear") == true && $0["tune_id"] is Int }
                 && !rs.contains { ($0["name"] as? String) == "Zzq Mystery Tune" }

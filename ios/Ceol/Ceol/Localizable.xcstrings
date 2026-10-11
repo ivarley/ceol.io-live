@@ -1700,6 +1700,16 @@
         }
       }
     },
+    "Add %@ without previewing": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Cuir %@ leis gan réamhamharc"
+          }
+        }
+      }
+    },
     "Add a Session": {
       "localizations": {
         "ga": {
@@ -1816,6 +1826,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Cuir duine leis an seisiún seo"
+          }
+        }
+      }
+    },
+    "Add this tune": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Cuir an fonn seo leis"
           }
         }
       }
@@ -1987,6 +2007,16 @@
         }
       }
     },
+    "Also known as: %@": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ainmneacha eile: %@"
+          }
+        }
+      }
+    },
     "Another tune to learn: ": {
       "localizations": {
         "ga": {
@@ -2027,7 +2057,18 @@
         }
       }
     },
+    "Any tune type": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Cineál foinn ar bith"
+          }
+        }
+      }
+    },
     "Any type": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -2274,6 +2315,7 @@
       }
     },
     "Both": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -2559,6 +2601,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Glan an iontráil"
+          }
+        }
+      }
+    },
+    "Clear filter %@": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Glan an scagaire %@"
           }
         }
       }
@@ -3077,6 +3129,26 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Níorbh fhéidir an taifeadadh a thosú: %@"
+          }
+        }
+      }
+    },
+    "Couldn’t load tune details from thesession.org.": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Níorbh fhéidir sonraí an fhoinn a lódáil ó thesession.org."
+          }
+        }
+      }
+    },
+    "Couldn’t load tune details.": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Níorbh fhéidir sonraí an fhoinn a lódáil."
           }
         }
       }
@@ -4594,6 +4666,16 @@
         }
       }
     },
+    "More …": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tuilleadh …"
+          }
+        }
+      }
+    },
     "Move": {
       "localizations": {
         "ga": {
@@ -4720,6 +4802,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "An lá dár gcionn"
+          }
+        }
+      }
+    },
+    "Next result": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "An chéad toradh eile"
           }
         }
       }
@@ -5230,6 +5322,16 @@
         }
       }
     },
+    "Not in the library yet — it will be imported from thesession.org when you add it.": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Níl sé sa leabharlann fós — iompórtálfar ó thesession.org é nuair a chuirfidh tú leis é."
+          }
+        }
+      }
+    },
     "Not linked": {
       "localizations": {
         "ga": {
@@ -5276,6 +5378,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Níl ar do liosta"
+          }
+        }
+      }
+    },
+    "Not played here yet": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Níor seinneadh anseo fós é"
           }
         }
       }
@@ -5846,6 +5958,16 @@
         }
       }
     },
+    "Played here %lld×": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Seinnte anseo %lld×"
+          }
+        }
+      }
+    },
     "Playing": {
       "localizations": {
         "ga": {
@@ -5956,12 +6078,32 @@
         }
       }
     },
+    "Preview %@": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Réamhamharc ar %@"
+          }
+        }
+      }
+    },
     "Previous day": {
       "localizations": {
         "ga": {
           "stringUnit": {
             "state": "needs_review",
             "value": "An lá roimhe"
+          }
+        }
+      }
+    },
+    "Previous result": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "An toradh roimhe"
           }
         }
       }
@@ -6246,6 +6388,16 @@
         }
       }
     },
+    "Results": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Torthaí"
+          }
+        }
+      }
+    },
     "Retry": {
       "localizations": {
         "ga": {
@@ -6432,6 +6584,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Cuardaigh de réir nótaí, m.sh. GED nó EBBA…"
+          }
+        }
+      }
+    },
+    "Search filters": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Scagairí cuardaigh"
           }
         }
       }
@@ -7236,6 +7398,26 @@
         }
       }
     },
+    "Tap to show the opening bars": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tapáil chun tús an fhoinn a thaispeáint"
+          }
+        }
+      }
+    },
+    "Tap to show the whole tune": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tapáil chun an fonn iomlán a thaispeáint"
+          }
+        }
+      }
+    },
     "That change wasn't saved.": {
       "localizations": {
         "ga": {
@@ -7682,6 +7864,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Ainm an fhoinn, na nótaí, nó nasc"
+          }
+        }
+      }
+    },
+    "Tune type": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Cineál foinn"
           }
         }
       }
@@ -8486,6 +8678,16 @@
         }
       }
     },
+    "abc": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "abc"
+          }
+        }
+      }
+    },
     "add it!": {
       "localizations": {
         "ga": {
@@ -8652,6 +8854,16 @@
         }
       }
     },
+    "last: %@": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "is déanaí: %@"
+          }
+        }
+      }
+    },
     "less": {
       "localizations": {
         "ga": {
@@ -8712,6 +8924,36 @@
         }
       }
     },
+    "notation (full)": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "nodaireacht (iomlán)"
+          }
+        }
+      }
+    },
+    "notation (incipit)": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "nodaireacht (tús an fhoinn)"
+          }
+        }
+      }
+    },
+    "notes": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "nótaí"
+          }
+        }
+      }
+    },
     "offline": {
       "localizations": {
         "ga": {
@@ -8728,6 +8970,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "seinnte anseo %lld×"
+          }
+        }
+      }
+    },
+    "rendering notation…": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "nodaireacht á tarraingt…"
           }
         }
       }
@@ -8812,6 +9064,16 @@
         }
       }
     },
+    "thesession": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "thesession"
+          }
+        }
+      }
+    },
     "thesession.org member number or link": {
       "localizations": {
         "ga": {
@@ -8848,6 +9110,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "an seisiún seo"
+          }
+        }
+      }
+    },
+    "this session’s": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "leagan an tseisiúin seo"
+          }
+        }
+      }
+    },
+    "tunebooks": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "leabhar fonn"
           }
         }
       }
@@ -8985,6 +9267,26 @@
         }
       }
     },
+    "♪ no notation": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "♪ gan nodaireacht"
+          }
+        }
+      }
+    },
+    "♪ no notation image": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "♪ gan íomhá nodaireachta"
+          }
+        }
+      }
+    },
     "♪ notation": {
       "localizations": {
         "ga": {
@@ -9062,6 +9364,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "＋ Cuir %@ leis"
+          }
+        }
+      }
+    },
+    "＋ Log This Tune": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "＋ Logáil an fonn seo"
           }
         }
       }
