@@ -546,17 +546,21 @@ final class CeolUITests: XCTestCase {
         let plus = app.buttons["tunes.add"]
         XCTAssertTrue(plus.waitForExistence(timeout: 10))
         plus.tap()
-        let query = app.textFields["addTune.query"]
+        let query = app.textFields["deep.field"]
         XCTAssertTrue(query.waitForExistence(timeout: 10))
         query.tap()
         query.typeText("kisco")
-        let quickAdd = app.buttons["addTune.quickAdd"].firstMatch
+        let quickAdd = app.buttons["deep.quick"].firstMatch
         XCTAssertTrue(quickAdd.waitForExistence(timeout: 10))
         quickAdd.tap()
         XCTAssertTrue(app.images["On your list"].firstMatch.waitForExistence(timeout: 10)
             || app.otherElements["On your list"].firstMatch.exists || app.descendants(matching: .any)["On your list"].exists)
         snapshot("add a tune")
-        app.buttons["addTune.row"].firstMatch.tap()
+        // The card's preview, then its button, open the tune's sheet (already added: its status shows).
+        app.buttons["deep.result"].firstMatch.tap()
+        let preview = app.buttons["preview.action"]
+        XCTAssertTrue(preview.waitForExistence(timeout: 10))
+        preview.tap()
         let learn = app.buttons["sheet.status.want to learn"]
         XCTAssertTrue(learn.waitForExistence(timeout: 10))
         XCTAssertTrue(learn.isSelected)
@@ -1650,8 +1654,8 @@ final class CeolUITests: XCTestCase {
         let cancel = app.buttons["deep.cancel"]
         XCTAssertTrue(cancel.waitForExistence(timeout: 5))
         snapshot("search panel")
-        app.swipeRight(velocity: .fast)
-        XCTAssertTrue(cancel.waitForNonExistence(timeout: 5), "swiped away to the right")
+        cancel.tap()
+        XCTAssertTrue(cancel.waitForNonExistence(timeout: 5), "closed with Done")
         XCTAssertTrue(app.buttons["night.done"].waitForExistence(timeout: 3))
     }
 

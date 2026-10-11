@@ -57,6 +57,7 @@
   "Add person": "Cuir duine leis",
   "Add person didn't work.": "Níorbh fhéidir an duine a chur leis.",
   "Add this tune": "Cuir an fonn seo leis",
+  "Add to my tunes": "Cuir le mo chuid fonn",
   "Adding…": "Á chur leis…",
   "Airs": "Foinn mhalla",
   "Also known as: %@": "Ainmneacha eile: %@",
@@ -150,6 +151,7 @@
   "No tunes yet — log one below.": "Gan foinn fós — logáil ceann thíos.",
   "None": "Dada",
   "Not checked in": "Níl i láthair",
+  "Not in Ceol's library yet. Log it at a session first, and it will be imported.": "Níl sé i leabharlann Ceol fós. Logáil ag seisiún ar dtús é, agus iompórtálfar é.",
   "Not in the library yet — it will be imported from thesession.org when you add it.": "Níl sé sa leabharlann fós — iompórtálfar ó thesession.org é nuair a chuirfidh tú leis é.",
   "Not played here yet": "Níor seinneadh anseo fós é",
   "Not set": "Gan socrú",
@@ -199,6 +201,8 @@
   "That change wasn't saved.": "Níor sábháladh an t-athrú sin.",
   "That didn't save.": "Níor sábháladh é sin.",
   "That person wasn't added. Try again.": "Níor cuireadh an duine sin leis. Bain triail eile as.",
+  "That tune isn't in Ceol's library yet.": "Níl an fonn sin i leabharlann Ceol fós.",
+  "That's a thesession.org tune link — open it above to see the tune.": "Nasc foinn ó thesession.org é sin — oscail thuas é chun an fonn a fheiceáil.",
   "The session": "An seisiún",
   "The usual": "An gnátháit",
   "This hides the editing controls.": "Folaíonn sé seo na rialuithe eagarthóireachta.",
@@ -279,5 +283,6 @@
   "＋ new set": "＋ sraith nua",
   "＋ start of set": "＋ tús na sraithe",
   "🔎 Search on thesession.org for “%@”": "🔎 Cuardaigh “%@” ar thesession.org",
+  "🔗 Open tune #%lld from thesession.org": "🔗 Oscail fonn #%lld ó thesession.org",
   "🗑 Remove": "🗑 Bain"
 }

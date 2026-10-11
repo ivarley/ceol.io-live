@@ -989,7 +989,6 @@ struct NightView: View {
     let title: String
     @State private var model: NightModel?
     @State private var deepSearching = false
-    @State private var searchDrag: CGFloat = 0
     @FocusState private var composerFocused: Bool
     @State private var infoTune: TuneRef?
     @State private var assigning = false
@@ -1104,14 +1103,13 @@ struct NightView: View {
         .sheet(isPresented: Binding(get: { model?.review != nil }, set: { if !$0 { model?.review = nil } })) {
             if let items = model?.review { ReviewSheet(items: items) }
         }
-        // Deep search comes in from the right, as the desktop web's pane sits on the right
-        // (and an iPad's would): a panel over the night, swiped away to the right.
-        .overlay {
-            if deepSearching, let model {
+        // Deep search: the same sheet as adding a tune to a session or to your list.
+        .sheet(isPresented: $deepSearching) {
+            if let model {
                 DeepSearchSheet(
                     model: model, initialQuery: model.composer.text,
                     preferType: Composer.setTuneType(model.cursorSegment),
-                    onClose: { closeSearch() }
+                    onClose: { deepSearching = false }
                 ) { payload in
                     if model.composer.editingID != nil {
                         // Searching while editing a logged tune: the pick relinks it.
@@ -1121,20 +1119,9 @@ struct NightView: View {
                         model.logTune(payload)
                     }
                 }
-                .offset(x: max(0, searchDrag))
-                .gesture(
-                    SwipeLeft(
-                        rightward: true,
-                        onChange: { searchDrag = max(0, $0) },
-                        onEnd: { x in
-                            if x > 100 { closeSearch() }
-                            withAnimation(.spring(duration: 0.25)) { searchDrag = 0 }
-                        }))
-                .transition(.move(edge: .trailing))
-                .zIndex(2)
+                .ceolDrawer(interactive: false)
             }
         }
-        .animation(.easeOut(duration: 0.25), value: deepSearching)
         .sheet(isPresented: $showingDetails) {
             if let model { LogDetailsSheet(model: model) { managingAttendance = true } }
         }
@@ -1367,11 +1354,6 @@ struct NightView: View {
     private func playingName(_ model: NightModel) -> String {
         guard let id = model.player.playingID else { return tr("Playing") }
         return model.log?.records.first { $0.recordID == id }?["name"]?.stringValue ?? tr("Playing")
-    }
-
-    private func closeSearch() {
-        deepSearching = false
-        searchDrag = 0
     }
 
     private func finishEditing() {

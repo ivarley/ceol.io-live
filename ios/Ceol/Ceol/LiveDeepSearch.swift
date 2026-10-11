@@ -1,13 +1,13 @@
-// Deep search from the logger's "Search" button (plan Phase 5c), the web's full-screen
-// TuneSearch modal (frontend/src/TuneSearch.svelte): the whole catalogue by name, by
-// notation, or both, with a filter button for the mode and the tune type; each card
-// shows the tune's opening bars. Tapping a card opens its preview (TunePreviewPane,
-// the web's TunePreview.svelte): a look before you log, with every setting to page
-// through and choose; the card's ＋ logs it in one tap. On request, thesession.org too,
-// where picking a tune imports it as it's logged. And the escape: log the text as typed.
-//
-// The same search adds a tune to a session's list (the web's add pane uses TuneSearch
-// too): scoped to the session, tunes already on its list dimmed, no "as typed".
+// The tune search (plan Phase 5c), the web's TuneSearch (frontend/src/TuneSearch.svelte)
+// as one sheet for three places: the logger's "Search" (log a tune at the cursor), a
+// session's "Add a tune" (its list), and your own "Add a tune" (your tunebook). The
+// whole catalogue by name, by notation, or both, with a filter button for the mode and
+// the tune type; each card shows the tune's opening bars. Tapping a card opens its
+// preview (TunePreviewPane, the web's TunePreview.svelte): a look before you commit,
+// with every setting to page through and choose; the card's ＋ commits in one tap. On
+// request, thesession.org too, where picking a tune imports it as it's logged. A pasted
+// thesession.org link opens that tune's preview. And the logger's escape: log the text
+// as typed.
 //
 // i18n-converted (spec 057).
 
@@ -17,15 +17,17 @@ import SwiftUI
 import UIKit
 
 /// What a tune search is for, which the server reads to mark results ("played here",
-/// "in this session"): a night being logged, or a session's list.
+/// "in this session"): a night being logged, a session's list, or your own tunebook.
 enum TuneSearchScope {
     case instance(Int)
     case session(String)
+    case mine
 
-    var queryItem: URLQueryItem {
+    var items: [URLQueryItem] {
         switch self {
-        case .instance(let id): .init(name: "instance", value: String(id))
-        case .session(let path): .init(name: "session", value: path)
+        case .instance(let id): [.init(name: "instance", value: String(id))]
+        case .session(let path): [.init(name: "session", value: path)]
+        case .mine: []
         }
     }
 }
@@ -47,11 +49,20 @@ struct DeepSearchSheet: View {
     var actionLabel = tr("＋ Log This Tune")
     /// Offer to log the text as typed (the logger only).
     var allowAsIs = true
+    /// Offer thesession.org's tunes too (picking one imports it): where the pick can import.
+    var allowRemote = true
     /// Close after a pick; off when the pick leads on to a next step in the same sheet.
     var closesOnPick = true
+    /// Dim the tunes already on your list, and let their ＋ stand down (your tunebook).
+    var dimOnList = false
+    /// The tunes added from here (your tunebook): dimmed like the ones already on the list.
+    var added: Binding<Set<Int>> = .constant([])
     /// The whole result picked, before `onPick` (what a next step shows of it).
     var pickedResult: ((JSONValue) -> Void)? = nil
-    /// Close the panel (Cancel, a swipe to the right, or after a pick).
+    /// The ＋ rail, when it does something other than `onPick` (your tunebook: on the
+    /// list at once, as To Learn). Returns what went wrong, or nil.
+    var onQuickAdd: (([String: JSONValue]) async -> String?)? = nil
+    /// Close the sheet (Done, a swipe down, or after a pick).
     let onClose: () -> Void
     /// {tune_id, name, tune_type, setting_id?, ...the result's fields}, {thesession_id, ...}, or {name}.
     let onPick: ([String: JSONValue]) -> Void
@@ -68,138 +79,142 @@ struct DeepSearchSheet: View {
     @State private var remote: [JSONValue]?
     @State private var remoteLoading = false
     @State private var remoteFailed = false
+    /// A pasted thesession.org link, opened: the preview pages this one tune.
+    @State private var pasted: DeepSearchItem?
     /// The preview showing, as an index into `previewItems`.
     @State private var preview: Int?
+    @State private var quickFailure: String?
 
     static let types = ["jig", "reel", "slip jig", "hornpipe", "polka", "slide", "waltz", "barndance", "strathspey", "three-two", "mazurka", "march"]
 
     @FocusState private var fieldFocused: Bool
 
-    /// What the preview's ‹ › page through: the local results, then thesession.org's.
+    private var trimmedQuery: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
+    /// A thesession.org link or tune number in the field: not a name to search for.
+    private var pastedID: Int? { TheSession.tuneID(trimmedQuery) }
+
+    /// What the preview's ‹ › page through: the local results, then thesession.org's;
+    /// or the one pasted tune.
     private var previewItems: [DeepSearchItem] {
-        results.map { DeepSearchItem(r: $0, remote: false) } + (remote ?? []).map { DeepSearchItem(r: $0, remote: true) }
+        if let pasted { return [pasted] }
+        return results.map { DeepSearchItem(r: $0, remote: false) } + (remote ?? []).map { DeepSearchItem(r: $0, remote: true) }
     }
+
+    private var filterCount: Int { (mode == .mixed ? 0 : 1) + (type == nil ? 0 : 1) }
 
     var body: some View {
-        // No NavigationStack of its own: it's a panel over a screen that's already in one,
-        // and a stack nested there pops the screen underneath.
-        ZStack {
-            VStack(spacing: 0) {
-                header
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 10) {
-                        if filtersOpen { filterPanel } else { filterPills }
-                        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
-                        if loading && results.isEmpty {
-                            ProgressView().frame(maxWidth: .infinity).padding()
-                        } else if failed {
-                            Text("Couldn't search. Check your connection.").foregroundStyle(CeolTokens.textMuted)
-                        } else if !q.isEmpty && results.isEmpty && !loading {
-                            Text("No tunes found for “\(q)”.").foregroundStyle(CeolTokens.textMuted)
+        NavigationStack {
+            ZStack {
+                searchTier
+                if let i = preview, previewItems.indices.contains(i) {
+                    TunePreviewPane(
+                        app: app, scope: scope, items: previewItems, index: i, actionLabel: actionLabel,
+                        allowRemoteAction: allowRemote,
+                        onBack: {
+                            preview = nil
+                            pasted = nil
                         }
-                        ForEach(Array(results.enumerated()), id: \.offset) { i, r in
-                            card(r, remote: false, index: i)
-                        }
-                        if !q.isEmpty {
-                            if remote == nil && mode != .abc {
-                                wide(tr("🔎 Search on thesession.org for “\(q)”"), color: CeolTokens.info, id: "deep.thesession") {
-                                    Task { await searchTheSession(q) }
-                                }
-                            }
-                            if allowAsIs && mode != .abc {
-                                wide(tr("＋ Log “\(q)” as typed (unlinked)"), color: CeolTokens.primary, id: "deep.asIs") {
-                                    pick(["name": .string(q)])
-                                }
-                            }
-                        }
-                        if remoteLoading || remote != nil || remoteFailed {
-                            Text("FROM THESESSION.ORG").font(.ceol(size: 12, weight: .semibold)).tracking(0.8)
-                                .foregroundStyle(CeolTokens.textMuted).padding(.top, 8)
-                            if remoteLoading {
-                                ProgressView().frame(maxWidth: .infinity)
-                            } else if remoteFailed {
-                                Text("Couldn't search thesession.org.").foregroundStyle(CeolTokens.textMuted)
-                            } else if remote?.isEmpty == true {
-                                Text("No new tunes on thesession.org for “\(q)”.").foregroundStyle(CeolTokens.textMuted)
-                            }
-                            ForEach(Array((remote ?? []).enumerated()), id: \.offset) { i, r in
-                                card(r, remote: true, index: results.count + i)
-                            }
-                        }
+                    ) { item, data, settingID in
+                        pickedResult?(item.r)
+                        pick(Self.payload(item, data: data, settingID: settingID))
                     }
-                    .font(.ceol(size: 15))
-                    .padding(16)
+                    .background(CeolTokens.drawerBg)
+                    .transition(.move(edge: .trailing))
+                    .zIndex(1)
                 }
-                .scrollDismissesKeyboard(.interactively)
             }
             .background(CeolTokens.drawerBg)
-            if let i = preview, previewItems.indices.contains(i) {
-                TunePreviewPane(
-                    app: app, scope: scope, items: previewItems, index: i, actionLabel: actionLabel,
-                    onBack: { preview = nil }
-                ) { item, data, settingID in
-                    pickedResult?(item.r)
-                    pick(Self.payload(item, data: data, settingID: settingID))
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done", action: onClose).accessibilityIdentifier("deep.cancel")
                 }
-                .background(CeolTokens.drawerBg)
-                .transition(.move(edge: .trailing))
-                .zIndex(1)
             }
-        }
-        .animation(.easeOut(duration: 0.2), value: preview)
-        .task(id: "\(query)|\(mode.rawValue)|\(type ?? "")") { await search() }
-        .onAppear {
-            if query.isEmpty { query = initialQuery }
-            // The keyboard moves from the composer to this field (the web's modal
-            // autofocuses it too); the preview then sends it away.
-            fieldFocused = true
+            .animation(.easeOut(duration: 0.2), value: preview)
+            .task(id: "\(query)|\(mode.rawValue)|\(type ?? "")") { await search() }
+            .onAppear {
+                if query.isEmpty { query = initialQuery }
+                // The keyboard comes to this field (the web's modal autofocuses it too);
+                // the preview then sends it away.
+                fieldFocused = true
+            }
         }
     }
 
-    /// Cancel, the title, the search field, and the filter button.
-    private var header: some View {
-        VStack(spacing: 10) {
-            ZStack {
-                Text(title).font(.ceol(size: 17, weight: .semibold)).foregroundStyle(CeolTokens.textColor)
-                HStack {
-                    Button("Cancel", action: onClose)
-                        .font(.ceol(size: 16)).foregroundStyle(CeolTokens.primary)
-                        .accessibilityIdentifier("deep.cancel")
-                    Spacer()
+    /// The field with its filter button, the filter panel or the pills, and the results.
+    private var searchTier: some View {
+        VStack(spacing: 0) {
+            VStack(spacing: 10) {
+                SearchRow(
+                    text: $query, prompt: prompt, fieldID: "deep.field", focused: $fieldFocused,
+                    onFilter: { withAnimation(.easeOut(duration: 0.2)) { filtersOpen.toggle() } }, filterCount: filterCount)
+                if filtersOpen {
+                    filterPanel.transition(.move(edge: .top).combined(with: .opacity))
+                } else {
+                    filterPills
                 }
             }
-            HStack(spacing: 8) {
-                HStack(spacing: 8) {
-                    Image(systemName: "magnifyingglass").foregroundStyle(CeolTokens.textMuted)
-                    TextField("", text: $query, prompt: Text(prompt).foregroundStyle(CeolTokens.textMuted))
-                        .font(.ceol(size: 16)).foregroundStyle(CeolTokens.textColor)
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
-                        .focused($fieldFocused)
-                        .submitLabel(.search)
-                        .accessibilityIdentifier("deep.field")
-                    if !query.isEmpty {
-                        Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(CeolTokens.textMuted) }
-                            .buttonStyle(.plain).accessibilityLabel("Clear search")
+            .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 8)
+            .clipped()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 10) {
+                    let q = trimmedQuery
+                    if let quickFailure {
+                        Text(quickFailure).font(.ceol(size: 14)).foregroundStyle(CeolTokens.danger)
+                    }
+                    if let id = pastedID {
+                        // A link, not a name: the only thing to do with it is open that tune.
+                        wide(tr("🔗 Open tune #\(id) from thesession.org"), color: CeolTokens.info, id: "deep.openPasted") {
+                            openPasted(id)
+                        }
+                        Text("That's a thesession.org tune link — open it above to see the tune.")
+                            .foregroundStyle(CeolTokens.textMuted)
+                    } else if q.isEmpty {
+                        Text("Search the tunes on Ceol by name, by the notes (\"GED BED\"), or paste a thesession.org link.")
+                            .foregroundStyle(CeolTokens.textMuted)
+                    } else if loading && results.isEmpty {
+                        ProgressView().frame(maxWidth: .infinity).padding()
+                    } else if failed {
+                        Text("Couldn't search. Check your connection.").foregroundStyle(CeolTokens.textMuted)
+                    } else if results.isEmpty && !loading {
+                        Text("No tunes found for “\(q)”.").foregroundStyle(CeolTokens.textMuted)
+                    }
+                    ForEach(Array(results.enumerated()), id: \.offset) { i, r in
+                        card(r, remote: false, index: i)
+                    }
+                    if !q.isEmpty && pastedID == nil {
+                        if allowRemote && remote == nil && mode != .abc {
+                            wide(tr("🔎 Search on thesession.org for “\(q)”"), color: CeolTokens.info, id: "deep.thesession") {
+                                Task { await searchTheSession(q) }
+                            }
+                        }
+                        if allowAsIs && mode != .abc {
+                            wide(tr("＋ Log “\(q)” as typed (unlinked)"), color: CeolTokens.primary, id: "deep.asIs") {
+                                pick(["name": .string(q)])
+                            }
+                        }
+                    }
+                    if remoteLoading || remote != nil || remoteFailed {
+                        Text("FROM THESESSION.ORG").font(.ceol(size: 12, weight: .semibold)).tracking(0.8)
+                            .foregroundStyle(CeolTokens.textMuted).padding(.top, 8)
+                        if remoteLoading {
+                            ProgressView().frame(maxWidth: .infinity)
+                        } else if remoteFailed {
+                            Text("Couldn't search thesession.org.").foregroundStyle(CeolTokens.textMuted)
+                        } else if remote?.isEmpty == true {
+                            Text("No new tunes on thesession.org for “\(q)”.").foregroundStyle(CeolTokens.textMuted)
+                        }
+                        ForEach(Array((remote ?? []).enumerated()), id: \.offset) { i, r in
+                            card(r, remote: true, index: results.count + i)
+                        }
                     }
                 }
-                .padding(.horizontal, 12).frame(height: 40)
-                .background(CeolTokens.headerBg, in: RoundedRectangle(cornerRadius: 10))
-                // The web's filter button: the search mode and the tune type, in a panel.
-                let filtering = filtersOpen || type != nil || mode != .mixed
-                Button { withAnimation(.easeOut(duration: 0.15)) { filtersOpen.toggle() } } label: {
-                    Image(systemName: "slider.horizontal.3").font(.system(size: 17, weight: .medium))
-                        .foregroundStyle(filtering ? CeolTokens.primary : CeolTokens.textMuted)
-                        .frame(width: 40, height: 40)
-                        .background(filtering ? CeolTokens.primary.opacity(0.16) : CeolTokens.headerBg, in: RoundedRectangle(cornerRadius: 10))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Search filters")
-                .accessibilityIdentifier("deep.filters")
+                .font(.ceol(size: 15))
+                .padding(.horizontal, 16).padding(.vertical, 8)
             }
+            .scrollDismissesKeyboard(.interactively)
         }
-        .padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 8)
-        .background(CeolTokens.drawerBg)
     }
 
     private var prompt: String {
@@ -255,7 +270,7 @@ struct DeepSearchSheet: View {
 
     /// The filters that are on, as pills while the panel is closed; a tap clears one.
     @ViewBuilder private var filterPills: some View {
-        if type != nil || mode != .mixed {
+        if filterCount > 0 {
             HStack(spacing: 8) {
                 if mode != .mixed {
                     pill(mode == .abc ? tr("By ABC") : tr("By name")) { mode = .mixed }
@@ -282,9 +297,12 @@ struct DeepSearchSheet: View {
         .accessibilityLabel(tr("Clear filter \(label)"))
     }
 
-    /// A result: its body opens the preview, its ＋ logs it at once.
+    /// A result: its body opens the preview, its ＋ commits it at once (or a check, for
+    /// a tune already on your list).
     private func card(_ r: JSONValue, remote: Bool, index: Int) -> some View {
         let name = r["name"]?.stringValue ?? ""
+        let id = r["tune_id"]?.intValue
+        let onList = dimOnList && (r["on_list"] == true || id.map { added.wrappedValue.contains($0) } == true)
         return HStack(spacing: 0) {
             Button {
                 fieldFocused = false
@@ -297,7 +315,7 @@ struct DeepSearchSheet: View {
                         Spacer()
                         if let t = r["tune_type"]?.stringValue { TypeChip(label: t) }
                     }
-                    if !remote, let id = r["tune_id"]?.intValue {
+                    if !remote, let id {
                         DeepIncipit(app: app, tuneID: id, base64: r["incipit_image"]?.stringValue, canRender: r["can_render"] == true)
                     }
                     let badges = [
@@ -320,24 +338,55 @@ struct DeepSearchSheet: View {
             .accessibilityLabel(tr("Preview \(name)"))
             .accessibilityIdentifier(remote ? "deep.remote" : "deep.result")
             Rectangle().fill(CeolTokens.borderColor).frame(width: 1)
-            Button {
-                pickedResult?(r)
-                pick(Self.payload(DeepSearchItem(r: r, remote: remote), data: nil, settingID: nil))
-            } label: {
-                Image(systemName: "plus").font(.system(size: 20, weight: .medium))
+            if onList {
+                Image(systemName: "checkmark").font(.system(size: 18, weight: .medium))
                     .foregroundStyle(CeolTokens.primary)
                     .frame(width: 48)
                     .frame(maxHeight: .infinity)
-                    .contentShape(Rectangle())
+                    .accessibilityLabel("On your list")
+            } else {
+                Button { quickAdd(DeepSearchItem(r: r, remote: remote)) } label: {
+                    Image(systemName: "plus").font(.system(size: 20, weight: .medium))
+                        .foregroundStyle(CeolTokens.primary)
+                        .frame(width: 48)
+                        .frame(maxHeight: .infinity)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(tr("Add \(name) without previewing"))
+                .accessibilityIdentifier(remote ? "deep.remoteQuick" : "deep.quick")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(tr("Add \(name) without previewing"))
-            .accessibilityIdentifier(remote ? "deep.remoteQuick" : "deep.quick")
         }
         .fixedSize(horizontal: false, vertical: true)
         .background(CeolTokens.headerBg, in: RoundedRectangle(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(CeolTokens.borderColor, lineWidth: 1))
-        .opacity(r["in_session"] == true && (remote || !allowAsIs) ? 0.6 : 1)
+        .opacity(onList || (r["in_session"] == true && (remote || !allowAsIs)) ? 0.6 : 1)
+    }
+
+    /// The ＋ rail: the caller's quick add where there is one (your tunebook), else the pick.
+    private func quickAdd(_ item: DeepSearchItem) {
+        let payload = Self.payload(item, data: nil, settingID: nil)
+        if let onQuickAdd {
+            quickFailure = nil
+            Task {
+                if let problem = await onQuickAdd(payload) {
+                    quickFailure = problem
+                } else if let id = item.r["tune_id"]?.intValue {
+                    added.wrappedValue.insert(id)
+                }
+            }
+        } else {
+            pickedResult?(item.r)
+            pick(payload)
+        }
+    }
+
+    /// A pasted link: that tune's preview, as a thesession.org result (the preview finds
+    /// out whether Ceol holds it, and loads its real name).
+    private func openPasted(_ id: Int) {
+        fieldFocused = false
+        pasted = DeepSearchItem(r: .object(["tune_id": .number(Double(id)), "name": .string("#\(id)"), "tune_type": .null]), remote: true)
+        preview = 0
     }
 
     /// What a pick hands on, as the web's pickDeep / pickRemote / previewAction: the
@@ -380,15 +429,17 @@ struct DeepSearchSheet: View {
 
     private func pick(_ payload: [String: JSONValue]) {
         preview = nil
+        pasted = nil
         onPick(payload)
         if closesOnPick { onClose() }
     }
 
     private func search() async {
-        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let q = trimmedQuery
         remote = nil
         remoteFailed = false
-        guard !q.isEmpty else {
+        quickFailure = nil
+        guard !q.isEmpty, pastedID == nil else {
             results = []
             return
         }
@@ -396,9 +447,8 @@ struct DeepSearchSheet: View {
         guard !Task.isCancelled else { return }
         loading = true
         defer { loading = false }
-        var items: [URLQueryItem] = [
-            scope.queryItem, .init(name: "limit", value: "30"),
-            .init(name: "q", value: q), .init(name: "mode", value: mode.rawValue),
+        var items: [URLQueryItem] = scope.items + [
+            .init(name: "limit", value: "30"), .init(name: "q", value: q), .init(name: "mode", value: mode.rawValue),
         ]
         if let type { items.append(.init(name: "type", value: type)) }
         if let preferType { items.append(.init(name: "prefer_type", value: preferType)) }
@@ -415,7 +465,7 @@ struct DeepSearchSheet: View {
     private func searchTheSession(_ q: String) async {
         remoteLoading = true
         defer { remoteLoading = false }
-        var items: [URLQueryItem] = [scope.queryItem, .init(name: "q", value: q)]
+        var items: [URLQueryItem] = scope.items + [.init(name: "q", value: q)]
         if let type { items.append(.init(name: "type", value: type)) }
         do {
             let r = try await app.getJSON(Self.path("/api/tunes/thesession-search", items))
@@ -433,6 +483,7 @@ struct DeepSearchSheet: View {
     }
 
     static func path(_ p: String, _ items: [URLQueryItem]) -> String {
+        guard !items.isEmpty else { return p }
         var c = URLComponents()
         c.path = p
         c.queryItems = items
@@ -479,11 +530,11 @@ struct DeepIncipit: View {
 
 // MARK: - The preview
 
-/// A look before you log (the web's TunePreview.svelte): the tune's name and type,
+/// A look before you commit (the web's TunePreview.svelte): the tune's name and type,
 /// how often it's been played here and how common it is, its other names, every
 /// setting to page through (the ones Ceol holds at once, the rest from thesession.org
 /// as they arrive), the notation (opening bars; tap for the whole tune) or the ABC,
-/// and the button that logs it. ‹ › at the top step through the other results. A
+/// and the button that commits it. ‹ › at the top step through the other results. A
 /// setting counts as chosen only when the pager was worked: landing on the session's
 /// own setting says nothing new.
 struct TunePreviewPane: View {
@@ -492,6 +543,9 @@ struct TunePreviewPane: View {
     let items: [DeepSearchItem]
     let index: Int
     let actionLabel: String
+    /// Whether the button works for a tune only thesession.org has (an import): not
+    /// from your tunebook, which takes catalogue tunes only.
+    var allowRemoteAction = true
     let onBack: () -> Void
     /// The pick: the result, the preview's data (nil when it didn't load), the chosen setting.
     let onAction: (DeepSearchItem, JSONValue?, Int?) -> Void
@@ -534,6 +588,7 @@ struct TunePreviewPane: View {
     private var sessionSettingID: Int? { data?["session_setting_id"]?.intValue }
     private var chosenSettingID: Int? { touched ? setting?.id : nil }
     private var tuneID: Int? { data?["tune_id"]?.intValue ?? item?.r["tune_id"]?.intValue }
+    private var actionAllowed: Bool { allowRemoteAction || !isRemote }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -562,7 +617,9 @@ struct TunePreviewPane: View {
                         if !settings.isEmpty { settingBar }
                         notation
                         if isRemote {
-                            Text("Not in the library yet — it will be imported from thesession.org when you add it.")
+                            Text(allowRemoteAction
+                                ? tr("Not in the library yet — it will be imported from thesession.org when you add it.")
+                                : tr("Not in Ceol's library yet. Log it at a session first, and it will be imported."))
                                 .font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
                         }
                     }
@@ -577,6 +634,8 @@ struct TunePreviewPane: View {
                     .background(CeolTokens.primaryFill, in: RoundedRectangle(cornerRadius: 8))
             }
             .buttonStyle(.plain)
+            .disabled(loading || !actionAllowed)
+            .opacity(loading || !actionAllowed ? 0.5 : 1)
             .padding(.horizontal, 16).padding(.vertical, 10)
             .accessibilityIdentifier("preview.action")
         }
@@ -599,9 +658,11 @@ struct TunePreviewPane: View {
             }
             .accessibilityIdentifier("preview.back")
             Spacer()
-            Text("\(idx + 1) of \(items.count)").font(.ceol(size: 14)).foregroundStyle(CeolTokens.textMuted)
-            stepButton(-1, enabled: idx > 0, label: tr("Previous result"), id: "preview.prev") { idx -= 1 }
-            stepButton(1, enabled: idx < items.count - 1, label: tr("Next result"), id: "preview.next") { idx += 1 }
+            if items.count > 1 {
+                Text("\(idx + 1) of \(items.count)").font(.ceol(size: 14)).foregroundStyle(CeolTokens.textMuted)
+                stepButton(-1, enabled: idx > 0, label: tr("Previous result"), id: "preview.prev") { idx -= 1 }
+                stepButton(1, enabled: idx < items.count - 1, label: tr("Next result"), id: "preview.next") { idx += 1 }
+            }
         }
         .padding(.horizontal, 16).padding(.vertical, 10)
     }
@@ -628,13 +689,15 @@ struct TunePreviewPane: View {
                 let dates = (data?["dates"]?.arrayValue ?? []).compactMap(\.stringValue)
                 (Text(verbatim: "♪ ") + Text("Played here \(n)×") + Text(verbatim: dates.isEmpty ? "" : " — ") + Text(dates.isEmpty ? "" : tr("last: \(dates.joined(separator: ", "))")))
                     .font(.ceol(size: 14, weight: .medium)).foregroundStyle(CeolTokens.warning)
+            } else if case .mine = scope {
+                EmptyView()
             } else {
                 Text("Not played here yet").font(.ceol(size: 14)).foregroundStyle(CeolTokens.textMuted)
             }
             HStack(spacing: 10) {
                 (Text(verbatim: "\(data?["tunebook_count"]?.intValue ?? 0) ").bold() + Text("tunebooks"))
                     .font(.ceol(size: 14)).foregroundStyle(CeolTokens.primary)
-                if item?.r["on_list"] == true {
+                if item?.r["on_list"] == true || data?["person_tune"]?["on_list"] == true {
                     Text("★ on your list").font(.ceol(size: 13)).foregroundStyle(CeolTokens.warning)
                 }
             }
@@ -809,10 +872,10 @@ struct TunePreviewPane: View {
             if item.remote && item.r["is_local"] != true {
                 d = try await app.getJSON("/api/tunes/thesession/\(id)/preview")
                 if d["is_local"] == true, let local = d["tune_id"]?.intValue {
-                    d = try await app.getJSON(DeepSearchSheet.path("/api/tunes/\(local)/preview", [scope.queryItem]))
+                    d = try await app.getJSON(DeepSearchSheet.path("/api/tunes/\(local)/preview", scope.items))
                 }
             } else {
-                d = try await app.getJSON(DeepSearchSheet.path("/api/tunes/\(id)/preview", [scope.queryItem]))
+                d = try await app.getJSON(DeepSearchSheet.path("/api/tunes/\(id)/preview", scope.items))
             }
             guard run == loadRun else { return }
             let remoteTune = d["is_local"] == false

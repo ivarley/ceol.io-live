@@ -1691,6 +1691,7 @@
       }
     },
     "Add %@ as To Learn": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -1856,6 +1857,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Cuir leis an seisiún"
+          }
+        }
+      }
+    },
+    "Add to my tunes": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Cuir le mo chuid fonn"
           }
         }
       }
@@ -2626,6 +2637,7 @@
       }
     },
     "Clear search": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -3104,6 +3116,7 @@
       }
     },
     "Couldn't search the catalogue. Check your connection.": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -5250,6 +5263,7 @@
       }
     },
     "No tunes found.": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -5422,6 +5436,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Níl i láthair"
+          }
+        }
+      }
+    },
+    "Not in Ceol's library yet. Log it at a session first, and it will be imported.": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Níl sé i leabharlann Ceol fós. Logáil ag seisiún ar dtús é, agus iompórtálfar é."
           }
         }
       }
@@ -6715,6 +6739,7 @@
       }
     },
     "Search filters": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -7624,12 +7649,32 @@
         }
       }
     },
+    "That tune isn't in Ceol's library yet.": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Níl an fonn sin i leabharlann Ceol fós."
+          }
+        }
+      }
+    },
     "That wasn't saved. Try again.": {
       "localizations": {
         "ga": {
           "stringUnit": {
             "state": "needs_review",
             "value": "Níor sábháladh é sin. Bain triail eile as."
+          }
+        }
+      }
+    },
+    "That's a thesession.org tune link — open it above to see the tune.": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Nasc foinn ó thesession.org é sin — oscail thuas é chun an fonn a fheiceáil."
           }
         }
       }
@@ -8048,6 +8093,7 @@
       }
     },
     "Tune name, notes, or a link": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -9624,6 +9670,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "🔎 Cuardaigh “%@” ar thesession.org"
+          }
+        }
+      }
+    },
+    "🔗 Open tune #%lld from thesession.org": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "🔗 Oscail fonn #%lld ó thesession.org"
           }
         }
       }

@@ -71,7 +71,7 @@ struct AddSessionTuneSheet: View {
                 }
             }
         }
-        .ceolDrawer([.large])
+        .ceolDrawer(interactive: false)
     }
 }
 

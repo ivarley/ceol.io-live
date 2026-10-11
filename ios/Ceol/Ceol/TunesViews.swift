@@ -42,6 +42,8 @@ struct TuneRef: Identifiable, Hashable {
     /// Whether `status` is known. Opened from somewhere other than your list, the sheet
     /// reads your status from the tune's detail instead.
     var statusKnown = true
+    /// A setting chosen in the search's preview: applied as yours once the tune is added.
+    var settingID: Int? = nil
 }
 
 struct TunesView: View {
@@ -377,6 +379,10 @@ struct TuneSheet: View {
         if await save(.add, status: LearnStatus(stored: new.rawValue)) {
             status = new.rawValue
             heard = 1  // an add is itself a hearing, as on the web
+            if let s = tune.settingID, await saveSetting(s, for: .mine) == nil {
+                incipit = nil
+                full = nil
+            }
         }
     }
 
@@ -741,122 +747,51 @@ struct NotationFullScreen: View {
 
 // MARK: - Adding a tune
 
-/// The web's add pane (mytunes/AddTuneApp.svelte), as a drawer: search the catalogue by
-/// name, notes ("GED BED") or a pasted thesession.org link; tap a tune to see it and add
-/// it with a status; or + on a row adds it at once as To Learn, as the web's + rail does.
+/// The web's add pane (mytunes/AddTuneApp.svelte), as a drawer: the shared tune search
+/// (DeepSearchSheet) over the catalogue, tunes already yours dimmed; a card's preview
+/// leads to the tune's sheet, where it is added with a status; + on a card adds it at
+/// once as To Learn, as the web's + rail does.
 struct AddTuneSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let onChanged: () -> Void
 
-    @State private var query = ""
-    @State private var results: [DeepSearchResult] = []
-    @State private var searched = false
-    @State private var failed = false
     @State private var added: Set<Int> = []
     @State private var open: TuneRef?
-    @State private var failure: String?
-    @FocusState private var focused: Bool
 
     var body: some View {
-        NavigationStack {
-            List {
-                SearchRow(text: $query, prompt: tr("Tune name, notes, or a link"), fieldID: "addTune.query", focused: $focused)
-                    .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 10, trailing: 16))
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-                if let failure {
-                    Text(failure).font(.ceol(size: 14)).foregroundStyle(CeolTokens.danger)
-                        .listRowBackground(Color.clear).listRowSeparator(.hidden)
-                }
-                if failed {
-                    Text("Couldn't search the catalogue. Check your connection.").font(.ceol(size: 15))
-                        .foregroundStyle(CeolTokens.textMuted).listRowBackground(Color.clear)
-                } else if searched && results.isEmpty {
-                    Text("No tunes found.").font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
-                        .listRowBackground(Color.clear)
-                } else if !searched {
-                    Text("Search the tunes on Ceol by name, by the notes (\"GED BED\"), or paste a thesession.org link.")
-                        .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
-                        .listRowBackground(Color.clear).listRowSeparator(.hidden)
-                }
-                ForEach(results, id: \.tuneId) { r in
-                    let onList = r.onList || added.contains(r.tuneId)
-                    HStack(spacing: 10) {
-                        Button {
-                            open = TuneRef(id: r.tuneId, name: r.name, type: r.tuneType, statusKnown: false)
-                        } label: {
-                            TuneRow(name: r.name, type: r.tuneType, status: nil, note: r.abcOnly ? tr("♪ notes match") : nil)
-                        }
-                        .buttonStyle(.plain)
-                        // Already yours: dimmed, and still opens.
-                        .opacity(onList ? 0.45 : 1)
-                        .accessibilityIdentifier("addTune.row")
-                        if onList {
-                            Image(systemName: "checkmark").foregroundStyle(CeolTokens.primary).frame(width: 36)
-                                .accessibilityLabel("On your list")
-                        } else {
-                            Button { Task { await quickAdd(r) } } label: {
-                                Image(systemName: "plus").font(.system(size: 17, weight: .medium))
-                                    .foregroundStyle(CeolTokens.primary).frame(width: 36, height: 36)
-                                    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(CeolTokens.borderColor, lineWidth: 1))
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("Add \(r.name) as To Learn")
-                            .accessibilityIdentifier("addTune.quickAdd")
-                        }
-                    }
-                    .listRowBackground(Color.clear)
-                    .listRowSeparatorTint(CeolTokens.borderColor)
-                }
-            }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-            .background(CeolTokens.drawerBg)
-            .navigationTitle("Add a tune")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
-            .task(id: query) { await search() }
-            .onAppear { focused = true }
-            .sheet(item: $open) { tune in
-                TuneSheet(tune: tune) {
-                    added.insert(tune.id)
-                    onChanged()
-                }
+        DeepSearchSheet(
+            app: model, scope: .mine, initialQuery: "", preferType: nil,
+            title: tr("Add a tune"), actionLabel: tr("Add to my tunes"), allowAsIs: false, allowRemote: false,
+            closesOnPick: false, dimOnList: true, added: $added,
+            onQuickAdd: { await quickAdd($0) },
+            onClose: { dismiss() }
+        ) { payload in
+            guard let id = payload["tune_id"]?.intValue else { return }
+            open = TuneRef(
+                id: id, name: payload["name"]?.stringValue ?? "", type: payload["tune_type"]?.stringValue,
+                statusKnown: false, settingID: payload["setting_id"]?.intValue)
+        }
+        .sheet(item: $open) { tune in
+            TuneSheet(tune: tune) {
+                added.insert(tune.id)
+                onChanged()
             }
         }
-        .ceolDrawer()
+        .ceolDrawer(interactive: false)
     }
 
-    private func search() async {
-        let q = query.trimmingCharacters(in: .whitespaces)
-        guard q.count >= 2 else {
-            results = []
-            searched = false
-            return
-        }
-        try? await Task.sleep(for: .milliseconds(300))
-        guard !Task.isCancelled else { return }
+    /// + : on the list at once, as To Learn (the web's + rail). What went wrong, or nil.
+    private func quickAdd(_ payload: [String: JSONValue]) async -> String? {
+        guard let id = payload["tune_id"]?.intValue else { return tr("That tune isn't in Ceol's library yet.") }
         do {
-            results = try await model.auth.client.deepSearchTunes(query: .init(q: q, limit: 40)).ok.body.json.results
-            failed = false
-            searched = true
-        } catch {
-            if !Task.isCancelled { failed = true }
-        }
-    }
-
-    /// + : on the list at once, as To Learn (the web's + rail).
-    private func quickAdd(_ r: DeepSearchResult) async {
-        failure = nil
-        do {
-            try await model.applyTuneOp(.add, tuneID: r.tuneId, learnStatus: .wantToLearn)
-            added.insert(r.tuneId)
+            try await model.applyTuneOp(.add, tuneID: id, learnStatus: .wantToLearn)
             onChanged()
+            return nil
         } catch let f as TuneOpFailure {
-            failure = f.message
+            return f.message
         } catch {
-            failure = tr("That wasn't saved. Try again.")
+            return tr("That wasn't saved. Try again.")
         }
     }
 }

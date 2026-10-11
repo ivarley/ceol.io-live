@@ -743,11 +743,13 @@ extension View {
     /// A drawer: a lighter surface than the page under it, and the grabber that says it
     /// can be dragged away. At full height it stops below the top bar, which stays
     /// live, so Share (top right) is in reach with a drawer up.
-    func ceolDrawer(_ detents: Set<PresentationDetent> = [.custom(BelowTopBar.self)]) -> some View {
+    /// `interactive: false` seals the screen under the drawer (a search over the logger:
+    /// the night's back button must not be in reach).
+    func ceolDrawer(_ detents: Set<PresentationDetent> = [.custom(BelowTopBar.self)], interactive: Bool = true) -> some View {
         presentationDetents(detents)
             .presentationDragIndicator(.visible)
             .presentationBackground(CeolTokens.drawerBg)
-            .presentationBackgroundInteraction(.enabled)
+            .presentationBackgroundInteraction(interactive ? .enabled : .disabled)
             .modifier(SharePaneHost(isRoot: false))
     }
 
