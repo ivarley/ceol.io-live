@@ -2066,4 +2066,14 @@ The plan (Phases 0-6) runs from here in `ios/`; see `ios/README.md` for the layo
     Learning, the server agrees, the test takes it off after), and the existing night
     tests through the menu (`nightMenu`, `editLog`). Help: the live logger page's "In
     the iPhone app" section, both languages.
+- **Tags, 2026-10-12.** The web's tags (spec 042: a tune's detail view, saved through
+  `set_tags`) come to the app, and both get a filter. The app's tune sheet has a tag
+  field under the notes (`TagsEditor`: a chip with an ✕ for each, a field that adds one
+  on return, spelt as the server keeps it, `MyTunesList.normalizeTag`), saved as it
+  changes through the tunebook queue and applied to the kept list (`TunebookOps`
+  `.setTags`). The Tunes tab's filter sheet offers "Tag" with every tag you've used
+  (`MyTunesList.tagsUsed`); the web's /my-tunes filter panel has the same row (a
+  `?tag=` param, a pill when the panel is closed). The rule is one in both
+  (`filterAndSort`: the tune's tags include it), held to `logic.fixtures.json`. Help:
+  the My Tunes page's filter list, both languages.
 

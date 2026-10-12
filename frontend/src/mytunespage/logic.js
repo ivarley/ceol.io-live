@@ -113,6 +113,7 @@ export function filterAndSort(allTunes, filters, sort, instruments, abcIds = nul
     // attended = played while I was there (R4).
     if (filters.rel === 'member' && memberPlays(tune) === 0) continue
     if (filters.rel === 'attended' && attendedPlays(tune) === 0) continue
+    if (filters.tag && !(tune.tags || []).includes(filters.tag)) continue
 
     if (filters.instrument) {
       const instStatus = resolveTuneInstrumentStatus(tune, instruments, filters.instrument)
@@ -206,6 +207,11 @@ export function sortModeLabel(id) {
 
 // --- URL state (filters + sort mirrored via replaceState) --------------------
 
+/** Every tag on the list, once each, a-z: the Tag filter's choices. */
+export function tagsUsed(allTunes) {
+  return [...new Set(allTunes.flatMap((t) => t.tags || []))].sort()
+}
+
 export function stateFromParams(params) {
   const filters = {
     search: params.get('search') || '',
@@ -215,6 +221,7 @@ export function stateFromParams(params) {
     rel: params.get('rel') || '',
     addedDir: params.get('addedDir') === 'before' ? 'before' : 'after',
     addedDate: params.get('addedDate') || '',
+    tag: params.get('tag') || '',
   }
   const sort = {
     type: params.get('sortType') || 'alpha',
@@ -232,6 +239,7 @@ export function paramsFromState(filters, sort) {
   if (filters.status) params.set('status', filters.status)
   if (filters.instrument) params.set('instrument', filters.instrument)
   if (filters.rel) params.set('rel', filters.rel)
+  if (filters.tag) params.set('tag', filters.tag)
   // The direction only means anything alongside a date, so it only travels with one.
   if (filters.addedDate) {
     params.set('addedDate', filters.addedDate)

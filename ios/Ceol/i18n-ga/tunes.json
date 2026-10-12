@@ -226,5 +226,9 @@
   "new to this session": "nua don seisiún seo",
   "sounds like a tune %lld%%": "is cosúil le fonn é %lld%%",
   "this session": "an seisiún seo",
-  "♪ notes match": "♪ na nótaí ag teacht leis"
+  "♪ notes match": "♪ na nótaí ag teacht leis",
+  "Tag": "Clib",
+  "All tags": "Gach clib",
+  "Add a tag": "Cuir clib leis",
+  "Remove tag %@": "Bain an chlib %@"
 }

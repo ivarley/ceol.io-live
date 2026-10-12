@@ -392,13 +392,50 @@ final class CeolUITests: XCTestCase {
         XCTAssertTrue(app.steppers["sheet.heard"].waitForNonExistence(timeout: 5))
         snapshot("edited")
 
+        // A tag: typed as "UI Test Tag", kept as "ui-test-tag", shown as a chip.
+        app.swipeUp()
+        let tagInput = app.textFields["sheet.tagInput"]
+        XCTAssertTrue(tagInput.waitForExistence(timeout: 5))
+        tagInput.tap()
+        tagInput.typeText("UI Test Tag\n")
+        XCTAssertTrue(app.descendants(matching: .any)["sheet.tag.ui-test-tag"].waitForExistence(timeout: 10))
+        snapshot("tagged")
+        app.buttons["Done"].tap()
+        XCTAssertTrue(app.textFields["sheet.tagInput"].waitForNonExistence(timeout: 5))
+
+        // The Tag filter offers it, and leaves only this tune.
+        app.buttons["Clear"].firstMatch.tap()
+        app.buttons["tunes.search.filter"].tap()
+        XCTAssertTrue(app.buttons["filters.done"].waitForExistence(timeout: 5))
+        app.buttons["ui-test-tag"].firstMatch.tap()
+        app.buttons["filters.done"].tap()
+        let listRows = app.buttons.matching(identifier: "tunes.row")
+        XCTAssertTrue(listRows.firstMatch.waitForExistence(timeout: 10))
+        XCTAssertEqual(listRows.count, 1)
+        XCTAssertTrue(listRows.firstMatch.label.contains(name), listRows.firstMatch.label)
+        snapshot("by tag")
+        app.buttons["tunes.search.filter"].tap()
+        XCTAssertTrue(app.buttons["filters.clear"].waitForExistence(timeout: 5))
+        app.buttons["filters.clear"].tap()
+        app.buttons["filters.done"].tap()
+
+        // Back in the sheet, the tag goes with the tune.
+        search.tap()
+        search.typeText("maid")
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label ==[c] %@", "Not on your list")).firstMatch.waitForExistence(timeout: 10))
+        app.buttons.matching(identifier: "tunes.row").containing(NSPredicate(format: "label CONTAINS %@", name)).firstMatch.tap()
+        XCTAssertTrue(app.buttons["sheet.remove"].waitForExistence(timeout: 10))
         app.swipeUp()
         app.buttons["sheet.remove"].tap()
         let confirm = app.buttons.matching(NSPredicate(format: "label == 'Remove' AND identifier != 'sheet.remove'")).firstMatch
         XCTAssertTrue(confirm.waitForExistence(timeout: 5))
         confirm.tap()
         XCTAssertTrue(app.buttons["sheet.remove"].waitForNonExistence(timeout: 10))
-        // Back in the catalogue, not on the list.
+        // Back in the catalogue, not on the list: searched again, since the last search
+        // ran while the tune was on the list.
+        app.buttons["Clear"].firstMatch.tap()
+        search.tap()
+        search.typeText("maid")
         XCTAssertTrue(
             app.buttons.matching(identifier: "catalogue.row").containing(NSPredicate(format: "label == %@", name)).firstMatch
                 .waitForExistence(timeout: 10))

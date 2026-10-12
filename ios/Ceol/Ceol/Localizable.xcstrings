@@ -2043,6 +2043,16 @@
         }
       }
     },
+    "Add a tag": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Cuir clib leis"
+          }
+        }
+      }
+    },
     "Add a tune": {
       "localizations": {
         "ga": {
@@ -2290,6 +2300,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Gach uirlis atá agam"
+          }
+        }
+      }
+    },
+    "All tags": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Gach clib"
           }
         }
       }
@@ -7237,6 +7257,16 @@
         }
       }
     },
+    "Remove tag %@": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Bain an chlib %@"
+          }
+        }
+      }
+    },
     "Rename": {
       "localizations": {
         "ga": {
@@ -8440,6 +8470,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "INNIU"
+          }
+        }
+      }
+    },
+    "Tag": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Clib"
           }
         }
       }

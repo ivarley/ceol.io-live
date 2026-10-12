@@ -24,6 +24,8 @@ struct TunesFilterSheet: View {
     @Binding var sort: MyTunesList.Sort
     let types: [String]
     let instruments: [MyTunesList.Instrument]
+    /// The tags you've given tunes (none: no Tag filter).
+    var tags: [String] = []
 
     @State private var addedDate = Date()
 
@@ -47,6 +49,12 @@ struct TunesFilterSheet: View {
                         label: tr("Played"),
                         options: [("", tr("Anywhere")), ("member", tr("At my sessions")), ("attended", tr("When I was there"))],
                         selection: $filters.rel)
+                    if !tags.isEmpty {
+                        ChoiceChips(
+                            label: tr("Tag"),
+                            options: [("", tr("All tags"))] + tags.map { ($0, $0) },
+                            selection: $filters.tag)
+                    }
                 }
                 .padding(20)
             }
@@ -61,6 +69,7 @@ struct TunesFilterSheet: View {
                         filters.rel = ""
                         filters.addedDate = ""
                         filters.addedBefore = false
+                        filters.tag = ""
                         sort = MyTunesList.Sort()
                     }
                     .disabled(filters.activeCount == 0 && sort == MyTunesList.Sort())

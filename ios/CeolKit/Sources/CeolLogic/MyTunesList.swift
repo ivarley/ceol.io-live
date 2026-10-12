@@ -23,11 +23,13 @@ public enum MyTunesList {
         public var attendedPlays: Int?
         /// Per-instrument overrides, keyed by the instrument's name on your profile.
         public var instrumentStatus: [String: String]
+        /// Your tags for it (spec 042): lower-case, hyphenated, as the server keeps them.
+        public var tags: [String]
 
         public init(
             tuneID: Int, name: String, type: String?, status: String, notes: String? = nil, addedDay: String? = nil,
             tunebookCount: Int? = nil, heardCount: Int? = nil, memberPlays: Int? = nil, sessionPlays: Int? = nil,
-            attendedPlays: Int? = nil, instrumentStatus: [String: String] = [:]
+            attendedPlays: Int? = nil, instrumentStatus: [String: String] = [:], tags: [String] = []
         ) {
             self.tuneID = tuneID
             self.name = name
@@ -41,6 +43,7 @@ public enum MyTunesList {
             self.sessionPlays = sessionPlays
             self.attendedPlays = attendedPlays
             self.instrumentStatus = instrumentStatus
+            self.tags = tags
         }
 
         /// Plays at your sessions (spec 033), falling back to the older count.
@@ -68,12 +71,14 @@ public enum MyTunesList {
         /// Added before `addedDate` (else on or after it).
         public var addedBefore = false
         public var addedDate = ""
+        /// One of your tags: only the tunes carrying it.
+        public var tag = ""
         public init() {}
 
         /// How many of the panel's filters are set (the search and status have their own
         /// controls).
         public var activeCount: Int {
-            [!type.isEmpty, !instrument.isEmpty, !rel.isEmpty, !addedDate.isEmpty].filter { $0 }.count
+            [!type.isEmpty, !instrument.isEmpty, !rel.isEmpty, !addedDate.isEmpty, !tag.isEmpty].filter { $0 }.count
         }
     }
 
@@ -177,6 +182,7 @@ public enum MyTunesList {
             }
             if f.rel == "member" && item.plays == 0 { continue }
             if f.rel == "attended" && item.attended == 0 { continue }
+            if !f.tag.isEmpty && !item.tags.contains(f.tag) { continue }
             if !f.instrument.isEmpty {
                 let inst = instrumentStatus(item, instruments: instruments, name: f.instrument)
                 let dimmed = inst == nil
@@ -198,6 +204,18 @@ public enum MyTunesList {
             out.sort { cmp($0.item, $1.item) < 0 }
         }
         return out
+    }
+
+    /// A tag as the server keeps it (tunesheet/logic.js normalizeTag): trimmed, lower
+    /// case, spaces to hyphens.
+    public static func normalizeTag(_ raw: String) -> String {
+        raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            .split(whereSeparator: { $0.isWhitespace }).joined(separator: "-")
+    }
+
+    /// Every tag on your list, once each, a-z: the filter's choices.
+    public static func tagsUsed(_ all: [Item]) -> [String] {
+        Array(Set(all.flatMap(\.tags))).sorted()
     }
 
     static let statusLabels = ["want to learn": "To Learn", "learning": "Learning", "learned": "Learned"]

@@ -34,6 +34,7 @@ struct TuneRef: Identifiable, Hashable {
     var status: String?
     var heardCount: Int?
     var notes: String?
+    var tags: [String] = []
     /// Opened from a session's page: the sheet adds that session's plays.
     var sessionPath: String? = nil
     /// Opened from one night's log: the sheet draws what was played that night, and
@@ -75,7 +76,7 @@ struct TunesView: View {
                 .onChange(of: open) { _, tune in if tune != nil { searching = false } }
                 .sheet(item: $open) { TuneSheet(tune: $0) { Task { await load() } } }
                 .sheet(isPresented: $filtering) {
-                    TunesFilterSheet(filters: $filters, sort: $sort, types: types, instruments: instruments)
+                    TunesFilterSheet(filters: $filters, sort: $sort, types: types, instruments: instruments, tags: tagsUsed)
                 }
                 .sheet(isPresented: $adding) { AddTuneSheet { Task { await load() } } }
                 // The Tunes icon, tapped while here: back to the list itself.
@@ -97,6 +98,9 @@ struct TunesView: View {
     private var instruments: [MyTunesList.Instrument] {
         (state.value?.instruments ?? []).map { .init(name: $0.instrument, isAuto: $0.isAuto) }
     }
+
+    /// The tags you've given tunes: the filter's choices.
+    private var tagsUsed: [String] { MyTunesList.tagsUsed((state.value?.tunes ?? []).map(\.listItem)) }
 
     private var types: [String] {
         Set((state.value?.tunes ?? []).compactMap(\.tuneType)).sorted()
@@ -206,12 +210,13 @@ struct TunesView: View {
                 Button {
                     open = TuneRef(
                         id: e.tuneID, name: e.name, type: e.type, status: e.status, heardCount: t?.heardCount,
-                        notes: e.notes)
+                        notes: e.notes, tags: t?.tags ?? [])
                 } label: {
                     TuneRow(
                         name: e.name, type: MyTunesList.typeBadgeLabel(e, sortType: sort.type), status: e.status,
                         note: row.abcOnly ? tr("♪ notes match") : nil, typeIsCount: sort.type != "alpha")
                 }
+                .accessibilityIdentifier("tunes.row")
                 .buttonStyle(.plain)
                 .opacity(row.dimmed ? 0.45 : 1)
                 .ceolRow()
@@ -264,7 +269,7 @@ extension PersonTune {
             tuneID: tuneId, name: tuneName, type: tuneType, status: learnStatus, notes: notes,
             addedDay: String(createdDate.prefix(10)), tunebookCount: tunebookCount,
             heardCount: heardCount, memberPlays: memberPlayCount, sessionPlays: sessionPlayCount,
-            attendedPlays: attendedPlayCount, instrumentStatus: overrides)
+            attendedPlays: attendedPlayCount, instrumentStatus: overrides, tags: tags)
     }
 }
 
@@ -311,6 +316,7 @@ struct TuneSheet: View {
     @State private var heard = 0
     @State private var notes = ""
     @State private var savedNotes = ""
+    @State private var tags: [String] = []
     @State private var busy = false
     @State private var failure: String?
     @State private var confirmRemove = false
@@ -361,6 +367,7 @@ struct TuneSheet: View {
                     heard = tune.heardCount ?? 0
                     notes = tune.notes ?? ""
                     savedNotes = notes
+                    tags = tune.tags
                     await load()
                 }
                 .confirmationDialog("Remove \(tune.name) from your tunes?", isPresented: $confirmRemove, titleVisibility: .visible) {
@@ -392,14 +399,14 @@ struct TuneSheet: View {
     @discardableResult
     private func save(
         _ type: TuneOp._TypePayload, status s: LearnStatus? = nil, heard h: Int? = nil, notes n: String? = nil,
-        nameAlias: String? = nil, key: String? = nil
+        tags: [String]? = nil, nameAlias: String? = nil, key: String? = nil
     ) async -> Bool {
         busy = true
         failure = nil
         defer { busy = false }
         do {
             try await model.applyTuneOp(
-                type, tuneID: tune.id, learnStatus: s, heardCount: h, notes: n, nameAlias: nameAlias, key: key,
+                type, tuneID: tune.id, learnStatus: s, heardCount: h, notes: n, tags: tags, nameAlias: nameAlias, key: key,
                 name: tune.name, tuneType: tune.type)
             onChanged()
             return true
@@ -419,7 +426,15 @@ struct TuneSheet: View {
         }
     }
 
-    /// Your list (TunebookPanel), and your notes under it once the tune is on it.
+    /// Your tags, saved as they change (the web's field saves as you leave it): shown
+    /// at once, put back if the save is refused.
+    private func saveTags(_ new: [String]) async {
+        let before = tags
+        tags = new
+        if !(await save(.setTags, tags: new)) { tags = before }
+    }
+
+    /// Your list (TunebookPanel), and your notes and tags under it once the tune is on it.
     @ViewBuilder private var yourList: some View {
         let current = status.flatMap(MyTunesRules.Status.init(rawValue:))
         TunebookPanel(tune: tune, status: $status, heard: $heard, onAdded: {
@@ -442,6 +457,7 @@ struct TuneSheet: View {
                         .font(.ceol(size: 15, weight: .medium)).foregroundStyle(CeolTokens.primary).disabled(busy)
                 }
             }
+            TagsEditor(tags: tags, busy: busy) { new in Task { await saveTags(new) } }
         }
     }
 
@@ -458,6 +474,7 @@ struct TuneSheet: View {
                 heard = mine["heard_count"]?.intValue ?? 0
                 notes = mine["notes"]?.stringValue ?? ""
                 savedNotes = notes
+                tags = (mine["tags"]?.arrayValue ?? []).compactMap(\.stringValue)
             }
             detail = .loaded(d)
             await loadNotation(d.sessionTune)
@@ -1320,5 +1337,55 @@ enum SettingLayer: Identifiable, Hashable {
         case .session: tr("Which version does \(sessionName) play?")
         case .night: tr("Which version was played that night?")
         }
+    }
+}
+
+/// Your tags for a tune (spec 042), as the web's tag field: a chip with an ✕ for each,
+/// and a field that adds one on return, spelt as the server keeps it (lower case,
+/// hyphenated). The Tunes tab's filter offers every tag you've used.
+struct TagsEditor: View {
+    let tags: [String]
+    let busy: Bool
+    let onChange: ([String]) -> Void
+    @State private var draft = ""
+
+    var body: some View {
+        FlowLayout(spacing: 8) {
+            ForEach(tags, id: \.self) { tag in
+                HStack(spacing: 5) {
+                    Text(tag).font(.ceol(size: 14, weight: .medium)).lineLimit(1)
+                    Button { onChange(tags.filter { $0 != tag }) } label: {
+                        Image(systemName: "xmark").font(.system(size: 10, weight: .bold))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(tr("Remove tag \(tag)"))
+                }
+                .foregroundStyle(CeolTokens.primary)
+                .padding(.horizontal, 10).padding(.vertical, 6)
+                .background(CeolTokens.primary.opacity(0.14), in: Capsule())
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("sheet.tag.\(tag)")
+            }
+            TextField("", text: $draft, prompt: Text("Add a tag").foregroundStyle(CeolTokens.textMuted))
+                .font(.ceol(size: 15))
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .submitLabel(.done)
+                .onSubmit(add)
+                .padding(.horizontal, 10)
+                .frame(minWidth: 110).frame(height: 32)
+                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(CeolTokens.borderColor, lineWidth: 1))
+                .accessibilityIdentifier("sheet.tagInput")
+        }
+        .disabled(busy)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("sheet.tags")
+    }
+
+    private func add() {
+        let tag = MyTunesList.normalizeTag(draft)
+        draft = ""
+        guard !tag.isEmpty, !tags.contains(tag) else { return }
+        onChange(tags + [tag])
     }
 }

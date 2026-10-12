@@ -36,4 +36,12 @@ struct MyTunesRulesTests {
         #expect(MyTunesRules.countText(shown: 42, total: 42) == "42 tunes")
         #expect(MyTunesRules.countText(shown: 1, total: 1) == "1 tune")
     }
+
+    // tunesheet/logic.js normalizeTag
+    @Test("a tag is trimmed, lower case and hyphenated")
+    func normalizeTag() {
+        #expect(MyTunesList.normalizeTag("  Pub Set ") == "pub-set")
+        #expect(MyTunesList.normalizeTag("Fast\t\tReels") == "fast-reels")
+        #expect(MyTunesList.normalizeTag("   ") == "")
+    }
 }

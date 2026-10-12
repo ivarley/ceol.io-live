@@ -21,6 +21,7 @@
     shouldSearchCatalogue,
     stateFromParams,
     submitOp,
+    tagsUsed,
     typeBadgeLabel,
   } from './logic.js'
   import { statusLabel } from '../mytunes/labels.js'
@@ -77,19 +78,22 @@
   // ---- derived ----------------------------------------------------------------
   const visible = $derived(filterAndSort(allTunes, filters, sort, instruments, abcMatch.ids))
   const tuneTypes = $derived([...new Set(allTunes.map((t) => t.tune_type).filter(Boolean))].sort())
+  // The tags you've given tunes (in the tune's detail view): the Tag filter's choices.
+  const tags = $derived(tagsUsed(allTunes))
   const hasActiveFilters = $derived(
     !!(
       filters.type ||
       filters.status ||
       filters.instrument ||
       filters.rel ||
-      filters.addedDate
+      filters.addedDate ||
+      filters.tag
     )
   )
   // What's set INSIDE the collapsed drawer. Status is excluded: it has its own always-
   // visible control, so lighting the drawer button for it would point at nothing.
   const hasDrawerFilters = $derived(
-    !!(filters.type || filters.instrument || filters.rel || filters.addedDate)
+    !!(filters.type || filters.instrument || filters.rel || filters.addedDate || filters.tag)
   )
 
   // Relationship chips (spec 033) — single-select, click the active one to clear.
@@ -271,12 +275,14 @@
     if (filters.type) out.push({ key: 'type', label: typeName(filters.type) })
     if (filters.instrument) out.push({ key: 'instrument', label: instrumentName(filters.instrument) })
     if (filters.rel) out.push({ key: 'rel', label: relLabel(filters.rel) })
+    if (filters.tag) out.push({ key: 'tag', label: filters.tag })
     return out
   })
   function removeFilterPill(key) {
     if (key === 'type') filters.type = ''
     else if (key === 'instrument') filters.instrument = ''
     else if (key === 'rel') filters.rel = ''
+    else if (key === 'tag') filters.tag = ''
   }
 
   function clearFilters() {
@@ -287,6 +293,7 @@
     filters.rel = ''
     filters.addedDate = ''
     filters.addedDir = 'after'
+    filters.tag = ''
     sort.type2 = null
     sort.dir2 = null
   }
@@ -815,6 +822,37 @@
                 onclick={() => {
                   openMenu = null
                   filters.instrument = opt.value
+                }}>{opt.label}</button>
+            {/each}
+          </div>
+        </div>
+      </div>
+    {/if}
+
+    <!-- Tag: one of the tags you've given tunes (spec 042); absent until you have one. -->
+    {#if tags.length}
+      <div class="filter-panel-row" id="tag-filter-row">
+        <span class="filter-row-label">{t('Tag')}</span>
+        <div class="inst-select" class:open={openMenu === 'tag'} id="tag-filter">
+          <button
+            type="button"
+            class="inst-select-trigger"
+            onclick={(e) => {
+              e.stopPropagation()
+              openMenu = openMenu === 'tag' ? null : 'tag'
+            }}>
+            <span id="tag-filter-label">{filters.tag || t('All tags')}</span>
+            <Chevron class="inst-select-caret" dir="down" size={14} />
+          </button>
+          <div class="inst-select-menu" id="tag-filter-menu">
+            {#each [{ value: '', label: t('All tags') }, ...tags.map((tag) => ({ value: tag, label: tag }))] as opt (opt.value)}
+              <button
+                type="button"
+                class="inst-select-option"
+                class:active={opt.value === filters.tag}
+                onclick={() => {
+                  openMenu = null
+                  filters.tag = opt.value
                 }}>{opt.label}</button>
             {/each}
           </div>

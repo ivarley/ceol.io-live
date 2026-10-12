@@ -13,7 +13,8 @@ private func item(_ t: JSONValue) -> MyTunesList.Item {
         addedDay: t["created_date"]?.stringValue.map { String($0.prefix(10)) },
         tunebookCount: t["tunebook_count"]?.intValue, heardCount: t["heard_count"]?.intValue,
         memberPlays: t["member_play_count"]?.intValue, sessionPlays: t["session_play_count"]?.intValue,
-        attendedPlays: t["attended_play_count"]?.intValue, instrumentStatus: overrides)
+        attendedPlays: t["attended_play_count"]?.intValue, instrumentStatus: overrides,
+        tags: (t["tags"]?.arrayValue ?? []).compactMap(\.stringValue))
 }
 
 private func filters(_ f: JSONValue?) -> MyTunesList.Filters {
@@ -25,6 +26,7 @@ private func filters(_ f: JSONValue?) -> MyTunesList.Filters {
     out.rel = f?["rel"]?.stringValue ?? ""
     out.addedBefore = f?["addedDir"]?.stringValue == "before"
     out.addedDate = f?["addedDate"]?.stringValue ?? ""
+    out.tag = f?["tag"]?.stringValue ?? ""
     return out
 }
 
@@ -66,6 +68,7 @@ let myTunesAdapters = ModuleAdapters(
         },
         "typeBadgeTitle": { args in .string(MyTunesList.typeBadgeTitle(args.string("sortType") ?? "")) },
         "sortModeLabel": { args in .string(MyTunesList.sortModeLabel(args.string("id") ?? "")) },
+        "tagsUsed": { args in .array(MyTunesList.tagsUsed(try args.require("allTunes", \.arrayValue).map(item)).map(JSONValue.string)) },
         "memberPlays": { args in JSONValue(item(try args.require("tune") { $0 }).plays) },
         "attendedPlays": { args in JSONValue(item(try args.require("tune") { $0 }).attended) },
         "resolveTuneInstrumentStatus": { args in

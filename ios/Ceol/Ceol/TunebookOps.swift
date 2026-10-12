@@ -36,13 +36,13 @@ extension AppModel {
     @discardableResult
     func applyTuneOp(
         _ type: TuneOp._TypePayload, tuneID: Int, learnStatus: LearnStatus? = nil,
-        heardCount: Int? = nil, notes: String? = nil, settingID: Int? = nil,
+        heardCount: Int? = nil, notes: String? = nil, tags: [String]? = nil, settingID: Int? = nil,
         nameAlias: String? = nil, key: String? = nil, instrument: String? = nil, status: String? = nil,
         name: String? = nil, tuneType: String? = nil
     ) async throws -> Components.Schemas.MyTunesOpResult {
         let op = TuneOp(
             opId: UUID().uuidString, _type: type, tuneId: tuneID, learnStatus: learnStatus,
-            heardCount: heardCount, notes: notes, settingId: settingID, instrument: instrument, status: status,
+            heardCount: heardCount, notes: notes, tags: tags, settingId: settingID, instrument: instrument, status: status,
             nameAlias: nameAlias, key: key)
         // Earlier changes wait: send them first, so this one is not applied out of order.
         if !tuneQueue.isEmpty { await tuneQueue.flush() }
@@ -145,8 +145,8 @@ enum TunebookOps {
             }
             payload.tunes[i].instrumentStatus = .init(additionalProperties: overrides)
         case .setTags:
-            // not sent by the app
-            break
+            guard let i else { return }
+            payload.tunes[i].tags = (op.tags ?? []).map(MyTunesList.normalizeTag).filter { !$0.isEmpty }
         }
     }
 }
