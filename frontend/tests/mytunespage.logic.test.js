@@ -250,8 +250,14 @@ describe('URL state round-trip', () => {
       rel: '',
       addedDir: 'after',
       addedDate: '',
+      tag: '',
     })
     expect(sort).toEqual({ type: 'heard', dir: 'desc', type2: 'alpha', dir2: 'asc' })
+    // A tag travels too, and only when set.
+    const tagged = paramsFromState({ search: '', tag: 'pub-set' }, { type: 'alpha', dir: 'asc', type2: null, dir2: null })
+    expect(tagged.get('tag')).toBe('pub-set')
+    expect(stateFromParams(tagged).filters.tag).toBe('pub-set')
+    expect(paramsFromState({ search: '' }, { type: 'alpha', dir: 'asc', type2: null, dir2: null }).get('tag')).toBeNull()
     // The added-date filter travels too, so a filtered view is a link you can send.
     const after = paramsFromState(
       { search: '', type: '', status: '', instrument: '', addedDir: 'after', addedDate: '2026-01-01' },
