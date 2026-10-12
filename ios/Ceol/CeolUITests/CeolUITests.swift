@@ -784,8 +784,11 @@ final class CeolUITests: XCTestCase {
             return i + 1 < names.count && names[i + 1] == second
         }
 
-        // Swipe one away; remove the other from its row.
-        app.staticTexts[second].swipeLeft()
+        // Swipe one away (the row, not its name: a swipe travels with the element's
+        // width, and the name wraps beside the "unlinked" badge, too narrow to reach the
+        // threshold); remove the other from its row.
+        app.descendants(matching: .any).matching(identifier: "log.row")
+            .containing(NSPredicate(format: "label == %@", second)).firstMatch.swipeLeft()
         XCTAssertTrue(app.staticTexts[second].waitForNonExistence(timeout: 5))
         app.staticTexts[first].tap()
         XCTAssertTrue(app.buttons["row.remove"].waitForExistence(timeout: 3))
