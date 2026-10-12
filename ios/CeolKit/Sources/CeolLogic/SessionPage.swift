@@ -163,6 +163,66 @@ public enum SessionPage {
         return best ?? entry.status
     }
 
+    // MARK: Setting a status on many tunes
+
+    /// One call to /api/my-tunes/ops.
+    public enum StatusOp: Equatable, Sendable {
+        /// `status` nil: the server's default ("want to learn").
+        case add(status: String?)
+        case setStatus(String)
+        /// `status` nil removes the override.
+        case setInstrumentStatus(instrument: String, status: String?)
+    }
+
+    public struct StatusPlan: Equatable, Sendable {
+        public let tuneID: Int
+        public let ops: [StatusOp]
+        public init(tuneID: Int, ops: [StatusOp]) {
+            self.tuneID = tuneID
+            self.ops = ops
+        }
+    }
+
+    /// The ops that put `target` on each tune under `scope`, as the web's bulk "My list"
+    /// plans them (frontend/src/mylist.js planStatusOps); a tune that needs nothing is
+    /// left out.
+    ///   - not on the list, overall: one add at the target
+    ///   - not on the list, an instrument: add (the default base) and the override
+    ///   - on the list, overall: set_status, and the auto overrides cleared so they follow
+    ///     it (a manual one is curated and kept); nothing when the base already matches
+    ///     and no auto override lingers
+    ///   - on the list, an instrument: one absolute set_instrument_status; nothing when
+    ///     that is what shows there already
+    /// An instrument scope only means anything with two or more instruments.
+    public static func planStatusOps(
+        _ tuneIDs: [Int], entries: [Int: TunebookEntry], instruments: [MyTunesList.Instrument],
+        scope: String, target: String
+    ) -> [StatusPlan] {
+        let scoped = scope != "all" && instruments.count >= 2 && instruments.contains { $0.name == scope }
+        var plans: [StatusPlan] = []
+        for tuneID in tuneIDs {
+            let entry = entries[tuneID]
+            var ops: [StatusOp] = []
+            if let entry {
+                if scoped {
+                    if resolveStatus(entry, instruments: instruments, scope: scope) == target { continue }
+                    ops.append(.setInstrumentStatus(instrument: scope, status: target))
+                } else {
+                    let autoOverridden = instruments.filter { $0.isAuto && entry.instrumentStatus[$0.name] != nil }
+                    if entry.status == target && autoOverridden.isEmpty { continue }
+                    ops.append(.setStatus(target))
+                    for i in autoOverridden { ops.append(.setInstrumentStatus(instrument: i.name, status: nil)) }
+                }
+            } else if scoped {
+                ops = [.add(status: nil), .setInstrumentStatus(instrument: scope, status: target)]
+            } else {
+                ops = [.add(status: target)]
+            }
+            plans.append(StatusPlan(tuneID: tuneID, ops: ops))
+        }
+        return plans
+    }
+
     // MARK: Logs
 
     public enum LogView: String, CaseIterable, Sendable {

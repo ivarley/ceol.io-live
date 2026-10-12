@@ -2024,3 +2024,46 @@ The plan (Phases 0-6) runs from here in `ios/`; see `ios/README.md` for the layo
   to put it away as before; the phone turned refits it to the new width. The image
   carries the zoom as its accessibility value ("250%"), for VoiceOver and
   `testPinchingTheNotation`, since the accessibility frame does not follow the zoom.
+- **Phase 7: finding your way around a night, 2026-10-12.** The web logger's filter
+  bar, its ★ my-list highlight and its bulk "My list", in the app's shapes, and the
+  night's header made coherent (one menu, not a row of icons):
+  - The night's header is pinned (the session, the date and tally, the notes on one
+    line, presence and the status pill); the top bar is one "⋯" menu (`night.menu`:
+    Edit log, Listen and log, Log details, Mark complete / Re-open log with the
+    details sheet's confirmations, Recordings for whoever may manage them, Share) and
+    Done while editing or selecting. Logging starts from the capsule under the last
+    set (`night.editBottom`), which reads "Listen and log" while editing
+    (`night.listenBottom`) and goes when the recorder is on this night (its strip sits
+    across the bottom then). The bootstrap now says `can_manage_recordings`
+    (additive); `NightRecordingsSheet` lists the night's uploads and how far the
+    segmenter has got with each, and opens the segmenter on the web through the
+    signed-in handoff; uploads, retries and deletions stay on the web.
+  - Watching, the search row (`night.search`, the kit's SearchRow with the filter
+    button) is first in the scroll, tucked under the header until the log is pulled
+    down, as the web hides its bar; typing narrows the log to sets with a matching
+    tune (`NightFinding.filterSets`, case and accents aside), the match lit in the
+    name. The filter sheet (`NightFilterSheet`) is the session Tunes tab's "My
+    tunebook" choice (Show my status / Not on my list / Want to learn / Learning /
+    Learned) and the instrument; "Show my status" marks every row
+    (`NightStatusMark`: the Tunes tab's glyph, a hollow mark for a tune not on your
+    list), the others narrow the log too, which the web's highlight can't. The
+    tunebook is the kept one (Phase 6), so this works with no signal. A pill row
+    under the header says what the log is narrowed to and "3 of 12 sets"; the status
+    filter is remembered (`@AppStorage night.myStatus`, cleared on sign-out). Not
+    while editing: the composer owns the keyboard there.
+  - Selecting, "By status" (`select.byStatus`, a menu of the four statuses) picks tunes
+    by your status, and "My list" (`select.mylist`, `ListStatusSheet`: the status, the
+    instrument when you play two or more, "Apply to N tunes") plans the ops as the web
+    does (`SessionPage.planStatusOps`, held to mylist.test.js) and sends each through
+    `applyTuneOp`, so they are kept at once and queued with no signal; the queue now
+    applies `set_instrument_status` too (the schema's `status` is a plain nullable
+    string so the generated client carries it). The confirmation is the web's ("Set 3
+    tunes to “Learned” · 1 already there").
+  - Tests: `NightFindingTests`, `SessionPageTests.planStatusOps`,
+    `testFindingATuneInTheNight` (the bar, the tucked search, "1 of 4 sets", the
+    filter to the sets not on my list, the pills, the menu, Recordings, the capsules),
+    `testSettingMyListFromANight` (By status picks five, My list adds Morrison's as
+    Learning, the server agrees, the test takes it off after), and the existing night
+    tests through the menu (`nightMenu`, `editLog`). Help: the live logger page's "In
+    the iPhone app" section, both languages.
+

@@ -37,11 +37,13 @@ extension AppModel {
     func applyTuneOp(
         _ type: TuneOp._TypePayload, tuneID: Int, learnStatus: LearnStatus? = nil,
         heardCount: Int? = nil, notes: String? = nil, settingID: Int? = nil,
-        nameAlias: String? = nil, key: String? = nil, name: String? = nil, tuneType: String? = nil
+        nameAlias: String? = nil, key: String? = nil, instrument: String? = nil, status: String? = nil,
+        name: String? = nil, tuneType: String? = nil
     ) async throws -> Components.Schemas.MyTunesOpResult {
         let op = TuneOp(
             opId: UUID().uuidString, _type: type, tuneId: tuneID, learnStatus: learnStatus,
-            heardCount: heardCount, notes: notes, settingId: settingID, nameAlias: nameAlias, key: key)
+            heardCount: heardCount, notes: notes, settingId: settingID, instrument: instrument, status: status,
+            nameAlias: nameAlias, key: key)
         // Earlier changes wait: send them first, so this one is not applied out of order.
         if !tuneQueue.isEmpty { await tuneQueue.flush() }
         if tuneQueue.isEmpty {
@@ -63,6 +65,18 @@ extension AppModel {
             }
         }
         return .init(success: true, opId: op.opId, _type: type.rawValue, tuneId: tuneID, heardCount: heardCount)
+    }
+
+    /// One of a status plan's ops (SessionPage.planStatusOps), through applyTuneOp.
+    func applyStatusOp(_ op: SessionPage.StatusOp, tuneID: Int, name: String?, tuneType: String?) async throws {
+        switch op {
+        case .add(let status):
+            try await applyTuneOp(.add, tuneID: tuneID, learnStatus: status.flatMap { LearnStatus(rawValue: $0) }, name: name, tuneType: tuneType)
+        case .setStatus(let status):
+            try await applyTuneOp(.setStatus, tuneID: tuneID, learnStatus: LearnStatus(rawValue: status))
+        case .setInstrumentStatus(let instrument, let status):
+            try await applyTuneOp(.setInstrumentStatus, tuneID: tuneID, instrument: instrument, status: status)
+        }
     }
 
     /// One op to the server: its result, a refusal, or a connection failure.
@@ -118,7 +132,19 @@ enum TunebookOps {
             guard let i else { return }
             payload.tunes.remove(at: i)
             payload.pagination.totalCount -= 1
-        case .setTags, .setInstrumentStatus:
+        case .setInstrumentStatus:
+            guard let i, let inst = op.instrument else { return }
+            var overrides = payload.tunes[i].instrumentStatus.additionalProperties
+            // The server's snap-back: an auto instrument set to the tune's own status
+            // keeps no row.
+            let auto = payload.instruments.first { $0.instrument == inst }?.isAuto ?? false
+            if let s = op.status, !(auto && s == payload.tunes[i].learnStatus) {
+                overrides[inst] = s
+            } else {
+                overrides.removeValue(forKey: inst)
+            }
+            payload.tunes[i].instrumentStatus = .init(additionalProperties: overrides)
+        case .setTags:
             // not sent by the app
             break
         }

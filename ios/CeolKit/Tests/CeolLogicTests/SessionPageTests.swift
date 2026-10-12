@@ -175,4 +175,33 @@ struct SessionPageTests {
         #expect(SessionPage.PeopleSort(mode: .name).descending == false)
         #expect(SessionPage.PeopleSort().descending == true)
     }
+
+    // frontend/tests/mylist.test.js, planStatusOps.
+    @Test("setting a status on many tunes plans the web's ops")
+    func planStatusOps() {
+        typealias Op = SessionPage.StatusOp
+        let fiddle = MyTunesList.Instrument(name: "Fiddle", isAuto: true)
+        let flute = MyTunesList.Instrument(name: "Flute", isAuto: true)
+        let banjo = MyTunesList.Instrument(name: "Banjo", isAuto: false)
+        func plan(_ ids: [Int], _ entries: [Int: SessionPage.TunebookEntry], _ insts: [MyTunesList.Instrument], _ scope: String, _ target: String) -> [[Op]] {
+            SessionPage.planStatusOps(ids, entries: entries, instruments: insts, scope: scope, target: target).map(\.ops)
+        }
+        // not on list, overall -> one add at the target
+        #expect(plan([1, 2], [:], [fiddle], "all", "want to learn") == [[.add(status: "want to learn")], [.add(status: "want to learn")]])
+        // not on list, an instrument -> add (default base) + the override
+        #expect(plan([1], [:], [fiddle, flute], "Flute", "learning") == [[.add(status: nil), .setInstrumentStatus(instrument: "Flute", status: "learning")]])
+        // on list, overall -> set_status + auto overrides cleared; the manual one kept
+        let e = SessionPage.TunebookEntry(status: "learning", instrumentStatus: ["Fiddle": "want to learn", "Banjo": "learned"])
+        #expect(plan([1], [1: e], [fiddle, banjo], "all", "learned") == [[.setStatus("learned"), .setInstrumentStatus(instrument: "Fiddle", status: nil)]])
+        // overall skips only when the base matches and no auto override lingers
+        #expect(plan([1], [1: .init(status: "learned", instrumentStatus: ["Fiddle": "learning"])], [fiddle, flute], "all", "learned").count == 1)
+        #expect(plan([1], [1: .init(status: "learned")], [fiddle, flute], "all", "learned").isEmpty)
+        #expect(plan([1], [1: .init(status: "learned", instrumentStatus: ["Banjo": "learning"])], [fiddle, banjo], "all", "learned").isEmpty)
+        // on list, an instrument -> one absolute override; nothing when already shown there
+        let f = SessionPage.TunebookEntry(status: "learning", instrumentStatus: ["Flute": "learned"])
+        #expect(plan([1], [1: f], [fiddle, flute], "Flute", "learned").isEmpty)
+        #expect(plan([1], [1: f], [fiddle, flute], "Fiddle", "learned") == [[.setInstrumentStatus(instrument: "Fiddle", status: "learned")]])
+        // one instrument: a scope still works on the base
+        #expect(plan([1], [:], [fiddle], "Fiddle", "learning") == [[.add(status: "learning")]])
+    }
 }

@@ -3,6 +3,7 @@
 // honours the offline test hook, as getJSON does.
 
 import CeolAPI
+import CeolLogic
 import CeolSession
 import Foundation
 
@@ -67,5 +68,22 @@ extension AppModel {
         resource("session/\(path)/people") { [auth] in
             try await auth.client.getSessionPeople(path: .init(sessionPath: path)).ok.body.json
         }
+    }
+}
+
+/// Your tunebook as the status filters read it (a session's Tunes tab, a night's log):
+/// each tune's status and overrides, and your instruments.
+struct Tunebook {
+    let entries: [Int: SessionPage.TunebookEntry]
+    let instruments: [MyTunesList.Instrument]
+}
+
+extension MyTunesPayload {
+    var tunebook: Tunebook {
+        var entries: [Int: SessionPage.TunebookEntry] = [:]
+        for t in tunes {
+            entries[t.tuneId] = .init(status: t.learnStatus, instrumentStatus: t.instrumentStatus.additionalProperties)
+        }
+        return Tunebook(entries: entries, instruments: instruments.map { .init(name: $0.instrument, isAuto: $0.isAuto) })
     }
 }

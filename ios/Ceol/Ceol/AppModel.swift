@@ -255,6 +255,7 @@ final class AppModel {
                 try? auth.store.setToken(nil)
                 NightStore.clearAll()
                 forgetPayloads()
+                Self.forgetSettings()
                 tuneQueue.stop()
             }
             if let s = UserDefaults.standard.string(forKey: "CeolOpenURL"), let url = URL(string: s) { pendingLink = url }
@@ -395,7 +396,13 @@ final class AppModel {
         tuneQueue.stop()
         NightStore.clearAll()
         forgetPayloads()
+        Self.forgetSettings()
         user = nil
+    }
+
+    /// Settings about this account's data (a night's tunebook filter), gone with it.
+    static func forgetSettings() {
+        for key in ["night.myStatus", "night.myStatusInstrument"] { UserDefaults.standard.removeObject(forKey: key) }
     }
 }
 

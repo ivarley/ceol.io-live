@@ -234,12 +234,6 @@ struct SessionDetailView: View {
     @State private var peopleSort = SessionPage.PeopleSort()
     @State private var filteringPeople = false
 
-    /// Your tunebook, for the Tunes tab's status filter.
-    struct Tunebook {
-        let entries: [Int: SessionPage.TunebookEntry]
-        let instruments: [MyTunesList.Instrument]
-    }
-
     /// Every tune, once the rest have arrived: the detail's first 20 and the remainder
     /// (less any the two have in common, when one is older than the other).
     private var allTunes: [SessionTunePayload]? {
@@ -255,14 +249,7 @@ struct SessionDetailView: View {
     }
 
     /// Your tunebook, for the Tunes tab's status filter, from the kept list.
-    private var tunebook: Tunebook? {
-        guard let mine = model.myTunes.value else { return nil }
-        var entries: [Int: SessionPage.TunebookEntry] = [:]
-        for t in mine.tunes {
-            entries[t.tuneId] = .init(status: t.learnStatus, instrumentStatus: t.instrumentStatus.additionalProperties)
-        }
-        return Tunebook(entries: entries, instruments: mine.instruments.map { .init(name: $0.instrument, isAuto: $0.isAuto) })
-    }
+    private var tunebook: Tunebook? { model.myTunes.value?.tunebook }
 
     /// The nights the chosen tune was played, and where in each ("Set 2, tune 1").
     struct TuneNights {
@@ -1024,46 +1011,124 @@ struct NightView: View {
     @State private var infoTune: TuneRef?
     @State private var assigning = false
     @State private var showingDetails = false
-    @State private var headerHeight: CGFloat = 0
     @State private var managingAttendance = false
     @State private var openTray: RecordID?
     @State private var scroll = ScrollPosition(edge: .top)
     @State private var scrollGeometry = ScrollGeometry(
         contentOffset: .zero, contentSize: .zero, contentInsets: .init(), containerSize: .zero)
+    // Finding a tune (spec 052 Phase 7), as the web logger's pull-down filter and its
+    // ★ highlight: the search row sits under the pinned header, scrolled just out of
+    // sight until the log is pulled down; the tunebook filter is remembered on the phone.
+    @State private var search = ""
+    @FocusState private var searching: Bool
+    @State private var filtering = false
+    @AppStorage("night.myStatus") private var myStatusRaw = ""
+    @AppStorage("night.myStatusInstrument") private var myStatusInstrument = "all"
+    @State private var searchRowHeight: CGFloat = 0
+    // The menu's actions.
+    @State private var confirmComplete = false
+    @State private var confirmReopen = false
+    @State private var showingRecordings = false
+    @State private var settingListStatus = false
+    @State private var actionFailure: String?
 
-    /// The top bar's actions: Edit log / Select / Done while the night can be logged,
-    /// Record (system admins, spec 053), and Share.
+    private var myStatus: SessionPage.MyStatus { SessionPage.MyStatus(rawValue: myStatusRaw) ?? .off }
+    private var tunebook: Tunebook? { app.myTunes.value?.tunebook }
+    private var tunebookFailed: Bool { app.myTunes.value == nil && app.myTunes.failure != nil && !app.myTunes.refreshing }
+
+    /// Your status for a tune under the filter's instrument; nil with the filter off, or
+    /// until your tunebook is here.
+    private var statusOf: ((Int) -> String)? {
+        guard myStatus != .off, let tunebook else { return nil }
+        let scope = myStatusInstrument
+        return { SessionPage.resolveStatus(tunebook.entries[$0], instruments: tunebook.instruments, scope: scope) }
+    }
+
+    /// The status the log is narrowed to; "Show my status" narrows nothing.
+    private var filterStatus: String? {
+        switch myStatus {
+        case .off, .all: nil
+        default: statusOf == nil ? nil : myStatus.rawValue
+        }
+    }
+
+    /// The recorder is listening for this night: its strip across the bottom says so.
+    private var listeningHere: Bool { app.recorder?.logsTo?.instanceID == sessionInstanceID }
+
+    /// The top bar: Done while editing or selecting, and the "⋯" menu, which holds the rest.
     @ViewBuilder private var nightActions: some View {
         HStack(spacing: 14) {
-            if let model, model.log != nil, model.status != .finished, !deepSearching {
+            if let model, model.log != nil, !deepSearching {
                 if model.selecting {
                     Button("Done") { model.setSelecting(false) }
                         .font(.ceol(size: 16, weight: .semibold))
                         .accessibilityIdentifier("select.done")
                 } else if model.editing {
-                    Button("Select") { model.setSelecting(true); composerFocused = false }
-                        .accessibilityIdentifier("night.select")
                     Button("Done") { finishEditing() }
                         .font(.ceol(size: 16, weight: .semibold))
                         .accessibilityIdentifier("night.done")
-                } else {
-                    Button { model.setEditing(true) } label: {
-                        Label("Edit log", systemImage: "pencil")
-                    }
-                    .accessibilityIdentifier("night.edit")
                 }
-            }
-            if let model, model.log != nil, model.status != .finished, model.editing != true {
-                // Listen and log the night's tunes (spec 053, 059): whoever can log it.
-                RecordNightButton(instanceID: sessionInstanceID, title: title)
-            }
-            if let night = model?.night, let path = night["session_path"]?.stringValue, model?.editing != true {
-                // A night's page is its date, or its id when it has none.
-                ShareButton(
-                    path: "/sessions/\(path)/\(night["instance_date"]?.stringValue ?? String(sessionInstanceID))",
-                    subject: "\(night["session_name"]?.stringValue ?? ""), \(night["session_date"]?.stringValue ?? "")")
+                nightMenu(model)
             }
         }
+    }
+
+    /// "If you're looking for some other ability, it's probably here."
+    private func nightMenu(_ model: NightModel) -> some View {
+        let complete = model.log?.meta["log_complete"] == true
+        let canLog = model.status != .finished && !complete
+        return Menu {
+            if canLog {
+                if model.editing {
+                    if !model.selecting {
+                        Button {
+                            model.setSelecting(true)
+                            composerFocused = false
+                        } label: { Label("Select", systemImage: "checkmark.circle") }
+                            .accessibilityIdentifier("night.select")
+                    }
+                } else {
+                    Button { model.setEditing(true) } label: { Label("Edit log", systemImage: "pencil") }
+                        .accessibilityIdentifier("night.edit")
+                    if !listeningHere {
+                        Button { app.openListen(logging: (sessionInstanceID, title)) } label: {
+                            Label { Text("Listen and log") } icon: { Image("TabListen").renderingMode(.template) }
+                        }
+                        .accessibilityIdentifier("night.record")
+                    }
+                }
+            }
+            Button { showingDetails = true } label: { Label("Log details", systemImage: "info.circle") }
+                .accessibilityIdentifier("night.details")
+            if complete {
+                Button { confirmReopen = true } label: { Label("Re-open log", systemImage: "lock.open") }
+                    .accessibilityIdentifier("night.reopen")
+            } else if model.status != .finished {
+                Button { confirmComplete = true } label: { Label("Mark complete", systemImage: "checkmark.seal") }
+                    .accessibilityIdentifier("night.complete")
+            }
+            if model.night?["can_manage_recordings"]?.boolValue == true {
+                Button { showingRecordings = true } label: { Label("Recordings", systemImage: "waveform") }
+                    .accessibilityIdentifier("night.recordings")
+            }
+            if let night = model.night, let path = night["session_path"]?.stringValue {
+                Divider()
+                Button {
+                    // A night's page is its date, or its id when it has none.
+                    app.sharing = app.shareOverride ?? ShareTarget(
+                        url: app.webURL("/sessions/\(path)/\(night["instance_date"]?.stringValue ?? String(sessionInstanceID))"),
+                        title: "\(night["session_name"]?.stringValue ?? ""), \(night["session_date"]?.stringValue ?? "")")
+                } label: { Label("Share", systemImage: "square.and.arrow.up") }
+                    .accessibilityIdentifier("share")
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle").font(.system(size: 20, weight: .medium))
+                .foregroundStyle(CeolTokens.textMuted)
+                .frame(width: 36, height: 36)
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel("More")
+        .accessibilityIdentifier("night.menu")
     }
 
     var body: some View {
@@ -1095,6 +1160,10 @@ struct NightView: View {
                 self.model = nil
             }
         }
+        // The tunebook filter needs your tunebook: fetched when it's asked for, kept after.
+        .task(id: myStatusRaw) {
+            if myStatus != .off { await app.myTunes.refresh(ifOlderThan: 60) }
+        }
         .sheet(item: $infoTune) { TuneSheet(tune: $0) }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if let model, model.editing, let log = model.log {
@@ -1105,7 +1174,10 @@ struct NightView: View {
                     }
                     LogToasts(model: model)
                     if model.selecting {
-                        SelectionBar(model: model, trackStarters: trackStarters(model.night)) { assigning = true }
+                        SelectionBar(
+                            model: model, trackStarters: trackStarters(model.night), onAssign: { assigning = true },
+                            statusOf: tunebook.map { tb in { SessionPage.resolveStatus(tb.entries[$0], instruments: tb.instruments, scope: "all") } },
+                            onListStatus: { settingListStatus = true })
                     } else {
                         LogComposer(
                             model: model, endIsOpen: !(log.ordered.last?.isBreak ?? true),
@@ -1130,6 +1202,10 @@ struct NightView: View {
             guard let id else { return }
             composerFocused = false
             withAnimation(.easeOut(duration: 0.25)) { scroll.scrollTo(id: rowScrollID(id), anchor: .center) }
+        }
+        .onChange(of: model?.selecting) { _, on in
+            // Selecting needs your tunebook for "By status" and "My list".
+            if on == true { Task { await app.myTunes.refresh(ifOlderThan: 60) } }
         }
         .sheet(isPresented: Binding(get: { model?.review != nil }, set: { if !$0 { model?.review = nil } })) {
             if let items = model?.review { ReviewSheet(items: items) }
@@ -1164,6 +1240,39 @@ struct NightView: View {
                 PersonPicker(model: model, mode: .assign)
             }
         }
+        .sheet(isPresented: $filtering) {
+            NightFilterSheet(
+                status: Binding(get: { myStatus }, set: { myStatusRaw = $0.rawValue }),
+                instrument: $myStatusInstrument,
+                instruments: (tunebook?.instruments ?? []).map(\.name),
+                tunebookFailed: tunebookFailed)
+        }
+        .sheet(isPresented: $showingRecordings) {
+            NightRecordingsSheet(instanceID: sessionInstanceID)
+        }
+        .sheet(isPresented: $settingListStatus) {
+            if let model {
+                ListStatusSheet(
+                    count: model.picked.count, instruments: (tunebook?.instruments ?? []).map(\.name),
+                    loaded: tunebook != nil, failed: tunebookFailed
+                ) { status, scope in
+                    Task { await applyListStatus(model, status, scope: scope) }
+                }
+            }
+        }
+        .confirmationDialog("Mark this session log as completely logged?", isPresented: $confirmComplete, titleVisibility: .visible) {
+            Button("Mark complete") { Task { actionFailure = await model?.markComplete() } }
+        } message: {
+            Text("This hides the editing controls.")
+        }
+        .confirmationDialog("Re-open this session log for editing?", isPresented: $confirmReopen, titleVisibility: .visible) {
+            Button("Re-open log") { Task { actionFailure = await model?.reopen() } }
+        }
+        .alert("That didn't work", isPresented: Binding(get: { actionFailure != nil }, set: { if !$0 { actionFailure = nil } })) {
+            Button("OK") {}
+        } message: {
+            Text(actionFailure ?? "")
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await model?.resume() } }
         }
@@ -1176,187 +1285,302 @@ struct NightView: View {
         // attendance too (spec 039). An older server doesn't say: on, as the web's default.
         let trackStarters = (b["track_set_starters"]?.boolValue ?? true) && (b["track_attendance"]?.boolValue ?? true)
         let notes = log.meta["notes"]?.stringValue ?? ""
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                // The web's night header: the session, the date and a tally, the notes,
-                // and how the connection is.
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text(b["session_name"]?.stringValue ?? "").font(.ceol(size: 24, weight: .semibold, relativeTo: .title2))
-                            .foregroundStyle(CeolTokens.textColor)
-                        Spacer(minLength: 8)
-                        PresenceAvatars(roster: model.roster)
-                        LiveStatusPill(status: model.status)
-                    }
-                    if let name = log.meta["instance_name"]?.stringValue, !name.isEmpty {
-                        Text(name).font(.ceol(size: 15, weight: .semibold)).foregroundStyle(CeolTokens.textColor)
-                    }
-                    HStack(alignment: .firstTextBaseline) {
-                        Text([log.meta["session_date"]?.stringValue, tuneCount == 0 ? nil : tally(tunes: tuneCount, sets: sets.count)]
-                            .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
-                            .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
-                        Spacer(minLength: 4)
-                        // Tap the header for the log's details, as on the web (spec 052 §B15).
-                        Button { showingDetails = true } label: {
-                            Image(systemName: "chevron.down").font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(CeolTokens.textMuted)
-                                .frame(width: 32, height: 24)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Log details")
-                        .accessibilityIdentifier("night.header")
-                    }
-                    if !notes.isEmpty {
-                        Text(notes).font(.ceolItalic(size: 15)).foregroundStyle(CeolTokens.textMuted)
-                    }
-                    if !model.editing && model.queuedCount > 0 { QueuedBanner(model: model).padding(.top, 4) }
-                    if AppModel.testHooks {
-                        Toggle("Simulate offline", isOn: Binding(get: { app.simulatedOffline }, set: { model.setSimulatedOffline($0) }))
-                            .font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
-                            .accessibilityIdentifier("debug.offline")
-                    }
+        let timeZone = b["timezone"]?.stringValue.flatMap(TimeZone.init(identifier:))
+        let complete = log.meta["log_complete"] == true
+        let finding = !model.editing && (!search.trimmingCharacters(in: .whitespaces).isEmpty || myStatus != .off)
+        let shown = model.editing ? sets : NightFinding.filterSets(sets, query: search, status: filterStatus, statusOf: { statusOf?($0) })
+        VStack(spacing: 0) {
+            // The web's night header, pinned: the session, the date and a tally, the
+            // notes, and how the connection is.
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(b["session_name"]?.stringValue ?? "").font(.ceol(size: 24, weight: .semibold, relativeTo: .title2))
+                        .foregroundStyle(CeolTokens.textColor)
+                        .lineLimit(1)
+                    Spacer(minLength: 8)
+                    PresenceAvatars(roster: model.roster)
+                    LiveStatusPill(status: model.status)
                 }
-                .padding(.horizontal, 20).padding(.vertical, 14)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(CeolTokens.headerBg.opacity(0.5))
-                .contentShape(Rectangle())
-                .onTapGesture { showingDetails = true }
-                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { headerHeight = $0 }
-                if model.editing {
-                    EditableLog(
-                        model: model, log: log, trackStarters: trackStarters,
-                        timeZone: b["timezone"]?.stringValue.flatMap(TimeZone.init(identifier:)),
-                        onFocusComposer: { composerFocused = true },
-                        onInfo: { t in openInfo(t, b) },
-                        autoScroll: { dy in
-                            let g = scrollGeometry
-                            let maxY = max(0, g.contentSize.height - g.containerSize.height + g.contentInsets.bottom)
-                            let y = min(max(g.contentOffset.y + dy, -g.contentInsets.top), maxY)
-                            scroll.scrollTo(y: y)
-                        },
-                        visible: scrollGeometry.contentInsets.top...max(
-                            scrollGeometry.contentInsets.top,
-                            scrollGeometry.containerSize.height - scrollGeometry.contentInsets.bottom)
-                    )
-                    .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 24)
-                    .animation(.easeOut(duration: 0.2), value: log.records)
-                    // Room under the last set, and a tap there leaves seam mode.
-                    Color.clear.frame(height: 160)
-                        .contentShape(Rectangle())
-                        .onTapGesture { model.leaveSeam() }
-                        .accessibilityHidden(true)
-                } else {
-                VStack(spacing: 12) {
-                    if sets.isEmpty {
-                        Text("No tunes logged yet.").font(.ceol(size: 16)).foregroundStyle(CeolTokens.textMuted)
-                            .frame(maxWidth: .infinity).padding(.vertical, 32)
+                if let name = log.meta["instance_name"]?.stringValue, !name.isEmpty {
+                    Text(name).font(.ceol(size: 15, weight: .semibold)).foregroundStyle(CeolTokens.textColor).lineLimit(1)
+                }
+                HStack(alignment: .firstTextBaseline) {
+                    Text([log.meta["session_date"]?.stringValue, tuneCount == 0 ? nil : tally(tunes: tuneCount, sets: sets.count)]
+                        .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
+                        .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
+                    Spacer(minLength: 4)
+                    // Tap the header for the log's details, as on the web (spec 052 §B15).
+                    Button { showingDetails = true } label: {
+                        Image(systemName: "chevron.down").font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(CeolTokens.textMuted)
+                            .frame(width: 32, height: 24)
                     }
-                    ForEach(Array(sets.enumerated()), id: \.offset) { i, set in
-                        let first = set.tunes.first?.recordID
-                        SetCard(
-                            label: SessionsL10n.setLabel(LogState.setLabel(set.tunes)), starter: trackStarters ? setStarter(set.tunes) : nil,
-                            onLabelTap: { withAnimation(.easeOut(duration: 0.15)) { openTray = openTray == first ? nil : first } },
-                            play: model.player.queueFor(set.tunes).isEmpty
-                                ? nil : (model.player.setIsPlaying(set.tunes), { model.player.toggleSet(set.tunes) })
-                        ) {
-                            if openTray == first {
-                                SetTray(
-                                    tunes: set.tunes, trackStarters: trackStarters,
-                                    timeZone: b["timezone"]?.stringValue.flatMap(TimeZone.init(identifier:)))
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Log details")
+                    .accessibilityIdentifier("night.header")
+                }
+                if !notes.isEmpty {
+                    Text(notes).font(.ceolItalic(size: 15)).foregroundStyle(CeolTokens.textMuted).lineLimit(1)
+                }
+                if !model.editing && model.queuedCount > 0 { QueuedBanner(model: model).padding(.top, 4) }
+                if AppModel.testHooks {
+                    Toggle("Simulate offline", isOn: Binding(get: { app.simulatedOffline }, set: { model.setSimulatedOffline($0) }))
+                        .font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
+                        .accessibilityIdentifier("debug.offline")
+                }
+            }
+            .padding(.horizontal, 20).padding(.vertical, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(CeolTokens.headerBg.opacity(0.5))
+            .contentShape(Rectangle())
+            .onTapGesture { showingDetails = true }
+            if finding {
+                // What the log is narrowed to, and how much of it that is.
+                NightPills(
+                    search: search, status: myStatus, instrument: myStatusInstrument,
+                    scoped: (tunebook?.instruments.count ?? 0) >= 2,
+                    tunebookLoaded: tunebook != nil, tunebookFailed: tunebookFailed,
+                    shown: shown.count, total: sets.count,
+                    onClearSearch: { search = "" },
+                    onClearStatus: {
+                        myStatusRaw = ""
+                        myStatusInstrument = "all"
+                    })
+            }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    if !model.editing {
+                        // Pull down to find a tune (the web's pull-down filter bar).
+                        SearchRow(
+                            text: $search, prompt: tr("Find a tune in the log"), fieldID: "night.search",
+                            filterMenu: { EmptyView() },
+                            focused: $searching,
+                            onFilter: {
+                                searching = false
+                                filtering = true
+                            },
+                            filterCount: myStatus == .off ? 0 : 1)
+                        .padding(.horizontal, 20).padding(.top, 10).padding(.bottom, 2)
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { searchRowHeight = $0 }
+                        .onAppear { tuckSearch() }
+                    }
+                    if model.editing {
+                        EditableLog(
+                            model: model, log: log, trackStarters: trackStarters,
+                            timeZone: timeZone,
+                            onFocusComposer: { composerFocused = true },
+                            onInfo: { t in openInfo(t, b) },
+                            autoScroll: { dy in
+                                let g = scrollGeometry
+                                let maxY = max(0, g.contentSize.height - g.containerSize.height + g.contentInsets.bottom)
+                                let y = min(max(g.contentOffset.y + dy, -g.contentInsets.top), maxY)
+                                scroll.scrollTo(y: y)
+                            },
+                            visible: scrollGeometry.contentInsets.top...max(
+                                scrollGeometry.contentInsets.top,
+                                scrollGeometry.containerSize.height - scrollGeometry.contentInsets.bottom)
+                        )
+                        .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 24)
+                        .animation(.easeOut(duration: 0.2), value: log.records)
+                        if !complete && !listeningHere && !model.selecting {
+                            // Hand the logging to the phone's ear; the recorder's strip then
+                            // sits across the bottom.
+                            NightCapsule(id: "night.listenBottom", action: { app.openListen(logging: (sessionInstanceID, title)) }) {
+                                EarGlyph(size: 17)
+                                Text("Listen and log")
                             }
-                            ForEach(Array(set.tunes.enumerated()), id: \.element) { _, t in
-                                // Tap a tune for its details, as on the web; ▶ where it has audio.
-                                HStack(spacing: 0) {
-                                    Button { openInfo(t, b) } label: {
-                                        Text(t["name"]?.stringValue ?? tr("Unknown tune"))
-                                            .font(.ceol(size: 19))
-                                            .foregroundStyle(CeolTokens.textColor)
-                                            .multilineTextAlignment(.leading)
-                                            .padding(.vertical, 9)
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                            .contentShape(Rectangle())
+                            .frame(maxWidth: .infinity)
+                        }
+                        // Room under the last set, and a tap there leaves seam mode.
+                        Color.clear.frame(height: 160)
+                            .contentShape(Rectangle())
+                            .onTapGesture { model.leaveSeam() }
+                            .accessibilityHidden(true)
+                    } else {
+                        VStack(spacing: 12) {
+                            if sets.isEmpty {
+                                Text("No tunes logged yet.").font(.ceol(size: 16)).foregroundStyle(CeolTokens.textMuted)
+                                    .frame(maxWidth: .infinity).padding(.vertical, 32)
+                            } else if shown.isEmpty {
+                                Text("No tunes match.").font(.ceol(size: 16)).foregroundStyle(CeolTokens.textMuted)
+                                    .frame(maxWidth: .infinity).padding(.vertical, 32)
+                                    .accessibilityIdentifier("night.noMatch")
+                            }
+                            ForEach(Array(shown.enumerated()), id: \.offset) { i, set in
+                                let first = set.tunes.first?.recordID
+                                SetCard(
+                                    label: SessionsL10n.setLabel(LogState.setLabel(set.tunes)), starter: trackStarters ? setStarter(set.tunes) : nil,
+                                    onLabelTap: { withAnimation(.easeOut(duration: 0.15)) { openTray = openTray == first ? nil : first } },
+                                    play: model.player.queueFor(set.tunes).isEmpty
+                                        ? nil : (model.player.setIsPlaying(set.tunes), { model.player.toggleSet(set.tunes) })
+                                ) {
+                                    if openTray == first {
+                                        SetTray(tunes: set.tunes, trackStarters: trackStarters, timeZone: timeZone)
                                     }
-                                    .buttonStyle(.plain)
-                                    .accessibilityIdentifier("night.tune")
-                                    if let id = t.recordID, model.player.resolved[id] != nil {
-                                        TunePlayButton(
-                                            playing: model.player.playingID == id, paused: model.player.paused,
-                                            action: { model.player.toggleTune(set.tunes, id) })
+                                    ForEach(Array(set.tunes.enumerated()), id: \.element) { _, t in
+                                        // Tap a tune for its details, as on the web; ▶ where it has audio.
+                                        HStack(spacing: 0) {
+                                            if let statusOf {
+                                                // Your status, as the Tunes tab marks it; a tune not on
+                                                // your list gets a hollow mark, since spotting those is
+                                                // the point.
+                                                NightStatusMark(status: t["tune_id"]?.intValue.map(statusOf))
+                                            }
+                                            Button { openInfo(t, b) } label: {
+                                                Text(highlighted(t["name"]?.stringValue ?? tr("Unknown tune")))
+                                                    .font(.ceol(size: 19))
+                                                    .foregroundStyle(CeolTokens.textColor)
+                                                    .multilineTextAlignment(.leading)
+                                                    .padding(.vertical, 9)
+                                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                                    .contentShape(Rectangle())
+                                            }
+                                            .buttonStyle(.plain)
+                                            .accessibilityIdentifier("night.tune")
+                                            if let id = t.recordID, model.player.resolved[id] != nil {
+                                                TunePlayButton(
+                                                    playing: model.player.playingID == id, paused: model.player.paused,
+                                                    action: { model.player.toggleTune(set.tunes, id) })
+                                            }
+                                        }
+                                        .padding(.horizontal, 4)
+                                        .nowPlaying(t.recordID != nil && model.player.playingID == t.recordID)
+                                        .remoteFlash(model, t.recordID)
+                                        .transition(.opacity.combined(with: .move(edge: .top)))
                                     }
                                 }
-                                .padding(.horizontal, 4)
-                                .nowPlaying(t.recordID != nil && model.player.playingID == t.recordID)
-                                .remoteFlash(model, t.recordID)
-                                .transition(.opacity.combined(with: .move(edge: .top)))
+                                .accessibilityElement(children: .contain)
+                                .accessibilityLabel("Set \(i + 1) · \(SessionsL10n.setLabel(LogState.setLabel(set.tunes)))")
+                            }
+                            if complete {
+                                Text("✓ This session has been fully logged").font(.ceol(size: 16, weight: .medium))
+                                    .foregroundStyle(CeolTokens.textMuted).padding(.top, 12)
+                            } else if model.status != .finished {
+                                // Reading along is the usual thing; logging starts here, under the
+                                // last set, where a live log grows (and in the menu).
+                                NightCapsule(id: "night.editBottom", action: { model.setEditing(true) }) {
+                                    Image(systemName: "pencil")
+                                    Text("Edit log")
+                                }
+                                .padding(.top, 12)
                             }
                         }
-                        .accessibilityElement(children: .contain)
-                        .accessibilityLabel("Set \(i + 1) · \(SessionsL10n.setLabel(LogState.setLabel(set.tunes)))")
-                    }
-                    if log.meta["log_complete"] == true {
-                        Text("✓ This session has been fully logged").font(.ceol(size: 16, weight: .medium))
-                            .foregroundStyle(CeolTokens.textMuted).padding(.top, 12)
-                    } else if model.status != .finished {
-                        // As the web's footer: Edit under the last row too, not only up top.
-                        Button { model.setEditing(true) } label: {
-                            Label("Edit log", systemImage: "pencil")
-                                .font(.ceol(size: 16, weight: .semibold))
-                                .foregroundStyle(CeolTokens.primary)
-                                .padding(.horizontal, 18).frame(height: 44)
-                                .overlay(Capsule().strokeBorder(CeolTokens.primary.opacity(0.6), lineWidth: 1))
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.top, 12)
-                        .accessibilityIdentifier("night.editBottom")
+                        .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 24)
+                        .animation(.easeOut(duration: 0.25), value: log.records)
                     }
                 }
-                .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 24)
-                .animation(.easeOut(duration: 0.25), value: log.records)
+                // Always enough to scroll the search row out of sight, as the web's list
+                // always overflows by its bar.
+                .frame(minHeight: model.editing ? 0 : scrollGeometry.containerSize.height + searchRowHeight, alignment: .top)
+            }
+            .scrollDismissesKeyboard(.interactively)
+            // A tap on empty space in the log (between the sets, or below them when it's
+            // short) leaves seam mode, as on the web.
+            .background {
+                if model.editing {
+                    Color.clear.contentShape(Rectangle()).onTapGesture { model.leaveSeam() }
+                }
+            }
+            .scrollPosition($scroll)
+            .onScrollGeometryChange(for: ScrollGeometry.self) { $0 } action: { _, g in scrollGeometry = g }
+            .coordinateSpace(name: nightScrollSpace)
+            .overlay(alignment: .bottom) {
+                // Watching, the player sits above the tab bar (editing, above the composer).
+                if !model.editing && model.player.isPlaying {
+                    PlayerBar(player: model.player, name: playingName(model))
+                        .padding(.horizontal, 16).padding(.bottom, CeolTabBar.height(landscape: verticalSizeClass == .compact) + 8)
+                }
+            }
+            .animation(.easeOut(duration: 0.2), value: model.player.isPlaying)
+            // Just below the night's header, as the web's sit below its own.
+            .overlay(alignment: .top) { ActivityLines(model: model) }
+            .overlay(alignment: .topLeading) {
+                // What a drag carries, under the finger.
+                if let d = model.drag, d.started {
+                    Text(d.label)
+                        .font(.ceol(size: 16, weight: .semibold))
+                        .foregroundStyle(CeolTokens.textColor)
+                        .padding(.horizontal, 14).padding(.vertical, 8)
+                        .background(CeolTokens.headerBg, in: RoundedRectangle(cornerRadius: 10))
+                        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(CeolTokens.primary, lineWidth: 1.5))
+                        .shadow(color: .black.opacity(0.5), radius: 8)
+                        .position(x: d.location.x - 70, y: d.location.y - 34)
+                        .allowsHitTesting(false)
+                        .accessibilityIdentifier("drag.ghost")
+                }
+            }
+            .scrollDisabled(model.drag?.started == true)
+            .refreshable { await model.start() }
+        }
+    }
+
+    /// Scroll the search row out of sight (a beat later, and once more, so the list has
+    /// its size by then), as the web hides its bar until the list is pulled down.
+    private func tuckSearch() {
+        Task {
+            for wait in [60, 300] {
+                try? await Task.sleep(for: .milliseconds(wait))
+                if searchRowHeight > 0, scrollGeometry.contentOffset.y < searchRowHeight - 1, !searching {
+                    scroll.scrollTo(y: searchRowHeight)
                 }
             }
         }
-        .scrollDismissesKeyboard(.interactively)
-        // A tap on empty space in the log (between the sets, or below them when it's
-        // short) leaves seam mode, as on the web.
-        .background {
-            if model.editing {
-                Color.clear.contentShape(Rectangle()).onTapGesture { model.leaveSeam() }
+    }
+
+    /// A tune's name with the search lit, as the web lights the match.
+    private func highlighted(_ name: String) -> AttributedString {
+        var a = AttributedString(name)
+        let q = search.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !q.isEmpty, let r = a.range(of: q, options: [.caseInsensitive, .diacriticInsensitive]) {
+            a[r].foregroundColor = CeolTokens.primary
+            a[r].inlinePresentationIntent = .stronglyEmphasized
+        }
+        return a
+    }
+
+    /// The web's bulk "My list" (frontend/src/App.svelte applyListStatus): the picked
+    /// tunes to `target` under `scope`, one plan per tune, each kept at once and sent
+    /// in order (queued with no signal). The selection stays, to layer another change on.
+    private func applyListStatus(_ model: NightModel, _ target: String, scope: String) async {
+        guard let tunebook, let log = model.log else { return }
+        let rows = log.records.filter { $0.recordID.map(model.picked.contains) ?? false }
+        var tuneIDs: [Int] = []
+        var names: [Int: (String?, String?)] = [:]
+        var unlinked = 0
+        for r in rows {
+            guard let id = r["tune_id"]?.intValue else {
+                unlinked += 1
+                continue
+            }
+            if names[id] == nil {
+                tuneIDs.append(id)
+                names[id] = (r["name"]?.stringValue, r["tune_type"]?.stringValue)
             }
         }
-        .scrollPosition($scroll)
-        .onScrollGeometryChange(for: ScrollGeometry.self) { $0 } action: { _, g in scrollGeometry = g }
-        .coordinateSpace(name: nightScrollSpace)
-        .overlay(alignment: .bottom) {
-            // Watching, the player sits above the tab bar (editing, above the composer).
-            if !model.editing && model.player.isPlaying {
-                PlayerBar(player: model.player, name: playingName(model))
-                    .padding(.horizontal, 16).padding(.bottom, CeolTabBar.height(landscape: verticalSizeClass == .compact) + 8)
+        let plans = SessionPage.planStatusOps(tuneIDs, entries: tunebook.entries, instruments: tunebook.instruments, scope: scope, target: target)
+        if plans.isEmpty {
+            model.say(unlinked > 0 ? tr("No change — unlinked tunes can’t be added to your list") : tr("Already up to date"))
+            return
+        }
+        var done = 0
+        var failed = 0
+        for p in plans {
+            do {
+                for op in p.ops { try await app.applyStatusOp(op, tuneID: p.tuneID, name: names[p.tuneID]?.0, tuneType: names[p.tuneID]?.1) }
+                done += 1
+            } catch {
+                failed += 1
             }
         }
-        .animation(.easeOut(duration: 0.2), value: model.player.isPlaying)
-        .overlay(alignment: .top) {
-            // Just below the night's header, as the web's sit below its own; once the
-            // header scrolls away, at the top.
-            ActivityLines(model: model)
-                .padding(.top, max(0, headerHeight - scrollGeometry.contentOffset.y - scrollGeometry.contentInsets.top))
+        let word = MyTunesStatusLabel.label(target)
+        let skipped = tuneIDs.count - plans.count
+        if failed > 0 {
+            model.say(tr("Set \(done) of \(plans.count) tunes to “\(word)” — \(failed) failed"))
+        } else {
+            var text = done == 1 ? tr("Set 1 tune to “\(word)”") : tr("Set \(done) tunes to “\(word)”")
+            if skipped > 0 { text += " · " + tr("\(skipped) already there") }
+            model.say(text)
         }
-        .overlay(alignment: .topLeading) {
-            // What a drag carries, under the finger.
-            if let d = model.drag, d.started {
-                Text(d.label)
-                    .font(.ceol(size: 16, weight: .semibold))
-                    .foregroundStyle(CeolTokens.textColor)
-                    .padding(.horizontal, 14).padding(.vertical, 8)
-                    .background(CeolTokens.headerBg, in: RoundedRectangle(cornerRadius: 10))
-                    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(CeolTokens.primary, lineWidth: 1.5))
-                    .shadow(color: .black.opacity(0.5), radius: 8)
-                    .position(x: d.location.x - 70, y: d.location.y - 34)
-                    .allowsHitTesting(false)
-                    .accessibilityIdentifier("drag.ghost")
-            }
-        }
-        .scrollDisabled(model.drag?.started == true)
-        .refreshable { await model.start() }
     }
 
     /// "12 tunes in 4 sets".
@@ -1586,6 +1810,12 @@ enum SessionsL10n {
         case .visitors: tr("Visitors")
         case .archived: tr("Archived")
         }
+    }
+
+    /// "3 of 12 sets", the night's count under a search or a filter.
+    static func setsShown(_ shown: Int, _ total: Int) -> String {
+        if shown == total { return total == 1 ? tr("1 set") : tr("\(total) sets") }
+        return tr("\(shown) of \(total) sets")
     }
 
     static func label(_ s: SessionPage.MyStatus) -> String {

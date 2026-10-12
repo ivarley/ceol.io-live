@@ -390,10 +390,11 @@ components:
         # set_setting: the setting you play (null clears). One only thesession.org has
         # is imported first, so this needs a connection unless the setting is held.
         setting_id: { type: [integer, "null"] }
-        # set_instrument_status: an instrument on your profile, and its status (null
-        # removes the override).
+        # set_instrument_status: an instrument on your profile, and its status (a
+        # LearnStatus; null, or left out, removes the override). A plain string here,
+        # not a oneOf, so the generated client has the field.
         instrument: { type: string }
-        status: { oneOf: [{ $ref: "#/components/schemas/LearnStatus" }, { type: "null" }] }
+        status: { type: [string, "null"] }
         # add (optional): what you call the tune, and the key you play it in, when they
         # differ from the catalogue's.
         name_alias: { type: [string, "null"] }
@@ -949,6 +950,9 @@ components:
         success: { type: boolean, const: true }
         session_instance_id: { type: integer }
         can_edit: { type: boolean }
+        # Whether the viewer may manage the night's recordings (a system admin, or a
+        # session admin granted it): the app's night menu offers Recordings on it.
+        can_manage_recordings: { type: boolean }
         current_person: { type: [object, "null"] }
         user_timezone: { type: [string, "null"] }
         session_timezone: { type: string }

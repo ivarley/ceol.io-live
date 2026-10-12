@@ -546,6 +546,10 @@ struct SelectionBar: View {
     let model: NightModel
     let trackStarters: Bool
     let onAssign: () -> Void
+    /// Your status for a tune, once your tunebook is here: "By status" picks by it.
+    var statusOf: ((Int) -> String)? = nil
+    /// The bulk "My list": add the picked tunes to your list, or set their status.
+    var onListStatus: (() -> Void)? = nil
 
     var body: some View {
         VStack(spacing: 8) {
@@ -556,6 +560,24 @@ struct SelectionBar: View {
                 Button("Select all") { model.pickAll() }.accessibilityIdentifier("select.all")
                 Text("·").foregroundStyle(CeolTokens.textMuted)
                 Button("None") { model.picked = [] }.accessibilityIdentifier("select.none")
+                if let statusOf {
+                    Text("·").foregroundStyle(CeolTokens.textMuted)
+                    // As the web's "Select: not on list · to learn · learning · learned".
+                    Menu {
+                        ForEach([SessionPage.MyStatus.notOnList, .wantToLearn, .learning, .learned], id: \.rawValue) { st in
+                            Button(SessionsL10n.label(st)) {
+                                model.pick { r in r["tune_id"]?.intValue.map { statusOf($0) == st.rawValue } ?? false }
+                            }
+                            .accessibilityIdentifier("select.status.\(st.rawValue)")
+                        }
+                    } label: {
+                        HStack(spacing: 3) {
+                            Text("By status")
+                            Image(systemName: "chevron.down").font(.system(size: 11, weight: .semibold))
+                        }
+                    }
+                    .accessibilityIdentifier("select.byStatus")
+                }
             }
             .font(.ceol(size: 15))
             .foregroundStyle(CeolTokens.primary)
@@ -567,6 +589,7 @@ struct SelectionBar: View {
                     withAnimation(.easeOut(duration: 0.2)) { model.deletePicked() }
                 }
                 if trackStarters { action("Assign", id: "assign", enabled: !model.picked.isEmpty, action: onAssign) }
+                if let onListStatus { action("My list", id: "mylist", enabled: !model.picked.isEmpty, action: onListStatus) }
             }
         }
         .padding(.horizontal, 16).padding(.vertical, 10)

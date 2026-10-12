@@ -57,6 +57,20 @@ final class CeolUITests: XCTestCase {
         add(shot)
     }
 
+    /// An action from the night's "⋯" menu (spec 052 Phase 7: the bar holds the menu
+    /// and Done; Edit log, Select and the rest are in it).
+    private func nightMenu(_ app: XCUIApplication, _ id: String) {
+        let menu = app.buttons["night.menu"]
+        XCTAssertTrue(menu.waitForExistence(timeout: 15))
+        menu.tap()
+        let item = app.buttons[id]
+        XCTAssertTrue(item.waitForExistence(timeout: 5), id)
+        item.tap()
+    }
+
+    /// Start logging the open night, from its menu.
+    private func editLog(_ app: XCUIApplication) { nightMenu(app, "night.edit") }
+
     /// Phase 3: the read-only screens, walked the way a person would.
     @MainActor
     func testBrowsingASessionToANight() throws {
@@ -725,7 +739,7 @@ final class CeolUITests: XCTestCase {
         await fulfillment(
             of: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS 'Live'"), object: status)], timeout: 15)
 
-        app.buttons["night.edit"].tap()
+        editLog(app)
         let input = app.textFields["log.input"]
         XCTAssertTrue(input.waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["tab.home"].exists, "the tab bar gives way to the composer")
@@ -780,7 +794,7 @@ final class CeolUITests: XCTestCase {
         try await waitFor("both removed") { rs in !rs.contains { ($0["name"] as? String) == first || ($0["name"] as? String) == second } }
 
         app.buttons["night.done"].tap()
-        XCTAssertTrue(app.buttons["night.edit"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["night.done"].waitForNonExistence(timeout: 5))
         XCTAssertTrue(app.buttons["tab.home"].waitForExistence(timeout: 3))
 
         // Leave the night as it was: drop any break this test added.
@@ -865,10 +879,9 @@ final class CeolUITests: XCTestCase {
         let item = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Finish logging' AND label CONTAINS '2013'")).firstMatch
         XCTAssertTrue(item.waitForExistence(timeout: 15))
         item.tap()
-        XCTAssertTrue(app.buttons["night.edit"].waitForExistence(timeout: 15))
-        app.buttons["night.edit"].tap()
+        editLog(app)
         XCTAssertTrue(app.staticTexts[c].waitForExistence(timeout: 10))
-        app.buttons["night.select"].tap()
+        nightMenu(app, "night.select")
         XCTAssertTrue(app.descendants(matching: .any)["select.count"].waitForExistence(timeout: 3))
 
         // Drag Charlie by its handle to between Alpha and Bravo.
@@ -999,8 +1012,7 @@ final class CeolUITests: XCTestCase {
         let night = app.buttons.matching(NSPredicate(format: "label MATCHES '.*[0-9]+ tunes?.*'")).firstMatch
         XCTAssertTrue(night.waitForExistence(timeout: 10))
         night.tap()
-        XCTAssertTrue(app.buttons["night.edit"].waitForExistence(timeout: 15))
-        app.buttons["night.edit"].tap()
+        editLog(app)
         let input = app.textFields["log.input"]
         XCTAssertTrue(input.waitForExistence(timeout: 5))
         // A set of our own (an open set could merge a repeated tune), and the vocabulary.
@@ -1098,8 +1110,7 @@ final class CeolUITests: XCTestCase {
         var app = launch(extra: hooks)
         signIn(app)
         openNewestMuellerNight(app)
-        XCTAssertTrue(app.buttons["night.edit"].waitForExistence(timeout: 15))
-        app.buttons["night.edit"].tap()
+        editLog(app)
         let input = app.textFields["log.input"]
         XCTAssertTrue(input.waitForExistence(timeout: 5))
 
@@ -1158,9 +1169,148 @@ final class CeolUITests: XCTestCase {
         XCTAssertFalse(labelled(app, renamed).exists)
     }
 
+    /// Sessions → Mueller → Logs → a seeded night by its tune count (tonight's,
+    /// auto-created and first in the list, reads "0 tunes"): the completed night of
+    /// 2026-01-27 ("10 tunes logged") or the open one of 2025-03-27 ("83 tunes logged").
     @MainActor
+    private func openMuellerNight(_ app: XCUIApplication, tunes: String, live: Bool) async {
+        app.buttons["tab.sessions"].firstMatch.tap()
+        let mueller = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Mueller Session'")).firstMatch
+        XCTAssertTrue(mueller.waitForExistence(timeout: 10))
+        mueller.tap()
+        app.buttons.containing(NSPredicate(format: "label BEGINSWITH 'Logs'")).firstMatch.tap()
+        showAllNights(app)
+        let night = app.buttons.containing(NSPredicate(format: "label CONTAINS %@", tunes)).firstMatch
+        XCTAssertTrue(night.waitForExistence(timeout: 10))
+        night.tap()
+        XCTAssertTrue(app.buttons["night.menu"].waitForExistence(timeout: 15))
+        if live {
+            let status = app.descendants(matching: .any)["night.status"]
+            XCTAssertTrue(status.waitForExistence(timeout: 15))
+            await fulfillment(
+                of: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS 'Live'"), object: status)], timeout: 15)
+        } else {
+            XCTAssertTrue(app.staticTexts["✓ This session has been fully logged"].waitForExistence(timeout: 15))
+        }
+    }
+
+    /// Spec 052 Phase 7: finding a tune in a night, the tunebook filter and the menu, on
+    /// the completed Mueller night of 2026-01-27 as seeded: four sets, five of its tunes
+    /// not on Ian's list, The Maid Behind The Bar in the third set.
+    @MainActor
+    func testFindingATuneInTheNight() async throws {
+        let app = launch()
+        signIn(app)
+        await openMuellerNight(app, tunes: "10 tunes logged", live: false)
+        // The bar holds the menu, not Edit: reading along is the usual thing.
+        XCTAssertFalse(app.buttons["night.edit"].exists)
+        XCTAssertFalse(app.buttons["night.record"].exists)
+        // The search row is tucked under the header until the log is pulled down.
+        let search = app.textFields["night.search"]
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        await fulfillment(
+            of: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == false"), object: search)], timeout: 5)
+        app.scrollViews.firstMatch.swipeDown(velocity: .slow)
+        await fulfillment(
+            of: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: search)], timeout: 5)
+        search.tap()
+        search.typeText("maid")
+        let shown = app.staticTexts["night.shown"]
+        await fulfillment(
+            of: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == '1 of 4 sets'"), object: shown)], timeout: 10)
+        XCTAssertTrue(labelled(app, "Maid Behind The Bar, The").exists)
+        XCTAssertFalse(labelled(app, "Cooley's").exists)
+        snapshot("night search")
+        app.buttons["night.pill.search"].tap()
+        XCTAssertTrue(app.buttons["night.pill.search"].waitForNonExistence(timeout: 3))
+        XCTAssertTrue(labelled(app, "Cooley's").waitForExistence(timeout: 3))
+        // The filter: the sets with a tune not on my list, every row marked.
+        app.buttons["night.search.filter"].tap()
+        XCTAssertTrue(app.buttons["filters.done"].waitForExistence(timeout: 5))
+        app.buttons["Not on my list"].firstMatch.tap()
+        app.buttons["filters.done"].tap()
+        XCTAssertTrue(app.buttons["night.pill.status"].waitForExistence(timeout: 5))
+        await fulfillment(
+            of: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == '3 of 4 sets'"), object: shown)], timeout: 15)
+        XCTAssertTrue(labelled(app, "Morrison's").exists)
+        XCTAssertFalse(labelled(app, "Drowsy Maggie").exists)
+        snapshot("night filter")
+        app.buttons["night.pill.status"].tap()
+        XCTAssertTrue(app.buttons["night.pill.status"].waitForNonExistence(timeout: 3))
+        XCTAssertTrue(labelled(app, "Drowsy Maggie").waitForExistence(timeout: 3))
+        // The menu on a completed log: details, Re-open (not Edit), Recordings (a
+        // system admin), Share.
+        app.buttons["night.menu"].tap()
+        XCTAssertTrue(app.buttons["night.details"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["night.reopen"].exists)
+        XCTAssertFalse(app.buttons["night.edit"].exists)
+        XCTAssertTrue(app.buttons["share"].exists)
+        app.buttons["night.recordings"].tap()
+        XCTAssertTrue(app.buttons["recordings.done"].waitForExistence(timeout: 10))
+        snapshot("night recordings")
+        app.buttons["recordings.done"].tap()
+        XCTAssertFalse(app.buttons["night.editBottom"].exists, "a completed log has no Edit capsule")
+    }
+
+    /// Spec 052 Phase 7: the capsule under the log, selecting by your status, and "My
+    /// list" on the picked tunes, on the open Mueller night of 2025-03-27 as seeded:
+    /// 83 tunes, 82 of them linked and not on Ian's list.
+    @MainActor
+    func testSettingMyListFromANight() async throws {
+        let app = launch()
+        signIn(app)
+        let api = try await TestAPI.signedIn(server: server)
+        // Tobin's Favorite is not on Ian's list as seeded: the test adds it, and takes it off after.
+        addTeardownBlock {
+            let mine = try await api.get("/api/my-tunes")
+            if let m = ((mine["tunes"] as? [[String: Any]]) ?? []).first(where: { ($0["tune_name"] as? String) == "Tobin's Favorite" }),
+                let id = m["tune_id"] as? Int
+            {
+                _ = try? await api.post("/api/my-tunes/ops", ["op_id": UUID().uuidString.lowercased(), "type": "remove", "tune_id": id])
+            }
+        }
+        await openMuellerNight(app, tunes: "83 tunes logged", live: true)
+        // Under the last set: Edit log; editing, Listen and log takes its place.
+        XCTAssertTrue(app.buttons["night.editBottom"].exists)
+        editLog(app)
+        XCTAssertTrue(app.textFields["log.input"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["night.listenBottom"].exists)
+        XCTAssertFalse(app.buttons["night.editBottom"].exists)
+        XCTAssertFalse(app.textFields["night.search"].exists)
+        nightMenu(app, "night.select")
+        let count = app.descendants(matching: .any)["select.count"]
+        XCTAssertTrue(count.waitForExistence(timeout: 3))
+        // By status: every tune not on my list; then just Morrison's.
+        let byStatus = app.buttons["select.byStatus"]
+        XCTAssertTrue(byStatus.waitForExistence(timeout: 10), "your tunebook arrives")
+        byStatus.tap()
+        let notOnList = app.buttons["select.status.not on list"]
+        XCTAssertTrue(notOnList.waitForExistence(timeout: 5))
+        notOnList.tap()
+        await fulfillment(
+            of: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == '82 selected'"), object: count)], timeout: 5)
+        app.buttons["select.none"].tap()
+        let row = app.descendants(matching: .any).matching(identifier: "select.row")
+            .containing(NSPredicate(format: "label == %@", "Tobin's Favorite")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 3))
+        row.tap()
+        XCTAssertEqual(count.label, "1 selected")
+        app.buttons["select.mylist"].tap()
+        XCTAssertTrue(app.buttons["mylist.apply"].waitForExistence(timeout: 5))
+        app.buttons["Learning"].firstMatch.tap()
+        snapshot("my list from a night")
+        app.buttons["mylist.apply"].tap()
+        XCTAssertTrue(app.staticTexts["Set 1 tune to “Learning”"].waitForExistence(timeout: 10))
+        let mine = try await api.get("/api/my-tunes")
+        let m = ((mine["tunes"] as? [[String: Any]]) ?? []).first { ($0["tune_name"] as? String) == "Tobin's Favorite" }
+        XCTAssertEqual(m?["learn_status"] as? String, "learning")
+        app.buttons["select.done"].tap()
+        app.buttons["night.done"].tap()
+    }
+
     /// The Logs tab opens on logged nights only, as the web's does; the newest night
     /// (tonight's, say) may have nothing logged yet.
+    @MainActor
     private func showAllNights(_ app: XCUIApplication) {
         let filter = app.buttons["logs.search.filter"]
         XCTAssertTrue(filter.waitForExistence(timeout: 10))
@@ -1246,7 +1396,7 @@ final class CeolUITests: XCTestCase {
         XCTAssertTrue(sarahAvatar.waitForExistence(timeout: 10), "Sarah should show as logging")
 
         // Typing: shown to those logging.
-        app.buttons["night.edit"].tap()
+        editLog(app)
         XCTAssertTrue(app.textFields["log.input"].waitForExistence(timeout: 5))
         var typing = URLRequest(url: URL(string: "\(stream)/live/instances/\(instanceID)/typing")!)
         typing.httpMethod = "POST"
@@ -1353,7 +1503,7 @@ final class CeolUITests: XCTestCase {
         item.tap()
         XCTAssertTrue(labelled(app, "Long Night 1").waitForExistence(timeout: 15))
         XCTAssertFalse(labelled(app, "Long Night 40").isHittable, "a long night opens at the top")
-        app.buttons["night.edit"].tap()
+        editLog(app)
         let last = app.staticTexts["Long Night 40"]
         XCTAssertTrue(last.waitForExistence(timeout: 5))
         let shown = NSPredicate(format: "isHittable == true")
@@ -1587,7 +1737,7 @@ final class CeolUITests: XCTestCase {
         app.buttons["set.play"].tap()
         XCTAssertTrue(player.waitForNonExistence(timeout: 5))
         // And while editing, where each tune also has its ⓘ and handle.
-        app.buttons["night.edit"].tap()
+        editLog(app)
         XCTAssertTrue(app.textFields["log.input"].waitForExistence(timeout: 5))
         app.scrollViews.firstMatch.swipeDown(velocity: .fast)
         XCTAssertTrue(plays.firstMatch.waitForExistence(timeout: 5))
@@ -1617,8 +1767,7 @@ final class CeolUITests: XCTestCase {
         let item = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Finish logging' AND label CONTAINS '2012'")).firstMatch
         XCTAssertTrue(item.waitForExistence(timeout: 15))
         item.tap()
-        XCTAssertTrue(app.buttons["night.edit"].waitForExistence(timeout: 15))
-        app.buttons["night.edit"].tap()
+        editLog(app)
         let input = app.textFields["log.input"]
         XCTAssertTrue(input.waitForExistence(timeout: 5))
         func atTheEnd() -> Bool { input.placeholderValue == "Tune name" }
@@ -1639,13 +1788,14 @@ final class CeolUITests: XCTestCase {
         app.buttons["row.insertAbove"].tap()
         XCTAssertFalse(atTheEnd())
         XCTAssertFalse(app.buttons["log.endSetHere"].exists, "mid-set is not the end of a set")
-        // Scroll the empty space below the last set clear of the box and keyboard.
+        // Scroll the empty space below the last set (under the "Listen and log" capsule)
+        // clear of the box and keyboard.
         let last = app.staticTexts["Seam Charlie"]
-        for _ in 0..<4 where last.frame.maxY + 130 > input.frame.minY {
+        for _ in 0..<4 where last.frame.maxY + 250 > input.frame.minY {
             app.staticTexts["Seam Alpha"].swipeUp(velocity: .slow)
         }
         app.coordinate(withNormalizedOffset: .zero)
-            .withOffset(CGVector(dx: last.frame.midX, dy: last.frame.maxY + 110)).tap()
+            .withOffset(CGVector(dx: last.frame.midX, dy: last.frame.maxY + 230)).tap()
         let back = NSPredicate(format: "placeholderValue == 'Tune name'")
         await fulfillment(of: [XCTNSPredicateExpectation(predicate: back, object: input)], timeout: 3)
 

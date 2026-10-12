@@ -570,6 +570,16 @@ final class NightModel {
         picked = Set(Selection.selectableIDs(LogState.segmentByBreaks(log.ordered)))
     }
 
+    /// Add every settled tune `keep` says (the web's select-by-status): additive, as
+    /// Select all is.
+    func pick(where keep: (LogRecord) -> Bool) {
+        guard let log else { return }
+        let selectable = Set(Selection.selectableIDs(LogState.segmentByBreaks(log.ordered)))
+        for r in log.ordered where keep(r) {
+            if let id = r.recordID, selectable.contains(id) { picked.insert(id) }
+        }
+    }
+
     /// Move a block to a drop target; the cursor lands after it, as on the web.
     func move(_ block: Selection.DragBlock, to target: Selection.DropTarget) {
         guard var l = log else { return }

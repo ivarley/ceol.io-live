@@ -3159,6 +3159,12 @@ def live_bootstrap(session_instance_id):
         )
         meta = cur.fetchone()
         session_date = format_session_date(meta[3]) if meta else ""
+        # Whether this person may manage the night's recordings (a system admin, or a
+        # session admin granted the bit), as the web page is told at render: the app's
+        # night menu offers Recordings on it.
+        from recording_routes import can_manage_recordings
+
+        manages_recordings = can_manage_recordings(cur, meta[0]) if meta else False
 
         cur.execute(
             "SELECT COALESCE(MAX(event_id), 0) FROM session_event WHERE session_instance_id = %s",
@@ -3176,6 +3182,7 @@ def live_bootstrap(session_instance_id):
                 "success": True,
                 "session_instance_id": int(session_instance_id),
                 "can_edit": can_edit,
+                "can_manage_recordings": manages_recordings,
                 "current_person": {
                     "person_id": getattr(current_user, "person_id", None),
                     "first_name": getattr(current_user, "first_name", ""),
