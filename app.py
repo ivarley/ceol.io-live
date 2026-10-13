@@ -112,7 +112,7 @@ from live_logging_routes import (
     live_people,
     live_match,
 )
-from timezone_utils import format_datetime_with_timezone, utc_to_local
+from timezone_utils import format_datetime_with_timezone, now_utc, utc_to_local
 from flask_login import current_user
 
 load_dotenv()
@@ -256,6 +256,13 @@ def load_user_from_request(req):
     Mirrors the sidecar's validation (streaming/service.py, _user_id_from_bearer).
     Cookie sessions keep flowing through user_loader; this only runs when the session
     cookie is absent or invalid.
+
+    A token that is used stays alive: its expiry slides to SESSION_LIFETIME_WEEKS from
+    now, so the app signs you out after six weeks *idle*, never six weeks after the day
+    you signed in. The write happens at most once a week per token (only once less
+    than SESSION_LIFETIME_WEEKS - 1 weeks remain), so an ordinary request costs no
+    UPDATE. The web's cookie already slides (Flask refreshes a permanent session on
+    every request).
     """
     auth_header = req.headers.get("Authorization", "")
     if not auth_header.lower().startswith("bearer "):
@@ -270,12 +277,22 @@ def load_user_from_request(req):
         cur = conn.cursor()
         cur.execute(
             """
-            SELECT user_id FROM user_session
+            SELECT user_id, expires_at FROM user_session
             WHERE session_id = %s AND expires_at > (NOW() AT TIME ZONE 'UTC')
             """,
             (token,),
         )
         row = cur.fetchone()
+        if row and row[1] - now_utc() < timedelta(weeks=SESSION_LIFETIME_WEEKS - 1):
+            cur.execute(
+                """
+                UPDATE user_session
+                SET expires_at = %s, last_accessed = %s
+                WHERE session_id = %s
+                """,
+                (now_utc() + timedelta(weeks=SESSION_LIFETIME_WEEKS), now_utc(), token),
+            )
+            conn.commit()
     finally:
         conn.close()
     if not row:

@@ -78,4 +78,28 @@ struct CeolClientTests {
         #expect(config.forceUpgrade == false)
         #expect(config.client.platform == "ios")
     }
+
+    @MainActor final class Heard {
+        var paths: [String] = []
+    }
+
+    @Test("reports a 401 to a request that carried the token, except for signing in")
+    @MainActor func unauthorized() async throws {
+        let envelope = Data(#"{"success": false, "error": "x", "message": "x", "code": "unauthenticated"}"#.utf8)
+        let transport = RecordingTransport(status: .unauthorized, body: envelope)
+        let heard = Heard()
+        let signedIn = Client.ceol(clientID: "ios/1.0.0", token: { "tok" }, unauthorized: { heard.paths.append($0) }, transport: transport)
+
+        _ = try? await signedIn.getMe()
+        #expect(heard.paths == ["/api/me"])
+
+        // A wrong password is a 401 about the request, not the token.
+        _ = try? await signedIn.loginWithPassword(body: .json(.init(email: "a@example.com", password: "nope")))
+        #expect(heard.paths == ["/api/me"])
+
+        // With no token sent, a 401 says nothing about one.
+        let signedOut = Client.ceol(clientID: "ios/1.0.0", token: { nil }, unauthorized: { heard.paths.append($0) }, transport: transport)
+        _ = try? await signedOut.getMe()
+        #expect(heard.paths == ["/api/me"])
+    }
 }

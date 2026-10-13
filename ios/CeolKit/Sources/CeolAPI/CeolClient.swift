@@ -7,6 +7,9 @@
 //     with MIN_CLIENT_VERSION_IOS for /api/app-config's force_upgrade (spec 052 A1/A8).
 //   - Authorization: Bearer <token>, whenever a token is held. The token is a
 //     user_session id; the app keeps it in the Keychain.
+//   - A 401 to a request that carried the token means the server no longer knows it
+//     (six weeks idle, or revoked from the web): `unauthorized` is told, so the app can
+//     send the person back to sign-in with everything it kept still on the phone.
 
 import Foundation
 import HTTPTypes
@@ -22,6 +25,11 @@ public enum CeolServer {
 /// takes effect on the very next call without rebuilding the client.
 public typealias TokenProvider = @Sendable () async -> String?
 
+/// Told, on the main actor, the path of a request the server answered 401 although it
+/// carried the token. Never for /api/auth/* (a wrong password, a dead link): those
+/// 401s are about the request, not the token.
+public typealias UnauthorizedHandler = @MainActor @Sendable (String) -> Void
+
 extension Client {
     /// A client for `serverURL` that identifies itself as `clientID` (the value of
     /// X-Ceol-Client, e.g. "ios/1.0.0 (build 12)") and sends `token()` when it has one.
@@ -29,12 +37,14 @@ extension Client {
     /// Accept-Language so the server answers in it even before sign-in (spec 057).
     /// `offline()` true fails every request as if the phone had no signal (the app's
     /// debug switch), so a test of the kept copies sees what a pub with no signal shows.
+    /// `unauthorized` hears of a 401 to a request that carried the token.
     public static func ceol(
         serverURL: URL = CeolServer.production,
         clientID: String,
         token: @escaping TokenProvider,
         language: @escaping @Sendable () -> String? = { nil },
         offline: @escaping @Sendable () -> Bool = { false },
+        unauthorized: @escaping UnauthorizedHandler = { _ in },
         transport: any ClientTransport = URLSessionTransport()
     ) -> Client {
         Client(
@@ -43,8 +53,39 @@ extension Client {
             middlewares: [
                 OfflineMiddleware(offline: offline),
                 ClientIDMiddleware(clientID: clientID, language: language), BearerTokenMiddleware(token: token),
+                UnauthorizedMiddleware(unauthorized: unauthorized),
             ]
         )
+    }
+}
+
+/// After the Bearer header is on: a 401 to a request that carries it is reported.
+public struct UnauthorizedMiddleware: ClientMiddleware {
+    public let unauthorized: UnauthorizedHandler
+
+    public init(unauthorized: @escaping UnauthorizedHandler) {
+        self.unauthorized = unauthorized
+    }
+
+    /// Whether a 401 to this request says the token is dead: it carried one, and the
+    /// request was not itself about signing in.
+    public static func meansTokenRejected(_ request: HTTPRequest, status: HTTPResponse.Status) -> Bool {
+        status.code == 401 && request.headerFields[.authorization] != nil
+            && !(request.path ?? "").hasPrefix("/api/auth/")
+    }
+
+    public func intercept(
+        _ request: HTTPRequest,
+        body: HTTPBody?,
+        baseURL: URL,
+        operationID: String,
+        next: @Sendable (HTTPRequest, HTTPBody?, URL) async throws -> (HTTPResponse, HTTPBody?)
+    ) async throws -> (HTTPResponse, HTTPBody?) {
+        let (response, responseBody) = try await next(request, body, baseURL)
+        if Self.meansTokenRejected(request, status: response.status) {
+            await unauthorized(request.path ?? "")
+        }
+        return (response, responseBody)
     }
 }
 

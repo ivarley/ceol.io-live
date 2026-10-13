@@ -7,6 +7,7 @@ import Foundation
 import Testing
 @testable import Ceol
 
+extension OnePhoneTests {
 @MainActor
 struct SwipeUndoTests {
     func row(_ id: JSONValue, _ pos: String, _ name: String) -> JSONValue {
@@ -43,4 +44,5 @@ struct SwipeUndoTests {
         #expect(names() == ["Drowsy Maggie", "The Kesh"])
         #expect(night.undoable == nil)
     }
+}
 }

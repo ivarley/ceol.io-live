@@ -9,6 +9,7 @@ import SwiftUI
 import Testing
 @testable import Ceol
 
+extension OnePhoneTests {
 @MainActor
 struct MeterStatesTests {
     static func state(_ t: Int, p: Double, shown: Int? = 452, none: Double = 0.0) -> ListenState {
@@ -114,4 +115,5 @@ struct MeterStatesTests {
         for i in 0..<60 { list = RecentTunes.adding(RecentTune(tuneID: 100 + i, name: "T", type: nil, heardAt: now.addingTimeInterval(2000 + Double(i))), to: list) }
         #expect(list.count == RecentTunes.keep)
     }
+}
 }

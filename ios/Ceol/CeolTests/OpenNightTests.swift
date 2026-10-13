@@ -6,6 +6,7 @@ import Foundation
 import Testing
 @testable import Ceol
 
+extension OnePhoneTests {
 @MainActor
 struct OpenNightTests {
     @Test func theScreenAndTheRecorderShareOneNight() {
@@ -26,4 +27,5 @@ struct OpenNightTests {
         app.closeNight(recorder)
         #expect(app.openNight(42) !== recorder)
     }
+}
 }

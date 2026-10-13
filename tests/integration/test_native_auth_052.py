@@ -17,7 +17,12 @@ from unittest.mock import patch
 
 import pytest
 
-from auth import User, generate_login_token, generate_verification_token
+from auth import (
+    SESSION_LIFETIME_WEEKS,
+    User,
+    generate_login_token,
+    generate_verification_token,
+)
 from database import get_db_connection
 from timezone_utils import now_utc
 
@@ -161,6 +166,48 @@ class TestBearerToken:
 
     def test_garbage_token_is_401(self, client):
         assert client.get("/api/me", headers=_bearer("not-a-token")).status_code == 401
+
+    def _set_expiry(self, token, **delta):
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE user_session SET expires_at = %s WHERE session_id = %s",
+                (now_utc() + timedelta(**delta), token),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def _expiry(self, token):
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT expires_at FROM user_session WHERE session_id = %s", (token,)
+            )
+            return cur.fetchone()[0]
+        finally:
+            conn.close()
+
+    def test_a_used_token_slides_its_expiry(self, client):
+        # Six weeks IDLE, not six weeks from sign-in: a token a week or more into its
+        # life is renewed by any authenticated request (the app's user is never signed
+        # out while they keep using it).
+        token = _login_native(client)["token"]
+        self._set_expiry(token, days=3)
+        assert client.get("/api/me", headers=_bearer(token)).status_code == 200
+        renewed = self._expiry(token)
+        assert renewed - now_utc() > timedelta(weeks=SESSION_LIFETIME_WEEKS - 1)
+        # ...and a young token is left alone (no write per request).
+        assert client.get("/api/me", headers=_bearer(token)).status_code == 200
+        assert self._expiry(token) == renewed
+
+    def test_an_expired_token_is_401_and_not_revived(self, client):
+        token = _login_native(client)["token"]
+        self._set_expiry(token, days=-1)
+        assert client.get("/api/me", headers=_bearer(token)).status_code == 401
+        assert self._expiry(token) < now_utc()
 
 
 class TestExchange:

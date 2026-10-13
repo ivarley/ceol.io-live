@@ -16,10 +16,12 @@ import Foundation
 typealias TuneOp = Components.Schemas.MyTunesOp
 typealias LearnStatus = Components.Schemas.LearnStatus
 
-/// A write the server refused, or (`connection`) couldn't be reached for; `message` is fit to show.
+/// A write the server refused, or (`connection`) couldn't be reached for, or
+/// (`signedOut`) answered 401: the sign-in has run out. `message` is fit to show.
 struct TuneOpFailure: Error {
     let message: String
     var connection = false
+    var signedOut = false
 }
 
 extension LearnStatus {
@@ -49,10 +51,11 @@ extension AppModel {
         if tuneQueue.isEmpty {
             do {
                 return try await sendTuneOp(op)
-            } catch let f as TuneOpFailure where !f.connection {
+            } catch let f as TuneOpFailure where !f.connection && !f.signedOut {
                 throw f
             } catch {
-                // no signal: queued below
+                // no signal, or no sign-in (AppModel.signInExpired has the person
+                // signing in again): queued below, sent after
             }
         }
         tuneQueue.enqueue(QueuedTuneOp(op: op, name: name, tuneType: tuneType, queuedAt: Date()))
@@ -93,8 +96,9 @@ extension AppModel {
         switch response {
         case .ok(let ok):
             return try ok.body.json
-        case .default(_, let error):
-            throw TuneOpFailure(message: (try? error.body.json)?.message ?? tr("That wasn't saved. Try again."))
+        case .default(let status, let error):
+            throw TuneOpFailure(
+                message: (try? error.body.json)?.message ?? tr("That wasn't saved. Try again."), signedOut: status == 401)
         }
     }
 }

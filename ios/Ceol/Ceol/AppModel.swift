@@ -13,6 +13,8 @@ import CeolSession
 import CeolLogic
 import Foundation
 import Observation
+import OpenAPIRuntime
+import OpenAPIURLSession
 
 @Observable
 final class AppModel {
@@ -66,10 +68,12 @@ final class AppModel {
             false
         #endif
     }() {
-        didSet { Self.offlineFlag.value = simulatedOffline }
+        didSet { offlineFlag.value = simulatedOffline }
     }
     /// The same switch, readable from the API client's middleware off the main actor.
-    nonisolated static let offlineFlag = OfflineFlag()
+    /// One per model, not shared: the tests build several models at once, and one
+    /// pretending to have no signal must not cut another off.
+    private let offlineFlag: OfflineFlag
     static var testHooks: Bool {
         #if DEBUG
             UserDefaults.standard.bool(forKey: "CeolTestHooks")
@@ -222,14 +226,24 @@ final class AppModel {
     private let devHosts: Set<String>
     private var pendingLink: URL?
 
-    init(server: URL = AppModel.serverURL, store: any TokenStore = KeychainTokenStore()) {
+    /// Where the client's 401s land (UnauthorizedMiddleware): a box, because the client
+    /// is built before `self` is, so the handler is hung on it at the end of init.
+    private let signInWatch: SignInWatch
+
+    init(server: URL = AppModel.serverURL, store: any TokenStore = KeychainTokenStore(),
+         transport: any ClientTransport = URLSessionTransport()) {
+        let watch = SignInWatch()
+        let flag = OfflineFlag()
         let client = Client.ceol(
             serverURL: server, clientID: ClientID.current, token: { store.token() }, language: { AppLanguage.code },
-            offline: { AppModel.offlineFlag.value })
+            offline: { flag.value }, unauthorized: { _ in watch.rejected?() }, transport: transport)
         auth = AuthService(client: client, store: store)
         self.server = server
         devHosts = CeolServer.production.host() == server.host() ? [] : [server.host() ?? ""]
-        Self.offlineFlag.value = simulatedOffline
+        signInWatch = watch
+        offlineFlag = flag
+        flag.value = simulatedOffline
+        watch.rejected = { [weak self] in self?.signInExpired() }
     }
 
     /// The server to talk to. Production, unless a debug build is launched with
@@ -253,10 +267,7 @@ final class AppModel {
             // opens a URL as a tapped link would.
             if UserDefaults.standard.bool(forKey: "CeolResetSession") {
                 try? auth.store.setToken(nil)
-                NightStore.clearAll()
-                forgetPayloads()
-                Self.forgetSettings()
-                tuneQueue.stop()
+                forgetAccountData()
             }
             if let s = UserDefaults.standard.string(forKey: "CeolOpenURL"), let url = URL(string: s) { pendingLink = url }
             // -CeolTab me: start on that tab (screenshots of one screen).
@@ -304,7 +315,14 @@ final class AppModel {
         enter(s.user, next: s.next)
     }
 
-    private func enter(_ user: User, next: SignedIn.Next?) {
+    func enter(_ user: User, next: SignedIn.Next?) {
+        // What the phone kept belongs to the account that was signed in when it was
+        // kept. The same account back (after the sign-in ran out, say) finds it all
+        // there, and its waiting changes go now; another account starts clean, so one
+        // person's nights never show under another's name and one tunebook's waiting
+        // changes never land in another.
+        if let owner = Self.localDataOwner, owner != user.userId { forgetAccountData() }
+        Self.localDataOwner = user.userId
         self.user = user
         setLanguage(user.language?.rawValue)
         phase = user.needsProfileSetup || next == .setupProfile ? .profileSetup : .signedIn
@@ -383,6 +401,32 @@ final class AppModel {
         phase = .signedOut
     }
 
+    /// The server no longer knows the token (six weeks idle, or signed out from the
+    /// web): back to sign-in. Nothing the phone kept is touched — the payloads, the
+    /// nights, the changes waiting to be sent — so an evening's work with no signal
+    /// is not lost to a sign-in that ran out while the phone was away; it goes once
+    /// the same account is signed in again (enter). The queues stop trying meanwhile:
+    /// every send would be refused the same way.
+    func signInExpired() {
+        guard phase == .signedIn || phase == .profileSetup else { return }
+        try? auth.store.setToken(nil)
+        prefetcher.stop()
+        tuneQueue.pause()
+        user = nil
+        notice = tr("Your sign-in ran out. Sign in again and the changes waiting on this phone will be sent.")
+        phase = .signedOut
+    }
+
+    /// The account whose data is on this phone (user_id), while any is.
+    private static let localDataOwnerKey = "LocalDataOwnerUserID"
+    static var localDataOwner: Int? {
+        get { UserDefaults.standard.object(forKey: localDataOwnerKey) as? Int }
+        set {
+            if let newValue { UserDefaults.standard.set(newValue, forKey: localDataOwnerKey) }
+            else { UserDefaults.standard.removeObject(forKey: localDataOwnerKey) }
+        }
+    }
+
     /// The account is gone (AuthService.deleteAccount already forgot the token).
     func accountDeleted() {
         forgetAccountData()
@@ -397,6 +441,7 @@ final class AppModel {
         NightStore.clearAll()
         forgetPayloads()
         Self.forgetSettings()
+        Self.localDataOwner = nil
         user = nil
     }
 
@@ -404,6 +449,11 @@ final class AppModel {
     static func forgetSettings() {
         for key in ["night.myStatus", "night.myStatusInstrument"] { UserDefaults.standard.removeObject(forKey: key) }
     }
+}
+
+/// Where the API client reports a rejected token (Client.ceol's `unauthorized`).
+final class SignInWatch {
+    var rejected: (() -> Void)?
 }
 
 /// A flag read from any thread (the client's middleware) and set on the main actor.

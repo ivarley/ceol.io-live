@@ -952,6 +952,10 @@ final class NightModel {
             }
             do {
                 let (code, answer) = try await app.postJSON("/api/live/instances/\(instanceID)/ops", body: .object(body))
+                // The sign-in ran out (postJSON has told the app): not a refusal of
+                // this change — it and everything behind it wait, as with no signal,
+                // for the next sign-in.
+                if code == 401 { throw URLError(.userAuthenticationRequired) }
                 outbox.removeFirst()
                 if code == 200 {
                     if let reason = log?.settle(opID: opID, answer: answer) {
@@ -1048,7 +1052,10 @@ extension AppModel {
         request.timeoutInterval = 10
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { throw URLError(.badServerResponse) }
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            if (response as? HTTPURLResponse)?.statusCode == 401 { signInExpired() }
+            throw URLError(.badServerResponse)
+        }
         return try JSONDecoder().decode(JSONValue.self, from: data)
     }
 
@@ -1063,6 +1070,8 @@ extension AppModel {
         request.httpBody = try JSONEncoder().encode(body)
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+        // These requests carry the token (authorized), so a 401 means it is dead.
+        if http.statusCode == 401 { signInExpired() }
         let json = (try? JSONDecoder().decode(JSONValue.self, from: data)) ?? .null
         return (http.statusCode, json)
     }

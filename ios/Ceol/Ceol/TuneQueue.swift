@@ -4,7 +4,9 @@
 // sent in order when the network returns, the app comes forward, or the next op is
 // tried. The ops are absolute sets keyed by op id (POST /api/my-tunes/ops), so sending
 // one twice does no harm. A refusal drops that op and is listed on the Tunes tab; a
-// connection failure stops the round until the next chance.
+// connection failure stops the round until the next chance, and so does a sign-in
+// that has run out (the server says 401): the op waits for the next sign-in, which is
+// the only thing that could get it through.
 //
 // i18n-converted (spec 057).
 
@@ -61,6 +63,15 @@ final class TuneQueue {
         Task { await flush() }
     }
 
+    /// The sign-in ran out: stop trying, keep everything (start sends it after the
+    /// next sign-in).
+    func pause() {
+        monitor?.cancel()
+        monitor = nil
+        flushing?.cancel()
+        flushing = nil
+    }
+
     /// Signing out: this account's changes go with it.
     func stop() {
         monitor?.cancel()
@@ -102,11 +113,11 @@ final class TuneQueue {
                 do {
                     _ = try await app.sendTuneOp(next.op)
                     sent += 1
-                } catch let f as TuneOpFailure where !f.connection {
+                } catch let f as TuneOpFailure where !f.connection && !f.signedOut {
                     let what = next.name ?? app.myTunes.value?.tunes.first { $0.tuneId == next.op.tuneId }?.tuneName ?? "#\(next.op.tuneId)"
                     refused.append("\(what): \(f.message)")
                 } catch {
-                    break
+                    break  // no connection, or no sign-in: the op waits
                 }
                 waiting.removeFirst()
                 save()

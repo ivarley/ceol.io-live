@@ -2066,6 +2066,40 @@ The plan (Phases 0-6) runs from here in `ios/`; see `ios/README.md` for the layo
     Learning, the server agrees, the test takes it off after), and the existing night
     tests through the menu (`nightMenu`, `editLog`). Help: the live logger page's "In
     the iPhone app" section, both languages.
+- **A sign-in that ran out, 2026-10-13.** Found by asking what breaks if a phone is
+  away for years. The token was six weeks from *sign-in*, not idle (nothing extended
+  it), and when it died both queues treated the server's 401 as a refusal: the tunebook
+  queue dropped every waiting change and listed it as refused, the night's outbox
+  rolled each change back with a passing notice, and nothing moved the app to sign-in
+  until the next cold launch. Signing in as another account also found the first
+  account's payloads, nights and waiting changes still there, and would have sent
+  the changes as the new account. Now:
+  - **The server slides the expiry** (`app.py`, `load_user_from_request`): a Bearer
+    request with less than five weeks left renews the row to six weeks from now, at
+    most one write a week per token. Six weeks idle, as `TokenStore.swift` always said.
+  - **A 401 means "sign in again", never "refused".** `UnauthorizedMiddleware`
+    (`CeolClient.swift`, last in the chain) reports a 401 to any request that carried
+    the token, except `/api/auth/*`; `AppModel.signInExpired` forgets the token,
+    pauses the queues (`TuneQueue.pause` keeps the file), says so on the sign-in
+    screen ("Your sign-in ran out. Sign in again and the changes waiting on this phone
+    will be sent.") and shows it. The raw paths (`getJSON` / `postJSON`) do the same.
+    `TuneOpFailure.signedOut` makes a 401 queue like no signal in `applyTuneOp` and
+    stop the round in `TuneQueue.flush`; the night's `drain` throws on a 401 so the
+    outbox is marked queued and saved, as with no signal. Nothing kept on the phone is
+    touched: the same account back (`enter`) sends it all.
+  - **What the phone keeps has an owner** (`AppModel.localDataOwner`, the user_id in
+    UserDefaults, set in `enter`, cleared with the data). A different account signing
+    in gets `forgetAccountData()` first, so one person's nights never show under
+    another's name and one tunebook's waiting changes never land in another.
+  - Tests: `OfflineTests.aSignInThatRanOutKeepsEverythingForTheSameAccount` and
+    `aServerThatForgotTheTokenSendsYouToSignInAndKeepsTheChange` (a transport that
+    401s everything), `CeolClientTests.unauthorized`, and on the server
+    `TestBearerToken.test_a_used_token_slides_its_expiry` /
+    `test_an_expired_token_is_401_and_not_revived`. Two things the tests turned up:
+    the client's simulated-offline switch was one static flag for every `AppModel`,
+    so one model pretending to have no signal cut another off (now one flag per
+    model), and the suites that build an `AppModel` share the phone's files, so they
+    are nested under `OnePhoneTests` (`.serialized`) and run one at a time.
 - **Tags, 2026-10-12.** The web's tags (spec 042: a tune's detail view, saved through
   `set_tags`) come to the app, and both get a filter. The app's tune sheet has a tag
   field under the notes (`TagsEditor`: a chip with an ✕ for each, a field that adds one

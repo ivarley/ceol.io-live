@@ -9964,6 +9964,16 @@
         }
       }
     },
+    "Your sign-in ran out. Sign in again and the changes waiting on this phone will be sent.": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Chuaigh do shíniú isteach in éag. Sínigh isteach arís agus seolfar na hathruithe atá ag fanacht ar an nguthán seo."
+          }
+        }
+      }
+    },
     "Your thesession.org member number is in your profile's address there: thesession.org/members/1234.": {
       "localizations": {
         "ga": {

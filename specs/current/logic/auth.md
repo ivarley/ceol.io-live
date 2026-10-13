@@ -77,7 +77,11 @@ accounts until verified. Links emailed by the login page before migration 056
 ## Sessions
 
 **Session Management** (`auth.py:177-221`):
-- 6-week lifetime (SESSION_LIFETIME_WEEKS = 6)
+- 6-week lifetime (SESSION_LIFETIME_WEEKS = 6), **idle**: a Bearer request made with
+  less than five weeks left renews the row to six weeks from now (`app.py`,
+  `load_user_from_request`), so the app signs you out six weeks after you last used
+  it, never six weeks after the day you signed in. The web's cookie slides on its own
+  (Flask refreshes a permanent session on every request).
 - Stored in user_session table with IP/user agent
 - Token: 32-byte URL-safe string
 

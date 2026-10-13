@@ -4,11 +4,37 @@
 import CeolAPI
 import CeolSession
 import Foundation
+import HTTPTypes
+import OpenAPIRuntime
 import Testing
 @testable import Ceol
 
+/// A server that has forgotten the token: 401 to everything.
+private final class TokenForgottenTransport: ClientTransport, @unchecked Sendable {
+    func send(_ request: HTTPRequest, body: HTTPBody?, baseURL: URL, operationID: String) async throws -> (HTTPResponse, HTTPBody?) {
+        var response = HTTPResponse(status: .unauthorized)
+        response.headerFields[.contentType] = "application/json"
+        return (response, HTTPBody(#"{"success": false, "error": "Authentication required", "message": "Authentication required", "code": "unauthenticated"}"#))
+    }
+}
+
+extension OnePhoneTests {
 @MainActor
 struct OfflineTests {
+    private static func user(_ id: Int) throws -> User {
+        try JSONDecoder().decode(User.self, from: Data("""
+            {"user_id": \(id), "person_id": \(id + 100), "username": "u\(id)", "email": "u\(id)@example.com",
+             "first_name": "U", "last_name": "\(id)", "is_system_admin": false, "timezone": "UTC",
+             "email_verified": true, "has_password": true, "needs_profile_setup": false}
+            """.utf8))
+    }
+
+    /// Back to nothing kept, for the next test.
+    private static func clean(_ app: AppModel) {
+        app.tuneQueue.stop()
+        app.forgetPayloads()
+        AppModel.localDataOwner = nil
+    }
     private static func emptyTunebook() -> MyTunesPayload {
         MyTunesPayload(
             success: true, tunes: [], instruments: [], thesessionUserId: nil,
@@ -101,4 +127,70 @@ struct OfflineTests {
         app.tuneQueue.stop()
         app.forgetPayloads()
     }
+
+    @Test func aSignInThatRanOutKeepsEverythingForTheSameAccount() async throws {
+        let app = Self.offlineApp()
+        AppModel.localDataOwner = nil
+        try app.auth.store.setToken("tok-7")
+        app.enter(try Self.user(7), next: nil)
+        #expect(app.phase == .signedIn)
+        #expect(AppModel.localDataOwner == 7)
+        app.myTunes.replace(Self.emptyTunebook())
+        try await app.applyTuneOp(.add, tuneID: 42, learnStatus: .wantToLearn, name: "The Kesh", tuneType: "jig")
+        #expect(app.tuneQueue.count == 1)
+
+        // The server no longer knows the token: back to sign-in, nothing lost.
+        app.signInExpired()
+        #expect(app.phase == .signedOut)
+        #expect(app.auth.store.token() == nil)
+        #expect(app.notice?.contains("Sign in again") == true)
+        #expect(app.tuneQueue.count == 1)
+        #expect(TuneQueue().count == 1)
+        let kept: PayloadStore.Stored<MyTunesPayload>? = PayloadStore.load("my-tunes")
+        #expect(kept?.value.tunes.map(\.tuneName) == ["The Kesh"])
+
+        // The same account signs in again: the change still waits, the list still shows it.
+        app.enter(try Self.user(7), next: nil)
+        #expect(app.tuneQueue.count == 1)
+        #expect(app.myTunes.value?.tunes.map(\.tuneName) == ["The Kesh"])
+
+        // Another account: none of it shows under them, none of it is sent as them.
+        app.enter(try Self.user(8), next: nil)
+        #expect(AppModel.localDataOwner == 8)
+        #expect(app.tuneQueue.isEmpty)
+        #expect(TuneQueue().isEmpty)
+        #expect(app.myTunes.value == nil)
+        let gone: PayloadStore.Stored<MyTunesPayload>? = PayloadStore.load("my-tunes")
+        #expect(gone == nil)
+        Self.clean(app)
+    }
+
+    @Test func aServerThatForgotTheTokenSendsYouToSignInAndKeepsTheChange() async throws {
+        let app = AppModel(server: URL(string: "http://127.0.0.1:9")!, store: MemoryTokenStore(), transport: TokenForgottenTransport())
+        app.simulatedOffline = true
+        Self.clean(app)
+        try app.auth.store.setToken("stale")
+        app.enter(try Self.user(7), next: nil)
+        app.myTunes.replace(Self.emptyTunebook())
+        // One change made with no signal...
+        try await app.applyTuneOp(.setHeard, tuneID: 42, heardCount: 3)
+        #expect(app.tuneQueue.count == 1)
+
+        // ...then the network is back, and the server answers 401 to the replay: the
+        // op is not a refusal (nothing is listed as refused), it waits; the sign-in
+        // is over.
+        app.simulatedOffline = false
+        await app.tuneQueue.flush()
+        #expect(app.tuneQueue.count == 1)
+        #expect(app.tuneQueue.refused.isEmpty)
+        #expect(app.phase == .signedOut)
+        #expect(app.auth.store.token() == nil)
+
+        // A change made now queues behind it rather than failing.
+        let result = try await app.applyTuneOp(.setNotes, tuneID: 42, notes: "B part twice")
+        #expect(result.success == true)
+        #expect(app.tuneQueue.count == 2)
+        Self.clean(app)
+    }
+}
 }
