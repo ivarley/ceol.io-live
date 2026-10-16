@@ -42,6 +42,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DEFAULT_ORIGINS = [
     "https://ceol.io",
     "https://www.ceol.io",
+    "https://ceol.app",  # spec 058: the new primary domain
     "http://localhost:3232",
 ]
 
@@ -84,7 +85,7 @@ def main():
     parser.add_argument("--apply", action="store_true", help="Write the configuration (default is to print it)")
     parser.add_argument(
         "--origin", action="append", dest="origins",
-        help="Origin allowed to upload; repeatable. Defaults to the ceol.io hosts plus localhost:3232.",
+        help="Origin allowed to upload; repeatable. Defaults to the ceol.io and ceol.app hosts plus localhost:3232.",
     )
     args = parser.parse_args()
 
