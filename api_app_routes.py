@@ -8,7 +8,7 @@ can render a screen, and nothing a page already serves.
   /auth/setup-profile), GET /api/app-config.
 - GET /api/home — the home screen payload (serializers.build_home_payload, the same
   dict the Jinja home renders).
-- GET /api/resolve — turns a ceol.io URL/path into ids, so a client opening a
+- GET /api/resolve — turns a Ceol URL/path into ids, so a client opening a
   Universal Link never re-implements web_routes.session_handler's path rules.
 - POST /api/auth/web-session — app -> web handoff for admin/help (mints a one-time
   login link).
@@ -22,6 +22,7 @@ same user_session row a cookie session records — and never a Set-Cookie.
 
 # i18n-converted
 import os
+import domains
 import re
 from datetime import timedelta
 
@@ -799,9 +800,7 @@ def app_config():
     return jsonify(
         {
             "success": True,
-            "streaming_base_url": os.environ.get(
-                "STREAMING_BASE_URL", "http://localhost:8080"
-            ),
+            "streaming_base_url": domains.streaming_base_url(request.host),
             "web_base_url": request.url_root.rstrip("/"),
             "min_client_version": min_versions,
             "force_upgrade": force_upgrade,
@@ -882,7 +881,7 @@ def _instance_block(row):
 
 @public_api  # session pages are public; it returns only what the URL already says
 def resolve_path():
-    """Turn a ceol.io URL or path into ids (spec 052 A7).
+    """Turn a Ceol URL (ceol.io or ceol.app) or path into ids (spec 052 A7).
 
     Accepts `?path=` as a bare session path (`oflahertys/2025-09-20`), a site path
     (`/sessions/oflahertys/123`, `/live/instances/123`), or a full URL. Applies the

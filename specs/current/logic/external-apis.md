@@ -86,8 +86,9 @@ Integration with third-party services.
 - `MAIL_DEFAULT_SENDER` - transactional from-address, default `noreply@ceol.io`
 - `MAIL_UPDATES_SENDER` - update-email from-address, default `ceol@ceol.io`
   (verified sender in SendGrid)
-- `MAIL_UNSUBSCRIBE` - mailto used in the default `List-Unsubscribe` header,
-  default `unsubscribe@ceol.io`
+- Unsubscribe headers (`List-Unsubscribe`, one-click) go only on mail with a personal
+  unsubscribe link (the update emails). Sign-in, verification and password-reset mail
+  carries none (spec 058; the old `MAIL_UNSUBSCRIBE` mailto went to a mailbox nobody reads).
 
 **Library**: `sendgrid` Python package (plus `markdown` for update-email bodies)
 

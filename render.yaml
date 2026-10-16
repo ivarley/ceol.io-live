@@ -43,12 +43,23 @@ services:
       # dashboard). Keep this and .nvmrc in sync.
       - key: NODE_VERSION
         value: "22"
-      # Public URL of the streaming sidecar (below), e.g. https://streaming.ceol.io
+      # Public URL of the streaming sidecar (below), e.g. https://streaming.ceol.io.
+      # Its parent domain is swapped for the request's (domains.py, spec 058).
       - key: STREAMING_BASE_URL
         sync: false
-      # Share the session cookie with the streaming subdomain (spec 024 §H).
-      - key: SESSION_COOKIE_DOMAIN
-        sync: false   # e.g. ".ceol.io"
+      # Share the session cookie with the streaming subdomain (spec 024 §H). One
+      # parent domain per site domain; each request gets its own host's (spec 058).
+      # SESSION_COOKIE_DOMAIN (a single value) is still read when this is unset.
+      - key: SESSION_COOKIE_DOMAINS
+        sync: false   # e.g. ".ceol.io,.ceol.app"
+      # The move to ceol.app (spec 058, domains.py). MOVE_TO_HOST alone: ceol.app
+      # answers with noindex. MOVE_SWITCHED=true: the old hosts stop serving the site.
+      - key: MOVE_TO_HOST
+        sync: false   # e.g. "ceol.app"
+      - key: MOVE_FROM_HOSTS
+        sync: false   # e.g. "ceol.io,www.ceol.io"
+      - key: MOVE_SWITCHED
+        sync: false
       - key: SESSION_COOKIE_SECURE
         value: "true"
 
@@ -80,7 +91,7 @@ services:
         sync: false
       # Pages allowed to open the live feed with the login cookie (streaming/service.py).
       # Must include the canonical https://ceol.io; https://www.ceol.io too while old
-      # tabs on www are still around.
+      # tabs on www are still around; https://ceol.app once it answers (spec 058).
       - key: STREAMING_ALLOWED_ORIGINS
         sync: false
 

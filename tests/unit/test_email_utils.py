@@ -25,25 +25,32 @@ def sent_payload(mock_sendgrid):
 
 @pytest.mark.unit
 class TestSendEmailViaSendgrid:
-    def test_default_sender_and_mailto_unsubscribe_unchanged(self, mock_sendgrid, app_context):
+    def test_default_sender_and_no_unsubscribe_headers(
+        self, mock_sendgrid, app_context
+    ):
+        # A sign-in link or a password reset has nothing to unsubscribe from (spec 058).
         result = send_email_via_sendgrid("to@example.com", "Subj", "body")
         assert result is True
         payload = sent_payload(mock_sendgrid)
         # conftest sets MAIL_DEFAULT_SENDER=test@ceol.io
         assert payload["from"]["email"] == "test@ceol.io"
-        assert payload["headers"]["List-Unsubscribe"].startswith("<mailto:")
-        assert payload["headers"]["List-Unsubscribe-Post"] == "List-Unsubscribe=One-Click"
+        assert "List-Unsubscribe" not in payload.get("headers", {})
+        assert "List-Unsubscribe-Post" not in payload.get("headers", {})
 
     def test_from_email_override(self, mock_sendgrid, app_context):
-        send_email_via_sendgrid("to@example.com", "Subj", "body", from_email="ceol@ceol.io")
+        send_email_via_sendgrid(
+            "to@example.com", "Subj", "body", from_email="ceol@ceol.io"
+        )
         assert sent_payload(mock_sendgrid)["from"]["email"] == "ceol@ceol.io"
 
-    def test_unsubscribe_url_replaces_mailto_header(self, mock_sendgrid, app_context):
+    def test_unsubscribe_url_sets_one_click_headers(self, mock_sendgrid, app_context):
         url = "https://ceol.io/unsubscribe/abc123"
         send_email_via_sendgrid("to@example.com", "Subj", "body", unsubscribe_url=url)
         payload = sent_payload(mock_sendgrid)
         assert payload["headers"]["List-Unsubscribe"] == f"<{url}>"
-        assert payload["headers"]["List-Unsubscribe-Post"] == "List-Unsubscribe=One-Click"
+        assert (
+            payload["headers"]["List-Unsubscribe-Post"] == "List-Unsubscribe=One-Click"
+        )
 
     def test_send_failure_returns_false(self, mock_sendgrid, app_context):
         mock_sendgrid.return_value.send.side_effect = Exception("boom")
@@ -79,7 +86,9 @@ class TestSendUpdateEmail:
                 kwargs.pop("body_markdown", self.BODY_MD),
             )
 
-    def test_sends_from_updates_sender_default(self, mock_sendgrid, app_context, monkeypatch):
+    def test_sends_from_updates_sender_default(
+        self, mock_sendgrid, app_context, monkeypatch
+    ):
         monkeypatch.delenv("MAIL_UPDATES_SENDER", raising=False)
         assert self._send(app_context) is True
         assert sent_payload(mock_sendgrid)["from"]["email"] == "ceol@ceol.io"
@@ -104,7 +113,9 @@ class TestSendUpdateEmail:
         assert "*tune search*" in text
         assert "<h1>" not in text
 
-    def test_footer_and_unsubscribe_link_in_both_parts(self, mock_sendgrid, app_context):
+    def test_footer_and_unsubscribe_link_in_both_parts(
+        self, mock_sendgrid, app_context
+    ):
         self._send(app_context, user_id=77)
         payload = sent_payload(mock_sendgrid)
         text = next(c["value"] for c in payload["content"] if c["type"] == "text/plain")
@@ -117,7 +128,9 @@ class TestSendUpdateEmail:
         with app_context.app_context():
             assert verify_unsubscribe_token(token) == 77
 
-    def test_unsubscribe_url_in_list_unsubscribe_header(self, mock_sendgrid, app_context):
+    def test_unsubscribe_url_in_list_unsubscribe_header(
+        self, mock_sendgrid, app_context
+    ):
         self._send(app_context, user_id=77)
         payload = sent_payload(mock_sendgrid)
         header = payload["headers"]["List-Unsubscribe"]

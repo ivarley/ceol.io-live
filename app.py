@@ -8,7 +8,6 @@ from flask import (
     redirect,
 )
 from flask_babel import gettext as _, lazy_gettext
-from flask_login import LoginManager
 from werkzeug.routing import BaseConverter
 import os
 import random
@@ -180,10 +179,12 @@ app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(weeks=SESSION_LIFETIME_WEEK
 # registrable domain are same-site, so default SameSite=Lax still flows; we only
 # need to broaden the cookie's Domain and mark it Secure in prod. Both are
 # env-driven so local dev (env unset) keeps today's host-only, non-Secure cookie.
-_cookie_domain = os.environ.get("SESSION_COOKIE_DOMAIN")  # e.g. ".ceol.io" in prod
-if _cookie_domain:
-    app.config["SESSION_COOKIE_DOMAIN"] = _cookie_domain
-    app.config["REMEMBER_COOKIE_DOMAIN"] = _cookie_domain
+# The Domain follows the request's host (SESSION_COOKIE_DOMAINS, e.g.
+# ".ceol.io,.ceol.app"), since both domains answer during the move (spec 058);
+# domains.init_app also installs the move itself, ahead of every other hook.
+import domains  # noqa: E402
+
+domains.init_app(app)
 if os.environ.get("SESSION_COOKIE_SECURE", "").lower() in ("1", "true", "yes"):
     app.config["SESSION_COOKIE_SECURE"] = True
     app.config["REMEMBER_COOKIE_SECURE"] = True
@@ -211,7 +212,7 @@ app.add_url_rule("/mockups/<mockup>/", "mockup_index", mockup_index)
 app.add_url_rule("/mockups/<mockup>/<path:filename>", "mockup_file", mockup_file)
 
 # Configure Flask-Login
-login_manager = LoginManager()
+login_manager = domains.HostLoginManager()
 login_manager.init_app(app)
 
 # Spec 057: English or Irish, per person (i18n.py).

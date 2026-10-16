@@ -18,6 +18,7 @@ from flask_login import login_user, logout_user, login_required, current_user
 import datetime
 from datetime import date, timedelta
 import os
+import domains
 import re
 
 import markdown
@@ -3771,7 +3772,6 @@ def live_logging_screen(session_instance_id):
     while the session is actually happening (`instance_active`). Everything a
     logged-out viewer must not do is refused by the API regardless of the UI.
     """
-    import os
 
     from instruments import CANONICAL_INSTRUMENTS
 
@@ -3824,7 +3824,7 @@ def live_logging_screen(session_instance_id):
         conn.close()
 
     can_edit = bool(current_user.is_authenticated)
-    streaming_base_url = os.environ.get("STREAMING_BASE_URL", "http://localhost:8080")
+    streaming_base_url = domains.streaming_base_url(request.host)
     return render_template(
         "live_logging.html",
         session_instance_id=session_instance_id,

@@ -19,7 +19,7 @@ def send_email_via_sendgrid(
 
     from_email: overrides MAIL_DEFAULT_SENDER for this message (must be a
     SendGrid-verified sender). unsubscribe_url: personalized one-click
-    unsubscribe target; replaces the default mailto List-Unsubscribe header
+    unsubscribe target, sent as List-Unsubscribe; without one, no unsubscribe headers
     (RFC 8058 — mail clients render a native Unsubscribe button and POST to it).
     """
     try:
@@ -30,7 +30,6 @@ def send_email_via_sendgrid(
 
         if from_email is None:
             from_email = os.environ.get("MAIL_DEFAULT_SENDER", "noreply@ceol.io")
-        unsubscribe_email = os.environ.get("MAIL_UNSUBSCRIBE", "unsubscribe@ceol.io")
 
         logger.info(
             f"Sending email via SendGrid - To: {to_email}, From: {from_email}, Subject: {subject}"
@@ -45,14 +44,14 @@ def send_email_via_sendgrid(
             html_content=body_html,
         )
 
-        # List-Unsubscribe headers for better deliverability
+        # One-click unsubscribe (RFC 8058), only on mail someone can unsubscribe from.
+        # Sign-in links, verification and password resets carry none: there is nothing
+        # to unsubscribe from, and no mailbox to receive a mailto (spec 058).
         if unsubscribe_url:
             message.header = Header("List-Unsubscribe", f"<{unsubscribe_url}>")
-        else:
-            message.header = Header("List-Unsubscribe", f"<mailto:{unsubscribe_email}>")
-        message.add_header(
-            Header("List-Unsubscribe-Post", "List-Unsubscribe=One-Click")
-        )
+            message.add_header(
+                Header("List-Unsubscribe-Post", "List-Unsubscribe=One-Click")
+            )
 
         response = sg.send(message)
 
@@ -327,7 +326,9 @@ def send_person_added_email(admin, person, session):
     """Tell a session's admin that someone was added to it, in the admin's language.
     `admin`: dict(name, email, language); `person`: dict(name, email, relationship);
     `session`: dict(name, location, path). An empty location reads "Unknown"."""
-    review_url = f"https://ceol.io/admin/sessions/{session['path']}/people"
+    review_url = url_for(
+        "session_admin_players", session_path=session["path"], _external=True
+    )
     with force_locale(admin.get("language") or "en"):
         location = session["location"] or _("Unknown")
         subject = _("New person added to session: %(session)s", session=session["name"])

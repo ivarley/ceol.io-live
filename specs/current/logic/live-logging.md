@@ -486,8 +486,9 @@ Built migrations: `schema/024_session_event.sql`, `schema/024_live_logging_delta
 
 `ceol-io-streaming` web service in `render.yaml`
 (`uvicorn streaming.service:app`). Flask reaches it via the `STREAMING_BASE_URL` env var;
-the session cookie is shared across subdomains (`SESSION_COOKIE_DOMAIN`) so the sidecar
-authenticates the SSE connection.
+the session cookie is shared across subdomains (`SESSION_COOKIE_DOMAINS`) so the sidecar
+authenticates the SSE connection. Both follow the request's host (`domains.py`, spec 058):
+a page on ceol.app gets `streaming.ceol.app` and a `.ceol.app` cookie.
 
 ## Related
 

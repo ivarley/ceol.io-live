@@ -64,5 +64,7 @@ def test_the_admin_notice_is_in_the_admins_language(relationship):
     assert f"in Unknown as a {relationship}." in en_args[2]
     assert ga_args[1] != en_args[1] and "Mueller" in ga_args[1]
     assert "austin/mueller" in ga_args[2]
+    # The review link is on whichever host the request came in on, not a fixed one.
+    assert "http://localhost/admin/sessions/austin/mueller/people" in en_args[2]
     for english in ("Hello", "Person Details", "Best regards", "review and modify"):
         assert english not in ga_args[2], english

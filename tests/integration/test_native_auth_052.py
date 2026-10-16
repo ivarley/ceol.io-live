@@ -494,6 +494,11 @@ class TestResolve:
         assert (
             inst["kind"] == "instance" and inst["instance"]["session_instance_id"] == 1
         )
+        # Either domain (spec 058): the host is ignored.
+        moved = client.get(
+            "/api/resolve?path=https://ceol.app/sessions/austin/mueller/2024-09-03"
+        ).get_json()
+        assert moved["instance"]["session_instance_id"] == 1
         live = client.get("/api/resolve?path=/live/instances/1").get_json()
         assert live["session"]["path"] == "austin/mueller"
         byid = client.get("/api/resolve?path=/sessions/austin/mueller/1").get_json()
