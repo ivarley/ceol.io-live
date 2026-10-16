@@ -1,8 +1,14 @@
 # 058: Move to ceol.app
 
 **Date:** 2026-10-07
-**Status:** Phase 0 BUILT 2026-10-16 (`domains.py`, `templates/moved.html`, `static/retired-sw.js`; tests in
-`tests/unit/test_domains_058.py`), not yet deployed. Phases 1-4 to do.
+**Status:** Phase 0 BUILT and deployed 2026-10-16 (`domains.py`, `templates/moved.html`, `static/retired-sw.js`;
+tests in `tests/unit/test_domains_058.py`). Phase 1 mostly done 2026-10-16: ceol.app, www.ceol.app and
+streaming.ceol.app answer through Cloudflare; the Render settings are set (`SESSION_COOKIE_DOMAINS`,
+`MOVE_TO_HOST`, `MOVE_FROM_HOSTS`, the streaming origins); SendGrid sends from ceol.app; the iOS app accepts
+ceol.app links (not yet in a TestFlight build). Checked: sign-in, the `.ceol.app` cookie reaching the streaming
+sidecar, the offline workers, the live logger's streaming address, the segmenter, and the retired worker
+taking over from an old one in Chrome. Still open in Phase 1: the S3 upload rule (bucket `ceol-io-recordings`),
+a recording upload on ceol.app, the phone's universal links. Phases 2-4 to do.
 
 ## Why
 
