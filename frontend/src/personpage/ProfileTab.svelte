@@ -41,6 +41,8 @@
   let userEmail = $state(user ? user.user_email || '' : '')
   let timezone = $state(user ? user.timezone : null)
   let receiveUpdateEmails = $state(user ? !!user.receive_update_emails : false)
+  // On the person, not the account: admins without a login get these too (migration 063).
+  let notifyPersonAdded = $state(person.notify_person_added !== false)
 
   const originalUsername = user ? user.username || '' : ''
   let usernameWarning = $state('')
@@ -106,6 +108,11 @@
       state: stateField.trim() || null,
       country: country.trim() || null,
       thesession_user_id: String(thesessionUserId).trim() || null,
+    }
+    // Your own choice only, like the update emails: an admin editing someone else
+    // leaves it out, and the server keeps what is there.
+    if (isUserProfile) {
+      formData.person.notify_person_added = notifyPersonAdded
     }
 
     if (user) {
@@ -582,6 +589,12 @@
             {user.receive_update_emails ? t('Subscribed') : t('Not subscribed')}
           </span>
         </div>
+        <div class="kit-field">
+          <span class="kit-field-label">{t('New people in my sessions')}</span>
+          <span class="kit-field-value" class:is-empty={person.notify_person_added === false}>
+            {person.notify_person_added === false ? t('No emails') : t('Email me')}
+          </span>
+        </div>
       </div>
 
       <!-- The card, not just the row, is conditional: the tune-logger row used to
@@ -652,6 +665,12 @@
               <label class="kit-check-label" for="receive_update_emails">
                 <input type="checkbox" id="receive_update_emails" name="receive_update_emails" bind:checked={receiveUpdateEmails} />
                 {t('Email me about updates to this app')}
+              </label>
+            </div>
+            <div class="kit-check-field">
+              <label class="kit-check-label" for="notify_person_added">
+                <input type="checkbox" id="notify_person_added" name="notify_person_added" bind:checked={notifyPersonAdded} />
+                {t('Email me when someone is added to a session I look after')}
               </label>
             </div>
           </div>

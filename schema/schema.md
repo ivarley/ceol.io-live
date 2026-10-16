@@ -94,6 +94,7 @@ The database will be a Postgres database. The basic entities in my model will be
     - country - string, optional
     - thesession_user_id - integer, optional, links to thesession.org user
     - active - boolean, default true. When false, the person is deactivated and won't appear in session people lists or be available to add to sessions/instances/tune sets.
+    - notify_person_added - boolean, default true. Whether the person gets an email when someone is added to a session they admin. Turned off on their profile or by the one-click link in that email (migration 063).
     - at_active_session_instance_id - foreign key to session_instance, indicates currently attending session
     - created_date - timestamp
     - last_modified_date - timestamp

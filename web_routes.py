@@ -52,6 +52,7 @@ from email_utils import (
     send_registration_email,
     send_login_link_email,
     verify_unsubscribe_token,
+    verify_person_unsubscribe_token,
 )
 from recurrence_utils import to_human_readable
 
@@ -2540,7 +2541,50 @@ def unsubscribe_updates(token):
 
     if request.method == "POST":
         return "", 200
-    return render_template("unsubscribe.html")
+    return render_template(
+        "unsubscribe.html", message=_("You've been unsubscribed from app updates.")
+    )
+
+
+def unsubscribe_person_added(token):
+    """One-click stop for the "someone was added to your session" emails (migration
+    063). Like unsubscribe_updates, but the token names a person: admins without a
+    login get these emails too."""
+    person_id = verify_person_unsubscribe_token(token)
+    if person_id is None:
+        from app import render_error_page
+
+        return render_error_page(_("This unsubscribe link is not valid."), 404)
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        save_to_history(cur, "person", "UPDATE", person_id)
+        cur.execute(
+            """
+            UPDATE person
+            SET notify_person_added = FALSE, last_modified_date = %s
+            WHERE person_id = %s
+            """,
+            (now_utc(), person_id),
+        )
+        if cur.rowcount == 0:
+            conn.rollback()
+            from app import render_error_page
+
+            return render_error_page(_("This unsubscribe link is not valid."), 404)
+        conn.commit()
+    finally:
+        conn.close()
+
+    if request.method == "POST":
+        return "", 200
+    return render_template(
+        "unsubscribe.html",
+        message=_(
+            "You won't get emails when someone is added to a session you look after."
+        ),
+    )
 
 
 @login_required

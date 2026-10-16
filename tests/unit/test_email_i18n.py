@@ -55,7 +55,12 @@ def test_the_admin_notice_is_in_the_admins_language(relationship):
     ) as send:
         for lang in ("en", "ga"):
             send_person_added_email(
-                {"name": "A B", "email": "a@example.com", "language": lang},
+                {
+                    "name": "A B",
+                    "email": "a@example.com",
+                    "language": lang,
+                    "person_id": 1,
+                },
                 {"name": "P Q", "email": None, "relationship": relationship},
                 {"name": "Mueller", "location": "", "path": "austin/mueller"},
             )

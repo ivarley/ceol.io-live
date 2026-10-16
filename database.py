@@ -653,11 +653,11 @@ def save_to_history(cur, table_name, operation, record_id, user_id=None):
             """
             INSERT INTO person_history
             (person_id, operation, changed_by_user_id, first_name, last_name, email, sms_number,
-             city, state, country, thesession_user_id, active, created_date, last_modified_date,
-             created_by_user_id, last_modified_user_id)
+             city, state, country, thesession_user_id, active, notify_person_added,
+             created_date, last_modified_date, created_by_user_id, last_modified_user_id)
             SELECT person_id, %s, %s, first_name, last_name, email, sms_number,
-                   city, state, country, thesession_user_id, active, created_date, last_modified_date,
-                   created_by_user_id, last_modified_user_id
+                   city, state, country, thesession_user_id, active, notify_person_added,
+                   created_date, last_modified_date, created_by_user_id, last_modified_user_id
             FROM person WHERE person_id = %s
         """,
             (operation, user_id, record_id),

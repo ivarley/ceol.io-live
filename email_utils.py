@@ -112,6 +112,20 @@ def _button(url, label):
     )
 
 
+_FOOTER_STYLE = "color: #6c757d; font-size: 0.85em;"
+_FOOTER_RULE = '<hr style="margin-top: 2em; border: none; border-top: 1px solid #ddd;">'
+
+
+def _settings_footer():
+    """The line every email to an account ends with: where to change which emails it
+    gets. Returns (text, html) in the language in force, so call it inside the
+    sender's force_locale block."""
+    url = url_for("user_profile", _external=True)
+    text = _("Change which emails you get from Ceol: %(url)s", url=url)
+    label = _("Change which emails you get from Ceol")
+    return text, f'<a href="{url}">{label}</a>'
+
+
 # Every _() here is a plain call, never inside an f-string: Babel's extractor doesn't
 # look inside f-strings, so such a string would never reach the catalog.
 
@@ -133,6 +147,7 @@ def send_password_reset_email(user, token):
             "If you did not make this request, please ignore this email and no changes will be made."
         )
         expires = _("This link will expire in 1 hour.")
+        footer_text, footer_html = _settings_footer()
 
     body_text = f"""{visit}
 {reset_url}
@@ -140,6 +155,9 @@ def send_password_reset_email(user, token):
 {ignore}
 
 {expires}
+
+--
+{footer_text}
 """
 
     body_html = f"""
@@ -148,6 +166,8 @@ def send_password_reset_email(user, token):
     <p><a href="{reset_url}">{link}</a></p>
     <p>{ignore}</p>
     <p><strong>{expires}</strong></p>
+    {_FOOTER_RULE}
+    <p style="{_FOOTER_STYLE}">{footer_html}</p>
     """
 
     result = send_email_via_sendgrid(user.email, subject, body_text, body_html)
@@ -184,6 +204,7 @@ def send_verification_email(user, token):
         )
         ignore = _("If you did not create this account, please ignore this email.")
         expires = _("This link will expire in 24 hours.")
+        footer_text, footer_html = _settings_footer()
 
     body_text = f"""{welcome}
 
@@ -193,6 +214,9 @@ def send_verification_email(user, token):
 {ignore}
 
 {expires}
+
+--
+{footer_text}
 """
 
     body_html = f"""
@@ -203,6 +227,8 @@ def send_verification_email(user, token):
     <p>{verification_url}</p>
     <p>{ignore}</p>
     <p><strong>{expires}</strong></p>
+    {_FOOTER_RULE}
+    <p style="{_FOOTER_STYLE}">{footer_html}</p>
     """
 
     result = send_email_via_sendgrid(user.email, subject, body_text, body_html)
@@ -217,7 +243,7 @@ def send_verification_email(user, token):
     return result
 
 
-def send_registration_email(email, token):
+def send_registration_email(email, token):  # no settings footer: there's no account yet
     """The link that creates an account for an address typed on the login page
     (migration 056). No account exists yet, so it goes to a bare address, and the
     wording has to make sense to someone who never asked for it. No account means no
@@ -291,6 +317,7 @@ def send_login_link_email(user, token):
         )
         expires = _("This link will expire in 15 minutes.")
         ignore = _("If you did not request this login link, please ignore this email.")
+        footer_text, footer_html = _settings_footer()
 
     body_text = f"""{click}
 {login_url}
@@ -298,6 +325,9 @@ def send_login_link_email(user, token):
 {expires}
 
 {ignore}
+
+--
+{footer_text}
 """
 
     body_html = f"""
@@ -308,6 +338,8 @@ def send_login_link_email(user, token):
     <p>{login_url}</p>
     <p><strong>{expires}</strong></p>
     <p>{ignore}</p>
+    {_FOOTER_RULE}
+    <p style="{_FOOTER_STYLE}">{footer_html}</p>
     """
 
     result = send_email_via_sendgrid(user.email, subject, body_text, body_html)
@@ -324,10 +356,16 @@ def send_login_link_email(user, token):
 
 def send_person_added_email(admin, person, session):
     """Tell a session's admin that someone was added to it, in the admin's language.
-    `admin`: dict(name, email, language); `person`: dict(name, email, relationship);
-    `session`: dict(name, location, path). An empty location reads "Unknown"."""
+    `admin`: dict(name, email, language, person_id); `person`: dict(name, email,
+    relationship); `session`: dict(name, location, path). An empty location reads
+    "Unknown". Ends with a one-click link that stops these emails (migration 063)."""
     review_url = url_for(
         "session_admin_players", session_path=session["path"], _external=True
+    )
+    unsubscribe_url = url_for(
+        "unsubscribe_person_added",
+        token=generate_person_unsubscribe_token(admin["person_id"]),
+        _external=True,
     )
     with force_locale(admin.get("language") or "en"):
         location = session["location"] or _("Unknown")
@@ -359,6 +397,12 @@ def send_person_added_email(admin, person, session):
         )
         regards = _("Best regards,")
         signature = _("The Ceol.io Session Management System")
+        why = _(
+            'You get this email because you look after "%(session)s" on Ceol.',
+            session=session["name"],
+        )
+        stop = _("Stop these emails: %(url)s", url=unsubscribe_url)
+        footer_text, _footer_html = _settings_footer()
 
     body = f"""{hello}
 
@@ -371,8 +415,15 @@ def send_person_added_email(admin, person, session):
 {review}
 
 {regards}
-{signature}"""
-    return send_email_via_sendgrid(admin["email"], subject, body)
+{signature}
+
+--
+{why}
+{stop}
+{footer_text}"""
+    return send_email_via_sendgrid(
+        admin["email"], subject, body, unsubscribe_url=unsubscribe_url
+    )
 
 
 def _unsubscribe_serializer():
@@ -388,6 +439,25 @@ def verify_unsubscribe_token(token):
     """Return the user_id encoded in an unsubscribe token, or None if invalid."""
     try:
         return _unsubscribe_serializer().loads(token)
+    except BadSignature:
+        return None
+
+
+def _person_unsubscribe_serializer():
+    # Its own salt: a person id and a user id are different numbers, so an update
+    # email's token must never pass for this one or the other way round.
+    return URLSafeSerializer(current_app.secret_key, salt="email-unsub-person-added")
+
+
+def generate_person_unsubscribe_token(person_id):
+    """Signed, non-expiring token that stops a person's "someone was added" emails."""
+    return _person_unsubscribe_serializer().dumps(person_id)
+
+
+def verify_person_unsubscribe_token(token):
+    """The person_id in a person-added unsubscribe token, or None if invalid."""
+    try:
+        return _person_unsubscribe_serializer().loads(token)
     except BadSignature:
         return None
 
@@ -408,7 +478,14 @@ def send_update_email(user_id, to_email, subject, body_markdown):
             "You're receiving this because you opted in to updates on ceol.io."
         )
         unsubscribe = _("Unsubscribe")
-        footer_text = opted_in + "\n" + _("Unsubscribe: %(url)s", url=unsubscribe_url)
+        settings_text, settings_html = _settings_footer()
+        footer_text = (
+            opted_in
+            + "\n"
+            + _("Unsubscribe: %(url)s", url=unsubscribe_url)
+            + "\n"
+            + settings_text
+        )
     # Plain-text part is the raw Markdown source (readable as-is)
     body_text = f"{body_markdown}\n\n--\n{footer_text}\n"
 
@@ -418,6 +495,7 @@ def send_update_email(user_id, to_email, subject, body_markdown):
     <p style="color: #6c757d; font-size: 0.85em;">
         {opted_in}
         <a href="{unsubscribe_url}">{unsubscribe}</a>
+        <br>{settings_html}
     </p>
     """
 

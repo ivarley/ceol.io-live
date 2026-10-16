@@ -99,8 +99,11 @@ Integration with third-party services.
 **Functions**:
 - `send_email_via_sendgrid(to_email, subject, body_text, body_html=None, from_email=None, unsubscribe_url=None)` -
   core sender. `from_email` overrides the default sender per message;
-  `unsubscribe_url` replaces the mailto `List-Unsubscribe` header with a
-  one-click URL (RFC 8058, `List-Unsubscribe-Post: List-Unsubscribe=One-Click`).
+  `unsubscribe_url` adds a one-click `List-Unsubscribe` header (RFC 8058,
+  `List-Unsubscribe-Post: List-Unsubscribe=One-Click`); without one there are none.
+- Every email to an account ends with "Change which emails you get from Ceol" and a
+  link to `/me` (`_settings_footer()`). The registration email has none: there's no
+  account yet.
 - `send_password_reset_email(user, token)` - password reset (1h expiry)
 - `send_verification_email(user, token)` - account verification (24h expiry)
 - `send_login_link_email(user, token)` - magic link login (15m expiry)
@@ -111,6 +114,14 @@ Integration with third-party services.
 - `generate_unsubscribe_token(user_id)` / `verify_unsubscribe_token(token)` -
   stateless signed unsubscribe tokens (`itsdangerous.URLSafeSerializer`, salt
   `email-unsub`, never expire; the token only grants flag-off).
+- `send_person_added_email(admin, person, session)` - tells a session's admins that
+  someone was added, in each admin's language. Skipped for admins whose
+  `person.notify_person_added` is off (migration 063; a session whose admins all said
+  no does not fall back to the system admins). The footer says why they get it and
+  carries a one-click stop link, `/unsubscribe/person-added/<token>`
+  (`generate_person_unsubscribe_token(person_id)`, salt `email-unsub-person-added`):
+  the setting lives on the person because admins without a login get it too. Turned
+  back on from the profile on `/me`.
 
 ### Update Email Flow (spec 027)
 

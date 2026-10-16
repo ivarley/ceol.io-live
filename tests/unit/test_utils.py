@@ -97,7 +97,7 @@ class TestEmailUtilities:
         result = send_password_reset_email(user, token)
 
         assert result is True
-        mock_url_for.assert_called_once_with(
+        mock_url_for.assert_any_call(
             "reset_password", token=token, _external=True
         )
         mock_send_email.assert_called_once()
@@ -124,7 +124,7 @@ class TestEmailUtilities:
         result = send_verification_email(user, token)
 
         assert result is True
-        mock_url_for.assert_called_once_with(
+        mock_url_for.assert_any_call(
             "verify_email", token=token, _external=True
         )
         mock_send_email.assert_called_once()

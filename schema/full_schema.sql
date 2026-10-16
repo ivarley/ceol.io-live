@@ -144,6 +144,7 @@ CREATE TABLE person (
     country VARCHAR(100),
     thesession_user_id INTEGER,
     active BOOLEAN DEFAULT TRUE NOT NULL,
+    notify_person_added BOOLEAN NOT NULL DEFAULT TRUE, -- emails when someone joins a session they admin (migration 063)
     at_active_session_instance_id INTEGER, -- FK added after session_instance table
     created_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     last_modified_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
@@ -1234,6 +1235,7 @@ CREATE TABLE person_history (
     country VARCHAR(100),
     thesession_user_id INTEGER,
     active BOOLEAN,
+    notify_person_added BOOLEAN,
     created_date TIMESTAMPTZ,
     last_modified_date TIMESTAMPTZ,
     created_by_user_id INTEGER,

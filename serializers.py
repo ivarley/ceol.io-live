@@ -327,7 +327,7 @@ def build_person_details_payload(
     cur.execute(
         """
         SELECT person_id, first_name, last_name, email, sms_number, city, state,
-               country, thesession_user_id, active
+               country, thesession_user_id, active, notify_person_added
         FROM person
         WHERE person_id = %s
         """,
@@ -350,6 +350,7 @@ def build_person_details_payload(
         "country": row["country"],
         "location": ", ".join(location_parts) if location_parts else None,
         "thesession_user_id": row["thesession_user_id"],
+        "notify_person_added": row["notify_person_added"],  # migration 063
         "active": row["active"],
     }
 

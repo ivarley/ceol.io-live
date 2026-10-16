@@ -1108,5 +1108,21 @@
   "＋ Add to My Tunes": {
     "ga": "＋ Cuir le Mo chuid fonn",
     "review": true
+  },
+  "New people in my sessions": {
+    "ga": "Daoine nua i mo sheisiúin",
+    "review": true
+  },
+  "Email me": {
+    "ga": "Seol ríomhphost chugam",
+    "review": true
+  },
+  "No emails": {
+    "ga": "Gan ríomhphoist",
+    "review": true
+  },
+  "Email me when someone is added to a session I look after": {
+    "ga": "Seol ríomhphost chugam nuair a chuirtear duine le seisiún a bhfuil cúram agam air",
+    "review": true
   }
 }

@@ -7472,6 +7472,12 @@ def update_person_details(person_id):
         # Update person details
         person_data = data.get("person", {})
         if person_data:
+            # The "someone was added" emails (migration 063): like the update-email
+            # flag below, only touched when the payload mentions it, so the admin
+            # edit form can't clobber the person's own choice.
+            notify_person_added = person_data.get("notify_person_added")
+            if notify_person_added is not None:
+                notify_person_added = bool(notify_person_added)
             save_to_history(
                 cur, "person", "UPDATE", person_id, user_id=get_current_user_id()
             )
@@ -7479,7 +7485,9 @@ def update_person_details(person_id):
                 """
                 UPDATE person
                 SET first_name = %s, last_name = %s, email = %s, sms_number = %s,
-                    city = %s, state = %s, country = %s, thesession_user_id = %s, last_modified_date = %s
+                    city = %s, state = %s, country = %s, thesession_user_id = %s,
+                    notify_person_added = COALESCE(%s, notify_person_added),
+                    last_modified_date = %s
                 WHERE person_id = %s
             """,
                 (
@@ -7491,6 +7499,7 @@ def update_person_details(person_id):
                     person_data.get("state") or None,
                     person_data.get("country") or None,
                     person_data.get("thesession_user_id") or None,
+                    notify_person_added,
                     now_utc(),
                     person_id,
                 ),
@@ -8147,7 +8156,8 @@ def add_person_to_session():
         # people — but fall back to person.email for admins with no account.
         cur.execute(
             """
-            SELECT p.first_name, p.last_name, COALESCE(ua.user_email, p.email), ua.language
+            SELECT p.first_name, p.last_name, COALESCE(ua.user_email, p.email), ua.language,
+                   p.person_id, p.notify_person_added
             FROM person p
             JOIN session_person sp ON p.person_id = sp.person_id
             LEFT JOIN user_account ua ON ua.person_id = p.person_id
@@ -8163,7 +8173,8 @@ def add_person_to_session():
         if not session_admins:
             cur.execute(
                 """
-                SELECT p.first_name, p.last_name, ua.user_email, ua.language
+                SELECT p.first_name, p.last_name, ua.user_email, ua.language,
+                       p.person_id, p.notify_person_added
                 FROM person p
                 JOIN user_account ua ON p.person_id = ua.person_id
                 WHERE ua.is_system_admin = TRUE AND ua.user_email IS NOT NULL
@@ -8188,13 +8199,26 @@ def add_person_to_session():
                 location_parts.append(session_country)
             session_location = ", ".join(location_parts)
 
-            for admin_first, admin_last, admin_email, admin_language in session_admins:
+            for (
+                admin_first,
+                admin_last,
+                admin_email,
+                admin_language,
+                admin_person_id,
+                wants_email,
+            ) in session_admins:
+                # Turned off on their profile or by the link in an earlier one
+                # (migration 063). Filtered here, not in the query, so a session
+                # whose admins all said no doesn't fall back to the system admins.
+                if not wants_email:
+                    continue
                 try:
                     send_person_added_email(
                         {
                             "name": f"{admin_first} {admin_last}",
                             "email": admin_email,
                             "language": admin_language,
+                            "person_id": admin_person_id,
                         },
                         {
                             "name": person_name,

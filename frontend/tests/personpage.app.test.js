@@ -204,6 +204,8 @@ describe('person details page view (user profile flavor)', () => {
           state: 'TX',
           country: 'USA',
           thesession_user_id: '777',
+          // Your own profile sends the "someone was added" setting (migration 063).
+          notify_person_added: true,
         },
         user: {
           username: 'ian',
@@ -326,6 +328,7 @@ describe('person details page view (admin flavor)', () => {
     // with the person), not an edit-form checkbox; opt-in is self-serve only.
     expect(container.querySelector('#is_active')).toBeNull()
     expect(container.querySelector('#receive_update_emails')).toBeNull()
+    expect(container.querySelector('#notify_person_added')).toBeNull()
     await fireEvent.click(container.querySelector('#save-btn'))
     await waitFor(() => {
       const call = fetch.mock.calls.find(([u]) => String(u).includes('/api/person/5/update'))
@@ -333,6 +336,7 @@ describe('person details page view (admin flavor)', () => {
       const body = JSON.parse(call[1].body)
       expect(body.user).not.toHaveProperty('is_active')
       expect(body.user).not.toHaveProperty('receive_update_emails')
+      expect(body.person).not.toHaveProperty('notify_person_added')
     })
   })
 

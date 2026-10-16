@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-16 05:41-0500\n"
+"POT-Creation-Date: 2026-10-16 06:02-0500\n"
 "PO-Revision-Date: 2026-10-06 12:44+0530\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ga\n"
@@ -28,17 +28,17 @@ msgstr "Tá cuntas ann cheana don seoladh ríomhphoist seo. Sínigh isteach leis
 msgid "Invalid or expired link. Please request a new one."
 msgstr "Nasc neamhbhailí nó as feidhm. Iarr ceann nua."
 
-#: api_app_routes.py:268 web_routes.py:1602
+#: api_app_routes.py:268 web_routes.py:1603
 #, review
 msgid "This account has been deactivated."
 msgstr "Díghníomhachtaíodh an cuntas seo."
 
-#: api_app_routes.py:283 web_routes.py:1376
+#: api_app_routes.py:283 web_routes.py:1377
 #, review
 msgid "Email address is required"
 msgstr "Tá seoladh ríomhphoist riachtanach"
 
-#: api_app_routes.py:288 web_routes.py:2497
+#: api_app_routes.py:288 web_routes.py:2498
 #, review
 msgid "If an unverified account with that email exists, a verification email has been sent."
 msgstr "Má tá cuntas gan fíorú ann leis an ríomhphost sin, seoladh ríomhphost fíoraithe."
@@ -113,8 +113,8 @@ msgstr "Theip ar an iarratas"
 
 #: api_person_tune_routes.py:68 api_person_tune_routes.py:371 api_routes.py:177
 #: api_routes.py:2251 api_routes.py:2797 api_routes.py:5021 api_routes.py:6235
-#: api_routes.py:6507 api_routes.py:12885 api_routes.py:12942
-#: api_routes.py:13686 api_routes.py:14090 live_logging_routes.py:1980
+#: api_routes.py:6507 api_routes.py:12909 api_routes.py:12966
+#: api_routes.py:13710 api_routes.py:14114 live_logging_routes.py:1980
 #: live_logging_routes.py:2795 recording_routes.py:978 recording_routes.py:1520
 #: recording_routes.py:1601 recording_routes.py:1654
 #, review
@@ -153,16 +153,16 @@ msgstr "Paraiméadar neamhbhailí: %(error)s"
 msgid "Error retrieving tunes: %(error)s"
 msgstr "Earráid agus na foinn á bhfáil: %(error)s"
 
-#: api_person_tune_routes.py:383 api_routes.py:2257 api_routes.py:13694
-#: api_routes.py:14190
+#: api_person_tune_routes.py:383 api_routes.py:2257 api_routes.py:13718
+#: api_routes.py:14214
 #, python-format, review
 msgid "Error retrieving tune details: %(error)s"
 msgstr "Earráid agus sonraí an fhoinn á bhfáil: %(error)s"
 
 #: api_person_tune_routes.py:416 api_person_tune_routes.py:732
 #: api_person_tune_routes.py:1396 api_routes.py:1253 api_routes.py:2301
-#: api_routes.py:2679 api_routes.py:5776 api_routes.py:7706 api_routes.py:13721
-#: api_routes.py:13912 api_routes.py:15143
+#: api_routes.py:2679 api_routes.py:5776 api_routes.py:7715 api_routes.py:13745
+#: api_routes.py:13936 api_routes.py:15167
 #, review
 msgid "No data provided"
 msgstr "Níor tugadh aon sonraí"
@@ -301,7 +301,7 @@ msgstr "cineál oibríochta anaithnid: %(type)s"
 msgid "Error applying my-tunes op: %(error)s"
 msgstr "Earráid agus an t-athrú ar do liosta á chur i bhfeidhm: %(error)s"
 
-#: api_person_tune_routes.py:1297 api_routes.py:11242
+#: api_person_tune_routes.py:1297 api_routes.py:11266
 #, review
 msgid "instrument and boolean is_auto are required"
 msgstr "Tá instrument agus is_auto (fíor/bréagach) riachtanach"
@@ -336,7 +336,7 @@ msgstr "Earráid agus an phróifíl á nuashonrú: %(error)s"
 msgid "Search query is required"
 msgstr "Tá téarma cuardaigh riachtanach"
 
-#: api_person_tune_routes.py:1507 api_routes.py:11455
+#: api_person_tune_routes.py:1507 api_routes.py:11479
 #, review
 msgid "Search query must be at least 2 characters"
 msgstr "Caithfidh 2 charachtar ar a laghad a bheith sa téarma cuardaigh"
@@ -412,30 +412,30 @@ msgstr "Earráid agus na foinn choiteanna á bhfáil: %(error)s"
 #: api_routes.py:3474 api_routes.py:3579 api_routes.py:3731 api_routes.py:3817
 #: api_routes.py:4303 api_routes.py:4821 api_routes.py:5209 api_routes.py:5553
 #: api_routes.py:5641 api_routes.py:5812 api_routes.py:6408 api_routes.py:6488
-#: api_routes.py:6680 api_routes.py:6788 api_routes.py:6867 api_routes.py:8115
-#: api_routes.py:8636 api_routes.py:8789 api_routes.py:8853 api_routes.py:8877
-#: api_routes.py:9042 api_routes.py:9069 api_routes.py:9187 api_routes.py:9258
-#: api_routes.py:9312 api_routes.py:9478 api_routes.py:9518 api_routes.py:9707
-#: api_routes.py:11474 api_routes.py:11673 api_routes.py:12194
-#: api_routes.py:12302 api_routes.py:12545 api_routes.py:13661
-#: api_routes.py:13679 api_routes.py:13730 api_routes.py:14442
-#: api_routes.py:14590 api_routes.py:14650 api_routes.py:14762
-#: api_routes.py:14788 api_routes.py:14858 api_routes.py:15405
-#: live_logging_routes.py:3495 web_routes.py:3150 web_routes.py:3209
-#: web_routes.py:3360
+#: api_routes.py:6680 api_routes.py:6788 api_routes.py:6867 api_routes.py:8124
+#: api_routes.py:8660 api_routes.py:8813 api_routes.py:8877 api_routes.py:8901
+#: api_routes.py:9066 api_routes.py:9093 api_routes.py:9211 api_routes.py:9282
+#: api_routes.py:9336 api_routes.py:9502 api_routes.py:9542 api_routes.py:9731
+#: api_routes.py:11498 api_routes.py:11697 api_routes.py:12218
+#: api_routes.py:12326 api_routes.py:12569 api_routes.py:13685
+#: api_routes.py:13703 api_routes.py:13754 api_routes.py:14466
+#: api_routes.py:14614 api_routes.py:14674 api_routes.py:14786
+#: api_routes.py:14812 api_routes.py:14882 api_routes.py:15429
+#: live_logging_routes.py:3495 web_routes.py:3194 web_routes.py:3253
+#: web_routes.py:3404
 #, review
 msgid "Session not found"
 msgstr "Níor aimsíodh an seisiún"
 
 #: api_routes.py:173 api_routes.py:524 api_routes.py:3511 api_routes.py:3597
 #: api_routes.py:3741 api_routes.py:3827 api_routes.py:5219 api_routes.py:5469
-#: api_routes.py:5988 api_routes.py:6203 api_routes.py:9717 api_routes.py:10407
-#: api_routes.py:10593 api_routes.py:11301 api_routes.py:13682
-#: api_routes.py:13738 api_routes.py:13930 live_logging_routes.py:1857
+#: api_routes.py:5988 api_routes.py:6203 api_routes.py:9741 api_routes.py:10431
+#: api_routes.py:10617 api_routes.py:11325 api_routes.py:13706
+#: api_routes.py:13762 api_routes.py:13954 live_logging_routes.py:1857
 #: live_logging_routes.py:1969 live_logging_routes.py:2069
 #: live_logging_routes.py:2611 live_logging_routes.py:3125
 #: live_logging_routes.py:3419 live_logging_routes.py:3490
-#: recording_routes.py:128 web_routes.py:3797
+#: recording_routes.py:128 web_routes.py:3840
 #, review
 msgid "Session instance not found"
 msgstr "Níor aimsíodh an ócáid seisiúin"
@@ -535,9 +535,9 @@ msgstr "Nuashonraíodh sonraí an tseisiúin"
 msgid "Error updating session: %(error)s"
 msgstr "Earráid agus an seisiún á nuashonrú: %(error)s"
 
-#: api_routes.py:1678 api_routes.py:6696 api_routes.py:6882 api_routes.py:8649
-#: api_routes.py:8764 api_routes.py:8866 api_routes.py:9057 api_routes.py:10826
-#: api_routes.py:11249 api_routes.py:12181 api_routes.py:12290
+#: api_routes.py:1678 api_routes.py:6696 api_routes.py:6882 api_routes.py:8673
+#: api_routes.py:8788 api_routes.py:8890 api_routes.py:9081 api_routes.py:10850
+#: api_routes.py:11273 api_routes.py:12205 api_routes.py:12314
 #, review
 msgid "Insufficient permissions"
 msgstr "Níl cead leordhóthanach agat"
@@ -567,7 +567,7 @@ msgstr "Nuashonraíodh líon na leabhar fonn ó %(old)s go %(new)s"
 msgid "Tunebook count unchanged (%(count)s)"
 msgstr "Níor athraigh líon na leabhar fonn (%(count)s)"
 
-#: api_routes.py:1809 api_routes.py:2082 api_routes.py:5109 api_routes.py:9674
+#: api_routes.py:1809 api_routes.py:2082 api_routes.py:5109 api_routes.py:9698
 #, python-format, review
 msgid "Error connecting to thesession.org: %(error)s"
 msgstr "Earráid agus ceangal á dhéanamh le thesession.org: %(error)s"
@@ -622,7 +622,7 @@ msgstr "Ní féidir ach le bainisteoirí seisiúin an méid a sheinntear ag seis
 msgid "Tune details saved successfully"
 msgstr "Sábháladh sonraí an fhoinn"
 
-#: api_routes.py:2516 api_routes.py:13889
+#: api_routes.py:2516 api_routes.py:13913
 #, python-format, review
 msgid "Error updating tune details: %(error)s"
 msgstr "Earráid agus sonraí an fhoinn á nuashonrú: %(error)s"
@@ -679,9 +679,9 @@ msgstr "Earráid agus na hailiasanna á bhfáil: %(error)s"
 
 #: api_routes.py:2948 api_routes.py:3137 api_routes.py:3434 api_routes.py:3917
 #: api_routes.py:3955 api_routes.py:4114 api_routes.py:4443 api_routes.py:4800
-#: api_routes.py:5174 api_routes.py:6463 api_routes.py:9460 api_routes.py:10542
-#: api_routes.py:10770 api_routes.py:11054 api_routes.py:12207
-#: api_routes.py:12310
+#: api_routes.py:5174 api_routes.py:6463 api_routes.py:9484 api_routes.py:10566
+#: api_routes.py:10794 api_routes.py:11078 api_routes.py:12231
+#: api_routes.py:12334
 #, review
 msgid "No JSON data provided"
 msgstr "Níor seoladh aon sonraí JSON"
@@ -736,7 +736,7 @@ msgstr "Earráid agus an t-ailias á scriosadh: %(error)s"
 msgid "Please enter a session date"
 msgstr "Cuir isteach dáta an tseisiúin"
 
-#: api_routes.py:3216 api_routes.py:12594
+#: api_routes.py:3216 api_routes.py:12618
 #, review
 msgid "Failed to create session instance"
 msgstr "Theip ar chruthú na hócáide seisiúin"
@@ -811,7 +811,7 @@ msgstr "Theip ar logáil an tseisiúin a mharcáil neamhchríochnaithe: %(error)
 msgid "Session ID is required"
 msgstr "Tá aitheantas an tseisiúin riachtanach"
 
-#: api_routes.py:3945 api_routes.py:8546
+#: api_routes.py:3945 api_routes.py:8570
 #, python-format, review
 msgid "Database error: %(error)s"
 msgstr "Earráid bhunachair sonraí: %(error)s"
@@ -821,7 +821,7 @@ msgstr "Earráid bhunachair sonraí: %(error)s"
 msgid "Failed to search sessions (status: %(status)s)"
 msgstr "Theip ar chuardach na seisiún (stádas: %(status)s)"
 
-#: api_routes.py:4052 api_routes.py:4205 api_routes.py:8366
+#: api_routes.py:4052 api_routes.py:4205 api_routes.py:8390
 #, python-format, review
 msgid "Error connecting to TheSession.org: %(error)s"
 msgstr "Earráid agus ceangal á dhéanamh le TheSession.org: %(error)s"
@@ -991,22 +991,22 @@ msgstr "Scriosadh %(tune_name)s den tsraith."
 msgid "Failed to delete tune: %(error)s"
 msgstr "Theip ar scriosadh an fhoinn: %(error)s"
 
-#: api_routes.py:5106 api_routes.py:9670
+#: api_routes.py:5106 api_routes.py:9694
 #, review
 msgid "Timeout connecting to thesession.org"
 msgstr "Chuaigh an t-am thart agus ceangal á dhéanamh le thesession.org"
 
-#: api_routes.py:5114 api_routes.py:9567
+#: api_routes.py:5114 api_routes.py:9591
 #, python-format, review
 msgid "Tune #%(tune_id)s not found on thesession.org"
 msgstr "Níor aimsíodh fonn #%(tune_id)s ar thesession.org"
 
-#: api_routes.py:5119 api_routes.py:9575
+#: api_routes.py:5119 api_routes.py:9599
 #, python-format, review
 msgid "Failed to fetch tune data from thesession.org (status: %(status)s)"
 msgstr "Theip ar shonraí an fhoinn a fháil ó thesession.org (stádas: %(status)s)"
 
-#: api_routes.py:5128 api_routes.py:5131 api_routes.py:9588
+#: api_routes.py:5128 api_routes.py:5131 api_routes.py:9612
 #, review
 msgid "Invalid tune data received from thesession.org"
 msgstr "Fuarthas sonraí foinn neamhbhailí ó thesession.org"
@@ -1061,7 +1061,7 @@ msgstr "Theip ar nascadh an fhoinn: %(error)s"
 msgid "Failed to get tunes: %(error)s"
 msgstr "Theip ar na foinn a fháil: %(error)s"
 
-#: api_routes.py:5562 api_routes.py:5818 api_routes.py:14845
+#: api_routes.py:5562 api_routes.py:5818 api_routes.py:14869
 #, review
 msgid "User not linked to person"
 msgstr "Níl an t-úsáideoir nasctha le duine"
@@ -1081,16 +1081,16 @@ msgstr "Theip ar na daoine a fháil: %(error)s"
 msgid "Not allowed to see this session's people"
 msgstr "Níl cead agat daoine an tseisiúin seo a fheiceáil"
 
-#: api_routes.py:5669 api_routes.py:8675 api_routes.py:8815 web_routes.py:3247
+#: api_routes.py:5669 api_routes.py:8699 api_routes.py:8839 web_routes.py:3291
 #, review
 msgid "Person not found in this session"
 msgstr "Níor aimsíodh an duine sa seisiún seo"
 
-#: api_routes.py:5713 api_routes.py:7735 api_routes.py:7851 api_routes.py:8090
-#: api_routes.py:8889 api_routes.py:9083 api_routes.py:10609
-#: api_routes.py:10709 api_routes.py:10952 api_routes.py:11086
-#: api_routes.py:11317 api_routes.py:13947 api_routes.py:15374
-#: web_routes.py:3434
+#: api_routes.py:5713 api_routes.py:7744 api_routes.py:7860 api_routes.py:8099
+#: api_routes.py:8913 api_routes.py:9107 api_routes.py:10633
+#: api_routes.py:10733 api_routes.py:10976 api_routes.py:11110
+#: api_routes.py:11341 api_routes.py:13971 api_routes.py:15398
+#: web_routes.py:3478
 #, review
 msgid "Person not found"
 msgstr "Níor aimsíodh an duine"
@@ -1100,8 +1100,8 @@ msgstr "Níor aimsíodh an duine"
 msgid "Failed to get person details: %(error)s"
 msgstr "Theip ar shonraí an duine a fháil: %(error)s"
 
-#: api_routes.py:5789 api_routes.py:8042 api_routes.py:8709 api_routes.py:8906
-#: api_routes.py:8982 api_routes.py:14835
+#: api_routes.py:5789 api_routes.py:8051 api_routes.py:8733 api_routes.py:8930
+#: api_routes.py:9006 api_routes.py:14859
 #, review
 msgid "relationship must be 'member' or 'visitor'"
 msgstr "Ní mór do relationship a bheith 'member' nó 'visitor'"
@@ -1141,7 +1141,7 @@ msgstr "Theip ar an duine a chur leis: %(error)s"
 msgid "Invalid parameters"
 msgstr "Paraiméadair neamhbhailí"
 
-#: api_routes.py:6008 api_routes.py:13993 templates/admin_tunes.html:341
+#: api_routes.py:6008 api_routes.py:14017 templates/admin_tunes.html:341
 #, review
 msgid "No tunes found"
 msgstr "Níor aimsíodh fonn"
@@ -1331,7 +1331,7 @@ msgstr "Ní féidir an t-ainm úsáideora a fhágáil folamh"
 msgid "Username must be at least 3 characters long"
 msgstr "Ní mór 3 charachtar ar a laghad a bheith san ainm úsáideora"
 
-#: api_routes.py:7438 api_routes.py:7535
+#: api_routes.py:7438 api_routes.py:7544
 #, review
 msgid "Username already taken"
 msgstr "Tá an t-ainm úsáideora sin in úsáid cheana"
@@ -1351,257 +1351,257 @@ msgstr "Earráid agus an t-ainm úsáideora á sheiceáil: %(error)s"
 msgid "Person ID is required"
 msgstr "Tá aitheantas an duine riachtanach"
 
-#: api_routes.py:7517
+#: api_routes.py:7526
 #, review
 msgid "User account does not match this person"
 msgstr "Ní hionann an cuntas úsáideora agus an duine seo"
 
-#: api_routes.py:7576
+#: api_routes.py:7585
 #, review
 msgid "Details updated successfully"
 msgstr "Nuashonraíodh na sonraí"
 
-#: api_routes.py:7583
+#: api_routes.py:7592
 #, python-format, review
 msgid "Failed to update details: %(error)s"
 msgstr "Theip ar nuashonrú na sonraí: %(error)s"
 
-#: api_routes.py:7597 api_routes.py:7698
+#: api_routes.py:7606 api_routes.py:7707
 #, review
 msgid "Unauthorized. Admin access required."
 msgstr "Níl cead agat. Ní mór a bheith i do bhainisteoir."
 
-#: api_routes.py:7620
+#: api_routes.py:7629
 #, review
 msgid "User not found"
 msgstr "Níor aimsíodh an t-úsáideoir"
 
-#: api_routes.py:7628
+#: api_routes.py:7637
 #, review
 msgid "Email is already verified"
 msgstr "Tá an ríomhphost fíoraithe cheana"
 
-#: api_routes.py:7655
+#: api_routes.py:7664
 #, python-format, review
 msgid "Email verified successfully for user '%(username)s'"
 msgstr "Fíoraíodh an ríomhphost don úsáideoir '%(username)s'"
 
-#: api_routes.py:7666
+#: api_routes.py:7675
 #, python-format, review
 msgid "Failed to verify email: %(error)s"
 msgstr "Theip ar fhíorú an ríomhphoist: %(error)s"
 
-#: api_routes.py:7711
+#: api_routes.py:7720
 #, review
 msgid "'active' field is required"
 msgstr "Tá an réimse 'active' riachtanach"
 
-#: api_routes.py:7759
+#: api_routes.py:7768
 #, python-format, review
 msgid "%(person_name)s is already active"
 msgstr "Tá %(person_name)s gníomhach cheana"
 
-#: api_routes.py:7764
+#: api_routes.py:7773
 #, python-format, review
 msgid "%(person_name)s is already deactivated"
 msgstr "Tá %(person_name)s díghníomhachtaithe cheana"
 
-#: api_routes.py:7814
+#: api_routes.py:7823
 #, python-format, review
 msgid "%(person_name)s has been reactivated"
 msgstr "Athghníomhachtaíodh %(person_name)s"
 
-#: api_routes.py:7817
+#: api_routes.py:7826
 #, python-format, review
 msgid "%(person_name)s has been deactivated"
 msgstr "Díghníomhachtaíodh %(person_name)s"
 
-#: api_routes.py:7830
+#: api_routes.py:7839
 #, python-format, review
 msgid "Failed to update person status: %(error)s"
 msgstr "Theip ar nuashonrú stádas an duine: %(error)s"
 
-#: api_routes.py:7927 api_routes.py:8612
+#: api_routes.py:7936 api_routes.py:8636
 #, python-format, review
 msgid "Failed to get sessions: %(error)s"
 msgstr "Theip ar na seisiúin a fháil: %(error)s"
 
-#: api_routes.py:8020
+#: api_routes.py:8029
 #, python-format, review
 msgid "Failed to search sessions: %(error)s"
 msgstr "Theip ar chuardach na seisiún: %(error)s"
 
-#: api_routes.py:8053
+#: api_routes.py:8062
 #, review
 msgid "Person ID and Session ID are required"
 msgstr "Tá aitheantas an duine agus aitheantas an tseisiúin riachtanach"
 
-#: api_routes.py:8072
+#: api_routes.py:8081
 #, review
 msgid "Person is already in this session"
 msgstr "Tá an duine sa seisiún seo cheana"
 
-#: api_routes.py:8101
+#: api_routes.py:8110
 #, python-format, review
 msgid "%(person_name)s is deactivated and cannot be added to sessions"
 msgstr "Tá %(person_name)s díghníomhachtaithe agus ní féidir é/í a chur le seisiúin"
 
-#: api_routes.py:8218
+#: api_routes.py:8242
 #, python-format, review
 msgid "%(person_name)s has been added to %(session_name)s as a member"
 msgstr "Cuireadh %(person_name)s le %(session_name)s mar bhall"
 
-#: api_routes.py:8224
+#: api_routes.py:8248
 #, python-format, review
 msgid "%(person_name)s has been added to %(session_name)s as a visitor"
 msgstr "Cuireadh %(person_name)s le %(session_name)s mar chuairteoir"
 
-#: api_routes.py:8238
+#: api_routes.py:8262
 #, python-format, review
 msgid "Failed to add person to session: %(error)s"
 msgstr "Theip ar an duine a chur leis an seisiún: %(error)s"
 
-#: api_routes.py:8268 api_routes.py:8275
+#: api_routes.py:8292 api_routes.py:8299
 #, review
 msgid "Invalid TheSession.org URL format"
 msgstr "Formáid URL TheSession.org neamhbhailí"
 
-#: api_routes.py:8284
+#: api_routes.py:8308
 #, review
 msgid "Please enter a valid name or TheSession.org URL/ID"
 msgstr "Cuir isteach ainm bailí nó URL/aitheantas TheSession.org"
 
-#: api_routes.py:8305
+#: api_routes.py:8329
 #, python-format, review
 msgid "A person with TheSession.org ID %(thesession_id)s already exists: %(first_name)s %(last_name)s (Person ID: %(person_id)s)"
 msgstr "Tá duine le haitheantas TheSession.org %(thesession_id)s ann cheana: %(first_name)s %(last_name)s (Aitheantas duine: %(person_id)s)"
 
-#: api_routes.py:8323
+#: api_routes.py:8347
 #, python-format, review
 msgid "TheSession.org user ID %(thesession_id)s not found"
 msgstr "Níor aimsíodh aitheantas úsáideora TheSession.org %(thesession_id)s"
 
-#: api_routes.py:8335
+#: api_routes.py:8359
 #, review
 msgid "Unable to retrieve user name from TheSession.org"
 msgstr "Níorbh fhéidir ainm an úsáideora a fháil ó TheSession.org"
 
-#: api_routes.py:8376
+#: api_routes.py:8400
 #, python-format, review
 msgid "Error validating user: %(error)s"
 msgstr "Earráid agus an t-úsáideoir á bhailíochtú: %(error)s"
 
-#: api_routes.py:8391 api_routes.py:12875
+#: api_routes.py:8415 api_routes.py:12899
 #, review
 msgid "Name cannot be empty"
 msgstr "Ní féidir an t-ainm a fhágáil folamh"
 
-#: api_routes.py:8416
+#: api_routes.py:8440
 #, python-format, review
 msgid "Error parsing name: %(error)s"
 msgstr "Earráid agus an t-ainm á pharsáil: %(error)s"
 
-#: api_routes.py:8435 templates/session_instance_players.html:183
+#: api_routes.py:8459 templates/session_instance_players.html:183
 #, review
 msgid "First name is required"
 msgstr "Tá an céadainm riachtanach"
 
-#: api_routes.py:8478
+#: api_routes.py:8502
 #, review
 msgid "Failed to create person"
 msgstr "Theip ar chruthú an duine"
 
-#: api_routes.py:8522
+#: api_routes.py:8546
 #, python-format, review
 msgid "%(first_name)s %(last_name)s has been created successfully and added to session \"%(session_name)s\""
 msgstr "Cruthaíodh %(first_name)s %(last_name)s agus cuireadh leis an seisiún \"%(session_name)s\" é/í"
 
-#: api_routes.py:8529
+#: api_routes.py:8553
 #, python-format, review
 msgid "%(first_name)s %(last_name)s has been created successfully"
 msgstr "Cruthaíodh %(first_name)s %(last_name)s"
 
-#: api_routes.py:8557
+#: api_routes.py:8581
 #, python-format, review
 msgid "Failed to create person: %(error)s"
 msgstr "Theip ar chruthú an duine: %(error)s"
 
-#: api_routes.py:8783
+#: api_routes.py:8807
 #, review
 msgid "Nothing to update"
 msgstr "Níl aon rud le nuashonrú"
 
-#: api_routes.py:9095
+#: api_routes.py:9119
 #, review
 msgid "Person is not in this session"
 msgstr "Níl an duine sa seisiún seo"
 
-#: api_routes.py:9202
+#: api_routes.py:9226
 #, review
 msgid "You are not a member of this session"
 msgstr "Ní ball den seisiún seo thú"
 
-#: api_routes.py:9220
+#: api_routes.py:9244
 #, python-format, review
 msgid "You have been removed from %(session_name)s"
 msgstr "Baineadh thú de %(session_name)s"
 
-#: api_routes.py:9239 api_routes.py:9302 api_routes.py:12791
-#: api_routes.py:12867 api_routes.py:12930 api_routes.py:13073
-#: api_routes.py:13471 api_routes.py:13500 api_routes.py:13603
-#: api_routes.py:13748 api_routes.py:13978 api_routes.py:14070
-#: api_routes.py:14213 api_routes.py:14330 api_routes.py:14970
-#: api_routes.py:15453
+#: api_routes.py:9263 api_routes.py:9326 api_routes.py:12815
+#: api_routes.py:12891 api_routes.py:12954 api_routes.py:13097
+#: api_routes.py:13495 api_routes.py:13524 api_routes.py:13627
+#: api_routes.py:13772 api_routes.py:14002 api_routes.py:14094
+#: api_routes.py:14237 api_routes.py:14354 api_routes.py:14994
+#: api_routes.py:15477
 #, review
 msgid "Unauthorized"
 msgstr "Níl cead agat"
 
-#: api_routes.py:9247
+#: api_routes.py:9271
 #, review
 msgid "Termination date is required"
 msgstr "Tá an dáta deiridh riachtanach"
 
-#: api_routes.py:9274 api_routes.py:9328
+#: api_routes.py:9298 api_routes.py:9352
 #, review
 msgid "Failed to update session"
 msgstr "Theip ar nuashonrú an tseisiúin"
 
-#: api_routes.py:9466
+#: api_routes.py:9490
 #, review
 msgid "Please provide a tune name"
 msgstr "Cuir isteach ainm foinn"
 
-#: api_routes.py:9505
+#: api_routes.py:9529
 #, review
 msgid "Please provide a tune_name query parameter"
 msgstr "Cuir isteach an paraiméadar ceiste tune_name"
 
-#: api_routes.py:9640
+#: api_routes.py:9664
 #, python-format, review
 msgid "Race condition error inserting tune %(tune_id)s"
 msgstr "Earráid choimhlinte agus fonn %(tune_id)s á chur isteach"
 
-#: api_routes.py:9651
+#: api_routes.py:9675
 #, python-format, review
 msgid "Database error inserting tune %(tune_id)s: %(error)s"
 msgstr "Earráid bhunachair sonraí agus fonn %(tune_id)s á chur isteach: %(error)s"
 
-#: api_routes.py:9681
+#: api_routes.py:9705
 #, python-format, review
 msgid "Error processing tune data: %(error)s"
 msgstr "Earráid agus sonraí an fhoinn á bpróiseáil: %(error)s"
 
-#: api_routes.py:9849
+#: api_routes.py:9873
 #, python-format, review
 msgid "Failed to validate tune #%(tune_id)s: %(error)s"
 msgstr "Theip ar bhailíochtú fhonn #%(tune_id)s: %(error)s"
 
-#: api_routes.py:9902
+#: api_routes.py:9926
 #, python-format, review
 msgid "Alias '%(alias_name)s' already exists for a different tune in this session"
 msgstr "Tá an t-ailias '%(alias_name)s' ann cheana d'fhonn eile sa seisiún seo"
 
-#: api_routes.py:10259
+#: api_routes.py:10283
 #, python-format, review
 msgid "Session saved successfully (%(num)d modification)"
 msgid_plural "Session saved successfully (%(num)d modifications)"
@@ -1611,182 +1611,182 @@ msgstr[2] "Sábháladh an seisiún (%(num)d athrú)"
 msgstr[3] "Sábháladh an seisiún (%(num)d n-athrú)"
 msgstr[4] "Sábháladh an seisiún (%(num)d athrú)"
 
-#: api_routes.py:10281
+#: api_routes.py:10305
 #, python-format, review
 msgid "Failed to save session: %(error)s"
 msgstr "Theip ar shábháil an tseisiúin: %(error)s"
 
-#: api_routes.py:10292
+#: api_routes.py:10316
 #, review
 msgid "User not authenticated"
 msgstr "Níl an t-úsáideoir sínithe isteach"
 
-#: api_routes.py:10335
+#: api_routes.py:10359
 #, review
 msgid "Auto-save preference updated"
 msgstr "Nuashonraíodh an rogha uathshábhála"
 
-#: api_routes.py:10419
+#: api_routes.py:10443
 #, review
 msgid "Not authorized to view attendance"
 msgstr "Níl cead agat an tinreamh a fheiceáil"
 
-#: api_routes.py:10556
+#: api_routes.py:10580
 #, review
 msgid "person_id and attendance are required"
 msgstr "Tá person_id agus attendance riachtanach"
 
-#: api_routes.py:10570
+#: api_routes.py:10594
 #, python-format, review
 msgid "attendance must be one of: %(values)s"
 msgstr "Ní mór do attendance a bheith ar cheann díobh seo: %(values)s"
 
-#: api_routes.py:10621
+#: api_routes.py:10645
 #, python-format, review
 msgid "%(person_name)s is deactivated and cannot be checked in"
 msgstr "Tá %(person_name)s díghníomhachtaithe agus ní féidir é/í a mharcáil i láthair"
 
-#: api_routes.py:10660
+#: api_routes.py:10684
 #, review
 msgid "Insufficient permissions to manage this person's attendance"
 msgstr "Níl cead leordhóthanach agat tinreamh an duine seo a bhainistiú"
 
-#: api_routes.py:10722
+#: api_routes.py:10746
 #, python-format, review
 msgid "Successfully added attendance for %(name)s"
 msgstr "Cuireadh tinreamh %(name)s leis"
 
-#: api_routes.py:10727
+#: api_routes.py:10751
 #, python-format, review
 msgid "Successfully updated attendance for %(name)s"
 msgstr "Nuashonraíodh tinreamh %(name)s"
 
-#: api_routes.py:10785
+#: api_routes.py:10809
 #, review
 msgid "first_name and last_name are required"
 msgstr "Tá first_name agus last_name riachtanach"
 
-#: api_routes.py:10798
+#: api_routes.py:10822
 #, review
 msgid "Invalid email format"
 msgstr "Formáid ríomhphoist neamhbhailí"
 
-#: api_routes.py:10805 api_routes.py:11063
+#: api_routes.py:10829 api_routes.py:11087
 #, review
 msgid "instruments must be a list"
 msgstr "Ní mór do instruments a bheith ina liosta"
 
-#: api_routes.py:10904
+#: api_routes.py:10928
 #, python-format, review
 msgid "Successfully created person: %(display_name)s"
 msgstr "Cruthaíodh an duine: %(display_name)s"
 
-#: api_routes.py:10972
+#: api_routes.py:10996
 #, review
 msgid "Insufficient permissions to view this person's instruments"
 msgstr "Níl cead leordhóthanach agat uirlisí an duine seo a fheiceáil"
 
-#: api_routes.py:11106
+#: api_routes.py:11130
 #, review
 msgid "Insufficient permissions to manage this person's instruments"
 msgstr "Níl cead leordhóthanach agat uirlisí an duine seo a bhainistiú"
 
-#: api_routes.py:11197
+#: api_routes.py:11221
 #, python-format, review
 msgid "Successfully updated instruments for %(person_name)s"
 msgstr "Nuashonraíodh na huirlisí do %(person_name)s"
 
-#: api_routes.py:11264
+#: api_routes.py:11288
 #, review
 msgid "Instrument not found for this person"
 msgstr "Níor aimsíodh an uirlis don duine seo"
 
-#: api_routes.py:11338 database.py:1385
+#: api_routes.py:11362 database.py:1385
 #, review
 msgid "Person is not currently attending this session instance"
 msgstr "Níl an duine seo marcáilte i láthair ag an ócáid seisiúin seo"
 
-#: api_routes.py:11376
+#: api_routes.py:11400
 #, review
 msgid "Insufficient permissions to remove this person from attendance"
 msgstr "Níl cead leordhóthanach agat an duine seo a bhaint ón tinreamh"
 
-#: api_routes.py:11402
+#: api_routes.py:11426
 #, python-format, review
 msgid "Successfully removed %(person_name)s from attendance"
 msgstr "Baineadh %(person_name)s ón tinreamh"
 
-#: api_routes.py:11444
+#: api_routes.py:11468
 #, review
 msgid "Search query 'q' parameter is required"
 msgstr "Tá an paraiméadar cuardaigh 'q' riachtanach"
 
-#: api_routes.py:11512
+#: api_routes.py:11536
 #, review
 msgid "Insufficient permissions to search people in this session"
 msgstr "Níl cead leordhóthanach agat daoine a chuardach sa seisiún seo"
 
-#: api_routes.py:11644
+#: api_routes.py:11668
 #, review
 msgid "Invalid limit parameter"
 msgstr "Paraiméadar teorann neamhbhailí"
 
-#: api_routes.py:11711
+#: api_routes.py:11735
 #, review
 msgid "Insufficient permissions to access people in this session"
 msgstr "Níl cead leordhóthanach agat rochtain a fháil ar dhaoine sa seisiún seo"
 
-#: api_routes.py:11852 api_routes.py:11856 api_routes.py:11862
+#: api_routes.py:11876 api_routes.py:11880 api_routes.py:11886
 #, review
 msgid "CSV data is empty"
 msgstr "Tá na sonraí CSV folamh"
 
-#: api_routes.py:11886
+#: api_routes.py:11910
 #, review
 msgid "No data rows found after header"
 msgstr "Níor aimsíodh aon ró sonraí tar éis an cheanntásca"
 
-#: api_routes.py:11901
+#: api_routes.py:11925
 #, python-format, review
 msgid "Error parsing row %(row)s: %(error)s"
 msgstr "Earráid agus ró %(row)s á pharsáil: %(error)s"
 
-#: api_routes.py:11908
+#: api_routes.py:11932
 #, review
 msgid "No valid person records found in CSV data"
 msgstr "Níor aimsíodh aon taifead duine bailí sna sonraí CSV"
 
-#: api_routes.py:11983
+#: api_routes.py:12007
 #, review
 msgid "First column appears to be name but is empty"
 msgstr "Is cosúil gur ainm atá sa chéad cholún ach tá sé folamh"
 
-#: api_routes.py:12033
+#: api_routes.py:12057
 #, review
 msgid "Name is required (either separate first/last name fields or full name)"
 msgstr "Tá an t-ainm riachtanach (réimsí ar leith don chéadainm agus don sloinne, nó an t-ainm iomlán)"
 
-#: api_routes.py:12163 api_routes.py:12272
+#: api_routes.py:12187 api_routes.py:12296
 #, review
 msgid "Only POST method allowed"
 msgstr "Ní cheadaítear ach an modh POST"
 
-#: api_routes.py:12214
+#: api_routes.py:12238
 #, review
 msgid "csv_data field is required"
 msgstr "Tá an réimse csv_data riachtanach"
 
-#: api_routes.py:12322
+#: api_routes.py:12346
 #, review
 msgid "processed_people field is required"
 msgstr "Tá an réimse processed_people riachtanach"
 
-#: api_routes.py:12335
+#: api_routes.py:12359
 #, review
 msgid "processed_people must be an array"
 msgstr "Ní mór do processed_people a bheith ina eagar"
 
-#: api_routes.py:12443
+#: api_routes.py:12467
 #, python-format, review
 msgid "Successfully imported %(num)d person (%(skipped)s skipped as duplicates)"
 msgid_plural "Successfully imported %(num)d people (%(skipped)s skipped as duplicates)"
@@ -1796,117 +1796,117 @@ msgstr[2] "Iompórtáladh %(num)d dhuine (%(skipped)s scipeáilte mar dhúblaigh
 msgstr[3] "Iompórtáladh %(num)d nduine (%(skipped)s scipeáilte mar dhúblaigh)"
 msgstr[4] "Iompórtáladh %(num)d duine (%(skipped)s scipeáilte mar dhúblaigh)"
 
-#: api_routes.py:12462
+#: api_routes.py:12486
 #, python-format, review
 msgid "Error saving people: %(error)s"
 msgstr "Earráid agus na daoine á sábháil: %(error)s"
 
-#: api_routes.py:12504
+#: api_routes.py:12528
 #, review
 msgid "No such place"
 msgstr "Níl a leithéid d'áit ann"
 
-#: api_routes.py:12871
+#: api_routes.py:12895
 #, review
 msgid "Missing name field"
 msgstr "Réimse an ainm ar iarraidh"
 
-#: api_routes.py:12902
+#: api_routes.py:12926
 #, python-format, review
 msgid "Updated tune name to '%(name)s'"
 msgstr "Athraíodh ainm an fhoinn go '%(name)s'"
 
-#: api_routes.py:12989
+#: api_routes.py:13013
 #, python-format, review
 msgid "TheSession.org returned status %(status)s"
 msgstr "Stádas %(status)s ó TheSession.org"
 
-#: api_routes.py:13003
+#: api_routes.py:13027
 #, python-format, review
 msgid "Failed to fetch from TheSession.org: %(error)s"
 msgstr "Theip ar fháil ó TheSession.org: %(error)s"
 
-#: api_routes.py:13077 api_routes.py:15457
+#: api_routes.py:13101 api_routes.py:15481
 #, review
 msgid "Request body required"
 msgstr "Tá corp an iarratais riachtanach"
 
-#: api_routes.py:13088
+#: api_routes.py:13112
 #, review
 msgid "Both old_tune_id and new_tune_id are required"
 msgstr "Tá old_tune_id agus new_tune_id araon riachtanach"
 
-#: api_routes.py:13099
+#: api_routes.py:13123
 #, review
 msgid "old_tune_id and new_tune_id cannot be the same"
 msgstr "Ní féidir le old_tune_id agus new_tune_id a bheith mar an gcéanna"
 
-#: api_routes.py:13121
+#: api_routes.py:13145
 #, python-format, review
 msgid "Tune %(old_tune_id)s not found"
 msgstr "Níor aimsíodh fonn %(old_tune_id)s"
 
-#: api_routes.py:13134
+#: api_routes.py:13158
 #, python-format, review
 msgid "Tune %(old_tune_id)s is already a redirect to tune %(target_id)s"
 msgstr "Atreoraíonn fonn %(old_tune_id)s chuig fonn %(target_id)s cheana"
 
-#: api_routes.py:13170
+#: api_routes.py:13194
 #, python-format, review
 msgid "Tune %(new_tune_id)s is not in the local database and could not be fetched from thesession.org: %(error)s"
 msgstr "Níl fonn %(new_tune_id)s sa bhunachar sonraí áitiúil agus níorbh fhéidir é a fháil ó thesession.org: %(error)s"
 
-#: api_routes.py:13197
+#: api_routes.py:13221
 #, python-format, review
 msgid "Could not import tune %(new_tune_id)s from thesession.org: %(error)s"
 msgstr "Níorbh fhéidir fonn %(new_tune_id)s a iompórtáil ó thesession.org: %(error)s"
 
-#: api_routes.py:13218
+#: api_routes.py:13242
 #, python-format, review
 msgid "Tune %(new_tune_id)s is a redirect to tune %(target_id)s - cannot redirect to a redirect"
 msgstr "Atreoraíonn fonn %(new_tune_id)s chuig fonn %(target_id)s - ní féidir atreorú chuig atreorú"
 
-#: api_routes.py:13430
+#: api_routes.py:13454
 #, python-format, review
 msgid "Migrated tune %(old_tune_id)s → %(new_tune_id)s"
 msgstr "Aistríodh fonn %(old_tune_id)s → %(new_tune_id)s"
 
-#: api_routes.py:13482
+#: api_routes.py:13506
 #, review
 msgid "A sync run is already in progress."
 msgstr "Tá sioncrónú ar siúl cheana."
 
-#: api_routes.py:13620
+#: api_routes.py:13644
 #, review
 msgid "No running scan to cancel."
 msgstr "Níl scanadh ar siúl le cealú."
 
-#: api_routes.py:13764
+#: api_routes.py:13788
 #, review
 msgid "Tune not found in this session instance"
 msgstr "Níor aimsíodh an fonn san ócáid seisiúin seo"
 
-#: api_routes.py:13818
+#: api_routes.py:13842
 #, review
 msgid "Invalid setting_override value"
 msgstr "Luach setting_override neamhbhailí"
 
-#: api_routes.py:13875
+#: api_routes.py:13899
 #, review
 msgid "Tune details updated successfully"
 msgstr "Nuashonraíodh sonraí an fhoinn"
 
-#: api_routes.py:13959
+#: api_routes.py:13983
 #, python-format, review
 msgid "%(person_name)s is deactivated and cannot be set as 'Started By'"
 msgstr "Tá %(person_name)s díghníomhachtaithe agus ní féidir é/í a shocrú mar thosaitheoir sraithe"
 
-#: api_routes.py:14005
+#: api_routes.py:14029
 #, python-format, review
 msgid "Invalid set index: %(set_index)s"
 msgstr "Innéacs sraithe neamhbhailí: %(set_index)s"
 
-#: api_routes.py:14033
+#: api_routes.py:14057
 #, python-format, review
 msgid "Updated %(num)d tune in set %(set_index)s"
 msgid_plural "Updated %(num)d tunes in set %(set_index)s"
@@ -1916,77 +1916,77 @@ msgstr[2] "Nuashonraíodh %(num)d fhonn i sraith %(set_index)s"
 msgstr[3] "Nuashonraíodh %(num)d bhfonn i sraith %(set_index)s"
 msgstr[4] "Nuashonraíodh %(num)d fonn i sraith %(set_index)s"
 
-#: api_routes.py:14051
+#: api_routes.py:14075
 #, python-format, review
 msgid "Error updating set started_by: %(error)s"
 msgstr "Earráid agus tosaitheoir na sraithe á nuashonrú: %(error)s"
 
-#: api_routes.py:14308
+#: api_routes.py:14332
 #, review
 msgid "Script failed"
 msgstr "Theip ar an script"
 
-#: api_routes.py:14318
+#: api_routes.py:14342
 #, review
 msgid "Script timed out after 5 minutes"
 msgstr "Chuaigh an t-am thart ar an script tar éis 5 nóiméad"
 
-#: api_routes.py:14872
+#: api_routes.py:14896
 #, review
 msgid "Already a member of this session"
 msgstr "Is ball den seisiún seo thú cheana"
 
-#: api_routes.py:14901
+#: api_routes.py:14925
 #, review
 msgid "Successfully joined session"
 msgstr "Chuaigh tú isteach sa seisiún"
 
-#: api_routes.py:14912
+#: api_routes.py:14936
 #, python-format, review
 msgid "Failed to join session: %(error)s"
 msgstr "Theip ort dul isteach sa seisiún: %(error)s"
 
-#: api_routes.py:14978
+#: api_routes.py:15002
 #, python-format, review
 msgid "Unknown entity type: %(entity_type)s"
 msgstr "Cineál aonáin anaithnid: %(entity_type)s"
 
-#: api_routes.py:15086 api_routes.py:15197
+#: api_routes.py:15110 api_routes.py:15221
 #, review
 msgid "User's person record not found"
 msgstr "Níor aimsíodh taifead duine an úsáideora"
 
-#: api_routes.py:15151
+#: api_routes.py:15175
 #, review
 msgid "No tunes selected"
 msgstr "Níor roghnaíodh fonn ar bith"
 
-#: api_routes.py:15154
+#: api_routes.py:15178
 #, review
 msgid "Invalid destination type"
 msgstr "Cineál cinn scríbe neamhbhailí"
 
-#: api_routes.py:15161
+#: api_routes.py:15185
 #, review
 msgid "Session path is required for session destination"
 msgstr "Tá seoladh an tseisiúin riachtanach nuair is seisiún an ceann scríbe"
 
-#: api_routes.py:15176
+#: api_routes.py:15200
 #, python-format, review
 msgid "learn_status must be one of: %(values)s"
 msgstr "Ní mór do learn_status a bheith ar cheann díobh seo: %(values)s"
 
-#: api_routes.py:15243
+#: api_routes.py:15267
 #, review
 msgid "Destination session not found"
 msgstr "Níor aimsíodh an seisiún is ceann scríbe"
 
-#: api_routes.py:15265
+#: api_routes.py:15289
 #, review
 msgid "You must be an admin of the destination session"
 msgstr "Ní mór duit a bheith i do bhainisteoir ar an seisiún is ceann scríbe"
 
-#: api_routes.py:15306
+#: api_routes.py:15330
 #, python-format, review
 msgid "Copied %(num)d tune to %(destination)s."
 msgid_plural "Copied %(num)d tunes to %(destination)s."
@@ -1996,7 +1996,7 @@ msgstr[2] "Cóipeáladh %(num)d fhonn chuig %(destination)s."
 msgstr[3] "Cóipeáladh %(num)d bhfonn chuig %(destination)s."
 msgstr[4] "Cóipeáladh %(num)d fonn chuig %(destination)s."
 
-#: api_routes.py:15314
+#: api_routes.py:15338
 #, python-format, review
 msgid "(%(num)d tune skipped because it was already there.)"
 msgid_plural "(%(num)d tunes skipped because it was already there.)"
@@ -2006,13 +2006,13 @@ msgstr[2] "(%(num)d fhonn scipeáilte mar go raibh sé ann cheana.)"
 msgstr[3] "(%(num)d bhfonn scipeáilte mar go raibh sé ann cheana.)"
 msgstr[4] "(%(num)d fonn scipeáilte mar go raibh sé ann cheana.)"
 
-#: api_routes.py:15359 api_routes.py:15396 api_routes.py:15514
+#: api_routes.py:15383 api_routes.py:15420 api_routes.py:15538
 #: recording_routes.py:50
 #, review
 msgid "Admin access required"
 msgstr "Teastaíonn rochtain bhainisteora"
 
-#: api_routes.py:15470
+#: api_routes.py:15494
 #, review
 msgid "Both loser_person_id and winner_person_id are required"
 msgstr "Tá loser_person_id agus winner_person_id araon riachtanach"
@@ -2022,27 +2022,27 @@ msgstr "Tá loser_person_id agus winner_person_id araon riachtanach"
 msgid "Please log in to access this page."
 msgstr "Sínigh isteach chun an leathanach seo a oscailt."
 
-#: app.py:2027
+#: app.py:2033
 #, review
 msgid "Page not found. The session you're looking for might have ended, or the URL might be incorrect."
 msgstr "Níor aimsíodh an leathanach. B'fhéidir go bhfuil an seisiún atá uait thart, nó go bhfuil an seoladh gréasáin mícheart."
 
-#: app.py:2043
+#: app.py:2049
 #, review
 msgid "You don't have permission to access this page. You might need to log in or contact an admin."
 msgstr "Níl cead agat an leathanach seo a oscailt. B'fhéidir go gcaithfidh tú síniú isteach nó dul i dteagmháil le bainisteoir."
 
-#: app.py:2059
+#: app.py:2065
 #, review
 msgid "You must be logged in to access this page. Please log in and try again."
 msgstr "Caithfidh tú a bheith sínithe isteach chun an leathanach seo a oscailt. Sínigh isteach agus bain triail eile as."
 
-#: app.py:2075
+#: app.py:2081
 #, review
 msgid "A server error occurred. Our team has been notified and will look into this issue."
 msgstr "Tharla earráid fhreastalaí. Cuireadh ár bhfoireann ar an eolas agus féachfaidh siad isteach air."
 
-#: app.py:2094
+#: app.py:2100
 #, python-format, review
 msgid "An unexpected error occurred: %(error)s"
 msgstr "Tharla earráid gan choinne: %(error)s"
@@ -2072,199 +2072,209 @@ msgstr "Nuashonraíodh na huirlisí"
 msgid "Successfully removed person from attendance"
 msgstr "Baineadh an duine ón tinreamh"
 
-#: email_utils.py:127
+#: email_utils.py:124
+#, python-format, review
+msgid "Change which emails you get from Ceol: %(url)s"
+msgstr "Athraigh na ríomhphoist a fhaigheann tú ó Cheol: %(url)s"
+
+#: email_utils.py:125
+#, review
+msgid "Change which emails you get from Ceol"
+msgstr "Athraigh na ríomhphoist a fhaigheann tú ó Cheol"
+
+#: email_utils.py:141
 #, review
 msgid "Password Reset Request - Ceol"
 msgstr "Iarratas ar phasfhocal nua - Ceol"
 
-#: email_utils.py:128
+#: email_utils.py:142
 #, review
 msgid "To reset your password, visit the following link:"
 msgstr "Chun do phasfhocal a athshocrú, oscail an nasc seo:"
 
-#: email_utils.py:129
+#: email_utils.py:143
 #, review
 msgid "Password Reset Request"
 msgstr "Iarratas ar phasfhocal nua"
 
-#: email_utils.py:130
+#: email_utils.py:144
 #, review
 msgid "To reset your password, click the following link:"
 msgstr "Chun do phasfhocal a athshocrú, cliceáil an nasc seo:"
 
-#: email_utils.py:131
+#: email_utils.py:145
 #, review
 msgid "Reset Your Password"
 msgstr "Athshocraigh do phasfhocal"
 
-#: email_utils.py:133
+#: email_utils.py:147
 #, review
 msgid "If you did not make this request, please ignore this email and no changes will be made."
 msgstr "Mura ndearna tú an t-iarratas seo, déan neamhaird den ríomhphost seo agus ní athrófar faic."
 
-#: email_utils.py:135
+#: email_utils.py:149
 #, review
 msgid "This link will expire in 1 hour."
 msgstr "Rachaidh an nasc seo as feidhm i gceann uair an chloig."
 
-#: email_utils.py:173
+#: email_utils.py:193
 #, review
 msgid "Verify Your Email Address - Ceol"
 msgstr "Fíoraigh do sheoladh ríomhphoist - Ceol"
 
-#: email_utils.py:174
+#: email_utils.py:194
 #, review
 msgid "Welcome to Ceol!"
 msgstr "Fáilte go Ceol!"
 
-#: email_utils.py:176
+#: email_utils.py:196
 #, review
 msgid "Please click the following link to verify your email address and activate your account:"
 msgstr "Cliceáil an nasc seo chun do sheoladh ríomhphoist a fhíorú agus do chuntas a ghníomhachtú:"
 
-#: email_utils.py:179
+#: email_utils.py:199
 #, review
 msgid "Thank you for registering with us. Please verify your email address to activate your account."
 msgstr "Go raibh maith agat as clárú. Fíoraigh do sheoladh ríomhphoist chun do chuntas a ghníomhachtú."
 
-#: email_utils.py:181
+#: email_utils.py:201
 #, review
 msgid "Verify Email Address"
 msgstr "Fíoraigh an seoladh ríomhphoist"
 
-#: email_utils.py:183 email_utils.py:239 email_utils.py:290
+#: email_utils.py:203 email_utils.py:265 email_utils.py:316
 #, review
 msgid "If the button doesn't work, copy and paste this link into your browser:"
 msgstr "Mura n-oibríonn an cnaipe, cóipeáil an nasc seo agus greamaigh i do bhrabhsálaí é:"
 
-#: email_utils.py:185
+#: email_utils.py:205
 #, review
 msgid "If you did not create this account, please ignore this email."
 msgstr "Mura ndearna tú an cuntas seo, déan neamhaird den ríomhphost seo."
 
-#: email_utils.py:186 email_utils.py:243
+#: email_utils.py:206 email_utils.py:269
 #, review
 msgid "This link will expire in 24 hours."
 msgstr "Rachaidh an nasc seo as feidhm i gceann 24 uair an chloig."
 
-#: email_utils.py:229
+#: email_utils.py:255
 #, review
 msgid "Create your account - Ceol"
 msgstr "Cruthaigh do chuntas - Ceol"
 
-#: email_utils.py:231
+#: email_utils.py:257
 #, review
 msgid "Someone, hopefully you, asked to create a Ceol account with this email address."
 msgstr "D'iarr duine éigin, tusa tá súil againn, cuntas Ceol a chruthú leis an seoladh ríomhphoist seo."
 
-#: email_utils.py:233
+#: email_utils.py:259
 #, review
 msgid "Click this link to create your account and log in:"
 msgstr "Cliceáil an nasc seo chun do chuntas a chruthú agus síniú isteach:"
 
-#: email_utils.py:234
+#: email_utils.py:260
 #, review
 msgid "Create your Ceol account"
 msgstr "Cruthaigh do chuntas Ceol"
 
-#: email_utils.py:236
+#: email_utils.py:262
 #, review
 msgid "Someone, hopefully you, asked to create an account with this email address."
 msgstr "D'iarr duine éigin, tusa tá súil againn, cuntas a chruthú leis an seoladh ríomhphoist seo."
 
-#: email_utils.py:238
+#: email_utils.py:264
 #, review
 msgid "Create my account"
 msgstr "Cruthaigh mo chuntas"
 
-#: email_utils.py:241
+#: email_utils.py:267
 #, review
 msgid "If this wasn't you, ignore this email. No account is created unless the link is clicked."
 msgstr "Murab tusa a bhí ann, déan neamhaird den ríomhphost seo. Ní chruthaítear cuntas mura gcliceáiltear an nasc."
 
-#: email_utils.py:284
+#: email_utils.py:310
 #, review
 msgid "Your Login Link - Ceol"
 msgstr "Do nasc síniú isteach - Ceol"
 
-#: email_utils.py:285
+#: email_utils.py:311
 #, review
 msgid "Click this link to log in to Ceol:"
 msgstr "Cliceáil an nasc seo chun síniú isteach i gCeol:"
 
-#: email_utils.py:286
+#: email_utils.py:312
 #, review
 msgid "Log In to Ceol"
 msgstr "Sínigh isteach i gCeol"
 
-#: email_utils.py:287
+#: email_utils.py:313
 #, review
 msgid "Click the button below to log in:"
 msgstr "Cliceáil an cnaipe thíos chun síniú isteach:"
 
-#: email_utils.py:288
+#: email_utils.py:314
 #, review
 msgid "Log In"
 msgstr "Sínigh isteach"
 
-#: email_utils.py:292
+#: email_utils.py:318
 #, review
 msgid "This link will expire in 15 minutes."
 msgstr "Rachaidh an nasc seo as feidhm i gceann 15 nóiméad."
 
-#: email_utils.py:293
+#: email_utils.py:319
 #, review
 msgid "If you did not request this login link, please ignore this email."
 msgstr "Mura ndearna tú an nasc síniú isteach seo a iarraidh, déan neamhaird den ríomhphost seo."
 
-#: email_utils.py:333 templates/admin_tunes.html:343
+#: email_utils.py:371 templates/admin_tunes.html:343
 #: templates/common_tunes.html:331 templates/session_instance_players.html:169
 #: templates/tunes.html:111
 #, review
 msgid "Unknown"
 msgstr "Anaithnid"
 
-#: email_utils.py:334
+#: email_utils.py:372
 #, python-format, review
 msgid "New person added to session: %(session)s"
 msgstr "Duine nua curtha leis an seisiún: %(session)s"
 
-#: email_utils.py:338
+#: email_utils.py:376
 #, python-format, review
 msgid "%(person)s has been added to the session \"%(session)s\" in %(location)s as a member."
 msgstr "Cuireadh %(person)s leis an seisiún \"%(session)s\" in %(location)s mar bhall."
 
-#: email_utils.py:343
+#: email_utils.py:381
 #, python-format, review
 msgid "%(person)s has been added to the session \"%(session)s\" in %(location)s as a visitor."
 msgstr "Cuireadh %(person)s leis an seisiún \"%(session)s\" in %(location)s mar chuairteoir."
 
-#: email_utils.py:348
+#: email_utils.py:386
 #, python-format, review
 msgid "%(person)s has been added to the session \"%(session)s\" in %(location)s as a %(relationship)s."
 msgstr "Cuireadh %(person)s leis an seisiún \"%(session)s\" in %(location)s (%(relationship)s)."
 
-#: email_utils.py:352
+#: email_utils.py:390
 #, python-format, review
 msgid "Hello %(name)s,"
 msgstr "Dia duit, %(name)s,"
 
-#: email_utils.py:353
+#: email_utils.py:391
 #, review
 msgid "Person Details:"
 msgstr "Sonraí an duine:"
 
-#: email_utils.py:354
+#: email_utils.py:392
 #, python-format, review
 msgid "Name: %(name)s"
 msgstr "Ainm: %(name)s"
 
-#: email_utils.py:355
+#: email_utils.py:393
 #, python-format, review
 msgid "Email: %(email)s"
 msgstr "Ríomhphost: %(email)s"
 
-#: email_utils.py:355 templates/session_admin_person.html:66
+#: email_utils.py:393 templates/session_admin_person.html:66
 #: templates/session_admin_person.html:68
 #: templates/session_admin_person.html:75
 #: templates/session_admin_person.html:77
@@ -2280,32 +2290,42 @@ msgstr "Ríomhphost: %(email)s"
 msgid "Not provided"
 msgstr "Níor tugadh"
 
-#: email_utils.py:357
+#: email_utils.py:395
 #, python-format, review
 msgid "You can review and modify this person's role in the session admin interface: %(url)s"
 msgstr "Is féidir leat ról an duine seo a fheiceáil agus a athrú i riarachán an tseisiúin: %(url)s"
 
-#: email_utils.py:360
+#: email_utils.py:398
 #, review
 msgid "Best regards,"
 msgstr "Le gach dea-ghuí,"
 
-#: email_utils.py:361
+#: email_utils.py:399
 #, review
 msgid "The Ceol.io Session Management System"
 msgstr "Córas bainistíochta seisiún Ceol.io"
 
-#: email_utils.py:408
+#: email_utils.py:401
+#, python-format, review
+msgid "You get this email because you look after \"%(session)s\" on Ceol."
+msgstr "Tá an ríomhphost seo á fháil agat mar go bhfuil cúram agat ar \"%(session)s\" ar Cheol."
+
+#: email_utils.py:404
+#, python-format, review
+msgid "Stop these emails: %(url)s"
+msgstr "Stop na ríomhphoist seo: %(url)s"
+
+#: email_utils.py:478
 #, review
 msgid "You're receiving this because you opted in to updates on ceol.io."
 msgstr "Tá sé seo á fháil agat mar gur roghnaigh tú nuashonruithe ó ceol.io."
 
-#: email_utils.py:410
+#: email_utils.py:480
 #, review
 msgid "Unsubscribe"
 msgstr "Díliostáil"
 
-#: email_utils.py:411
+#: email_utils.py:485
 #, python-format, review
 msgid "Unsubscribe: %(url)s"
 msgstr "Díliostáil: %(url)s"
@@ -4175,7 +4195,7 @@ msgid "Ingest failed: %(detail)s"
 msgstr "Theip ar an bpróiseáil: %(detail)s"
 
 #: templates/admin_recordings.html:201 templates/admin_recordings.html:797
-#: web_routes.py:4009
+#: web_routes.py:4052
 #, review
 msgid "no detail recorded"
 msgstr "níor taifeadadh aon sonra"
@@ -6030,12 +6050,12 @@ msgstr "Scipeáil anois"
 msgid "Type a password in both boxes, or choose Skip for now."
 msgstr "Clóscríobh pasfhocal sa dá bhosca, nó roghnaigh Scipeáil anois."
 
-#: templates/auth/set_password.html:92 web_routes.py:1698
+#: templates/auth/set_password.html:92 web_routes.py:1699
 #, review
 msgid "Your password needs at least 8 characters. Make it longer, or choose Skip for now."
 msgstr "Teastaíonn 8 gcarachtar ar a laghad i do phasfhocal. Déan níos faide é, nó roghnaigh Scipeáil anois."
 
-#: templates/auth/set_password.html:99 web_routes.py:1707
+#: templates/auth/set_password.html:99 web_routes.py:1708
 #, review
 msgid "The two passwords don't match. Type the same password in both boxes."
 msgstr "Níl an dá phasfhocal mar an gcéanna. Clóscríobh an pasfhocal céanna sa dá bhosca."
@@ -7611,11 +7631,6 @@ msgstr "Díliostáilte - Seisiúin Cheoil Ghaelaigh"
 msgid "Unsubscribed"
 msgstr "Díliostáilte"
 
-#: templates/unsubscribe.html:16
-#, review
-msgid "You've been unsubscribed from app updates."
-msgstr "Díliostáladh thú ó nuashonruithe na haipe."
-
 #: templates/unsubscribe.html:18
 #, review
 msgid "your profile"
@@ -7623,319 +7638,329 @@ msgstr "do phróifíl"
 
 #: templates/unsubscribe.html:19
 #, python-format, review
-msgid "Changed your mind? You can turn updates back on any time on %(profile)s."
-msgstr "Ar athraigh tú d'intinn? Is féidir leat na nuashonruithe a chur ar siúl arís am ar bith ar %(profile)s."
+msgid "Changed your mind? You can turn these emails back on any time on %(profile)s."
+msgstr "Ar athraigh tú d'intinn? Is féidir leat na ríomhphoist seo a chur ar siúl arís am ar bith ar %(profile)s."
 
-#: web_routes.py:74
+#: web_routes.py:75
 #, review
 msgid "Something went wrong loading this page."
 msgstr "Chuaigh rud éigin amú agus an leathanach seo á lódáil."
 
-#: web_routes.py:333 web_routes.py:613
+#: web_routes.py:334 web_routes.py:614
 #, python-format, review
 msgid "Session not found: %(path)s"
 msgstr "Níor aimsíodh an seisiún: %(path)s"
 
-#: web_routes.py:565 web_routes.py:757
+#: web_routes.py:566 web_routes.py:758
 #, python-format, review
 msgid "Session instance not found: %(path)s on %(date)s"
 msgstr "Níor aimsíodh an ócáid seisiúin: %(path)s ar %(date)s"
 
-#: web_routes.py:571 web_routes.py:763
+#: web_routes.py:572 web_routes.py:764
 #, python-format, review
 msgid "Session instance not found: ID %(id)s for session %(path)s"
 msgstr "Níor aimsíodh an ócáid seisiúin: aitheantas %(id)s don seisiún %(path)s"
 
-#: web_routes.py:669
+#: web_routes.py:670
 #, review
 msgid "Players tab requires a specific session instance. Please select a date from the session page."
 msgstr "Teastaíonn ócáid seisiúin ar leith don chluaisín Ceoltóirí. Roghnaigh dáta ó leathanach an tseisiúin."
 
-#: web_routes.py:960
+#: web_routes.py:961
 #, review
 msgid "Username, password, first name, last name, and email are required."
 msgstr "Tá ainm úsáideora, pasfhocal, céadainm, sloinne agus ríomhphost riachtanach."
 
-#: web_routes.py:966 web_routes.py:2091
+#: web_routes.py:967 web_routes.py:2092
 #, review
 msgid "Passwords do not match."
 msgstr "Níl na pasfhocail mar a chéile."
 
-#: web_routes.py:970 web_routes.py:2095 web_routes.py:2219
+#: web_routes.py:971 web_routes.py:2096 web_routes.py:2220
 #, review
 msgid "Password must be at least 8 characters long."
 msgstr "Caithfidh 8 gcarachtar ar a laghad a bheith sa phasfhocal."
 
-#: web_routes.py:976
+#: web_routes.py:977
 #, review
 msgid "Username already exists. Please choose a different one."
 msgstr "Tá an t-ainm úsáideora sin in úsáid cheana. Roghnaigh ceann eile."
 
-#: web_routes.py:986 web_routes.py:1025
+#: web_routes.py:987 web_routes.py:1026
 #, review
 msgid "Email address already registered with a user account. Please try logging in or use password reset if needed."
 msgstr "Tá an seoladh ríomhphoist seo cláraithe le cuntas úsáideora cheana. Bain triail as síniú isteach, nó athshocraigh an pasfhocal más gá."
 
-#: web_routes.py:1074
+#: web_routes.py:1075
 #, review
 msgid "Failed to create person record"
 msgstr "Theip ar thaifead an duine a chruthú"
 
-#: web_routes.py:1109
+#: web_routes.py:1110
 #, review
 msgid "Failed to create user account"
 msgstr "Theip ar an gcuntas úsáideora a chruthú"
 
-#: web_routes.py:1143
+#: web_routes.py:1144
 #, review
 msgid "Registration successful! Please check your email to verify your account before logging in."
 msgstr "D'éirigh leis an gclárú! Féach ar do ríomhphost chun do chuntas a fhíorú sula síneoidh tú isteach."
 
-#: web_routes.py:1150
+#: web_routes.py:1151
 #, review
 msgid "Registration successful, but failed to send verification email. Please contact support."
 msgstr "D'éirigh leis an gclárú, ach theip ar an ríomhphost fíoraithe a sheoladh. Déan teagmháil le tacaíocht."
 
-#: web_routes.py:1160
+#: web_routes.py:1161
 #, review
 msgid "Registration failed. Please try again."
 msgstr "Theip ar an gclárú. Bain triail eile as."
 
-#: web_routes.py:1195
+#: web_routes.py:1196
 #, review
 msgid "Username and password are required."
 msgstr "Tá ainm úsáideora agus pasfhocal riachtanach."
 
-#: web_routes.py:1211
+#: web_routes.py:1212
 #, review
 msgid "Please verify your email address before logging in. Check your email for a verification link."
 msgstr "Fíoraigh do sheoladh ríomhphoist sula síneoidh tú isteach. Féach ar do ríomhphost le haghaidh nasc fíoraithe."
 
-#: web_routes.py:1286
+#: web_routes.py:1287
 #, review
 msgid "Invalid username or password."
 msgstr "Ainm úsáideora nó pasfhocal mícheart."
 
-#: web_routes.py:1334
+#: web_routes.py:1335
 #, review
 msgid "You have been logged out."
 msgstr "Síníodh amach thú."
 
-#: web_routes.py:1370 web_routes.py:1484
+#: web_routes.py:1371 web_routes.py:1485
 #, review
 msgid "JSON request required"
 msgstr "Teastaíonn iarratas JSON"
 
-#: web_routes.py:1380
+#: web_routes.py:1381
 #, review
 msgid "Please enter a valid email address"
 msgstr "Cuir isteach seoladh ríomhphoist bailí"
 
-#: web_routes.py:1400
+#: web_routes.py:1401
 #, review
 msgid "This account has been deactivated. Please contact support."
 msgstr "Díghníomhachtaíodh an cuntas seo. Déan teagmháil le tacaíocht."
 
-#: web_routes.py:1414
+#: web_routes.py:1415
 #, review
 msgid "Enter your password to log in"
 msgstr "Cuir isteach do phasfhocal chun síniú isteach"
 
-#: web_routes.py:1451
+#: web_routes.py:1452
 #, review
 msgid "Check your email for a login link"
 msgstr "Féach ar do ríomhphost le haghaidh nasc síniú isteach"
 
-#: web_routes.py:1475
+#: web_routes.py:1476
 #, review
 msgid "We don't have an account for this email yet. We've sent a link to create one."
 msgstr "Níl cuntas againn don ríomhphost seo fós. Sheolamar nasc chun ceann a chruthú."
 
-#: web_routes.py:1491
+#: web_routes.py:1492
 #, review
 msgid "Email and password are required"
 msgstr "Tá ríomhphost agus pasfhocal riachtanach"
 
-#: web_routes.py:1512 web_routes.py:1542
+#: web_routes.py:1513 web_routes.py:1543
 #, review
 msgid "Invalid email or password"
 msgstr "Ríomhphost nó pasfhocal mícheart"
 
-#: web_routes.py:1526
+#: web_routes.py:1527
 #, review
 msgid "This account has been deactivated"
 msgstr "Díghníomhachtaíodh an cuntas seo"
 
-#: web_routes.py:1557
+#: web_routes.py:1558
 #, review
 msgid "Please verify your email address first"
 msgstr "Fíoraigh do sheoladh ríomhphoist ar dtús"
 
-#: web_routes.py:1598
+#: web_routes.py:1599
 #, review
 msgid "Invalid or expired login link. Please request a new one."
 msgstr "Tá an nasc síniú isteach neamhbhailí nó imithe as feidhm. Iarr ceann nua."
 
-#: web_routes.py:1676
+#: web_routes.py:1677
 #, review
 msgid "You have been logged in."
 msgstr "Síníodh isteach thú."
 
-#: web_routes.py:1746
+#: web_routes.py:1747
 #, review
 msgid "Password set successfully! You can use it to log in next time."
 msgstr "Socraíodh an pasfhocal! Is féidir leat é a úsáid chun síniú isteach an chéad uair eile."
 
-#: web_routes.py:1889
+#: web_routes.py:1890
 #, review
 msgid "Profile updated!"
 msgstr "Próifíl nuashonraithe!"
 
-#: web_routes.py:2003 web_routes.py:2414
+#: web_routes.py:2004 web_routes.py:2415
 #, review
 msgid "Email address is required."
 msgstr "Tá seoladh ríomhphoist riachtanach."
 
-#: web_routes.py:2056
+#: web_routes.py:2057
 #, review
 msgid "Password reset instructions have been sent to your email."
 msgstr "Seoladh treoracha athshocraithe pasfhocail chuig do ríomhphost."
 
-#: web_routes.py:2061
+#: web_routes.py:2062
 #, review
 msgid "Failed to send reset email. Please try again later."
 msgstr "Theip ar an ríomhphost athshocraithe a sheoladh. Bain triail eile as ar ball."
 
-#: web_routes.py:2068
+#: web_routes.py:2069
 #, review
 msgid "If an account with that email exists, password reset instructions have been sent."
 msgstr "Má tá cuntas ann leis an ríomhphost sin, seoladh treoracha athshocraithe pasfhocail."
 
-#: web_routes.py:2087
+#: web_routes.py:2088
 #, review
 msgid "Both password fields are required."
 msgstr "Tá an dá réimse pasfhocail riachtanach."
 
-#: web_routes.py:2155
+#: web_routes.py:2156
 #, review
 msgid "Password has been reset successfully. Please log in."
 msgstr "Athshocraíodh an pasfhocal. Sínigh isteach."
 
-#: web_routes.py:2159 web_routes.py:2179
+#: web_routes.py:2160 web_routes.py:2180
 #, review
 msgid "Invalid or expired reset token."
 msgstr "Tá an comhartha athshocraithe neamhbhailí nó imithe as feidhm."
 
-#: web_routes.py:2201
+#: web_routes.py:2202
 #, review
 msgid "All password fields are required."
 msgstr "Tá gach réimse pasfhocail riachtanach."
 
-#: web_routes.py:2207
+#: web_routes.py:2208
 #, review
 msgid "Password fields are required."
 msgstr "Tá na réimsí pasfhocail riachtanach."
 
-#: web_routes.py:2213
+#: web_routes.py:2214
 #, review
 msgid "New passwords do not match."
 msgstr "Níl na pasfhocail nua mar a chéile."
 
-#: web_routes.py:2227
+#: web_routes.py:2228
 #, review
 msgid "Current password is incorrect."
 msgstr "Tá an pasfhocal reatha mícheart."
 
-#: web_routes.py:2262
+#: web_routes.py:2263
 #, review
 msgid "Password changed successfully."
 msgstr "Athraíodh an pasfhocal."
 
-#: web_routes.py:2264
+#: web_routes.py:2265
 #, review
 msgid "Password created successfully."
 msgstr "Cruthaíodh an pasfhocal."
 
-#: web_routes.py:2312
+#: web_routes.py:2313
 #, review
 msgid "Email verified! Welcome to Ceol."
 msgstr "Fíoraíodh an ríomhphost! Fáilte go Ceol."
 
-#: web_routes.py:2348
+#: web_routes.py:2349
 #, review
 msgid "There's already an account for this email address. Enter the address below to log in."
 msgstr "Tá cuntas ann cheana don seoladh ríomhphoist seo. Cuir isteach an seoladh thíos chun síniú isteach."
 
-#: web_routes.py:2392
+#: web_routes.py:2393
 #, review
 msgid "This link is invalid or has expired. Enter your email below and we'll send a new one."
 msgstr "Tá an nasc seo neamhbhailí nó imithe as feidhm. Cuir isteach do ríomhphost thíos agus seolfaimid ceann nua."
 
-#: web_routes.py:2405
+#: web_routes.py:2406
 #, review
 msgid "Email verified successfully! You can now log in."
 msgstr "Fíoraíodh an ríomhphost! Is féidir leat síniú isteach anois."
 
-#: web_routes.py:2468
+#: web_routes.py:2469
 #, review
 msgid "Verification email sent! Please check your email."
 msgstr "Seoladh an ríomhphost fíoraithe! Féach ar do ríomhphost."
 
-#: web_routes.py:2473
+#: web_routes.py:2474
 #, review
 msgid "Failed to send verification email. Please try again later."
 msgstr "Theip ar an ríomhphost fíoraithe a sheoladh. Bain triail eile as ar ball."
 
-#: web_routes.py:2482
+#: web_routes.py:2483
 #, review
 msgid "We've sent a new link. Check your email to create your account."
 msgstr "Sheolamar nasc nua. Féach ar do ríomhphost chun do chuntas a chruthú."
 
-#: web_routes.py:2489
+#: web_routes.py:2490
 #, review
 msgid "Failed to send the email. Please try again in a few minutes."
 msgstr "Theip ar an ríomhphost a sheoladh. Bain triail eile as i gceann cúpla nóiméad."
 
-#: web_routes.py:2518 web_routes.py:2536
+#: web_routes.py:2519 web_routes.py:2537 web_routes.py:2557 web_routes.py:2575
 #, review
 msgid "This unsubscribe link is not valid."
 msgstr "Níl an nasc díliostála seo bailí."
 
-#: web_routes.py:2550 web_routes.py:2563 web_routes.py:2749 web_routes.py:2767
-#: web_routes.py:2785 web_routes.py:2796 web_routes.py:2811 web_routes.py:2822
-#: web_routes.py:2916 web_routes.py:2926 web_routes.py:3006 web_routes.py:3138
-#: web_routes.py:3197 web_routes.py:3353 web_routes.py:3529 web_routes.py:3888
-#: web_routes.py:3932 web_routes.py:3972
+#: web_routes.py:2545
+#, review
+msgid "You've been unsubscribed from app updates."
+msgstr "Díliostáladh thú ó nuashonruithe na haipe."
+
+#: web_routes.py:2585
+#, review
+msgid "You won't get emails when someone is added to a session you look after."
+msgstr "Ní bhfaighidh tú ríomhphost nuair a chuirtear duine le seisiún a bhfuil cúram agat air."
+
+#: web_routes.py:2594 web_routes.py:2607 web_routes.py:2793 web_routes.py:2811
+#: web_routes.py:2829 web_routes.py:2840 web_routes.py:2855 web_routes.py:2866
+#: web_routes.py:2960 web_routes.py:2970 web_routes.py:3050 web_routes.py:3182
+#: web_routes.py:3241 web_routes.py:3397 web_routes.py:3573 web_routes.py:3931
+#: web_routes.py:3975 web_routes.py:4015
 #, review
 msgid "You must be authorized to view this page."
 msgstr "Ní mór cead a bheith agat chun an leathanach seo a fheiceáil."
 
-#: web_routes.py:3024
+#: web_routes.py:3068
 #, review
 msgid "Person not found."
 msgstr "Níor aimsíodh an duine."
 
-#: web_routes.py:3442
+#: web_routes.py:3486
 #, review
 msgid "This person does not have a user account"
 msgstr "Níl cuntas úsáideora ag an duine seo"
 
-#: web_routes.py:3492
+#: web_routes.py:3536
 #, review
 msgid "Error loading page"
 msgstr "Earráid agus an leathanach á lódáil"
 
-#: web_routes.py:3997
+#: web_routes.py:4040
 #, review
 msgid "That recording doesn't exist."
 msgstr "Níl an taifeadadh sin ann."
 
-#: web_routes.py:4013
+#: web_routes.py:4056
 #, python-format, review
 msgid "That recording could not be processed (%(detail)s). Retry it from the list."
 msgstr "Níorbh fhéidir an taifeadadh sin a phróiseáil (%(detail)s). Bain triail eile as ón liosta."
 
-#: web_routes.py:4022
+#: web_routes.py:4065
 #, review
 msgid "That recording is still being processed — its waveform isn't ready yet."
 msgstr "Tá an taifeadadh sin fós á phróiseáil — níl a thonnchruth réidh fós."

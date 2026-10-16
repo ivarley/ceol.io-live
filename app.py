@@ -706,6 +706,12 @@ app.add_url_rule(
     methods=["GET", "POST"],
 )
 app.add_url_rule(
+    "/unsubscribe/person-added/<token>",
+    "unsubscribe_person_added",
+    unsubscribe_person_added,
+    methods=["GET", "POST"],
+)
+app.add_url_rule(
     "/resend-verification",
     "resend_verification",
     resend_verification,

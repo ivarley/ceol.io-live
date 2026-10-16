@@ -13,10 +13,10 @@
                         <h3 class="card-title text-center mb-0">{{ _('Unsubscribed') }}</h3>
                     </div>
                     <div class="card-body">
-                        <p>{{ _("You've been unsubscribed from app updates.") }}</p>
+                        <p>{{ message }}</p>
                         <p class="text-muted mb-0">
                             {% set profile_link %}<a href="{{ url_for('user_profile') }}">{{ _('your profile') }}</a>{% endset %}
-                            {{ _('Changed your mind? You can turn updates back on any time on %(profile)s.', profile=profile_link) }}
+                            {{ _('Changed your mind? You can turn these emails back on any time on %(profile)s.', profile=profile_link) }}
                         </p>
                     </div>
                 </div>
