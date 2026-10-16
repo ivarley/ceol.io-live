@@ -6,7 +6,9 @@
 //
 // Both go to POST /api/auth/exchange with the token; the server tells them apart. The
 // app accepts them on ceol.io and on www.ceol.io, which redirects to it but appears
-// in links sent before ceol.io became canonical.
+// in links sent before ceol.io became canonical, and on ceol.app, where Ceol is moving
+// (spec 058). Emails carry the host they were sent from, so both domains stay until
+// the old one's links have run out.
 
 import Foundation
 
@@ -14,7 +16,7 @@ public enum AuthLink: Equatable, Sendable {
     case login(token: String)
     case verifyEmail(token: String)
 
-    public static let hosts: Set<String> = ["ceol.io", "www.ceol.io"]
+    public static let hosts: Set<String> = ["ceol.io", "www.ceol.io", "ceol.app"]
 
     public var token: String {
         switch self {

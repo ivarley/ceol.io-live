@@ -173,6 +173,9 @@ struct AuthLinkTests {
         #expect(AuthLink(URL(string: "https://ceol.io/auth/login/abc123")!) == .login(token: "abc123"))
         #expect(AuthLink(URL(string: "https://www.ceol.io/verify-email/xyz")!) == .verifyEmail(token: "xyz"))
         #expect(AuthLink(URL(string: "https://CEOL.io/verify-email/xyz?utm=1")!) == .verifyEmail(token: "xyz"))
+        // The new domain (spec 058).
+        #expect(AuthLink(URL(string: "https://ceol.app/auth/login/abc123")!) == .login(token: "abc123"))
+        #expect(AuthLink(URL(string: "https://ceol.app/verify-email/xyz")!) == .verifyEmail(token: "xyz"))
     }
 
     @Test("anything else is not a sign-in link")
@@ -180,6 +183,7 @@ struct AuthLinkTests {
         for s in [
             "https://ceol.io/sessions/austin/mueller", "https://ceol.io/auth/login/", "https://ceol.io/verify-email",
             "https://evil.example/auth/login/abc", "https://ceol.io/auth/login/abc/extra",
+            "https://notceol.app/auth/login/abc", "https://ceol.app/sessions/austin/mueller",
         ] {
             #expect(AuthLink(URL(string: s)!) == nil, "\(s)")
         }
