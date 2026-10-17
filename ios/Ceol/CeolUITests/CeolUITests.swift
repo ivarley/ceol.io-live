@@ -671,8 +671,12 @@ final class CeolUITests: XCTestCase {
         let app = launch()
         signIn(app)
         app.buttons["tab.tunes"].firstMatch.tap()
+        // Share is in the top bar's "⋯", with Report.
+        let menu = app.buttons["page.menu"].firstMatch
+        XCTAssertTrue(menu.waitForExistence(timeout: 10))
+        menu.tap()
         let share = app.buttons["share"].firstMatch
-        XCTAssertTrue(share.waitForExistence(timeout: 10))
+        XCTAssertTrue(share.waitForExistence(timeout: 5))
         share.tap()
         XCTAssertTrue(app.images["share.qr"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["share.url"].label.hasSuffix("/my-tunes"), app.staticTexts["share.url"].label)
@@ -681,13 +685,39 @@ final class CeolUITests: XCTestCase {
         XCTAssertTrue(app.images["share.qr"].waitForNonExistence(timeout: 5))
 
         app.buttons.containing(NSPredicate(format: "label CONTAINS \"Cooley's\"")).firstMatch.tap()
-        XCTAssertTrue(app.images["Notation for Cooley's"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.buttons["sheet.notation"].waitForExistence(timeout: 20))
         snapshot("drawer below the bar")
         // Tapped where it is on screen: behind a sheet, accessibility calls it hidden
         // even though the drawer stops below the bar and the tap gets through.
-        share.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        menu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        XCTAssertTrue(app.buttons["share"].firstMatch.waitForExistence(timeout: 5))
+        app.buttons["share"].firstMatch.tap()
         XCTAssertTrue(app.staticTexts["share.url"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["share.url"].label.contains("thesession.org/tunes/"), app.staticTexts["share.url"].label)
+    }
+
+    /// Report (App Store guideline 1.2): in the "⋯" on every screen, a form about that
+    /// screen. Not sent: a local server's email is real.
+    @MainActor
+    func testReportingAScreen() throws {
+        let app = launch()
+        signIn(app)
+        app.buttons["tab.sessions"].firstMatch.tap()
+        let menu = app.buttons["page.menu"].firstMatch
+        XCTAssertTrue(menu.waitForExistence(timeout: 10))
+        menu.tap()
+        let report = app.buttons["report"].firstMatch
+        XCTAssertTrue(report.waitForExistence(timeout: 5))
+        report.tap()
+        let send = app.buttons["report.send"]
+        XCTAssertTrue(send.waitForExistence(timeout: 5))
+        XCTAssertFalse(send.isEnabled, "nothing chosen yet")
+        app.buttons["report.other"].tap()
+        XCTAssertFalse(send.isEnabled, "Something else needs a few words")
+        app.buttons["report.offensive"].tap()
+        XCTAssertTrue(send.isEnabled)
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label ENDSWITH \"/sessions\"")).firstMatch.exists)
+        snapshot("report")
     }
 
     /// Phase 5a: a night shows what another client logs, live. The test is the other

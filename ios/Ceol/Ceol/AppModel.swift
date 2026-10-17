@@ -47,8 +47,10 @@ final class AppModel {
         rootRequests[tab, default: 0] += 1
     }
 
-    /// The Share pane, when open (ShareButton sets it; ceolSharePane shows it).
+    /// The Share pane, when open (PageMenu sets it; ceolSharePane shows it).
     var sharing: ShareTarget?
+    /// The report form, when open (Report in a "⋯" menu; shown where Share is).
+    var reporting: ReportTarget?
     /// What Share offers while a drawer is up over the screen (the tune drawer: that
     /// tune's page). The drawer sets it as it appears and clears it as it goes.
     var shareOverride: ShareTarget?

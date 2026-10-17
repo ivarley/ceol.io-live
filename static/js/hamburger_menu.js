@@ -27,6 +27,11 @@ function shareCurrentPage() {
     window.location.href = '/share?url=' + encodeURIComponent(window.location.href);
 }
 
+// Report (App Store guideline 1.2): a short form about this page, sent to support.
+function reportCurrentPage() {
+    window.location.href = '/report?page=' + encodeURIComponent(window.location.href);
+}
+
 // --- 'Find a tune' (context-aware) ---------------------------------------
 // NO UI REACHES THIS ANY MORE. Its only caller was the menu item, dropped when the
 // menu was re-cut to mirror the tab bar (spec 052 §B8): the live logger inserts tunes

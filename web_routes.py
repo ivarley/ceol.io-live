@@ -852,6 +852,27 @@ def help_page():
     return render_template(localized("help.html"))
 
 
+def privacy_page():
+    return render_template(localized("help_privacy.html"))
+
+
+def support_page():
+    return render_template(localized("help_support.html"))
+
+
+def report_page():
+    """The web's Report (App Store guideline 1.2): a short form about the page it came
+    from (`?page=`), sent to POST /api/report."""
+    page = request.args.get("page", "")[:500]
+    # It becomes a link back: an address or a path on this site, never javascript: etc.
+    if not (
+        page.startswith(("https://", "http://"))
+        or (page.startswith("/") and not page.startswith("//"))
+    ):
+        page = ""
+    return render_template("report.html", page_url=page)
+
+
 def share_page():
     # Get the target URL from query parameter (the page to share)
     target_url = request.args.get("url", request.host_url.rstrip("/"))

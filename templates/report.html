@@ -1,0 +1,98 @@
+{# i18n-converted #}
+{# Report a page (App Store guideline 1.2): opened from Report in the menu, with the page
+   it came from in ?page=. Sends to POST /api/report, which emails support. #}
+{% extends "base.html" %}
+
+{% block title %}{{ _('Report') }} - {{ _('Irish Music Sessions') }}{% endblock %}
+
+{% block content %}
+<div class="page-wrapper">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-8 col-lg-6">
+                <div class="card mt-5">
+                    <div class="card-header">
+                        <h3 class="card-title text-center mb-0">{{ _('Report') }}</h3>
+                    </div>
+                    <div class="card-body">
+                        <div id="reportSent" style="display:none">
+                            <p>{{ _("Thanks. Your report has gone to Ceol's support, and someone will look at it soon.") }}</p>
+                            {% if page_url %}<p class="mb-0"><a href="{{ page_url }}">{{ _('Back to the page') }}</a></p>{% endif %}
+                        </div>
+                        <form id="reportForm">
+                            {% if page_url %}
+                            <p class="text-muted">{{ _('About this page:') }} <span style="word-break: break-all">{{ page_url }}</span></p>
+                            {% endif %}
+                            <fieldset class="mb-3">
+                                <legend class="form-label" style="font-size: 1rem">{{ _("What's wrong?") }}</legend>
+                                {% for value, label in [
+                                    ('offensive', _('Offensive or inappropriate')),
+                                    ('wrong', _('Wrong or spam')),
+                                    ('broken', _("Something's broken")),
+                                    ('other', _('Something else')),
+                                ] %}
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="reason" id="reason-{{ value }}" value="{{ value }}" required>
+                                    <label class="form-check-label" for="reason-{{ value }}">{{ label }}</label>
+                                </div>
+                                {% endfor %}
+                            </fieldset>
+                            <div class="mb-3">
+                                <label for="reportMessage" class="form-label">{{ _('Tell us more (optional)') }}</label>
+                                <textarea class="form-control" id="reportMessage" rows="4" maxlength="4000"></textarea>
+                            </div>
+                            {% if not current_user.is_authenticated %}
+                            <div class="mb-3">
+                                <label for="reportEmail" class="form-label">{{ _('Your email, if you want a reply (optional)') }}</label>
+                                <input type="email" class="form-control" id="reportEmail">
+                            </div>
+                            {% endif %}
+                            <p id="reportError" class="text-danger" style="display:none"></p>
+                            <button type="submit" class="btn btn-primary" id="reportSend">{{ _('Send Report') }}</button>
+                        </form>
+                        <p class="text-muted mt-3 mb-0">{{ _('You can also email %(address)s.', address='support@ceol.app') }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+(function () {
+    const form = document.getElementById('reportForm');
+    const error = document.getElementById('reportError');
+    const send = document.getElementById('reportSend');
+    const SENDING = {{ _('Sending...') | tojson }};
+    const SEND = {{ _('Send Report') | tojson }};
+    const FAILED = {{ _("Couldn't send that. Try again, or email %(address)s.", address='support@ceol.app') | tojson }};
+    form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        error.style.display = 'none';
+        send.disabled = true;
+        send.textContent = SENDING;
+        const email = document.getElementById('reportEmail');
+        try {
+            const r = await fetch('/api/report', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    reason: (form.querySelector('input[name=reason]:checked') || {}).value || '',
+                    message: document.getElementById('reportMessage').value,
+                    page_url: {{ page_url | tojson }},
+                    contact_email: email ? email.value : '',
+                }),
+            });
+            const data = await r.json().catch(() => ({}));
+            if (!r.ok || !data.success) throw new Error(data.message || data.error || FAILED);
+            form.style.display = 'none';
+            document.getElementById('reportSent').style.display = '';
+        } catch (err) {
+            error.textContent = err.message || FAILED;
+            error.style.display = '';
+            send.disabled = false;
+            send.textContent = SEND;
+        }
+    });
+})();
+</script>
+{% endblock %}

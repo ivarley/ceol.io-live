@@ -268,7 +268,7 @@ struct SessionDetailView: View {
             .background(CeolTokens.bgColor)
             .ceolKept(state)
             // The web's Share: a link to this page, for someone without the app too.
-            .ceolPushedBar(name) { ShareButton(path: "/sessions/\(path)/\(tab.rawValue.lowercased())", subject: name) }
+            .ceolPushedBar(name) { PageMenu(path: "/sessions/\(path)/\(tab.rawValue.lowercased())", subject: name) }
             .navigationDestination(item: $newNight) { NightView(sessionInstanceID: $0.id, title: $0.title) }
             .sheet(isPresented: $editingRole) {
                 if let p = state.value?.permissions, let relationship = p.relationship {
@@ -1112,14 +1112,18 @@ struct NightView: View {
                     .accessibilityIdentifier("night.recordings")
             }
             if let night = model.night, let path = night["session_path"]?.stringValue {
+                // A night's page is its date, or its id when it has none.
+                let url = app.webURL("/sessions/\(path)/\(night["instance_date"]?.stringValue ?? String(sessionInstanceID))")
                 Divider()
                 Button {
-                    // A night's page is its date, or its id when it has none.
                     app.sharing = app.shareOverride ?? ShareTarget(
-                        url: app.webURL("/sessions/\(path)/\(night["instance_date"]?.stringValue ?? String(sessionInstanceID))"),
-                        title: "\(night["session_name"]?.stringValue ?? ""), \(night["session_date"]?.stringValue ?? "")")
+                        url: url, title: "\(night["session_name"]?.stringValue ?? ""), \(night["session_date"]?.stringValue ?? "")")
                 } label: { Label("Share", systemImage: "square.and.arrow.up") }
                     .accessibilityIdentifier("share")
+                ReportButton(url: url)
+            } else {
+                Divider()
+                ReportButton(url: nil)
             }
         } label: {
             Image(systemName: "ellipsis.circle").font(.system(size: 20, weight: .medium))

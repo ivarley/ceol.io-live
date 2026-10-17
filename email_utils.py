@@ -13,12 +13,19 @@ logger = logging.getLogger(__name__)
 
 
 def send_email_via_sendgrid(
-    to_email, subject, body_text, body_html=None, from_email=None, unsubscribe_url=None
+    to_email,
+    subject,
+    body_text,
+    body_html=None,
+    from_email=None,
+    unsubscribe_url=None,
+    reply_to=None,
 ):
     """Send email using SendGrid API.
 
     from_email: overrides MAIL_DEFAULT_SENDER for this message (must be a
-    SendGrid-verified sender). unsubscribe_url: personalized one-click
+    SendGrid-verified sender). reply_to: where a reply goes instead (a report's
+    sender, so support answers them directly). unsubscribe_url: personalized one-click
     unsubscribe target, sent as List-Unsubscribe; without one, no unsubscribe headers
     (RFC 8058 — mail clients render a native Unsubscribe button and POST to it).
     """
@@ -43,6 +50,8 @@ def send_email_via_sendgrid(
             plain_text_content=body_text,
             html_content=body_html,
         )
+        if reply_to:
+            message.reply_to = reply_to
 
         # One-click unsubscribe (RFC 8058), only on mail someone can unsubscribe from.
         # Sign-in links, verification and password resets carry none: there is nothing

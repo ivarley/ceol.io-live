@@ -410,5 +410,13 @@
   "people|Attended": {
     "ga": "Bhí i láthair",
     "review": true
+  },
+  "Report": {
+    "ga": "Tuairiscigh",
+    "review": true
+  },
+  "Privacy Policy": {
+    "ga": "Polasaí príobháideachais",
+    "review": true
   }
 }

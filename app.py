@@ -31,6 +31,7 @@ from api_app_routes import (
     auth_web_session,
     apple_app_site_association,
     delete_account_api,
+    report_api,
     listen_decider_data,
 )
 from api_routes import *
@@ -556,6 +557,9 @@ app.add_url_rule("/add-session", "add_session", add_session)
 app.add_url_rule("/tunes", "tunes_page", tunes_page)
 app.add_url_rule("/about", "about_page", about_page)
 app.add_url_rule("/help", "help_page", help_page)
+app.add_url_rule("/privacy", "privacy_page", privacy_page)
+app.add_url_rule("/support", "support_page", support_page)
+app.add_url_rule("/report", "report_page", report_page)
 app.add_url_rule(
     "/irish-glossary-review", "irish_glossary_review", irish_glossary_review
 )
@@ -622,6 +626,7 @@ app.add_url_rule("/api/me/profile", "me_profile", me_profile, methods=["GET", "P
 app.add_url_rule(
     "/api/me/delete-account", "delete_account_api", delete_account_api, methods=["POST"]
 )
+app.add_url_rule("/api/report", "report_api", report_api, methods=["POST"])
 app.add_url_rule("/api/app-config", "app_config", app_config, methods=["GET"])
 app.add_url_rule("/api/home", "api_home", api_home, methods=["GET"])
 app.add_url_rule("/api/resolve", "resolve_path", resolve_path, methods=["GET"])

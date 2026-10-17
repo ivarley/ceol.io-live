@@ -102,7 +102,9 @@ struct ListenScreen: View {
                 .padding(16)
             }
             .background(CeolTokens.bgColor)
-            .modifier(CeolTopBar(title: app.recorder?.title ?? tr("Listen"), root: !presented) { stopButton })
+            .modifier(CeolTopBar(title: app.recorder?.title ?? tr("Listen"), root: !presented) {
+                HStack(spacing: 14) { stopButton; PageMenu(path: nil) }
+            })
             .toolbar {
                 if presented {
                     ToolbarItem(placement: .topBarLeading) {

@@ -123,7 +123,7 @@ extension View {
     /// (it goes Home, as the web's does), Share top-right, and no page heading. `title`
     /// still names the screen for the back button; `sharePath` is the page on the web.
     func ceolRootBar(_ title: String, sharePath: String) -> some View {
-        modifier(CeolTopBar(title: title, root: true) { ShareButton(path: sharePath, subject: title) })
+        modifier(CeolTopBar(title: title, root: true) { PageMenu(path: sharePath, subject: title) })
     }
 
     /// The web's header strip: the top bar on the header colour, always.
@@ -727,28 +727,50 @@ struct ShareTarget: Identifiable, Equatable {
     var id: URL { url }
 }
 
-/// The web's Share (its glyph, muted). It opens the Share pane for this screen, or for
-/// the drawer over it when there is one.
-struct ShareButton: View {
+/// What Report is about: the page's web address, when it has one.
+struct ReportTarget: Identifiable, Equatable {
+    let url: URL?
+    var id: String { url?.absoluteString ?? "" }
+}
+
+/// The top bar's "⋯" on every screen: Share (the Share pane for this screen, or for the
+/// drawer over it when there is one) and Report (App Store guideline 1.2: a way to
+/// report what's on any screen). `path` nil: a screen with no web page, Report only.
+struct PageMenu: View {
     @Environment(AppModel.self) private var model
     @Environment(\.verticalSizeClass) private var verticalSizeClass
-    let path: String
+    let path: String?
     var subject: String = "Ceol"
 
     var body: some View {
         let landscape = verticalSizeClass == .compact
-        Button {
-            model.sharing = model.shareOverride ?? ShareTarget(url: model.webURL(path), title: subject)
+        Menu {
+            if let path {
+                Button {
+                    model.sharing = model.shareOverride ?? ShareTarget(url: model.webURL(path), title: subject)
+                } label: { Label { Text("Share") } icon: { Image("IconShare").renderingMode(.template) } }
+                    .accessibilityIdentifier("share")
+            }
+            ReportButton(url: model.shareOverride?.url ?? path.map { model.webURL($0) })
         } label: {
-            Image("IconShare").renderingMode(.template).resizable().scaledToFit()
-                .frame(width: landscape ? 18 : 20, height: landscape ? 18 : 20)
+            Image(systemName: "ellipsis.circle").font(.system(size: landscape ? 18 : 20, weight: .medium))
                 .foregroundStyle(CeolTokens.textMuted)
                 .frame(width: landscape ? 26 : 36, height: landscape ? 26 : 36)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Share this page")
-        .accessibilityIdentifier("share")
+        .accessibilityLabel("More")
+        .accessibilityIdentifier("page.menu")
+    }
+}
+
+/// Report, as a menu item: opens the report form (ReportView) about `url`.
+struct ReportButton: View {
+    @Environment(AppModel.self) private var model
+    let url: URL?
+
+    var body: some View {
+        Button { model.reporting = ReportTarget(url: url) } label: { Label("Report", systemImage: "flag") }
+            .accessibilityIdentifier("report")
     }
 }
 
@@ -789,6 +811,7 @@ private struct SharePaneHost: ViewModifier {
         let mine = isRoot ? model.shareHosts.isEmpty : model.shareHosts.last == id
         content
             .sheet(item: Binding(get: { mine ? model.sharing : nil }, set: { model.sharing = $0 })) { SharePane(target: $0) }
+            .sheet(item: Binding(get: { mine ? model.reporting : nil }, set: { model.reporting = $0 })) { ReportView(target: $0) }
             .onAppear { if !isRoot { model.shareHosts.append(id) } }
             .onDisappear { model.shareHosts.removeAll { $0 == id } }
     }

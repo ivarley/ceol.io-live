@@ -171,5 +171,19 @@
   "logged": "logáilte",
   "not logged": "gan logáil",
   "there": "a chara",
-  "thesession.org member number or link": "Uimhir bhaill nó nasc thesession.org"
+  "thesession.org member number or link": "Uimhir bhaill nó nasc thesession.org",
+  "Report": "Tuairiscigh",
+  "More": "Tuilleadh",
+  "Offensive or inappropriate": "Maslach nó míchuí",
+  "Wrong or spam": "Mícheart nó turscar",
+  "Something's broken": "Tá rud éigin briste",
+  "Something else": "Rud éigin eile",
+  "What's wrong?": "Cad atá mícheart?",
+  "About this page": "Faoin leathanach seo",
+  "Tell us more": "Inis tuilleadh dúinn",
+  "Reports go to support@ceol.app, with your name and email so we can reply.": "Téann tuairiscí chuig support@ceol.app, le d'ainm agus do ríomhphost ionas gur féidir linn freagra a thabhairt.",
+  "Thanks. Your report has gone to Ceol's support, and someone will look at it soon.": "Go raibh maith agat. Tá do thuairisc imithe chuig tacaíocht Ceol, agus breathnóidh duine air go luath.",
+  "Send": "Seol",
+  "Contact & Support": "Teagmháil agus tacaíocht",
+  "Privacy Policy": "Polasaí príobháideachais"
 }

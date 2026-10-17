@@ -67,6 +67,15 @@
       {#snippet trailing()}<Chevron class="kit-chev" />{/snippet}
     </Row>
 
+    <!-- App Store guideline 1.2: phones have no menu, so Report lives here too. -->
+    <Row styled={false} rowClass="kit-field account-row" href="/report" title={t('Report')} id="account-report">
+      {#snippet trailing()}<Chevron class="kit-chev" />{/snippet}
+    </Row>
+
+    <Row styled={false} rowClass="kit-field account-row" href="/privacy" title={t('Privacy Policy')} id="account-privacy">
+      {#snippet trailing()}<Chevron class="kit-chev" />{/snippet}
+    </Row>
+
     <Row
       styled={false}
       rowClass="kit-field account-row account-row-out"

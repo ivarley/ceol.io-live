@@ -1,0 +1,24 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "NSMicrophoneUsageDescription" : {
+      "comment" : "The microphone permission prompt (Ceol-Info.plist). Spec 057: Irish drafted, needs review.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ceol listens to work out which tunes are being played. A recording you keep stays on this phone unless you upload it."
+          }
+        },
+        "ga" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Éisteann Ceol chun a oibriú amach cé na foinn atá á seinm. Fanann taifeadadh a choinníonn tú ar an bhfón seo mura n-uaslódálann tú é."
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

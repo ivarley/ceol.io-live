@@ -150,6 +150,20 @@ public struct AuthService: Sendable {
         }
     }
 
+    /// Report a page to Ceol's support (POST /api/report): `reason` is offensive, wrong,
+    /// broken or other; `message` is required for other. Emailed to support.
+    public func report(reason: String, message: String, pageURL: String?) async throws {
+        guard let reason = Operations.SendReport.Input.Body.JsonPayload.ReasonPayload(rawValue: reason) else {
+            throw AuthFailure(status: 400, code: "invalid_reason", message: "Choose what's wrong.")
+        }
+        switch try await client.sendReport(body: .json(.init(reason: reason, message: message, pageUrl: pageURL))) {
+        case .ok:
+            return
+        case .default(let status, let error):
+            throw failure(status, try? error.body.json)
+        }
+    }
+
     /// A one-time link that opens `next` (a path on the site, e.g. "/admin") in a
     /// browser already signed in as this account (spec 052 A7). It lasts 5 minutes and
     /// works once, so mint it just before opening.

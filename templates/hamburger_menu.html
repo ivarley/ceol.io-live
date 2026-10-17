@@ -47,6 +47,7 @@
                onclick="shareCurrentPage(); return false;">{{ _('Share') }}</a>
             <a href="/help" class="hamburger-item"
                {% if p.startswith('/help') %}aria-current="page"{% endif %}>{{ _('Help') }}</a>
+            <a href="#" class="hamburger-item" onclick="reportCurrentPage(); return false;">{{ _('Report') }}</a>
             {# Spec 057: the other language, named in that language. #}
             <a href="{{ url_for('set_language', code=other_lang, next=request.full_path) }}" class="hamburger-item hamburger-lang" lang="{{ other_lang }}"
                hreflang="{{ other_lang }}">{{ 'Gaeilge' if other_lang == 'ga' else 'English' }}</a>
@@ -71,6 +72,7 @@
                onclick="shareCurrentPage(); return false;">{{ _('Share') }}</a>
             <a href="/help" class="hamburger-item"
                {% if p.startswith('/help') %}aria-current="page"{% endif %}>{{ _('Help') }}</a>
+            <a href="#" class="hamburger-item" onclick="reportCurrentPage(); return false;">{{ _('Report') }}</a>
             {# Spec 057: the other language, named in that language. #}
             <a href="{{ url_for('set_language', code=other_lang, next=request.full_path) }}" class="hamburger-item hamburger-lang" lang="{{ other_lang }}"
                hreflang="{{ other_lang }}">{{ 'Gaeilge' if other_lang == 'ga' else 'English' }}</a>

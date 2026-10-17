@@ -471,6 +471,83 @@ def delete_account_api():
 
 
 # ---------------------------------------------------------------------------
+# POST /api/report — "Report" in every page's menu (App Store guideline 1.2)
+# ---------------------------------------------------------------------------
+
+REPORT_REASONS = ("offensive", "wrong", "broken", "other")
+SUPPORT_EMAIL = "support@ceol.app"
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+@public_api
+def report_api():
+    """Send support a report about a page: something offensive, wrong, or broken.
+
+    Open to anyone who can see the page, signed in or not. A signed-in report says who
+    sent it; a signed-out one may leave an address to hear back on. Nothing is stored:
+    the report is an email to SUPPORT_EMAIL (overridable for testing), with Reply-To
+    set to the sender, so answering it is answering them. The email is for Ceol's own
+    support, so it stays in English."""
+    from email_utils import send_email_via_sendgrid
+
+    data = request.get_json(silent=True) or {}
+    reason = (data.get("reason") or "").strip()
+    message = (data.get("message") or "").strip()
+    page_url = (data.get("page_url") or "").strip()[:500]
+    contact = (data.get("contact_email") or "").strip()[:254]
+    if reason not in REPORT_REASONS:
+        return api_error(_("Choose what's wrong."), 400, code="invalid_reason")
+    if len(message) > 4000:
+        return api_error(_("That's too long. Keep it under 4,000 characters."), 400)
+    if reason == "other" and not message:
+        return api_error(_("Say what's wrong."), 400, code="message_required")
+
+    if current_user.is_authenticated:
+        reply_to = current_user.email or None
+        who = f"{current_user.first_name} {current_user.last_name} (user {current_user.user_id}, {current_user.email or 'no email'})"
+    else:
+        if contact and not _EMAIL_RE.match(contact):
+            return api_error(
+                _("That email address doesn't look right."), 400, code="invalid_email"
+            )
+        reply_to = contact or None
+        who = f"Not signed in ({contact or 'no address given'})"
+
+    labels = {
+        "offensive": "Offensive or inappropriate",
+        "wrong": "Wrong or spam",
+        "broken": "Something's broken",
+        "other": "Other",
+    }
+    body = "\n".join(
+        [
+            f"Reason: {labels[reason]}",
+            f"Page: {page_url or '(none given)'}",
+            f"From: {who}",
+            f"Client: {request.headers.get('X-Ceol-Client') or request.headers.get('User-Agent', '')}",
+            "",
+            message or "(no message)",
+        ]
+    )
+    sent = send_email_via_sendgrid(
+        os.environ.get("REPORT_EMAIL", SUPPORT_EMAIL),
+        f"[Ceol report] {labels[reason]}: {page_url or 'no page'}"[:200],
+        body,
+        reply_to=reply_to,
+    )
+    if not sent:
+        return api_error(
+            _(
+                "Couldn't send that. Try again, or email %(address)s.",
+                address=SUPPORT_EMAIL,
+            ),
+            503,
+            code="send_failed",
+        )
+    return jsonify({"success": True})
+
+
+# ---------------------------------------------------------------------------
 # GET|PUT /api/me/profile — the JSON twin of /auth/setup-profile
 # ---------------------------------------------------------------------------
 

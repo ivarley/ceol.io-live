@@ -196,6 +196,18 @@ struct MeView: View {
                     .buttonStyle(.plain)
                     .disabled(opening != nil)
                     .accessibilityIdentifier("me.help")
+                    Button { Task { await openWeb("/support", needsSignIn: false) } } label: {
+                        KitRow(label: tr("Contact & Support")) { WebMark(busy: opening == "/support") }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(opening != nil)
+                    .accessibilityIdentifier("me.support")
+                    Button { Task { await openWeb("/privacy", needsSignIn: false) } } label: {
+                        KitRow(label: tr("Privacy Policy")) { WebMark(busy: opening == "/privacy") }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(opening != nil)
+                    .accessibilityIdentifier("me.privacy")
                     Button { confirmSignOut = true } label: {
                         KitRow(label: tr("Log Out"), labelColor: CeolTokens.danger) { EmptyView() }
                     }

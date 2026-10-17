@@ -1932,6 +1932,16 @@
         }
       }
     },
+    "About this page": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Faoin leathanach seo"
+          }
+        }
+      }
+    },
     "About this session:": {
       "localizations": {
         "ga": {
@@ -3141,6 +3151,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Ag ceangal leis an éisteoir…"
+          }
+        }
+      }
+    },
+    "Contact & Support": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Teagmháil agus tacaíocht"
           }
         }
       }
@@ -6386,6 +6406,16 @@
         }
       }
     },
+    "Offensive or inappropriate": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Maslach nó míchuí"
+          }
+        }
+      }
+    },
     "Offline": {
       "localizations": {
         "ga": {
@@ -7004,6 +7034,16 @@
         }
       }
     },
+    "Privacy Policy": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Polasaí príobháideachais"
+          }
+        }
+      }
+    },
     "Probably not a tune right now (%lld%%)": {
       "extractionState": "stale",
       "localizations": {
@@ -7293,6 +7333,26 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Athdhéanamh"
+          }
+        }
+      }
+    },
+    "Report": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tuairiscigh"
+          }
+        }
+      }
+    },
+    "Reports go to support@ceol.app, with your name and email so we can reply.": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Téann tuairiscí chuig support@ceol.app, le d'ainm agus do ríomhphost ionas gur féidir linn freagra a thabhairt."
           }
         }
       }
@@ -7644,6 +7704,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Roghnaigh cé na cinn sa mhí..."
+          }
+        }
+      }
+    },
+    "Send": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Seol"
           }
         }
       }
@@ -8152,12 +8222,32 @@
         }
       }
     },
+    "Something else": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Rud éigin eile"
+          }
+        }
+      }
+    },
     "Something went wrong reaching Ceol. Try again in a moment.": {
       "localizations": {
         "ga": {
           "stringUnit": {
             "state": "needs_review",
             "value": "Chuaigh rud éigin amú agus teagmháil á déanamh le Ceol. Bain triail eile as i gceann nóiméid."
+          }
+        }
+      }
+    },
+    "Something's broken": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tá rud éigin briste"
           }
         }
       }
@@ -8520,6 +8610,26 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Abair liom cén fonn atá á sheinm. Ní logáiltear aon rud mura ndeir tú é."
+          }
+        }
+      }
+    },
+    "Tell us more": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Inis tuilleadh dúinn"
+          }
+        }
+      }
+    },
+    "Thanks. Your report has gone to Ceol's support, and someone will look at it soon.": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Go raibh maith agat. Tá do thuairisc imithe chuig tacaíocht Ceol, agus breathnóidh duine air go luath."
           }
         }
       }
@@ -9612,6 +9722,16 @@
         }
       }
     },
+    "What's wrong?": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Cad atá mícheart?"
+          }
+        }
+      }
+    },
     "When": {
       "localizations": {
         "ga": {
@@ -9709,6 +9829,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "An fonn ar fad"
+          }
+        }
+      }
+    },
+    "Wrong or spam": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Mícheart nó turscar"
           }
         }
       }

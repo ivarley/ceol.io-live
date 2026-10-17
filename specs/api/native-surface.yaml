@@ -1400,6 +1400,32 @@ paths:
         # Error codes: confirmation_mismatch (400, the email did not match); admin_account or
         # sent_update_emails (403, this flow may not delete it).
         default: { $ref: "#/components/responses/Error" }
+  /api/report:
+    post:
+      operationId: sendReport
+      summary: >-
+        Report a page to Ceol's support (App Store guideline 1.2): something offensive,
+        wrong or spam, or broken. Emailed to support, Reply-To the sender; nothing is
+        stored. Signed in or not.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, enum: [offensive, wrong, broken, other] }
+                # Required when reason is other. At most 4,000 characters.
+                message: { type: string }
+                # The page's web address (what Share would hand on).
+                page_url: { type: string }
+                # Signed out only: where to hear back. Ignored when signed in.
+                contact_email: { type: string }
+      responses:
+        "200": { description: sent, content: { application/json: { schema: { $ref: "#/components/schemas/Ok" } } } }
+        # Error codes: invalid_reason, message_required, invalid_email (400); send_failed (503).
+        default: { $ref: "#/components/responses/Error" }
   /api/home:
     get:
       operationId: getHome
