@@ -1,7 +1,7 @@
 # 058: Move to ceol.app
 
 **Date:** 2026-10-07
-**Status:** Phase 0 BUILT and deployed 2026-10-16 (`domains.py`, `templates/moved.html`, `static/retired-sw.js`;
+**Status:** Phase 0 BUILT and deployed 2026-10-16 (`domains.py`, `templates/moved_banner.html` (originally a moved page, replaced by a redirect and banner on 2026-10-16), `static/retired-sw.js`;
 tests in `tests/unit/test_domains_058.py`). Phase 1 mostly done 2026-10-16: ceol.app, www.ceol.app and
 streaming.ceol.app answer through Cloudflare; the Render settings are set (`SESSION_COOKIE_DOMAINS`,
 `MOVE_TO_HOST`, `MOVE_FROM_HOSTS`, the streaming origins); SendGrid sends from ceol.app; the iOS app accepts
@@ -108,7 +108,7 @@ on no listed domain (local dev) gets `STREAMING_BASE_URL` unchanged. The same go
 - The hardcoded admin link in `email_utils.py` built with `url_for`.
 - No unsubscribe headers on mail without a personal unsubscribe link (§Email).
 - The switch-day behaviour, built now and off until its settings are set (§Settings):
-  the moved page, the retired service worker, the 308s, the moved-page log line, and
+  the redirect and banner, the retired service worker, the 308s, the moved-redirect log line, and
   `noindex` on the new host until the switch.
 - Tests: `tests/unit/test_domains_058.py`, plus the email and resolve tests.
 
@@ -145,8 +145,8 @@ home-screen icon needs deleting and re-adding from `ceol.app`.
 1. **Email:** switch the `MAIL_*` settings to the `ceol.app` addresses.
 2. **Set `MOVE_SWITCHED=true`.** The `noindex` goes, and `ceol.io` stops serving the
    site. A `before_request` in Flask (`domains.py`), on a host in `MOVE_FROM_HOSTS`:
-   - **`GET`/`HEAD` of a page:** the "Ceol has moved" page (below), status 200,
-     `Cache-Control: no-store`.
+   - **`GET`/`HEAD` of a page:** a 302 (`Cache-Control: no-store`) to the same URL on
+     `ceol.app` with `ceol_moved=1` added, which turns on the banner (below).
    - **`/sw.js` and `/live/sw.js`:** a worker (`static/retired-sw.js`) that deletes its
      caches, unregisters itself and reloads the open tabs. Without this, people who visited before keep the old worker, which would
      answer navigations from its cache. These two paths must not redirect: a browser
@@ -159,20 +159,26 @@ home-screen icon needs deleting and re-adding from `ceol.app`.
 4. **Google Search Console:** add `ceol.app` and file a change of address from `ceol.io`.
 5. **Release notes** for the month, in both languages.
 
-Cloudflare's `www.ceol.io` → `ceol.io` redirect stays; the moved page then answers on
-`ceol.io`. Two hops on an old link is fine.
+Cloudflare's `www.ceol.io` → `ceol.io` redirect stays. An old link then takes three
+hops (`www.ceol.io` → `ceol.io` → `ceol.app?ceol_moved=1` → `ceol.app`), which is fine.
 
-#### The "Ceol has moved" page
+#### The "Ceol has moved" banner
 
-A plain page on `ceol.io` (`templates/moved.html`), in the visitor's language by the
-site's usual rule (their profile while the old login cookie lasts, else the language
-switch's cookie): "Ceol has moved to ceol.app. Please update your bookmarks." with a note about
-home-screen icons, and a button that continues to the same path on `ceol.app` (e.g. `ceol.app/sessions/austin/mueller`).
-No automatic redirect: the point is that people notice and update the bookmark. It is a
-Jinja template written converted (spec 057), with its Irish in the `.po`.
+The product owner chose (2026-10-16) an automatic redirect with a banner over an
+interrupt page. On `ceol.app`, a page request carrying `ceol_moved=1` sets the
+`ceol_moved` cookie (a year, not HttpOnly) and 302s to the same URL without the
+parameter, so the address bar shows the one worth bookmarking. While the cookie is set,
+every page (`templates/base.html` and `live_logging.html` include
+`templates/moved_banner.html`) shows a bar across the top: "Ceol has moved · Ceol has a
+new address: ceol.app. Please update your bookmarks." with the home-screen note, in the
+visitor's language. Its × deletes the cookie. The bar's script also hides it when the
+cookie is gone, since the service worker may serve a page snapshot taken before.
 
-Later, when the product owner decides the page has done its job, it is replaced by a 301
-straight to `ceol.app`. Use 301 only then: Chrome keeps a 301 without cache headers
+Arriving from `ceol.io` again (an old bookmark not yet updated) sets the cookie again, so
+the banner comes back until the bookmark is changed.
+
+Later, when the product owner decides the old address has had its time, the 302 becomes a
+301 without the marker. Use 301 only then: Chrome keeps a 301 without cache headers
 forever (the September 2026 apex/www flip showed this), so it must be final.
 
 ### Phase 4 — Wording
@@ -224,7 +230,7 @@ All on `ceol.io-live`; all read per request, so changing one needs no deploy.
 
 To decide when to retire the domain. Cloudflare's analytics for the `ceol.io` zone already
 count requests per day, and after the switch every one of them is leftover traffic (bots
-included). For the people behind it, the moved page logs one line per view (`moved-page path=… user_id=…`, logger
+included). For the people behind it, the redirect logs one line per page (`moved-redirect path=… user_id=…`, logger
 `ceol.domains`): the path, and the user id if the browser still carries a `ceol.io` login cookie. That shows who still
 has old bookmarks, which can be followed up by email. Render keeps logs for a limited time,
 so if a longer record is wanted, a small table with a daily count is the next step; not
@@ -233,7 +239,7 @@ built unless asked.
 ## Known costs
 
 - **Installed web apps.** A home-screen install belongs to the origin it was installed
-  from. Its icon opens `ceol.io` and lands on the moved page. Delete it and re-add from
+  from. Its icon opens `ceol.io`, which redirects out of the installed app's window. Delete it and re-add from
   `ceol.app`; the email says so.
 - **Saved passwords.** Browser password managers file passwords by domain, so they may
   not offer the `ceol.io` password on `ceol.app`. The magic link covers anyone stuck.

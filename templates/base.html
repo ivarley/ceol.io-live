@@ -406,6 +406,7 @@
    app's own tab bar is the navigation, so the web's is left out. #}
 {% set show_tab_bar = not hide_tab_bar and not session.get('in_app') %}
 <body class="docs-page{% if show_tab_bar %} has-tab-bar{% endif %}">
+{% include 'moved_banner.html' %}
 <header class="header fixed-top">	    
     <div class="branding docs-branding">
         <div class="container-fluid position-relative" style="padding-top: 3px; padding-bottom: 3px;">

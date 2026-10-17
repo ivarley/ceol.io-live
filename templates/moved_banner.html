@@ -1,0 +1,43 @@
+{# i18n-converted #}
+{# Spec 058: shown on the new host to someone redirected from the old one, until they
+   dismiss it. The server renders it while the ceol_moved cookie is set (domains.py);
+   the script also hides it when the cookie is gone, because the service worker may
+   serve a page snapshot taken before it was dismissed. #}
+{% if moved_banner %}
+<div class="moved-banner" id="moved-banner" role="status">
+  <div class="moved-banner-text">
+    <strong>{{ _('Ceol has moved') }}</strong> ·
+    {{ _('Ceol has a new address: %(address)s', address=moved_to_host) }}
+    {{ _('Please update your bookmarks.') }}
+    <span class="moved-banner-note">{{ _('If you added Ceol to your home screen, remove it and add it again from the new address.') }}</span>
+  </div>
+  <button type="button" class="moved-banner-close" id="moved-banner-close" aria-label="{{ _('Close') }}">×</button>
+</div>
+<style>
+  .moved-banner {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 10000;
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
+    background: #2d7d46; color: #fff; font-size: 0.95rem; line-height: 1.4;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  }
+  .moved-banner-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .moved-banner-note { display: block; opacity: 0.85; font-size: 0.85rem; }
+  .moved-banner-close {
+    flex: none; background: none; border: 0; color: #fff; font-size: 1.6rem;
+    line-height: 1; padding: 0 4px; cursor: pointer;
+  }
+</style>
+<script>
+  (function () {
+    var banner = document.getElementById('moved-banner');
+    var name = {{ moved_cookie | tojson }};
+    var has = document.cookie.split('; ').some(function (c) { return c === name + '=1'; });
+    if (!has) { banner.remove(); return; }
+    document.getElementById('moved-banner-close').addEventListener('click', function () {
+      document.cookie = name + '=; Max-Age=0; path=/';
+      banner.remove();
+    });
+  })();
+</script>
+{% endif %}

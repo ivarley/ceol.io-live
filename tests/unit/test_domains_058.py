@@ -139,24 +139,22 @@ class TestBeforeTheSwitch:
 
 @pytest.mark.unit
 class TestAfterTheSwitch:
-    def test_a_page_gets_the_moved_page(self, client, switched):
+    def test_a_page_is_redirected_and_marked(self, client, switched):
         resp = client.get(
             "/sessions/austin/mueller?tab=logs",
             base_url="https://ceol.io",
             headers=HTML,
         )
-        assert resp.status_code == 200
+        assert resp.status_code == 302
         assert resp.headers["Cache-Control"] == "no-store"
-        text = resp.get_data(as_text=True)
-        assert "Ceol has moved" in text
-        assert 'href="https://ceol.app/sessions/austin/mueller?tab=logs"' in text
-        assert "ceol.app/sessions/austin/mueller<" in text
+        assert (
+            resp.headers["Location"]
+            == "https://ceol.app/sessions/austin/mueller?tab=logs&ceol_moved=1"
+        )
 
-    def test_the_moved_page_in_irish(self, client, switched):
-        client.set_cookie("ceol_lang", "ga", domain="ceol.io")
+    def test_a_page_without_a_query(self, client, switched):
         resp = client.get("/", base_url="https://ceol.io", headers=HTML)
-        text = resp.get_data(as_text=True)
-        assert 'lang="ga"' in text and "Ceol has moved" not in text
+        assert resp.headers["Location"] == "https://ceol.app/?ceol_moved=1"
 
     @pytest.mark.parametrize("path", ["/sw.js", "/live/sw.js"])
     def test_the_workers_retire(self, client, switched, path):
@@ -191,6 +189,44 @@ class TestAfterTheSwitch:
         assert b"Main-app service worker" in resp.data
         assert "X-Robots-Tag" not in resp.headers
 
+    def test_the_new_host_swaps_the_mark_for_a_cookie(self, client, switched):
+        resp = client.get(
+            "/sessions/austin/mueller?tab=logs&ceol_moved=1",
+            base_url="https://ceol.app",
+            headers=HTML,
+        )
+        assert resp.status_code == 302
+        assert resp.headers["Location"] == "/sessions/austin/mueller?tab=logs"
+        cookie = next(c for c in _set_cookies(resp) if c.startswith("ceol_moved="))
+        assert "ceol_moved=1" in cookie and "HttpOnly" not in cookie
+
+    def test_the_mark_is_ignored_elsewhere(self, client, switched):
+        resp = client.get("/sw.js?ceol_moved=1", base_url="http://localhost:3232")
+        assert resp.status_code == 200
+
     def test_other_hosts_are_untouched(self, client, switched):
         resp = client.get("/sw.js", base_url="http://localhost:3232")
         assert b"Main-app service worker" in resp.data
+
+
+@pytest.mark.unit
+class TestTheBanner:
+    def _render(self, cookie, lang="en"):
+        from flask import render_template_string
+
+        cookies = [f"ceol_lang={lang}"] + ([f"ceol_moved={cookie}"] if cookie else [])
+        with app.test_request_context(
+            "/", base_url="https://ceol.app", headers={"Cookie": "; ".join(cookies)}
+        ):
+            return render_template_string("{% include 'moved_banner.html' %}")
+
+    def test_shown_while_the_cookie_is_set(self, switched):
+        text = self._render("1")
+        assert "Ceol has moved" in text and "ceol.app" in text
+
+    def test_not_shown_without_it(self, switched):
+        assert "moved-banner" not in self._render(None)
+
+    def test_in_irish(self, switched):
+        text = self._render("1", lang="ga")
+        assert "moved-banner" in text and "Ceol has moved" not in text

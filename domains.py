@@ -14,15 +14,16 @@ used to be one fixed setting now follow the request's host:
 - The move itself. MOVE_TO_HOST names the new host and MOVE_FROM_HOSTS the old ones.
   Until MOVE_SWITCHED is on, the new host answers with `X-Robots-Tag: noindex` so search
   engines don't index a second copy. Once it is on, the old hosts stop serving the site:
-  a page gets the "Ceol has moved" page, the two service workers get one that clears its
-  caches and unregisters, and everything else a 308 to the same URL on the new host.
+  a page is redirected to the same URL on the new host, marked so the new host shows a
+  "Ceol has moved" banner until it is dismissed; the two service workers get one that
+  clears its caches and unregisters; everything else gets a 308 to the new host.
 """
 
 import logging
 import os
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from flask import Response, redirect, render_template, request, send_from_directory
+from flask import redirect, request, send_from_directory
 from flask.sessions import SecureCookieSessionInterface
 from flask_login import LoginManager, current_user
 
@@ -30,6 +31,13 @@ _log = logging.getLogger("ceol.domains")
 
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 SERVICE_WORKER_PATHS = ("/sw.js", "/live/sw.js")
+
+# A page redirected from an old host arrives with MOVED_PARAM; the new host swaps it for
+# MOVED_COOKIE, which shows the banner (templates/moved_banner.html) until the visitor
+# dismisses it. The banner's script clears the cookie, so it is not HttpOnly.
+MOVED_PARAM = "ceol_moved"
+MOVED_COOKIE = "ceol_moved"
+MOVED_COOKIE_MAX_AGE = 365 * 24 * 3600
 
 
 def _env_list(name):
@@ -154,19 +162,49 @@ def _moved():
     if _is_page_request():
         user_id = current_user.user_id if current_user.is_authenticated else None
         # Who still arrives on the old address, for deciding when to retire it.
-        _log.info("moved-page path=%s user_id=%s", request.path, user_id)
-        new_url = _new_url()
-        resp = Response(
-            render_template(
-                "moved.html",
-                new_url=new_url,
-                new_address=new_url.split("://", 1)[1].split("?", 1)[0].rstrip("/"),
-                new_host=move_to_host(),
-            )
-        )
+        _log.info("moved-redirect path=%s user_id=%s", request.path, user_id)
+        sep = "&" if request.query_string else "?"
+        # 302 rather than 301 for now: a browser keeps a 301 forever (spec 058).
+        resp = redirect(f"{_new_url()}{sep}{MOVED_PARAM}=1", code=302)
         resp.headers["Cache-Control"] = "no-store"
         return resp
     return redirect(_new_url(), code=308)
+
+
+def _arrived_from_old_host():
+    """On the new host, swap the redirect's marker for the banner's cookie, and send the
+    visitor on to the clean URL (the one worth bookmarking)."""
+    if MOVED_PARAM not in request.args or request.method not in ("GET", "HEAD"):
+        return None
+    if not move_to_host() or _bare_host(request.host) != move_to_host():
+        return None
+    query = urlencode(
+        [
+            (k, v)
+            for k, v in parse_qsl(
+                request.query_string.decode("latin-1"), keep_blank_values=True
+            )
+            if k != MOVED_PARAM
+        ]
+    )
+    resp = redirect(request.path + (f"?{query}" if query else ""), code=302)
+    resp.headers["Cache-Control"] = "no-store"
+    resp.set_cookie(
+        MOVED_COOKIE,
+        "1",
+        max_age=MOVED_COOKIE_MAX_AGE,
+        secure=request.is_secure,
+        samesite="Lax",
+    )
+    return resp
+
+
+def _banner_context():
+    return {
+        "moved_banner": request.cookies.get(MOVED_COOKIE) == "1",
+        "moved_cookie": MOVED_COOKIE,
+        "moved_to_host": move_to_host() or _bare_host(request.host),
+    }
 
 
 def _noindex_before_switch(resp):
@@ -184,4 +222,6 @@ def init_app(app):
     hook is registered, so an old host is answered before anything else runs."""
     app.session_interface = HostSessionInterface()
     app.before_request(_moved)
+    app.before_request(_arrived_from_old_host)
+    app.context_processor(_banner_context)
     app.after_request(_noindex_before_switch)
