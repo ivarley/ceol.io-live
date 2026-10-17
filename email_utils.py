@@ -6,7 +6,7 @@ from flask import url_for, current_app
 from flask_babel import force_locale, gettext as _
 from itsdangerous import URLSafeSerializer, BadSignature
 from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail, Header
+from sendgrid.helpers.mail import ClickTracking, Header, Mail, TrackingSettings
 
 # Configure logger for email operations
 logger = logging.getLogger(__name__)
@@ -52,6 +52,12 @@ def send_email_via_sendgrid(
         )
         if reply_to:
             message.reply_to = reply_to
+        # No click tracking: SendGrid would rewrite every link through its own
+        # redirect, which garbles the page address in a report and stops sign-in
+        # links from opening the app (universal links need the real ceol.app URL).
+        message.tracking_settings = TrackingSettings(
+            click_tracking=ClickTracking(False, False)
+        )
 
         # One-click unsubscribe (RFC 8058), only on mail someone can unsubscribe from.
         # Sign-in links, verification and password resets carry none: there is nothing
