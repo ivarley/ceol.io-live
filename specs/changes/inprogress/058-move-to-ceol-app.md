@@ -8,7 +8,7 @@ streaming.ceol.app answer through Cloudflare; the Render settings are set (`SESS
 ceol.app links (not yet in a TestFlight build). Checked: sign-in, the `.ceol.app` cookie reaching the streaming
 sidecar, the offline workers, the live logger's streaming address, the segmenter, and the retired worker
 taking over from an old one in Chrome. The S3 upload rule (bucket `ceol-io-recordings`) allows ceol.app
-(2026-10-16; checked with a preflight from each origin). Still open in Phase 1: the phone's universal links. Phases 2-4 to do.
+(2026-10-16; checked with a preflight from each origin and a real upload from ceol.app, recording 156). Still open in Phase 1: the phone's universal links. Phases 2-4 to do.
 
 ## Why
 
