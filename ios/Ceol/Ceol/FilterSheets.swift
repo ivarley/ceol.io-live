@@ -162,13 +162,17 @@ struct SessionsFilterSheet: View {
     @Binding var sort: SessionsRules.Sort
     @Binding var country: String
     let countries: [String]
+    /// A guest has no sessions of their own (spec 060): every session, and no "Show".
+    var guest = false
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    ChoiceChips(
-                        label: tr("Show"), options: SessionsRules.Scope.allCases.map { ($0, SessionsL10n.label($0)) }, selection: $scope)
+                    if !guest {
+                        ChoiceChips(
+                            label: tr("Show"), options: SessionsRules.Scope.allCases.map { ($0, SessionsL10n.label($0)) }, selection: $scope)
+                    }
                     ChoiceChips(
                         label: tr("Status"), options: SessionsRules.Status.allCases.map { ($0, SessionsL10n.label($0)) }, selection: $status)
                     ChoiceChips(label: tr("Sort"), options: SessionsRules.Sort.allCases.map { ($0, SessionsL10n.label($0)) }, selection: $sort)
@@ -184,7 +188,7 @@ struct SessionsFilterSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Clear") {
-                        scope = .mine
+                        scope = guest ? .all : .mine
                         status = .active
                         sort = .name
                         country = ""

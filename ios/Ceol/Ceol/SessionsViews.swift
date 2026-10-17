@@ -66,7 +66,8 @@ struct SessionsView: View {
                         // Only countries with sessions under the other choices, so none is empty.
                         countries: SessionsRules.countries((state.value?.sessions ?? []).map(\.entry).filter {
                             SessionsRules.matches($0, scope: scope, status: status, search: search, today: localToday())
-                        }))
+                        }),
+                        guest: model.isGuest)
                 }
                 .sheet(isPresented: $adding) {
                     AddSessionView { path, name in
@@ -107,9 +108,10 @@ struct SessionsView: View {
             VStack(alignment: .leading, spacing: 8) {
                 SearchRow(
                     text: $search, prompt: tr("Search by name or location…"), fieldID: "sessions.search",
-                    onAdd: { adding = true }, addID: "sessions.add", addLabel: tr("Add a session"),
+                    onAdd: { if model.isGuest { model.askToSignIn() } else { adding = true } },
+                    addID: "sessions.add", addLabel: tr("Add a session"),
                     onFilter: { filtering = true },
-                    filterCount: (scope != .mine ? 1 : 0) + (status != .active ? 1 : 0) + (sort != .name ? 1 : 0) + (country.isEmpty ? 0 : 1))
+                    filterCount: (scope != (model.isGuest ? .all : .mine) ? 1 : 0) + (status != .active ? 1 : 0) + (sort != .name ? 1 : 0) + (country.isEmpty ? 0 : 1))
                 Text(SessionsL10n.sessionsCount(shown.count, scope, status)).font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
             }
             .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 8, trailing: 16))
@@ -587,7 +589,7 @@ struct SessionDetailView: View {
                     onAdd: d.permissions.isLoggedIn ? {
                         searchingTunes = false
                         addingTune = true
-                    } : nil,
+                    } : model.isGuest ? { model.askToSignIn() } : nil,
                     addID: "session.addTune", addLabel: tr("Add a tune to this session"),
                     focused: $searchingTunes,
                     // The keyboard would otherwise stay up over the drawer.
@@ -782,7 +784,7 @@ struct SessionDetailView: View {
         VStack(alignment: .leading, spacing: 8) {
             SearchRow(
                 text: $logSearch, prompt: tr("Search for a tune"), fieldID: "logs.search",
-                onAdd: d.permissions.isLoggedIn ? { addingNight = true } : nil,
+                onAdd: d.permissions.isLoggedIn ? { addingNight = true } : model.isGuest ? { model.askToSignIn() } : nil,
                 addID: "session.addNight", addLabel: tr("Add a night"),
                 focused: $searchingLogs,
                 onFilter: {
@@ -1039,7 +1041,7 @@ struct NightView: View {
     /// Your status for a tune under the filter's instrument; nil with the filter off, or
     /// until your tunebook is here.
     private var statusOf: ((Int) -> String)? {
-        guard myStatus != .off, let tunebook else { return nil }
+        guard !app.isGuest, myStatus != .off, let tunebook else { return nil }
         let scope = myStatusInstrument
         return { SessionPage.resolveStatus(tunebook.entries[$0], instruments: tunebook.instruments, scope: scope) }
     }
@@ -1076,7 +1078,8 @@ struct NightView: View {
     /// "If you're looking for some other ability, it's probably here."
     private func nightMenu(_ model: NightModel) -> some View {
         let complete = model.log?.meta["log_complete"] == true
-        let canLog = model.status != .finished && !complete
+        // A guest reads the log, and logs nothing (spec 060).
+        let canLog = !app.isGuest && model.status != .finished && !complete
         return Menu {
             if canLog {
                 if model.editing {
@@ -1100,7 +1103,9 @@ struct NightView: View {
             }
             Button { showingDetails = true } label: { Label("Log details", systemImage: "info.circle") }
                 .accessibilityIdentifier("night.details")
-            if complete {
+            if app.isGuest {
+                // nothing to mark: a guest changes nothing
+            } else if complete {
                 Button { confirmReopen = true } label: { Label("Re-open log", systemImage: "lock.open") }
                     .accessibilityIdentifier("night.reopen")
             } else if model.status != .finished {
@@ -1359,7 +1364,8 @@ struct NightView: View {
                             text: $search, prompt: tr("Find a tune in the log"), fieldID: "night.search",
                             filterMenu: { EmptyView() },
                             focused: $searching,
-                            onFilter: {
+                            // The filter is by your tunebook's status: none for a guest.
+                            onFilter: app.isGuest ? nil : {
                                 searching = false
                                 filtering = true
                             },
@@ -1459,6 +1465,9 @@ struct NightView: View {
                             if complete {
                                 Text("✓ This session has been fully logged").font(.ceol(size: 16, weight: .medium))
                                     .foregroundStyle(CeolTokens.textMuted).padding(.top, 12)
+                            } else if app.isGuest {
+                                SignInPrompt(text: tr("Sign in to log tunes"), id: "night.signIn")
+                                    .padding(.top, 12)
                             } else if model.status != .finished {
                                 // Reading along is the usual thing; logging starts here, under the
                                 // last set, where a live log grows (and in the menu).

@@ -48,6 +48,7 @@ CHECKED_GETS = [
     ("/api/my-tunes", "/api/my-tunes"),
     ("/api/my-tunes/common/{other_person_id}", "/api/my-tunes/common/2"),
     ("/api/offline/bundle", "/api/offline/bundle"),
+    ("/api/tunes/top", "/api/tunes/top?limit=20"),
     ("/api/tunes/search", "/api/tunes/search?q=cooley"),
     (
         "/api/tunes/deep-search",
@@ -944,3 +945,82 @@ class TestSignInHelp:
         r = client.post("/api/auth/forgot-password", json={}, headers={"X-Ceol-Client": "ios/0.0.0"})
         assert r.status_code == 400
         assert r.get_json()["code"] == "missing_email"
+
+
+class TestGuestReads:
+    """Spec 060: the app works without signing in. What a guest reads answers with no
+    token, and the writes beside it still refuse one."""
+
+    GUEST = {"X-Ceol-Client": "ios/0.0.0 (contract-test)"}
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "/api/listen/decider-data",
+            "/api/tunes/top?limit=5",
+            "/api/tunes/1/preview",
+            "/api/tunes/1/incipit-image",
+            "/api/tunes/1/detail",
+            "/api/sessions/with-today-status",
+            "/api/sessions/austin/mueller/detail",
+            "/api/sessions/austin/mueller/logs",
+            "/api/live/instances/1/bootstrap",
+        ],
+    )
+    def test_a_guest_can_read(self, client, url):
+        r = client.get(url, headers=self.GUEST)
+        assert r.status_code == 200, (url, r.get_json())
+
+    def test_a_guest_can_read_a_settings_image(self, client):
+        from database import get_db_connection
+
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT setting_id FROM tune_setting LIMIT 1")
+            setting_id = cur.fetchone()[0]
+        finally:
+            conn.close()
+        r = client.get(f"/api/tunes/settings/{setting_id}/image", headers=self.GUEST)
+        assert r.status_code == 200, r.get_json()
+
+    @pytest.mark.parametrize(
+        "method,url",
+        [
+            ("get", "/api/home"),
+            ("get", "/api/my-tunes"),
+            ("get", "/api/me"),
+            ("get", "/api/tunes/thesession/1/preview"),
+            ("post", "/api/tunes/render-abc"),
+            ("get", "/api/live/instances/1/vocabulary"),
+        ],
+    )
+    def test_a_guest_is_refused_the_rest(self, client, method, url):
+        r = getattr(client, method)(url, headers=self.GUEST)
+        assert r.status_code == 401, (url, r.status_code)
+
+    def test_a_guest_is_limited_on_notation(self, client, monkeypatch):
+        import rate_limit
+
+        monkeypatch.delenv("RATE_LIMIT_DISABLED", raising=False)
+        rate_limit.reset()
+        try:
+            codes = [
+                client.get("/api/tunes/1/incipit-image", headers=self.GUEST).status_code
+                for _ in range(61)
+            ]
+        finally:
+            rate_limit.reset()
+        assert codes[:60] == [200] * 60
+        assert codes[60] == 429
+
+    def test_signed_in_notation_is_not_limited(self, native_client, monkeypatch):
+        import rate_limit
+
+        monkeypatch.delenv("RATE_LIMIT_DISABLED", raising=False)
+        rate_limit.reset()
+        try:
+            codes = {native_client.get("/api/tunes/1/incipit-image").status_code for _ in range(61)}
+        finally:
+            rate_limit.reset()
+        assert codes == {200}

@@ -139,9 +139,10 @@ struct OfflineTests {
         try await app.applyTuneOp(.add, tuneID: 42, learnStatus: .wantToLearn, name: "The Kesh", tuneType: "jig")
         #expect(app.tuneQueue.count == 1)
 
-        // The server no longer knows the token: back to sign-in, nothing lost.
+        // The server no longer knows the token: a guest, asked to sign in, nothing lost.
         app.signInExpired()
-        #expect(app.phase == .signedOut)
+        #expect(app.phase == .guest)
+        #expect(app.signingIn)
         #expect(app.auth.store.token() == nil)
         #expect(app.notice?.contains("Sign in again") == true)
         #expect(app.tuneQueue.count == 1)
@@ -165,6 +166,33 @@ struct OfflineTests {
         Self.clean(app)
     }
 
+    /// Spec 060: signing in from the sheet closes it and leaves you where you were;
+    /// deleting the account starts the tabs over as a guest.
+    @Test func aGuestSignsInWhereTheyAreAndLeavesAsAGuest() async throws {
+        let app = Self.offlineApp()
+        AppModel.localDataOwner = nil
+        app.tab = .sessions
+        app.sessionsPath = [.session(path: "austin/mueller", name: "Mueller")]
+        app.askToSignIn()
+        #expect(app.signingIn)
+        try app.auth.store.setToken("tok-7")
+        app.enter(try Self.user(7), next: nil)
+        #expect(app.phase == .signedIn)
+        #expect(!app.signingIn)
+        #expect(app.tab == .sessions)
+        #expect(app.sessionsPath.count == 1)
+
+        let generation = app.tabsGeneration
+        app.accountDeleted()
+        #expect(app.phase == .guest)
+        #expect(app.isGuest)
+        #expect(app.tab == .home)
+        #expect(app.sessionsPath.isEmpty)
+        #expect(app.tabsGeneration == generation + 1)
+        #expect(app.notice?.contains("deleted") == true)
+        Self.clean(app)
+    }
+
     @Test func aServerThatForgotTheTokenSendsYouToSignInAndKeepsTheChange() async throws {
         let app = AppModel(server: URL(string: "http://127.0.0.1:9")!, store: MemoryTokenStore(), transport: TokenForgottenTransport())
         app.simulatedOffline = true
@@ -183,7 +211,7 @@ struct OfflineTests {
         await app.tuneQueue.flush()
         #expect(app.tuneQueue.count == 1)
         #expect(app.tuneQueue.refused.isEmpty)
-        #expect(app.phase == .signedOut)
+        #expect(app.phase == .guest)
         #expect(app.auth.store.token() == nil)
 
         // A change made now queues behind it rather than failing.

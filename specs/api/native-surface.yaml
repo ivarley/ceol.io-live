@@ -753,6 +753,22 @@ components:
               tune_name: { type: string }
               tune_type: { type: [string, "null"] }
               tunebook_count: { type: integer }
+    TopTunes:
+      type: object
+      required: [success, tunes, limit]
+      properties:
+        success: { type: boolean }
+        limit: { type: integer }
+        tunes:
+          type: array
+          items:
+            type: object
+            required: [tune_id, name, tunebook_count]
+            properties:
+              tune_id: { type: integer }
+              name: { type: string }
+              tune_type: { type: [string, "null"] }
+              tunebook_count: { type: integer }
     TuneSearch:
       type: object
       required: [success, tunes, count]
@@ -1602,6 +1618,13 @@ paths:
         default: { $ref: "#/components/responses/Error" }
 
   # --- tunes ---------------------------------------------------------------------
+  /api/tunes/top:
+    get:
+      operationId: getTopTunes
+      summary: The most common tunes, by thesession.org tunebook count. Public; a guest's Tunes tab (spec 060)
+      parameters:
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 500 }, description: "Default 100" }
+      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/TopTunes" } } } } }
   /api/tunes/search:
     get:
       operationId: searchTunes
@@ -1640,15 +1663,13 @@ paths:
   /api/tunes/{tune_id}/preview:
     get:
       operationId: getTunePreview
-      summary: Look-before-you-log preview (?session=&instance= scope)
-      security: [{ bearer: [] }]
+      summary: Look-before-you-log preview (?session=&instance= scope). Public (spec 060); rate_limited (429) for a signed-out caller
       parameters: [{ name: tune_id, in: path, required: true, schema: { type: integer } }]
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/TunePreview" } } } } }
   /api/tunes/{tune_id}/incipit-image:
     get:
       operationId: getTuneIncipitImage
-      summary: Incipit PNG (base64), rendered on demand
-      security: [{ bearer: [] }]
+      summary: Incipit PNG (base64), rendered on demand. Public (spec 060); rate_limited (429) for a signed-out caller
       parameters:
         - { name: tune_id, in: path, required: true, schema: { type: integer } }
         - { name: kind, in: query, required: false, schema: { type: string, enum: [incipit, both] }, description: "both also renders the full image, for the sheet's toggle" }
@@ -1656,8 +1677,7 @@ paths:
   /api/tunes/settings/{setting_id}/image:
     get:
       operationId: getSettingImage
-      summary: One setting's notation PNG (?kind=incipit|full)
-      security: [{ bearer: [] }]
+      summary: One setting's notation PNG (?kind=incipit|full). Public (spec 060); rate_limited (429) for a signed-out caller
       parameters:
         - { name: setting_id, in: path, required: true, schema: { type: integer } }
         - { name: kind, in: query, required: false, schema: { type: string, enum: [incipit, full] }, description: "incipit (the default) or the whole tune" }
@@ -2079,13 +2099,12 @@ paths:
   /api/listen/decider-data:
     get:
       operationId: getDeciderData
-      summary: The newest file the phone decides from when it listens offline (spec 053)
+      summary: The newest file the phone decides from when it listens offline (spec 053). Public (spec 060)
       description: >-
         Rebuilt weekly from thesession.org's dump. `url` is a presigned GET valid for
         `expires_in` seconds; check the download against `sha256`. `available` is false
         when none is published in this format. Errors: bad_format (400),
         storage_unavailable (503: keep the file you have, ask later).
-      security: [{ bearer: [] }]
       parameters:
         - { name: format, in: query, required: false, schema: { type: integer, default: 1 },
             description: "The file format the client reads (CeolDeciding's Corpus.version)." }

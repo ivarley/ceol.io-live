@@ -8142,6 +8142,46 @@
         }
       }
     },
+    "Sign in or create an account": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Sínigh isteach nó cruthaigh cuntas"
+          }
+        }
+      }
+    },
+    "Sign in to add this to your tunes": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Sínigh isteach chun é seo a chur le d'fhoinn"
+          }
+        }
+      }
+    },
+    "Sign in to keep your own list of tunes": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Sínigh isteach chun do liosta fonn féin a choinneáil"
+          }
+        }
+      }
+    },
+    "Sign in to log tunes": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Sínigh isteach chun foinn a logáil"
+          }
+        }
+      }
+    },
     "Sign out": {
       "localizations": {
         "ga": {
@@ -8775,6 +8815,16 @@
         }
       }
     },
+    "The most common tunes, by how many players have them in a tunebook on thesession.org.": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Na foinn is coitianta, de réir cé mhéad ceoltóir a bhfuil siad ina leabhar fonn acu ar thesession.org."
+          }
+        }
+      }
+    },
     "The recording so far stays on this phone.": {
       "localizations": {
         "ga": {
@@ -9225,6 +9275,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Foinn i bpáirt"
+          }
+        }
+      }
+    },
+    "Tunes on Ceol": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Foinn ar Ceol"
           }
         }
       }
@@ -9722,6 +9782,16 @@
         }
       }
     },
+    "Welcome to Ceol, an app for traditional Irish music. You can use the [Listen](ceol-guest:listen) feature to figure out what tune you're hearing, and browse [tunes](ceol-guest:tunes) and [session logs](ceol-guest:sessions). To track your own tunes or edit session logs, [sign in](ceol-guest:signin) or [create a free account](ceol-guest:signin).": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Fáilte go Ceol, aip don cheol traidisiúnta Gaelach. Is féidir leat an ghné [Éist](ceol-guest:listen) a úsáid chun a fháil amach cén fonn atá á sheinm, agus [foinn](ceol-guest:tunes) agus [logálacha seisiún](ceol-guest:sessions) a bhrabhsáil. Chun do chuid fonn féin a choinneáil nó logálacha seisiún a chur in eagar, [sínigh isteach](ceol-guest:signin) nó [cruthaigh cuntas saor in aisce](ceol-guest:signin)."
+          }
+        }
+      }
+    },
     "What I call it": {
       "localizations": {
         "ga": {
@@ -9949,6 +10019,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Is bainisteoir anseo thú. Ní athraíonn sé sin ar aon chaoi."
+          }
+        }
+      }
+    },
+    "You're not signed in. With an account you can keep your own list of tunes, join sessions and log what's played.": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Níl tú sínithe isteach. Le cuntas, is féidir leat do liosta fonn féin a choinneáil, freastal ar sheisiúin agus an méid a sheinntear a logáil."
           }
         }
       }

@@ -329,5 +329,6 @@
   "Set %lld of %lld tunes to “%@” — %lld failed": "Socraíodh %1$lld as %2$lld fonn mar “%3$@” — theip ar %4$lld",
   "Set 1 tune to “%@”": "Socraíodh 1 fhonn mar “%@”",
   "Set %lld tunes to “%@”": "Socraíodh %1$lld fonn mar “%2$@”",
-  "%lld already there": "%lld ann cheana"
+  "%lld already there": "%lld ann cheana",
+  "Sign in to log tunes": "Sínigh isteach chun foinn a logáil"
 }

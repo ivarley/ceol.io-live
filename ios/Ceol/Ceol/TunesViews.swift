@@ -66,6 +66,10 @@ struct TunesView: View {
     @FocusState private var searching: Bool
 
     var body: some View {
+        if model.isGuest { GuestTunesView() } else { signedIn }
+    }
+
+    private var signedIn: some View {
         NavigationStack {
             Resourced(resource: state) { payload in list(payload) }
                 .background(CeolTokens.bgColor)
@@ -715,8 +719,17 @@ struct TunebookPanel: View {
     @State private var key = ""
 
     var body: some View {
+        // A guest has no list to add to (spec 060).
+        if model.isGuest {
+            SignInPrompt(text: tr("Sign in to add this to your tunes"), id: "sheet.signIn")
+        } else {
+            panel
+        }
+    }
+
+    private var panel: some View {
         let current = status.flatMap(MyTunesRules.Status.init(rawValue:))
-        VStack(spacing: 14) {
+        return VStack(spacing: 14) {
             if loading {
                 ProgressView().frame(maxWidth: .infinity)
             } else {
@@ -1387,5 +1400,97 @@ struct TagsEditor: View {
         draft = ""
         guard !tag.isEmpty, !tags.contains(tag) else { return }
         onChange(tags + [tag])
+    }
+}
+
+// MARK: - A guest's Tunes (spec 060)
+
+typealias TopTunesPayload = Components.Schemas.TopTunes
+
+/// The Tunes tab for a guest: no list of your own, so the most common tunes (the web's
+/// public Tunes page), and the search reaches the whole catalogue by name.
+struct GuestTunesView: View {
+    @Environment(AppModel.self) private var model
+    private var state: Resource<TopTunesPayload> { model.topTunes }
+    @State private var search = ""
+    @State private var results: [Components.Schemas.TuneSearch.TunesPayloadPayload]?
+    @State private var searchFailed = false
+    @State private var open: TuneRef?
+    @FocusState private var searching: Bool
+
+    var body: some View {
+        NavigationStack {
+            Resourced(resource: state) { payload in list(payload) }
+                .background(CeolTokens.bgColor)
+                .ceolKept(state)
+                .ceolRootBar(tr("Tunes"), sharePath: "/tunes")
+                .task(id: search) { await searchCatalogue() }
+                .onChange(of: open) { _, tune in if tune != nil { searching = false } }
+                .sheet(item: $open) { TuneSheet(tune: $0) }
+                .onChange(of: model.rootRequests[.tunes]) { _, _ in
+                    open = nil
+                    searching = false
+                }
+                .task { await state.refresh(ifOlderThan: 60 * 60) }
+        }
+    }
+
+    /// The catalogue's name search, after a short pause in typing; two characters at least.
+    private func searchCatalogue() async {
+        let q = search.trimmingCharacters(in: .whitespaces)
+        guard q.count >= 2 else {
+            results = nil
+            return
+        }
+        try? await Task.sleep(for: .milliseconds(300))
+        guard !Task.isCancelled else { return }
+        do {
+            results = try await model.auth.client.searchTunes(query: .init(q: q)).ok.body.json.tunes
+            searchFailed = false
+        } catch {
+            if !Task.isCancelled { searchFailed = true }
+        }
+    }
+
+    @ViewBuilder private func list(_ payload: TopTunesPayload) -> some View {
+        List {
+            VStack(alignment: .leading, spacing: 10) {
+                SignInPrompt(text: tr("Sign in to keep your own list of tunes"), id: "tunes.signIn")
+                SearchRow(text: $search, prompt: tr("Search"), fieldID: "tunes.search", focused: $searching)
+                Text(results == nil ? tr("The most common tunes, by how many players have them in a tunebook on thesession.org.") : tr("Tunes on Ceol"))
+                    .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
+            }
+            .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 6, trailing: 16))
+            .listRowBackground(CeolTokens.bgColor)
+            .listRowSeparator(.hidden)
+            if let results {
+                if searchFailed {
+                    Text("Couldn't search the catalogue.").foregroundStyle(CeolTokens.textMuted).ceolRow()
+                } else if results.isEmpty {
+                    Text("No tunes match.").font(.ceol(size: 16)).foregroundStyle(CeolTokens.textMuted)
+                        .listRowBackground(CeolTokens.bgColor).listRowSeparator(.hidden)
+                }
+                ForEach(results, id: \.tuneId) { r in
+                    row(id: r.tuneId, name: r.name, type: r.tuneType, note: r.abcOnly ? tr("♪ notes match") : nil)
+                }
+            } else {
+                ForEach(payload.tunes, id: \.tuneId) { t in
+                    row(id: t.tuneId, name: t.name, type: t.tuneType, note: nil)
+                }
+            }
+        }
+        .ceolPlainList()
+        .refreshable { await state.refresh() }
+    }
+
+    private func row(id: Int, name: String, type: String?, note: String?) -> some View {
+        Button {
+            open = TuneRef(id: id, name: name, type: type)
+        } label: {
+            TuneRow(name: name, type: type, status: nil, note: note)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("tunes.row")
+        .ceolRow()
     }
 }

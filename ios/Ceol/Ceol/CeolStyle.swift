@@ -789,6 +789,11 @@ extension View {
             .modifier(SharePaneHost(isRoot: false))
     }
 
+    /// A full-screen cover that Share and the sign-in sheet open from while it is up.
+    func ceolSheetHost() -> some View {
+        modifier(SharePaneHost(isRoot: false))
+    }
+
     /// Where the Share pane opens from when no drawer is up: the tab view.
     func ceolSharePane() -> some View {
         modifier(SharePaneHost(isRoot: true))
@@ -812,6 +817,13 @@ private struct SharePaneHost: ViewModifier {
         content
             .sheet(item: Binding(get: { mine ? model.sharing : nil }, set: { model.sharing = $0 })) { SharePane(target: $0) }
             .sheet(item: Binding(get: { mine ? model.reporting : nil }, set: { model.reporting = $0 })) { ReportView(target: $0) }
+            // The sign-in sheet (spec 060), from the topmost drawer as Share is.
+            .sheet(isPresented: Binding(get: { mine && model.signingIn }, set: { model.signingIn = $0 }), onDismiss: {
+                model.notice = nil
+                model.linkError = nil
+            }) {
+                SignInView()
+            }
             .onAppear { if !isRoot { model.shareHosts.append(id) } }
             .onDisappear { model.shareHosts.removeAll { $0 == id } }
     }

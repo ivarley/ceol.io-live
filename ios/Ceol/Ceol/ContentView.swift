@@ -10,8 +10,8 @@ import CeolDesign
 import CeolSession
 import SwiftUI
 
-/// The screen for where the app is: splash while launching, then sign-in, profile setup
-/// or the tabs (AppModel.Phase).
+/// The screen for where the app is: splash while launching, then the tabs (signed in or
+/// as a guest, spec 060) or profile setup (AppModel.Phase).
 struct ContentView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
@@ -25,9 +25,11 @@ struct ContentView: View {
                 Group {
                     switch model.phase {
                     case .upgradeRequired: UpgradeRequiredView().transition(.opacity)
-                    case .signedOut: SignInView().transition(.opacity)
                     case .profileSetup: ProfileSetupView().transition(.opacity)
-                    case .signedIn, .launching: MainTabView().transition(.opacity)
+                    case .guest, .signedIn, .launching:
+                        // Signing out starts the tabs over (tabsGeneration); signing in
+                        // from the sheet keeps you where you were.
+                        MainTabView().id(model.tabsGeneration).transition(.opacity)
                     }
                 }
                 // Spec 057: the id rebuilds the screens when the language changes, so text

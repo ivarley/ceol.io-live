@@ -35,9 +35,22 @@ final class CeolUITests: XCTestCase {
         return app
     }
 
+    /// The app opens as a guest (spec 060): Home's button opens the sign-in sheet.
+    private func openSignIn(_ app: XCUIApplication) {
+        let button = app.buttons["home.signIn"]
+        XCTAssertTrue(button.waitForExistence(timeout: 15))
+        button.tap()
+    }
+
     /// Sign in with a seeded password account (nothing is emailed): the admin unless
     /// another is named.
     private func signIn(_ app: XCUIApplication, as account: String = "ian@ceol.io") {
+        openSignIn(app)
+        signInOnSheet(app, as: account)
+    }
+
+    /// The sign-in sheet, already up: fill it in, and wait for it to go.
+    private func signInOnSheet(_ app: XCUIApplication, as account: String = "ian@ceol.io") {
         let email = app.textFields["signin.email"]
         XCTAssertTrue(email.waitForExistence(timeout: 15))
         email.tap()
@@ -48,6 +61,7 @@ final class CeolUITests: XCTestCase {
         password.tap()
         password.typeText("password123")
         app.buttons["signin.submit"].tap()
+        XCTAssertTrue(password.waitForNonExistence(timeout: 10))
         XCTAssertTrue(app.buttons["tab.me"].firstMatch.waitForExistence(timeout: 10))
     }
 
@@ -2043,6 +2057,7 @@ final class CeolUITests: XCTestCase {
     @MainActor
     func testPasswordSignInThenSignOut() throws {
         let app = launch()
+        openSignIn(app)
 
         let email = app.textFields["signin.email"]
         XCTAssertTrue(email.waitForExistence(timeout: 15))
@@ -2067,12 +2082,14 @@ final class CeolUITests: XCTestCase {
         let confirm = app.buttons.matching(NSPredicate(format: "label == 'Sign out' AND identifier != 'me.signout'")).firstMatch
         XCTAssertTrue(confirm.waitForExistence(timeout: 5))
         confirm.tap()
-        XCTAssertTrue(app.textFields["signin.email"].waitForExistence(timeout: 10))
+        // Signed out: a guest again, on Home.
+        XCTAssertTrue(app.descendants(matching: .any)["home.welcome"].waitForExistence(timeout: 10))
     }
 
     @MainActor
     func testAWrongPasswordSaysSo() throws {
         let app = launch()
+        openSignIn(app)
         let email = app.textFields["signin.email"]
         XCTAssertTrue(email.waitForExistence(timeout: 15))
         email.tap()
@@ -2084,7 +2101,70 @@ final class CeolUITests: XCTestCase {
         password.typeText("not-the-password")
         app.buttons["signin.submit"].tap()
         XCTAssertTrue(app.staticTexts["signin.error"].waitForExistence(timeout: 10))
-        XCTAssertFalse(app.buttons["tab.me"].firstMatch.exists)
+        XCTAssertTrue(app.secureTextFields["signin.password"].exists, "still on the sign-in sheet")
+    }
+
+    /// Spec 060: with no account, sessions, their logs, a night and a tune all read as
+    /// they do signed in; what needs an account asks you to sign in, and signing in from
+    /// there brings you back to where you were.
+    @MainActor
+    func testBrowsingAsAGuest() throws {
+        let app = launch()
+        XCTAssertTrue(app.descendants(matching: .any)["home.welcome"].waitForExistence(timeout: 15))
+        snapshot("guest home")
+
+        app.buttons["tab.sessions"].firstMatch.tap()
+        let mueller = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Mueller Session'")).firstMatch
+        XCTAssertTrue(mueller.waitForExistence(timeout: 10))
+        mueller.tap()
+        XCTAssertTrue(app.buttons["session.tune"].firstMatch.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons.containing(NSPredicate(format: "label BEGINSWITH 'People'")).firstMatch.exists, "no People tab")
+
+        // A tune: its sheet, with a sign-in button where your list's would be.
+        app.buttons["session.tune"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["sheet.signIn"].waitForExistence(timeout: 10))
+        snapshot("guest tune")
+        app.buttons["Done"].firstMatch.tap()
+
+        // A night's log, read-only.
+        app.buttons.containing(NSPredicate(format: "label BEGINSWITH 'Logs'")).firstMatch.tap()
+        let night = app.buttons.matching(NSPredicate(format: "label MATCHES '.*[1-9][0-9]* tunes.*'")).firstMatch
+        XCTAssertTrue(night.waitForExistence(timeout: 10))
+        night.tap()
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'Set 1'")).firstMatch.waitForExistence(timeout: 10))
+        // Nothing to log with: no Edit log under the sets or in the menu, nothing to mark.
+        XCTAssertFalse(app.buttons["night.editBottom"].exists)
+        snapshot("guest night")
+        app.buttons["night.menu"].tap()
+        XCTAssertTrue(app.buttons["night.details"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["night.edit"].exists)
+        XCTAssertFalse(app.buttons["night.complete"].exists)
+        XCTAssertFalse(app.buttons["night.reopen"].exists)
+        app.buttons["night.details"].tap()
+        XCTAssertTrue(app.buttons["Done"].firstMatch.waitForExistence(timeout: 5))
+        app.buttons["Done"].firstMatch.tap()
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+
+        // Join asks you to sign in; signing in lands back on the session, now with People.
+        let join = app.buttons["session.join"]
+        XCTAssertTrue(join.waitForExistence(timeout: 10))
+        join.tap()
+        signInOnSheet(app)
+        XCTAssertTrue(app.buttons["session.band"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons.containing(NSPredicate(format: "label BEGINSWITH 'People'")).firstMatch.waitForExistence(timeout: 15))
+    }
+
+    /// A guest's Tunes tab: the most common tunes, and the catalogue's search.
+    @MainActor
+    func testGuestTunes() throws {
+        let app = launch()
+        app.buttons["tab.tunes"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["tunes.signIn"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.buttons["tunes.row"].firstMatch.waitForExistence(timeout: 10))
+        let search = app.textFields["tunes.search"]
+        search.tap()
+        search.typeText("cooley")
+        XCTAssertTrue(app.buttons.containing(NSPredicate(format: "label CONTAINS[c] 'Cooley'")).firstMatch.waitForExistence(timeout: 10))
     }
 
     @MainActor

@@ -27,6 +27,10 @@ struct MeView: View {
     @State private var saveFailure: String?
 
     var body: some View {
+        if model.isGuest { GuestMeView() } else { signedIn }
+    }
+
+    private var signedIn: some View {
         NavigationStack {
             Resourced(resource: state) { p in list(p) }
                 .background(CeolTokens.bgColor)
@@ -351,5 +355,61 @@ extension ISO8601DateFormatter {
         if let d = f.date(from: s) { return d }
         f.formatOptions = [.withInternetDateTime]
         return f.date(from: s)
+    }
+}
+
+/// Me for a guest (spec 060): sign in, and the parts of Me that aren't about an account.
+/// The web pages open plainly, with no sign-in to hand over; the language is kept on
+/// the phone until you sign in, when your profile's takes over.
+struct GuestMeView: View {
+    @Environment(AppModel.self) private var model
+    @State private var page: WebPage?
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("You're not signed in. With an account you can keep your own list of tunes, join sessions and log what's played.")
+                            .font(.ceol(size: 17)).foregroundStyle(CeolTokens.textColor)
+                        Button { model.askToSignIn() } label: {
+                            Text("Sign in or create an account")
+                                .font(.ceol(size: 17, weight: .semibold))
+                                .frame(maxWidth: .infinity, minHeight: 50)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(CeolTokens.primary)
+                        .accessibilityIdentifier("me.signIn")
+                    }
+                    // Spec 057: each language named in itself, whatever the app is in.
+                    KitGroup(title: tr("Language")) {
+                        Picker("Language", selection: Binding(get: { model.language }, set: { model.setLanguage($0) })) {
+                            Text(verbatim: "English").tag("en")
+                            Text(verbatim: "Gaeilge").tag("ga")
+                        }
+                        .pickerStyle(.segmented)
+                        .accessibilityIdentifier("me.language")
+                        .padding(.vertical, 6)
+                    }
+                    KitGroup {
+                        webRow(tr("Help"), "/help", id: "me.help")
+                        webRow(tr("Contact & Support"), "/support", id: "me.support")
+                        webRow(tr("Privacy Policy"), "/privacy", id: "me.privacy")
+                    }
+                }
+                .padding(20)
+            }
+            .background(CeolTokens.bgColor)
+            .ceolRootBar(tr("Me"), sharePath: "/")
+            .sheet(item: $page) { SafariView(url: $0.url).ignoresSafeArea() }
+        }
+    }
+
+    private func webRow(_ label: String, _ path: String, id: String) -> some View {
+        Button { page = WebPage(url: model.webURL(path)) } label: {
+            KitRow(label: label) { WebMark(busy: false) }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(id)
     }
 }

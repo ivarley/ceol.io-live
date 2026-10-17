@@ -41,6 +41,11 @@ extension AppModel {
         resource("my-tunes") { [auth] in try await auth.client.getMyTunes().ok.body.json }
     }
 
+    /// The most common tunes: a guest's Tunes tab (spec 060).
+    var topTunes: Resource<TopTunesPayload> {
+        resource("tunes-top") { [auth] in try await auth.client.getTopTunes(query: .init(limit: 100)).ok.body.json }
+    }
+
     var profile: Resource<ProfilePayload> {
         resource("profile") { [auth] in try await auth.profile() }
     }

@@ -928,7 +928,8 @@ def app_config():
 # ---------------------------------------------------------------------------
 
 
-@api_login_required
+@public_api  # spec 060: built from thesession.org's public dump; a guest's phone
+# needs it to hear tunes at all
 def listen_decider_data():
     """The newest decider file in the format the app reads (`?format=`, default 1),
     published weekly from thesession.org's dump (services/decider_data_service.py,

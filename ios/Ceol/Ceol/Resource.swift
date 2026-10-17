@@ -60,9 +60,15 @@ enum PayloadStore {
     }
 }
 
+/// A kept payload, whatever its type: signing in fetches every open one again.
+@MainActor
+protocol Refreshing: AnyObject {
+    @discardableResult func refresh() async -> Bool
+}
+
 @MainActor
 @Observable
-final class Resource<Value: Codable & Sendable> {
+final class Resource<Value: Codable & Sendable>: Refreshing {
     let key: String
     private(set) var value: Value?
     /// When `value` was fetched (or last changed on the phone).

@@ -230,5 +230,9 @@
   "Tag": "Clib",
   "All tags": "Gach clib",
   "Add a tag": "Cuir clib leis",
-  "Remove tag %@": "Bain an chlib %@"
+  "Remove tag %@": "Bain an chlib %@",
+  "Sign in to add this to your tunes": "Sínigh isteach chun é seo a chur le d'fhoinn",
+  "Sign in to keep your own list of tunes": "Sínigh isteach chun do liosta fonn féin a choinneáil",
+  "The most common tunes, by how many players have them in a tunebook on thesession.org.": "Na foinn is coitianta, de réir cé mhéad ceoltóir a bhfuil siad ina leabhar fonn acu ar thesession.org.",
+  "Tunes on Ceol": "Foinn ar Ceol"
 }

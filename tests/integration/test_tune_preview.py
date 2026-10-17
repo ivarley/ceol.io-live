@@ -135,9 +135,15 @@ def preview_rows():
     conn.close()
 
 
-def test_tune_preview_requires_login(client, preview_rows):
+def test_tune_preview_is_public_and_carries_nothing_personal(client, preview_rows):
+    """Spec 060: the app's guests preview local tunes; signed out there is no
+    tunebook entry and no session of yours to start an add from."""
     resp = client.get(f"/api/tunes/{TUNE}/preview")
-    assert resp.status_code == 401
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["success"] is True
+    assert body.get("person_tune") is None
+    assert body.get("session_defaults") is None
 
 
 def test_tune_preview_personal_settings_and_no_session_fields(

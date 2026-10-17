@@ -3572,13 +3572,35 @@ def tunes_thesession_search():
     )
 
 
-@api_login_required
+def _too_many_images():
+    return _("Too many requests for notation. Try again shortly.")
+
+
+# Spec 060: public, so the app's guests see notation. These render ABC already in our
+# database through our own renderer and fetch nothing from outside; the signed-out
+# limit only keeps an anonymous loop from tying up the renderer. 60 a minute, because
+# a pub's worth of guests can share one address.
+@public_api
+@rate_limited(
+    limit=60,
+    per=60,
+    scope="notation-images",
+    signed_out_only=True,
+    message=_too_many_images,
+)
 def tunes_incipit_image(tune_id):
     """GET /api/tunes/<id>/incipit-image?kind=incipit|both — scope-free."""
     return _incipit_response(tune_id)
 
 
-@api_login_required
+@public_api  # spec 060: a local tune's preview, for the app's guests
+@rate_limited(
+    limit=60,
+    per=60,
+    scope="notation-images",
+    signed_out_only=True,
+    message=_too_many_images,
+)
 def tunes_preview(tune_id):
     """GET /api/tunes/<id>/preview[?session=|?instance=]"""
     session_id, kind, err = _scope_or_404()
@@ -3587,7 +3609,14 @@ def tunes_preview(tune_id):
     return _tune_preview_core(tune_id, session_id=session_id)
 
 
-@api_login_required
+@public_api  # spec 060, as tunes_incipit_image
+@rate_limited(
+    limit=60,
+    per=60,
+    scope="notation-images",
+    signed_out_only=True,
+    message=_too_many_images,
+)
 def tunes_setting_image(setting_id):
     """GET /api/tunes/settings/<id>/image?kind=incipit|full — scope-free."""
     return _setting_image_response(setting_id)

@@ -128,8 +128,16 @@ def check(scope: str, limit: int, per: float, key: str | None = None) -> float:
         return 0.0
 
 
-def rate_limited(limit: int, per: float, scope: str):
+def rate_limited(
+    limit: int, per: float, scope: str, signed_out_only=False, message=None
+):
     """Throttle a view per caller. Answers 429 with `code: "rate_limited"`.
+
+    `signed_out_only` leaves signed-in callers alone: for endpoints opened to guests
+    that make no outbound call (spec 060's notation images), where the limit is only
+    there to keep an anonymous loop from tying up the renderer. `message` is a
+    function returning the 429's sentence (called per request, so it is translated);
+    the default speaks of thesession.org.
 
     Disabled when RATE_LIMIT_DISABLED is set, which the e2e suite does: those
     specs drive the same few endpoints far harder than a person would, and a
@@ -141,14 +149,20 @@ def rate_limited(limit: int, per: float, scope: str):
         def wrapper(*args, **kwargs):
             if os.environ.get("RATE_LIMIT_DISABLED") == "1":
                 return view(*args, **kwargs)
+            if signed_out_only and current_user.is_authenticated:
+                return view(*args, **kwargs)
             retry_after = check(scope, limit, per)
             if retry_after:
                 seconds = max(1, int(retry_after + 0.999))
                 response = jsonify(
                     {
                         "success": False,
-                        "error": _(
-                            "Too many requests to thesession.org. Try again shortly."
+                        "error": (
+                            message()
+                            if message
+                            else _(
+                                "Too many requests to thesession.org. Try again shortly."
+                            )
                         ),
                         "code": "rate_limited",
                     }

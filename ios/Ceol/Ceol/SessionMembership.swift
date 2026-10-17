@@ -39,11 +39,14 @@ struct JoinPrompt: View {
     @State private var failure: String?
 
     var body: some View {
-        if permissions.relationship == nil && permissions.isLoggedIn {
+        // A guest is asked too: the answer opens the sign-in sheet (spec 060).
+        if permissions.relationship == nil && (permissions.isLoggedIn || model.isGuest) {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
                     Text("Do you attend this session?").font(.ceol(size: 16)).foregroundStyle(CeolTokens.textColor)
-                    Button(busy ? "Adding…" : "Yes, Add Me") { asking = true }
+                    Button(busy ? "Adding…" : "Yes, Add Me") {
+                        if model.isGuest { model.askToSignIn() } else { asking = true }
+                    }
                         .font(.ceol(size: 16, weight: .semibold))
                         .foregroundStyle(CeolTokens.primary)
                         .disabled(busy)

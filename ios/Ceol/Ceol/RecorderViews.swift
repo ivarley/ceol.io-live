@@ -238,11 +238,14 @@ struct ListenStartView: View {
                     .accessibilityIdentifier("start.listenWhere")
                 }
             }
-            Toggle(isOn: $recording) {
-                Text("Keep a recording on this phone").font(.ceol(size: 14)).foregroundStyle(CeolTokens.textMuted)
+            // A guest's recording could go nowhere (spec 060): no switch.
+            if !app.isGuest {
+                Toggle(isOn: $recording) {
+                    Text("Keep a recording on this phone").font(.ceol(size: 14)).foregroundStyle(CeolTokens.textMuted)
+                }
+                .tint(CeolTokens.primaryFill)
+                .accessibilityIdentifier("start.recording")
             }
-            .tint(CeolTokens.primaryFill)
-            .accessibilityIdentifier("start.recording")
             Button {
                 if app.user?.isSystemAdmin == true { ListenWhere.preferred = place }
                 onStart(recording)

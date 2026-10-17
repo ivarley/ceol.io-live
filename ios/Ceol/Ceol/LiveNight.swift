@@ -458,6 +458,7 @@ final class NightModel {
     }
 
     func loadVocabulary() async {
+        guard !app.isGuest else { return }  // an account's (spec 060)
         guard let v = try? await app.getJSON("/api/live/instances/\(instanceID)/vocabulary") else { return }
         knownRaw = v["known_tunes"]
         aliasesRaw = v["known_aliases"]
@@ -870,6 +871,7 @@ final class NightModel {
     }
 
     func loadPeople() async {
+        guard !app.isGuest else { return }  // an account's (spec 060)
         guard let p = try? await app.getJSON("/api/live/instances/\(instanceID)/people") else { return }
         people = p["people"]?.arrayValue ?? []
         peopleLoaded = true
@@ -1053,7 +1055,10 @@ extension AppModel {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            if (response as? HTTPURLResponse)?.statusCode == 401 { signInExpired() }
+            // A guest sends no token, so a 401 is only "this needs an account" (spec 060).
+            if (response as? HTTPURLResponse)?.statusCode == 401, request.value(forHTTPHeaderField: "Authorization") != nil {
+                signInExpired()
+            }
             throw URLError(.badServerResponse)
         }
         return try JSONDecoder().decode(JSONValue.self, from: data)
@@ -1070,8 +1075,8 @@ extension AppModel {
         request.httpBody = try JSONEncoder().encode(body)
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
-        // These requests carry the token (authorized), so a 401 means it is dead.
-        if http.statusCode == 401 { signInExpired() }
+        // A request that carried the token: a 401 means it is dead. A guest's carries none.
+        if http.statusCode == 401, request.value(forHTTPHeaderField: "Authorization") != nil { signInExpired() }
         let json = (try? JSONDecoder().decode(JSONValue.self, from: data)) ?? .null
         return (http.statusCode, json)
     }

@@ -4,7 +4,8 @@
 //
 //   launching       splash, while app-config and the stored token are checked
 //   upgradeRequired the server says this build is too old (MIN_CLIENT_VERSION_IOS)
-//   signedOut       the email-first sign-in
+//   guest           the tabs, signed out (spec 060): reading is open; the sign-in
+//                   sheet (`signingIn`) opens from whatever needs an account
 //   profileSetup    signed in, but name or location missing (auth.needs_profile_setup)
 //   signedIn        the four tabs
 
@@ -19,7 +20,20 @@ import OpenAPIURLSession
 @Observable
 final class AppModel {
     enum Phase: Equatable {
-        case launching, upgradeRequired, signedOut, profileSetup, signedIn
+        case launching, upgradeRequired, guest, profileSetup, signedIn
+    }
+
+    /// Signed out, using the app as a guest (spec 060).
+    var isGuest: Bool { phase == .guest }
+    /// The sign-in sheet is up, over wherever you were.
+    var signingIn = false
+    /// Counts the times the tabs were started over (signing out, an account deleted):
+    /// the tab view's identity, so nothing of the account stays on screen.
+    private(set) var tabsGeneration = 0
+
+    /// Something that needs an account was tapped: the sign-in sheet.
+    func askToSignIn() {
+        signingIn = true
     }
 
     private(set) var phase: Phase = .launching
@@ -289,7 +303,7 @@ final class AppModel {
             if let user = try await auth.currentUser() {
                 enter(user, next: nil)
             } else {
-                phase = .signedOut
+                enterGuest()
             }
         } catch {
             // Can't reach the server, but a token is stored: stay signed in rather than
@@ -300,7 +314,7 @@ final class AppModel {
                 prefetcher.start(app: self)
                 tuneQueue.start(app: self)
             } else {
-                phase = .signedOut
+                enterGuest()
             }
         }
         if let url = pendingLink {
@@ -317,7 +331,15 @@ final class AppModel {
         enter(s.user, next: s.next)
     }
 
+    /// Signed out: the tabs, as a guest. The phone still hears tunes, so its decider
+    /// file is kept current; the prefetcher and the tunebook queue are an account's.
+    private func enterGuest() {
+        phase = .guest
+        deciderData.start(app: self)
+    }
+
     func enter(_ user: User, next: SignedIn.Next?) {
+        let wasGuest = phase == .guest
         // What the phone kept belongs to the account that was signed in when it was
         // kept. The same account back (after the sign-in ran out, say) finds it all
         // there, and its waiting changes go now; another account starts clean, so one
@@ -334,6 +356,17 @@ final class AppModel {
         // the screens' payloads, ahead of their opening; changes made with no signal
         prefetcher.start(app: self)
         tuneQueue.start(app: self)
+        signingIn = false
+        // Signed in from the sheet: the screens behind it were fetched as a guest, so
+        // fetch them again for their personal parts (your status, Join, the add buttons).
+        if wasGuest { refreshKept() }
+    }
+
+    /// Fetch every payload a screen has open again.
+    private func refreshKept() {
+        for r in resources.values {
+            if let r = r as? any Refreshing { Task { await r.refresh() } }
+        }
     }
 
     /// Launched with no signal, the person is unknown though signed in: once the server
@@ -378,12 +411,16 @@ final class AppModel {
         do {
             signedIn(try await auth.exchange(link))
         } catch let failure as AuthFailure {
-            if phase != .signedIn { phase = .signedOut }
-            linkError = Self.message(for: failure)
+            linkFailed(Self.message(for: failure))
         } catch {
-            if phase != .signedIn { phase = .signedOut }
-            linkError = tr("Couldn't reach Ceol to open that link. Check your connection and tap it again.")
+            linkFailed(tr("Couldn't reach Ceol to open that link. Check your connection and tap it again."))
         }
+    }
+
+    /// An emailed link that didn't sign you in: a guest sees why on the sign-in sheet.
+    private func linkFailed(_ message: String) {
+        linkError = message
+        if phase == .guest { signingIn = true }
     }
 
     static func message(for failure: AuthFailure) -> String {
@@ -400,11 +437,20 @@ final class AppModel {
     func signOut() async {
         await auth.logout()
         forgetAccountData()
-        phase = .signedOut
+        startOverAsGuest()
+    }
+
+    /// The tabs from the top, as a guest: nothing of the account left on screen.
+    private func startOverAsGuest() {
+        sessionsPath = []
+        tunesStatus = nil
+        tab = .home
+        tabsGeneration += 1
+        enterGuest()
     }
 
     /// The server no longer knows the token (six weeks idle, or signed out from the
-    /// web): back to sign-in. Nothing the phone kept is touched — the payloads, the
+    /// web): back to being a guest, with the sign-in sheet up. Nothing the phone kept is touched — the payloads, the
     /// nights, the changes waiting to be sent — so an evening's work with no signal
     /// is not lost to a sign-in that ran out while the phone was away; it goes once
     /// the same account is signed in again (enter). The queues stop trying meanwhile:
@@ -416,7 +462,8 @@ final class AppModel {
         tuneQueue.pause()
         user = nil
         notice = tr("Your sign-in ran out. Sign in again and the changes waiting on this phone will be sent.")
-        phase = .signedOut
+        enterGuest()
+        signingIn = true
     }
 
     /// The account whose data is on this phone (user_id), while any is.
@@ -433,7 +480,8 @@ final class AppModel {
     func accountDeleted() {
         forgetAccountData()
         notice = tr("Your account has been deleted.")
-        phase = .signedOut
+        startOverAsGuest()
+        signingIn = true
     }
 
     /// Everything kept for this account: nights, payloads, waiting tunebook changes.

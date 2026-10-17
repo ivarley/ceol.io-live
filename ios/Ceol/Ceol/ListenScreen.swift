@@ -45,6 +45,7 @@ struct ListenCover: View {
 
     var body: some View {
         ListenScreen(context: context, presented: true, showingRecent: $showingRecent)
+            .ceolSheetHost()
     }
 }
 

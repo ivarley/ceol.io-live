@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-17 08:52-0500\n"
+"POT-Creation-Date: 2026-10-17 16:17-0500\n"
 "PO-Revision-Date: 2026-10-06 12:44+0530\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ga\n"
@@ -108,17 +108,17 @@ msgstr "Ní féidir leis an ainm úsáideora a bheith folamh"
 msgid "That username is taken"
 msgstr "Tá an t-ainm úsáideora sin in úsáid cheana"
 
-#: api_app_routes.py:944
+#: api_app_routes.py:945
 msgid "format must be a whole number"
 msgstr "Ní mór don fhormáid a bheith ina slánuimhir"
 
-#: api_app_routes.py:951
+#: api_app_routes.py:952
 #, python-format
 msgid "The decider data could not be read: %(error)s"
 msgstr "Níorbh fhéidir sonraí an chinnteora a léamh: %(error)s"
 
-#: api_app_routes.py:1024 api_app_routes.py:1042 api_app_routes.py:1051
-#: api_app_routes.py:1112
+#: api_app_routes.py:1025 api_app_routes.py:1043 api_app_routes.py:1052
+#: api_app_routes.py:1113
 #, review
 msgid "Not found"
 msgstr "Níor aimsíodh é"
@@ -2638,6 +2638,11 @@ msgstr "Tá an abc rófhada"
 msgid "instance must be an id"
 msgstr "Caithfidh instance a bheith ina aitheantas"
 
+#: live_logging_routes.py:3576
+#, review
+msgid "Too many requests for notation. Try again shortly."
+msgstr "An iomarca iarratas ar nodaireacht. Bain triail eile as ar ball beag."
+
 #: place_routes.py:23
 #, review
 msgid "Only a site admin can change places"
@@ -2768,7 +2773,7 @@ msgstr "Tá seisiúin ag %(name)s; bog iad ar dtús"
 msgid "%(name)s contains %(children)s; move those first"
 msgstr "Tá %(children)s laistigh de %(name)s; bog iad sin ar dtús"
 
-#: rate_limit.py:151
+#: rate_limit.py:164
 #, review
 msgid "Too many requests to thesession.org. Try again shortly."
 msgstr "An iomarca iarratas chuig thesession.org. Bain triail eile as ar ball beag."

@@ -25,6 +25,8 @@ struct LogDetailsSheet: View {
     var body: some View {
         let meta = model.log?.meta ?? [:]
         let complete = meta["log_complete"] == true
+        // A guest reads the details and changes none of them (spec 060).
+        let guest = app.isGuest
         NavigationStack {
             List {
                 Section {
@@ -32,24 +34,28 @@ struct LogDetailsSheet: View {
                         HStack {
                             Text("Date").foregroundStyle(CeolTokens.textMuted)
                             Spacer()
-                            Button("Change") { editingDate = true }.accessibilityIdentifier("details.date")
+                            if !guest { Button("Change") { editingDate = true }.accessibilityIdentifier("details.date") }
                         }
                         Text(whenLabel(meta)).foregroundStyle(CeolTokens.textColor)
                     }
                     row("Name", meta["instance_name"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 } ?? unnamed) {
-                        Button(meta["instance_name"]?.stringValue?.isEmpty == false ? tr("Rename") : tr("Name it")) { editingName = true }
-                            .accessibilityIdentifier("details.name")
+                        if !guest {
+                            Button(meta["instance_name"]?.stringValue?.isEmpty == false ? tr("Rename") : tr("Name it")) { editingName = true }
+                                .accessibilityIdentifier("details.name")
+                        }
                     }
                     row("Tunes", tuneSummary) { EmptyView() }
                     row("Status", complete ? tr("✓ Marked complete") : tr("Still logging")) {
-                        if complete {
+                        if guest {
+                            EmptyView()
+                        } else if complete {
                             Button("Re-open") { confirmReopen = true }.accessibilityIdentifier("details.reopen")
                         } else {
                             Button("Mark complete") { confirmComplete = true }.accessibilityIdentifier("details.complete")
                         }
                     }
                 }
-                if model.trackAttendance || !model.roster.isEmpty {
+                if !guest && (model.trackAttendance || !model.roster.isEmpty) {
                     Section("Who and what") {
                         NightPeopleDetails(model: model) {
                             dismiss()
@@ -57,26 +63,32 @@ struct LogDetailsSheet: View {
                         }
                     }
                 }
-                Section("Notes") {
-                    TextField("Add notes for this session…", text: $notes, axis: .vertical)
-                        .lineLimit(3...8)
-                        .accessibilityIdentifier("details.notes")
-                    if notes != (meta["notes"]?.stringValue ?? "") {
-                        HStack {
-                            Button(notesSaving ? tr("Saving…") : tr("Save")) {
-                                notesSaving = true
-                                Task {
-                                    let r = await model.metaOp("edit_notes", ["notes": .string(notes)], label: "notes")
-                                    why = r.why
-                                    notesSaving = false
+                if guest {
+                    if let saved = meta["notes"]?.stringValue, !saved.isEmpty {
+                        Section("Notes") { Text(saved).foregroundStyle(CeolTokens.textColor) }
+                    }
+                } else {
+                    Section("Notes") {
+                        TextField("Add notes for this session…", text: $notes, axis: .vertical)
+                            .lineLimit(3...8)
+                            .accessibilityIdentifier("details.notes")
+                        if notes != (meta["notes"]?.stringValue ?? "") {
+                            HStack {
+                                Button(notesSaving ? tr("Saving…") : tr("Save")) {
+                                    notesSaving = true
+                                    Task {
+                                        let r = await model.metaOp("edit_notes", ["notes": .string(notes)], label: "notes")
+                                        why = r.why
+                                        notesSaving = false
+                                    }
                                 }
+                                .disabled(notesSaving)
+                                .accessibilityIdentifier("details.saveNotes")
+                                Spacer()
+                                Button("Cancel") { notes = meta["notes"]?.stringValue ?? "" }.foregroundStyle(CeolTokens.textMuted)
                             }
-                            .disabled(notesSaving)
-                            .accessibilityIdentifier("details.saveNotes")
-                            Spacer()
-                            Button("Cancel") { notes = meta["notes"]?.stringValue ?? "" }.foregroundStyle(CeolTokens.textMuted)
+                            .buttonStyle(.borderless)
                         }
-                        .buttonStyle(.borderless)
                     }
                 }
                 if let why {

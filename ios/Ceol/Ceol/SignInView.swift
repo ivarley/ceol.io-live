@@ -51,6 +51,12 @@ struct SignInView: View {
             .background(CeolTokens.bgColor)
             .disabled(busy || model.openingLink)
             .overlay { if model.openingLink { ProgressView("Signing you in…") } }
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") { model.signingIn = false }
+                        .accessibilityIdentifier("signin.close")
+                }
+            }
         }
     }
 

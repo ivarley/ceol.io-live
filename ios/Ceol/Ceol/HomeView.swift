@@ -32,6 +32,10 @@ extension HomePayload.UpcomingSessionsPayloadPayload {
 struct HomeView: View {
     @Environment(AppModel.self) private var model
     var body: some View {
+        if model.isGuest { GuestHomeView() } else { signedIn }
+    }
+
+    private var signedIn: some View {
         NavigationStack {
             Resourced(resource: model.home) { home in
                 content(home)
