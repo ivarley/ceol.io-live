@@ -4,8 +4,6 @@
 <dict>
 	<key>com.apple.developer.associated-domains</key>
 	<array>
-		<string>applinks:ceol.io</string>
-		<string>applinks:www.ceol.io</string>
 		<string>applinks:ceol.app</string>
 	</array>
 </dict>

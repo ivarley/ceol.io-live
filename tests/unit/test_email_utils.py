@@ -91,7 +91,7 @@ class TestSendUpdateEmail:
     ):
         monkeypatch.delenv("MAIL_UPDATES_SENDER", raising=False)
         assert self._send(app_context) is True
-        assert sent_payload(mock_sendgrid)["from"]["email"] == "ceol@ceol.io"
+        assert sent_payload(mock_sendgrid)["from"]["email"] == "ceol@ceol.app"
 
     def test_updates_sender_env_override(self, mock_sendgrid, app_context, monkeypatch):
         monkeypatch.setenv("MAIL_UPDATES_SENDER", "news@ceol.io")

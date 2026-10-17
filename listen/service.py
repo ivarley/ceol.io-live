@@ -275,7 +275,7 @@ async def lifespan(app):
         t.cancel()
 
 
-CEOL_API_URL = os.environ.get("CEOL_API_URL", "https://ceol.io")
+CEOL_API_URL = os.environ.get("CEOL_API_URL", "https://ceol.app")
 _app_tokens = {}      # token -> (allowed, checked at)
 
 

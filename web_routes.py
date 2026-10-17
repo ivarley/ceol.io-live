@@ -895,6 +895,7 @@ def help_live_logger():
 # Release notes months, most recent first. Single source of truth shared by
 # the index page and the per-month detail pages.
 RELEASE_NOTES_MONTHS = [
+    ("2026-10", "October 2026"),
     ("2026-07", "July 2026"),
     ("2026-06", "June 2026"),
     ("2026-03", "March 2026"),

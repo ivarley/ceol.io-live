@@ -29,7 +29,7 @@ def send_email_via_sendgrid(
             return False
 
         if from_email is None:
-            from_email = os.environ.get("MAIL_DEFAULT_SENDER", "noreply@ceol.io")
+            from_email = os.environ.get("MAIL_DEFAULT_SENDER", "noreply@ceol.app")
 
         logger.info(
             f"Sending email via SendGrid - To: {to_email}, From: {from_email}, Subject: {subject}"
@@ -464,8 +464,8 @@ def verify_person_unsubscribe_token(token):
 
 def send_update_email(user_id, to_email, subject, body_markdown):
     """Send one app-update email (spec 027): Markdown body, personalized
-    unsubscribe link, from the updates sender (default ceol@ceol.io)."""
-    from_email = os.environ.get("MAIL_UPDATES_SENDER", "ceol@ceol.io")
+    unsubscribe link, from the updates sender (default ceol@ceol.app)."""
+    from_email = os.environ.get("MAIL_UPDATES_SENDER", "ceol@ceol.app")
 
     unsubscribe_url = url_for(
         "unsubscribe_updates",
@@ -475,7 +475,7 @@ def send_update_email(user_id, to_email, subject, body_markdown):
 
     with force_locale(_language_of_user_id(user_id)):
         opted_in = _(
-            "You're receiving this because you opted in to updates on ceol.io."
+            "You're receiving this because you opted in to updates on Ceol."
         )
         unsubscribe = _("Unsubscribe")
         settings_text, settings_html = _settings_footer()

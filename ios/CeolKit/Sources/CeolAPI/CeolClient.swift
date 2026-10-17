@@ -18,7 +18,7 @@ import OpenAPIURLSession
 
 public enum CeolServer {
     /// The canonical host. www.ceol.io redirects here.
-    public static let production = URL(string: "https://ceol.io")!
+    public static let production = URL(string: "https://ceol.app")!
 }
 
 /// Where the token comes from. Called once per request, so a sign-in or sign-out
