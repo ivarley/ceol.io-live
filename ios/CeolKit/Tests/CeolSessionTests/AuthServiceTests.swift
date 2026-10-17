@@ -72,6 +72,29 @@ struct AuthServiceTests {
         }
     }
 
+    @Test("check-email with link asks for a link, and only then")
+    func checkEmailLink() async throws {
+        let (auth, _, transport) = service([
+            "/api/auth/check-email": (200, #"{"action": "magic_link_sent", "email": "v@x.io", "message": "Check your email"}"#)
+        ])
+        #expect(try await auth.checkEmail("v@x.io", link: true) == .linkSent(email: "v@x.io", message: "Check your email"))
+        #expect(transport.requests.count == 1)
+    }
+
+    @Test("forgot-password passes on the server's sentence, and its refusal")
+    func forgotPassword() async throws {
+        let (auth, _, _) = service([
+            "/api/auth/forgot-password": (200, #"{"success": true, "message": "If an account exists, we sent a link."}"#)
+        ])
+        #expect(try await auth.forgotPassword(email: "v@x.io") == "If an account exists, we sent a link.")
+        let (refusing, _, _) = service([
+            "/api/auth/forgot-password": (400, error("missing_email", "Email address is required"))
+        ])
+        await #expect(throws: AuthFailure(status: 400, code: "missing_email", message: "Email address is required")) {
+            try await refusing.forgotPassword(email: "")
+        }
+    }
+
     @Test("login stores the token and passes on what the server wants next")
     func loginStoresToken() async throws {
         let (auth, store, _) = service(["/api/auth/login-password": (200, login(next: #""setup_profile""#))])

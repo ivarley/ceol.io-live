@@ -87,9 +87,10 @@ public struct AuthService: Sendable {
 
     // MARK: - Signing in
 
-    /// Step 1: the address. The server decides what happens next.
-    public func checkEmail(_ email: String) async throws -> CheckEmailOutcome {
-        switch try await client.checkEmail(body: .json(.init(email: email))) {
+    /// Step 1: the address. The server decides what happens next. With `link`, a
+    /// password account is emailed a sign-in link instead of being asked for the password.
+    public func checkEmail(_ email: String, link: Bool = false) async throws -> CheckEmailOutcome {
+        switch try await client.checkEmail(body: .json(.init(email: email, link: link ? true : nil))) {
         case .ok(let ok):
             let r = try ok.body.json
             switch r.action {
@@ -127,6 +128,15 @@ public struct AuthService: Sendable {
     public func resendVerification(email: String) async throws {
         switch try await client.resendVerification(body: .json(.init(email: email))) {
         case .ok: return
+        case .default(let status, let error): throw failure(status, try? error.body.json)
+        }
+    }
+
+    /// "Forgot your password?": the server emails a reset link (a web page) and answers
+    /// the same whether or not the address exists. Returns the server's sentence.
+    public func forgotPassword(email: String) async throws -> String? {
+        switch try await client.forgotPassword(body: .json(.init(email: email))) {
+        case .ok(let ok): return try ok.body.json.message
         case .default(let status, let error): throw failure(status, try? error.body.json)
         }
     }

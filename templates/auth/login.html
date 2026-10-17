@@ -32,11 +32,11 @@
                         <div id="email-step">
                             <p class="text-muted mb-3">{{ _('Enter your email to log in or create an account.') }}</p>
                             <div class="mb-3">
-                                <label for="email" class="form-label">{{ _('Email address') }}</label>
+                                <label for="email">{{ _('Email address') }}</label>
                                 <input type="email" class="form-control" id="email" name="email" required autofocus>
                             </div>
-                            <div class="d-grid">
-                                <button type="button" class="btn btn-primary" id="next-btn" onclick="checkEmail()">
+                            <div>
+                                <button type="button" class="btn btn-primary btn-block" id="next-btn" onclick="checkEmail()">
                                     <span id="next-btn-text">{{ _('Next') }}</span>
                                     <span id="next-btn-spinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
                                 </button>
@@ -46,24 +46,27 @@
                         <!-- Step 2a: Password login -->
                         <div id="password-step" class="d-none">
                             <div class="mb-3">
-                                <label class="form-label text-muted">{{ _('Email') }}</label>
+                                <label class="text-muted">{{ _('Email') }}</label>
                                 <div class="d-flex align-items-center">
-                                    <span id="display-email" class="me-2"></span>
+                                    <span id="display-email" class="mr-2"></span>
                                     <button type="button" class="btn btn-link btn-sm p-0" onclick="resetForm()">{{ _('Change') }}</button>
                                 </div>
                             </div>
                             <div class="mb-3">
-                                <label for="password" class="form-label">{{ _('Password') }}</label>
+                                <label for="password">{{ _('Password') }}</label>
                                 <input type="password" class="form-control" id="password" name="password" required>
                             </div>
-                            <div class="d-grid">
-                                <button type="button" class="btn btn-primary" id="login-btn" onclick="loginWithPassword()">
+                            <div>
+                                <button type="button" class="btn btn-primary btn-block" id="login-btn" onclick="loginWithPassword()">
                                     <span id="login-btn-text">{{ _('Login') }}</span>
                                     <span id="login-btn-spinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
                                 </button>
                             </div>
                             <div class="text-center mt-3">
                                 <a href="{{ url_for('forgot_password') }}">{{ _('Forgot your password?') }}</a>
+                            </div>
+                            <div class="text-center mt-2">
+                                <a href="#" id="link-btn" onclick="sendLoginLink(); return false;">{{ _('Email me a sign-in link instead') }}</a>
                             </div>
                         </div>
 
@@ -98,10 +101,6 @@
                             </div>
                         </div>
 
-                        <hr class="my-4">
-                        <div class="text-center">
-                            <p class="text-muted small mb-0">{{ _('Having trouble?') }} <a href="{{ url_for('resend_verification') }}">{{ _('Resend verification email') }}</a></p>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -159,9 +158,9 @@ function resetForm() {
     document.getElementById('email').focus();
 }
 
-async function checkEmail() {
+async function checkEmail(link = false) {
     clearAlerts();
-    const email = document.getElementById('email').value.trim();
+    const email = link ? currentEmail : document.getElementById('email').value.trim();
 
     if (!email) {
         showAlert({{ _('Please enter your email address.')|tojson }}, 'error');
@@ -182,7 +181,7 @@ async function checkEmail() {
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ email: email })
+            body: JSON.stringify(link ? { email: email, link: true } : { email: email })
         });
 
         const data = await response.json();
@@ -193,8 +192,9 @@ async function checkEmail() {
             return;
         }
 
-        // Hide email step
+        // Hide email step (and the password step, when a link was asked for instead)
         document.getElementById('email-step').classList.add('d-none');
+        document.getElementById('password-step').classList.add('d-none');
 
         if (data.action === 'password_login') {
             // Show password step
@@ -217,6 +217,10 @@ async function checkEmail() {
     } finally {
         setButtonLoading('next-btn', false);
     }
+}
+
+function sendLoginLink() {
+    checkEmail(true);
 }
 
 async function loginWithPassword() {

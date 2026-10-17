@@ -57,6 +57,7 @@ components:
       required: [success]
       properties:
         success: { type: boolean, const: true }
+        message: { type: string, description: "The server's own sentence, when it has one to show." }
     User:
       type: object
       required: [user_id, person_id, username, email, first_name, last_name,
@@ -88,7 +89,7 @@ components:
     CheckEmail:
       description: >-
         Email-first login, step 1. password_login: ask for the password. magic_link_sent:
-        the account has no password, and a one-time login link was emailed. registration_started:
+        the account has no password (or `link` was asked for), and a one-time login link was emailed. registration_started:
         there is no account for the address; a link that creates one was emailed, and nothing
         exists until it is opened (migration 056). `message` is the server's own wording.
       type: object
@@ -1226,6 +1227,11 @@ paths:
               required: [email]
               properties:
                 email: { type: string }
+                link:
+                  type: boolean
+                  description: >-
+                    Email a login link even when the account has a password ("Email me a
+                    sign-in link instead"); the answer is then magic_link_sent.
       responses:
         "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/CheckEmail" } } } }
         default: { $ref: "#/components/responses/Error" }
@@ -1274,6 +1280,24 @@ paths:
     post:
       operationId: resendVerification
       summary: Re-send the verification email (never reveals whether the address exists)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string }
+      responses:
+        "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Ok" } } } }
+        default: { $ref: "#/components/responses/Error" }
+  /api/auth/forgot-password:
+    post:
+      operationId: forgotPassword
+      summary: >-
+        Email a password reset link (never reveals whether the address exists). The link
+        opens the web's reset page. Error: missing_email (400).
       requestBody:
         required: true
         content:

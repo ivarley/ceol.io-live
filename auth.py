@@ -386,6 +386,42 @@ def generate_password_reset_token():
     return secrets.token_urlsafe(32)
 
 
+def start_password_reset(email):
+    """Give the active account at `email` a one-hour password reset token. Returns
+    (user, token) for the caller to email, or None when there is no such account.
+    Shared by the web form (/forgot-password) and the app (POST /api/auth/forgot-password)."""
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT ua.user_id, ua.username, ua.user_email, p.first_name
+            FROM user_account ua
+            JOIN person p ON ua.person_id = p.person_id
+            WHERE LOWER(ua.user_email) = LOWER(%s) AND ua.is_active = TRUE
+            """,
+            (email,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return None
+        token = generate_password_reset_token()
+        # No user logged in during a password reset request.
+        save_to_history(cur, "user_account", "UPDATE", row[0], user_id=None)
+        cur.execute(
+            """
+            UPDATE user_account
+            SET password_reset_token = %s, password_reset_expires = %s, last_modified_user_id = NULL
+            WHERE user_id = %s
+            """,
+            (token, now_utc() + timedelta(hours=1), row[0]),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return User(row[0], None, row[1], email=row[2], first_name=row[3]), token
+
+
 def generate_verification_token():
     return secrets.token_urlsafe(32)
 

@@ -370,15 +370,17 @@ class TestAPIEndpointsSmokeTest:
 class TestPasswordResetJourney:
     """Test password reset workflow."""
 
+    @patch("auth.get_db_connection")
     @patch("web_routes.send_password_reset_email")
     @patch("web_routes.get_db_connection")
-    def test_password_reset_request_flow(self, mock_get_conn, mock_send_email, client):
+    def test_password_reset_request_flow(self, mock_get_conn, mock_send_email, mock_auth_conn, client):
         """Test password reset request workflow."""
         mock_send_email.return_value = True
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
         mock_conn.cursor.return_value = mock_cursor
         mock_get_conn.return_value = mock_conn
+        mock_auth_conn.return_value = mock_conn
 
         # Mock user exists
         mock_cursor.fetchone.return_value = (1, "testuser", "test@example.com", "Test")

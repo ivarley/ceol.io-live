@@ -24,6 +24,8 @@ struct SignInView: View {
     /// A password login refused because the address was never confirmed.
     @State private var unverified = false
     @State private var resent = false
+    /// The server's answer to "Forgot your password?".
+    @State private var resetSent: String?
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -54,8 +56,11 @@ struct SignInView: View {
 
     private var header: some View {
         Section {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(verbatim: "Ceol").font(.ceol(.largeTitle, weight: .semibold)).foregroundStyle(CeolTokens.primary)
+            VStack(alignment: .leading, spacing: 10) {
+                // The same wordmark as the web's (static/images/logo3-1.png).
+                Image("Wordmark").resizable().scaledToFit()
+                    .frame(height: 56)
+                    .accessibilityLabel(Text(verbatim: "Ceol"))
                 Text("The tunes you know, the sessions you play, and what gets played there.")
                     .font(.ceol(.subheadline)).foregroundStyle(CeolTokens.textMuted)
             }
@@ -65,6 +70,7 @@ struct SignInView: View {
 
     // MARK: - Steps
 
+    @ViewBuilder
     private var emailStep: some View {
         Section {
             TextField("Email address", text: $email)
@@ -76,15 +82,19 @@ struct SignInView: View {
                 .focused($focused)
                 .onSubmit { Task { await checkEmail() } }
                 .accessibilityIdentifier("signin.email")
-            Button { Task { await checkEmail() } } label: { progressLabel(tr("Continue")) }
-                .disabled(email.trimmingCharacters(in: .whitespaces).isEmpty)
-                .accessibilityIdentifier("signin.continue")
+        }
+        .onAppear { focused = true }
+        Section {
+            primaryButton(tr("Continue"), id: "signin.continue",
+                          disabled: email.trimmingCharacters(in: .whitespaces).isEmpty) {
+                await checkEmail()
+            }
         } footer: {
             Text("New here? Enter your email and we'll send you a link to create your account.")
         }
-        .onAppear { focused = true }
     }
 
+    @ViewBuilder
     private func passwordStep(_ email: String) -> some View {
         Section {
             LabeledContent("Email", value: email)
@@ -94,18 +104,32 @@ struct SignInView: View {
                 .focused($focused)
                 .onSubmit { Task { await login(email) } }
                 .accessibilityIdentifier("signin.password")
-            Button { Task { await login(email) } } label: { progressLabel(tr("Sign in")) }
-                .disabled(password.isEmpty)
-                .accessibilityIdentifier("signin.submit")
+        }
+        .onAppear { focused = true }
+        Section {
+            primaryButton(tr("Sign in"), id: "signin.submit", disabled: password.isEmpty) {
+                await login(email)
+            }
+        }
+        Section {
             if unverified {
                 Button(resent ? tr("Sent. Check your email.") : tr("Send the confirmation email again")) {
                     Task { await resend(email) }
                 }
                 .disabled(resent)
             }
+            Button("Email me a sign-in link instead") {
+                Task { await checkEmail(again: email, link: true) }
+            }
+            .accessibilityIdentifier("signin.sendLink")
+            if let resetSent {
+                Text(resetSent).foregroundStyle(CeolTokens.textMuted).accessibilityIdentifier("signin.resetSent")
+            } else {
+                Button("Forgot your password?") { Task { await forgotPassword(email) } }
+                    .accessibilityIdentifier("signin.forgot")
+            }
             Button("Use a different email", role: .cancel) { reset() }
         }
-        .onAppear { focused = true }
     }
 
     private func sentStep(_ email: String, _ message: String, _ registration: Bool) -> some View {
@@ -118,7 +142,9 @@ struct SignInView: View {
                 .font(.ceol(.footnote)).foregroundStyle(CeolTokens.textMuted)
             Button(resent ? tr("Sent again.") : tr("Send it again")) {
                 Task {
-                    await checkEmail(again: email)
+                    // link: a password account that asked for a link gets another, not the
+                    // password step; for the others the answer is the same as before.
+                    await checkEmail(again: email, link: true)
                     resent = true
                 }
             }
@@ -127,22 +153,34 @@ struct SignInView: View {
         }
     }
 
-    private func progressLabel(_ title: String) -> some View {
-        HStack {
-            Text(title)
-            if busy { Spacer(); ProgressView() }
+    /// The step's main action: a filled button, so it doesn't read as another field.
+    private func primaryButton(_ title: String, id: String, disabled: Bool,
+                               action: @escaping () async -> Void) -> some View {
+        Button { Task { await action() } } label: {
+            ZStack {
+                Text(title).opacity(busy ? 0 : 1)
+                if busy { ProgressView().tint(.white) }
+            }
+            .font(.ceol(.headline))
+            .frame(maxWidth: .infinity, minHeight: 34)
         }
+        .buttonStyle(.borderedProminent)
+        .tint(CeolTokens.primary)
+        .disabled(disabled)
+        .listRowBackground(Color.clear)
+        .listRowInsets(EdgeInsets())
+        .accessibilityIdentifier(id)
     }
 
     // MARK: - Actions
 
-    private func checkEmail(again: String? = nil) async {
+    private func checkEmail(again: String? = nil, link: Bool = false) async {
         let address = again ?? email.trimmingCharacters(in: .whitespaces)
         guard !address.isEmpty else { return }
         await run {
             model.linkError = nil
             model.notice = nil
-            switch try await model.auth.checkEmail(address) {
+            switch try await model.auth.checkEmail(address, link: link) {
             case .needsPassword(let email): step = .password(email: email)
             case .linkSent(let email, let message): step = .sent(email: email, message: message, registration: false)
             case .registrationStarted(let email, let message):
@@ -162,6 +200,13 @@ struct SignInView: View {
         }
     }
 
+    private func forgotPassword(_ email: String) async {
+        await run {
+            resetSent = try await model.auth.forgotPassword(email: email)
+                ?? tr("If an account with that email exists, password reset instructions have been sent.")
+        }
+    }
+
     private func resend(_ email: String) async {
         await run {
             try await model.auth.resendVerification(email: email)
@@ -175,6 +220,7 @@ struct SignInView: View {
         error = nil
         unverified = false
         resent = false
+        resetSent = nil
     }
 
     /// Runs an action with the busy state, showing a refusal in the server's words and

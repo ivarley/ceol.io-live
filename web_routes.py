@@ -38,7 +38,7 @@ from auth import (
     is_site_path,
     create_session,
     cleanup_expired_sessions,
-    generate_password_reset_token,
+    start_password_reset,
     generate_verification_token,
     generate_login_token,
     log_login_event,
@@ -1384,7 +1384,8 @@ def check_email_api():
     API endpoint for the unified login flow.
     Check if email exists and return appropriate action:
     - password_login: User exists with password, show password field
-    - magic_link_sent: User exists without password, magic link emailed
+    - magic_link_sent: User exists without password, or asked for a link instead
+      of the password ("link": true), and a magic link was emailed
     - registration_started: No account for this address. A pending registration
       is recorded (auth.start_pending_registration) and a link emailed; the person
       and account are only created when that link is clicked (verify_email).
@@ -1428,7 +1429,7 @@ def check_email_api():
                 403,
             )
 
-        if user.has_password():
+        if user.has_password() and not data.get("link"):
             # User has password - prompt for password login
             return jsonify(
                 {
@@ -1438,7 +1439,7 @@ def check_email_api():
                 }
             )
         else:
-            # User has no password - send magic link
+            # No password, or a link asked for instead - send magic link
             token = generate_login_token()
             expires = now_utc() + timedelta(minutes=15)
 
@@ -2026,75 +2027,26 @@ def forgot_password():
             flash(_("Email address is required."), "error")
             return render_template("auth/forgot_password.html")
 
-        # Find user by email
-        conn = get_db_connection()
-        try:
-            cur = conn.cursor()
-            cur.execute(
-                """
-                SELECT ua.user_id, ua.username, ua.user_email, p.first_name
-                FROM user_account ua
-                JOIN person p ON ua.person_id = p.person_id
-                WHERE ua.user_email = %s AND ua.is_active = TRUE
-            """,
-                (email,),
-            )
-            user_data = cur.fetchone()
-
-            if user_data:
-                # Generate reset token
-                token = generate_password_reset_token()
-                expires = now_utc() + timedelta(hours=1)
-
-                # Save token to database (no user logged in during password reset request)
-                save_to_history(
-                    cur,
-                    "user_account",
-                    "UPDATE",
-                    user_data[0],
-                    user_id=None,
-                )
-                cur.execute(
-                    """
-                    UPDATE user_account
-                    SET password_reset_token = %s, password_reset_expires = %s, last_modified_user_id = NULL
-                    WHERE user_id = %s
-                """,
-                    (token, expires, user_data[0]),
-                )
-                conn.commit()
-
-                # Create user object for email sending
-                user = User(
-                    user_data[0],
-                    None,
-                    user_data[1],
-                    email=user_data[2],
-                    first_name=user_data[3],
-                )
-
-                # Send reset email
-                if send_password_reset_email(user, token):
-                    flash(
-                        _("Password reset instructions have been sent to your email."),
-                        "info",
-                    )
-                else:
-                    flash(
-                        _("Failed to send reset email. Please try again later."),
-                        "error",
-                    )
-            else:
-                # Don't reveal whether email exists
+        reset = start_password_reset(email)
+        if reset:
+            if send_password_reset_email(*reset):
                 flash(
-                    _(
-                        "If an account with that email exists, password reset instructions have been sent."
-                    ),
+                    _("Password reset instructions have been sent to your email."),
                     "info",
                 )
-
-        finally:
-            conn.close()
+            else:
+                flash(
+                    _("Failed to send reset email. Please try again later."),
+                    "error",
+                )
+        else:
+            # Don't reveal whether email exists
+            flash(
+                _(
+                    "If an account with that email exists, password reset instructions have been sent."
+                ),
+                "info",
+            )
 
         return redirect(url_for("login"))
 

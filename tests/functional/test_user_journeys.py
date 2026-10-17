@@ -407,10 +407,11 @@ class TestSessionCreationWorkflow:
 class TestPasswordManagementWorkflow:
     """Test complete password management workflow."""
 
+    @patch("auth.get_db_connection")
     @patch("web_routes.send_password_reset_email")
     @patch("web_routes.get_db_connection")
     def test_complete_password_reset_journey(
-        self, mock_get_conn, mock_send_email, client
+        self, mock_get_conn, mock_send_email, mock_auth_conn, client
     ):
         """Test complete password reset from request to completion."""
         mock_send_email.return_value = True
@@ -418,6 +419,7 @@ class TestPasswordManagementWorkflow:
         mock_cursor = MagicMock()
         mock_conn.cursor.return_value = mock_cursor
         mock_get_conn.return_value = mock_conn
+        mock_auth_conn.return_value = mock_conn
 
         # Phase 1: User forgets password and requests reset
         mock_cursor.fetchone.return_value = (1, "testuser", "test@example.com", "Test")

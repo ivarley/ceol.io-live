@@ -3974,6 +3974,16 @@
         }
       }
     },
+    "Email me a sign-in link instead": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Seol nasc síniú isteach chugam ina ionad sin"
+          }
+        }
+      }
+    },
     "End set": {
       "localizations": {
         "ga": {
@@ -4231,6 +4241,16 @@
         }
       }
     },
+    "Forgot your password?": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "An ndearna tú dearmad ar do phasfhocal?"
+          }
+        }
+      }
+    },
     "Full screen": {
       "localizations": {
         "ga": {
@@ -4468,6 +4488,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Thug mé cuairt air"
+          }
+        }
+      }
+    },
+    "If an account with that email exists, password reset instructions have been sent.": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Má tá cuntas ann leis an ríomhphost sin, seoladh treoracha athshocraithe pasfhocail."
           }
         }
       }

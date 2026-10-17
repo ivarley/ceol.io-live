@@ -20,6 +20,7 @@ from auth import User, SESSION_LIFETIME_WEEKS
 from api_auth import public_api
 from api_app_routes import (
     auth_exchange,
+    auth_forgot_password,
     auth_resend_verification,
     auth_logout,
     auth_set_password,
@@ -611,6 +612,12 @@ app.add_url_rule(
     "/api/auth/resend-verification",
     "auth_resend_verification",
     auth_resend_verification,
+    methods=["POST"],
+)
+app.add_url_rule(
+    "/api/auth/forgot-password",
+    "auth_forgot_password",
+    auth_forgot_password,
     methods=["POST"],
 )
 app.add_url_rule("/api/auth/logout", "auth_logout", auth_logout, methods=["POST"])

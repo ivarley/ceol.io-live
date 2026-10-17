@@ -855,3 +855,92 @@ class TestLoginRefusalsHaveTheirOwnCodes:
         )
         assert inactive.status_code == 403
         assert inactive.get_json()["code"] == "account_inactive"
+
+
+class TestSignInHelp:
+    """The password step's two ways out: a sign-in link instead of the password, and
+    "Forgot your password?". Both email something, so the senders are stubbed."""
+
+    @pytest.fixture
+    def account(self):
+        import uuid
+
+        import bcrypt
+
+        from database import get_db_connection
+
+        tag = uuid.uuid4().hex[:8]
+        email = f"helpme{tag}@example.com"
+        hashed = bcrypt.hashpw(b"pw-contract-1", bcrypt.gensalt()).decode()
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "INSERT INTO person (first_name, last_name, created_date, last_modified_date) "
+                "VALUES ('Help', 'Me', NOW(), NOW()) RETURNING person_id"
+            )
+            pid = cur.fetchone()[0]
+            cur.execute(
+                "INSERT INTO user_account (person_id, username, user_email, hashed_password, timezone, "
+                "email_verified, is_active, created_date, last_modified_date) "
+                "VALUES (%s, %s, %s, %s, 'UTC', TRUE, TRUE, NOW(), NOW()) RETURNING user_id",
+                (pid, f"helpme{tag}", email, hashed),
+            )
+            uid = cur.fetchone()[0]
+            conn.commit()
+            yield {"email": email, "user_id": uid}
+        finally:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM login_history WHERE user_id = %s", (uid,))
+            cur.execute("DELETE FROM user_account_history WHERE user_id = %s", (uid,))
+            cur.execute("DELETE FROM user_account WHERE user_id = %s", (uid,))
+            cur.execute("DELETE FROM person WHERE person_id = %s", (pid,))
+            conn.commit()
+            conn.close()
+
+    def _column(self, user_id, column):
+        from database import get_db_connection
+
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(f"SELECT {column} FROM user_account WHERE user_id = %s", (user_id,))
+            return cur.fetchone()[0]
+        finally:
+            conn.close()
+
+    def test_a_link_instead_of_the_password(self, spec, client, account, monkeypatch):
+        sent = []
+        monkeypatch.setattr("web_routes.send_login_link_email", lambda user, token: sent.append(token))
+        r = client.post(
+            "/api/auth/check-email",
+            json={"email": account["email"], "link": True},
+            headers={"X-Ceol-Client": "ios/0.0.0"},
+        )
+        assert r.status_code == 200, r.get_json()
+        body = r.get_json()
+        TestResponsesMatchSchemas._validate(None, spec, spec["components"]["schemas"]["CheckEmail"], body)
+        assert body["action"] == "magic_link_sent"
+        assert sent and self._column(account["user_id"], "login_token") == sent[0]
+
+    def test_forgot_password_never_says_whether_the_address_exists(self, spec, client, account, monkeypatch):
+        sent = []
+        monkeypatch.setattr(
+            "api_app_routes.send_password_reset_email", lambda user, token: sent.append(token) or True
+        )
+        headers = {"X-Ceol-Client": "ios/0.0.0"}
+        known = client.post("/api/auth/forgot-password", json={"email": account["email"].upper()}, headers=headers)
+        unknown = client.post("/api/auth/forgot-password", json={"email": "nobody-here@example.com"}, headers=headers)
+        ok = spec["paths"]["/api/auth/forgot-password"]["post"]["responses"]["200"]
+        schema = ok["content"]["application/json"]["schema"]
+        for r in (known, unknown):
+            assert r.status_code == 200, r.get_json()
+            TestResponsesMatchSchemas._validate(None, spec, schema, r.get_json())
+        assert known.get_json() == unknown.get_json()
+        assert len(sent) == 1
+        assert self._column(account["user_id"], "password_reset_token") == sent[0]
+
+    def test_forgot_password_needs_an_address(self, client):
+        r = client.post("/api/auth/forgot-password", json={}, headers={"X-Ceol-Client": "ios/0.0.0"})
+        assert r.status_code == 400
+        assert r.get_json()["code"] == "missing_email"

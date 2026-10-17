@@ -51,10 +51,15 @@ from auth import (
     has_pending_registration,
     log_login_event,
     needs_profile_setup,
+    start_password_reset,
     start_pending_registration,
 )
 from database import get_db_connection, save_to_history
-from email_utils import send_registration_email, send_verification_email
+from email_utils import (
+    send_password_reset_email,
+    send_registration_email,
+    send_verification_email,
+)
 from instruments import CANONICAL_INSTRUMENTS, normalize_instruments
 from timezone_utils import now_utc
 
@@ -325,6 +330,32 @@ def auth_resend_verification():
     user = User(row[0], None, row[1], email=row[4], first_name=row[2], last_name=row[3])
     send_verification_email(user, token)
     return jsonify(generic)
+
+
+# ---------------------------------------------------------------------------
+# POST /api/auth/forgot-password
+# ---------------------------------------------------------------------------
+
+
+@public_api  # pre-login by definition; never reveals whether the address exists
+def auth_forgot_password():
+    """The app's "Forgot your password?": email a reset link, as /forgot-password
+    does. The link opens the web's reset page; the new password then works here."""
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip().lower()
+    if not email:
+        return api_error(_("Email address is required"), 400, "missing_email")
+    reset = start_password_reset(email)
+    if reset:
+        send_password_reset_email(*reset)
+    return jsonify(
+        {
+            "success": True,
+            "message": _(
+                "If an account with that email exists, password reset instructions have been sent."
+            ),
+        }
+    )
 
 
 # ---------------------------------------------------------------------------
