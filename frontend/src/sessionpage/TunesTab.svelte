@@ -436,6 +436,7 @@
     if (!pane) return false
     pane.open({
       sessionPath: sessionPath,
+      sessionName: session.name,
       query,
       onAdded: function (tuneId, name) {
         // Land on the tunes tab with the existing toast + scroll/highlight flow.

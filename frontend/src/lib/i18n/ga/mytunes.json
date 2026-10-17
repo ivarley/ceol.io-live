@@ -227,10 +227,6 @@
     "ga": "Stádas an ríomhphoist",
     "review": true
   },
-  "Enter a setting number or paste a thesession.org URL.": {
-    "ga": "Cuir isteach uimhir leagain nó greamaigh URL ó thesession.org.",
-    "review": true
-  },
   "Enter your thesession.org user ID": {
     "ga": "Cuir isteach d'aitheantas úsáideora ar thesession.org",
     "review": true
@@ -287,10 +283,6 @@
   },
   "I play this in a different key": {
     "ga": "Seinnim é seo i ngléas eile",
-    "review": true
-  },
-  "If the session plays a specific setting of the tune, paste its URL or setting number.": {
-    "ga": "Má sheinneann an seisiún leagan áirithe den fhonn, greamaigh a URL nó uimhir an leagain.",
     "review": true
   },
   "If {name} exists twice in the database, merge the duplicate into this record. All tunes, attendance, memberships and attributions move to the survivor; the duplicate is deleted. This cannot be undone.": {
@@ -583,10 +575,6 @@
   },
   "Setting (optional)": {
     "ga": "Leagan (roghnach)",
-    "review": true
-  },
-  "Setting number or thesession.org URL": {
-    "ga": "Uimhir an leagain nó URL ó thesession.org",
     "review": true
   },
   "Show this tune on your list": {
@@ -1123,6 +1111,18 @@
   },
   "Email me when someone is added to a session I look after": {
     "ga": "Seol ríomhphost chugam nuair a chuirtear duine le seisiún a bhfuil cúram agam air",
+    "review": true
+  },
+  "The first setting": {
+    "ga": "An chéad leagan",
+    "review": true
+  },
+  "Use the first setting": {
+    "ga": "Úsáid an chéad leagan",
+    "review": true
+  },
+  "If the session plays a specific setting of the tune, page through them and pick it.": {
+    "ga": "Má sheinntear leagan ar leith den fhonn ag an seisiún, téigh tríd na leaganacha agus roghnaigh é.",
     "review": true
   }
 }

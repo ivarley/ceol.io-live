@@ -958,8 +958,31 @@ def _handle_change_tune(cur, session_instance_id, data, user_id):
         sets += ["key_override = %s"]
         params += [data["key_override"]]
     if "setting_override" in data:
+        # A setting belongs to one tune (setting ids are numbered across all of
+        # thesession.org), so it must be a setting of the tune this row ends up on.
+        setting = data["setting_override"]
+        if data.get("unlink"):
+            setting_tune_id = None
+        elif "tune_id" in data:
+            setting_tune_id = data["tune_id"]
+        else:
+            setting_tune_id = rec[1]
+        if setting is not None and setting_tune_id is None:
+            setting = None
+        elif setting is not None:
+            try:
+                setting = int(setting)
+            except (TypeError, ValueError):
+                raise OpRejected("invalid", _("Invalid setting_override value"))
+            try:
+                _ensure_setting_local(cur, setting_tune_id, setting, user_id)
+            except TuneImportError as e:
+                raise OpRejected("invalid", e.message)
         sets += ["setting_override = %s"]
-        params += [data["setting_override"]]
+        params += [setting]
+    elif data.get("unlink") or ("tune_id" in data and data["tune_id"] != rec[1]):
+        # The old tune's setting isn't one of the new tune's.
+        sets += ["setting_override = NULL"]
     if not sets:
         raise OpRejected("invalid", _("change_tune had no fields to change."))
     # A person saying which tune this is settles a machine's guess: the row is

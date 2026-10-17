@@ -2814,6 +2814,15 @@ def add_session_tune(session_path):
                 409,
             )
 
+        # A chosen setting must be one of this tune's (setting ids are numbered across
+        # all of thesession.org, so "1" is Cooley's whatever tune it's typed against).
+        err = ensure_setting_held(cur, tune_id, parsed_setting_id)
+        if err:
+            conn.rollback()
+            cur.close()
+            conn.close()
+            return err
+
         # No specific setting requested -> store the tune's default so the setting in
         # use is always visible/linkable (spec 032).
         if parsed_setting_id is None:

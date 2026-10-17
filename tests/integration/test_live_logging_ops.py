@@ -493,6 +493,38 @@ def test_change_tune_rename_stores_override(client, authenticated_user, live_ins
     assert db_cursor.fetchone() == ("Renamed Tune", live_instance["reel"])
 
 
+def test_change_tune_relink_drops_the_old_tunes_setting(client, authenticated_user, live_instance, db_cursor):
+    """A setting belongs to one tune: relinking a night's row to another tune must not
+    carry the old tune's setting along, or the new tune shows the old one's notation."""
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        _, a = _op(client, inst, op_type="add_tune", tune_id=live_instance["reel"])
+        rid = a["record"]["session_instance_tune_id"]
+        _, s = _op(client, inst, op_type="change_tune", record_id=rid, setting_override=SET_LOCAL2)
+        assert s["record"]["setting_override"] == SET_LOCAL2
+        _, same = _op(client, inst, op_type="change_tune", record_id=rid, tune_id=live_instance["reel"])
+        assert same["record"]["setting_override"] == SET_LOCAL2  # same tune: kept
+        _, rel = _op(client, inst, op_type="change_tune", record_id=rid, tune_id=live_instance["newt"])
+    assert rel["record"]["tune_id"] == live_instance["newt"]
+    assert rel["record"]["setting_override"] is None
+
+
+def test_change_tune_refuses_another_tunes_setting(client, authenticated_user, live_instance, db_cursor, monkeypatch):
+    """Setting ids are numbered across all of thesession.org: NEWT's setting is not one
+    of REEL's, so it can't be the setting of a REEL row."""
+    import live_logging_routes
+    monkeypatch.setattr(live_logging_routes, "_fetch_thesession_tune", lambda tid: dict(FAKE_TS_REEL))
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        _, a = _op(client, inst, op_type="add_tune", tune_id=live_instance["reel"])
+        rid = a["record"]["session_instance_tune_id"]
+        _, bad = _op(client, inst, op_type="change_tune", record_id=rid, setting_override=SET_NEWT)
+    assert bad["success"] is False and bad["reason"] == "invalid"
+    db_cursor.execute(
+        "SELECT setting_override FROM session_instance_tune WHERE session_instance_tune_id = %s", (rid,))
+    assert db_cursor.fetchone()[0] is None
+
+
 def test_change_tune_no_fields_rejected(client, authenticated_user, live_instance):
     inst = live_instance["instance_id"]
     with authenticated_user:

@@ -120,6 +120,7 @@ All core tables have `*_history` tables tracking INSERT/UPDATE/DELETE. See [Hist
 - `058_places.sql` + `scripts/migrate_055_places.py` - Places and session paths (spec 055)
 - `060_log_confidence_model.sql` - which calibration model made a machine-logged tune's confidence (spec 053)
 - `061_listen_job.sql` - the listening service's background jobs: finding a night's tunes from its recording (spec 053)
+- `064_setting_matches_tune.sql` + `scripts/fix_mismatched_settings.py` - a row's setting (`session_tune.setting_id`, `session_instance_tune.setting_override`, `person_tune.setting_id`) must be a setting of the row's tune; a trigger blanks one that belongs to another tune (setting ids are numbered across all of thesession.org, so a typed "1" is Cooley's)
 
 ## Procedures
 

@@ -1830,21 +1830,25 @@ def _load_session_scope(conn, tune_id: int, session_path: str, date_or_id: Optio
 
 def _load_setting_notation(conn, tune_id: int, setting_id: Optional[int]) -> Dict[str, Any]:
     """Notation for a specific setting, falling back to the tune's first setting.
-    setting_id in the result is the setting actually resolved."""
+    setting_id in the result is the setting actually resolved. A setting of another
+    tune is never drawn: setting ids are numbered across all of thesession.org."""
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    row = None
     if setting_id:
         cur.execute(
-            "SELECT setting_id, abc, incipit_abc, image, incipit_image, key FROM tune_setting WHERE setting_id = %s",
-            (setting_id,),
+            """SELECT setting_id, abc, incipit_abc, image, incipit_image, key
+               FROM tune_setting WHERE setting_id = %s AND tune_id = %s""",
+            (setting_id, tune_id),
         )
-    else:
+        row = cur.fetchone()
+    if not row:
         cur.execute(
             """SELECT setting_id, abc, incipit_abc, image, incipit_image, key
                FROM tune_setting WHERE tune_id = %s
                ORDER BY setting_id ASC LIMIT 1""",
             (tune_id,),
         )
-    row = cur.fetchone()
+        row = cur.fetchone()
     if not row:
         return {"setting_id": None, "abc": None, "incipit_abc": None, "image": None, "incipit_image": None, "setting_key": None}
     return {

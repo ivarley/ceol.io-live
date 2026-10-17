@@ -4,12 +4,15 @@
   // (mobile slide-in / desktop split pane), but scoped to a session's repertoire —
   // tunes already in THIS session dim and sort last, and the configure phase asks
   // the session questions instead: alias ("we call this"), and under Advanced a
-  // specific setting and the key the session plays it in. Bundled into the
+  // specific setting (picked by looking at it, in the setting chooser: setting ids
+  // are numbered across all of thesession.org, so a typed "1" meant Cooley's) and
+  // the key the session plays it in. Bundled into the
   // sessionpage bundle as a child of its App, driven via bind:this + open().
   import { Chevron, Chip, ServerError, t, tn, tuneTypeName } from '../lib/index.js'
   import { failText } from './labels.js'
   import TuneSearch from '../TuneSearch.svelte'
   import Incipit from '../Incipit.svelte'
+  import SettingChooser from '../tunesheet/SettingChooser.svelte'
   import { createPaneState } from './pane.svelte.js'
 
   // Same list the legacy add page offered.
@@ -21,6 +24,7 @@
 
   const pane = createPaneState()
   let sessionPath = $state('')
+  let sessionName = $state('')
   let config = $state({ searchScope: {} })
   let picked = $state(null) // null = search phase; else {tune_id?, thesession_id?, name, tune_type, ...}
   let initialQuery = $state('')
@@ -29,8 +33,8 @@
   // Configure-phase state.
   let alias = $state('')
   let advancedOpen = $state(false)
-  let settingRaw = $state('')
-  let settingError = $state('')
+  let chosenSetting = $state(null) // {setting_id, key} from the chooser; null = the tune's first
+  let chooserOpen = $state(false)
   let keyChoice = $state('')
   let submitting = $state(false)
   let errorMsg = $state('')
@@ -42,6 +46,7 @@
 
   export function open(opts = {}) {
     sessionPath = opts.sessionPath || ''
+    sessionName = opts.sessionName || ''
     config = { searchScope: { session: sessionPath } }
     initialQuery = opts.query || ''
     onAdded = opts.onAdded || (() => {})
@@ -67,8 +72,8 @@
   function resetConfigPhase() {
     alias = ''
     advancedOpen = false
-    settingRaw = ''
-    settingError = ''
+    chosenSetting = null
+    chooserOpen = false
     keyChoice = ''
     submitting = false
     errorMsg = ''
@@ -100,7 +105,7 @@
     // A setting chosen in the preview's pager prefills Advanced (visible, editable) —
     // the existing submit path saves it as the session's setting and imports/caches it.
     if (payload.setting_id != null) {
-      settingRaw = String(payload.setting_id)
+      chosenSetting = { setting_id: payload.setting_id, key: null }
       advancedOpen = true
     }
     return false
@@ -111,30 +116,15 @@
     errorMsg = ''
   }
 
-  // ---- setting field (Advanced) ----
-  function parseSettingId(input) {
-    const text = (input || '').trim()
-    if (!text) return { ok: true, id: null }
-    if (/^\d+$/.test(text)) return { ok: true, id: parseInt(text, 10) }
-    if (text.includes('thesession.org')) {
-      const qm = text.match(/[?&]setting=(\d+)/)
-      if (qm) return { ok: true, id: parseInt(qm[1], 10) }
-      const hm = text.match(/#setting(\d+)/)
-      if (hm) return { ok: true, id: parseInt(hm[1], 10) }
-    }
-    return { ok: false, id: null }
+  // ---- setting (Advanced) ----
+  async function chooseSetting(setting) {
+    chosenSetting = { setting_id: setting.setting_id, key: setting.key || null }
+    return true
   }
 
   async function submit() {
     if (submitting) return
     errorMsg = ''
-    const s = parseSettingId(settingRaw)
-    if (!s.ok) {
-      settingError = t('Enter a setting number or paste a thesession.org URL.')
-      advancedOpen = true
-      return
-    }
-    settingError = ''
     if (!navigator.onLine) {
       errorMsg = t('You are offline. Session tunes can only be added online.')
       return
@@ -150,7 +140,7 @@
           tune_id: picked.tune_id ?? null,
           thesession_id: picked.thesession_id ?? null,
           alias: alias.trim() || null,
-          setting_id: s.id,
+          setting_id: chosenSetting?.setting_id ?? null,
           key: keyChoice || null,
         }),
       })
@@ -233,16 +223,21 @@
           </button>
           {#if advancedOpen}
             <div class="mt-advanced">
-              <label class="mt-label" for="st-add-setting">{t('Setting (optional)')}</label>
-              <input
-                id="st-add-setting"
-                class="mt-setting"
-                placeholder={t('Setting number or thesession.org URL')}
-                bind:value={settingRaw}
-                oninput={() => (settingError = '')}
-              />
-              <p class="mt-help">{t('If the session plays a specific setting of the tune, paste its URL or setting number.')}</p>
-              {#if settingError}<p class="mt-error">{settingError}</p>{/if}
+              <span class="mt-label">{t('Setting (optional)')}</span>
+              <div class="mt-setting-pick">
+                <span class="mt-setting-now">
+                  {#if chosenSetting}
+                    #{chosenSetting.setting_id}{chosenSetting.key ? ` · ${chosenSetting.key}` : ''}
+                  {:else}
+                    {t('The first setting')}
+                  {/if}
+                </span>
+                <button type="button" class="mt-change" onclick={() => (chooserOpen = true)}>{t('Change Setting')}</button>
+                {#if chosenSetting}
+                  <button type="button" class="mt-change" onclick={() => (chosenSetting = null)}>{t('Use the first setting')}</button>
+                {/if}
+              </div>
+              <p class="mt-help">{t('If the session plays a specific setting of the tune, page through them and pick it.')}</p>
               <label class="mt-label" for="st-add-key">{t('Key (optional)')}</label>
               <select id="st-add-key" class="mt-setting" bind:value={keyChoice}>
                 <option value="">{t('(not specified)')}</option>
@@ -262,4 +257,15 @@
       </div>
     {/if}
   </div>
+{/if}
+
+{#if picked}
+  <SettingChooser
+    bind:open={chooserOpen}
+    tuneId={picked.tune_id ?? picked.thesession_id}
+    tuneName={picked.name}
+    tuneType={picked.tune_type || ''}
+    currentSettingId={chosenSetting?.setting_id ?? null}
+    heading={sessionName ? t('Which version does {name} play?', { name: sessionName }) : t('Change Setting')}
+    onChoose={chooseSetting} />
 {/if}

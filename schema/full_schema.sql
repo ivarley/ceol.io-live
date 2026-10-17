@@ -1934,6 +1934,55 @@ CREATE TABLE tune_merge_scan_result (
 
 CREATE INDEX idx_tune_merge_scan_result_tune ON tune_merge_scan_result (tune_id);
 
+-- A row's setting must be a setting of that row's tune (migration 064). Setting
+-- ids are numbered across all of thesession.org, so a setting we hold that
+-- belongs to another tune is blanked and the row falls back to its tune's first
+-- setting. The endpoints check first and say what is wrong; this is the backstop.
+CREATE OR REPLACE FUNCTION clear_setting_of_other_tune()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_setting INTEGER;
+BEGIN
+    IF TG_TABLE_NAME = 'session_instance_tune' THEN
+        v_setting := NEW.setting_override;
+    ELSE
+        v_setting := NEW.setting_id;
+    END IF;
+
+    IF v_setting IS NOT NULL AND EXISTS (
+        SELECT 1 FROM tune_setting
+        WHERE setting_id = v_setting
+          AND tune_id IS DISTINCT FROM NEW.tune_id
+    ) THEN
+        IF TG_TABLE_NAME = 'session_instance_tune' THEN
+            NEW.setting_override := NULL;
+        ELSE
+            NEW.setting_id := NULL;
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_session_tune_setting_matches_tune
+    BEFORE INSERT OR UPDATE OF setting_id, tune_id ON session_tune
+    FOR EACH ROW
+    WHEN (NEW.setting_id IS NOT NULL)
+    EXECUTE FUNCTION clear_setting_of_other_tune();
+
+CREATE TRIGGER trigger_session_instance_tune_setting_matches_tune
+    BEFORE INSERT OR UPDATE OF setting_override, tune_id ON session_instance_tune
+    FOR EACH ROW
+    WHEN (NEW.setting_override IS NOT NULL)
+    EXECUTE FUNCTION clear_setting_of_other_tune();
+
+CREATE TRIGGER trigger_person_tune_setting_matches_tune
+    BEFORE INSERT OR UPDATE OF setting_id, tune_id ON person_tune
+    FOR EACH ROW
+    WHEN (NEW.setting_id IS NOT NULL)
+    EXECUTE FUNCTION clear_setting_of_other_tune();
+
 -- =============================================================================
 -- Schema creation complete
 -- =============================================================================
