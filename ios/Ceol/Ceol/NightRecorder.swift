@@ -515,8 +515,17 @@ final class NightRecorder {
     /// one it hasn't. Only the id is sent; the name (as the meter shows it) is the row's
     /// label until the server answers.
     private func logToNight(_ tuneID: Int, auto: Bool = false) {
-        guard logged != tuneID, let night, night.log != nil else { return }
+        guard logged != tuneID, let night, let log = night.log else { return }
         let c = state?.top.first { $0.tuneID == tuneID }
+        // someone else listening at the same session got there first: the latest set
+        // already ends with it (or has it just before the tune that ends it)
+        if Self.latestSetEndsWith(tuneID, log.ordered) {
+            logged = tuneID
+            loggedRow = nil  // not ours: "Wrong tune" leaves it for whoever logged it
+            loggedAt[tuneID] = Date()
+            meterLog.write("app", ListenWire.event("already_logged", ["tune_id": tuneID, "auto": auto]))
+            return
+        }
         let name: JSONValue = c?.name.map(JSONValue.string) ?? .null
         // by thesession.org id always: the listener names tunes from the whole of
         // thesession.org, and one of its popular picks may not be in Ceol's catalogue yet
@@ -525,6 +534,21 @@ final class NightRecorder {
         logged = tuneID
         loggedAt[tuneID] = Date()
         meterLog.write("app", ListenWire.event("logged", ["tune_id": tuneID, "outside": c?.outside == true, "auto": auto]))
+    }
+
+    /// Whether the night's latest set (the last one with tunes, open or ended) has this
+    /// tune as its last or second-to-last tune. Rows still on their way from this phone
+    /// carry no tune_id yet; `logged` covers those.
+    nonisolated static func latestSetEndsWith(_ tuneID: Int, _ ordered: [LogRecord]) -> Bool {
+        var latest: [LogRecord] = []
+        for r in ordered.reversed() {
+            if r.isBreak {
+                if latest.isEmpty { continue }  // the break that ended it
+                break
+            }
+            if r["record_type"] == .string("tune") { latest.append(r) }
+        }
+        return latest.prefix(2).contains { $0["tune_id"]?.intValue == tuneID }
     }
 
     func tapNone() {

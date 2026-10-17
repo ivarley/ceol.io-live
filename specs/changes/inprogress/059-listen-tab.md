@@ -24,6 +24,12 @@ Made by the product owner, 2026-10-11.
     "Logging tunes to {night}" at the top, with **Stop logging**, which asks "Stop
     logging these tunes to {night} and just show them instead?" and then moves to
     Ad-hoc mode without stopping the listening.
+    Several phones can log the same night at once. Before logging a tune, the meter
+    checks the night's latest set (the last one with tunes, open or just ended); if
+    that tune is already its last or second-to-last tune, someone else has logged it,
+    and the meter treats it as logged without adding a row (and "Wrong tune" leaves
+    that row alone). The server still merges two adds of the same tune into the open
+    set when they cross on the way (spec 024 §H30).
   - **Ad-hoc mode**: the meter only says what is playing. It is the mode you arrive in
     from the tab, from Home ("What tune am I hearing right now?") and from the three
     "Add a tune" searches (your tunebook, a session's list, a night's log), each of

@@ -49,3 +49,43 @@ struct SelfConfirmTests {
         #expect(pick(state(p: 1.0), loggedAt: [452: Date().addingTimeInterval(-601)]) == 452)
     }
 }
+
+// Two phones listening at one session: a tune the other phone has already logged as the
+// latest set's last or second-to-last tune isn't logged again (NightRecorder.latestSetEndsWith).
+struct AlreadyLoggedTests {
+    func tune(_ id: Int?, _ pos: String) -> LogRecord {
+        .object(["session_instance_tune_id": .string("r\(pos)"), "record_type": "tune", "order_position": .string(pos),
+                 "tune_id": id.map { JSONValue($0) } ?? .null, "deleted": false])
+    }
+
+    func brk(_ pos: String) -> LogRecord {
+        .object(["session_instance_tune_id": .string("b\(pos)"), "record_type": "break", "order_position": .string(pos),
+                 "deleted": false])
+    }
+
+    @Test func theLastOrSecondToLastTuneOfTheOpenSet() {
+        let log = [tune(100, "a0"), tune(452, "a1"), tune(748, "a2")]
+        #expect(NightRecorder.latestSetEndsWith(748, log))
+        #expect(NightRecorder.latestSetEndsWith(452, log))
+        #expect(!NightRecorder.latestSetEndsWith(100, log))   // third from the end: played again
+        #expect(!NightRecorder.latestSetEndsWith(999, log))
+    }
+
+    @Test func aSetJustEndedIsStillTheLatest() {
+        let log = [tune(452, "a0"), tune(748, "a1"), brk("a2")]
+        #expect(NightRecorder.latestSetEndsWith(748, log))
+        #expect(NightRecorder.latestSetEndsWith(452, log))
+    }
+
+    @Test func onlyTheLatestSet() {
+        let log = [tune(452, "a0"), brk("a1"), tune(748, "a2")]
+        #expect(!NightRecorder.latestSetEndsWith(452, log))
+        #expect(NightRecorder.latestSetEndsWith(748, log))
+        #expect(!NightRecorder.latestSetEndsWith(452, []))
+    }
+
+    @Test func aRowStillOnItsWayHasNoTuneYet() {
+        let log = [tune(452, "a0"), tune(nil, "a1"), tune(nil, "a2")]
+        #expect(!NightRecorder.latestSetEndsWith(452, log))
+    }
+}
