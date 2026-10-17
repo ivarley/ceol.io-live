@@ -35,12 +35,13 @@ final class CeolUITests: XCTestCase {
         return app
     }
 
-    /// Sign in with the seeded password account (nothing is emailed).
-    private func signIn(_ app: XCUIApplication) {
+    /// Sign in with a seeded password account (nothing is emailed): the admin unless
+    /// another is named.
+    private func signIn(_ app: XCUIApplication, as account: String = "ian@ceol.io") {
         let email = app.textFields["signin.email"]
         XCTAssertTrue(email.waitForExistence(timeout: 15))
         email.tap()
-        email.typeText("ian@ceol.io")
+        email.typeText(account)
         app.buttons["signin.continue"].tap()
         let password = app.secureTextFields["signin.password"]
         XCTAssertTrue(password.waitForExistence(timeout: 10))
@@ -103,6 +104,48 @@ final class CeolUITests: XCTestCase {
         night.tap()
         XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'Set 1'")).firstMatch.waitForExistence(timeout: 10))
         snapshot("night")
+    }
+
+    /// The App Store's screenshots, as an ordinary member (no admin badge or tools):
+    /// Home, Sessions, a session, a night's log, Tunes, a tune, Listen. Not a check;
+    /// run it alone on a 6.9" phone (see ios/README.md) and export the attachments.
+    @MainActor
+    func testAppStoreScreenshots() throws {
+        let app = launch()
+        signIn(app, as: "sarah.oconnor@example.com")
+        sleep(2)
+        snapshot("01 home")
+
+        app.buttons["tab.sessions"].firstMatch.tap()
+        let mueller = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Mueller Session'")).firstMatch
+        XCTAssertTrue(mueller.waitForExistence(timeout: 10))
+        sleep(1)
+        snapshot("02 sessions")
+        mueller.tap()
+        XCTAssertTrue(app.buttons["session.tune"].firstMatch.waitForExistence(timeout: 10))
+        sleep(1)
+        snapshot("03 session")
+        app.buttons.containing(NSPredicate(format: "label BEGINSWITH 'Logs'")).firstMatch.tap()
+        let night = app.buttons.matching(NSPredicate(format: "label MATCHES '.*[1-9][0-9]* tunes.*'")).firstMatch
+        XCTAssertTrue(night.waitForExistence(timeout: 10))
+        night.tap()
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'Set 1'")).firstMatch.waitForExistence(timeout: 10))
+        sleep(1)
+        snapshot("04 night")
+
+        app.buttons["tab.tunes"].firstMatch.tap()
+        sleep(2)
+        snapshot("05 tunes")
+        app.buttons.containing(NSPredicate(format: "label CONTAINS \"Cooley's\"")).firstMatch.tap()
+        XCTAssertTrue(app.buttons["sheet.notation"].waitForExistence(timeout: 20))
+        sleep(1)
+        snapshot("06 tune")
+        app.buttons["Done"].firstMatch.tap()
+
+        app.buttons["tab.listen"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["start.listen"].waitForExistence(timeout: 10))
+        sleep(1)
+        snapshot("07 listen")
     }
 
     /// A festival is one row in the list; it opens its year (spec 056), which leads with
