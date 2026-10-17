@@ -3736,7 +3736,7 @@
     <!-- Mirrors the app-wide header (base.html .header): full-viewport bar, 30px logo +
          site title (hidden on phones, like .logo-text). -->
     <div class="appbar">
-      <a class="brand" href="/" aria-label={t('ceol.io home')}><img src="/static/images/logo3-1.png" alt={'ceol'} /><span class="brand-text">{t('Traditional Irish Session Logs')}</span></a>
+      <a class="brand" href="/" aria-label={t('Ceol home')}><img src="/static/images/logo3-1.png" alt={'ceol'} /><span class="brand-text">{t('Traditional Irish Session Logs')}</span></a>
       <!-- The hamburger menu is the SHARED app menu, rendered server-side in the live
            shell (templates/hamburger_menu.html) and floated top-right. 'Find a tune'
            routes to openDeep() here via window.__liveFindTune (set in onMount). -->

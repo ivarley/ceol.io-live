@@ -1941,7 +1941,7 @@
     around(tn(heardCountView, "You've heard this {n} time", "You've heard this {n} times", { n: MARK }))
   )
   const listCountLine = $derived(
-    around(tn(tune?.person_list_count || 0, 'Saved in {n} tune list on Ceol.io', 'Saved in {n} tune lists on Ceol.io', { n: MARK }))
+    around(tn(tune?.person_list_count || 0, 'Saved in {n} tune list on Ceol', 'Saved in {n} tune lists on Ceol', { n: MARK }))
   )
   const tunebookLine = $derived(
     around(tn(tunebookCountView, 'Saved in {n} tunebook on TheSession.org', 'Saved in {n} tunebooks on TheSession.org', { n: MARK }))

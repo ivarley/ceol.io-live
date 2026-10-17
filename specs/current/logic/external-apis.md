@@ -83,8 +83,8 @@ Integration with third-party services.
 
 **Environment Variables**:
 - `SENDGRID_API_KEY` - API key (required; sends fail gracefully without it)
-- `MAIL_DEFAULT_SENDER` - transactional from-address, default `noreply@ceol.io`
-- `MAIL_UPDATES_SENDER` - update-email from-address, default `ceol@ceol.io`
+- `MAIL_DEFAULT_SENDER` - transactional from-address, default `noreply@ceol.app`
+- `MAIL_UPDATES_SENDER` - update-email from-address, default `ceol@ceol.app`
   (verified sender in SendGrid)
 - Unsubscribe headers (`List-Unsubscribe`, one-click) go only on mail with a personal
   unsubscribe link (the update emails). Sign-in, verification and password-reset mail

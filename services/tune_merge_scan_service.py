@@ -49,7 +49,7 @@ from flask_babel import gettext as _
 from database import get_db_connection
 
 # Identify ourselves politely on every request we make.
-USER_AGENT = "ceol.io merged-tune sync (https://ceol.io; contact: ian@ceol.io)"
+USER_AGENT = "Ceol merged-tune sync (https://ceol.app)"
 
 TUNE_URL = "https://thesession.org/tunes/{tune_id}"
 DUMP_TUNES_URL = (

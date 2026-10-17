@@ -17,7 +17,7 @@ import OpenAPIRuntime
 import OpenAPIURLSession
 
 public enum CeolServer {
-    /// The canonical host. www.ceol.io redirects here.
+    /// The canonical host (spec 058). ceol.io and www.ceol.io redirect here.
     public static let production = URL(string: "https://ceol.app")!
 }
 

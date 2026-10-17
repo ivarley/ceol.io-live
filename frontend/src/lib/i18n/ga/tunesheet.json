@@ -679,13 +679,13 @@
     },
     "review": true
   },
-  "Saved in {n} tune lists on Ceol.io": {
+  "Saved in {n} tune lists on Ceol": {
     "ga": {
-      "one": "Sábháilte i {n} liosta fonn ar Ceol.io",
-      "two": "Sábháilte i {n} liosta fonn ar Ceol.io",
-      "few": "Sábháilte i {n} liosta fonn ar Ceol.io",
-      "many": "Sábháilte i {n} liosta fonn ar Ceol.io",
-      "other": "Sábháilte i {n} liosta fonn ar Ceol.io"
+      "one": "Sábháilte i {n} liosta fonn ar Cheol",
+      "two": "Sábháilte i {n} liosta fonn ar Cheol",
+      "few": "Sábháilte i {n} liosta fonn ar Cheol",
+      "many": "Sábháilte i {n} liosta fonn ar Cheol",
+      "other": "Sábháilte i {n} liosta fonn ar Cheol"
     },
     "review": true
   },

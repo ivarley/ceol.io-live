@@ -1,8 +1,8 @@
 {# i18n-converted #}
 {% extends "base.html" %}
 
-{% block title %}{{ page_title | default(_('Help')) }} - {{ 'ceol.io' }}{% endblock %}
-{% block description %}{{ page_description | default(_('Help and documentation for ceol.io')) }}{% endblock %}
+{% block title %}{{ page_title | default(_('Help')) }} - {{ 'Ceol' }}{% endblock %}
+{% block description %}{{ page_description | default(_('Help and documentation for Ceol')) }}{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -319,7 +319,7 @@
 {% macro help_nav(active_page) %}
         <ul class="help-nav">
             <li class="help-nav-item">
-                <a href="{{ url_for('help_page') }}" class="help-nav-link {{ 'active' if active_page == 'about' else '' }}">{{ _("What's ceol.io?") }}</a>
+                <a href="{{ url_for('help_page') }}" class="help-nav-link {{ 'active' if active_page == 'about' else '' }}">{{ _("What's Ceol?") }}</a>
             </li>
             <li class="help-nav-item">
                 <a href="{{ url_for('help_sessions') }}" class="help-nav-link {{ 'active' if active_page == 'sessions' else '' }}">{{ _("What's a Session?") }}</a>

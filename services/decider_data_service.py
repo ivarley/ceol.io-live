@@ -142,7 +142,7 @@ def _download(url, dest):
         url,
         stream=True,
         timeout=120,
-        headers={"User-Agent": "ceol.io decider rebuild (https://ceol.io)"},
+        headers={"User-Agent": "Ceol decider rebuild (https://ceol.app)"},
     ) as resp:
         resp.raise_for_status()
         with open(dest, "wb") as f:

@@ -2,7 +2,7 @@
 
 ## What Ceol is for
 
-Ceol.io is a companion to thesession.org for players of Irish traditional music: it tracks the tunes you know and are learning, the sessions you play at, and what was actually played at each of those sessions. thesession.org holds the world's tune data; Ceol holds the social layer — what is really played, where, and by whom.
+Ceol (ceol.app; formerly ceol.io) is a companion to thesession.org for players of Irish traditional music: it tracks the tunes you know and are learning, the sessions you play at, and what was actually played at each of those sessions. thesession.org holds the world's tune data; Ceol holds the social layer — what is really played, where, and by whom.
 
 The user-facing version of this lives at `/help` (`templates/help.html`, Irish in `templates/ga/help.html`). Keep them in step.
 

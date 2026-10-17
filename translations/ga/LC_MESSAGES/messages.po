@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-16 22:04-0500\n"
+"POT-Creation-Date: 2026-10-16 22:32-0500\n"
 "PO-Revision-Date: 2026-10-06 12:44+0530\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ga\n"
@@ -78,42 +78,42 @@ msgstr "Tá sé sin rófhada. Coinnigh faoi 4,000 carachtar é."
 msgid "Say what's wrong."
 msgstr "Abair cad atá mícheart."
 
-#: api_app_routes.py:510
+#: api_app_routes.py:511
 #, review
 msgid "That email address doesn't look right."
 msgstr "Ní cosúil go bhfuil an seoladh ríomhphoist sin ceart."
 
-#: api_app_routes.py:538 templates/report.html:67
+#: api_app_routes.py:541 templates/report.html:67
 #, python-format, review
 msgid "Couldn't send that. Try again, or email %(address)s."
 msgstr "Níorbh fhéidir é sin a sheoladh. Bain triail eile as, nó seol ríomhphost chuig %(address)s."
 
-#: api_app_routes.py:682
+#: api_app_routes.py:687
 #, review
 msgid "Enter your thesession.org member number or profile link"
 msgstr "Cuir isteach d'uimhir bhaill ar thesession.org nó nasc do phróifíle"
 
-#: api_app_routes.py:691
+#: api_app_routes.py:696
 #, review
 msgid "Username can't be empty"
 msgstr "Ní féidir leis an ainm úsáideora a bheith folamh"
 
-#: api_app_routes.py:697
+#: api_app_routes.py:702
 #, review
 msgid "That username is taken"
 msgstr "Tá an t-ainm úsáideora sin in úsáid cheana"
 
-#: api_app_routes.py:908
+#: api_app_routes.py:913
 msgid "format must be a whole number"
 msgstr "Ní mór don fhormáid a bheith ina slánuimhir"
 
-#: api_app_routes.py:915
+#: api_app_routes.py:920
 #, python-format
 msgid "The decider data could not be read: %(error)s"
 msgstr "Níorbh fhéidir sonraí an chinnteora a léamh: %(error)s"
 
-#: api_app_routes.py:988 api_app_routes.py:1006 api_app_routes.py:1015
-#: api_app_routes.py:1076
+#: api_app_routes.py:993 api_app_routes.py:1011 api_app_routes.py:1020
+#: api_app_routes.py:1081
 #, review
 msgid "Not found"
 msgstr "Níor aimsíodh é"
@@ -2327,8 +2327,8 @@ msgstr "Le gach dea-ghuí,"
 
 #: email_utils.py:408
 #, review
-msgid "The Ceol.io Session Management System"
-msgstr "Córas bainistíochta seisiún Ceol.io"
+msgid "The Ceol Session Management System"
+msgstr "Córas bainistíochta seisiún Cheoil"
 
 #: email_utils.py:410
 #, python-format, review
@@ -6412,13 +6412,13 @@ msgstr "Príomhnascleanúint"
 
 #: templates/help_base.html:5
 #, review
-msgid "Help and documentation for ceol.io"
-msgstr "Cabhair agus treoracha do ceol.io"
+msgid "Help and documentation for Ceol"
+msgstr "Cabhair agus treoracha do Cheol"
 
 #: templates/help_base.html:322
 #, review
-msgid "What's ceol.io?"
-msgstr "Cad é ceol.io?"
+msgid "What's Ceol?"
+msgstr "Cad é Ceol?"
 
 #: templates/help_base.html:325
 #, review

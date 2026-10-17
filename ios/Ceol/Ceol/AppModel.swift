@@ -224,7 +224,7 @@ final class AppModel {
     let auth: AuthService
     /// The server the app talks to; its web pages (Help, Admin) open from here too.
     let server: URL
-    /// Hosts, beyond ceol.io, whose sign-in links the app accepts: a development server.
+    /// Hosts, beyond ceol.app and ceol.io, whose sign-in links the app accepts: a development server.
     private let devHosts: Set<String>
     private var pendingLink: URL?
 

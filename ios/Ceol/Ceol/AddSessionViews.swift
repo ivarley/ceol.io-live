@@ -210,7 +210,7 @@ struct AddSessionView: View {
                 let r = try ok.body.json
                 if r.exists, let path = r.sessionPath {
                     existing = (String(path.dropFirst("/sessions/".count)), tr("session \(id)"))
-                    failure = tr("Session \(id) is already on ceol.io.")
+                    failure = tr("Session \(id) is already on Ceol.")
                     return
                 }
             case .default(_, let e):
@@ -322,7 +322,7 @@ struct SessionDetailsForm: View {
                 TextField("State or county (required)", text: $state).accessibilityIdentifier("details.state")
                 TextField("Country (required)", text: $country).accessibilityIdentifier("details.country")
             } footer: {
-                Text(verbatim: "ceol.io/sessions/\(path.isEmpty ? "…" : path)")
+                Text(verbatim: "ceol.app/sessions/\(path.isEmpty ? "…" : path)")
             }
             scheduleSection
             Section {

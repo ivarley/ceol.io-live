@@ -1685,7 +1685,7 @@ describe('DRIFT GUARD: offline bundle parity with the API detail payload', () =>
     expect(onlineDigest.tags).toBe('practice,session')
     expect(onlineDigest.nameAlias).toBe('Cooleys (mine)')
     expect(onlineDigest.settingField).toBe('4321')
-    expect(onlineDigest.statsTab).toContain('Saved in 4 tune lists on Ceol.io')
+    expect(onlineDigest.statsTab).toContain('Saved in 4 tune lists on Ceol')
     expect(onlineDigest.statsTab).toContain('Saved in 9 tunebooks on TheSession.org')
     expect(onlineDigest.statsTab).toContain('Last Updated 2026-01-01')
     expect(onlineDigest.statsTab).toContain('Logged 3 times at my sessions')

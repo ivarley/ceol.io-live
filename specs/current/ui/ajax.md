@@ -77,7 +77,7 @@ traces to an install, and `/api/app-config` compares the version to
 | `GET /api/me` | bearer | identity block (`user_id`, `person_id`, names, `is_system_admin`, `timezone`, `email_verified`, `has_password`, `needs_profile_setup`) |
 | `GET|PUT /api/me/profile` | bearer | the JSON twin of `/auth/setup-profile` (name, location, timezone, instruments; blank clears, absent keeps) |
 | `GET /api/home` | bearer | `serializers.build_home_payload` — the same dict the Jinja `/` renders |
-| `GET /api/resolve?path=` | public | a ceol.io URL/path → `{kind: session|instance, session, instance}` using `session_handler`'s rules (`oflahertys/2025` is a session, not an instance) |
+| `GET /api/resolve?path=` | public | a Ceol URL/path (ceol.app or ceol.io) → `{kind: session|instance, session, instance}` using `session_handler`'s rules (`oflahertys/2025` is a session, not an instance) |
 | `POST /api/auth/web-session {next}` | bearer | mints a 5-minute one-time `/auth/login/<token>?next=…` link so the app can open the web (admin, help) signed in |
 | `/.well-known/apple-app-site-association` | public | served when `IOS_APP_IDS` is set; paths in `api_app_routes.UNIVERSAL_LINK_PATHS` |
 

@@ -7768,12 +7768,12 @@
         }
       }
     },
-    "Session %@ is already on ceol.io.": {
+    "Session %@ is already on Ceol.": {
       "localizations": {
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Tá seisiún %@ ar ceol.io cheana."
+            "value": "Tá seisiún %@ ar Cheol cheana."
           }
         }
       }

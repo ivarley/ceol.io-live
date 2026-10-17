@@ -106,7 +106,7 @@
         searching = false
         if (data.exists) {
           showError(
-            t('Session {id} is already on ceol.io.', { id: sessionId }),
+            t('Session {id} is already on Ceol.', { id: sessionId }),
             data.session_path,
             t('Open it')
           )
@@ -329,7 +329,7 @@
 <!-- Picking a session that is already here is a decision, so it is a Dialog. -->
 <Dialog
   bind:open={existingOpen}
-  title={t('Already on ceol.io')}
+  title={t('Already on Ceol')}
   description={t('"{name}" is already here.', { name: existingName })}
   confirmLabel={t('Open it')}
   onConfirm={() => navigate(existingPath)} />
@@ -412,7 +412,7 @@
     color: var(--secondary-text, #888);
   }
 
-  /* A session already on ceol.io is still worth showing — it answers "is mine
+  /* A session already on Ceol is still worth showing — it answers "is mine
      here?" — but it is not something you can add, so it recedes. */
   .as-results :global(.as-result.existing .kit-row-title) {
     color: var(--secondary-text, #888);

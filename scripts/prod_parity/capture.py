@@ -12,7 +12,7 @@ import json, os, random, sys, time
 import requests
 
 OUT = sys.argv[1]
-BASE = "https://ceol.io"
+BASE = "https://ceol.app"
 H = {"X-Ceol-Client": "ios/0.0.0 (parity-check)", "Accept": "application/json"}
 os.makedirs(OUT, exist_ok=True)
 s = requests.Session()

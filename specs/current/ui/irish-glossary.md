@@ -103,7 +103,7 @@ Drafted for words the first round didn't cover, and already used in the interfac
 | Attended (people present) | Bhí i láthair | A list of who was there. |
 | Attended (nights I went to) | Bhí mé ann | A filter on your own logs. Same English word as the row above, different Irish. |
 | register | cláraigh | |
-| path / web address | seoladh / seoladh gréasáin | A session's address on the site, e.g. ceol.io/sessions/austin/mueller. See "Words with two meanings". |
+| path / web address | seoladh / seoladh gréasáin | A session's address on the site, e.g. ceol.app/sessions/austin/mueller. See "Words with two meanings". |
 | device | feiste | Not "gléas", which is key. |
 | sync | sioncrónaigh / sioncrónú | Offline changes sent when the connection returns. |
 | recording | taifeadadh (pl. taifeadtaí) | Audio of a session. "Ag taifeadadh" = recording now. |

@@ -1,4 +1,4 @@
-# Ceol.io
+# Ceol
 
 Irish traditional music session tracker. A web application for tracking live music sessions, tunes, and attendance at Irish traditional music gatherings.
 

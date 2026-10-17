@@ -14165,7 +14165,7 @@ def get_admin_tune_detail(tune_id):
         play_count_result = cur.fetchone()
         global_play_count = play_count_result[0] if play_count_result else 0
 
-        # How many people have this tune on their Ceol.io tune list
+        # How many people have this tune on their Ceol tune list
         cur.execute("SELECT COUNT(*) FROM person_tune WHERE tune_id = %s", (tune_id,))
         person_list_result = cur.fetchone()
         person_list_count = person_list_result[0] if person_list_result else 0

@@ -3,7 +3,7 @@ info:
   title: Ceol native surface
   version: "1"
   description: |
-    The subset of the ceol.io JSON API a native client is allowed to depend on
+    The subset of the Ceol JSON API a native client is allowed to depend on
     (spec 052 A5). Everything under /api/* that is NOT listed here is web-internal
     and may change without notice; everything here changes ADDITIVELY only —
     fields are added, never removed or retyped, and a removal waits a deprecation
@@ -29,8 +29,8 @@ info:
       * Live-op business rejections are HTTP 200 with {success:true, rejected:true, reason}.
 
 servers:
-  # The canonical host; www.ceol.io redirects here.
-  - url: https://ceol.io
+  # The canonical host (spec 058); ceol.io and www.ceol.io redirect here.
+  - url: https://ceol.app
 
 components:
   securitySchemes:
@@ -254,7 +254,7 @@ components:
             end: { $ref: "#/components/schemas/Date" }
     Resolve:
       description: >-
-        What a ceol.io link is. `session` and `instance` come with kind session and
+        What a Ceol link (ceol.app, or an old ceol.io one) is. `session` and `instance` come with kind session and
         instance; kind place (a bare town or festival prefix, spec 055/056) brings
         `place`, and for a festival also `years` (upcoming first, then newest first),
         `current` (the year the window rule lands on, or null for the picker),

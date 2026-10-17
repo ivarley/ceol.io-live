@@ -215,8 +215,8 @@
     "ga": "Caithfidh litir nó uimhir a bheith i ngach cuid den seoladh",
     "review": true
   },
-  "Session {id} is already on ceol.io.": {
-    "ga": "Tá seisiún {id} ar ceol.io cheana.",
+  "Session {id} is already on Ceol.": {
+    "ga": "Tá seisiún {id} ar Cheol cheana.",
     "review": true
   },
   "Open it": {
@@ -283,8 +283,8 @@
     "ga": "Do sheisiúin nach bhfuil ar thesession.org",
     "review": true
   },
-  "Already on ceol.io": {
-    "ga": "Ar ceol.io cheana",
+  "Already on Ceol": {
+    "ga": "Ar Cheol cheana",
     "review": true
   },
   "\"{name}\" is already here.": {

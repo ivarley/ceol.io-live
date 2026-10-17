@@ -44,7 +44,7 @@ Debug builds read three launch arguments (Xcode: Scheme > Run > Arguments):
 
 | Argument | Does |
 |---|---|
-| `-CeolServerURL http://127.0.0.1:5031` | Talk to a development server instead of https://ceol.io (plain HTTP to 127.0.0.1 needs no ATS exception). Sign-in links on that host are accepted too. |
+| `-CeolServerURL http://127.0.0.1:5031` | Talk to a development server instead of https://ceol.app (plain HTTP to 127.0.0.1 needs no ATS exception). Sign-in links on that host are accepted too. |
 | `-CeolResetSession YES` | Start signed out. Keychain items survive a reinstall on the simulator. |
 | `-CeolOpenURL <url>` | Open a URL at launch, as if a link were tapped: how the UI tests open an emailed link. |
 

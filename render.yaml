@@ -90,8 +90,8 @@ services:
       - key: FLASK_SESSION_SECRET_KEY
         sync: false
       # Pages allowed to open the live feed with the login cookie (streaming/service.py).
-      # Must include the canonical https://ceol.io; https://www.ceol.io too while old
-      # tabs on www are still around; https://ceol.app once it answers (spec 058).
+      # Must include the canonical https://ceol.app (spec 058); https://ceol.io and
+      # https://www.ceol.io too while tabs opened before the move are still around.
       - key: STREAMING_ALLOWED_ORIGINS
         sync: false
 

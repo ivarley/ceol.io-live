@@ -405,7 +405,7 @@ def send_person_added_email(admin, person, session):
             url=review_url,
         )
         regards = _("Best regards,")
-        signature = _("The Ceol.io Session Management System")
+        signature = _("The Ceol Session Management System")
         why = _(
             'You get this email because you look after "%(session)s" on Ceol.',
             session=session["name"],
