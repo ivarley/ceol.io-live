@@ -332,7 +332,7 @@ Before deploying to production:
 3. **Check production cron configuration** in `render.yaml`:
    ```yaml
    - type: cron
-     name: ceol-io-active-sessions
+     name: ceol-active-sessions
      schedule: "14,29,44,59 * * * *"
    ```
 

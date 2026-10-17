@@ -19,7 +19,7 @@ Two processes, split by direction of data flow (§A4):
 - **Flask app (`ceol-io`)** — the sync, server-authoritative **referee**. Owns *all*
   writes. Handles the upstream `POST` ops and serves the screen shell + bootstrap/search
   endpoints.
-- **Streaming service (`ceol-io-streaming`)** — a separate async Python sidecar
+- **Streaming service (`ceol-streaming`)** — a separate async Python sidecar
   (Starlette + asyncpg, `streaming/service.py`), mirroring the abc-renderer sidecar
   pattern. Holds long-lived **SSE** connections and is downstream fan-out **only**.
 
@@ -484,7 +484,7 @@ Built migrations: `schema/024_session_event.sql`, `schema/024_live_logging_delta
 
 ## Deployment
 
-`ceol-io-streaming` web service in `render.yaml`
+`ceol-streaming` web service in `render.yaml`
 (`uvicorn streaming.service:app`). Flask reaches it via the `STREAMING_BASE_URL` env var;
 the session cookie is shared across subdomains (`SESSION_COOKIE_DOMAINS`) so the sidecar
 authenticates the SSE connection. Both follow the request's host (`domains.py`, spec 058):

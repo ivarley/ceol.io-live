@@ -15,7 +15,7 @@
 # Last checked against the dashboard: 2026-08-19 (ceol-listen added 2026-10-01, when created).
 services:
   - type: web
-    name: ceol.io-live
+    name: ceol
     env: python
     # Also builds the spec-024 live-logging Svelte bundle into static/live.
     buildCommand: "pip install -r requirements.txt && npm install && npm run build && cd frontend && npm install && npm run build"
@@ -67,7 +67,7 @@ services:
   # (Starlette + asyncpg) holding the long-lived SSE connections; shares the DB
   # and the Flask session secret (cookie auth) with the main app.
   - type: web
-    name: ceol-io-streaming
+    name: ceol-streaming
     env: python
     buildCommand: "pip install -r requirements.txt"
     # Bounded graceful drain: SIGTERM (deploy/restart) must not hang on the
@@ -100,7 +100,7 @@ services:
   # rather than as a second cron service. It gates itself on Monday 06:00 UTC
   # and on when it last ran, so 671 of every 672 invocations it costs one query.
   - type: cron
-    name: ceol-io-active-sessions
+    name: ceol-active-sessions
     env: python
     schedule: "14,29,44,59 * * * *"
     buildCommand: "pip install -r requirements.txt"

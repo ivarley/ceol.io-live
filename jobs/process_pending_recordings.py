@@ -5,7 +5,7 @@ Finish recording ingests nobody is working on - manual tool (spec 050)
 NOT a cron job. This was declared as one in render.yaml and never created, so
 the safety net it describes was a comment for its whole life -- and the reason
 given for it was wrong anyway. It said Render's free tier idles a web service
-out after ~15 minutes; ceol.io-live is on starter and does not idle. What
+out after ~15 minutes; the `ceol` web service is on starter and does not idle. What
 actually kills an in-flight ingest is the process restarting: a deploy, an OOM,
 or gunicorn recycling a worker at max_requests.
 

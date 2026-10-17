@@ -19,7 +19,7 @@ on (spec 050) — the same sweep the web service runs on its own.
 
 It was declared as a cron in `render.yaml` and never created, so it never ran.
 The reason given for it was wrong anyway: it assumed a free-tier web service that
-idles out after ~15 minutes, but `ceol.io-live` is on starter and does not idle.
+idles out after ~15 minutes, but `ceol` is on starter and does not idle.
 What actually interrupts an ingest is the process restarting — a deploy, an OOM,
 or gunicorn recycling a worker at `max_requests`.
 
@@ -125,7 +125,7 @@ python3 jobs/test_active_sessions.py --setup-test-data
 
 ## Production Deployment
 
-Ceol has exactly **one** cron service, `ceol-io-active-sessions`, and everything
+Ceol has exactly **one** cron service, `ceol-active-sessions`, and everything
 scheduled hangs off it or off the web service. That is deliberate: cron services
 cost money, and both of the other scheduled things here were once declared in
 `render.yaml` and silently never created.
@@ -136,7 +136,7 @@ them into the file.
 
 ```yaml
 - type: cron
-  name: ceol-io-active-sessions
+  name: ceol-active-sessions
   env: python
   schedule: "14,29,44,59 * * * *"
   buildCommand: "pip install -r requirements.txt"
@@ -147,9 +147,9 @@ What runs where:
 
 | Work | Where it runs | Trigger |
 |---|---|---|
-| Active sessions + auto-create | `ceol-io-active-sessions` cron | `14,29,44,59 * * * *` |
+| Active sessions + auto-create | `ceol-active-sessions` cron | `14,29,44,59 * * * *` |
 | thesession.org merge sync | same cron, at the end | gated to Mondays 06:00 UTC, ≥6 days since last |
-| Recording ingest sweep | `ceol.io-live` web service | `post_fork` on every worker boot, then every 10 min |
+| Recording ingest sweep | `ceol` web service | `post_fork` on every worker boot, then every 10 min |
 
 ## Development Workflow
 

@@ -8,7 +8,7 @@ Weekly job that mirrors upstream tune merges automatically (spec 031).
 **Schedule**: Weekly, Mondays 06:00 UTC (thesession.org's data dumps refresh on Sundays)
 **Purpose**: Because `tune.tune_id` *is* the thesession.org tune id, tunes merged
 upstream go stale silently. This job finds them and applies the merges.
-**Technology**: Python, piggybacked on the `ceol-io-active-sessions` cron —
+**Technology**: Python, piggybacked on the `ceol-active-sessions` cron —
 **not** a service of its own. See [Scheduling](#scheduling).
 
 ## How It Works

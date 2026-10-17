@@ -460,7 +460,7 @@ def start_ingest(recording_id, user_id=None):
 # This used to be a cron job. It was declared in render.yaml and never created,
 # so for its whole life the safety net was a comment -- but the reasoning behind
 # it was wrong anyway. It was written for a free-tier web service that idles out
-# after ~15 minutes without traffic; ceol.io-live is on starter and does not
+# after ~15 minutes without traffic; the `ceol` web service is on starter and does not
 # idle. What actually kills an in-flight ingest is the process restarting: a
 # deploy, an OOM, or gunicorn recycling a worker at max_requests.
 #

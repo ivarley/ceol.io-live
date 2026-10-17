@@ -97,7 +97,7 @@ Configured in `render.yaml`:
 
 ```yaml
 - type: cron
-  name: ceol-io-active-sessions
+  name: ceol-active-sessions
   env: python
   schedule: "14,29,44,59 * * * *"
   buildCommand: "pip install -r requirements.txt"
