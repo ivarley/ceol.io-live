@@ -222,11 +222,11 @@ class TestTheBanner:
 
     def test_shown_while_the_cookie_is_set(self, switched):
         text = self._render("1")
-        assert "Ceol has moved" in text and "ceol.app" in text
+        assert "Ceol has moved!" in text and "<em>ceol.app</em>" in text
 
     def test_not_shown_without_it(self, switched):
         assert "moved-banner" not in self._render(None)
 
     def test_in_irish(self, switched):
         text = self._render("1", lang="ga")
-        assert "moved-banner" in text and "Ceol has moved" not in text
+        assert "<em>ceol.app</em>" in text and "Ceol has moved" not in text

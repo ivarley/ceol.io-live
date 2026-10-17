@@ -5,27 +5,25 @@
    serve a page snapshot taken before it was dismissed. #}
 {% if moved_banner %}
 <div class="moved-banner" id="moved-banner" role="status">
-  <div class="moved-banner-text">
-    <strong>{{ _('Ceol has moved') }}</strong> ·
-    {{ _('Ceol has a new address: %(address)s', address=moved_to_host) }}
-    {{ _('Please update your bookmarks.') }}
-    <span class="moved-banner-note">{{ _('If you added Ceol to your home screen, remove it and add it again from the new address.') }}</span>
-  </div>
+  {% set moved_address = ('<em>%s</em>' | safe) % moved_to_host %}
+  <p class="moved-banner-lead">{{ _("Ceol has moved! It's now at %(address)s (you've been redirected automatically).", address=moved_address) }}</p>
+  <p class="moved-banner-note">{{ _('Please update your bookmarks. If you added Ceol to your home screen, remove it and add it again.') }}</p>
   <button type="button" class="moved-banner-close" id="moved-banner-close" aria-label="{{ _('Close') }}">×</button>
 </div>
 <style>
   .moved-banner {
     position: fixed; top: 0; left: 0; right: 0; z-index: 10000;
-    display: flex; align-items: flex-start; gap: 12px;
-    padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
-    background: #2d7d46; color: #fff; font-size: 0.95rem; line-height: 1.4;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    padding: calc(10px + env(safe-area-inset-top)) 44px 10px;
+    background: #2d7d46; color: #fff; text-align: center; line-height: 1.4;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4); overflow-wrap: anywhere;
   }
-  .moved-banner-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-  .moved-banner-note { display: block; opacity: 0.85; font-size: 0.85rem; }
+  .moved-banner p { margin: 0; }
+  .moved-banner-lead { font-size: 1.05rem; font-weight: 600; }
+  .moved-banner-note { font-size: 0.85rem; opacity: 0.9; margin-top: 2px; }
   .moved-banner-close {
-    flex: none; background: none; border: 0; color: #fff; font-size: 1.6rem;
-    line-height: 1; padding: 0 4px; cursor: pointer;
+    position: absolute; top: calc(6px + env(safe-area-inset-top)); right: 8px;
+    background: none; border: 0; color: #fff; font-size: 1.6rem;
+    line-height: 1; padding: 4px 8px; cursor: pointer;
   }
 </style>
 <script>

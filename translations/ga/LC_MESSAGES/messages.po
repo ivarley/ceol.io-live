@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-16 21:35-0500\n"
+"POT-Creation-Date: 2026-10-16 21:49-0500\n"
 "PO-Revision-Date: 2026-10-06 12:44+0530\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ga\n"
@@ -3489,7 +3489,7 @@ msgstr "Stair na n-athruithe"
 #: templates/auth/set_password.html:61 templates/auth/setup_profile.html:21
 #: templates/base.html:512 templates/home.html:73
 #: templates/modals/person_edit.html:8 templates/modals/person_edit.html:73
-#: templates/moved_banner.html:14 templates/session_admin_person.html:431
+#: templates/moved_banner.html:11 templates/session_admin_person.html:431
 #, review
 msgid "Close"
 msgstr "Dún"
@@ -6554,24 +6554,14 @@ msgid "Add Person"
 msgstr "Cuir an duine leis"
 
 #: templates/moved_banner.html:9
-#, review
-msgid "Ceol has moved"
-msgstr "Tá Ceol bogtha"
+#, python-format, review
+msgid "Ceol has moved! It's now at %(address)s (you've been redirected automatically)."
+msgstr "Tá Ceol bogtha! Tá sé anois ag %(address)s (atreoraíodh thú go huathoibríoch)."
 
 #: templates/moved_banner.html:10
-#, python-format, review
-msgid "Ceol has a new address: %(address)s"
-msgstr "Tá seoladh nua ag Ceol: %(address)s"
-
-#: templates/moved_banner.html:11
 #, review
-msgid "Please update your bookmarks."
-msgstr "Nuashonraigh do leabharmharcanna, le do thoil."
-
-#: templates/moved_banner.html:12
-#, review
-msgid "If you added Ceol to your home screen, remove it and add it again from the new address."
-msgstr "Má chuir tú Ceol ar do scáileán baile, bain de é agus cuir arís é ón seoladh nua."
+msgid "Please update your bookmarks. If you added Ceol to your home screen, remove it and add it again."
+msgstr "Nuashonraigh do leabharmharcanna, le do thoil. Má chuir tú Ceol ar do scáileán baile, bain de é agus cuir arís é."
 
 #: templates/my_tunes.html:5
 #, review
