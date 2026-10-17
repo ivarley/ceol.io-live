@@ -2158,6 +2158,17 @@ final class CeolUITests: XCTestCase {
     @MainActor
     func testGuestTunes() throws {
         let app = launch()
+        // Sign In is in every screen's "⋯" while signed out.
+        let menu = app.buttons["page.menu"].firstMatch
+        XCTAssertTrue(menu.waitForExistence(timeout: 15))
+        menu.tap()
+        let item = app.buttons["menu.signIn"]
+        XCTAssertTrue(item.waitForExistence(timeout: 5))
+        item.tap()
+        XCTAssertTrue(app.textFields["signin.email"].waitForExistence(timeout: 5))
+        app.buttons["signin.close"].tap()
+        XCTAssertTrue(app.textFields["signin.email"].waitForNonExistence(timeout: 5))
+
         app.buttons["tab.tunes"].firstMatch.tap()
         XCTAssertTrue(app.buttons["tunes.signIn"].waitForExistence(timeout: 15))
         XCTAssertTrue(app.buttons["tunes.row"].firstMatch.waitForExistence(timeout: 10))

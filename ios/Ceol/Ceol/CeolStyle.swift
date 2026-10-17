@@ -745,6 +745,7 @@ struct PageMenu: View {
     var body: some View {
         let landscape = verticalSizeClass == .compact
         Menu {
+            SignInMenuItem()
             if let path {
                 Button {
                     model.sharing = model.shareOverride ?? ShareTarget(url: model.webURL(path), title: subject)
@@ -760,6 +761,19 @@ struct PageMenu: View {
         }
         .accessibilityLabel("More")
         .accessibilityIdentifier("page.menu")
+    }
+}
+
+/// Sign In, first in a "⋯" menu while signed out (spec 060); nothing when signed in.
+struct SignInMenuItem: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        if model.isGuest {
+            Button { model.askToSignIn() } label: { Label("Sign In", systemImage: "person.crop.circle") }
+                .accessibilityIdentifier("menu.signIn")
+            Divider()
+        }
     }
 }
 

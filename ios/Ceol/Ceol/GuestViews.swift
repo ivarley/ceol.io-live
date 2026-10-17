@@ -27,10 +27,11 @@ struct GuestHomeView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(spacing: 32) {
                     Text(welcome)
-                        .font(.ceol(size: 19))
-                        .lineSpacing(4)
+                        .font(.ceol(size: 24, relativeTo: .title3))
+                        .lineSpacing(6)
+                        .multilineTextAlignment(.center)
                         .foregroundStyle(CeolTokens.textColor)
                         .accessibilityIdentifier("home.welcome")
                     Button { model.askToSignIn() } label: {
@@ -42,8 +43,12 @@ struct GuestHomeView: View {
                     .tint(CeolTokens.primary)
                     .accessibilityIdentifier("home.signIn")
                 }
-                .padding(20)
+                .padding(24)
             }
+            // In the middle of the screen, not hanging from the top; scrolls only when
+            // large text makes it taller than the screen.
+            .defaultScrollAnchor(.center)
+            .scrollBounceBehavior(.basedOnSize)
             .background(CeolTokens.bgColor)
             .ceolRootBar(tr("Home"), sharePath: "/")
             .environment(\.openURL, OpenURLAction { url in

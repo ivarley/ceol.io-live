@@ -323,7 +323,14 @@ final class NightModel {
                 request.setValue(String(from), forHTTPHeaderField: "Last-Event-ID")
                 request.timeoutInterval = 60
                 let (bytes, response) = try await URLSession.shared.bytes(for: request)
-                guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
+                let code = (response as? HTTPURLResponse)?.statusCode
+                // A guest is streamed a night only while it is under way (the sidecar's
+                // 403 otherwise): the log is as loaded, with nothing to reconnect to.
+                if code == 403 && self.app.isGuest {
+                    self.status = .finished
+                    return
+                }
+                guard code == 200 else { throw URLError(.badServerResponse) }
                 self.status = .live
                 self.failures = 0
                 self.startWatchdog()

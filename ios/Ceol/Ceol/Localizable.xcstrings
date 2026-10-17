@@ -8132,6 +8132,16 @@
         }
       }
     },
+    "Sign In": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Sínigh isteach"
+          }
+        }
+      }
+    },
     "Sign in": {
       "localizations": {
         "ga": {

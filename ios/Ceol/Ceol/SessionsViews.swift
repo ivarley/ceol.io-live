@@ -1081,6 +1081,7 @@ struct NightView: View {
         // A guest reads the log, and logs nothing (spec 060).
         let canLog = !app.isGuest && model.status != .finished && !complete
         return Menu {
+            SignInMenuItem()
             if canLog {
                 if model.editing {
                     if !model.selecting {
