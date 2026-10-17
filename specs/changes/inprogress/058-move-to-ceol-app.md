@@ -7,8 +7,8 @@ streaming.ceol.app answer through Cloudflare; the Render settings are set (`SESS
 `MOVE_TO_HOST`, `MOVE_FROM_HOSTS`, the streaming origins); SendGrid sends from ceol.app; the iOS app accepts
 ceol.app links (not yet in a TestFlight build). Checked: sign-in, the `.ceol.app` cookie reaching the streaming
 sidecar, the offline workers, the live logger's streaming address, the segmenter, and the retired worker
-taking over from an old one in Chrome. Still open in Phase 1: the S3 upload rule (bucket `ceol-io-recordings`),
-a recording upload on ceol.app, the phone's universal links. Phases 2-4 to do.
+taking over from an old one in Chrome. The S3 upload rule (bucket `ceol-io-recordings`) allows ceol.app
+(2026-10-16; checked with a preflight from each origin). Still open in Phase 1: the phone's universal links. Phases 2-4 to do.
 
 ## Why
 
