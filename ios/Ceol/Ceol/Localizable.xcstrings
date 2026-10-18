@@ -2763,6 +2763,16 @@
         }
       }
     },
+    "Browse session logs": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Brabhsáil logálacha seisiún"
+          }
+        }
+      }
+    },
     "Bulk remove": {
       "localizations": {
         "ga": {
@@ -4181,6 +4191,16 @@
         }
       }
     },
+    "Find popular tunes": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Aimsigh foinn a bhfuil éileamh orthu"
+          }
+        }
+      }
+    },
     "Finish logging %@": {
       "localizations": {
         "ga": {
@@ -4900,6 +4920,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Éist agus logáil"
+          }
+        }
+      }
+    },
+    "Listen to identify tunes": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Éist chun foinn a aithint"
           }
         }
       }
@@ -8152,6 +8182,16 @@
         }
       }
     },
+    "Sign in or create a free account": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Sínigh isteach nó cruthaigh cuntas saor in aisce"
+          }
+        }
+      }
+    },
     "Sign in or create an account": {
       "localizations": {
         "ga": {
@@ -9792,12 +9832,12 @@
         }
       }
     },
-    "Welcome to Ceol, an app for traditional Irish music. You can use the [Listen](ceol-guest:listen) feature to figure out what tune you're hearing, and browse [tunes](ceol-guest:tunes) and [session logs](ceol-guest:sessions). To track your own tunes or edit session logs, [sign in](ceol-guest:signin) or [create a free account](ceol-guest:signin).": {
+    "Welcome to Ceol, an app\nfor traditional Irish music.": {
       "localizations": {
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Fáilte go Ceol, aip don cheol traidisiúnta Gaelach. Is féidir leat an ghné [Éist](ceol-guest:listen) a úsáid chun a fháil amach cén fonn atá á sheinm, agus [foinn](ceol-guest:tunes) agus [logálacha seisiún](ceol-guest:sessions) a bhrabhsáil. Chun do chuid fonn féin a choinneáil nó logálacha seisiún a chur in eagar, [sínigh isteach](ceol-guest:signin) nó [cruthaigh cuntas saor in aisce](ceol-guest:signin)."
+            "value": "Fáilte go Ceol, aip\ndon cheol traidisiúnta Gaelach."
           }
         }
       }

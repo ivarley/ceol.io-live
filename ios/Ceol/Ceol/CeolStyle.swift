@@ -754,13 +754,46 @@ struct PageMenu: View {
             }
             ReportButton(url: model.shareOverride?.url ?? path.map { model.webURL($0) })
         } label: {
-            Image(systemName: "ellipsis.circle").font(.system(size: landscape ? 18 : 20, weight: .medium))
-                .foregroundStyle(CeolTokens.textMuted)
-                .frame(width: landscape ? 26 : 36, height: landscape ? 26 : 36)
-                .contentShape(Rectangle())
+            MoreTapTarget(width: landscape ? 26 : 36, height: landscape ? 26 : 44)
         }
+        .ceolMoreIcon(size: landscape ? 20 : 23)
         .accessibilityLabel("More")
         .accessibilityIdentifier("page.menu")
+    }
+}
+
+/// The "⋯" a menu opens from: the dots in grey and a dimmer ring around them. Use it as
+/// `.ceolMoreMenu { … }` on the Menu, not as its label: iOS 26 animates a menu's label
+/// back from where the menu closed, which made the ⋯ swing in from up and to the left,
+/// so the label is an invisible tap target and the icon is drawn behind it, still.
+struct MoreIcon: View {
+    var size: CGFloat = 23
+
+    var body: some View {
+        ZStack {
+            Circle().strokeBorder(CeolTokens.textMuted.opacity(0.4), lineWidth: 1.5)
+            Image(systemName: "ellipsis").font(.system(size: size * 0.5, weight: .bold))
+                .foregroundStyle(CeolTokens.textMuted)
+        }
+        .frame(width: size, height: size)
+    }
+}
+
+extension View {
+    /// A "⋯" menu's look (MoreIcon), on a Menu whose label is `MoreTapTarget`.
+    func ceolMoreIcon(size: CGFloat = 23) -> some View {
+        background(alignment: .trailing) { MoreIcon(size: size).allowsHitTesting(false) }
+    }
+}
+
+/// A "⋯" menu's label: nothing to see (ceolMoreIcon draws the icon), the size of a tap.
+/// The icon sits at its trailing edge, near the screen's edge.
+struct MoreTapTarget: View {
+    var width: CGFloat = 36
+    var height: CGFloat = 44
+
+    var body: some View {
+        Color.clear.frame(width: width, height: height).contentShape(Rectangle())
     }
 }
 

@@ -176,7 +176,6 @@
   "View": "Féach",
   "We sent it to %@. Open the link on this iPhone and it will sign you in here.": "Sheolamar chuig %@ é. Oscail an nasc ar an iPhone seo agus síneoidh sé isteach anseo thú.",
   "Welcome back, ": "Fáilte ar ais, ",
-  "Welcome to Ceol, an app for traditional Irish music. You can use the [Listen](ceol-guest:listen) feature to figure out what tune you're hearing, and browse [tunes](ceol-guest:tunes) and [session logs](ceol-guest:sessions). To track your own tunes or edit session logs, [sign in](ceol-guest:signin) or [create a free account](ceol-guest:signin).": "Fáilte go Ceol, aip don cheol traidisiúnta Gaelach. Is féidir leat an ghné [Éist](ceol-guest:listen) a úsáid chun a fháil amach cén fonn atá á sheinm, agus [foinn](ceol-guest:tunes) agus [logálacha seisiún](ceol-guest:sessions) a bhrabhsáil. Chun do chuid fonn féin a choinneáil nó logálacha seisiún a chur in eagar, [sínigh isteach](ceol-guest:signin) nó [cruthaigh cuntas saor in aisce](ceol-guest:signin).",
   "What's wrong?": "Cad atá mícheart?",
   "Where you play": "An áit a seinneann tú",
   "Wrong or spam": "Mícheart nó turscar",
@@ -192,5 +191,10 @@
   "logged": "logáilte",
   "not logged": "gan logáil",
   "there": "a chara",
-  "thesession.org member number or link": "Uimhir bhaill nó nasc thesession.org"
+  "thesession.org member number or link": "Uimhir bhaill nó nasc thesession.org",
+  "Welcome to Ceol, an app\nfor traditional Irish music.": "Fáilte go Ceol, aip\ndon cheol traidisiúnta Gaelach.",
+  "Listen to identify tunes": "Éist chun foinn a aithint",
+  "Find popular tunes": "Aimsigh foinn a bhfuil éileamh orthu",
+  "Browse session logs": "Brabhsáil logálacha seisiún",
+  "Sign in or create a free account": "Sínigh isteach nó cruthaigh cuntas saor in aisce"
 }

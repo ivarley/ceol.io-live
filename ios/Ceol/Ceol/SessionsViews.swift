@@ -1132,11 +1132,9 @@ struct NightView: View {
                 ReportButton(url: nil)
             }
         } label: {
-            Image(systemName: "ellipsis.circle").font(.system(size: 20, weight: .medium))
-                .foregroundStyle(CeolTokens.textMuted)
-                .frame(width: 36, height: 36)
-                .contentShape(Rectangle())
+            MoreTapTarget()
         }
+        .ceolMoreIcon()
         .accessibilityLabel("More")
         .accessibilityIdentifier("night.menu")
     }

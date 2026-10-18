@@ -1,6 +1,6 @@
 // The app without signing in (spec 060): reading is open, and changing things or
-// keeping things of your own needs an account. A guest's Home is a short welcome whose
-// links open the screens they name; wherever an account is needed, a prompt opens the
+// keeping things of your own needs an account. A guest's Home is a short welcome and a
+// button into each part of the app; wherever an account is needed, a prompt opens the
 // sign-in sheet (AppModel.askToSignIn).
 //
 // i18n-converted (spec 057).
@@ -8,64 +8,62 @@
 import CeolDesign
 import SwiftUI
 
-/// A guest's Home: what Ceol is, and links into it.
+/// A guest's Home: what Ceol is, and a button into each part of it.
 struct GuestHomeView: View {
     @Environment(AppModel.self) private var model
-
-    /// The welcome, with its links as markdown so the Irish can place them where its own
-    /// word order puts them. Each link is a `ceol-guest:` address `open` reads.
-    private var welcome: AttributedString {
-        let text = tr("Welcome to Ceol, an app for traditional Irish music. You can use the [Listen](ceol-guest:listen) feature to figure out what tune you're hearing, and browse [tunes](ceol-guest:tunes) and [session logs](ceol-guest:sessions). To track your own tunes or edit session logs, [sign in](ceol-guest:signin) or [create a free account](ceol-guest:signin).")
-        var a = (try? AttributedString(markdown: text)) ?? AttributedString(text)
-        for run in a.runs where run.link != nil {
-            a[run.range].foregroundColor = CeolTokens.primary
-            a[run.range].underlineStyle = .single
-        }
-        return a
-    }
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 32) {
-                    Text(welcome)
+                VStack(spacing: 14) {
+                    Text("Welcome to Ceol, an app\nfor traditional Irish music.")
                         .font(.ceol(size: 24, relativeTo: .title3))
                         .lineSpacing(6)
                         .multilineTextAlignment(.center)
                         .foregroundStyle(CeolTokens.textColor)
+                        .frame(maxWidth: .infinity)
+                        .padding(.bottom, 18)
                         .accessibilityIdentifier("home.welcome")
-                    Button { model.askToSignIn() } label: {
-                        Text("Sign in or create an account")
-                            .font(.ceol(size: 17, weight: .semibold))
-                            .frame(maxWidth: .infinity, minHeight: 50)
+                    GuestHomeButton(title: tr("Listen to identify tunes"), id: "home.listen") { model.tab = .listen }
+                    GuestHomeButton(title: tr("Find popular tunes"), id: "home.tunes") { model.tab = .tunes }
+                    GuestHomeButton(title: tr("Browse session logs"), id: "home.sessions") { model.tab = .sessions }
+                    GuestHomeButton(title: tr("Sign in or create a free account"), prominent: true, id: "home.signIn") {
+                        model.askToSignIn()
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(CeolTokens.primary)
-                    .accessibilityIdentifier("home.signIn")
+                    .padding(.top, 10)
                 }
-                .padding(24)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 28)
             }
-            // In the middle of the screen, not hanging from the top; scrolls only when
-            // large text makes it taller than the screen.
-            .defaultScrollAnchor(.center)
             .scrollBounceBehavior(.basedOnSize)
             .background(CeolTokens.bgColor)
             .ceolRootBar(tr("Home"), sharePath: "/")
-            .environment(\.openURL, OpenURLAction { url in
-                open(url)
-                return .handled
-            })
         }
     }
+}
 
-    private func open(_ url: URL) {
-        guard url.scheme == "ceol-guest" else { return }
-        switch url.absoluteString.dropFirst("ceol-guest:".count) {
-        case "listen": model.tab = .listen
-        case "tunes": model.tab = .tunes
-        case "sessions": model.tab = .sessions
-        default: model.askToSignIn()
+/// One of the guest Home's buttons: white on black with a green outline, or, for
+/// signing in, white on the green fill.
+struct GuestHomeButton: View {
+    let title: String
+    var prominent = false
+    let id: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.ceol(size: 17, weight: .semibold))
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.white)
+                .padding(.horizontal, 16)
+                .frame(maxWidth: .infinity, minHeight: 50)
+                .background(prominent ? CeolTokens.primaryFill : .black, in: Capsule())
+                .overlay(Capsule().strokeBorder(prominent ? .clear : CeolTokens.primary, lineWidth: 1.5))
+                .contentShape(Capsule())
         }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(id)
     }
 }
 

@@ -2113,7 +2113,8 @@ final class CeolUITests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["home.welcome"].waitForExistence(timeout: 15))
         snapshot("guest home")
 
-        app.buttons["tab.sessions"].firstMatch.tap()
+        // Home's "Browse session logs" opens Sessions.
+        app.buttons["home.sessions"].tap()
         let mueller = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Mueller Session'")).firstMatch
         XCTAssertTrue(mueller.waitForExistence(timeout: 10))
         mueller.tap()
