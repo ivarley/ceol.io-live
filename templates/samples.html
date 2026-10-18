@@ -1,0 +1,33 @@
+{# i18n-converted #}
+{# Tunes to play to Listen (/samples): short clips from real session recordings, for
+   App Review or anyone trying Listen without a session to hand. The clips come from
+   recording.LISTEN_SAMPLES, cut by scripts/make_listen_samples.py. #}
+{% extends "base.html" %}
+
+{% block title %}{{ _('Try Listen') }} - {{ _('Irish Music Sessions') }}{% endblock %}
+
+{% block content %}
+<div class="page-wrapper">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-8 col-lg-6">
+                <div class="card mt-5">
+                    <div class="card-header">
+                        <h3 class="card-title text-center mb-0">{{ _('Try Listen') }}</h3>
+                    </div>
+                    <div class="card-body">
+                        <p>{{ _("To try Listen in the Ceol app, play one of these tunes near your phone, then open the Listen tab and tap Start Listening. Ceol names the tune once it's sure.") }}</p>
+                        <p class="text-muted">{{ _('Both are short clips from a real session: the Mueller Session in Austin, Texas.') }}</p>
+                        {% for sample in samples %}
+                        <div class="mt-4">
+                            <h5 class="mb-1">{{ sample.name }} <small class="text-muted">{{ _('Jig') if sample.tune_type == 'jig' else _('Reel') }}</small></h5>
+                            <audio controls preload="none" style="width: 100%" src="{{ url_for('sample_audio', slug=sample.slug) }}"></audio>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

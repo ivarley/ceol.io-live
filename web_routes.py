@@ -9,6 +9,7 @@ from flask import (
     jsonify,
     make_response,
     current_app,
+    abort,
 )
 from i18n import localized, request_language
 from flask_babel import format_date, gettext as _
@@ -871,6 +872,27 @@ def report_page():
     ):
         page = ""
     return render_template("report.html", page_url=page)
+
+
+def samples_page():
+    """Two tunes to play to Listen (/samples): short clips from real session
+    recordings, for App Review or anyone trying Listen without a session to hand."""
+    from recording import LISTEN_SAMPLES
+
+    return render_template("samples.html", samples=LISTEN_SAMPLES)
+
+
+def sample_audio(slug):
+    """A sample clip: a redirect to a fresh presigned S3 address, so the page's links
+    never expire."""
+    from recording import LISTEN_SAMPLES, generate_presigned_url, sample_storage_key
+
+    if slug not in {s["slug"] for s in LISTEN_SAMPLES}:
+        abort(404)
+    try:
+        return redirect(generate_presigned_url(sample_storage_key(slug), expiry=3600))
+    except RuntimeError:  # storage not configured on this server
+        abort(404)
 
 
 def share_page():

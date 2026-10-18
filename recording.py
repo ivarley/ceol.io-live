@@ -143,6 +143,21 @@ def check_configured():
     return None
 
 
+# The clips on /samples: a tune or two from real session recordings, for anyone (App
+# Review, a new user) who wants to try Listen without a session to hand. Each is cut
+# from a segmenter mark by scripts/make_listen_samples.py and stored under
+# samples/<slug>.mp3; the page plays them through /samples/<slug>.mp3.
+LISTEN_SAMPLES = [
+    # Mueller Session, Austin, 16 April 2026
+    {"slug": "the-kesh", "name": "The Kesh", "tune_type": "jig", "segment_id": 979},
+    {"slug": "the-silver-spear", "name": "The Silver Spear", "tune_type": "reel", "segment_id": 983},
+]
+
+
+def sample_storage_key(slug):
+    return f"samples/{slug}.mp3"
+
+
 def build_storage_key(filename, prefix="recordings"):
     """Mint an S3 key for a newly uploaded file.
 

@@ -561,6 +561,8 @@ app.add_url_rule("/help", "help_page", help_page)
 app.add_url_rule("/privacy", "privacy_page", privacy_page)
 app.add_url_rule("/support", "support_page", support_page)
 app.add_url_rule("/report", "report_page", report_page)
+app.add_url_rule("/samples", "samples_page", samples_page)
+app.add_url_rule("/samples/<slug>.mp3", "sample_audio", sample_audio)
 app.add_url_rule(
     "/irish-glossary-review", "irish_glossary_review", irish_glossary_review
 )
