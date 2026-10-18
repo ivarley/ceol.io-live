@@ -372,6 +372,26 @@
   const notationView = $derived(
     notationSource ? notationDisplay(notationSource, notationMode, notationSize) : null
   )
+  // Copy what's showing: the staff as a PNG, or the ABC as text. The image goes in
+  // as a promise so Safari still counts the write as part of the click.
+  let notationCopied = $state(false)
+  async function copyNotation(e) {
+    e.stopPropagation()
+    const view = notationView
+    if (!view) return
+    try {
+      if (view.kind === 'img') {
+        const blob = fetch(`data:image/png;base64,${view.src}`).then((r) => r.blob())
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+      } else {
+        await navigator.clipboard.writeText(view.text)
+      }
+    } catch {
+      return // clipboard blocked: leave the icon as it was
+    }
+    notationCopied = true
+    setTimeout(() => (notationCopied = false), 1500)
+  }
   const thesessionLink = $derived(notationSource ? theSessionUrl(notationSource) : '')
   const abctoolsLink = $derived(notationSource ? abcToolsUrl(notationSource) : '')
 
@@ -2148,7 +2168,17 @@
                 {/if}
               </div>
               <div class="notation-external-links">
-                {#if thesessionLink}<a
+                {#if notationView}<button
+                    type="button"
+                    class="notation-copy-btn"
+                    title={notationCopied ? t('Copied') : t('Copy')}
+                    aria-label={notationCopied ? t('Copied') : t('Copy')}
+                    onclick={copyNotation}
+                    >{#if notationCopied}<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5" /></svg
+                      >{:else}<svg viewBox="0 0 16 16" aria-hidden="true"
+                        ><rect x="5.5" y="5.5" width="8" height="8" rx="1.5" /><path d="M10.5 3.5v-.5a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 3v5A1.5 1.5 0 0 0 4 9.5h.5" /></svg
+                      >{/if}</button
+                  >{/if}{#if thesessionLink}<a
                     href={thesessionLink}
                     target="_blank"
                     class="notation-external-link"

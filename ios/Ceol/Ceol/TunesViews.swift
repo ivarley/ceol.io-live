@@ -332,6 +332,8 @@ struct TuneSheet: View {
     @State private var abcMode = false
     /// What's showing, over the whole screen (the arrows under the staff).
     @State private var fullScreen = false
+    /// The copy button's tick, for a moment after copying.
+    @State private var copied = false
     /// The first time you tap through to the whole tune: a word about learning by ear.
     @State private var showNotationNotice = false
     @State private var notationNoticeDone = false
@@ -937,6 +939,27 @@ extension TuneSheet {
                     .disabled(t.abc == nil && t.incipitAbc == nil)
                     .opacity(t.abc == nil && t.incipitAbc == nil ? 0.4 : 1)
                 Spacer()
+                // Copy what's showing: the staff as an image, or the ABC as text.
+                if let copy = copyable(t) {
+                    Button {
+                        switch copy {
+                        case .image(let image): UIPasteboard.general.image = image
+                        case .text(let text): UIPasteboard.general.string = text
+                        }
+                        copied = true
+                        Task {
+                            try? await Task.sleep(for: .seconds(1.5))
+                            copied = false
+                        }
+                    } label: {
+                        Image(systemName: copied ? "checkmark" : "doc.on.doc").font(.system(size: 17))
+                            .foregroundStyle(CeolTokens.primary)
+                            .frame(width: 36, height: 32).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(copied ? "Copied" : "Copy")
+                    .accessibilityIdentifier("sheet.copy")
+                }
                 // Full screen, once the whole tune is up (the opening bars fit as they are).
                 if showFull && !abcMode && full != nil {
                     Button { fullScreen = true } label: {
@@ -974,6 +997,14 @@ extension TuneSheet {
         } message: {
             Text("You can tap the opening bars to see the whole tune setting.\n\nBUT! Please remember that traditional Irish music is best learned by listening, not reading. It's OK to use the notation as a reference, in a pinch, but it's always better to learn with your ears.")
         }
+    }
+
+    private enum Copyable { case image(UIImage), text(String) }
+
+    /// What the copy button copies: whatever the card is showing.
+    private func copyable(_ t: Components.Schemas.TuneDetail.SessionTunePayload) -> Copyable? {
+        if abcMode { return (showFull ? t.abc : (t.incipitAbc ?? t.abc)).map(Copyable.text) }
+        return (showFull ? (full ?? incipit) : incipit).map(Copyable.image)
     }
 
     /// Opening bars ⇄ the whole tune, fetched the first time it is asked for. The first

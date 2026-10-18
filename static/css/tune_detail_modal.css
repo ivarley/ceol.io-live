@@ -1003,6 +1003,30 @@
     border-bottom-color: var(--primary);
 }
 
+.notation-copy-btn {
+    background: transparent;
+    border: none;
+    padding: 4px 8px;
+    line-height: 0;
+    color: var(--secondary-text);
+    cursor: pointer;
+    transition: color 0.2s ease;
+}
+
+.notation-copy-btn:hover {
+    color: var(--primary);
+}
+
+.notation-copy-btn svg {
+    width: 15px;
+    height: 15px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
 .notation-mode-tab {
     background: transparent;
     border: none;
